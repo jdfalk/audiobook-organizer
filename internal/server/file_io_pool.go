@@ -1,5 +1,5 @@
 // file: internal/server/file_io_pool.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c4d5e6f7-a8b9-0c1d-2e3f-4a5b6c7d8e9f
 //
 // Bounded worker pool for file I/O operations (cover embed, tag write,
@@ -28,10 +28,11 @@ type FileIOJob struct {
 // FileIOPool manages a bounded pool of workers for slow file operations.
 // Jobs are tracked in PebbleDB so interrupted ones can be recovered on restart.
 type FileIOPool struct {
-	ch      chan fileIOJobEntry
-	wg      sync.WaitGroup
-	stopped int32
-	pending sync.Map // bookID -> true, for in-memory tracking
+	ch       chan fileIOJobEntry
+	wg       sync.WaitGroup
+	stopped  int32
+	pending  sync.Map // bookID -> true, for in-memory tracking
+	overflow chan struct{} // semaphore to limit overflow goroutines
 }
 
 type fileIOJobEntry struct {
@@ -49,13 +50,14 @@ var globalServer *Server
 // NewFileIOPool creates a pool with the given number of workers.
 func NewFileIOPool(workers int) *FileIOPool {
 	p := &FileIOPool{
-		ch: make(chan fileIOJobEntry, 200),
+		ch:       make(chan fileIOJobEntry, 500),
+		overflow: make(chan struct{}, workers), // cap overflow goroutines at worker count
 	}
 	for i := 0; i < workers; i++ {
 		p.wg.Add(1)
 		go p.worker(i)
 	}
-	log.Printf("[INFO] file I/O pool started with %d workers", workers)
+	log.Printf("[INFO] file I/O pool started with %d workers, buffer 500", workers)
 	return p
 }
 
@@ -94,8 +96,11 @@ func (p *FileIOPool) SubmitTyped(bookID, opType string, fn func()) {
 	select {
 	case p.ch <- fileIOJobEntry{bookID: bookID, opType: opType, fn: fn}:
 	default:
-		log.Printf("[WARN] file I/O pool buffer full, running inline for book %s", bookID)
+		// Buffer full — use semaphore to limit overflow concurrency
+		p.overflow <- struct{}{} // blocks if too many overflow goroutines
+		log.Printf("[WARN] file I/O pool buffer full, running overflow for book %s", bookID)
 		go func() {
+			defer func() { <-p.overflow }()
 			fn()
 			p.pending.Delete(bookID)
 			removePendingFileOp(bookID)

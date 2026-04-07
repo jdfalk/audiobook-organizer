@@ -703,6 +703,7 @@ type Server struct {
 	changelogService       *ChangelogService
 	activityService        *ActivityService
 	activityWriter         *activityWriter
+	http3Server            *http3.Server
 }
 
 // ServerConfig holds server configuration
@@ -1036,14 +1037,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 		// Start HTTP/3 server if configured
 		if cfg.HTTP3Port != "" {
+			s.http3Server = &http3.Server{
+				Addr:      fmt.Sprintf("%s:%s", cfg.Host, cfg.HTTP3Port),
+				Handler:   s.router,
+				TLSConfig: tlsConfig,
+			}
 			go func() {
-				http3Server := &http3.Server{
-					Addr:      fmt.Sprintf("%s:%s", cfg.Host, cfg.HTTP3Port),
-					Handler:   s.router,
-					TLSConfig: tlsConfig,
-				}
 				log.Printf("Starting HTTP/3 (QUIC) server on UDP %s:%s", cfg.Host, cfg.HTTP3Port)
-				if err := http3Server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil {
+				if err := s.http3Server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil {
 					log.Printf("Failed to start HTTP/3 server: %v", err)
 				}
 			}()
@@ -1269,13 +1270,42 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	log.Println("Shutting down server...")
 
-	// Close AI scan store
-	if s.aiScanStore != nil {
-		if err := s.aiScanStore.Close(); err != nil {
-			log.Printf("[WARN] Failed to close AI scan store: %v", err)
-		} else {
-			log.Println("[INFO] AI scan store closed")
+	// Broadcast shutdown event to all connected clients FIRST
+	if hub := realtime.GetGlobalHub(); hub != nil {
+		hub.Broadcast(&realtime.Event{
+			Type: "system.shutdown",
+			Data: map[string]any{
+				"message": "Server is shutting down",
+			},
+		})
+		// Give clients a moment to receive the event
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Stop accepting HTTP requests BEFORE closing any stores.
+	// This prevents panics from requests hitting closed PebbleDB instances.
+	log.Println("[INFO] Stopping HTTP servers...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if s.http3Server != nil {
+		if err := s.http3Server.Close(); err != nil {
+			log.Printf("[WARN] HTTP/3 server close error: %v", err)
 		}
+	}
+	if err := s.httpServer.Shutdown(ctx); err != nil {
+		log.Printf("[WARN] HTTP server forced shutdown: %v", err)
+	}
+
+	// Stop the file I/O pool — waits for in-flight jobs to finish
+	if GlobalFileIOPool != nil {
+		log.Println("[INFO] Waiting for file I/O operations to complete...")
+		GlobalFileIOPool.Stop()
+	}
+
+	// Flush the ITL write-back batcher
+	if GlobalWriteBackBatcher != nil {
+		log.Println("[INFO] Flushing iTunes write-back batcher...")
+		GlobalWriteBackBatcher.Stop()
 	}
 
 	// Stop activity writer before closing store
@@ -1298,37 +1328,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 		log.Println("[INFO] File watcher stopped")
 	}
 
-	// Broadcast shutdown event to all connected clients
-	if hub := realtime.GetGlobalHub(); hub != nil {
-		hub.Broadcast(&realtime.Event{
-			Type: "system.shutdown",
-			Data: map[string]any{
-				"message": "Server is shutting down",
-			},
-		})
-		// Give clients a moment to receive the event
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	// Stop the file I/O pool — waits for in-flight jobs to finish
-	if GlobalFileIOPool != nil {
-		log.Println("[INFO] Waiting for file I/O operations to complete...")
-		GlobalFileIOPool.Stop()
-	}
-
-	// Flush the ITL write-back batcher
-	if GlobalWriteBackBatcher != nil {
-		log.Println("[INFO] Flushing iTunes write-back batcher...")
-		GlobalWriteBackBatcher.Stop()
-	}
-
-	// Give outstanding requests a deadline for completion
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := s.httpServer.Shutdown(ctx); err != nil {
-		backgroundWG.Wait()
-		return fmt.Errorf("server forced to shutdown: %w", err)
+	// Close AI scan store
+	if s.aiScanStore != nil {
+		if err := s.aiScanStore.Close(); err != nil {
+			log.Printf("[WARN] Failed to close AI scan store: %v", err)
+		} else {
+			log.Println("[INFO] AI scan store closed")
+		}
+		s.aiScanStore = nil
 	}
 
 	backgroundWG.Wait()
