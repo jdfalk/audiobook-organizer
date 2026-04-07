@@ -401,10 +401,15 @@ export function OperationsIndicator() {
 
           {/* Recent completed operations section */}
           <Divider />
-          <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+          <Box sx={{ px: 2, pt: 1.5, pb: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="subtitle2" color="text.secondary" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Recent
             </Typography>
+            {recentOps.length > 0 && (
+              <Button size="small" sx={{ fontSize: '0.65rem', py: 0, minHeight: 20, textTransform: 'none' }} onClick={() => setRecentOps([])}>
+                Clear
+              </Button>
+            )}
           </Box>
 
           {recentOps.length === 0 && (
