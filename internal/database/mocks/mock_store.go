@@ -12256,3 +12256,79 @@ func (_c *MockStore_GetRecentCompletedOperations_Call) RunAndReturn(run func(int
 	_c.Call.Return(run)
 	return _c
 }
+
+// SetRaw stubs the Store interface method.
+func (_mock *MockStore) SetRaw(key string, value []byte) error {
+	ret := _mock.Called(key, value)
+	return ret.Error(0)
+}
+
+type MockStore_SetRaw_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) SetRaw(key interface{}, value interface{}) *MockStore_SetRaw_Call {
+	return &MockStore_SetRaw_Call{Call: _e.mock.On("SetRaw", key, value)}
+}
+func (_c *MockStore_SetRaw_Call) Run(run func(string, []byte)) *MockStore_SetRaw_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].([]byte)) })
+	return _c
+}
+func (_c *MockStore_SetRaw_Call) Return(err error) *MockStore_SetRaw_Call {
+	_c.Call.Return(err)
+	return _c
+}
+func (_c *MockStore_SetRaw_Call) RunAndReturn(run func(string, []byte) error) *MockStore_SetRaw_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteRaw stubs the Store interface method.
+func (_mock *MockStore) DeleteRaw(key string) error {
+	ret := _mock.Called(key)
+	return ret.Error(0)
+}
+
+type MockStore_DeleteRaw_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) DeleteRaw(key interface{}) *MockStore_DeleteRaw_Call {
+	return &MockStore_DeleteRaw_Call{Call: _e.mock.On("DeleteRaw", key)}
+}
+func (_c *MockStore_DeleteRaw_Call) Run(run func(string)) *MockStore_DeleteRaw_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_DeleteRaw_Call) Return(err error) *MockStore_DeleteRaw_Call {
+	_c.Call.Return(err)
+	return _c
+}
+func (_c *MockStore_DeleteRaw_Call) RunAndReturn(run func(string) error) *MockStore_DeleteRaw_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ScanPrefix stubs the Store interface method.
+func (_mock *MockStore) ScanPrefix(prefix string) ([]database.KVPair, error) {
+	ret := _mock.Called(prefix)
+	var r0 []database.KVPair
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.KVPair)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_ScanPrefix_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) ScanPrefix(prefix interface{}) *MockStore_ScanPrefix_Call {
+	return &MockStore_ScanPrefix_Call{Call: _e.mock.On("ScanPrefix", prefix)}
+}
+func (_c *MockStore_ScanPrefix_Call) Run(run func(string)) *MockStore_ScanPrefix_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_ScanPrefix_Call) Return(pairs []database.KVPair, err error) *MockStore_ScanPrefix_Call {
+	_c.Call.Return(pairs, err)
+	return _c
+}
+func (_c *MockStore_ScanPrefix_Call) RunAndReturn(run func(string) ([]database.KVPair, error)) *MockStore_ScanPrefix_Call {
+	_c.Call.Return(run)
+	return _c
+}

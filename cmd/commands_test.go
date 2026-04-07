@@ -375,6 +375,9 @@ func (s *stubStore) GetRemovedExternalIDs(source string) ([]database.ExternalIDM
 	return nil, nil
 }
 
+func (s *stubStore) SetRaw(key string, value []byte) error        { return nil }
+func (s *stubStore) DeleteRaw(key string) error                   { return nil }
+func (s *stubStore) ScanPrefix(prefix string) ([]database.KVPair, error) { return nil, nil }
 func (s *stubStore) CreateOperationResult(result *database.OperationResult) error { return nil }
 func (s *stubStore) GetOperationResults(operationID string) ([]database.OperationResult, error) {
 	return nil, nil

@@ -1427,6 +1427,9 @@ func (m *MockStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping, e
 	return nil, nil
 }
 
+func (m *MockStore) SetRaw(key string, value []byte) error      { return nil }
+func (m *MockStore) DeleteRaw(key string) error                 { return nil }
+func (m *MockStore) ScanPrefix(prefix string) ([]KVPair, error) { return nil, nil }
 func (m *MockStore) CreateOperationResult(result *OperationResult) error       { return nil }
 func (m *MockStore) GetOperationResults(operationID string) ([]OperationResult, error) {
 	return nil, nil
