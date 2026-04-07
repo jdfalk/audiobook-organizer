@@ -49,7 +49,6 @@ func TestSearchMetadata_ReturnsResults(t *testing.T) {
 	assert.Contains(t, resp["error"], "no metadata sources enabled")
 }
 
-
 func TestSearchMetadata_BookNotFound(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()

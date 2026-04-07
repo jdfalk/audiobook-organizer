@@ -94,10 +94,10 @@ func (bs *BatchService) UpdateAudiobooks(req *BatchUpdateRequest) *BatchResponse
 
 // BatchOperationItem describes one operation to perform on one book.
 type BatchOperationItem struct {
-	ID        string         `json:"id"`
-	Action    string         `json:"action"`              // "update", "delete", "restore"
-	Updates   map[string]any `json:"updates,omitempty"`   // for action=update
-	HardDelete bool         `json:"hard_delete,omitempty"` // for action=delete
+	ID         string         `json:"id"`
+	Action     string         `json:"action"`                // "update", "delete", "restore"
+	Updates    map[string]any `json:"updates,omitempty"`     // for action=update
+	HardDelete bool           `json:"hard_delete,omitempty"` // for action=delete
 }
 
 // BatchOperationsRequest allows different operations per item.

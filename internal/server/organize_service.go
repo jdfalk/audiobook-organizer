@@ -43,12 +43,12 @@ type OrganizeRequest struct {
 }
 
 type OrganizeStats struct {
-	Organized     int
-	ReOrganized   int
+	Organized      int
+	ReOrganized    int
 	AlreadyCorrect int
-	Skipped       int // soft-deleted / non-primary / missing file skips
-	Failed        int
-	Total         int
+	Skipped        int // soft-deleted / non-primary / missing file skips
+	Failed         int
+	Total          int
 }
 
 // PerformOrganizeWithID executes organization with checkpoint support.
@@ -600,7 +600,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 			ChangeType:  "organize_summary",
 			FieldName:   "stats",
 			OldValue:    "",
-			NewValue:    fmt.Sprintf("organized:%d re_organized:%d already_correct:%d skipped:%d failed:%d total:%d",
+			NewValue: fmt.Sprintf("organized:%d re_organized:%d already_correct:%d skipped:%d failed:%d total:%d",
 				stats.Organized, stats.ReOrganized, stats.AlreadyCorrect, stats.Skipped, stats.Failed, stats.Total),
 		})
 	}

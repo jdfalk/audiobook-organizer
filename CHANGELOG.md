@@ -69,6 +69,10 @@
 - **Write-back batcher refactor**: supports add/remove/location/metadata ops in one flush
 - **Cover embedding**: gated on `embed_cover_art` config (was always running), config settable via API
 
+##### CI/CD & Lint Fixes (contributed by @jdfalk)
+- **E2E test lint errors**: 15 fixes across 12 Playwright test files (unused params, imports, escapes)
+- **Frontend lint warnings**: replaced `any` types with proper types in Settings/BookDedup, fixed useCallback/useEffect deps in Library/BookDedup, added react-refresh eslint-disable comments
+
 ##### Bug Fixes (contributed by @jdfalk)
 - **Search was broken**: `searchBooks` was calling removed `/audiobooks/search` endpoint
 - **Field-only searches**: `-review:matched` was treated as text search instead of field filter

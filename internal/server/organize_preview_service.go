@@ -29,14 +29,14 @@ type OrganizePreviewStep struct {
 
 // OrganizePreviewResponse is the full response for a preview-organize request.
 type OrganizePreviewResponse struct {
-	Steps        []OrganizePreviewStep `json:"steps"`
-	NeedsCopy    bool                  `json:"needs_copy"`
-	NeedsRename  bool                  `json:"needs_rename"`
-	CurrentPath  string                `json:"current_path"`
-	TargetPath   string                `json:"target_path"`
-	IsProtected  bool                  `json:"is_protected"`
-	HasBookFiles bool                  `json:"has_book_files"`
-	BookFileCount int                  `json:"book_file_count"`
+	Steps         []OrganizePreviewStep `json:"steps"`
+	NeedsCopy     bool                  `json:"needs_copy"`
+	NeedsRename   bool                  `json:"needs_rename"`
+	CurrentPath   string                `json:"current_path"`
+	TargetPath    string                `json:"target_path"`
+	IsProtected   bool                  `json:"is_protected"`
+	HasBookFiles  bool                  `json:"has_book_files"`
+	BookFileCount int                   `json:"book_file_count"`
 }
 
 // OrganizePreviewService builds a read-only preview of what a single-book organize would do.

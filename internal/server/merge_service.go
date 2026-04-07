@@ -107,4 +107,3 @@ func (ms *MergeService) MergeBooks(bookIDs []string, primaryID string) (*MergeRe
 		MergedCount:    len(books),
 	}, nil
 }
-

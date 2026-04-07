@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	batchChunkBooks   = 500
-	batchChunkLogs    = 200
-	batchChunkItunes  = 500
-	batchModel        = "o4-mini"
-	batchMaxTokens    = 16000
-	batchTemperature  = 0.1
+	batchChunkBooks  = 500
+	batchChunkLogs   = 200
+	batchChunkItunes = 500
+	batchModel       = "o4-mini"
+	batchMaxTokens   = 16000
+	batchTemperature = 0.1
 )
 
 // batchRequest represents a single line in OpenAI batch JSONL format.

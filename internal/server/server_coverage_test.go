@@ -80,7 +80,6 @@ func TestCountAudiobooksEndpoint(t *testing.T) {
 	}
 }
 
-
 // TestSystemLogsEndpoint tests system logs retrieval
 func TestSystemLogsEndpoint(t *testing.T) {
 	server, cleanup := setupTestServer(t)

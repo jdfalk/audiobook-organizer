@@ -18,6 +18,7 @@ const ToastContext = createContext<ToastContextType>({
 });
 
 /** Returns the toast API for displaying notifications. */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useToast(): ToastContextType {
   return useContext(ToastContext);
 }

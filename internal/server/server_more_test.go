@@ -92,13 +92,13 @@ func TestUpdateConfigEndpoint(t *testing.T) {
 	defer cleanup()
 
 	update := map[string]any{
-		"root_dir":         "/tmp/library",
-		"playlist_dir":     "/tmp/playlists",
-		"openai_api_key":   "secret-key",
+		"root_dir":          "/tmp/library",
+		"playlist_dir":      "/tmp/playlists",
+		"openai_api_key":    "secret-key",
 		"enable_ai_parsing": true,
-		"concurrent_scans": 2,
-		"language":         "en",
-		"log_level":        "debug",
+		"concurrent_scans":  2,
+		"language":          "en",
+		"log_level":         "debug",
 	}
 	body, err := json.Marshal(update)
 	require.NoError(t, err)
@@ -564,14 +564,14 @@ func TestUpdateDeleteBatchAudiobook(t *testing.T) {
 	require.NoError(t, err)
 
 	updatePayload := map[string]any{
-		"title":                   "New Title",
-		"author_name":             "Author Name",
-		"series_name":             "Series Name",
-		"narrator":                "Narrator Name",
-		"publisher":               "Publisher",
-		"language":                "en",
-		"audiobook_release_year":  2020,
-		"isbn13":                  "1234567890123",
+		"title":                  "New Title",
+		"author_name":            "Author Name",
+		"series_name":            "Series Name",
+		"narrator":               "Narrator Name",
+		"publisher":              "Publisher",
+		"language":               "en",
+		"audiobook_release_year": 2020,
+		"isbn13":                 "1234567890123",
 	}
 	body, err := json.Marshal(updatePayload)
 	require.NoError(t, err)

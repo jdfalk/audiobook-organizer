@@ -30,8 +30,8 @@ type ReconcileMatch struct {
 	BookTitle  string  `json:"book_title"`
 	OldPath    string  `json:"old_path"`
 	NewPath    string  `json:"new_path"`
-	MatchType  string  `json:"match_type"`  // "hash", "original_hash", "filename"
-	Confidence string  `json:"confidence"`  // "high", "medium", "low"
+	MatchType  string  `json:"match_type"` // "hash", "original_hash", "filename"
+	Confidence string  `json:"confidence"` // "high", "medium", "low"
 	Score      float64 `json:"score"`
 }
 
@@ -646,10 +646,10 @@ func countMatchType(matches []ReconcileMatch, matchType string) int {
 
 // VersionGroupCleanupResult holds the result of pruning duplicate version groups.
 type VersionGroupCleanupResult struct {
-	GroupsChecked  int `json:"groups_checked"`
-	GroupsCleaned  int `json:"groups_cleaned"`
+	GroupsChecked     int `json:"groups_checked"`
+	GroupsCleaned     int `json:"groups_cleaned"`
 	DuplicatesRemoved int `json:"duplicates_removed"`
-	FilesDeleted   int `json:"files_deleted"`
+	FilesDeleted      int `json:"files_deleted"`
 }
 
 // cleanupDuplicateVersionGroups finds version groups with more than 2 members
@@ -867,23 +867,23 @@ func (s *Server) markBrokenSegmentBooksHandler(c *gin.Context) {
 
 // MergeDuplicatesResult describes the outcome of merging no-VG duplicates into existing version groups.
 type MergeDuplicatesResult struct {
-	TotalNoVG         int                   `json:"total_no_vg"`
-	MatchedToVG       int                   `json:"matched_to_vg"`
-	SelfDuplicates    int                   `json:"self_duplicates"`
-	MetadataMerged    int                   `json:"metadata_merged"`
-	SoftDeleted       int                   `json:"soft_deleted"`
-	RemainingOrphans  int                   `json:"remaining_orphans"`
-	Errors            int                   `json:"errors"`
-	Details           []MergeDuplicateEntry `json:"details,omitempty"`
+	TotalNoVG        int                   `json:"total_no_vg"`
+	MatchedToVG      int                   `json:"matched_to_vg"`
+	SelfDuplicates   int                   `json:"self_duplicates"`
+	MetadataMerged   int                   `json:"metadata_merged"`
+	SoftDeleted      int                   `json:"soft_deleted"`
+	RemainingOrphans int                   `json:"remaining_orphans"`
+	Errors           int                   `json:"errors"`
+	Details          []MergeDuplicateEntry `json:"details,omitempty"`
 }
 
 // MergeDuplicateEntry describes one merge action.
 type MergeDuplicateEntry struct {
-	DuplicateID    string   `json:"duplicate_id"`
-	PrimaryID      string   `json:"primary_id"`
-	Title          string   `json:"title"`
-	FieldsMerged   []string `json:"fields_merged,omitempty"`
-	Action         string   `json:"action"`
+	DuplicateID  string   `json:"duplicate_id"`
+	PrimaryID    string   `json:"primary_id"`
+	Title        string   `json:"title"`
+	FieldsMerged []string `json:"fields_merged,omitempty"`
+	Action       string   `json:"action"`
 }
 
 // mergeNoVGDuplicates finds no-VG books that match VG books by title, merges metadata, and soft-deletes.

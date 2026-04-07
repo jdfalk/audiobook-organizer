@@ -13,6 +13,7 @@ import { ToastProvider } from './components/toast/ToastProvider';
 import { useAppStore } from './stores/useAppStore';
 import { AuthProvider } from './contexts/AuthContext';
 
+// eslint-disable-next-line react-refresh/only-export-components
 function AppRoot() {
   const themeMode = useAppStore((state) => state.themeMode);
   const theme = useMemo(() => createAppTheme(themeMode), [themeMode]);

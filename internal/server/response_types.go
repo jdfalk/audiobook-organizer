@@ -38,17 +38,17 @@ type DeleteResponse struct {
 
 // BulkResponse provides a consistent format for bulk operation responses
 type BulkResponse struct {
-	Total     int         `json:"total"`
-	Succeeded int         `json:"succeeded"`
-	Failed    int         `json:"failed"`
-	Results   []BulkItem  `json:"results"`
+	Total     int        `json:"total"`
+	Succeeded int        `json:"succeeded"`
+	Failed    int        `json:"failed"`
+	Results   []BulkItem `json:"results"`
 }
 
 // BulkItem represents a single item in a bulk operation response
 type BulkItem struct {
-	ID       string `json:"id"`
-	Status   string `json:"status"` // "success", "failed"
-	Error    string `json:"error,omitempty"`
+	ID       string   `json:"id"`
+	Status   string   `json:"status"` // "success", "failed"
+	Error    string   `json:"error,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
 }
 
@@ -131,25 +131,25 @@ func NewStatusResponse(status string, data any) *StatusResponse {
 
 // AudiobookResponse provides a consistent format for audiobook responses
 type AudiobookResponse struct {
-	ID              string  `json:"id"`
-	Title           string  `json:"title"`
-	Author          string  `json:"author,omitempty"`
-	Series          string  `json:"series,omitempty"`
-	SeriesSequence  *int    `json:"series_sequence,omitempty"`
-	FilePath        string  `json:"file_path,omitempty"`
-	Format          string  `json:"format,omitempty"`
-	Duration        int64   `json:"duration,omitempty"`
-	ReleaseYear     *int    `json:"release_year,omitempty"`
-	Genre           string  `json:"genre,omitempty"`
-	Narrators       string  `json:"narrators,omitempty"`
-	Publisher       string  `json:"publisher,omitempty"`
-	Language        string  `json:"language,omitempty"`
-	CoverArtPath    string  `json:"cover_art_path,omitempty"`
-	Description     string  `json:"description,omitempty"`
-	Rating          *float64 `json:"rating,omitempty"`
-	TagList         []string `json:"tags,omitempty"`
-	IsMarkedForDeletion bool `json:"is_marked_for_deletion,omitempty"`
-	IsAudiobook     bool    `json:"is_audiobook,omitempty"`
+	ID                  string   `json:"id"`
+	Title               string   `json:"title"`
+	Author              string   `json:"author,omitempty"`
+	Series              string   `json:"series,omitempty"`
+	SeriesSequence      *int     `json:"series_sequence,omitempty"`
+	FilePath            string   `json:"file_path,omitempty"`
+	Format              string   `json:"format,omitempty"`
+	Duration            int64    `json:"duration,omitempty"`
+	ReleaseYear         *int     `json:"release_year,omitempty"`
+	Genre               string   `json:"genre,omitempty"`
+	Narrators           string   `json:"narrators,omitempty"`
+	Publisher           string   `json:"publisher,omitempty"`
+	Language            string   `json:"language,omitempty"`
+	CoverArtPath        string   `json:"cover_art_path,omitempty"`
+	Description         string   `json:"description,omitempty"`
+	Rating              *float64 `json:"rating,omitempty"`
+	TagList             []string `json:"tags,omitempty"`
+	IsMarkedForDeletion bool     `json:"is_marked_for_deletion,omitempty"`
+	IsAudiobook         bool     `json:"is_audiobook,omitempty"`
 }
 
 // WorkResponse provides a consistent format for work responses
@@ -177,8 +177,8 @@ type SeriesResponse struct {
 
 // DuplicateGroup represents a group of duplicate audiobooks
 type DuplicateGroup struct {
-	Key     string `json:"key"`
-	Items   int    `json:"items"`
+	Key     string          `json:"key"`
+	Items   int             `json:"items"`
 	Details []DuplicateItem `json:"details,omitempty"`
 }
 
@@ -198,7 +198,7 @@ type DuplicatesResponse struct {
 
 // HealthResponse provides a consistent format for health check responses
 type HealthResponse struct {
-	Status   string `json:"status"`
-	Uptime   int64  `json:"uptime_seconds"`
-	Timestamp int64 `json:"timestamp"`
+	Status    string `json:"status"`
+	Uptime    int64  `json:"uptime_seconds"`
+	Timestamp int64  `json:"timestamp"`
 }

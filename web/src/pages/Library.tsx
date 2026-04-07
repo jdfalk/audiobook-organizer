@@ -765,7 +765,7 @@ export const Library = () => {
     } finally {
       setLoading(false);
     }
-  }, [convertApiBook, debouncedSearch, filters, itemsPerPage, page, parsedSearch, selectedTags, sortBy, sortOrder, navigate, toast]);
+  }, [debouncedSearch, filters, itemsPerPage, page, parsedSearch, selectedTags, sortBy, sortOrder, navigate, toast]);
 
   // Reload books when scan/organize completes
   useEffect(() => {

@@ -607,9 +607,9 @@ func (pm *PipelineManager) runEnrichment(ctx context.Context, scanID int, source
 
 	// For each uncertain suggestion, fetch book titles to enrich the context
 	type enrichedInput struct {
-		Suggestion   database.ScanSuggestion `json:"suggestion"`
-		BookTitles   map[int][]string        `json:"book_titles"`
-		OriginalIdx  int                     `json:"original_idx"`
+		Suggestion  database.ScanSuggestion `json:"suggestion"`
+		BookTitles  map[int][]string        `json:"book_titles"`
+		OriginalIdx int                     `json:"original_idx"`
 	}
 
 	var enrichInputs []enrichedInput

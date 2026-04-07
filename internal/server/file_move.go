@@ -79,4 +79,3 @@ func MoveBookFile(store database.Store, bookID, oldPath, newPath string, extraUp
 	log.Printf("[INFO] file_move: moved %s → %s for book %s", oldPath, newPath, bookID)
 	return nil
 }
-

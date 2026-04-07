@@ -14,13 +14,13 @@ import (
 // Returns unified ScanResults with agreement classification.
 //
 // Logic:
-// - For each groups suggestion, try to match against full suggestions by overlapping author IDs.
-//   Fallback: match by canonical name.
-// - Match found + same action + same canonical -> "agreed" (use higher confidence)
-// - Match found + same action + different canonical -> "agreed" (use groups' canonical, note diff)
-// - Match found + different actions -> "disagreed" (include both)
-// - No match -> "groups_only"
-// - Unmatched full suggestions -> "full_only"
+//   - For each groups suggestion, try to match against full suggestions by overlapping author IDs.
+//     Fallback: match by canonical name.
+//   - Match found + same action + same canonical -> "agreed" (use higher confidence)
+//   - Match found + same action + different canonical -> "agreed" (use groups' canonical, note diff)
+//   - Match found + different actions -> "disagreed" (include both)
+//   - No match -> "groups_only"
+//   - Unmatched full suggestions -> "full_only"
 func CrossValidate(scanID int, groupsSuggestions, fullSuggestions []database.ScanSuggestion) []database.ScanResult {
 	var results []database.ScanResult
 	fullMatched := make([]bool, len(fullSuggestions))

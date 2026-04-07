@@ -1781,6 +1781,9 @@ function AIAuthorPipelinePage() {
       } catch { /* ignore polling errors */ }
     }, 5000);
     return () => clearInterval(interval);
+    // scan?.id and scan?.status are the meaningful change signals; including
+    // the full `scan` object would restart the interval on every poll update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scan?.id, scan?.status]);
 
   const startScan = async () => {
@@ -1902,8 +1905,8 @@ function AIAuthorPipelinePage() {
                   await api.cancelAIScan(scan.id);
                   const updated = await api.getAIScan(scan.id);
                   setScan(updated);
-                } catch (e: any) {
-                  setError(e.message || 'Failed to cancel scan');
+                } catch (e: unknown) {
+                  setError(e instanceof Error ? e.message : 'Failed to cancel scan');
                 }
               }}
             >

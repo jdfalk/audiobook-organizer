@@ -245,11 +245,11 @@ func TestITunesImport_SeriesExtraction(t *testing.T) {
 		album          string
 		expectedSeries string
 	}{
-		{"Middle-earth, Book 1", "Middle-earth"},         // comma separator
-		{"The Dark Tower: Book 3", "The Dark Tower"},     // colon separator
-		{"Wheel of Time - Book 5", "Wheel of Time"},      // dash separator
-		{"Dune Chronicles", "Dune Chronicles"},           // no separator, whole name
-		{"", ""},                                          // empty
+		{"Middle-earth, Book 1", "Middle-earth"},     // comma separator
+		{"The Dark Tower: Book 3", "The Dark Tower"}, // colon separator
+		{"Wheel of Time - Book 5", "Wheel of Time"},  // dash separator
+		{"Dune Chronicles", "Dune Chronicles"},       // no separator, whole name
+		{"", ""},                                     // empty
 	}
 
 	for _, tc := range tests {
@@ -333,14 +333,14 @@ func TestITunesImport_MultiTrackBookSegments(t *testing.T) {
 		require.NoError(t, err)
 
 		bf := &database.BookFile{
-			ID:         fmt.Sprintf("bf-%d", i),
-			BookID:     created.ID,
-			FilePath:   trackPath,
-			Format:     "m4b",
-			FileSize:   int64(track.Size),
-			Duration:   int(track.TotalTime),
+			ID:          fmt.Sprintf("bf-%d", i),
+			BookID:      created.ID,
+			FilePath:    trackPath,
+			Format:      "m4b",
+			FileSize:    int64(track.Size),
+			Duration:    int(track.TotalTime),
 			TrackNumber: track.TrackNumber,
-			TrackCount: len(mobyGroup.tracks),
+			TrackCount:  len(mobyGroup.tracks),
 		}
 		require.NoError(t, database.GlobalStore.CreateBookFile(bf))
 	}

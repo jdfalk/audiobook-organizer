@@ -135,8 +135,8 @@ func TestConfigUpdateService_ApplyUpdates_ArrayFields(t *testing.T) {
 	}()
 
 	payload := map[string]any{
-		"exclude_patterns":      []any{"*.tmp", "*.bak", "*.cache"},
-		"supported_extensions":  []any{".mp3", ".m4b", ".m4a"},
+		"exclude_patterns":     []any{"*.tmp", "*.bak", "*.cache"},
+		"supported_extensions": []any{".mp3", ".m4b", ".m4a"},
 	}
 
 	err := svc.ApplyUpdates(payload)
@@ -1155,17 +1155,17 @@ func TestConfigUpdateService_UpdateConfig_AllFields(t *testing.T) {
 	}()
 
 	payload := map[string]any{
-		"organization_strategy":  "custom",
-		"scan_on_startup":        true,
-		"auto_organize":          true,
-		"folder_naming_pattern":  "{author}/{series}",
-		"file_naming_pattern":    "{title}",
-		"create_backups":         true,
-		"language":               "en-US",
-		"log_level":              "debug",
-		"openai_api_key":         "sk-test123",
-		"enable_ai_parsing":      true,
-		"concurrent_scans":       float64(5),
+		"organization_strategy": "custom",
+		"scan_on_startup":       true,
+		"auto_organize":         true,
+		"folder_naming_pattern": "{author}/{series}",
+		"file_naming_pattern":   "{title}",
+		"create_backups":        true,
+		"language":              "en-US",
+		"log_level":             "debug",
+		"openai_api_key":        "sk-test123",
+		"enable_ai_parsing":     true,
+		"concurrent_scans":      float64(5),
 	}
 
 	status, resp := svc.UpdateConfig(payload)
@@ -1276,7 +1276,7 @@ func TestConfigUpdateService_ApplyUpdates_OpenAIKey(t *testing.T) {
 	}()
 
 	err := svc.ApplyUpdates(map[string]any{
-		"openai_api_key":   "sk-proj-test12345",
+		"openai_api_key":    "sk-proj-test12345",
 		"enable_ai_parsing": true,
 	})
 	if err != nil {

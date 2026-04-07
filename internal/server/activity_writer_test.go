@@ -17,12 +17,12 @@ import (
 
 func TestParseLogLine(t *testing.T) {
 	cases := []struct {
-		name        string
-		line        string
-		wantLevel   string
-		wantSource  string
-		wantMsgPfx  string // prefix check (empty = exact match with wantMsg)
-		wantMsg     string // exact match if wantMsgPfx is empty
+		name       string
+		line       string
+		wantLevel  string
+		wantSource string
+		wantMsgPfx string // prefix check (empty = exact match with wantMsg)
+		wantMsg    string // exact match if wantMsgPfx is empty
 	}{
 		{
 			name:       "info scheduler",

@@ -238,11 +238,11 @@ func TestCreateOrganizedVersion_RecomputesITunesPath(t *testing.T) {
 		GetBookFilesFunc: func(bookID string) ([]database.BookFile, error) {
 			return []database.BookFile{
 				{
-					ID:         "bf1",
-					BookID:     "original-book",
-					FilePath:   "/mnt/bigdata/books/itunes/iTunes Media/Audiobooks/Author/book.m4b",
-					ITunesPath: "file://localhost/W:/itunes/iTunes%20Media/Audiobooks/Author/book.m4b",
-					ITunesPersistentID:  "DEADBEEF01020304",
+					ID:                 "bf1",
+					BookID:             "original-book",
+					FilePath:           "/mnt/bigdata/books/itunes/iTunes Media/Audiobooks/Author/book.m4b",
+					ITunesPath:         "file://localhost/W:/itunes/iTunes%20Media/Audiobooks/Author/book.m4b",
+					ITunesPersistentID: "DEADBEEF01020304",
 				},
 			}, nil
 		},
@@ -469,7 +469,7 @@ func TestCreateOrganizedVersion_CopiesAllBookFiles(t *testing.T) {
 		UpdateBookFunc: func(id string, book *database.Book) (*database.Book, error) {
 			return book, nil
 		},
-		MarkNeedsRescanFunc:       func(bookID string) error { return nil },
+		MarkNeedsRescanFunc: func(bookID string) error { return nil },
 		CreateBookFileFunc: func(file *database.BookFile) error {
 			mu.Lock()
 			createdFiles = append(createdFiles, *file)
@@ -526,7 +526,7 @@ func TestCreateOrganizedVersion_SetsCorrectStates(t *testing.T) {
 	var updatedOriginal *database.Book
 
 	mockDB := &database.MockStore{
-		GetBookFilesFunc:   func(bookID string) ([]database.BookFile, error) { return nil, nil },
+		GetBookFilesFunc: func(bookID string) ([]database.BookFile, error) { return nil, nil },
 		CreateBookFunc: func(book *database.Book) (*database.Book, error) {
 			return book, nil
 		},
@@ -536,8 +536,8 @@ func TestCreateOrganizedVersion_SetsCorrectStates(t *testing.T) {
 			}
 			return book, nil
 		},
-		MarkNeedsRescanFunc:       func(bookID string) error { return nil },
-		CreateBookFileFunc:        func(file *database.BookFile) error { return nil },
+		MarkNeedsRescanFunc: func(bookID string) error { return nil },
+		CreateBookFileFunc:  func(file *database.BookFile) error { return nil },
 	}
 
 	cfg := &config.Config{

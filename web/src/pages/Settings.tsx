@@ -117,7 +117,7 @@ interface UpdatesSectionProps {
     autoUpdateWindowStart: number;
     autoUpdateWindowEnd: number;
   };
-  setSettings: React.Dispatch<React.SetStateAction<any>>;
+  setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
 }
 
 function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
@@ -187,7 +187,7 @@ function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
               <Switch
                 checked={settings.autoUpdateEnabled}
                 onChange={(e) =>
-                  setSettings((prev: any) => ({
+                  setSettings((prev) => ({
                     ...prev,
                     autoUpdateEnabled: e.target.checked,
                   }))
@@ -205,7 +205,7 @@ function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
             label="Update channel"
             value={settings.autoUpdateChannel}
             onChange={(e) =>
-              setSettings((prev: any) => ({
+              setSettings((prev) => ({
                 ...prev,
                 autoUpdateChannel: e.target.value,
               }))
@@ -224,7 +224,7 @@ function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
             label="Check interval (minutes)"
             value={settings.autoUpdateCheckMinutes}
             onChange={(e) =>
-              setSettings((prev: any) => ({
+              setSettings((prev) => ({
                 ...prev,
                 autoUpdateCheckMinutes: parseInt(e.target.value) || 60,
               }))
@@ -241,7 +241,7 @@ function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
             label="Update window start"
             value={settings.autoUpdateWindowStart}
             onChange={(e) =>
-              setSettings((prev: any) => ({
+              setSettings((prev) => ({
                 ...prev,
                 autoUpdateWindowStart: parseInt(e.target.value),
               }))
@@ -263,7 +263,7 @@ function UpdatesSection({ settings, setSettings }: UpdatesSectionProps) {
             label="Update window end"
             value={settings.autoUpdateWindowEnd}
             onChange={(e) =>
-              setSettings((prev: any) => ({
+              setSettings((prev) => ({
                 ...prev,
                 autoUpdateWindowEnd: parseInt(e.target.value),
               }))
@@ -334,7 +334,7 @@ interface MaintenanceWindowSectionProps {
     maintenanceWindowStart: number;
     maintenanceWindowEnd: number;
   };
-  setSettings: React.Dispatch<React.SetStateAction<any>>;
+  setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
 }
 
 function MaintenanceWindowSection({ settings, setSettings }: MaintenanceWindowSectionProps) {
@@ -353,7 +353,7 @@ function MaintenanceWindowSection({ settings, setSettings }: MaintenanceWindowSe
               <Switch
                 checked={settings.maintenanceWindowEnabled}
                 onChange={(e) =>
-                  setSettings((prev: any) => ({
+                  setSettings((prev) => ({
                     ...prev,
                     maintenanceWindowEnabled: e.target.checked,
                   }))
@@ -371,7 +371,7 @@ function MaintenanceWindowSection({ settings, setSettings }: MaintenanceWindowSe
             label="Window start (hour)"
             value={settings.maintenanceWindowStart}
             onChange={(e) =>
-              setSettings((prev: any) => ({
+              setSettings((prev) => ({
                 ...prev,
                 maintenanceWindowStart: parseInt(e.target.value),
               }))
@@ -393,7 +393,7 @@ function MaintenanceWindowSection({ settings, setSettings }: MaintenanceWindowSe
             label="Window end (hour)"
             value={settings.maintenanceWindowEnd}
             onChange={(e) =>
-              setSettings((prev: any) => ({
+              setSettings((prev) => ({
                 ...prev,
                 maintenanceWindowEnd: parseInt(e.target.value),
               }))
@@ -410,6 +410,59 @@ function MaintenanceWindowSection({ settings, setSettings }: MaintenanceWindowSe
       </Grid>
     </Paper>
   );
+}
+
+interface UiMetadataSource {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  requiresAuth: boolean;
+  credentials: { [key: string]: string };
+}
+
+interface SettingsState {
+  libraryPath: string;
+  organizationStrategy: string;
+  scanOnStartup: boolean;
+  autoOrganize: boolean;
+  folderNamingPattern: string;
+  fileNamingPattern: string;
+  createBackups: boolean;
+  supportedExtensions: string[];
+  excludePatterns: string[];
+  enableDiskQuota: boolean;
+  diskQuotaPercent: number;
+  enableUserQuotas: boolean;
+  defaultUserQuotaGB: number;
+  autoFetchMetadata: boolean;
+  enableAIParsing: boolean;
+  openaiApiKey: string;
+  metadataSources: UiMetadataSource[];
+  language: string;
+  concurrentScans: number;
+  memoryLimitType: string;
+  cacheSize: number;
+  memoryLimitPercent: number;
+  memoryLimitMB: number;
+  logLevel: string;
+  logFormat: string;
+  enableJsonLogging: boolean;
+  purgeSoftDeletedAfterDays: number;
+  purgeSoftDeletedDeleteFiles: boolean;
+  autoUpdateEnabled: boolean;
+  autoUpdateChannel: string;
+  autoUpdateCheckMinutes: number;
+  autoUpdateWindowStart: number;
+  autoUpdateWindowEnd: number;
+  maintenanceWindowEnabled: boolean;
+  maintenanceWindowStart: number;
+  maintenanceWindowEnd: number;
+  pathFormat: string;
+  segmentTitleFormat: string;
+  autoRenameOnApply: boolean;
+  autoWriteTagsOnApply: boolean;
+  verifyAfterWrite: boolean;
 }
 
 export function Settings() {
@@ -475,59 +528,6 @@ export function Settings() {
   const [factoryResetStep, setFactoryResetStep] = useState<0 | 1 | 2>(0);
   const [factoryResetConfirmText, setFactoryResetConfirmText] = useState('');
   const [factoryResetInProgress, setFactoryResetInProgress] = useState(false);
-
-  interface UiMetadataSource {
-    id: string;
-    name: string;
-    enabled: boolean;
-    priority: number;
-    requiresAuth: boolean;
-    credentials: { [key: string]: string };
-  }
-
-  interface SettingsState {
-    libraryPath: string;
-    organizationStrategy: string;
-    scanOnStartup: boolean;
-    autoOrganize: boolean;
-    folderNamingPattern: string;
-    fileNamingPattern: string;
-    createBackups: boolean;
-    supportedExtensions: string[];
-    excludePatterns: string[];
-    enableDiskQuota: boolean;
-    diskQuotaPercent: number;
-    enableUserQuotas: boolean;
-    defaultUserQuotaGB: number;
-    autoFetchMetadata: boolean;
-    enableAIParsing: boolean;
-    openaiApiKey: string;
-    metadataSources: UiMetadataSource[];
-    language: string;
-    concurrentScans: number;
-    memoryLimitType: string;
-    cacheSize: number;
-    memoryLimitPercent: number;
-    memoryLimitMB: number;
-    logLevel: string;
-    logFormat: string;
-    enableJsonLogging: boolean;
-    purgeSoftDeletedAfterDays: number;
-    purgeSoftDeletedDeleteFiles: boolean;
-    autoUpdateEnabled: boolean;
-    autoUpdateChannel: string;
-    autoUpdateCheckMinutes: number;
-    autoUpdateWindowStart: number;
-    autoUpdateWindowEnd: number;
-    maintenanceWindowEnabled: boolean;
-    maintenanceWindowStart: number;
-    maintenanceWindowEnd: number;
-    pathFormat: string;
-    segmentTitleFormat: string;
-    autoRenameOnApply: boolean;
-    autoWriteTagsOnApply: boolean;
-    verifyAfterWrite: boolean;
-  }
 
   const initialSettings: SettingsState = {
     // Library settings
