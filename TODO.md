@@ -87,10 +87,20 @@
 
 | # | Item | Details | Status |
 |---|------|---------|--------|
-| 30 | **Background file ops need graceful tracking** | Cover embed, tag write, rename are fire-and-forget goroutines. Lost on restart. Users told "applied" when file writes haven't happened. | 🚨 Needs fix |
-| 31 | **Resume interrupted metadata fetch on startup** | If server restarts mid-fetch, already-fetched results survive but remaining books are lost. Need startup recovery. | ⏳ Planned |
-| 32 | **Aggressive search/book result caching** | Books rarely change — cache search results 30-60s, individual book lookups, metadata candidates. | ⏳ Planned |
+| 30 | **Background file ops need graceful tracking** | Cover embed, tag write, rename are fire-and-forget goroutines. Lost on restart. Users told "applied" when file writes haven't happened. | ✅ Fixed — persistent tracking in PebbleDB, startup recovery |
+| 31 | **Resume interrupted metadata fetch on startup** | If server restarts mid-fetch, already-fetched results survive but remaining books are lost. Need startup recovery. | ✅ Fixed — saves book_ids as params, resumes remaining on startup |
+| 32 | **Aggressive search/book result caching** | Books rarely change — cache search results 30-60s, individual book lookups, metadata candidates. | ✅ Fixed — list 30s, metadata search 30s |
 | 33 | **Batch apply still fires separate requests per click** | Frontend coalesces with 500ms debounce but rapid clicks still result in multiple API calls. Need true client-side queue. | ⏳ Partially fixed |
+
+---
+
+## 🟡 P2 — CI/CD & Lint Fixes (April 6, 2026)
+
+| # | Item | Details | Status |
+|---|------|---------|--------|
+| 34 | **E2E test lint errors (10 errors)** | Unused `page` params, unused imports, unnecessary escapes in Playwright tests. Files: `file-browser.spec.ts`, `error-handling.spec.ts`, `dynamic-ui-interactions.spec.ts`, `demo-full-workflow.spec.ts`, `dashboard.spec.ts`, `core-functionality.spec.ts`, `book-detail.spec.ts`, `batch-operations.spec.ts` | ⏳ |
+| 35 | **Frontend lint warnings (11 warnings)** | `Unexpected any` in Settings.tsx/BookDedup.tsx, missing useEffect deps in BookDedup.tsx, unnecessary useCallback dep in Library.tsx, Fast refresh warnings in main.tsx/AuthContext.tsx/ToastProvider.tsx/ConfigurableTable.tsx | ⏳ |
+| 36 | **GitHub Actions Node.js 20 deprecation** | `actions/setup-node` running Node.js 20, deprecated June 2026. Update to Node.js 24 compatible version. | ⏳ |
 
 ---
 
