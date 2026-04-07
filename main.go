@@ -6,9 +6,6 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net/http"
-	_ "net/http/pprof" // registers pprof handlers on default mux
 	"os"
 
 	"github.com/jdfalk/audiobook-organizer/cmd"
@@ -26,14 +23,6 @@ func main() {
 }
 
 func run() int {
-	// Start pprof on a separate port (localhost only for security)
-	go func() {
-		log.Println("[INFO] pprof available at http://localhost:6060/debug/pprof/")
-		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-			log.Printf("[WARN] pprof server failed: %v", err)
-		}
-	}()
-
 	// Set version everywhere
 	cmd.SetVersion(version)
 	server.SetVersion(version)
