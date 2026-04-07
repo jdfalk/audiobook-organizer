@@ -875,8 +875,15 @@ func InitializeStore(dbType, path string, enableSQLite bool) error {
 
 // CloseStore closes the global store
 func CloseStore() error {
-	if GlobalStore != nil {
-		return GlobalStore.Close()
+	// Grab and nil the global ref first so lingering goroutines
+	// see nil and fail gracefully instead of hitting a closed DB.
+	store := GlobalStore
+	GlobalStore = nil
+
+	if store != nil {
+		// Brief pause to let in-flight goroutines notice the nil
+		time.Sleep(100 * time.Millisecond)
+		return store.Close()
 	}
 	// Backwards compatibility
 	if DB != nil {
