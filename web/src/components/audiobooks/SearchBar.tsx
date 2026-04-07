@@ -98,6 +98,13 @@ const SEARCH_HELP = [
   { example: 'NOT author:Unknown', desc: 'Exclude a field value' },
   { example: 'quality:320kbps', desc: 'Filter by audio quality' },
   { example: 'publisher:Audible', desc: 'Filter by publisher' },
+  // Common combinations
+  { example: 'review:matched has_written:yes has_organized:yes', desc: 'Fully processed books' },
+  { example: '-review:matched', desc: 'Books still needing metadata' },
+  { example: 'review:matched -has_written:yes', desc: 'Metadata applied but not written to files' },
+  { example: 'review:matched has_written:yes -has_organized:yes', desc: 'Written but not organized' },
+  { example: 'has_cover:no review:matched', desc: 'Matched but missing cover art' },
+  { example: 'library_state:imported -review:matched', desc: 'Imported books needing metadata' },
 ];
 
 interface SearchBarProps {
