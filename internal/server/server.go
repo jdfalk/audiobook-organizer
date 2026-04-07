@@ -1096,6 +1096,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Recover interrupted file I/O operations (cover embed, tag write, rename)
 	RecoverInterruptedFileOps()
 
+	// Resume interrupted metadata candidate fetch operations
+	s.resumeInterruptedMetadataFetch()
+
 	// Backfill external ID mappings from existing iTunes PIDs (one-time, idempotent)
 	go s.backfillExternalIDs()
 

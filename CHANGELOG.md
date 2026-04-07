@@ -11,6 +11,14 @@
 
 #### April 5-6, 2026 — ITL Mutation, Bulk Metadata Review, ACL Fixes, UI Overhaul (v4.0.0)
 
+##### Reliability — Background File Operations (contributed by jdfalk)
+- **Persistent file I/O tracking**: cover embed, tag write, rename jobs tracked in PebbleDB (`pending_file_op:{bookID}` keys). Completed jobs auto-delete. No more "applied but never written" on restart.
+- **Startup recovery**: interrupted file I/O jobs re-queued automatically on server start
+- **Resume interrupted metadata fetch**: if server restarts mid-fetch, already-fetched results survive. Remaining books re-enqueued from saved operation params on startup.
+- **File I/O worker pool**: 4 bounded workers (was unbounded goroutines). Prevents 10 concurrent ffmpeg processes.
+- **Graceful shutdown**: file I/O pool drains + ITL batcher flushes before server exits on SIGTERM
+- **Adaptive ITL batcher**: debounce extends up to 30s for rapid-fire applies (was fixed 5s)
+
 ##### iTunes ITL Binary Format
 - **LE-format track add/remove**: `AddTracksLE`, `RemoveTracksByPIDLE`, `RemoveTrackByPIDLE` for v10+ iTunes libraries
 - **Metadata write-back to ITL**: `UpdateMetadataLE` writes title, artist, album, genre directly to ITL mhoh chunks (iTunes caches everything, won't re-read file tags)
