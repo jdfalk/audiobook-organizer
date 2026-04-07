@@ -11,11 +11,13 @@ import {
   Chip,
   CircularProgress,
   Dialog,
+  FormControlLabel,
   DialogActions,
   DialogContent,
   DialogTitle,
   Slider,
   Stack,
+  Switch,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -75,15 +77,51 @@ export function MetadataReviewDialog({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
+  const [hideApplied, setHideApplied] = useState(true);
+  const [hideRejected, setHideRejected] = useState(true);
 
   useEffect(() => {
     if (!open || !operationId) return;
     setLoading(true);
     api
       .getOperationResults(operationId)
-      .then((data) => {
+      .then(async (data) => {
         const results = data.results || [];
-        setResults(results);
+
+        // Detect already-applied and rejected books from stored results + current book state
+        const initialStates = new Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>();
+        for (const r of results) {
+          if (r.status === 'rejected') {
+            initialStates.set(r.book.id, 'rejected');
+          }
+        }
+
+        // Check current book state for applied metadata (batch fetch current data)
+        try {
+          const bookIds = results.filter(r => r.status === 'matched').map(r => r.book.id);
+          for (const id of bookIds) {
+            if (initialStates.has(id)) continue;
+            try {
+              const book = await api.getBook(id);
+              if (book.metadata_review_status === 'matched') {
+                initialStates.set(id, 'applied');
+              }
+              // Update book info with current data (cover, title, etc.)
+              const result = results.find(r => r.book.id === id);
+              if (result && book) {
+                result.book.cover_url = book.cover_url || result.book.cover_url;
+                result.book.title = book.title || result.book.title;
+              }
+            } catch {
+              // Book may have been deleted
+            }
+          }
+        } catch {
+          // Ignore batch fetch errors
+        }
+
+        setRowStates(initialStates);
+        setResults([...results]);
         setSummary({
           matched: data.matched ?? results.filter((r: api.CandidateResult) => r.status === 'matched').length,
           no_match: data.no_match ?? results.filter((r: api.CandidateResult) => r.status === 'no_match').length,
@@ -111,7 +149,9 @@ export function MetadataReviewDialog({
           r.candidate &&
           r.candidate.score * 100 >= confidenceThreshold) ||
         r.status !== 'matched'
-    );
+    )
+    .filter((r) => !hideApplied || rowStates.get(r.book.id) !== 'applied')
+    .filter((r) => !hideRejected || rowStates.get(r.book.id) !== 'rejected');
 
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
@@ -617,8 +657,8 @@ export function MetadataReviewDialog({
               ))}
             </Stack>
 
-            {/* View toggle */}
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+            {/* View toggle + hide filters */}
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap">
               <ToggleButtonGroup
                 size="small"
                 value={viewMode}
@@ -628,6 +668,14 @@ export function MetadataReviewDialog({
                 <ToggleButton value="compact">Compact</ToggleButton>
                 <ToggleButton value="two-column">Two-Column</ToggleButton>
               </ToggleButtonGroup>
+              <FormControlLabel
+                control={<Switch size="small" checked={hideApplied} onChange={(e) => setHideApplied(e.target.checked)} />}
+                label={<Typography variant="body2">Hide Applied</Typography>}
+              />
+              <FormControlLabel
+                control={<Switch size="small" checked={hideRejected} onChange={(e) => setHideRejected(e.target.checked)} />}
+                label={<Typography variant="body2">Hide Rejected</Typography>}
+              />
             </Stack>
 
             {/* Smart action buttons */}
