@@ -36,7 +36,7 @@ permissions:
 jobs:
   release:
     name: Create Production Release
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@378e23a96c00d719075732dd2af4de45f7523cbb # v1.10.4
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@959c35e8d5ae487ea400dc33b0e988275976544c # no Windows builds, skip empty assets
     with:
       release-type: ${{ github.event.inputs.release-type }}
       prerelease: false
