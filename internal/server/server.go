@@ -3604,8 +3604,8 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 	var req struct {
 		BookIDs  []string `json:"book_ids"`
-		Rename   bool     `json:"rename"`   // legacy — treated same as organize
-		Organize bool     `json:"organize"` // organize files after writing tags
+		Rename   bool     `json:"rename"`
+		Organize bool     `json:"organize"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -3616,82 +3616,108 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		return
 	}
 
-	doOrganize := req.Organize || req.Rename // backwards compatible
+	store := database.GlobalStore
+	doOrganize := req.Organize || req.Rename
 
-	type batchWriteBackError struct {
-		BookID string `json:"book_id"`
-		Error  string `json:"error"`
+	// Create a supervisor operation for tracking
+	opID := ulid.Make().String()
+	if _, err := store.CreateOperation(opID, "batch_save_to_files", nil); err != nil {
+		internalError(c, "failed to create operation", err)
+		return
 	}
 
-	written := 0
-	writtenFiles := 0
-	organized := 0
-	failed := 0
-	errors := make([]batchWriteBackError, 0)
+	bookIDs := make([]string, len(req.BookIDs))
+	copy(bookIDs, req.BookIDs)
+	totalBooks := len(bookIDs)
+	mfs := s.metadataFetchService
+	orgSvc := s.organizeService
 
-	org := organizer.NewOrganizer(&config.AppConfig)
-	log2 := logger.NewWithActivityLog("batch-write-back", database.GlobalStore)
+	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.UpdateProgress(0, totalBooks, "starting save to files")
 
-	for _, id := range req.BookIDs {
-		book, err := database.GlobalStore.GetBookByID(id)
-		if err != nil || book == nil {
-			failed++
-			errors = append(errors, batchWriteBackError{BookID: id, Error: "audiobook not found"})
-			continue
-		}
+		written, organized, failed := 0, 0, 0
+		org := organizer.NewOrganizer(&config.AppConfig)
+		log2 := logger.NewWithActivityLog("batch-write-back", store)
 
-		count, err := s.metadataFetchService.WriteBackMetadataForBook(id)
-		if err != nil {
-			failed++
-			errors = append(errors, batchWriteBackError{BookID: id, Error: err.Error()})
-			continue
-		}
+		for i, id := range bookIDs {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 
-		written++
-		writtenFiles += count
-
-		// Organize after writing tags
-		if doOrganize {
-			// Re-fetch book to get updated metadata
-			book, err = database.GlobalStore.GetBookByID(id)
+			book, err := store.GetBookByID(id)
 			if err != nil || book == nil {
+				failed++
+				_ = store.AddOperationLog(opID, "warn", fmt.Sprintf("book %s not found", id), nil)
 				continue
 			}
-			oldPath := book.FilePath
-			alreadyInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(oldPath, config.AppConfig.RootDir)
 
-			var newPath string
-			var orgErr error
-			if alreadyInRoot {
-				newPath, orgErr = s.organizeService.reOrganizeInPlace(book, log2)
-			} else {
-				bookFiles, _ := database.GlobalStore.GetBookFiles(id)
-				isDir := len(bookFiles) > 1
-				if !isDir {
-					if info, statErr := os.Stat(oldPath); statErr == nil && info.IsDir() {
-						isDir = true
+			// Write tags
+			_, wbErr := mfs.WriteBackMetadataForBook(id)
+			if wbErr != nil {
+				failed++
+				detail := wbErr.Error()
+				_ = store.AddOperationLog(opID, "warn", fmt.Sprintf("write-back failed for %s", book.Title), &detail)
+				continue
+			}
+			written++
+
+			// Organize
+			if doOrganize {
+				book, _ = store.GetBookByID(id)
+				if book != nil {
+					oldPath := book.FilePath
+					alreadyInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(oldPath, config.AppConfig.RootDir)
+					var newPath string
+					var orgErr error
+					if alreadyInRoot {
+						newPath, orgErr = orgSvc.reOrganizeInPlace(book, log2)
+					} else {
+						bookFiles, _ := store.GetBookFiles(id)
+						isDir := len(bookFiles) > 1
+						if !isDir {
+							if info, statErr := os.Stat(oldPath); statErr == nil && info.IsDir() {
+								isDir = true
+							}
+						}
+						if isDir {
+							newPath, orgErr = orgSvc.organizeDirectoryBook(org, book, log2)
+						} else {
+							newPath, _, orgErr = org.OrganizeBook(book)
+						}
+					}
+					if orgErr != nil {
+						detail := orgErr.Error()
+						_ = store.AddOperationLog(opID, "warn", fmt.Sprintf("organize failed for %s", book.Title), &detail)
+					} else if newPath != "" && newPath != oldPath {
+						organized++
 					}
 				}
-				if isDir {
-					newPath, orgErr = s.organizeService.organizeDirectoryBook(org, book, log2)
-				} else {
-					newPath, _, orgErr = org.OrganizeBook(book)
-				}
 			}
-			if orgErr != nil {
-				errors = append(errors, batchWriteBackError{BookID: id, Error: fmt.Sprintf("organize failed: %v", orgErr)})
-			} else if newPath != "" && newPath != oldPath {
-				organized++
+
+			// Enqueue ITL write-back
+			if GlobalWriteBackBatcher != nil {
+				GlobalWriteBackBatcher.Enqueue(id)
 			}
+
+			_ = progress.UpdateProgress(i+1, totalBooks,
+				fmt.Sprintf("processed %d/%d (written: %d, organized: %d, failed: %d)",
+					i+1, totalBooks, written, organized, failed))
 		}
+
+		_ = progress.UpdateProgress(totalBooks, totalBooks,
+			fmt.Sprintf("complete: written %d, organized %d, failed %d", written, organized, failed))
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(opID, "batch_save_to_files", operations.PriorityNormal, opFunc); err != nil {
+		internalError(c, "failed to enqueue operation", err)
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"written":       written,
-		"written_files": writtenFiles,
-		"organized":     organized,
-		"failed":        failed,
-		"errors":        errors,
+		"operation_id": opID,
+		"message":      fmt.Sprintf("Save to files queued for %d books", totalBooks),
+		"book_count":   totalBooks,
 	})
 }
 
