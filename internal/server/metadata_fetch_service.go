@@ -1346,10 +1346,25 @@ func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, cove
 		return
 	}
 
+	// Check if the new cover is different from what's already embedded.
+	// Skip archive + embed if they match (same hash).
+	newCoverData, _ := os.ReadFile(coverPath)
+	if len(newCoverData) > 0 {
+		newHash := fmt.Sprintf("%x", sha256.Sum256(newCoverData))[:12]
+		existingData, _, _ := metadata.ExtractCoverArtBytes(files[0])
+		if len(existingData) > 0 {
+			existingHash := fmt.Sprintf("%x", sha256.Sum256(existingData))[:12]
+			if newHash == existingHash {
+				log.Printf("[DEBUG] cover art unchanged for book %s, skipping embed", book.ID)
+				return
+			}
+		}
+	}
+
 	// Archive the old cover from the first file before overwriting
 	mfs.archiveExistingCover(book.ID, files[0])
 
-	// Embed new cover into all files (always overwrite)
+	// Embed new cover into all files
 	embedded := 0
 	for _, f := range files {
 		if err := tagger.EmbedCoverArt(f, coverPath); err != nil {
