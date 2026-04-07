@@ -657,8 +657,8 @@ export const Library = () => {
         }
       }
 
-      // Determine search text (free text from parsed search, or raw search if no parse)
-      const searchText = parsedSearch?.freeText || debouncedSearch;
+      // Use parsed free text — field filters are handled separately via the filters param
+      const searchText = parsedSearch ? parsedSearch.freeText : debouncedSearch;
 
       // Get tag filter from sidebar tags or parsed search
       const tagFilter =

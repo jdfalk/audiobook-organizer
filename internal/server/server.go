@@ -864,6 +864,9 @@ func NewServer() *Server {
 	// Initialize the iTunes auto write-back batcher
 	InitWriteBackBatcher()
 
+	// Initialize the file I/O worker pool (bounded concurrency for embed/tag/rename)
+	InitFileIOPool()
+
 	return server
 }
 
@@ -1297,6 +1300,18 @@ func (s *Server) Start(cfg ServerConfig) error {
 		})
 		// Give clients a moment to receive the event
 		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Stop the file I/O pool — waits for in-flight jobs to finish
+	if GlobalFileIOPool != nil {
+		log.Println("[INFO] Waiting for file I/O operations to complete...")
+		GlobalFileIOPool.Stop()
+	}
+
+	// Flush the ITL write-back batcher
+	if GlobalWriteBackBatcher != nil {
+		log.Println("[INFO] Flushing iTunes write-back batcher...")
+		GlobalWriteBackBatcher.Stop()
 	}
 
 	// Give outstanding requests a deadline for completion
@@ -7300,17 +7315,21 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	// Kick off slow file I/O (cover embed, tags, rename) in background.
 	// Cover download is already done inline so the response has the URL.
 	shouldWriteBack := body.WriteBack == nil || *body.WriteBack
-	go func() {
-		s.metadataFetchService.ApplyMetadataFileIO(id)
-		if shouldWriteBack {
-			if _, wbErr := s.metadataFetchService.WriteBackMetadataForBook(id); wbErr != nil {
-				log.Printf("[WARN] background write-back for %s: %v", id, wbErr)
+	if GlobalFileIOPool != nil {
+		bookID := id
+		mfs := s.metadataFetchService
+		GlobalFileIOPool.Submit(bookID, func() {
+			mfs.ApplyMetadataFileIO(bookID)
+			if shouldWriteBack {
+				if _, wbErr := mfs.WriteBackMetadataForBook(bookID); wbErr != nil {
+					log.Printf("[WARN] background write-back for %s: %v", bookID, wbErr)
+				}
+				if GlobalWriteBackBatcher != nil {
+					GlobalWriteBackBatcher.Enqueue(bookID)
+				}
 			}
-			if GlobalWriteBackBatcher != nil {
-				GlobalWriteBackBatcher.Enqueue(id)
-			}
-		}
-	}()
+		})
+	}
 
 	// Re-fetch to get fully enriched book with author/series/narrator names
 	enrichedBook := resp.Book
