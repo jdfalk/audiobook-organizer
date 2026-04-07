@@ -1198,22 +1198,16 @@ export const Library = () => {
 
     setBulkWriteBackInProgress(true);
     try {
-      const result = await api.batchWriteBackMetadata(
+      await api.batchWriteBackMetadata(
         activeBooks.map((book) => book.id),
         bulkWriteBackRename
       );
-      setBulkWriteBackResult(result);
-      if (result.failed > 0) {
-        toast(`Saved ${result.written} books to files, ${result.failed} failed.`, 'warning');
-      } else {
-        const renameNote = (result.organized || result.renamed) > 0 ? ` and organized ${result.organized || result.renamed}` : '';
-        toast(`Saved ${result.written} books to files${renameNote}.`, 'success');
-        setSelectedAudiobooks([]);
-      }
-      await loadAudiobooks();
+      toast(`Saving ${activeBooks.length} books to files — check operations for progress.`, 'success');
+      setBulkWriteBackDialogOpen(false);
+      setSelectedAudiobooks([]);
     } catch (error) {
-      console.error('Failed to batch write metadata:', error);
-      toast('Failed to save selected books to files.', 'error');
+      console.error('Failed to start save to files:', error);
+      toast('Failed to start save to files.', 'error');
     } finally {
       setBulkWriteBackInProgress(false);
     }
