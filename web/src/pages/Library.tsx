@@ -2257,6 +2257,8 @@ export const Library = () => {
                   <MenuItem value={20}>20</MenuItem>
                   <MenuItem value={50}>50</MenuItem>
                   <MenuItem value={100}>100</MenuItem>
+                  <MenuItem value={250}>250</MenuItem>
+                  <MenuItem value={500}>500</MenuItem>
                 </TextField>
                 {totalPages > 1 && (
                   <Pagination
