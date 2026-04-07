@@ -2617,7 +2617,7 @@ export interface CandidateBookInfo {
 export interface CandidateResult {
   book: CandidateBookInfo;
   candidate?: MetadataCandidate;
-  status: 'matched' | 'no_match' | 'error';
+  status: 'matched' | 'no_match' | 'error' | 'rejected';
   error_message?: string;
 }
 
