@@ -80,6 +80,11 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 	bookIDs := make([]string, len(req.BookIDs))
 	copy(bookIDs, req.BookIDs)
 
+	// Save book IDs as operation params for recovery on restart
+	if paramsJSON, err := json.Marshal(bookIDs); err == nil {
+		_ = store.SaveOperationParams(opID, paramsJSON)
+	}
+
 	mfs := s.metadataFetchService
 
 	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -457,4 +462,112 @@ func (s *Server) handleGetRecentOperations(c *gin.Context) {
 	}
 	s.listCache.Set(cacheKey, resp)
 	c.JSON(http.StatusOK, resp)
+}
+
+// resumeInterruptedMetadataFetch checks for metadata_candidate_fetch operations
+// that were interrupted (status=running) and re-enqueues the remaining books.
+func (s *Server) resumeInterruptedMetadataFetch() {
+	store := database.GlobalStore
+	if store == nil {
+		return
+	}
+
+	interrupted, err := store.GetInterruptedOperations()
+	if err != nil {
+		return
+	}
+
+	for _, op := range interrupted {
+		if op.Type != "metadata_candidate_fetch" {
+			continue
+		}
+
+		// Load the original book IDs from saved params
+		paramsJSON, err := store.GetOperationParams(op.ID)
+		if err != nil || len(paramsJSON) == 0 {
+			log.Printf("[WARN] no saved params for interrupted metadata fetch %s, marking failed", op.ID)
+			_ = store.UpdateOperationStatus(op.ID, "failed", op.Progress, op.Total, "interrupted, no params to resume")
+			continue
+		}
+
+		var allBookIDs []string
+		if err := json.Unmarshal(paramsJSON, &allBookIDs); err != nil {
+			log.Printf("[WARN] invalid params for interrupted metadata fetch %s: %v", op.ID, err)
+			_ = store.UpdateOperationStatus(op.ID, "failed", op.Progress, op.Total, "interrupted, invalid params")
+			continue
+		}
+
+		// Find which books already have results
+		existingResults, _ := store.GetOperationResults(op.ID)
+		completed := make(map[string]bool, len(existingResults))
+		for _, r := range existingResults {
+			completed[r.BookID] = true
+		}
+
+		// Filter to remaining books
+		var remaining []string
+		for _, id := range allBookIDs {
+			if !completed[id] {
+				remaining = append(remaining, id)
+			}
+		}
+
+		if len(remaining) == 0 {
+			log.Printf("[INFO] interrupted metadata fetch %s has all results, marking completed", op.ID)
+			_ = store.UpdateOperationStatus(op.ID, "completed", len(allBookIDs), len(allBookIDs), "recovered — all books fetched")
+			continue
+		}
+
+		log.Printf("[INFO] resuming metadata fetch %s: %d/%d books remaining", op.ID, len(remaining), len(allBookIDs))
+
+		// Re-enqueue the remaining books as a continuation of the same operation
+		opID := op.ID
+		totalBooks := len(allBookIDs)
+		alreadyDone := len(allBookIDs) - len(remaining)
+		mfs := s.metadataFetchService
+
+		opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+			_ = progress.UpdateProgress(alreadyDone, totalBooks, fmt.Sprintf("resuming: %d/%d already fetched", alreadyDone, totalBooks))
+
+			limiter := rate.NewLimiter(rate.Limit(10), 1)
+			var completed int64 = int64(alreadyDone)
+			const numWorkers = 8
+			ch := make(chan string, len(remaining))
+			for _, id := range remaining {
+				ch <- id
+			}
+			close(ch)
+
+			var wg sync.WaitGroup
+			for w := 0; w < numWorkers; w++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for bookID := range ch {
+						if ctx.Err() != nil {
+							return
+						}
+						_ = limiter.Wait(ctx)
+						result := s.fetchCandidateForBook(ctx, mfs, store, limiter, opID, bookID)
+						resultJSON, _ := json.Marshal(result)
+						_ = store.CreateOperationResult(&database.OperationResult{
+							OperationID: opID,
+							BookID:      bookID,
+							ResultJSON:  string(resultJSON),
+							Status:      result.Status,
+						})
+						done := atomic.AddInt64(&completed, 1)
+						_ = progress.UpdateProgress(int(done), totalBooks, fmt.Sprintf("fetched %d/%d", done, totalBooks))
+					}
+				}()
+			}
+			wg.Wait()
+			return nil
+		}
+
+		if err := operations.GlobalQueue.Enqueue(opID, "metadata_candidate_fetch", operations.PriorityNormal, opFunc); err != nil {
+			log.Printf("[WARN] failed to re-enqueue metadata fetch %s: %v", opID, err)
+			_ = store.UpdateOperationStatus(opID, "failed", alreadyDone, totalBooks, "failed to resume")
+		}
+	}
 }
