@@ -22,8 +22,8 @@ const backups = [
 
 const openBackupSettings = async (
   page: Page,
-  backupsToUse: any[] = [],
-  failures: Record<string, any> = {}
+  backupsToUse: unknown[] = [],
+  failures: Record<string, unknown> = {}
 ) => {
   // Phase 2 setup: Reset and skip welcome wizard with mocked APIs (must be before page.goto)
   // This also mocks EventSource to prevent SSE connections

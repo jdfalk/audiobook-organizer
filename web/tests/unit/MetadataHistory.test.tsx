@@ -102,10 +102,6 @@ describe('MetadataHistory', () => {
     });
 
     // Click undo button (inside the table, find the icon button)
-    const undoButtons = screen.getAllByTestId ?
-      screen.getAllByRole('button').filter(btn => btn.querySelector('svg[data-testid="UndoIcon"]')) :
-      [];
-    // Fallback: find all icon buttons that are not disabled
     const allButtons = screen.getAllByRole('button');
     const undoButton = allButtons.find(btn => btn.innerHTML.includes('UndoIcon') || btn.querySelector('svg'));
     expect(undoButton).toBeTruthy();

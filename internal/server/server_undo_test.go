@@ -354,9 +354,14 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 	batcher := NewWriteBackBatcher(1 * time.Hour) // long delay so it won't flush
 	GlobalWriteBackBatcher = batcher
 	defer func() {
+		// Stop pool workers before restoring globals to avoid races
+		if p := GetGlobalFileIOPool(); p != nil {
+			p.Stop()
+			SetGlobalFileIOPool(nil)
+		}
+		batcher.Stop()
 		GlobalWriteBackBatcher = origBatcher
 		config.AppConfig = origConfig
-		batcher.Stop()
 	}()
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/audiobooks/%s/undo-last-apply", book.ID), nil)
@@ -396,9 +401,14 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 	batcher := NewWriteBackBatcher(1 * time.Hour)
 	GlobalWriteBackBatcher = batcher
 	defer func() {
+		// Stop pool workers before restoring globals to avoid races
+		if p := GetGlobalFileIOPool(); p != nil {
+			p.Stop()
+			SetGlobalFileIOPool(nil)
+		}
+		batcher.Stop()
 		GlobalWriteBackBatcher = origBatcher
 		config.AppConfig = origConfig
-		batcher.Stop()
 	}()
 
 	writeBack := true
@@ -454,9 +464,14 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 	batcher := NewWriteBackBatcher(1 * time.Hour)
 	GlobalWriteBackBatcher = batcher
 	defer func() {
+		// Stop pool workers before restoring globals to avoid races
+		if p := GetGlobalFileIOPool(); p != nil {
+			p.Stop()
+			SetGlobalFileIOPool(nil)
+		}
+		batcher.Stop()
 		GlobalWriteBackBatcher = origBatcher
 		config.AppConfig = origConfig
-		batcher.Stop()
 	}()
 
 	// Omit write_back field entirely — should default to true
@@ -511,9 +526,14 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 	batcher := NewWriteBackBatcher(1 * time.Hour)
 	GlobalWriteBackBatcher = batcher
 	defer func() {
+		// Stop pool workers before restoring globals to avoid races
+		if p := GetGlobalFileIOPool(); p != nil {
+			p.Stop()
+			SetGlobalFileIOPool(nil)
+		}
+		batcher.Stop()
 		GlobalWriteBackBatcher = origBatcher
 		config.AppConfig = origConfig
-		batcher.Stop()
 	}()
 
 	writeBack := false
