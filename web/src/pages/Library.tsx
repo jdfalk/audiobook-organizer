@@ -287,7 +287,6 @@ export const Library = () => {
     searchParams.get('reviewOp')
   );
   const [metadataReviewOpen, setMetadataReviewOpen] = useState(!!searchParams.get('reviewOp'));
-  const [metadataFetchInProgress, setMetadataFetchInProgress] = useState(false);
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
 
@@ -1714,11 +1713,9 @@ export const Library = () => {
               variant="outlined"
               color="primary"
               onClick={async () => {
-                if (metadataFetchInProgress) return;
-                setMetadataFetchInProgress(true);
                 try {
                   const { operation_id } = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
-                  toast('Fetching metadata for ' + selectedAudiobooks.length + ' books...', 'info');
+                  toast(`Fetching metadata for ${selectedAudiobooks.length} books — check operations for progress.`, 'info');
                   setMetadataReviewOpId(operation_id);
                   const poll = setInterval(async () => {
                     try {
@@ -1726,16 +1723,15 @@ export const Library = () => {
                       const op = ops.find((o: { id: string }) => o.id === operation_id);
                       if (!op || op.status === 'completed' || op.status === 'failed') {
                         clearInterval(poll);
-                        setMetadataFetchInProgress(false);
                         if (!op || op.status === 'completed') { setMetadataReviewOpen(true); toast('Metadata fetch complete — review results', 'success'); }
                         else { toast('Metadata fetch failed', 'error'); }
                       }
                     } catch { /* ignore */ }
                   }, 2000);
-                } catch { toast('Failed to start metadata fetch', 'error'); setMetadataFetchInProgress(false); }
+                } catch { toast('Failed to start metadata fetch', 'error'); }
               }}
-              disabled={selectedAudiobooks.length < 2 || metadataFetchInProgress}
-            >{metadataFetchInProgress ? 'Fetching...' : 'Fetch & Review'}</Button>
+              disabled={selectedAudiobooks.length < 2}
+            >Fetch & Review</Button>
             <Button size="small" variant="outlined" onClick={() => setBulkSearchOpen(true)} disabled={!hasSelection}>Search Metadata</Button>
             <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24 }} />
             <Button size="small" variant="outlined" onClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }} disabled={!selectedHasActive}>Save to Files</Button>
@@ -2198,7 +2194,21 @@ export const Library = () => {
                   Clear Search
                 </Button>
               </Paper>
-            ) : viewMode === 'grid' ? (
+            ) : (
+            <>
+            {itemsPerPage > 50 && totalPages > 1 && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={(_, value) => setPage(value)}
+                  color="primary"
+                  siblingCount={3}
+                  size="small"
+                />
+              </Box>
+            )}
+            {viewMode === 'grid' ? (
               <AudiobookGrid
                 audiobooks={audiobooks}
                 loading={loading}
@@ -2228,6 +2238,8 @@ export const Library = () => {
                 onSortChange={handleColumnSortChange}
                 onColumnResize={resizeColumn}
               />
+            )}
+            </>
             )}
 
             {!loading && (
