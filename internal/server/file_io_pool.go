@@ -118,12 +118,24 @@ func (p *FileIOPool) PendingBookIDs() []string {
 	return ids
 }
 
-// Stop drains the queue and waits for in-flight jobs to finish.
+// Stop drains the queue and waits for in-flight jobs to finish,
+// with a 30-second timeout to prevent blocking shutdown indefinitely.
 func (p *FileIOPool) Stop() {
 	atomic.StoreInt32(&p.stopped, 1)
 	close(p.ch)
-	p.wg.Wait()
-	log.Printf("[INFO] file I/O pool stopped, all jobs complete")
+
+	done := make(chan struct{})
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Printf("[INFO] file I/O pool stopped, all jobs complete")
+	case <-time.After(30 * time.Second):
+		log.Printf("[WARN] file I/O pool shutdown timed out after 30s, %d jobs may be incomplete", p.Pending())
+	}
 }
 
 // InitFileIOPool creates the global pool.
