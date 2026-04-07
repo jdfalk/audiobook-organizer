@@ -2181,12 +2181,13 @@ export async function writeBackMetadata(
 
 export async function batchWriteBackMetadata(
   bookIds: string[],
-  organize = false
+  organize = false,
+  force = false
 ): Promise<BatchWriteBackResponse> {
   const response = await fetch(`${API_BASE}/audiobooks/batch-write-back`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ book_ids: bookIds, organize }),
+    body: JSON.stringify({ book_ids: bookIds, organize, force }),
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write metadata to files');

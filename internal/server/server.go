@@ -3606,6 +3606,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		BookIDs  []string `json:"book_ids"`
 		Rename   bool     `json:"rename"`
 		Organize bool     `json:"organize"`
+		Force    bool     `json:"force"` // skip change detection, rewrite everything
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -3629,13 +3630,14 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 	bookIDs := make([]string, len(req.BookIDs))
 	copy(bookIDs, req.BookIDs)
 	totalBooks := len(bookIDs)
+	force := req.Force
 	mfs := s.metadataFetchService
 	orgSvc := s.organizeService
 
 	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
 		_ = progress.UpdateProgress(0, totalBooks, "starting save to files")
 
-		written, organized, failed := 0, 0, 0
+		written, organized, failed, skipped := 0, 0, 0, 0
 		org := organizer.NewOrganizer(&config.AppConfig)
 		log2 := logger.NewWithActivityLog("batch-write-back", store)
 
@@ -3648,6 +3650,14 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 			if err != nil || book == nil {
 				failed++
 				_ = store.AddOperationLog(opID, "warn", fmt.Sprintf("book %s not found", id), nil)
+				continue
+			}
+
+			// Skip if already written and metadata hasn't changed since last write
+			if !force && book.LastWrittenAt != nil && !book.UpdatedAt.After(*book.LastWrittenAt) {
+				skipped++
+				_ = progress.UpdateProgress(i+1, totalBooks,
+					fmt.Sprintf("processed %d/%d (skipped: %d — already up to date)", i+1, totalBooks, skipped))
 				continue
 			}
 
@@ -3705,7 +3715,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		}
 
 		_ = progress.UpdateProgress(totalBooks, totalBooks,
-			fmt.Sprintf("complete: written %d, organized %d, failed %d", written, organized, failed))
+			fmt.Sprintf("complete: written %d, organized %d, skipped %d, failed %d", written, organized, skipped, failed))
 		return nil
 	}
 

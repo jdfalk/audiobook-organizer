@@ -312,6 +312,7 @@ export const Library = () => {
   const [bulkWriteBackDialogOpen, setBulkWriteBackDialogOpen] = useState(false);
   const [bulkWriteBackInProgress, setBulkWriteBackInProgress] = useState(false);
   const [bulkWriteBackRename, setBulkWriteBackRename] = useState(false);
+  const [bulkWriteBackForce, setBulkWriteBackForce] = useState(false);
   const [bulkWriteBackResult, setBulkWriteBackResult] = useState<api.BatchWriteBackResponse | null>(
     null
   );
@@ -1200,7 +1201,8 @@ export const Library = () => {
     try {
       await api.batchWriteBackMetadata(
         activeBooks.map((book) => book.id),
-        bulkWriteBackRename
+        bulkWriteBackRename,
+        bulkWriteBackForce
       );
       toast(`Saving ${activeBooks.length} books to files — check operations for progress.`, 'success');
       setBulkWriteBackDialogOpen(false);
@@ -2548,6 +2550,16 @@ export const Library = () => {
                 />
               }
               label="Organize files after write"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={bulkWriteBackForce}
+                  onChange={(event) => setBulkWriteBackForce(event.target.checked)}
+                  disabled={bulkWriteBackInProgress}
+                />
+              }
+              label="Force rewrite (skip change detection)"
             />
             {bulkWriteBackResult && (
               <Box sx={{ mt: 2 }}>
