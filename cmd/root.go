@@ -10,9 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -348,12 +346,9 @@ func SetVersion(v string) {
 
 // Execute adds all child commands to the root command and sets flags appropriately
 func Execute() error {
-	// Set umask to 0002 on Linux so os.Create (mode 0666) yields 0664 and
-	// os.MkdirAll(..., 0777) yields 0775. This preserves group-write which
-	// is required for POSIX ACLs to function correctly.
-	if runtime.GOOS == "linux" {
-		syscall.Umask(0002)
-	}
+	// Set umask on Unix so os.Create yields 0664 and os.MkdirAll yields 0775.
+	// This preserves group-write required for POSIX ACLs.
+	setUmask()
 	return rootCmd.Execute()
 }
 
