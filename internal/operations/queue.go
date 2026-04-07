@@ -106,7 +106,7 @@ func NewOperationQueue(store database.Store, workers int) *OperationQueue {
 		pending:    make(chan *QueuedOperation, 100),
 		workers:    workers,
 		store:      store,
-		timeout:    30 * time.Minute,
+		timeout:    120 * time.Minute,
 		ctx:        ctx,
 		cancel:     cancel,
 		listeners:  make(map[string][]ProgressListener),
