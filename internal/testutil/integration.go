@@ -48,7 +48,7 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	err = database.RunMigrations(store)
 	require.NoError(t, err)
 
-	database.GlobalStore = store
+	database.SetGlobalStore(store)
 
 	queue := operations.NewOperationQueue(store, 2)
 	operations.GlobalQueue = queue
@@ -77,8 +77,9 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	}
 
 	cleanup := func() {
-		store.Close()
 		_ = queue.Shutdown(2 * time.Second)
+		database.SetGlobalStore(nil)
+		store.Close()
 	}
 
 	return env, cleanup

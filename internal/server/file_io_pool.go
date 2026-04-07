@@ -157,7 +157,7 @@ func RecoverInterruptedFileOps() {
 // --- Persistent tracking via PebbleDB ---
 
 func storePendingFileOp(bookID, opType string) {
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	if store == nil {
 		return
 	}
@@ -168,7 +168,7 @@ func storePendingFileOp(bookID, opType string) {
 }
 
 func removePendingFileOp(bookID string) {
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	if store == nil {
 		return
 	}
@@ -179,7 +179,7 @@ func removePendingFileOp(bookID string) {
 // recoverInterruptedFileOps re-queues any file I/O jobs that were in-flight
 // when the server last shut down (or crashed).
 func recoverInterruptedFileOps() {
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	if store == nil {
 		return
 	}

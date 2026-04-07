@@ -6,6 +6,7 @@ package database
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -834,8 +835,25 @@ type DashboardStats struct {
 	FormatDistribution map[string]int `json:"format_distribution"`
 }
 
-// Global store instance
+// Global store instance — use GetGlobalStore/SetGlobalStore for concurrent access.
+// Direct assignment is allowed in single-goroutine contexts (init, main).
 var GlobalStore Store
+var globalStoreMu sync.RWMutex
+
+// GetGlobalStore returns the global store with read-lock protection.
+func GetGlobalStore() Store {
+	globalStoreMu.RLock()
+	s := GlobalStore
+	globalStoreMu.RUnlock()
+	return s
+}
+
+// SetGlobalStore sets the global store with write-lock protection.
+func SetGlobalStore(s Store) {
+	globalStoreMu.Lock()
+	GlobalStore = s
+	globalStoreMu.Unlock()
+}
 
 // InitializeStore initializes the database store based on configuration
 func InitializeStore(dbType, path string, enableSQLite bool) error {
