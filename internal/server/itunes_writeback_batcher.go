@@ -22,13 +22,19 @@ import (
 // WriteBackBatcher collects ITL operations and flushes them in a single batch
 // after a debounce delay. Supports location updates, track additions, and
 // track removals — all applied in one read-modify-write cycle.
+//
+// Adaptive debounce: the initial delay is 5s, but if new enqueues arrive
+// within the window, the timer extends up to maxDelay (30s). This batches
+// rapid-fire applies into a single ITL write instead of multiple.
 type WriteBackBatcher struct {
 	mu             sync.Mutex
-	pendingBooks   map[string]bool          // book IDs for location updates
-	pendingAdds    []itunes.ITLNewTrack     // tracks to add
-	pendingRemoves map[string]bool          // PIDs to remove (lowercase hex)
+	pendingBooks   map[string]bool      // book IDs for location updates
+	pendingAdds    []itunes.ITLNewTrack // tracks to add
+	pendingRemoves map[string]bool      // PIDs to remove (lowercase hex)
 	timer          *time.Timer
 	delay          time.Duration
+	maxDelay       time.Duration
+	firstEnqueue   time.Time // when the first enqueue in this batch happened
 	stopCh         chan struct{}
 	stopped        bool
 }
@@ -42,6 +48,7 @@ func NewWriteBackBatcher(delay time.Duration) *WriteBackBatcher {
 		pendingBooks:   make(map[string]bool),
 		pendingRemoves: make(map[string]bool),
 		delay:          delay,
+		maxDelay:       30 * time.Second,
 		stopCh:         make(chan struct{}),
 	}
 }
@@ -100,7 +107,23 @@ func (b *WriteBackBatcher) resetTimer() {
 	if b.timer != nil {
 		b.timer.Stop()
 	}
-	b.timer = time.AfterFunc(b.delay, b.flush)
+	// Track when the first enqueue in this batch happened
+	if b.firstEnqueue.IsZero() {
+		b.firstEnqueue = time.Now()
+	}
+	// If we've been accumulating for longer than maxDelay, flush now
+	elapsed := time.Since(b.firstEnqueue)
+	if elapsed >= b.maxDelay {
+		go b.flush()
+		return
+	}
+	// Otherwise, extend the timer (but don't exceed maxDelay from first enqueue)
+	remaining := b.maxDelay - elapsed
+	delay := b.delay
+	if delay > remaining {
+		delay = remaining
+	}
+	b.timer = time.AfterFunc(delay, b.flush)
 }
 
 func (b *WriteBackBatcher) hasPending() bool {
@@ -127,6 +150,7 @@ func (b *WriteBackBatcher) flush() {
 	b.pendingBooks = make(map[string]bool)
 	b.pendingAdds = nil
 	b.pendingRemoves = make(map[string]bool)
+	b.firstEnqueue = time.Time{} // reset for next batch
 	b.mu.Unlock()
 
 	store := database.GlobalStore
