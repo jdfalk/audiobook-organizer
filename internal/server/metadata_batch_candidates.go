@@ -209,8 +209,26 @@ func (s *Server) fetchCandidateForBook(
 		}
 	}
 
-	// Pick the top-scoring candidate.
-	topCandidate := resp.Results[0]
+	// Load previously rejected candidates for this book (across all operations)
+	// and filter them out so we pick the next best match.
+	rejectedKeys := loadRejectedCandidateKeys(store, bookID)
+	var filtered []MetadataCandidate
+	for _, c := range resp.Results {
+		key := c.Source + "|" + c.Title
+		if !rejectedKeys[key] {
+			filtered = append(filtered, c)
+		}
+	}
+	if len(filtered) == 0 {
+		return CandidateResult{
+			Book:   bookInfo,
+			Status: "no_match",
+			Error:  "all candidates previously rejected",
+		}
+	}
+
+	// Pick the top-scoring non-rejected candidate.
+	topCandidate := filtered[0]
 	return CandidateResult{
 		Book:      bookInfo,
 		Candidate: &topCandidate,
@@ -377,6 +395,34 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 		"error_count":  len(errors),
 		"operation_id": req.OperationID,
 	})
+}
+
+// loadRejectedCandidateKeys scans all operation_results for a book to find
+// previously rejected candidates. Returns a set of "source|title" keys.
+func loadRejectedCandidateKeys(store database.Store, bookID string) map[string]bool {
+	keys := make(map[string]bool)
+	// Scan all op_result entries for this book using the raw KV prefix
+	pairs, err := store.ScanPrefix(fmt.Sprintf("op_result:"))
+	if err != nil {
+		return keys
+	}
+	for _, kv := range pairs {
+		var r database.OperationResult
+		if err := json.Unmarshal(kv.Value, &r); err != nil {
+			continue
+		}
+		if r.BookID != bookID || r.Status != "rejected" {
+			continue
+		}
+		var cr CandidateResult
+		if err := json.Unmarshal([]byte(r.ResultJSON), &cr); err != nil {
+			continue
+		}
+		if cr.Candidate != nil {
+			keys[cr.Candidate.Source+"|"+cr.Candidate.Title] = true
+		}
+	}
+	return keys
 }
 
 // handleRejectCandidates stores rejected candidates so future fetches exclude them.
