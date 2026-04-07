@@ -344,6 +344,12 @@ func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger
 	}
 
 	if oldPath == targetPath {
+		// Already in correct location — still stamp as organized
+		organizedState := "organized"
+		book.LibraryState = &organizedState
+		now := time.Now()
+		book.LastOrganizedAt = &now
+		orgSvc.db.UpdateBook(book.ID, book)
 		return targetPath, nil
 	}
 
@@ -357,8 +363,12 @@ func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger
 		return "", fmt.Errorf("failed to rename %s -> %s: %w", oldPath, targetPath, err)
 	}
 
-	// Update the book record
+	// Update the book record — set path and mark as organized
 	book.FilePath = targetPath
+	organizedState := "organized"
+	book.LibraryState = &organizedState
+	now := time.Now()
+	book.LastOrganizedAt = &now
 	if _, err := orgSvc.db.UpdateBook(book.ID, book); err != nil {
 		log.Warn("Failed to update book path for %s: %s", book.ID, err.Error())
 	}
