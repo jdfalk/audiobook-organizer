@@ -100,6 +100,7 @@ const SEARCH_HELP = [
   { example: 'publisher:Audible', desc: 'Filter by publisher' },
   // Common combinations
   { example: 'review:matched has_written:yes has_organized:yes', desc: 'Fully processed books' },
+  { example: '-review:matched library_state:organized -has_written:yes', desc: 'Organized but needs metadata + file write' },
   { example: '-review:matched', desc: 'Books still needing metadata' },
   { example: 'review:matched -has_written:yes', desc: 'Metadata applied but not written to files' },
   { example: 'review:matched has_written:yes -has_organized:yes', desc: 'Written but not organized' },
