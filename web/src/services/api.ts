@@ -2654,6 +2654,16 @@ export async function batchApplyCandidates(operationId: string, bookIds: string[
   return response.json();
 }
 
+export async function batchRejectCandidates(operationId: string, bookIds: string[]): Promise<{ rejected: number }> {
+  const response = await fetch(`${API_BASE}/metadata/batch-reject-candidates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation_id: operationId, book_ids: bookIds }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to reject candidates');
+  return response.json();
+}
+
 export async function getRecentCompletedOperations(): Promise<Operation[]> {
   const response = await fetch(`${API_BASE}/operations/recent`);
   if (!response.ok) throw await buildApiError(response, 'Failed to get recent operations');

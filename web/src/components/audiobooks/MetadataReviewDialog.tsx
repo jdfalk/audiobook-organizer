@@ -66,7 +66,7 @@ export function MetadataReviewDialog({
   const [results, setResults] = useState<CandidateResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [rowStates, setRowStates] = useState<Map<string, 'pending' | 'applied' | 'skipped'>>(
+  const [rowStates, setRowStates] = useState<Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>>(
     new Map()
   );
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
@@ -168,7 +168,21 @@ export function MetadataReviewDialog({
   };
 
   const handleSkip = (bookId: string) => {
-    setRowStates((prev) => new Map(prev).set(bookId, 'skipped'));
+    setRowStates((prev) => {
+      const current = prev.get(bookId);
+      // Toggle: skip ↔ pending
+      return new Map(prev).set(bookId, current === 'skipped' ? 'pending' : 'skipped');
+    });
+  };
+
+  const handleReject = async (bookId: string) => {
+    try {
+      await api.batchRejectCandidates(operationId, [bookId]);
+      setRowStates((prev) => new Map(prev).set(bookId, 'rejected'));
+      toast('Candidate rejected — will be excluded from future fetches', 'info');
+    } catch {
+      toast('Failed to reject', 'error');
+    }
   };
 
   const highConfidenceIds = filteredResults
@@ -178,8 +192,7 @@ export function MetadataReviewDialog({
         r.candidate &&
         r.candidate.score * 100 >= confidenceThreshold &&
         r.candidate.narrator &&
-        rowStates.get(r.book.id) !== 'applied' &&
-        rowStates.get(r.book.id) !== 'skipped'
+        !['applied', 'skipped', 'rejected'].includes(rowStates.get(r.book.id) || '')
     )
     .map((r) => r.book.id);
 
@@ -188,8 +201,7 @@ export function MetadataReviewDialog({
       (r) =>
         r.status === 'matched' &&
         r.candidate &&
-        rowStates.get(r.book.id) !== 'applied' &&
-        rowStates.get(r.book.id) !== 'skipped'
+        !['applied', 'skipped', 'rejected'].includes(rowStates.get(r.book.id) || '')
     )
     .map((r) => r.book.id);
 
@@ -221,7 +233,7 @@ export function MetadataReviewDialog({
 
   const isRowActionable = (bookId: string) => {
     const state = rowStates.get(bookId);
-    return state !== 'applied' && state !== 'skipped';
+    return state !== 'applied' && state !== 'rejected';
   };
 
   const renderCompactRow = (r: CandidateResult) => {
@@ -286,35 +298,19 @@ export function MetadataReviewDialog({
           )}
           {isRowActionable(bookId) && r.candidate && (
             <>
-              <Button
-                size="small"
-                variant="contained"
-                color="success"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleApplyOne(bookId);
-                }}
-              >
-                Apply
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSkip(bookId);
-                }}
-              >
-                Skip
-              </Button>
+              <Button size="small" variant="contained" color="success" onClick={(e) => { e.stopPropagation(); handleApplyOne(bookId); }}>Apply</Button>
+              <Button size="small" variant="outlined" color="error" onClick={(e) => { e.stopPropagation(); handleReject(bookId); }}>Reject</Button>
+              <Button size="small" variant="text" onClick={(e) => { e.stopPropagation(); handleSkip(bookId); }}>Skip</Button>
             </>
           )}
-          {!isRowActionable(bookId) && (
-            <Chip
-              label={rowStates.get(bookId) === 'applied' ? 'Applied' : 'Skipped'}
-              size="small"
-              color={rowStates.get(bookId) === 'applied' ? 'success' : 'default'}
-            />
+          {rowStates.get(bookId) === 'skipped' && (
+            <Chip label="Skipped" size="small" onClick={(e) => { e.stopPropagation(); handleSkip(bookId); }} sx={{ cursor: 'pointer' }} />
+          )}
+          {rowStates.get(bookId) === 'applied' && (
+            <Chip label="Applied" size="small" color="success" />
+          )}
+          {rowStates.get(bookId) === 'rejected' && (
+            <Chip label="Rejected" size="small" color="error" />
           )}
         </Stack>
 
@@ -513,15 +509,15 @@ export function MetadataReviewDialog({
                   </Stack>
                   {isRowActionable(bookId) && (
                     <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                      <Button size="small" variant="contained" color="success" onClick={() => handleApplyOne(bookId)}>
-                        Apply
-                      </Button>
-                      <Button size="small" variant="outlined" onClick={() => handleSkip(bookId)}>
-                        Skip
-                      </Button>
+                      <Button size="small" variant="contained" color="success" onClick={() => handleApplyOne(bookId)}>Apply</Button>
+                      <Button size="small" variant="outlined" color="error" onClick={() => handleReject(bookId)}>Reject</Button>
+                      <Button size="small" variant="text" onClick={() => handleSkip(bookId)}>Skip</Button>
                     </Stack>
                   )}
-                  {!isRowActionable(bookId) && (
+                  {rowStates.get(bookId) === 'skipped' && (
+                    <Chip label="Skipped — click to undo" size="small" onClick={() => handleSkip(bookId)} sx={{ cursor: 'pointer', mt: 1 }} />
+                  )}
+                  {!isRowActionable(bookId) && rowStates.get(bookId) !== 'skipped' && (
                     <Chip
                       label={rowStates.get(bookId) === 'applied' ? 'Applied' : 'Skipped'}
                       size="small"
