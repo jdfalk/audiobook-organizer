@@ -1710,11 +1710,9 @@ export const Library = () => {
       >
         {hasSelection ? (
           /* Batch actions mode */
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ width: '100%' }}>
             <Chip label={`${selectedAudiobooks.length} selected`} size="small" color="primary" />
             <Button size="small" variant="outlined" onClick={() => setBatchEditOpen(true)} disabled={!hasSelection}>Batch Edit</Button>
-            <Button size="small" variant="outlined" onClick={() => setBulkTagDialogOpen(true)} disabled={!hasSelection}>Tag</Button>
-            <Button size="small" variant="outlined" onClick={() => setBulkFetchDialogOpen(true)} disabled={!hasSelection}>Fetch Metadata</Button>
             <Button
               size="small"
               variant="outlined"
@@ -1743,9 +1741,13 @@ export const Library = () => {
               disabled={selectedAudiobooks.length < 2 || metadataFetchInProgress}
             >{metadataFetchInProgress ? 'Fetching...' : 'Fetch & Review'}</Button>
             <Button size="small" variant="outlined" onClick={() => setBulkSearchOpen(true)} disabled={!hasSelection}>Search Metadata</Button>
+            <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24 }} />
             <Button size="small" variant="outlined" onClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }} disabled={!selectedHasActive}>Save to Files</Button>
             <Button size="small" variant="outlined" onClick={() => setBulkOrganizeDialogOpen(true)} disabled={!selectedHasImport}>Organize Selected</Button>
+            <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24 }} />
             <Button size="small" variant="outlined" color="primary" onClick={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }} disabled={selectedAudiobooks.length < 2}>Merge as Versions</Button>
+            <Button size="small" variant="outlined" onClick={() => setBulkTagDialogOpen(true)} disabled={!hasSelection}>Tag</Button>
+            <Box sx={{ flex: 1 }} />
             <Button size="small" variant="outlined" color="secondary" onClick={() => setBatchDeleteDialogOpen(true)} disabled={!selectedHasActive}>Delete Selected</Button>
             <Button size="small" variant="outlined" color="success" onClick={handleBatchRestore} disabled={!selectedHasDeleted || batchRestoreInProgress}>{batchRestoreInProgress ? 'Restoring...' : 'Restore Selected'}</Button>
           </Stack>
