@@ -287,6 +287,7 @@ export const Library = () => {
     searchParams.get('reviewOp')
   );
   const [metadataReviewOpen, setMetadataReviewOpen] = useState(!!searchParams.get('reviewOp'));
+  const [metadataFetchInProgress, setMetadataFetchInProgress] = useState(false);
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
 
@@ -1711,15 +1712,13 @@ export const Library = () => {
             <Button size="small" variant="outlined" onClick={() => setBatchEditOpen(true)} disabled={!hasSelection}>Batch Edit</Button>
             <Button size="small" variant="outlined" onClick={() => setBulkTagDialogOpen(true)} disabled={!hasSelection}>Tag</Button>
             <Button size="small" variant="outlined" onClick={() => setBulkFetchDialogOpen(true)} disabled={!hasSelection}>Fetch Metadata</Button>
-            <Button size="small" variant="outlined" onClick={() => setBulkSearchOpen(true)} disabled={!hasSelection}>Search Metadata</Button>
-            <Button size="small" variant="outlined" onClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }} disabled={!selectedHasActive}>Save to Files</Button>
-            <Button size="small" variant="outlined" onClick={() => setBulkOrganizeDialogOpen(true)} disabled={!selectedHasImport}>Organize Selected</Button>
-            <Button size="small" variant="outlined" color="primary" onClick={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }} disabled={selectedAudiobooks.length < 2}>Merge as Versions</Button>
             <Button
               size="small"
               variant="outlined"
               color="primary"
               onClick={async () => {
+                if (metadataFetchInProgress) return;
+                setMetadataFetchInProgress(true);
                 try {
                   const { operation_id } = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
                   toast('Fetching metadata for ' + selectedAudiobooks.length + ' books...', 'info');
@@ -1730,15 +1729,20 @@ export const Library = () => {
                       const op = ops.find((o: { id: string }) => o.id === operation_id);
                       if (!op || op.status === 'completed' || op.status === 'failed') {
                         clearInterval(poll);
+                        setMetadataFetchInProgress(false);
                         if (!op || op.status === 'completed') { setMetadataReviewOpen(true); toast('Metadata fetch complete — review results', 'success'); }
                         else { toast('Metadata fetch failed', 'error'); }
                       }
                     } catch { /* ignore */ }
                   }, 2000);
-                } catch { toast('Failed to start metadata fetch', 'error'); }
+                } catch { toast('Failed to start metadata fetch', 'error'); setMetadataFetchInProgress(false); }
               }}
-              disabled={selectedAudiobooks.length < 2}
-            >Fetch & Review</Button>
+              disabled={selectedAudiobooks.length < 2 || metadataFetchInProgress}
+            >{metadataFetchInProgress ? 'Fetching...' : 'Fetch & Review'}</Button>
+            <Button size="small" variant="outlined" onClick={() => setBulkSearchOpen(true)} disabled={!hasSelection}>Search Metadata</Button>
+            <Button size="small" variant="outlined" onClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }} disabled={!selectedHasActive}>Save to Files</Button>
+            <Button size="small" variant="outlined" onClick={() => setBulkOrganizeDialogOpen(true)} disabled={!selectedHasImport}>Organize Selected</Button>
+            <Button size="small" variant="outlined" color="primary" onClick={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }} disabled={selectedAudiobooks.length < 2}>Merge as Versions</Button>
             <Button size="small" variant="outlined" color="secondary" onClick={() => setBatchDeleteDialogOpen(true)} disabled={!selectedHasActive}>Delete Selected</Button>
             <Button size="small" variant="outlined" color="success" onClick={handleBatchRestore} disabled={!selectedHasDeleted || batchRestoreInProgress}>{batchRestoreInProgress ? 'Restoring...' : 'Restore Selected'}</Button>
           </Stack>
@@ -1912,7 +1916,7 @@ export const Library = () => {
             </Stack>
 
             {/* Select All bar — always visible */}
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5, mt: -1.5, mb: -1.5 }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5, mt: -0.5, mb: -1 }}>
               <FormControlLabel
                 control={
                   <Checkbox
