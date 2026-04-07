@@ -539,6 +539,9 @@ export const Library = () => {
     params.set('page', page.toString());
     if (itemsPerPage !== 20) params.set('limit', itemsPerPage.toString());
     if (selectedTags.length > 0) params.set('tag', selectedTags[0]);
+    // Preserve reviewOp if present
+    const existingReviewOp = searchParams.get('reviewOp');
+    if (existingReviewOp) params.set('reviewOp', existingReviewOp);
 
     // Push a new history entry when page changes so back button works;
     // replace for other changes (search typing, etc.) to avoid history spam.
