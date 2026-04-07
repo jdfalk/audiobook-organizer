@@ -437,29 +437,23 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 	})
 }
 
-// loadRejectedCandidateKeys scans all operation_results for a book to find
-// previously rejected candidates. Returns a set of "source|title" keys.
+// loadRejectedCandidateKeys finds previously rejected candidates for a book.
+// Uses a dedicated rejection key prefix for fast lookup instead of scanning
+// all operation results.
 func loadRejectedCandidateKeys(store database.Store, bookID string) map[string]bool {
 	keys := make(map[string]bool)
-	// Scan all op_result entries for this book using the raw KV prefix
-	pairs, err := store.ScanPrefix(fmt.Sprintf("op_result:"))
+	// Scan only rejection keys for this specific book
+	pairs, err := store.ScanPrefix(fmt.Sprintf("rejected_candidate:%s:", bookID))
 	if err != nil {
 		return keys
 	}
 	for _, kv := range pairs {
-		var r database.OperationResult
-		if err := json.Unmarshal(kv.Value, &r); err != nil {
-			continue
-		}
-		if r.BookID != bookID || r.Status != "rejected" {
-			continue
-		}
-		var cr CandidateResult
-		if err := json.Unmarshal([]byte(r.ResultJSON), &cr); err != nil {
-			continue
-		}
-		if cr.Candidate != nil {
-			keys[cr.Candidate.Source+"|"+cr.Candidate.Title] = true
+		// Key format: rejected_candidate:{bookID}:{source}|{title}
+		// Value is just "1" — we only need the key
+		keyStr := string(kv.Key)
+		prefix := fmt.Sprintf("rejected_candidate:%s:", bookID)
+		if len(keyStr) > len(prefix) {
+			keys[keyStr[len(prefix):]] = true
 		}
 	}
 	return keys
@@ -511,6 +505,12 @@ func (s *Server) handleRejectCandidates(c *gin.Context) {
 			ResultJSON:  string(updatedJSON),
 			Status:      "rejected",
 		})
+
+		// Store a fast-lookup rejection key for the batch fetch dedup
+		if cr.Candidate != nil {
+			rejectKey := fmt.Sprintf("rejected_candidate:%s:%s|%s", r.BookID, cr.Candidate.Source, cr.Candidate.Title)
+			_ = store.SetRaw(rejectKey, []byte("1"))
+		}
 		rejected++
 	}
 
