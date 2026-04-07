@@ -4268,6 +4268,37 @@ func (p *PebbleStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping,
 	return nil, nil
 }
 
+func (p *PebbleStore) SetRaw(key string, value []byte) error {
+	return p.db.Set([]byte(key), value, pebble.Sync)
+}
+
+func (p *PebbleStore) DeleteRaw(key string) error {
+	return p.db.Delete([]byte(key), pebble.Sync)
+}
+
+func (p *PebbleStore) ScanPrefix(prefix string) ([]KVPair, error) {
+	prefixBytes := []byte(prefix)
+	upperBound := make([]byte, len(prefixBytes))
+	copy(upperBound, prefixBytes)
+	upperBound[len(upperBound)-1]++
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefixBytes,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var pairs []KVPair
+	for iter.First(); iter.Valid(); iter.Next() {
+		val := make([]byte, len(iter.Value()))
+		copy(val, iter.Value())
+		pairs = append(pairs, KVPair{Key: string(iter.Key()), Value: val})
+	}
+	return pairs, nil
+}
+
 func (p *PebbleStore) CreateOperationResult(result *OperationResult) error {
 	result.CreatedAt = time.Now()
 	data, err := json.Marshal(result)

@@ -3261,6 +3261,35 @@ func (s *SQLiteStore) ListOperationSummaryLogs(limit, offset int) ([]OperationSu
 
 // ---- Operation Results (structured per-book output) ----
 
+func (s *SQLiteStore) SetRaw(key string, value []byte) error {
+	s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`)
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)`, key, value)
+	return err
+}
+
+func (s *SQLiteStore) DeleteRaw(key string) error {
+	_, err := s.db.Exec(`DELETE FROM kv_store WHERE key = ?`, key)
+	return err
+}
+
+func (s *SQLiteStore) ScanPrefix(prefix string) ([]KVPair, error) {
+	s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`)
+	rows, err := s.db.Query(`SELECT key, value FROM kv_store WHERE key LIKE ?`, prefix+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var pairs []KVPair
+	for rows.Next() {
+		var kv KVPair
+		if err := rows.Scan(&kv.Key, &kv.Value); err != nil {
+			continue
+		}
+		pairs = append(pairs, kv)
+	}
+	return pairs, nil
+}
+
 func (s *SQLiteStore) CreateOperationResult(result *OperationResult) error {
 	_, err := s.db.Exec(
 		`INSERT INTO operation_results (operation_id, book_id, result_json, status) VALUES (?, ?, ?, ?)`,

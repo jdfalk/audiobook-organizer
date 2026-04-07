@@ -306,6 +306,11 @@ type Store interface {
 	SetExternalIDProvenance(source, externalID, provenance string) error
 	GetRemovedExternalIDs(source string) ([]ExternalIDMapping, error)
 
+	// Low-level key-value operations (for persistent tracking)
+	SetRaw(key string, value []byte) error
+	DeleteRaw(key string) error
+	ScanPrefix(prefix string) ([]KVPair, error)
+
 	// User Tags (free-form labels on books)
 	GetBookUserTags(bookID string) ([]string, error)
 	SetBookUserTags(bookID string, tags []string) error
@@ -764,6 +769,12 @@ type DeferredITunesUpdate struct {
 	UpdateType   string     `json:"update_type"`
 	CreatedAt    time.Time  `json:"created_at"`
 	AppliedAt    *time.Time `json:"applied_at,omitempty"`
+}
+
+// KVPair is a raw key-value pair from the store.
+type KVPair struct {
+	Key   string
+	Value []byte
 }
 
 // ExternalIDMapping maps an external identifier (iTunes PID, Audible ASIN, etc.) to a book.

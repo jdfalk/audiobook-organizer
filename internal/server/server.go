@@ -865,6 +865,8 @@ func NewServer() *Server {
 	InitWriteBackBatcher()
 
 	// Initialize the file I/O worker pool (bounded concurrency for embed/tag/rename)
+	// Set global server ref for recovery of interrupted file ops
+	globalServer = server
 	InitFileIOPool()
 
 	return server
@@ -1090,6 +1092,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Resume any operations that were interrupted by a previous shutdown/crash
 	s.resumeInterruptedOperations()
+
+	// Recover interrupted file I/O operations (cover embed, tag write, rename)
+	RecoverInterruptedFileOps()
 
 	// Backfill external ID mappings from existing iTunes PIDs (one-time, idempotent)
 	go s.backfillExternalIDs()
