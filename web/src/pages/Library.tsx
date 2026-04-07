@@ -491,7 +491,12 @@ export const Library = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     setPage(1);
   }, [searchQuery, filters, selectedTags, sortBy, sortOrder, itemsPerPage]);
 
