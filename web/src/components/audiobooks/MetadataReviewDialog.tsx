@@ -643,7 +643,7 @@ export function MetadataReviewDialog({
                 value={confidenceThreshold}
                 onChange={(_, v) => setConfidenceThreshold(v as number)}
                 min={0}
-                max={100}
+                max={300}
                 sx={{ maxWidth: 300 }}
               />
             </Stack>
