@@ -330,24 +330,21 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             Type free text to search titles, or use field filters:
           </Typography>
 
-          <Box
-            component="table"
-            sx={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              '& td': { py: 0.5, px: 1, verticalAlign: 'top' },
-              '& td:first-of-type': { fontFamily: 'monospace', fontSize: '0.8rem', whiteSpace: 'nowrap', cursor: 'pointer', color: 'primary.main', '&:hover': { textDecoration: 'underline' } },
-              '& td:last-of-type': { color: 'text.secondary', fontSize: '0.8rem' },
-            }}
-          >
-            <tbody>
-              {SEARCH_HELP.map((h) => (
-                <tr key={h.example}>
-                  <td onClick={() => handleHelpExampleClick(h.example)}>{h.example}</td>
-                  <td>{h.desc}</td>
-                </tr>
-              ))}
-            </tbody>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            {SEARCH_HELP.map((h) => (
+              <Box
+                key={h.example}
+                onClick={() => handleHelpExampleClick(h.example)}
+                sx={{ cursor: 'pointer', py: 0.5, px: 1, borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}
+              >
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'primary.main', wordBreak: 'break-word' }}>
+                  {h.example}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {h.desc}
+                </Typography>
+              </Box>
+            ))}
           </Box>
 
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, mb: 0.5 }}>
