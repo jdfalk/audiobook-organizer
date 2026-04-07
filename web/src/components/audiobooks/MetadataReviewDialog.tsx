@@ -79,6 +79,7 @@ export function MetadataReviewDialog({
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
   const [hideApplied, setHideApplied] = useState(true);
   const [hideRejected, setHideRejected] = useState(true);
+  const [hideNoMatch, setHideNoMatch] = useState(true);
 
   useEffect(() => {
     if (!open || !operationId) return;
@@ -151,7 +152,8 @@ export function MetadataReviewDialog({
         r.status !== 'matched'
     )
     .filter((r) => !hideApplied || rowStates.get(r.book.id) !== 'applied')
-    .filter((r) => !hideRejected || rowStates.get(r.book.id) !== 'rejected');
+    .filter((r) => !hideRejected || rowStates.get(r.book.id) !== 'rejected')
+    .filter((r) => !hideNoMatch || (r.status !== 'no_match' && r.status !== 'error'));
 
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
@@ -675,6 +677,10 @@ export function MetadataReviewDialog({
               <FormControlLabel
                 control={<Switch size="small" checked={hideRejected} onChange={(e) => setHideRejected(e.target.checked)} />}
                 label={<Typography variant="body2">Hide Rejected</Typography>}
+              />
+              <FormControlLabel
+                control={<Switch size="small" checked={hideNoMatch} onChange={(e) => setHideNoMatch(e.target.checked)} />}
+                label={<Typography variant="body2">Hide No Match</Typography>}
               />
             </Stack>
 
