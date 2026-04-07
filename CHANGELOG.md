@@ -9,6 +9,63 @@
 
 ### Added / Changed
 
+#### April 5-6, 2026 — ITL Mutation, Bulk Metadata Review, ACL Fixes, UI Overhaul (v4.0.0)
+
+##### iTunes ITL Binary Format
+- **LE-format track add/remove**: `AddTracksLE`, `RemoveTracksByPIDLE`, `RemoveTrackByPIDLE` for v10+ iTunes libraries
+- **Metadata write-back to ITL**: `UpdateMetadataLE` writes title, artist, album, genre directly to ITL mhoh chunks (iTunes caches everything, won't re-read file tags)
+- **Combined mutation pipeline**: `ApplyITLOperations` — single read-modify-write for removes + adds + location patches + metadata updates
+- **ITL test suite**: template-based generation from real production ITL, verified against iTunes 12.13.10.3
+- **Format documentation**: `docs/itl-binary-format.md` — comprehensive reference for hdfm, msdh, mith, mhoh structures
+- **hohm chunk ordering fix**: location (0x0D) must precede metadata chunks
+- **mith totalLen fix**: must include all mhoh sub-blocks
+
+##### Bulk Metadata Review
+- **Background operation**: `POST /api/v1/metadata/batch-fetch-candidates` — parallel workers (8 goroutines, rate-limited 10 req/s) fetch best metadata match per book
+- **Review dialog**: compact/two-column view with source filter chips, confidence slider, Apply/Reject/Skip per row
+- **Reject candidates**: marks bad matches for future exclusion
+- **Batch apply**: coalesced client-side (500ms debounce), server-side via `batch-apply-candidates`
+- **Operations dropdown**: shows last 10 completed operations with "Review Results" button
+- **Migration 45**: `operation_results` table for structured candidate storage
+
+##### Library UI Overhaul
+- **Unified sticky toolbar**: single bar swaps between library actions and batch actions based on selection
+- **Select All always visible**: thin bar between search and content
+- **Shift-click range selection**: click + shift-click selects range in grid and list views
+- **Merge as Versions button**: select 2+ books, pick primary, merge rest as versions
+- **Search autocomplete**: field prefix suggestions, recent searches, help panel with clickable examples
+- **Source filter chips**: filter metadata results by source (Audible, Google Books, etc.) in both single and bulk search
+- **Undo on toast**: Apply metadata shows toast with Undo button
+- **Applied state**: bulk search Apply button shows checkmark + "Applied" after use
+- **250/500 items per page**: for bulk operations
+- **Search filters**: `review:matched`, `has_cover:yes/no`, `itunes_sync_status:dirty`
+
+##### Performance & Reliability
+- **File I/O worker pool**: 4 bounded workers for cover embed/tag write/rename (was unbounded goroutines)
+- **Graceful shutdown**: pool drains + ITL batcher flushes before server exits
+- **Adaptive ITL batcher**: debounce extends up to 30s for rapid-fire applies (was fixed 5s)
+- **Library list cache**: 10s TTL, operations/recent cache
+- **Async metadata apply**: DB update inline, cover download inline, file I/O in background
+- **Primary-only library listing**: `is_primary_version=true` on all queries
+
+##### ACL & Permission Fixes
+- **49 production permission fixes**: `0755`→`0775`, `0644`→`0664` across 23 files for Linux POSIX ACL compatibility
+- **`syscall.Umask(0002)`** on Linux startup for `os.Create` safety net
+- **`internal/util/perms.go`**: `DirMode`, `FileMode`, `SecretFileMode` constants
+
+##### iTunes Integration
+- **PID lifecycle tracking**: migration 44 adds `provenance` and `removed_at` to `external_id_map`
+- **Track provisioner**: generates PIDs for non-iTunes books, stores with `provenance='generated'`
+- **Dedup integration**: `mergeDuplicateBook` queues ITL removal for duplicate tracks
+- **Write-back batcher refactor**: supports add/remove/location/metadata ops in one flush
+- **Cover embedding**: gated on `embed_cover_art` config (was always running), config settable via API
+
+##### Bug Fixes
+- **Search was broken**: `searchBooks` was calling removed `/audiobooks/search` endpoint
+- **Field-only searches**: `-review:matched` was treated as text search instead of field filter
+- **Page persistence**: page number always in URL, survives navigation and refresh
+- **Series display**: "Confederation · Book 4" instead of misleading "Confederation #4"
+
 #### March 25-27, 2026 — Unified Activity Page, Bug Fixes, Maintenance Tools (v3.0.0)
 
 ##### Unified Activity Log System
