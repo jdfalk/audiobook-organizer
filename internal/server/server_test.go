@@ -66,9 +66,9 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 
 	// Cleanup function
 	cleanup := func() {
-		if GlobalFileIOPool != nil {
-			GlobalFileIOPool.Stop()
-			GlobalFileIOPool = nil
+		if p := GetGlobalFileIOPool(); p != nil {
+			p.Stop()
+			SetGlobalFileIOPool(nil)
 		}
 		if queue != nil {
 			_ = queue.Shutdown(5 * time.Second)
@@ -96,9 +96,9 @@ func setupTestServerWithStore(t *testing.T, store database.Store) (*Server, func
 
 	// Cleanup function
 	cleanup := func() {
-		if GlobalFileIOPool != nil {
-			GlobalFileIOPool.Stop()
-			GlobalFileIOPool = nil
+		if p := GetGlobalFileIOPool(); p != nil {
+			p.Stop()
+			SetGlobalFileIOPool(nil)
 		}
 		// Don't close the store - caller is responsible for cleanup
 	}

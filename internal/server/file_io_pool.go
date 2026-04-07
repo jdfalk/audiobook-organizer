@@ -43,9 +43,25 @@ type fileIOJobEntry struct {
 
 // GlobalFileIOPool is the singleton pool.
 var GlobalFileIOPool *FileIOPool
+var globalFileIOPoolMu sync.Mutex
 
 // globalServer holds a reference to the Server for recovery of interrupted file ops.
 var globalServer *Server
+
+// GetGlobalFileIOPool returns the pool safely.
+func GetGlobalFileIOPool() *FileIOPool {
+	globalFileIOPoolMu.Lock()
+	p := GlobalFileIOPool
+	globalFileIOPoolMu.Unlock()
+	return p
+}
+
+// SetGlobalFileIOPool sets the pool safely.
+func SetGlobalFileIOPool(p *FileIOPool) {
+	globalFileIOPoolMu.Lock()
+	GlobalFileIOPool = p
+	globalFileIOPoolMu.Unlock()
+}
 
 // NewFileIOPool creates a pool with the given number of workers.
 func NewFileIOPool(workers int) *FileIOPool {
@@ -125,8 +141,11 @@ func (p *FileIOPool) PendingBookIDs() []string {
 
 // Stop drains the queue and waits for in-flight jobs to finish,
 // with a 30-second timeout to prevent blocking shutdown indefinitely.
+// Safe to call multiple times.
 func (p *FileIOPool) Stop() {
-	atomic.StoreInt32(&p.stopped, 1)
+	if !atomic.CompareAndSwapInt32(&p.stopped, 0, 1) {
+		return // already stopped
+	}
 	close(p.ch)
 
 	done := make(chan struct{})

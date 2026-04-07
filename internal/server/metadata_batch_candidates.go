@@ -414,9 +414,9 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 		applied++
 
 		// Queue file I/O through the worker pool (bounded concurrency).
-		if GlobalFileIOPool != nil {
+		if pool := GetGlobalFileIOPool(); pool != nil {
 			bid := bookID
-			GlobalFileIOPool.Submit(bid, func() {
+			pool.Submit(bid, func() {
 				mfs.ApplyMetadataFileIO(bid)
 				if _, err := mfs.WriteBackMetadataForBook(bid); err != nil {
 					log.Printf("[WARN] write-back failed for %s: %v", bid, err)

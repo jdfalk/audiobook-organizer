@@ -529,6 +529,11 @@ export const Library = () => {
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const prevPageRef = useRef(page);
+  const reviewOpRef = useRef(searchParams.get('reviewOp'));
+  useEffect(() => {
+    reviewOpRef.current = searchParams.get('reviewOp');
+  }, [searchParams]);
+
   useEffect(() => {
     const params = new URLSearchParams();
 
@@ -544,9 +549,8 @@ export const Library = () => {
     params.set('page', page.toString());
     if (itemsPerPage !== 20) params.set('limit', itemsPerPage.toString());
     if (selectedTags.length > 0) params.set('tag', selectedTags[0]);
-    // Preserve reviewOp if present
-    const existingReviewOp = searchParams.get('reviewOp');
-    if (existingReviewOp) params.set('reviewOp', existingReviewOp);
+    // Preserve reviewOp if present (via ref to avoid infinite loop)
+    if (reviewOpRef.current) params.set('reviewOp', reviewOpRef.current);
 
     // Push a new history entry when page changes so back button works;
     // replace for other changes (search typing, etc.) to avoid history spam.

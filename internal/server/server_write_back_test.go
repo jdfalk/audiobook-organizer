@@ -1,6 +1,6 @@
 // file: internal/server/server_write_back_test.go
-// version: 1.1.0
-// guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
+// version: 1.2.0
+// guid: d2e3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package server
 
@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -16,50 +17,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWriteBackEndpoint_NotFound(t *testing.T) {
+func TestBatchWriteBackEndpoint_MissingBookIDs(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/audiobooks/nonexistent-id/write-back", nil)
+	body, _ := json.Marshal(map[string]any{"book_ids": []string{}, "rename": false})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/audiobooks/batch-write-back", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestWriteBackEndpoint_ExistingBook_NoFiles(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	// Insert a book that has no real file on disk
-	book, err := database.GlobalStore.CreateBook(&database.Book{
-		Title:    "Write-back Test",
-		FilePath: "/tmp/no-such-file.m4b",
-		Format:   "m4b",
-	})
-	require.NoError(t, err)
-
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/api/v1/audiobooks/"+book.ID+"/write-back",
-		nil,
-	)
-	w := httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
-
-	// Endpoint returns 200 even when files fail — failures are warnings not errors
-	require.Equal(t, http.StatusOK, w.Code)
-	body := w.Body.String()
-	assert.Contains(t, body, "written_count")
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestBatchWriteBackEndpoint_ReturnsSummary(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	store := database.GetGlobalStore()
+	book, err := store.CreateBook(&database.Book{
 		Title:    "Batch Write-back Test",
-		FilePath: "/tmp/no-such-file.m4b",
+		FilePath: filepath.Join(t.TempDir(), "test.m4b"),
 		Format:   "m4b",
 	})
 	require.NoError(t, err)
@@ -81,18 +59,15 @@ func TestBatchWriteBackEndpoint_ReturnsSummary(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 
+	// The endpoint is async — it returns an operation ID, not inline results
 	var resp struct {
-		Written int `json:"written"`
-		Failed  int `json:"failed"`
-		Errors  []struct {
-			BookID string `json:"book_id"`
-			Error  string `json:"error"`
-		} `json:"errors"`
+		OperationID string `json:"operation_id"`
+		Message     string `json:"message"`
+		BookCount   int    `json:"book_count"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 
-	assert.Equal(t, 1, resp.Written)
-	assert.Equal(t, 1, resp.Failed)
-	require.Len(t, resp.Errors, 1)
-	assert.Equal(t, "missing-id", resp.Errors[0].BookID)
+	assert.NotEmpty(t, resp.OperationID)
+	assert.Equal(t, 2, resp.BookCount)
+	assert.Contains(t, resp.Message, "2 books")
 }

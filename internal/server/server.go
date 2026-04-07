@@ -733,31 +733,32 @@ func NewServer() *Server {
 	// Register metrics (idempotent)
 	metrics.Register()
 
+	store := database.GetGlobalStore()
 	server := &Server{
 		router:                 router,
-		audiobookService:       NewAudiobookService(database.GlobalStore),
-		audiobookUpdateService: NewAudiobookUpdateService(database.GlobalStore),
-		batchService:           NewBatchService(database.GlobalStore),
-		workService:            NewWorkService(database.GlobalStore),
-		authorSeriesService:    NewAuthorSeriesService(database.GlobalStore),
+		audiobookService:       NewAudiobookService(store),
+		audiobookUpdateService: NewAudiobookUpdateService(store),
+		batchService:           NewBatchService(store),
+		workService:            NewWorkService(store),
+		authorSeriesService:    NewAuthorSeriesService(store),
 		filesystemService:      NewFilesystemService(),
-		importPathService:      NewImportPathService(database.GlobalStore),
-		importService:          NewImportService(database.GlobalStore),
-		scanService:            NewScanService(database.GlobalStore),
-		organizeService:        NewOrganizeService(database.GlobalStore),
-		metadataFetchService:   NewMetadataFetchService(database.GlobalStore),
-		configUpdateService:    NewConfigUpdateService(database.GlobalStore),
-		systemService:          NewSystemService(database.GlobalStore),
-		metadataStateService:   NewMetadataStateService(database.GlobalStore),
-		dashboardService:       NewDashboardService(database.GlobalStore),
+		importPathService:      NewImportPathService(store),
+		importService:          NewImportService(store),
+		scanService:            NewScanService(store),
+		organizeService:        NewOrganizeService(store),
+		metadataFetchService:   NewMetadataFetchService(store),
+		configUpdateService:    NewConfigUpdateService(store),
+		systemService:          NewSystemService(store),
+		metadataStateService:   NewMetadataStateService(store),
+		dashboardService:       NewDashboardService(store),
 		dashboardCache:         cache.New[gin.H](30 * time.Second),
 		dedupCache:             cache.New[gin.H](5 * time.Minute),
 		listCache:              cache.New[gin.H](30 * time.Second),
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
-		mergeService:           NewMergeService(database.GlobalStore),
-		diagnosticsService:     NewDiagnosticsService(database.GlobalStore, nil, config.AppConfig.ITunesLibraryReadPath),
-		changelogService:       NewChangelogService(database.GlobalStore),
+		mergeService:           NewMergeService(store),
+		diagnosticsService:     NewDiagnosticsService(store, nil, config.AppConfig.ITunesLibraryReadPath),
+		changelogService:       NewChangelogService(store),
 	}
 
 	// Initialize update scheduler
@@ -1297,9 +1298,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 	}
 
 	// Stop the file I/O pool — waits for in-flight jobs to finish
-	if GlobalFileIOPool != nil {
+	if p := GetGlobalFileIOPool(); p != nil {
 		log.Println("[INFO] Waiting for file I/O operations to complete...")
-		GlobalFileIOPool.Stop()
+		p.Stop()
 	}
 
 	// Flush the ITL write-back batcher
@@ -7413,10 +7414,10 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	// Kick off slow file I/O (cover embed, tags, rename) in background.
 	// Cover download is already done inline so the response has the URL.
 	shouldWriteBack := body.WriteBack == nil || *body.WriteBack
-	if GlobalFileIOPool != nil {
+	if pool := GetGlobalFileIOPool(); pool != nil {
 		bookID := id
 		mfs := s.metadataFetchService
-		GlobalFileIOPool.Submit(bookID, func() {
+		pool.Submit(bookID, func() {
 			mfs.ApplyMetadataFileIO(bookID)
 			if shouldWriteBack {
 				if _, wbErr := mfs.WriteBackMetadataForBook(bookID); wbErr != nil {
