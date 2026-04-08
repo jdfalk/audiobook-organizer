@@ -27,7 +27,7 @@ env:
 jobs:
   prerelease:
     name: Create Prerelease Build
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@609558cb8ebfc3e99c8d94f8ed2c51370328b916 # fix: remove empty artifacts before upload
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@609558cc633e4c6dad92f65d7bddf77a0968771b # fix: remove empty artifacts before upload
     with:
       release-type: 'auto'
       prerelease: true
