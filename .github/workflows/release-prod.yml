@@ -36,7 +36,7 @@ permissions:
 jobs:
   release:
     name: Create Production Release
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@959c35e8d5ae487ea400dc33b0e988275976544c # no Windows builds, skip empty assets
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@609558cb8ebfc3e99c8d94f8ed2c51370328b916 # fix: remove empty artifacts before upload
     with:
       release-type: ${{ github.event.inputs.release-type }}
       prerelease: false
