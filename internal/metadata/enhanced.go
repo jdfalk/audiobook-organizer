@@ -475,10 +475,10 @@ func writeMP3Metadata(filePath string, metadata map[string]interface{}, config f
 		args = append(args, "--genre", genre)
 	}
 	if year, ok := metadata["year"].(int); ok && year > 0 {
-		args = append(args, "--release-year", fmt.Sprintf("%d", year))
+		args = append(args, "-Y", fmt.Sprintf("%d", year))
 	}
 	if track, ok := metadata["track"].(string); ok && track != "" {
-		args = append(args, "--track-num", track)
+		args = append(args, "-n", track)
 	}
 	// Write custom AUDIOBOOK_ORGANIZER_* TXXX frames
 	customPairs := [][2]string{
