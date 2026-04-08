@@ -58,6 +58,12 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	}
 	defer C.taglib_file_free(file)
 
+	// taglib_file_new can return non-nil for unrecognised formats but
+	// the internal File* is null, causing a SIGSEGV in property calls.
+	if C.taglib_file_is_valid(file) == 0 {
+		return fmt.Errorf("taglib: file not valid/supported: %s", abs)
+	}
+
 	// Write each property via the C property API
 	for key, values := range tags {
 		cKey := C.CString(key)
