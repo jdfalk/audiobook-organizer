@@ -251,9 +251,30 @@ export function MetadataReviewDialog({
     try {
       await api.batchRejectCandidates(operationId, [bookId]);
       setRowStates((prev) => new Map(prev).set(bookId, 'rejected'));
-      toast('Candidate rejected — will be excluded from future fetches', 'info');
+      toast('Candidate rejected — will be excluded from future fetches', 'info', {
+        label: 'Undo',
+        onClick: async () => {
+          try {
+            await api.batchUnrejectCandidates(operationId, [bookId]);
+            setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
+            toast('Rejection undone', 'success');
+          } catch {
+            toast('Failed to undo rejection', 'error');
+          }
+        },
+      });
     } catch {
       toast('Failed to reject', 'error');
+    }
+  };
+
+  const handleUnreject = async (bookId: string) => {
+    try {
+      await api.batchUnrejectCandidates(operationId, [bookId]);
+      setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
+      toast('Rejection undone', 'success');
+    } catch {
+      toast('Failed to undo rejection', 'error');
     }
   };
 
@@ -383,7 +404,7 @@ export function MetadataReviewDialog({
             <Chip label="Applied" size="small" color="success" />
           )}
           {rowStates.get(bookId) === 'rejected' && (
-            <Chip label="Rejected" size="small" color="error" />
+            <Chip label="Rejected — click to undo" size="small" color="error" onClick={(e) => { e.stopPropagation(); handleUnreject(bookId); }} sx={{ cursor: 'pointer' }} />
           )}
         </Stack>
 
@@ -590,13 +611,11 @@ export function MetadataReviewDialog({
                   {rowStates.get(bookId) === 'skipped' && (
                     <Chip label="Skipped — click to undo" size="small" onClick={() => handleSkip(bookId)} sx={{ cursor: 'pointer', mt: 1 }} />
                   )}
-                  {!isRowActionable(bookId) && rowStates.get(bookId) !== 'skipped' && (
-                    <Chip
-                      label={rowStates.get(bookId) === 'applied' ? 'Applied' : 'Skipped'}
-                      size="small"
-                      color={rowStates.get(bookId) === 'applied' ? 'success' : 'default'}
-                      sx={{ mt: 1 }}
-                    />
+                  {rowStates.get(bookId) === 'rejected' && (
+                    <Chip label="Rejected — click to undo" size="small" color="error" onClick={() => handleUnreject(bookId)} sx={{ cursor: 'pointer', mt: 1 }} />
+                  )}
+                  {rowStates.get(bookId) === 'applied' && (
+                    <Chip label="Applied" size="small" color="success" sx={{ mt: 1 }} />
                   )}
                 </Box>
               </Stack>

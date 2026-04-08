@@ -517,6 +517,64 @@ func (s *Server) handleRejectCandidates(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"rejected": rejected})
 }
 
+// handleUnrejectCandidates reverses a rejection — restores the candidate to "matched" status
+// and removes the fast-lookup rejection key so it can be fetched again.
+func (s *Server) handleUnrejectCandidates(c *gin.Context) {
+	var req struct {
+		OperationID string   `json:"operation_id"`
+		BookIDs     []string `json:"book_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	store := database.GlobalStore
+
+	results, err := store.GetOperationResults(req.OperationID)
+	if err != nil {
+		internalError(c, "failed to load results", err)
+		return
+	}
+
+	unrejectSet := make(map[string]bool, len(req.BookIDs))
+	for _, id := range req.BookIDs {
+		unrejectSet[id] = true
+	}
+
+	unrejected := 0
+	for _, r := range results {
+		if !unrejectSet[r.BookID] {
+			continue
+		}
+		var cr CandidateResult
+		if err := json.Unmarshal([]byte(r.ResultJSON), &cr); err != nil {
+			continue
+		}
+		if cr.Status != "rejected" {
+			continue
+		}
+		cr.Status = "matched"
+		updatedJSON, _ := json.Marshal(cr)
+
+		_ = store.CreateOperationResult(&database.OperationResult{
+			OperationID: req.OperationID,
+			BookID:      r.BookID,
+			ResultJSON:  string(updatedJSON),
+			Status:      "matched",
+		})
+
+		// Remove the fast-lookup rejection key
+		if cr.Candidate != nil {
+			rejectKey := fmt.Sprintf("rejected_candidate:%s:%s|%s", r.BookID, cr.Candidate.Source, cr.Candidate.Title)
+			_ = store.DeleteRaw(rejectKey)
+		}
+		unrejected++
+	}
+
+	c.JSON(http.StatusOK, gin.H{"unrejected": unrejected})
+}
+
 // handleGetRecentOperations returns the last 10 completed metadata_candidate_fetch operations.
 // Uses the server's listCache (10s TTL) to avoid expensive PebbleDB prefix scans on every poll.
 func (s *Server) handleGetRecentOperations(c *gin.Context) {
