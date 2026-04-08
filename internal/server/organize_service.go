@@ -40,6 +40,7 @@ type OrganizeRequest struct {
 	FetchMetadataFirst bool
 	SyncITunesFirst    bool
 	OperationID        string
+	BookIDs            []string // if set, only organize these books
 }
 
 type OrganizeStats struct {
@@ -72,18 +73,29 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	// Auto-backup database before organizing
 	orgSvc.autoBackup(log)
 
-	// Get ALL books by paginating through the database
-	var allBooks []database.Book
+	// Get books — either specific IDs or all books
 	const fetchPageSize = 1000
-	for offset := 0; ; offset += fetchPageSize {
-		page, fetchErr := orgSvc.db.GetAllBooks(fetchPageSize, offset)
-		if fetchErr != nil {
-			log.Error("Failed to fetch books: %s", fetchErr.Error())
-			return fmt.Errorf("failed to fetch books: %w", fetchErr)
+	var allBooks []database.Book
+	if len(req.BookIDs) > 0 {
+		for _, id := range req.BookIDs {
+			book, err := orgSvc.db.GetBookByID(id)
+			if err != nil || book == nil {
+				log.Warn("Book %s not found, skipping", id)
+				continue
+			}
+			allBooks = append(allBooks, *book)
 		}
-		allBooks = append(allBooks, page...)
-		if len(page) < fetchPageSize {
-			break
+	} else {
+		for offset := 0; ; offset += fetchPageSize {
+			page, fetchErr := orgSvc.db.GetAllBooks(fetchPageSize, offset)
+			if fetchErr != nil {
+				log.Error("Failed to fetch books: %s", fetchErr.Error())
+				return fmt.Errorf("failed to fetch books: %w", fetchErr)
+			}
+			allBooks = append(allBooks, page...)
+			if len(page) < fetchPageSize {
+				break
+			}
 		}
 	}
 

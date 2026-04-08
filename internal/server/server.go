@@ -6191,10 +6191,11 @@ func (s *Server) startOrganize(c *gin.Context) {
 	}
 
 	var req struct {
-		FolderPath         *string `json:"folder_path"`
-		Priority           *int    `json:"priority"`
-		FetchMetadataFirst bool    `json:"fetch_metadata_first"`
-		SyncITunesFirst    bool    `json:"sync_itunes_first"`
+		FolderPath         *string  `json:"folder_path"`
+		Priority           *int     `json:"priority"`
+		BookIDs            []string `json:"book_ids"`
+		FetchMetadataFirst bool     `json:"fetch_metadata_first"`
+		SyncITunesFirst    bool     `json:"sync_itunes_first"`
 	}
 	_ = c.ShouldBindJSON(&req)
 
@@ -6215,6 +6216,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 	organizeReq := &OrganizeRequest{
 		FolderPath:         req.FolderPath,
 		Priority:           req.Priority,
+		BookIDs:            req.BookIDs,
 		FetchMetadataFirst: req.FetchMetadataFirst,
 		SyncITunesFirst:    req.SyncITunesFirst,
 		OperationID:        op.ID,
