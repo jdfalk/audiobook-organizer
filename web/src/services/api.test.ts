@@ -179,7 +179,7 @@ describe('api import paths', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/v1/audiobooks/batch-write-back', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ book_ids: ['id-1', 'id-2'], rename: true }),
+      body: JSON.stringify({ book_ids: ['id-1', 'id-2'], organize: true, force: false }),
     });
   });
 });

@@ -34,6 +34,9 @@ vi.mock('../services/api', () => ({
   }),
   getHomeDirectory: vi.fn().mockResolvedValue('/tmp'),
   getSoftDeletedBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+  getUserColumnConfig: vi.fn().mockResolvedValue(null),
+  saveUserColumnConfig: vi.fn().mockResolvedValue(undefined),
+  listAllUserTags: vi.fn().mockResolvedValue([]),
   browseFilesystem: vi.fn().mockResolvedValue({
     path: '/',
     items: [],

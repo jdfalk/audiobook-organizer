@@ -21,13 +21,21 @@ vi.mock('../services/api', () => ({
       updated_at: '2026-01-01T00:00:00Z',
       author_name: 'Author',
     },
+    {
+      id: 'id-2',
+      title: 'Second Book',
+      file_path: '/tmp/book2.m4b',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      author_name: 'Author',
+    },
   ]),
   searchBooks: vi.fn().mockResolvedValue([]),
   getImportPaths: vi.fn().mockResolvedValue([]),
-  countBooks: vi.fn().mockResolvedValue(1),
+  countBooks: vi.fn().mockResolvedValue(2),
   getSystemStatus: vi.fn().mockResolvedValue({
     status: 'ok',
-    library: { path: '/tmp', book_count: 1, total_size: 0 },
+    library: { path: '/tmp', book_count: 2, total_size: 0 },
     import_paths: { book_count: 0, folder_count: 0, total_size: 0 },
     memory: {},
     runtime: {},
@@ -35,17 +43,11 @@ vi.mock('../services/api', () => ({
   }),
   getHomeDirectory: vi.fn().mockResolvedValue('/tmp'),
   getSoftDeletedBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
-  fetchBookMetadata: vi.fn().mockResolvedValue({
-    message: 'Success',
-    source: 'Open Library',
-    book: {
-      id: 'id-1',
-      title: 'Test Book',
-      file_path: '/tmp/book.m4b',
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-      author_name: 'Author',
-    },
+  getUserColumnConfig: vi.fn().mockResolvedValue(null),
+  saveUserColumnConfig: vi.fn().mockResolvedValue(undefined),
+  listAllUserTags: vi.fn().mockResolvedValue([]),
+  batchFetchCandidates: vi.fn().mockResolvedValue({
+    operation_id: 'op-1',
   }),
   batchWriteBackMetadata: vi.fn().mockResolvedValue({
     written: 1,
@@ -67,30 +69,30 @@ describe('Library bulk metadata fetch', () => {
       </MemoryRouter>
     );
 
-    const selectBox = await screen.findByRole('checkbox', {
-      name: /select test book/i,
+    // Select both books so "Fetch & Review" becomes enabled (requires 2+)
+    const selectBoxes = await screen.findAllByRole('checkbox', {
+      name: /select /i,
     });
-    await user.click(selectBox);
+    for (const box of selectBoxes) {
+      await user.click(box);
+    }
     await waitFor(() => {
-      expect(selectBox).toBeChecked();
+      for (const box of selectBoxes) {
+        expect(box).toBeChecked();
+      }
     });
 
-    const openButton = await screen.findByRole('button', {
-      name: /bulk fetch metadata/i,
+    const fetchButton = await screen.findByRole('button', {
+      name: /fetch & review/i,
     });
     await waitFor(() => {
-      expect(openButton).toBeEnabled();
+      expect(fetchButton).toBeEnabled();
     });
-    await user.click(openButton);
+    await user.click(fetchButton);
 
-    const confirmButton = await screen.findByRole('button', {
-      name: /^fetch metadata$/i,
-    });
-    await user.click(confirmButton);
-
-    const fetchMock = vi.mocked(api.fetchBookMetadata);
+    const fetchMock = vi.mocked(api.batchFetchCandidates);
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('id-1');
+      expect(fetchMock).toHaveBeenCalledWith(['id-1', 'id-2']);
     });
   });
 
@@ -105,7 +107,7 @@ describe('Library bulk metadata fetch', () => {
     );
 
     const selectBox = await screen.findByRole('checkbox', {
-      name: /select test book/i,
+      name: /select test book$/i,
     });
     await user.click(selectBox);
     await waitFor(() => {
@@ -124,10 +126,10 @@ describe('Library bulk metadata fetch', () => {
       name: /save selected to files/i,
     });
 
-    const renameBox = within(dialog).getByRole('checkbox', {
-      name: /rename files after write-back/i,
+    const organizeBox = within(dialog).getByRole('checkbox', {
+      name: /organize files after write/i,
     });
-    await user.click(renameBox);
+    await user.click(organizeBox);
 
     const confirmButton = within(dialog).getByRole('button', {
       name: /^save to files$/i,
@@ -136,7 +138,7 @@ describe('Library bulk metadata fetch', () => {
 
     const writeBackMock = vi.mocked(api.batchWriteBackMetadata);
     await waitFor(() => {
-      expect(writeBackMock).toHaveBeenCalledWith(['id-1'], true);
+      expect(writeBackMock).toHaveBeenCalledWith(['id-1'], true, false);
     });
   });
 });

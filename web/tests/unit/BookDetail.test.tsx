@@ -219,9 +219,9 @@ describe('BookDetail Component', () => {
     const filesTab = await screen.findByRole('tab', { name: /files/i });
     await user.click(filesTab);
 
-    // Should show the tag comparison toggle
+    // Should show the tag comparison table (Source header in transposed table)
     await waitFor(() => {
-      expect(screen.getByTestId('tag-comparison-toggle')).toBeInTheDocument();
+      expect(screen.getByText('Source')).toBeInTheDocument();
     }, { timeout: 2000 });
   });
 
