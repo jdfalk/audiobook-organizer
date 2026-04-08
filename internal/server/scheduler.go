@@ -1332,6 +1332,10 @@ func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
 		return fmt.Errorf("failed to create maintenance-window operation: %w", err)
 	}
 
+	// Mark as run NOW to prevent the 60s ticker from re-enqueuing
+	// while the async operation is still running.
+	ts.saveLastMaintenanceRun()
+
 	_ = operations.GlobalQueue.Enqueue(op.ID, "maintenance-window", operations.PriorityNormal,
 		func(innerCtx context.Context, progress operations.ProgressReporter) error {
 			ignoreWindow := ctx.Value(ignoreWindowKey) != nil
@@ -1417,8 +1421,6 @@ func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
 					_ = progress.Log("info", fmt.Sprintf("Task %s triggered (no operation)", name), nil)
 				}
 			}
-
-			ts.saveLastMaintenanceRun()
 
 			if hadErrors {
 				_ = progress.UpdateProgress(len(eligible), len(eligible), "Maintenance window completed with errors")
