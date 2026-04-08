@@ -8240,6 +8240,9 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 		// Move the file to the new book
 		_ = database.GlobalStore.MoveBookFilesToBook([]string{fileID}, sourceBook.ID, created.ID)
 
+		// Reassign external ID mappings (iTunes PIDs) that belong to the moved file
+		reassignExternalIDsForFiles(sourceBook.ID, created.ID, []database.BookFile{f})
+
 		createdBooks = append(createdBooks, created)
 	}
 
@@ -8353,17 +8356,86 @@ func (s *Server) moveSegments(c *gin.Context) {
 		}
 	}
 
-	// 4. Move files
+	// 4. Collect the files being moved (for external ID reassignment)
+	var movedFiles []database.BookFile
+	movedSet := make(map[string]bool, len(req.SegmentIDs))
+	for _, sid := range req.SegmentIDs {
+		movedSet[sid] = true
+	}
+	for _, f := range sourceFiles {
+		if movedSet[f.ID] {
+			movedFiles = append(movedFiles, f)
+		}
+	}
+
+	// 5. Move files
 	if err := database.GlobalStore.MoveBookFilesToBook(req.SegmentIDs, id, req.TargetBookID); err != nil {
 		internalError(c, "failed to move files", err)
 		return
 	}
+
+	// 6. Reassign external ID mappings (iTunes PIDs) for moved files
+	reassignExternalIDsForFiles(id, req.TargetBookID, movedFiles)
 
 	c.JSON(http.StatusOK, gin.H{
 		"segments_moved": len(req.SegmentIDs),
 		"source_book_id": id,
 		"target_book_id": req.TargetBookID,
 	})
+}
+
+// reassignExternalIDsForFiles moves external ID mappings (iTunes PIDs) from
+// sourceBookID to targetBookID for the given files. It matches by file_path or
+// ITunesPersistentID on the external_id_map entries.
+func reassignExternalIDsForFiles(sourceBookID, targetBookID string, files []database.BookFile) {
+	eidStore := asExternalIDStore(database.GlobalStore)
+	if eidStore == nil {
+		return
+	}
+
+	mappings, err := eidStore.GetExternalIDsForBook(sourceBookID)
+	if err != nil || len(mappings) == 0 {
+		return
+	}
+
+	// Build lookup sets from the moved files
+	movedPaths := make(map[string]bool, len(files))
+	movedPIDs := make(map[string]bool, len(files))
+	for _, f := range files {
+		if f.FilePath != "" {
+			movedPaths[f.FilePath] = true
+		}
+		if f.ITunesPersistentID != "" {
+			movedPIDs[f.ITunesPersistentID] = true
+		}
+	}
+
+	// Collect only the mappings that belong to the moved files
+	var toMove []database.ExternalIDMapping
+	for _, m := range mappings {
+		if (m.FilePath != "" && movedPaths[m.FilePath]) ||
+			(m.ExternalID != "" && movedPIDs[m.ExternalID]) {
+			toMove = append(toMove, m)
+		}
+	}
+	if len(toMove) == 0 {
+		return
+	}
+
+	// Reassign each mapping: delete old reverse key, update primary, add new reverse key
+	for _, m := range toMove {
+		oldReverseKey := fmt.Sprintf("ext_id:book:%s:%s:%s", sourceBookID, m.Source, m.ExternalID)
+		_ = database.GlobalStore.DeleteRaw(oldReverseKey)
+
+		m.BookID = targetBookID
+		if createErr := eidStore.CreateExternalIDMapping(&m); createErr != nil {
+			log.Printf("[WARN] reassignExternalIDsForFiles: failed to reassign %s:%s to %s: %v",
+				m.Source, m.ExternalID, targetBookID, createErr)
+		}
+	}
+
+	log.Printf("[INFO] reassigned %d external ID mapping(s) from book %s to %s",
+		len(toMove), sourceBookID, targetBookID)
 }
 
 // parseFilenameWithAI uses OpenAI to parse a filename into structured metadata
