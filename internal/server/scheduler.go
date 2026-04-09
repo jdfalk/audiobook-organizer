@@ -553,7 +553,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				return err
 			})
 		},
-		IsEnabled:              func() bool { return config.AppConfig.ScheduledDbOptimizeEnabled }, // piggyback on db_optimize enable
+		IsEnabled:              func() bool { return config.AppConfig.MaintenanceWindowDbOptimize }, // enabled when maintenance window backup cleanup is on
 		GetInterval:            func() time.Duration { return 0 },                                  // manual or maintenance window only
 		RunOnStart:             func() bool { return false },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowDbOptimize },
