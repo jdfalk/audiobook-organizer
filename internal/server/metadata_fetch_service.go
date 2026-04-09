@@ -953,6 +953,41 @@ func isCompilation(title string) bool {
 	return compilationRe.MatchString(lower)
 }
 
+// extractTrailingNumber pulls a trailing number from a title, handling patterns
+// like "Series Name 8", "Series Name, Book 3", "Title #12", "Title (Volume 5)".
+// Returns the number as a string, or "" if none found.
+var trailingNumberRe = regexp.MustCompile(
+	`(?i)(?:,?\s*(?:book|volume|vol\.?|part|pt\.?|#)\s*)?(\d+(?:\.\d+)?)\s*(?:\(.*\))?\s*$`)
+
+func extractTrailingNumber(title string) string {
+	// Strip common suffixes that aren't numbers
+	clean := regexp.MustCompile(`(?i)\s*\((un)?abridged\)\s*$`).ReplaceAllString(title, "")
+	clean = regexp.MustCompile(`\s*\[.*?\]\s*$`).ReplaceAllString(clean, "")
+	clean = strings.TrimSpace(clean)
+
+	m := trailingNumberRe.FindStringSubmatch(clean)
+	if len(m) >= 2 {
+		return m[1]
+	}
+	return ""
+}
+
+// normalizeSeriesNumber extracts the numeric portion from a series position
+// string like "8", "8.0", "Book 8", "#8".
+var seriesNumRe = regexp.MustCompile(`(\d+(?:\.\d+)?)`)
+
+func normalizeSeriesNumber(pos string) string {
+	m := seriesNumRe.FindStringSubmatch(pos)
+	if len(m) >= 2 {
+		// Normalize "8.0" → "8"
+		if strings.HasSuffix(m[1], ".0") {
+			return strings.TrimSuffix(m[1], ".0")
+		}
+		return m[1]
+	}
+	return ""
+}
+
 // scoreOneResult computes a quality score in [0, ~1.15] for a single result
 // against a set of search-title significant words.
 func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float64 {
@@ -1762,6 +1797,33 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 	}
 	if len(withCover) > 0 {
 		candidates = withCover
+	}
+
+	// Series-number tiebreaker: if the original title contains a number that
+	// was stripped for search (e.g. "We Hunt Monsters 8" → "We Hunt Monsters"),
+	// boost candidates whose SeriesPosition or title number matches.
+	originalTitle := query
+	if originalTitle == "" {
+		originalTitle = book.Title
+	}
+	if expectedNum := extractTrailingNumber(originalTitle); expectedNum != "" {
+		for i := range candidates {
+			c := &candidates[i]
+			candidateNum := ""
+			// Check SeriesPosition first (most reliable)
+			if c.SeriesPosition != "" {
+				candidateNum = normalizeSeriesNumber(c.SeriesPosition)
+			}
+			// Fall back to trailing number in candidate title
+			if candidateNum == "" {
+				candidateNum = extractTrailingNumber(c.Title)
+			}
+			if candidateNum == expectedNum {
+				c.Score *= 2.0 // Strong boost for exact number match
+			} else if candidateNum != "" && candidateNum != expectedNum {
+				c.Score *= 0.5 // Penalize wrong number in same series
+			}
+		}
 	}
 
 	// Sort by score descending
