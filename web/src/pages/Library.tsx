@@ -200,6 +200,7 @@ export const Library = () => {
   };
 
   const [audiobooks, setAudiobooks] = useState<Audiobook[]>([]);
+  const allBooksRef = useRef<Audiobook[]>([]); // Full filtered list (all pages) for "Select All Items"
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -642,6 +643,15 @@ export const Library = () => {
     setSelectedAudiobooks([]);
   };
 
+  const handleSelectAllItems = () => {
+    setSelectedAudiobooks(allBooksRef.current);
+  };
+
+  // True when all items on the current page are selected but not all items globally
+  const allItemsTotal = allBooksRef.current.length;
+  const showSelectAllBanner =
+    allOnPageSelected && selectedAudiobooks.length < allItemsTotal && allItemsTotal > audiobooks.length;
+
   // convertApiBook is defined above the component as a pure function
 
   const loadAudiobooks = useCallback(async () => {
@@ -745,6 +755,7 @@ export const Library = () => {
       const total = filteredBooks.length;
       const paginatedBooks = filteredBooks.slice(offset, offset + itemsPerPage);
 
+      allBooksRef.current = filteredBooks;
       setAudiobooks(paginatedBooks);
       setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
 
@@ -1936,11 +1947,63 @@ export const Library = () => {
               />
               {hasSelection && (
                 <>
-                  <Chip label={`${selectedAudiobooks.length} selected`} size="small" />
+                  <Chip label={`${selectedAudiobooks.length} selected`} size="small" color="primary" />
                   <Button size="small" variant="text" onClick={handleClearSelection}>Deselect</Button>
                 </>
               )}
             </Stack>
+
+            {/* Gmail-style "Select all X items" banner */}
+            {showSelectAllBanner && (
+              <Box
+                sx={{
+                  py: 0.75,
+                  px: 2,
+                  bgcolor: 'action.selected',
+                  borderRadius: 1,
+                  textAlign: 'center',
+                  mb: 0.5,
+                }}
+              >
+                <Typography variant="body2" component="span">
+                  All {audiobooks.length} items on this page are selected.{' '}
+                </Typography>
+                <Button
+                  size="small"
+                  variant="text"
+                  sx={{ textTransform: 'none', fontWeight: 'bold' }}
+                  onClick={handleSelectAllItems}
+                >
+                  Select all {allItemsTotal.toLocaleString()} items
+                </Button>
+              </Box>
+            )}
+
+            {/* Banner when all items are selected */}
+            {selectedAudiobooks.length === allItemsTotal && allItemsTotal > audiobooks.length && (
+              <Box
+                sx={{
+                  py: 0.75,
+                  px: 2,
+                  bgcolor: 'action.selected',
+                  borderRadius: 1,
+                  textAlign: 'center',
+                  mb: 0.5,
+                }}
+              >
+                <Typography variant="body2" component="span">
+                  All {allItemsTotal.toLocaleString()} items are selected.{' '}
+                </Typography>
+                <Button
+                  size="small"
+                  variant="text"
+                  sx={{ textTransform: 'none' }}
+                  onClick={handleClearSelection}
+                >
+                  Clear selection
+                </Button>
+              </Box>
+            )}
 
             <Paper sx={{ p: 2, display: 'none' }}>
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
