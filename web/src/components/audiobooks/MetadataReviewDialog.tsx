@@ -69,9 +69,9 @@ export function MetadataReviewDialog({
   const [results, setResults] = useState<CandidateResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [rowStates, setRowStates] = useState<Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>>(
-    new Map()
-  );
+  const [rowStates, setRowStates] = useState<
+    Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>
+  >(new Map());
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [confidenceThreshold, setConfidenceThreshold] = useState(85);
   const [viewMode, setViewMode] = useState<'compact' | 'two-column'>('compact');
@@ -103,7 +103,7 @@ export function MetadataReviewDialog({
 
         // Check current book state for applied metadata (batch fetch current data)
         try {
-          const bookIds = results.filter(r => r.status === 'matched').map(r => r.book.id);
+          const bookIds = results.filter((r) => r.status === 'matched').map((r) => r.book.id);
           for (const id of bookIds) {
             if (initialStates.has(id)) continue;
             try {
@@ -112,7 +112,7 @@ export function MetadataReviewDialog({
                 initialStates.set(id, 'applied');
               }
               // Update book info with current data (cover, title, etc.)
-              const result = results.find(r => r.book.id === id);
+              const result = results.find((r) => r.book.id === id);
               if (result && book) {
                 result.book.cover_url = book.cover_url || result.book.cover_url;
                 result.book.title = book.title || result.book.title;
@@ -128,9 +128,14 @@ export function MetadataReviewDialog({
         setRowStates(initialStates);
         setResults([...results]);
         setSummary({
-          matched: data.matched ?? results.filter((r: api.CandidateResult) => r.status === 'matched').length,
-          no_match: data.no_match ?? results.filter((r: api.CandidateResult) => r.status === 'no_match').length,
-          errors: data.errors ?? results.filter((r: api.CandidateResult) => r.status === 'error').length,
+          matched:
+            data.matched ??
+            results.filter((r: api.CandidateResult) => r.status === 'matched').length,
+          no_match:
+            data.no_match ??
+            results.filter((r: api.CandidateResult) => r.status === 'no_match').length,
+          errors:
+            data.errors ?? results.filter((r: api.CandidateResult) => r.status === 'error').length,
           total: data.total ?? results.length,
         });
         setLoading(false);
@@ -150,9 +155,7 @@ export function MetadataReviewDialog({
     .filter((r) => !sourceFilter || r.candidate?.source === sourceFilter)
     .filter(
       (r) =>
-        (r.status === 'matched' &&
-          r.candidate &&
-          r.candidate.score * 100 >= confidenceThreshold) ||
+        (r.status === 'matched' && r.candidate && r.candidate.score * 100 >= confidenceThreshold) ||
         r.status !== 'matched'
     )
     .filter((r) => !hideApplied || rowStates.get(r.book.id) !== 'applied')
@@ -160,7 +163,9 @@ export function MetadataReviewDialog({
     .filter((r) => !hideNoMatch || (r.status !== 'no_match' && r.status !== 'error'));
 
   // Reset page when filters change
-  useEffect(() => { setReviewPage(1); }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideNoMatch]);
+  useEffect(() => {
+    setReviewPage(1);
+  }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideNoMatch]);
 
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
@@ -176,7 +181,11 @@ export function MetadataReviewDialog({
         label: 'Undo',
         onClick: async () => {
           for (const id of ids) {
-            try { await api.undoLastApply(id); } catch { /* ignore */ }
+            try {
+              await api.undoLastApply(id);
+            } catch {
+              /* ignore */
+            }
           }
           setRowStates((prev) => {
             const next = new Map(prev);
@@ -278,7 +287,13 @@ export function MetadataReviewDialog({
     }
   };
 
-  const highConfidenceIds = filteredResults
+  // Current page slice — buttons should only act on what's visible on screen
+  const pageResults = filteredResults.slice(
+    (reviewPage - 1) * reviewPageSize,
+    reviewPage * reviewPageSize
+  );
+
+  const highConfidenceIds = pageResults
     .filter(
       (r) =>
         r.status === 'matched' &&
@@ -289,7 +304,7 @@ export function MetadataReviewDialog({
     )
     .map((r) => r.book.id);
 
-  const allVisiblePendingIds = filteredResults
+  const allVisiblePendingIds = pageResults
     .filter(
       (r) =>
         r.status === 'matched' &&
@@ -320,7 +335,12 @@ export function MetadataReviewDialog({
     if (state === 'applied')
       return { bgcolor: 'success.main', opacity: 0.6, borderRadius: 1, transition: 'all 0.3s' };
     if (state === 'skipped')
-      return { bgcolor: 'action.disabledBackground', opacity: 0.5, borderRadius: 1, transition: 'all 0.3s' };
+      return {
+        bgcolor: 'action.disabledBackground',
+        opacity: 0.5,
+        borderRadius: 1,
+        transition: 'all 0.3s',
+      };
     return { borderRadius: 1, transition: 'all 0.3s' };
   };
 
@@ -358,7 +378,10 @@ export function MetadataReviewDialog({
             src={r.candidate?.cover_url || r.book.cover_url || ''}
             variant="rounded"
             sx={{ width: 40, height: 50, cursor: 'pointer' }}
-            onClick={(e) => { e.stopPropagation(); setPreviewCover(r.candidate?.cover_url || r.book.cover_url || ''); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreviewCover(r.candidate?.cover_url || r.book.cover_url || '');
+            }}
           />
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="body2" noWrap>
@@ -380,7 +403,13 @@ export function MetadataReviewDialog({
               <Chip
                 label={`${Math.round(r.candidate.score * 100)}%`}
                 size="small"
-                color={r.candidate.score >= 0.85 ? 'success' : r.candidate.score >= 0.6 ? 'warning' : 'default'}
+                color={
+                  r.candidate.score >= 0.85
+                    ? 'success'
+                    : r.candidate.score >= 0.6
+                      ? 'warning'
+                      : 'default'
+                }
               />
               <Chip
                 label={r.candidate.source}
@@ -392,31 +421,86 @@ export function MetadataReviewDialog({
           )}
           {isRowActionable(bookId) && r.candidate && (
             <>
-              <Button size="small" variant="contained" color="success" onClick={(e) => { e.stopPropagation(); handleApplyOne(bookId); }}>Apply</Button>
-              <Button size="small" variant="outlined" color="error" onClick={(e) => { e.stopPropagation(); handleReject(bookId); }}>Reject</Button>
-              <Button size="small" variant="text" onClick={(e) => { e.stopPropagation(); handleSkip(bookId); }}>Skip</Button>
+              <Button
+                size="small"
+                variant="contained"
+                color="success"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleApplyOne(bookId);
+                }}
+              >
+                Apply
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleReject(bookId);
+                }}
+              >
+                Reject
+              </Button>
+              <Button
+                size="small"
+                variant="text"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSkip(bookId);
+                }}
+              >
+                Skip
+              </Button>
             </>
           )}
           {rowStates.get(bookId) === 'skipped' && (
-            <Chip label="Skipped" size="small" onClick={(e) => { e.stopPropagation(); handleSkip(bookId); }} sx={{ cursor: 'pointer' }} />
+            <Chip
+              label="Skipped"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSkip(bookId);
+              }}
+              sx={{ cursor: 'pointer' }}
+            />
           )}
           {rowStates.get(bookId) === 'applied' && (
             <Chip label="Applied" size="small" color="success" />
           )}
           {rowStates.get(bookId) === 'rejected' && (
-            <Chip label="Rejected — click to undo" size="small" color="error" onClick={(e) => { e.stopPropagation(); handleUnreject(bookId); }} sx={{ cursor: 'pointer' }} />
+            <Chip
+              label="Rejected — click to undo"
+              size="small"
+              color="error"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleUnreject(bookId);
+              }}
+              sx={{ cursor: 'pointer' }}
+            />
           )}
         </Stack>
 
         {/* Expanded two-column detail for this row */}
         {isExpanded && r.candidate && (
-          <Stack direction="row" spacing={2} sx={{ p: 2, pl: 7, bgcolor: 'action.hover', borderRadius: 1 }}>
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{ p: 2, pl: 7, bgcolor: 'action.hover', borderRadius: 1 }}
+          >
             <Box sx={{ flex: 1 }}>
               <Typography variant="subtitle2" gutterBottom>
                 Current
               </Typography>
               <Stack direction="row" spacing={1} alignItems="flex-start">
-                <Avatar src={r.book.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80, cursor: r.book.cover_url ? 'pointer' : 'default' }} onClick={() => r.book.cover_url && setPreviewCover(r.book.cover_url)} />
+                <Avatar
+                  src={r.book.cover_url || ''}
+                  variant="rounded"
+                  sx={{ width: 60, height: 80, cursor: r.book.cover_url ? 'pointer' : 'default' }}
+                  onClick={() => r.book.cover_url && setPreviewCover(r.book.cover_url)}
+                />
                 <Box>
                   <Typography variant="body2" fontWeight="bold">
                     {r.book.title}
@@ -437,7 +521,12 @@ export function MetadataReviewDialog({
                     {r.book.file_path}
                   </Typography>
                   {r.book.itunes_path && (
-                    <Typography variant="caption" color="info.main" display="block" sx={{ wordBreak: 'break-all' }}>
+                    <Typography
+                      variant="caption"
+                      color="info.main"
+                      display="block"
+                      sx={{ wordBreak: 'break-all' }}
+                    >
                       iTunes: {r.book.itunes_path}
                     </Typography>
                   )}
@@ -449,7 +538,16 @@ export function MetadataReviewDialog({
                 Proposed
               </Typography>
               <Stack direction="row" spacing={1} alignItems="flex-start">
-                <Avatar src={r.candidate.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80, cursor: r.candidate?.cover_url ? 'pointer' : 'default' }} onClick={() => r.candidate?.cover_url && setPreviewCover(r.candidate.cover_url)} />
+                <Avatar
+                  src={r.candidate.cover_url || ''}
+                  variant="rounded"
+                  sx={{
+                    width: 60,
+                    height: 80,
+                    cursor: r.candidate?.cover_url ? 'pointer' : 'default',
+                  }}
+                  onClick={() => r.candidate?.cover_url && setPreviewCover(r.candidate.cover_url)}
+                />
                 <Box>
                   <Typography variant="body2" fontWeight="bold">
                     {r.candidate.title}
@@ -463,7 +561,9 @@ export function MetadataReviewDialog({
                   {r.candidate.series && (
                     <Typography variant="body2">
                       Series: {r.candidate.series}
-                      {r.candidate.series_position ? ` \u00b7 Book ${r.candidate.series_position}` : ''}
+                      {r.candidate.series_position
+                        ? ` \u00b7 Book ${r.candidate.series_position}`
+                        : ''}
                     </Typography>
                   )}
                   {r.candidate.year && (
@@ -479,7 +579,13 @@ export function MetadataReviewDialog({
                   <Chip
                     label={`${Math.round(r.candidate.score * 100)}%`}
                     size="small"
-                    color={r.candidate.score >= 0.85 ? 'success' : r.candidate.score >= 0.6 ? 'warning' : 'default'}
+                    color={
+                      r.candidate.score >= 0.85
+                        ? 'success'
+                        : r.candidate.score >= 0.6
+                          ? 'warning'
+                          : 'default'
+                    }
                     sx={{ mt: 0.5, mr: 0.5 }}
                   />
                   <Chip
@@ -522,7 +628,12 @@ export function MetadataReviewDialog({
                 onChange={() => toggleSelected(bookId)}
                 disabled={!isRowActionable(bookId)}
               />
-              <Avatar src={r.book.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80, cursor: r.book.cover_url ? 'pointer' : 'default' }} onClick={() => r.book.cover_url && setPreviewCover(r.book.cover_url)} />
+              <Avatar
+                src={r.book.cover_url || ''}
+                variant="rounded"
+                sx={{ width: 60, height: 80, cursor: r.book.cover_url ? 'pointer' : 'default' }}
+                onClick={() => r.book.cover_url && setPreviewCover(r.book.cover_url)}
+              />
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="body2" fontWeight="bold">
                   {r.book.title}
@@ -543,7 +654,12 @@ export function MetadataReviewDialog({
                   {r.book.file_path}
                 </Typography>
                 {r.book.itunes_path && (
-                  <Typography variant="caption" color="info.main" display="block" sx={{ wordBreak: 'break-all' }}>
+                  <Typography
+                    variant="caption"
+                    color="info.main"
+                    display="block"
+                    sx={{ wordBreak: 'break-all' }}
+                  >
                     iTunes: {r.book.itunes_path}
                   </Typography>
                 )}
@@ -555,7 +671,16 @@ export function MetadataReviewDialog({
           <Box sx={{ flex: 1 }}>
             {r.candidate ? (
               <Stack direction="row" spacing={1} alignItems="flex-start">
-                <Avatar src={r.candidate.cover_url || ''} variant="rounded" sx={{ width: 60, height: 80, cursor: r.candidate?.cover_url ? 'pointer' : 'default' }} onClick={() => r.candidate?.cover_url && setPreviewCover(r.candidate.cover_url)} />
+                <Avatar
+                  src={r.candidate.cover_url || ''}
+                  variant="rounded"
+                  sx={{
+                    width: 60,
+                    height: 80,
+                    cursor: r.candidate?.cover_url ? 'pointer' : 'default',
+                  }}
+                  onClick={() => r.candidate?.cover_url && setPreviewCover(r.candidate.cover_url)}
+                />
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography variant="body2" fontWeight="bold">
                     {r.candidate.title}
@@ -569,7 +694,9 @@ export function MetadataReviewDialog({
                   {r.candidate.series && (
                     <Typography variant="body2">
                       Series: {r.candidate.series}
-                      {r.candidate.series_position ? ` \u00b7 Book ${r.candidate.series_position}` : ''}
+                      {r.candidate.series_position
+                        ? ` \u00b7 Book ${r.candidate.series_position}`
+                        : ''}
                     </Typography>
                   )}
                   {r.candidate.year && (
@@ -603,16 +730,43 @@ export function MetadataReviewDialog({
                   </Stack>
                   {isRowActionable(bookId) && (
                     <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                      <Button size="small" variant="contained" color="success" onClick={() => handleApplyOne(bookId)}>Apply</Button>
-                      <Button size="small" variant="outlined" color="error" onClick={() => handleReject(bookId)}>Reject</Button>
-                      <Button size="small" variant="text" onClick={() => handleSkip(bookId)}>Skip</Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        onClick={() => handleApplyOne(bookId)}
+                      >
+                        Apply
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={() => handleReject(bookId)}
+                      >
+                        Reject
+                      </Button>
+                      <Button size="small" variant="text" onClick={() => handleSkip(bookId)}>
+                        Skip
+                      </Button>
                     </Stack>
                   )}
                   {rowStates.get(bookId) === 'skipped' && (
-                    <Chip label="Skipped — click to undo" size="small" onClick={() => handleSkip(bookId)} sx={{ cursor: 'pointer', mt: 1 }} />
+                    <Chip
+                      label="Skipped — click to undo"
+                      size="small"
+                      onClick={() => handleSkip(bookId)}
+                      sx={{ cursor: 'pointer', mt: 1 }}
+                    />
                   )}
                   {rowStates.get(bookId) === 'rejected' && (
-                    <Chip label="Rejected — click to undo" size="small" color="error" onClick={() => handleUnreject(bookId)} sx={{ cursor: 'pointer', mt: 1 }} />
+                    <Chip
+                      label="Rejected — click to undo"
+                      size="small"
+                      color="error"
+                      onClick={() => handleUnreject(bookId)}
+                      sx={{ cursor: 'pointer', mt: 1 }}
+                    />
                   )}
                   {rowStates.get(bookId) === 'applied' && (
                     <Chip label="Applied" size="small" color="success" sx={{ mt: 1 }} />
@@ -622,7 +776,11 @@ export function MetadataReviewDialog({
             ) : (
               <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
                 <Chip
-                  label={r.status === 'no_match' ? 'No match found' : `Error: ${r.error_message || 'Unknown'}`}
+                  label={
+                    r.status === 'no_match'
+                      ? 'No match found'
+                      : `Error: ${r.error_message || 'Unknown'}`
+                  }
                   color={r.status === 'error' ? 'error' : 'default'}
                 />
               </Box>
@@ -635,181 +793,216 @@ export function MetadataReviewDialog({
 
   return (
     <>
-    <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
-      <DialogTitle>
-        Review Metadata Matches &mdash; {summary.total} books
-      </DialogTitle>
-      <DialogContent>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Box>
-        ) : (
-          <>
-            {/* Stats chips */}
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-              <Chip label={`${summary.matched} matched`} color="success" size="small" />
-              <Chip label={`${summary.no_match} no match`} size="small" />
-              <Chip label={`${summary.errors} errors`} color="error" size="small" />
-            </Stack>
+      <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
+        <DialogTitle>Review Metadata Matches &mdash; {summary.total} books</DialogTitle>
+        <DialogContent>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              {/* Stats chips */}
+              <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                <Chip label={`${summary.matched} matched`} color="success" size="small" />
+                <Chip label={`${summary.no_match} no match`} size="small" />
+                <Chip label={`${summary.errors} errors`} color="error" size="small" />
+              </Stack>
 
-            {/* Confidence slider */}
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
-                Min confidence: {confidenceThreshold}%
-              </Typography>
-              <Slider
-                value={confidenceThreshold}
-                onChange={(_, v) => setConfidenceThreshold(v as number)}
-                min={0}
-                max={300}
-                sx={{ maxWidth: 300 }}
-              />
-            </Stack>
-
-            {/* Source filter chips */}
-            <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
-              <Chip
-                label={`All (${results.length})`}
-                size="small"
-                variant={sourceFilter === null ? 'filled' : 'outlined'}
-                onClick={() => setSourceFilter(null)}
-              />
-              {Object.entries(sourceCounts).map(([source, count]) => (
-                <Chip
-                  key={source}
-                  label={`${source} (${count})`}
-                  size="small"
-                  color={SOURCE_COLORS[source] || 'default'}
-                  variant={sourceFilter === source ? 'filled' : 'outlined'}
-                  onClick={() => setSourceFilter(sourceFilter === source ? null : source)}
-                />
-              ))}
-            </Stack>
-
-            {/* View toggle + hide filters */}
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap">
-              <ToggleButtonGroup
-                size="small"
-                value={viewMode}
-                exclusive
-                onChange={(_, v) => v && setViewMode(v)}
-              >
-                <ToggleButton value="compact">Compact</ToggleButton>
-                <ToggleButton value="two-column">Two-Column</ToggleButton>
-              </ToggleButtonGroup>
-              <FormControlLabel
-                control={<Switch size="small" checked={hideApplied} onChange={(e) => setHideApplied(e.target.checked)} />}
-                label={<Typography variant="body2">Hide Applied</Typography>}
-              />
-              <FormControlLabel
-                control={<Switch size="small" checked={hideRejected} onChange={(e) => setHideRejected(e.target.checked)} />}
-                label={<Typography variant="body2">Hide Rejected</Typography>}
-              />
-              <FormControlLabel
-                control={<Switch size="small" checked={hideNoMatch} onChange={(e) => setHideNoMatch(e.target.checked)} />}
-                label={<Typography variant="body2">Hide No Match</Typography>}
-              />
-            </Stack>
-
-            {/* Smart action buttons */}
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-              <Tooltip title={`Apply ${highConfidenceIds.length} high-confidence matches with narrator`}>
-                <span>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="success"
-                    disabled={applying || highConfidenceIds.length === 0}
-                    onClick={() => handleBulkApply(highConfidenceIds)}
-                  >
-                    Apply High Confidence ({highConfidenceIds.length})
-                  </Button>
-                </span>
-              </Tooltip>
-              <Tooltip title={`Apply all ${allVisiblePendingIds.length} visible pending matches`}>
-                <span>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    disabled={applying || allVisiblePendingIds.length === 0}
-                    onClick={() => handleBulkApply(allVisiblePendingIds)}
-                  >
-                    Apply All Visible ({allVisiblePendingIds.length})
-                  </Button>
-                </span>
-              </Tooltip>
-              <Button size="small" variant="outlined" color="warning" onClick={handleSkipAllUnmatched}>
-                Skip All Unmatched
-              </Button>
-            </Stack>
-
-            {/* Results list (paginated) */}
-            {filteredResults.length > 0 && (
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                <Typography variant="caption" color="text.secondary">
-                  Showing {Math.min((reviewPage - 1) * reviewPageSize + 1, filteredResults.length)}-{Math.min(reviewPage * reviewPageSize, filteredResults.length)} of {filteredResults.length}
+              {/* Confidence slider */}
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+                <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+                  Min confidence: {confidenceThreshold}%
                 </Typography>
-                <Pagination
-                  count={Math.ceil(filteredResults.length / reviewPageSize)}
-                  page={reviewPage}
-                  onChange={(_, p) => setReviewPage(p)}
-                  size="small"
+                <Slider
+                  value={confidenceThreshold}
+                  onChange={(_, v) => setConfidenceThreshold(v as number)}
+                  min={0}
+                  max={300}
+                  sx={{ maxWidth: 300 }}
                 />
               </Stack>
-            )}
-            <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
-              {filteredResults.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
-                  No results match current filters
-                </Typography>
-              ) : viewMode === 'compact' ? (
-                filteredResults.slice((reviewPage - 1) * reviewPageSize, reviewPage * reviewPageSize).map(renderCompactRow)
-              ) : (
-                filteredResults.slice((reviewPage - 1) * reviewPageSize, reviewPage * reviewPageSize).map(renderTwoColumnCard)
-              )}
-            </Box>
-          </>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-        <Button
-          variant="contained"
-          disabled={selectedIds.size === 0 || applying}
-          onClick={() => handleBulkApply(Array.from(selectedIds))}
-        >
-          {applying ? (
-            <CircularProgress size={20} sx={{ mr: 1 }} />
-          ) : null}
-          Apply Selected ({selectedIds.size})
-        </Button>
-      </DialogActions>
-    </Dialog>
 
-    {/* Cover preview lightbox */}
-    {previewCover && (
-      <Box
-        onClick={() => setPreviewCover(null)}
-        sx={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 2000,
-          bgcolor: 'rgba(0,0,0,0.85)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-        }}
-      >
+              {/* Source filter chips */}
+              <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+                <Chip
+                  label={`All (${results.length})`}
+                  size="small"
+                  variant={sourceFilter === null ? 'filled' : 'outlined'}
+                  onClick={() => setSourceFilter(null)}
+                />
+                {Object.entries(sourceCounts).map(([source, count]) => (
+                  <Chip
+                    key={source}
+                    label={`${source} (${count})`}
+                    size="small"
+                    color={SOURCE_COLORS[source] || 'default'}
+                    variant={sourceFilter === source ? 'filled' : 'outlined'}
+                    onClick={() => setSourceFilter(sourceFilter === source ? null : source)}
+                  />
+                ))}
+              </Stack>
+
+              {/* View toggle + hide filters */}
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap">
+                <ToggleButtonGroup
+                  size="small"
+                  value={viewMode}
+                  exclusive
+                  onChange={(_, v) => v && setViewMode(v)}
+                >
+                  <ToggleButton value="compact">Compact</ToggleButton>
+                  <ToggleButton value="two-column">Two-Column</ToggleButton>
+                </ToggleButtonGroup>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={hideApplied}
+                      onChange={(e) => setHideApplied(e.target.checked)}
+                    />
+                  }
+                  label={<Typography variant="body2">Hide Applied</Typography>}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={hideRejected}
+                      onChange={(e) => setHideRejected(e.target.checked)}
+                    />
+                  }
+                  label={<Typography variant="body2">Hide Rejected</Typography>}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={hideNoMatch}
+                      onChange={(e) => setHideNoMatch(e.target.checked)}
+                    />
+                  }
+                  label={<Typography variant="body2">Hide No Match</Typography>}
+                />
+              </Stack>
+
+              {/* Smart action buttons */}
+              <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                <Tooltip
+                  title={`Apply ${highConfidenceIds.length} high-confidence matches with narrator`}
+                >
+                  <span>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="success"
+                      disabled={applying || highConfidenceIds.length === 0}
+                      onClick={() => handleBulkApply(highConfidenceIds)}
+                    >
+                      Apply High Confidence ({highConfidenceIds.length})
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Tooltip
+                  title={`Apply all ${allVisiblePendingIds.length} pending matches on this page`}
+                >
+                  <span>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={applying || allVisiblePendingIds.length === 0}
+                      onClick={() => handleBulkApply(allVisiblePendingIds)}
+                    >
+                      Apply Page ({allVisiblePendingIds.length})
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  onClick={handleSkipAllUnmatched}
+                >
+                  Skip All Unmatched
+                </Button>
+              </Stack>
+
+              {/* Results list (paginated) */}
+              {filteredResults.length > 0 && (
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 1 }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    Showing{' '}
+                    {Math.min((reviewPage - 1) * reviewPageSize + 1, filteredResults.length)}-
+                    {Math.min(reviewPage * reviewPageSize, filteredResults.length)} of{' '}
+                    {filteredResults.length}
+                  </Typography>
+                  <Pagination
+                    count={Math.ceil(filteredResults.length / reviewPageSize)}
+                    page={reviewPage}
+                    onChange={(_, p) => setReviewPage(p)}
+                    size="small"
+                  />
+                </Stack>
+              )}
+              <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
+                {filteredResults.length === 0 ? (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ p: 2, textAlign: 'center' }}
+                  >
+                    No results match current filters
+                  </Typography>
+                ) : viewMode === 'compact' ? (
+                  pageResults.map(renderCompactRow)
+                ) : (
+                  pageResults.map(renderTwoColumnCard)
+                )}
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Close</Button>
+          <Button
+            variant="contained"
+            disabled={selectedIds.size === 0 || applying}
+            onClick={() => handleBulkApply(Array.from(selectedIds))}
+          >
+            {applying ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+            Apply Selected ({selectedIds.size})
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Cover preview lightbox */}
+      {previewCover && (
         <Box
-          component="img"
-          src={previewCover}
-          alt="Cover preview"
-          sx={{ maxWidth: '80vw', maxHeight: '80vh', borderRadius: 2, boxShadow: 8 }}
-        />
-      </Box>
-    )}
+          onClick={() => setPreviewCover(null)}
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2000,
+            bgcolor: 'rgba(0,0,0,0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <Box
+            component="img"
+            src={previewCover}
+            alt="Cover preview"
+            sx={{ maxWidth: '80vw', maxHeight: '80vh', borderRadius: 2, boxShadow: 8 }}
+          />
+        </Box>
+      )}
     </>
   );
 }
