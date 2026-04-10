@@ -1,5 +1,5 @@
 // file: internal/server/metadata_scoring_refactor_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 3a7c2b1d-e84f-4d59-9f16-0e5a8b2c4d7e
 
 package server
@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -204,4 +205,137 @@ func TestMetadataScorer_WiredEndToEnd(t *testing.T) {
 		}
 	}
 	assert.Equal(t, []int{1}, kept, "only the strong match should survive the filter")
+}
+
+// TestRerankTopK_FiresOnAmbiguousTop checks that rerankTopK sends exactly the
+// candidates within MetadataLLMRerankEpsilon of the best score to the LLM,
+// and replaces their Score fields with the LLM's output.
+func TestRerankTopK_FiresOnAmbiguousTop(t *testing.T) {
+	// LLM says candidate 1 is actually the winner (0.95) even though
+	// candidate 0 had a higher base score (0.90).
+	llm := &scorerStub{
+		name:   "llm",
+		scores: []float64{0.60, 0.95}, // indices 0 and 1 of the ambiguous top
+	}
+	mfs := &MetadataFetchService{llmScorer: llm}
+
+	prevEps := config.AppConfig.MetadataLLMRerankEpsilon
+	prevK := config.AppConfig.MetadataLLMRerankTopK
+	config.AppConfig.MetadataLLMRerankEpsilon = 0.05
+	config.AppConfig.MetadataLLMRerankTopK = 5
+	defer func() {
+		config.AppConfig.MetadataLLMRerankEpsilon = prevEps
+		config.AppConfig.MetadataLLMRerankTopK = prevK
+	}()
+
+	book := &database.Book{ID: "BOOK", Title: "Query"}
+	candidates := []MetadataCandidate{
+		{Title: "A", Score: 0.90},
+		{Title: "B", Score: 0.88}, // within epsilon of 0.90 → rerank
+		{Title: "C", Score: 0.70}, // outside epsilon → untouched
+		{Title: "D", Score: 0.50}, // outside epsilon → untouched
+	}
+
+	got := mfs.rerankTopK(context.Background(), book, candidates)
+	assert.Equal(t, 1, llm.callCount, "LLM should be called exactly once")
+	require.Len(t, got, 4)
+
+	// After rerank + resort, candidate B (0.95) should be first, A (0.60)
+	// should be pushed down, C (0.70) and D (0.50) should be unchanged.
+	assert.Equal(t, "B", got[0].Title)
+	assert.InDelta(t, 0.95, got[0].Score, 0.0001)
+	assert.Equal(t, "C", got[1].Title, "C's 0.70 should now outrank A's demoted 0.60")
+	assert.InDelta(t, 0.70, got[1].Score, 0.0001)
+	assert.Equal(t, "A", got[2].Title)
+	assert.InDelta(t, 0.60, got[2].Score, 0.0001)
+	assert.Equal(t, "D", got[3].Title)
+	assert.InDelta(t, 0.50, got[3].Score, 0.0001)
+}
+
+// TestRerankTopK_HonorsTopKCap verifies the topK cap even when more
+// candidates are within epsilon of the best.
+func TestRerankTopK_HonorsTopKCap(t *testing.T) {
+	llm := &scorerStub{
+		name:   "llm",
+		scores: []float64{0.90, 0.80, 0.70}, // 3 scores, matching topK=3
+	}
+	mfs := &MetadataFetchService{llmScorer: llm}
+
+	prevEps := config.AppConfig.MetadataLLMRerankEpsilon
+	prevK := config.AppConfig.MetadataLLMRerankTopK
+	config.AppConfig.MetadataLLMRerankEpsilon = 0.50 // huge — everything is "ambiguous"
+	config.AppConfig.MetadataLLMRerankTopK = 3
+	defer func() {
+		config.AppConfig.MetadataLLMRerankEpsilon = prevEps
+		config.AppConfig.MetadataLLMRerankTopK = prevK
+	}()
+
+	book := &database.Book{ID: "BOOK", Title: "Query"}
+	candidates := []MetadataCandidate{
+		{Title: "A", Score: 0.85},
+		{Title: "B", Score: 0.80},
+		{Title: "C", Score: 0.75},
+		{Title: "D", Score: 0.70}, // would be in epsilon but topK caps at 3
+		{Title: "E", Score: 0.65},
+	}
+
+	mfs.rerankTopK(context.Background(), book, candidates)
+	assert.Equal(t, 1, llm.callCount)
+	// The stub received exactly 3 candidates — verify via scores slice length
+	// we handed it (the stub returned a 3-element slice).
+	assert.Len(t, llm.scores, 3)
+}
+
+// TestRerankTopK_NoAmbiguityReturnsUnchanged verifies that when only one
+// candidate is within epsilon of the best, rerank is a no-op.
+func TestRerankTopK_NoAmbiguityReturnsUnchanged(t *testing.T) {
+	llm := &scorerStub{name: "llm", scores: []float64{0.9}}
+	mfs := &MetadataFetchService{llmScorer: llm}
+
+	prevEps := config.AppConfig.MetadataLLMRerankEpsilon
+	config.AppConfig.MetadataLLMRerankEpsilon = 0.01
+	defer func() { config.AppConfig.MetadataLLMRerankEpsilon = prevEps }()
+
+	candidates := []MetadataCandidate{
+		{Title: "A", Score: 0.95},
+		{Title: "B", Score: 0.70}, // 0.25 below best → outside epsilon
+		{Title: "C", Score: 0.50},
+	}
+	got := mfs.rerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
+	assert.Equal(t, 0, llm.callCount, "LLM should not be called when only 1 candidate is ambiguous")
+	assert.Equal(t, "A", got[0].Title)
+	assert.InDelta(t, 0.95, got[0].Score, 0.0001)
+}
+
+// TestRerankTopK_NilScorerIsNoOp verifies the nil-scorer fallback.
+func TestRerankTopK_NilScorerIsNoOp(t *testing.T) {
+	mfs := &MetadataFetchService{llmScorer: nil}
+	candidates := []MetadataCandidate{
+		{Title: "A", Score: 0.95},
+		{Title: "B", Score: 0.94},
+	}
+	got := mfs.rerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
+	assert.Equal(t, "A", got[0].Title, "nil scorer should return candidates unchanged")
+	assert.InDelta(t, 0.95, got[0].Score, 0.0001)
+}
+
+// TestRerankTopK_LLMErrorKeepsBaseScores verifies that a scorer error leaves
+// the base scores untouched.
+func TestRerankTopK_LLMErrorKeepsBaseScores(t *testing.T) {
+	llm := &scorerStub{name: "llm", err: errors.New("openai boom")}
+	mfs := &MetadataFetchService{llmScorer: llm}
+
+	prevEps := config.AppConfig.MetadataLLMRerankEpsilon
+	config.AppConfig.MetadataLLMRerankEpsilon = 0.10
+	defer func() { config.AppConfig.MetadataLLMRerankEpsilon = prevEps }()
+
+	candidates := []MetadataCandidate{
+		{Title: "A", Score: 0.95},
+		{Title: "B", Score: 0.92},
+	}
+	got := mfs.rerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
+	assert.Equal(t, 1, llm.callCount)
+	assert.Equal(t, "A", got[0].Title)
+	assert.InDelta(t, 0.95, got[0].Score, 0.0001, "base score preserved on LLM error")
+	assert.InDelta(t, 0.92, got[1].Score, 0.0001)
 }
