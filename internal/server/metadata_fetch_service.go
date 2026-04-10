@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.39.0
+// version: 4.40.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -995,11 +995,13 @@ func normalizeSeriesNumber(pos string) string {
 	return ""
 }
 
-// scoreOneResult computes a quality score in [0, ~1.15] for a single result
-// against a set of search-title significant words.
-func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float64 {
+// computeF1Base returns just the F1 token-overlap portion of the score, with
+// no penalties or bonuses applied. It's the "base score" contribution from
+// the significantWords pathway, extracted so alternative scorers (embedding,
+// LLM, reranker) can supply their own base score and reuse the shared
+// non-base adjustment function.
+func computeF1Base(r metadata.BookMetadata, searchWords map[string]bool) float64 {
 	resultWords := significantWords(r.Title)
-
 	if len(searchWords) == 0 || len(resultWords) == 0 {
 		return 0
 	}
@@ -1022,25 +1024,40 @@ func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float6
 	}
 	precision := float64(precHits) / float64(len(resultWords))
 
-	// F1
-	var f1 float64
-	if recall+precision > 0 {
-		f1 = 2 * recall * precision / (recall + precision)
+	if recall+precision == 0 {
+		return 0
 	}
+	return 2 * recall * precision / (recall + precision)
+}
+
+// applyNonBaseAdjustments applies the compilation penalty, length penalty,
+// and rich-metadata bonus to a base score. These adjustments are meaningful
+// regardless of which scorer tier produced the base score and are applied
+// identically on every path.
+//
+// baseWordCount is the number of significant words in the search title —
+// used for the length penalty. Pass 0 to disable the length penalty (e.g.
+// when the length ratio is meaningless for a non-token-overlap scorer).
+func applyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWordCount int) float64 {
+	score := baseScore
 
 	// Compilation penalty
 	if isCompilation(r.Title) {
-		f1 *= 0.15
+		score *= 0.15
 	}
 
-	// Length penalty: penalise results that are much longer than the search
-	nSearch := float64(len(searchWords))
-	nResult := float64(len(resultWords))
-	if nResult > 1.5*nSearch {
-		f1 *= (1.5 * nSearch) / nResult
+	// Length penalty: penalise results that are much longer than the search.
+	// Only applies when baseWordCount > 0 (the F1 path).
+	if baseWordCount > 0 {
+		resultWords := significantWords(r.Title)
+		nSearch := float64(baseWordCount)
+		nResult := float64(len(resultWords))
+		if nResult > 1.5*nSearch {
+			score *= (1.5 * nSearch) / nResult
+		}
 	}
 
-	// Rich-metadata bonus (capped at +0.15)
+	// Rich-metadata bonus (capped at +0.15, additive)
 	bonus := 0.0
 	if r.Description != "" {
 		bonus += 0.05
@@ -1058,7 +1075,19 @@ func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float6
 		bonus = 0.15
 	}
 
-	return f1 + bonus
+	return score + bonus
+}
+
+// scoreOneResult computes a quality score in [0, ~1.15] for a single result
+// against a set of search-title significant words. It preserves the
+// pre-refactor signature and behavior, composing computeF1Base and
+// applyNonBaseAdjustments. Existing callers are unchanged.
+func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float64 {
+	base := computeF1Base(r, searchWords)
+	if base == 0 {
+		return 0 // preserve original early-return behavior (skips bonus)
+	}
+	return applyNonBaseAdjustments(base, r, len(searchWords))
 }
 
 // applySeriesPositionFilter rejects the top result if it claims a different
