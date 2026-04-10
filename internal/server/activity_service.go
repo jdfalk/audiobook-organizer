@@ -1,5 +1,5 @@
 // file: internal/server/activity_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -43,6 +43,11 @@ func (s *ActivityService) Summarize(olderThan time.Time, tier string) (int, erro
 // Returns the number of rows deleted.
 func (s *ActivityService) Prune(olderThan time.Time, tier string) (int, error) {
 	return s.store.Prune(olderThan, tier)
+}
+
+// CompactByDay groups old change/debug entries by UTC day into digest rows.
+func (s *ActivityService) CompactByDay(olderThan time.Time) (database.CompactResult, error) {
+	return s.store.CompactByDay(olderThan)
 }
 
 // GetDistinctSources returns all unique sources with their entry counts,
