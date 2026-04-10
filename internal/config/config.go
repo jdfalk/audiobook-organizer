@@ -564,6 +564,15 @@ func InitConfig() {
 		ExcludePatterns:     excludePatterns,
 	}
 
+	// Embedding-based dedup (defaults used unless DB settings override)
+	AppConfig.EmbeddingEnabled = true
+	AppConfig.EmbeddingModel = "text-embedding-3-large"
+	AppConfig.DedupBookHighThreshold = 0.95
+	AppConfig.DedupBookLowThreshold = 0.85
+	AppConfig.DedupAuthorHighThreshold = 0.92
+	AppConfig.DedupAuthorLowThreshold = 0.80
+	AppConfig.DedupAutoMergeEnabled = true
+
 	// Default Open Library dump dir to {RootDir}/openlibrary-dumps if not set
 	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
 		AppConfig.OpenLibraryDumpDir = filepath.Join(AppConfig.RootDir, "openlibrary-dumps")
