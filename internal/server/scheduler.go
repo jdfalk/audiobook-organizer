@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -982,29 +982,42 @@ func (ts *TaskScheduler) registerAllTasks() {
 					if ts.server.activityService == nil {
 						return nil
 					}
+
+					// Step 1: Compact old entries into daily digests
+					compactionDays := config.AppConfig.ActivityLogCompactionDays
+					if compactionDays <= 0 {
+						compactionDays = 14
+					}
+					compactionCutoff := time.Now().AddDate(0, 0, -compactionDays)
+					compacted, err := ts.server.activityService.CompactByDay(compactionCutoff)
+					if err != nil {
+						return fmt.Errorf("compact activity: %w", err)
+					}
+
+					// Step 2: Summarize remaining old change entries
 					changeDays := config.AppConfig.ActivityLogRetentionChangeDays
 					if changeDays <= 0 {
 						changeDays = 90
 					}
-					debugDays := config.AppConfig.ActivityLogRetentionDebugDays
-					if debugDays <= 0 {
-						debugDays = 30
-					}
-
 					changeCutoff := time.Now().AddDate(0, 0, -changeDays)
-					debugCutoff := time.Now().AddDate(0, 0, -debugDays)
-
 					summarized, err := ts.server.activityService.Summarize(changeCutoff, "change")
 					if err != nil {
 						return fmt.Errorf("summarize activity: %w", err)
 					}
 
+					// Step 3: Prune old debug entries
+					debugDays := config.AppConfig.ActivityLogRetentionDebugDays
+					if debugDays <= 0 {
+						debugDays = 30
+					}
+					debugCutoff := time.Now().AddDate(0, 0, -debugDays)
 					pruned, err := ts.server.activityService.Prune(debugCutoff, "debug")
 					if err != nil {
 						return fmt.Errorf("prune activity: %w", err)
 					}
 
-					log.Printf("Activity log cleanup: summarized %d change entries, pruned %d debug entries", summarized, pruned)
+					log.Printf("Activity log cleanup: compacted %d days (%d entries), summarized %d, pruned %d",
+						compacted.DaysCompacted, compacted.EntriesDeleted, summarized, pruned)
 					return nil
 				},
 			)
