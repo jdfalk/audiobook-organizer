@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.45.0
+// version: 4.46.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -134,6 +134,16 @@ type SearchMetadataResponse struct {
 	Query         string              `json:"query"`
 	SourcesTried  []string            `json:"sources_tried"`
 	SourcesFailed map[string]string   `json:"sources_failed,omitempty"`
+}
+
+// SearchOptions carries optional per-request flags for SearchMetadataForBook.
+// Adding a new option never breaks existing callers — they can keep using the
+// zero-value or the simpler variadic signature.
+type SearchOptions struct {
+	// UseRerank asks the LLM rerank tier to run on the top candidates (if
+	// MetadataLLMScoringEnabled is true on the server). When false, only
+	// the base scorer tier runs.
+	UseRerank bool
 }
 
 // BuildSourceChain returns metadata sources ordered by config priority.
@@ -1295,6 +1305,108 @@ func (mfs *MetadataFetchService) bestTitleMatchForBook(
 	return pickBestMatchFromScored(results, baseScores, baseTier, searchWords, bookAuthor, bookNarrator)
 }
 
+// rerankTopK asks the LLM scorer to re-judge the ambiguous top candidates
+// after the base scorer has produced initial rankings. "Ambiguous" means
+// candidates whose Score lands within MetadataLLMRerankEpsilon of the best
+// candidate's Score. At most MetadataLLMRerankTopK candidates are sent to
+// the LLM, even if more fall inside the epsilon window, to cap per-search
+// cost.
+//
+// On success, the returned slice is the same candidates with updated Score
+// values for the top-K slots, re-sorted descending by Score. On any failure
+// (LLM disabled, backend error, fewer than 2 ambiguous candidates to resolve)
+// the input slice is returned unchanged so the search path degrades cleanly.
+func (mfs *MetadataFetchService) rerankTopK(
+	ctx context.Context,
+	book *database.Book,
+	candidates []MetadataCandidate,
+) []MetadataCandidate {
+	if len(candidates) < 2 || mfs.llmScorer == nil {
+		return candidates
+	}
+
+	// Sort descending by current score so the "ambiguous top" is contiguous
+	// at index 0.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+
+	epsilon := config.AppConfig.MetadataLLMRerankEpsilon
+	topK := config.AppConfig.MetadataLLMRerankTopK
+	if topK <= 0 {
+		topK = 5
+	}
+
+	bestScore := candidates[0].Score
+	ambiguousEnd := 1
+	for ambiguousEnd < len(candidates) && ambiguousEnd < topK {
+		if bestScore-candidates[ambiguousEnd].Score > epsilon {
+			break
+		}
+		ambiguousEnd++
+	}
+	if ambiguousEnd < 2 {
+		// Only one candidate within epsilon — nothing to resolve.
+		log.Printf("[DEBUG] metadata-search: rerank skipped — only 1 candidate within %.3f of best (%.3f)",
+			epsilon, bestScore)
+		return candidates
+	}
+
+	topCands := candidates[:ambiguousEnd]
+	log.Printf("[DEBUG] metadata-search: rerank firing on top %d candidates (epsilon=%.3f, bestScore=%.3f)",
+		len(topCands), epsilon, bestScore)
+
+	// Resolve the book's author name for the query payload.
+	authorName := ""
+	if book.AuthorID != nil {
+		if author, err := mfs.db.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+			authorName = author.Name
+		}
+	}
+	query := ai.Query{
+		BookID:   book.ID,
+		Title:    book.Title,
+		Author:   authorName,
+		Narrator: derefStr(book.Narrator),
+	}
+
+	llmCands := make([]ai.Candidate, len(topCands))
+	for i, c := range topCands {
+		llmCands[i] = ai.Candidate{
+			Title:    c.Title,
+			Author:   c.Author,
+			Narrator: c.Narrator,
+		}
+	}
+
+	llmScores, err := mfs.llmScorer.Score(ctx, query, llmCands)
+	if err != nil || len(llmScores) != len(topCands) {
+		if err != nil {
+			log.Printf("[WARN] metadata-search: rerank LLM call failed, keeping base scores: %v", err)
+		} else {
+			log.Printf("[WARN] metadata-search: rerank returned %d scores for %d candidates, keeping base scores",
+				len(llmScores), len(topCands))
+		}
+		return candidates
+	}
+
+	// Replace top-K base scores with LLM scores directly — do not apply the
+	// author/narrator/series bonus multipliers again. The LLM prompt already
+	// sees those fields and judges them as part of its score; re-multiplying
+	// would double-count the same evidence and distort the top-K's position
+	// relative to the non-reranked tail.
+	for i := range topCands {
+		candidates[i].Score = llmScores[i]
+	}
+
+	// Resort the full list so the reranked top-K is in correct order against
+	// the untouched tail.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+	return candidates
+}
+
 // applySeriesPositionFilter rejects the top result if it claims a different
 // series position than the book's known position. If the result has no
 // SeriesPosition or the book has no known position, results pass through.
@@ -1741,7 +1853,31 @@ func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta meta
 
 // SearchMetadataForBook searches all configured metadata sources and returns
 // scored candidates for manual matching.
+// SearchMetadataForBook is the backward-compatible variadic entry point.
+// New callers should prefer SearchMetadataForBookWithOptions — the variadic
+// author/narrator/series positioning is historical and easy to get wrong.
 func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, authorHint ...string) (*SearchMetadataResponse, error) {
+	var author, narrator, series string
+	if len(authorHint) > 0 {
+		author = authorHint[0]
+	}
+	if len(authorHint) > 1 {
+		narrator = authorHint[1]
+	}
+	if len(authorHint) > 2 {
+		series = authorHint[2]
+	}
+	return mfs.SearchMetadataForBookWithOptions(id, query, author, narrator, series, SearchOptions{})
+}
+
+// SearchMetadataForBookWithOptions is the canonical search entry point. The
+// old variadic signature wraps this and passes default options. All new call
+// sites should use this method directly so they can pass SearchOptions fields
+// (UseRerank etc.) explicitly.
+func (mfs *MetadataFetchService) SearchMetadataForBookWithOptions(
+	id, query, author, narrator, series string,
+	opts SearchOptions,
+) (*SearchMetadataResponse, error) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
@@ -1756,11 +1892,11 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 	// If title is effectively empty but we have author/narrator hints,
 	// use the author name as search query to get results
 	if strings.TrimSpace(searchTitle) == "" || searchTitle == "-" {
-		if len(authorHint) > 0 && authorHint[0] != "" {
-			searchTitle = authorHint[0]
+		if author != "" {
+			searchTitle = author
 		} else if book.AuthorID != nil {
-			if author, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
-				searchTitle = author.Name
+			if a, aerr := mfs.db.GetAuthorByID(*book.AuthorID); aerr == nil && a != nil {
+				searchTitle = a.Name
 			}
 		}
 	}
@@ -1775,19 +1911,10 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 		return nil, fmt.Errorf("no metadata sources enabled")
 	}
 
-	// Extract author, narrator, and series hints from variadic parameter
-	searchAuthor := ""
-	if len(authorHint) > 0 && authorHint[0] != "" {
-		searchAuthor = strings.TrimSpace(authorHint[0])
-	}
-	searchNarrator := ""
-	if len(authorHint) > 1 && authorHint[1] != "" {
-		searchNarrator = strings.TrimSpace(authorHint[1])
-	}
-	searchSeries := ""
-	if len(authorHint) > 2 && authorHint[2] != "" {
-		searchSeries = strings.TrimSpace(authorHint[2])
-	}
+	// Normalize explicit author/narrator/series hints for downstream scoring.
+	searchAuthor := strings.TrimSpace(author)
+	searchNarrator := strings.TrimSpace(narrator)
+	searchSeries := strings.TrimSpace(series)
 
 	// Always resolve the book's own author and narrator for scoring tiebreaks,
 	// even when no explicit hints were provided in the search request
@@ -2057,6 +2184,11 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 	// Cap at 50 to support large series
 	if len(candidates) > 50 {
 		candidates = candidates[:50]
+	}
+
+	// Optional LLM rerank pass on the top ambiguous candidates.
+	if opts.UseRerank && mfs.llmScorer != nil && config.AppConfig.MetadataLLMScoringEnabled {
+		candidates = mfs.rerankTopK(context.Background(), book, candidates)
 	}
 
 	log.Printf("[DEBUG] metadata-search: returning %d candidates for %q (search words: %v)", len(candidates), searchTitle, searchWords)
