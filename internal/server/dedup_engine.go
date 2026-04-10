@@ -113,7 +113,7 @@ func (de *DedupEngine) CheckBook(ctx context.Context, bookID string) (bool, erro
 
 	// --- Layer 2: Embedding similarity ---
 	if de.embedClient != nil {
-		if err := de.EmbedBook(ctx, bookID); err != nil {
+		if _, err := de.EmbedBook(ctx, bookID); err != nil {
 			log.Printf("dedup: embed book error for %s: %v", bookID, err)
 		} else {
 			if err := de.findSimilarBooks(ctx, bookID); err != nil {
@@ -488,26 +488,83 @@ func (de *DedupEngine) CheckAuthor(ctx context.Context, authorID int) error {
 	return nil
 }
 
+// EmbedStatus classifies the outcome of a single EmbedBook call so callers
+// can count live API usage separately from no-op traversals. The log line
+// in runEmbeddingBackfill used to say "N books embedded" for every
+// successful return regardless of what actually happened, which made the
+// backfill's real cost invisible. With this enum a caller can report:
+//
+//	Embedded N (cached M, skipped_non_primary P, skipped_empty_title Q)
+//
+// making it obvious at a glance whether a run actually called the
+// embeddings API or just walked the library to validate state.
+type EmbedStatus int
+
+const (
+	// EmbedStatusEmbedded means the embeddings API was called and the
+	// resulting vector was written to the store. This is the only status
+	// that costs money.
+	EmbedStatusEmbedded EmbedStatus = iota
+
+	// EmbedStatusCached means the book already had an embedding whose
+	// text_hash matched the current title/author/narrator, so no API
+	// call was made and no row was written. On re-runs of an unchanged
+	// library almost every book lands here.
+	EmbedStatusCached
+
+	// EmbedStatusSkippedNonPrimary means the book is a non-primary
+	// member of a version group (alternate format of another book).
+	// Its identity is owned by the primary, so it gets no embedding.
+	// Any stale row for the book is deleted on the way out.
+	EmbedStatusSkippedNonPrimary
+
+	// EmbedStatusSkippedEmptyTitle means the book has no usable title
+	// (empty, whitespace-only, or ≤ 2 characters after trimming).
+	// Embedding such a book would collapse into a dense cluster where
+	// unrelated records spuriously match at ~100% cosine. Any stale row
+	// for the book is deleted on the way out.
+	EmbedStatusSkippedEmptyTitle
+)
+
+// String returns a short human-readable form of the status, suitable for
+// log output.
+func (s EmbedStatus) String() string {
+	switch s {
+	case EmbedStatusEmbedded:
+		return "embedded"
+	case EmbedStatusCached:
+		return "cached"
+	case EmbedStatusSkippedNonPrimary:
+		return "skipped_non_primary"
+	case EmbedStatusSkippedEmptyTitle:
+		return "skipped_empty_title"
+	default:
+		return "unknown"
+	}
+}
+
 // EmbedBook generates and stores an embedding for the given book.
-// Skips re-embedding if the text hash has not changed.
+// Returns a status classifying what actually happened so callers can
+// distinguish live API calls from cache hits and skipped-by-policy books.
 //
 // Non-primary versions (members of a version group that are not the primary
 // representative) are skipped entirely: their embedding would be a duplicate
 // of the primary's by construction, and surfacing them as dedup candidates
 // just clutters the UI with noise. Any existing embedding for a non-primary
 // book is deleted on the spot so historical rows from earlier backfills get
-// cleaned up as we walk the library.
-func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) error {
+// cleaned up as we walk the library. Empty-title books are skipped with
+// the same cleanup behavior.
+func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) (EmbedStatus, error) {
 	if de.embedClient == nil {
-		return fmt.Errorf("no embedding client configured")
+		return 0, fmt.Errorf("no embedding client configured")
 	}
 
 	book, err := de.bookStore.GetBookByID(bookID)
 	if err != nil {
-		return fmt.Errorf("get book %s: %w", bookID, err)
+		return 0, fmt.Errorf("get book %s: %w", bookID, err)
 	}
 	if book == nil {
-		return fmt.Errorf("book %s not found", bookID)
+		return 0, fmt.Errorf("book %s not found", bookID)
 	}
 
 	// Skip non-primary version-group members. If the book was previously
@@ -516,7 +573,7 @@ func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) error {
 		if err := de.embedStore.Delete("book", bookID); err != nil {
 			log.Printf("dedup: delete stale embedding for non-primary %s: %v", bookID, err)
 		}
-		return nil
+		return EmbedStatusSkippedNonPrimary, nil
 	}
 
 	// Skip books without a usable title. Embedding a blank or near-empty
@@ -529,7 +586,7 @@ func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) error {
 		if err := de.embedStore.Delete("book", bookID); err != nil {
 			log.Printf("dedup: delete stale embedding for empty-title %s: %v", bookID, err)
 		}
-		return nil
+		return EmbedStatusSkippedEmptyTitle, nil
 	}
 
 	authorName := ""
@@ -543,24 +600,27 @@ func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) error {
 	text := ai.BuildEmbeddingText("book", book.Title, authorName, derefStr(book.Narrator))
 	hash := ai.TextHash(text)
 
-	// Check if existing embedding already has this hash — skip if so
+	// Check if existing embedding already has this hash — skip if so.
 	existing, err := de.embedStore.Get("book", bookID)
 	if err == nil && existing != nil && existing.TextHash == hash {
-		return nil // already up to date
+		return EmbedStatusCached, nil
 	}
 
 	vec, err := de.embedClient.EmbedOne(ctx, text)
 	if err != nil {
-		return fmt.Errorf("embed text: %w", err)
+		return 0, fmt.Errorf("embed text: %w", err)
 	}
 
-	return de.embedStore.Upsert(database.Embedding{
+	if err := de.embedStore.Upsert(database.Embedding{
 		EntityType: "book",
 		EntityID:   bookID,
 		TextHash:   hash,
 		Vector:     vec,
 		Model:      "text-embedding-3-large",
-	})
+	}); err != nil {
+		return 0, err
+	}
+	return EmbedStatusEmbedded, nil
 }
 
 // EmbedAuthor generates and stores an embedding for the given author.
@@ -647,7 +707,7 @@ func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total i
 
 		// Layer 2 embedding: re-embed if stale, then similarity scan.
 		if de.embedClient != nil {
-			if err := de.EmbedBook(ctx, book.ID); err != nil {
+			if _, err := de.EmbedBook(ctx, book.ID); err != nil {
 				log.Printf("dedup: full scan embed error for %s: %v", book.ID, err)
 			}
 		}
