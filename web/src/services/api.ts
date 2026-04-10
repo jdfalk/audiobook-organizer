@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.65.0
+// version: 1.66.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3551,4 +3551,112 @@ export async function deleteUserColumnConfig(): Promise<void> {
   if (!response.ok && response.status !== 404) {
     throw await buildApiError(response, 'Failed to delete column config');
   }
+}
+
+// --- Embedding-based deduplication ---
+
+export interface DedupCandidate {
+  id: number;
+  entity_type: 'book' | 'author';
+  entity_a_id: string;
+  entity_b_id: string;
+  layer: 'exact' | 'embedding' | 'llm';
+  similarity?: number;
+  llm_verdict?: string;
+  llm_reason?: string;
+  status: 'pending' | 'merged' | 'dismissed';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DedupCandidatesResponse {
+  candidates: DedupCandidate[];
+  total: number;
+}
+
+export interface DedupStats {
+  entity_type: string;
+  layer: string;
+  status: string;
+  count: number;
+}
+
+export async function getDedupCandidates(params?: {
+  entity_type?: string;
+  status?: string;
+  layer?: string;
+  min_similarity?: number;
+  limit?: number;
+  offset?: number;
+}): Promise<DedupCandidatesResponse> {
+  const qs = new URLSearchParams();
+  if (params?.entity_type) qs.set('entity_type', params.entity_type);
+  if (params?.status) qs.set('status', params.status);
+  if (params?.layer) qs.set('layer', params.layer);
+  if (params?.min_similarity != null)
+    qs.set('min_similarity', String(params.min_similarity));
+  if (params?.limit != null) qs.set('limit', String(params.limit));
+  if (params?.offset != null) qs.set('offset', String(params.offset));
+  const url = qs.toString()
+    ? `${API_BASE}/dedup/candidates?${qs}`
+    : `${API_BASE}/dedup/candidates`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch dedup candidates');
+  }
+  return response.json();
+}
+
+export async function getDedupStats(): Promise<{ stats: DedupStats[] }> {
+  const response = await fetch(`${API_BASE}/dedup/stats`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch dedup stats');
+  }
+  return response.json();
+}
+
+export async function mergeDedupCandidate(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/${id}/merge`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge dedup candidate');
+  }
+}
+
+export async function dismissDedupCandidate(id: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/${id}/dismiss`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to dismiss dedup candidate');
+  }
+}
+
+export async function triggerDedupScan(): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE}/dedup/scan`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to trigger dedup scan');
+  }
+  return response.json();
+}
+
+export async function triggerDedupLLM(): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE}/dedup/scan-llm`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to trigger dedup LLM scan');
+  }
+  return response.json();
+}
+
+export async function triggerDedupRefresh(): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE}/dedup/refresh`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to trigger dedup refresh');
+  }
+  return response.json();
 }
