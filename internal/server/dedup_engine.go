@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -402,32 +402,44 @@ func extractSeriesNumberFromTitle(title string) string {
 // non-digit content (e.g. two books titled "Untitled" — no digits, so
 // the function returns false and the pair is allowed through).
 func titlesDifferOnlyInDigits(a, b string) bool {
-	stripDigits := func(s string) (stripped string, hadDigit bool) {
+	// Normalize: replace each digit with a space, then collapse runs of
+	// whitespace, then trim. Replacing (rather than dropping) digits
+	// avoids "title12" and "title" producing different strippeds when
+	// one is "title12sub" and the other is "title sub" — both collapse
+	// to "title sub" the right way. Collapsing whitespace handles
+	// "title 2" -> "title " -> "title" vs plain "title".
+	normalize := func(s string) string {
 		var sb strings.Builder
 		for _, r := range s {
 			if r >= '0' && r <= '9' {
-				hadDigit = true
+				sb.WriteRune(' ')
 				continue
 			}
 			sb.WriteRune(r)
 		}
-		return sb.String(), hadDigit
+		return strings.Join(strings.Fields(sb.String()), " ")
 	}
-	strippedA, aHadDigit := stripDigits(a)
-	strippedB, bHadDigit := stripDigits(b)
-	if !aHadDigit || !bHadDigit {
+	normA := normalize(a)
+	normB := normalize(b)
+	if normA != normB {
 		return false
 	}
-	if strippedA != strippedB {
-		return false
-	}
-	// Both had digits and the non-digit content is identical — they
-	// differ only in number tokens. But if the digit strings are ALSO
-	// identical (e.g. both titles contain "2024" in the same position),
-	// this isn't a series-volume difference, it's the same title.
+	// Non-digit content is identical (ignoring whitespace differences
+	// where digits used to be). For this to count as a series-volume
+	// diff, the digit strings must differ. If both digit strings are
+	// identical, it's the same title (e.g. both "Foundation 1" — same
+	// book, not a series difference). If one side has no digits and the
+	// other has a digit, that's a "Backyard Dungeon" vs "Backyard Dungeon
+	// 2" pattern where the first book is volume 1 and the second is
+	// volume 2 — a real series-volume diff.
 	digitsA := extractDigits(a)
 	digitsB := extractDigits(b)
-	return digitsA != digitsB
+	if digitsA == digitsB {
+		return false
+	}
+	// At least one side must have a digit; otherwise both digit strings
+	// are "" and the == check above would have caught it.
+	return true
 }
 
 // extractDigits returns all digit characters from s concatenated in
@@ -823,6 +835,18 @@ func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total i
 func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 	if de.embedStore == nil || de.bookStore == nil {
 		return 0, nil
+	}
+
+	// First, canonicalize existing rows so duplicate-direction pairs
+	// collapse into a single logical row. This has to run BEFORE the
+	// stale-rule sweep below because otherwise we'd list the same pair
+	// twice (once as (A,B), once as (B,A)) and maybe delete one copy
+	// based on one rule and leave the other copy to cause confusion.
+	if rewritten, deleted, err := de.embedStore.CanonicalizeCandidates(); err != nil {
+		log.Printf("dedup: canonicalize candidates: %v", err)
+	} else if rewritten > 0 || deleted > 0 {
+		log.Printf("dedup: canonicalized %d candidate pair(s), deleted %d duplicate(s)",
+			rewritten, deleted)
 	}
 
 	candidates, _, err := de.embedStore.ListCandidates(database.CandidateFilter{

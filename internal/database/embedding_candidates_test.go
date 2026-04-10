@@ -1,5 +1,5 @@
 // file: internal/database/embedding_candidates_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f3e2d1c0-b9a8-4765-8e7d-6f5c4b3a2190
 
 package database
@@ -251,4 +251,96 @@ func TestDedupCandidates_LayerUpgrade(t *testing.T) {
 	got, _, _ = store.ListCandidates(CandidateFilter{EntityType: "book"})
 	require.Len(t, got, 1)
 	assert.Equal(t, "exact", got[0].Layer, "exact should upgrade over llm")
+}
+
+// TestDedupCandidates_UpsertCanonicalizes verifies that inserting the same
+// logical pair with swapped entity IDs produces exactly one row (in
+// canonical form: smaller ID first). Before this fix, FullScan would
+// discover a pair once as (A,B) while processing book A, then again as
+// (B,A) while processing book B, and each went into its own row because
+// the UNIQUE constraint treats (A,B) and (B,A) as distinct — which is
+// why the UI showed the same "Foundation and Empire" pair twice.
+func TestDedupCandidates_UpsertCanonicalizes(t *testing.T) {
+	store := newTestEmbeddingStore(t)
+
+	// Insert the pair as (book_z, book_a) — non-canonical direction.
+	require.NoError(t, store.UpsertCandidate(DedupCandidate{
+		EntityType: "book",
+		EntityAID:  "book_z",
+		EntityBID:  "book_a",
+		Layer:      "embedding",
+		Similarity: floatPtr(0.92),
+		Status:     "pending",
+	}))
+	// Insert the same pair in canonical direction — should update the
+	// existing row, not create a new one.
+	require.NoError(t, store.UpsertCandidate(DedupCandidate{
+		EntityType: "book",
+		EntityAID:  "book_a",
+		EntityBID:  "book_z",
+		Layer:      "embedding",
+		Similarity: floatPtr(0.93),
+		Status:     "pending",
+	}))
+
+	got, total, err := store.ListCandidates(CandidateFilter{EntityType: "book"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, total, "exactly one row should exist for the pair")
+	require.Len(t, got, 1)
+	// Canonical form: smaller ID first
+	assert.Equal(t, "book_a", got[0].EntityAID)
+	assert.Equal(t, "book_z", got[0].EntityBID)
+	// Second upsert's similarity should have taken effect.
+	require.NotNil(t, got[0].Similarity)
+	assert.InDelta(t, 0.93, *got[0].Similarity, 0.0001)
+}
+
+// TestCanonicalizeCandidates_Cleanup verifies the one-time cleanup that
+// removes duplicate (A,B)/(B,A) rows from deployments that accumulated
+// them before UpsertCandidate started canonicalizing on insert. The
+// cleanup must (a) swap non-canonical rows in place when no canonical
+// sibling exists, and (b) delete the non-canonical row when a canonical
+// sibling already exists.
+func TestCanonicalizeCandidates_Cleanup(t *testing.T) {
+	store := newTestEmbeddingStore(t)
+
+	// Bypass the upsert canonicalization by using raw SQL so we can
+	// simulate a pre-fix database state.
+	rawInsert := func(typ, a, b, layer string) {
+		t.Helper()
+		_, err := store.db.Exec(`
+			INSERT INTO dedup_candidates
+				(entity_type, entity_a_id, entity_b_id, layer, status, created_at, updated_at)
+			VALUES (?, ?, ?, ?, 'pending', '2026-04-10', '2026-04-10')
+		`, typ, a, b, layer)
+		require.NoError(t, err)
+	}
+
+	// Case A: non-canonical row with no canonical sibling — should be
+	// swapped in place.
+	rawInsert("book", "zebra", "apple", "embedding")
+
+	// Case B: canonical row already exists alongside a non-canonical
+	// duplicate — the non-canonical duplicate should be deleted.
+	rawInsert("book", "hello", "world", "embedding") // canonical (h < w)
+	rawInsert("book", "world", "hello", "exact")     // non-canonical duplicate
+
+	// Case C: pair already in canonical form — untouched.
+	rawInsert("book", "aaa", "bbb", "embedding")
+
+	rewritten, deleted, err := store.CanonicalizeCandidates()
+	require.NoError(t, err)
+	assert.Equal(t, 1, rewritten, "case A should be swapped in place")
+	assert.Equal(t, 1, deleted, "case B's non-canonical duplicate should be deleted")
+
+	// Verify final state: 3 rows, all in canonical order.
+	got, total, err := store.ListCandidates(CandidateFilter{EntityType: "book", Limit: 100})
+	require.NoError(t, err)
+	assert.Equal(t, 3, total)
+	require.Len(t, got, 3)
+	for _, c := range got {
+		assert.LessOrEqual(t, c.EntityAID, c.EntityBID,
+			"all rows should have entity_a_id <= entity_b_id after canonicalize, got (%s, %s)",
+			c.EntityAID, c.EntityBID)
+	}
 }
