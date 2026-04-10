@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.42.0
+// version: 4.43.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -1775,16 +1775,38 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 
 		log.Printf("[DEBUG] metadata-search: %s returned %d raw results for %q", src.Name(), len(allResults), searchTitle)
 
-		for _, r := range allResults {
+		baseScores, baseTier := mfs.scoreBaseCandidates(context.Background(), book, allResults, searchWords)
+		log.Printf("[DEBUG] metadata-search: scored %d results from %s with tier %s", len(allResults), src.Name(), baseTier)
+
+		for i, r := range allResults {
 			key := strings.ToLower(r.Title + "|" + r.Author)
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
 
-			score := scoreOneResult(r, searchWords)
-			if score <= 0 {
-				log.Printf("[DEBUG] metadata-search: score=0 for %q by %q from %s", r.Title, r.Author, src.Name())
+			baseScore := baseScores[i]
+
+			// Apply non-base adjustments (compilation, length, rich metadata). For
+			// non-F1 tiers, pass baseWordCount=0 so the length penalty is suppressed —
+			// it's a token-overlap-specific signal that doesn't translate to semantic
+			// embedding scores.
+			baseWordCount := 0
+			if baseTier == "f1" {
+				baseWordCount = len(searchWords)
+			}
+			score := applyNonBaseAdjustments(baseScore, r, baseWordCount)
+
+			// Tier-specific minimum on the adjusted score. F1 path filters at <= 0
+			// (preserves original behavior); embedding path uses the configured
+			// MetadataEmbeddingMinScore threshold.
+			minScore := 0.0
+			if baseTier == "embedding" {
+				minScore = config.AppConfig.MetadataEmbeddingMinScore
+			}
+			if score <= minScore {
+				log.Printf("[DEBUG] metadata-search: adjusted score=%.3f (tier=%s) below threshold for %q by %q from %s",
+					score, baseTier, r.Title, r.Author, src.Name())
 				continue
 			}
 
