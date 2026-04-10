@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.35.0
+// version: 1.36.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -437,6 +437,7 @@ interface SettingsState {
   defaultUserQuotaGB: number;
   autoFetchMetadata: boolean;
   enableAIParsing: boolean;
+  metadataLLMScoringEnabled: boolean;
   openaiApiKey: string;
   metadataSources: UiMetadataSource[];
   language: string;
@@ -551,6 +552,7 @@ export function Settings() {
     // Metadata settings
     autoFetchMetadata: true,
     enableAIParsing: false,
+    metadataLLMScoringEnabled: false,
     openaiApiKey: '',
     metadataSources: [
       {
@@ -728,6 +730,7 @@ export function Settings() {
         // Metadata settings
         autoFetchMetadata: config.auto_fetch_metadata ?? true,
         enableAIParsing: config.enable_ai_parsing ?? false,
+        metadataLLMScoringEnabled: config.metadata_llm_scoring_enabled ?? false,
         openaiApiKey: '', // Clear field when loading, show placeholder instead
         metadataSources:
           config.metadata_sources && config.metadata_sources.length > 0
@@ -1376,6 +1379,7 @@ export function Settings() {
         // Metadata
         auto_fetch_metadata: settings.autoFetchMetadata,
         enable_ai_parsing: settings.enableAIParsing,
+        metadata_llm_scoring_enabled: settings.metadataLLMScoringEnabled,
         // Only include API key if user entered a new one
         ...(settings.openaiApiKey
           ? { openai_api_key: settings.openaiApiKey }
@@ -2544,6 +2548,29 @@ export function Settings() {
                   parse complex audiobook filenames into title, author, series,
                   narrator, etc. This dramatically improves metadata extraction
                   from poorly named files where traditional parsing fails.
+                </Typography>
+              </Alert>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.metadataLLMScoringEnabled}
+                    onChange={(e) =>
+                      handleChange('metadataLLMScoringEnabled', e.target.checked)
+                    }
+                  />
+                }
+                label="Enable AI rerank for metadata search (opt-in per search)"
+              />
+              <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
+                <Typography variant="caption">
+                  <strong>What is this?</strong> Allows users to request a
+                  higher-quality LLM rerank pass on ambiguous metadata search results.
+                  The per-search toggle in the search dialog is only effective when
+                  this server-wide switch is on. Adds approximately $0.003 per search
+                  when a user opts in.
                 </Typography>
               </Alert>
             </Grid>
