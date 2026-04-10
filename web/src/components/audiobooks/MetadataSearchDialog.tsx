@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataSearchDialog.tsx
-// version: 1.8.0
+// version: 1.9.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import { useCallback, useEffect, useState } from 'react';
@@ -103,6 +103,7 @@ export function MetadataSearchDialog({
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [sortResults, setSortResults] = useState<'score' | 'source'>('score');
   const [writeToFiles, setWriteToFiles] = useState(true);
+  const [useRerank, setUseRerank] = useState(false);
 
   // Auto-populate query and search on open
   useEffect(() => {
@@ -130,7 +131,14 @@ export function MetadataSearchDialog({
       if (!book?.id) return;
       setLoading(true);
       try {
-        const resp = await api.searchMetadataForBook(book.id, searchQuery, author || undefined, narrator || undefined, series || undefined);
+        const resp = await api.searchMetadataForBook(
+          book.id,
+          searchQuery,
+          author || undefined,
+          narrator || undefined,
+          series || undefined,
+          useRerank || undefined
+        );
         setResults(resp.results || []);
         setSourcesTried(resp.sources_tried || []);
         setSourcesFailed(resp.sources_failed || {});
@@ -144,7 +152,7 @@ export function MetadataSearchDialog({
         setLoading(false);
       }
     },
-    [book?.id, toast]
+    [book?.id, toast, useRerank]
   );
 
   const handleSearch = () => {
@@ -368,6 +376,17 @@ export function MetadataSearchDialog({
               onKeyDown={handleKeyDown}
               placeholder="Series name (boosts matching series)"
               label="Series"
+            />
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={useRerank}
+                  onChange={(e) => setUseRerank(e.target.checked)}
+                />
+              }
+              label="AI rerank (higher quality, ~$0.003/search)"
+              sx={{ ml: 0 }}
             />
           </Stack>
         </Collapse>
