@@ -537,3 +537,115 @@ func TestRunLLMReview_NilParserSkipsGracefully(t *testing.T) {
 		t.Errorf("candidate should be untouched when parser is nil: %+v", got)
 	}
 }
+
+// TestHasUsableTitle pins the title length/whitespace rejection rules.
+func TestHasUsableTitle(t *testing.T) {
+	cases := []struct {
+		title string
+		want  bool
+	}{
+		{"", false},
+		{"   ", false},
+		{"a", false},
+		{"ab", false},
+		{"abc", true},
+		{"  abc  ", true},
+		{"The Way of Kings", true},
+	}
+	for _, tc := range cases {
+		if got := hasUsableTitle(tc.title); got != tc.want {
+			t.Errorf("hasUsableTitle(%q) = %v, want %v", tc.title, got, tc.want)
+		}
+	}
+}
+
+// TestExtractSeriesNumberFromTitle verifies the regex covers all the
+// marker variations we've seen in the wild, especially the "bk N" case
+// that was the reason for PR #208's follow-up commits.
+func TestExtractSeriesNumberFromTitle(t *testing.T) {
+	cases := []struct {
+		title string
+		want  string
+	}{
+		{"Reclaiming Honor bk 6", "6"},
+		{"Reclaiming Honor bk.6", "6"},
+		{"Reclaiming Honor bk6", "6"},
+		{"Title, Book 3", "3"},
+		{"Title Vol 12", "12"},
+		{"Title Volume 12", "12"},
+		{"Title Vol. 12", "12"},
+		{"Title #4", "4"},
+		{"Title (Book 7)", "7"},
+		{"Title Part 2", "2"},
+		{"Title Pt. 2", "2"},
+		{"Title Pt 2", "2"},
+		{"Title Episode 9", "9"},
+		{"Title Ep 9", "9"},
+		{"Title No 5", "5"},
+		{"Title Number 5", "5"},
+		{"No marker here", ""},
+		{"1984", ""}, // bare numbers should not match
+		{"The Way of Kings", ""},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := extractSeriesNumberFromTitle(tc.title); got != tc.want {
+			t.Errorf("extractSeriesNumberFromTitle(%q) = %q, want %q", tc.title, got, tc.want)
+		}
+	}
+}
+
+// TestTitlesDifferOnlyInDigits verifies the last-ditch digit-structure
+// check that catches series volumes whose marker the regex doesn't
+// recognize.
+func TestTitlesDifferOnlyInDigits(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		// Classic positive: two volumes with bare trailing numbers.
+		{"reclaiming honor 6", "reclaiming honor 7", true},
+		{"series name 3", "series name 4", true},
+		{"title 6 subtitle", "title 7 subtitle", true},
+		// Different digit lengths but same non-digit structure.
+		{"title 9", "title 10", true},
+		// Identical titles (no digits) — not a series-volume pair.
+		{"the way of kings", "the way of kings", false},
+		// Same title, same numbers — identical, not a difference.
+		{"title 3", "title 3", false},
+		// Different non-digit content — not a series-volume pair.
+		{"title one", "title two", false},
+		{"reclaiming honor", "restoring honor", false},
+		// One has a number, the other doesn't — structure differs.
+		{"title", "title 3", false},
+		// Both numbers but different non-digit content.
+		{"title 3", "book 3", false},
+		// Empty strings.
+		{"", "", false},
+	}
+	for _, tc := range cases {
+		if got := titlesDifferOnlyInDigits(tc.a, tc.b); got != tc.want {
+			t.Errorf("titlesDifferOnlyInDigits(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+// TestEmbedStatus_String verifies the human-readable names used in log
+// output. These are a stable user-facing string so they shouldn't drift.
+func TestEmbedStatus_String(t *testing.T) {
+	cases := []struct {
+		status EmbedStatus
+		want   string
+	}{
+		{EmbedStatusEmbedded, "embedded"},
+		{EmbedStatusCached, "cached"},
+		{EmbedStatusSkippedNonPrimary, "skipped_non_primary"},
+		{EmbedStatusSkippedEmptyTitle, "skipped_empty_title"},
+		{EmbedStatus(99), "unknown"},
+	}
+	for _, tc := range cases {
+		if got := tc.status.String(); got != tc.want {
+			t.Errorf("EmbedStatus(%d).String() = %q, want %q", tc.status, got, tc.want)
+		}
+	}
+}

@@ -1,5 +1,5 @@
 // file: internal/server/embedding_backfill.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 
 package server
@@ -19,12 +19,17 @@ import (
 //     Layer 1 exact checks during FullScan (PR #207)
 //   - v3: skip books with empty/near-empty titles, skip Layer 1 + Layer 2
 //     matches where books are distinct volumes of a numbered series
+//     (PR #208, first iteration)
+//   - v4: expanded series-marker regex to include "bk", "vol", "volume",
+//     "number", "no", "part", "pt", "episode", "ep", "#", and added a
+//     last-ditch digit-only-difference fallback to catch series volumes
+//     whose marker the regex doesn't recognize
 //
 // The backfill stays idempotent — individual EmbedBook calls skip on
 // cached text_hash — so re-running it just pays a few seconds of DB reads
 // plus a purge pass to delete candidates that the new rules would have
 // rejected.
-const backfillVersionMarker = "embedding_backfill_v3_done"
+const backfillVersionMarker = "embedding_backfill_v4_done"
 
 // runEmbeddingBackfill embeds all books and authors on first startup and
 // re-runs once after each backfill version bump.
