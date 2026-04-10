@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.29.0
+// version: 1.30.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -134,6 +134,7 @@ type Config struct {
 	// Activity log retention (separate from operation log retention)
 	ActivityLogRetentionChangeDays int `json:"activity_log_retention_change_days"` // default 90
 	ActivityLogRetentionDebugDays  int `json:"activity_log_retention_debug_days"`  // default 30
+	ActivityLogCompactionDays int `json:"activity_log_compaction_days"` // default 14
 
 	// API limits
 	APIRateLimitPerMinute  int  `json:"api_rate_limit_per_minute"`
@@ -840,6 +841,7 @@ func ResetToDefaults() {
 		PurgeSoftDeletedDeleteFiles:    false,
 		ActivityLogRetentionChangeDays: 90,
 		ActivityLogRetentionDebugDays:  30,
+		ActivityLogCompactionDays: 14,
 
 		// Logging
 		LogLevel:          "info",
