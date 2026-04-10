@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.40.0
+// version: 4.41.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -21,6 +21,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
@@ -37,6 +38,7 @@ type MetadataFetchService struct {
 	isbnEnrichment  *ISBNEnrichmentService
 	activityService *ActivityService
 	dedupEngine     *DedupEngine
+	metadataScorer  ai.MetadataCandidateScorer // optional; nil = fallback to F1
 }
 
 // SetActivityService sets the activity service for dual-writing to the unified activity log.
@@ -56,6 +58,14 @@ func (mfs *MetadataFetchService) SetOLStore(store *openlibrary.OLStore) {
 // SetDedupEngine sets the dedup engine for post-apply dedup checks.
 func (mfs *MetadataFetchService) SetDedupEngine(engine *DedupEngine) {
 	mfs.dedupEngine = engine
+}
+
+// SetMetadataScorer injects the pluggable metadata candidate scorer. A nil
+// scorer (or a scorer that returns errors at runtime) makes the search
+// pipeline fall back to the pre-existing significantWords F1 path, so this
+// method is safe to leave unset.
+func (mfs *MetadataFetchService) SetMetadataScorer(scorer ai.MetadataCandidateScorer) {
+	mfs.metadataScorer = scorer
 }
 
 // SetISBNEnrichment sets the ISBN enrichment service for background ISBN/ASIN lookups.
