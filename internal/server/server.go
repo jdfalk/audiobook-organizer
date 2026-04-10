@@ -7456,21 +7456,28 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Query    string `json:"query"`
-		Author   string `json:"author"`
-		Narrator string `json:"narrator"`
-		Series   string `json:"series"`
+		Query     string `json:"query"`
+		Author    string `json:"author"`
+		Narrator  string `json:"narrator"`
+		Series    string `json:"series"`
+		UseRerank bool   `json:"use_rerank"`
 	}
 	_ = c.ShouldBindJSON(&body)
 
-	// Cache metadata search results for 60s — external API calls are expensive
-	cacheKey := fmt.Sprintf("meta_search:%s:%s:%s:%s:%s", id, body.Query, body.Author, body.Narrator, body.Series)
+	// Cache metadata search results for 60s — external API calls are expensive.
+	// use_rerank is part of the cache key so a rerank result and a non-rerank
+	// result for the same search don't clobber each other.
+	cacheKey := fmt.Sprintf("meta_search:%s:%s:%s:%s:%s:%t",
+		id, body.Query, body.Author, body.Narrator, body.Series, body.UseRerank)
 	if cached, ok := s.listCache.Get(cacheKey); ok {
 		c.JSON(http.StatusOK, cached)
 		return
 	}
 
-	resp, err := s.metadataFetchService.SearchMetadataForBook(id, body.Query, body.Author, body.Narrator, body.Series)
+	resp, err := s.metadataFetchService.SearchMetadataForBookWithOptions(
+		id, body.Query, body.Author, body.Narrator, body.Series,
+		SearchOptions{UseRerank: body.UseRerank},
+	)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
