@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.30.0
+// version: 1.31.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -135,6 +135,15 @@ type Config struct {
 	ActivityLogRetentionChangeDays int `json:"activity_log_retention_change_days"` // default 90
 	ActivityLogRetentionDebugDays  int `json:"activity_log_retention_debug_days"`  // default 30
 	ActivityLogCompactionDays int `json:"activity_log_compaction_days"` // default 14
+
+	// Embedding-based dedup
+	EmbeddingEnabled         bool    `json:"embedding_enabled"`              // default true
+	EmbeddingModel           string  `json:"embedding_model"`                // default "text-embedding-3-large"
+	DedupBookHighThreshold   float64 `json:"dedup_book_high_threshold"`      // default 0.95
+	DedupBookLowThreshold    float64 `json:"dedup_book_low_threshold"`       // default 0.85
+	DedupAuthorHighThreshold float64 `json:"dedup_author_high_threshold"`    // default 0.92
+	DedupAuthorLowThreshold  float64 `json:"dedup_author_low_threshold"`     // default 0.80
+	DedupAutoMergeEnabled    bool    `json:"dedup_auto_merge_enabled"`       // default true
 
 	// API limits
 	APIRateLimitPerMinute  int  `json:"api_rate_limit_per_minute"`
@@ -842,6 +851,15 @@ func ResetToDefaults() {
 		ActivityLogRetentionChangeDays: 90,
 		ActivityLogRetentionDebugDays:  30,
 		ActivityLogCompactionDays: 14,
+
+		// Embedding-based dedup
+		EmbeddingEnabled:         true,
+		EmbeddingModel:           "text-embedding-3-large",
+		DedupBookHighThreshold:   0.95,
+		DedupBookLowThreshold:    0.85,
+		DedupAuthorHighThreshold: 0.92,
+		DedupAuthorLowThreshold:  0.80,
+		DedupAutoMergeEnabled:    true,
 
 		// Logging
 		LogLevel:          "info",
