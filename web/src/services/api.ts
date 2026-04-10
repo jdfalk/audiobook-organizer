@@ -2082,12 +2082,20 @@ export async function searchMetadataForBook(
   query?: string,
   author?: string,
   narrator?: string,
-  series?: string
+  series?: string,
+  useRerank?: boolean
 ): Promise<SearchMetadataResponse> {
-  const body: { query: string; author?: string; narrator?: string; series?: string } = { query: query || '' };
+  const body: {
+    query: string;
+    author?: string;
+    narrator?: string;
+    series?: string;
+    use_rerank?: boolean;
+  } = { query: query || '' };
   if (author) body.author = author;
   if (narrator) body.narrator = narrator;
   if (series) body.series = series;
+  if (useRerank) body.use_rerank = true;
   const response = await fetch(
     `${API_BASE}/audiobooks/${bookId}/search-metadata`,
     {
