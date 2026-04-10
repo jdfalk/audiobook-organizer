@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.149.0
+// version: 1.150.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1553,6 +1553,15 @@ func (s *Server) setupRoutes() {
 			protected.POST("/authors/bulk-delete", s.bulkDeleteAuthors)
 			protected.POST("/series/bulk-delete", s.bulkDeleteSeries)
 			protected.POST("/dedup/validate", s.validateDedupEntry)
+
+			// Embedding-based dedup
+			protected.GET("/dedup/candidates", s.listDedupCandidates)
+			protected.GET("/dedup/stats", s.getDedupStats)
+			protected.POST("/dedup/candidates/:id/merge", s.mergeDedupCandidate)
+			protected.POST("/dedup/candidates/:id/dismiss", s.dismissDedupCandidate)
+			protected.POST("/dedup/scan", s.triggerDedupScan)
+			protected.POST("/dedup/scan-llm", s.triggerDedupLLM)
+			protected.POST("/dedup/refresh", s.triggerDedupRefresh)
 
 			// File system routes
 			protected.GET("/filesystem/home", s.getHomeDirectory)
