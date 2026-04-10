@@ -504,6 +504,7 @@ export interface Config {
 
   // AI parsing
   enable_ai_parsing: boolean;
+  metadata_llm_scoring_enabled?: boolean;
   openai_api_key: string;
 
   // Performance
