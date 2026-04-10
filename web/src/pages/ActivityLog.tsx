@@ -43,7 +43,7 @@ import { fetchActivity, fetchActivitySources, compactActivityLog } from '../serv
 import type { ActivityEntry, SourceCount } from '../services/activityApi';
 import * as api from '../services/api';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
 
 const EVENT_TYPES = [
   'book_added',
@@ -145,6 +145,7 @@ export default function ActivityLog() {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [loading, setLoading] = useState(false);
 
   // Auto-refresh
@@ -233,8 +234,8 @@ export default function ActivityLog() {
       const excludeTiersStr = inactiveTiers.length > 0 ? inactiveTiers.join(',') : undefined;
 
       const result = await fetchActivity({
-        limit: PAGE_SIZE,
-        offset: (p - 1) * PAGE_SIZE,
+        limit: pageSize,
+        offset: (p - 1) * pageSize,
         type: typeFilter || undefined,
         level: levelFilter || undefined,
         operation_id: operationId.trim() || undefined,
@@ -272,10 +273,10 @@ export default function ActivityLog() {
     loadSources();
   }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, loadFeed, loadSources]);
 
-  // Load feed on page change
+  // Load feed on page or pageSize change
   useEffect(() => {
     loadFeed(page);
-  }, [page, loadFeed]);
+  }, [page, pageSize, loadFeed]);
 
   // Auto-refresh feed — 5s when active ops exist, 30s when idle
   const refreshInterval = activeOps.length > 0 ? 5000 : 30000;
@@ -410,7 +411,7 @@ export default function ActivityLog() {
     setExcludedSources(new Set());
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const showOpsSection = pinned || activeOps.length > 0;
 
   // Shared filter controls (used in both mobile collapsed and desktop layouts)
@@ -1187,8 +1188,8 @@ export default function ActivityLog() {
           </Table>
         )}
 
-        {totalPages > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+        <Stack direction="row" justifyContent="center" alignItems="center" spacing={2} sx={{ py: 2 }}>
+          {totalPages > 1 && (
             <Pagination
               count={totalPages}
               page={page}
@@ -1196,8 +1197,19 @@ export default function ActivityLog() {
               color="primary"
               size={isMobile ? 'small' : 'medium'}
             />
-          </Box>
-        )}
+          )}
+          <TextField
+            select
+            size="small"
+            value={pageSize}
+            onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+            sx={{ minWidth: 90 }}
+          >
+            {PAGE_SIZE_OPTIONS.map((n) => (
+              <MenuItem key={n} value={n}>{n} / page</MenuItem>
+            ))}
+          </TextField>
+        </Stack>
       </Paper>
 
       {/* Revert Confirmation Dialog */}
