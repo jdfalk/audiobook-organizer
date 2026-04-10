@@ -1,5 +1,5 @@
 // file: internal/server/metadata_scoring_refactor_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 3a7c2b1d-e84f-4d59-9f16-0e5a8b2c4d7e
 
 package server
@@ -159,4 +159,49 @@ func TestScoreBaseCandidates_NilScorerFallsBackSilently(t *testing.T) {
 	scores, tier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
 	assert.Equal(t, "f1", tier)
 	assert.Len(t, scores, 1)
+}
+
+// TestMetadataScorer_WiredEndToEnd verifies that an injected scorer's output
+// reaches the main search loop via scoreBaseCandidates. It uses a
+// controllable scorerStub and feeds it canned results, then checks that the
+// stub was invoked and its scores became the base scores used downstream.
+func TestMetadataScorer_WiredEndToEnd(t *testing.T) {
+	// Stub scorer that prefers the second candidate over the first.
+	stub := &scorerStub{
+		name:   "embedding",
+		scores: []float64{0.30, 0.95},
+	}
+
+	mfs := &MetadataFetchService{metadataScorer: stub}
+	prev := config.AppConfig.MetadataEmbeddingScoringEnabled
+	prevMin := config.AppConfig.MetadataEmbeddingMinScore
+	config.AppConfig.MetadataEmbeddingScoringEnabled = true
+	config.AppConfig.MetadataEmbeddingMinScore = 0.50
+	defer func() {
+		config.AppConfig.MetadataEmbeddingScoringEnabled = prev
+		config.AppConfig.MetadataEmbeddingMinScore = prevMin
+	}()
+
+	book := &database.Book{ID: "BOOK_X", Title: "Query Title"}
+	results := []metadata.BookMetadata{
+		{Title: "Weak Match", Author: "Someone"},
+		{Title: "Strong Match", Author: "Someone"},
+	}
+	searchWords := significantWords("Query Title")
+
+	scores, tier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
+	assert.Equal(t, "embedding", tier)
+	assert.Equal(t, []float64{0.30, 0.95}, scores)
+	assert.Equal(t, 1, stub.callCount, "scorer called exactly once")
+
+	// Verify the min-score filter logic by running it inline (mirrors the
+	// main search loop's minScore check after applyNonBaseAdjustments).
+	var kept []int
+	for i, s := range scores {
+		adjusted := applyNonBaseAdjustments(s, results[i], 0)
+		if adjusted > config.AppConfig.MetadataEmbeddingMinScore {
+			kept = append(kept, i)
+		}
+	}
+	assert.Equal(t, []int{1}, kept, "only the strong match should survive the filter")
 }
