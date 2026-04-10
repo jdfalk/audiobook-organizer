@@ -170,11 +170,12 @@ func (s *Server) compactActivity(c *gin.Context) {
 	var req struct {
 		OlderThanDays int `json:"older_than_days"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.OlderThanDays <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "older_than_days must be a positive integer"})
+	if err := c.ShouldBindJSON(&req); err != nil || req.OlderThanDays < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "older_than_days must be zero or positive"})
 		return
 	}
 
+	// 0 means "compact everything up to now"
 	cutoff := time.Now().AddDate(0, 0, -req.OlderThanDays)
 	result, err := s.activityService.CompactByDay(cutoff)
 	if err != nil {
