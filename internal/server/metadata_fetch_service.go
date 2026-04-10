@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.44.0
+// version: 4.45.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -39,6 +39,7 @@ type MetadataFetchService struct {
 	activityService *ActivityService
 	dedupEngine     *DedupEngine
 	metadataScorer  ai.MetadataCandidateScorer // optional; nil = fallback to F1
+	llmScorer       ai.MetadataCandidateScorer // optional; nil = no LLM rerank tier
 }
 
 // SetActivityService sets the activity service for dual-writing to the unified activity log.
@@ -66,6 +67,13 @@ func (mfs *MetadataFetchService) SetDedupEngine(engine *DedupEngine) {
 // method is safe to leave unset.
 func (mfs *MetadataFetchService) SetMetadataScorer(scorer ai.MetadataCandidateScorer) {
 	mfs.metadataScorer = scorer
+}
+
+// SetMetadataLLMScorer injects the LLM rerank scorer. A nil scorer or a
+// scorer that returns errors at runtime makes the rerank pass a no-op, so
+// this method is safe to leave unset.
+func (mfs *MetadataFetchService) SetMetadataLLMScorer(scorer ai.MetadataCandidateScorer) {
+	mfs.llmScorer = scorer
 }
 
 // SetISBNEnrichment sets the ISBN enrichment service for background ISBN/ASIN lookups.
