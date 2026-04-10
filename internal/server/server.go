@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.150.0
+// version: 1.151.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -838,6 +838,7 @@ func NewServer() *Server {
 					AutoMergeEnabled:    config.AppConfig.DedupAutoMergeEnabled,
 				}
 				log.Println("[INFO] Embedding store and dedup engine initialized")
+				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
 			} else {
 				log.Println("[INFO] Embedding store opened (dedup engine disabled — no API key or embedding_enabled=false)")
 			}
@@ -6099,6 +6100,21 @@ func (s *Server) addImportPath(c *gin.Context) {
 					} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
 						_ = progress.Log("warn", "Auto-organize enabled but root_dir not set", nil)
 					}
+				}
+
+				// Trigger dedup check on newly scanned books
+				if s.dedupEngine != nil && len(books) > 0 {
+					go func() {
+						for _, b := range books {
+							dbBook, err := database.GlobalStore.GetBookByFilePath(b.FilePath)
+							if err != nil || dbBook == nil {
+								continue
+							}
+							if _, err := s.dedupEngine.CheckBook(context.Background(), dbBook.ID); err != nil {
+								log.Printf("[WARN] dedup check failed for scanned book %s: %v", dbBook.ID, err)
+							}
+						}
+					}()
 				}
 
 				// Update book count for this import path

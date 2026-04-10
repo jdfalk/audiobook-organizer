@@ -1,10 +1,11 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.38.0
+// version: 4.39.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -35,6 +36,7 @@ type MetadataFetchService struct {
 	overrideSources []metadata.MetadataSource // for testing
 	isbnEnrichment  *ISBNEnrichmentService
 	activityService *ActivityService
+	dedupEngine     *DedupEngine
 }
 
 // SetActivityService sets the activity service for dual-writing to the unified activity log.
@@ -49,6 +51,11 @@ func NewMetadataFetchService(db database.Store) *MetadataFetchService {
 // SetOLStore sets the Open Library dump store for local-first lookups.
 func (mfs *MetadataFetchService) SetOLStore(store *openlibrary.OLStore) {
 	mfs.olStore = store
+}
+
+// SetDedupEngine sets the dedup engine for post-apply dedup checks.
+func (mfs *MetadataFetchService) SetDedupEngine(engine *DedupEngine) {
+	mfs.dedupEngine = engine
 }
 
 // SetISBNEnrichment sets the ISBN enrichment service for background ISBN/ASIN lookups.
@@ -2826,6 +2833,15 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		if oldDir != filepath.Dir(entry.TargetPath) {
 			removeEmptyDirs(oldDir, config.AppConfig.RootDir)
 		}
+	}
+
+	// Trigger dedup check after metadata apply
+	if mfs.dedupEngine != nil {
+		go func() {
+			if _, err := mfs.dedupEngine.CheckBook(context.Background(), id); err != nil {
+				log.Printf("[WARN] dedup re-check failed for book %s after metadata apply: %v", id, err)
+			}
+		}()
 	}
 
 	return nil
