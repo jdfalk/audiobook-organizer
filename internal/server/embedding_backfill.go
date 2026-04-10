@@ -1,5 +1,5 @@
 // file: internal/server/embedding_backfill.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 
 package server
@@ -13,12 +13,18 @@ import (
 
 // backfillVersionMarker identifies the current generation of the dedup
 // backfill pipeline. Bumping this string causes a one-time re-run on the
-// next startup so older deployments can pick up new rules (e.g. v2 added
-// non-primary-version filtering, same-group pair skipping, and Layer 1
-// exact checks during FullScan). The backfill stays idempotent —
-// individual EmbedBook calls skip on cached text_hash — so re-running it
-// just pays a few seconds of DB reads.
-const backfillVersionMarker = "embedding_backfill_v2_done"
+// next startup so older deployments can pick up new rules. Rule history:
+//   - v1: initial backfill (PR #203)
+//   - v2: non-primary-version filtering, same-group pair skipping, and
+//     Layer 1 exact checks during FullScan (PR #207)
+//   - v3: skip books with empty/near-empty titles, skip Layer 1 + Layer 2
+//     matches where books are distinct volumes of a numbered series
+//
+// The backfill stays idempotent — individual EmbedBook calls skip on
+// cached text_hash — so re-running it just pays a few seconds of DB reads
+// plus a purge pass to delete candidates that the new rules would have
+// rejected.
+const backfillVersionMarker = "embedding_backfill_v3_done"
 
 // runEmbeddingBackfill embeds all books and authors on first startup and
 // re-runs once after each backfill version bump.

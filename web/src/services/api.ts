@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.66.0
+// version: 1.67.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3631,6 +3631,31 @@ export async function dismissDedupCandidate(id: number): Promise<void> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to dismiss dedup candidate');
   }
+}
+
+export interface BulkMergeDedupResult {
+  attempted: number;
+  merged: number;
+  failed: number;
+  failures?: Array<{ candidate_id: number; reason: string }>;
+}
+
+export async function bulkMergeDedupCandidates(filter: {
+  entity_type?: string;
+  status?: string;
+  layer?: string;
+  min_similarity?: number;
+  max_similarity?: number;
+}): Promise<BulkMergeDedupResult> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/bulk-merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(filter),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to bulk-merge dedup candidates');
+  }
+  return response.json();
 }
 
 export async function triggerDedupScan(): Promise<{ status: string }> {

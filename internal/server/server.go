@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.152.0
+// version: 1.153.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1583,6 +1583,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/dedup/stats", s.getDedupStats)
 			protected.POST("/dedup/candidates/:id/merge", s.mergeDedupCandidate)
 			protected.POST("/dedup/candidates/:id/dismiss", s.dismissDedupCandidate)
+			protected.POST("/dedup/candidates/bulk-merge", s.bulkMergeDedupCandidates)
 			protected.POST("/dedup/scan", s.triggerDedupScan)
 			protected.POST("/dedup/scan-llm", s.triggerDedupLLM)
 			protected.POST("/dedup/refresh", s.triggerDedupRefresh)

@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -85,6 +85,102 @@ func (s *Server) getDedupStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"stats": stats})
+}
+
+// bulkMergeDedupCandidates handles POST /api/v1/dedup/candidates/bulk-merge.
+//
+// Accepts the same filter params as listDedupCandidates in the JSON body
+// (entity_type, status, layer, min_similarity, max_similarity) and merges
+// every matching candidate by calling MergeService.MergeBooks. Returns a
+// summary with counts of attempted, merged, and failed candidates.
+//
+// The endpoint is intended for the "Merge Filtered" bulk action in the
+// Embedding Dedup UI. It only operates on book candidates; author
+// candidates are skipped (and counted as failed with a reason) since
+// they're merged through a different service.
+//
+// Safety: caller should confirm with the user before invoking, because
+// this is destructive and irreversible.
+func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
+	if s.embeddingStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embedding store not available"})
+		return
+	}
+	if s.mergeService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "merge service not available"})
+		return
+	}
+
+	var body struct {
+		EntityType    string   `json:"entity_type"`
+		Status        string   `json:"status"`
+		Layer         string   `json:"layer"`
+		MinSimilarity *float64 `json:"min_similarity"`
+		MaxSimilarity *float64 `json:"max_similarity"`
+	}
+	_ = c.ShouldBindJSON(&body)
+
+	// Default to pending status if caller did not set one. Merging already-
+	// merged or already-dismissed rows makes no sense.
+	if body.Status == "" {
+		body.Status = "pending"
+	}
+	// Only book candidates are mergeable through this endpoint.
+	if body.EntityType == "" {
+		body.EntityType = "book"
+	}
+	if body.EntityType != "book" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bulk merge only supports entity_type=book"})
+		return
+	}
+
+	filter := database.CandidateFilter{
+		EntityType:    body.EntityType,
+		Status:        body.Status,
+		Layer:         body.Layer,
+		MinSimilarity: body.MinSimilarity,
+		MaxSimilarity: body.MaxSimilarity,
+		Limit:         100000,
+	}
+
+	candidates, total, err := s.embeddingStore.ListCandidates(filter)
+	if err != nil {
+		internalError(c, "failed to list candidates for bulk merge", err)
+		return
+	}
+
+	type failure struct {
+		CandidateID int64  `json:"candidate_id"`
+		Reason      string `json:"reason"`
+	}
+	var failures []failure
+	merged := 0
+
+	for _, cand := range candidates {
+		_, mergeErr := s.mergeService.MergeBooks([]string{cand.EntityAID, cand.EntityBID}, "")
+		if mergeErr != nil {
+			failures = append(failures, failure{CandidateID: cand.ID, Reason: mergeErr.Error()})
+			log.Printf("[dedup] bulk merge candidate %d failed: %v", cand.ID, mergeErr)
+			continue
+		}
+		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
+			// The books were merged on the server side, but we couldn't
+			// update the candidate row — log it and count as merged
+			// since the destructive action already happened.
+			log.Printf("[dedup] bulk merge candidate %d merged but status update failed: %v", cand.ID, err)
+		}
+		merged++
+	}
+
+	log.Printf("[dedup] bulk merge complete: %d merged, %d failed out of %d matched",
+		merged, len(failures), total)
+
+	c.JSON(http.StatusOK, gin.H{
+		"attempted": total,
+		"merged":    merged,
+		"failed":    len(failures),
+		"failures":  failures,
+	})
 }
 
 // mergeDedupCandidate handles POST /api/v1/dedup/candidates/:id/merge.
