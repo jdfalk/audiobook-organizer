@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.32.0
+// version: 1.33.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -149,6 +149,11 @@ type Config struct {
 	MetadataEmbeddingScoringEnabled bool    `json:"metadata_embedding_scoring_enabled"` // default true
 	MetadataEmbeddingMinScore       float64 `json:"metadata_embedding_min_score"`       // default 0.50
 	MetadataEmbeddingBestMatchMin   float64 `json:"metadata_embedding_best_match_min"`  // default 0.70
+
+	// Metadata LLM rerank tier (PR2)
+	MetadataLLMScoringEnabled bool    `json:"metadata_llm_scoring_enabled"` // default false — opt-in, costs money
+	MetadataLLMRerankEpsilon  float64 `json:"metadata_llm_rerank_epsilon"`  // default 0.01
+	MetadataLLMRerankTopK     int     `json:"metadata_llm_rerank_top_k"`    // default 5
 
 	// API limits
 	APIRateLimitPerMinute  int  `json:"api_rate_limit_per_minute"`
@@ -582,6 +587,9 @@ func InitConfig() {
 	AppConfig.MetadataEmbeddingScoringEnabled = true
 	AppConfig.MetadataEmbeddingMinScore = 0.50
 	AppConfig.MetadataEmbeddingBestMatchMin = 0.70
+	AppConfig.MetadataLLMScoringEnabled = false
+	AppConfig.MetadataLLMRerankEpsilon = 0.01
+	AppConfig.MetadataLLMRerankTopK = 5
 
 	// Default Open Library dump dir to {RootDir}/openlibrary-dumps if not set
 	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
@@ -884,6 +892,11 @@ func ResetToDefaults() {
 		MetadataEmbeddingScoringEnabled: true,
 		MetadataEmbeddingMinScore:       0.50,
 		MetadataEmbeddingBestMatchMin:   0.70,
+
+		// Metadata LLM rerank tier (PR2)
+		MetadataLLMScoringEnabled: false,
+		MetadataLLMRerankEpsilon:  0.01,
+		MetadataLLMRerankTopK:     5,
 
 		// Logging
 		LogLevel:          "info",
