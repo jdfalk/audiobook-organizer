@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -72,6 +72,7 @@ func NewTaskScheduler(s *Server) *TaskScheduler {
 	ts.maintenanceOrder = []string{
 		"reconcile_scan",
 		"dedup_refresh",
+		"dedup_llm_review",
 		"author_split_scan",
 		"series_prune",
 		"isbn_enrichment",
@@ -232,6 +233,26 @@ func (ts *TaskScheduler) registerAllTasks() {
 		},
 		RunOnStart:             func() bool { return config.AppConfig.ScheduledDedupRefreshOnStartup },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowDedupRefresh },
+	})
+
+	ts.registerTask(TaskDefinition{
+		Name:        "dedup_llm_review",
+		Description: "Run LLM review on ambiguous dedup candidates",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperation("dedup-llm-review", func(ctx context.Context, progress operations.ProgressReporter) error {
+				if ts.server.dedupEngine == nil {
+					_ = progress.Log("info", "Dedup engine not initialized, skipping LLM review", nil)
+					return nil
+				}
+				_ = progress.Log("info", "Starting LLM review of ambiguous dedup candidates", nil)
+				return ts.server.dedupEngine.RunLLMReview(ctx)
+			})
+		},
+		IsEnabled:              func() bool { return ts.server.dedupEngine != nil },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return true },
 	})
 
 	ts.registerTask(TaskDefinition{
@@ -1284,7 +1305,7 @@ func (ts *TaskScheduler) isTaskRunning(name string) bool {
 	}
 	opTypeMap := map[string]string{
 		"library_scan": "scan", "library_organize": "organize",
-		"dedup_refresh": "author-dedup-scan", "series_prune": "series-prune",
+		"dedup_refresh": "author-dedup-scan", "dedup_llm_review": "dedup-llm-review", "series_prune": "series-prune",
 		"isbn_enrichment":   "isbn-enrichment",
 		"author_split_scan": "author-split-scan", "db_optimize": "db-optimize",
 		"purge_deleted": "purge-deleted", "tombstone_cleanup": "tombstone-cleanup",
