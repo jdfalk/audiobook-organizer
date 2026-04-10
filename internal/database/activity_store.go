@@ -126,6 +126,11 @@ func NewActivityStore(dbPath string) (*ActivityStore, error) {
 	// Migrate: add compacted column if missing (idempotent)
 	_, _ = db.Exec(`ALTER TABLE activity_log ADD COLUMN compacted BOOLEAN NOT NULL DEFAULT 0`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_activity_compacted ON activity_log (compacted)`)
+
+	// Fix digest timestamps from 23:59:59 to 00:00:00 (one-shot, idempotent)
+	_, _ = db.Exec(`UPDATE activity_log SET timestamp = date(timestamp) || ' 00:00:00'
+		WHERE tier = 'digest' AND type = 'daily_digest' AND time(timestamp) = '23:59:59'`)
+
 	return &ActivityStore{db: db}, nil
 }
 
