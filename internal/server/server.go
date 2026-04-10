@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.147.0
+// version: 1.148.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1608,6 +1608,7 @@ func (s *Server) setupRoutes() {
 			// Unified activity log
 			protected.GET("/activity", s.listActivity)
 			protected.GET("/activity/sources", s.listActivitySources)
+			protected.POST("/activity/compact", s.compactActivity)
 
 			// System routes
 			protected.GET("/system/status", s.getSystemStatus)

@@ -1,5 +1,5 @@
 // file: internal/server/activity_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
 
 package server
@@ -158,4 +158,29 @@ func (s *Server) listActivitySources(c *gin.Context) {
 		sources = []database.SourceCount{}
 	}
 	c.JSON(http.StatusOK, gin.H{"sources": sources})
+}
+
+// compactActivity handles POST /api/v1/activity/compact.
+func (s *Server) compactActivity(c *gin.Context) {
+	if s.activityService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "activity log not available"})
+		return
+	}
+
+	var req struct {
+		OlderThanDays int `json:"older_than_days"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.OlderThanDays <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "older_than_days must be a positive integer"})
+		return
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -req.OlderThanDays)
+	result, err := s.activityService.CompactByDay(cutoff)
+	if err != nil {
+		internalError(c, "activity compaction failed", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }
