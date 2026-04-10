@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.41.0
+// version: 4.42.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -1098,6 +1098,66 @@ func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float6
 		return 0 // preserve original early-return behavior (skips bonus)
 	}
 	return applyNonBaseAdjustments(base, r, len(searchWords))
+}
+
+// scoreBaseCandidates picks the highest-available base scorer tier and
+// returns one base score per input result, aligned to input order, along
+// with a short tier name for logs and UI badges ("embedding", "f1", ...).
+//
+// The fallback chain is:
+//  1. If MetadataEmbeddingScoringEnabled AND a scorer is injected AND the
+//     scorer succeeds → use those scores. Tier = scorer.Name().
+//  2. Otherwise, compute F1 inline. Tier = "f1".
+//
+// Any scorer error is logged and falls through to the F1 tier. The search
+// path must never fail because of a scorer problem — F1 is always reachable
+// as a last resort since it only depends on the in-memory result data.
+func (mfs *MetadataFetchService) scoreBaseCandidates(
+	ctx context.Context,
+	book *database.Book,
+	results []metadata.BookMetadata,
+	searchWords map[string]bool,
+) ([]float64, string) {
+	if config.AppConfig.MetadataEmbeddingScoringEnabled && mfs.metadataScorer != nil && len(results) > 0 {
+		query := ai.Query{
+			BookID:   book.ID,
+			Title:    book.Title,
+			Narrator: derefStr(book.Narrator),
+		}
+		if book.AuthorID != nil {
+			if author, err := mfs.db.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+				query.Author = author.Name
+			}
+		}
+
+		cands := make([]ai.Candidate, len(results))
+		for i, r := range results {
+			cands[i] = ai.Candidate{
+				Title:    r.Title,
+				Author:   r.Author,
+				Narrator: r.Narrator,
+			}
+		}
+
+		scores, err := mfs.metadataScorer.Score(ctx, query, cands)
+		if err == nil && len(scores) == len(results) {
+			return scores, mfs.metadataScorer.Name()
+		}
+		if err != nil {
+			log.Printf("[WARN] metadata-scorer %s failed, falling back to F1: %v",
+				mfs.metadataScorer.Name(), err)
+		} else {
+			log.Printf("[WARN] metadata-scorer %s returned %d scores for %d results, falling back to F1",
+				mfs.metadataScorer.Name(), len(scores), len(results))
+		}
+	}
+
+	// F1 fallback tier.
+	scores := make([]float64, len(results))
+	for i, r := range results {
+		scores[i] = computeF1Base(r, searchWords)
+	}
+	return scores, "f1"
 }
 
 // applySeriesPositionFilter rejects the top result if it claims a different
