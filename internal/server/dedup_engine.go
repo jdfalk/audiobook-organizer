@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -23,6 +23,7 @@ type DedupEngine struct {
 	embedStore   *database.EmbeddingStore
 	bookStore    database.Store
 	embedClient  *ai.EmbeddingClient
+	llmParser    *ai.OpenAIParser
 	mergeService *MergeService
 
 	// Thresholds (read from config or set directly)
@@ -31,25 +32,44 @@ type DedupEngine struct {
 	AuthorHighThreshold float64
 	AuthorLowThreshold  float64
 	AutoMergeEnabled    bool
+
+	// Layer 3 ambiguous zones — candidates whose similarity falls inside these
+	// ranges (inclusive) are sent to the LLM during RunLLMReview.
+	LLMBookLow    float64
+	LLMBookHigh   float64
+	LLMAuthorLow  float64
+	LLMAuthorHigh float64
+
+	// LLMMaxPairsPerRun caps how many pairs a single RunLLMReview invocation will
+	// send to the LLM. Zero means "all pending ambiguous candidates".
+	LLMMaxPairsPerRun int
 }
 
 // NewDedupEngine creates a DedupEngine with sensible defaults.
+// llmParser may be nil if Layer 3 LLM review should be disabled.
 func NewDedupEngine(
 	embedStore *database.EmbeddingStore,
 	bookStore database.Store,
 	embedClient *ai.EmbeddingClient,
+	llmParser *ai.OpenAIParser,
 	mergeService *MergeService,
 ) *DedupEngine {
 	return &DedupEngine{
 		embedStore:          embedStore,
 		bookStore:           bookStore,
 		embedClient:         embedClient,
+		llmParser:           llmParser,
 		mergeService:        mergeService,
 		BookHighThreshold:   0.95,
 		BookLowThreshold:    0.85,
 		AuthorHighThreshold: 0.92,
 		AuthorLowThreshold:  0.80,
 		AutoMergeEnabled:    false,
+		LLMBookLow:          0.80,
+		LLMBookHigh:         0.92,
+		LLMAuthorLow:        0.75,
+		LLMAuthorHigh:       0.85,
+		LLMMaxPairsPerRun:   200,
 	}
 }
 
@@ -488,10 +508,186 @@ func (de *DedupEngine) getAllBooks() ([]database.Book, error) {
 }
 
 // RunLLMReview processes ambiguous candidates through LLM review (Layer 3).
-// TODO: Implement full LLM review using OpenAI chat completion.
+// Pending book candidates whose similarity falls in [LLMBookLow, LLMBookHigh] and
+// pending author candidates in [LLMAuthorLow, LLMAuthorHigh] are fetched, enriched
+// with entity metadata, batched, and sent to the OpenAI chat LLM. The verdict is
+// persisted via UpdateCandidateLLM (which also sets layer='llm').
+//
+// Candidates that are already at layer='llm' are skipped — rerunning is cheap in
+// bookkeeping but expensive in API calls, so callers should use UpsertCandidate to
+// clear the layer back to 'embedding' if they want a re-review.
 func (de *DedupEngine) RunLLMReview(ctx context.Context) error {
-	log.Println("dedup: LLM review not yet implemented")
+	if de.llmParser == nil || !de.llmParser.IsEnabled() {
+		log.Println("dedup: LLM review skipped — llmParser not configured")
+		return nil
+	}
+	if de.embedStore == nil {
+		return fmt.Errorf("dedup: LLM review requires embedStore")
+	}
+
+	bookCandidates, err := de.listAmbiguousCandidates("book", de.LLMBookLow, de.LLMBookHigh)
+	if err != nil {
+		return fmt.Errorf("list ambiguous book candidates: %w", err)
+	}
+	authorCandidates, err := de.listAmbiguousCandidates("author", de.LLMAuthorLow, de.LLMAuthorHigh)
+	if err != nil {
+		return fmt.Errorf("list ambiguous author candidates: %w", err)
+	}
+
+	allCandidates := append(bookCandidates, authorCandidates...)
+	if de.LLMMaxPairsPerRun > 0 && len(allCandidates) > de.LLMMaxPairsPerRun {
+		allCandidates = allCandidates[:de.LLMMaxPairsPerRun]
+	}
+	if len(allCandidates) == 0 {
+		log.Println("dedup: LLM review found no pending ambiguous candidates")
+		return nil
+	}
+	log.Printf("dedup: LLM review starting — %d pair(s) queued", len(allCandidates))
+
+	// Build inputs alongside an index→candidate map for verdict routing.
+	inputs := make([]ai.DedupPairInput, 0, len(allCandidates))
+	byIndex := make(map[int]database.DedupCandidate, len(allCandidates))
+	for i, c := range allCandidates {
+		input, ok := de.buildPairInput(i, c)
+		if !ok {
+			log.Printf("dedup: skipping candidate %d — could not load entities", c.ID)
+			continue
+		}
+		inputs = append(inputs, input)
+		byIndex[i] = c
+	}
+	if len(inputs) == 0 {
+		return nil
+	}
+
+	verdicts, err := de.llmParser.ReviewDedupPairs(ctx, inputs)
+	if err != nil {
+		// Persist whatever we did get before surfacing the error.
+		de.applyVerdicts(verdicts, byIndex)
+		return fmt.Errorf("LLM review call: %w", err)
+	}
+	applied := de.applyVerdicts(verdicts, byIndex)
+	log.Printf("dedup: LLM review complete — %d verdict(s) applied", applied)
 	return nil
+}
+
+// listAmbiguousCandidates returns pending embedding-layer candidates whose
+// similarity falls inside [low, high].
+func (de *DedupEngine) listAmbiguousCandidates(entityType string, low, high float64) ([]database.DedupCandidate, error) {
+	filter := database.CandidateFilter{
+		EntityType:    entityType,
+		Status:        "pending",
+		Layer:         "embedding",
+		MinSimilarity: &low,
+		MaxSimilarity: &high,
+		Limit:         10000,
+	}
+	candidates, _, err := de.embedStore.ListCandidates(filter)
+	return candidates, err
+}
+
+// buildPairInput enriches a stored candidate with entity details suitable for
+// the LLM prompt. Returns false if either entity could not be loaded.
+func (de *DedupEngine) buildPairInput(index int, c database.DedupCandidate) (ai.DedupPairInput, bool) {
+	input := ai.DedupPairInput{
+		Index:      index,
+		EntityType: c.EntityType,
+	}
+	if c.Similarity != nil {
+		input.Similarity = *c.Similarity
+	}
+
+	switch c.EntityType {
+	case "book":
+		a, aOK := de.loadBookEntity(c.EntityAID)
+		b, bOK := de.loadBookEntity(c.EntityBID)
+		if !aOK || !bOK {
+			return input, false
+		}
+		input.A = a
+		input.B = b
+	case "author":
+		a, aOK := de.loadAuthorEntity(c.EntityAID)
+		b, bOK := de.loadAuthorEntity(c.EntityBID)
+		if !aOK || !bOK {
+			return input, false
+		}
+		input.A = a
+		input.B = b
+	default:
+		return input, false
+	}
+	return input, true
+}
+
+// loadBookEntity fetches a book and converts it into a DedupEntity. The caller
+// may rely on ID always being populated when the second return value is true.
+func (de *DedupEngine) loadBookEntity(bookID string) (ai.DedupEntity, bool) {
+	book, err := de.bookStore.GetBookByID(bookID)
+	if err != nil || book == nil {
+		return ai.DedupEntity{}, false
+	}
+	entity := ai.DedupEntity{ID: book.ID, Title: book.Title}
+	if book.AuthorID != nil {
+		if author, aerr := de.bookStore.GetAuthorByID(*book.AuthorID); aerr == nil && author != nil {
+			entity.Author = author.Name
+		}
+	}
+	if book.Narrator != nil {
+		entity.Narrator = *book.Narrator
+	}
+	if book.ISBN13 != nil && *book.ISBN13 != "" {
+		entity.ISBN = *book.ISBN13
+	} else if book.ISBN10 != nil {
+		entity.ISBN = *book.ISBN10
+	}
+	if book.ASIN != nil {
+		entity.ASIN = *book.ASIN
+	}
+	return entity, true
+}
+
+// loadAuthorEntity fetches an author and converts it into a DedupEntity. The
+// Title field carries the author name so the prompt treats both entity types
+// uniformly.
+func (de *DedupEngine) loadAuthorEntity(entityID string) (ai.DedupEntity, bool) {
+	id, err := strconv.Atoi(entityID)
+	if err != nil {
+		return ai.DedupEntity{}, false
+	}
+	author, err := de.bookStore.GetAuthorByID(id)
+	if err != nil || author == nil {
+		return ai.DedupEntity{}, false
+	}
+	return ai.DedupEntity{ID: entityID, Title: author.Name}, true
+}
+
+// applyVerdicts persists each verdict via UpdateCandidateLLM and returns the
+// number of rows successfully updated. Errors are logged and skipped so one
+// bad row does not abort the whole batch.
+func (de *DedupEngine) applyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]database.DedupCandidate) int {
+	applied := 0
+	for _, v := range verdicts {
+		candidate, ok := byIndex[v.Index]
+		if !ok {
+			log.Printf("dedup: LLM returned unknown index %d", v.Index)
+			continue
+		}
+		verdict := "not_duplicate"
+		if v.IsDuplicate {
+			verdict = "duplicate"
+		}
+		reason := v.Reason
+		if v.Confidence != "" {
+			reason = fmt.Sprintf("[%s] %s", v.Confidence, reason)
+		}
+		if err := de.embedStore.UpdateCandidateLLM(candidate.ID, verdict, reason); err != nil {
+			log.Printf("dedup: failed to update candidate %d: %v", candidate.ID, err)
+			continue
+		}
+		applied++
+	}
+	return applied
 }
 
 // levenshteinDistance computes the Levenshtein edit distance between two strings.

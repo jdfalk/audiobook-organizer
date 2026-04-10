@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
 package database
@@ -54,6 +54,7 @@ type CandidateFilter struct {
 	Status        string
 	Layer         string
 	MinSimilarity *float64
+	MaxSimilarity *float64
 	Limit         int
 	Offset        int
 }
@@ -435,6 +436,10 @@ func (s *EmbeddingStore) ListCandidates(f CandidateFilter) ([]DedupCandidate, in
 	if f.MinSimilarity != nil {
 		clauses = append(clauses, "similarity >= ?")
 		args = append(args, *f.MinSimilarity)
+	}
+	if f.MaxSimilarity != nil {
+		clauses = append(clauses, "similarity <= ?")
+		args = append(args, *f.MaxSimilarity)
 	}
 
 	where := ""
