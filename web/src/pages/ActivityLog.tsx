@@ -153,6 +153,7 @@ export default function ActivityLog() {
   // Compact
   const [compactAnchor, setCompactAnchor] = useState<null | HTMLElement>(null);
   const [compacting, setCompacting] = useState(false);
+  const [customCompactDays, setCustomCompactDays] = useState('');
   const [expandedDigests, setExpandedDigests] = useState<Set<number>>(new Set());
 
   // Revert dialog
@@ -795,13 +796,33 @@ export default function ActivityLog() {
                 <Menu
                   anchorEl={compactAnchor}
                   open={Boolean(compactAnchor)}
-                  onClose={() => setCompactAnchor(null)}
+                  onClose={() => { setCompactAnchor(null); setCustomCompactDays(''); }}
                 >
-                  {[7, 14, 30, 60].map((days) => (
+                  <MenuItem onClick={() => handleCompact(0)}>Everything (now)</MenuItem>
+                  {[3, 7, 14, 30, 60].map((days) => (
                     <MenuItem key={days} onClick={() => handleCompact(days)}>
                       Older than {days} days
                     </MenuItem>
                   ))}
+                  <MenuItem disableRipple sx={{ '&:hover': { bgcolor: 'transparent' } }}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      placeholder="Custom days"
+                      value={customCompactDays}
+                      onChange={(e) => setCustomCompactDays(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const n = parseInt(customCompactDays, 10);
+                          if (n > 0) handleCompact(n);
+                        }
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      sx={{ width: 120 }}
+                      InputProps={{ inputProps: { min: 0 } }}
+                    />
+                  </MenuItem>
                 </Menu>
 
                 {/* Auto-refresh (moved here on mobile) */}
