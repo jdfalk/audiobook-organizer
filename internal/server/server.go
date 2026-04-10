@@ -826,17 +826,21 @@ func NewServer() *Server {
 			server.embeddingStore = embeddingStore
 			if config.AppConfig.OpenAIAPIKey != "" && config.AppConfig.EmbeddingEnabled {
 				embedClient := ai.NewEmbeddingClient(config.AppConfig.OpenAIAPIKey)
-				server.dedupEngine = &DedupEngine{
-					embedStore:          embeddingStore,
-					bookStore:           database.GlobalStore,
-					embedClient:         embedClient,
-					mergeService:        server.mergeService,
-					BookHighThreshold:   config.AppConfig.DedupBookHighThreshold,
-					BookLowThreshold:    config.AppConfig.DedupBookLowThreshold,
-					AuthorHighThreshold: config.AppConfig.DedupAuthorHighThreshold,
-					AuthorLowThreshold:  config.AppConfig.DedupAuthorLowThreshold,
-					AutoMergeEnabled:    config.AppConfig.DedupAutoMergeEnabled,
-				}
+				// Dedup Layer 3 uses a dedicated chat parser so it can call
+				// OpenAIParser.ReviewDedupPairs during maintenance runs.
+				llmParser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+				server.dedupEngine = NewDedupEngine(
+					embeddingStore,
+					database.GlobalStore,
+					embedClient,
+					llmParser,
+					server.mergeService,
+				)
+				server.dedupEngine.BookHighThreshold = config.AppConfig.DedupBookHighThreshold
+				server.dedupEngine.BookLowThreshold = config.AppConfig.DedupBookLowThreshold
+				server.dedupEngine.AuthorHighThreshold = config.AppConfig.DedupAuthorHighThreshold
+				server.dedupEngine.AuthorLowThreshold = config.AppConfig.DedupAuthorLowThreshold
+				server.dedupEngine.AutoMergeEnabled = config.AppConfig.DedupAutoMergeEnabled
 				log.Println("[INFO] Embedding store and dedup engine initialized")
 				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
 			} else {
