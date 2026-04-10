@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -47,6 +47,33 @@ type ActivityFilter struct {
 	ExcludeSources []string // hide these sources
 	ExcludeTiers   []string // hide these tiers
 }
+
+// CompactResult holds the outcome of a CompactByDay operation.
+type CompactResult struct {
+	DaysCompacted  int `json:"days_compacted"`
+	EntriesDeleted int `json:"entries_deleted"`
+}
+
+// DigestItem represents a single compacted entry within a daily digest.
+type DigestItem struct {
+	Type    string `json:"type"`
+	Book    string `json:"book,omitempty"`
+	BookID  string `json:"book_id,omitempty"`
+	Summary string `json:"summary"`
+	Details string `json:"details,omitempty"`
+}
+
+// DigestDetails is the JSON structure stored in a daily digest row's details column.
+type DigestDetails struct {
+	Date           string         `json:"date"`
+	OriginalCount  int            `json:"original_count"`
+	Counts         map[string]int `json:"counts"`
+	Items          []DigestItem   `json:"items"`
+	Truncated      bool           `json:"truncated,omitempty"`
+	TruncatedCount int            `json:"truncated_count,omitempty"`
+}
+
+const maxDigestItems = 500
 
 // ActivityStore persists activity log entries in a dedicated SQLite sidecar database.
 type ActivityStore struct {
@@ -461,4 +488,270 @@ func nullableJSON(v map[string]any) (any, error) {
 		return nil, err
 	}
 	return string(b), nil
+}
+
+// CompactByDay collapses old change/debug entries into one daily_digest row per
+// UTC day. Audit-tier entries are never touched. Each day is processed in its
+// own transaction for atomicity.
+func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error) {
+	var result CompactResult
+
+	// 1. Fetch all compactable entries.
+	rows, err := s.db.Query(`
+		SELECT id, timestamp, tier, type, level, source, operation_id,
+		       book_id, summary, details, tags
+		FROM   activity_log
+		WHERE  tier IN ('change', 'debug')
+		  AND  compacted = 0
+		  AND  timestamp < ?
+		ORDER BY timestamp ASC`,
+		olderThan.UTC(),
+	)
+	if err != nil {
+		return result, fmt.Errorf("activity_store: compact query: %w", err)
+	}
+
+	// Scan into memory grouped by date.
+	type dayGroup struct {
+		entries []ActivityEntry
+		ids     []int64
+	}
+	days := make(map[string]*dayGroup) // key = "2006-01-02"
+	var dayOrder []string
+
+	for rows.Next() {
+		var (
+			e          ActivityEntry
+			ts         time.Time
+			opID       sql.NullString
+			bookID     sql.NullString
+			detailsRaw sql.NullString
+			tagsRaw    sql.NullString
+		)
+		if err := rows.Scan(
+			&e.ID, &ts, &e.Tier, &e.Type, &e.Level, &e.Source,
+			&opID, &bookID, &e.Summary, &detailsRaw, &tagsRaw,
+		); err != nil {
+			rows.Close()
+			return result, fmt.Errorf("activity_store: compact scan: %w", err)
+		}
+		e.Timestamp = ts.UTC()
+		if opID.Valid {
+			e.OperationID = opID.String
+		}
+		if bookID.Valid {
+			e.BookID = bookID.String
+		}
+		if detailsRaw.Valid && detailsRaw.String != "" {
+			_ = json.Unmarshal([]byte(detailsRaw.String), &e.Details)
+		}
+		if tagsRaw.Valid && tagsRaw.String != "" {
+			e.Tags = strings.Split(tagsRaw.String, ",")
+		}
+
+		dateKey := e.Timestamp.Format("2006-01-02")
+		dg, ok := days[dateKey]
+		if !ok {
+			dg = &dayGroup{}
+			days[dateKey] = dg
+			dayOrder = append(dayOrder, dateKey)
+		}
+		dg.entries = append(dg.entries, e)
+		dg.ids = append(dg.ids, e.ID)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return result, fmt.Errorf("activity_store: compact rows: %w", err)
+	}
+
+	// 2. Process each day.
+	for _, dateKey := range dayOrder {
+		dg := days[dateKey]
+
+		// Idempotency: skip if digest already exists for this date.
+		var exists int
+		err := s.db.QueryRow(`
+			SELECT COUNT(*) FROM activity_log
+			WHERE tier = 'digest' AND type = 'daily_digest'
+			  AND date(timestamp) = ?`, dateKey).Scan(&exists)
+		if err != nil {
+			return result, fmt.Errorf("activity_store: compact check digest: %w", err)
+		}
+		if exists > 0 {
+			continue
+		}
+
+		// Build counts map.
+		counts := make(map[string]int)
+		for _, e := range dg.entries {
+			counts[e.Type]++
+		}
+
+		// Build items — error/warn first, then the rest.
+		var errItems, normalItems []DigestItem
+		for _, e := range dg.entries {
+			item := DigestItem{
+				Type:    e.Type,
+				Book:    extractBookName(e),
+				BookID:  e.BookID,
+				Summary: extractItemSummary(e),
+			}
+			if e.Level == "error" || e.Level == "warn" {
+				item.Details = extractErrorDetails(e)
+				errItems = append(errItems, item)
+			} else {
+				normalItems = append(normalItems, item)
+			}
+		}
+		items := append(errItems, normalItems...)
+
+		truncated := false
+		truncatedCount := 0
+		if len(items) > maxDigestItems {
+			truncatedCount = len(items) - maxDigestItems
+			items = items[:maxDigestItems]
+			truncated = true
+		}
+
+		dd := DigestDetails{
+			Date:           dateKey,
+			OriginalCount:  len(dg.entries),
+			Counts:         counts,
+			Items:          items,
+			Truncated:      truncated,
+			TruncatedCount: truncatedCount,
+		}
+
+		detailsBytes, err := json.Marshal(dd)
+		if err != nil {
+			return result, fmt.Errorf("activity_store: compact marshal digest: %w", err)
+		}
+
+		// End of day timestamp.
+		endOfDay, _ := time.Parse("2006-01-02", dateKey)
+		endOfDay = endOfDay.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+
+		// Transaction: insert digest + delete originals.
+		tx, err := s.db.Begin()
+		if err != nil {
+			return result, fmt.Errorf("activity_store: compact begin tx: %w", err)
+		}
+
+		_, err = tx.Exec(`
+			INSERT INTO activity_log
+				(timestamp, tier, type, level, source, summary, details, compacted)
+			VALUES (?, 'digest', 'daily_digest', 'info', 'compaction', ?, ?, 1)`,
+			endOfDay, fmt.Sprintf("Daily digest for %s (%d entries)", dateKey, len(dg.entries)),
+			string(detailsBytes),
+		)
+		if err != nil {
+			tx.Rollback()
+			return result, fmt.Errorf("activity_store: compact insert digest: %w", err)
+		}
+
+		// Delete originals by ID. Use batched placeholders.
+		for i := 0; i < len(dg.ids); i += 999 {
+			end := i + 999
+			if end > len(dg.ids) {
+				end = len(dg.ids)
+			}
+			batch := dg.ids[i:end]
+			placeholders := strings.Repeat("?,", len(batch))
+			placeholders = placeholders[:len(placeholders)-1] // trim trailing comma
+			args := make([]any, len(batch))
+			for j, id := range batch {
+				args[j] = id
+			}
+			_, err = tx.Exec("DELETE FROM activity_log WHERE id IN ("+placeholders+")", args...)
+			if err != nil {
+				tx.Rollback()
+				return result, fmt.Errorf("activity_store: compact delete: %w", err)
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return result, fmt.Errorf("activity_store: compact commit: %w", err)
+		}
+
+		result.DaysCompacted++
+		result.EntriesDeleted += len(dg.ids)
+	}
+
+	return result, nil
+}
+
+// extractBookName returns the book title from entry details, or "".
+func extractBookName(e ActivityEntry) string {
+	if v, ok := e.Details["book_title"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	if v, ok := e.Details["title"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// extractItemSummary builds a short summary string from the entry based on its type.
+func extractItemSummary(e ActivityEntry) string {
+	switch e.Type {
+	case "metadata_applied":
+		fields, _ := e.Details["fields"].(string)
+		source, _ := e.Details["source"].(string)
+		if fields != "" && source != "" {
+			return fields + " from " + source
+		}
+		if fields != "" {
+			return fields
+		}
+	case "tag_written":
+		tagCount := detailNumber(e.Details, "tag_count")
+		fileCount := detailNumber(e.Details, "file_count")
+		return fmt.Sprintf("wrote %d tags to %d files", tagCount, fileCount)
+	case "organize_completed":
+		if p, ok := e.Details["new_path"].(string); ok {
+			return "moved to " + p
+		}
+	case "config_changed":
+		if k, ok := e.Details["key"].(string); ok {
+			return k + " changed"
+		}
+	}
+	// Default: truncate summary to 120 chars.
+	if len(e.Summary) > 120 {
+		return e.Summary[:120]
+	}
+	return e.Summary
+}
+
+// extractErrorDetails joins error-related fields from entry details.
+func extractErrorDetails(e ActivityEntry) string {
+	var parts []string
+	for _, key := range []string{"error", "path", "file_path"} {
+		if v, ok := e.Details[key].(string); ok && v != "" {
+			parts = append(parts, v)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// detailNumber extracts a numeric value from details as int.
+func detailNumber(details map[string]any, key string) int {
+	v, ok := details[key]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	case int64:
+		return int(n)
+	default:
+		return 0
+	}
 }
