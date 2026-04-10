@@ -1,5 +1,5 @@
 // file: internal/server/embedding_backfill.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 
 package server
@@ -69,15 +69,41 @@ func (s *Server) runEmbeddingBackfill() {
 	totalEmbedded := embedded + authorCount
 	log.Printf("[INFO] Embedding backfill complete: %d total entities", totalEmbedded)
 
-	// Run full dedup scan
-	if err := s.dedupEngine.FullScan(ctx, func(done, total int) {
-		if done%1000 == 0 && done > 0 {
-			log.Printf("[INFO] Dedup scan progress: %d/%d", done, total)
-		}
-	}); err != nil {
+	// Run full dedup scan with a bucket-crossing progress logger (see
+	// newDedupScanProgressLogger for why a naive `done%N == 0` check fails).
+	log.Printf("[INFO] Running initial dedup scan...")
+	progressFn := newDedupScanProgressLogger(1000, func(format string, args ...any) {
+		log.Printf(format, args...)
+	})
+	if err := s.dedupEngine.FullScan(ctx, progressFn); err != nil {
 		log.Printf("[WARN] Initial dedup scan failed: %v", err)
 	}
 
 	_ = store.SetSetting("embedding_backfill_done", "true", "bool", false)
 	log.Printf("[INFO] Embedding backfill and initial dedup scan complete")
+}
+
+// newDedupScanProgressLogger returns a progress callback suitable for
+// DedupEngine.FullScan that logs once every `interval` books processed (plus
+// one final line at completion).
+//
+// It exists because FullScan passes `done = i+1` at a step of 10, so values
+// are 1, 11, 21, ... which never satisfy `done % interval == 0` for interval
+// ≥ 11. This previously hid all scan progress. The returned closure tracks
+// the next threshold internally and advances past it on each bucket crossing,
+// so progress lines appear at ~interval granularity regardless of the caller's
+// step size.
+func newDedupScanProgressLogger(interval int, logf func(format string, args ...any)) func(done, total int) {
+	if interval <= 0 {
+		interval = 1
+	}
+	nextLog := interval
+	return func(done, total int) {
+		if done >= nextLog || (total > 0 && done == total) {
+			logf("[INFO] Dedup scan progress: %d/%d", done, total)
+			for nextLog <= done {
+				nextLog += interval
+			}
+		}
+	}
 }
