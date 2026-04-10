@@ -614,11 +614,12 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 		}
 
 		// End of day timestamp.
-		endOfDay, err := time.Parse("2006-01-02", dateKey)
+		// Use start-of-day (00:00:00) so digests sort AFTER all live entries
+		// in a newest-first list — all digests cluster together at the bottom.
+		startOfDay, err := time.Parse("2006-01-02", dateKey)
 		if err != nil {
 			return result, fmt.Errorf("activity_store: compact parse date %q: %w", dateKey, err)
 		}
-		endOfDay = endOfDay.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
 
 		// Transaction: idempotency check + insert digest + delete originals.
 		tx, err := s.db.Begin()
@@ -645,7 +646,7 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 			INSERT INTO activity_log
 				(timestamp, tier, type, level, source, summary, details, compacted)
 			VALUES (?, 'digest', 'daily_digest', 'info', 'compaction', ?, ?, 1)`,
-			endOfDay, fmt.Sprintf("Daily digest for %s (%d entries)", dateKey, len(dg.entries)),
+			startOfDay, fmt.Sprintf("Daily digest for %s (%d entries)", dateKey, len(dg.entries)),
 			string(detailsBytes),
 		)
 		if err != nil {
