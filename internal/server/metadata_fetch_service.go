@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.43.0
+// version: 4.44.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -280,7 +280,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 		}
 		if len(results) > 0 {
 			// Score all results and pick the best; reject if below quality threshold.
-			scored := bestTitleMatchWithContext(results, currentAuthor, currentNarrator, searchTitle, book.Title)
+			scored := mfs.bestTitleMatchForBook(book, results, currentAuthor, currentNarrator, searchTitle, book.Title)
 			if len(scored) == 0 {
 				log.Printf("[DEBUG] %s: all %d results rejected by quality scorer for %q",
 					src.Name(), len(results), searchTitle)
@@ -432,7 +432,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 			continue
 		}
 
-		scored := bestTitleMatchWithContext(results, "", titleOnlyNarrator, searchTitle, book.Title)
+		scored := mfs.bestTitleMatchForBook(book, results, "", titleOnlyNarrator, searchTitle, book.Title)
 		if len(scored) == 0 {
 			continue
 		}
@@ -1088,6 +1088,103 @@ func applyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWor
 	return score + bonus
 }
 
+// pickBestMatchFromScored takes pre-computed base scores from any tier and
+// returns the single best-matching result above the tier-appropriate
+// threshold, applying the full stack of author/narrator/audiobook bonus
+// multipliers. It's shared between the F1-only package-level
+// bestTitleMatchWithContext and the scorer-backed bestTitleMatchForBook
+// method, so the bonus logic lives in one place.
+//
+// baseScores must be aligned to results (same length, same order).
+// baseTier drives the minimum score threshold and the length-penalty
+// behavior inside applyNonBaseAdjustments: "f1" uses the historical 0.35
+// threshold and applies the length penalty; other tiers (e.g. "embedding")
+// use MetadataEmbeddingBestMatchMin (default 0.70) and disable the length
+// penalty since their base scores have no token-overlap ratio.
+//
+// For the F1 tier we preserve the historical "skip bonuses when base==0"
+// behavior of scoreOneResult: a result whose F1 base is zero contributes a
+// final score of zero, so it can never win regardless of rich-metadata
+// bonuses or author/narrator multipliers. This keeps the package-level
+// bestTitleMatchWithContext bit-for-bit equivalent to its pre-refactor
+// implementation, which the existing test suite locks in.
+func pickBestMatchFromScored(
+	results []metadata.BookMetadata,
+	baseScores []float64,
+	baseTier string,
+	searchWords map[string]bool,
+	bookAuthor, bookNarrator string,
+) []metadata.BookMetadata {
+	const f1MinScore = 0.35
+
+	minScore := f1MinScore
+	if baseTier != "f1" {
+		minScore = config.AppConfig.MetadataEmbeddingBestMatchMin
+	}
+
+	bestIdx := -1
+	bestScore := 0.0
+	for i, r := range results {
+		baseScore := baseScores[i]
+
+		var score float64
+		if baseTier == "f1" {
+			// Preserve scoreOneResult's early-return-on-zero behavior so the
+			// F1 path stays bit-for-bit identical to the pre-refactor code.
+			if baseScore == 0 {
+				continue
+			}
+			score = applyNonBaseAdjustments(baseScore, r, len(searchWords))
+		} else {
+			// Non-F1 tiers (embedding, etc.) skip the length penalty by
+			// passing baseWordCount=0; the cosine-based base has no
+			// token-overlap ratio for the penalty to be meaningful.
+			score = applyNonBaseAdjustments(baseScore, r, 0)
+		}
+
+		// Author-based scoring: boost matches, penalize mismatches or missing.
+		if bookAuthor != "" {
+			if r.Author != "" {
+				rAuthorLower := strings.ToLower(r.Author)
+				bAuthorLower := strings.ToLower(bookAuthor)
+				if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
+					score *= 1.5
+				} else {
+					score *= 0.7
+				}
+			} else {
+				score *= 0.75
+			}
+		}
+
+		// Narrator-based scoring: boost matches as secondary tiebreaker.
+		if bookNarrator != "" && r.Narrator != "" {
+			rNarrLower := strings.ToLower(r.Narrator)
+			bNarrLower := strings.ToLower(bookNarrator)
+			if strings.Contains(rNarrLower, bNarrLower) || strings.Contains(bNarrLower, rNarrLower) {
+				score *= 1.3
+			}
+		}
+
+		// Audiobook-specific: boost results with narrator, penalize without.
+		if r.Narrator != "" {
+			score *= 1.15
+		} else {
+			score *= 0.85
+		}
+
+		if score > bestScore {
+			bestScore = score
+			bestIdx = i
+		}
+	}
+
+	if bestIdx >= 0 && bestScore >= minScore {
+		return []metadata.BookMetadata{results[bestIdx]}
+	}
+	return nil
+}
+
 // scoreOneResult computes a quality score in [0, ~1.15] for a single result
 // against a set of search-title significant words. It preserves the
 // pre-refactor signature and behavior, composing computeF1Base and
@@ -1160,6 +1257,36 @@ func (mfs *MetadataFetchService) scoreBaseCandidates(
 	return scores, "f1"
 }
 
+// bestTitleMatchForBook is the scorer-aware sibling of
+// bestTitleMatchWithContext. It routes through scoreBaseCandidates so
+// callers that have a *database.Book in hand (e.g. the automatic metadata
+// fetch paths) get embedding-based scoring when available, falling back
+// silently to the F1 path when the scorer is disabled or errors.
+//
+// The package-level bestTitleMatch[WithContext] functions still exist and
+// still use F1 — they're kept for the test suite and for code paths that
+// don't have a Book in scope. This method is the preferred entry point
+// for production call sites that do.
+func (mfs *MetadataFetchService) bestTitleMatchForBook(
+	book *database.Book,
+	results []metadata.BookMetadata,
+	bookAuthor, bookNarrator string,
+	titles ...string,
+) []metadata.BookMetadata {
+	// Union of significant words from all title variants. Needed by both
+	// the F1 fallback path (via scoreBaseCandidates) and by
+	// pickBestMatchFromScored for the length penalty.
+	searchWords := map[string]bool{}
+	for _, t := range titles {
+		for w := range significantWords(t) {
+			searchWords[w] = true
+		}
+	}
+
+	baseScores, baseTier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
+	return pickBestMatchFromScored(results, baseScores, baseTier, searchWords, bookAuthor, bookNarrator)
+}
+
 // applySeriesPositionFilter rejects the top result if it claims a different
 // series position than the book's known position. If the result has no
 // SeriesPosition or the book has no known position, results pass through.
@@ -1191,8 +1318,6 @@ func bestTitleMatch(results []metadata.BookMetadata, titles ...string) []metadat
 }
 
 func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, bookNarrator string, titles ...string) []metadata.BookMetadata {
-	const minScore = 0.35
-
 	// Union of significant words from all title variants.
 	searchWords := map[string]bool{}
 	for _, t := range titles {
@@ -1201,52 +1326,14 @@ func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 		}
 	}
 
-	bestIdx := -1
-	bestScore := 0.0
+	// F1 base scores aligned to results — the helper applies bonuses,
+	// multipliers, and the 0.35 threshold for the "f1" tier.
+	baseScores := make([]float64, len(results))
 	for i, r := range results {
-		score := scoreOneResult(r, searchWords)
-
-		// Author-based scoring: boost matches, penalize mismatches or missing
-		if bookAuthor != "" {
-			if r.Author != "" {
-				rAuthorLower := strings.ToLower(r.Author)
-				bAuthorLower := strings.ToLower(bookAuthor)
-				if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
-					score *= 1.5
-				} else {
-					score *= 0.7
-				}
-			} else {
-				score *= 0.75
-			}
-		}
-
-		// Narrator-based scoring: boost matches as secondary tiebreaker
-		if bookNarrator != "" && r.Narrator != "" {
-			rNarrLower := strings.ToLower(r.Narrator)
-			bNarrLower := strings.ToLower(bookNarrator)
-			if strings.Contains(rNarrLower, bNarrLower) || strings.Contains(bNarrLower, rNarrLower) {
-				score *= 1.3
-			}
-		}
-
-		// Audiobook-specific: boost results with narrator, penalize without
-		if r.Narrator != "" {
-			score *= 1.15
-		} else {
-			score *= 0.85
-		}
-
-		if score > bestScore {
-			bestScore = score
-			bestIdx = i
-		}
+		baseScores[i] = computeF1Base(r, searchWords)
 	}
 
-	if bestIdx >= 0 && bestScore >= minScore {
-		return []metadata.BookMetadata{results[bestIdx]}
-	}
-	return nil
+	return pickBestMatchFromScored(results, baseScores, "f1", searchWords, bookAuthor, bookNarrator)
 }
 
 // syncMetadataToLibraryCopy copies metadata fields from the original book to
