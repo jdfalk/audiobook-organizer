@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.4.0
+// version: 1.4.1
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -568,19 +568,6 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 	for _, dateKey := range dayOrder {
 		dg := days[dateKey]
 
-		// Idempotency: skip if digest already exists for this date.
-		var exists int
-		err := s.db.QueryRow(`
-			SELECT COUNT(*) FROM activity_log
-			WHERE tier = 'digest' AND type = 'daily_digest'
-			  AND date(timestamp) = ?`, dateKey).Scan(&exists)
-		if err != nil {
-			return result, fmt.Errorf("activity_store: compact check digest: %w", err)
-		}
-		if exists > 0 {
-			continue
-		}
-
 		// Build counts map.
 		counts := make(map[string]int)
 		for _, e := range dg.entries {
@@ -628,13 +615,31 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 		}
 
 		// End of day timestamp.
-		endOfDay, _ := time.Parse("2006-01-02", dateKey)
+		endOfDay, err := time.Parse("2006-01-02", dateKey)
+		if err != nil {
+			return result, fmt.Errorf("activity_store: compact parse date %q: %w", dateKey, err)
+		}
 		endOfDay = endOfDay.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
 
-		// Transaction: insert digest + delete originals.
+		// Transaction: idempotency check + insert digest + delete originals.
 		tx, err := s.db.Begin()
 		if err != nil {
 			return result, fmt.Errorf("activity_store: compact begin tx: %w", err)
+		}
+
+		// Idempotency: skip if digest already exists for this date (inside tx).
+		var exists int
+		err = tx.QueryRow(`
+			SELECT COUNT(*) FROM activity_log
+			WHERE tier = 'digest' AND type = 'daily_digest'
+			  AND date(timestamp) = ?`, dateKey).Scan(&exists)
+		if err != nil {
+			tx.Rollback()
+			return result, fmt.Errorf("activity_store: compact check digest: %w", err)
+		}
+		if exists > 0 {
+			tx.Rollback()
+			continue
 		}
 
 		_, err = tx.Exec(`
@@ -650,6 +655,7 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 		}
 
 		// Delete originals by ID. Use batched placeholders.
+		var deletedCount int64
 		for i := 0; i < len(dg.ids); i += 999 {
 			end := i + 999
 			if end > len(dg.ids) {
@@ -662,11 +668,13 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 			for j, id := range batch {
 				args[j] = id
 			}
-			_, err = tx.Exec("DELETE FROM activity_log WHERE id IN ("+placeholders+")", args...)
-			if err != nil {
+			delRes, delErr := tx.Exec("DELETE FROM activity_log WHERE id IN ("+placeholders+")", args...)
+			if delErr != nil {
 				tx.Rollback()
-				return result, fmt.Errorf("activity_store: compact delete: %w", err)
+				return result, fmt.Errorf("activity_store: compact delete: %w", delErr)
 			}
+			n, _ := delRes.RowsAffected()
+			deletedCount += n
 		}
 
 		if err := tx.Commit(); err != nil {
@@ -674,7 +682,7 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 		}
 
 		result.DaysCompacted++
-		result.EntriesDeleted += len(dg.ids)
+		result.EntriesDeleted += int(deletedCount)
 	}
 
 	return result, nil
