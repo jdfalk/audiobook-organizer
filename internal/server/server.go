@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.151.0
+// version: 1.152.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -843,6 +843,20 @@ func NewServer() *Server {
 				server.dedupEngine.AutoMergeEnabled = config.AppConfig.DedupAutoMergeEnabled
 				log.Println("[INFO] Embedding store and dedup engine initialized")
 				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
+
+				// Wire the embedding-based metadata candidate scorer. The
+				// scorer reuses the same embedClient + embeddingStore as the
+				// dedup engine; it's a lightweight wrapper exposing the
+				// MetadataCandidateScorer interface. Any failure at search
+				// time falls back to the F1 path inside scoreBaseCandidates,
+				// so this is safe to leave wired up unconditionally once
+				// the embedding infra is available.
+				if config.AppConfig.MetadataEmbeddingScoringEnabled {
+					server.metadataFetchService.SetMetadataScorer(
+						ai.NewEmbeddingScorer(embedClient, embeddingStore),
+					)
+					log.Println("[INFO] Metadata candidate scoring: embedding tier enabled")
+				}
 			} else {
 				log.Println("[INFO] Embedding store opened (dedup engine disabled — no API key or embedding_enabled=false)")
 			}
