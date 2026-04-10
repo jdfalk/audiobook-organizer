@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_scorer_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9c3e5b17-6f8a-4d2e-b091-5a7c8d4e2f6a
 
 package ai
@@ -11,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 // fakeEmbedAPI is an in-process stand-in for the OpenAI embeddings endpoint.
@@ -152,4 +154,60 @@ func TestEmbeddingScorer_CandidateBatchError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Nil(t, scores)
+}
+
+func TestEmbeddingScorer_BookIDFastPath(t *testing.T) {
+	// Spin up a real temp-dir EmbeddingStore and seed a known vector for a
+	// specific book ID. Verify the scorer uses that vector instead of calling
+	// EmbedOne.
+	tmpDir := t.TempDir()
+	store, err := database.NewEmbeddingStore(tmpDir + "/test.db")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	// Seed book BOOK_A with a one-hot 'a'-style vector so it matches
+	// candidates whose text starts with 'a'.
+	require.NoError(t, store.Upsert(database.Embedding{
+		EntityType: "book",
+		EntityID:   "BOOK_A",
+		TextHash:   "hash-a",
+		Vector:     []float32{1, 0, 0, 0},
+		Model:      "text-embedding-3-large",
+	}))
+
+	api := &fakeEmbedAPI{textToVec: oneHotByPrefix}
+	scorer := NewEmbeddingScorerWithAPI(api, store)
+
+	scores, err := scorer.Score(context.Background(),
+		Query{BookID: "BOOK_A", Title: "whatever the title is"},
+		[]Candidate{
+			{Title: "abyss"},     // 'a' → matches seeded vector
+			{Title: "different"}, // default → orthogonal
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, scores, 2)
+	assert.InDelta(t, 1.0, scores[0], 0.01)
+	assert.InDelta(t, 0.0, scores[1], 0.01)
+
+	assert.Equal(t, 0, api.embedOne, "BookID fast-path should skip query embedding")
+	assert.Equal(t, 1, api.embedBatch, "candidates are still batch-embedded")
+}
+
+func TestEmbeddingScorer_BookIDMissFallsBackToEmbed(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := database.NewEmbeddingStore(tmpDir + "/test.db")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	// Store has no entry for BOOK_MISSING.
+
+	api := &fakeEmbedAPI{textToVec: oneHotByPrefix}
+	scorer := NewEmbeddingScorerWithAPI(api, store)
+
+	_, err = scorer.Score(context.Background(),
+		Query{BookID: "BOOK_MISSING", Title: "Dune"},
+		[]Candidate{{Title: "Dune"}},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, 1, api.embedOne, "store miss should fall back to EmbedOne")
 }
