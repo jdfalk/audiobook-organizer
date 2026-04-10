@@ -1,5 +1,5 @@
 // file: web/src/services/activityApi.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
@@ -7,7 +7,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 export interface ActivityEntry {
   id: string;
   timestamp: string;
-  tier: 'audit' | 'change' | 'debug';
+  tier: 'audit' | 'change' | 'debug' | 'digest';
   type: string;
   level: string;
   source: string;
@@ -86,4 +86,21 @@ export async function fetchActivitySources(filter: Partial<ActivityFilter> = {})
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Sources API error: ${res.status}`);
   return res.json();
+}
+
+export interface CompactResult {
+  days_compacted: number;
+  entries_deleted: number;
+}
+
+export async function compactActivityLog(olderThanDays: number): Promise<CompactResult> {
+  const response = await fetch(`${API_BASE}/activity/compact`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ older_than_days: olderThanDays }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to compact activity log: ${response.status}`);
+  }
+  return response.json();
 }
