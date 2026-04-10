@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -299,6 +299,11 @@ func (de *DedupEngine) findSimilarBooks(ctx context.Context, bookID string) erro
 		return fmt.Errorf("no embedding for book %s", bookID)
 	}
 
+	// Load the query book once so we can consult its version_group_id when
+	// filtering candidates. If the lookup fails we proceed without the
+	// filter — skipping pairs is an optimisation, not a correctness need.
+	queryBook, _ := de.bookStore.GetBookByID(bookID)
+
 	results, err := de.embedStore.FindSimilar("book", emb.Vector, float32(de.BookLowThreshold), 20)
 	if err != nil {
 		return err
@@ -307,6 +312,17 @@ func (de *DedupEngine) findSimilarBooks(ctx context.Context, bookID string) erro
 	for _, r := range results {
 		if r.EntityID == bookID {
 			continue
+		}
+		// Drop candidates that are already siblings in the same version
+		// group. The version-group system already knows these are the same
+		// logical book in different formats, so surfacing them as dedup
+		// candidates is just noise.
+		if queryBook != nil && queryBook.VersionGroupID != nil && *queryBook.VersionGroupID != "" {
+			otherBook, err := de.bookStore.GetBookByID(r.EntityID)
+			if err == nil && otherBook != nil && otherBook.VersionGroupID != nil &&
+				*otherBook.VersionGroupID == *queryBook.VersionGroupID {
+				continue
+			}
 		}
 		sim := float64(r.Similarity)
 		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
@@ -371,6 +387,13 @@ func (de *DedupEngine) CheckAuthor(ctx context.Context, authorID int) error {
 
 // EmbedBook generates and stores an embedding for the given book.
 // Skips re-embedding if the text hash has not changed.
+//
+// Non-primary versions (members of a version group that are not the primary
+// representative) are skipped entirely: their embedding would be a duplicate
+// of the primary's by construction, and surfacing them as dedup candidates
+// just clutters the UI with noise. Any existing embedding for a non-primary
+// book is deleted on the spot so historical rows from earlier backfills get
+// cleaned up as we walk the library.
 func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) error {
 	if de.embedClient == nil {
 		return fmt.Errorf("no embedding client configured")
@@ -382,6 +405,15 @@ func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) error {
 	}
 	if book == nil {
 		return fmt.Errorf("book %s not found", bookID)
+	}
+
+	// Skip non-primary version-group members. If the book was previously
+	// embedded (stale data from a pre-fix backfill), remove that row now.
+	if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
+		if err := de.embedStore.Delete("book", bookID); err != nil {
+			log.Printf("dedup: delete stale embedding for non-primary %s: %v", bookID, err)
+		}
+		return nil
 	}
 
 	authorName := ""
@@ -452,8 +484,15 @@ func (de *DedupEngine) EmbedAuthor(ctx context.Context, authorID int) error {
 	})
 }
 
-// FullScan re-embeds stale entities and runs Layer 2 similarity scans for all books.
+// FullScan re-embeds stale entities and runs both Layer 1 (exact) and
+// Layer 2 (embedding) dedup checks for every primary book in the library.
 // The progress callback is invoked periodically with (done, total).
+//
+// Layer 1 used to only run on ingest and metadata-apply events, which meant
+// the `exact` bucket stayed at zero for libraries that hadn't seen new books
+// since the initial backfill. Running it inside FullScan populates the
+// bucket with the hash/ISBN/near-title-match candidates that were always
+// there but never surfaced.
 func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total int)) error {
 	books, err := de.getAllBooks()
 	if err != nil {
@@ -468,14 +507,34 @@ func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total i
 		default:
 		}
 
-		// Embed (skips if hash unchanged)
+		// Resolve author name once — reused by both Layer 1 title check
+		// and (indirectly) by Layer 2 via EmbedBook.
+		authorName := ""
+		if book.AuthorID != nil {
+			if author, err := de.bookStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+				authorName = author.Name
+			}
+		}
+
+		// Layer 1 exact checks (file hash, ISBN/ASIN, near-identical title).
+		// Errors are logged but non-fatal — one missing field shouldn't
+		// abort the whole scan.
+		if _, err := de.checkExactFileHash(&book, authorName); err != nil {
+			log.Printf("dedup: full scan hash check error for %s: %v", book.ID, err)
+		}
+		if err := de.checkExactISBN(&book); err != nil {
+			log.Printf("dedup: full scan ISBN check error for %s: %v", book.ID, err)
+		}
+		if err := de.checkExactTitle(&book, authorName); err != nil {
+			log.Printf("dedup: full scan title check error for %s: %v", book.ID, err)
+		}
+
+		// Layer 2 embedding: re-embed if stale, then similarity scan.
 		if de.embedClient != nil {
 			if err := de.EmbedBook(ctx, book.ID); err != nil {
 				log.Printf("dedup: full scan embed error for %s: %v", book.ID, err)
 			}
 		}
-
-		// Layer 2 similarity
 		if err := de.findSimilarBooks(ctx, book.ID); err != nil {
 			// Not fatal — just means no embedding yet
 			log.Printf("dedup: full scan similarity error for %s: %v", book.ID, err)
@@ -488,7 +547,97 @@ func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total i
 	return nil
 }
 
-// getAllBooks fetches all books in batches.
+// PurgeStaleCandidates deletes book-dedup-candidate rows that are no longer
+// meaningful under the current rules:
+//
+//   - either side references a non-primary version-group member (their
+//     identity is owned by their group's primary, not the row itself)
+//   - both sides belong to the same version_group_id (the version-group
+//     system already knows they are the same logical book)
+//
+// Returns the number of rows deleted. Intended to be called once at startup
+// after the backfill completes and again at the start of a user-triggered
+// Re-scan so the candidate table stays clean after the Layer 1 + Layer 2
+// rules tighten.
+func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
+	if de.embedStore == nil || de.bookStore == nil {
+		return 0, nil
+	}
+
+	candidates, _, err := de.embedStore.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Limit:      100000,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("list candidates: %w", err)
+	}
+
+	// Memoise book lookups so a book referenced by many candidates is only
+	// fetched once per purge run.
+	type bookMeta struct {
+		isNonPrimary   bool
+		versionGroupID string
+		missing        bool
+	}
+	cache := make(map[string]bookMeta, len(candidates)*2)
+	lookup := func(id string) bookMeta {
+		if m, ok := cache[id]; ok {
+			return m
+		}
+		b, err := de.bookStore.GetBookByID(id)
+		m := bookMeta{}
+		if err != nil || b == nil {
+			m.missing = true
+			cache[id] = m
+			return m
+		}
+		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+			m.isNonPrimary = true
+		}
+		if b.VersionGroupID != nil {
+			m.versionGroupID = *b.VersionGroupID
+		}
+		cache[id] = m
+		return m
+	}
+
+	deleted := 0
+	for _, c := range candidates {
+		select {
+		case <-ctx.Done():
+			return deleted, ctx.Err()
+		default:
+		}
+
+		a := lookup(c.EntityAID)
+		b := lookup(c.EntityBID)
+
+		stale := false
+		switch {
+		case a.missing || b.missing:
+			// One side no longer exists — the candidate can't be actioned.
+			stale = true
+		case a.isNonPrimary || b.isNonPrimary:
+			stale = true
+		case a.versionGroupID != "" && a.versionGroupID == b.versionGroupID:
+			stale = true
+		}
+		if !stale {
+			continue
+		}
+		if err := de.embedStore.DeleteCandidate(c.ID); err != nil {
+			log.Printf("dedup: purge stale candidate %d: %v", c.ID, err)
+			continue
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
+// getAllBooks fetches all PRIMARY-version books in batches. Non-primary
+// version-group members are filtered out so FullScan never processes them
+// (their identity is owned by the primary) and similarity scanning only
+// produces primary-vs-primary candidate pairs.
 func (de *DedupEngine) getAllBooks() ([]database.Book, error) {
 	var all []database.Book
 	const batchSize = 500
@@ -498,7 +647,12 @@ func (de *DedupEngine) getAllBooks() ([]database.Book, error) {
 		if err != nil {
 			return nil, err
 		}
-		all = append(all, batch...)
+		for _, b := range batch {
+			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+				continue
+			}
+			all = append(all, b)
+		}
 		if len(batch) < batchSize {
 			break
 		}

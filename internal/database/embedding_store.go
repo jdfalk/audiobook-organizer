@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
 package database
@@ -516,6 +516,12 @@ func (s *EmbeddingStore) RemoveCandidatesForEntity(entityType, entityID string) 
 	}
 	n, err := res.RowsAffected()
 	return int(n), err
+}
+
+// DeleteCandidate removes a single candidate row by ID.
+func (s *EmbeddingStore) DeleteCandidate(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM dedup_candidates WHERE id=?`, id)
+	return err
 }
 
 // GetCandidateStats returns row counts grouped by entity_type, layer, and status.
