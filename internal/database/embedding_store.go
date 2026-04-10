@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
 package database
@@ -332,7 +332,16 @@ func joinAnd(clauses []string) string {
 }
 
 // UpsertCandidate inserts or updates a dedup candidate pair.
-// On conflict (entity_type, entity_a_id, entity_b_id) the row is updated.
+// On conflict (entity_type, entity_a_id, entity_b_id) the row is updated,
+// but the layer column follows a precedence rule so more-specific evidence
+// wins: exact > llm > embedding. This stops Layer 2 similarity scans from
+// silently downgrading pairs that Layer 1 already flagged as exact
+// matches, which used to erase the `exact` bucket whenever two books were
+// both hash/ISBN/title-near-matched AND cosine-similar.
+//
+// The `similarity` column is paired with `layer` — it only makes sense on
+// the embedding path — so we only overwrite similarity when we're also
+// overwriting (or newly inserting) the layer.
 func (s *EmbeddingStore) UpsertCandidate(c DedupCandidate) error {
 	now := time.Now().UTC()
 
@@ -358,10 +367,24 @@ INSERT INTO dedup_candidates
     (entity_type, entity_a_id, entity_b_id, layer, similarity, llm_verdict, llm_reason, status, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(entity_type, entity_a_id, entity_b_id) DO UPDATE SET
-    layer       = excluded.layer,
-    similarity  = excluded.similarity,
-    llm_verdict = excluded.llm_verdict,
-    llm_reason  = excluded.llm_reason,
+    layer = CASE
+        WHEN layer = 'exact' THEN 'exact'
+        WHEN layer = 'llm' AND excluded.layer != 'exact' THEN 'llm'
+        ELSE excluded.layer
+    END,
+    similarity = CASE
+        WHEN layer = 'exact' THEN similarity
+        WHEN layer = 'llm' AND excluded.layer != 'exact' THEN similarity
+        ELSE excluded.similarity
+    END,
+    llm_verdict = CASE
+        WHEN excluded.llm_verdict IS NOT NULL THEN excluded.llm_verdict
+        ELSE llm_verdict
+    END,
+    llm_reason  = CASE
+        WHEN excluded.llm_reason IS NOT NULL THEN excluded.llm_reason
+        ELSE llm_reason
+    END,
     status      = excluded.status,
     updated_at  = excluded.updated_at
 `,
