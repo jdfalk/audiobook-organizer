@@ -845,6 +845,11 @@ func NewServer() *Server {
 		}
 	}
 
+	// Start embedding backfill if dedup engine is ready
+	if server.dedupEngine != nil {
+		go server.runEmbeddingBackfill()
+	}
+
 	// Wire activity log dual-write hooks
 	if server.activityService != nil {
 		// Task 10: Operation changes → activity log
