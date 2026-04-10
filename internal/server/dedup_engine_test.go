@@ -616,8 +616,11 @@ func TestTitlesDifferOnlyInDigits(t *testing.T) {
 		// Different non-digit content — not a series-volume pair.
 		{"title one", "title two", false},
 		{"reclaiming honor", "restoring honor", false},
-		// One has a number, the other doesn't — structure differs.
-		{"title", "title 3", false},
+		// One has a number, the other doesn't — this IS a series pair
+		// now. "Backyard Dungeon" vs "Backyard Dungeon 2" is the
+		// canonical example: book 1 (unnumbered) vs book 2 (numbered).
+		{"title", "title 3", true},
+		{"backyard dungeon", "backyard dungeon 2", true},
 		// Both numbers but different non-digit content.
 		{"title 3", "book 3", false},
 		// Empty strings.

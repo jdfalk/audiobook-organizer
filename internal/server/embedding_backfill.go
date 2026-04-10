@@ -1,5 +1,5 @@
 // file: internal/server/embedding_backfill.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 
 package server
@@ -29,7 +29,7 @@ import (
 // cached text_hash — so re-running it just pays a few seconds of DB reads
 // plus a purge pass to delete candidates that the new rules would have
 // rejected.
-const backfillVersionMarker = "embedding_backfill_v4_done"
+const backfillVersionMarker = "embedding_backfill_v5_done"
 
 // runEmbeddingBackfill embeds all books and authors on first startup and
 // re-runs once after each backfill version bump.

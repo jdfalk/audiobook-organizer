@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
 package database
@@ -342,7 +342,21 @@ func joinAnd(clauses []string) string {
 // The `similarity` column is paired with `layer` — it only makes sense on
 // the embedding path — so we only overwrite similarity when we're also
 // overwriting (or newly inserting) the layer.
+//
+// Pairs are canonicalized before insert so each logical pair has exactly
+// one row regardless of which direction it was discovered from. Without
+// this, FullScan would emit both (A, B) when processing book A and (B, A)
+// when processing book B, and each would go into its own row because the
+// UNIQUE constraint on (entity_type, entity_a_id, entity_b_id) treats the
+// two orderings as distinct. The UI then shows the same logical pair
+// twice, which is exactly the "Foundation and Empire appears twice" bug
+// from PR #208 follow-up. Canonical order: the lexicographically smaller
+// ID is always EntityAID.
 func (s *EmbeddingStore) UpsertCandidate(c DedupCandidate) error {
+	if c.EntityAID > c.EntityBID {
+		c.EntityAID, c.EntityBID = c.EntityBID, c.EntityAID
+	}
+
 	now := time.Now().UTC()
 
 	// Preserve created_at for existing rows.
@@ -545,6 +559,77 @@ func (s *EmbeddingStore) RemoveCandidatesForEntity(entityType, entityID string) 
 func (s *EmbeddingStore) DeleteCandidate(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM dedup_candidates WHERE id=?`, id)
 	return err
+}
+
+// CanonicalizeCandidates rewrites existing rows so each logical pair has
+// exactly one entry with entity_a_id < entity_b_id lexicographically. This
+// is a one-time cleanup for deployments that accumulated duplicate rows
+// before UpsertCandidate started canonicalizing on insert.
+//
+// Algorithm:
+//  1. Find every row where entity_a_id > entity_b_id (non-canonical order).
+//  2. For each such row, check whether a canonical row already exists for
+//     the same pair. If yes, delete the non-canonical row (the canonical
+//     one already carries the evidence). If no, update the non-canonical
+//     row in place to swap the two IDs.
+//
+// Returns (rewritten, deleted) counts for logging.
+func (s *EmbeddingStore) CanonicalizeCandidates() (rewritten, deleted int, err error) {
+	rows, err := s.db.Query(`
+SELECT id, entity_type, entity_a_id, entity_b_id
+FROM dedup_candidates
+WHERE entity_a_id > entity_b_id
+`)
+	if err != nil {
+		return 0, 0, fmt.Errorf("canonicalize: list non-canonical: %w", err)
+	}
+	type nonCanon struct {
+		id         int64
+		entityType string
+		a, b       string
+	}
+	var targets []nonCanon
+	for rows.Next() {
+		var n nonCanon
+		if err := rows.Scan(&n.id, &n.entityType, &n.a, &n.b); err != nil {
+			rows.Close()
+			return 0, 0, fmt.Errorf("canonicalize: scan: %w", err)
+		}
+		targets = append(targets, n)
+	}
+	rows.Close()
+
+	for _, n := range targets {
+		// Canonical form has the smaller ID first.
+		canonicalA, canonicalB := n.b, n.a
+
+		var existingID int64
+		err := s.db.QueryRow(
+			`SELECT id FROM dedup_candidates WHERE entity_type=? AND entity_a_id=? AND entity_b_id=?`,
+			n.entityType, canonicalA, canonicalB,
+		).Scan(&existingID)
+		switch {
+		case err == sql.ErrNoRows:
+			// No canonical row exists — swap the fields in place.
+			if _, err := s.db.Exec(
+				`UPDATE dedup_candidates SET entity_a_id=?, entity_b_id=?, updated_at=? WHERE id=?`,
+				canonicalA, canonicalB, time.Now().UTC().Format(time.RFC3339Nano), n.id,
+			); err != nil {
+				return rewritten, deleted, fmt.Errorf("canonicalize: swap row %d: %w", n.id, err)
+			}
+			rewritten++
+		case err != nil:
+			return rewritten, deleted, fmt.Errorf("canonicalize: check existing %d: %w", n.id, err)
+		default:
+			// Canonical row already exists — the non-canonical one is
+			// redundant, delete it.
+			if _, err := s.db.Exec(`DELETE FROM dedup_candidates WHERE id=?`, n.id); err != nil {
+				return rewritten, deleted, fmt.Errorf("canonicalize: delete row %d: %w", n.id, err)
+			}
+			deleted++
+		}
+	}
+	return rewritten, deleted, nil
 }
 
 // GetCandidateStats returns row counts grouped by entity_type, layer, and status.
