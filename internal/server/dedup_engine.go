@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -294,16 +294,30 @@ func (de *DedupEngine) checkExactTitle(book *database.Book, authorName string) e
 		if !hasUsableTitle(other.Title) {
 			continue
 		}
-		dist := levenshteinDistance(normTitle, normalizeTitle(other.Title))
+		otherNormTitle := normalizeTitle(other.Title)
+		dist := levenshteinDistance(normTitle, otherNormTitle)
 		if dist >= 3 {
 			continue
 		}
-		// Series-volume safety: if both books identify as distinct volumes
-		// of the same series, this is a near-title match by construction
-		// (volume digits differ by one character each) and must not become
-		// an "exact" candidate. Merging volume 3 into volume 2 would silently
-		// destroy user content.
-		if otherSeriesNum := seriesNumberOf(other); bookSeriesNum != "" && otherSeriesNum != "" && bookSeriesNum != otherSeriesNum {
+		// Series-volume safety (primary): if both books identify as
+		// distinct volumes of the same series via structured metadata or
+		// an explicit "Book N" / "bk N" / "Vol N" / "#N" marker in the
+		// title, reject the pair. Merging volume 3 into volume 2 would
+		// silently destroy user content.
+		otherSeriesNum := seriesNumberOf(other)
+		if bookSeriesNum != "" && otherSeriesNum != "" && bookSeriesNum != otherSeriesNum {
+			continue
+		}
+		// Series-volume safety (fallback): if the normalized titles differ
+		// ONLY in digit characters (same non-digit structure, different
+		// numbers) the pair is almost certainly two volumes of a series
+		// whose volume marker the regex didn't catch. This is the last-
+		// ditch guard for title patterns like "Series Name 3" with no
+		// explicit "book"/"bk"/"vol" token. False positives here are
+		// limited to two books whose titles genuinely differ only in a
+		// number — rare enough that dismissing them manually is much
+		// cheaper than accidentally merging a wrong volume.
+		if titlesDifferOnlyInDigits(normTitle, otherNormTitle) {
 			continue
 		}
 		sim := 1.0
@@ -345,22 +359,87 @@ func seriesNumberOf(book *database.Book) string {
 	return extractSeriesNumberFromTitle(book.Title)
 }
 
-// seriesNumberInTitleRe matches a trailing "Book N", "#N", "(N)", "Vol N",
-// or bare trailing number after a separator, with optional surrounding
-// punctuation. Captures the digit portion only.
-var seriesNumberInTitleRe = regexp.MustCompile(`(?i)(?:book|vol(?:ume)?|#|part|pt\.?)\s*(\d+(?:\.\d+)?)`)
+// seriesNumberInTitleRe matches an explicit book-volume marker followed by
+// a number. Recognized markers (case-insensitive, optional trailing dot):
+//
+//	book, bk, volume, vol, number, no, part, pt, episode, ep, #
+//
+// Examples that match: "Reclaiming Honor bk 6", "Title, Book 3",
+// "Title Vol. 12", "Title #4", "Title Ep 7", "title bk.3" (no space).
+// The capture group is the digit portion only.
+var seriesNumberInTitleRe = regexp.MustCompile(
+	`(?i)(?:book|bk|volume|vol|number|no|part|pt|episode|ep|#)\.?\s*(\d+(?:\.\d+)?)`,
+)
 
-// extractSeriesNumberFromTitle looks for an explicit "Book N" / "Vol N" /
-// "#N" token anywhere in the title and returns the matched number as a
-// string. Returns "" if none found. It only matches explicit book-volume
-// markers — a bare number in a title ("1984") is not treated as a series
-// position.
+// extractSeriesNumberFromTitle looks for an explicit volume marker token
+// anywhere in the title and returns the matched number as a string.
+// Returns "" if none found. It only matches explicit book-volume markers —
+// a bare number in a title ("1984") is not treated as a series position.
+//
+// This is the safety net that stops Layer 1 from merging "Reclaiming
+// Honor bk 6" into "Reclaiming Honor bk 7" just because the normalized
+// titles differ by two characters and slip under the Levenshtein
+// threshold.
 func extractSeriesNumberFromTitle(title string) string {
 	m := seriesNumberInTitleRe.FindStringSubmatch(title)
 	if len(m) >= 2 {
 		return m[1]
 	}
 	return ""
+}
+
+// titlesDifferOnlyInDigits reports whether two titles have identical
+// structure after stripping all digit characters. When true, the two
+// titles are near-certainly two volumes of a series where the volume
+// marker token isn't one the regex recognizes — e.g. "Title 3" vs
+// "Title 4", "Series Name Six" vs "Series Name Seven" (no, that one
+// has letter differences and returns false), "Reclaiming Honor abc6"
+// vs "Reclaiming Honor abc7".
+//
+// The function is intentionally strict: both titles must match exactly
+// after digit removal AND at least one digit must be present in each.
+// This avoids false rejections for unrelated books with matching
+// non-digit content (e.g. two books titled "Untitled" — no digits, so
+// the function returns false and the pair is allowed through).
+func titlesDifferOnlyInDigits(a, b string) bool {
+	stripDigits := func(s string) (stripped string, hadDigit bool) {
+		var sb strings.Builder
+		for _, r := range s {
+			if r >= '0' && r <= '9' {
+				hadDigit = true
+				continue
+			}
+			sb.WriteRune(r)
+		}
+		return sb.String(), hadDigit
+	}
+	strippedA, aHadDigit := stripDigits(a)
+	strippedB, bHadDigit := stripDigits(b)
+	if !aHadDigit || !bHadDigit {
+		return false
+	}
+	if strippedA != strippedB {
+		return false
+	}
+	// Both had digits and the non-digit content is identical — they
+	// differ only in number tokens. But if the digit strings are ALSO
+	// identical (e.g. both titles contain "2024" in the same position),
+	// this isn't a series-volume difference, it's the same title.
+	digitsA := extractDigits(a)
+	digitsB := extractDigits(b)
+	return digitsA != digitsB
+}
+
+// extractDigits returns all digit characters from s concatenated in
+// order. "Book 3 part 2" → "32".
+func extractDigits(s string) string {
+	var sb strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
 }
 
 // findSimilarBooks runs Layer 2 embedding similarity search for a book.
@@ -421,11 +500,17 @@ func (de *DedupEngine) findSimilarBooks(ctx context.Context, bookID string) erro
 		// Drop candidates that are distinct volumes of a numbered series.
 		// Embeddings cannot distinguish "Book 3" from "Book 4" well because
 		// the titles are 99% identical — we have to filter these out by
-		// structured metadata.
+		// structured metadata. The explicit marker check is the primary
+		// signal (Book.SeriesSequence or a "bk"/"book"/"vol"/"#" token in
+		// the title); the digit-structure check is the fallback for titles
+		// like "Series Name 3" that have no explicit marker.
 		if querySeriesNum != "" {
 			if otherSeriesNum := seriesNumberOf(otherBook); otherSeriesNum != "" && otherSeriesNum != querySeriesNum {
 				continue
 			}
+		}
+		if queryBook != nil && titlesDifferOnlyInDigits(normalizeTitle(queryBook.Title), normalizeTitle(otherBook.Title)) {
+			continue
 		}
 		sim := float64(r.Similarity)
 		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
@@ -755,6 +840,7 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 		emptyTitle     bool
 		versionGroupID string
 		seriesNumber   string
+		normTitle      string
 		missing        bool
 	}
 	cache := make(map[string]bookMeta, len(candidates)*2)
@@ -779,6 +865,7 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 			m.versionGroupID = *b.VersionGroupID
 		}
 		m.seriesNumber = seriesNumberOf(b)
+		m.normTitle = normalizeTitle(b.Title)
 		cache[id] = m
 		return m
 	}
@@ -808,9 +895,14 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 		case a.versionGroupID != "" && a.versionGroupID == b.versionGroupID:
 			stale = true
 		case a.seriesNumber != "" && b.seriesNumber != "" && a.seriesNumber != b.seriesNumber:
-			// Distinct volumes of a numbered series should never be dedup
-			// candidates, even if the embedding cosine is close to 1.0 or
-			// Levenshtein on titles lands under the exact-match threshold.
+			// Distinct volumes of a numbered series (detected via a
+			// structured field or an explicit "book/bk/vol/#" marker).
+			stale = true
+		case titlesDifferOnlyInDigits(a.normTitle, b.normTitle):
+			// Fallback: normalized titles differ only in digit content,
+			// meaning they're different volumes of a series whose marker
+			// the explicit regex didn't match. "Reclaiming Honor bk 6"
+			// vs "Reclaiming Honor bk 7" is the canonical example.
 			stale = true
 		}
 		if !stale {
