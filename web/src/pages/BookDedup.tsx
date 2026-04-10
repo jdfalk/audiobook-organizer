@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.4.0
+// version: 3.5.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -51,7 +51,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import * as api from '../services/api';
-import type { Book, AuthorDedupGroup, SeriesDupGroup, ValidationResult, Operation, BookDedupGroup } from '../services/api';
+import type { Book, AuthorDedupGroup, SeriesDupGroup, ValidationResult, Operation, BookDedupGroup, DedupCandidate, DedupStats } from '../services/api';
 import SearchIcon from '@mui/icons-material/Search';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import Collapse from '@mui/material/Collapse';
@@ -2103,6 +2103,7 @@ function AIReviewTab() {
 
 // ---- Reconcile Tab ----
 import BuildIcon from '@mui/icons-material/Build';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import type { ReconcileMatch, ReconcilePreview, ReconcileBrokenRecord } from '../services/api';
 
 function ReconcileTab() {
@@ -2415,8 +2416,331 @@ function ReconcileTab() {
   );
 }
 
+// ---- Embedding Dedup Tab ----
+
+/** Cached book details for candidate display */
+const bookCache = new Map<string, Book>();
+
+async function fetchBookCached(id: string): Promise<Book | null> {
+  if (bookCache.has(id)) return bookCache.get(id)!;
+  try {
+    const book = await api.getBook(id);
+    bookCache.set(id, book);
+    return book;
+  } catch {
+    return null;
+  }
+}
+
+const LAYER_COLORS: Record<string, 'error' | 'primary' | 'secondary'> = {
+  exact: 'error',
+  embedding: 'primary',
+  llm: 'secondary',
+};
+
+function EmbeddingDedupTab() {
+  const navigate = useNavigate();
+  const [stats, setStats] = useState<DedupStats[]>([]);
+  const [candidates, setCandidates] = useState<DedupCandidate[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [layerFilter, setLayerFilter] = useState<string>('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [bookDetails, setBookDetails] = useState<Map<string, Book>>(new Map());
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+
+  // Load stats
+  const loadStats = useCallback(async () => {
+    try {
+      const { stats: s } = await api.getDedupStats();
+      setStats(s);
+    } catch {
+      // stats are optional
+    }
+  }, []);
+
+  // Load candidates
+  const loadCandidates = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: Parameters<typeof api.getDedupCandidates>[0] = {
+        status: statusFilter || undefined,
+        layer: layerFilter || undefined,
+        limit: rowsPerPage,
+        offset: page * rowsPerPage,
+      };
+      const resp = await api.getDedupCandidates(params);
+      setCandidates(resp.candidates || []);
+      setTotal(resp.total || 0);
+
+      // Fetch book details for all candidates
+      const ids = new Set<string>();
+      for (const c of resp.candidates || []) {
+        ids.add(c.entity_a_id);
+        ids.add(c.entity_b_id);
+      }
+      const details = new Map<string, Book>();
+      await Promise.all(
+        Array.from(ids).map(async (id) => {
+          const book = await fetchBookCached(id);
+          if (book) details.set(id, book);
+        })
+      );
+      setBookDetails(details);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load candidates');
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, layerFilter, page, rowsPerPage]);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => { loadCandidates(); }, [loadCandidates]);
+
+  const handleMerge = async (id: number) => {
+    setActionLoading(id);
+    try {
+      await api.mergeDedupCandidate(id);
+      loadCandidates();
+      loadStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Merge failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDismiss = async (id: number) => {
+    setActionLoading(id);
+    try {
+      await api.dismissDedupCandidate(id);
+      loadCandidates();
+      loadStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Dismiss failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleScan = async () => {
+    setScanning(true);
+    setScanMsg(null);
+    try {
+      const { status } = await api.triggerDedupScan();
+      setScanMsg(status || 'Scan triggered');
+      // Refresh after a short delay
+      setTimeout(() => { loadCandidates(); loadStats(); }, 2000);
+    } catch (err) {
+      setScanMsg(err instanceof Error ? err.message : 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleLLM = async () => {
+    setScanning(true);
+    setScanMsg(null);
+    try {
+      const { status } = await api.triggerDedupLLM();
+      setScanMsg(status || 'AI review triggered');
+      setTimeout(() => { loadCandidates(); loadStats(); }, 3000);
+    } catch (err) {
+      setScanMsg(err instanceof Error ? err.message : 'AI review failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  // Aggregate stats for display
+  const pendingCount = stats.filter(s => s.status === 'pending').reduce((sum, s) => sum + s.count, 0);
+  const exactCount = stats.filter(s => s.layer === 'exact').reduce((sum, s) => sum + s.count, 0);
+  const embeddingCount = stats.filter(s => s.layer === 'embedding').reduce((sum, s) => sum + s.count, 0);
+  const llmCount = stats.filter(s => s.layer === 'llm').reduce((sum, s) => sum + s.count, 0);
+
+  const renderBookSide = (id: string) => {
+    const book = bookDetails.get(id);
+    if (!book) return <Typography variant="body2" color="text.secondary">Book #{id}</Typography>;
+    return (
+      <Box
+        sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+        onClick={() => navigate(`/books/${book.id}`)}
+      >
+        <Typography variant="body2" fontWeight="medium" noWrap>
+          {cleanDisplayTitle(book.title)}
+        </Typography>
+        {book.author_name && (
+          <Typography variant="caption" color="text.secondary" noWrap>
+            {book.author_name}
+          </Typography>
+        )}
+      </Box>
+    );
+  };
+
+  return (
+    <Box>
+      {/* Toolbar */}
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
+        <Button
+          variant="outlined"
+          startIcon={scanning ? <CircularProgress size={16} /> : <RefreshIcon />}
+          onClick={handleScan}
+          disabled={scanning}
+          size="small"
+        >
+          Re-scan
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={scanning ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+          onClick={handleLLM}
+          disabled={scanning}
+          size="small"
+        >
+          AI Review
+        </Button>
+        {scanMsg && (
+          <Alert severity="info" sx={{ py: 0, flexGrow: 1 }} onClose={() => setScanMsg(null)}>
+            {scanMsg}
+          </Alert>
+        )}
+      </Stack>
+
+      {/* Stats chips */}
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+        <Chip label={`${pendingCount} pending`} size="small" color="warning" variant="outlined" />
+        <Chip label={`${exactCount} exact`} size="small" color="error" variant="outlined" />
+        <Chip label={`${embeddingCount} embedding`} size="small" color="primary" variant="outlined" />
+        <Chip label={`${llmCount} LLM`} size="small" color="secondary" variant="outlined" />
+        <Chip label={`${total} showing`} size="small" variant="outlined" />
+      </Stack>
+
+      {/* Filters */}
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
+        <Tabs value={statusFilter} onChange={(_, v) => { setStatusFilter(v); setPage(0); }}>
+          <Tab value="pending" label="Pending" />
+          <Tab value="merged" label="Merged" />
+          <Tab value="dismissed" label="Dismissed" />
+          <Tab value="" label="All" />
+        </Tabs>
+        <Divider orientation="vertical" flexItem />
+        <Stack direction="row" spacing={0.5}>
+          {(['', 'exact', 'embedding', 'llm'] as const).map((layer) => (
+            <Chip
+              key={layer || 'all'}
+              label={layer || 'All'}
+              size="small"
+              color={layerFilter === layer ? (LAYER_COLORS[layer] || 'default') : 'default'}
+              variant={layerFilter === layer ? 'filled' : 'outlined'}
+              onClick={() => { setLayerFilter(layer); setPage(0); }}
+              sx={{ cursor: 'pointer' }}
+            />
+          ))}
+        </Stack>
+      </Stack>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+
+      {loading ? (
+        <Box sx={{ textAlign: 'center', py: 4 }}><CircularProgress /></Box>
+      ) : candidates.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <Typography color="text.secondary">No candidates found matching the current filters.</Typography>
+        </Paper>
+      ) : (
+        <>
+          <Stack spacing={1}>
+            {candidates.map((c) => (
+              <Card key={c.id} variant="outlined">
+                <CardContent sx={{ pb: 1 }}>
+                  <Stack direction="row" spacing={2} alignItems="flex-start">
+                    {/* Book A */}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>{renderBookSide(c.entity_a_id)}</Box>
+
+                    {/* Center info */}
+                    <Stack alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+                      <MergeIcon color="action" />
+                      <Chip
+                        label={c.layer}
+                        size="small"
+                        color={LAYER_COLORS[c.layer] || 'default'}
+                      />
+                      {c.similarity != null && (
+                        <Typography variant="caption" color="text.secondary">
+                          {(c.similarity * 100).toFixed(1)}%
+                        </Typography>
+                      )}
+                    </Stack>
+
+                    {/* Book B */}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>{renderBookSide(c.entity_b_id)}</Box>
+                  </Stack>
+
+                  {c.llm_reason && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontStyle: 'italic' }}>
+                      LLM: {c.llm_verdict} &mdash; {c.llm_reason}
+                    </Typography>
+                  )}
+                </CardContent>
+                <CardActions sx={{ pt: 0 }}>
+                  {c.status === 'pending' ? (
+                    <>
+                      <Button
+                        size="small"
+                        color="primary"
+                        startIcon={actionLoading === c.id ? <CircularProgress size={14} /> : <MergeIcon />}
+                        onClick={() => handleMerge(c.id)}
+                        disabled={actionLoading != null}
+                      >
+                        Merge
+                      </Button>
+                      <Button
+                        size="small"
+                        color="inherit"
+                        startIcon={actionLoading === c.id ? <CircularProgress size={14} /> : <VisibilityOffIcon />}
+                        onClick={() => handleDismiss(c.id)}
+                        disabled={actionLoading != null}
+                      >
+                        Dismiss
+                      </Button>
+                    </>
+                  ) : (
+                    <Chip
+                      label={c.status}
+                      size="small"
+                      color={c.status === 'merged' ? 'success' : 'default'}
+                      variant="outlined"
+                    />
+                  )}
+                </CardActions>
+              </Card>
+            ))}
+          </Stack>
+
+          <TablePagination
+            component="div"
+            count={total}
+            page={page}
+            onPageChange={(_, p) => setPage(p)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
+        </>
+      )}
+    </Box>
+  );
+}
+
 // ---- Main Dedup Page ----
-const TAB_NAMES = ['books', 'book-duplicates', 'authors', 'series', 'ai', 'reconcile'] as const;
+const TAB_NAMES = ['books', 'book-duplicates', 'authors', 'series', 'ai', 'reconcile', 'embedding'] as const;
 
 export function BookDedup() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2441,6 +2765,7 @@ export function BookDedup() {
         <Tab icon={<Badge color="default"><ListIcon /></Badge>} label="Series" iconPosition="start" />
         <Tab icon={<Badge color="default"><AutoAwesomeIcon /></Badge>} label="AI Review" iconPosition="start" />
         <Tab icon={<Badge color="default"><BuildIcon /></Badge>} label="Reconcile" iconPosition="start" />
+        <Tab icon={<Badge color="default"><FingerprintIcon /></Badge>} label="Embedding" iconPosition="start" />
       </Tabs>
 
       {tab === 0 && <BookDedupTab />}
@@ -2449,6 +2774,7 @@ export function BookDedup() {
       {tab === 3 && <SeriesDedupTab />}
       {tab === 4 && <AIReviewTab />}
       {tab === 5 && <ReconcileTab />}
+      {tab === 6 && <EmbeddingDedupTab />}
     </Box>
   );
 }
