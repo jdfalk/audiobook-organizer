@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS activity_log (
     summary      TEXT     NOT NULL,
     details      JSON,
     tags         TEXT,
-    pruned_at    DATETIME
+    pruned_at    DATETIME,
+    compacted    BOOLEAN  NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_activity_timestamp        ON activity_log (timestamp);
 CREATE INDEX IF NOT EXISTS idx_activity_type_timestamp   ON activity_log (type, timestamp);
@@ -77,6 +78,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_tags             ON activity_log (tags);
 CREATE INDEX IF NOT EXISTS idx_activity_source           ON activity_log (source);
 CREATE INDEX IF NOT EXISTS idx_activity_tier_timestamp   ON activity_log (tier, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_level_timestamp  ON activity_log (level, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_compacted        ON activity_log (compacted);
 `
 
 // NewActivityStore opens (or creates) the SQLite activity log at dbPath.
@@ -95,6 +97,9 @@ func NewActivityStore(dbPath string) (*ActivityStore, error) {
 		db.Close()
 		return nil, fmt.Errorf("activity_store: schema: %w", err)
 	}
+	// Migrate: add compacted column if missing (idempotent)
+	_, _ = db.Exec(`ALTER TABLE activity_log ADD COLUMN compacted BOOLEAN NOT NULL DEFAULT 0`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_activity_compacted ON activity_log (compacted)`)
 	return &ActivityStore{db: db}, nil
 }
 
