@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.31.0
+// version: 1.32.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -144,6 +144,11 @@ type Config struct {
 	DedupAuthorHighThreshold float64 `json:"dedup_author_high_threshold"`    // default 0.92
 	DedupAuthorLowThreshold  float64 `json:"dedup_author_low_threshold"`     // default 0.80
 	DedupAutoMergeEnabled    bool    `json:"dedup_auto_merge_enabled"`       // default true
+
+	// Metadata candidate scoring (PR1)
+	MetadataEmbeddingScoringEnabled bool    `json:"metadata_embedding_scoring_enabled"` // default true
+	MetadataEmbeddingMinScore       float64 `json:"metadata_embedding_min_score"`       // default 0.50
+	MetadataEmbeddingBestMatchMin   float64 `json:"metadata_embedding_best_match_min"`  // default 0.70
 
 	// API limits
 	APIRateLimitPerMinute  int  `json:"api_rate_limit_per_minute"`
@@ -573,6 +578,11 @@ func InitConfig() {
 	AppConfig.DedupAuthorLowThreshold = 0.80
 	AppConfig.DedupAutoMergeEnabled = true
 
+	// Metadata candidate scoring (defaults used unless DB settings override)
+	AppConfig.MetadataEmbeddingScoringEnabled = true
+	AppConfig.MetadataEmbeddingMinScore = 0.50
+	AppConfig.MetadataEmbeddingBestMatchMin = 0.70
+
 	// Default Open Library dump dir to {RootDir}/openlibrary-dumps if not set
 	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
 		AppConfig.OpenLibraryDumpDir = filepath.Join(AppConfig.RootDir, "openlibrary-dumps")
@@ -869,6 +879,11 @@ func ResetToDefaults() {
 		DedupAuthorHighThreshold: 0.92,
 		DedupAuthorLowThreshold:  0.80,
 		DedupAutoMergeEnabled:    true,
+
+		// Metadata candidate scoring (PR1)
+		MetadataEmbeddingScoringEnabled: true,
+		MetadataEmbeddingMinScore:       0.50,
+		MetadataEmbeddingBestMatchMin:   0.70,
 
 		// Logging
 		LogLevel:          "info",
