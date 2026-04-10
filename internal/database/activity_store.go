@@ -198,7 +198,7 @@ func (s *ActivityStore) Query(f ActivityFilter) ([]ActivityEntry, int, error) {
 	// Fetch
 	dataQuery := `SELECT id, timestamp, tier, type, level, source,
 		operation_id, book_id, summary, details, tags, pruned_at
-		FROM activity_log` + where + ` ORDER BY timestamp DESC LIMIT ? OFFSET ?`
+		FROM activity_log` + where + ` ORDER BY compacted ASC, timestamp DESC LIMIT ? OFFSET ?`
 	dataArgs := append(args, f.Limit, f.Offset)
 
 	rows, err := s.db.Query(dataQuery, dataArgs...)
