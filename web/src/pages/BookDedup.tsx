@@ -2453,6 +2453,8 @@ function EmbeddingDedupTab() {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [bulkMergeOpen, setBulkMergeOpen] = useState(false);
+  const [bulkMerging, setBulkMerging] = useState(false);
 
   // Load stats
   const loadStats = useCallback(async () => {
@@ -2558,6 +2560,28 @@ function EmbeddingDedupTab() {
     }
   };
 
+  const handleBulkMerge = async () => {
+    setBulkMerging(true);
+    setBulkMergeOpen(false);
+    setScanMsg(null);
+    try {
+      const result = await api.bulkMergeDedupCandidates({
+        entity_type: 'book',
+        status: statusFilter || 'pending',
+        layer: layerFilter || undefined,
+      });
+      setScanMsg(
+        `Bulk merge complete: ${result.merged} merged, ${result.failed} failed (of ${result.attempted} matched)`
+      );
+      loadCandidates();
+      loadStats();
+    } catch (err) {
+      setScanMsg(err instanceof Error ? err.message : 'Bulk merge failed');
+    } finally {
+      setBulkMerging(false);
+    }
+  };
+
   // Aggregate stats for display
   const pendingCount = stats.filter(s => s.status === 'pending').reduce((sum, s) => sum + s.count, 0);
   const exactCount = stats.filter(s => s.layer === 'exact').reduce((sum, s) => sum + s.count, 0);
@@ -2592,7 +2616,7 @@ function EmbeddingDedupTab() {
           variant="outlined"
           startIcon={scanning ? <CircularProgress size={16} /> : <RefreshIcon />}
           onClick={handleScan}
-          disabled={scanning}
+          disabled={scanning || bulkMerging}
           size="small"
         >
           Re-scan
@@ -2601,10 +2625,21 @@ function EmbeddingDedupTab() {
           variant="outlined"
           startIcon={scanning ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
           onClick={handleLLM}
-          disabled={scanning}
+          disabled={scanning || bulkMerging}
           size="small"
         >
           AI Review
+        </Button>
+        <Button
+          variant="outlined"
+          color="warning"
+          startIcon={bulkMerging ? <CircularProgress size={16} /> : <MergeIcon />}
+          onClick={() => setBulkMergeOpen(true)}
+          disabled={scanning || bulkMerging || total === 0 || statusFilter !== 'pending'}
+          size="small"
+          title={statusFilter !== 'pending' ? 'Switch to Pending filter to enable bulk merge' : ''}
+        >
+          Merge Filtered ({total})
         </Button>
         {scanMsg && (
           <Alert severity="info" sx={{ py: 0, flexGrow: 1 }} onClose={() => setScanMsg(null)}>
@@ -2612,6 +2647,30 @@ function EmbeddingDedupTab() {
           </Alert>
         )}
       </Stack>
+
+      {/* Bulk merge confirmation dialog */}
+      <Dialog open={bulkMergeOpen} onClose={() => setBulkMergeOpen(false)}>
+        <DialogTitle>Merge all filtered candidates?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You are about to merge <strong>{total}</strong> candidate
+            {total === 1 ? '' : 's'} matching the current filter
+            {layerFilter ? ` (layer: ${layerFilter})` : ''}. Each candidate
+            becomes a version group; this is irreversible.
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2 }}>
+            <strong>Warning:</strong> Bulk merging trusts the scorer entirely.
+            Review a sample first if you are not confident in the current
+            filter's precision.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkMergeOpen(false)}>Cancel</Button>
+          <Button onClick={handleBulkMerge} color="warning" variant="contained">
+            Merge {total}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Stats chips */}
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>

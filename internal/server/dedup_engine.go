@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -257,9 +258,24 @@ func (de *DedupEngine) checkExactISBN(book *database.Book) error {
 	return nil
 }
 
-// checkExactTitle checks all books by the same author for near-identical titles.
+// checkExactTitle checks all books by the same author for near-identical
+// titles. Near-identical is defined as Levenshtein distance < 3 on the
+// normalized titles, WITH a series-volume safety check: if both books
+// carry a distinct series position (either on the Book.SeriesSequence
+// field or extracted from the title string), they are rejected even when
+// the raw Levenshtein falls under the threshold. Without this guard,
+// numbered series volumes like "X 3: A LitRPG Adventure (X, Book 3)" vs
+// "X 2: A LitRPG Adventure (X, Book 2)" match at distance 2 and get
+// incorrectly flagged as exact duplicates.
+//
+// Books with empty or near-empty titles are also rejected here — a pair
+// of empty strings has a Levenshtein distance of 0 and would otherwise
+// match every other empty-titled book by the same author.
 func (de *DedupEngine) checkExactTitle(book *database.Book, authorName string) error {
 	if book.AuthorID == nil {
+		return nil
+	}
+	if !hasUsableTitle(book.Title) {
 		return nil
 	}
 
@@ -269,27 +285,82 @@ func (de *DedupEngine) checkExactTitle(book *database.Book, authorName string) e
 	}
 
 	normTitle := normalizeTitle(book.Title)
+	bookSeriesNum := seriesNumberOf(book)
 	for i := range others {
 		other := &others[i]
 		if other.ID == book.ID {
 			continue
 		}
+		if !hasUsableTitle(other.Title) {
+			continue
+		}
 		dist := levenshteinDistance(normTitle, normalizeTitle(other.Title))
-		if dist < 3 {
-			sim := 1.0
-			if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
-				EntityType: "book",
-				EntityAID:  book.ID,
-				EntityBID:  other.ID,
-				Layer:      "exact",
-				Similarity: &sim,
-				Status:     "pending",
-			}); err != nil {
-				log.Printf("dedup: upsert title candidate error: %v", err)
-			}
+		if dist >= 3 {
+			continue
+		}
+		// Series-volume safety: if both books identify as distinct volumes
+		// of the same series, this is a near-title match by construction
+		// (volume digits differ by one character each) and must not become
+		// an "exact" candidate. Merging volume 3 into volume 2 would silently
+		// destroy user content.
+		if otherSeriesNum := seriesNumberOf(other); bookSeriesNum != "" && otherSeriesNum != "" && bookSeriesNum != otherSeriesNum {
+			continue
+		}
+		sim := 1.0
+		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
+			EntityType: "book",
+			EntityAID:  book.ID,
+			EntityBID:  other.ID,
+			Layer:      "exact",
+			Similarity: &sim,
+			Status:     "pending",
+		}); err != nil {
+			log.Printf("dedup: upsert title candidate error: %v", err)
 		}
 	}
 	return nil
+}
+
+// hasUsableTitle reports whether a title string is meaningful enough to
+// drive dedup decisions. Empty strings, whitespace-only strings, and
+// extremely short strings (≤ 2 characters after trimming) are rejected
+// — their embeddings collapse into a tiny region of the vector space
+// where unrelated records spuriously hit 100% cosine similarity, and
+// their Levenshtein distance against any other empty-ish title is 0.
+func hasUsableTitle(title string) bool {
+	trimmed := strings.TrimSpace(title)
+	return len([]rune(trimmed)) > 2
+}
+
+// seriesNumberOf returns a stable string representation of a book's
+// series position, if one can be determined. It prefers the structured
+// Book.SeriesSequence field; if that's unset it falls back to extracting
+// a trailing book-number token from the title (handling patterns like
+// "Title 3", "Title, Book 3", "Title (Book 3)", "Title #3"). Returns ""
+// if no position can be determined.
+func seriesNumberOf(book *database.Book) string {
+	if book.SeriesSequence != nil {
+		return strconv.Itoa(*book.SeriesSequence)
+	}
+	return extractSeriesNumberFromTitle(book.Title)
+}
+
+// seriesNumberInTitleRe matches a trailing "Book N", "#N", "(N)", "Vol N",
+// or bare trailing number after a separator, with optional surrounding
+// punctuation. Captures the digit portion only.
+var seriesNumberInTitleRe = regexp.MustCompile(`(?i)(?:book|vol(?:ume)?|#|part|pt\.?)\s*(\d+(?:\.\d+)?)`)
+
+// extractSeriesNumberFromTitle looks for an explicit "Book N" / "Vol N" /
+// "#N" token anywhere in the title and returns the matched number as a
+// string. Returns "" if none found. It only matches explicit book-volume
+// markers — a bare number in a title ("1984") is not treated as a series
+// position.
+func extractSeriesNumberFromTitle(title string) string {
+	m := seriesNumberInTitleRe.FindStringSubmatch(title)
+	if len(m) >= 2 {
+		return m[1]
+	}
+	return ""
 }
 
 // findSimilarBooks runs Layer 2 embedding similarity search for a book.
@@ -299,10 +370,25 @@ func (de *DedupEngine) findSimilarBooks(ctx context.Context, bookID string) erro
 		return fmt.Errorf("no embedding for book %s", bookID)
 	}
 
-	// Load the query book once so we can consult its version_group_id when
-	// filtering candidates. If the lookup fails we proceed without the
-	// filter — skipping pairs is an optimisation, not a correctness need.
+	// Load the query book once so we can consult its version_group_id, its
+	// title, and its series position when filtering candidates. If the
+	// lookup fails we proceed without the filter — skipping pairs is an
+	// optimisation, not a correctness need, but a nil queryBook means we
+	// must skip the version-group and series-volume checks below.
 	queryBook, _ := de.bookStore.GetBookByID(bookID)
+
+	// Guard against embeddings that should never have been created in the
+	// first place. If the query book has an empty/near-empty title, its
+	// embedding is noise and everything it matches will be garbage —
+	// treat this as a no-op rather than creating candidates.
+	if queryBook != nil && !hasUsableTitle(queryBook.Title) {
+		return nil
+	}
+
+	querySeriesNum := ""
+	if queryBook != nil {
+		querySeriesNum = seriesNumberOf(queryBook)
+	}
 
 	results, err := de.embedStore.FindSimilar("book", emb.Vector, float32(de.BookLowThreshold), 20)
 	if err != nil {
@@ -313,14 +399,31 @@ func (de *DedupEngine) findSimilarBooks(ctx context.Context, bookID string) erro
 		if r.EntityID == bookID {
 			continue
 		}
+		otherBook, _ := de.bookStore.GetBookByID(r.EntityID)
+		if otherBook == nil {
+			// Other book no longer exists — skip the candidate.
+			continue
+		}
+		// Drop candidates with no usable title on the other side. Their
+		// embedding is noise (same reason as the query-side guard above).
+		if !hasUsableTitle(otherBook.Title) {
+			continue
+		}
 		// Drop candidates that are already siblings in the same version
 		// group. The version-group system already knows these are the same
 		// logical book in different formats, so surfacing them as dedup
 		// candidates is just noise.
-		if queryBook != nil && queryBook.VersionGroupID != nil && *queryBook.VersionGroupID != "" {
-			otherBook, err := de.bookStore.GetBookByID(r.EntityID)
-			if err == nil && otherBook != nil && otherBook.VersionGroupID != nil &&
-				*otherBook.VersionGroupID == *queryBook.VersionGroupID {
+		if queryBook != nil && queryBook.VersionGroupID != nil && *queryBook.VersionGroupID != "" &&
+			otherBook.VersionGroupID != nil &&
+			*otherBook.VersionGroupID == *queryBook.VersionGroupID {
+			continue
+		}
+		// Drop candidates that are distinct volumes of a numbered series.
+		// Embeddings cannot distinguish "Book 3" from "Book 4" well because
+		// the titles are 99% identical — we have to filter these out by
+		// structured metadata.
+		if querySeriesNum != "" {
+			if otherSeriesNum := seriesNumberOf(otherBook); otherSeriesNum != "" && otherSeriesNum != querySeriesNum {
 				continue
 			}
 		}
@@ -412,6 +515,19 @@ func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) error {
 	if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
 		if err := de.embedStore.Delete("book", bookID); err != nil {
 			log.Printf("dedup: delete stale embedding for non-primary %s: %v", bookID, err)
+		}
+		return nil
+	}
+
+	// Skip books without a usable title. Embedding a blank or near-empty
+	// title produces a vector that lives in a dense cluster of other
+	// empty-title vectors, matching them all at ~100% cosine — the exact
+	// false-positive pattern the user saw in prod. We also delete any
+	// stale embedding for the book in case a pre-fix backfill had stored
+	// one, so the next similarity scan is clean.
+	if !hasUsableTitle(book.Title) {
+		if err := de.embedStore.Delete("book", bookID); err != nil {
+			log.Printf("dedup: delete stale embedding for empty-title %s: %v", bookID, err)
 		}
 		return nil
 	}
@@ -576,7 +692,9 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 	// fetched once per purge run.
 	type bookMeta struct {
 		isNonPrimary   bool
+		emptyTitle     bool
 		versionGroupID string
+		seriesNumber   string
 		missing        bool
 	}
 	cache := make(map[string]bookMeta, len(candidates)*2)
@@ -594,9 +712,13 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
 			m.isNonPrimary = true
 		}
+		if !hasUsableTitle(b.Title) {
+			m.emptyTitle = true
+		}
 		if b.VersionGroupID != nil {
 			m.versionGroupID = *b.VersionGroupID
 		}
+		m.seriesNumber = seriesNumberOf(b)
 		cache[id] = m
 		return m
 	}
@@ -619,7 +741,16 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 			stale = true
 		case a.isNonPrimary || b.isNonPrimary:
 			stale = true
+		case a.emptyTitle || b.emptyTitle:
+			// One or both books have no usable title — their embedding
+			// was garbage and any similarity match they produced is noise.
+			stale = true
 		case a.versionGroupID != "" && a.versionGroupID == b.versionGroupID:
+			stale = true
+		case a.seriesNumber != "" && b.seriesNumber != "" && a.seriesNumber != b.seriesNumber:
+			// Distinct volumes of a numbered series should never be dedup
+			// candidates, even if the embedding cosine is close to 1.0 or
+			// Levenshtein on titles lands under the exact-match threshold.
 			stale = true
 		}
 		if !stale {
