@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -152,7 +152,9 @@ func (s *Server) dismissDedupCandidate(c *gin.Context) {
 }
 
 // triggerDedupScan handles POST /api/v1/dedup/scan.
-// Starts a background full embedding-based dedup scan.
+// Starts a background full embedding-based dedup scan. Before scanning,
+// any stale candidates (non-primary versions, same-group pairs, orphaned
+// book IDs) are purged so the scan starts from a clean slate.
 func (s *Server) triggerDedupScan(c *gin.Context) {
 	if s.dedupEngine == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dedup engine not available"})
@@ -161,6 +163,11 @@ func (s *Server) triggerDedupScan(c *gin.Context) {
 
 	go func() {
 		ctx := context.Background()
+		if deleted, err := s.dedupEngine.PurgeStaleCandidates(ctx); err != nil {
+			log.Printf("[dedup] purge stale candidates error: %v", err)
+		} else if deleted > 0 {
+			log.Printf("[dedup] purged %d stale candidate(s) before scan", deleted)
+		}
 		if err := s.dedupEngine.FullScan(ctx, func(done, total int) {
 			log.Printf("[dedup] scan progress: %d/%d", done, total)
 		}); err != nil {
@@ -191,6 +198,7 @@ func (s *Server) triggerDedupLLM(c *gin.Context) {
 
 // triggerDedupRefresh handles POST /api/v1/dedup/refresh.
 // Re-runs the full scan (re-embeds stale entries then scans for candidates).
+// Purges stale candidates first so the refresh starts clean.
 func (s *Server) triggerDedupRefresh(c *gin.Context) {
 	if s.dedupEngine == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dedup engine not available"})
@@ -199,6 +207,11 @@ func (s *Server) triggerDedupRefresh(c *gin.Context) {
 
 	go func() {
 		ctx := context.Background()
+		if deleted, err := s.dedupEngine.PurgeStaleCandidates(ctx); err != nil {
+			log.Printf("[dedup] purge stale candidates error: %v", err)
+		} else if deleted > 0 {
+			log.Printf("[dedup] purged %d stale candidate(s) before refresh", deleted)
+		}
 		if err := s.dedupEngine.FullScan(ctx, func(done, total int) {
 			log.Printf("[dedup] refresh progress: %d/%d", done, total)
 		}); err != nil {
