@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.153.0
+// version: 1.154.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -856,6 +856,18 @@ func NewServer() *Server {
 						ai.NewEmbeddingScorer(embedClient, embeddingStore),
 					)
 					log.Println("[INFO] Metadata candidate scoring: embedding tier enabled")
+				}
+
+				// Wire the LLM rerank scorer. It reuses the same llmParser
+				// the dedup engine uses for Layer 3 review. The scorer is
+				// injected unconditionally — the per-search use_rerank flag
+				// and the MetadataLLMScoringEnabled config key together gate
+				// whether it actually fires.
+				server.metadataFetchService.SetMetadataLLMScorer(ai.NewLLMScorer(llmParser))
+				if config.AppConfig.MetadataLLMScoringEnabled {
+					log.Println("[INFO] Metadata candidate scoring: LLM rerank tier enabled (opt-in per search)")
+				} else {
+					log.Println("[INFO] Metadata candidate scoring: LLM rerank tier wired but disabled in config")
 				}
 			} else {
 				log.Println("[INFO] Embedding store opened (dedup engine disabled — no API key or embedding_enabled=false)")
