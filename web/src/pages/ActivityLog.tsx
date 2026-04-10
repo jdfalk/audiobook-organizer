@@ -1,8 +1,8 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.1.0
+// version: 2.2.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -16,6 +16,7 @@ import {
   DialogTitle,
   IconButton,
   LinearProgress,
+  Menu,
   MenuItem,
   Pagination,
   Paper,
@@ -38,7 +39,7 @@ import ClearIcon from '@mui/icons-material/Clear.js';
 import UndoIcon from '@mui/icons-material/Undo.js';
 import CancelIcon from '@mui/icons-material/Cancel.js';
 import FilterListIcon from '@mui/icons-material/FilterList.js';
-import { fetchActivity, fetchActivitySources } from '../services/activityApi';
+import { fetchActivity, fetchActivitySources, compactActivityLog } from '../services/activityApi';
 import type { ActivityEntry, SourceCount } from '../services/activityApi';
 import * as api from '../services/api';
 
@@ -66,6 +67,7 @@ const TIER_COLORS: Record<string, string> = {
   audit: '#1976d2',
   change: '#9c27b0',
   debug: '#757575',
+  digest: '#00897b',
 };
 
 function levelChip(level: string) {
@@ -113,7 +115,7 @@ export default function ActivityLog() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [tiers, setTiers] = useState<Set<string>>(new Set(['audit', 'change']));
+  const [tiers, setTiers] = useState<Set<string>>(new Set(['audit', 'change', 'digest']));
   const [typeFilter, setTypeFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [operationId, setOperationId] = useState('');
@@ -147,6 +149,11 @@ export default function ActivityLog() {
 
   // Auto-refresh
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Compact
+  const [compactAnchor, setCompactAnchor] = useState<null | HTMLElement>(null);
+  const [compacting, setCompacting] = useState(false);
+  const [expandedDigests, setExpandedDigests] = useState<Set<number>>(new Set());
 
   // Revert dialog
   const [revertEntry, setRevertEntry] = useState<ActivityEntry | null>(null);
@@ -220,7 +227,7 @@ export default function ActivityLog() {
       const excludeStr = excludedSources.size > 0 ? [...excludedSources].join(',') : undefined;
 
       // Server-side tier filtering via exclude_tiers
-      const allTiers = ['audit', 'change', 'debug'];
+      const allTiers = ['audit', 'change', 'debug', 'digest'];
       const inactiveTiers = allTiers.filter((t) => !tiers.has(t));
       const excludeTiersStr = inactiveTiers.length > 0 ? inactiveTiers.join(',') : undefined;
 
@@ -341,6 +348,20 @@ export default function ActivityLog() {
     }
   };
 
+  const handleCompact = async (days: number) => {
+    setCompactAnchor(null);
+    setCompacting(true);
+    try {
+      const result = await compactActivityLog(days);
+      alert(`Compacted ${result.days_compacted} days, removed ${result.entries_deleted.toLocaleString()} entries`);
+      loadFeed(page);
+    } catch (err) {
+      alert(`Compaction failed: ${err}`);
+    } finally {
+      setCompacting(false);
+    }
+  };
+
   const toggleTier = (tier: string) => {
     setTiers((prev) => {
       const next = new Set(prev);
@@ -355,9 +376,10 @@ export default function ActivityLog() {
 
   const hasActiveFilters =
     search !== '' ||
-    tiers.size !== 2 ||
+    tiers.size !== 3 ||
     !tiers.has('audit') ||
     !tiers.has('change') ||
+    !tiers.has('digest') ||
     typeFilter !== '' ||
     levelFilter !== '' ||
     operationId !== '' ||
@@ -367,7 +389,7 @@ export default function ActivityLog() {
 
   // Count active non-search filters (for mobile badge)
   const activeFilterCount = [
-    tiers.size !== 2 || !tiers.has('audit') || !tiers.has('change'),
+    tiers.size !== 3 || !tiers.has('audit') || !tiers.has('change') || !tiers.has('digest'),
     typeFilter !== '',
     levelFilter !== '',
     operationId !== '',
@@ -378,7 +400,7 @@ export default function ActivityLog() {
 
   const clearFilters = () => {
     setSearch('');
-    setTiers(new Set(['audit', 'change']));
+    setTiers(new Set(['audit', 'change', 'digest']));
     setTypeFilter('');
     setLevelFilter('');
     setOperationId('');
@@ -393,7 +415,7 @@ export default function ActivityLog() {
   // Shared filter controls (used in both mobile collapsed and desktop layouts)
   const tierChips = (
     <Stack direction="row" spacing={1} flexWrap="wrap">
-      {['audit', 'change', 'debug'].map((tier) => (
+      {['audit', 'change', 'debug', 'digest'].map((tier) => (
         <Chip
           key={tier}
           label={tiers.has(tier) ? `\u2713 ${tier}` : tier}
@@ -760,6 +782,28 @@ export default function ActivityLog() {
                 {/* Sources */}
                 {sourcesButton(true)}
 
+                {/* Compact button */}
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={compacting}
+                  onClick={(e) => setCompactAnchor(e.currentTarget)}
+                  fullWidth
+                >
+                  {compacting ? 'Compacting…' : 'Compact'}
+                </Button>
+                <Menu
+                  anchorEl={compactAnchor}
+                  open={Boolean(compactAnchor)}
+                  onClose={() => setCompactAnchor(null)}
+                >
+                  {[7, 14, 30, 60].map((days) => (
+                    <MenuItem key={days} onClick={() => handleCompact(days)}>
+                      Older than {days} days
+                    </MenuItem>
+                  ))}
+                </Menu>
+
                 {/* Auto-refresh (moved here on mobile) */}
                 <Button
                   size="small"
@@ -852,6 +896,27 @@ export default function ActivityLog() {
 
               {/* Sources dropdown */}
               {sourcesButton()}
+
+              {/* Compact button */}
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={compacting}
+                onClick={(e) => setCompactAnchor(e.currentTarget)}
+              >
+                {compacting ? 'Compacting…' : 'Compact'}
+              </Button>
+              <Menu
+                anchorEl={compactAnchor}
+                open={Boolean(compactAnchor)}
+                onClose={() => setCompactAnchor(null)}
+              >
+                {[7, 14, 30, 60].map((days) => (
+                  <MenuItem key={days} onClick={() => handleCompact(days)}>
+                    Older than {days} days
+                  </MenuItem>
+                ))}
+              </Menu>
             </Stack>
 
             {/* Row 3: Active filter summary */}
@@ -899,78 +964,184 @@ export default function ActivityLog() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {entries.map((entry) => (
-                <TableRow
-                  key={entry.id}
-                  hover
-                  sx={{
-                    bgcolor: rowBgColor(entry),
-                    opacity: entry.tier === 'debug' ? 0.6 : 1,
-                  }}
-                >
-                  <TableCell sx={{ whiteSpace: 'nowrap', color: 'text.secondary', fontSize: '0.75rem' }}>
-                    {isMobile ? formatTimestampCompact(entry.timestamp) : formatTimestamp(entry.timestamp)}
-                  </TableCell>
-                  <TableCell>{levelChip(entry.level)}</TableCell>
-                  <TableCell>
-                    <Chip size="small" label={(entry.type || '').replace(/_/g, ' ')} />
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: isMobile ? 180 : 400 }}>
-                    <Typography variant="body2" noWrap title={entry.summary}>
-                      {entry.summary}
-                    </Typography>
-                    {entry.operation_id && !operationId && (
-                      <Typography
-                        variant="caption"
-                        sx={{ cursor: 'pointer', color: 'primary.main' }}
-                        onClick={() => setOperationId(entry.operation_id!)}
+              {entries.map((entry) => {
+                if (entry.tier === 'digest') {
+                  const isExpanded = expandedDigests.has(Number(entry.id));
+                  const details = entry.details as {
+                    date?: string;
+                    original_count?: number;
+                    counts?: Record<string, number>;
+                    items?: Array<{ type: string; book?: string; book_id?: string; summary: string; details?: string }>;
+                    truncated?: boolean;
+                    truncated_count?: number;
+                  } | undefined;
+                  const counts = details?.counts || {};
+                  const items = details?.items || [];
+
+                  return (
+                    <React.Fragment key={entry.id}>
+                      <TableRow
+                        hover
+                        sx={{ bgcolor: 'rgba(0, 137, 123, 0.06)', cursor: 'pointer' }}
+                        onClick={() => {
+                          setExpandedDigests((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(Number(entry.id))) next.delete(Number(entry.id));
+                            else next.add(Number(entry.id));
+                            return next;
+                          });
+                        }}
                       >
-                        view operation &rarr;
-                      </Typography>
-                    )}
-                    {entry.book_id && (
-                      <Typography
-                        variant="caption"
-                        sx={{ cursor: 'pointer', color: 'primary.main', ml: 1 }}
-                        onClick={() => navigate(`/library/${entry.book_id}`)}
-                      >
-                        book &rarr;
-                      </Typography>
-                    )}
-                  </TableCell>
-                  {!isMobile && (
-                    <TableCell>
-                      <Typography variant="caption" color="text.secondary">
-                        {entry.source}
-                      </Typography>
-                    </TableCell>
-                  )}
-                  {!isMobile && (
-                    <TableCell>
-                      {entry.tags && entry.tags.length > 0 ? (
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                          {entry.tags.map((tag) => (
-                            <Chip key={tag} size="small" label={tag} variant="outlined" />
-                          ))}
-                        </Stack>
-                      ) : null}
-                    </TableCell>
-                  )}
-                  <TableCell>
-                    {entry.operation_id &&
-                      (entry.type === 'organize_completed' || entry.type === 'metadata_applied') && (
-                        <Tooltip title="Revert operation">
-                          <IconButton
-                            size="small"
-                            onClick={() => setRevertEntry(entry)}
-                          >
-                            <UndoIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <TableCell sx={{ whiteSpace: 'nowrap', color: 'text.secondary', fontSize: '0.75rem' }}>
+                          {details?.date || entry.timestamp}
+                        </TableCell>
+                        <TableCell>
+                          <Chip size="small" label="digest" sx={{ bgcolor: '#00897b', color: 'white' }} />
+                        </TableCell>
+                        <TableCell>
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                            {Object.entries(counts).slice(0, 6).map(([type, count]) => (
+                              <Chip key={type} size="small" variant="outlined" label={`${count} ${type.replace(/_/g, ' ')}`} />
+                            ))}
+                          </Stack>
+                        </TableCell>
+                        <TableCell colSpan={isMobile ? 1 : 2}>
+                          <Typography variant="body2">
+                            {entry.summary} {isExpanded ? '▾' : '▸'}
+                          </Typography>
+                        </TableCell>
+                        {!isMobile && <TableCell />}
+                        <TableCell />
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow>
+                          <TableCell colSpan={isMobile ? 5 : 7} sx={{ py: 0, px: 2 }}>
+                            <Box sx={{ maxHeight: 400, overflow: 'auto', py: 1 }}>
+                              {items.map((item, idx) => (
+                                <Stack
+                                  key={idx}
+                                  direction="row"
+                                  spacing={1}
+                                  alignItems="center"
+                                  sx={{
+                                    py: 0.5,
+                                    borderBottom: '1px solid',
+                                    borderColor: 'divider',
+                                    color: item.type === 'error' ? 'error.main' : 'text.primary',
+                                  }}
+                                >
+                                  <Chip size="small" label={item.type.replace(/_/g, ' ')} sx={{ minWidth: 100 }} />
+                                  {item.book_id ? (
+                                    <Typography
+                                      variant="body2"
+                                      component="span"
+                                      sx={{ cursor: 'pointer', color: 'primary.main', fontWeight: 500 }}
+                                      onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate(`/library/${item.book_id}`); }}
+                                    >
+                                      {item.book || item.book_id}
+                                    </Typography>
+                                  ) : (
+                                    <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
+                                      {item.book || '—'}
+                                    </Typography>
+                                  )}
+                                  <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                                    {item.summary}
+                                  </Typography>
+                                  {item.details && (
+                                    <Typography variant="caption" color="error.main">
+                                      {item.details}
+                                    </Typography>
+                                  )}
+                                </Stack>
+                              ))}
+                              {details?.truncated && (
+                                <Typography variant="caption" color="text.secondary" sx={{ pt: 1, display: 'block' }}>
+                                  … and {details.truncated_count?.toLocaleString()} more entries not shown
+                                </Typography>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
                       )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </React.Fragment>
+                  );
+                }
+
+                // Regular entry
+                return (
+                  <TableRow
+                    key={entry.id}
+                    hover
+                    sx={{
+                      bgcolor: rowBgColor(entry),
+                      opacity: entry.tier === 'debug' ? 0.6 : 1,
+                    }}
+                  >
+                    <TableCell sx={{ whiteSpace: 'nowrap', color: 'text.secondary', fontSize: '0.75rem' }}>
+                      {isMobile ? formatTimestampCompact(entry.timestamp) : formatTimestamp(entry.timestamp)}
+                    </TableCell>
+                    <TableCell>{levelChip(entry.level)}</TableCell>
+                    <TableCell>
+                      <Chip size="small" label={(entry.type || '').replace(/_/g, ' ')} />
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: isMobile ? 180 : 400 }}>
+                      <Typography variant="body2" noWrap title={entry.summary}>
+                        {entry.summary}
+                      </Typography>
+                      {entry.operation_id && !operationId && (
+                        <Typography
+                          variant="caption"
+                          sx={{ cursor: 'pointer', color: 'primary.main' }}
+                          onClick={() => setOperationId(entry.operation_id!)}
+                        >
+                          view operation &rarr;
+                        </Typography>
+                      )}
+                      {entry.book_id && (
+                        <Typography
+                          variant="caption"
+                          sx={{ cursor: 'pointer', color: 'primary.main', ml: 1 }}
+                          onClick={() => navigate(`/library/${entry.book_id}`)}
+                        >
+                          book &rarr;
+                        </Typography>
+                      )}
+                    </TableCell>
+                    {!isMobile && (
+                      <TableCell>
+                        <Typography variant="caption" color="text.secondary">
+                          {entry.source}
+                        </Typography>
+                      </TableCell>
+                    )}
+                    {!isMobile && (
+                      <TableCell>
+                        {entry.tags && entry.tags.length > 0 ? (
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                            {entry.tags.map((tag) => (
+                              <Chip key={tag} size="small" label={tag} variant="outlined" />
+                            ))}
+                          </Stack>
+                        ) : null}
+                      </TableCell>
+                    )}
+                    <TableCell>
+                      {entry.operation_id &&
+                        (entry.type === 'organize_completed' || entry.type === 'metadata_applied') && (
+                          <Tooltip title="Revert operation">
+                            <IconButton
+                              size="small"
+                              onClick={() => setRevertEntry(entry)}
+                            >
+                              <UndoIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
