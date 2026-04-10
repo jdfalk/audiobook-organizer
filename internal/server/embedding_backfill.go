@@ -1,5 +1,5 @@
 // file: internal/server/embedding_backfill.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 
 package server
@@ -43,7 +43,24 @@ func (s *Server) runEmbeddingBackfill() {
 
 	ctx := context.Background()
 	offset := 0
-	embedded := 0
+
+	// Honest counters: the previous version of this loop reported
+	// "N books embedded" for every successful EmbedBook return, which
+	// included non-primary skips, empty-title skips, and cached-hash
+	// no-ops. A re-run against a stable library would report ~24K
+	// "embedded" books even though zero API calls had been made and
+	// roughly half the records were non-primary version siblings the
+	// scorer never touches. We now count each EmbedStatus into its own
+	// bucket and log a breakdown at the end.
+	var (
+		statEmbedded            int
+		statCached              int
+		statSkippedNonPrimary   int
+		statSkippedEmptyTitle   int
+		statErrors              int
+	)
+	visited := 0
+	nextProgressAt := 500
 
 	// Backfill books in batches
 	for {
@@ -52,18 +69,36 @@ func (s *Server) runEmbeddingBackfill() {
 			break
 		}
 		for _, book := range books {
-			if err := s.dedupEngine.EmbedBook(ctx, book.ID); err != nil {
+			status, err := s.dedupEngine.EmbedBook(ctx, book.ID)
+			if err != nil {
 				log.Printf("[WARN] backfill embed book %s: %v", book.ID, err)
-			} else {
-				embedded++
+				statErrors++
+				visited++
+				continue
 			}
+			switch status {
+			case EmbedStatusEmbedded:
+				statEmbedded++
+			case EmbedStatusCached:
+				statCached++
+			case EmbedStatusSkippedNonPrimary:
+				statSkippedNonPrimary++
+			case EmbedStatusSkippedEmptyTitle:
+				statSkippedEmptyTitle++
+			}
+			visited++
 		}
 		offset += len(books)
-		if embedded%500 == 0 && embedded > 0 {
-			log.Printf("[INFO] Embedding backfill progress: %d books embedded", embedded)
+		if visited >= nextProgressAt {
+			log.Printf("[INFO] Embedding backfill progress: %d books visited (embedded=%d cached=%d skipped_non_primary=%d skipped_empty_title=%d)",
+				visited, statEmbedded, statCached, statSkippedNonPrimary, statSkippedEmptyTitle)
+			for nextProgressAt <= visited {
+				nextProgressAt += 500
+			}
 		}
 	}
-	log.Printf("[INFO] Embedded %d books", embedded)
+	log.Printf("[INFO] Book backfill complete: visited=%d embedded=%d cached=%d skipped_non_primary=%d skipped_empty_title=%d errors=%d",
+		visited, statEmbedded, statCached, statSkippedNonPrimary, statSkippedEmptyTitle, statErrors)
 
 	// Backfill authors
 	authorCount := 0
@@ -81,8 +116,8 @@ func (s *Server) runEmbeddingBackfill() {
 	}
 	log.Printf("[INFO] Embedded %d authors", authorCount)
 
-	totalEmbedded := embedded + authorCount
-	log.Printf("[INFO] Embedding backfill complete: %d total entities", totalEmbedded)
+	log.Printf("[INFO] Embedding backfill complete: %d books (embedded=%d, cached=%d), %d authors",
+		visited, statEmbedded, statCached, authorCount)
 
 	// Purge stale candidates from any previous scan before running a new
 	// one. This is what cleans up the 16K+ non-primary / same-group rows

@@ -278,7 +278,7 @@ func TestDedupEngine_EmbedBook_NilClient(t *testing.T) {
 		return &database.Book{ID: "BOOK_1", Title: "Test Book"}, nil
 	}
 
-	err := engine.EmbedBook(context.Background(), "BOOK_1")
+	_, err := engine.EmbedBook(context.Background(), "BOOK_1")
 	if err == nil {
 		t.Fatal("expected error when embedClient is nil")
 	}
