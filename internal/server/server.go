@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.148.0
+// version: 1.149.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -702,6 +702,8 @@ type Server struct {
 	diagnosticsService     *DiagnosticsService
 	changelogService       *ChangelogService
 	activityService        *ActivityService
+	embeddingStore         *database.EmbeddingStore
+	dedupEngine            *DedupEngine
 	activityWriter         *activityWriter
 	http3Server            *http3.Server
 }
@@ -811,6 +813,34 @@ func NewServer() *Server {
 			log.Printf("[WARN] Failed to open activity log store: %v", err)
 		} else {
 			server.activityService = NewActivityService(activityStore)
+		}
+	}
+
+	// Open embedding store for dedup
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
+		embeddingDBPath := filepath.Join(filepath.Dir(dbPath), "embeddings.db")
+		embeddingStore, err := database.NewEmbeddingStore(embeddingDBPath)
+		if err != nil {
+			log.Printf("[WARN] Failed to open embedding store: %v", err)
+		} else {
+			server.embeddingStore = embeddingStore
+			if config.AppConfig.OpenAIAPIKey != "" && config.AppConfig.EmbeddingEnabled {
+				embedClient := ai.NewEmbeddingClient(config.AppConfig.OpenAIAPIKey)
+				server.dedupEngine = &DedupEngine{
+					embedStore:          embeddingStore,
+					bookStore:           database.GlobalStore,
+					embedClient:         embedClient,
+					mergeService:        server.mergeService,
+					BookHighThreshold:   config.AppConfig.DedupBookHighThreshold,
+					BookLowThreshold:    config.AppConfig.DedupBookLowThreshold,
+					AuthorHighThreshold: config.AppConfig.DedupAuthorHighThreshold,
+					AuthorLowThreshold:  config.AppConfig.DedupAuthorLowThreshold,
+					AutoMergeEnabled:    config.AppConfig.DedupAutoMergeEnabled,
+				}
+				log.Println("[INFO] Embedding store and dedup engine initialized")
+			} else {
+				log.Println("[INFO] Embedding store opened (dedup engine disabled — no API key or embedding_enabled=false)")
+			}
 		}
 	}
 
@@ -1327,6 +1357,15 @@ func (s *Server) Start(cfg ServerConfig) error {
 	if fileWatcher != nil {
 		fileWatcher.Stop()
 		log.Println("[INFO] File watcher stopped")
+	}
+
+	// Close embedding store
+	if s.embeddingStore != nil {
+		if err := s.embeddingStore.Close(); err != nil {
+			log.Printf("[WARN] Failed to close embedding store: %v", err)
+		} else {
+			log.Println("[INFO] Embedding store closed")
+		}
 	}
 
 	// Close AI scan store
