@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.11.0
+// version: 3.12.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -2768,7 +2768,14 @@ function EmbeddingDedupTab() {
   };
 
   // Aggregate stats for display
+  // Status-dimension counts. The layer-dimension counts below intentionally
+  // aggregate ACROSS statuses so "10 exact" means "10 exact-layer candidates
+  // of any status", matching the existing semantics users have seen. Status
+  // counts only count rows in that specific status bucket.
   const pendingCount = stats.filter(s => s.status === 'pending').reduce((sum, s) => sum + s.count, 0);
+  const mergedCount = stats.filter(s => s.status === 'merged').reduce((sum, s) => sum + s.count, 0);
+  const dismissedCount = stats.filter(s => s.status === 'dismissed').reduce((sum, s) => sum + s.count, 0);
+  const allCount = pendingCount + mergedCount + dismissedCount;
   const exactCount = stats.filter(s => s.layer === 'exact').reduce((sum, s) => sum + s.count, 0);
   const embeddingCount = stats.filter(s => s.layer === 'embedding').reduce((sum, s) => sum + s.count, 0);
   const llmCount = stats.filter(s => s.layer === 'llm').reduce((sum, s) => sum + s.count, 0);
@@ -3001,22 +3008,26 @@ function EmbeddingDedupTab() {
         </DialogActions>
       </Dialog>
 
-      {/* Stats chips */}
+      {/* Stats chips — one per status bucket plus per-layer breakdown. */}
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <Chip label={`${pendingCount} pending`} size="small" color="warning" variant="outlined" />
+        <Chip label={`${mergedCount} merged`} size="small" color="success" variant="outlined" />
+        <Chip label={`${dismissedCount} dismissed`} size="small" color="default" variant="outlined" />
         <Chip label={`${exactCount} exact`} size="small" color="error" variant="outlined" />
         <Chip label={`${embeddingCount} embedding`} size="small" color="primary" variant="outlined" />
         <Chip label={`${llmCount} LLM`} size="small" color="secondary" variant="outlined" />
         <Chip label={`${total} showing`} size="small" variant="outlined" />
       </Stack>
 
-      {/* Filters */}
+      {/* Filters — tab labels carry the running per-status count so you
+          can see at a glance how many you've merged/dismissed without
+          needing to click into each bucket. */}
       <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
         <Tabs value={statusFilter} onChange={(_, v) => { setStatusFilter(v); setPage(0); }}>
-          <Tab value="pending" label="Pending" />
-          <Tab value="merged" label="Merged" />
-          <Tab value="dismissed" label="Dismissed" />
-          <Tab value="" label="All" />
+          <Tab value="pending" label={`Pending (${pendingCount})`} />
+          <Tab value="merged" label={`Merged (${mergedCount})`} />
+          <Tab value="dismissed" label={`Dismissed (${dismissedCount})`} />
+          <Tab value="" label={`All (${allCount})`} />
         </Tabs>
         <Divider orientation="vertical" flexItem />
         <Stack direction="row" spacing={0.5}>
