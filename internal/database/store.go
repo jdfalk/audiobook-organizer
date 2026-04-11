@@ -317,6 +317,25 @@ type Store interface {
 	SetBookUserTags(bookID string, tags []string) error
 	AddBookUserTag(bookID string, tag string) error
 	RemoveBookUserTag(bookID string, tag string) error
+
+	// Book Alternative Titles (variant names used for dedup + search)
+	GetBookAlternativeTitles(bookID string) ([]BookAlternativeTitle, error)
+	AddBookAlternativeTitle(bookID, title, source, language string) error
+	RemoveBookAlternativeTitle(bookID, title string) error
+	SetBookAlternativeTitles(bookID string, titles []BookAlternativeTitle) error
+}
+
+// BookAlternativeTitle represents a variant name for a book — romaji
+// vs English, ampersand vs "and", subtitle reordering, rebrands, etc.
+// Used by the dedup engine's Layer 1 exact title matching and by
+// library search so either form finds the book.
+type BookAlternativeTitle struct {
+	ID        int64     `json:"id"`
+	BookID    string    `json:"book_id"`
+	Title     string    `json:"title"`
+	Source    string    `json:"source"`   // "user", "metadata_fetch", "auto_ampersand", etc.
+	Language  string    `json:"language,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Common data structures used by all store implementations

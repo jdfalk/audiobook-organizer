@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -289,7 +289,7 @@ func (de *DedupEngine) checkExactTitle(book *database.Book, authorName string) e
 		return fmt.Errorf("get books by author: %w", err)
 	}
 
-	normTitle := normalizeTitle(book.Title)
+	bookForms := de.allNormalizedTitleForms(book)
 	bookSeriesNum := seriesNumberOf(book)
 	for i := range others {
 		other := &others[i]
@@ -299,11 +299,21 @@ func (de *DedupEngine) checkExactTitle(book *database.Book, authorName string) e
 		if !hasUsableTitle(other.Title) {
 			continue
 		}
-		otherNormTitle := normalizeTitle(other.Title)
-		dist := levenshteinDistance(normTitle, otherNormTitle)
+		otherForms := de.allNormalizedTitleForms(other)
+		// Closest-form distance: a match exists if ANY form of book is
+		// within Levenshtein 2 of ANY form of other. Alt titles let the
+		// user encode variants the normalizer can't auto-derive
+		// (manga romaji vs English, rebrands, subtitle reorderings).
+		dist := minLevenshteinBetweenForms(bookForms, otherForms)
 		if dist >= 3 {
 			continue
 		}
+		// Keep the original primary-title pair as the "chosen" form for
+		// downstream guards (series-number, digit-diff). Alt-title
+		// matching is only for reaching the pair — once we're past the
+		// distance threshold we still sanity-check with primary titles.
+		normTitle := normalizeTitle(book.Title)
+		otherNormTitle := normalizeTitle(other.Title)
 		// Series-volume safety (primary): if both books identify as
 		// distinct volumes of the same series via structured metadata or
 		// an explicit "Book N" / "bk N" / "Vol N" / "#N" marker in the
@@ -1278,6 +1288,65 @@ func normalizeTitle(title string) string {
 	}
 
 	return title
+}
+
+// allNormalizedTitleForms returns the set of normalized title strings
+// for a book — its primary title plus every alternative title stored
+// in book_alternative_titles. Alt titles let users encode variants
+// the normalizer can't auto-derive: manga romaji vs translated
+// English, rebrands where the title changed entirely, subtitle
+// reorderings, etc. The exact-match Layer uses this set to answer
+// "does ANY form of book A match ANY form of book B" — a single
+// user-entered alt title can rescue a previously-missed duplicate.
+//
+// Errors from the alt-title lookup are swallowed and logged — if
+// the alt-title store is unavailable we fall back to primary-only
+// matching, which is the pre-alt-titles behavior.
+func (de *DedupEngine) allNormalizedTitleForms(book *database.Book) []string {
+	forms := []string{normalizeTitle(book.Title)}
+	seen := map[string]struct{}{forms[0]: {}}
+	if de.bookStore != nil {
+		if alts, err := de.bookStore.GetBookAlternativeTitles(book.ID); err == nil {
+			for _, alt := range alts {
+				norm := normalizeTitle(alt.Title)
+				if norm == "" {
+					continue
+				}
+				if _, dup := seen[norm]; dup {
+					continue
+				}
+				seen[norm] = struct{}{}
+				forms = append(forms, norm)
+			}
+		} else {
+			log.Printf("dedup: alt title lookup for %s: %v", book.ID, err)
+		}
+	}
+	return forms
+}
+
+// minLevenshteinBetweenForms returns the minimum Levenshtein distance
+// between any pair of strings drawn one from each input slice. Used by
+// checkExactTitle to find the closest match across primary + alt title
+// forms of two books. With typical N, M of 1-5 the O(N*M) nested loop
+// is trivially fast and much simpler than any clever early-exit.
+func minLevenshteinBetweenForms(a, b []string) int {
+	if len(a) == 0 || len(b) == 0 {
+		return 1 << 30
+	}
+	minDist := 1 << 30
+	for _, x := range a {
+		for _, y := range b {
+			d := levenshteinDistance(x, y)
+			if d < minDist {
+				minDist = d
+				if minDist == 0 {
+					return 0
+				}
+			}
+		}
+	}
+	return minDist
 }
 
 // derefStr is defined in audiobook_service.go

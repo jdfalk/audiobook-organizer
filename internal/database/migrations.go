@@ -310,6 +310,12 @@ var migrations = []Migration{
 		Up:          migration045Up,
 		Down:        nil,
 	},
+	{
+		Version:     46,
+		Description: "Add book_alternative_titles table for search + dedup variant matching",
+		Up:          migration046Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2325,5 +2331,52 @@ func migration045Up(store Store) error {
 		}
 	}
 	log.Println("  - Created operation_results table")
+	return nil
+}
+
+// migration046Up creates the book_alternative_titles table. This powers
+// two things:
+//
+//  1. Dedup Layer 1 exact-title matching can iterate every alt title on
+//     both sides of a comparison, so manga romaji vs English, subtitle
+//     reordering, or rebrands all collapse to the same normalized form.
+//  2. Library search can index alt titles alongside the primary title,
+//     so searching for either variant finds the book.
+//
+// Schema:
+//
+//	id         — autoincrement primary key
+//	book_id    — books.id (cascade on delete)
+//	title      — the alternate title string
+//	source     — where the alt came from: 'user', 'metadata_fetch',
+//	             'auto_ampersand', 'itunes_import', 'manga_romaji', etc.
+//	language   — optional ISO-639 code for the language variant
+//	created_at — audit trail
+//
+// UNIQUE(book_id, title) prevents dup rows for the same variant.
+func migration046Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS book_alternative_titles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            book_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'user',
+            language TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(book_id, title)
+        )`,
+		`CREATE INDEX IF NOT EXISTS idx_book_alt_titles_book ON book_alternative_titles(book_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_alt_titles_title ON book_alternative_titles(title)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 46: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Created book_alternative_titles table")
 	return nil
 }
