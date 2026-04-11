@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_support.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 //
 // TagLib WASM writer (default, no CGO required).
@@ -54,4 +54,23 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	}
 
 	return nil
+}
+
+// readTagsWithTaglib reads tags from a file via the TagLib WASM runtime.
+// Returns a flat key → list-of-values map exactly like TagLib's property
+// interface: "TITLE" → ["Foundation and Empire"], "ARTIST" → ["Isaac
+// Asimov"], plus any custom properties the file has (AUDIOBOOK_ORGANIZER_*,
+// SERIES, SERIES_INDEX, NARRATOR, etc.). Used as a fallback by
+// ExtractMetadata when dhowden/tag can't parse a file — typically happens
+// on unusual M4B variants, DRM-touched files, or edge-case Vorbis comments.
+func readTagsWithTaglib(filePath string) (map[string][]string, error) {
+	abs, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("taglib read abs: %w", err)
+	}
+	tags, err := taglib.ReadTags(abs)
+	if err != nil {
+		return nil, fmt.Errorf("taglib read: %w", err)
+	}
+	return tags, nil
 }

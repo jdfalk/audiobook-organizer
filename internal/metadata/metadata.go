@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -127,7 +127,22 @@ func ExtractMetadata(filePath string, metaLog logger.Logger) (Metadata, error) {
 
 	m, err := tag.ReadFrom(f)
 	if err != nil {
-		metaLog.Warn("failed to read tags for %s: %v; falling back to filename parsing", filePath, err)
+		// dhowden/tag choked on this file. Before giving up and falling
+		// back to filename parsing, try TagLib — it understands more
+		// variants (M4B with unusual atoms, certain DRM-scrubbed files,
+		// Vorbis-with-non-standard-comment layouts) and we already link
+		// its static libs for tag writing. TagLib's output is folded
+		// into a Metadata via BuildMetadataFromTaglibMap so everything
+		// downstream sees the same shape.
+		metaLog.Warn("dhowden/tag failed for %s: %v; trying taglib fallback", filePath, err)
+		if tagMap, tlErr := readTagsWithTaglib(filePath); tlErr == nil && len(tagMap) > 0 {
+			result := BuildMetadataFromTaglibMap(tagMap, filePath, metaLog)
+			metaLog.Info("taglib fallback succeeded for %s (%d keys)", filePath, len(tagMap))
+			return result, nil
+		} else if tlErr != nil {
+			metaLog.Warn("taglib fallback also failed for %s: %v", filePath, tlErr)
+		}
+		metaLog.Warn("both parsers failed for %s; falling back to filename parsing", filePath)
 		metadata = extractFromFilename(filePath)
 		metadata.UsedFilenameFallback = true
 		if metadata.SeriesIndex == 0 {
