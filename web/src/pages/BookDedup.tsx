@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.13.0
+// version: 3.14.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -40,6 +40,7 @@ import {
   Switch,
 } from '@mui/material';
 import MergeIcon from '@mui/icons-material/MergeType';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -2633,10 +2634,10 @@ function EmbeddingDedupTab() {
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadCandidates(); }, [loadCandidates]);
 
-  const handleMergeCluster = async (cluster: BookCluster) => {
-    setActionLoading(cluster.key);
+  const handleMergeCluster = async (cluster: BookCluster, primaryBookId?: string) => {
+    setActionLoading(primaryBookId ? `${cluster.key}:primary:${primaryBookId}` : cluster.key);
     try {
-      await api.mergeDedupCluster(cluster.bookIds);
+      await api.mergeDedupCluster(cluster.bookIds, primaryBookId);
       loadCandidates();
       loadStats();
     } catch (err) {
@@ -2877,6 +2878,34 @@ function EmbeddingDedupTab() {
             </Tooltip>
           )}
         </Box>
+        {cluster.hasPending && (
+          <Tooltip title="Merge cluster — keep THIS book as primary (overrides auto-pick)">
+            <span>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleMergeCluster(cluster, id);
+                }}
+                disabled={anyActionBusy}
+                sx={{
+                  position: 'absolute',
+                  top: -4,
+                  right: isMultiWay ? 22 : -4,
+                  padding: '2px',
+                  color: 'text.disabled',
+                  '&:hover': { color: 'warning.main' },
+                }}
+              >
+                {actionLoading === `${cluster.key}:primary:${id}` ? (
+                  <CircularProgress size={14} />
+                ) : (
+                  <StarBorderIcon sx={{ fontSize: 16 }} />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         {isMultiWay && cluster.hasPending && (
           <Tooltip title="Not a duplicate — remove this book from the cluster">
             <span>
