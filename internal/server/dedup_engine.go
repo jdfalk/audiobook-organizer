@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -854,8 +854,16 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 			rewritten, deleted)
 	}
 
+	// CRITICAL: Only purge PENDING candidates. Merged and dismissed rows
+	// are historical records the user explicitly wants to keep — they're
+	// what populates the Merged / Dismissed tabs and lets the user see
+	// what they've already actioned. Without this filter, every rescan
+	// would delete every previously-merged candidate (because merged
+	// books share a version_group_id, which is one of the stale-rule
+	// conditions below), making the Merged tab useless.
 	candidates, _, err := de.embedStore.ListCandidates(database.CandidateFilter{
 		EntityType: "book",
+		Status:     "pending",
 		Limit:      100000,
 	})
 	if err != nil {
