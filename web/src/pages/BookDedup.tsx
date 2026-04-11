@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.12.0
+// version: 3.13.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -10,6 +10,7 @@ import {
   Paper,
   Button,
   Alert,
+  Snackbar,
   Chip,
   CircularProgress,
   Divider,
@@ -2948,12 +2949,30 @@ function EmbeddingDedupTab() {
         >
           Merge Page ({clusters.filter((c) => c.hasPending).length})
         </Button>
-        {scanMsg && (
-          <Alert severity="info" sx={{ py: 0, flexGrow: 1 }} onClose={() => setScanMsg(null)}>
-            {scanMsg}
-          </Alert>
-        )}
       </Stack>
+
+      {/* Scan/merge status lives in a bottom-right Snackbar instead of
+          shoving an inline Alert into the toolbar. The inline version
+          squeezed the toolbar and made the whole row look busted when
+          a status fired. */}
+      <Snackbar
+        open={scanMsg !== null}
+        autoHideDuration={6000}
+        onClose={(_, reason) => {
+          if (reason === 'clickaway') return;
+          setScanMsg(null);
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity="info"
+          variant="filled"
+          onClose={() => setScanMsg(null)}
+          sx={{ minWidth: 280 }}
+        >
+          {scanMsg}
+        </Alert>
+      </Snackbar>
 
       {/* Bulk merge confirmation dialog */}
       <Dialog open={bulkMergeOpen} onClose={() => setBulkMergeOpen(false)}>
