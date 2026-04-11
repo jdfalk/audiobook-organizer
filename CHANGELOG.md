@@ -1,13 +1,66 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.1.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-03-19 -->
+<!-- last-edited: 2026-04-11 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 11, 2026 — Cluster UX, Metadata Integrations, ITL Safety, server.go Refactor (v4.1.0)
+
+Twelve-item backlog sprint covering cluster display improvements,
+metadata source finishes, iTunes write-back safety, and a large
+internal refactor of the server package.
+
+##### Dedup Cluster UX (contributed by @jdfalk)
+- **Per-side "merge as primary" star** ([#230](https://github.com/jdfalk/audiobook-organizer/pull/230)): explicit primary override on each side of a cluster card. `primary_book_id` threaded through `mergeDedupCluster`.
+- **Export current filtered candidate set** ([#231](https://github.com/jdfalk/audiobook-organizer/pull/231)): new CSV/JSON export button with the active filter applied. Backed by `exportDedupCandidates` handler.
+- **Series-aware bulk merge** ([#232](https://github.com/jdfalk/audiobook-organizer/pull/232)): new `listDedupCandidateSeries` + `mergeDedupCandidateSeries` endpoints and "Merge Series" dialog. Lets users fold whole near-duplicate series together in one step.
+- **Multi-select split-cluster workflow** ([#233](https://github.com/jdfalk/audiobook-organizer/pull/233)): checkboxes on each cluster member with a "Remove N selected" action. `removeFromDedupCluster` now accepts `remove_book_ids` plural.
+- **Book alternative titles schema + engine integration** ([#234](https://github.com/jdfalk/audiobook-organizer/pull/234)): migration 046 adds `book_alternative_titles` table; `Store` gains `GetBookAlternativeTitles` / `AddBookAlternativeTitle` / `RemoveBookAlternativeTitle` / `SetBookAlternativeTitles`. Dedup engine's exact-title check walks all normalized forms across both sides using `allNormalizedTitleForms` + `minLevenshteinBetweenForms`.
+
+##### Metadata Integrations (contributed by @jdfalk)
+- **Resume Last Review button** ([#235](https://github.com/jdfalk/audiobook-organizer/pull/235)): new `GET /metadata/recent-fetches` picks up the latest completed bulk fetch so users don't lose results when the review dialog closes.
+- **Resume Review picker for back-to-back fetches** ([#236](https://github.com/jdfalk/audiobook-organizer/pull/236)): extends #235 to return up to 10 recent completed fetches in a dropdown — fixes "select pages 1-2, then pages 3-4, never see the first batch again".
+- **Audnexus + Hardcover full integration** ([#237](https://github.com/jdfalk/audiobook-organizer/pull/237)):
+  - New `ContextualSearch` optional interface and `SearchContext` struct: `Title`, `Author`, `Narrator`, `ISBN10/13`, `ASIN`, `Series`.
+  - `ProtectedSource` forwards `SearchByContext` through the circuit breaker via type assertion.
+  - Audnexus `SearchByContext` uses `LookupByASIN` when an ASIN is present, falls back gracefully otherwise.
+  - Hardcover GraphQL query expanded to 14 fields (`contributor_names`, `isbns`, `featured_series`, `series_names`, `genres`, etc.). Narrator derived from `contributor_names` minus `author_names`. ISBN-13 preferred over ISBN-10.
+  - `metadata_fetch_service.go` tries `SearchByContext` first for any source that supports it, falls back to title-only search otherwise.
+
+##### iTunes ITL Safety (contributed by @jdfalk)
+- **ITL write-back: backup, validate, restore, narrator** ([#238](https://github.com/jdfalk/audiobook-organizer/pull/238)):
+  - New `safeWriteITL` pipeline: pre-validate source → backup to `.bak-YYYYMMDD-HHMMSS` → apply → validate temp → rename → validate final → restore-from-backup on post-rename corruption.
+  - `itlBackupRetention = 5` with `pruneITLBackups` rotation (lex sort on timestamp suffix).
+  - Composer field now populated with narrator on every metadata update (audiobook convention — `album_artist > artist > composer`).
+  - Genre falls through to book's own genre when set instead of hardcoding `"Audiobook"`.
+  - Test hooks `itlValidateFn` + `itlApplyOperationsFn` make the full cycle unit-testable without needing a real ITL fixture (the existing fixture is format-fragile — documented in backlog 5.8).
+  - New `itunes_writeback_batcher_test.go` covers happy path, broken source, temp validation failure, post-rename restore, and backup prune rotation.
+
+##### Internal — Server Package Refactor (contributed by @jdfalk)
+- **Split monolithic `server.go`** ([#240](https://github.com/jdfalk/audiobook-organizer/pull/240), backlog 4.2): 10,596 lines → 2,670 lines of lifecycle/helpers + ten domain handler files:
+  - `audiobooks_handlers.go` (1,288) — book CRUD, batch ops, files/segments, tags
+  - `entities_handlers.go` (1,104) — authors/series/narrators/works
+  - `duplicates_handlers.go` (1,261) — SQL-based dedup flow
+  - `metadata_handlers.go` (1,146) — fetch/search/apply/writeback/COW
+  - `ai_handlers.go` (923) — AI scan lifecycle + author review
+  - `operations_handlers.go` (828) — scan/organize/transcode/tasks/maintenance
+  - `system_handlers.go` (632) — health/status/config/backups/events/prefs
+  - `versions_handlers.go` (478) — version-group CRUD + segment moves
+  - `filesystem_handlers.go` (301) — browse/exclude/import-path CRUD/import-file
+  - `organize_handlers.go` (229) — preview/apply rename + organize-book
+- Extraction driven by `split_server.py` — brace-balanced method boundary detection with string/comment/rune awareness so nested closures don't confuse it. No behavioural changes; handler signatures and `setupRoutes` registrations unchanged.
+- **Regenerate mocks via mockery** ([#239](https://github.com/jdfalk/audiobook-organizer/pull/239) prep): `internal/database/mocks/mock_store.go` now comes from `mockery` v3.7.0 (was hand-edited). Backlog 5.9 tracks adding CI enforcement.
+
+##### Documentation (contributed by @jdfalk)
+- **Backlog additions** ([#239](https://github.com/jdfalk/audiobook-organizer/pull/239)):
+  - 5.8 Regenerate ITL test fixtures after format work
+  - 5.9 Enforce mockery-generated mocks
+  - 6.4 ITL upload / download / partial export — generate a fresh ITL containing only a user-selected subset (e.g., 300 checked-out books out of 12K) for portable laptop iTunes libraries
 
 #### April 5-6, 2026 — ITL Mutation, Bulk Metadata Review, ACL Fixes, UI Overhaul (v4.0.0)
 
