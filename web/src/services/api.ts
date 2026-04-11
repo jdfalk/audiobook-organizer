@@ -2656,19 +2656,32 @@ export async function getOperationResults(operationId: string): Promise<BatchFet
   return response.json();
 }
 
-// getLatestMetadataFetch returns the most recent completed metadata
-// batch-fetch operation that has persisted results, or null if none
-// exists. Used by the "Resume Last Review" button in the library so a
-// user who lost the reviewOp state (page reload, tab close) can get
-// back to the review dialog without re-running the fetch.
-export async function getLatestMetadataFetch(): Promise<{
-  operation: { id: string; type: string; status: string; created_at: string };
+// MetadataFetchSummary is one row in the Resume Review picker —
+// a completed metadata_candidate_fetch operation with its result
+// breakdown so the user knows what they're about to review.
+export interface MetadataFetchSummary {
+  id: string;
+  type: string;
+  status: string;
+  created_at: string;
+  completed_at?: string;
   result_count: number;
-} | null> {
-  const response = await fetch(`${API_BASE}/metadata/latest-fetch`);
-  if (response.status === 404) return null;
-  if (!response.ok) throw await buildApiError(response, 'Failed to get latest metadata fetch');
-  return response.json();
+  matched_count: number;
+  no_match_count: number;
+  error_count: number;
+}
+
+// getRecentMetadataFetches returns up to the last 10 completed
+// metadata batch-fetch operations that have persisted results,
+// newest first. Used by the Resume Review picker dialog so users
+// can pick which fetch to review when multiple are outstanding —
+// solves the scenario where someone fires a second fetch before
+// reviewing the first.
+export async function getRecentMetadataFetches(): Promise<MetadataFetchSummary[]> {
+  const response = await fetch(`${API_BASE}/metadata/recent-fetches`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to list recent metadata fetches');
+  const data = await response.json();
+  return data.operations || [];
 }
 
 export async function batchApplyCandidates(operationId: string, bookIds: string[]): Promise<{ applied: number }> {
