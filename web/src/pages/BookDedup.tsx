@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.14.0
+// version: 3.15.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -11,6 +11,8 @@ import {
   Button,
   Alert,
   Snackbar,
+  Menu,
+  MenuItem,
   Chip,
   CircularProgress,
   Divider,
@@ -41,6 +43,7 @@ import {
 } from '@mui/material';
 import MergeIcon from '@mui/icons-material/MergeType';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
+import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -2573,6 +2576,7 @@ function EmbeddingDedupTab() {
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [bulkMergeOpen, setBulkMergeOpen] = useState(false);
   const [pageMergeOpen, setPageMergeOpen] = useState(false);
+  const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
   const [pageMerging, setPageMerging] = useState(false);
   const [bulkMerging, setBulkMerging] = useState(false);
 
@@ -2633,6 +2637,23 @@ function EmbeddingDedupTab() {
 
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadCandidates(); }, [loadCandidates]);
+
+  // Download the current filtered candidate set as CSV or JSON. Builds
+  // the query string with whatever filters the user has active (status,
+  // layer) so what they export matches what they see. Navigates to the
+  // endpoint via an anchor click so the browser handles the file save.
+  const handleExport = (format: 'csv' | 'json') => {
+    const params = new URLSearchParams({ format });
+    if (statusFilter) params.set('status', statusFilter);
+    if (layerFilter) params.set('layer', layerFilter);
+    const url = `/api/v1/dedup/candidates/export?${params.toString()}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = ''; // let the server Content-Disposition pick the name
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   const handleMergeCluster = async (cluster: BookCluster, primaryBookId?: string) => {
     setActionLoading(primaryBookId ? `${cluster.key}:primary:${primaryBookId}` : cluster.key);
@@ -2978,6 +2999,28 @@ function EmbeddingDedupTab() {
         >
           Merge Page ({clusters.filter((c) => c.hasPending).length})
         </Button>
+        <Button
+          variant="outlined"
+          color="inherit"
+          startIcon={<DownloadIcon />}
+          onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+          size="small"
+          title="Download the current filtered candidate set as CSV or JSON"
+        >
+          Export
+        </Button>
+        <Menu
+          anchorEl={exportMenuAnchor}
+          open={Boolean(exportMenuAnchor)}
+          onClose={() => setExportMenuAnchor(null)}
+        >
+          <MenuItem onClick={() => { handleExport('csv'); setExportMenuAnchor(null); }}>
+            Download as CSV
+          </MenuItem>
+          <MenuItem onClick={() => { handleExport('json'); setExportMenuAnchor(null); }}>
+            Download as JSON
+          </MenuItem>
+        </Menu>
       </Stack>
 
       {/* Scan/merge status lives in a bottom-right Snackbar instead of

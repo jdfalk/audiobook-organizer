@@ -1,15 +1,18 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
 
 import (
 	"context"
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -72,6 +75,183 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 		"candidates": candidates,
 		"total":      total,
 	})
+}
+
+// exportDedupCandidates handles GET /api/v1/dedup/candidates/export.
+//
+// Query params:
+//
+//	format = "csv" (default) or "json"
+//	status, layer, min_similarity, entity_type — same as list endpoint
+//
+// Unlike the list endpoint, export doesn't paginate — it walks every
+// matching row up to an internal hard cap (100K) to prevent runaway
+// downloads. Each row is enriched with the book titles and author names
+// of both sides so the CSV is readable in a spreadsheet without needing
+// to cross-reference IDs.
+//
+// Columns (CSV): candidate_id, status, layer, similarity,
+// entity_a_id, entity_a_title, entity_a_author,
+// entity_b_id, entity_b_title, entity_b_author,
+// llm_verdict, llm_reason, created_at, updated_at.
+func (s *Server) exportDedupCandidates(c *gin.Context) {
+	if s.embeddingStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embedding store not available"})
+		return
+	}
+
+	format := c.DefaultQuery("format", "csv")
+	if format != "csv" && format != "json" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "format must be csv or json"})
+		return
+	}
+
+	filter := database.CandidateFilter{Limit: 100000}
+	if v := c.Query("entity_type"); v != "" {
+		filter.EntityType = v
+	}
+	if v := c.Query("status"); v != "" {
+		filter.Status = v
+	}
+	if v := c.Query("layer"); v != "" {
+		filter.Layer = v
+	}
+	if v := c.Query("min_similarity"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid min_similarity"})
+			return
+		}
+		filter.MinSimilarity = &f
+	}
+
+	candidates, _, err := s.embeddingStore.ListCandidates(filter)
+	if err != nil {
+		internalError(c, "failed to list candidates for export", err)
+		return
+	}
+
+	// Enrich: lookup titles + author names for every entity involved,
+	// memoized so a book that appears in multiple candidates is only
+	// fetched once. Books-only for now — authors export would need the
+	// author table which we can add later if needed.
+	type enriched struct {
+		title  string
+		author string
+	}
+	cache := make(map[string]enriched, len(candidates)*2)
+	lookup := func(id string) enriched {
+		if e, ok := cache[id]; ok {
+			return e
+		}
+		e := enriched{}
+		if book, err := database.GlobalStore.GetBookByID(id); err == nil && book != nil {
+			e.title = book.Title
+			if book.AuthorID != nil {
+				if a, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && a != nil {
+					e.author = a.Name
+				}
+			}
+		}
+		cache[id] = e
+		return e
+	}
+
+	filename := fmt.Sprintf("dedup-candidates-%s.%s", time.Now().Format("20060102-150405"), format)
+
+	if format == "json" {
+		type row struct {
+			CandidateID   int64   `json:"candidate_id"`
+			Status        string  `json:"status"`
+			Layer         string  `json:"layer"`
+			Similarity    float64 `json:"similarity"`
+			EntityType    string  `json:"entity_type"`
+			EntityAID     string  `json:"entity_a_id"`
+			EntityATitle  string  `json:"entity_a_title"`
+			EntityAAuthor string  `json:"entity_a_author"`
+			EntityBID     string  `json:"entity_b_id"`
+			EntityBTitle  string  `json:"entity_b_title"`
+			EntityBAuthor string  `json:"entity_b_author"`
+			LLMVerdict    string  `json:"llm_verdict,omitempty"`
+			LLMReason     string  `json:"llm_reason,omitempty"`
+			CreatedAt     string  `json:"created_at"`
+			UpdatedAt     string  `json:"updated_at"`
+		}
+		rows := make([]row, 0, len(candidates))
+		for _, cand := range candidates {
+			a := lookup(cand.EntityAID)
+			b := lookup(cand.EntityBID)
+			sim := 0.0
+			if cand.Similarity != nil {
+				sim = *cand.Similarity
+			}
+			rows = append(rows, row{
+				CandidateID:   cand.ID,
+				Status:        cand.Status,
+				Layer:         cand.Layer,
+				Similarity:    sim,
+				EntityType:    cand.EntityType,
+				EntityAID:     cand.EntityAID,
+				EntityATitle:  a.title,
+				EntityAAuthor: a.author,
+				EntityBID:     cand.EntityBID,
+				EntityBTitle:  b.title,
+				EntityBAuthor: b.author,
+				LLMVerdict:    cand.LLMVerdict,
+				LLMReason:     cand.LLMReason,
+				CreatedAt:     cand.CreatedAt.Format(time.RFC3339),
+				UpdatedAt:     cand.UpdatedAt.Format(time.RFC3339),
+			})
+		}
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+		c.Header("Content-Type", "application/json")
+		enc := json.NewEncoder(c.Writer)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(gin.H{"count": len(rows), "candidates": rows}); err != nil {
+			log.Printf("[dedup] export json encode: %v", err)
+		}
+		return
+	}
+
+	// CSV path.
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Header("Content-Type", "text/csv")
+	w := csv.NewWriter(c.Writer)
+	defer w.Flush()
+	_ = w.Write([]string{
+		"candidate_id", "status", "layer", "similarity",
+		"entity_type",
+		"entity_a_id", "entity_a_title", "entity_a_author",
+		"entity_b_id", "entity_b_title", "entity_b_author",
+		"llm_verdict", "llm_reason",
+		"created_at", "updated_at",
+	})
+	for _, cand := range candidates {
+		a := lookup(cand.EntityAID)
+		b := lookup(cand.EntityBID)
+		simStr := ""
+		if cand.Similarity != nil {
+			simStr = strconv.FormatFloat(*cand.Similarity, 'f', 4, 64)
+		}
+		_ = w.Write([]string{
+			strconv.FormatInt(cand.ID, 10),
+			cand.Status,
+			cand.Layer,
+			simStr,
+			cand.EntityType,
+			cand.EntityAID,
+			a.title,
+			a.author,
+			cand.EntityBID,
+			b.title,
+			b.author,
+			cand.LLMVerdict,
+			cand.LLMReason,
+			cand.CreatedAt.Format(time.RFC3339),
+			cand.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	log.Printf("[dedup] export: wrote %d candidate rows as %s", len(candidates), format)
 }
 
 // getDedupStats handles GET /api/v1/dedup/stats.

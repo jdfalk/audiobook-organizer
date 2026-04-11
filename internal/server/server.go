@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.160.0
+// version: 1.161.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1742,6 +1742,7 @@ func (s *Server) setupRoutes() {
 
 			// Embedding-based dedup
 			protected.GET("/dedup/candidates", s.listDedupCandidates)
+			protected.GET("/dedup/candidates/export", s.exportDedupCandidates)
 			protected.GET("/dedup/stats", s.getDedupStats)
 			protected.POST("/dedup/candidates/:id/merge", s.mergeDedupCandidate)
 			protected.POST("/dedup/candidates/:id/dismiss", s.dismissDedupCandidate)
