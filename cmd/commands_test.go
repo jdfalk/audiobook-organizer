@@ -367,6 +367,16 @@ func (s *stubStore) GetBookTags(bookID string) ([]string, error)                
 func (s *stubStore) SetBookTags(bookID string, tags []string) error              { return nil }
 func (s *stubStore) ListAllTags() ([]database.TagWithCount, error)               { return nil, nil }
 func (s *stubStore) GetBooksByTag(tag string) ([]string, error)                  { return nil, nil }
+func (s *stubStore) GetBookAlternativeTitles(bookID string) ([]database.BookAlternativeTitle, error) {
+	return nil, nil
+}
+func (s *stubStore) AddBookAlternativeTitle(bookID, title, source, language string) error {
+	return nil
+}
+func (s *stubStore) RemoveBookAlternativeTitle(bookID, title string) error { return nil }
+func (s *stubStore) SetBookAlternativeTitles(bookID string, titles []database.BookAlternativeTitle) error {
+	return nil
+}
 func (s *stubStore) MarkExternalIDRemoved(source, externalID string) error       { return nil }
 func (s *stubStore) SetExternalIDProvenance(source, externalID, provenance string) error {
 	return nil
