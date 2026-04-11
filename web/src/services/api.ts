@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.70.0
+// version: 1.71.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3693,6 +3693,43 @@ export async function mergeDedupCluster(
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge dedup cluster');
+  }
+  return response.json();
+}
+
+export interface DedupSeriesSummary {
+  series_id: number;
+  series_name: string;
+  cluster_count: number;
+  book_count: number;
+  candidate_count: number;
+}
+
+export async function listDedupCandidateSeries(): Promise<DedupSeriesSummary[]> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/series-summary`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to list dedup series summary');
+  }
+  const data = await response.json();
+  return data.series || [];
+}
+
+export interface SeriesMergeResult {
+  series_id: number;
+  clusters_merged: number;
+  books_merged: number;
+  candidates_updated: number;
+  failures?: string[];
+}
+
+export async function mergeDedupCandidateSeries(seriesId: number): Promise<SeriesMergeResult> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/merge-series`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ series_id: seriesId }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge dedup series');
   }
   return response.json();
 }

@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -252,6 +253,279 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 		})
 	}
 	log.Printf("[dedup] export: wrote %d candidate rows as %s", len(candidates), format)
+}
+
+// series-aware dedup helpers below. These exist to support "merge
+// every cluster in this series" — a common workflow after rescanning
+// a whole collection where every book in a series produces its own
+// cluster and the user wants to commit all of them with one action
+// instead of N clicks.
+
+// dedupSeriesSummary is one entry in the response of
+// listDedupCandidateSeries — one row per series that has pending
+// candidates, with counts so the user can pick a series to merge
+// without having to drill into each one.
+type dedupSeriesSummary struct {
+	SeriesID       int    `json:"series_id"`
+	SeriesName     string `json:"series_name"`
+	ClusterCount   int    `json:"cluster_count"`
+	BookCount      int    `json:"book_count"`
+	CandidateCount int    `json:"candidate_count"`
+}
+
+// listDedupCandidateSeries handles
+// GET /api/v1/dedup/candidates/series-summary.
+//
+// Walks every pending book candidate, looks up both sides' series_id,
+// and returns one row per series where BOTH sides of at least one
+// candidate pair belong to that series. Clusters are computed via
+// union-find per-series so the count reflects what "merge every
+// cluster in this series" would actually touch.
+//
+// Candidates whose two sides belong to different series are excluded
+// from every summary — they're cross-series and don't fit the
+// "series-aware bulk merge" workflow.
+func (s *Server) listDedupCandidateSeries(c *gin.Context) {
+	if s.embeddingStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embedding store not available"})
+		return
+	}
+
+	cands, _, err := s.embeddingStore.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Status:     "pending",
+		Limit:      100000,
+	})
+	if err != nil {
+		internalError(c, "failed to list pending candidates", err)
+		return
+	}
+
+	// Memoize book → series_id lookups across candidates.
+	bookSeries := make(map[string]int, len(cands)*2)
+	lookup := func(id string) int {
+		if v, ok := bookSeries[id]; ok {
+			return v
+		}
+		book, err := database.GlobalStore.GetBookByID(id)
+		if err != nil || book == nil || book.SeriesID == nil {
+			bookSeries[id] = 0
+			return 0
+		}
+		bookSeries[id] = *book.SeriesID
+		return *book.SeriesID
+	}
+
+	// Group candidate pairs by series. candsBySeries[seriesID] holds
+	// every (a_id, b_id) that's entirely within that series.
+	type pair struct{ a, b string }
+	candsBySeries := make(map[int][]pair)
+	for _, cand := range cands {
+		sa := lookup(cand.EntityAID)
+		sb := lookup(cand.EntityBID)
+		if sa == 0 || sb == 0 || sa != sb {
+			continue
+		}
+		candsBySeries[sa] = append(candsBySeries[sa], pair{cand.EntityAID, cand.EntityBID})
+	}
+
+	// For each series, cluster via union-find to compute how many
+	// merge operations would actually run.
+	summary := make([]dedupSeriesSummary, 0, len(candsBySeries))
+	for seriesID, pairs := range candsBySeries {
+		parent := make(map[string]string)
+		var find func(string) string
+		find = func(x string) string {
+			for parent[x] != x {
+				parent[x] = parent[parent[x]]
+				x = parent[x]
+			}
+			return x
+		}
+		union := func(a, b string) {
+			for _, id := range []string{a, b} {
+				if _, ok := parent[id]; !ok {
+					parent[id] = id
+				}
+			}
+			ra, rb := find(a), find(b)
+			if ra != rb {
+				parent[ra] = rb
+			}
+		}
+		for _, p := range pairs {
+			union(p.a, p.b)
+		}
+		roots := make(map[string]struct{})
+		books := make(map[string]struct{})
+		for id := range parent {
+			roots[find(id)] = struct{}{}
+			books[id] = struct{}{}
+		}
+
+		name := ""
+		if series, err := database.GlobalStore.GetSeriesByID(seriesID); err == nil && series != nil {
+			name = series.Name
+		}
+		summary = append(summary, dedupSeriesSummary{
+			SeriesID:       seriesID,
+			SeriesName:     name,
+			ClusterCount:   len(roots),
+			BookCount:      len(books),
+			CandidateCount: len(pairs),
+		})
+	}
+
+	// Stable sort: highest cluster count first, then series name.
+	sort.Slice(summary, func(i, j int) bool {
+		if summary[i].ClusterCount != summary[j].ClusterCount {
+			return summary[i].ClusterCount > summary[j].ClusterCount
+		}
+		return summary[i].SeriesName < summary[j].SeriesName
+	})
+
+	c.JSON(http.StatusOK, gin.H{"series": summary})
+}
+
+// mergeDedupCandidateSeries handles
+// POST /api/v1/dedup/candidates/merge-series.
+//
+// Body: {"series_id": N}
+//
+// Finds every pending book candidate whose both sides belong to the
+// given series, builds clusters via union-find, and merges each
+// cluster with MergeService.MergeBooks. Returns a summary of how many
+// clusters were touched and how many books were merged in total.
+//
+// Cross-series candidates (one side in this series, the other
+// somewhere else) are deliberately untouched — the series filter is
+// a scope, not a selector. If the user wants those pairs merged, they
+// can use the regular Merge Filtered action.
+func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
+	if s.embeddingStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embedding store not available"})
+		return
+	}
+	if s.mergeService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "merge service not available"})
+		return
+	}
+
+	var body struct {
+		SeriesID int `json:"series_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.SeriesID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "series_id must be a positive integer"})
+		return
+	}
+
+	cands, _, err := s.embeddingStore.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Status:     "pending",
+		Limit:      100000,
+	})
+	if err != nil {
+		internalError(c, "failed to list pending candidates", err)
+		return
+	}
+
+	// Filter to same-series candidates only.
+	bookSeries := make(map[string]int, len(cands)*2)
+	lookup := func(id string) int {
+		if v, ok := bookSeries[id]; ok {
+			return v
+		}
+		book, err := database.GlobalStore.GetBookByID(id)
+		if err != nil || book == nil || book.SeriesID == nil {
+			bookSeries[id] = 0
+			return 0
+		}
+		bookSeries[id] = *book.SeriesID
+		return *book.SeriesID
+	}
+	var inScope []database.DedupCandidate
+	for _, cand := range cands {
+		if lookup(cand.EntityAID) == body.SeriesID && lookup(cand.EntityBID) == body.SeriesID {
+			inScope = append(inScope, cand)
+		}
+	}
+
+	// Union-find cluster build.
+	parent := make(map[string]string)
+	var find func(string) string
+	find = func(x string) string {
+		for parent[x] != x {
+			parent[x] = parent[parent[x]]
+			x = parent[x]
+		}
+		return x
+	}
+	union := func(a, b string) {
+		for _, id := range []string{a, b} {
+			if _, ok := parent[id]; !ok {
+				parent[id] = id
+			}
+		}
+		ra, rb := find(a), find(b)
+		if ra != rb {
+			parent[ra] = rb
+		}
+	}
+	for _, cand := range inScope {
+		union(cand.EntityAID, cand.EntityBID)
+	}
+	clusters := make(map[string][]string)
+	for id := range parent {
+		root := find(id)
+		clusters[root] = append(clusters[root], id)
+	}
+
+	// Merge each cluster. Candidate rows contained in each cluster get
+	// marked as merged inside the same loop (same membership check as
+	// mergeDedupCluster) so the Merged tab reflects the action.
+	mergedClusters := 0
+	mergedBooks := 0
+	candidatesUpdated := 0
+	var failures []string
+	for _, bookIDs := range clusters {
+		if len(bookIDs) < 2 {
+			continue
+		}
+		if _, err := s.mergeService.MergeBooks(bookIDs, ""); err != nil {
+			failures = append(failures, fmt.Sprintf("cluster of %d: %v", len(bookIDs), err))
+			continue
+		}
+		mergedClusters++
+		mergedBooks += len(bookIDs)
+
+		inCluster := make(map[string]struct{}, len(bookIDs))
+		for _, id := range bookIDs {
+			inCluster[id] = struct{}{}
+		}
+		for _, cand := range inScope {
+			_, aIn := inCluster[cand.EntityAID]
+			_, bIn := inCluster[cand.EntityBID]
+			if !aIn || !bIn {
+				continue
+			}
+			if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
+				log.Printf("[dedup] series merge: status update %d: %v", cand.ID, err)
+				continue
+			}
+			candidatesUpdated++
+		}
+	}
+
+	log.Printf("[dedup] series merge: series=%d clusters_merged=%d books_merged=%d candidates_updated=%d failures=%d",
+		body.SeriesID, mergedClusters, mergedBooks, candidatesUpdated, len(failures))
+
+	c.JSON(http.StatusOK, gin.H{
+		"series_id":          body.SeriesID,
+		"clusters_merged":    mergedClusters,
+		"books_merged":       mergedBooks,
+		"candidates_updated": candidatesUpdated,
+		"failures":           failures,
+	})
 }
 
 // getDedupStats handles GET /api/v1/dedup/stats.
