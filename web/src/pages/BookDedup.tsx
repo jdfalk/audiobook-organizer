@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.7.0
+// version: 3.8.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -2420,6 +2420,11 @@ function ReconcileTab() {
 
 /** Cached book details for candidate display */
 const bookCache = new Map<string, Book>();
+/** Cached book file lists. Files are fetched in parallel with book details so
+ * hovering a file path can show every segment without waiting on a network
+ * round trip. An empty array means "we tried and got none", `undefined`
+ * means "not fetched yet". */
+const bookFilesCache = new Map<string, string[]>();
 
 async function fetchBookCached(id: string): Promise<Book | null> {
   if (bookCache.has(id)) return bookCache.get(id)!;
@@ -2429,6 +2434,20 @@ async function fetchBookCached(id: string): Promise<Book | null> {
     return book;
   } catch {
     return null;
+  }
+}
+
+async function fetchBookFilesCached(id: string): Promise<string[]> {
+  const cached = bookFilesCache.get(id);
+  if (cached) return cached;
+  try {
+    const { files } = await api.getBookFiles(id);
+    const paths = (files || []).map((f) => f.file_path).filter(Boolean);
+    bookFilesCache.set(id, paths);
+    return paths;
+  } catch {
+    bookFilesCache.set(id, []);
+    return [];
   }
 }
 
@@ -2546,6 +2565,7 @@ function EmbeddingDedupTab() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [bookDetails, setBookDetails] = useState<Map<string, Book>>(new Map());
+  const [bookFiles, setBookFiles] = useState<Map<string, string[]>>(new Map());
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
@@ -2577,20 +2597,29 @@ function EmbeddingDedupTab() {
       setCandidates(resp.candidates || []);
       setTotal(resp.total || 0);
 
-      // Fetch book details for all candidates
+      // Fetch book details + file lists in parallel for every candidate
+      // side. File lists are what makes the "hover for all files" tooltip
+      // instant — without them a 4-way cluster would trigger a burst of
+      // network requests on mouse-over.
       const ids = new Set<string>();
       for (const c of resp.candidates || []) {
         ids.add(c.entity_a_id);
         ids.add(c.entity_b_id);
       }
       const details = new Map<string, Book>();
+      const filesMap = new Map<string, string[]>();
       await Promise.all(
-        Array.from(ids).map(async (id) => {
-          const book = await fetchBookCached(id);
-          if (book) details.set(id, book);
-        })
+        Array.from(ids).flatMap((id) => [
+          fetchBookCached(id).then((book) => {
+            if (book) details.set(id, book);
+          }),
+          fetchBookFilesCached(id).then((paths) => {
+            filesMap.set(id, paths);
+          }),
+        ])
       );
       setBookDetails(details);
+      setBookFiles(filesMap);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load candidates');
     } finally {
@@ -2693,7 +2722,40 @@ function EmbeddingDedupTab() {
         </Typography>
       );
     }
-    const shortPath = truncateAudiobookPath(book.file_path);
+    const allFiles = bookFiles.get(id) ?? [];
+    // Prefer the full file list (book_files table) over the Book.file_path
+    // column because multi-file audiobooks only track the first file on the
+    // Book row. When the list is empty (iTunes-linked, unorganized, or
+    // haven't-loaded-yet) we fall back to Book.file_path so something shows.
+    const primaryPath = allFiles[0] ?? book.file_path ?? '';
+    const shortPath = truncateAudiobookPath(primaryPath);
+    const extraCount = Math.max(0, allFiles.length - 1);
+    // Build a multi-line tooltip that lists every file with the repo-root
+    // prefix stripped. This is what lets the user tell near-identical
+    // cluster sides apart — "Turn Coat / Turn Coat - 1" vs
+    // "Turn Coat / Turn Coat - 1" looks identical until you see the full
+    // file lists diverge.
+    const tooltipContent =
+      allFiles.length > 0 ? (
+        <Box sx={{ maxWidth: 600 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+            {allFiles.length} file{allFiles.length === 1 ? '' : 's'}:
+          </Typography>
+          {allFiles.map((p, idx) => (
+            <Typography
+              key={idx}
+              variant="caption"
+              sx={{ display: 'block', fontFamily: 'monospace', fontSize: '0.7rem', whiteSpace: 'pre' }}
+            >
+              {truncateAudiobookPath(p)}
+            </Typography>
+          ))}
+        </Box>
+      ) : (
+        <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+          {primaryPath || '(no file path)'}
+        </Typography>
+      );
     return (
       <Box
         sx={{ cursor: 'pointer', minWidth: 0, '&:hover .dedup-side-title': { textDecoration: 'underline' } }}
@@ -2714,14 +2776,25 @@ function EmbeddingDedupTab() {
           </Typography>
         )}
         {shortPath && (
-          <Tooltip title={book.file_path} enterDelay={400}>
+          <Tooltip
+            title={tooltipContent}
+            enterDelay={300}
+            placement="bottom-start"
+            componentsProps={{ tooltip: { sx: { maxWidth: 'none' } } }}
+          >
             <Typography
               variant="caption"
               color="text.disabled"
               noWrap
               sx={{ display: 'block', fontFamily: 'monospace', fontSize: '0.7rem' }}
+              onClick={(e) => e.stopPropagation()}
             >
               {shortPath}
+              {extraCount > 0 && (
+                <Box component="span" sx={{ ml: 0.5, color: 'primary.main', fontWeight: 600 }}>
+                  +{extraCount} more
+                </Box>
+              )}
             </Typography>
           </Tooltip>
         )}
