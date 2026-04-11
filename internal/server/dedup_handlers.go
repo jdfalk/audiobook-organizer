@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -208,7 +208,8 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 	}
 
 	var body struct {
-		BookIDs []string `json:"book_ids"`
+		BookIDs       []string `json:"book_ids"`
+		PrimaryBookID string   `json:"primary_book_id,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -218,8 +219,23 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids must contain at least 2 entries"})
 		return
 	}
+	// If primary_book_id is set, it must be one of the books in the
+	// cluster. Empty means "let bookIsBetter auto-pick".
+	if body.PrimaryBookID != "" {
+		found := false
+		for _, id := range body.BookIDs {
+			if id == body.PrimaryBookID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "primary_book_id must be one of book_ids"})
+			return
+		}
+	}
 
-	mergeResult, err := s.mergeService.MergeBooks(body.BookIDs, "")
+	mergeResult, err := s.mergeService.MergeBooks(body.BookIDs, body.PrimaryBookID)
 	if err != nil {
 		internalError(c, "failed to merge books in cluster", err)
 		return
