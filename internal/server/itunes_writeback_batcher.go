@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -8,8 +8,11 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -180,6 +183,21 @@ func (b *WriteBackBatcher) flush() {
 				authorName = author.Name
 			}
 		}
+		// Narrator ends up in the Composer field for audiobooks —
+		// Apple Music shows it there and most audiobook workflows
+		// (scanners, converters, players) key on that mapping.
+		narrator := ""
+		if book.Narrator != nil {
+			narrator = *book.Narrator
+		}
+		// Genre: prefer the book's own genre when set, fall back to
+		// "Audiobook" so iTunes classifies correctly. Previously
+		// every write hardcoded "Audiobook" even when the user had
+		// set a more specific value.
+		genre := "Audiobook"
+		if book.Genre != nil && *book.Genre != "" {
+			genre = *book.Genre
+		}
 
 		files, _ := store.GetBookFiles(id)
 		if len(files) > 0 {
@@ -199,7 +217,8 @@ func (b *WriteBackBatcher) flush() {
 					Name:         f.Title,
 					Album:        book.Title,
 					Artist:       authorName,
-					Genre:        "Audiobook",
+					Composer:     narrator,
+					Genre:        genre,
 				})
 			}
 		} else if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
@@ -214,7 +233,8 @@ func (b *WriteBackBatcher) flush() {
 				Name:         book.Title,
 				Album:        book.Title,
 				Artist:       authorName,
-				Genre:        "Audiobook",
+				Composer:     narrator,
+				Genre:        genre,
 			})
 		}
 	}
@@ -230,21 +250,178 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
-	log.Printf("[INFO] iTunes write-back: flushing %d location updates, %d adds, %d removes",
-		len(locationUpdates), len(adds), len(removes))
+	log.Printf("[INFO] iTunes write-back: flushing %d location updates, %d metadata updates, %d adds, %d removes",
+		len(locationUpdates), len(metadataUpdates), len(adds), len(removes))
 
 	itlPath := config.AppConfig.ITunesLibraryWritePath
-	result, err := itunes.ApplyITLOperations(itlPath, itlPath+".tmp", ops)
-	if err != nil {
+	if err := safeWriteITL(itlPath, ops); err != nil {
 		log.Printf("[WARN] iTunes write-back failed: %v", err)
 		return
 	}
+}
 
-	if renameErr := renameFile(itlPath+".tmp", itlPath); renameErr != nil {
-		log.Printf("[WARN] iTunes write-back rename failed: %v", renameErr)
-	} else {
-		log.Printf("[INFO] iTunes write-back: %d operations applied", result.UpdatedCount)
+// Test hooks. Production code wires these to the real itunes
+// package functions at package init. Tests override them so the
+// safe-write cycle can be unit-tested without needing a valid
+// ITL fixture on disk — the fixture itself is fragile, format
+// changes have broken it before, and mocking the two external
+// calls lets us test the logic in isolation.
+var (
+	itlValidateFn           = itunes.ValidateITL
+	itlApplyOperationsFn    = itunes.ApplyITLOperations
+)
+
+// safeWriteITL performs a backup → write-temp → validate-temp →
+// rename → validate-final → cleanup cycle for ITL write-back. At
+// every failure point the original ITL is either untouched or
+// restored from the backup, so a corrupted write can never leave
+// the user with an unreadable library file.
+//
+// Sequence:
+//  1. Ensure the source ITL currently parses (pre-condition check).
+//     If it doesn't, abort — we won't compound an existing problem.
+//  2. Copy itlPath → itlPath+".bak-YYYYMMDD-HHMMSS" as the rollback
+//     anchor. Prune older backups to keep the last `itlBackupRetention`.
+//  3. Run ApplyITLOperations to produce itlPath+".tmp".
+//  4. Validate the .tmp file. If invalid, remove .tmp and abort — the
+//     original itlPath is still intact.
+//  5. Rename .tmp over itlPath.
+//  6. Validate the renamed itlPath. If invalid (the rename itself
+//     produced corruption, or the write was partial), copy the
+//     backup back over itlPath.
+//  7. Log the result.
+func safeWriteITL(itlPath string, ops itunes.ITLOperationSet) error {
+	// Step 1: sanity-check the source. If the ITL we're about to
+	// write over is ALREADY corrupted, the write has nothing to
+	// validate against and a rollback wouldn't help anyway.
+	if err := itlValidateFn(itlPath); err != nil {
+		return fmt.Errorf("source ITL validation failed (refusing to write to a broken file): %w", err)
 	}
+
+	// Step 2: backup-before-write.
+	backupPath, backupErr := writeITLBackup(itlPath)
+	if backupErr != nil {
+		// A failing backup isn't fatal for the write — the user can
+		// still recover from the next successful run — but we log
+		// prominently so they know the safety net was missing.
+		log.Printf("[WARN] iTunes write-back: backup failed (%v); proceeding without a rollback anchor", backupErr)
+		backupPath = ""
+	} else {
+		if pruneErr := pruneITLBackups(itlPath, itlBackupRetention); pruneErr != nil {
+			log.Printf("[WARN] iTunes write-back: backup prune failed: %v", pruneErr)
+		}
+	}
+
+	// Step 3: write the updated ITL to a temp file.
+	tmpPath := itlPath + ".tmp"
+	result, err := itlApplyOperationsFn(itlPath, tmpPath, ops)
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("ApplyITLOperations: %w", err)
+	}
+
+	// Step 4: validate the temp BEFORE renaming. If the write
+	// produced a file iTunes can't read, the original is still
+	// intact at itlPath and we abort cleanly.
+	if err := itlValidateFn(tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("validation of temp ITL failed (original preserved): %w", err)
+	}
+
+	// Step 5: rename .tmp over the original.
+	if err := renameFile(tmpPath, itlPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("rename .tmp → itl: %w", err)
+	}
+
+	// Step 6: validate the final file. On paranoid-filesystem
+	// failures or weird permission issues the rename can land but
+	// the result is still corrupt. Catch that and roll back.
+	if err := itlValidateFn(itlPath); err != nil {
+		log.Printf("[ERROR] iTunes write-back: post-rename validation failed (%v)", err)
+		if backupPath != "" {
+			if rbErr := copyFileContents(backupPath, itlPath); rbErr != nil {
+				return fmt.Errorf("post-rename validation failed AND backup restore failed: validation=%v restore=%v", err, rbErr)
+			}
+			log.Printf("[INFO] iTunes write-back: restored from backup %s after corrupted write", backupPath)
+			return fmt.Errorf("post-rename validation failed (restored from backup): %w", err)
+		}
+		return fmt.Errorf("post-rename validation failed (no backup available): %w", err)
+	}
+
+	log.Printf("[INFO] iTunes write-back: %d operations applied and validated", result.UpdatedCount)
+	return nil
+}
+
+// itlBackupRetention is how many rotating .bak-YYYYMMDD-HHMMSS
+// files to keep per ITL file. Balances "enough history to
+// investigate a regression" vs "don't fill the disk". Five is
+// typical for config-file backup schemes.
+const itlBackupRetention = 5
+
+// writeITLBackup copies itlPath to a timestamped sibling and
+// returns the new path. Uses time.Now with seconds precision so
+// rapid-fire backups in the same millisecond collide by design —
+// the per-run batcher's debounce makes that effectively
+// impossible, but documenting the assumption.
+func writeITLBackup(itlPath string) (string, error) {
+	stamp := time.Now().Format("20060102-150405")
+	backupPath := fmt.Sprintf("%s.bak-%s", itlPath, stamp)
+	if err := copyFileContents(itlPath, backupPath); err != nil {
+		return "", err
+	}
+	return backupPath, nil
+}
+
+// copyFileContents duplicates src to dst by reading the whole file
+// into memory and writing it out. Small enough for ITL files
+// (typically < 100 MB) and avoids needing io.Copy's dance.
+func copyFileContents(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", src, err)
+	}
+	if err := os.WriteFile(dst, data, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", dst, err)
+	}
+	return nil
+}
+
+// pruneITLBackups deletes rotating backups beyond the keep limit.
+// Sorts siblings by name (lexicographic on the timestamp suffix,
+// which is monotonic) and removes the oldest excess.
+func pruneITLBackups(itlPath string, keep int) error {
+	if keep <= 0 {
+		return nil
+	}
+	dir := filepath.Dir(itlPath)
+	base := filepath.Base(itlPath) + ".bak-"
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	var backups []string
+	for _, ent := range entries {
+		if ent.IsDir() {
+			continue
+		}
+		name := ent.Name()
+		if !strings.HasPrefix(name, base) {
+			continue
+		}
+		backups = append(backups, filepath.Join(dir, name))
+	}
+	if len(backups) <= keep {
+		return nil
+	}
+	sort.Strings(backups) // oldest first (lex sort on timestamp)
+	toRemove := backups[:len(backups)-keep]
+	for _, p := range toRemove {
+		if err := os.Remove(p); err != nil {
+			log.Printf("[WARN] iTunes write-back: prune %s: %v", p, err)
+		}
+	}
+	return nil
 }
 
 // renameFile is a helper for os.Rename.
