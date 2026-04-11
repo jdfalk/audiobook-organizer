@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-04-05
 
@@ -342,6 +342,47 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 		"no_match":     countByStatus(candidateResults, "no_match"),
 		"errors":       countByStatus(candidateResults, "error"),
 	})
+}
+
+// handleGetLatestMetadataFetch returns the most recently-created
+// metadata_candidate_fetch operation that has persisted results. Used
+// by the "Resume Last Review" button in the library: after a fetch
+// completes the user may close the tab, reload, or otherwise lose the
+// in-memory reviewOp state, and they need a way to get back to the
+// review dialog without re-running the fetch. Returns 404 if no such
+// operation exists.
+func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
+	store := database.GlobalStore
+	ops, err := store.GetRecentOperations(50)
+	if err != nil {
+		internalError(c, "failed to list recent operations", err)
+		return
+	}
+	for _, op := range ops {
+		if op.Type != "metadata_candidate_fetch" {
+			continue
+		}
+		if op.Status != "completed" {
+			continue
+		}
+		// Confirm it actually has persisted results — an operation
+		// can "complete" with zero results if every book's fetch
+		// failed, and there's nothing to review in that case.
+		results, err := store.GetOperationResults(op.ID)
+		if err != nil {
+			log.Printf("[WARN] resume-review: get results for %s: %v", op.ID, err)
+			continue
+		}
+		if len(results) == 0 {
+			continue
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"operation":    op,
+			"result_count": len(results),
+		})
+		return
+	}
+	c.JSON(http.StatusNotFound, gin.H{"error": "no completed metadata fetch operations with results found"})
 }
 
 // countByStatus counts CandidateResults with the given status.

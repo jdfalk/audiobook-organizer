@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.48.0
+// version: 1.49.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -1752,6 +1752,27 @@ export const Library = () => {
               }}
               disabled={selectedAudiobooks.length < 2}
             >Fetch & Review</Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={async () => {
+                try {
+                  const latest = await api.getLatestMetadataFetch();
+                  if (!latest) {
+                    toast('No recent metadata fetch with results found. Start a Fetch & Review first.', 'info');
+                    return;
+                  }
+                  setMetadataReviewOpId(latest.operation.id);
+                  setMetadataReviewOpen(true);
+                  toast(`Resumed review for ${latest.result_count} book(s)`, 'success');
+                } catch {
+                  toast('Failed to load latest metadata fetch', 'error');
+                }
+              }}
+              title="Open the review dialog with the most recent completed fetch results — useful after a page reload or accidental dialog close"
+            >
+              Resume Last Review
+            </Button>
             <Button size="small" variant="outlined" onClick={() => setBulkSearchOpen(true)} disabled={!hasSelection}>Search Metadata</Button>
             <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24 }} />
             <Button size="small" variant="outlined" onClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }} disabled={!selectedHasActive}>Save to Files</Button>
