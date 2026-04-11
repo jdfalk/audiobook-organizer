@@ -1443,6 +1443,15 @@ func (m *MockStore) SetBookUserTags(bookID string, tags []string) error { return
 func (m *MockStore) AddBookUserTag(bookID string, tag string) error { return nil }
 func (m *MockStore) RemoveBookUserTag(bookID string, tag string) error { return nil }
 
+func (m *MockStore) GetBookAlternativeTitles(bookID string) ([]BookAlternativeTitle, error) {
+	return nil, nil
+}
+func (m *MockStore) AddBookAlternativeTitle(bookID, title, source, language string) error { return nil }
+func (m *MockStore) RemoveBookAlternativeTitle(bookID, title string) error                { return nil }
+func (m *MockStore) SetBookAlternativeTitles(bookID string, titles []BookAlternativeTitle) error {
+	return nil
+}
+
 func (m *MockStore) RecordPathChange(change *BookPathChange) error {
 	if m.RecordPathChangeFunc != nil {
 		return m.RecordPathChangeFunc(change)
