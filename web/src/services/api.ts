@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.72.0
+// version: 1.73.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -2653,6 +2653,21 @@ export async function batchFetchCandidates(bookIds: string[]): Promise<{ operati
 export async function getOperationResults(operationId: string): Promise<BatchFetchResponse> {
   const response = await fetch(`${API_BASE}/operations/${operationId}/results`);
   if (!response.ok) throw await buildApiError(response, 'Failed to get operation results');
+  return response.json();
+}
+
+// getLatestMetadataFetch returns the most recent completed metadata
+// batch-fetch operation that has persisted results, or null if none
+// exists. Used by the "Resume Last Review" button in the library so a
+// user who lost the reviewOp state (page reload, tab close) can get
+// back to the review dialog without re-running the fetch.
+export async function getLatestMetadataFetch(): Promise<{
+  operation: { id: string; type: string; status: string; created_at: string };
+  result_count: number;
+} | null> {
+  const response = await fetch(`${API_BASE}/metadata/latest-fetch`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw await buildApiError(response, 'Failed to get latest metadata fetch');
   return response.json();
 }
 
