@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.155.0
+// version: 1.156.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -706,6 +706,19 @@ type Server struct {
 	dedupEngine            *DedupEngine
 	activityWriter         *activityWriter
 	http3Server            *http3.Server
+
+	// Shutdown coordination. bgCtx is canceled when Shutdown() runs, and
+	// bgWG tracks every fire-and-forget background goroutine (embedding
+	// backfill, async dedup scans, etc.) so Shutdown can wait for them to
+	// finish BEFORE the database is closed. Without this the embedding
+	// backfill goroutine would still be holding Pebble iterators when
+	// database.CloseStore() ran, and Pebble would panic with "element has
+	// outstanding references" during FileCache.Unref. Every goroutine that
+	// touches the store must: (1) call bgWG.Add(1) before starting,
+	// (2) defer bgWG.Done(), (3) honor bgCtx.Done() for cancellation.
+	bgCtx    context.Context
+	bgCancel context.CancelFunc
+	bgWG     sync.WaitGroup
 }
 
 // ServerConfig holds server configuration
@@ -736,7 +749,10 @@ func NewServer() *Server {
 	metrics.Register()
 
 	store := database.GetGlobalStore()
+	bgCtx, bgCancel := context.WithCancel(context.Background())
 	server := &Server{
+		bgCtx:                  bgCtx,
+		bgCancel:               bgCancel,
 		router:                 router,
 		audiobookService:       NewAudiobookService(store),
 		audiobookUpdateService: NewAudiobookUpdateService(store),
@@ -875,9 +891,17 @@ func NewServer() *Server {
 		}
 	}
 
-	// Start embedding backfill if dedup engine is ready
+	// Start embedding backfill if dedup engine is ready. Tracked via
+	// bgWG so Shutdown() can wait for it to finish before the database
+	// closes — without this, a backfill still iterating Pebble when the
+	// server stops will leave iterators open and panic inside Pebble's
+	// FileCache.Unref during Close().
 	if server.dedupEngine != nil {
-		go server.runEmbeddingBackfill()
+		server.bgWG.Add(1)
+		go func() {
+			defer server.bgWG.Done()
+			server.runEmbeddingBackfill()
+		}()
 	}
 
 	// Wire activity log dual-write hooks
@@ -1167,8 +1191,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Resume interrupted metadata candidate fetch operations
 	s.resumeInterruptedMetadataFetch()
 
-	// Backfill external ID mappings from existing iTunes PIDs (one-time, idempotent)
-	go s.backfillExternalIDs()
+	// Backfill external ID mappings from existing iTunes PIDs (one-time,
+	// idempotent). Tracked via bgWG for the same reason as the embedding
+	// backfill: we can't let it hold Pebble iterators while CloseStore runs.
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		s.backfillExternalIDs()
+	}()
 
 	// Start periodic cleanup of stale transcode temp files
 	if database.GlobalStore != nil {
@@ -1361,6 +1391,29 @@ func (s *Server) Start(cfg ServerConfig) error {
 	}
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		log.Printf("[WARN] HTTP server forced shutdown: %v", err)
+	}
+
+	// Cancel fire-and-forget background work (embedding backfill, async
+	// dedup scans) and wait for it to return. This MUST happen before
+	// embeddingStore.Close() and before Start() returns (which triggers
+	// the deferred closeStore() in cmd/root.go). Without it, the backfill
+	// goroutine keeps iterating Pebble while CloseStore runs, and Pebble's
+	// FileCache.Unref panics with "element has outstanding references"
+	// during shutdown — which has been killing every restart mid-cycle.
+	if s.bgCancel != nil {
+		log.Println("[INFO] Canceling background goroutines...")
+		s.bgCancel()
+	}
+	bgDone := make(chan struct{})
+	go func() {
+		s.bgWG.Wait()
+		close(bgDone)
+	}()
+	select {
+	case <-bgDone:
+		log.Println("[INFO] Background goroutines stopped")
+	case <-time.After(30 * time.Second):
+		log.Println("[WARN] Background goroutines did not stop within 30s — proceeding with shutdown anyway")
 	}
 
 	// Stop the file I/O pool — waits for in-flight jobs to finish
