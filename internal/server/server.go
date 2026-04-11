@@ -870,18 +870,7 @@ func NewServer() *Server {
 				// Re-scan before dedup ever saw it — which meant a
 				// "Foundation & Empire" re-import would stay invisible to
 				// the cluster tab for hours or days.
-				scanner.DedupOnImportHook = func(bookID string) {
-					if server.dedupEngine == nil {
-						return
-					}
-					server.bgWG.Add(1)
-					go func() {
-						defer server.bgWG.Done()
-						if _, err := server.dedupEngine.CheckBook(server.bgCtx, bookID); err != nil {
-							log.Printf("[WARN] dedup-on-import CheckBook(%s): %v", bookID, err)
-						}
-					}()
-				}
+				scanner.DedupOnImportHook = server.fireDedupOnImport
 				log.Println("[INFO] Dedup-on-import hook wired")
 
 				// Wire the organize collision hook. When OrganizeBook
@@ -1031,6 +1020,35 @@ func NewServer() *Server {
 	InitFileIOPool()
 
 	return server
+}
+
+// fireDedupOnImport runs the dedup engine's Layer 1 + Layer 2 checks for
+// a freshly created book, in a bgWG-tracked goroutine so it doesn't
+// block the caller and shutdown drains it before closing Pebble.
+//
+// This is the single entry point used by every CreateBook path —
+// scanner imports (via scanner.DedupOnImportHook), iTunes sync, manual
+// book creation, etc. Having every create path fire the hook means new
+// books get exact-match hash/ISBN/title checks against the whole
+// library immediately, instead of waiting for a user-triggered Re-scan.
+//
+// In particular this catches the "iTunes sync creates a parallel row
+// for a book we already have under audiobook-organizer/" bug — the
+// Layer 1 file-hash check fires inside CheckBook, sees the match, and
+// records a pending dedup candidate that surfaces in the UI.
+//
+// Safe to call even when the dedup engine is disabled — it's a no-op.
+func (s *Server) fireDedupOnImport(bookID string) {
+	if s.dedupEngine == nil || bookID == "" {
+		return
+	}
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		if _, err := s.dedupEngine.CheckBook(s.bgCtx, bookID); err != nil {
+			log.Printf("[WARN] dedup-on-import CheckBook(%s): %v", bookID, err)
+		}
+	}()
 }
 
 // resumeInterruptedOperations checks for operations left in running/queued state
@@ -1332,8 +1350,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}()
 
-	// Start auto-scan file watcher if enabled
-	var fileWatcher *watcher.Watcher
+	// Start auto-scan file watchers if enabled. ONE watcher per enabled
+	// import path — previously only the first enabled path was watched,
+	// so users with multiple import locations had silent blind spots on
+	// every path after the first.
+	var fileWatchers []*watcher.Watcher
 	if config.AppConfig.AutoScanEnabled && database.GlobalStore != nil {
 		importPaths, err := database.GlobalStore.GetAllImportPaths()
 		if err == nil && len(importPaths) > 0 {
@@ -1349,7 +1370,10 @@ func (s *Server) Start(cfg ServerConfig) error {
 					debounce = time.Duration(config.AppConfig.AutoScanDebounceSeconds) * time.Second
 				}
 				watchLog := logger.NewWithActivityLog("auto-scan", database.GlobalStore)
-				fileWatcher = watcher.New(func(path string) {
+				// The same callback is reused across watchers because
+				// each watcher invokes it with its own root path, so
+				// the scan target is correct per event.
+				cb := func(path string) {
 					watchLog.Info("Auto-scan triggered for: %s", path)
 					if hub := realtime.GetGlobalHub(); hub != nil {
 						hub.Broadcast(&realtime.Event{
@@ -1375,13 +1399,15 @@ func (s *Server) Start(cfg ServerConfig) error {
 							}
 						}()
 					}
-				}, debounce)
-				// Start watching the first import path (primary)
-				if startErr := fileWatcher.Start(watchPaths[0]); startErr != nil {
-					watchLog.Warn("Failed to start file watcher: %v", startErr)
-					fileWatcher = nil
-				} else {
-					watchLog.Info("Auto-scan file watcher started for %s", watchPaths[0])
+				}
+				for _, wp := range watchPaths {
+					fw := watcher.New(cb, debounce)
+					if startErr := fw.Start(wp); startErr != nil {
+						watchLog.Warn("Failed to start file watcher for %s: %v", wp, startErr)
+						continue
+					}
+					fileWatchers = append(fileWatchers, fw)
+					watchLog.Info("Auto-scan file watcher started for %s", wp)
 				}
 			}
 		}
@@ -1511,10 +1537,12 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}
 
-	// Stop file watcher
-	if fileWatcher != nil {
-		fileWatcher.Stop()
-		log.Println("[INFO] File watcher stopped")
+	// Stop every file watcher (one per import path).
+	for _, fw := range fileWatchers {
+		fw.Stop()
+	}
+	if len(fileWatchers) > 0 {
+		log.Printf("[INFO] File watchers stopped (%d)", len(fileWatchers))
 	}
 
 	// Close embedding store

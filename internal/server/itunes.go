@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.21.0
+// version: 2.22.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -1068,6 +1068,15 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			log.Error("Failed to save '%s': %v", book.Title, err)
 			updateITunesProgress(log, status, processed, totalGroups)
 			continue
+		}
+
+		// Fire dedup-on-import so iTunes ghost entries get checked
+		// against the organized library. Layer 1 hash match will
+		// surface any parallel row for the same file content that's
+		// already under audiobook-organizer/, instead of quietly
+		// coexisting as two rows pointing at the same audio.
+		if globalServer != nil {
+			globalServer.fireDedupOnImport(created.ID)
 		}
 
 		updateITunesImported(status)
@@ -2315,6 +2324,11 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				log.Error("Failed to create '%s': %v", book.Title, err)
 			} else {
 				newBooks++
+				// Dedup-on-import: catch iTunes ghost entries that
+				// overlap with existing organized-library books.
+				if globalServer != nil {
+					globalServer.fireDedupOnImport(created.ID)
+				}
 				// Set up book_authors junction table
 				if created.AuthorID != nil && len(book.Authors) > 0 {
 					for i := range book.Authors {

@@ -1,5 +1,5 @@
 // file: internal/database/activity_compact_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package database
@@ -210,4 +210,100 @@ func TestCompactByDay_TruncatesLargeDays(t *testing.T) {
 	assert.True(t, dd.Truncated, "Truncated should be true")
 	assert.Equal(t, 100, dd.TruncatedCount, "100 items should have been truncated")
 	assert.Equal(t, 600, dd.OriginalCount)
+}
+
+// TestCompactByDay_MergesIntoExistingDigest is the regression test for the
+// "compact Everything (now) returns 0" bug. When a daily digest already
+// exists for a date AND more uncompacted change/debug entries have been
+// written for that same date (late imports, background tasks, etc.), a
+// second compact run used to `continue` past the day and leave the new
+// entries permanently uncompacted. This test proves that's fixed: the
+// second run merges new entries into the existing digest and deletes the
+// originals.
+func TestCompactByDay_MergesIntoExistingDigest(t *testing.T) {
+	s := newTestActivityStore(t)
+
+	// Day 1: three initial entries at 08:00 on 2025-05-15.
+	day := time.Date(2025, 5, 15, 8, 0, 0, 0, time.UTC)
+	// olderThan is set to "1 hour after the latest entry we'll add",
+	// so every run compacts everything written so far.
+	initialCutoff := time.Date(2025, 5, 15, 12, 0, 0, 0, time.UTC)
+
+	for i := 0; i < 3; i++ {
+		_, err := s.Record(ActivityEntry{
+			Tier:      "change",
+			Type:      "metadata_applied",
+			Level:     "info",
+			Source:    "test",
+			Summary:   "initial entry",
+			Timestamp: day,
+			Details:   map[string]any{"book_title": "Initial Book"},
+		})
+		require.NoError(t, err)
+	}
+
+	// First compaction — 3 entries compacted into 1 digest.
+	r1, err := s.CompactByDay(initialCutoff)
+	require.NoError(t, err)
+	assert.Equal(t, 1, r1.DaysCompacted, "first run should create 1 digest")
+	assert.Equal(t, 3, r1.EntriesDeleted)
+
+	// Late-arriving entries: 5 more entries for the SAME day, written
+	// AFTER the first compact ran. This is the real-world scenario —
+	// background imports, deferred tasks, crash recovery.
+	lateDay := time.Date(2025, 5, 15, 11, 0, 0, 0, time.UTC)
+	for i := 0; i < 5; i++ {
+		_, err := s.Record(ActivityEntry{
+			Tier:      "change",
+			Type:      "tag_written",
+			Level:     "info",
+			Source:    "test",
+			Summary:   "late entry",
+			Timestamp: lateDay,
+			Details:   map[string]any{"book_title": "Late Book", "tag_count": float64(4), "file_count": float64(1)},
+		})
+		require.NoError(t, err)
+	}
+
+	// Second compaction — must MERGE the 5 late entries into the
+	// existing digest, not skip them.
+	r2, err := s.CompactByDay(initialCutoff)
+	require.NoError(t, err)
+	assert.Equal(t, 1, r2.DaysCompacted, "second run should merge into existing digest (counted as 1 day compacted)")
+	assert.Equal(t, 5, r2.EntriesDeleted, "all 5 late entries must be deleted")
+
+	// Exactly one digest row for 2025-05-15 (old one deleted, new one
+	// inserted with combined data).
+	var digestCount int
+	err = s.db.QueryRow(`
+		SELECT COUNT(*) FROM activity_log
+		WHERE tier = 'digest' AND type = 'daily_digest'
+		  AND date(timestamp) = '2025-05-15'`).Scan(&digestCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, digestCount, "must be exactly one digest per day")
+
+	// Zero uncompacted change/debug rows remaining for 2025-05-15.
+	var remaining int
+	err = s.db.QueryRow(`
+		SELECT COUNT(*) FROM activity_log
+		WHERE tier IN ('change','debug') AND compacted = 0
+		  AND date(timestamp) = '2025-05-15'`).Scan(&remaining)
+	require.NoError(t, err)
+	assert.Equal(t, 0, remaining, "no stragglers should remain")
+
+	// Unmarshal the merged digest and verify it contains both old and new counts.
+	var detailsJSON []byte
+	err = s.db.QueryRow(`
+		SELECT details FROM activity_log
+		WHERE tier = 'digest' AND type = 'daily_digest'
+		  AND date(timestamp) = '2025-05-15'`).Scan(&detailsJSON)
+	require.NoError(t, err)
+	var dd DigestDetails
+	err = json.Unmarshal(detailsJSON, &dd)
+	require.NoError(t, err)
+
+	assert.Equal(t, 8, dd.OriginalCount, "merged digest should cover all 8 entries (3 old + 5 new)")
+	assert.Equal(t, 3, dd.Counts["metadata_applied"], "old counts preserved")
+	assert.Equal(t, 5, dd.Counts["tag_written"], "new counts added")
+	assert.Len(t, dd.Items, 8, "all 8 items present")
 }
