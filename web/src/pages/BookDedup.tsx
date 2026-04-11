@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.10.0
+// version: 3.11.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -2570,6 +2570,8 @@ function EmbeddingDedupTab() {
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [bulkMergeOpen, setBulkMergeOpen] = useState(false);
+  const [pageMergeOpen, setPageMergeOpen] = useState(false);
+  const [pageMerging, setPageMerging] = useState(false);
   const [bulkMerging, setBulkMerging] = useState(false);
 
   // Load stats
@@ -2704,6 +2706,10 @@ function EmbeddingDedupTab() {
     }
   };
 
+  // clusters must be computed before the page-merge handler so the
+  // handler closure can read it directly.
+  const clusters = useMemo(() => buildClusters(candidates), [candidates]);
+
   const handleBulkMerge = async () => {
     setBulkMerging(true);
     setBulkMergeOpen(false);
@@ -2724,6 +2730,41 @@ function EmbeddingDedupTab() {
     } finally {
       setBulkMerging(false);
     }
+  };
+
+  // Merge every cluster currently visible on the page. This is the
+  // incremental-review path: the user skims what's on-screen, trusts the
+  // lot, and wants to commit just those without also merging every
+  // off-page candidate the filter matches. Iterates buildClusters
+  // output and calls mergeDedupCluster serially — for a 25-item page
+  // that's typically 5-15 clusters, well under a second each.
+  const handleMergePage = async () => {
+    setPageMerging(true);
+    setPageMergeOpen(false);
+    setScanMsg(null);
+    let merged = 0;
+    let failed = 0;
+    const firstError: { msg?: string } = {};
+    for (const cluster of clusters) {
+      if (!cluster.hasPending) continue;
+      try {
+        await api.mergeDedupCluster(cluster.bookIds);
+        merged++;
+      } catch (err) {
+        failed++;
+        if (!firstError.msg) {
+          firstError.msg = err instanceof Error ? err.message : String(err);
+        }
+      }
+    }
+    const summary =
+      failed === 0
+        ? `Page merge complete: ${merged} cluster${merged === 1 ? '' : 's'} merged`
+        : `Page merge: ${merged} merged, ${failed} failed${firstError.msg ? ` (${firstError.msg})` : ''}`;
+    setScanMsg(summary);
+    loadCandidates();
+    loadStats();
+    setPageMerging(false);
   };
 
   // Aggregate stats for display
@@ -2856,8 +2897,6 @@ function EmbeddingDedupTab() {
     );
   };
 
-  const clusters = useMemo(() => buildClusters(candidates), [candidates]);
-
   return (
     <Box>
       {/* Toolbar */}
@@ -2885,11 +2924,22 @@ function EmbeddingDedupTab() {
           color="warning"
           startIcon={bulkMerging ? <CircularProgress size={16} /> : <MergeIcon />}
           onClick={() => setBulkMergeOpen(true)}
-          disabled={scanning || bulkMerging || total === 0 || statusFilter !== 'pending'}
+          disabled={scanning || bulkMerging || pageMerging || total === 0 || statusFilter !== 'pending'}
           size="small"
           title={statusFilter !== 'pending' ? 'Switch to Pending filter to enable bulk merge' : ''}
         >
           Merge Filtered ({total})
+        </Button>
+        <Button
+          variant="outlined"
+          color="primary"
+          startIcon={pageMerging ? <CircularProgress size={16} /> : <MergeIcon />}
+          onClick={() => setPageMergeOpen(true)}
+          disabled={scanning || bulkMerging || pageMerging || clusters.length === 0 || statusFilter !== 'pending'}
+          size="small"
+          title={statusFilter !== 'pending' ? 'Switch to Pending filter to enable page merge' : 'Merge only clusters visible on this page'}
+        >
+          Merge Page ({clusters.filter((c) => c.hasPending).length})
         </Button>
         {scanMsg && (
           <Alert severity="info" sx={{ py: 0, flexGrow: 1 }} onClose={() => setScanMsg(null)}>
@@ -2918,6 +2968,35 @@ function EmbeddingDedupTab() {
           <Button onClick={() => setBulkMergeOpen(false)}>Cancel</Button>
           <Button onClick={handleBulkMerge} color="warning" variant="contained">
             Merge {total}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Page merge confirmation dialog. Narrower-scope than the bulk
+          merge — only touches clusters currently rendered on the page,
+          which is the incremental-review path for users who trust what
+          they see but not necessarily everything the filter matches. */}
+      <Dialog open={pageMergeOpen} onClose={() => setPageMergeOpen(false)}>
+        <DialogTitle>Merge clusters on this page?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You are about to merge{' '}
+            <strong>{clusters.filter((c) => c.hasPending).length}</strong>{' '}
+            cluster{clusters.filter((c) => c.hasPending).length === 1 ? '' : 's'}{' '}
+            currently visible on this page. Each cluster becomes one version
+            group; this is irreversible.
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2 }}>
+            Off-page candidates matching the same filter are <strong>not</strong>{' '}
+            touched — use Merge Filtered for that. This lets you commit a
+            reviewed subset without also merging everything the filter catches.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPageMergeOpen(false)}>Cancel</Button>
+          <Button onClick={handleMergePage} color="primary" variant="contained">
+            Merge {clusters.filter((c) => c.hasPending).length} cluster
+            {clusters.filter((c) => c.hasPending).length === 1 ? '' : 's'}
           </Button>
         </DialogActions>
       </Dialog>
