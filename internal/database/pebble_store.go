@@ -4432,6 +4432,103 @@ func (p *PebbleStore) RemoveBookUserTag(bookID string, tag string) error {
 	return p.SetBookUserTags(bookID, filtered)
 }
 
+// --- Book Alternative Titles ---
+//
+// Stored as one JSON blob per book under key `alt_titles:book:<id>`.
+// The Pebble store doesn't persist to any SQL table so the schema
+// from migration 046 is irrelevant here — this is the Pebble-native
+// representation used by production. The SQLite implementation is
+// only for the test-backed sidecar path.
+
+// GetBookAlternativeTitles returns every alt title for a book.
+func (p *PebbleStore) GetBookAlternativeTitles(bookID string) ([]BookAlternativeTitle, error) {
+	dbKey := []byte(fmt.Sprintf("alt_titles:book:%s", bookID))
+	value, closer, err := p.db.Get(dbKey)
+	if err == pebble.ErrNotFound {
+		return []BookAlternativeTitle{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+
+	var alts []BookAlternativeTitle
+	if err := json.Unmarshal(value, &alts); err != nil {
+		return nil, err
+	}
+	return alts, nil
+}
+
+// SetBookAlternativeTitles replaces every alt title for a book.
+func (p *PebbleStore) SetBookAlternativeTitles(bookID string, titles []BookAlternativeTitle) error {
+	dbKey := []byte(fmt.Sprintf("alt_titles:book:%s", bookID))
+	// Normalize: make sure every row has book_id populated + a
+	// created_at, and default source="user" when omitted.
+	now := time.Now().UTC()
+	normalized := make([]BookAlternativeTitle, 0, len(titles))
+	for _, alt := range titles {
+		if alt.Title == "" {
+			continue
+		}
+		if alt.BookID == "" {
+			alt.BookID = bookID
+		}
+		if alt.Source == "" {
+			alt.Source = "user"
+		}
+		if alt.CreatedAt.IsZero() {
+			alt.CreatedAt = now
+		}
+		normalized = append(normalized, alt)
+	}
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return err
+	}
+	return p.db.Set(dbKey, data, pebble.Sync)
+}
+
+// AddBookAlternativeTitle appends one alt title. Idempotent on (book_id,
+// title) — if the same title already exists, the call is a no-op and
+// the existing source/language/created_at are preserved.
+func (p *PebbleStore) AddBookAlternativeTitle(bookID, title, source, language string) error {
+	if title == "" {
+		return fmt.Errorf("alternative title cannot be empty")
+	}
+	existing, err := p.GetBookAlternativeTitles(bookID)
+	if err != nil {
+		return err
+	}
+	for _, alt := range existing {
+		if alt.Title == title {
+			return nil // already present
+		}
+	}
+	existing = append(existing, BookAlternativeTitle{
+		BookID:    bookID,
+		Title:     title,
+		Source:    source,
+		Language:  language,
+		CreatedAt: time.Now().UTC(),
+	})
+	return p.SetBookAlternativeTitles(bookID, existing)
+}
+
+// RemoveBookAlternativeTitle deletes one variant. No-op if absent.
+func (p *PebbleStore) RemoveBookAlternativeTitle(bookID, title string) error {
+	existing, err := p.GetBookAlternativeTitles(bookID)
+	if err != nil {
+		return err
+	}
+	filtered := make([]BookAlternativeTitle, 0, len(existing))
+	for _, alt := range existing {
+		if alt.Title != title {
+			filtered = append(filtered, alt)
+		}
+	}
+	return p.SetBookAlternativeTitles(bookID, filtered)
+}
+
 // Reset clears all data from the store and resets all counters to initial state
 func (p *PebbleStore) Reset() error {
 	// Use DeleteRange to wipe the entire keyspace in one operation.

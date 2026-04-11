@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.162.0
+// version: 1.163.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1687,6 +1687,11 @@ func (s *Server) setupRoutes() {
 			protected.GET("/tags", s.listAllUserTags)
 			protected.GET("/audiobooks/:id/user-tags", s.getBookUserTags)
 			protected.POST("/audiobooks/batch-tags", s.batchUpdateTags)
+
+			// Book alternative titles
+			protected.GET("/audiobooks/:id/alternative-titles", s.getBookAlternativeTitles)
+			protected.POST("/audiobooks/:id/alternative-titles", s.addBookAlternativeTitle)
+			protected.DELETE("/audiobooks/:id/alternative-titles", s.removeBookAlternativeTitle)
 
 			// User preferences
 			protected.GET("/preferences/:key", s.getUserPreference)
@@ -3468,6 +3473,83 @@ func (s *Server) getBookUserTags(c *gin.Context) {
 		tags = []string{}
 	}
 	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
+// getBookAlternativeTitles handles GET /audiobooks/:id/alternative-titles.
+// Returns the list of alt titles for a book along with source/language
+// metadata so the UI can show where each came from.
+func (s *Server) getBookAlternativeTitles(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	alts, err := database.GlobalStore.GetBookAlternativeTitles(id)
+	if err != nil {
+		internalError(c, "failed to get alternative titles", err)
+		return
+	}
+	if alts == nil {
+		alts = []database.BookAlternativeTitle{}
+	}
+	c.JSON(http.StatusOK, gin.H{"alternative_titles": alts})
+}
+
+// addBookAlternativeTitle handles POST /audiobooks/:id/alternative-titles.
+// Body: {"title": "...", "source": "user", "language": "en"}
+// Idempotent on (book_id, title) — re-adding the same title is a no-op.
+func (s *Server) addBookAlternativeTitle(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	var body struct {
+		Title    string `json:"title"`
+		Source   string `json:"source,omitempty"`
+		Language string `json:"language,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.Title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		return
+	}
+	// Confirm the book exists before inserting — avoids orphan alt
+	// title rows for deleted books.
+	if book, err := database.GlobalStore.GetBookByID(id); err != nil || book == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		return
+	}
+	if err := database.GlobalStore.AddBookAlternativeTitle(id, body.Title, body.Source, body.Language); err != nil {
+		internalError(c, "failed to add alternative title", err)
+		return
+	}
+	alts, _ := database.GlobalStore.GetBookAlternativeTitles(id)
+	c.JSON(http.StatusOK, gin.H{"alternative_titles": alts})
+}
+
+// removeBookAlternativeTitle handles DELETE /audiobooks/:id/alternative-titles.
+// Body: {"title": "..."}
+// Body is used instead of a path param so titles with slashes/special
+// characters don't need URL-encoding hoops.
+func (s *Server) removeBookAlternativeTitle(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+	var body struct {
+		Title string `json:"title"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.Title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		return
+	}
+	if err := database.GlobalStore.RemoveBookAlternativeTitle(id, body.Title); err != nil {
+		internalError(c, "failed to remove alternative title", err)
+		return
+	}
+	alts, _ := database.GlobalStore.GetBookAlternativeTitles(id)
+	c.JSON(http.StatusOK, gin.H{"alternative_titles": alts})
 }
 
 func (s *Server) batchUpdateTags(c *gin.Context) {

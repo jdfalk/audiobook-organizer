@@ -4096,6 +4096,88 @@ func (s *SQLiteStore) RemoveBookUserTag(bookID string, tag string) error {
 	return err
 }
 
+// GetBookAlternativeTitles returns every alt title for a book, ordered
+// by source (user-entered first, auto-generated last) then title.
+func (s *SQLiteStore) GetBookAlternativeTitles(bookID string) ([]BookAlternativeTitle, error) {
+	rows, err := s.db.Query(`
+        SELECT id, book_id, title, source, COALESCE(language, ''), created_at
+        FROM book_alternative_titles
+        WHERE book_id = ?
+        ORDER BY CASE source WHEN 'user' THEN 0 ELSE 1 END, title`, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []BookAlternativeTitle
+	for rows.Next() {
+		var alt BookAlternativeTitle
+		if err := rows.Scan(&alt.ID, &alt.BookID, &alt.Title, &alt.Source, &alt.Language, &alt.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, alt)
+	}
+	return out, rows.Err()
+}
+
+// AddBookAlternativeTitle adds a variant title to a book. Idempotent
+// on (book_id, title) via the UNIQUE constraint — re-adding the same
+// title with a different source is a no-op, which is intentional:
+// user-added titles should not be overwritten by auto-generated ones.
+func (s *SQLiteStore) AddBookAlternativeTitle(bookID, title, source, language string) error {
+	if title == "" {
+		return fmt.Errorf("alternative title cannot be empty")
+	}
+	if source == "" {
+		source = "user"
+	}
+	var langParam interface{}
+	if language != "" {
+		langParam = language
+	}
+	_, err := s.db.Exec(`
+        INSERT OR IGNORE INTO book_alternative_titles (book_id, title, source, language)
+        VALUES (?, ?, ?, ?)`, bookID, title, source, langParam)
+	return err
+}
+
+// RemoveBookAlternativeTitle deletes one variant. No-op if absent.
+func (s *SQLiteStore) RemoveBookAlternativeTitle(bookID, title string) error {
+	_, err := s.db.Exec(`DELETE FROM book_alternative_titles WHERE book_id = ? AND title = ?`, bookID, title)
+	return err
+}
+
+// SetBookAlternativeTitles replaces every alt title for a book. Used
+// by the PUT endpoint that takes the full list as a single request.
+func (s *SQLiteStore) SetBookAlternativeTitles(bookID string, titles []BookAlternativeTitle) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM book_alternative_titles WHERE book_id = ?`, bookID); err != nil {
+		return err
+	}
+	for _, alt := range titles {
+		if alt.Title == "" {
+			continue
+		}
+		src := alt.Source
+		if src == "" {
+			src = "user"
+		}
+		var langParam interface{}
+		if alt.Language != "" {
+			langParam = alt.Language
+		}
+		if _, err := tx.Exec(`
+            INSERT INTO book_alternative_titles (book_id, title, source, language)
+            VALUES (?, ?, ?, ?)`, bookID, alt.Title, src, langParam); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1

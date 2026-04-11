@@ -12332,3 +12332,77 @@ func (_c *MockStore_ScanPrefix_Call) RunAndReturn(run func(string) ([]database.K
 	_c.Call.Return(run)
 	return _c
 }
+
+// --- Book Alternative Titles ---
+
+// GetBookAlternativeTitles stubs the Store interface method.
+func (_mock *MockStore) GetBookAlternativeTitles(bookID string) ([]database.BookAlternativeTitle, error) {
+	ret := _mock.Called(bookID)
+	var r0 []database.BookAlternativeTitle
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.BookAlternativeTitle)
+	}
+	return r0, ret.Error(1)
+}
+
+type MockStore_GetBookAlternativeTitles_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetBookAlternativeTitles(bookID interface{}) *MockStore_GetBookAlternativeTitles_Call {
+	return &MockStore_GetBookAlternativeTitles_Call{Call: _e.mock.On("GetBookAlternativeTitles", bookID)}
+}
+
+func (_c *MockStore_GetBookAlternativeTitles_Call) Return(alts []database.BookAlternativeTitle, err error) *MockStore_GetBookAlternativeTitles_Call {
+	_c.Call.Return(alts, err)
+	return _c
+}
+
+// AddBookAlternativeTitle stubs the Store interface method.
+func (_mock *MockStore) AddBookAlternativeTitle(bookID, title, source, language string) error {
+	ret := _mock.Called(bookID, title, source, language)
+	return ret.Error(0)
+}
+
+type MockStore_AddBookAlternativeTitle_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) AddBookAlternativeTitle(bookID, title, source, language interface{}) *MockStore_AddBookAlternativeTitle_Call {
+	return &MockStore_AddBookAlternativeTitle_Call{Call: _e.mock.On("AddBookAlternativeTitle", bookID, title, source, language)}
+}
+
+func (_c *MockStore_AddBookAlternativeTitle_Call) Return(err error) *MockStore_AddBookAlternativeTitle_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+// RemoveBookAlternativeTitle stubs the Store interface method.
+func (_mock *MockStore) RemoveBookAlternativeTitle(bookID, title string) error {
+	ret := _mock.Called(bookID, title)
+	return ret.Error(0)
+}
+
+type MockStore_RemoveBookAlternativeTitle_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) RemoveBookAlternativeTitle(bookID, title interface{}) *MockStore_RemoveBookAlternativeTitle_Call {
+	return &MockStore_RemoveBookAlternativeTitle_Call{Call: _e.mock.On("RemoveBookAlternativeTitle", bookID, title)}
+}
+
+func (_c *MockStore_RemoveBookAlternativeTitle_Call) Return(err error) *MockStore_RemoveBookAlternativeTitle_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+// SetBookAlternativeTitles stubs the Store interface method.
+func (_mock *MockStore) SetBookAlternativeTitles(bookID string, titles []database.BookAlternativeTitle) error {
+	ret := _mock.Called(bookID, titles)
+	return ret.Error(0)
+}
+
+type MockStore_SetBookAlternativeTitles_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) SetBookAlternativeTitles(bookID, titles interface{}) *MockStore_SetBookAlternativeTitles_Call {
+	return &MockStore_SetBookAlternativeTitles_Call{Call: _e.mock.On("SetBookAlternativeTitles", bookID, titles)}
+}
+
+func (_c *MockStore_SetBookAlternativeTitles_Call) Return(err error) *MockStore_SetBookAlternativeTitles_Call {
+	_c.Call.Return(err)
+	return _c
+}
