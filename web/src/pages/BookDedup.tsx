@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.15.0
+// version: 3.16.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -2577,6 +2577,10 @@ function EmbeddingDedupTab() {
   const [bulkMergeOpen, setBulkMergeOpen] = useState(false);
   const [pageMergeOpen, setPageMergeOpen] = useState(false);
   const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
+  const [seriesMergeOpen, setSeriesMergeOpen] = useState(false);
+  const [seriesMergeLoading, setSeriesMergeLoading] = useState(false);
+  const [seriesSummary, setSeriesSummary] = useState<api.DedupSeriesSummary[]>([]);
+  const [seriesMergeRunning, setSeriesMergeRunning] = useState<number | null>(null);
   const [pageMerging, setPageMerging] = useState(false);
   const [bulkMerging, setBulkMerging] = useState(false);
 
@@ -2637,6 +2641,43 @@ function EmbeddingDedupTab() {
 
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadCandidates(); }, [loadCandidates]);
+
+  // Open the Merge Series dialog, which fetches the list of series
+  // with pending cluster candidates and lets the user fire a
+  // per-series bulk merge. Re-fetches on every open so the counts
+  // match current state.
+  const handleOpenSeriesMerge = async () => {
+    setSeriesMergeOpen(true);
+    setSeriesMergeLoading(true);
+    try {
+      const summary = await api.listDedupCandidateSeries();
+      setSeriesSummary(summary);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load series summary');
+      setSeriesSummary([]);
+    } finally {
+      setSeriesMergeLoading(false);
+    }
+  };
+
+  const handleMergeSeries = async (seriesId: number) => {
+    setSeriesMergeRunning(seriesId);
+    try {
+      const result = await api.mergeDedupCandidateSeries(seriesId);
+      setScanMsg(
+        `Series merge complete: ${result.clusters_merged} cluster(s) merged, ${result.books_merged} books`
+      );
+      // Refresh the summary so the just-merged series disappears.
+      const fresh = await api.listDedupCandidateSeries();
+      setSeriesSummary(fresh);
+      loadCandidates();
+      loadStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Series merge failed');
+    } finally {
+      setSeriesMergeRunning(null);
+    }
+  };
 
   // Download the current filtered candidate set as CSV or JSON. Builds
   // the query string with whatever filters the user has active (status,
@@ -3001,6 +3042,17 @@ function EmbeddingDedupTab() {
         </Button>
         <Button
           variant="outlined"
+          color="secondary"
+          startIcon={<MergeIcon />}
+          onClick={handleOpenSeriesMerge}
+          disabled={scanning || bulkMerging || pageMerging}
+          size="small"
+          title="Merge every pending cluster within a chosen series"
+        >
+          Merge Series
+        </Button>
+        <Button
+          variant="outlined"
           color="inherit"
           startIcon={<DownloadIcon />}
           onClick={(e) => setExportMenuAnchor(e.currentTarget)}
@@ -3096,6 +3148,80 @@ function EmbeddingDedupTab() {
             Merge {clusters.filter((c) => c.hasPending).length} cluster
             {clusters.filter((c) => c.hasPending).length === 1 ? '' : 's'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Series merge dialog — one row per series that has pending
+          same-series cluster candidates. User clicks a row to merge
+          every cluster in that series at once. Different from
+          Merge Filtered because it's series-scoped regardless of
+          the current status/layer filter. */}
+      <Dialog
+        open={seriesMergeOpen}
+        onClose={() => setSeriesMergeOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Merge clusters by series</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Each row below is a series that has pending duplicate
+            clusters entirely within it. Click a row to merge every
+            cluster in that series — each becomes its own version
+            group. Cross-series candidates (pairs where the two sides
+            belong to different series) are not touched.
+          </DialogContentText>
+          {seriesMergeLoading ? (
+            <Box sx={{ textAlign: 'center', py: 3 }}><CircularProgress /></Box>
+          ) : seriesSummary.length === 0 ? (
+            <Typography color="text.secondary">
+              No series with pending same-series clusters right now.
+            </Typography>
+          ) : (
+            <Stack spacing={1}>
+              {seriesSummary.map((row) => {
+                const running = seriesMergeRunning === row.series_id;
+                return (
+                  <Box
+                    key={row.series_id}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      p: 1.5,
+                      border: 1,
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="body2" fontWeight="medium" noWrap>
+                        {row.series_name || `(series #${row.series_id})`}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.cluster_count} cluster{row.cluster_count === 1 ? '' : 's'} ·{' '}
+                        {row.book_count} book{row.book_count === 1 ? '' : 's'} ·{' '}
+                        {row.candidate_count} candidate{row.candidate_count === 1 ? '' : 's'}
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="secondary"
+                      onClick={() => handleMergeSeries(row.series_id)}
+                      disabled={seriesMergeRunning != null}
+                      startIcon={running ? <CircularProgress size={14} /> : <MergeIcon />}
+                    >
+                      Merge
+                    </Button>
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSeriesMergeOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 
