@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/oklog/ulid/v2"
@@ -344,45 +345,89 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 	})
 }
 
-// handleGetLatestMetadataFetch returns the most recently-created
-// metadata_candidate_fetch operation that has persisted results. Used
-// by the "Resume Last Review" button in the library: after a fetch
-// completes the user may close the tab, reload, or otherwise lose the
-// in-memory reviewOp state, and they need a way to get back to the
-// review dialog without re-running the fetch. Returns 404 if no such
-// operation exists.
+// handleListMetadataFetchOperations returns recent completed
+// metadata_candidate_fetch operations that have persisted results.
+//
+// Returns up to the last 10 operations where:
+//   - type = metadata_candidate_fetch
+//   - status = completed
+//   - at least one persisted result row exists
+//
+// The frontend Resume Review dialog displays these so the user can
+// pick which fetch to review. Without this, firing two fetches
+// back-to-back without reviewing the first leaves the first's
+// results invisible in the UI — the operation id is only held in
+// React state, and only the latest gets tracked.
+//
+// 10 is a soft cap chosen as "enough to cover back-to-back fetches
+// plus a review backlog without overwhelming the dialog".
 func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
+	const maxOps = 10
 	store := database.GlobalStore
-	ops, err := store.GetRecentOperations(50)
+	// Scan more than maxOps from recent history because the filter
+	// (type + completed + non-empty results) can reject many rows.
+	ops, err := store.GetRecentOperations(200)
 	if err != nil {
 		internalError(c, "failed to list recent operations", err)
 		return
 	}
+	type fetchOpSummary struct {
+		ID           string    `json:"id"`
+		Type         string    `json:"type"`
+		Status       string    `json:"status"`
+		CreatedAt    time.Time `json:"created_at"`
+		CompletedAt  time.Time `json:"completed_at,omitempty"`
+		ResultCount  int       `json:"result_count"`
+		MatchedCount int       `json:"matched_count"`
+		NoMatchCount int       `json:"no_match_count"`
+		ErrorCount   int       `json:"error_count"`
+	}
+	var out []fetchOpSummary
 	for _, op := range ops {
+		if len(out) >= maxOps {
+			break
+		}
 		if op.Type != "metadata_candidate_fetch" {
 			continue
 		}
 		if op.Status != "completed" {
 			continue
 		}
-		// Confirm it actually has persisted results — an operation
-		// can "complete" with zero results if every book's fetch
-		// failed, and there's nothing to review in that case.
 		results, err := store.GetOperationResults(op.ID)
 		if err != nil {
-			log.Printf("[WARN] resume-review: get results for %s: %v", op.ID, err)
+			log.Printf("[WARN] list-metadata-fetches: get results for %s: %v", op.ID, err)
 			continue
 		}
 		if len(results) == 0 {
 			continue
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"operation":    op,
-			"result_count": len(results),
-		})
-		return
+		var matched, noMatch, errCount int
+		for _, r := range results {
+			switch r.Status {
+			case "matched":
+				matched++
+			case "no_match":
+				noMatch++
+			case "error":
+				errCount++
+			}
+		}
+		summary := fetchOpSummary{
+			ID:           op.ID,
+			Type:         op.Type,
+			Status:       op.Status,
+			CreatedAt:    op.CreatedAt,
+			ResultCount:  len(results),
+			MatchedCount: matched,
+			NoMatchCount: noMatch,
+			ErrorCount:   errCount,
+		}
+		if op.CompletedAt != nil {
+			summary.CompletedAt = *op.CompletedAt
+		}
+		out = append(out, summary)
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "no completed metadata fetch operations with results found"})
+	c.JSON(http.StatusOK, gin.H{"operations": out, "count": len(out)})
 }
 
 // countByStatus counts CandidateResults with the given status.

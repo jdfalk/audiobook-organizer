@@ -17,6 +17,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   TextField,
   IconButton,
@@ -288,6 +289,8 @@ export const Library = () => {
     searchParams.get('reviewOp')
   );
   const [metadataReviewOpen, setMetadataReviewOpen] = useState(!!searchParams.get('reviewOp'));
+  const [resumeReviewPickerOpen, setResumeReviewPickerOpen] = useState(false);
+  const [recentFetches, setRecentFetches] = useState<api.MetadataFetchSummary[]>([]);
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
 
@@ -1757,21 +1760,20 @@ export const Library = () => {
               variant="outlined"
               onClick={async () => {
                 try {
-                  const latest = await api.getLatestMetadataFetch();
-                  if (!latest) {
+                  const list = await api.getRecentMetadataFetches();
+                  if (list.length === 0) {
                     toast('No recent metadata fetch with results found. Start a Fetch & Review first.', 'info');
                     return;
                   }
-                  setMetadataReviewOpId(latest.operation.id);
-                  setMetadataReviewOpen(true);
-                  toast(`Resumed review for ${latest.result_count} book(s)`, 'success');
+                  setRecentFetches(list);
+                  setResumeReviewPickerOpen(true);
                 } catch {
-                  toast('Failed to load latest metadata fetch', 'error');
+                  toast('Failed to load recent metadata fetches', 'error');
                 }
               }}
-              title="Open the review dialog with the most recent completed fetch results — useful after a page reload or accidental dialog close"
+              title="Pick a recent fetch operation to review — useful when multiple fetches completed without review or after a page reload"
             >
-              Resume Last Review
+              Resume Review
             </Button>
             <Button size="small" variant="outlined" onClick={() => setBulkSearchOpen(true)} disabled={!hasSelection}>Search Metadata</Button>
             <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24 }} />
@@ -2955,6 +2957,72 @@ export const Library = () => {
             toast={toast}
           />
         )}
+
+        {/* Resume Review picker: lists recent completed
+            metadata_candidate_fetch ops with their result counts.
+            Click a row to open the MetadataReviewDialog for that
+            specific operation. Solves the "fired two fetches, first
+            one's results are lost in the UI" scenario. */}
+        <Dialog
+          open={resumeReviewPickerOpen}
+          onClose={() => setResumeReviewPickerOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Resume metadata review</DialogTitle>
+          <DialogContent>
+            <DialogContentText sx={{ mb: 2 }}>
+              Pick a completed metadata fetch to review. Results stay in
+              the operation log until you review them, so even older
+              fetches can still be opened if you never got around to it.
+            </DialogContentText>
+            {recentFetches.length === 0 ? (
+              <Typography color="text.secondary">No recent fetches found.</Typography>
+            ) : (
+              <Stack spacing={1}>
+                {recentFetches.map((op) => (
+                  <Box
+                    key={op.id}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      p: 1.5,
+                      border: 1,
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      cursor: 'pointer',
+                      '&:hover': { borderColor: 'primary.main' },
+                    }}
+                    onClick={() => {
+                      setMetadataReviewOpId(op.id);
+                      setMetadataReviewOpen(true);
+                      setResumeReviewPickerOpen(false);
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="body2" fontWeight="medium" noWrap>
+                        {new Date(op.completed_at || op.created_at).toLocaleString()}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {op.matched_count} matched ·{' '}
+                        {op.no_match_count} no match ·{' '}
+                        {op.error_count} error{' '}
+                        ({op.result_count} total)
+                      </Typography>
+                    </Box>
+                    <Button size="small" variant="contained">
+                      Review
+                    </Button>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setResumeReviewPickerOpen(false)}>Close</Button>
+          </DialogActions>
+        </Dialog>
 
         <VersionManagement
           audiobookId={versionManagingAudiobook?.id || ''}

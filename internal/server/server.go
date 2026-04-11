@@ -1884,7 +1884,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/metadata/fields", s.getMetadataFields)
 			protected.POST("/metadata/bulk-fetch", s.bulkFetchMetadata)
 			protected.POST("/metadata/batch-fetch-candidates", s.handleBatchFetchCandidates)
-			protected.GET("/metadata/latest-fetch", s.handleGetLatestMetadataFetch)
+			protected.GET("/metadata/recent-fetches", s.handleGetLatestMetadataFetch)
 			protected.POST("/metadata/batch-apply-candidates", s.handleBatchApplyCandidates)
 			protected.POST("/metadata/batch-reject-candidates", s.handleRejectCandidates)
 			protected.POST("/metadata/batch-unreject-candidates", s.handleUnrejectCandidates)
