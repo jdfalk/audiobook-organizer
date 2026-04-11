@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_cgo.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 //
 // Native CGO bindings to TagLib C API for high-performance tag writing.
@@ -100,4 +100,69 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	}
 
 	return nil
+}
+
+// readTagsWithTaglib reads tags from a file via native TagLib (CGO).
+// Returns a flat key → list-of-values map, matching the shape of the
+// WASM fallback in taglib_support.go so callers can use one code path.
+// Used by ExtractMetadata when dhowden/tag fails to parse a file.
+func readTagsWithTaglib(filePath string) (map[string][]string, error) {
+	abs, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("taglib read abs: %w", err)
+	}
+
+	cPath := C.CString(abs)
+	defer C.free(unsafe.Pointer(cPath))
+
+	file := C.taglib_file_new(cPath)
+	if file == nil {
+		return nil, fmt.Errorf("taglib: failed to open %s", abs)
+	}
+	defer C.taglib_file_free(file)
+
+	if C.taglib_file_is_valid(file) == 0 {
+		return nil, fmt.Errorf("taglib: file not valid/supported: %s", abs)
+	}
+
+	// taglib_property_keys returns a NULL-terminated array of C strings.
+	// The array AND each string are owned by taglib and must be freed via
+	// taglib_property_free.
+	keys := C.taglib_property_keys(file)
+	if keys == nil {
+		// No properties — not an error, just an empty tag set.
+		return map[string][]string{}, nil
+	}
+	defer C.taglib_property_free(keys)
+
+	tags := map[string][]string{}
+	// Walk the NULL-terminated key array.
+	keyPtr := unsafe.Pointer(keys)
+	for {
+		cKey := *(**C.char)(keyPtr)
+		if cKey == nil {
+			break
+		}
+		key := C.GoString(cKey)
+
+		// taglib_property_get returns a NULL-terminated value array, also
+		// owned by taglib and freed via taglib_property_free.
+		values := C.taglib_property_get(file, cKey)
+		if values != nil {
+			valPtr := unsafe.Pointer(values)
+			for {
+				cVal := *(**C.char)(valPtr)
+				if cVal == nil {
+					break
+				}
+				tags[key] = append(tags[key], C.GoString(cVal))
+				valPtr = unsafe.Pointer(uintptr(valPtr) + unsafe.Sizeof(cVal))
+			}
+			C.taglib_property_free(values)
+		}
+
+		keyPtr = unsafe.Pointer(uintptr(keyPtr) + unsafe.Sizeof(cKey))
+	}
+
+	return tags, nil
 }
