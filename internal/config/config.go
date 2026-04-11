@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.33.0
+// version: 1.34.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -154,6 +154,24 @@ type Config struct {
 	MetadataLLMScoringEnabled bool    `json:"metadata_llm_scoring_enabled"` // default false — opt-in, costs money
 	MetadataLLMRerankEpsilon  float64 `json:"metadata_llm_rerank_epsilon"`  // default 0.01
 	MetadataLLMRerankTopK     int     `json:"metadata_llm_rerank_top_k"`    // default 5
+
+	// Tag-write backup policy.
+	//
+	// When enabled, metadata_fetch_service creates a .bak-<timestamp>
+	// hardlink next to every audio file it's about to write tags to.
+	// Historically this was always on and accumulated tens of thousands
+	// of stale backup files across the library, filling terabytes of
+	// disk. It's also of questionable value — TagLib writes tags
+	// in-place, which means a hardlink snapshot DOES NOT preserve
+	// pre-write content if the writer modifies the inode's data. The
+	// hardlinks only survive as real backups when the writer happens
+	// to use a rename-dance, which is not guaranteed across formats.
+	//
+	// Default is false: don't create the backups at all. Users who
+	// want belt-and-suspenders recovery can turn it on, but they
+	// should pair it with the cleanup-backups maintenance endpoint
+	// to keep the library from growing unbounded.
+	WriteBackupBeforeTagWrite bool `json:"write_backup_before_tag_write"` // default false
 
 	// API limits
 	APIRateLimitPerMinute  int  `json:"api_rate_limit_per_minute"`
@@ -590,6 +608,7 @@ func InitConfig() {
 	AppConfig.MetadataLLMScoringEnabled = false
 	AppConfig.MetadataLLMRerankEpsilon = 0.01
 	AppConfig.MetadataLLMRerankTopK = 5
+	AppConfig.WriteBackupBeforeTagWrite = false
 
 	// Default Open Library dump dir to {RootDir}/openlibrary-dumps if not set
 	if AppConfig.OpenLibraryDumpDir == "" && AppConfig.RootDir != "" {
@@ -897,6 +916,11 @@ func ResetToDefaults() {
 		MetadataLLMScoringEnabled: false,
 		MetadataLLMRerankEpsilon:  0.01,
 		MetadataLLMRerankTopK:     5,
+
+		// Tag-write backup default OFF — old default was always-on and
+		// accumulated tens of thousands of stale backup files across
+		// the library (multi-TB apparent size). Opt-in if you want it.
+		WriteBackupBeforeTagWrite: false,
 
 		// Logging
 		LogLevel:          "info",

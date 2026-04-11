@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.46.0
+// version: 4.47.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -2647,9 +2647,30 @@ func audioFilesInDir(dir string) []string {
 	return files
 }
 
-// backupFileBeforeWrite creates a timestamped .bak copy of a file before writing tags.
+// backupFileBeforeWrite creates a timestamped .bak copy of a file before
+// writing tags — IF the WriteBackupBeforeTagWrite config flag is enabled.
+//
+// Default is OFF. Historically this function ran unconditionally on every
+// tag write and used os.Link (hardlink) for "no disk space cost". Two
+// problems with that:
+//
+//  1. Tens of thousands of stale backup files accumulated across the
+//     library (43K+ files, multi-TB apparent size in production) because
+//     nothing ever cleaned them up.
+//  2. Hardlinks don't actually preserve pre-write content when the
+//     writer modifies the inode in place (which TagLib does for some
+//     formats). The "backup" could be a hardlink to the same now-modified
+//     data, providing false safety.
+//
+// The flag is opt-in. Users who turn it on should also run the
+// cleanup-backups maintenance endpoint periodically to keep the library
+// from growing unbounded.
+//
 // Failures are logged but non-fatal — the write-back proceeds regardless.
 func backupFileBeforeWrite(filePath string) {
+	if !config.AppConfig.WriteBackupBeforeTagWrite {
+		return
+	}
 	if filePath == "" {
 		return
 	}
@@ -2657,8 +2678,6 @@ func backupFileBeforeWrite(filePath string) {
 		return
 	}
 	backupPath := filePath + ".bak-" + time.Now().Format("20060102-150405")
-	// Use hardlink — same data, no disk space cost. Falls back to copy if
-	// hardlink fails (cross-device, unsupported filesystem).
 	if err := os.Link(filePath, backupPath); err != nil {
 		// Hardlink failed — fall back to copy
 		if err := fileops.SafeCopy(filePath, backupPath, fileops.OperationConfig{}); err != nil {
