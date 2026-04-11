@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -3522,4 +3522,133 @@ func (s *Server) handleGenerateITLTests(c *gin.Context) {
 		"book_files": len(allBookFiles),
 		"message":    fmt.Sprintf("Generated ITL test suite in %s with %d books and %d book_files", outputDir, len(allBooks), len(allBookFiles)),
 	})
+}
+
+// backupCleanupResult summarizes a cleanup-backups run.
+type backupCleanupResult struct {
+	DryRun       bool     `json:"dry_run"`
+	RootDir      string   `json:"root_dir"`
+	FilesFound   int      `json:"files_found"`
+	FilesRemoved int      `json:"files_removed"`
+	BytesFreed   int64    `json:"bytes_freed"`
+	Errors       []string `json:"errors,omitempty"`
+}
+
+// handleCleanupBackups sweeps the library for stale tag-write backup files
+// and deletes them. Two patterns are matched:
+//
+//  1. `*.backup` and `*.backup.*.backup` — created by the older
+//     fileops.FileOperation.Execute() path, which retains 5 per file but
+//     never garbage-collects when a file stops being written.
+//  2. `*.bak-YYYYMMDD-HHMMSS` — created by the write-back path in
+//     metadata_fetch_service.backupFileBeforeWrite. That function is now
+//     gated on the WriteBackupBeforeTagWrite config flag (default off)
+//     so new backups stop accumulating, but the historical pile (tens of
+//     thousands of files, multi-TB apparent size) still needs sweeping.
+//
+// Protected paths:
+//   - Every directory whose name starts with `.` is skipped via
+//     filepath.SkipDir. This covers the iTunes writeback folder
+//     (.itunes-writeback) and the cover dedup store (.covers).
+//   - The iTunes Media tree outside the managed library is not walked
+//     because we only scan under config.AppConfig.RootDir.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would be removed
+//   - dry_run=false — actually delete
+func (s *Server) handleCleanupBackups(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") == "true"
+	rootDir := config.AppConfig.RootDir
+	if rootDir == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "root_dir is not configured"})
+		return
+	}
+	if _, err := os.Stat(rootDir); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("root_dir not accessible: %v", err)})
+		return
+	}
+
+	result := backupCleanupResult{
+		DryRun:  dryRun,
+		RootDir: rootDir,
+	}
+
+	// Regex matches a timestamped .bak-YYYYMMDD-HHMMSS suffix anywhere in
+	// the filename. Anchored at end-of-string so it doesn't accidentally
+	// eat filenames that happen to contain `.bak-1` earlier.
+	bakTimestampRe := regexp.MustCompile(`\.bak-[0-9]{8}-[0-9]{6}$`)
+
+	walkErr := filepath.Walk(rootDir, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			// Non-fatal, keep going — record and continue.
+			result.Errors = append(result.Errors, fmt.Sprintf("walk %q: %v", path, walkErr))
+			return nil
+		}
+		if info.IsDir() {
+			// Skip any hidden directory. This intentionally catches
+			// .itunes-writeback, .covers, and any other dotfolder a user
+			// might add later — explicit deny-list is fragile, prefix
+			// check is robust. The root itself never starts with `.`
+			// so we don't have to guard against skipping it.
+			if path != rootDir && strings.HasPrefix(filepath.Base(path), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		name := filepath.Base(path)
+		isBackupCopy := strings.HasSuffix(name, ".backup")
+		isBakTimestamp := bakTimestampRe.MatchString(name)
+		if !isBackupCopy && !isBakTimestamp {
+			return nil
+		}
+
+		result.FilesFound++
+		size := info.Size()
+
+		if dryRun {
+			result.BytesFreed += size
+			return nil
+		}
+
+		if removeErr := os.Remove(path); removeErr != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("remove %q: %v", path, removeErr))
+			log.Printf("[WARN] cleanup-backups: failed to remove %q: %v", path, removeErr)
+			return nil
+		}
+		result.FilesRemoved++
+		result.BytesFreed += size
+		return nil
+	})
+	if walkErr != nil {
+		internalError(c, "failed to walk root directory", walkErr)
+		return
+	}
+
+	log.Printf("[INFO] cleanup-backups: dry_run=%v found=%d removed=%d bytes=%d errors=%d",
+		dryRun, result.FilesFound, result.FilesRemoved, result.BytesFreed, len(result.Errors))
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":       result.DryRun,
+		"root_dir":      result.RootDir,
+		"files_found":   result.FilesFound,
+		"files_removed": result.FilesRemoved,
+		"bytes_freed":   result.BytesFreed,
+		"human_freed":   humanizeBytes(result.BytesFreed),
+		"errors":        result.Errors,
+	})
+}
+
+// humanizeBytes turns a byte count into a short "1.23 GB" style string.
+func humanizeBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for x := n / unit; x >= unit; x /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.2f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }
