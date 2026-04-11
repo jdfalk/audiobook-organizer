@@ -1,10 +1,11 @@
 // file: internal/organizer/organizer.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -17,6 +18,29 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+// ErrTargetOccupied is returned from OrganizeBook when the computed
+// target path already exists on disk and is a DIFFERENT file than the
+// book's current source. This is the "two books with identical metadata
+// want the same destination" case — e.g. two different audio files both
+// tagged as "Asimov / Foundation". Previously OrganizeBook silently
+// returned (target, "", nil) here, which caused the caller to update
+// the DB file_path to the occupant's file — two rows pointed at the
+// same file on disk and the second book's audio was orphaned.
+//
+// Callers that can usefully act on this (e.g. the manual organize
+// endpoint) should detect the error via errors.Is, look up the occupant
+// via GetBookByFilePath, and either create a dedup candidate or ask
+// the user to resolve the collision before retrying.
+var ErrTargetOccupied = errors.New("organize: target path already occupied by a different file")
+
+// OrganizeCollisionHook is an optional package-level hook fired when
+// OrganizeBook hits ErrTargetOccupied. The server package wires it to
+// create a pending dedup candidate between the current book and the
+// occupant, so the collision surfaces in the dedup tab instead of
+// becoming an invisible data-integrity problem. nil-safe — the
+// organizer runs fine in tests or CLI contexts where no hook is set.
+var OrganizeCollisionHook func(currentBookID, occupantPath string)
 
 // Organizer handles file organization operations
 type Organizer struct {
@@ -79,29 +103,62 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, string, error) {
 		return targetPath, "", nil
 	}
 
-	// Check if file already exists at target path
-	if targetInfo, err := os.Stat(targetPath); err == nil {
-		// Target exists — check if it's the same inode (already hardlinked)
-		if srcInfo, srcErr := os.Stat(book.FilePath); srcErr == nil {
-			if os.SameFile(srcInfo, targetInfo) {
-				return targetPath, "", nil // Already the same file (hardlink/reflink)
-			}
-		}
-		return targetPath, "", nil // Target already exists with different content; don't overwrite
-	}
-
-	// Check for duplicate files by hash (if hash is available in book metadata)
-	// This prevents copying the same file multiple times during re-organization
-	if book.FileHash != nil && *book.FileHash != "" {
-		// Check if a file with this hash already exists in the database
+	// Same-hash dedup check runs FIRST so a true content-duplicate (same
+	// bytes, two DB rows) gets a proper error before we get to the
+	// target-exists check. Otherwise a re-organize of a book whose
+	// content already exists at another path under root would hit the
+	// target-exists branch first (seeing the OLD organized version) and
+	// silently no-op. Order matters.
+	if book.FileHash != nil && *book.FileHash != "" && database.GlobalStore != nil {
 		existingBook, err := database.GlobalStore.GetBookByFileHash(*book.FileHash)
 		if err == nil && existingBook != nil && existingBook.ID != book.ID {
-			// Another book with same hash exists - check if it's in the output directory
 			if strings.HasPrefix(existingBook.FilePath, o.config.RootDir) {
-				// File already organized under different metadata
+				// Content-identical book already organized under a
+				// different row. This is a true duplicate — fire the
+				// collision hook so the dedup tab picks it up.
+				if OrganizeCollisionHook != nil {
+					OrganizeCollisionHook(book.ID, existingBook.FilePath)
+				}
 				return existingBook.FilePath, "", fmt.Errorf("duplicate file already organized at: %s", existingBook.FilePath)
 			}
 		}
+	}
+
+	// Check if file already exists at target path. Four cases:
+	//   1. SameFile (hardlink/reflink): already organized, success no-op.
+	//   2. Different inode but the DB says this exact book owns the
+	//      target path: it's a previous copy-based organize of the same
+	//      book (re-organize where the caller didn't refresh book.FilePath
+	//      before the retry). Success no-op.
+	//   3. Different inode and the DB says another book owns the target:
+	//      real collision, fire hook, return ErrTargetOccupied.
+	//   4. Different inode and no DB row at the target (e.g. orphaned
+	//      file from a previous partial organize): treat as collision
+	//      too — refuse to overwrite, let the user resolve it.
+	if targetInfo, err := os.Stat(targetPath); err == nil {
+		if srcInfo, srcErr := os.Stat(book.FilePath); srcErr == nil {
+			if os.SameFile(srcInfo, targetInfo) {
+				return targetPath, "", nil
+			}
+		}
+		// Case 2: ask the DB who owns the target. If it's the current
+		// book, this is a re-organize no-op — don't panic, don't fire
+		// the collision hook, just return the target.
+		if database.GlobalStore != nil && book.ID != "" {
+			if owner, lookupErr := database.GlobalStore.GetBookByFilePath(targetPath); lookupErr == nil && owner != nil && owner.ID == book.ID {
+				return targetPath, "", nil
+			}
+		}
+		// Case 3/4: collision. Fire the hook so the server can create a
+		// pending dedup candidate between this book and whoever owns
+		// the target, then return the explicit error. The old code
+		// silently returned nil here, which caused the caller to set
+		// this book's file_path to the occupant's file — two DB rows
+		// pointing at one file on disk.
+		if OrganizeCollisionHook != nil {
+			OrganizeCollisionHook(book.ID, targetPath)
+		}
+		return targetPath, "", fmt.Errorf("%w: %s", ErrTargetOccupied, targetPath)
 	}
 
 	// Perform the organization based on strategy

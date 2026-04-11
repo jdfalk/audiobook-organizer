@@ -1,10 +1,11 @@
 // file: internal/organizer/organizer_test.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package organizer
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -295,7 +296,10 @@ func TestOrganizeBook_Copy(t *testing.T) {
 		t.Error("content mismatch")
 	}
 
-	// Verify calling again with same book returns same path
+	// Verify re-organize is idempotent: production updates book.FilePath
+	// to the new path after a successful organize, so the next call hits
+	// the source==target fast-path and returns the same path.
+	book.FilePath = targetPath
 	targetPath2, _, err := org.OrganizeBook(book)
 	if err != nil {
 		t.Fatalf("second OrganizeBook failed: %v", err)
@@ -820,5 +824,156 @@ func TestCopyFile_IOCopyError(t *testing.T) {
 	err = org.copyFile(srcPath, dstPath)
 	if err == nil {
 		t.Log("Expected error for read-only destination, but got none (may be OS-specific)")
+	}
+}
+
+// TestOrganizeBook_TargetOccupiedByDifferentFile is the regression test
+// for the silent-no-op bug: two books with identical metadata produce
+// the same target path, the first organizes successfully, the second
+// used to return (target, "", nil) and the caller would update the
+// second book's file_path to the first book's file — two DB rows
+// pointing at one file on disk. Now the second call must return
+// ErrTargetOccupied so the caller knows the organize didn't happen.
+func TestOrganizeBook_TargetOccupiedByDifferentFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDir := filepath.Join(tmpDir, "source")
+	dstDir := filepath.Join(tmpDir, "output")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+
+	// Two DIFFERENT source files with the same metadata.
+	srcA := filepath.Join(srcDir, "a.m4b")
+	srcB := filepath.Join(srcDir, "b.m4b")
+	if err := os.WriteFile(srcA, []byte("content A"), 0644); err != nil {
+		t.Fatalf("write A: %v", err)
+	}
+	if err := os.WriteFile(srcB, []byte("content B - totally different"), 0644); err != nil {
+		t.Fatalf("write B: %v", err)
+	}
+
+	cfg := &config.Config{
+		RootDir:              dstDir,
+		FolderNamingPattern:  "{author}",
+		FileNamingPattern:    "{title}",
+		OrganizationStrategy: "copy",
+	}
+	org := NewOrganizer(cfg)
+
+	bookA := &database.Book{
+		ID:       "book-a",
+		Title:    "Foundation",
+		FilePath: srcA,
+		Author:   &database.Author{Name: "Asimov"},
+	}
+	bookB := &database.Book{
+		ID:       "book-b",
+		Title:    "Foundation",
+		FilePath: srcB,
+		Author:   &database.Author{Name: "Asimov"},
+	}
+
+	// Organize A - should succeed.
+	targetA, _, err := org.OrganizeBook(bookA)
+	if err != nil {
+		t.Fatalf("OrganizeBook(A) failed: %v", err)
+	}
+	if _, err := os.Stat(targetA); err != nil {
+		t.Fatalf("target A missing after organize: %v", err)
+	}
+
+	// Organize B - target is now A's file, different inode. Must return
+	// ErrTargetOccupied, NOT silently succeed.
+	_, _, err = org.OrganizeBook(bookB)
+	if err == nil {
+		t.Fatal("expected ErrTargetOccupied, got nil - silent no-op regression")
+	}
+	if !errors.Is(err, ErrTargetOccupied) {
+		t.Errorf("expected ErrTargetOccupied, got %v", err)
+	}
+
+	// B's source file must still exist and be unchanged.
+	bContent, err := os.ReadFile(srcB)
+	if err != nil {
+		t.Fatalf("read B source: %v", err)
+	}
+	if string(bContent) != "content B - totally different" {
+		t.Errorf("B source was modified: %q", bContent)
+	}
+
+	// Target file's content must still be A's, not B's.
+	aContent, err := os.ReadFile(targetA)
+	if err != nil {
+		t.Fatalf("read target: %v", err)
+	}
+	if string(aContent) != "content A" {
+		t.Errorf("target was overwritten by B: %q", aContent)
+	}
+}
+
+// TestOrganizeBook_CollisionHookFires verifies the collision hook is
+// called with the current book's ID and the occupant's path when the
+// target-exists branch fires. This is the wiring the server relies on
+// to create a pending dedup candidate for user resolution.
+func TestOrganizeBook_CollisionHookFires(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcDir := filepath.Join(tmpDir, "source")
+	dstDir := filepath.Join(tmpDir, "output")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatalf("mkdir source: %v", err)
+	}
+
+	srcA := filepath.Join(srcDir, "a.m4b")
+	srcB := filepath.Join(srcDir, "b.m4b")
+	if err := os.WriteFile(srcA, []byte("A"), 0644); err != nil {
+		t.Fatalf("write A: %v", err)
+	}
+	if err := os.WriteFile(srcB, []byte("B"), 0644); err != nil {
+		t.Fatalf("write B: %v", err)
+	}
+
+	cfg := &config.Config{
+		RootDir:              dstDir,
+		FolderNamingPattern:  "{author}",
+		FileNamingPattern:    "{title}",
+		OrganizationStrategy: "copy",
+	}
+	org := NewOrganizer(cfg)
+
+	type call struct{ bookID, occupant string }
+	var calls []call
+	prev := OrganizeCollisionHook
+	OrganizeCollisionHook = func(bookID, occupant string) {
+		calls = append(calls, call{bookID, occupant})
+	}
+	t.Cleanup(func() { OrganizeCollisionHook = prev })
+
+	bookA := &database.Book{
+		ID: "book-a", Title: "Foundation", FilePath: srcA,
+		Author: &database.Author{Name: "Asimov"},
+	}
+	bookB := &database.Book{
+		ID: "book-b", Title: "Foundation", FilePath: srcB,
+		Author: &database.Author{Name: "Asimov"},
+	}
+
+	if _, _, err := org.OrganizeBook(bookA); err != nil {
+		t.Fatalf("OrganizeBook(A): %v", err)
+	}
+	if len(calls) != 0 {
+		t.Errorf("hook fired for successful organize: %v", calls)
+	}
+
+	if _, _, err := org.OrganizeBook(bookB); err == nil {
+		t.Fatal("expected error for B")
+	}
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 hook call, got %d: %v", len(calls), calls)
+	}
+	if calls[0].bookID != "book-b" {
+		t.Errorf("hook bookID = %q, want book-b", calls[0].bookID)
+	}
+	if !strings.HasSuffix(calls[0].occupant, "Foundation.m4b") {
+		t.Errorf("hook occupant = %q, want ...Foundation.m4b", calls[0].occupant)
 	}
 }
