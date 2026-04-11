@@ -1,5 +1,5 @@
 // file: internal/metadata/audnexus_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-c5d6e7f8a9b0
 
 package metadata
@@ -120,5 +120,64 @@ func TestAudnexusClient_LookupByASIN_NotFound(t *testing.T) {
 	}
 }
 
+// TestAudnexusClient_SearchByContext_UsesASIN verifies the new
+// ContextualSearch path: when the context has an ASIN, we call
+// LookupByASIN and return its result. Without an ASIN, we return
+// nil so the fetch chain falls through to the next source.
+func TestAudnexusClient_SearchByContext_UsesASIN(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/books/B003JVHRU0" {
+			_, _ = w.Write([]byte(`{
+				"asin": "B003JVHRU0",
+				"title": "The Hobbit",
+				"authors": [{"name": "J.R.R. Tolkien"}]
+			}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client := NewAudnexusClientWithBaseURL(server.URL)
+
+	// With ASIN: should hit LookupByASIN and return one result.
+	results, err := client.SearchByContext(&SearchContext{
+		Title:  "The Hobbit",
+		Author: "Tolkien",
+		ASIN:   "B003JVHRU0",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result from ASIN lookup, got %d", len(results))
+	}
+	if results[0].Title != "The Hobbit" {
+		t.Errorf("expected title 'The Hobbit', got %q", results[0].Title)
+	}
+
+	// Without ASIN: should return (nil, nil) so the chain falls through.
+	results, err = client.SearchByContext(&SearchContext{
+		Title:  "The Hobbit",
+		Author: "Tolkien",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results without ASIN, got %d", len(results))
+	}
+
+	// Nil context: same — return (nil, nil) cleanly, not a panic.
+	results, err = client.SearchByContext(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results from nil context, got %d", len(results))
+	}
+}
+
 // Verify interface compliance
 var _ MetadataSource = (*AudnexusClient)(nil)
+var _ ContextualSearch = (*AudnexusClient)(nil)

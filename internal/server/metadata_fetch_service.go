@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.47.0
+// version: 4.48.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -149,6 +149,35 @@ type SearchOptions struct {
 // BuildSourceChain returns metadata sources ordered by config priority.
 // Each source is wrapped with a circuit breaker that opens after 5 consecutive
 // failures and retries after 30 seconds.
+// buildSearchContext gathers the richer context fields from a Book
+// that metadata.ContextualSearch implementations can use to do better
+// than plain title+author lookups. Empty fields are left empty so
+// sources see "" instead of a garbage placeholder.
+func buildSearchContext(book *database.Book, searchTitle, author, narrator string) *metadata.SearchContext {
+	ctx := &metadata.SearchContext{
+		Title:    searchTitle,
+		Author:   author,
+		Narrator: narrator,
+	}
+	if book != nil {
+		if book.ISBN10 != nil {
+			ctx.ISBN10 = *book.ISBN10
+		}
+		if book.ISBN13 != nil {
+			ctx.ISBN13 = *book.ISBN13
+		}
+		if book.ASIN != nil {
+			ctx.ASIN = *book.ASIN
+		}
+		if book.SeriesID != nil && database.GlobalStore != nil {
+			if series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+				ctx.Series = series.Name
+			}
+		}
+	}
+	return ctx
+}
+
 func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 	// Copy and sort by priority
 	sources := make([]config.MetadataSource, len(config.AppConfig.MetadataSources))
@@ -255,8 +284,25 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 		var results []metadata.BookMetadata
 		var searchErr error
 
+		// Try the ContextualSearch path first if the source implements
+		// it. This hands richer context (ASIN, ISBN, narrator) to
+		// sources that can use it — Audnexus uses the ASIN for a direct
+		// lookup that works when title search can't, Hardcover uses
+		// the ISBN for a more precise match than the fuzzy GraphQL
+		// search. Sources that don't implement the interface just
+		// fall through to the title/author path below.
+		if ctxSearch, ok := src.(metadata.ContextualSearch); ok {
+			ctx := buildSearchContext(book, searchTitle, currentAuthor, currentNarrator)
+			results, searchErr = ctxSearch.SearchByContext(ctx)
+			if searchErr != nil {
+				log.Printf("[WARN] %s context search failed for %q: %v", src.Name(), book.Title, searchErr)
+				// Context search failure is non-fatal — fall through
+				// to the regular title/author path in case that works.
+			}
+		}
+
 		// Try title+author search first for better match quality
-		if currentAuthor != "" {
+		if len(results) == 0 && currentAuthor != "" {
 			results, searchErr = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
 			if searchErr != nil {
 				log.Printf("[WARN] %s title+author search failed for %q by %q: %v", src.Name(), searchTitle, currentAuthor, searchErr)
