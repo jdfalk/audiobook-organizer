@@ -1,5 +1,5 @@
 // file: internal/metadata/audnexus.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-a3b4c5d6e7f8
 
 package metadata
@@ -92,6 +92,28 @@ type audnexusAuthor struct {
 func (c *AudnexusClient) SearchByTitle(title string) ([]BookMetadata, error) {
 	log.Printf("[DEBUG] Audnexus has no title search endpoint, skipping title-only search for %q", title)
 	return nil, nil
+}
+
+// SearchByContext lets the fetch service pass richer context than
+// the title/author methods. Audnexus only has an ASIN lookup endpoint
+// (no title or ISBN search) so the only productive path here is to
+// call LookupByASIN when the context has an ASIN.
+//
+// Returns nil, nil (not an error) when there's no ASIN — that tells
+// the fetch chain to fall through to the next source without logging
+// a failure.
+func (c *AudnexusClient) SearchByContext(ctx *SearchContext) ([]BookMetadata, error) {
+	if ctx == nil || ctx.ASIN == "" {
+		return nil, nil
+	}
+	book, err := c.LookupByASIN(ctx.ASIN)
+	if err != nil {
+		return nil, err
+	}
+	if book == nil {
+		return nil, nil
+	}
+	return []BookMetadata{*book}, nil
 }
 
 // SearchByTitleAndAuthor searches for an author on Audnexus, then looks up
