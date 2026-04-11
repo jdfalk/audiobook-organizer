@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.8.0
+// version: 3.9.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -2915,6 +2915,12 @@ function EmbeddingDedupTab() {
             {clusters.map((cluster) => {
               const busy = actionLoading === cluster.key;
               const isMultiWay = cluster.bookIds.length > 2;
+              // Horizontal cramming stops being readable around 4 sides —
+              // dividing the card width by 5+ produces columns too narrow
+              // to fit a full title. Switch to a stacked vertical layout
+              // (one book per row, full-width file paths) for large
+              // clusters so every side stays legible.
+              const isLargeCluster = cluster.bookIds.length >= 5;
               return (
                 <Card key={cluster.key} variant="outlined">
                   <CardContent sx={{ pb: 1 }}>
@@ -2947,18 +2953,29 @@ function EmbeddingDedupTab() {
                       <MergeIcon color="action" fontSize="small" />
                     </Stack>
 
-                    {/* Book sides laid out horizontally with vertical dividers */}
+                    {/* Book sides — horizontal for small clusters (2-4 sides
+                        fit comfortably side-by-side), vertical for large ones
+                        so a 19-way cluster is still mergeable. */}
                     <Stack
-                      direction="row"
-                      spacing={2}
+                      direction={isLargeCluster ? 'column' : 'row'}
+                      spacing={isLargeCluster ? 1 : 2}
                       alignItems="stretch"
-                      divider={<Divider orientation="vertical" flexItem />}
-                      sx={{ overflowX: 'auto' }}
+                      divider={
+                        <Divider
+                          orientation={isLargeCluster ? 'horizontal' : 'vertical'}
+                          flexItem
+                        />
+                      }
+                      sx={isLargeCluster ? undefined : { overflowX: 'auto' }}
                     >
                       {cluster.bookIds.map((bookId) => (
                         <Box
                           key={bookId}
-                          sx={{ flex: 1, minWidth: 0, maxWidth: `${100 / cluster.bookIds.length}%` }}
+                          sx={
+                            isLargeCluster
+                              ? { minWidth: 0 }
+                              : { flex: 1, minWidth: 0, maxWidth: `${100 / cluster.bookIds.length}%` }
+                          }
                         >
                           {renderBookSide(bookId)}
                         </Box>

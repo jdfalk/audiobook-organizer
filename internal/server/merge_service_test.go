@@ -1,5 +1,5 @@
 // file: internal/server/merge_service_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8e847d3e-f1a0-41be-a05c-1b18cd3fb7af
 
 package server
@@ -102,6 +102,78 @@ func TestMergeService_MergeBooks_TooFew(t *testing.T) {
 	_, err := ms.MergeBooks([]string{"one"}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least 2")
+}
+
+// TestMergeService_MergeBooks_PrefersOrganizedOverITunesGhost verifies that
+// when a cluster mixes books under the managed library with books still
+// pointing at the iTunes Media folder, the organized copy wins the primary
+// slot even if the iTunes one has a "better" format. Without this bias a
+// M4B iTunes ghost would steal primary from an MP3 that's already been
+// organized into our library — that's the opposite of what we want.
+func TestMergeService_MergeBooks_PrefersOrganizedOverITunesGhost(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	_ = server
+
+	store := database.GlobalStore
+
+	// iTunes ghost — better format on paper (M4B, higher bitrate)
+	ghost := &database.Book{
+		ID:       ulid.Make().String(),
+		Title:    "Foundation and Empire",
+		Format:   "m4b",
+		FilePath: "/mnt/bigdata/books/itunes/iTunes Media/Audiobooks/Isaac Asimov/Foundation and Empire.m4b",
+	}
+	bitrate := 128
+	ghost.Bitrate = &bitrate
+
+	// Organized library copy — worse format on paper but this is the one
+	// the user actually owns and manages.
+	organized := &database.Book{
+		ID:       ulid.Make().String(),
+		Title:    "Foundation and Empire",
+		Format:   "mp3",
+		FilePath: "/mnt/bigdata/books/audiobook-organizer/Isaac Asimov/Foundation and Empire/Foundation and Empire.mp3",
+	}
+	lowBitrate := 64
+	organized.Bitrate = &lowBitrate
+
+	_, err := store.CreateBook(ghost)
+	require.NoError(t, err)
+	_, err = store.CreateBook(organized)
+	require.NoError(t, err)
+
+	ms := NewMergeService(store)
+	result, err := ms.MergeBooks([]string{ghost.ID, organized.ID}, "")
+	require.NoError(t, err)
+
+	// The organized MP3 must win even though the iTunes ghost is M4B +
+	// higher bitrate — path origin is the strongest tiebreaker.
+	assert.Equal(t, organized.ID, result.PrimaryID,
+		"organized library path should beat iTunes ghost regardless of format")
+}
+
+// TestIsITunesGhostPath sanity-checks the path classifier against the
+// shapes we see in production. Exhaustive because the classifier is the
+// load-bearing piece of the primary-pick bias above.
+func TestIsITunesGhostPath(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"itunes media absolute", "/mnt/bigdata/books/itunes/iTunes Media/Audiobooks/x.m4b", true},
+		{"itunes media mixed case", "/mnt/bigdata/books/iTunes/iTunes Media/x.m4b", true},
+		{"organized library", "/mnt/bigdata/books/audiobook-organizer/author/book.mp3", false},
+		{"empty", "", false},
+		{"relative", "itunes/iTunes Media/x.m4b", true},
+		{"generic linux tmp", "/tmp/x.mp3", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isITunesGhostPath(tc.path))
+		})
+	}
 }
 
 func TestMergeService_MergeBooks_NotFound(t *testing.T) {
