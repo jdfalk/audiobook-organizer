@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.9.0
+// version: 3.10.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -2656,6 +2656,25 @@ function EmbeddingDedupTab() {
     }
   };
 
+  // Remove a single book from a 3+ way cluster. Dismisses just the edges
+  // between this book and the other cluster members, leaving the rest as
+  // a smaller cluster the user can still merge. This is the "one of these
+  // is actually a different book" escape hatch — e.g. a 3-way cluster with
+  // "Monster Trainer Academy I" twice plus "Monster Trainer Academy II"
+  // where the user wants to merge the two I's and kick out the II.
+  const handleRemoveFromCluster = async (cluster: BookCluster, bookId: string) => {
+    setActionLoading(`${cluster.key}:${bookId}`);
+    try {
+      await api.removeFromDedupCluster(cluster.bookIds, bookId);
+      loadCandidates();
+      loadStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Remove from cluster failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleScan = async () => {
     setScanning(true);
     setScanMsg(null);
@@ -2713,7 +2732,12 @@ function EmbeddingDedupTab() {
   const embeddingCount = stats.filter(s => s.layer === 'embedding').reduce((sum, s) => sum + s.count, 0);
   const llmCount = stats.filter(s => s.layer === 'llm').reduce((sum, s) => sum + s.count, 0);
 
-  const renderBookSide = (id: string) => {
+  // renderBookSide takes the cluster it belongs to so the per-side
+  // "Not a duplicate" button can scope its dismiss to that cluster's
+  // pairs only. The button only appears for 3+ way clusters — in a 2-way
+  // cluster, removing one side is the same as dismissing the whole
+  // cluster, so we show the existing cluster-level Dismiss button instead.
+  const renderBookSide = (id: string, cluster: BookCluster) => {
     const book = bookDetails.get(id);
     if (!book) {
       return (
@@ -2722,6 +2746,9 @@ function EmbeddingDedupTab() {
         </Typography>
       );
     }
+    const isMultiWay = cluster.bookIds.length > 2;
+    const removeBusy = actionLoading === `${cluster.key}:${id}`;
+    const anyActionBusy = actionLoading != null;
     const allFiles = bookFiles.get(id) ?? [];
     // Prefer the full file list (book_files table) over the Book.file_path
     // column because multi-file audiobooks only track the first file on the
@@ -2757,45 +2784,72 @@ function EmbeddingDedupTab() {
         </Typography>
       );
     return (
-      <Box
-        sx={{ cursor: 'pointer', minWidth: 0, '&:hover .dedup-side-title': { textDecoration: 'underline' } }}
-        onClick={() => navigate(`/books/${book.id}`)}
-      >
-        <Typography
-          className="dedup-side-title"
-          variant="body2"
-          fontWeight="medium"
-          noWrap
-          title={book.title}
+      <Box sx={{ minWidth: 0, position: 'relative' }}>
+        <Box
+          sx={{ cursor: 'pointer', minWidth: 0, '&:hover .dedup-side-title': { textDecoration: 'underline' } }}
+          onClick={() => navigate(`/books/${book.id}`)}
         >
-          {cleanDisplayTitle(book.title)}
-        </Typography>
-        {book.author_name && (
-          <Typography variant="caption" color="text.secondary" noWrap title={book.author_name}>
-            {book.author_name}
-          </Typography>
-        )}
-        {shortPath && (
-          <Tooltip
-            title={tooltipContent}
-            enterDelay={300}
-            placement="bottom-start"
-            componentsProps={{ tooltip: { sx: { maxWidth: 'none' } } }}
+          <Typography
+            className="dedup-side-title"
+            variant="body2"
+            fontWeight="medium"
+            noWrap
+            title={book.title}
+            sx={{ pr: isMultiWay ? 3 : 0 }} // leave room for the button
           >
-            <Typography
-              variant="caption"
-              color="text.disabled"
-              noWrap
-              sx={{ display: 'block', fontFamily: 'monospace', fontSize: '0.7rem' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {shortPath}
-              {extraCount > 0 && (
-                <Box component="span" sx={{ ml: 0.5, color: 'primary.main', fontWeight: 600 }}>
-                  +{extraCount} more
-                </Box>
-              )}
+            {cleanDisplayTitle(book.title)}
+          </Typography>
+          {book.author_name && (
+            <Typography variant="caption" color="text.secondary" noWrap title={book.author_name}>
+              {book.author_name}
             </Typography>
+          )}
+          {shortPath && (
+            <Tooltip
+              title={tooltipContent}
+              enterDelay={300}
+              placement="bottom-start"
+              componentsProps={{ tooltip: { sx: { maxWidth: 'none' } } }}
+            >
+              <Typography
+                variant="caption"
+                color="text.disabled"
+                noWrap
+                sx={{ display: 'block', fontFamily: 'monospace', fontSize: '0.7rem' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {shortPath}
+                {extraCount > 0 && (
+                  <Box component="span" sx={{ ml: 0.5, color: 'primary.main', fontWeight: 600 }}>
+                    +{extraCount} more
+                  </Box>
+                )}
+              </Typography>
+            </Tooltip>
+          )}
+        </Box>
+        {isMultiWay && cluster.hasPending && (
+          <Tooltip title="Not a duplicate — remove this book from the cluster">
+            <span>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRemoveFromCluster(cluster, id);
+                }}
+                disabled={anyActionBusy}
+                sx={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -4,
+                  padding: '2px',
+                  color: 'text.disabled',
+                  '&:hover': { color: 'error.main' },
+                }}
+              >
+                {removeBusy ? <CircularProgress size={14} /> : <CloseIcon sx={{ fontSize: 16 }} />}
+              </IconButton>
+            </span>
           </Tooltip>
         )}
       </Box>
@@ -2977,7 +3031,7 @@ function EmbeddingDedupTab() {
                               : { flex: 1, minWidth: 0, maxWidth: `${100 / cluster.bookIds.length}%` }
                           }
                         >
-                          {renderBookSide(bookId)}
+                          {renderBookSide(bookId, cluster)}
                         </Box>
                       ))}
                     </Stack>

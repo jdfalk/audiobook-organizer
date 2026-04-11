@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -318,6 +318,101 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "dismissed",
+		"dismissed": dismissed,
+	})
+}
+
+// removeFromDedupCluster handles POST /api/v1/dedup/candidates/remove-from-cluster.
+//
+// Body: {"cluster_book_ids": [...], "remove_book_id": "X"}
+//
+// Dismisses every pending candidate whose pair is one-side-X and other-side
+// in (cluster \ X). In other words: "this one book is NOT a duplicate of
+// the other books in this cluster". Pairs involving X that point to books
+// OUTSIDE the cluster are left alone — this is a scoped split, not a
+// global ban on the book.
+//
+// The effect on the UI: a 3-way cluster (A, B, C) where the user removes
+// C drops the (A,C) and (B,C) edges but leaves (A,B). On the next page
+// load the union-find produces a 2-way cluster (A, B) and C disappears
+// from the pending view. C can still show up in future dedup scans if
+// something new hits it.
+func (s *Server) removeFromDedupCluster(c *gin.Context) {
+	if s.embeddingStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embedding store not available"})
+		return
+	}
+
+	var body struct {
+		ClusterBookIDs []string `json:"cluster_book_ids"`
+		RemoveBookID   string   `json:"remove_book_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if body.RemoveBookID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "remove_book_id is required"})
+		return
+	}
+	if len(body.ClusterBookIDs) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster_book_ids must contain at least 2 entries"})
+		return
+	}
+
+	// Build the set of "other books in this cluster" — everything in the
+	// cluster except the one being removed.
+	others := make(map[string]struct{}, len(body.ClusterBookIDs))
+	for _, id := range body.ClusterBookIDs {
+		if id != body.RemoveBookID {
+			others[id] = struct{}{}
+		}
+	}
+	if len(others) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster must contain at least one book other than remove_book_id"})
+		return
+	}
+
+	candidates, _, err := s.embeddingStore.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Status:     "pending",
+		Limit:      100000,
+	})
+	if err != nil {
+		internalError(c, "failed to list candidates for cluster remove", err)
+		return
+	}
+
+	dismissed := 0
+	for _, cand := range candidates {
+		// The pair must involve the removed book on one side and an
+		// "other cluster member" on the opposite side. Pairs where the
+		// removed book touches a book OUTSIDE the cluster are deliberately
+		// skipped — those represent different clusters that the user
+		// hasn't expressed an opinion on.
+		var otherID string
+		switch {
+		case cand.EntityAID == body.RemoveBookID:
+			otherID = cand.EntityBID
+		case cand.EntityBID == body.RemoveBookID:
+			otherID = cand.EntityAID
+		default:
+			continue
+		}
+		if _, ok := others[otherID]; !ok {
+			continue
+		}
+		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
+			log.Printf("[dedup] remove-from-cluster: status update %d: %v", cand.ID, err)
+			continue
+		}
+		dismissed++
+	}
+	log.Printf("[dedup] remove-from-cluster: dismissed %d edge(s) between %s and %d other cluster member(s)",
+		dismissed, body.RemoveBookID, len(others))
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "removed",
 		"dismissed": dismissed,
 	})
 }

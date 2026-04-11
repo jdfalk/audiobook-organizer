@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.68.0
+// version: 1.69.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3694,6 +3694,29 @@ export async function dismissDedupCluster(bookIds: string[]): Promise<{ status: 
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to dismiss dedup cluster');
+  }
+  return response.json();
+}
+
+// Remove a single book from a cluster by dismissing only the edges between
+// it and the other cluster members. Pairs involving the book with books
+// OUTSIDE the cluster are left alone. Used by the per-side "not a
+// duplicate" button when one book in a 3+ way cluster is wrong but the
+// rest are real duplicates.
+export async function removeFromDedupCluster(
+  clusterBookIds: string[],
+  removeBookId: string
+): Promise<{ status: string; dismissed: number }> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/remove-from-cluster`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cluster_book_ids: clusterBookIds,
+      remove_book_id: removeBookId,
+    }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to remove book from dedup cluster');
   }
   return response.json();
 }
