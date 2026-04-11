@@ -1,5 +1,5 @@
 // file: internal/metadata/hardcover.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e7e02554-8931-49ba-9528-d3d51279da1d
 
 package metadata
@@ -129,13 +129,31 @@ type hardcoverHit struct {
 }
 
 type hardcoverDocument struct {
-	Title       string          `json:"title"`
-	AuthorNames []string        `json:"author_names"`
-	Image       *hardcoverImage `json:"image"`
-	Description string          `json:"description"`
-	ReleaseYear int             `json:"release_year"`
-	Slug        string          `json:"slug"`
-	Publisher   string          `json:"publisher"`
+	Title            string              `json:"title"`
+	AuthorNames      []string            `json:"author_names"`
+	ContributorNames []string            `json:"contributor_names"`
+	Image            *hardcoverImage     `json:"image"`
+	Description      string              `json:"description"`
+	ReleaseYear      int                 `json:"release_year"`
+	Slug             string              `json:"slug"`
+	Publisher        string              `json:"publisher"`
+	ISBNs            []string            `json:"isbns"`
+	Pages            int                 `json:"pages"`
+	AudioSeconds     int                 `json:"audio_seconds"`
+	SeriesNames      []string            `json:"series_names"`
+	FeaturedSeries   *hardcoverFeaturedS `json:"featured_series"`
+	Genres           []string            `json:"genres"`
+	Language         string              `json:"language"`
+}
+
+// hardcoverFeaturedS is the subset of Hardcover's featured_series
+// field we need — the series name and the book's position within it.
+// Field names match Hardcover's GraphQL schema as of early 2026;
+// query is defensive so missing/renamed fields produce zero-valued
+// defaults rather than parse errors.
+type hardcoverFeaturedS struct {
+	SeriesName string  `json:"series_name"`
+	Position   float64 `json:"position"`
 }
 
 type hardcoverImage struct {
@@ -162,6 +180,53 @@ func (c *HardcoverClient) SearchByTitleAndAuthor(title, author string) ([]BookMe
 	return c.search(query)
 }
 
+// hardcoverDocumentFields is the full set of fields we request from
+// Hardcover's GraphQL schema on every search. Kept as a single const
+// so the query is easy to tune and every call site fetches the same
+// shape. Fields the API doesn't know about produce GraphQL errors,
+// which we catch and surface — if Hardcover renames something, we
+// find out immediately instead of silently dropping data.
+const hardcoverDocumentFields = `title
+author_names
+contributor_names
+image { url }
+description
+release_year
+slug
+publisher
+isbns
+pages
+audio_seconds
+series_names
+featured_series { series_name position }
+genres
+language`
+
+// SearchByContext prefers ISBN-based lookup when available (more
+// precise than the fuzzy search_books endpoint), falling back to a
+// title+author query. ASIN isn't something Hardcover indexes directly
+// so we ignore that field.
+func (c *HardcoverClient) SearchByContext(ctx *SearchContext) ([]BookMetadata, error) {
+	if c.apiToken == "" {
+		return nil, nil
+	}
+	if ctx == nil {
+		return nil, nil
+	}
+	// Prefer ISBN-13 → ISBN-10 → title+author.
+	switch {
+	case ctx.ISBN13 != "":
+		return c.search(ctx.ISBN13)
+	case ctx.ISBN10 != "":
+		return c.search(ctx.ISBN10)
+	case ctx.Title != "" && ctx.Author != "":
+		return c.search(ctx.Title + " " + ctx.Author)
+	case ctx.Title != "":
+		return c.search(ctx.Title)
+	}
+	return nil, nil
+}
+
 func (c *HardcoverClient) search(query string) ([]BookMetadata, error) {
 	c.waitForRateLimit()
 
@@ -169,7 +234,7 @@ func (c *HardcoverClient) search(query string) ([]BookMetadata, error) {
 	escapedQuery := strings.ReplaceAll(query, `\`, `\\`)
 	escapedQuery = strings.ReplaceAll(escapedQuery, `"`, `\"`)
 
-	graphqlQuery := fmt.Sprintf(`query { search_books(query: "%s", limit: 5) { results { hits { document { title author_names image { url } description release_year slug publisher } } } } }`, escapedQuery)
+	graphqlQuery := fmt.Sprintf(`query { search_books(query: "%s", limit: 5) { results { hits { document { %s } } } } }`, escapedQuery, hardcoverDocumentFields)
 
 	reqBody := hardcoverGraphQLRequest{Query: graphqlQuery}
 	bodyBytes, err := json.Marshal(reqBody)
@@ -200,6 +265,12 @@ func (c *HardcoverClient) search(query string) ([]BookMetadata, error) {
 	}
 
 	if len(gqlResp.Errors) > 0 {
+		// GraphQL field errors are fatal to the query — log every one
+		// so a schema change surfaces clearly instead of producing
+		// silently-empty results.
+		for _, e := range gqlResp.Errors {
+			log.Printf("[WARN] Hardcover GraphQL error: %s", e.Message)
+		}
 		return nil, fmt.Errorf("Hardcover GraphQL error: %s", gqlResp.Errors[0].Message)
 	}
 
@@ -210,21 +281,84 @@ func (c *HardcoverClient) search(query string) ([]BookMetadata, error) {
 	hits := gqlResp.Data.SearchBooks.Results.Hits
 	results := make([]BookMetadata, 0, len(hits))
 	for _, hit := range hits {
-		doc := hit.Document
-		meta := BookMetadata{
-			Title:       doc.Title,
-			Description: doc.Description,
-			Publisher:   doc.Publisher,
-			PublishYear: doc.ReleaseYear,
-		}
-		if len(doc.AuthorNames) > 0 {
-			meta.Author = strings.Join(doc.AuthorNames, ", ")
-		}
-		if doc.Image != nil && doc.Image.URL != "" {
-			meta.CoverURL = doc.Image.URL
-		}
-		results = append(results, meta)
+		results = append(results, hardcoverDocumentToMetadata(&hit.Document))
 	}
-
 	return results, nil
+}
+
+// hardcoverDocumentToMetadata folds a Hardcover GraphQL document into
+// our internal BookMetadata shape. Extracted so every code path uses
+// the same field-mapping rules and alt-result resurfaces share one
+// implementation.
+func hardcoverDocumentToMetadata(doc *hardcoverDocument) BookMetadata {
+	meta := BookMetadata{
+		Title:       doc.Title,
+		Description: doc.Description,
+		Publisher:   doc.Publisher,
+		PublishYear: doc.ReleaseYear,
+		Language:    doc.Language,
+	}
+	if len(doc.AuthorNames) > 0 {
+		meta.Author = strings.Join(doc.AuthorNames, ", ")
+	}
+	// Narrator: Hardcover exposes it via contributor_names. That's
+	// the list of every credited contributor (co-authors, narrators,
+	// translators, illustrators) without role labels in the search
+	// index, so we take the first name that isn't already in
+	// AuthorNames as the probable narrator. Imperfect but better than
+	// dropping it entirely.
+	if len(doc.ContributorNames) > 0 {
+		authorSet := make(map[string]struct{}, len(doc.AuthorNames))
+		for _, a := range doc.AuthorNames {
+			authorSet[strings.ToLower(strings.TrimSpace(a))] = struct{}{}
+		}
+		var candidates []string
+		for _, name := range doc.ContributorNames {
+			key := strings.ToLower(strings.TrimSpace(name))
+			if key == "" {
+				continue
+			}
+			if _, dup := authorSet[key]; dup {
+				continue
+			}
+			candidates = append(candidates, name)
+		}
+		if len(candidates) > 0 {
+			meta.Narrator = strings.Join(candidates, ", ")
+		}
+	}
+	if doc.Image != nil && doc.Image.URL != "" {
+		meta.CoverURL = doc.Image.URL
+	}
+	// ISBN: prefer 13 over 10 when both exist. We record the first
+	// one we see since the order within hardcover's isbns array is
+	// not guaranteed.
+	for _, isbn := range doc.ISBNs {
+		if len(isbn) == 13 {
+			meta.ISBN = isbn
+			break
+		}
+	}
+	if meta.ISBN == "" && len(doc.ISBNs) > 0 {
+		meta.ISBN = doc.ISBNs[0]
+	}
+	// Series: prefer featured_series (name + position) over
+	// series_names (just names, no position).
+	if doc.FeaturedSeries != nil && doc.FeaturedSeries.SeriesName != "" {
+		meta.Series = doc.FeaturedSeries.SeriesName
+		if doc.FeaturedSeries.Position > 0 {
+			if doc.FeaturedSeries.Position == float64(int(doc.FeaturedSeries.Position)) {
+				meta.SeriesPosition = fmt.Sprintf("%d", int(doc.FeaturedSeries.Position))
+			} else {
+				meta.SeriesPosition = fmt.Sprintf("%.2f", doc.FeaturedSeries.Position)
+			}
+		}
+	} else if len(doc.SeriesNames) > 0 {
+		meta.Series = doc.SeriesNames[0]
+	}
+	// Genre: Hardcover returns a list; join for storage.
+	if len(doc.Genres) > 0 {
+		meta.Genre = strings.Join(doc.Genres, ", ")
+	}
+	return meta
 }

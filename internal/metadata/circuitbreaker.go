@@ -1,5 +1,5 @@
 // file: internal/metadata/circuitbreaker.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e2f3a4b5-c6d7-8901-ef23-456789abcdef
 
 package metadata
@@ -173,4 +173,30 @@ func (ps *ProtectedSource) SearchByTitleAndAuthor(title, author string) ([]BookM
 // Breaker returns the underlying CircuitBreaker for status reporting.
 func (ps *ProtectedSource) Breaker() *CircuitBreaker {
 	return ps.breaker
+}
+
+// SearchByContext forwards to the underlying source if it implements
+// ContextualSearch. Returns (nil, nil) otherwise so the fetch service
+// naturally falls through to the title/author methods below.
+//
+// This is what makes the "type assert to ContextualSearch" check in
+// the fetch service work against wrapped sources — without this
+// method, wrapping an Audnexus or Hardcover client in a
+// ProtectedSource would strip the optional interface and the
+// contextual fast-path would silently never run.
+func (ps *ProtectedSource) SearchByContext(ctx *SearchContext) ([]BookMetadata, error) {
+	inner, ok := ps.source.(ContextualSearch)
+	if !ok {
+		return nil, nil
+	}
+	if err := ps.breaker.AllowRequest(); err != nil {
+		return nil, err
+	}
+	results, err := inner.SearchByContext(ctx)
+	if err != nil {
+		ps.breaker.RecordFailure()
+		return nil, err
+	}
+	ps.breaker.RecordSuccess()
+	return results, nil
 }
