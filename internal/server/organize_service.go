@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -736,8 +736,23 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 	createdBook, err := orgSvc.db.CreateBook(&newBook)
 	if err != nil {
 		log.Error("Failed to create organized book record for %s: %v", book.Title, err)
-		if !isDir {
-			os.Remove(newPath)
+		// Best-effort cleanup of the files we just placed at newPath so
+		// we don't leak orphan files (single-file) or orphan directories
+		// (multi-file) with no DB row pointing at them. Every removal is
+		// safety-gated on newPath being under RootDir so a broken newPath
+		// can't accidentally rm something outside the managed library.
+		if newPath != "" && config.AppConfig.RootDir != "" && strings.HasPrefix(newPath, config.AppConfig.RootDir) {
+			if isDir {
+				if rmErr := os.RemoveAll(newPath); rmErr != nil {
+					log.Warn("organize: cleanup of partial directory organize failed (%s): %v", newPath, rmErr)
+				} else {
+					log.Warn("organize: cleaned up partial directory organize at %s after CreateBook failure", newPath)
+				}
+			} else {
+				if rmErr := os.Remove(newPath); rmErr != nil {
+					log.Warn("organize: cleanup of partial single-file organize failed (%s): %v", newPath, rmErr)
+				}
+			}
 		}
 		return nil, err
 	}

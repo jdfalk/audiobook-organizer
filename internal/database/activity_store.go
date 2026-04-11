@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.4.1
+// version: 1.5.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -626,32 +626,86 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 			return result, fmt.Errorf("activity_store: compact parse date %q: %w", dateKey, err)
 		}
 
-		// Transaction: idempotency check + insert digest + delete originals.
+		// Transaction: merge-or-insert digest + delete originals.
 		tx, err := s.db.Begin()
 		if err != nil {
 			return result, fmt.Errorf("activity_store: compact begin tx: %w", err)
 		}
 
-		// Idempotency: skip if digest already exists for this date (inside tx).
-		var exists int
+		// Merge semantics: if a digest already exists for this date
+		// (because a previous compact ran and then more entries were
+		// written for the same day — background imports, late tasks,
+		// etc.), fold its counts/items into the new digest and DELETE
+		// the old row inside this transaction. Then INSERT a single
+		// combined digest below.
+		//
+		// Previous behavior was to `continue` on existing digest, which
+		// left every late-arriving entry permanently uncompacted. A
+		// library that ran compact once a day would accumulate tens of
+		// thousands of stragglers forever.
+		var (
+			existingID          int64
+			existingDetailsJSON sql.NullString
+		)
 		err = tx.QueryRow(`
-			SELECT COUNT(*) FROM activity_log
+			SELECT id, details FROM activity_log
 			WHERE tier = 'digest' AND type = 'daily_digest'
-			  AND date(timestamp) = ?`, dateKey).Scan(&exists)
-		if err != nil {
+			  AND date(timestamp) = ?
+			ORDER BY id ASC
+			LIMIT 1`, dateKey).Scan(&existingID, &existingDetailsJSON)
+		if err != nil && err != sql.ErrNoRows {
 			tx.Rollback()
 			return result, fmt.Errorf("activity_store: compact check digest: %w", err)
 		}
-		if exists > 0 {
-			tx.Rollback()
-			continue
+		if existingID > 0 {
+			// Fold existing digest's counts + items into the new digest
+			// we just built, then delete the old row.
+			if existingDetailsJSON.Valid && existingDetailsJSON.String != "" {
+				var existing DigestDetails
+				if jsonErr := json.Unmarshal([]byte(existingDetailsJSON.String), &existing); jsonErr == nil {
+					// Merge counts.
+					for k, v := range existing.Counts {
+						dd.Counts[k] += v
+					}
+					dd.OriginalCount += existing.OriginalCount
+					// Merge items — old items first so new errors/warnings
+					// still sort to the front. Cap at maxDigestItems.
+					// Existing digests may already have been truncated; we
+					// preserve that signal in the combined row.
+					combined := append(existing.Items, dd.Items...)
+					if existing.Truncated {
+						// Keep the truncation flag since older data was lost.
+						dd.Truncated = true
+						dd.TruncatedCount += existing.TruncatedCount
+					}
+					if len(combined) > maxDigestItems {
+						dd.TruncatedCount += len(combined) - maxDigestItems
+						combined = combined[:maxDigestItems]
+						dd.Truncated = true
+					}
+					dd.Items = combined
+				}
+			}
+			// Re-marshal the merged digest for insertion below.
+			merged, mErr := json.Marshal(dd)
+			if mErr != nil {
+				tx.Rollback()
+				return result, fmt.Errorf("activity_store: compact remarshal merged digest: %w", mErr)
+			}
+			detailsBytes = merged
+
+			// Delete the old digest row — we'll insert the combined one below.
+			if _, delErr := tx.Exec(`DELETE FROM activity_log WHERE id = ?`, existingID); delErr != nil {
+				tx.Rollback()
+				return result, fmt.Errorf("activity_store: compact delete old digest: %w", delErr)
+			}
 		}
 
 		_, err = tx.Exec(`
 			INSERT INTO activity_log
 				(timestamp, tier, type, level, source, summary, details, compacted)
 			VALUES (?, 'digest', 'daily_digest', 'info', 'compaction', ?, ?, 1)`,
-			startOfDay, fmt.Sprintf("Daily digest for %s (%d entries)", dateKey, len(dg.entries)),
+			startOfDay, fmt.Sprintf("Daily digest for %s (%d entries)", dateKey, dd.OriginalCount),
 			string(detailsBytes),
 		)
 		if err != nil {
