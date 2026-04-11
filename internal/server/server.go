@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.158.0
+// version: 1.159.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -883,6 +883,51 @@ func NewServer() *Server {
 					}()
 				}
 				log.Println("[INFO] Dedup-on-import hook wired")
+
+				// Wire the organize collision hook. When OrganizeBook
+				// hits ErrTargetOccupied (two books with identical
+				// metadata producing the same target path, or a re-organize
+				// of a content-duplicate), this hook creates a pending
+				// "exact" dedup candidate between the current book and the
+				// book that already owns the target. Without it, the
+				// collision would surface only as an opaque error and the
+				// user would have no trail to follow.
+				//
+				// Runs inside a bgWG-tracked goroutine so it doesn't block
+				// the organize caller and shutdown drains it cleanly.
+				organizer.OrganizeCollisionHook = func(currentBookID, occupantPath string) {
+					if server.embeddingStore == nil || database.GlobalStore == nil {
+						return
+					}
+					server.bgWG.Add(1)
+					go func() {
+						defer server.bgWG.Done()
+						occupant, err := database.GlobalStore.GetBookByFilePath(occupantPath)
+						if err != nil {
+							log.Printf("[WARN] organize-collision hook: lookup %s failed: %v", occupantPath, err)
+							return
+						}
+						if occupant == nil || occupant.ID == currentBookID {
+							return
+						}
+						sim := 1.0
+						if err := server.embeddingStore.UpsertCandidate(database.DedupCandidate{
+							EntityType: "book",
+							EntityAID:  currentBookID,
+							EntityBID:  occupant.ID,
+							Layer:      "exact",
+							Similarity: &sim,
+							Status:     "pending",
+						}); err != nil {
+							log.Printf("[WARN] organize-collision hook: upsert candidate %s/%s failed: %v",
+								currentBookID, occupant.ID, err)
+							return
+						}
+						log.Printf("[INFO] organize-collision: created dedup candidate between %s and %s (occupant of %s)",
+							currentBookID, occupant.ID, occupantPath)
+					}()
+				}
+				log.Println("[INFO] Organize collision hook wired")
 
 				// Wire the embedding-based metadata candidate scorer. The
 				// scorer reuses the same embedClient + embeddingStore as the
