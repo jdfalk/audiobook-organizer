@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -180,6 +180,145 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 		"merged":    merged,
 		"failed":    len(failures),
 		"failures":  failures,
+	})
+}
+
+// mergeDedupCluster handles POST /api/v1/dedup/candidates/merge-cluster.
+//
+// Body: {"book_ids": ["id1", "id2", "id3", ...]}
+//
+// Merges the supplied book IDs into a single version group with one call to
+// MergeService.MergeBooks, then marks every dedup_candidate row whose pair
+// is fully contained in the set as status=merged. This is the backend for
+// the Embedding tab's multi-book cluster card, where 3+ candidate books form
+// a connected component in the pairwise candidate graph and should be
+// merged together as one logical group rather than one pairwise merge at a
+// time (which would fight the version-group state mid-way).
+func (s *Server) mergeDedupCluster(c *gin.Context) {
+	if s.embeddingStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embedding store not available"})
+		return
+	}
+	if s.mergeService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "merge service not available"})
+		return
+	}
+
+	var body struct {
+		BookIDs []string `json:"book_ids"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if len(body.BookIDs) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids must contain at least 2 entries"})
+		return
+	}
+
+	mergeResult, err := s.mergeService.MergeBooks(body.BookIDs, "")
+	if err != nil {
+		internalError(c, "failed to merge books in cluster", err)
+		return
+	}
+
+	// Mark every candidate whose pair is fully contained in the cluster
+	// as merged. Using a set for O(1) membership so a cluster of N books
+	// checks each row's pair in constant time.
+	inCluster := make(map[string]struct{}, len(body.BookIDs))
+	for _, id := range body.BookIDs {
+		inCluster[id] = struct{}{}
+	}
+	candidates, _, listErr := s.embeddingStore.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Status:     "pending",
+		Limit:      100000,
+	})
+	updated := 0
+	if listErr != nil {
+		log.Printf("[dedup] cluster merge: list candidates failed: %v", listErr)
+	} else {
+		for _, cand := range candidates {
+			_, aIn := inCluster[cand.EntityAID]
+			_, bIn := inCluster[cand.EntityBID]
+			if !aIn || !bIn {
+				continue
+			}
+			if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
+				log.Printf("[dedup] cluster merge: status update %d: %v", cand.ID, err)
+				continue
+			}
+			updated++
+		}
+	}
+	log.Printf("[dedup] cluster merge: merged %d books, marked %d candidate row(s) as merged",
+		len(body.BookIDs), updated)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":              "merged",
+		"merged_books":        len(body.BookIDs),
+		"candidates_updated":  updated,
+		"result":              mergeResult,
+	})
+}
+
+// dismissDedupCluster handles POST /api/v1/dedup/candidates/dismiss-cluster.
+//
+// Body: {"book_ids": ["id1", "id2", ...]}
+//
+// Marks every dedup_candidate row whose pair is fully contained in the set
+// as status=dismissed. No books are modified — this just removes the pair
+// from the pending queue.
+func (s *Server) dismissDedupCluster(c *gin.Context) {
+	if s.embeddingStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embedding store not available"})
+		return
+	}
+
+	var body struct {
+		BookIDs []string `json:"book_ids"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	if len(body.BookIDs) < 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids must contain at least 2 entries"})
+		return
+	}
+
+	inCluster := make(map[string]struct{}, len(body.BookIDs))
+	for _, id := range body.BookIDs {
+		inCluster[id] = struct{}{}
+	}
+	candidates, _, err := s.embeddingStore.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Status:     "pending",
+		Limit:      100000,
+	})
+	if err != nil {
+		internalError(c, "failed to list candidates for cluster dismiss", err)
+		return
+	}
+	dismissed := 0
+	for _, cand := range candidates {
+		_, aIn := inCluster[cand.EntityAID]
+		_, bIn := inCluster[cand.EntityBID]
+		if !aIn || !bIn {
+			continue
+		}
+		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
+			log.Printf("[dedup] cluster dismiss: status update %d: %v", cand.ID, err)
+			continue
+		}
+		dismissed++
+	}
+	log.Printf("[dedup] cluster dismiss: dismissed %d candidate row(s) across %d books",
+		dismissed, len(body.BookIDs))
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "dismissed",
+		"dismissed": dismissed,
 	})
 }
 
