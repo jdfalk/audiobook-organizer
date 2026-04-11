@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.16.0
+// version: 3.17.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -2581,6 +2581,11 @@ function EmbeddingDedupTab() {
   const [seriesMergeLoading, setSeriesMergeLoading] = useState(false);
   const [seriesSummary, setSeriesSummary] = useState<api.DedupSeriesSummary[]>([]);
   const [seriesMergeRunning, setSeriesMergeRunning] = useState<number | null>(null);
+  // Per-cluster multi-select state for the split-cluster workflow.
+  // Key: cluster.key → set of selected bookIds. When at least one
+  // book is selected for a cluster, the split-cluster action bar
+  // appears at the bottom of that card.
+  const [splitSelections, setSplitSelections] = useState<Map<string, Set<string>>>(new Map());
   const [pageMerging, setPageMerging] = useState(false);
   const [bulkMerging, setBulkMerging] = useState(false);
 
@@ -2724,14 +2729,58 @@ function EmbeddingDedupTab() {
 
   // Remove a single book from a 3+ way cluster. Dismisses just the edges
   // between this book and the other cluster members, leaving the rest as
-  // a smaller cluster the user can still merge. This is the "one of these
-  // is actually a different book" escape hatch — e.g. a 3-way cluster with
-  // "Monster Trainer Academy I" twice plus "Monster Trainer Academy II"
-  // where the user wants to merge the two I's and kick out the II.
+  // a smaller cluster the user can still merge.
   const handleRemoveFromCluster = async (cluster: BookCluster, bookId: string) => {
     setActionLoading(`${cluster.key}:${bookId}`);
     try {
       await api.removeFromDedupCluster(cluster.bookIds, bookId);
+      loadCandidates();
+      loadStats();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Remove from cluster failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Toggle whether a specific book is selected for multi-select split
+  // on a given cluster. Immutable map update so React re-renders the
+  // cluster card.
+  const toggleSplitSelection = (cluster: BookCluster, bookId: string) => {
+    setSplitSelections((prev) => {
+      const next = new Map(prev);
+      const current = new Set(next.get(cluster.key) ?? []);
+      if (current.has(bookId)) {
+        current.delete(bookId);
+      } else {
+        current.add(bookId);
+      }
+      if (current.size === 0) {
+        next.delete(cluster.key);
+      } else {
+        next.set(cluster.key, current);
+      }
+      return next;
+    });
+  };
+
+  // Remove every selected book from a cluster in one backend call.
+  // This is what the split-cluster multi-select workflow commits:
+  // "this 6-way cluster is really two groups, let me kick out three
+  // of the books in one action instead of clicking × three times".
+  const handleRemoveSelectedFromCluster = async (cluster: BookCluster) => {
+    const selected = splitSelections.get(cluster.key);
+    if (!selected || selected.size === 0) return;
+    const removeIds = Array.from(selected);
+    setActionLoading(`${cluster.key}:split`);
+    try {
+      await api.removeFromDedupCluster(cluster.bookIds, removeIds);
+      // Clear selection for this cluster on success.
+      setSplitSelections((prev) => {
+        const next = new Map(prev);
+        next.delete(cluster.key);
+        return next;
+      });
       loadCandidates();
       loadStats();
     } catch (err) {
@@ -2990,6 +3039,23 @@ function EmbeddingDedupTab() {
                 {removeBusy ? <CircularProgress size={14} /> : <CloseIcon sx={{ fontSize: 16 }} />}
               </IconButton>
             </span>
+          </Tooltip>
+        )}
+        {isMultiWay && cluster.hasPending && (
+          <Tooltip title="Select for multi-remove">
+            <Checkbox
+              size="small"
+              checked={splitSelections.get(cluster.key)?.has(id) ?? false}
+              onClick={(e) => e.stopPropagation()}
+              onChange={() => toggleSplitSelection(cluster, id)}
+              disabled={anyActionBusy}
+              sx={{
+                position: 'absolute',
+                top: -8,
+                left: -8,
+                padding: '4px',
+              }}
+            />
           </Tooltip>
         )}
       </Box>
@@ -3374,6 +3440,23 @@ function EmbeddingDedupTab() {
                         >
                           Dismiss
                         </Button>
+                        {(splitSelections.get(cluster.key)?.size ?? 0) > 0 && (
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                            startIcon={
+                              actionLoading === `${cluster.key}:split`
+                                ? <CircularProgress size={14} />
+                                : <CloseIcon />
+                            }
+                            onClick={() => handleRemoveSelectedFromCluster(cluster)}
+                            disabled={actionLoading != null}
+                            sx={{ ml: 'auto' }}
+                          >
+                            Remove {splitSelections.get(cluster.key)?.size ?? 0} Selected
+                          </Button>
+                        )}
                       </>
                     ) : (
                       <Chip
