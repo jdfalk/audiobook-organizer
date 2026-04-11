@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.5.0
+// version: 1.7.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -76,7 +76,12 @@ func NewDedupEngine(
 
 // CheckBook runs Layer 1 (exact) and Layer 2 (embedding) dedup checks for a book.
 // Returns true if the book was auto-merged (Layer 1 only, when AutoMergeEnabled).
+// Honors ctx cancellation so the dedup-on-import hook can bail immediately
+// when the server is shutting down, rather than racing Pebble close.
 func (de *DedupEngine) CheckBook(ctx context.Context, bookID string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	book, err := de.bookStore.GetBookByID(bookID)
 	if err != nil {
 		return false, fmt.Errorf("get book %s: %w", bookID, err)
@@ -1203,11 +1208,67 @@ func min3(a, b, c int) int {
 }
 
 // normalizeTitle lowercases, trims whitespace, and collapses internal whitespace.
+// normalizeTitleRe matches anything that isn't alphanumeric or whitespace —
+// used to strip punctuation so "Foo: The Bar" and "Foo The Bar" collapse to
+// the same normalized form.
+var normalizeTitleRe = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
+
+// normalizeTitleQuoteStripper matches apostrophes / single quotes / smart
+// quotes — characters that should be stripped to *nothing* rather than a
+// space so "Ender's Game" becomes "enders game" instead of "ender s game".
+var normalizeTitleQuoteStripper = regexp.MustCompile("[\u0027\u2018\u2019\u201C\u201D\"]")
+
+// normalizeTitle folds a title to the canonical form used across the dedup
+// engine's exact-match layer. It is deliberately aggressive:
+//
+//   - lowercase
+//   - "&" and "+" fold to " and " so "Foundation & Empire" matches
+//     "Foundation and Empire"
+//   - all non-alphanumeric characters (punctuation, smart quotes, em-dashes)
+//     are stripped
+//   - leading articles ("the", "a", "an") are dropped so "The Hobbit"
+//     matches "Hobbit"
+//   - multiple whitespace runs collapse to a single space
+//
+// These transforms mirror what a human naturally ignores when deciding if
+// two titles are "the same book". They are applied uniformly on both sides
+// of any title comparison so the folding never produces false positives on
+// its own — the caller still has to decide how close is close enough.
 func normalizeTitle(title string) string {
 	title = strings.ToLower(strings.TrimSpace(title))
-	// Collapse multiple spaces to one
-	parts := strings.Fields(title)
-	return strings.Join(parts, " ")
+
+	// Strip quotes and apostrophes to *nothing* first, so "Ender's Game"
+	// collapses to "enders game" instead of "ender s game". This has to
+	// happen before the general punctuation pass because that one
+	// replaces with a space.
+	title = normalizeTitleQuoteStripper.ReplaceAllString(title, "")
+
+	// Fold ampersands / plus signs to the word "and" BEFORE stripping
+	// punctuation, otherwise the regex would eat the "&" and leave the
+	// words around it glued together ("Foo & Bar" -> "foo  bar", which
+	// normalizes the same as "Foo Bar" and loses the conjunction).
+	title = strings.ReplaceAll(title, "&", " and ")
+	title = strings.ReplaceAll(title, "+", " and ")
+
+	// Strip everything else that isn't a letter, digit, or whitespace —
+	// colons, dashes, parens, etc. all get replaced with a space so the
+	// words on either side don't glue together.
+	title = normalizeTitleRe.ReplaceAllString(title, " ")
+
+	// Collapse whitespace runs to a single space.
+	title = strings.Join(strings.Fields(title), " ")
+
+	// Drop a leading article. Only a leading one — "A Game of Thrones"
+	// should match "Game of Thrones" but "Go Set a Watchman" must not
+	// turn into "Go Set Watchman".
+	for _, article := range []string{"the ", "a ", "an "} {
+		if strings.HasPrefix(title, article) {
+			title = title[len(article):]
+			break
+		}
+	}
+
+	return title
 }
 
 // derefStr is defined in audiobook_service.go

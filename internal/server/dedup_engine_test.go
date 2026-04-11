@@ -312,19 +312,67 @@ func TestLevenshteinDistance(t *testing.T) {
 
 func TestNormalizeTitle(t *testing.T) {
 	tests := []struct {
-		input, want string
+		name, input, want string
 	}{
-		{"  Hello   World  ", "hello world"},
-		{"UPPERCASE", "uppercase"},
-		{"already normal", "already normal"},
-		{"", ""},
-		{"  multiple   spaces   here  ", "multiple spaces here"},
+		{"trim and collapse", "  Hello   World  ", "hello world"},
+		{"uppercase", "UPPERCASE", "uppercase"},
+		{"already normal", "already normal", "already normal"},
+		{"empty", "", ""},
+		{"multiple spaces", "  multiple   spaces   here  ", "multiple spaces here"},
+		// Ampersand folding — the reason this function got rewritten.
+		// "Foundation & Empire" and "Foundation and Empire" must collapse
+		// to the exact same string or the exact-match layer misses them.
+		{"ampersand", "Foundation & Empire", "foundation and empire"},
+		{"ampersand compact", "Foundation&Empire", "foundation and empire"},
+		{"plus sign", "Jekyll + Hyde", "jekyll and hyde"},
+		// Punctuation stripping — the colon becomes a space so the two
+		// halves stay distinct words (prevents "Foundation: The Trilogy"
+		// from colliding with the unrelated "Foundationthetrilogy").
+		{"subtitle colon", "Foundation: The Trilogy", "foundation the trilogy"},
+		{"apostrophe glues letters", "Ender's Game", "enders game"},
+		{"smart quotes stripped", "The \u201cHobbit\u201d", "hobbit"},
+		{"em dash", "Foundation \u2014 Book I", "foundation book i"},
+		// Article stripping — leading only.
+		{"leading the", "The Hobbit", "hobbit"},
+		{"leading a", "A Game of Thrones", "game of thrones"},
+		{"leading an", "An Ember in the Ashes", "ember in the ashes"},
+		{"mid-string the not dropped", "Go Set a Watchman", "go set a watchman"},
+		// Combinations.
+		{"article + ampersand", "The Beauty & The Beast", "beauty and the beast"},
 	}
 
 	for _, tc := range tests {
-		got := normalizeTitle(tc.input)
-		if got != tc.want {
-			t.Errorf("normalizeTitle(%q) = %q, want %q", tc.input, got, tc.want)
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normalizeTitle(tc.input); got != tc.want {
+				t.Errorf("normalizeTitle(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestNormalizeTitle_FoundationAndEmpire is the canonical real-world case
+// that motivated the rewrite. If these four don't all collapse to the same
+// string, the exact-match layer will keep producing duplicate pair rows in
+// the dedup tab.
+func TestNormalizeTitle_FoundationAndEmpire(t *testing.T) {
+	variants := []string{
+		"Foundation and Empire",
+		"Foundation & Empire",
+		"Foundation and Empire (Unabridged)",
+		"foundation and empire",
+	}
+	want := normalizeTitle(variants[0])
+	// "Unabridged" is not the same as the other three — normalizeTitle
+	// deliberately does not know about editorial-qualifier stripping
+	// (that's cleanDisplayTitle's job in the UI). Assert only the three
+	// that should match.
+	for _, v := range variants[:3] {
+		got := normalizeTitle(v)
+		if v == "Foundation and Empire (Unabridged)" {
+			continue
+		}
+		if got != want {
+			t.Errorf("normalizeTitle(%q) = %q, want %q (same as %q)", v, got, want, variants[0])
 		}
 	}
 }

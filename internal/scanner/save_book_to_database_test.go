@@ -1,5 +1,5 @@
 // file: internal/scanner/save_book_to_database_test.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: 0f1e2d3c-4b5a-6978-8899-aabbccddeeff
 
 package scanner
@@ -145,5 +145,68 @@ func TestSaveBookToDatabase_BlocklistSkips(t *testing.T) {
 	saved, err := store.GetBookByFilePath(filePath)
 	if err == nil && saved != nil {
 		t.Error("expected blocked book to be skipped")
+	}
+}
+
+// TestSaveBookToDatabase_DedupOnImportHook verifies that the dedup-on-import
+// hook fires exactly once per newly created book and is NOT called when an
+// existing book is updated via the same code path. This is the contract the
+// scanner-side and server-side code both depend on: the hook is "new book,
+// you should embed + Layer1 check this now", not a general "saveBook ran"
+// notification.
+func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
+	store, cleanup := setupSQLiteStore(t)
+	defer cleanup()
+
+	prevStore := database.GlobalStore
+	database.GlobalStore = store
+	t.Cleanup(func() { database.GlobalStore = prevStore })
+
+	prevConfig := config.AppConfig
+	t.Cleanup(func() { config.AppConfig = prevConfig })
+	config.AppConfig.RootDir = t.TempDir()
+
+	// Install the hook and make sure we uninstall on test exit so other
+	// tests in the same package aren't affected.
+	var hookCalls []string
+	prevHook := DedupOnImportHook
+	DedupOnImportHook = func(bookID string) {
+		hookCalls = append(hookCalls, bookID)
+	}
+	t.Cleanup(func() { DedupOnImportHook = prevHook })
+
+	filePath := filepath.Join(config.AppConfig.RootDir, "dedup-hook.m4b")
+	if err := os.WriteFile(filePath, []byte("hook test"), 0o644); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	book := &Book{
+		FilePath: filePath,
+		Title:    "Hook Test",
+		Author:   "Hook Author",
+		Format:   ".m4b",
+	}
+
+	// First save: new book → hook MUST fire exactly once.
+	if err := saveBookToDatabase(book); err != nil {
+		t.Fatalf("saveBookToDatabase create failed: %v", err)
+	}
+	if len(hookCalls) != 1 {
+		t.Fatalf("expected 1 hook call on create, got %d: %v", len(hookCalls), hookCalls)
+	}
+	firstCallID := hookCalls[0]
+	if firstCallID == "" {
+		t.Error("expected non-empty book ID in hook call")
+	}
+
+	// Second save (same file path): existing book → hook MUST NOT fire
+	// again. Updating an existing book isn't a new import event and
+	// shouldn't re-trigger dedup processing.
+	book.Title = "Hook Test Updated"
+	if err := saveBookToDatabase(book); err != nil {
+		t.Fatalf("saveBookToDatabase update failed: %v", err)
+	}
+	if len(hookCalls) != 1 {
+		t.Errorf("expected hook call count to stay at 1 after update, got %d: %v", len(hookCalls), hookCalls)
 	}
 }

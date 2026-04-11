@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.27.0
+// version: 1.28.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -35,6 +35,17 @@ var saveBook = saveBookToDatabase
 // ScanActivityRecorder is a package-level hook for dual-writing scan events
 // to the unified activity log. Set by server.go after the ActivityService is created.
 var ScanActivityRecorder func(bookID, title string)
+
+// DedupOnImportHook runs the full dedup engine (Layer 1 exact + Layer 2
+// embedding) against a freshly created book. Set by server.go after the
+// DedupEngine is wired up. Import used to have no dedup at all — new books
+// sat in the DB without embeddings until the next user-triggered Re-scan,
+// which meant a \"Foundation & Empire\" re-import wouldn't get flagged
+// against the existing \"Foundation and Empire\" copy for hours or days.
+// The hook is invoked inside a goroutine so the scan loop is never blocked
+// by embedding API calls; the server's bgWG makes sure it finishes before
+// shutdown.
+var DedupOnImportHook func(bookID string)
 
 // defaultLog is a package-level logger for functions that cannot accept a logger parameter.
 var defaultLog = logger.New("scanner")
@@ -1538,8 +1549,16 @@ func saveBookToDatabase(book *Book) error {
 			}
 
 			_, err = database.GlobalStore.CreateBook(dbBook)
-			if err == nil && ScanActivityRecorder != nil {
-				ScanActivityRecorder(dbBook.ID, dbBook.Title)
+			if err == nil {
+				if ScanActivityRecorder != nil {
+					ScanActivityRecorder(dbBook.ID, dbBook.Title)
+				}
+				// Fire the dedup-on-import hook if it's wired up. The hook
+				// is responsible for its own goroutine + shutdown tracking;
+				// from the scanner's perspective this is fire-and-forget.
+				if DedupOnImportHook != nil {
+					DedupOnImportHook(dbBook.ID)
+				}
 			}
 			return err
 		}
