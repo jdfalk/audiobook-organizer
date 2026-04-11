@@ -1,17 +1,20 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	ulid "github.com/oklog/ulid/v2"
 )
 
 // listDedupCandidates handles GET /api/v1/dedup/candidates.
@@ -482,72 +485,121 @@ func (s *Server) dismissDedupCandidate(c *gin.Context) {
 }
 
 // triggerDedupScan handles POST /api/v1/dedup/scan.
-// Starts a background full embedding-based dedup scan. Before scanning,
-// any stale candidates (non-primary versions, same-group pairs, orphaned
-// book IDs) are purged so the scan starts from a clean slate.
+// Runs a full embedding-based dedup scan as a tracked Operation so the
+// UI can show progress and completion. Before scanning, stale candidates
+// (non-primary versions, same-group pairs, orphaned book IDs) are purged.
+//
+// Previously this fired a fire-and-forget goroutine and returned
+// {"status": "started"} with no way for the UI to see progress or
+// completion. Now the operation shows up in the Operations panel with
+// live progress updates and final-completion messages.
 func (s *Server) triggerDedupScan(c *gin.Context) {
 	if s.dedupEngine == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dedup engine not available"})
 		return
 	}
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
 
-	go func() {
-		ctx := context.Background()
+	opID := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(opID, "dedup-scan", nil)
+	if err != nil {
+		internalError(c, "failed to create dedup-scan operation", err)
+		return
+	}
+
+	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.UpdateProgress(0, 100, "Purging stale candidates...")
 		if deleted, err := s.dedupEngine.PurgeStaleCandidates(ctx); err != nil {
 			log.Printf("[dedup] purge stale candidates error: %v", err)
 		} else if deleted > 0 {
 			log.Printf("[dedup] purged %d stale candidate(s) before scan", deleted)
 		}
-		if err := s.dedupEngine.FullScan(ctx, func(done, total int) {
-			log.Printf("[dedup] scan progress: %d/%d", done, total)
-		}); err != nil {
-			log.Printf("[dedup] FullScan error: %v", err)
-		}
-	}()
 
-	c.JSON(http.StatusOK, gin.H{"status": "started"})
+		// FullScan reports progress via a callback (done, total). Translate
+		// that into ProgressReporter updates, reserving 5% at the start for
+		// the purge pass and 5% at the end for the "complete" line so the
+		// bar actually moves all the way to 100.
+		var lastPct int
+		fullScanErr := s.dedupEngine.FullScan(ctx, func(done, total int) {
+			if total <= 0 {
+				return
+			}
+			pct := 5 + (90 * done / total)
+			if pct == lastPct {
+				return
+			}
+			lastPct = pct
+			_ = progress.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
+		})
+		if fullScanErr != nil {
+			log.Printf("[dedup] FullScan error: %v", fullScanErr)
+			return fmt.Errorf("dedup scan: %w", fullScanErr)
+		}
+
+		// Fetch final candidate counts for the completion message.
+		pendingCount := 0
+		if s.embeddingStore != nil {
+			filter := database.CandidateFilter{EntityType: "book", Status: "pending", Limit: 1}
+			if _, total, listErr := s.embeddingStore.ListCandidates(filter); listErr == nil {
+				pendingCount = total
+			}
+		}
+		_ = progress.UpdateProgress(100, 100,
+			fmt.Sprintf("Dedup scan complete — %d pending candidates", pendingCount))
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(opID, "dedup-scan", operations.PriorityLow, opFunc); err != nil {
+		internalError(c, "failed to enqueue dedup scan", err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
 }
 
 // triggerDedupLLM handles POST /api/v1/dedup/scan-llm.
-// Starts a background LLM review pass over existing candidates.
+// Runs an LLM review pass over ambiguous embedding-layer candidates as a
+// tracked Operation so the UI can display progress and completion.
 func (s *Server) triggerDedupLLM(c *gin.Context) {
 	if s.dedupEngine == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dedup engine not available"})
 		return
 	}
-
-	go func() {
-		ctx := context.Background()
-		if err := s.dedupEngine.RunLLMReview(ctx); err != nil {
-			log.Printf("[dedup] RunLLMReview error: %v", err)
-		}
-	}()
-
-	c.JSON(http.StatusOK, gin.H{"status": "started"})
-}
-
-// triggerDedupRefresh handles POST /api/v1/dedup/refresh.
-// Re-runs the full scan (re-embeds stale entries then scans for candidates).
-// Purges stale candidates first so the refresh starts clean.
-func (s *Server) triggerDedupRefresh(c *gin.Context) {
-	if s.dedupEngine == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dedup engine not available"})
+	if operations.GlobalQueue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
 
-	go func() {
-		ctx := context.Background()
-		if deleted, err := s.dedupEngine.PurgeStaleCandidates(ctx); err != nil {
-			log.Printf("[dedup] purge stale candidates error: %v", err)
-		} else if deleted > 0 {
-			log.Printf("[dedup] purged %d stale candidate(s) before refresh", deleted)
-		}
-		if err := s.dedupEngine.FullScan(ctx, func(done, total int) {
-			log.Printf("[dedup] refresh progress: %d/%d", done, total)
-		}); err != nil {
-			log.Printf("[dedup] refresh FullScan error: %v", err)
-		}
-	}()
+	opID := ulid.Make().String()
+	op, err := database.GlobalStore.CreateOperation(opID, "dedup-llm-review", nil)
+	if err != nil {
+		internalError(c, "failed to create dedup-llm-review operation", err)
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "started"})
+	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.UpdateProgress(0, 100, "Starting LLM review of ambiguous candidates...")
+		if err := s.dedupEngine.RunLLMReview(ctx); err != nil {
+			return fmt.Errorf("LLM review: %w", err)
+		}
+		_ = progress.UpdateProgress(100, 100, "LLM review complete")
+		return nil
+	}
+
+	if err := operations.GlobalQueue.Enqueue(opID, "dedup-llm-review", operations.PriorityLow, opFunc); err != nil {
+		internalError(c, "failed to enqueue LLM review", err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
+}
+
+// triggerDedupRefresh handles POST /api/v1/dedup/refresh.
+// Re-runs the full scan as a tracked Operation. Identical behavior to
+// triggerDedupScan — kept as a separate endpoint for backwards compatibility.
+func (s *Server) triggerDedupRefresh(c *gin.Context) {
+	s.triggerDedupScan(c)
 }

@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package server
@@ -954,31 +954,32 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 	return deleted, nil
 }
 
-// getAllBooks fetches all PRIMARY-version books in batches. Non-primary
-// version-group members are filtered out so FullScan never processes them
-// (their identity is owned by the primary) and similarity scanning only
-// produces primary-vs-primary candidate pairs.
+// getAllBooks fetches all PRIMARY-version books in a single pass.
+// Non-primary version-group members are filtered out so FullScan never
+// processes them (their identity is owned by the primary) and similarity
+// scanning only produces primary-vs-primary candidate pairs.
+//
+// Previously this used batched pagination (500 per page, ~48 batches for
+// a 24K-book library). Each batch re-opened a Pebble iterator and walked
+// from the start to the target offset before yielding results, producing
+// O(n²) iterator ops per FullScan — ~576K reads for a 24K-book library.
+// Passing limit=0 tells the store to return everything in one iteration,
+// which is O(n). The memory cost is ~50MB for 24K Book structs — same
+// order of magnitude as the old cumulative batch allocation and far
+// cheaper than the wasted CPU on re-walked iterators.
 func (de *DedupEngine) getAllBooks() ([]database.Book, error) {
-	var all []database.Book
-	const batchSize = 500
-	offset := 0
-	for {
-		batch, err := de.bookStore.GetAllBooks(batchSize, offset)
-		if err != nil {
-			return nil, err
-		}
-		for _, b := range batch {
-			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
-				continue
-			}
-			all = append(all, b)
-		}
-		if len(batch) < batchSize {
-			break
-		}
-		offset += batchSize
+	batch, err := de.bookStore.GetAllBooks(0, 0)
+	if err != nil {
+		return nil, err
 	}
-	return all, nil
+	filtered := make([]database.Book, 0, len(batch))
+	for _, b := range batch {
+		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+			continue
+		}
+		filtered = append(filtered, b)
+	}
+	return filtered, nil
 }
 
 // RunLLMReview processes ambiguous candidates through LLM review (Layer 3).
