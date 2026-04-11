@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.67.0
+// version: 1.68.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3663,6 +3663,37 @@ export async function bulkMergeDedupCandidates(filter: {
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to bulk-merge dedup candidates');
+  }
+  return response.json();
+}
+
+export interface ClusterMergeResult {
+  status: string;
+  merged_books: number;
+  candidates_updated: number;
+  result?: unknown;
+}
+
+export async function mergeDedupCluster(bookIds: string[]): Promise<ClusterMergeResult> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/merge-cluster`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ book_ids: bookIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge dedup cluster');
+  }
+  return response.json();
+}
+
+export async function dismissDedupCluster(bookIds: string[]): Promise<{ status: string; dismissed: number }> {
+  const response = await fetch(`${API_BASE}/dedup/candidates/dismiss-cluster`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ book_ids: bookIds }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to dismiss dedup cluster');
   }
   return response.json();
 }
