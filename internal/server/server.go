@@ -2304,9 +2304,39 @@ func isITunesGhostPath(p string) bool {
 	return strings.Contains(lower, "/itunes media/") || strings.Contains(lower, "/itunes/itunes")
 }
 
+// bookCurationScore returns a coarse "how much effort has the user put into
+// this entry" score. Higher means more curated. Used by bookIsBetter as the
+// tiebreaker right below path origin — a user-curated MP3 should beat an
+// untouched M4B because the whole point of merging is to keep the entry
+// that already has the right metadata.
+//
+// Signals, each worth one point:
+//
+//   - MetadataReviewStatus == "matched" (user explicitly accepted a match)
+//   - LastWrittenAt set (tags have been written back to the file)
+//   - MetadataUpdatedAt strictly newer than CreatedAt (user-visible metadata
+//     field has been edited since the row was created)
+func bookCurationScore(b *database.Book) int {
+	score := 0
+	if b.MetadataReviewStatus != nil && *b.MetadataReviewStatus == "matched" {
+		score++
+	}
+	if b.LastWrittenAt != nil {
+		score++
+	}
+	if b.MetadataUpdatedAt != nil && b.CreatedAt != nil && b.MetadataUpdatedAt.After(*b.CreatedAt) {
+		score++
+	}
+	return score
+}
+
 // bookIsBetter returns true if a is a "better" primary version than b.
-// Preference: managed library path > iTunes-ghost path, M4B > other formats,
-// higher bitrate, larger file.
+// Preference order (strongest first):
+//  1. Organized library path over iTunes-ghost path
+//  2. Higher curation score (user effort beats technical quality)
+//  3. M4B over other formats
+//  4. Higher bitrate
+//  5. Larger file size
 func bookIsBetter(a, b *database.Book) bool {
 	// Path origin trumps everything else — an organized-library copy is
 	// always a better primary than an iTunes ghost, regardless of format or
@@ -2316,6 +2346,17 @@ func bookIsBetter(a, b *database.Book) bool {
 	bGhost := isITunesGhostPath(b.FilePath)
 	if aGhost != bGhost {
 		return !aGhost
+	}
+
+	// Curation beats format quality. If the user has spent effort on one
+	// entry (accepted a metadata match, written tags back, edited fields),
+	// that entry wins even if a pristine duplicate has a "better" format
+	// or bitrate — the curated one is where the user's work lives and
+	// where any linked relationships (external IDs, tags, notes) point.
+	aCur := bookCurationScore(a)
+	bCur := bookCurationScore(b)
+	if aCur != bCur {
+		return aCur > bCur
 	}
 
 	aM4B := strings.EqualFold(a.Format, "m4b")
