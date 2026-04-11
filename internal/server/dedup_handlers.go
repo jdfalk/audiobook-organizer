@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -797,19 +797,24 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 
 // removeFromDedupCluster handles POST /api/v1/dedup/candidates/remove-from-cluster.
 //
-// Body: {"cluster_book_ids": [...], "remove_book_id": "X"}
+// Body: {
+//   "cluster_book_ids": [...],
+//   "remove_book_id": "X"      // singular, backwards-compat
+//   "remove_book_ids": [...]   // plural, preferred
+// }
 //
-// Dismisses every pending candidate whose pair is one-side-X and other-side
-// in (cluster \ X). In other words: "this one book is NOT a duplicate of
-// the other books in this cluster". Pairs involving X that point to books
-// OUTSIDE the cluster are left alone — this is a scoped split, not a
-// global ban on the book.
+// Dismisses every pending candidate whose pair is one-side-in-remove-set
+// and other-side in (cluster \ remove-set). In other words: "these books
+// are NOT duplicates of the remaining books in this cluster". Pairs where
+// both sides are in the remove set are ALSO dismissed — removing two
+// wrong-books from a cluster means neither should stay paired with
+// anything that was in the original cluster.
 //
-// The effect on the UI: a 3-way cluster (A, B, C) where the user removes
-// C drops the (A,C) and (B,C) edges but leaves (A,B). On the next page
-// load the union-find produces a 2-way cluster (A, B) and C disappears
-// from the pending view. C can still show up in future dedup scans if
-// something new hits it.
+// Pairs involving a removed book with books OUTSIDE the cluster are
+// left alone — this is a scoped split, not a global ban.
+//
+// Accepts both singular and plural forms for backwards compatibility.
+// If both are provided, they're merged into a single set.
 func (s *Server) removeFromDedupCluster(c *gin.Context) {
 	if s.embeddingStore == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embedding store not available"})
@@ -818,14 +823,28 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 
 	var body struct {
 		ClusterBookIDs []string `json:"cluster_book_ids"`
-		RemoveBookID   string   `json:"remove_book_id"`
+		RemoveBookID   string   `json:"remove_book_id,omitempty"`
+		RemoveBookIDs  []string `json:"remove_book_ids,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	if body.RemoveBookID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "remove_book_id is required"})
+
+	// Normalize into one remove set. Singular and plural both supported
+	// so the existing × button (singular) keeps working while the new
+	// multi-select UI sends the plural.
+	removeSet := make(map[string]struct{})
+	if body.RemoveBookID != "" {
+		removeSet[body.RemoveBookID] = struct{}{}
+	}
+	for _, id := range body.RemoveBookIDs {
+		if id != "" {
+			removeSet[id] = struct{}{}
+		}
+	}
+	if len(removeSet) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "remove_book_id or remove_book_ids is required"})
 		return
 	}
 	if len(body.ClusterBookIDs) < 2 {
@@ -833,16 +852,17 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 		return
 	}
 
-	// Build the set of "other books in this cluster" — everything in the
-	// cluster except the one being removed.
-	others := make(map[string]struct{}, len(body.ClusterBookIDs))
+	// Build the set of "remaining books in this cluster" — cluster
+	// minus the remove set.
+	remaining := make(map[string]struct{}, len(body.ClusterBookIDs))
 	for _, id := range body.ClusterBookIDs {
-		if id != body.RemoveBookID {
-			others[id] = struct{}{}
+		if _, removed := removeSet[id]; removed {
+			continue
 		}
+		remaining[id] = struct{}{}
 	}
-	if len(others) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster must contain at least one book other than remove_book_id"})
+	if len(remaining) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster must contain at least one book that is not in remove set"})
 		return
 	}
 
@@ -858,35 +878,43 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 
 	dismissed := 0
 	for _, cand := range candidates {
-		// The pair must involve the removed book on one side and an
-		// "other cluster member" on the opposite side. Pairs where the
-		// removed book touches a book OUTSIDE the cluster are deliberately
-		// skipped — those represent different clusters that the user
-		// hasn't expressed an opinion on.
-		var otherID string
+		// A pair is dismissible if at least one side is in the remove
+		// set AND the other side is either also in the remove set or in
+		// the remaining cluster. Pairs where a removed book touches a
+		// book OUTSIDE the cluster are not touched — those are
+		// different clusters.
+		_, aRemoved := removeSet[cand.EntityAID]
+		_, bRemoved := removeSet[cand.EntityBID]
+		if !aRemoved && !bRemoved {
+			continue
+		}
+		_, aRemaining := remaining[cand.EntityAID]
+		_, bRemaining := remaining[cand.EntityBID]
+
+		touchesCluster := false
 		switch {
-		case cand.EntityAID == body.RemoveBookID:
-			otherID = cand.EntityBID
-		case cand.EntityBID == body.RemoveBookID:
-			otherID = cand.EntityAID
-		default:
+		case aRemoved && (bRemaining || bRemoved):
+			touchesCluster = true
+		case bRemoved && (aRemaining || aRemoved):
+			touchesCluster = true
+		}
+		if !touchesCluster {
 			continue
 		}
-		if _, ok := others[otherID]; !ok {
-			continue
-		}
+
 		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
 			log.Printf("[dedup] remove-from-cluster: status update %d: %v", cand.ID, err)
 			continue
 		}
 		dismissed++
 	}
-	log.Printf("[dedup] remove-from-cluster: dismissed %d edge(s) between %s and %d other cluster member(s)",
-		dismissed, body.RemoveBookID, len(others))
+	log.Printf("[dedup] remove-from-cluster: dismissed %d edge(s), removed %d book(s) from cluster of %d",
+		dismissed, len(removeSet), len(body.ClusterBookIDs))
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "removed",
 		"dismissed": dismissed,
+		"removed":   len(removeSet),
 	})
 }
 
