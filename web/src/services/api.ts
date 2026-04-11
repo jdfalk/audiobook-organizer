@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.69.0
+// version: 1.70.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3674,11 +3674,22 @@ export interface ClusterMergeResult {
   result?: unknown;
 }
 
-export async function mergeDedupCluster(bookIds: string[]): Promise<ClusterMergeResult> {
+// mergeDedupCluster merges a set of book IDs into one version group.
+// If primaryBookId is provided, that book is forced as the version-group
+// primary (overrides the bookIsBetter auto-pick based on path origin,
+// curation, format, bitrate, size). If omitted, the backend auto-picks.
+export async function mergeDedupCluster(
+  bookIds: string[],
+  primaryBookId?: string
+): Promise<ClusterMergeResult> {
+  const body: Record<string, unknown> = { book_ids: bookIds };
+  if (primaryBookId) {
+    body.primary_book_id = primaryBookId;
+  }
   const response = await fetch(`${API_BASE}/dedup/candidates/merge-cluster`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ book_ids: bookIds }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge dedup cluster');
