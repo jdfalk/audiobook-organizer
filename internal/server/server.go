@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.156.0
+// version: 1.157.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -859,6 +859,30 @@ func NewServer() *Server {
 				server.dedupEngine.AutoMergeEnabled = config.AppConfig.DedupAutoMergeEnabled
 				log.Println("[INFO] Embedding store and dedup engine initialized")
 				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
+
+				// Wire the dedup-on-import hook. When scanner.CreateBook
+				// succeeds, the scanner calls DedupOnImportHook(bookID) in
+				// the scan-loop goroutine. We spin a fresh goroutine so the
+				// scan loop is never blocked by embedding API calls, and
+				// register it with bgWG so shutdown waits for in-flight
+				// work before closing Pebble. Without this, a freshly
+				// imported book would wait for the next user-triggered
+				// Re-scan before dedup ever saw it — which meant a
+				// "Foundation & Empire" re-import would stay invisible to
+				// the cluster tab for hours or days.
+				scanner.DedupOnImportHook = func(bookID string) {
+					if server.dedupEngine == nil {
+						return
+					}
+					server.bgWG.Add(1)
+					go func() {
+						defer server.bgWG.Done()
+						if _, err := server.dedupEngine.CheckBook(server.bgCtx, bookID); err != nil {
+							log.Printf("[WARN] dedup-on-import CheckBook(%s): %v", bookID, err)
+						}
+					}()
+				}
+				log.Println("[INFO] Dedup-on-import hook wired")
 
 				// Wire the embedding-based metadata candidate scorer. The
 				// scorer reuses the same embedClient + embeddingStore as the
