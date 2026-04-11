@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.154.0
+// version: 1.155.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2214,9 +2214,33 @@ func isProtectedPath(filePath string) bool {
 	return false
 }
 
+// isITunesGhostPath reports whether a book's file path points at the
+// iTunes media folder rather than the managed audiobook-organizer library.
+// Such books are "ghost" references — iTunes knows about them but they
+// live outside the library we actually manage, so they should never be
+// chosen as the primary version of a merge.
+func isITunesGhostPath(p string) bool {
+	if p == "" {
+		return false
+	}
+	lower := strings.ToLower(p)
+	return strings.Contains(lower, "/itunes media/") || strings.Contains(lower, "/itunes/itunes")
+}
+
 // bookIsBetter returns true if a is a "better" primary version than b.
-// Preference: M4B > other formats, higher bitrate, larger file.
+// Preference: managed library path > iTunes-ghost path, M4B > other formats,
+// higher bitrate, larger file.
 func bookIsBetter(a, b *database.Book) bool {
+	// Path origin trumps everything else — an organized-library copy is
+	// always a better primary than an iTunes ghost, regardless of format or
+	// bitrate. Otherwise a high-bitrate iTunes import would steal the
+	// primary slot from the file the user has actually organized.
+	aGhost := isITunesGhostPath(a.FilePath)
+	bGhost := isITunesGhostPath(b.FilePath)
+	if aGhost != bGhost {
+		return !aGhost
+	}
+
 	aM4B := strings.EqualFold(a.Format, "m4b")
 	bM4B := strings.EqualFold(b.Format, "m4b")
 	if aM4B != bM4B {
