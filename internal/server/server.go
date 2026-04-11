@@ -1596,6 +1596,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/candidates/:id/merge", s.mergeDedupCandidate)
 			protected.POST("/dedup/candidates/:id/dismiss", s.dismissDedupCandidate)
 			protected.POST("/dedup/candidates/bulk-merge", s.bulkMergeDedupCandidates)
+			protected.POST("/dedup/candidates/merge-cluster", s.mergeDedupCluster)
+			protected.POST("/dedup/candidates/dismiss-cluster", s.dismissDedupCluster)
 			protected.POST("/dedup/scan", s.triggerDedupScan)
 			protected.POST("/dedup/scan-llm", s.triggerDedupLLM)
 			protected.POST("/dedup/refresh", s.triggerDedupRefresh)

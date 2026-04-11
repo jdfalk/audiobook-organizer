@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.6.0
+// version: 3.7.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -2438,6 +2438,102 @@ const LAYER_COLORS: Record<string, 'error' | 'primary' | 'secondary'> = {
   llm: 'secondary',
 };
 
+/**
+ * A cluster groups candidate pairs that share books via connected components.
+ * A 2-way cluster is a single pair; a 3+ way cluster is what happens when
+ * (A,B), (B,C), (A,C) all hit — previously shown as three duplicate-looking
+ * rows, now collapsed into one multi-book card.
+ */
+interface BookCluster {
+  key: string;
+  bookIds: string[];
+  candidateIds: number[];
+  layer: string;
+  maxSimilarity: number | null;
+  hasPending: boolean;
+  overallStatus: string;
+  llmInfo: string | null;
+}
+
+const LAYER_RANK: Record<string, number> = { exact: 3, llm: 2, embedding: 1 };
+
+/**
+ * Group candidates into clusters using union-find. Each cluster's layer is
+ * the strongest layer seen across its pairs (exact > llm > embedding) so
+ * the visual chip reflects the most trustworthy signal in the group.
+ */
+function buildClusters(candidates: DedupCandidate[]): BookCluster[] {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    let cur = x;
+    while (parent.get(cur) !== root) {
+      const next = parent.get(cur)!;
+      parent.set(cur, root);
+      cur = next;
+    }
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  for (const c of candidates) {
+    if (!parent.has(c.entity_a_id)) parent.set(c.entity_a_id, c.entity_a_id);
+    if (!parent.has(c.entity_b_id)) parent.set(c.entity_b_id, c.entity_b_id);
+    union(c.entity_a_id, c.entity_b_id);
+  }
+  const groups = new Map<string, BookCluster>();
+  for (const c of candidates) {
+    const root = find(c.entity_a_id);
+    let g = groups.get(root);
+    if (!g) {
+      g = {
+        key: root,
+        bookIds: [],
+        candidateIds: [],
+        layer: c.layer,
+        maxSimilarity: c.similarity ?? null,
+        hasPending: false,
+        overallStatus: c.status,
+        llmInfo: null,
+      };
+      groups.set(root, g);
+    }
+    if (!g.bookIds.includes(c.entity_a_id)) g.bookIds.push(c.entity_a_id);
+    if (!g.bookIds.includes(c.entity_b_id)) g.bookIds.push(c.entity_b_id);
+    g.candidateIds.push(c.id);
+    if ((LAYER_RANK[c.layer] ?? 0) > (LAYER_RANK[g.layer] ?? 0)) g.layer = c.layer;
+    if (c.similarity != null && (g.maxSimilarity == null || c.similarity > g.maxSimilarity)) {
+      g.maxSimilarity = c.similarity;
+    }
+    if (c.status === 'pending') g.hasPending = true;
+    if (g.overallStatus !== c.status) g.overallStatus = 'mixed';
+    if (c.llm_reason && !g.llmInfo) g.llmInfo = `${c.llm_verdict ?? ''}: ${c.llm_reason}`;
+  }
+  // Order clusters by the lowest candidate id they contain so the page
+  // order stays stable across refreshes.
+  return Array.from(groups.values()).sort((a, b) => {
+    const minA = Math.min(...a.candidateIds);
+    const minB = Math.min(...b.candidateIds);
+    return minA - minB;
+  });
+}
+
+/**
+ * Strip everything up to and including "audiobook-organizer/" so long
+ * production paths don't blow out the card width. Falls back to the full
+ * path if the marker isn't present (e.g. during tests or odd mounts).
+ */
+function truncateAudiobookPath(path: string | undefined | null): string {
+  if (!path) return '';
+  const marker = 'audiobook-organizer/';
+  const idx = path.indexOf(marker);
+  return idx >= 0 ? path.slice(idx + marker.length) : path;
+}
+
 function EmbeddingDedupTab() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DedupStats[]>([]);
@@ -2450,7 +2546,7 @@ function EmbeddingDedupTab() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [bookDetails, setBookDetails] = useState<Map<string, Book>>(new Map());
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [bulkMergeOpen, setBulkMergeOpen] = useState(false);
@@ -2505,10 +2601,10 @@ function EmbeddingDedupTab() {
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadCandidates(); }, [loadCandidates]);
 
-  const handleMerge = async (id: number) => {
-    setActionLoading(id);
+  const handleMergeCluster = async (cluster: BookCluster) => {
+    setActionLoading(cluster.key);
     try {
-      await api.mergeDedupCandidate(id);
+      await api.mergeDedupCluster(cluster.bookIds);
       loadCandidates();
       loadStats();
     } catch (err) {
@@ -2518,10 +2614,10 @@ function EmbeddingDedupTab() {
     }
   };
 
-  const handleDismiss = async (id: number) => {
-    setActionLoading(id);
+  const handleDismissCluster = async (cluster: BookCluster) => {
+    setActionLoading(cluster.key);
     try {
-      await api.dismissDedupCandidate(id);
+      await api.dismissDedupCluster(cluster.bookIds);
       loadCandidates();
       loadStats();
     } catch (err) {
@@ -2590,23 +2686,50 @@ function EmbeddingDedupTab() {
 
   const renderBookSide = (id: string) => {
     const book = bookDetails.get(id);
-    if (!book) return <Typography variant="body2" color="text.secondary">Book #{id}</Typography>;
+    if (!book) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          Book #{id}
+        </Typography>
+      );
+    }
+    const shortPath = truncateAudiobookPath(book.file_path);
     return (
       <Box
-        sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+        sx={{ cursor: 'pointer', minWidth: 0, '&:hover .dedup-side-title': { textDecoration: 'underline' } }}
         onClick={() => navigate(`/books/${book.id}`)}
       >
-        <Typography variant="body2" fontWeight="medium" noWrap>
+        <Typography
+          className="dedup-side-title"
+          variant="body2"
+          fontWeight="medium"
+          noWrap
+          title={book.title}
+        >
           {cleanDisplayTitle(book.title)}
         </Typography>
         {book.author_name && (
-          <Typography variant="caption" color="text.secondary" noWrap>
+          <Typography variant="caption" color="text.secondary" noWrap title={book.author_name}>
             {book.author_name}
           </Typography>
+        )}
+        {shortPath && (
+          <Tooltip title={book.file_path} enterDelay={400}>
+            <Typography
+              variant="caption"
+              color="text.disabled"
+              noWrap
+              sx={{ display: 'block', fontFamily: 'monospace', fontSize: '0.7rem' }}
+            >
+              {shortPath}
+            </Typography>
+          </Tooltip>
         )}
       </Box>
     );
   };
+
+  const clusters = useMemo(() => buildClusters(candidates), [candidates]);
 
   return (
     <Box>
@@ -2716,71 +2839,103 @@ function EmbeddingDedupTab() {
       ) : (
         <>
           <Stack spacing={1}>
-            {candidates.map((c) => (
-              <Card key={c.id} variant="outlined">
-                <CardContent sx={{ pb: 1 }}>
-                  <Stack direction="row" spacing={2} alignItems="flex-start">
-                    {/* Book A */}
-                    <Box sx={{ flex: 1, minWidth: 0 }}>{renderBookSide(c.entity_a_id)}</Box>
-
-                    {/* Center info */}
-                    <Stack alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
-                      <MergeIcon color="action" />
+            {clusters.map((cluster) => {
+              const busy = actionLoading === cluster.key;
+              const isMultiWay = cluster.bookIds.length > 2;
+              return (
+                <Card key={cluster.key} variant="outlined">
+                  <CardContent sx={{ pb: 1 }}>
+                    {/* Top info row: layer, similarity, cluster size */}
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ mb: 1 }}
+                    >
                       <Chip
-                        label={c.layer}
+                        label={cluster.layer}
                         size="small"
-                        color={LAYER_COLORS[c.layer] || 'default'}
+                        color={LAYER_COLORS[cluster.layer] || 'default'}
                       />
-                      {c.similarity != null && (
+                      {cluster.maxSimilarity != null && (
                         <Typography variant="caption" color="text.secondary">
-                          {(c.similarity * 100).toFixed(1)}%
+                          {(cluster.maxSimilarity * 100).toFixed(1)}%
                         </Typography>
                       )}
+                      {isMultiWay && (
+                        <Chip
+                          label={`${cluster.bookIds.length}-way cluster`}
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                        />
+                      )}
+                      <Box sx={{ flex: 1 }} />
+                      <MergeIcon color="action" fontSize="small" />
                     </Stack>
 
-                    {/* Book B */}
-                    <Box sx={{ flex: 1, minWidth: 0 }}>{renderBookSide(c.entity_b_id)}</Box>
-                  </Stack>
+                    {/* Book sides laid out horizontally with vertical dividers */}
+                    <Stack
+                      direction="row"
+                      spacing={2}
+                      alignItems="stretch"
+                      divider={<Divider orientation="vertical" flexItem />}
+                      sx={{ overflowX: 'auto' }}
+                    >
+                      {cluster.bookIds.map((bookId) => (
+                        <Box
+                          key={bookId}
+                          sx={{ flex: 1, minWidth: 0, maxWidth: `${100 / cluster.bookIds.length}%` }}
+                        >
+                          {renderBookSide(bookId)}
+                        </Box>
+                      ))}
+                    </Stack>
 
-                  {c.llm_reason && (
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontStyle: 'italic' }}>
-                      LLM: {c.llm_verdict} &mdash; {c.llm_reason}
-                    </Typography>
-                  )}
-                </CardContent>
-                <CardActions sx={{ pt: 0 }}>
-                  {c.status === 'pending' ? (
-                    <>
-                      <Button
-                        size="small"
-                        color="primary"
-                        startIcon={actionLoading === c.id ? <CircularProgress size={14} /> : <MergeIcon />}
-                        onClick={() => handleMerge(c.id)}
-                        disabled={actionLoading != null}
+                    {cluster.llmInfo && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ mt: 0.5, display: 'block', fontStyle: 'italic' }}
                       >
-                        Merge
-                      </Button>
-                      <Button
+                        LLM: {cluster.llmInfo}
+                      </Typography>
+                    )}
+                  </CardContent>
+                  <CardActions sx={{ pt: 0 }}>
+                    {cluster.hasPending ? (
+                      <>
+                        <Button
+                          size="small"
+                          color="primary"
+                          startIcon={busy ? <CircularProgress size={14} /> : <MergeIcon />}
+                          onClick={() => handleMergeCluster(cluster)}
+                          disabled={actionLoading != null}
+                        >
+                          {isMultiWay ? `Merge ${cluster.bookIds.length} Books` : 'Merge'}
+                        </Button>
+                        <Button
+                          size="small"
+                          color="inherit"
+                          startIcon={busy ? <CircularProgress size={14} /> : <VisibilityOffIcon />}
+                          onClick={() => handleDismissCluster(cluster)}
+                          disabled={actionLoading != null}
+                        >
+                          Dismiss
+                        </Button>
+                      </>
+                    ) : (
+                      <Chip
+                        label={cluster.overallStatus}
                         size="small"
-                        color="inherit"
-                        startIcon={actionLoading === c.id ? <CircularProgress size={14} /> : <VisibilityOffIcon />}
-                        onClick={() => handleDismiss(c.id)}
-                        disabled={actionLoading != null}
-                      >
-                        Dismiss
-                      </Button>
-                    </>
-                  ) : (
-                    <Chip
-                      label={c.status}
-                      size="small"
-                      color={c.status === 'merged' ? 'success' : 'default'}
-                      variant="outlined"
-                    />
-                  )}
-                </CardActions>
-              </Card>
-            ))}
+                        color={cluster.overallStatus === 'merged' ? 'success' : 'default'}
+                        variant="outlined"
+                      />
+                    )}
+                  </CardActions>
+                </Card>
+              );
+            })}
           </Stack>
 
           <TablePagination
