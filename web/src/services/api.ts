@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.71.0
+// version: 1.72.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3746,22 +3746,27 @@ export async function dismissDedupCluster(bookIds: string[]): Promise<{ status: 
   return response.json();
 }
 
-// Remove a single book from a cluster by dismissing only the edges between
-// it and the other cluster members. Pairs involving the book with books
-// OUTSIDE the cluster are left alone. Used by the per-side "not a
-// duplicate" button when one book in a 3+ way cluster is wrong but the
-// rest are real duplicates.
+// Remove one or more books from a cluster by dismissing only the
+// edges between them and the remaining cluster members. Pairs
+// involving a removed book with books OUTSIDE the cluster are left
+// alone. Accepts either a single book ID (× button) or a list of
+// IDs (multi-select split).
 export async function removeFromDedupCluster(
   clusterBookIds: string[],
-  removeBookId: string
-): Promise<{ status: string; dismissed: number }> {
+  removeBookIds: string | string[]
+): Promise<{ status: string; dismissed: number; removed: number }> {
+  const body: Record<string, unknown> = {
+    cluster_book_ids: clusterBookIds,
+  };
+  if (Array.isArray(removeBookIds)) {
+    body.remove_book_ids = removeBookIds;
+  } else {
+    body.remove_book_id = removeBookIds;
+  }
   const response = await fetch(`${API_BASE}/dedup/candidates/remove-from-cluster`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      cluster_book_ids: clusterBookIds,
-      remove_book_id: removeBookId,
-    }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to remove book from dedup cluster');
