@@ -105,6 +105,66 @@ func TestMergeService_MergeBooks_TooFew(t *testing.T) {
 	assert.Contains(t, err.Error(), "at least 2")
 }
 
+// TestMergeService_MergeBooks_SoftDeletesLosers verifies the
+// post-2026-04-11 merge semantics: losers get soft-deleted
+// (MarkedForDeletion=true) after merge so they drop off the
+// default library view, while the winner stays active with
+// the version group pointing at all of them.
+func TestMergeService_MergeBooks_SoftDeletesLosers(t *testing.T) {
+	server, cleanup := setupTestServer(t)
+	defer cleanup()
+	_ = server
+
+	store := database.GlobalStore
+
+	book1 := &database.Book{
+		ID:       ulid.Make().String(),
+		Title:    "Loser MP3",
+		Format:   "mp3",
+		FilePath: "/tmp/loser.mp3",
+	}
+	book2 := &database.Book{
+		ID:       ulid.Make().String(),
+		Title:    "Winner M4B",
+		Format:   "m4b",
+		FilePath: "/tmp/winner.m4b",
+	}
+
+	_, err := store.CreateBook(book1)
+	require.NoError(t, err)
+	_, err = store.CreateBook(book2)
+	require.NoError(t, err)
+
+	ms := NewMergeService(store)
+	result, err := ms.MergeBooks([]string{book1.ID, book2.ID}, "")
+	require.NoError(t, err)
+	require.Equal(t, book2.ID, result.PrimaryID, "M4B should auto-win")
+
+	// Winner is NOT soft-deleted.
+	winner, err := store.GetBookByID(book2.ID)
+	require.NoError(t, err)
+	require.NotNil(t, winner)
+	require.NotNil(t, winner.IsPrimaryVersion)
+	assert.True(t, *winner.IsPrimaryVersion)
+	if winner.MarkedForDeletion != nil {
+		assert.False(t, *winner.MarkedForDeletion, "winner must not be soft-deleted")
+	}
+
+	// Loser IS soft-deleted, with the version group still pointing
+	// at it so the relationship survives for recovery.
+	loser, err := store.GetBookByID(book1.ID)
+	require.NoError(t, err)
+	require.NotNil(t, loser)
+	require.NotNil(t, loser.IsPrimaryVersion)
+	assert.False(t, *loser.IsPrimaryVersion)
+	require.NotNil(t, loser.MarkedForDeletion, "loser must be soft-deleted")
+	assert.True(t, *loser.MarkedForDeletion)
+	require.NotNil(t, loser.MarkedForDeletionAt, "loser must have deletion timestamp")
+	assert.WithinDuration(t, time.Now(), *loser.MarkedForDeletionAt, 5*time.Second)
+	require.NotNil(t, loser.VersionGroupID)
+	assert.Equal(t, result.VersionGroupID, *loser.VersionGroupID)
+}
+
 // TestMergeService_MergeBooks_PrefersCuratedOverPristine verifies that a
 // book the user has curated (metadata match accepted, tags written back)
 // wins the primary slot over a duplicate with a better format or bitrate.
