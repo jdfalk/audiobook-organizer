@@ -1826,6 +1826,12 @@ func (s *Server) setupRoutes() {
 				itunesGroup.POST("/import-status/bulk", s.handleITunesImportStatusBulk)
 				itunesGroup.GET("/library-status", s.handleITunesLibraryStatus)
 				itunesGroup.POST("/sync", s.handleITunesSync)
+				// Diff-and-batch rebuild: computes the full diff
+				// between the DB and the current ITL file, then
+				// applies all adds/removes/updates in one atomic
+				// safeWriteITL call. Supports dry_run=true to
+				// preview without applying. Backlog 7.9.
+				itunesGroup.POST("/rebuild", s.rebuildITLHandler)
 			}
 
 			// Cover art
