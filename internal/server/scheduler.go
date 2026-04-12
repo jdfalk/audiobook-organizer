@@ -76,6 +76,7 @@ func NewTaskScheduler(s *Server) *TaskScheduler {
 		"author_split_scan",
 		"series_prune",
 		"isbn_enrichment",
+		"metadata_upgrade",
 		"tombstone_cleanup",
 		"purge_deleted",
 		"purge_old_logs",
@@ -302,6 +303,34 @@ func (ts *TaskScheduler) registerAllTasks() {
 			})
 		},
 		IsEnabled:              func() bool { return s.metadataFetchService != nil && s.metadataFetchService.isbnEnrichment != nil },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowMetadataRefresh },
+	})
+
+	ts.registerTask(TaskDefinition{
+		Name:        "metadata_upgrade",
+		Description: "Upgrade metadata from lower-quality sources (Google Books, Wikipedia) to richer ones (Hardcover, Audible) when a high-confidence match is available",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperation("metadata-upgrade", func(ctx context.Context, progress operations.ProgressReporter) error {
+				if s.metadataFetchService == nil {
+					return fmt.Errorf("metadata fetch service not initialized")
+				}
+				svc := NewMetadataUpgradeService(database.GlobalStore, s.metadataFetchService)
+				_ = progress.Log("info", "Scanning for books with upgradeable metadata sources...", nil)
+				result, err := svc.RunUpgrade(ctx, 200)
+				if err != nil {
+					return err
+				}
+				msg := fmt.Sprintf("Metadata upgrade complete: checked %d, upgraded %d, skipped %d, errors %d",
+					result.Checked, result.Upgraded, result.Skipped, result.Errors)
+				_ = progress.Log("info", msg, nil)
+				_ = progress.UpdateProgress(100, 100, msg)
+				return nil
+			})
+		},
+		IsEnabled:              func() bool { return s.metadataFetchService != nil },
 		GetInterval:            func() time.Duration { return 0 },
 		RunOnStart:             func() bool { return false },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowMetadataRefresh },
