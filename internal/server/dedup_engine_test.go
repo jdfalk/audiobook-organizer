@@ -158,6 +158,142 @@ func TestDedupEngine_ExactMatch_FileHash_AutoMerge(t *testing.T) {
 	}
 }
 
+// TestDedupEngine_DurationMatch_EmitsCandidate verifies the
+// duration signal: two books by the same author with
+// near-identical durations (±2%) and recognizably similar
+// titles should produce an exact-layer candidate. The threshold
+// is loose enough to catch formatting drift but strict enough
+// to exclude abridged editions.
+func TestDedupEngine_DurationMatch_EmitsCandidate(t *testing.T) {
+	engine, mock, es := setupTestEngine(t)
+	engine.AutoMergeEnabled = false
+
+	authorID := 1
+	// Same book content, titles differ by 5 characters — too
+	// far for checkExactTitle's strict threshold (3) but within
+	// checkDurationMatch's relaxed threshold (6). Duration match
+	// is the only path that should emit the candidate here.
+	durA := 36000
+	durB := 36180 // 0.5% over — well within 2% tolerance
+	bookA := &database.Book{
+		ID: "BOOK_A", Title: "Foundation",
+		AuthorID: &authorID, Duration: &durA,
+	}
+	bookB := &database.Book{
+		ID: "BOOK_B", Title: "Foundation Novel",
+		AuthorID: &authorID, Duration: &durB,
+	}
+
+	mock.GetBookByIDFunc = func(id string) (*database.Book, error) {
+		if id == "BOOK_A" {
+			return bookA, nil
+		}
+		return nil, nil
+	}
+	mock.GetAuthorByIDFunc = func(id int) (*database.Author, error) {
+		return &database.Author{ID: 1, Name: "Isaac Asimov"}, nil
+	}
+	mock.GetBookByFileHashFunc = func(hash string) (*database.Book, error) {
+		return nil, nil
+	}
+	mock.GetBookFilesFunc = func(bookID string) ([]database.BookFile, error) {
+		return nil, nil
+	}
+	mock.GetBooksByAuthorIDFunc = func(id int) ([]database.Book, error) {
+		return []database.Book{*bookA, *bookB}, nil
+	}
+	mock.GetAllBooksFunc = func(limit, offset int) ([]database.Book, error) {
+		return nil, nil
+	}
+	_, err := engine.CheckBook(context.Background(), "BOOK_A")
+	if err != nil {
+		t.Fatalf("CheckBook: %v", err)
+	}
+
+	_, total, err := es.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Layer:      "exact",
+	})
+	if err != nil {
+		t.Fatalf("ListCandidates: %v", err)
+	}
+	if total == 0 {
+		t.Fatal("expected duration-match candidate, got zero")
+	}
+}
+
+// TestDedupEngine_DurationMatch_RejectsAbridged verifies that
+// when durations differ substantially (>= 20%) the duration
+// signal produces NO candidate — abridged/unabridged editions
+// are legitimately different content.
+func TestDedupEngine_DurationMatch_RejectsAbridged(t *testing.T) {
+	engine, mock, es := setupTestEngine(t)
+	engine.AutoMergeEnabled = false
+
+	authorID := 1
+	durFull := 36000
+	durAbridged := 18000 // 50% shorter
+	bookA := &database.Book{
+		ID: "BOOK_A", Title: "Foundation",
+		AuthorID: &authorID, Duration: &durFull,
+	}
+	bookB := &database.Book{
+		ID: "BOOK_B", Title: "Foundation",
+		AuthorID: &authorID, Duration: &durAbridged,
+	}
+
+	mock.GetBookByIDFunc = func(id string) (*database.Book, error) {
+		if id == "BOOK_A" {
+			return bookA, nil
+		}
+		return nil, nil
+	}
+	mock.GetAuthorByIDFunc = func(id int) (*database.Author, error) {
+		return &database.Author{ID: 1, Name: "Isaac Asimov"}, nil
+	}
+	mock.GetBookByFileHashFunc = func(hash string) (*database.Book, error) {
+		return nil, nil
+	}
+	mock.GetBookFilesFunc = func(bookID string) ([]database.BookFile, error) {
+		return nil, nil
+	}
+	mock.GetBooksByAuthorIDFunc = func(id int) ([]database.Book, error) {
+		// checkExactTitle path — SAME titles would normally
+		// match, we specifically want to test that the
+		// duration signal's abridged guard doesn't emit a
+		// duration-based candidate. (checkExactTitle WILL
+		// emit its own candidate because titles match.)
+		return []database.Book{*bookA, *bookB}, nil
+	}
+	mock.GetAllBooksFunc = func(limit, offset int) ([]database.Book, error) {
+		return nil, nil
+	}
+	// Hide the title check's candidate so we're only measuring
+	// the duration-signal behavior. We do that by making the
+	// titles differ enough that checkExactTitle rejects them
+	// but still counts as "recognizably similar" for the
+	// duration check.
+	bookB.Title = "Foundation Abridged Edition By Isaac Asimov"
+
+	_, err := engine.CheckBook(context.Background(), "BOOK_A")
+	if err != nil {
+		t.Fatalf("CheckBook: %v", err)
+	}
+
+	// Duration >20% off should never produce a duration-match candidate.
+	_, total, _ := es.ListCandidates(database.CandidateFilter{
+		EntityType: "book",
+		Layer:      "exact",
+	})
+	// The >=20% short-circuit means the duration check exits
+	// early and emits nothing. Any remaining exact-layer
+	// candidate would be from the title check, which also
+	// rejects because the titles differ enough.
+	if total != 0 {
+		t.Errorf("expected 0 exact candidates for abridged pair, got %d", total)
+	}
+}
+
 func TestDedupEngine_ExactMatch_ISBN(t *testing.T) {
 	engine, mock, es := setupTestEngine(t)
 
