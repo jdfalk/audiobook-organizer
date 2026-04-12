@@ -58,6 +58,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import * as api from '../services/api';
 import type { Book, AuthorDedupGroup, SeriesDupGroup, ValidationResult, Operation, BookDedupGroup, DedupCandidate, DedupStats } from '../services/api';
 import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import Collapse from '@mui/material/Collapse';
 import MicIcon from '@mui/icons-material/Mic';
@@ -2569,6 +2570,12 @@ function EmbeddingDedupTab() {
   const [layerFilter, setLayerFilter] = useState<string>('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+  // Client-side search over the currently-loaded page of
+  // candidates. Searches title, author, and file path on both
+  // sides of each cluster. Case-insensitive substring match.
+  // For a broader search, bump rowsPerPage first or export to
+  // CSV and grep.
+  const [searchQuery, setSearchQuery] = useState('');
   const [bookDetails, setBookDetails] = useState<Map<string, Book>>(new Map());
   const [bookFiles, setBookFiles] = useState<Map<string, string[]>>(new Map());
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -2821,7 +2828,31 @@ function EmbeddingDedupTab() {
 
   // clusters must be computed before the page-merge handler so the
   // handler closure can read it directly.
-  const clusters = useMemo(() => buildClusters(candidates), [candidates]);
+  const allClusters = useMemo(() => buildClusters(candidates), [candidates]);
+
+  // Apply the client-side search filter. Searches title,
+  // every author on book.authors, and file path on every book
+  // in every cluster. A cluster is kept if ANY of its books
+  // matches — search "Foundation" and you want the whole
+  // cluster for Foundation to show up, not just one side.
+  // When searchQuery is empty, returns allClusters unchanged.
+  const clusters = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return allClusters;
+    return allClusters.filter((cluster) => {
+      for (const bookId of cluster.bookIds) {
+        const book = bookDetails.get(bookId);
+        if (!book) continue;
+        if ((book.title || '').toLowerCase().includes(q)) return true;
+        if ((book.file_path || '').toLowerCase().includes(q)) return true;
+        const authors = book.authors || [];
+        for (const a of authors) {
+          if ((a.name || '').toLowerCase().includes(q)) return true;
+        }
+      }
+      return false;
+    });
+  }, [allClusters, searchQuery, bookDetails]);
 
   const handleBulkMerge = async () => {
     setBulkMerging(true);
@@ -3305,7 +3336,7 @@ function EmbeddingDedupTab() {
       {/* Filters — tab labels carry the running per-status count so you
           can see at a glance how many you've merged/dismissed without
           needing to click into each bucket. */}
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
         <Tabs value={statusFilter} onChange={(_, v) => { setStatusFilter(v); setPage(0); }}>
           <Tab value="pending" label={`Pending (${pendingCount})`} />
           <Tab value="merged" label={`Merged (${mergedCount})`} />
@@ -3326,6 +3357,30 @@ function EmbeddingDedupTab() {
             />
           ))}
         </Stack>
+        <Divider orientation="vertical" flexItem />
+        <TextField
+          size="small"
+          placeholder="Search title, author, path…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ minWidth: 280 }}
+          InputProps={{
+            endAdornment: searchQuery ? (
+              <IconButton
+                size="small"
+                onClick={() => setSearchQuery('')}
+                aria-label="clear search"
+              >
+                <ClearIcon fontSize="small" />
+              </IconButton>
+            ) : null,
+          }}
+          helperText={
+            searchQuery
+              ? `${clusters.length} of ${allClusters.length} on page match`
+              : 'Searches the current page only'
+          }
+        />
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
