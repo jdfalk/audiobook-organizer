@@ -732,6 +732,10 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			}
 			updatedCount++
 			result.Status = "updated"
+
+			// System tag the source and language so the review UI
+			// and future upgrade jobs know where this came from.
+			s.metadataFetchService.applyMetadataSystemTags(bookID, sourceName, meta.Language)
 		} else if len(fetchedValues) > 0 {
 			result.Status = "fetched"
 		}
