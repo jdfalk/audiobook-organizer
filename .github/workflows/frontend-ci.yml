@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v4.3.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Load frontend configuration
         id: frontend-config
@@ -48,7 +48,7 @@ jobs:
     name: Frontend Build and Test
     needs: frontend-config
     if: needs.frontend-config.outputs.has-frontend == 'true'
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@378e23a96c00d719075732dd2af4de45f7523cbb # v1.10.4
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@7d1de69939871d95024c649cf5214b137bb64fb7 # latest
     with:
       go-version: '1.26'
       go-experiment: 'jsonv2'
