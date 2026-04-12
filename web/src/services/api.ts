@@ -2623,6 +2623,11 @@ export interface CandidateBookInfo {
   format?: string;
   duration_seconds?: number;
   file_size_bytes?: number;
+  // Book's current language (ISO code or full name). Used by
+  // the review dialog's language filter to hide candidates
+  // whose language disagrees with the book's. Empty means
+  // "unknown" — filter is a no-op for that row.
+  language?: string;
 }
 
 export interface CandidateResult {
