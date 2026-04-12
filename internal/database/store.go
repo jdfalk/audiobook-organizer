@@ -287,13 +287,53 @@ type Store interface {
 	RecordPathChange(change *BookPathChange) error
 	GetBookPathHistory(bookID string) ([]BookPathChange, error)
 
-	// Book User Tags (user-defined labels like "litrpg", "scifi", etc.)
+	// Tags (user-defined labels + system-applied provenance).
+	//
+	// Tags exist on three entity types (books / authors / series)
+	// and share the same shape: (entity_id, tag, source, created_at).
+	// The `source` column distinguishes user-applied tags ('user')
+	// from auto-applied system tags ('system'). System tags follow
+	// a `category:subcategory[:detail]` naming convention — see
+	// migrations 47 and 48 for the current namespace.
+	//
+	// The string-list methods (AddBookTag / GetBookTags / ...) are
+	// the user-facing surface — they default to source='user' and
+	// are what the UI edits. Server code that auto-applies tags
+	// should call the *WithSource variants so provenance is
+	// preserved and system tags can be filtered separately.
+
+	// Book tags
 	AddBookTag(bookID, tag string) error
+	AddBookTagWithSource(bookID, tag, source string) error
 	RemoveBookTag(bookID, tag string) error
+	RemoveBookTagsByPrefix(bookID, prefix, source string) error // clear a namespace
 	GetBookTags(bookID string) ([]string, error)
-	SetBookTags(bookID string, tags []string) error // bulk replace
+	GetBookTagsDetailed(bookID string) ([]BookTag, error)
+	SetBookTags(bookID string, tags []string) error // bulk replace (user source)
 	ListAllTags() ([]TagWithCount, error)
 	GetBooksByTag(tag string) ([]string, error) // returns book IDs
+
+	// Author tags (mirror of book tags, keyed by author integer ID)
+	AddAuthorTag(authorID int, tag string) error
+	AddAuthorTagWithSource(authorID int, tag, source string) error
+	RemoveAuthorTag(authorID int, tag string) error
+	RemoveAuthorTagsByPrefix(authorID int, prefix, source string) error
+	GetAuthorTags(authorID int) ([]string, error)
+	GetAuthorTagsDetailed(authorID int) ([]BookTag, error)
+	SetAuthorTags(authorID int, tags []string) error
+	ListAllAuthorTags() ([]TagWithCount, error)
+	GetAuthorsByTag(tag string) ([]int, error)
+
+	// Series tags (mirror of book tags, keyed by series integer ID)
+	AddSeriesTag(seriesID int, tag string) error
+	AddSeriesTagWithSource(seriesID int, tag, source string) error
+	RemoveSeriesTag(seriesID int, tag string) error
+	RemoveSeriesTagsByPrefix(seriesID int, prefix, source string) error
+	GetSeriesTags(seriesID int) ([]string, error)
+	GetSeriesTagsDetailed(seriesID int) ([]BookTag, error)
+	SetSeriesTags(seriesID int, tags []string) error
+	ListAllSeriesTags() ([]TagWithCount, error)
+	GetSeriesByTag(tag string) ([]int, error)
 
 	// External ID mapping (PID map for iTunes, Audible, etc.)
 	CreateExternalIDMapping(mapping *ExternalIDMapping) error
@@ -822,17 +862,25 @@ type BookPathChange struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// BookTag represents a user-defined tag on a book
+// BookTag represents one tag row on a book. Source distinguishes
+// user-applied tags ("user") from system-applied provenance tags
+// ("system", e.g. dedup:merge-survivor:llm-auto, metadata:source:*).
+// BookID is populated on reads that need to identify the owning book
+// (historically PebbleStore serialized it into the JSON value); for
+// the per-book read path it's left empty since the caller already
+// has the ID.
 type BookTag struct {
-	BookID    string    `json:"book_id"`
+	BookID    string    `json:"book_id,omitempty"`
 	Tag       string    `json:"tag"`
+	Source    string    `json:"source,omitempty"` // "user" | "system"
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// TagWithCount represents a tag with its usage count
+// TagWithCount represents a tag with its usage count.
 type TagWithCount struct {
-	Tag   string `json:"tag"`
-	Count int    `json:"count"`
+	Tag    string `json:"tag"`
+	Count  int    `json:"count"`
+	Source string `json:"source,omitempty"` // "user" or "system" — empty when mixed
 }
 
 // ScanCacheEntry holds mtime/size for incremental scan skip checks.

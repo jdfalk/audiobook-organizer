@@ -250,13 +250,38 @@ type MockStore struct {
 	RecordPathChangeFunc   func(change *BookPathChange) error
 	GetBookPathHistoryFunc func(bookID string) ([]BookPathChange, error)
 
-	// Book User Tags
-	AddBookTagFunc    func(bookID, tag string) error
-	RemoveBookTagFunc func(bookID, tag string) error
-	GetBookTagsFunc   func(bookID string) ([]string, error)
-	SetBookTagsFunc   func(bookID string, tags []string) error
-	ListAllTagsFunc   func() ([]TagWithCount, error)
-	GetBooksByTagFunc func(tag string) ([]string, error)
+	// Book Tags
+	AddBookTagFunc              func(bookID, tag string) error
+	AddBookTagWithSourceFunc    func(bookID, tag, source string) error
+	RemoveBookTagFunc           func(bookID, tag string) error
+	RemoveBookTagsByPrefixFunc  func(bookID, prefix, source string) error
+	GetBookTagsFunc             func(bookID string) ([]string, error)
+	GetBookTagsDetailedFunc     func(bookID string) ([]BookTag, error)
+	SetBookTagsFunc             func(bookID string, tags []string) error
+	ListAllTagsFunc             func() ([]TagWithCount, error)
+	GetBooksByTagFunc           func(tag string) ([]string, error)
+
+	// Author Tags
+	AddAuthorTagFunc              func(authorID int, tag string) error
+	AddAuthorTagWithSourceFunc    func(authorID int, tag, source string) error
+	RemoveAuthorTagFunc           func(authorID int, tag string) error
+	RemoveAuthorTagsByPrefixFunc  func(authorID int, prefix, source string) error
+	GetAuthorTagsFunc             func(authorID int) ([]string, error)
+	GetAuthorTagsDetailedFunc     func(authorID int) ([]BookTag, error)
+	SetAuthorTagsFunc             func(authorID int, tags []string) error
+	ListAllAuthorTagsFunc         func() ([]TagWithCount, error)
+	GetAuthorsByTagFunc           func(tag string) ([]int, error)
+
+	// Series Tags
+	AddSeriesTagFunc              func(seriesID int, tag string) error
+	AddSeriesTagWithSourceFunc    func(seriesID int, tag, source string) error
+	RemoveSeriesTagFunc           func(seriesID int, tag string) error
+	RemoveSeriesTagsByPrefixFunc  func(seriesID int, prefix, source string) error
+	GetSeriesTagsFunc             func(seriesID int) ([]string, error)
+	GetSeriesTagsDetailedFunc     func(seriesID int) ([]BookTag, error)
+	SetSeriesTagsFunc             func(seriesID int, tags []string) error
+	ListAllSeriesTagsFunc         func() ([]TagWithCount, error)
+	GetSeriesByTagFunc            func(tag string) ([]int, error)
 
 	// Lifecycle
 	CloseFunc func() error
@@ -1522,6 +1547,166 @@ func (m *MockStore) ListAllTags() ([]TagWithCount, error) {
 func (m *MockStore) GetBooksByTag(tag string) ([]string, error) {
 	if m.GetBooksByTagFunc != nil {
 		return m.GetBooksByTagFunc(tag)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) AddBookTagWithSource(bookID, tag, source string) error {
+	if m.AddBookTagWithSourceFunc != nil {
+		return m.AddBookTagWithSourceFunc(bookID, tag, source)
+	}
+	if m.AddBookTagFunc != nil {
+		return m.AddBookTagFunc(bookID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) RemoveBookTagsByPrefix(bookID, prefix, source string) error {
+	if m.RemoveBookTagsByPrefixFunc != nil {
+		return m.RemoveBookTagsByPrefixFunc(bookID, prefix, source)
+	}
+	return nil
+}
+
+func (m *MockStore) GetBookTagsDetailed(bookID string) ([]BookTag, error) {
+	if m.GetBookTagsDetailedFunc != nil {
+		return m.GetBookTagsDetailedFunc(bookID)
+	}
+	return nil, nil
+}
+
+// ---- Author tag methods ----
+
+func (m *MockStore) AddAuthorTag(authorID int, tag string) error {
+	if m.AddAuthorTagFunc != nil {
+		return m.AddAuthorTagFunc(authorID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) AddAuthorTagWithSource(authorID int, tag, source string) error {
+	if m.AddAuthorTagWithSourceFunc != nil {
+		return m.AddAuthorTagWithSourceFunc(authorID, tag, source)
+	}
+	if m.AddAuthorTagFunc != nil {
+		return m.AddAuthorTagFunc(authorID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) RemoveAuthorTag(authorID int, tag string) error {
+	if m.RemoveAuthorTagFunc != nil {
+		return m.RemoveAuthorTagFunc(authorID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) RemoveAuthorTagsByPrefix(authorID int, prefix, source string) error {
+	if m.RemoveAuthorTagsByPrefixFunc != nil {
+		return m.RemoveAuthorTagsByPrefixFunc(authorID, prefix, source)
+	}
+	return nil
+}
+
+func (m *MockStore) GetAuthorTags(authorID int) ([]string, error) {
+	if m.GetAuthorTagsFunc != nil {
+		return m.GetAuthorTagsFunc(authorID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetAuthorTagsDetailed(authorID int) ([]BookTag, error) {
+	if m.GetAuthorTagsDetailedFunc != nil {
+		return m.GetAuthorTagsDetailedFunc(authorID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) SetAuthorTags(authorID int, tags []string) error {
+	if m.SetAuthorTagsFunc != nil {
+		return m.SetAuthorTagsFunc(authorID, tags)
+	}
+	return nil
+}
+
+func (m *MockStore) ListAllAuthorTags() ([]TagWithCount, error) {
+	if m.ListAllAuthorTagsFunc != nil {
+		return m.ListAllAuthorTagsFunc()
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetAuthorsByTag(tag string) ([]int, error) {
+	if m.GetAuthorsByTagFunc != nil {
+		return m.GetAuthorsByTagFunc(tag)
+	}
+	return nil, nil
+}
+
+// ---- Series tag methods ----
+
+func (m *MockStore) AddSeriesTag(seriesID int, tag string) error {
+	if m.AddSeriesTagFunc != nil {
+		return m.AddSeriesTagFunc(seriesID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) AddSeriesTagWithSource(seriesID int, tag, source string) error {
+	if m.AddSeriesTagWithSourceFunc != nil {
+		return m.AddSeriesTagWithSourceFunc(seriesID, tag, source)
+	}
+	if m.AddSeriesTagFunc != nil {
+		return m.AddSeriesTagFunc(seriesID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) RemoveSeriesTag(seriesID int, tag string) error {
+	if m.RemoveSeriesTagFunc != nil {
+		return m.RemoveSeriesTagFunc(seriesID, tag)
+	}
+	return nil
+}
+
+func (m *MockStore) RemoveSeriesTagsByPrefix(seriesID int, prefix, source string) error {
+	if m.RemoveSeriesTagsByPrefixFunc != nil {
+		return m.RemoveSeriesTagsByPrefixFunc(seriesID, prefix, source)
+	}
+	return nil
+}
+
+func (m *MockStore) GetSeriesTags(seriesID int) ([]string, error) {
+	if m.GetSeriesTagsFunc != nil {
+		return m.GetSeriesTagsFunc(seriesID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetSeriesTagsDetailed(seriesID int) ([]BookTag, error) {
+	if m.GetSeriesTagsDetailedFunc != nil {
+		return m.GetSeriesTagsDetailedFunc(seriesID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) SetSeriesTags(seriesID int, tags []string) error {
+	if m.SetSeriesTagsFunc != nil {
+		return m.SetSeriesTagsFunc(seriesID, tags)
+	}
+	return nil
+}
+
+func (m *MockStore) ListAllSeriesTags() ([]TagWithCount, error) {
+	if m.ListAllSeriesTagsFunc != nil {
+		return m.ListAllSeriesTagsFunc()
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetSeriesByTag(tag string) ([]int, error) {
+	if m.GetSeriesByTagFunc != nil {
+		return m.GetSeriesByTagFunc(tag)
 	}
 	return nil, nil
 }

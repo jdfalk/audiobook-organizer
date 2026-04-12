@@ -316,6 +316,18 @@ var migrations = []Migration{
 		Up:          migration046Up,
 		Down:        nil,
 	},
+	{
+		Version:     47,
+		Description: "Add source column to book_tags so system-applied tags can be distinguished from user tags",
+		Up:          migration047Up,
+		Down:        nil,
+	},
+	{
+		Version:     48,
+		Description: "Add author_tags and series_tags tables for author/series-level tagging",
+		Up:          migration048Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2380,3 +2392,100 @@ func migration046Up(store Store) error {
 	log.Println("  - Created book_alternative_titles table")
 	return nil
 }
+
+// migration047Up adds a `source` column to book_tags so system-
+// applied tags (dedup:merge-survivor:llm-auto, metadata:source:*,
+// ...) can be distinguished from user-applied tags. PebbleStore
+// stores the same field in the serialized value; this migration
+// keeps SQLite as a first-class store option in sync.
+//
+// Example sources and the tags they emit:
+//
+//	source='user'   — tag was added via the UI or API by a human
+//	source='system' — tag was added automatically by the server:
+//	    dedup:merge-survivor[:auto-hash|auto-isbn|llm-auto]
+//	    dedup:duration-match
+//	    dedup:duration-abridged
+//	    metadata:source:{audible,hardcover,google_books,openlibrary,audnexus}
+//	    metadata:language:{en,es,fr,...} (from applied metadata)
+//	    import:scan (future), organize:applied (future), ...
+//
+// The column defaults to 'user' so every existing row stays valid
+// without a data migration, and existing AddBookTag callers don't
+// need to be touched — they just keep writing user-sourced tags.
+//
+// An index on source lets "tag:metadata:source:google_books AND
+// source=system" filter cheaply for the metadata-upgrade workflow.
+func migration047Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+	stmts := []string{
+		`ALTER TABLE book_tags ADD COLUMN source TEXT NOT NULL DEFAULT 'user'`,
+		`CREATE INDEX IF NOT EXISTS idx_book_tags_source ON book_tags(source)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			// ALTER TABLE ADD COLUMN fails if the column already
+			// exists — SQLite has no IF NOT EXISTS for ALTER. Log
+			// and continue so a re-run is idempotent.
+			log.Printf("  - [WARN] migration 47: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Added source column to book_tags")
+	return nil
+}
+
+// migration048Up adds parallel `author_tags` and `series_tags`
+// tables so tagging works at every entity level, not just books.
+// Motivating use cases:
+//
+//   - Mark an author as language-locked: tag with `language:en`,
+//     then the metadata fetcher and dedup engine skip candidates
+//     in other languages without inspecting every book.
+//   - Mark a series as `completed` / `on-hold` / `dropped` for
+//     read-list management.
+//   - Future "policy" tags: `policy:english-only` on an author or
+//     series binds a named settings bundle to every book that
+//     inherits through the author/series hierarchy.
+//   - System-applied provenance tags on authors/series after a
+//     merge or metadata apply — same namespace as book_tags.
+//
+// Schema mirrors book_tags after migration 47: primary key on
+// (entity_id, tag), `source` column defaulting to 'user', plus
+// indexes on tag and source for reverse lookup and filtering.
+func migration048Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS author_tags (
+            author_id INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'user',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (author_id, tag)
+        )`,
+		`CREATE INDEX IF NOT EXISTS idx_author_tags_tag ON author_tags(tag)`,
+		`CREATE INDEX IF NOT EXISTS idx_author_tags_source ON author_tags(source)`,
+		`CREATE TABLE IF NOT EXISTS series_tags (
+            series_id INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'user',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (series_id, tag)
+        )`,
+		`CREATE INDEX IF NOT EXISTS idx_series_tags_tag ON series_tags(tag)`,
+		`CREATE INDEX IF NOT EXISTS idx_series_tags_source ON series_tags(source)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 48: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Created author_tags and series_tags tables")
+	return nil
+}
+
