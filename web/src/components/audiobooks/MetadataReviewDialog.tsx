@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Dialog,
   FormControlLabel,
+  MenuItem,
   Pagination,
   DialogActions,
   DialogContent,
@@ -19,6 +20,7 @@ import {
   Slider,
   Stack,
   Switch,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -46,6 +48,24 @@ const SOURCE_COLORS: Record<string, 'primary' | 'secondary' | 'success' | 'warni
   goodreads: 'warning',
   manual: 'info',
 };
+
+// Matches ActivityLog's selector so users see the same options
+// across pagination controls.
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
+
+// Persist the review page size in localStorage so users don't have
+// to re-select it every time they open the dialog. The activity log
+// uses session-only state, but the review dialog is opened ad-hoc
+// many times per session — re-picking "250 per page" on every open
+// is annoying.
+const REVIEW_PAGE_SIZE_KEY = 'metadata-review-page-size';
+
+function loadReviewPageSize(): number {
+  if (typeof window === 'undefined') return 25;
+  const raw = window.localStorage.getItem(REVIEW_PAGE_SIZE_KEY);
+  const n = raw ? Number(raw) : 25;
+  return PAGE_SIZE_OPTIONS.includes(n) ? n : 25;
+}
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -80,7 +100,7 @@ export function MetadataReviewDialog({
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
   const [previewCover, setPreviewCover] = useState<string | null>(null);
   const [reviewPage, setReviewPage] = useState(1);
-  const reviewPageSize = 25;
+  const [reviewPageSize, setReviewPageSize] = useState<number>(loadReviewPageSize);
   const [hideApplied, setHideApplied] = useState(true);
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
@@ -941,12 +961,34 @@ export function MetadataReviewDialog({
                     {Math.min(reviewPage * reviewPageSize, filteredResults.length)} of{' '}
                     {filteredResults.length}
                   </Typography>
-                  <Pagination
-                    count={Math.ceil(filteredResults.length / reviewPageSize)}
-                    page={reviewPage}
-                    onChange={(_, p) => setReviewPage(p)}
-                    size="small"
-                  />
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Pagination
+                      count={Math.ceil(filteredResults.length / reviewPageSize)}
+                      page={reviewPage}
+                      onChange={(_, p) => setReviewPage(p)}
+                      size="small"
+                    />
+                    <TextField
+                      select
+                      size="small"
+                      value={reviewPageSize}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setReviewPageSize(next);
+                        setReviewPage(1);
+                        if (typeof window !== 'undefined') {
+                          window.localStorage.setItem(REVIEW_PAGE_SIZE_KEY, String(next));
+                        }
+                      }}
+                      sx={{ minWidth: 100 }}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((n) => (
+                        <MenuItem key={n} value={n}>
+                          {n} / page
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Stack>
                 </Stack>
               )}
               <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
