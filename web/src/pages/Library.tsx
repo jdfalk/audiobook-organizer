@@ -1080,16 +1080,23 @@ export const Library = () => {
 
   const handleBatchSave = async (updates: Partial<Audiobook>) => {
     try {
-      const results = await Promise.allSettled(
-        selectedAudiobooks.map((ab) => api.updateBook(ab.id, updates))
-      );
-      const failed = results.filter((r) => r.status === 'rejected').length;
-      if (failed > 0) {
-        toast(`Updated ${results.length - failed} audiobooks, ${failed} failed.`, 'warning');
+      // Use the single-call batch API instead of N individual
+      // PUT requests. One round trip, one DB write loop. The
+      // old path did Promise.allSettled(N × updateBook) which
+      // was both slower and noisier in the activity log.
+      const ids = selectedAudiobooks.map((ab) => ab.id);
+      const result = await api.batchUpdateBooks(ids, updates as Record<string, unknown>);
+      if (result.failed > 0) {
+        toast(
+          `Updated ${result.updated} audiobooks, ${result.failed} failed.`,
+          'warning'
+        );
       } else {
-        toast(`Updated metadata for ${selectedAudiobooks.length} audiobooks.`, 'success');
+        toast(
+          `Updated metadata for ${result.updated} audiobooks.`,
+          'success'
+        );
       }
-      // Reload to get server state
       loadAudiobooks();
       setSelectedAudiobooks([]);
       setBatchEditOpen(false);
@@ -2508,6 +2515,9 @@ export const Library = () => {
           audiobooks={selectedAudiobooks}
           onClose={() => setBatchEditOpen(false)}
           onSave={handleBatchSave}
+          onSavePerBook={async (bookId, updates) => {
+            await api.updateBook(bookId, updates as Record<string, unknown> & Partial<import('../services/api').Book>);
+          }}
         />
 
         <BulkTagDialog
