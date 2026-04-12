@@ -3267,6 +3267,22 @@ func (s *SQLiteStore) SetRaw(key string, value []byte) error {
 	return err
 }
 
+// GetRaw reads a single kv_store row. Returns (nil, nil) on miss so
+// callers can handle cache-style lookups with a two-valued result
+// rather than a sentinel error.
+func (s *SQLiteStore) GetRaw(key string) ([]byte, error) {
+	s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`)
+	var value []byte
+	err := s.db.QueryRow(`SELECT value FROM kv_store WHERE key = ?`, key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
 func (s *SQLiteStore) DeleteRaw(key string) error {
 	_, err := s.db.Exec(`DELETE FROM kv_store WHERE key = ?`, key)
 	return err
