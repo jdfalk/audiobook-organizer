@@ -1,5 +1,5 @@
 # file: Makefile
-# version: 2.6.0
+# version: 2.7.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
@@ -15,6 +15,7 @@ export GOEXPERIMENT := jsonv2
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
         test test-all test-e2e coverage coverage-check ci \
+        vet mocks mocks-check \
         docker docker-run docker-stop \
         release-dry-run release-snapshot version \
         build-mtls-bridge build-mtls-bridge-windows
@@ -137,10 +138,37 @@ web-lint:
 # --- Testing targets ---
 
 ## test: Run Go backend tests
-test:
+test: vet
 	@echo "🧪 Running backend tests..."
 	@go test ./... -v -race
 	@echo "✅ Backend tests passed"
+
+## vet: Run go vet across every package. Catches hand-written mock
+## drift (the stubStore / PR #234 incident) before tests even compile.
+vet:
+	@echo "🔍 Running go vet..."
+	@go vet ./...
+	@echo "✅ go vet passed"
+
+## mocks: Regenerate mockery-managed mocks from .mockery.yaml.
+## Run this after editing an interface listed in .mockery.yaml.
+mocks:
+	@echo "🎭 Regenerating mockery-managed mocks..."
+	@mockery
+	@echo "✅ Mocks regenerated"
+
+## mocks-check: Verify committed mocks match what mockery would generate
+## right now. Fails CI if someone edited an interface without re-running
+## mockery. Backlog 5.9.
+mocks-check:
+	@echo "🎭 Checking that committed mocks are up to date..."
+	@mockery >/dev/null 2>&1
+	@if ! git diff --quiet -- internal/*/mocks/ internal/ai/mock_*_test.go internal/metadata/mock_*_test.go; then \
+		echo "❌ Committed mocks are stale. Run 'make mocks' and commit the result."; \
+		git diff --stat -- internal/*/mocks/ internal/ai/mock_*_test.go internal/metadata/mock_*_test.go; \
+		exit 1; \
+	fi
+	@echo "✅ Mocks are up to date"
 
 ## test-all: Run all tests (backend + frontend)
 test-all: test web-test
@@ -174,8 +202,8 @@ coverage-check:
 	fi; \
 	echo "✅ Coverage $$coverage% meets 80% threshold"
 
-## ci: Full CI check (all tests + coverage)
-ci: test-all coverage-check
+## ci: Full CI check (vet + mocks-check + all tests + coverage)
+ci: mocks-check test-all coverage-check
 	@echo "✅ All CI checks passed!"
 
 ## build-mtls-bridge: Build the mTLS bridge binary (macOS)

@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.27.0
+// version: 1.28.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -8,6 +8,24 @@ import (
 	"fmt"
 	"time"
 )
+
+// Compile-time assertion: MockStore must implement Store. If a new
+// method is added to the Store interface without a corresponding
+// MockStore method, this line breaks the build before tests even
+// start — catching the drift that #241 had to fix after merge.
+//
+// (We keep this hand-written MockStore alongside the mockery-generated
+// one in internal/database/mocks because the two patterns serve
+// different callers: this one is permissive by default — unconfigured
+// methods return zero values silently, matching the historical
+// "minimal stub" idiom used by ~22 server test files. Converting all
+// of those to mockery's strict-expectation model would require
+// either adding .Maybe() expectations for every method each code
+// path happens to call, or writing a loose-mock helper that
+// re-creates this pattern on top of the generated mock. Neither is
+// clearly an improvement, so we keep the two patterns and rely on
+// this assertion + CI vet to prevent drift.)
+var _ Store = (*MockStore)(nil)
 
 // MockStore is a simple mock implementation for testing services
 type MockStore struct {
