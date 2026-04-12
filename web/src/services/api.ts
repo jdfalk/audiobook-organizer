@@ -3512,6 +3512,34 @@ export async function removeBookUserTag(
   return data.tags;
 }
 
+// DetailedBookTag carries the source attribution alongside the
+// tag string. `source='user'` is a human-applied label; everything
+// else (`system`, potentially future sources) is server-applied
+// provenance and should be rendered as non-deletable in the UI.
+export interface DetailedBookTag {
+  tag: string;
+  source: string;
+  created_at: string;
+}
+
+// getBookTagsDetailed returns tags with their source attribution
+// so the frontend can render user-applied and system-applied
+// tags differently. System tags follow the namespace from
+// migrations 47/48 — dedup:*, metadata:source:*, metadata:language:*,
+// etc. — and are the result of automatic server-side actions.
+export async function getBookTagsDetailed(
+  bookId: string
+): Promise<DetailedBookTag[]> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${bookId}/tags-detailed`
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get detailed tags');
+  }
+  const data = await response.json();
+  return (data.tags || []) as DetailedBookTag[];
+}
+
 export async function bulkUpdateTags(
   bookIds: string[],
   addTags: string[],

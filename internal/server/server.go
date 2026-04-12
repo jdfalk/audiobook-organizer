@@ -1690,6 +1690,10 @@ func (s *Server) setupRoutes() {
 			// User tag routes
 			protected.GET("/tags", s.listAllUserTags)
 			protected.GET("/audiobooks/:id/user-tags", s.getBookUserTags)
+			// Detailed tag route: returns tag+source pairs so the
+			// UI can render system-applied tags (dedup:*,
+			// metadata:source:*, etc.) differently from user tags.
+			protected.GET("/audiobooks/:id/tags-detailed", s.getBookTagsDetailed)
 			protected.POST("/audiobooks/batch-tags", s.batchUpdateTags)
 
 			// Book alternative titles

@@ -911,6 +911,33 @@ func (s *Server) getBookUserTags(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"tags": tags})
 }
 
+// getBookTagsDetailed returns a book's tags with their source
+// attribution ('user' vs 'system'), so the frontend can render
+// user-applied and system-applied tags differently. System tags
+// follow the namespace from migrations 47/48 — dedup:*,
+// metadata:source:*, metadata:language:*, etc. — and should be
+// shown as outlined, non-deletable chips by default.
+//
+// Backlog 7.8. Separate endpoint from /user-tags so existing
+// callers that only want the string list don't pay for the
+// source lookup.
+func (s *Server) getBookTagsDetailed(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		return
+	}
+	tags, err := database.GlobalStore.GetBookTagsDetailed(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if tags == nil {
+		tags = []database.BookTag{}
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
 // getBookAlternativeTitles handles GET /audiobooks/:id/alternative-titles.
 // Returns the list of alt titles for a book along with source/language
 // metadata so the UI can show where each came from.
