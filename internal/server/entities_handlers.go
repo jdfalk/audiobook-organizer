@@ -11,6 +11,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -453,6 +454,36 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 						OldValue:    fmt.Sprintf("author_id:%d (%s)", mergeID, mergeAuthorName),
 						NewValue:    fmt.Sprintf("author_id:%d (%s)", keepID, keepName),
 					})
+				}
+
+				// Sync the denormalized `book.AuthorID` pointer
+				// on the Book row itself. SetBookAuthors above
+				// updates the join table, but callers that read
+				// the Book struct directly — organize path,
+				// metadata fetcher, search indexer — expect
+				// book.AuthorID to match the primary author in
+				// the join table. Without this sync, the field
+				// still points at the losing author ID, which
+				// has been hard-deleted on the next iteration.
+				//
+				// Tombstones cover most lookups (GetAuthorByID
+				// follows the tombstone chain), but any code that
+				// uses book.AuthorID as a map key or as an equality
+				// check without going through the lookup helpers
+				// sees the stale ID. This closes that gap.
+				//
+				// Backlog 7.11 — found while investigating the
+				// merge ITL cleanup bug (#251).
+				current, gbErr := store.GetBookByID(book.ID)
+				if gbErr != nil || current == nil {
+					continue
+				}
+				if current.AuthorID != nil && *current.AuthorID == mergeID {
+					newID := keepID
+					current.AuthorID = &newID
+					if _, upErr := store.UpdateBook(book.ID, current); upErr != nil {
+						log.Printf("[WARN] author merge: failed to sync denormalized AuthorID on book %s: %v", book.ID, upErr)
+					}
 				}
 			}
 
