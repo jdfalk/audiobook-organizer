@@ -401,7 +401,13 @@ func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
 		if op.Type != "metadata_candidate_fetch" {
 			continue
 		}
-		if op.Status != "completed" {
+		// Include both completed AND running operations so the
+		// user can review partial results while a bulk fetch is
+		// still in progress. Before this change, only completed
+		// operations appeared in the picker — the user had to
+		// wait for the full 10K-book fetch to finish before they
+		// could start reviewing anything.
+		if op.Status != "completed" && op.Status != "running" {
 			continue
 		}
 		results, err := store.GetOperationResults(op.ID)
