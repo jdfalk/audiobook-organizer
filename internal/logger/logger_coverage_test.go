@@ -1,5 +1,5 @@
 // file: internal/logger/logger_coverage_test.go
-// version: 1.0.0
+// version: 1.1.0
 
 package logger
 
@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/logger/mocks"
+	"github.com/stretchr/testify/mock"
 )
 
 // --- Level coverage ---
@@ -72,7 +74,7 @@ func TestCoverage_StandardLogger_With_EmptyParent(t *testing.T) {
 }
 
 func TestCoverage_NewWithActivityLog(t *testing.T) {
-	writer := &mockActivityWriter{}
+	writer := mocks.NewMockActivityLogWriter(t)
 	log := NewWithActivityLog("test", writer)
 	if log.activityWriter == nil {
 		t.Error("activity writer should be set")
@@ -82,55 +84,59 @@ func TestCoverage_NewWithActivityLog(t *testing.T) {
 	}
 }
 
-func TestCoverage_StandardLogger_ActivityWriter_Trace(t *testing.T) {
+// newActivityCapture returns a mock ActivityLogWriter whose
+// AddSystemActivityLog appends "level:message" to a shared slice.
+// Centralizes the capture boilerplate across coverage tests.
+func newActivityCapture(t *testing.T) (*mocks.MockActivityLogWriter, *[]string) {
+	t.Helper()
 	var captured []string
-	writer := &mockActivityWriter{
-		addFunc: func(source, level, message string) error {
+	writer := mocks.NewMockActivityLogWriter(t)
+	writer.EXPECT().
+		AddSystemActivityLog(mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(source, level, message string) error {
 			captured = append(captured, level+":"+message)
 			return nil
-		},
-	}
+		}).Maybe()
+	return writer, &captured
+}
+
+func TestCoverage_StandardLogger_ActivityWriter_Trace(t *testing.T) {
+	writer, captured := newActivityCapture(t)
 	log := NewWithActivityLog("test", writer)
 	log.Trace("should not capture") // below minStdout
 
-	if len(captured) != 0 {
-		t.Errorf("expected 0 captured, got %d", len(captured))
+	if len(*captured) != 0 {
+		t.Errorf("expected 0 captured, got %d", len(*captured))
 	}
 }
 
 func TestCoverage_StandardLogger_ActivityWriter_Error(t *testing.T) {
-	var captured []string
-	writer := &mockActivityWriter{
-		addFunc: func(source, level, message string) error {
-			captured = append(captured, level+":"+message)
-			return nil
-		},
-	}
+	writer, captured := newActivityCapture(t)
 	log := NewWithActivityLog("test", writer)
 	log.Error("error %s", "msg")
 
-	if len(captured) != 1 {
-		t.Errorf("expected 1 captured, got %d", len(captured))
+	if len(*captured) != 1 {
+		t.Errorf("expected 1 captured, got %d", len(*captured))
 	}
 }
 
 // --- OperationLogger coverage ---
 
 func TestCoverage_OperationLogger_Trace(t *testing.T) {
-	store := &mockOpStore{}
+	store, calls := newOpStoreMock(t)
 	log := ForOperation("op1", store, nil)
 	log.Trace("trace msg") // should not go to DB (below minDBLevel)
-	if len(store.logs) != 0 {
-		t.Errorf("expected 0 DB logs, got %d", len(store.logs))
+	if len(calls.logs) != 0 {
+		t.Errorf("expected 0 DB logs, got %d", len(calls.logs))
 	}
 }
 
 func TestCoverage_OperationLogger_Error(t *testing.T) {
-	store := &mockOpStore{}
+	store, calls := newOpStoreMock(t)
 	log := ForOperation("op1", store, nil)
 	log.Error("error msg")
-	if len(store.logs) != 1 {
-		t.Errorf("expected 1 DB log, got %d", len(store.logs))
+	if len(calls.logs) != 1 {
+		t.Errorf("expected 1 DB log, got %d", len(calls.logs))
 	}
 }
 
@@ -156,7 +162,7 @@ func TestCoverage_OperationLogger_OperationID(t *testing.T) {
 }
 
 func TestCoverage_OperationLogger_SetMinDBLevel(t *testing.T) {
-	store := &mockOpStore{}
+	store, calls := newOpStoreMock(t)
 	log := ForOperation("op1", store, nil)
 	log.SetMinDBLevel(LevelError)
 
@@ -164,8 +170,8 @@ func TestCoverage_OperationLogger_SetMinDBLevel(t *testing.T) {
 	log.Warn("should not appear")
 	log.Error("should appear")
 
-	if len(store.logs) != 1 {
-		t.Errorf("expected 1 log, got %d: %v", len(store.logs), store.logs)
+	if len(calls.logs) != 1 {
+		t.Errorf("expected 1 log, got %d: %v", len(calls.logs), calls.logs)
 	}
 }
 
@@ -184,27 +190,27 @@ func TestCoverage_OperationLogger_With_Prefix(t *testing.T) {
 }
 
 func TestCoverage_OperationLogger_WithHub(t *testing.T) {
-	store := &mockOpStore{}
-	hub := &mockHub{}
+	store, _ := newOpStoreMock(t)
+	hub, hubCalls := newHubMock(t)
 	log := ForOperation("op1", store, hub)
 
 	log.Info("msg")
 
-	hub.mu.Lock()
-	sent := hub.logsSent
-	hub.mu.Unlock()
+	hubCalls.mu.Lock()
+	sent := hubCalls.logsSent
+	hubCalls.mu.Unlock()
 	if sent != 1 {
 		t.Errorf("expected 1 hub log, got %d", sent)
 	}
 }
 
 func TestCoverage_OperationLogger_Log_WithDetails(t *testing.T) {
-	store := &mockOpStore{}
+	store, calls := newOpStoreMock(t)
 	log := ForOperation("op1", store, nil)
 	details := "some details"
 	_ = log.Log("info", "msg with details", &details)
-	if len(store.logs) != 1 {
-		t.Errorf("expected 1 DB log, got %d", len(store.logs))
+	if len(calls.logs) != 1 {
+		t.Errorf("expected 1 DB log, got %d", len(calls.logs))
 	}
 }
 
@@ -233,10 +239,31 @@ func TestCoverage_OperationLogger_ConcurrentRecordChange(t *testing.T) {
 
 // --- PruneOldLogs coverage ---
 
+// retentionStoreConfig describes the desired behavior of a mock
+// RetentionStore: the count each Prune method should return plus
+// whether it should fail. Zero values ⇒ (0, nil) for that method.
+type retentionStoreConfig struct {
+	logsCount     int
+	changesCount  int
+	activityCount int
+	logErr        error
+	changeErr     error
+	activityErr   error
+}
+
+func newRetentionStoreMock(t *testing.T, cfg retentionStoreConfig) *mocks.MockRetentionStore {
+	t.Helper()
+	m := mocks.NewMockRetentionStore(t)
+	m.EXPECT().PruneOperationLogs(mock.Anything).Return(cfg.logsCount, cfg.logErr).Maybe()
+	m.EXPECT().PruneOperationChanges(mock.Anything).Return(cfg.changesCount, cfg.changeErr).Maybe()
+	m.EXPECT().PruneSystemActivityLogs(mock.Anything).Return(cfg.activityCount, cfg.activityErr).Maybe()
+	return m
+}
+
 func TestCoverage_PruneOldLogs(t *testing.T) {
 	t.Run("disabled when 0 days", func(t *testing.T) {
 		log := New("test")
-		store := &mockRetentionStore{}
+		store := newRetentionStoreMock(t, retentionStoreConfig{})
 		n, err := PruneOldLogs(store, 0, log)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -248,11 +275,11 @@ func TestCoverage_PruneOldLogs(t *testing.T) {
 
 	t.Run("prunes all types", func(t *testing.T) {
 		log := New("test")
-		store := &mockRetentionStore{
+		store := newRetentionStoreMock(t, retentionStoreConfig{
 			logsCount:     10,
 			changesCount:  5,
 			activityCount: 3,
-		}
+		})
 		n, err := PruneOldLogs(store, 30, log)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -264,7 +291,7 @@ func TestCoverage_PruneOldLogs(t *testing.T) {
 
 	t.Run("handles log prune error", func(t *testing.T) {
 		log := New("test")
-		store := &mockRetentionStore{logErr: errMock}
+		store := newRetentionStoreMock(t, retentionStoreConfig{logErr: errMock})
 		_, err := PruneOldLogs(store, 30, log)
 		if err == nil {
 			t.Error("expected error")
@@ -273,7 +300,7 @@ func TestCoverage_PruneOldLogs(t *testing.T) {
 
 	t.Run("handles change prune error", func(t *testing.T) {
 		log := New("test")
-		store := &mockRetentionStore{changeErr: errMock}
+		store := newRetentionStoreMock(t, retentionStoreConfig{changeErr: errMock})
 		_, err := PruneOldLogs(store, 30, log)
 		if err == nil {
 			t.Error("expected error")
@@ -282,7 +309,7 @@ func TestCoverage_PruneOldLogs(t *testing.T) {
 
 	t.Run("handles activity prune error", func(t *testing.T) {
 		log := New("test")
-		store := &mockRetentionStore{activityErr: errMock}
+		store := newRetentionStoreMock(t, retentionStoreConfig{activityErr: errMock})
 		_, err := PruneOldLogs(store, 30, log)
 		if err == nil {
 			t.Error("expected error")
@@ -293,24 +320,3 @@ func TestCoverage_PruneOldLogs(t *testing.T) {
 // --- test helpers ---
 
 var errMock = fmt.Errorf("mock error")
-
-type mockRetentionStore struct {
-	logsCount     int
-	changesCount  int
-	activityCount int
-	logErr        error
-	changeErr     error
-	activityErr   error
-}
-
-func (m *mockRetentionStore) PruneOperationLogs(olderThan time.Time) (int, error) {
-	return m.logsCount, m.logErr
-}
-
-func (m *mockRetentionStore) PruneOperationChanges(olderThan time.Time) (int, error) {
-	return m.changesCount, m.changeErr
-}
-
-func (m *mockRetentionStore) PruneSystemActivityLogs(olderThan time.Time) (int, error) {
-	return m.activityCount, m.activityErr
-}

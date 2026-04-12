@@ -1,5 +1,5 @@
 // file: internal/logger/operation_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package logger
@@ -7,81 +7,108 @@ package logger
 import (
 	"sync"
 	"testing"
+
+	"github.com/jdfalk/audiobook-organizer/internal/logger/mocks"
+	"github.com/stretchr/testify/mock"
 )
 
-type mockOpStore struct {
+// opStoreCalls collects what the OperationLogger pushed through its
+// store dependency during a test. We use a struct of slices instead
+// of inspecting mock.Calls directly because several tests care about
+// the *order* and *content* of messages, not just that the method
+// fired.
+type opStoreCalls struct {
+	mu       sync.Mutex
 	logs     []string
 	changes  []interface{}
 	progress []string
-	mu       sync.Mutex
 }
 
-func (m *mockOpStore) AddOperationLog(opID, level, message string, details *string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.logs = append(m.logs, level+":"+message)
-	return nil
+func newOpStoreMock(t *testing.T) (*mocks.MockOperationStore, *opStoreCalls) {
+	t.Helper()
+	calls := &opStoreCalls{}
+	m := mocks.NewMockOperationStore(t)
+	m.EXPECT().
+		AddOperationLog(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(opID, level, message string, details *string) error {
+			calls.mu.Lock()
+			defer calls.mu.Unlock()
+			calls.logs = append(calls.logs, level+":"+message)
+			return nil
+		}).Maybe()
+	m.EXPECT().
+		CreateOperationChange(mock.Anything).
+		RunAndReturn(func(change interface{}) error {
+			calls.mu.Lock()
+			defer calls.mu.Unlock()
+			calls.changes = append(calls.changes, change)
+			return nil
+		}).Maybe()
+	m.EXPECT().
+		UpdateOperationProgress(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(id string, current, total int, message string) error {
+			calls.mu.Lock()
+			defer calls.mu.Unlock()
+			calls.progress = append(calls.progress, message)
+			return nil
+		}).Maybe()
+	return m, calls
 }
 
-func (m *mockOpStore) CreateOperationChange(change interface{}) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.changes = append(m.changes, change)
-	return nil
-}
-
-func (m *mockOpStore) UpdateOperationProgress(id string, current, total int, message string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.progress = append(m.progress, message)
-	return nil
-}
-
-type mockHub struct {
+type hubCalls struct {
+	mu           sync.Mutex
 	logsSent     int
 	progressSent int
-	mu           sync.Mutex
 }
 
-func (m *mockHub) SendOperationLog(opID, level, message string, details *string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.logsSent++
-}
-
-func (m *mockHub) SendOperationProgress(opID string, current, total int, message string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.progressSent++
+func newHubMock(t *testing.T) (*mocks.MockRealtimeHub, *hubCalls) {
+	t.Helper()
+	calls := &hubCalls{}
+	m := mocks.NewMockRealtimeHub(t)
+	m.EXPECT().
+		SendOperationLog(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(opID, level, message string, details *string) {
+			calls.mu.Lock()
+			defer calls.mu.Unlock()
+			calls.logsSent++
+		}).Maybe()
+	m.EXPECT().
+		SendOperationProgress(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(opID string, current, total int, message string) {
+			calls.mu.Lock()
+			defer calls.mu.Unlock()
+			calls.progressSent++
+		}).Maybe()
+	return m, calls
 }
 
 func TestOperationLogger_LevelFiltering(t *testing.T) {
-	store := &mockOpStore{}
-	hub := &mockHub{}
+	store, storeCalls := newOpStoreMock(t)
+	hub, hubCalls := newHubMock(t)
 	log := ForOperation("op1", store, hub)
 
 	log.Debug("debug msg") // below default minDBLevel (INFO)
 	log.Info("info msg")   // at minDBLevel
 	log.Warn("warn msg")   // above minDBLevel
 
-	if len(store.logs) != 2 {
-		t.Errorf("expected 2 DB logs (info+warn), got %d: %v", len(store.logs), store.logs)
+	if len(storeCalls.logs) != 2 {
+		t.Errorf("expected 2 DB logs (info+warn), got %d: %v", len(storeCalls.logs), storeCalls.logs)
 	}
-	if hub.logsSent != 2 {
-		t.Errorf("expected 2 hub sends, got %d", hub.logsSent)
+	if hubCalls.logsSent != 2 {
+		t.Errorf("expected 2 hub sends, got %d", hubCalls.logsSent)
 	}
 }
 
 func TestOperationLogger_DebugWhenVerbose(t *testing.T) {
-	store := &mockOpStore{}
+	store, storeCalls := newOpStoreMock(t)
 	log := ForOperation("op1", store, nil)
 	log.SetMinDBLevel(LevelDebug)
 
 	log.Debug("debug msg")
 	log.Trace("trace msg") // still below DEBUG
 
-	if len(store.logs) != 1 {
-		t.Errorf("expected 1 DB log (debug), got %d", len(store.logs))
+	if len(storeCalls.logs) != 1 {
+		t.Errorf("expected 1 DB log (debug), got %d", len(storeCalls.logs))
 	}
 }
 
@@ -123,27 +150,27 @@ func TestOperationLogger_With(t *testing.T) {
 }
 
 func TestOperationLogger_Progress(t *testing.T) {
-	store := &mockOpStore{}
-	hub := &mockHub{}
+	store, storeCalls := newOpStoreMock(t)
+	hub, hubCalls := newHubMock(t)
 	log := ForOperation("op1", store, hub)
 
 	log.UpdateProgress(5, 100, "scanning")
 
-	if len(store.progress) != 1 {
-		t.Errorf("expected 1 progress update, got %d", len(store.progress))
+	if len(storeCalls.progress) != 1 {
+		t.Errorf("expected 1 progress update, got %d", len(storeCalls.progress))
 	}
-	if hub.progressSent != 1 {
-		t.Errorf("expected 1 hub progress, got %d", hub.progressSent)
+	if hubCalls.progressSent != 1 {
+		t.Errorf("expected 1 hub progress, got %d", hubCalls.progressSent)
 	}
 }
 
 func TestOperationLogger_BackwardCompatLog(t *testing.T) {
-	store := &mockOpStore{}
+	store, storeCalls := newOpStoreMock(t)
 	log := ForOperation("op1", store, nil)
 
 	_ = log.Log("info", "backward compat message", nil)
 
-	if len(store.logs) != 1 {
-		t.Errorf("expected 1 DB log, got %d", len(store.logs))
+	if len(storeCalls.logs) != 1 {
+		t.Errorf("expected 1 DB log, got %d", len(storeCalls.logs))
 	}
 }
