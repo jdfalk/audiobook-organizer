@@ -119,25 +119,40 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 		tagWriteTarget = proposedPath // Write tags to the copy, not the original
 	}
 
-	// Write tags to the target file (never the protected source)
+	// Write tags to the target file (never the protected source).
+	//
+	// Only write fields that actually changed. Without this filter,
+	// every organize pass would rewrite every tag on every file
+	// regardless of whether the DB value and the on-disk value
+	// already match — wasted disk I/O, wasted mtime churn (which
+	// poisons the scanner's mtime skip cache), and unnecessary
+	// noise in any backup/sync watcher. The filter reads the
+	// current file's tags, compares each key, and drops matches.
+	// When nothing remains we skip the write entirely.
 	if len(tagMeta) > 0 && !isProtectedPath(tagWriteTarget) {
-		opConfig := fileops.OperationConfig{VerifyChecksums: true}
-		if err := enhanced.WriteMetadataToFile(tagWriteTarget, tagMeta, opConfig); err != nil {
-			log.Printf("[WARN] rename: tag write failed for %s: %v", bookID, err)
-			// Tag write failure is non-fatal; continue with rename
+		filtered := filterUnchangedTags(tagWriteTarget, tagMeta)
+		if len(filtered) == 0 {
+			log.Printf("[DEBUG] rename: all tags match, skipping write for %s", tagWriteTarget)
 		} else {
-			tagsWritten = len(tagMeta)
-			// Record tag write changes for undo
-			if operationID != "" {
-				for field, val := range tagMeta {
-					_ = rs.db.CreateOperationChange(&database.OperationChange{
-						OperationID: operationID,
-						BookID:      bookID,
-						ChangeType:  "tag_write",
-						FieldName:   field,
-						OldValue:    "", // original tag values not easily recoverable
-						NewValue:    fmt.Sprintf("%v", val),
-					})
+			opConfig := fileops.OperationConfig{VerifyChecksums: true}
+			if err := enhanced.WriteMetadataToFile(tagWriteTarget, filtered, opConfig); err != nil {
+				log.Printf("[WARN] rename: tag write failed for %s: %v", bookID, err)
+				// Tag write failure is non-fatal; continue with rename
+			} else {
+				tagsWritten = len(filtered)
+				// Record tag write changes for undo (only the
+				// fields we actually wrote).
+				if operationID != "" {
+					for field, val := range filtered {
+						_ = rs.db.CreateOperationChange(&database.OperationChange{
+							OperationID: operationID,
+							BookID:      bookID,
+							ChangeType:  "tag_write",
+							FieldName:   field,
+							OldValue:    "", // original tag values not easily recoverable
+							NewValue:    fmt.Sprintf("%v", val),
+						})
+					}
 				}
 			}
 		}

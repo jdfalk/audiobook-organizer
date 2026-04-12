@@ -2733,9 +2733,13 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			skippedProtected++
 		} else {
 			fullTagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
-			// Always write all tags — taglib fork handles custom MP4 atoms natively.
-			// The filter previously skipped writes when standard tags matched,
-			// but custom tags (NARRATOR, SERIES, etc.) need writing too.
+			// Filter out tags whose current on-disk value already
+			// matches the DB state, so a re-run of bulk write-back
+			// is near-free when nothing actually changed.
+			// filterUnchangedTags now covers album_artist and
+			// composer (both narrator-sourced in our convention),
+			// so the filter correctly no-ops on unchanged books
+			// instead of always-writing because of those keys.
 			dirFiles := audioFilesInDir(book.FilePath)
 			if len(dirFiles) > 0 {
 				// book.FilePath is a directory — write to each audio file found inside.
@@ -2746,8 +2750,13 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 						skippedProtected++
 						continue
 					}
+					fm := filterUnchangedTags(f, fullTagMap)
+					if len(fm) == 0 {
+						log.Printf("[DEBUG] write-back: all tags match, skipping %s", f)
+						continue
+					}
 					backupFileBeforeWrite(f)
-					if err := metadata.WriteMetadataToFile(f, fullTagMap, opConfig); err != nil {
+					if err := metadata.WriteMetadataToFile(f, fm, opConfig); err != nil {
 						log.Printf("[WARN] write-back failed for %s: %v", f, err)
 					} else {
 						log.Printf("[INFO] wrote metadata back to %s", f)
@@ -2755,11 +2764,16 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 					}
 				}
 			} else {
-				backupFileBeforeWrite(book.FilePath)
-				if err := metadata.WriteMetadataToFile(book.FilePath, fullTagMap, opConfig); err != nil {
-					log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+				fm := filterUnchangedTags(book.FilePath, fullTagMap)
+				if len(fm) == 0 {
+					log.Printf("[DEBUG] write-back: all tags match, skipping %s", book.FilePath)
 				} else {
-					writtenCount++
+					backupFileBeforeWrite(book.FilePath)
+					if err := metadata.WriteMetadataToFile(book.FilePath, fm, opConfig); err != nil {
+						log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
+					} else {
+						writtenCount++
+					}
 				}
 			}
 		}
@@ -2997,9 +3011,20 @@ func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 	}
 
 	currentVals := map[string]string{
-		"title":           current.Title,
-		"album":           current.Album,
-		"artist":          current.Artist,
+		"title": current.Title,
+		"album": current.Album,
+		"artist": current.Artist,
+		// album_artist and composer both hold the narrator in our
+		// audiobook tag convention (album_artist > artist > composer
+		// is the read priority). RenameService writes them as two
+		// separate keys, so filterUnchangedTags needs to know they
+		// compare against current.Narrator too — otherwise every
+		// organize pass sees album_artist/composer as "unknown
+		// field → always write" and falls through to a real write,
+		// which was the root cause of the "organize rewrites tags
+		// every time even when unchanged" investigation.
+		"album_artist":    current.Narrator,
+		"composer":        current.Narrator,
 		"narrator":        current.Narrator,
 		"genre":           current.Genre,
 		"year":            fmt.Sprintf("%d", current.Year),
