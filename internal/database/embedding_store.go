@@ -173,6 +173,70 @@ ON CONFLICT(id) DO UPDATE SET
 	return err
 }
 
+// cacheEntityID composes the per-row entity_id for cache entries.
+// The primary key on the embeddings table is entity_type:entity_id,
+// so to keep different models for the same text hash in separate
+// rows we embed the model name into the entity_id itself. Format:
+// "<model>:<textHash>". This keeps the existing table schema and
+// its text_hash index untouched while giving each (hash, model)
+// pair its own row.
+func cacheEntityID(textHash, model string) string {
+	return model + ":" + textHash
+}
+
+// GetCachedEmbedding looks up a cached embedding by its text hash
+// and model. Content-hash caching reuses the existing embeddings
+// table under an `entity_type='cache'` keyspace so every caller
+// that embeds the same text string — Foundation by Isaac Asimov,
+// for example — gets the same vector back with zero API cost
+// after the first successful embed.
+//
+// Returns nil, nil on a cache miss. Errors are only for real I/O
+// problems — callers should treat nil+nil as "proceed to embed".
+//
+// Added after a production incident where the metadata scorer
+// re-embedded every candidate on every fetch and burned the
+// entire monthly OpenAI quota in minutes.
+func (s *EmbeddingStore) GetCachedEmbedding(textHash, model string) ([]float32, error) {
+	if textHash == "" || model == "" {
+		return nil, nil
+	}
+	id := compositeKey("cache", cacheEntityID(textHash, model))
+	row := s.db.QueryRow(`SELECT vector FROM embeddings WHERE id = ?`, id)
+	var vectorBlob []byte
+	err := row.Scan(&vectorBlob)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get cached embedding: %w", err)
+	}
+	return decodeVector(vectorBlob), nil
+}
+
+// PutCachedEmbedding stores a vector keyed by its text hash and
+// model under the `entity_type='cache'` keyspace so future
+// GetCachedEmbedding lookups hit. Errors are logged by the
+// caller — a cache-put failure is never fatal.
+//
+// Reuses the existing embeddings table rather than a new one
+// because the schema already has an index on text_hash and the
+// user's "SQLite for specific things only" directive applies:
+// the embedding store is already a SQLite sidecar and we don't
+// want another one.
+func (s *EmbeddingStore) PutCachedEmbedding(textHash, model string, vector []float32) error {
+	if textHash == "" || model == "" || len(vector) == 0 {
+		return nil
+	}
+	return s.Upsert(Embedding{
+		EntityType: "cache",
+		EntityID:   cacheEntityID(textHash, model),
+		TextHash:   textHash,
+		Vector:     vector,
+		Model:      model,
+	})
+}
+
 // Get retrieves an embedding by entity type and ID. Returns nil, nil when not found.
 func (s *EmbeddingStore) Get(entityType, entityID string) (*Embedding, error) {
 	id := compositeKey(entityType, entityID)

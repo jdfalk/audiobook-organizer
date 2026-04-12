@@ -23,6 +23,49 @@ func newTestEmbeddingStore(t *testing.T) *EmbeddingStore {
 	return store
 }
 
+// TestEmbeddingStore_ContentHashCache locks in the contract that
+// GetCachedEmbedding returns (nil, nil) on a miss, PutCachedEmbedding
+// round-trips a vector by text hash + model, and different models
+// for the same hash are isolated. This is the cache path that
+// EmbedBatch relies on to avoid burning the OpenAI quota on
+// identical-content re-embeds.
+func TestEmbeddingStore_ContentHashCache(t *testing.T) {
+	store := newTestEmbeddingStore(t)
+
+	const hash = "deadbeef"
+	const model = "text-embedding-3-large"
+
+	// Miss on a fresh store.
+	got, err := store.GetCachedEmbedding(hash, model)
+	require.NoError(t, err)
+	assert.Nil(t, got, "miss should return nil, nil")
+
+	// Round-trip a vector.
+	want := []float32{0.1, 0.2, 0.3, 0.4}
+	require.NoError(t, store.PutCachedEmbedding(hash, model, want))
+	got, err = store.GetCachedEmbedding(hash, model)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	// Same hash, different model → separate row.
+	smaller := []float32{1, 2}
+	require.NoError(t, store.PutCachedEmbedding(hash, "text-embedding-3-small", smaller))
+	got, err = store.GetCachedEmbedding(hash, "text-embedding-3-small")
+	require.NoError(t, err)
+	assert.Equal(t, smaller, got)
+	// The original entry at the original model is still intact.
+	got, err = store.GetCachedEmbedding(hash, model)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	// Empty arguments short-circuit cleanly.
+	got, err = store.GetCachedEmbedding("", model)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+	require.NoError(t, store.PutCachedEmbedding("", model, want))
+	require.NoError(t, store.PutCachedEmbedding(hash, model, nil))
+}
+
 func TestEmbeddingStore_UpsertAndGet(t *testing.T) {
 	store := newTestEmbeddingStore(t)
 

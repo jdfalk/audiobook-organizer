@@ -836,7 +836,16 @@ func NewServer() *Server {
 		} else {
 			server.embeddingStore = embeddingStore
 			if config.AppConfig.OpenAIAPIKey != "" && config.AppConfig.EmbeddingEnabled {
-				embedClient := ai.NewEmbeddingClient(config.AppConfig.OpenAIAPIKey)
+				// Wire the embedding store as a content-hash cache so
+				// repeated embeds of identical text (e.g. "Foundation
+				// by Isaac Asimov" appearing as a candidate across
+				// many metadata fetches) return instantly without
+				// re-hitting OpenAI. Added after the 2026-04-11 quota
+				// incident where a single bulk fetch burned the
+				// entire monthly budget by re-embedding every
+				// candidate on every fetch.
+				embedClient := ai.NewEmbeddingClient(config.AppConfig.OpenAIAPIKey).
+					WithCache(embeddingStore)
 				// Dedup Layer 3 uses a dedicated chat parser so it can call
 				// OpenAIParser.ReviewDedupPairs during maintenance runs.
 				llmParser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
