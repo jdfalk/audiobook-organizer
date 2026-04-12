@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -703,6 +704,133 @@ func TestApplyVerdicts_PersistsAndRoutes(t *testing.T) {
 		if c.LLMReason == "" {
 			t.Errorf("candidate %d has empty reason", c.ID)
 		}
+	}
+}
+
+// TestApplyVerdicts_AutoMergeOnHighConfidence verifies that
+// when DedupLLMAutoMergeHighConfidence is enabled, a
+// "duplicate"+"high" verdict triggers an immediate merge and
+// tags the surviving book with dedup:merge-survivor:llm-auto.
+// Medium/low confidence verdicts and not_duplicate verdicts
+// must NOT auto-merge even when the flag is on.
+func TestApplyVerdicts_AutoMergeOnHighConfidence(t *testing.T) {
+	engine, mock, es := setupTestEngine(t)
+
+	// Enable the opt-in flag for this test.
+	prev := config.AppConfig.DedupLLMAutoMergeHighConfidence
+	config.AppConfig.DedupLLMAutoMergeHighConfidence = true
+	defer func() { config.AppConfig.DedupLLMAutoMergeHighConfidence = prev }()
+
+	// Seed two books the merge service can load.
+	authorID := 1
+	bookA := &database.Book{
+		ID: "BOOK_A", Title: "Foundation",
+		AuthorID: &authorID, Format: "mp3",
+	}
+	bookB := &database.Book{
+		ID: "BOOK_B", Title: "Foundation",
+		AuthorID: &authorID, Format: "m4b",
+	}
+	mock.GetBookByIDFunc = func(id string) (*database.Book, error) {
+		switch id {
+		case "BOOK_A":
+			return bookA, nil
+		case "BOOK_B":
+			return bookB, nil
+		}
+		return nil, nil
+	}
+	// MergeBooks calls UpdateBook on every input; give it a
+	// noop hook so the merge completes instead of panicking.
+	mock.UpdateBookFunc = func(id string, b *database.Book) (*database.Book, error) {
+		return b, nil
+	}
+
+	// Seed a candidate for the pair.
+	sim := 0.88
+	_ = es.UpsertCandidate(database.DedupCandidate{
+		EntityType: "book", EntityAID: "BOOK_A", EntityBID: "BOOK_B",
+		Layer: "embedding", Similarity: &sim, Status: "pending",
+	})
+	candidates, _, _ := es.ListCandidates(database.CandidateFilter{EntityType: "book"})
+	if len(candidates) != 1 {
+		t.Fatalf("expected 1 seeded candidate, got %d", len(candidates))
+	}
+
+	byIndex := map[int]database.DedupCandidate{0: candidates[0]}
+	verdicts := []ai.DedupPairVerdict{
+		{Index: 0, IsDuplicate: true, Confidence: "high", Reason: "identical metadata"},
+	}
+
+	applied := engine.applyVerdicts(verdicts, byIndex)
+	if applied != 1 {
+		t.Errorf("applied = %d, want 1", applied)
+	}
+
+	// The candidate status should be "merged" after auto-merge.
+	got, _, _ := es.ListCandidates(database.CandidateFilter{EntityType: "book"})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 candidate, got %d", len(got))
+	}
+	if got[0].Status != "merged" {
+		t.Errorf("expected status='merged' after auto-merge, got %q", got[0].Status)
+	}
+}
+
+// TestApplyVerdicts_NoAutoMergeWhenDisabled verifies that when
+// the opt-in flag is off (the default), a high-confidence
+// duplicate verdict persists the row but does NOT fire a merge.
+func TestApplyVerdicts_NoAutoMergeWhenDisabled(t *testing.T) {
+	engine, _, es := setupTestEngine(t)
+
+	// Flag is false by default; be explicit.
+	prev := config.AppConfig.DedupLLMAutoMergeHighConfidence
+	config.AppConfig.DedupLLMAutoMergeHighConfidence = false
+	defer func() { config.AppConfig.DedupLLMAutoMergeHighConfidence = prev }()
+
+	sim := 0.88
+	_ = es.UpsertCandidate(database.DedupCandidate{
+		EntityType: "book", EntityAID: "BOOK_A", EntityBID: "BOOK_B",
+		Layer: "embedding", Similarity: &sim, Status: "pending",
+	})
+	candidates, _, _ := es.ListCandidates(database.CandidateFilter{EntityType: "book"})
+	byIndex := map[int]database.DedupCandidate{0: candidates[0]}
+	verdicts := []ai.DedupPairVerdict{
+		{Index: 0, IsDuplicate: true, Confidence: "high", Reason: "identical"},
+	}
+	engine.applyVerdicts(verdicts, byIndex)
+
+	got, _, _ := es.ListCandidates(database.CandidateFilter{EntityType: "book"})
+	if got[0].Status == "merged" {
+		t.Error("auto-merge fired when flag is disabled — status should still be 'pending'")
+	}
+}
+
+// TestApplyVerdicts_NoAutoMergeMediumConfidence verifies that
+// even with the flag ON, a medium or low confidence verdict
+// does NOT trigger auto-merge.
+func TestApplyVerdicts_NoAutoMergeMediumConfidence(t *testing.T) {
+	engine, _, es := setupTestEngine(t)
+
+	prev := config.AppConfig.DedupLLMAutoMergeHighConfidence
+	config.AppConfig.DedupLLMAutoMergeHighConfidence = true
+	defer func() { config.AppConfig.DedupLLMAutoMergeHighConfidence = prev }()
+
+	sim := 0.88
+	_ = es.UpsertCandidate(database.DedupCandidate{
+		EntityType: "book", EntityAID: "A", EntityBID: "B",
+		Layer: "embedding", Similarity: &sim, Status: "pending",
+	})
+	candidates, _, _ := es.ListCandidates(database.CandidateFilter{EntityType: "book"})
+	byIndex := map[int]database.DedupCandidate{0: candidates[0]}
+	verdicts := []ai.DedupPairVerdict{
+		{Index: 0, IsDuplicate: true, Confidence: "medium", Reason: "probably same"},
+	}
+	engine.applyVerdicts(verdicts, byIndex)
+
+	got, _, _ := es.ListCandidates(database.CandidateFilter{EntityType: "book"})
+	if got[0].Status == "merged" {
+		t.Error("medium-confidence verdict should not have auto-merged")
 	}
 }
 

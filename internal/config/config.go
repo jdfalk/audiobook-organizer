@@ -144,6 +144,16 @@ type Config struct {
 	DedupAuthorHighThreshold float64 `json:"dedup_author_high_threshold"`    // default 0.92
 	DedupAuthorLowThreshold  float64 `json:"dedup_author_low_threshold"`     // default 0.80
 	DedupAutoMergeEnabled    bool    `json:"dedup_auto_merge_enabled"`       // default true
+	// DedupLLMAutoMergeHighConfidence, when true, automatically
+	// applies a merge when the LLM review (Layer 3) returns a
+	// "duplicate" verdict with confidence "high". Opt-in because
+	// a false-positive high-confidence verdict silently merges
+	// the wrong pair of books. When enabled, every auto-merge
+	// tags the surviving book with
+	// `dedup:merge-survivor:llm-auto` as a system tag so users
+	// can filter the dedup tab for "things the LLM decided
+	// for me" and review them post-hoc.
+	DedupLLMAutoMergeHighConfidence bool `json:"dedup_llm_auto_merge_high_confidence"` // default false — opt-in
 
 	// Metadata candidate scoring (PR1)
 	MetadataEmbeddingScoringEnabled bool    `json:"metadata_embedding_scoring_enabled"` // default true
@@ -600,6 +610,7 @@ func InitConfig() {
 	AppConfig.DedupAuthorHighThreshold = 0.92
 	AppConfig.DedupAuthorLowThreshold = 0.80
 	AppConfig.DedupAutoMergeEnabled = true
+	AppConfig.DedupLLMAutoMergeHighConfidence = false // opt-in
 
 	// Metadata candidate scoring (defaults used unless DB settings override)
 	AppConfig.MetadataEmbeddingScoringEnabled = true
@@ -906,6 +917,7 @@ func ResetToDefaults() {
 		DedupAuthorHighThreshold: 0.92,
 		DedupAuthorLowThreshold:  0.80,
 		DedupAutoMergeEnabled:    true,
+		DedupLLMAutoMergeHighConfidence: false,
 
 		// Metadata candidate scoring (PR1)
 		MetadataEmbeddingScoringEnabled: true,
