@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -1310,11 +1311,24 @@ func (de *DedupEngine) loadAuthorEntity(entityID string) (ai.DedupEntity, bool) 
 	return ai.DedupEntity{ID: entityID, Title: author.Name}, true
 }
 
-// applyVerdicts persists each verdict via UpdateCandidateLLM and returns the
-// number of rows successfully updated. Errors are logged and skipped so one
-// bad row does not abort the whole batch.
+// applyVerdicts persists each LLM verdict via UpdateCandidateLLM
+// and, when DedupLLMAutoMergeHighConfidence is enabled, fires an
+// immediate merge for "duplicate" verdicts at confidence "high".
+//
+// Returns the number of verdicts successfully persisted (not the
+// number of merges fired — that's logged separately).
+//
+// Auto-merges via LLM verdict tag the surviving book with
+// `dedup:merge-survivor:llm-auto` as a system tag so the user
+// can later filter "things the LLM decided for me" and review
+// them post-hoc. The LLM's reason string is recorded in the
+// candidate's llm_reason column for audit trail.
+//
+// Errors are logged and skipped so one bad row doesn't abort
+// the whole batch.
 func (de *DedupEngine) applyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]database.DedupCandidate) int {
 	applied := 0
+	autoMerged := 0
 	for _, v := range verdicts {
 		candidate, ok := byIndex[v.Index]
 		if !ok {
@@ -1334,6 +1348,67 @@ func (de *DedupEngine) applyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map
 			continue
 		}
 		applied++
+
+		// Auto-merge path (opt-in, book candidates only, high
+		// confidence only). Author candidates are NOT auto-merged
+		// — author merges are structural and user-visible enough
+		// that we require manual confirmation regardless of
+		// confidence.
+		if !config.AppConfig.DedupLLMAutoMergeHighConfidence {
+			continue
+		}
+		if candidate.EntityType != "book" {
+			continue
+		}
+		if !v.IsDuplicate {
+			continue
+		}
+		if !strings.EqualFold(v.Confidence, "high") {
+			continue
+		}
+		if de.mergeService == nil {
+			log.Printf("dedup: LLM auto-merge skipped for candidate %d — mergeService unavailable", candidate.ID)
+			continue
+		}
+
+		result, mergeErr := de.mergeService.MergeBooks(
+			[]string{candidate.EntityAID, candidate.EntityBID},
+			"", // auto-pick primary via bookIsBetter
+		)
+		if mergeErr != nil {
+			log.Printf("dedup: LLM auto-merge failed for candidate %d (%s + %s): %v",
+				candidate.ID, candidate.EntityAID, candidate.EntityBID, mergeErr)
+			continue
+		}
+
+		// Mark candidate as merged in the dedup store so it
+		// drops off the pending/review tab.
+		if err := de.embedStore.UpdateCandidateStatus(candidate.ID, "merged"); err != nil {
+			log.Printf("dedup: failed to mark candidate %d merged: %v", candidate.ID, err)
+		}
+
+		// Tag the surviving book with the auto-merge provenance.
+		// The tag carries the "llm-auto" suffix so users can
+		// filter "merged by the LLM at high confidence" separately
+		// from hand-merges and other auto-merge sources.
+		if result != nil && result.PrimaryID != "" {
+			if tagErr := database.EnsureSingletonBookTag(
+				de.bookStore,
+				result.PrimaryID,
+				"dedup:merge-survivor",
+				"dedup:merge-survivor:llm-auto",
+				"system",
+			); tagErr != nil {
+				log.Printf("dedup: failed to tag auto-merged survivor %s: %v", result.PrimaryID, tagErr)
+			}
+		}
+
+		autoMerged++
+		log.Printf("dedup: LLM auto-merged candidate %d (%s + %s) — reason: %s",
+			candidate.ID, candidate.EntityAID, candidate.EntityBID, reason)
+	}
+	if autoMerged > 0 {
+		log.Printf("dedup: LLM auto-merge fired on %d high-confidence pair(s)", autoMerged)
 	}
 	return applied
 }
