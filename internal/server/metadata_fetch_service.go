@@ -527,6 +527,11 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 
 		mfs.persistFetchedMetadata(id, meta)
 
+		// Mirror of ApplyMetadataCandidate: tag the book with the
+		// source and language so downstream filters (review dialog,
+		// upgrade jobs) have provenance to key on.
+		mfs.applyMetadataSystemTags(id, src.Name(), meta.Language)
+
 		return &FetchMetadataResponse{
 			Message: "metadata fetched by title only",
 			Book:    updatedBook,
@@ -2378,11 +2383,129 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 		mfs.queueISBNEnrichment(id, updatedBook)
 	}
 
+	// Tag the book with metadata:source:* and metadata:language:*
+	// as system-applied provenance tags. Uses the singleton
+	// helpers so a no-op re-apply of the same source/language is
+	// a true no-op at the tag layer (no wasted writes). Done after
+	// UpdateBook so a failed update never leaves stale tags behind.
+	mfs.applyMetadataSystemTags(id, candidate.Source, meta.Language)
+
 	return &FetchMetadataResponse{
 		Message: "metadata candidate applied",
 		Book:    updatedBook,
 		Source:  candidate.Source,
 	}, nil
+}
+
+// applyMetadataSystemTags writes the metadata:source:* and
+// metadata:language:* system tags for a book. Logs but doesn't
+// propagate errors — tagging is provenance metadata, not part
+// of the apply transaction, so a tag write failure shouldn't
+// fail the apply itself.
+func (mfs *MetadataFetchService) applyMetadataSystemTags(bookID, sourceName, language string) {
+	sourceTag := metadataSourceTag(sourceName)
+	if sourceTag != "" {
+		if err := database.EnsureSingletonBookTag(
+			mfs.db, bookID, "metadata:source:", sourceTag, "system",
+		); err != nil {
+			log.Printf("[WARN] failed to tag book %s with %s: %v", bookID, sourceTag, err)
+		}
+	}
+	langTag := metadataLanguageTag(language)
+	if langTag != "" {
+		if err := database.EnsureSingletonBookTag(
+			mfs.db, bookID, "metadata:language:", langTag, "system",
+		); err != nil {
+			log.Printf("[WARN] failed to tag book %s with %s: %v", bookID, langTag, err)
+		}
+	}
+}
+
+// metadataSourceTag turns a human-readable source name from
+// metadata.MetadataSource.Name() into a tag-safe slug under the
+// metadata:source:* namespace. Returns "" for empty inputs so
+// the caller can skip the tag write.
+//
+//	"Hardcover"          → "metadata:source:hardcover"
+//	"Open Library"       → "metadata:source:open_library"
+//	"Google Books"       → "metadata:source:google_books"
+//	"Audnexus (Audible)" → "metadata:source:audnexus"
+//	"Audible"            → "metadata:source:audible"
+func metadataSourceTag(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	// Special case: drop the "(Audible)" parenthetical on Audnexus
+	// so the tag cleanly identifies the source provider, not its
+	// upstream. We still have metadata:source:audible for the
+	// direct Audible path.
+	if strings.HasPrefix(name, "Audnexus") {
+		return "metadata:source:audnexus"
+	}
+	slug := strings.ToLower(name)
+	slug = strings.ReplaceAll(slug, " ", "_")
+	slug = strings.ReplaceAll(slug, "(", "")
+	slug = strings.ReplaceAll(slug, ")", "")
+	slug = strings.ReplaceAll(slug, "-", "_")
+	return "metadata:source:" + slug
+}
+
+// metadataLanguageTag turns a language string from a metadata
+// source into a tag under the metadata:language:* namespace.
+// Accepts ISO 639-1 codes ("en"), ISO 639-2 codes ("eng"), and
+// full English names ("English"); normalizes to the 2-letter
+// form where recognized and lowercases everything else. Returns
+// "" for empty inputs so the caller can skip the tag write.
+func metadataLanguageTag(lang string) string {
+	lang = strings.ToLower(strings.TrimSpace(lang))
+	if lang == "" {
+		return ""
+	}
+	// Short list of ISO 639-2 / English-name variants we see
+	// across the real sources. Unknown languages fall through
+	// to the lowercased input so we never drop data — worst
+	// case the tag looks weird but it's still filterable.
+	canonical := map[string]string{
+		"english":    "en",
+		"eng":        "en",
+		"spanish":    "es",
+		"spa":        "es",
+		"french":     "fr",
+		"fre":        "fr",
+		"fra":        "fr",
+		"german":     "de",
+		"ger":        "de",
+		"deu":        "de",
+		"italian":    "it",
+		"ita":        "it",
+		"japanese":   "ja",
+		"jpn":        "ja",
+		"chinese":    "zh",
+		"chi":        "zh",
+		"zho":        "zh",
+		"mandarin":   "zh",
+		"portuguese": "pt",
+		"por":        "pt",
+		"russian":    "ru",
+		"rus":        "ru",
+		"dutch":      "nl",
+		"nld":        "nl",
+		"korean":     "ko",
+		"kor":        "ko",
+		"arabic":     "ar",
+		"ara":        "ar",
+	}
+	if code, ok := canonical[lang]; ok {
+		return "metadata:language:" + code
+	}
+	// Already a 2-letter code? Keep it.
+	if len(lang) == 2 {
+		return "metadata:language:" + lang
+	}
+	// Unknown — slugify and pass through.
+	slug := strings.ReplaceAll(lang, " ", "_")
+	return "metadata:language:" + slug
 }
 
 // ApplyMetadataFileIO runs the slow file operations after metadata is applied:
