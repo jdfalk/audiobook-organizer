@@ -764,6 +764,31 @@ export async function updateBook(
   return response.json();
 }
 
+// batchUpdateBooks applies the same metadata updates to every
+// book in `ids` via a single API call. Much faster than N
+// individual updateBook calls — one round trip and one DB
+// write loop instead of N of each.
+export interface BatchUpdateResult {
+  updated: number;
+  failed: number;
+  errors?: string[];
+}
+
+export async function batchUpdateBooks(
+  ids: string[],
+  updates: Record<string, unknown>
+): Promise<BatchUpdateResult> {
+  const response = await fetch(`${API_BASE}/audiobooks/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, updates }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to batch update audiobooks');
+  }
+  return response.json();
+}
+
 export async function getBookTags(
   bookId: string,
   compareId?: string,

@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/BatchEditDialog.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5b6c7d8e-9f0a-1b2c-3d4e-5f6a7b8c9d0e
 
 import React, { useState } from 'react';
@@ -15,6 +15,8 @@ import {
   Alert,
   FormControlLabel,
   Checkbox,
+  Tooltip,
+  Typography,
 } from '@mui/material';
 import type { Audiobook } from '../../types';
 
@@ -22,7 +24,15 @@ interface BatchEditDialogProps {
   open: boolean;
   audiobooks: Audiobook[];
   onClose: () => void;
+  // onSave is called ONCE with the common updates (same values
+  // for all books). When series_position auto-increment is on,
+  // the dialog calls onSavePerBook instead — one call per book
+  // with a different series_position each time.
   onSave: (updates: Partial<Audiobook>) => Promise<void>;
+  // onSavePerBook is optional — when absent and auto-increment
+  // is needed, the dialog falls back to calling onSave multiple
+  // times (less efficient but always works).
+  onSavePerBook?: (bookId: string, updates: Partial<Audiobook>) => Promise<void>;
 }
 
 interface FieldUpdate {
@@ -35,16 +45,24 @@ export const BatchEditDialog: React.FC<BatchEditDialogProps> = ({
   audiobooks,
   onClose,
   onSave,
+  onSavePerBook,
 }) => {
   const [updates, setUpdates] = useState<Record<string, FieldUpdate>>({
     author: { enabled: false, value: '' },
     narrator: { enabled: false, value: '' },
     series: { enabled: false, value: '' },
+    series_position: { enabled: false, value: 1 },
     genre: { enabled: false, value: '' },
     language: { enabled: false, value: '' },
     publisher: { enabled: false, value: '' },
     year: { enabled: false, value: '' },
   });
+  // Auto-increment: when series_position is enabled AND this is
+  // checked, each book gets an incrementing series_position
+  // starting from the value in the field. Typical use: select 10
+  // books in a series, set starting position to 1, check
+  // auto-increment, and all 10 get positions 1–10.
+  const [autoIncrement, setAutoIncrement] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,14 +85,39 @@ export const BatchEditDialog: React.FC<BatchEditDialogProps> = ({
     setError(null);
 
     try {
+      // Build the common (non-auto-incrementing) field set.
       const changedFields: Partial<Audiobook> = {};
       Object.entries(updates).forEach(([field, update]) => {
         if (update.enabled) {
+          // Skip series_position if auto-increment is on — it
+          // gets handled per-book below.
+          if (field === 'series_position' && autoIncrement) return;
           changedFields[field as keyof Audiobook] = update.value as never;
         }
       });
 
-      await onSave(changedFields);
+      // Auto-increment path: each book gets a different
+      // series_position. Uses onSavePerBook when available
+      // (single PUT per book) or falls back to onSave in
+      // a loop (batch endpoint can't do per-book values).
+      if (
+        updates.series_position.enabled &&
+        autoIncrement
+      ) {
+        const start = Number(updates.series_position.value) || 1;
+        const saveFn = onSavePerBook || (async (_id: string, u: Partial<Audiobook>) => onSave(u));
+        let i = 0;
+        for (const ab of audiobooks) {
+          const perBook = {
+            ...changedFields,
+            series_position: start + i,
+          } as Partial<Audiobook>;
+          await saveFn(ab.id, perBook);
+          i++;
+        }
+      } else {
+        await onSave(changedFields);
+      }
       onClose();
     } catch (err) {
       setError(
@@ -163,6 +206,48 @@ export const BatchEditDialog: React.FC<BatchEditDialogProps> = ({
                 disabled={!updates.series.enabled}
                 sx={{ mt: 1 }}
               />
+            </Grid>
+
+            <Grid item xs={12} sm={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={updates.series_position.enabled}
+                    onChange={() => handleToggle('series_position')}
+                  />
+                }
+                label="Series Position"
+              />
+              <TextField
+                fullWidth
+                type="number"
+                placeholder="Starting position"
+                value={updates.series_position.value}
+                onChange={(e) =>
+                  handleChange('series_position', parseInt(e.target.value) || 1)
+                }
+                disabled={!updates.series_position.enabled}
+                sx={{ mt: 1 }}
+              />
+              {updates.series_position.enabled && (
+                <Tooltip title="Each book gets an incrementing position starting from the value above. Books are numbered in the order they appear in the selection.">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={autoIncrement}
+                        onChange={(e) => setAutoIncrement(e.target.checked)}
+                        size="small"
+                      />
+                    }
+                    label={
+                      <Typography variant="body2">
+                        Auto-increment (1, 2, 3, …)
+                      </Typography>
+                    }
+                    sx={{ mt: 0.5 }}
+                  />
+                </Tooltip>
+              )}
             </Grid>
 
             <Grid item xs={12} sm={6}>
