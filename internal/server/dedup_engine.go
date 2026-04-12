@@ -116,6 +116,10 @@ func (de *DedupEngine) CheckBook(ctx context.Context, bookID string) (bool, erro
 		log.Printf("dedup: title check error for %s: %v", bookID, err)
 	}
 
+	if err := de.checkDurationMatch(book); err != nil {
+		log.Printf("dedup: duration check error for %s: %v", bookID, err)
+	}
+
 	// --- Layer 2: Embedding similarity ---
 	if de.embedClient != nil {
 		if _, err := de.EmbedBook(ctx, bookID); err != nil {
@@ -345,6 +349,161 @@ func (de *DedupEngine) checkExactTitle(book *database.Book, authorName string) e
 			Status:     "pending",
 		}); err != nil {
 			log.Printf("dedup: upsert title candidate error: %v", err)
+		}
+	}
+	return nil
+}
+
+// durationMatchTolerance is the max percent difference in
+// duration (seconds) for two books to be considered duration-
+// matches. Two percent catches normal transcoding / chapter
+// reshuffling variance while excluding abridged / reorganized
+// editions which typically differ by 10%+.
+const durationMatchTolerance = 0.02 // 2%
+
+// durationAbridgedThreshold is the minimum percent difference
+// for two books with matching title + author to be flagged as
+// a likely abridged / unabridged pair rather than a duplicate.
+// These aren't emitted as merge candidates — same book content,
+// different editions — but BOTH books get a system tag so users
+// can filter them for separate handling.
+const durationAbridgedThreshold = 0.20 // 20%
+
+// durationLevenshteinMax is the max Levenshtein distance
+// between normalized titles for the duration-signal fallback
+// to still emit a candidate. This is looser than the
+// checkExactTitle threshold (3) because duration match is a
+// strong physical-content signal — two files with near-
+// identical length and a recognizably similar title are almost
+// certainly the same book, even if the title formatting
+// differs more than the exact-title check tolerates.
+const durationLevenshteinMax = 6
+
+// checkDurationMatch scans books by the same author for duration-
+// based similarity signals. A strong duration match (±2%) combined
+// with a recognizably similar title is a near-certain duplicate
+// indicator — duration is one of the hardest physical signals to
+// fake, and normal transcoding variance stays well under 2%.
+//
+// Emits candidates with layer="exact" when duration matches AND
+// titles are within the relaxed Levenshtein threshold. Flags
+// obvious abridged/unabridged edition pairs with a system tag on
+// BOTH books so the user can filter them manually without merging.
+//
+// Backlog 1.2. Runs after checkExactTitle so the cheap/strict
+// signal fires first; duration is the "I know these are the same
+// book but the title encoding differs enough that the strict
+// check missed it" fallback.
+func (de *DedupEngine) checkDurationMatch(book *database.Book) error {
+	if book.AuthorID == nil {
+		return nil
+	}
+	if book.Duration == nil || *book.Duration <= 0 {
+		return nil
+	}
+	if !hasUsableTitle(book.Title) {
+		return nil
+	}
+
+	others, err := de.bookStore.GetBooksByAuthorID(*book.AuthorID)
+	if err != nil {
+		return fmt.Errorf("get books by author: %w", err)
+	}
+
+	bookDur := float64(*book.Duration)
+	bookNorm := normalizeTitle(book.Title)
+	bookForms := de.allNormalizedTitleForms(book)
+
+	for i := range others {
+		other := &others[i]
+		if other.ID == book.ID {
+			continue
+		}
+		if other.Duration == nil || *other.Duration <= 0 {
+			continue
+		}
+		if !hasUsableTitle(other.Title) {
+			continue
+		}
+
+		otherDur := float64(*other.Duration)
+		// Symmetric percent difference so order doesn't matter.
+		diff := bookDur - otherDur
+		if diff < 0 {
+			diff = -diff
+		}
+		base := bookDur
+		if otherDur > base {
+			base = otherDur
+		}
+		pct := diff / base
+
+		// Short-circuit: completely unrelated durations. 20% is a
+		// generous upper bound — anything past that can't be the
+		// same book content even in abridged form.
+		if pct >= durationAbridgedThreshold {
+			continue
+		}
+
+		otherForms := de.allNormalizedTitleForms(other)
+		titleDist := minLevenshteinBetweenForms(bookForms, otherForms)
+		otherNorm := normalizeTitle(other.Title)
+
+		// Series-volume guard: same rejection as checkExactTitle.
+		// If both books identify as distinct series volumes, don't
+		// emit a candidate even when duration matches (a reread of
+		// the series often has every volume at the same length).
+		bookSeriesNum := seriesNumberOf(book)
+		otherSeriesNum := seriesNumberOf(other)
+		if bookSeriesNum != "" && otherSeriesNum != "" && bookSeriesNum != otherSeriesNum {
+			continue
+		}
+		if titlesDifferOnlyInDigits(bookNorm, otherNorm) {
+			continue
+		}
+
+		// Exact duration match (±2%) + recognizable title →
+		// emit a merge candidate. The relaxed Levenshtein
+		// threshold (6 vs 3 in checkExactTitle) is OK here
+		// because duration is the strong signal.
+		if pct <= durationMatchTolerance && titleDist <= durationLevenshteinMax {
+			sim := 1.0
+			if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
+				EntityType: "book",
+				EntityAID:  book.ID,
+				EntityBID:  other.ID,
+				Layer:      "exact",
+				Similarity: &sim,
+				Status:     "pending",
+			}); err != nil {
+				log.Printf("dedup: duration candidate upsert error: %v", err)
+				continue
+			}
+			// Tag both sides so users can filter "books the
+			// dedup engine matched on duration signal".
+			_ = database.EnsureSingletonBookTag(
+				de.bookStore, book.ID, "dedup:duration-match", "dedup:duration-match", "system",
+			)
+			_ = database.EnsureSingletonBookTag(
+				de.bookStore, other.ID, "dedup:duration-match", "dedup:duration-match", "system",
+			)
+			continue
+		}
+
+		// Duration mismatch 10-20% with same/near-same title is
+		// almost always an abridged/unabridged edition pair.
+		// Don't emit a merge candidate (they're legitimately
+		// different content), but tag both sides so users can
+		// filter and handle manually. The threshold starts at
+		// 10% because normal transcoding noise ends around 2-5%
+		// and 10% is safely above that.
+		if pct >= 0.10 && titleDist <= durationLevenshteinMax {
+			_ = database.EnsureSingletonBookTag(
+				de.bookStore, book.ID, "dedup:duration-abridged", "dedup:duration-abridged", "system",
+			)
+			_ = database.EnsureSingletonBookTag(
+				de.bookStore, other.ID, "dedup:duration-abridged", "dedup:duration-abridged", "system",
+			)
 		}
 	}
 	return nil
@@ -804,7 +963,8 @@ func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total i
 			}
 		}
 
-		// Layer 1 exact checks (file hash, ISBN/ASIN, near-identical title).
+		// Layer 1 exact checks (file hash, ISBN/ASIN, near-identical title,
+		// duration match).
 		// Errors are logged but non-fatal — one missing field shouldn't
 		// abort the whole scan.
 		if _, err := de.checkExactFileHash(&book, authorName); err != nil {
@@ -815,6 +975,9 @@ func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total i
 		}
 		if err := de.checkExactTitle(&book, authorName); err != nil {
 			log.Printf("dedup: full scan title check error for %s: %v", book.ID, err)
+		}
+		if err := de.checkDurationMatch(&book); err != nil {
+			log.Printf("dedup: full scan duration check error for %s: %v", book.ID, err)
 		}
 
 		// Layer 2 embedding: re-embed if stale, then similarity scan.
