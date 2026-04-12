@@ -73,17 +73,3 @@ func TestScanService_PerformScan_NoFolders(t *testing.T) {
 	}
 }
 
-// mockProgressReporter is a no-op ProgressReporter for tests that still use operations.ProgressReporter.
-type mockProgressReporter struct{}
-
-func (m *mockProgressReporter) Log(level, message string, details *string) error {
-	return nil
-}
-
-func (m *mockProgressReporter) UpdateProgress(current, total int, message string) error {
-	return nil
-}
-
-func (m *mockProgressReporter) IsCanceled() bool {
-	return false
-}

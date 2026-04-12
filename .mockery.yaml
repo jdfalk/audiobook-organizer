@@ -1,9 +1,14 @@
 # file: .mockery.yaml
-# version: 1.11.0
+# version: 1.12.0
 # guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 # Mockery configuration (v3)
 # NOTE: with-expecter is enabled by default in v3
+#
+# Rule: every production interface that is stubbed in tests should be
+# listed here. Hand-written test doubles drift as interfaces evolve
+# (see backlog 5.9 and the PR #234 / stubStore incident). Regenerate
+# with `mockery` after editing this file and commit the result.
 all: false
 dir: internal/database/mocks
 filename: mock_store.go
@@ -16,9 +21,13 @@ packages:
   github.com/jdfalk/audiobook-organizer/internal/operations:
     config:
       dir: internal/operations/mocks
-      filename: mock_queue.go
     interfaces:
       Queue:
+        config:
+          filename: mock_queue.go
+      ProgressReporter:
+        config:
+          filename: mock_progress_reporter.go
   github.com/jdfalk/audiobook-organizer/internal/scanner:
     config:
       dir: internal/scanner/mocks
@@ -26,8 +35,58 @@ packages:
     interfaces:
       Scanner:
   github.com/jdfalk/audiobook-organizer/internal/metadata:
-    config:
-      dir: internal/metadata/mocks
-      filename: mock_metadata_extractor.go
     interfaces:
       MetadataExtractor:
+        configs:
+          # Exported mock in metadata/mocks for external users
+          # (internal/server tests, etc.).
+          - dir: internal/metadata/mocks
+            filename: mock_metadata_extractor.go
+          # Unexported test-only mock in the metadata package itself,
+          # so metadata's own tests (assemble_test.go, ...) can use a
+          # mockery-generated double without creating an import cycle
+          # through metadata/mocks.
+          - dir: internal/metadata
+            pkgname: metadata
+            filename: mock_metadata_extractor_test.go
+            structname: mockMetadataExtractorInternal
+      MetadataSource:
+        config:
+          dir: internal/metadata/mocks
+          filename: mock_metadata_source.go
+      ContextualSearch:
+        config:
+          dir: internal/metadata/mocks
+          filename: mock_contextual_search.go
+  github.com/jdfalk/audiobook-organizer/internal/ai:
+    interfaces:
+      MetadataCandidateScorer:
+        config:
+          dir: internal/ai/mocks
+          filename: mock_metadata_candidate_scorer.go
+      # metadataLLMBackend is unexported, so its mock must live in the
+      # ai package itself (can't import an unexported type from a mocks
+      # subpackage). Using a _test.go filename keeps the mock out of
+      # the production build.
+      metadataLLMBackend:
+        config:
+          dir: internal/ai
+          pkgname: ai
+          filename: mock_metadata_llm_backend_test.go
+          structname: mockMetadataLLMBackend
+  github.com/jdfalk/audiobook-organizer/internal/logger:
+    config:
+      dir: internal/logger/mocks
+    interfaces:
+      OperationStore:
+        config:
+          filename: mock_operation_store.go
+      RealtimeHub:
+        config:
+          filename: mock_realtime_hub.go
+      ActivityLogWriter:
+        config:
+          filename: mock_activity_log_writer.go
+      RetentionStore:
+        config:
+          filename: mock_retention_store.go
