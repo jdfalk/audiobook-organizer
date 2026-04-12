@@ -2952,21 +2952,36 @@ export const Library = () => {
           toast={toast}
         />
 
-        {metadataReviewOpId && (
-          <MetadataReviewDialog
-            open={metadataReviewOpen}
-            operationId={metadataReviewOpId}
-            onClose={() => {
-              setMetadataReviewOpen(false);
-              setMetadataReviewOpId(null);
-            }}
-            onComplete={() => {
-              loadAudiobooks();
-              setSelectedAudiobooks([]);
-            }}
-            toast={toast}
-          />
-        )}
+        {/* Always render the review dialog so its internal state
+            (loaded results, row states, scroll position) survives
+            across close/reopen cycles. Only toggle the `open` prop.
+            The dialog ignores backdrop clicks and Escape — the
+            user must click the × button or Done to close, which
+            prevents accidentally blowing away a long review
+            session. Reopening is instant because the data is
+            already loaded.
+
+            When the user explicitly closes, we KEEP the opId
+            alive so clicking "Resume Review" with the same
+            operation reopens the same dialog state without a
+            re-query. Clearing the opId happens only when the
+            user picks a DIFFERENT operation from the picker. */}
+        <MetadataReviewDialog
+          open={metadataReviewOpen}
+          operationId={metadataReviewOpId || ''}
+          onClose={() => {
+            setMetadataReviewOpen(false);
+            // Intentionally NOT clearing metadataReviewOpId so
+            // the dialog's internal state survives and reopen is
+            // instant. The opId is cleared when the user picks a
+            // new operation from the Resume Review picker.
+          }}
+          onComplete={() => {
+            loadAudiobooks();
+            setSelectedAudiobooks([]);
+          }}
+          toast={toast}
+        />
 
         {/* Resume Review picker: lists recent completed
             metadata_candidate_fetch ops with their result counts.

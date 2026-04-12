@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Dialog,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Pagination,
   DialogActions,
@@ -26,6 +27,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import type { CandidateResult } from '../../services/api';
 import * as api from '../../services/api';
 
@@ -223,6 +225,57 @@ export function MetadataReviewDialog({
       })
       .catch(() => setLoading(false));
   }, [open, operationId]);
+
+  // Poll for new results while the operation is still running.
+  // The fetch writes results to operation_results incrementally,
+  // so partial results are available before the operation
+  // finishes. Polling every 5s gives a responsive "results
+  // streaming in" experience without hammering the backend.
+  // Stops automatically when the data says the operation is done
+  // (total count stabilizes) or when the dialog is closed.
+  const [operationDone, setOperationDone] = useState(false);
+  const prevTotalRef = useRef(0);
+
+  useEffect(() => {
+    if (!open || !operationId || loading || operationDone) return;
+    const interval = setInterval(async () => {
+      try {
+        const data = await api.getOperationResults(operationId);
+        const newResults = data.results || [];
+        const newTotal = data.total ?? newResults.length;
+
+        // If the count hasn't changed in two consecutive polls,
+        // the operation is likely done. Stop polling to save
+        // bandwidth. The user can always close and reopen the
+        // dialog to get the final state.
+        if (newTotal > 0 && newTotal === prevTotalRef.current) {
+          setOperationDone(true);
+          return;
+        }
+        prevTotalRef.current = newTotal;
+
+        // Only update if we got more results than we currently have.
+        if (newTotal > results.length) {
+          setResults([...newResults]);
+          setSummary({
+            matched: data.matched ?? newResults.filter((r: api.CandidateResult) => r.status === 'matched').length,
+            no_match: data.no_match ?? newResults.filter((r: api.CandidateResult) => r.status === 'no_match').length,
+            errors: data.errors ?? newResults.filter((r: api.CandidateResult) => r.status === 'error').length,
+            total: newTotal,
+          });
+        }
+      } catch {
+        // Silent — polling failure is not fatal
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [open, operationId, loading, operationDone, results.length]);
+
+  // Reset polling state when the operation changes.
+  useEffect(() => {
+    setOperationDone(false);
+    prevTotalRef.current = 0;
+  }, [operationId]);
 
   // Compute unique sources with counts
   const sourceCounts = results.reduce<Record<string, number>>((acc, r) => {
@@ -888,8 +941,36 @@ export function MetadataReviewDialog({
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
-        <DialogTitle>Review Metadata Matches &mdash; {summary.total} books</DialogTitle>
+      <Dialog
+        open={open}
+        // Ignore backdrop clicks so the dialog stays open while
+        // the user is reviewing. The only way to close is the
+        // explicit × button or the Done action. This prevents
+        // the "accidentally clicked outside, lost all my review
+        // state, had to re-query and wait for it to load again"
+        // problem. Escape key is also suppressed — reviewing
+        // 1000 candidates is a long workflow where the user
+        // reaches for the keyboard often and hitting Esc by
+        // accident should not blow away their session.
+        onClose={(_event, reason) => {
+          if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
+          onClose();
+        }}
+        disableEscapeKeyDown
+        maxWidth="xl"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Review Metadata Matches &mdash; {summary.total} books</span>
+          <IconButton
+            onClick={onClose}
+            size="small"
+            aria-label="close review dialog"
+            sx={{ ml: 2 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
         <DialogContent>
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
