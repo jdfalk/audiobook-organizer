@@ -349,6 +349,12 @@ type Store interface {
 
 	// Low-level key-value operations (for persistent tracking)
 	SetRaw(key string, value []byte) error
+	// GetRaw reads a single key. Returns (nil, nil) on miss —
+	// callers should treat a nil value + nil error as "not found"
+	// so they don't need a sentinel error constant. Used by
+	// cache layers and anywhere else that needs a lightweight
+	// key-value lookup against the primary store.
+	GetRaw(key string) ([]byte, error)
 	DeleteRaw(key string) error
 	ScanPrefix(prefix string) ([]KVPair, error)
 

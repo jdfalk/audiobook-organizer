@@ -2003,50 +2003,86 @@ func (mfs *MetadataFetchService) SearchMetadataForBookWithOptions(
 		var allResults []metadata.BookMetadata
 		var lastErr error
 		sourcesTried = append(sourcesTried, src.Name())
+		cacheHit := false
 
-		// If author hint provided, use title+author search for better results
-		if searchAuthor != "" {
-			if results, serr := src.SearchByTitleAndAuthor(searchTitle, searchAuthor); serr == nil {
+		// Check the metadata fetch cache before hitting the
+		// external API. Cache key is (bookID, source name) —
+		// on hit, we use the cached results as-is and skip the
+		// Search* calls entirely. On miss we fall through to
+		// the API path and write the result back at the end
+		// of the per-source block.
+		//
+		// Added 2026-04-11 after the OpenAI quota incident
+		// where re-fetching 8000 books hit every external API
+		// 8000 times even for books we'd already matched with
+		// high confidence.
+		if cached, cerr := database.GetCachedMetadataFetch(mfs.db, id, src.Name()); cerr == nil && cached != nil {
+			var cachedResults []metadata.BookMetadata
+			if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil {
+				allResults = cachedResults
+				cacheHit = true
+				log.Printf("[DEBUG] metadata-search: cache HIT for (%s, %s) — %d results, age=%s",
+					id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+			}
+		}
+
+		if !cacheHit {
+			// If author hint provided, use title+author search for better results
+			if searchAuthor != "" {
+				if results, serr := src.SearchByTitleAndAuthor(searchTitle, searchAuthor); serr == nil {
+					allResults = append(allResults, results...)
+				} else {
+					lastErr = serr
+					log.Printf("[DEBUG] metadata-search: %s SearchByTitleAndAuthor(%q, %q) error: %v", src.Name(), searchTitle, searchAuthor, serr)
+				}
+			}
+
+			// Narrator-as-author fallback: author/narrator fields are frequently
+			// swapped in audiobook metadata. Try searching with the narrator as
+			// author to catch these cases.
+			if bookNarrator != "" && bookNarrator != searchAuthor {
+				if results, serr := src.SearchByTitleAndAuthor(searchTitle, bookNarrator); serr == nil {
+					allResults = append(allResults, results...)
+				} else {
+					log.Printf("[DEBUG] metadata-search: %s narrator-as-author fallback(%q, %q) error: %v", src.Name(), searchTitle, bookNarrator, serr)
+				}
+			}
+
+			// Always also search by title only to get broader results
+			if results, serr := src.SearchByTitle(searchTitle); serr == nil {
 				allResults = append(allResults, results...)
 			} else {
 				lastErr = serr
-				log.Printf("[DEBUG] metadata-search: %s SearchByTitleAndAuthor(%q, %q) error: %v", src.Name(), searchTitle, searchAuthor, serr)
+				log.Printf("[DEBUG] metadata-search: %s SearchByTitle(%q) error: %v", src.Name(), searchTitle, serr)
+			}
+			// SearchByTitle with original title if different
+			if searchTitle != book.Title {
+				if results, serr := src.SearchByTitle(book.Title); serr == nil {
+					allResults = append(allResults, results...)
+				} else {
+					lastErr = serr
+				}
+			}
+
+			// If all calls failed (no results and there was an error), record it
+			if len(allResults) == 0 && lastErr != nil {
+				sourcesFailed[src.Name()] = lastErr.Error()
+			}
+
+			log.Printf("[DEBUG] metadata-search: %s returned %d raw results for %q", src.Name(), len(allResults), searchTitle)
+
+			// Write to cache on a successful non-empty fetch.
+			// Empty and error cases are not cached so they can
+			// be retried. Cache is best-effort — a Put failure
+			// is logged but doesn't fail the outer search.
+			if len(allResults) > 0 {
+				if blob, merr := json.Marshal(allResults); merr == nil {
+					if perr := database.PutCachedMetadataFetch(mfs.db, id, src.Name(), blob, 0); perr != nil {
+						log.Printf("[WARN] metadata-search: cache put failed for (%s, %s): %v", id, src.Name(), perr)
+					}
+				}
 			}
 		}
-
-		// Narrator-as-author fallback: author/narrator fields are frequently
-		// swapped in audiobook metadata. Try searching with the narrator as
-		// author to catch these cases.
-		if bookNarrator != "" && bookNarrator != searchAuthor {
-			if results, serr := src.SearchByTitleAndAuthor(searchTitle, bookNarrator); serr == nil {
-				allResults = append(allResults, results...)
-			} else {
-				log.Printf("[DEBUG] metadata-search: %s narrator-as-author fallback(%q, %q) error: %v", src.Name(), searchTitle, bookNarrator, serr)
-			}
-		}
-
-		// Always also search by title only to get broader results
-		if results, serr := src.SearchByTitle(searchTitle); serr == nil {
-			allResults = append(allResults, results...)
-		} else {
-			lastErr = serr
-			log.Printf("[DEBUG] metadata-search: %s SearchByTitle(%q) error: %v", src.Name(), searchTitle, serr)
-		}
-		// SearchByTitle with original title if different
-		if searchTitle != book.Title {
-			if results, serr := src.SearchByTitle(book.Title); serr == nil {
-				allResults = append(allResults, results...)
-			} else {
-				lastErr = serr
-			}
-		}
-
-		// If all calls failed (no results and there was an error), record it
-		if len(allResults) == 0 && lastErr != nil {
-			sourcesFailed[src.Name()] = lastErr.Error()
-		}
-
-		log.Printf("[DEBUG] metadata-search: %s returned %d raw results for %q", src.Name(), len(allResults), searchTitle)
 
 		baseScores, baseTier := mfs.scoreBaseCandidates(context.Background(), book, allResults, searchWords)
 		log.Printf("[DEBUG] metadata-search: scored %d results from %s with tier %s", len(allResults), src.Name(), baseTier)
@@ -2389,6 +2425,15 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 	// a true no-op at the tag layer (no wasted writes). Done after
 	// UpdateBook so a failed update never leaves stale tags behind.
 	mfs.applyMetadataSystemTags(id, candidate.Source, meta.Language)
+
+	// Invalidate the metadata fetch cache for this book. After a
+	// successful apply the book's title/author may have changed,
+	// which means any cached candidates from the per-source cache
+	// were queried against stale search terms and should be
+	// re-fetched next time the user asks.
+	if cerr := database.InvalidateAllCachedMetadataFetchesForBook(mfs.db, id); cerr != nil {
+		log.Printf("[WARN] metadata apply: failed to invalidate fetch cache for %s: %v", id, cerr)
+	}
 
 	return &FetchMetadataResponse{
 		Message: "metadata candidate applied",

@@ -4272,6 +4272,24 @@ func (p *PebbleStore) SetRaw(key string, value []byte) error {
 	return p.db.Set([]byte(key), value, pebble.Sync)
 }
 
+// GetRaw reads a single key. Returns (nil, nil) on miss so callers
+// can handle cache-style lookups with a two-valued result instead
+// of a sentinel error.
+func (p *PebbleStore) GetRaw(key string) ([]byte, error) {
+	val, closer, err := p.db.Get([]byte(key))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	// Copy because the closer frees the underlying bytes.
+	out := make([]byte, len(val))
+	copy(out, val)
+	return out, nil
+}
+
 func (p *PebbleStore) DeleteRaw(key string) error {
 	return p.db.Delete([]byte(key), pebble.Sync)
 }
