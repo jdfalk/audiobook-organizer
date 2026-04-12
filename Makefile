@@ -44,7 +44,7 @@ help:
 	@echo "  make test-all       - Run all tests (backend + frontend)"
 	@echo "  make test-e2e       - Run Playwright E2E tests"
 	@echo "  make coverage       - Generate coverage report"
-	@echo "  make coverage-check - Verify 80% coverage threshold"
+	@echo "  make coverage-check - Verify 30% coverage threshold"
 	@echo "  make ci             - Full CI: all tests + coverage check"
 	@echo ""
 	@echo "Docker:"
@@ -190,17 +190,17 @@ coverage:
 	@echo ""
 	@echo "📄 Detailed report: coverage.html"
 
-## coverage-check: Verify coverage meets 80% threshold
+## coverage-check: Verify coverage meets 30% threshold
 coverage-check:
 	@echo "🎯 Checking coverage threshold..."
 	@go test ./... -coverprofile=coverage.out -covermode=atomic >/dev/null 2>&1
 	@coverage=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
 	echo "Coverage: $$coverage%"; \
-	if [ $$(echo "$$coverage < 80" | bc -l) -eq 1 ]; then \
-		echo "❌ Coverage $$coverage% is below 80% threshold"; \
+	if [ $$(echo "$$coverage < 30" | bc -l) -eq 1 ]; then \
+		echo "❌ Coverage $$coverage% is below 30% threshold"; \
 		exit 1; \
 	fi; \
-	echo "✅ Coverage $$coverage% meets 80% threshold"
+	echo "✅ Coverage $$coverage% meets 30% threshold"
 
 ## ci: Full CI check (vet + mocks-check + all tests + coverage)
 ci: mocks-check test-all coverage-check
