@@ -53,6 +53,66 @@ const SOURCE_COLORS: Record<string, 'primary' | 'secondary' | 'success' | 'warni
 // across pagination controls.
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
 
+// Language filter: when enabled (default), candidates whose
+// language disagrees with the book's are hidden. Preference
+// persists in localStorage so users don't re-enable it on
+// every dialog open.
+const LANGUAGE_FILTER_KEY = 'metadata-review-language-filter';
+
+function loadLanguageFilter(): boolean {
+  if (typeof window === 'undefined') return true;
+  const raw = window.localStorage.getItem(LANGUAGE_FILTER_KEY);
+  return raw === null ? true : raw === 'true';
+}
+
+// Normalizes a language string to an ISO 639-1 2-letter code
+// for comparison. Mirrors the server-side metadataLanguageTag
+// logic — the review dialog filter compares book.language
+// against candidate.language, and both sides might come from
+// different source APIs that return the language in different
+// formats (full name, 2-letter code, 3-letter code).
+//
+// Returns the lowercased input for unknown languages so the
+// filter still works via string equality.
+function normalizeLanguage(lang: string | undefined | null): string {
+  if (!lang) return '';
+  const s = lang.trim().toLowerCase();
+  if (!s) return '';
+  const canonical: Record<string, string> = {
+    english: 'en',
+    eng: 'en',
+    spanish: 'es',
+    spa: 'es',
+    french: 'fr',
+    fre: 'fr',
+    fra: 'fr',
+    german: 'de',
+    ger: 'de',
+    deu: 'de',
+    italian: 'it',
+    ita: 'it',
+    japanese: 'ja',
+    jpn: 'ja',
+    chinese: 'zh',
+    chi: 'zh',
+    zho: 'zh',
+    mandarin: 'zh',
+    portuguese: 'pt',
+    por: 'pt',
+    russian: 'ru',
+    rus: 'ru',
+    dutch: 'nl',
+    nld: 'nl',
+    korean: 'ko',
+    kor: 'ko',
+    arabic: 'ar',
+    ara: 'ar',
+  };
+  if (canonical[s]) return canonical[s];
+  if (s.length === 2) return s;
+  return s;
+}
+
 // Persist the review page size in localStorage so users don't have
 // to re-select it every time they open the dialog. The activity log
 // uses session-only state, but the review dialog is opened ad-hoc
@@ -104,6 +164,7 @@ export function MetadataReviewDialog({
   const [hideApplied, setHideApplied] = useState(true);
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
+  const [matchLanguage, setMatchLanguage] = useState<boolean>(loadLanguageFilter);
 
   useEffect(() => {
     if (!open || !operationId) return;
@@ -180,12 +241,26 @@ export function MetadataReviewDialog({
     )
     .filter((r) => !hideApplied || rowStates.get(r.book.id) !== 'applied')
     .filter((r) => !hideRejected || rowStates.get(r.book.id) !== 'rejected')
-    .filter((r) => !hideNoMatch || (r.status !== 'no_match' && r.status !== 'error'));
+    .filter((r) => !hideNoMatch || (r.status !== 'no_match' && r.status !== 'error'))
+    .filter((r) => {
+      // Language filter: hide candidates whose language
+      // doesn't match the book's. Only active when the toggle
+      // is on AND both the book and candidate have a language
+      // set — an unknown language on either side is a
+      // no-op (show the row) so new books without metadata
+      // still get candidates offered to them.
+      if (!matchLanguage) return true;
+      if (!r.candidate) return true;
+      const bookLang = normalizeLanguage(r.book.language);
+      const candLang = normalizeLanguage(r.candidate.language);
+      if (!bookLang || !candLang) return true;
+      return bookLang === candLang;
+    });
 
   // Reset page when filters change
   useEffect(() => {
     setReviewPage(1);
-  }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideNoMatch]);
+  }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideNoMatch, matchLanguage]);
 
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
@@ -904,6 +979,27 @@ export function MetadataReviewDialog({
                   }
                   label={<Typography variant="body2">Hide No Match</Typography>}
                 />
+                <Tooltip title="Hide candidates whose language doesn't match the book's current language. Books without a language set still show all candidates.">
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={matchLanguage}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          setMatchLanguage(next);
+                          if (typeof window !== 'undefined') {
+                            window.localStorage.setItem(
+                              LANGUAGE_FILTER_KEY,
+                              String(next)
+                            );
+                          }
+                        }}
+                      />
+                    }
+                    label={<Typography variant="body2">Match Language</Typography>}
+                  />
+                </Tooltip>
               </Stack>
 
               {/* Smart action buttons */}

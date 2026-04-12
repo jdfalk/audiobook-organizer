@@ -34,6 +34,14 @@ type CandidateBookInfo struct {
 	Format     string `json:"format,omitempty"`
 	Duration   int    `json:"duration_seconds,omitempty"`
 	FileSize   int64  `json:"file_size_bytes,omitempty"`
+	// Language is the book's current language as stored on the
+	// Book row (ISO code or full name, whatever was last applied).
+	// Used by the review dialog's language filter to hide
+	// candidates whose language disagrees with the book's — the
+	// motivating Spanish/English "Ancillary Sword" screenshot fix.
+	// Empty when the book has no language set, in which case the
+	// filter is a no-op for that row.
+	Language string `json:"language,omitempty"`
 }
 
 // CandidateResult holds the metadata candidate search result for a single book.
@@ -299,6 +307,9 @@ func buildCandidateBookInfo(book *database.Book) CandidateBookInfo {
 	}
 	if book.FileSize != nil {
 		info.FileSize = *book.FileSize
+	}
+	if book.Language != nil {
+		info.Language = *book.Language
 	}
 	return info
 }
