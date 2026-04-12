@@ -1,10 +1,15 @@
 // file: internal/logger/logger_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d
 
 package logger
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/jdfalk/audiobook-organizer/internal/logger/mocks"
+	"github.com/stretchr/testify/mock"
+)
 
 func TestParseLevel(t *testing.T) {
 	tests := []struct {
@@ -58,12 +63,14 @@ func TestStandardLogger_NoOps(t *testing.T) {
 
 func TestStandardLogger_ActivityWriter(t *testing.T) {
 	var captured []string
-	writer := &mockActivityWriter{
-		addFunc: func(source, level, message string) error {
+	writer := mocks.NewMockActivityLogWriter(t)
+	writer.EXPECT().
+		AddSystemActivityLog(mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(source, level, message string) error {
 			captured = append(captured, level+":"+message)
 			return nil
-		},
-	}
+		}).Maybe()
+
 	log := NewWithActivityLog("test", writer)
 	log.Debug("should not be captured")
 	log.Info("should be captured")
@@ -72,15 +79,4 @@ func TestStandardLogger_ActivityWriter(t *testing.T) {
 	if len(captured) != 2 {
 		t.Errorf("expected 2 captured, got %d", len(captured))
 	}
-}
-
-type mockActivityWriter struct {
-	addFunc func(source, level, message string) error
-}
-
-func (m *mockActivityWriter) AddSystemActivityLog(source, level, message string) error {
-	if m.addFunc != nil {
-		return m.addFunc(source, level, message)
-	}
-	return nil
 }

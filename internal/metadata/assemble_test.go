@@ -1,5 +1,5 @@
 // file: internal/metadata/assemble_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2c3d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f
 
 package metadata
@@ -8,16 +8,21 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/mock"
 )
 
-// mockAssembleExtractor returns fixed metadata for testing assembly logic.
-type mockAssembleExtractor struct {
-	meta Metadata
-	err  error
-}
-
-func (m *mockAssembleExtractor) ExtractMetadata(_ string) (Metadata, error) {
-	return m.meta, m.err
+// newAssembleExtractorStub returns an in-package mockery-generated
+// MetadataExtractor configured to return fixed metadata. Used by
+// tests that exercise AssembleBookMetadata and want to skip real
+// tag extraction.
+func newAssembleExtractorStub(t *testing.T, meta Metadata, err error) *mockMetadataExtractorInternal {
+	t.Helper()
+	m := newMockMetadataExtractorInternal(t)
+	m.EXPECT().
+		ExtractMetadata(mock.Anything).
+		Return(meta, err).Maybe()
+	return m
 }
 
 func TestResolveTitlePrefersTag(t *testing.T) {
@@ -243,14 +248,12 @@ func TestAssembleBookMetadataIntegration(t *testing.T) {
 
 	// Use a mock extractor to simulate real tag data
 	oldExtractor := GlobalMetadataExtractor
-	GlobalMetadataExtractor = &mockAssembleExtractor{
-		meta: Metadata{
-			Title:  "The Colour of Magic",
-			Artist: "Terry Pratchett",
-			Year:   1983,
-			Genre:  "Fantasy",
-		},
-	}
+	GlobalMetadataExtractor = newAssembleExtractorStub(t, Metadata{
+		Title:  "The Colour of Magic",
+		Artist: "Terry Pratchett",
+		Year:   1983,
+		Genre:  "Fantasy",
+	}, nil)
 	defer func() { GlobalMetadataExtractor = oldExtractor }()
 
 	bm, err := AssembleBookMetadata(bookDir, fakeFile, 3, 12345.0)
