@@ -22,6 +22,11 @@ on:
         required: false
         type: boolean
         default: false
+      previous-version:
+        description: 'Override previous version for changelog (e.g. v0.205.0). Leave empty for auto-detect.'
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: release-${{ github.ref }}
@@ -36,7 +41,7 @@ permissions:
 jobs:
   release:
     name: Create Production Release
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@ea8b522079207f1cb0f3fd5145def8c317fee14a # latest
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@659c291cd2c9df49d392dcb49ee289023896ea21 # latest
     with:
       release-type: ${{ github.event.inputs.release-type }}
       prerelease: false
@@ -48,4 +53,5 @@ jobs:
       system-packages: 'libtag1-dev'
       pre-build-script: 'cd web && npm ci && npm run build'
       go-experiment: 'jsonv2'
+      previous-version: ${{ github.event.inputs.previous-version }}
     secrets: inherit
