@@ -41,6 +41,7 @@ jobs:
       release-type: ${{ github.event.inputs.release-type }}
       prerelease: false
       draft: ${{ github.event.inputs.create-draft == 'true' }}
+      stable: true
       go-enabled: true
       frontend-enabled: true
       docker-enabled: true
