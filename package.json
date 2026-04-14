@@ -1,6 +1,6 @@
 {
   "devDependencies": {
-    "axios": "^1.14.0",
+    "axios": "^1.15.0",
     "playwright": "^1.59.1"
   }
 }
