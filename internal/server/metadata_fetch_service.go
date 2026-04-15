@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.48.0
+// version: 4.49.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -360,22 +360,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 				}
 			}
 			meta := scored[0]
-
-			// Parse series string if present (e.g. "(Long Earth 05) The Long Cosmos")
-			parsedSeries, parsedPosition, parsedTitle := parseSeriesFromTitle(meta.Title)
-			if parsedSeries == "" && meta.Series != "" {
-				parsedSeries, parsedPosition, parsedTitle = parseSeriesFromTitle(meta.Series)
-				if parsedTitle == "" {
-					parsedTitle = meta.Title
-				}
-			}
-			if parsedSeries != "" {
-				meta.Series = parsedSeries
-				meta.SeriesPosition = parsedPosition
-				if parsedTitle != "" {
-					meta.Title = parsedTitle
-				}
-			}
+			normalizeMetaSeries(&meta)
 
 			// Safety: never apply empty/untitled metadata
 			if meta.Title == "" || strings.ToLower(meta.Title) == "untitled" {
@@ -501,21 +486,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 			continue
 		}
 		meta := scored[0]
-
-		parsedSeries, parsedPosition, parsedTitle := parseSeriesFromTitle(meta.Title)
-		if parsedSeries == "" && meta.Series != "" {
-			parsedSeries, parsedPosition, parsedTitle = parseSeriesFromTitle(meta.Series)
-			if parsedTitle == "" {
-				parsedTitle = meta.Title
-			}
-		}
-		if parsedSeries != "" {
-			meta.Series = parsedSeries
-			meta.SeriesPosition = parsedPosition
-			if parsedTitle != "" {
-				meta.Title = parsedTitle
-			}
-		}
+		normalizeMetaSeries(&meta)
 
 		mfs.recordChangeHistory(book, meta, src.Name())
 		mfs.applyMetadataToBook(book, meta)
@@ -780,6 +751,35 @@ func derefIntAsString(p *int) string {
 func jsonEncodeString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+// normalizeMetaSeries splits an embedded "Series Name, Book N" pattern
+// out of meta.Title or meta.Series into separate Series + SeriesPosition
+// fields. Audible/Audnexus sometimes return the series name with the
+// book number baked in (e.g. "Mistborn, Book 3") instead of using their
+// own Sequence field, which leaves us with a series row named
+// "Mistborn, Book 3" if we apply the candidate as-is.
+//
+// Safe to call multiple times: a no-match leaves meta untouched, and an
+// already-split series field will not match Pattern 3.
+func normalizeMetaSeries(meta *metadata.BookMetadata) {
+	parsedSeries, parsedPosition, parsedTitle := parseSeriesFromTitle(meta.Title)
+	if parsedSeries == "" && meta.Series != "" {
+		parsedSeries, parsedPosition, parsedTitle = parseSeriesFromTitle(meta.Series)
+		if parsedTitle == "" {
+			parsedTitle = meta.Title
+		}
+	}
+	if parsedSeries == "" {
+		return
+	}
+	meta.Series = parsedSeries
+	if parsedPosition != "" {
+		meta.SeriesPosition = parsedPosition
+	}
+	if parsedTitle != "" {
+		meta.Title = parsedTitle
+	}
 }
 
 // parseSeriesFromTitle extracts series name, position, and title from strings like:
@@ -2375,6 +2375,11 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 			meta.Language = ""
 		}
 	}
+
+	// Strip embedded "Series Name, Book N" before persisting — protects
+	// against Audible/Audnexus candidates where the book number is baked
+	// into the series name. Same normalization the auto-fetch paths run.
+	normalizeMetaSeries(&meta)
 
 	// Record history BEFORE applying changes so old values are correct
 	mfs.recordChangeHistory(book, meta, candidate.Source)
