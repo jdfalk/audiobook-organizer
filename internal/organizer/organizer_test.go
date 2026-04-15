@@ -235,7 +235,7 @@ func TestOrganizeBook_NilBook(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nil book")
 	}
-	if err.Error() != "invalid book or file path" {
+	if !strings.Contains(err.Error(), "book is nil") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -247,7 +247,7 @@ func TestOrganizeBook_EmptyFilePath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for empty file path")
 	}
-	if err.Error() != "invalid book or file path" {
+	if !strings.Contains(err.Error(), "file_path is empty") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -675,7 +675,7 @@ func TestCopyFile_ErrorCases(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for nonexistent source")
 		}
-		if !strings.Contains(err.Error(), "failed to open source file") {
+		if !strings.Contains(err.Error(), "cannot read source file") {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
@@ -690,7 +690,7 @@ func TestCopyFile_ErrorCases(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for invalid destination")
 		}
-		if !strings.Contains(err.Error(), "failed to create destination file") {
+		if !strings.Contains(err.Error(), "cannot create destination file") {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})

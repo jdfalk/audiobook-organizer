@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -342,7 +342,13 @@ func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger
 
 	info, err := os.Stat(oldPath)
 	if err != nil {
-		return "", fmt.Errorf("cannot stat %s: %w", oldPath, err)
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("source path no longer exists: %s — re-scan the library to update tracking", oldPath)
+		}
+		if os.IsPermission(err) {
+			return "", fmt.Errorf("permission denied reading source: %s — check filesystem permissions and ACLs", oldPath)
+		}
+		return "", fmt.Errorf("cannot access source %s: %w", oldPath, err)
 	}
 
 	var targetPath string
@@ -366,13 +372,14 @@ func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger
 	}
 
 	// Create parent directory for target
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0775); err != nil {
-		return "", fmt.Errorf("failed to create target directory: %w", err)
+	parentDir := filepath.Dir(targetPath)
+	if err := os.MkdirAll(parentDir, 0775); err != nil {
+		return "", fmt.Errorf("cannot create target directory %s: %w (check parent permissions and disk space)", parentDir, err)
 	}
 
 	// Rename (move) the file or directory
 	if err := os.Rename(oldPath, targetPath); err != nil {
-		return "", fmt.Errorf("failed to rename %s -> %s: %w", oldPath, targetPath, err)
+		return "", fmt.Errorf("cannot move %s -> %s: %w (verify both paths exist, target not in use, same filesystem, write permission)", oldPath, targetPath, err)
 	}
 
 	// Update the book record — set path and mark as organized
@@ -635,19 +642,28 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 // Returns the target directory path.
 func (orgSvc *OrganizeService) organizeDirectoryBook(org *organizer.Organizer, book *database.Book, log logger.Logger) (string, error) {
 	bookFiles, err := orgSvc.db.GetBookFiles(book.ID)
-	if err != nil || len(bookFiles) == 0 {
-		return "", fmt.Errorf("no book_files for %s — cannot organize without known files", book.ID)
+	if err != nil {
+		return "", fmt.Errorf("cannot load segments for %s (%s): %w", book.Title, book.ID, err)
+	}
+	if len(bookFiles) == 0 {
+		return "", fmt.Errorf("no segments tracked for %q (id=%s) — run a library scan to detect files in %s", book.Title, book.ID, book.FilePath)
 	}
 
 	var segmentPaths []string
+	missingCount := 0
 	for _, bf := range bookFiles {
-		if bf.FilePath != "" && !bf.Missing {
-			segmentPaths = append(segmentPaths, bf.FilePath)
+		if bf.FilePath == "" {
+			continue
 		}
+		if bf.Missing {
+			missingCount++
+			continue
+		}
+		segmentPaths = append(segmentPaths, bf.FilePath)
 	}
 
 	if len(segmentPaths) == 0 {
-		return "", fmt.Errorf("all book_files for %s are marked missing — skipping", book.ID)
+		return "", fmt.Errorf("all %d segments for %q (id=%s) marked missing on disk — re-scan to verify, or restore from backup", missingCount, book.Title, book.ID)
 	}
 
 	log.Info("Organizing %d segment file(s) for %s (from book_files)", len(segmentPaths), book.Title)
