@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -376,6 +376,7 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(diagnosticsCmd)
 	rootCmd.AddCommand(metadataInspectCmd)
+	rootCmd.AddCommand(seedCmd)
 
 	// Add serve command specific flags
 	serveCmd.Flags().String("port", "8484", "port to run the web server on")
