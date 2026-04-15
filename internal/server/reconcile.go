@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -105,19 +105,7 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		result, err := buildReconcilePreviewWithProgress(store, operations.LoggerFromReporter(progress))
-		if err != nil {
-			return fmt.Errorf("reconcile scan failed: %w", err)
-		}
-
-		resultJSON, err := json.Marshal(result)
-		if err != nil {
-			return fmt.Errorf("failed to marshal scan results: %w", err)
-		}
-		if err := store.UpdateOperationResultData(id, string(resultJSON)); err != nil {
-			return fmt.Errorf("failed to store scan results: %w", err)
-		}
-		return nil
+		return s.runReconcileScan(ctx, id, progress)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal, operationFunc); err != nil {
@@ -126,6 +114,28 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, op)
+}
+
+// runReconcileScan executes the reconcile preview build and persists results.
+// Read-only over DB and filesystem — safe to re-run on restart with no
+// checkpoint, the same shape as runIsbnEnrichment / runMetadataRefreshScan.
+func (s *Server) runReconcileScan(ctx context.Context, opID string, progress operations.ProgressReporter) error {
+	store := database.GlobalStore
+	if store == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	result, err := buildReconcilePreviewWithProgress(store, operations.LoggerFromReporter(progress))
+	if err != nil {
+		return fmt.Errorf("reconcile scan failed: %w", err)
+	}
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal scan results: %w", err)
+	}
+	if err := store.UpdateOperationResultData(opID, string(resultJSON)); err != nil {
+		return fmt.Errorf("failed to store scan results: %w", err)
+	}
+	return nil
 }
 
 // latestReconcileScan handles GET /api/v1/operations/reconcile/scan/latest
