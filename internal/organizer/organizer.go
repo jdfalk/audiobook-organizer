@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -77,13 +77,16 @@ func NewOrganizer(cfg *config.Config) *Organizer {
 // OrganizeBook organizes a book file according to the configured patterns
 // Returns (targetPath, method, error) where method is "reflink", "hardlink", "copy", or "symlink"
 func (o *Organizer) OrganizeBook(book *database.Book) (string, string, error) {
-	if book == nil || book.FilePath == "" {
-		return "", "", fmt.Errorf("invalid book or file path")
+	if book == nil {
+		return "", "", fmt.Errorf("cannot organize: book is nil")
+	}
+	if book.FilePath == "" {
+		return "", "", fmt.Errorf("cannot organize %q (id=%s): file_path is empty — book has no tracked file", book.Title, book.ID)
 	}
 
 	// Skip directories — only organize individual files
 	if info, err := os.Stat(book.FilePath); err == nil && info.IsDir() {
-		return "", "", fmt.Errorf("source path is a directory, not a file: %s", book.FilePath)
+		return "", "", fmt.Errorf("cannot organize %q (id=%s): file_path %s is a directory but single-file organize was requested — use organizeDirectoryBook for multi-file books", book.Title, book.ID, book.FilePath)
 	}
 
 	// Generate target path
@@ -326,7 +329,8 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) (string, 
 
 	result = cleanupPattern(result)
 	if leftoverPlaceholderRegex.MatchString(result) {
-		return "", fmt.Errorf("unresolved placeholders in pattern result: %s", result)
+		leftover := leftoverPlaceholderRegex.FindAllString(result, -1)
+		return "", fmt.Errorf("naming pattern produced %q with unresolved placeholders %v — book is missing values for these fields, or the pattern references unknown placeholders", result, leftover)
 	}
 	return result, nil
 }
@@ -413,7 +417,7 @@ func ensureUnderRoot(fullPath, rootDir string) error {
 	cleanTarget := filepath.Clean(fullPath)
 	cleanRoot := filepath.Clean(rootDir)
 	if !strings.HasPrefix(cleanTarget, cleanRoot+string(filepath.Separator)) && cleanTarget != cleanRoot {
-		return fmt.Errorf("generated path %q escapes root directory %q", cleanTarget, cleanRoot)
+		return fmt.Errorf("generated path %q escapes the configured root %q — likely caused by special characters in author/title metadata or a malformed naming pattern", cleanTarget, cleanRoot)
 	}
 	return nil
 }
@@ -430,7 +434,7 @@ func stringOrEmpty(s *string) string {
 func (o *Organizer) copyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("failed to open source file: %w", err)
+		return fmt.Errorf("cannot read source file %s: %w", src, err)
 	}
 	defer sourceFile.Close()
 
@@ -439,7 +443,7 @@ func (o *Organizer) copyFile(src, dst string) error {
 
 	destFile, err := os.Create(tempPath)
 	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
+		return fmt.Errorf("cannot create destination file %s: %w (check parent directory permissions and disk space)", tempPath, err)
 	}
 	defer func() {
 		_ = destFile.Close()

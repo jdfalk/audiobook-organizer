@@ -89,7 +89,7 @@ func TestOrganizeDirectoryBook_NoBookFiles(t *testing.T) {
 
 	_, err := svc.organizeDirectoryBook(org, book, testLog)
 	assert.Error(t, err, "should fail with no book_files")
-	assert.Contains(t, err.Error(), "no book_files")
+	assert.Contains(t, err.Error(), "no segments tracked")
 }
 
 func TestOrganizeDirectoryBook_AllBookFilesMarkedMissing(t *testing.T) {
