@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.0.0 -->
+<!-- version: 5.1.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-14 -->
 
@@ -110,8 +110,8 @@ since it was last edited on 2026-04-11).
 - [x] **5.1** Search inside the dedup tab (shipped v0.206.0, commit `191faa3`)
 - [ ] **5.2** "Similar books" lookup on BookDetail page (**S**)
 - [ ] **5.3** Batch select in library view (**S**)
-- [ ] **5.4** Better error messages on organize failures (**S**)
-- [ ] **5.5** Dev mode "seed library" command (**S**)
+- [x] **5.4** Better error messages on organize failures (#273)
+- [x] **5.5** Dev mode "seed library" command (#274)
 - [ ] **5.6** Frontend test coverage baseline (**M**)
 - [ ] **5.7** API documentation (**M**)
 - [ ] **5.8** Regenerate ITL test fixtures after format work (**S**) — prereq for 7.9
@@ -163,21 +163,21 @@ Intentionally deferred. Captured here so they don't resurface as new ideas.
 These surfaced in later sessions and live only in Claude project memory.
 Promote to `docs/backlog-2026-04-10.md` (or a successor) when touched.
 
-### Graceful File Ops — 5 remaining gaps
+### Graceful File Ops — 1 remaining gap
 
 Full details: [`memory/project_graceful_file_ops.md`](../../.claude/projects/-Users-jdfalk-repos-github-com-jdfalk-audiobook-organizer/memory/project_graceful_file_ops.md)
 
-- [ ] **GFO-1** No UI indicator for in-flight file ops — add `GET /api/v1/file-ops/pending` endpoint (`PendingBookIDs()` exists but is internal-only), plus a "N books writing tags…" indicator in the operations drawer
-- [ ] **GFO-2** Per-book tracking key collision — `pending_file_op:{bookID}` means two distinct op types for the same book overwrite each other; move to `pending_file_op:{bookID}:{opType}`
-- [ ] **GFO-3** Many op types silently marked failed on restart — make `bulk_write_back`, `isbn-enrichment`, `metadata-refresh`, `reconcile_scan` resumable (top candidates); currently ~16 types are not
+- [x] **GFO-1** UI indicator for in-flight file ops + `GET /api/v1/file-ops/pending` (#270)
+- [x] **GFO-2** Per-book tracking key collision — moved to `pending_file_op:{bookID}:{opType}` (#270)
+- [x] **GFO-3** Resumable ops — `bulk_write_back`, `isbn-enrichment`, `metadata-refresh` (#270), `reconcile_scan` (#272). ~13 cleanup/maintenance types still silently fail on restart but are low-impact.
 - [ ] **GFO-4** No sub-operation phase tracking — if ffmpeg (cover) succeeds but taglib (tags) fails, recovery re-runs ffmpeg pointlessly. Add phase checkpoints inside the apply pipeline
-- [ ] **GFO-5** `GET /operations/recent` is ~900ms — PebbleDB prefix scan over all operations. Maintain a `recent_ops` index key or TTL-cache the result
+- [x] **GFO-5** `GET /operations/recent` ~900ms — fixed by replacing O(N²) bubble sort with `sort.Slice` (#270). Side-index deferred until benchmarks show it's needed.
 
 ### Bulk Metadata Review — Audible series format bug
 
 Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/-Users-jdfalk-repos-github-com-jdfalk-audiobook-organizer/memory/project_bulk_metadata_review.md)
 
-- [ ] **BMR-1** Audible auto-fetch sometimes stores `"Series Name, Book N"` as a single series field instead of splitting name + position. Investigate `parseSeriesFromTitle` × Audible data path.
+- [x] **BMR-1** Audible "Series, Book N" baked into series field — `normalizeMetaSeries` now runs in `ApplyMetadataCandidate` too, not just the auto-fetch paths (#271)
 
 ### Design Spec Already Written (but not yet planned)
 
@@ -235,6 +235,14 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 ---
 
 ## ✅ Recently Completed
+
+### Session 20 (2026-04-14) — operations infrastructure + UX cleanup
+
+- **#270** Per-op file I/O tracking + resumable bulk ops (GFO-1, GFO-2, GFO-3 partial, GFO-5)
+- **#271** Normalize "Series, Book N" out of Audible candidates (BMR-1)
+- **#272** Make `reconcile_scan` resumable (GFO-3 final)
+- **#273** Richer organize error messages with paths and remediation hints (5.4)
+- **#274** `seed` subcommand for local dev libraries (5.5)
 
 ### v0.206.0 release (2026-04-13)
 
