@@ -1,176 +1,303 @@
 <!-- file: TODO.md -->
-<!-- version: 4.0.0 -->
+<!-- version: 5.0.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-03-19 -->
+<!-- last-edited: 2026-04-14 -->
 
 # Project TODO
 
-> All detailed plans live in [`docs/superpowers/plans/`](docs/superpowers/plans/) and specs in [`docs/superpowers/specs/`](docs/superpowers/specs/). Implementation guides for open items are in [`docs/implementation-guide.md`](docs/implementation-guide.md).
+Canonical index into every piece of outstanding work across the project.
+Details live in the linked files; this file exists so anyone (you, me, a
+future agent) can scan the entire workspace in one page.
+
+**Sources indexed here:**
+- [`docs/backlog-2026-04-10.md`](docs/backlog-2026-04-10.md) — 1725-line working list, ranked by category
+- [`docs/superpowers/plans/`](docs/superpowers/plans/) — implementation plans per feature
+- [`docs/superpowers/specs/`](docs/superpowers/specs/) — design specs per feature
+- [`docs/implementation-guide.md`](docs/implementation-guide.md) — integration guide for open items
+- Claude project memory at `~/.claude/projects/-Users-jdfalk-repos-github-com-jdfalk-audiobook-organizer/memory/` — items still to graduate here
 
 ---
 
-## 🎯 Current Status — April 6, 2026
+## 🎯 Current Status — April 14, 2026
 
 **Library:** 24,022 books / 3,341 authors / 10,924 series (migration 45)
-**Production:** PebbleDB, Linux, HTTPS at 172.16.2.30:8484
-**iTunes:** ITL write-back with LE track add/remove, metadata write-back to ITL
-**New this session:** Bulk metadata review, ITL format documentation, ACL permission fixes
+**Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
+**Latest shipped release:** v0.206.0 (2026-04-13)
+**In flight:** CI / release workflow fixes (see next section)
 
 ---
 
-## 🐛 Bugs — All Resolved (Session 15, Mar 25-27)
+## 🔧 CI / Release Infrastructure — In Progress (April 14, 2026)
 
-| # | Item | Status |
-|---|------|--------|
-| B1 | Author merge variant display | ✅ Fixed — shows merge target + all variant names |
-| B2 | Tag extraction conflicting metadata | ✅ Fixed — composer cleared on write |
-| B3 | Author/narrator swap | ✅ Mitigated by B2; full fix needs metadata pipeline redesign (P2) |
-| B4 | series_index not read back | ✅ Already fixed — reads SERIES_INDEX/MVIN |
-| B5 | 35 iTunes sync path errors | ✅ Not a bug — files genuinely missing on disk |
-| B6 | File version separator too faint | ✅ Fixed — thicker separator |
-| B7 | Book detail refresh after metadata | ✅ Fixed — refresh button + auto-refresh after operations |
-| B8 | Write-back fails on multi-file books | ✅ Fixed — globs audio files in directory |
+The default `GITHUB_TOKEN` can't push refs whose reachable commits
+modify `.github/workflows/` files. This blocked v0.207.0. Fix is a
+GitHub App that mints short-lived tokens with `workflows: write`.
 
----
+**Cross-repo work** (ghcommon, audiobook-organizer, release-go-action,
+gha-release-go):
 
-## 🚨 P0 — All Resolved
+- [x] Revert corrupted `release-go-action/action.yml` (2 MCP push bugs from earlier session)
+- [x] `ghcommon/scripts/setup-ci-app.sh` — one-shot GitHub App creator + secret distributor
+- [x] `ghcommon/reusable-release.yml` — stale draft + superseded-RC auto-cleanup on stable cuts
+- [x] `ghcommon/reusable-release.yml` — keep-5 most-recent RCs policy (`RC_KEEP_COUNT`)
+- [ ] Create `jdfalk-ci-bot` GitHub App via manifest flow (one browser click)
+- [ ] Distribute `CI_APP_ID` + `CI_APP_PRIVATE_KEY` to: audiobook-organizer, ghcommon, release-go-action, gha-release-go, release-frontend-action, gha-release-frontend, release-docker-action, gha-release-docker
+- [ ] Install App on all target repos
+- [ ] Patch `release-go-action/action.yml` — token-in-URL push using `github-token` input
+- [ ] Wire `github-token` input through `gha-release-go`
+- [ ] Wire `actions/create-github-app-token@v1` into `ghcommon/reusable-release.yml`
+- [ ] Cut production release `v0.207.0`
+- [ ] Cut production release `v0.208.0`
 
-| # | Item | Status |
-|---|------|--------|
-| 1 | ISBN enrichment wrong matches | ✅ Validated — 60% length ratio fix working, all ISBNs valid |
-
----
-
-## 🔴 P1 — All Resolved or Assessed
-
-| # | Item | Status |
-|---|------|--------|
-| 2 | Preview Organize (single book) | ✅ Built — step-by-step preview with Apply button |
-| 3 | Playlist system | ⏳ Assessed — 248 lines of data model, no API/UI. Needs brainstorming. |
-| 4 | Bulk "Save to Files" | ✅ Built — `POST /api/v1/audiobooks/bulk-write-back` with filters + "Save All" button |
-| 5 | Series dedup cleanup | ✅ Built — `POST /api/v1/maintenance/cleanup-series` (1-book removal + duplicate merge) |
-| 6 | "read by narrator" fix | ✅ Built — `POST /api/v1/maintenance/fix-read-by-narrator` (dry_run by default) |
-| 7 | M4B conversion live test | ⏳ Local tests pass. Needs user supervision for production test. |
+**Session memory:** `project_session_state.md` has full context of what broke and why.
 
 ---
 
-## 🟡 P2 — Current Priority
+## 📋 Backlog — [full file](docs/backlog-2026-04-10.md)
 
-| # | Item | Details | Status |
-|---|------|---------|--------|
-| 8 | **Activity page mobile layout** | Collapsible filter drawer for mobile | ✅ Fixed |
-| 9 | **Activity page adaptive refresh** | 5s when ops running, 30s when idle | ✅ Fixed |
-| 10 | **Version vs Snapshot UI polish** | Edge case handling | ✅ Fixed — empty trays, auto-expand single-file |
-| 11 | **Compare snapshot wiring** | Load snapshot data on Compare click | ✅ Partially fixed — falls back to activity log |
-| 12 | **Background ISBN enrichment** | Scheduled maintenance task | ✅ Already implemented |
-| 13 | **Copy-on-write TTL tuning** | Verify on production | ✅ Verified — 23 files, TTL working |
-| 14 | **iTunes PID detail view** | Show file paths, track names | ✅ Fixed — shows file paths and track PIDs |
-| 15 | **ITL write-back testing** | 176K tracks written to ITL copy | ✅ Working — needs user to test with iTunes |
-| 16 | **TAG-DIAG instrumentation** | Clean up diagnostic logging | ✅ Already cleaned up |
-| 17 | **Author/narrator swap (full fix)** | Post-extraction guard + maintenance endpoint | ✅ Built — deploy pending |
-| 18 | **Library state badges** | imported=amber, organized=green, filter, dashboard count | ✅ Fixed |
-| 19 | **Vite chunk splitting** | Code-split large JS bundle | ✅ Fixed — index 514KB → 107KB |
-| 20 | **Stale interrupted operations** | Mark as failed on startup | ✅ Fixed |
-| 21 | **Settings save/buttons not visible** | Sticky floating buttons | ✅ Already implemented |
-| 22 | **iTunes sync dialog pre-fill from config** | Auto-fill XML path | ✅ Fixed |
-| 23 | **iTunes sync from ITL directly** | ParseLibrary auto-detects XML vs ITL | ✅ Fixed — point sync at ITL file and it just works |
-| 24 | **Force Import always greyed out** | Disabled condition fixed | ✅ Fixed |
-| 25 | **ITL write-back — multi-file books** | Per-file itunes_path via book_files | ✅ Fixed — 176K tracks updated |
-| 26 | **Files & History layout — separate version boxes** | Path-based labels when same format | ✅ Fixed |
-| 27 | **Files & History — show individual files** | book_files API + frontend | ✅ Fixed — 114K files tracked |
-| 28 | **Track PIDs sorted by track number** | Sorted in iTunes panel | ✅ Fixed |
-| 29 | **Deprecate XML functions** | ParseLibrary now auto-detects ITL vs XML. Can switch sync to ITL path. | ✅ Infrastructure done — XML still works as fallback |
+Statuses below reflect the current state including v0.206.0's shipped
+work (many items marked "open" in the backlog file were quietly shipped
+since it was last edited on 2026-04-11).
+
+### 1. Dedup & Library Integrity — [section](docs/backlog-2026-04-10.md#1-dedup--library-integrity)
+
+- [x] **1.1** `book_alternative_titles` schema + engine integration (#234)
+- [x] **1.2** Duration-based similarity signal (shipped v0.206.0, commit `4c6139e`)
+- [x] **1.3** Dedup scan as a real Operation (#227)
+- [x] **1.4** LLM verdict auto-apply above confidence threshold (shipped v0.206.0, commit `28257a9`)
+- [ ] **1.5** Side-by-side metadata diff in cluster card (**M**)
+- [ ] **1.6** Import-time collision preview (**M**)
+- [x] **1.7** Per-side "merge into this" quick action (#230)
+- [x] **1.8** Smarter "split cluster" with edge preview (#233)
+- [x] **1.9** Series-aware bulk merge (#232)
+- [x] **1.10** Export dedup state as CSV/JSON (#231)
+
+### 2. Known Bugs — all closed in #227
+
+- [x] **2.1** Activity log compact "Everything (now)" returns 0
+- [x] **2.2** Dedup scan isn't tracked in Operations (see 1.3)
+- [x] **2.3** Dedup scan has no completion messages
+- [x] **2.4** Directory organize has no cleanup on partial failure
+- [x] **2.5** Scanner may double-count iTunes + organized paths as separate books
+- [x] **2.6** `GetAllBooks` is O(n²) when called in a loop
+- [x] **2.7** Auto-scan file watcher only watches one import path
+
+### 3. Features — [section](docs/backlog-2026-04-10.md#3-features)
+
+- [ ] **3.1** Library centralization / `.versions/` layout (**L**) — needs brainstorm; see memory `project_centralization_backlog.md`
+- [ ] **3.2** Bulk organize undo via `operation_changes` (**M**)
+- [x] **3.3** Bulk edit metadata across selected books (shipped v0.206.0, commit `4ea0038`)
+- [ ] **3.4** Smart playlists (**M**)
+- [ ] **3.5** Cover art browse/restore UI (**S**)
+- [ ] **3.6** Read/unread tracking beyond iTunes play count (**M**)
+- [ ] **3.7** Multi-user support (**L**)
+- [ ] **3.8** Plex-style HTTP media server API (**L**)
+- [ ] **3.9** LLM-based series detection and ordering (**M**)
+- [ ] **3.10** AI-generated cover art when none exists (**S**)
+
+### 4. Architecture / Future-Proofing — [section](docs/backlog-2026-04-10.md#4-architecture--future-proofing)
+
+- [ ] **4.1** PostgreSQL research track (**XL**)
+- [x] **4.2** Split the monolithic `server.go` (commit `c858ceb`)
+- [ ] **4.3** Move write-back queue to a durable outbox (**M**)
+- [ ] **4.4** Replace `database.GlobalStore` package var with DI (**L**)
+- [ ] **4.5** Property-based tests for dedup engine (**M**)
+- [ ] **4.6** Chaos tests for the embedding store under shutdown (**M**)
+- [ ] **4.7** Per-workload store evaluation: Pebble vs SQLite vs PostgreSQL vs Go-native NoSQL (**L** research)
+
+### 5. UX / DX Polish — [section](docs/backlog-2026-04-10.md#5-ux--dx-polish)
+
+- [x] **5.1** Search inside the dedup tab (shipped v0.206.0, commit `191faa3`)
+- [ ] **5.2** "Similar books" lookup on BookDetail page (**S**)
+- [ ] **5.3** Batch select in library view (**S**)
+- [ ] **5.4** Better error messages on organize failures (**S**)
+- [ ] **5.5** Dev mode "seed library" command (**S**)
+- [ ] **5.6** Frontend test coverage baseline (**M**)
+- [ ] **5.7** API documentation (**M**)
+- [ ] **5.8** Regenerate ITL test fixtures after format work (**S**) — prereq for 7.9
+- [x] **5.9** Enforce mockery-generated mocks via CI gate (commit `45492c3`)
+
+### 6. Integration / Ecosystem — [section](docs/backlog-2026-04-10.md#6-integration--ecosystem)
+
+- [ ] **6.1** Deluge `move_storage` integration (**M**) — pairs with 3.1
+- [x] **6.2** Audnexus + Hardcover full integration (#7daef15)
+- [x] **6.3** Tag writeback to iTunes via ITL updates (shipped previously)
+- [ ] **6.4** ITL upload / download / partial export (**M**)
+
+### 7. Tagging as Infrastructure — [section](docs/backlog-2026-04-10.md#7-tagging-as-infrastructure)
+
+Underlying tag plumbing shipped in #244. Most items below are follow-ons
+that layer on that foundation.
+
+- [ ] **7.1** Tag-based policies / preference inheritance (**L**) — depends on 7.2
+- [x] **7.2** Language filter in metadata review (shipped v0.206.0, commit `df6c9bd`)
+- [x] **7.3** Metadata-apply tagging — source + language (shipped v0.206.0, commit `441fd43`)
+- [x] **7.4** Google Books → Audible auto-upgrade maintenance job (shipped v0.206.0, commit `24201d4`)
+- [x] **7.5** Metadata fetch caching (shipped v0.206.0, commit `2080c87`)
+- [x] **7.6** Persistent review dialog + concurrent review during fetch (shipped v0.206.0, commit `1d2bf53`)
+- [ ] **7.7** Author and series tag HTTP endpoints + frontend (**M**) — store parity shipped in #244; HTTP/UI remain
+- [x] **7.8** System tag UX — visual distinction user vs system (shipped v0.206.0, commit `4dda739`)
+- [ ] **7.9** Full iTunes library regenerate / rebuild (**L**) — diff-and-batch mode shipped (commit `286140d`); full rebuild-from-scratch mode remains
+- [ ] **7.10** Archive sweep for soft-deleted books (**M**) — physically clean up after retention window
+- [x] **7.11** Author/series merge — sync denormalized `book.AuthorID` (shipped v0.206.0, commit `f244824`)
+- [x] **7.12** Organize rewrites file tags on every run even when unchanged (shipped v0.206.0, commit `2d4ad01`)
+
+### 8. Out of Scope / Decide Later — [section](docs/backlog-2026-04-10.md#8-out-of-scope--decide-later)
+
+Intentionally deferred. Captured here so they don't resurface as new ideas.
+
+- iOS / Android companion app (scope explosion)
+- WebDAV browse of the library (niche)
+- RSS / Atom feed of new additions (niche)
+- Notification system (Slack / Discord when scan completes) (rabbit hole)
+- Cross-library federation (architecturally premature)
+- Voice control / Alexa skill (out of focus)
+- Audio preview in dedup tab — play first 30 seconds (requires streaming infra)
+- "Recommended for you" based on listening history (no listening history store)
+- Book recommendation engine (same)
 
 ---
 
-## 🔴 P1 — Active Issues (April 6, 2026)
+## 🧠 From Memory — items not yet in the backlog file
 
-| # | Item | Details | Status |
-|---|------|---------|--------|
-| 30 | **Background file ops need graceful tracking** | Cover embed, tag write, rename are fire-and-forget goroutines. Lost on restart. Users told "applied" when file writes haven't happened. | ✅ Fixed — persistent tracking in PebbleDB, startup recovery |
-| 31 | **Resume interrupted metadata fetch on startup** | If server restarts mid-fetch, already-fetched results survive but remaining books are lost. Need startup recovery. | ✅ Fixed — saves book_ids as params, resumes remaining on startup |
-| 32 | **Aggressive search/book result caching** | Books rarely change — cache search results 30-60s, individual book lookups, metadata candidates. | ✅ Fixed — list 30s, metadata search 30s |
-| 33 | **Batch apply still fires separate requests per click** | Frontend coalesces with 500ms debounce but rapid clicks still result in multiple API calls. Need true client-side queue. | ⏳ Partially fixed |
+These surfaced in later sessions and live only in Claude project memory.
+Promote to `docs/backlog-2026-04-10.md` (or a successor) when touched.
 
----
+### Graceful File Ops — 5 remaining gaps
 
-## 🟡 P2 — CI/CD & Lint Fixes (April 6, 2026)
+Full details: [`memory/project_graceful_file_ops.md`](../../.claude/projects/-Users-jdfalk-repos-github-com-jdfalk-audiobook-organizer/memory/project_graceful_file_ops.md)
 
-| # | Item | Details | Status |
-|---|------|---------|--------|
-| 34 | **E2E test lint errors (10 errors)** | Unused `page` params, unused imports, unnecessary escapes in Playwright tests. | ✅ Fixed — 15 fixes across 12 files |
-| 35 | **Frontend lint warnings (11 warnings)** | `Unexpected any`, missing deps, fast refresh warnings. | ✅ Fixed — proper types, eslint-disable comments |
-| 36 | **GitHub Actions Node.js 20 deprecation** | `actions/setup-node` already at v6.3.0 — warning is from transitive dependency, will auto-resolve. | ✅ Already up to date |
+- [ ] **GFO-1** No UI indicator for in-flight file ops — add `GET /api/v1/file-ops/pending` endpoint (`PendingBookIDs()` exists but is internal-only), plus a "N books writing tags…" indicator in the operations drawer
+- [ ] **GFO-2** Per-book tracking key collision — `pending_file_op:{bookID}` means two distinct op types for the same book overwrite each other; move to `pending_file_op:{bookID}:{opType}`
+- [ ] **GFO-3** Many op types silently marked failed on restart — make `bulk_write_back`, `isbn-enrichment`, `metadata-refresh`, `reconcile_scan` resumable (top candidates); currently ~16 types are not
+- [ ] **GFO-4** No sub-operation phase tracking — if ffmpeg (cover) succeeds but taglib (tags) fails, recovery re-runs ffmpeg pointlessly. Add phase checkpoints inside the apply pipeline
+- [ ] **GFO-5** `GET /operations/recent` is ~900ms — PebbleDB prefix scan over all operations. Maintain a `recent_ops` index key or TTL-cache the result
 
----
+### Bulk Metadata Review — Audible series format bug
 
-## 🟢 P3 — Nice to Have
+Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/-Users-jdfalk-repos-github-com-jdfalk-audiobook-organizer/memory/project_bulk_metadata_review.md)
 
-| # | Item | Details | Spec/Plan |
-|---|------|---------|-----------|
-| 21 | **Playlist system (full)** | Tag-based vs stored vs iTunes sync. Smart playlists based on play counts. Bidirectional sync to iTunes. Needs brainstorming. | — |
-| 29 | **Empty folder cleanup** | Audiobook organizer folder has empty directories from renames. Need maintenance task to clean up. | — |
-| 30 | **External library sync abstraction** | Sonarr-style pluggable connectors for syncing with external libraries (iTunes, future apps). Needs brainstorming. | — |
-| 22 | **OpenAI batch polling rate limiting** | gpt-5.4 hit token limits. | [Diagnostics Spec](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md) |
-| 23 | **Deferred iTunes updates live test** | Deployed but untested. | [Deferred iTunes Spec](docs/superpowers/specs/2026-03-14-deferred-itunes-updates-design.md) |
-| 24 | **Path format customization UI** | Expose in Settings. | — |
-| 25 | **Migrate old logging tables** | Convert to activity summaries. | [Activity Log Spec](docs/superpowers/specs/2026-03-25-unified-activity-page-design.md) |
-| 26 | **Delete GitHub fork repos** | `gh repo delete jdfalk/go-taglib`. | — |
-| 27 | **Dynamic/smart playlists** | Auto-updating based on queries. | — |
-| 28 | **Database migration to PostgreSQL** | Research recommended. | — |
-| 29 | **Add ffmpeg to production Dockerfile** | Runtime stage (`alpine:3.23`) is missing ffmpeg — transcoding, cover art embedding, and M4B tag writing silently fail in Docker. Add `apk add --no-cache ffmpeg`. | — |
+- [ ] **BMR-1** Audible auto-fetch sometimes stores `"Series Name, Book N"` as a single series field instead of splitting name + position. Investigate `parseSeriesFromTitle` × Audible data path.
+
+### Design Spec Already Written (but not yet planned)
+
+- [ ] **DES-1** Bleve library search — spec at [`docs/superpowers/specs/2026-04-11-bleve-library-search.md`](docs/superpowers/specs/2026-04-11-bleve-library-search.md)
+- [ ] **DES-2** chromem-go embedding store — spec at [`docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md`](docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md)
 
 ---
 
-## ✅ Recently Completed (Session 12-13, Mar 14-19)
+## 📚 Implementation Plans — [`docs/superpowers/plans/`](docs/superpowers/plans/)
+
+Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan written, not yet executed.
+
+- [x] [2026-03-10 Central logger](docs/superpowers/plans/2026-03-10-central-logger.md)
+- [x] [2026-03-10 Incremental scan](docs/superpowers/plans/2026-03-10-incremental-scan.md)
+- [x] [2026-03-12 Unified maintenance window](docs/superpowers/plans/2026-03-12-unified-maintenance-window.md)
+- [x] [2026-03-14 Diagnostics export](docs/superpowers/plans/2026-03-14-diagnostics-export.md)
+- [x] [2026-03-18 Files & History redesign](docs/superpowers/plans/2026-03-18-files-history-redesign.md)
+- [x] [2026-03-25 Unified activity log](docs/superpowers/plans/2026-03-25-unified-activity-log.md)
+- [x] [2026-03-25 Unified activity page](docs/superpowers/plans/2026-03-25-unified-activity-page.md)
+- [x] [2026-03-27 ITL parser rewrite](docs/superpowers/plans/2026-03-27-itl-parser-rewrite.md)
+- [x] [2026-03-28 Book-files table](docs/superpowers/plans/2026-03-28-book-files-table.md)
+- [x] [2026-04-05 mTLS bridge](docs/superpowers/plans/2026-04-05-mtls-bridge.md)
+- [x] [2026-04-06 Bulk metadata review](docs/superpowers/plans/2026-04-06-bulk-metadata-review.md)
+- [x] [2026-04-06 mTLS bridge repo extraction](docs/superpowers/plans/2026-04-06-mtls-bridge-repo-extraction.md)
+- [x] [2026-04-09 Activity log compaction](docs/superpowers/plans/2026-04-09-activity-log-compaction.md)
+- [x] [2026-04-09 Embedding dedup](docs/superpowers/plans/2026-04-09-embedding-dedup.md)
+- [x] [2026-04-10 Metadata candidate scoring PR1](docs/superpowers/plans/2026-04-10-metadata-candidate-scoring-pr1.md)
+- [x] [2026-04-10 Metadata candidate scoring PR2](docs/superpowers/plans/2026-04-10-metadata-candidate-scoring-pr2.md)
+
+---
+
+## 📐 Design Specs — [`docs/superpowers/specs/`](docs/superpowers/specs/)
+
+- [2026-03-10 Central logger](docs/superpowers/specs/2026-03-10-central-logger-design.md)
+- [2026-03-10 Incremental scan](docs/superpowers/specs/2026-03-10-incremental-scan-design.md)
+- [2026-03-12 Unified maintenance window](docs/superpowers/specs/2026-03-12-unified-maintenance-window-design.md)
+- [2026-03-14 Deferred iTunes updates](docs/superpowers/specs/2026-03-14-deferred-itunes-updates-design.md)
+- [2026-03-14 Diagnostics export](docs/superpowers/specs/2026-03-14-diagnostics-export-design.md)
+- [2026-03-15 External ID mapping](docs/superpowers/specs/2026-03-15-external-id-mapping-design.md)
+- [2026-03-18 Files & History redesign](docs/superpowers/specs/2026-03-18-files-history-redesign.md)
+- [2026-03-25 Unified activity log](docs/superpowers/specs/2026-03-25-unified-activity-log-design.md)
+- [2026-03-25 Unified activity page](docs/superpowers/specs/2026-03-25-unified-activity-page-design.md)
+- [2026-03-25 Unified change tracking](docs/superpowers/specs/2026-03-25-unified-change-tracking-design.md)
+- [2026-03-27 ITL parser rewrite](docs/superpowers/specs/2026-03-27-itl-parser-rewrite-design.md)
+- [2026-03-28 Book-files table](docs/superpowers/specs/2026-03-28-book-files-table-design.md)
+- [2026-04-05 mTLS bridge](docs/superpowers/specs/2026-04-05-mtls-bridge-design.md)
+- [2026-04-06 Bulk metadata review](docs/superpowers/specs/2026-04-06-bulk-metadata-review-design.md)
+- [2026-04-06 mTLS bridge repo extraction](docs/superpowers/specs/2026-04-06-mtls-bridge-repo-extraction-design.md)
+- [2026-04-09 Activity log compaction](docs/superpowers/specs/2026-04-09-activity-log-compaction-design.md)
+- [2026-04-09 Embedding dedup](docs/superpowers/specs/2026-04-09-embedding-dedup-design.md)
+- [2026-04-10 Metadata candidate scoring](docs/superpowers/specs/2026-04-10-metadata-candidate-scoring-design.md)
+- [2026-04-11 Bleve library search](docs/superpowers/specs/2026-04-11-bleve-library-search.md) — design only, no plan yet
+- [2026-04-11 chromem-go embedding store](docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md) — design only, no plan yet
+
+---
+
+## ✅ Recently Completed
+
+### v0.206.0 release (2026-04-13)
+
+See [v0.206.0 release notes](https://github.com/jdfalk/audiobook-organizer/releases/tag/v0.206.0) for the full commit list. Highlights folded into §1, §3, §5, §7 above.
 
 <details>
-<summary>49 commits — click to expand</summary>
+<summary>Session 12-19 archive — click to expand</summary>
 
-### Data Cleanup
-- Cleaned library from 68K → 10.9K books (84% reduction)
-- Cleaned authors from 6K → 2.9K, series from 19K → 8.5K
-- Deleted 15K same-path duplicates, 5K same-format duplicates, 2.9K unmatched organizer copies
-- Merged 1.3K duplicate series, removed 7.3K empty series
-- Removed 2.3K empty authors
-- Stripped numeric title prefixes from 278 books
-- Removed fake numeric series assignments from 332 books
-- All ULID version groups converted to vg- style
+### Bugs — Session 15 (March 25-27, 2026) — all fixed
+- **B1** Author merge variant display — shows merge target + all variant names
+- **B2** Tag extraction conflicting metadata — composer cleared on write
+- **B3** Author/narrator swap — mitigated by B2; full fix needs metadata pipeline redesign (7.11 covered the worst of it)
+- **B4** `series_index` not read back — already fixed (reads `SERIES_INDEX` / `MVIN`)
+- **B5** 35 iTunes sync path errors — not a bug, files genuinely missing on disk
+- **B6** File version separator too faint — thicker separator
+- **B7** Book detail refresh after metadata — refresh button + auto-refresh after operations
+- **B8** Write-back fails on multi-file books — globs audio files in directory
+
+### P0 / P1 — all resolved
+- **1** ISBN enrichment wrong matches — 60% length ratio fix validated
+- **2** Preview Organize (single book) — built with step-by-step preview + Apply
+- **3** Playlist system — assessed, needs brainstorming (tracked as 3.4 above)
+- **4** Bulk "Save to Files" — `POST /api/v1/audiobooks/bulk-write-back`
+- **5** Series dedup cleanup — `POST /api/v1/maintenance/cleanup-series`
+- **6** "read by narrator" fix — `POST /api/v1/maintenance/fix-read-by-narrator` (dry-run default)
+- **7** M4B conversion live test — local tests pass; production test user-gated
+
+### P2 items 8-29 (April 6, 2026 session) — all fixed
+Activity page mobile layout, adaptive refresh, version vs snapshot UI polish, compare snapshot wiring, background ISBN enrichment, copy-on-write TTL tuning, iTunes PID detail view, ITL write-back testing, TAG-DIAG cleanup, author/narrator swap full fix, library state badges, Vite chunk splitting, stale interrupted operations, sticky settings buttons, iTunes sync dialog pre-fill, iTunes sync from ITL directly, Force Import greyed out, ITL multi-file books, Files & History separate version boxes, show individual files, track PIDs sorted, XML function deprecation.
+
+### Active P1 items 30-33 (April 6, 2026) — resolved or partial
+- **30** Background file ops graceful tracking — persistent PebbleDB tracking + startup recovery. Five follow-up gaps captured under **GFO-1..5** above.
+- **31** Resume interrupted metadata fetch on startup — saves book_ids as params, resumes remaining
+- **32** Aggressive search/book result caching — list 30s, metadata search 30s
+- **33** Batch apply separate requests per click — partially fixed (500ms debounce); true client-side queue still open
+
+### CI/CD & Lint Fixes (April 6, 2026)
+- **34** E2E test lint errors — 15 fixes across 12 files
+- **35** Frontend lint warnings — proper types, targeted eslint-disable
+- **36** GitHub Actions Node.js 20 deprecation — `setup-node` already at v6.3.0; transitive updates ongoing
+
+### Data Cleanup (Session 12-13)
+- Library: 68K → 10.9K books (84% reduction)
+- Authors: 6K → 2.9K; series: 19K → 8.5K
+- 15K same-path duplicates, 5K same-format duplicates, 2.9K unmatched organizer copies deleted
+- 1.3K duplicate series merged, 7.3K empty series removed
+- 2.3K empty authors removed
+- 278 numeric title prefixes stripped
+- 332 fake numeric series assignments removed
+- All ULID version groups converted to `vg-` style
 - All version groups have a primary version set
 
-### Features Built
-- **Diagnostics page** — ZIP export, AI batch analysis, 4 categories, results review panel
-- **External ID mapping** — migration 34, 97K PID mappings, merge/delete/tombstone support
-- **Files & History tab** — format-grouped trays, TagComparison with dropdown, ChangeLog timeline
-- **Background ISBN/ASIN enrichment** — after metadata apply
-- **Bulk batch-operations API** — per-item update/delete/restore
-- **Universal batch poller** — metadata tags on all batches, routes by type
-- **Deferred iTunes updates** — migration 33, post-transcode hook, auto-apply on sync
-- **File path history** — migration 35, records renames
-- **Genre field** — migration 36, stored from metadata fetch
-- **Copy-on-write backups** — hardlinks before tag writes, TTL cleanup task
-- **Revert buttons** in ChangeLog entries (DB + file revert)
-
-### Bug Fixes
-- Metadata sync to library copies (stale data on tag write)
-- `books.file_path` updated after segment rename
-- iTunes files protected from `os.Rename` in apply pipeline
-- Soft-deleted list uncapped (was 500, now 10K)
-- Operation resume after server restart
-- Reconcile scan visible in operations UI
-- Operations list stable sort by created_at
-- Save to Files now renames + cleans empty dirs
-- Single-file books get virtual segment for rename
-- Single-file naming: `{title}.{ext}` not `{title} - 1/1.{ext}`
-- Tag extraction: album_artist > artist > composer priority
-- Honest write-back counting (no false "written" messages)
-- stripChapterFromTitle strips leading dashes
-- Search by author/narrator without title
-- Fetch metadata can't wipe title to Untitled
-- ISBN enrichment strict title matching
-- Read custom tags back (SERIES_INDEX, PUBLISHER, MVNM/MVIN)
-- Write ALL metadata to file tags (series, publisher, language, ISBN, description)
-- iTunes path removed from scanner import paths (prevented double import)
-- Purge protects books with iTunes PIDs
+### Features — Session 12-13
+- Diagnostics page (ZIP export, AI batch analysis, 4 categories, results review)
+- External ID mapping (migration 34, 97K PID mappings, merge/delete/tombstone)
+- Files & History tab (format-grouped trays, TagComparison, ChangeLog timeline)
+- Background ISBN/ASIN enrichment after metadata apply
+- Bulk batch-operations API (per-item update/delete/restore)
+- Universal batch poller (routes by metadata tag)
+- Deferred iTunes updates (migration 33, post-transcode hook)
+- File path history (migration 35)
+- Genre field (migration 36)
+- Copy-on-write backups with TTL cleanup
+- Revert buttons in ChangeLog (DB + file revert)
 
 </details>
