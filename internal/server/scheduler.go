@@ -286,21 +286,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Enrich missing ISBN identifiers from external metadata sources",
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("isbn-enrichment", func(ctx context.Context, progress operations.ProgressReporter) error {
-				if s.metadataFetchService == nil || s.metadataFetchService.isbnEnrichment == nil {
-					_ = progress.Log("info", "ISBN enrichment service is not configured, skipping", nil)
-					return nil
-				}
-				_ = progress.Log("info", "Scanning for books missing ISBN identifiers", nil)
-				checked, updated, err := s.metadataFetchService.isbnEnrichment.EnrichMissingISBNs(ctx, 100)
-				if err != nil {
-					return err
-				}
-				msg := fmt.Sprintf("ISBN enrichment complete: checked %d candidate book(s), updated %d", checked, updated)
-				_ = progress.Log("info", msg, nil)
-				_ = progress.UpdateProgress(100, 100, msg)
-				return nil
-			})
+			return ts.triggerOperation("isbn-enrichment", s.runIsbnEnrichment)
 		},
 		IsEnabled:              func() bool { return s.metadataFetchService != nil && s.metadataFetchService.isbnEnrichment != nil },
 		GetInterval:            func() time.Duration { return 0 },
@@ -738,33 +724,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Re-fetch metadata for incomplete books",
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("metadata-refresh", func(ctx context.Context, progress operations.ProgressReporter) error {
-				store := database.GlobalStore
-				if store == nil {
-					return fmt.Errorf("database not initialized")
-				}
-				_ = progress.Log("info", "Starting metadata refresh scan", nil)
-				_ = progress.UpdateProgress(0, 100, "Scanning books for incomplete metadata...")
-				books, err := store.GetAllBooks(10000, 0)
-				if err != nil {
-					return fmt.Errorf("failed to get books: %w", err)
-				}
-				_ = progress.Log("info", fmt.Sprintf("Checking %d books for incomplete metadata", len(books)), nil)
-				incomplete := 0
-				for i, book := range books {
-					if book.AuthorID == nil || book.Title == "" {
-						incomplete++
-						_ = progress.Log("debug", fmt.Sprintf("Incomplete: %q (id=%s)", book.Title, book.ID), nil)
-					}
-					if (i+1)%200 == 0 {
-						_ = progress.UpdateProgress(i+1, len(books), fmt.Sprintf("Checked %d/%d books", i+1, len(books)))
-					}
-				}
-				resultMsg := fmt.Sprintf("Found %d books with incomplete metadata out of %d total", incomplete, len(books))
-				_ = progress.Log("info", resultMsg, nil)
-				_ = progress.UpdateProgress(len(books), len(books), resultMsg)
-				return nil
-			})
+			return ts.triggerOperation("metadata-refresh", s.runMetadataRefreshScan)
 		},
 		IsEnabled: func() bool { return config.AppConfig.ScheduledMetadataRefreshEnabled },
 		GetInterval: func() time.Duration {

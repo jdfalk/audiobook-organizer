@@ -1,16 +1,20 @@
 // file: internal/server/file_io_pool.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c4d5e6f7-a8b9-0c1d-2e3f-4a5b6c7d8e9f
 //
 // Bounded worker pool for file I/O operations (cover embed, tag write,
 // rename). Tracks pending jobs in PebbleDB so they survive restarts.
+//
+// Tracking key schema: pending_file_op:{bookID}:{opType}. Multiple op
+// types for the same book coexist without clobbering. Recovery looks
+// each opType up in recoveryDispatch.
 
 package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,10 +22,12 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
+const pendingFileOpPrefix = "pending_file_op:"
+
 // FileIOJob tracks a pending file I/O operation persistently.
 type FileIOJob struct {
 	BookID    string    `json:"book_id"`
-	OpType    string    `json:"op_type"` // "apply_metadata", "write_back", etc.
+	OpType    string    `json:"op_type"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -31,7 +37,7 @@ type FileIOPool struct {
 	ch       chan fileIOJobEntry
 	wg       sync.WaitGroup
 	stopped  int32
-	pending  sync.Map // bookID -> true, for in-memory tracking
+	pending  sync.Map      // "{bookID}:{opType}" -> FileIOJob, for in-memory tracking
 	overflow chan struct{} // semaphore to limit overflow goroutines
 }
 
@@ -41,12 +47,34 @@ type fileIOJobEntry struct {
 	fn     func()
 }
 
-// GlobalFileIOPool is the singleton pool.
-var GlobalFileIOPool *FileIOPool
-var globalFileIOPoolMu sync.Mutex
+var (
+	GlobalFileIOPool   *FileIOPool
+	globalFileIOPoolMu sync.Mutex
 
-// globalServer holds a reference to the Server for recovery of interrupted file ops.
-var globalServer *Server
+	// globalServer holds a Server reference used by the default recovery handler.
+	globalServer *Server
+
+	recoveryDispatch   = map[string]FileOpRecoveryFunc{}
+	recoveryDispatchMu sync.RWMutex
+)
+
+// FileOpRecoveryFunc re-runs a specific file-op type for one book.
+type FileOpRecoveryFunc func(bookID string)
+
+// RegisterFileOpRecovery registers a recovery handler for a given op type.
+// Overwrites any previous registration for the same type.
+func RegisterFileOpRecovery(opType string, fn FileOpRecoveryFunc) {
+	recoveryDispatchMu.Lock()
+	recoveryDispatch[opType] = fn
+	recoveryDispatchMu.Unlock()
+}
+
+func lookupFileOpRecovery(opType string) (FileOpRecoveryFunc, bool) {
+	recoveryDispatchMu.RLock()
+	fn, ok := recoveryDispatch[opType]
+	recoveryDispatchMu.RUnlock()
+	return fn, ok
+}
 
 // GetGlobalFileIOPool returns the pool safely.
 func GetGlobalFileIOPool() *FileIOPool {
@@ -67,7 +95,7 @@ func SetGlobalFileIOPool(p *FileIOPool) {
 func NewFileIOPool(workers int) *FileIOPool {
 	p := &FileIOPool{
 		ch:       make(chan fileIOJobEntry, 500),
-		overflow: make(chan struct{}, workers), // cap overflow goroutines at worker count
+		overflow: make(chan struct{}, workers),
 	}
 	for i := 0; i < workers; i++ {
 		p.wg.Add(1)
@@ -83,18 +111,17 @@ func (p *FileIOPool) worker(id int) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("[ERROR] file I/O worker %d panicked on book %s: %v", id, job.bookID, r)
+					log.Printf("[ERROR] file I/O worker %d panicked on book %s (op=%s): %v", id, job.bookID, job.opType, r)
 				}
 			}()
 			job.fn()
-			// Mark completed — remove from persistent store
-			p.pending.Delete(job.bookID)
-			removePendingFileOp(job.bookID)
+			p.pending.Delete(pendingKey(job.bookID, job.opType))
+			removePendingFileOp(job.bookID, job.opType)
 		}()
 	}
 }
 
-// Submit queues a file I/O job with persistent tracking.
+// Submit queues a file I/O job with the default "apply_metadata" op type.
 func (p *FileIOPool) Submit(bookID string, fn func()) {
 	p.SubmitTyped(bookID, "apply_metadata", fn)
 }
@@ -102,40 +129,58 @@ func (p *FileIOPool) Submit(bookID string, fn func()) {
 // SubmitTyped queues a file I/O job with a specific operation type.
 func (p *FileIOPool) SubmitTyped(bookID, opType string, fn func()) {
 	if atomic.LoadInt32(&p.stopped) == 1 {
-		log.Printf("[WARN] file I/O pool stopped, dropping job for book %s", bookID)
+		log.Printf("[WARN] file I/O pool stopped, dropping job for book %s (op=%s)", bookID, opType)
 		return
 	}
-	// Track persistently so we can recover on restart
-	p.pending.Store(bookID, true)
-	storePendingFileOp(bookID, opType)
+	job := FileIOJob{BookID: bookID, OpType: opType, CreatedAt: time.Now()}
+	p.pending.Store(pendingKey(bookID, opType), job)
+	storePendingFileOp(job)
 
 	select {
 	case p.ch <- fileIOJobEntry{bookID: bookID, opType: opType, fn: fn}:
 	default:
-		// Buffer full — use semaphore to limit overflow concurrency
-		p.overflow <- struct{}{} // blocks if too many overflow goroutines
-		log.Printf("[WARN] file I/O pool buffer full, running overflow for book %s", bookID)
+		p.overflow <- struct{}{}
+		log.Printf("[WARN] file I/O pool buffer full, running overflow for book %s (op=%s)", bookID, opType)
 		go func() {
 			defer func() { <-p.overflow }()
 			fn()
-			p.pending.Delete(bookID)
-			removePendingFileOp(bookID)
+			p.pending.Delete(pendingKey(bookID, opType))
+			removePendingFileOp(bookID, opType)
 		}()
 	}
 }
 
-// Pending returns the number of queued + in-flight jobs.
+// Pending returns the number of queued jobs.
 func (p *FileIOPool) Pending() int {
 	return len(p.ch)
 }
 
-// PendingBookIDs returns all book IDs with pending file operations.
-func (p *FileIOPool) PendingBookIDs() []string {
-	var ids []string
-	p.pending.Range(func(key, _ any) bool {
-		ids = append(ids, key.(string))
+// PendingJobs returns all in-flight / queued jobs for observability.
+func (p *FileIOPool) PendingJobs() []FileIOJob {
+	var jobs []FileIOJob
+	p.pending.Range(func(_, v any) bool {
+		if job, ok := v.(FileIOJob); ok {
+			jobs = append(jobs, job)
+		}
 		return true
 	})
+	return jobs
+}
+
+// PendingBookIDs returns all book IDs with at least one pending file op.
+// Deduped across op types.
+func (p *FileIOPool) PendingBookIDs() []string {
+	seen := map[string]struct{}{}
+	p.pending.Range(func(_, v any) bool {
+		if job, ok := v.(FileIOJob); ok {
+			seen[job.BookID] = struct{}{}
+		}
+		return true
+	})
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
 	return ids
 }
 
@@ -144,7 +189,7 @@ func (p *FileIOPool) PendingBookIDs() []string {
 // Safe to call multiple times.
 func (p *FileIOPool) Stop() {
 	if !atomic.CompareAndSwapInt32(&p.stopped, 0, 1) {
-		return // already stopped
+		return
 	}
 	close(p.ch)
 
@@ -162,37 +207,72 @@ func (p *FileIOPool) Stop() {
 	}
 }
 
-// InitFileIOPool creates the global pool.
+// InitFileIOPool creates the global pool and registers the default recovery handler.
 func InitFileIOPool() {
 	GlobalFileIOPool = NewFileIOPool(4)
+	RegisterFileOpRecovery("apply_metadata", func(bookID string) {
+		srv := globalServer
+		if srv == nil || srv.metadataFetchService == nil {
+			log.Printf("[WARN] no server instance for apply_metadata recovery of book %s", bookID)
+			return
+		}
+		srv.metadataFetchService.ApplyMetadataFileIO(bookID)
+		if _, err := srv.metadataFetchService.WriteBackMetadataForBook(bookID); err != nil {
+			log.Printf("[WARN] recovery write-back for %s: %v", bookID, err)
+		}
+		if GlobalWriteBackBatcher != nil {
+			GlobalWriteBackBatcher.Enqueue(bookID)
+		}
+	})
 }
 
 // RecoverInterruptedFileOps re-queues any interrupted file I/O jobs.
-// Called explicitly from the server startup sequence, after all services are ready.
+// Called from the server startup sequence after services are ready.
 func RecoverInterruptedFileOps() {
 	recoverInterruptedFileOps()
 }
 
 // --- Persistent tracking via PebbleDB ---
 
-func storePendingFileOp(bookID, opType string) {
-	store := database.GetGlobalStore()
-	if store == nil {
-		return
-	}
-	job := FileIOJob{BookID: bookID, OpType: opType, CreatedAt: time.Now()}
-	data, _ := json.Marshal(job)
-	key := fmt.Sprintf("pending_file_op:%s", bookID)
-	_ = store.SetRaw(key, data)
+func pendingKey(bookID, opType string) string {
+	return bookID + ":" + opType
 }
 
-func removePendingFileOp(bookID string) {
+func pebbleKey(bookID, opType string) string {
+	return pendingFileOpPrefix + bookID + ":" + opType
+}
+
+// parsePebbleKey splits a stored key back into (bookID, opType).
+// Accepts legacy keys without opType ("pending_file_op:{bookID}"), treating them as apply_metadata.
+func parsePebbleKey(key string) (bookID, opType string, ok bool) {
+	rest := strings.TrimPrefix(key, pendingFileOpPrefix)
+	if rest == key {
+		return "", "", false
+	}
+	// Last ":" separates bookID from opType. Book IDs shouldn't contain ":"
+	// but be defensive: split on the last colon only.
+	idx := strings.LastIndex(rest, ":")
+	if idx < 0 {
+		return rest, "apply_metadata", true
+	}
+	return rest[:idx], rest[idx+1:], true
+}
+
+func storePendingFileOp(job FileIOJob) {
 	store := database.GetGlobalStore()
 	if store == nil {
 		return
 	}
-	key := fmt.Sprintf("pending_file_op:%s", bookID)
-	_ = store.DeleteRaw(key)
+	data, _ := json.Marshal(job)
+	_ = store.SetRaw(pebbleKey(job.BookID, job.OpType), data)
+}
+
+func removePendingFileOp(bookID, opType string) {
+	store := database.GetGlobalStore()
+	if store == nil {
+		return
+	}
+	_ = store.DeleteRaw(pebbleKey(bookID, opType))
 }
 
 // recoverInterruptedFileOps re-queues any file I/O jobs that were in-flight
@@ -203,9 +283,8 @@ func recoverInterruptedFileOps() {
 		return
 	}
 
-	keys, err := store.ScanPrefix("pending_file_op:")
+	keys, err := store.ScanPrefix(pendingFileOpPrefix)
 	if err != nil || len(keys) == 0 {
-		// No interrupted ops or store doesn't support ScanPrefix (e.g. in tests)
 		return
 	}
 
@@ -218,23 +297,35 @@ func recoverInterruptedFileOps() {
 			continue
 		}
 
-		bookID := job.BookID
-		log.Printf("[INFO] re-queuing file I/O for book %s (type=%s, started=%s)", bookID, job.OpType, job.CreatedAt.Format(time.RFC3339))
+		// Backfill fields for legacy entries that predate the opType split.
+		if job.BookID == "" || job.OpType == "" {
+			if bid, op, ok := parsePebbleKey(kv.Key); ok {
+				if job.BookID == "" {
+					job.BookID = bid
+				}
+				if job.OpType == "" {
+					job.OpType = op
+				}
+			}
+		}
+		if job.OpType == "" {
+			job.OpType = "apply_metadata"
+		}
+		if job.BookID == "" {
+			_ = store.DeleteRaw(kv.Key)
+			continue
+		}
 
-		GlobalFileIOPool.SubmitTyped(bookID, job.OpType, func() {
-			// Re-run the full apply pipeline
-			srv := globalServer
-			if srv == nil {
-				log.Printf("[WARN] no server instance for recovery of book %s", bookID)
-				return
-			}
-			srv.metadataFetchService.ApplyMetadataFileIO(bookID)
-			if _, wbErr := srv.metadataFetchService.WriteBackMetadataForBook(bookID); wbErr != nil {
-				log.Printf("[WARN] recovery write-back for %s: %v", bookID, wbErr)
-			}
-			if GlobalWriteBackBatcher != nil {
-				GlobalWriteBackBatcher.Enqueue(bookID)
-			}
-		})
+		fn, ok := lookupFileOpRecovery(job.OpType)
+		if !ok {
+			log.Printf("[WARN] no recovery handler for op type %q (book %s), removing stale key", job.OpType, job.BookID)
+			_ = store.DeleteRaw(kv.Key)
+			continue
+		}
+
+		bookID := job.BookID
+		opType := job.OpType
+		log.Printf("[INFO] re-queuing file I/O for book %s (type=%s, started=%s)", bookID, opType, job.CreatedAt.Format(time.RFC3339))
+		GlobalFileIOPool.SubmitTyped(bookID, opType, func() { fn(bookID) })
 	}
 }

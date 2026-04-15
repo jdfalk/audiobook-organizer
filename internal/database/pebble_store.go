@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.41.0
+// version: 1.42.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -2543,15 +2543,9 @@ func (p *PebbleStore) GetRecentOperations(limit int) ([]Operation, error) {
 		operations = append(operations, op)
 	}
 
-	// Sort by created_at descending (most recent first)
-	// In production, you'd want a better indexing strategy
-	for i := 0; i < len(operations)-1; i++ {
-		for j := i + 1; j < len(operations); j++ {
-			if operations[j].CreatedAt.After(operations[i].CreatedAt) {
-				operations[i], operations[j] = operations[j], operations[i]
-			}
-		}
-	}
+	sort.Slice(operations, func(i, j int) bool {
+		return operations[i].CreatedAt.After(operations[j].CreatedAt)
+	})
 
 	if len(operations) > limit {
 		operations = operations[:limit]
@@ -2579,14 +2573,9 @@ func (p *PebbleStore) ListOperations(limit, offset int) ([]Operation, int, error
 		operations = append(operations, op)
 	}
 
-	// Sort by created_at descending
-	for i := 0; i < len(operations)-1; i++ {
-		for j := i + 1; j < len(operations); j++ {
-			if operations[j].CreatedAt.After(operations[i].CreatedAt) {
-				operations[i], operations[j] = operations[j], operations[i]
-			}
-		}
-	}
+	sort.Slice(operations, func(i, j int) bool {
+		return operations[i].CreatedAt.After(operations[j].CreatedAt)
+	})
 
 	total := len(operations)
 	if offset >= len(operations) {

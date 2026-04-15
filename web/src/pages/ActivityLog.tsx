@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.2.0
+// version: 2.3.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -42,6 +42,8 @@ import FilterListIcon from '@mui/icons-material/FilterList.js';
 import { fetchActivity, fetchActivitySources, compactActivityLog } from '../services/activityApi';
 import type { ActivityEntry, SourceCount } from '../services/activityApi';
 import * as api from '../services/api';
+import { PendingFileOpsBanner } from '../components/PendingFileOpsBanner';
+import { usePendingFileOps } from '../hooks/usePendingFileOps';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
 
@@ -128,6 +130,9 @@ export default function ActivityLog() {
 
   // Mobile filter collapse
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+
+  // Pending background file operations (cover embed, tag write, rename)
+  const { operations: pendingFileOps } = usePendingFileOps();
 
   // Active ops
   const [activeOps, setActiveOps] = useState<api.ActiveOperationSummary[]>([]);
@@ -556,6 +561,9 @@ export default function ActivityLog() {
           <RefreshIcon />
         </IconButton>
       </Stack>
+
+      {/* In-flight background file operations */}
+      <PendingFileOpsBanner operations={pendingFileOps} />
 
       {/* Pinned Operations Section */}
       {showOpsSection && (
