@@ -1,5 +1,5 @@
 // file: internal/operations/state.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package operations
@@ -42,6 +42,25 @@ type ScanParams struct {
 // OrganizeParams stores the immutable parameters for an organize operation.
 type OrganizeParams struct {
 	Strategy string `json:"strategy,omitempty"`
+}
+
+// BulkWriteBackParams stores the immutable parameters for a bulk write-back operation.
+// Resume diffs the book IDs against the operation's checkpoint PhaseIndex.
+type BulkWriteBackParams struct {
+	BookIDs []string `json:"book_ids"`
+	Rename  bool     `json:"rename"`
+}
+
+// IsbnEnrichmentParams stores the immutable parameters for an ISBN enrichment operation.
+// BookIDs is the list to enrich; on resume, the checkpoint PhaseIndex is the next index.
+type IsbnEnrichmentParams struct {
+	BookIDs []string `json:"book_ids"`
+}
+
+// MetadataRefreshParams stores the immutable parameters for a metadata refresh operation.
+type MetadataRefreshParams struct {
+	BookIDs []string `json:"book_ids"`
+	Source  string   `json:"source,omitempty"`
 }
 
 // SaveCheckpoint persists an operation's progress checkpoint.

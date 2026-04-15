@@ -1130,12 +1130,32 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.organizeService.PerformOrganizeWithID(ctx, opID, &OrganizeRequest{}, operations.LoggerFromReporter(progress))
 			}
+		case "bulk_write_back":
+			params, _ := operations.LoadParams[operations.BulkWriteBackParams](store, opID)
+			if params == nil {
+				log.Printf("[WARN] No params for interrupted bulk_write_back %s, marking failed", opID)
+				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
+				continue
+			}
+			startIdx := 0
+			if checkpoint != nil {
+				startIdx = checkpoint.PhaseIndex
+			}
+			bookIDs := params.BookIDs
+			doRename := params.Rename
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.runBulkWriteBack(ctx, opID, bookIDs, doRename, startIdx, progress)
+			}
+		case "isbn-enrichment":
+			resumeFn = s.runIsbnEnrichment
+		case "metadata-refresh":
+			resumeFn = s.runMetadataRefreshScan
 		case "reconcile_scan", "transcode", "diagnostics_export", "diagnostics_ai",
-			"bulk_write_back", "cleanup_activity_log", "purge_old_logs",
-			"purge-deleted", "tombstone-cleanup", "isbn-enrichment",
+			"cleanup_activity_log", "purge_old_logs",
+			"purge-deleted", "tombstone-cleanup",
 			"author-dedup-scan", "author-split-scan", "series-prune",
 			"db-optimize", "cleanup-old-backups", "batch_poller",
-			"itunes_sync", "metadata-refresh":
+			"itunes_sync":
 			// These are not resumable — mark as failed silently
 			_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
 			_ = operations.ClearState(store, opID)
@@ -1788,6 +1808,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/organize", s.startOrganize)
 			protected.POST("/operations/transcode", s.startTranscode)
 			protected.GET("/operations/recent", s.handleGetRecentOperations)
+			protected.GET("/file-ops/pending", s.handleListPendingFileOps)
 			protected.GET("/operations/:id/results", s.handleGetOperationResults)
 			protected.GET("/operations/:id/status", s.getOperationStatus)
 			protected.GET("/operations/:id/logs", s.getOperationLogs)

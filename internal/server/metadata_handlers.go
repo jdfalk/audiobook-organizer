@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -855,78 +855,18 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	}
 
 	doRename := req.Rename
-	mfs := s.metadataFetchService
 	bookIDs := make([]string, len(filtered))
 	for i, b := range filtered {
 		bookIDs[i] = b.ID
 	}
 
+	// Persist params so the operation can be resumed across a restart.
+	if err := operations.SaveParams(store, op.ID, operations.BulkWriteBackParams{BookIDs: bookIDs, Rename: doRename}); err != nil {
+		log.Printf("[WARN] failed to save bulk_write_back params for %s: %v", op.ID, err)
+	}
+
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		total := len(bookIDs)
-		written := 0
-		failed := 0
-
-		for i, bookID := range bookIDs {
-			if progress.IsCanceled() {
-				msg := fmt.Sprintf("canceled after %d/%d books (%d written, %d failed)", i, total, written, failed)
-				_ = progress.Log("info", msg, nil)
-				return nil
-			}
-
-			// Check context cancellation
-			select {
-			case <-ctx.Done():
-				msg := fmt.Sprintf("context canceled after %d/%d books (%d written, %d failed)", i, total, written, failed)
-				_ = progress.Log("info", msg, nil)
-				return ctx.Err()
-			default:
-			}
-
-			book, err := store.GetBookByID(bookID)
-			if err != nil || book == nil {
-				failed++
-				detail := fmt.Sprintf("book %s: not found", bookID)
-				_ = progress.Log("warn", detail, nil)
-				_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (skipped: not found)", i+1, total))
-				continue
-			}
-
-			// Skip protected paths (re-check in case data changed)
-			if isProtectedPath(book.FilePath) {
-				detail := fmt.Sprintf("book %s: skipping protected path %s", bookID, book.FilePath)
-				_ = progress.Log("info", detail, nil)
-				_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (skipped: protected)", i+1, total))
-				continue
-			}
-
-			// Step 1: Rename if requested
-			if doRename {
-				if renameErr := mfs.RunApplyPipelineRenameOnly(bookID, book); renameErr != nil {
-					detail := fmt.Sprintf("book %s: rename failed: %v", bookID, renameErr)
-					_ = progress.Log("warn", detail, nil)
-				}
-			}
-
-			// Step 2: Write tags
-			count, writeErr := mfs.WriteBackMetadataForBook(bookID)
-			if writeErr != nil {
-				failed++
-				detail := fmt.Sprintf("book %s: write-back failed: %v", bookID, writeErr)
-				_ = progress.Log("warn", detail, nil)
-			} else {
-				written++
-				if count > 0 {
-					detail := fmt.Sprintf("book %s: wrote %d file(s)", bookID, count)
-					_ = progress.Log("debug", detail, nil)
-				}
-			}
-
-			_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (%d written, %d failed)", i+1, total, written, failed))
-		}
-
-		summary := fmt.Sprintf("bulk write-back complete: %d written, %d failed out of %d", written, failed, total)
-		_ = progress.Log("info", summary, nil)
-		return nil
+		return s.runBulkWriteBack(ctx, op.ID, bookIDs, doRename, 0, progress)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "bulk_write_back", operations.PriorityNormal, operationFunc); err != nil {
@@ -938,6 +878,142 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 		"operation_id":    op.ID,
 		"estimated_books": estimatedBooks,
 	})
+}
+
+// runBulkWriteBack iterates the provided bookIDs starting at startIdx, writing
+// tags (and optionally renaming first) for each. Used by both the fresh-launch
+// path and the resume path. Checkpoints progress every 10 books so a restart
+// can pick up near where it left off.
+func (s *Server) runBulkWriteBack(
+	ctx context.Context,
+	opID string,
+	bookIDs []string,
+	doRename bool,
+	startIdx int,
+	progress operations.ProgressReporter,
+) error {
+	store := database.GlobalStore
+	mfs := s.metadataFetchService
+	total := len(bookIDs)
+	written := 0
+	failed := 0
+
+	if startIdx > 0 {
+		_ = progress.Log("info", fmt.Sprintf("resuming bulk write-back from index %d/%d", startIdx, total), nil)
+	}
+
+	for i := startIdx; i < total; i++ {
+		bookID := bookIDs[i]
+		if progress.IsCanceled() {
+			msg := fmt.Sprintf("canceled after %d/%d books (%d written, %d failed)", i, total, written, failed)
+			_ = progress.Log("info", msg, nil)
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			msg := fmt.Sprintf("context canceled after %d/%d books (%d written, %d failed)", i, total, written, failed)
+			_ = progress.Log("info", msg, nil)
+			return ctx.Err()
+		default:
+		}
+
+		book, err := store.GetBookByID(bookID)
+		if err != nil || book == nil {
+			failed++
+			_ = progress.Log("warn", fmt.Sprintf("book %s: not found", bookID), nil)
+			_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (skipped: not found)", i+1, total))
+			continue
+		}
+
+		if isProtectedPath(book.FilePath) {
+			_ = progress.Log("info", fmt.Sprintf("book %s: skipping protected path %s", bookID, book.FilePath), nil)
+			_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (skipped: protected)", i+1, total))
+			continue
+		}
+
+		if doRename {
+			if renameErr := mfs.RunApplyPipelineRenameOnly(bookID, book); renameErr != nil {
+				_ = progress.Log("warn", fmt.Sprintf("book %s: rename failed: %v", bookID, renameErr), nil)
+			}
+		}
+
+		count, writeErr := mfs.WriteBackMetadataForBook(bookID)
+		if writeErr != nil {
+			failed++
+			_ = progress.Log("warn", fmt.Sprintf("book %s: write-back failed: %v", bookID, writeErr), nil)
+		} else {
+			written++
+			if count > 0 {
+				_ = progress.Log("debug", fmt.Sprintf("book %s: wrote %d file(s)", bookID, count), nil)
+			}
+		}
+
+		_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (%d written, %d failed)", i+1, total, written, failed))
+
+		if (i+1)%10 == 0 {
+			_ = operations.SaveCheckpoint(store, opID, "bulk_write_back", "writing", i+1, total)
+		}
+	}
+
+	_ = operations.ClearState(store, opID)
+	summary := fmt.Sprintf("bulk write-back complete: %d written, %d failed out of %d", written, failed, total)
+	_ = progress.Log("info", summary, nil)
+	return nil
+}
+
+// runIsbnEnrichment enriches missing ISBN identifiers from external sources.
+// Idempotent — books that already have an ISBN are skipped, so a restart
+// safely re-runs from scratch (no checkpoint needed).
+func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.ProgressReporter) error {
+	if s.metadataFetchService == nil || s.metadataFetchService.isbnEnrichment == nil {
+		_ = progress.Log("info", "ISBN enrichment service is not configured, skipping", nil)
+		return nil
+	}
+	_ = progress.Log("info", "Scanning for books missing ISBN identifiers", nil)
+	checked, updated, err := s.metadataFetchService.isbnEnrichment.EnrichMissingISBNs(ctx, 100)
+	if err != nil {
+		return err
+	}
+	msg := fmt.Sprintf("ISBN enrichment complete: checked %d candidate book(s), updated %d", checked, updated)
+	_ = progress.Log("info", msg, nil)
+	_ = progress.UpdateProgress(100, 100, msg)
+	return nil
+}
+
+// runMetadataRefreshScan reports books with incomplete metadata. Read-only,
+// safe to re-run on restart with no state.
+func (s *Server) runMetadataRefreshScan(ctx context.Context, progress operations.ProgressReporter) error {
+	store := database.GlobalStore
+	if store == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	_ = progress.Log("info", "Starting metadata refresh scan", nil)
+	_ = progress.UpdateProgress(0, 100, "Scanning books for incomplete metadata...")
+	books, err := store.GetAllBooks(10000, 0)
+	if err != nil {
+		return fmt.Errorf("failed to get books: %w", err)
+	}
+	_ = progress.Log("info", fmt.Sprintf("Checking %d books for incomplete metadata", len(books)), nil)
+	incomplete := 0
+	for i, book := range books {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if book.AuthorID == nil || book.Title == "" {
+			incomplete++
+			_ = progress.Log("debug", fmt.Sprintf("Incomplete: %q (id=%s)", book.Title, book.ID), nil)
+		}
+		if (i+1)%200 == 0 {
+			_ = progress.UpdateProgress(i+1, len(books), fmt.Sprintf("Checked %d/%d books", i+1, len(books)))
+		}
+	}
+	resultMsg := fmt.Sprintf("Found %d books with incomplete metadata out of %d total", incomplete, len(books))
+	_ = progress.Log("info", resultMsg, nil)
+	_ = progress.UpdateProgress(len(books), len(books), resultMsg)
+	return nil
 }
 
 func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
