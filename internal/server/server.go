@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.165.0
+// version: 1.166.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1150,7 +1150,12 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = s.runIsbnEnrichment
 		case "metadata-refresh":
 			resumeFn = s.runMetadataRefreshScan
-		case "reconcile_scan", "transcode", "diagnostics_export", "diagnostics_ai",
+		case "reconcile_scan":
+			scanOpID := opID
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.runReconcileScan(ctx, scanOpID, progress)
+			}
+		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
 			"author-dedup-scan", "author-split-scan", "series-prune",
