@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.55.0
+// version: 1.56.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -958,6 +958,21 @@ func (s *SQLiteStore) GetBookVersionByTorrentHash(hash string) (*BookVersion, er
 }
 func (s *SQLiteStore) ListTrashedBookVersions() ([]BookVersion, error) { return nil, nil }
 func (s *SQLiteStore) ListPurgedBookVersions() ([]BookVersion, error)  { return nil, nil }
+
+// ---- User playlists (SQLite no-op stubs, spec 3.4) ----
+
+func (s *SQLiteStore) CreateUserPlaylist(pl *UserPlaylist) (*UserPlaylist, error) { return pl, nil }
+func (s *SQLiteStore) GetUserPlaylist(id string) (*UserPlaylist, error)           { return nil, nil }
+func (s *SQLiteStore) GetUserPlaylistByName(name string) (*UserPlaylist, error)   { return nil, nil }
+func (s *SQLiteStore) GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
+	return nil, 0, nil
+}
+func (s *SQLiteStore) UpdateUserPlaylist(pl *UserPlaylist) error        { return nil }
+func (s *SQLiteStore) DeleteUserPlaylist(id string) error               { return nil }
+func (s *SQLiteStore) ListDirtyUserPlaylists() ([]UserPlaylist, error)  { return nil, nil }
 
 // ---- API keys + Invites (SQLite no-op stubs) ----
 
