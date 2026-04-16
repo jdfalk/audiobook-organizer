@@ -40,7 +40,7 @@ type MockStore struct {
 	GetBookByFileHashFunc           func(hash string) (*Book, error)
 	GetBookByOriginalHashFunc       func(hash string) (*Book, error)
 	GetBookByOrganizedHashFunc      func(hash string) (*Book, error)
-	GetBookVersionsFunc             func(id string, limit int) ([]BookVersion, error)
+	GetBookVersionsFunc             func(id string, limit int) ([]BookSnapshot, error)
 	GetBookAtVersionFunc            func(id string, ts time.Time) (*Book, error)
 	RevertBookToVersionFunc         func(id string, ts time.Time) (*Book, error)
 	PruneBookVersionsFunc           func(id string, keepCount int) (int, error)
@@ -1396,7 +1396,7 @@ func (m *MockStore) SetLastWrittenAt(id string, t time.Time) error {
 	return nil
 }
 
-func (m *MockStore) GetBookVersions(id string, limit int) ([]BookVersion, error) {
+func (m *MockStore) GetBookSnapshots(id string, limit int) ([]BookSnapshot, error) {
 	if m.GetBookVersionsFunc != nil {
 		return m.GetBookVersionsFunc(id, limit)
 	}
@@ -1417,7 +1417,7 @@ func (m *MockStore) RevertBookToVersion(id string, ts time.Time) (*Book, error) 
 	return nil, fmt.Errorf("not implemented in mock")
 }
 
-func (m *MockStore) PruneBookVersions(id string, keepCount int) (int, error) {
+func (m *MockStore) PruneBookSnapshots(id string, keepCount int) (int, error) {
 	if m.PruneBookVersionsFunc != nil {
 		return m.PruneBookVersionsFunc(id, keepCount)
 	}

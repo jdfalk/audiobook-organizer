@@ -4346,8 +4346,8 @@ func (s *SQLiteStore) CountTableRows(table string) (int64, error) {
 	return n, nil
 }
 
-// GetBookVersions is a stub — book versioning is not yet supported in SQLite store.
-func (s *SQLiteStore) GetBookVersions(id string, limit int) ([]BookVersion, error) {
+// GetBookSnapshots is a stub — book versioning is not yet supported in SQLite store.
+func (s *SQLiteStore) GetBookSnapshots(id string, limit int) ([]BookSnapshot, error) {
 	return nil, nil
 }
 
@@ -4361,8 +4361,8 @@ func (s *SQLiteStore) RevertBookToVersion(id string, ts time.Time) (*Book, error
 	return nil, fmt.Errorf("book versioning not supported in SQLite store")
 }
 
-// PruneBookVersions is a stub — book versioning is not yet supported in SQLite store.
-func (s *SQLiteStore) PruneBookVersions(id string, keepCount int) (int, error) {
+// PruneBookSnapshots is a stub — book versioning is not yet supported in SQLite store.
+func (s *SQLiteStore) PruneBookSnapshots(id string, keepCount int) (int, error) {
 	return 0, nil
 }
 

@@ -843,7 +843,7 @@ func TestPebbleUpdateBookCreatesVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Updated Title", updated.Title)
 
-	versions, err := store.GetBookVersions(created.ID, 10)
+	versions, err := store.GetBookSnapshots(created.ID, 10)
 	require.NoError(t, err)
 	require.Len(t, versions, 1)
 
@@ -867,7 +867,7 @@ func TestPebbleGetBookAtVersion(t *testing.T) {
 	created.Title = "V3"
 	store.UpdateBook(created.ID, created)
 
-	versions, err := store.GetBookVersions(created.ID, 10)
+	versions, err := store.GetBookSnapshots(created.ID, 10)
 	require.NoError(t, err)
 	require.Len(t, versions, 2)
 
@@ -888,7 +888,7 @@ func TestPebbleRevertBookToVersion(t *testing.T) {
 	created.Title = "Modified"
 	store.UpdateBook(created.ID, created)
 
-	versions, err := store.GetBookVersions(created.ID, 10)
+	versions, err := store.GetBookSnapshots(created.ID, 10)
 	require.NoError(t, err)
 	require.Len(t, versions, 1)
 
@@ -901,7 +901,7 @@ func TestPebbleRevertBookToVersion(t *testing.T) {
 	require.Equal(t, "Original", current.Title)
 
 	// Revert creates a new version (snapshot of "Modified")
-	versions2, err := store.GetBookVersions(created.ID, 10)
+	versions2, err := store.GetBookSnapshots(created.ID, 10)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(versions2), 2)
 }
@@ -920,14 +920,14 @@ func TestPebblePruneBookVersions(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	versions, _ := store.GetBookVersions(created.ID, 100)
+	versions, _ := store.GetBookSnapshots(created.ID, 100)
 	require.Len(t, versions, 5)
 
-	pruned, err := store.PruneBookVersions(created.ID, 2)
+	pruned, err := store.PruneBookSnapshots(created.ID, 2)
 	require.NoError(t, err)
 	require.Equal(t, 3, pruned)
 
-	remaining, _ := store.GetBookVersions(created.ID, 100)
+	remaining, _ := store.GetBookSnapshots(created.ID, 100)
 	require.Len(t, remaining, 2)
 }
 
