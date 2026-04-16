@@ -1,5 +1,5 @@
 // file: internal/server/external_id_backfill.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d
 
 package server
@@ -43,7 +43,7 @@ func asExternalIDStore(s database.Store) ExternalIDStore {
 // book that has an iTunes PersistentID set. This is idempotent — it checks the
 // setting "external_id_backfill_done" and only runs once.
 func (s *Server) backfillExternalIDs() {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		return
 	}
