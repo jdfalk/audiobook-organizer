@@ -22,9 +22,9 @@ func TestVersionEndpoints_HappyPaths(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	book1, err := database.GlobalStore.CreateBook(&database.Book{Title: "One", FilePath: "/tmp/one.m4b", Format: "m4b"})
+	book1, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "One", FilePath: "/tmp/one.m4b", Format: "m4b"})
 	require.NoError(t, err)
-	book2, err := database.GlobalStore.CreateBook(&database.Book{Title: "Two", FilePath: "/tmp/two.m4b", Format: "m4b"})
+	book2, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Two", FilePath: "/tmp/two.m4b", Format: "m4b"})
 	require.NoError(t, err)
 
 	// list versions when no group
@@ -58,9 +58,9 @@ func TestVersionEndpoints_HappyPaths(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	updated1, err := database.GlobalStore.GetBookByID(book1.ID)
+	updated1, err := database.GetGlobalStore().GetBookByID(book1.ID)
 	require.NoError(t, err)
-	updated2, err := database.GlobalStore.GetBookByID(book2.ID)
+	updated2, err := database.GetGlobalStore().GetBookByID(book2.ID)
 	require.NoError(t, err)
 	require.NotNil(t, updated1.VersionGroupID)
 	require.NotNil(t, updated2.VersionGroupID)
@@ -75,9 +75,9 @@ func TestWorkEndpoints_WithMockStore(t *testing.T) {
 	defer cleanup()
 
 	store := dbmocks.NewMockStore(t)
-	origStore := database.GlobalStore
-	database.GlobalStore = store
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	author1 := 1
 	author2 := 2
@@ -92,7 +92,7 @@ func TestWorkEndpoints_WithMockStore(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	store2 := dbmocks.NewMockStore(t)
-	database.GlobalStore = store2
+	database.SetGlobalStore(store2)
 	store2.EXPECT().GetAllWorks().Return(works, nil)
 	store2.EXPECT().GetBooksByWorkID("w1").Return([]database.Book{{ID: "b1"}, {ID: "b2"}}, nil)
 	store2.EXPECT().GetBooksByWorkID("w2").Return(nil, assert.AnError)

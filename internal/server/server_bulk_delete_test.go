@@ -40,7 +40,7 @@ func TestBulkDeleteAuthors_AllEmpty(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	// Create authors with no books
 	a1, err := store.CreateAuthor("Author One")
@@ -75,7 +75,7 @@ func TestBulkDeleteAuthors_SkipsAuthorsWithBooks(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	// Create two authors
 	authorWithBooks, err := store.CreateAuthor("Has Books")
@@ -164,7 +164,7 @@ func TestBulkDeleteAuthors_MixedResults(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	// Create three authors
 	a1, err := store.CreateAuthor("Empty Author 1")
@@ -261,7 +261,7 @@ func TestBulkDeleteSeries_AllEmpty(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	s1, err := store.CreateSeries("Series One", nil)
 	require.NoError(t, err)
@@ -295,7 +295,7 @@ func TestBulkDeleteSeries_SkipsSeriesWithBooks(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	seriesWithBooks, err := store.CreateSeries("Has Books", nil)
 	require.NoError(t, err)
@@ -363,7 +363,7 @@ func TestBulkDeleteSeries_MixedResults(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	s1, err := store.CreateSeries("Empty 1", nil)
 	require.NoError(t, err)

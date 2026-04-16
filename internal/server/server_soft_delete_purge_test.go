@@ -25,7 +25,7 @@ func TestSoftDeleteAndPurge_WithFileDeletion(t *testing.T) {
 
 	filePath := filepath.Join(t.TempDir(), "purge.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{Title: "Purge Me", FilePath: filePath, Format: "m4b"})
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Purge Me", FilePath: filePath, Format: "m4b"})
 	require.NoError(t, err)
 
 	// Soft-delete via API.
@@ -56,7 +56,7 @@ func TestRunAutoPurgeSoftDeleted_DeletesOldEntries(t *testing.T) {
 
 	filePath := filepath.Join(t.TempDir(), "auto-purge.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{Title: "Auto Purge", FilePath: filePath, Format: "m4b"})
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Auto Purge", FilePath: filePath, Format: "m4b"})
 	require.NoError(t, err)
 
 	// Mark as soft-deleted older than cutoff.
@@ -65,13 +65,13 @@ func TestRunAutoPurgeSoftDeleted_DeletesOldEntries(t *testing.T) {
 	book.MarkedForDeletion = &marked
 	book.MarkedForDeletionAt = &deletedAt
 	book.LibraryState = stringPtr("deleted")
-	_, err = database.GlobalStore.UpdateBook(book.ID, book)
+	_, err = database.GetGlobalStore().UpdateBook(book.ID, book)
 	require.NoError(t, err)
 
 	server.runAutoPurgeSoftDeleted()
 
 	// Book removed.
-	fetched, err := database.GlobalStore.GetBookByID(book.ID)
+	fetched, err := database.GetGlobalStore().GetBookByID(book.ID)
 	require.NoError(t, err)
 	assert.Nil(t, fetched)
 

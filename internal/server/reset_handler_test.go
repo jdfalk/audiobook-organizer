@@ -22,7 +22,7 @@ func TestResetSystem_Success(t *testing.T) {
 	server := setupHandlerTestServer(t)
 
 	// Mock the Reset function
-	if store, ok := database.GlobalStore.(*database.MockStore); ok {
+	if store, ok := database.GetGlobalStore().(*database.MockStore); ok {
 		store.ResetFunc = func() error {
 			return nil
 		}
@@ -77,7 +77,7 @@ func TestResetSystem_Error(t *testing.T) {
 	server := setupHandlerTestServer(t)
 
 	// Mock the Reset function to return an error
-	if store, ok := database.GlobalStore.(*database.MockStore); ok {
+	if store, ok := database.GetGlobalStore().(*database.MockStore); ok {
 		store.ResetFunc = func() error {
 			return errors.New("test error")
 		}
@@ -101,7 +101,7 @@ func TestResetSystem_MultipleResets(t *testing.T) {
 	server := setupHandlerTestServer(t)
 
 	// Mock the Reset function
-	if store, ok := database.GlobalStore.(*database.MockStore); ok {
+	if store, ok := database.GetGlobalStore().(*database.MockStore); ok {
 		store.ResetFunc = func() error {
 			return nil
 		}

@@ -235,7 +235,7 @@ func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 	tempFile := filepath.Join(tempDir, "book.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
 
-	created, err := database.GlobalStore.CreateBook(&database.Book{
+	created, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Stored Title",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -290,7 +290,7 @@ func TestGetAudiobookTagsRejectsInvalidSnapshotTimestamp(t *testing.T) {
 	tempFile := filepath.Join(tempDir, "book.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
 
-	created, err := database.GlobalStore.CreateBook(&database.Book{
+	created, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Snapshot Test",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -313,7 +313,7 @@ func TestUpdateAudiobookOverridesPersist(t *testing.T) {
 	tempFile := filepath.Join(t.TempDir(), "book-override.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
 
-	created, err := database.GlobalStore.CreateBook(&database.Book{
+	created, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Original Title",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -333,7 +333,7 @@ func TestUpdateAudiobookOverridesPersist(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updated))
 	assert.Equal(t, "New Title", updated.Title)
 
-	states, err := database.GlobalStore.GetMetadataFieldStates(created.ID)
+	states, err := database.GetGlobalStore().GetMetadataFieldStates(created.ID)
 	require.NoError(t, err)
 
 	stateByField := map[string]database.MetadataFieldState{}
@@ -657,7 +657,7 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 	require.NoError(t, os.WriteFile(otherFile, []byte("audio"), 0o644))
 
 	// Arrange: book with a locked publisher override and missing language/author.
-	created, err := database.GlobalStore.CreateBook(&database.Book{
+	created, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "The Hobbit",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -673,7 +673,7 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	other, err := database.GlobalStore.CreateBook(&database.Book{
+	other, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Unknown Title",
 		FilePath: otherFile,
 		Format:   "m4b",
@@ -756,7 +756,7 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 
 	assert.Equal(t, "not_found", missingResult.Status)
 
-	updatedBook, err := database.GlobalStore.GetBookByID(created.ID)
+	updatedBook, err := database.GetGlobalStore().GetBookByID(created.ID)
 	require.NoError(t, err)
 	require.NotNil(t, updatedBook)
 	assert.Nil(t, updatedBook.Publisher)
@@ -1270,16 +1270,16 @@ func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	author, err := database.GlobalStore.CreateAuthor("Test Author")
+	author, err := database.GetGlobalStore().CreateAuthor("Test Author")
 	require.NoError(t, err)
-	series, err := database.GlobalStore.CreateSeries("Test Series", &author.ID)
+	series, err := database.GetGlobalStore().CreateSeries("Test Series", &author.ID)
 	require.NoError(t, err)
 
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "book.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("dummy audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Stored Title",
 		AuthorID: &author.ID,
 		SeriesID: &series.ID,
@@ -1342,7 +1342,7 @@ func TestUpdateAudiobookPersistsOverrides(t *testing.T) {
 	filePath := filepath.Join(tempDir, "book.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("dummy audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Original Title",
 		FilePath: filePath,
 	})
@@ -1488,7 +1488,7 @@ func TestSoftDeleteAudiobook(t *testing.T) {
 	filePath := filepath.Join(tempDir, "softdelete.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "To Soft Delete",
 		FilePath: filePath,
 	})
@@ -1536,7 +1536,7 @@ func TestListAudiobookVersions(t *testing.T) {
 	filePath := filepath.Join(tempDir, "version.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Version Test",
 		FilePath: filePath,
 	})
@@ -1619,7 +1619,7 @@ func TestRestoreAudiobook(t *testing.T) {
 	filePath := filepath.Join(tempDir, "restore.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "To Restore",
 		FilePath: filePath,
 	})
@@ -1664,9 +1664,9 @@ func TestLinkAudiobookVersion(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath1, []byte("v1"), 0o644))
 	require.NoError(t, os.WriteFile(filePath2, []byte("v2"), 0o644))
 
-	book1, err := database.GlobalStore.CreateBook(&database.Book{Title: "Book V1", FilePath: filePath1})
+	book1, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Book V1", FilePath: filePath1})
 	require.NoError(t, err)
-	book2, err := database.GlobalStore.CreateBook(&database.Book{Title: "Book V2", FilePath: filePath2})
+	book2, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Book V2", FilePath: filePath2})
 	require.NoError(t, err)
 
 	payload := map[string]any{
@@ -1690,7 +1690,7 @@ func TestRemoveImportPath(t *testing.T) {
 	defer cleanup()
 
 	// Create an import path directly via DB
-	importPath, err := database.GlobalStore.CreateImportPath("/to/remove", "Remove Me")
+	importPath, err := database.GetGlobalStore().CreateImportPath("/to/remove", "Remove Me")
 	require.NoError(t, err)
 
 	// Delete via API - note route uses :id suffix on import-paths
@@ -1775,13 +1775,13 @@ func TestListAudiobooksWithFilters(t *testing.T) {
 	defer cleanup()
 
 	// Create an author and audiobook
-	author, err := database.GlobalStore.CreateAuthor("Filter Author")
+	author, err := database.GetGlobalStore().CreateAuthor("Filter Author")
 	require.NoError(t, err)
 
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "filter.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Filter Book",
 		AuthorID: &author.ID,
 		FilePath: filePath,
@@ -1884,7 +1884,7 @@ func TestListBlockedHashes(t *testing.T) {
 	defer cleanup()
 
 	// Add a blocked hash
-	err := database.GlobalStore.AddBlockedHash("abc123", "test reason")
+	err := database.GetGlobalStore().AddBlockedHash("abc123", "test reason")
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/blocked-hashes", nil)
@@ -1931,7 +1931,7 @@ func TestRemoveBlockedHash(t *testing.T) {
 			name: "successfully remove blocked hash",
 			hash: "def456",
 			setup: func() {
-				err := database.GlobalStore.AddBlockedHash("def456", "test reason")
+				err := database.GetGlobalStore().AddBlockedHash("def456", "test reason")
 				require.NoError(t, err)
 			},
 			expectedStatus: http.StatusOK,
@@ -1989,7 +1989,7 @@ func TestExportMetadataHandler(t *testing.T) {
 	filePath := filepath.Join(tempDir, "test.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Export Test Book",
 		FilePath: filePath,
 	})
@@ -2052,14 +2052,14 @@ func TestGetDashboardWithData(t *testing.T) {
 	defer cleanup()
 
 	// Create some test data
-	author, err := database.GlobalStore.CreateAuthor("Test Author")
+	author, err := database.GetGlobalStore().CreateAuthor("Test Author")
 	require.NoError(t, err)
 
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "test.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio data for testing"), 0o644))
 
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Dashboard Test Book",
 		AuthorID: &author.ID,
 		FilePath: filePath,
@@ -2098,7 +2098,7 @@ func TestBatchUpdateAudiobooksWithData(t *testing.T) {
 	filePath := filepath.Join(tempDir, "batch.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Batch Test",
 		FilePath: filePath,
 	})
@@ -2152,7 +2152,7 @@ func TestDeleteAudiobookWithSoftDelete(t *testing.T) {
 	filePath := filepath.Join(tempDir, "softdel.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "To Be Soft Deleted",
 		FilePath: filePath,
 	})
@@ -2179,14 +2179,14 @@ func TestUpdateAudiobookWithMetadata(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	author, err := database.GlobalStore.CreateAuthor("Original Author")
+	author, err := database.GetGlobalStore().CreateAuthor("Original Author")
 	require.NoError(t, err)
 
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "meta.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Original Title",
 		AuthorID: &author.ID,
 		FilePath: filePath,
@@ -2216,7 +2216,7 @@ func TestUpdateAudiobookWithMetadata(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Verify the metadata was updated
-	updated, err := database.GlobalStore.GetBookByID(book.ID)
+	updated, err := database.GetGlobalStore().GetBookByID(book.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Title", updated.Title)
 	require.NotNil(t, updated.Publisher)
@@ -2237,7 +2237,7 @@ func TestListAudiobooksWithSearchAndPagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		filePath := filepath.Join(tempDir, fmt.Sprintf("book%d.m4b", i))
 		require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
-		_, err := database.GlobalStore.CreateBook(&database.Book{
+		_, err := database.GetGlobalStore().CreateBook(&database.Book{
 			Title:    fmt.Sprintf("Test Book %d", i),
 			FilePath: filePath,
 		})
@@ -2298,7 +2298,7 @@ func TestHandleITunesImportStatus(t *testing.T) {
 			setup: func() string {
 				libPath := "/fake/library.xml"
 				opID := ulid.Make().String()
-				op, err := database.GlobalStore.CreateOperation(opID, "itunes_import", &libPath)
+				op, err := database.GetGlobalStore().CreateOperation(opID, "itunes_import", &libPath)
 				require.NoError(t, err)
 				return op.ID
 			},
@@ -2363,7 +2363,7 @@ func TestListAudiobookVersions_ErrorCases(t *testing.T) {
 				tempDir := t.TempDir()
 				filePath := filepath.Join(tempDir, "single.m4b")
 				require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
-				book, err := database.GlobalStore.CreateBook(&database.Book{
+				book, err := database.GetGlobalStore().CreateBook(&database.Book{
 					Title:    "Single Version Book",
 					FilePath: filePath,
 				})
@@ -2390,13 +2390,13 @@ func TestListAudiobookVersions_ErrorCases(t *testing.T) {
 				require.NoError(t, os.WriteFile(filePath2, []byte("v2"), 0o644))
 
 				groupID := "vg-" + ulid.Make().String()
-				book1, err := database.GlobalStore.CreateBook(&database.Book{
+				book1, err := database.GetGlobalStore().CreateBook(&database.Book{
 					Title:          "Version 1",
 					FilePath:       filePath1,
 					VersionGroupID: &groupID,
 				})
 				require.NoError(t, err)
-				_, err = database.GlobalStore.CreateBook(&database.Book{
+				_, err = database.GetGlobalStore().CreateBook(&database.Book{
 					Title:          "Version 2",
 					FilePath:       filePath2,
 					VersionGroupID: &groupID,

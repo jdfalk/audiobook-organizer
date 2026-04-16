@@ -76,7 +76,7 @@ func TestCancelOperationWithQueueMock(t *testing.T) {
 			// Create mock store
 			mockStore := dbmocks.NewMockStore(t)
 			tt.mockStoreSetup(mockStore)
-			database.GlobalStore = mockStore
+			database.SetGlobalStore(mockStore)
 
 			// Create and setup mock queue (or leave nil for nil test)
 			if tt.mockQueueSetup != nil {
@@ -182,7 +182,7 @@ func TestGetOperationsWithQueueMock(t *testing.T) {
 			// Create mock store
 			mockStore := dbmocks.NewMockStore(t)
 			tt.mockStoreSetup(mockStore)
-			database.GlobalStore = mockStore
+			database.SetGlobalStore(mockStore)
 
 			// Create and setup mock queue (or leave nil)
 			if tt.mockQueueSetup != nil {

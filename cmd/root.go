@@ -242,7 +242,7 @@ var serveCmd = &cobra.Command{
 
 		// Attach database store to the operation queue (initialized early without store)
 		if operations.GlobalQueue != nil {
-			operations.GlobalQueue.SetStore(database.GlobalStore)
+			operations.GlobalQueue.SetStore(database.GetGlobalStore())
 			fmt.Println("Operation queue connected to database store")
 		}
 
@@ -254,7 +254,7 @@ var serveCmd = &cobra.Command{
 		fmt.Println("Settings encryption initialized")
 
 		// Load configuration from database (overrides defaults with persisted values)
-		if err := loadConfigFromDB(database.GlobalStore); err != nil {
+		if err := loadConfigFromDB(database.GetGlobalStore()); err != nil {
 			fmt.Printf("Warning: Could not load config from database: %v\n", err)
 		} else {
 			fmt.Println("Configuration loaded from database")
@@ -275,7 +275,7 @@ var serveCmd = &cobra.Command{
 		}
 
 		// Log import path count
-		if folders, err := database.GlobalStore.GetAllImportPaths(); err == nil {
+		if folders, err := database.GetGlobalStore().GetAllImportPaths(); err == nil {
 			fmt.Printf("  - Import paths (scan paths): %d configured\n", len(folders))
 			for _, folder := range folders {
 				fmt.Printf("    * %s (%s)\n", folder.Name, folder.Path)
@@ -293,7 +293,7 @@ var serveCmd = &cobra.Command{
 		if w := cmd.Flag("workers").Value.String(); w != "" {
 			fmt.Sscanf(w, "%d", &workers)
 		}
-		initializeQueue(database.GlobalStore, workers)
+		initializeQueue(database.GetGlobalStore(), workers)
 		if config.AppConfig.OperationTimeoutMinutes > 0 {
 			operations.SetGlobalOperationTimeout(time.Duration(config.AppConfig.OperationTimeoutMinutes) * time.Minute)
 		}

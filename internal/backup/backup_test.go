@@ -1211,13 +1211,13 @@ func TestCreateBackupLowCompression(t *testing.T) {
 // TestBackupDatabaseNotInitialized tests BackupDatabase with nil GlobalStore
 func TestBackupDatabaseNotInitialized(t *testing.T) {
 	// Save original GlobalStore and defer restore
-	originalStore := database.GlobalStore
+	originalStore := database.GetGlobalStore()
 	defer func() {
-		database.GlobalStore = originalStore
+		database.SetGlobalStore(originalStore)
 	}()
 
 	// Set GlobalStore to nil
-	database.GlobalStore = nil
+	database.SetGlobalStore(nil)
 
 	config := BackupConfig{
 		BackupDir:        t.TempDir(),

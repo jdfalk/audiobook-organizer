@@ -333,13 +333,13 @@ func TestTranscodeIntegration_ServerFlow(t *testing.T) {
 
 	// Build the operation function (mirrors server.go lines 5467-5551)
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		outputPath, err := transcode.Transcode(ctx, opts, database.GlobalStore, progress)
+		outputPath, err := transcode.Transcode(ctx, opts, database.GetGlobalStore(), progress)
 		if err != nil {
 			return err
 		}
 
 		// Get the original book to preserve its data
-		originalBook, err := database.GlobalStore.GetBookByID(bookID)
+		originalBook, err := database.GetGlobalStore().GetBookByID(bookID)
 		if err != nil {
 			return fmt.Errorf("failed to get original book: %w", err)
 		}
@@ -358,7 +358,7 @@ func TestTranscodeIntegration_ServerFlow(t *testing.T) {
 		originalBook.IsPrimaryVersion = &notPrimary
 		originalBook.VersionGroupID = &groupID
 		originalBook.VersionNotes = &origNotes
-		if _, err := database.GlobalStore.UpdateBook(bookID, originalBook); err != nil {
+		if _, err := database.GetGlobalStore().UpdateBook(bookID, originalBook); err != nil {
 			progress.Log("warn", fmt.Sprintf("Failed to update original book version info: %v", err), nil)
 		}
 
@@ -389,7 +389,7 @@ func TestTranscodeIntegration_ServerFlow(t *testing.T) {
 			VersionGroupID:   &groupID,
 			VersionNotes:     &m4bNotes,
 		}
-		if _, err := database.GlobalStore.CreateBook(newBook); err != nil {
+		if _, err := database.GetGlobalStore().CreateBook(newBook); err != nil {
 			return fmt.Errorf("failed to create M4B book record: %w", err)
 		}
 

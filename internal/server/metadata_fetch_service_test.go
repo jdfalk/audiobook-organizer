@@ -38,7 +38,7 @@ func (m *mockMetadataSource) SearchByTitleAndAuthor(title, author string) ([]met
 	return nil, nil
 }
 
-// setupGlobalStoreForTest sets database.GlobalStore to a MockStore that handles
+// setupGlobalStoreForTest sets database.GetGlobalStore() to a MockStore that handles
 // metadata state calls (needed by persistFetchedMetadata -> loadMetadataState).
 func setupGlobalStoreForTest(t *testing.T) {
 	t.Helper()

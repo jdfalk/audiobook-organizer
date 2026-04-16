@@ -56,19 +56,19 @@ func TestBulkFetchMetadata_MixedResults(t *testing.T) {
 	// Book that should update (has missing publisher/language/year/isbn/author).
 	tempFile := filepath.Join(t.TempDir(), "bulk1.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book1, err := database.GlobalStore.CreateBook(&database.Book{Title: "Book One", FilePath: tempFile, Format: "m4b"})
+	book1, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Book One", FilePath: tempFile, Format: "m4b"})
 	require.NoError(t, err)
 
 	// Book with missing title.
 	tempFile2 := filepath.Join(t.TempDir(), "bulk2.m4b")
 	require.NoError(t, os.WriteFile(tempFile2, []byte("audio"), 0o644))
-	book2, err := database.GlobalStore.CreateBook(&database.Book{Title: "", FilePath: tempFile2, Format: "m4b"})
+	book2, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "", FilePath: tempFile2, Format: "m4b"})
 	require.NoError(t, err)
 
 	// Book whose title returns no results.
 	tempFile3 := filepath.Join(t.TempDir(), "bulk3.m4b")
 	require.NoError(t, os.WriteFile(tempFile3, []byte("audio"), 0o644))
-	book3, err := database.GlobalStore.CreateBook(&database.Book{Title: "NoResults", FilePath: tempFile3, Format: "m4b"})
+	book3, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "NoResults", FilePath: tempFile3, Format: "m4b"})
 	require.NoError(t, err)
 
 	payload := map[string]interface{}{
@@ -144,7 +144,7 @@ func TestBulkFetchMetadata_OnlyMissingFalse_AllowsOverwrite(t *testing.T) {
 	tempFile := filepath.Join(t.TempDir(), "bulk-overwrite.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
 	existingPublisher := "Existing Pub"
-	book, err := database.GlobalStore.CreateBook(&database.Book{Title: "Book One", FilePath: tempFile, Format: "m4b", Publisher: &existingPublisher})
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Book One", FilePath: tempFile, Format: "m4b", Publisher: &existingPublisher})
 	require.NoError(t, err)
 
 	payload := map[string]interface{}{
@@ -160,7 +160,7 @@ func TestBulkFetchMetadata_OnlyMissingFalse_AllowsOverwrite(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	updated, err := database.GlobalStore.GetBookByID(book.ID)
+	updated, err := database.GetGlobalStore().GetBookByID(book.ID)
 	require.NoError(t, err)
 	require.NotNil(t, updated)
 	require.NotNil(t, updated.Publisher)

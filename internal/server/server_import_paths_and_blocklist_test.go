@@ -81,9 +81,9 @@ func TestImportPaths_ListNilAndRemoveInvalidID(t *testing.T) {
 	store.EXPECT().GetAllImportPaths().Return(([]database.ImportPath)(nil), nil)
 	store.EXPECT().DeleteImportPath(mock.Anything).Return(nil).Maybe()
 
-	origStore := database.GlobalStore
-	database.GlobalStore = store
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	// listImportPaths should return [] not null.
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/import-paths", nil)
@@ -113,7 +113,7 @@ func TestAddImportPath_EnqueuesAndExecutesOperationFunc(t *testing.T) {
 	config.AppConfig.RootDir = ""
 
 	store := dbmocks.NewMockStore(t)
-	origStore := database.GlobalStore
+	origStore := database.GetGlobalStore()
 	server, cleanup := setupTestServerWithStore(t, store)
 	defer cleanup()
 	queue := qmock.NewMockQueue(t)
@@ -124,7 +124,7 @@ func TestAddImportPath_EnqueuesAndExecutesOperationFunc(t *testing.T) {
 	operations.GlobalQueue = queue
 	scanner.GlobalScanner = scannerMock
 	t.Cleanup(func() {
-		database.GlobalStore = origStore
+		database.SetGlobalStore(origStore)
 		operations.GlobalQueue = origQueue
 		scanner.GlobalScanner = origScanner
 	})
@@ -166,9 +166,9 @@ func TestBlockedHashes_CRUD(t *testing.T) {
 	defer cleanup()
 
 	store := dbmocks.NewMockStore(t)
-	origStore := database.GlobalStore
-	database.GlobalStore = store
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	// addBlockedHash invalid hash length
 	bad := bytes.NewBufferString(`{"hash":"abc","reason":"nope"}`)

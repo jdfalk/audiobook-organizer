@@ -17,12 +17,12 @@ func TestCloseStoreWithDBOnly(t *testing.T) {
 		t.Fatalf("failed to open db: %v", err)
 	}
 
-	origStore := GlobalStore
+	origStore := globalStore
 	origDB := DB
-	GlobalStore = nil
+	globalStore = nil
 	DB = db
 	defer func() {
-		GlobalStore = origStore
+		globalStore = origStore
 		DB = origDB
 	}()
 

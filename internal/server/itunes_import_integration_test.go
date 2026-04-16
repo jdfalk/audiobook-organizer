@@ -116,7 +116,7 @@ func TestITunesImport_BuildAndSaveBooks(t *testing.T) {
 		book, err := buildBookFromAlbumGroup(group, testLibraryPath(t), opts)
 		require.NoError(t, err, "build book for group %s", group.key)
 
-		created, err := database.GlobalStore.CreateBook(book)
+		created, err := database.GetGlobalStore().CreateBook(book)
 		require.NoError(t, err, "save book %s", book.Title)
 		savedBooks = append(savedBooks, created)
 	}
@@ -125,7 +125,7 @@ func TestITunesImport_BuildAndSaveBooks(t *testing.T) {
 
 	// Verify books exist in DB with correct titles
 	for _, book := range savedBooks {
-		fetched, err := database.GlobalStore.GetBookByID(book.ID)
+		fetched, err := database.GetGlobalStore().GetBookByID(book.ID)
 		require.NoError(t, err)
 		require.NotNil(t, fetched)
 		assert.Equal(t, book.Title, fetched.Title)
@@ -165,7 +165,7 @@ func TestITunesImport_AuthorAndSeriesCreation(t *testing.T) {
 	assignAuthorAndSeries(database.GetGlobalStore(), book1, track1)
 
 	require.NotNil(t, book1.AuthorID, "AuthorID should be set")
-	author, err := database.GlobalStore.GetAuthorByName("Frank Herbert")
+	author, err := database.GetGlobalStore().GetAuthorByName("Frank Herbert")
 	require.NoError(t, err)
 	require.NotNil(t, author)
 	assert.Equal(t, *book1.AuthorID, author.ID)
@@ -173,7 +173,7 @@ func TestITunesImport_AuthorAndSeriesCreation(t *testing.T) {
 	// "Dune Chronicles" has no separator with exactly 2 parts, so extractSeriesName
 	// returns the whole album name
 	require.NotNil(t, book1.SeriesID, "SeriesID should be set")
-	series, err := database.GlobalStore.GetSeriesByName("Dune Chronicles", book1.AuthorID)
+	series, err := database.GetGlobalStore().GetSeriesByName("Dune Chronicles", book1.AuthorID)
 	require.NoError(t, err)
 	require.NotNil(t, series)
 	assert.Equal(t, *book1.SeriesID, series.ID)
@@ -199,7 +199,7 @@ func TestITunesImport_AuthorAndSeriesCreation(t *testing.T) {
 
 	require.NotNil(t, book3.SeriesID)
 	// extractSeriesName("Middle-earth, Book 1") should return "Middle-earth"
-	seriesMiddle, err := database.GlobalStore.GetSeriesByName("Middle-earth", book3.AuthorID)
+	seriesMiddle, err := database.GetGlobalStore().GetSeriesByName("Middle-earth", book3.AuthorID)
 	require.NoError(t, err)
 	require.NotNil(t, seriesMiddle)
 	assert.Equal(t, *book3.SeriesID, seriesMiddle.ID)
@@ -224,7 +224,7 @@ func TestITunesImport_AuthorDedup(t *testing.T) {
 	assert.Equal(t, *bookA.AuthorID, *bookB.AuthorID, "both books should share the same author ID")
 
 	// Verify only one author named "Isaac Asimov" exists
-	authors, err := database.GlobalStore.GetAllAuthors()
+	authors, err := database.GetGlobalStore().GetAllAuthors()
 	require.NoError(t, err)
 	count := 0
 	for _, a := range authors {
@@ -266,7 +266,7 @@ func TestITunesImport_SeriesExtraction(t *testing.T) {
 	assignAuthorAndSeries(database.GetGlobalStore(), book, track)
 
 	require.NotNil(t, book.SeriesID)
-	series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID)
+	series, err := database.GetGlobalStore().GetSeriesByID(*book.SeriesID)
 	require.NoError(t, err)
 	require.NotNil(t, series)
 	assert.Equal(t, "Middle-earth", series.Name)
@@ -323,7 +323,7 @@ func TestITunesImport_MultiTrackBookSegments(t *testing.T) {
 	book, err := buildBookFromAlbumGroup(*mobyGroup, testLibraryPath(t), opts)
 	require.NoError(t, err)
 
-	created, err := database.GlobalStore.CreateBook(book)
+	created, err := database.GetGlobalStore().CreateBook(book)
 	require.NoError(t, err)
 
 	// Create book_files as executeITunesImport does (replaces legacy book_segments)
@@ -342,11 +342,11 @@ func TestITunesImport_MultiTrackBookSegments(t *testing.T) {
 			TrackNumber: track.TrackNumber,
 			TrackCount:  len(mobyGroup.tracks),
 		}
-		require.NoError(t, database.GlobalStore.CreateBookFile(bf))
+		require.NoError(t, database.GetGlobalStore().CreateBookFile(bf))
 	}
 
 	// Verify book_files
-	files, err := database.GlobalStore.GetBookFiles(created.ID)
+	files, err := database.GetGlobalStore().GetBookFiles(created.ID)
 	require.NoError(t, err)
 	require.Len(t, files, 3)
 
