@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -49,7 +49,7 @@ type readByFixResult struct {
 func (s *Server) handleFixReadByNarrator(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -328,7 +328,7 @@ type seriesCleanupDupGroup struct {
 func (s *Server) handleCleanupSeries(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -633,7 +633,7 @@ type bookFilesBackfillResult struct {
 func (s *Server) handleBackfillBookFiles(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") == "true"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -1092,7 +1092,7 @@ type authorNarratorSwapResult struct {
 func (s *Server) handleFixAuthorNarratorSwap(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -1257,7 +1257,7 @@ type authorDirBook struct {
 func (s *Server) handleFixVersionGroups(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -1684,7 +1684,7 @@ type enrichBookFileResult struct {
 func (s *Server) handleEnrichBookFiles(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -1894,7 +1894,7 @@ type fixBookFilePathsResult struct {
 func (s *Server) handleFixBookFilePaths(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -2116,7 +2116,7 @@ type dedupMergeDetail struct {
 func (s *Server) handleDedupBooks(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") == "true"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -2728,7 +2728,7 @@ type refetchMissingAuthorsResult struct {
 func (s *Server) handleRefetchMissingAuthors(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -2951,7 +2951,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -3303,7 +3303,7 @@ type libraryStateFixResult struct {
 func (s *Server) handleFixLibraryStates(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -3403,7 +3403,7 @@ type recomputeITunesPathResult struct {
 func (s *Server) handleRecomputeITunesPaths(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -3483,7 +3483,7 @@ func (s *Server) handleRecomputeITunesPaths(c *gin.Context) {
 
 // handleGenerateITLTests generates a suite of .itl test files for iTunes testing.
 func (s *Server) handleGenerateITLTests(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
