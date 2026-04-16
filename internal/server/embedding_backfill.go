@@ -1,5 +1,5 @@
 // file: internal/server/embedding_backfill.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 
 package server
@@ -7,8 +7,6 @@ package server
 import (
 	"context"
 	"log"
-
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 // backfillVersionMarker identifies the current generation of the dedup
@@ -34,7 +32,7 @@ const backfillVersionMarker = "embedding_backfill_v5_done"
 // runEmbeddingBackfill embeds all books and authors on first startup and
 // re-runs once after each backfill version bump.
 func (s *Server) runEmbeddingBackfill() {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil || s.dedupEngine == nil {
 		return
 	}

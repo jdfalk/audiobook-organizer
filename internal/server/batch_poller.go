@@ -1,5 +1,5 @@
 // file: internal/server/batch_poller.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f8a1b2c3-d4e5-6789-abcd-0123456789ab
 
 package server
@@ -185,7 +185,7 @@ func (s *Server) registerBatchPollerHandlers() {
 func (s *Server) storeBatchResultForOperation(batchID string, payload map[string]any) {
 	store := s.batchPoller.db
 	if store == nil {
-		store = database.GlobalStore
+		store = s.Store()
 	}
 	if store == nil {
 		log.Printf("[WARN] batch_poller: no store available to save batch %s results", batchID)
