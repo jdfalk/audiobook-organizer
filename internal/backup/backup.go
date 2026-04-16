@@ -1,5 +1,5 @@
 // file: internal/backup/backup.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8f9e0a1b-2c3d-4e5f-6a7b-8c9d0e1f2a3b
 
 package backup
@@ -380,7 +380,7 @@ func ScheduleBackup(interval time.Duration, config BackupConfig) error {
 
 // BackupDatabase is a convenience function that backs up the global database
 func BackupDatabase(config BackupConfig) (*BackupInfo, error) {
-	if database.GlobalStore == nil {
+	if database.GetGlobalStore() == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 

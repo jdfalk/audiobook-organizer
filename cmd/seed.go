@@ -1,5 +1,5 @@
 // file: cmd/seed.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7d2e9a4f-1b85-4c63-9f0a-3e8d7b2c1f56
 //
 // `seed` populates a fresh database with synthetic books for local
@@ -96,7 +96,7 @@ func runSeed(cmd *cobra.Command, _ []string) error {
 	}
 	defer closeStore()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}
