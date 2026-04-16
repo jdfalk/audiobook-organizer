@@ -1449,6 +1449,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 	} else if created > 0 || updated > 0 {
 		log.Printf("[INFO] seed roles: %d created, %d updated", created, updated)
 	}
+	if err := auth.SeedSystemUser(s.Store()); err != nil {
+		log.Printf("[WARN] seed system user: %v", err)
+	}
 
 	// Resume any operations that were interrupted by a previous shutdown/crash
 	s.resumeInterruptedOperations()

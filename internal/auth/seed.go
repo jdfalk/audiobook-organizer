@@ -107,6 +107,29 @@ func SeedRoles(store database.Store) (created, updated int, err error) {
 	return created, updated, nil
 }
 
+// SystemUserID is the ID of the _system pseudo-user. Used to
+// attribute operations triggered by background tasks (scanners,
+// maintenance, etc.) rather than a real human user.
+const SystemUserID = "_system"
+
+// SeedSystemUser creates the _system pseudo-user if absent.
+// It has no password and cannot log in — it exists solely as an
+// audit attribution target.
+func SeedSystemUser(store database.Store) error {
+	if store == nil {
+		return nil
+	}
+	existing, err := store.GetUserByUsername(SystemUserID)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return nil
+	}
+	_, err = store.CreateUser(SystemUserID, "_system@local", "", "", nil, "system")
+	return err
+}
+
 // samePermSet reports whether two permission slices contain the same
 // set of values, independent of order.
 func samePermSet(a, b []Permission) bool {
