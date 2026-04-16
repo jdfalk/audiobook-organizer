@@ -42,7 +42,7 @@ func TestListAudiobooksWithMockery(t *testing.T) {
 	// database.GlobalStore = mockStore
 	// defer func() { database.GlobalStore = nil }()
 	//
-	// server := NewServer()
+	// server := NewServer(nil)
 	//
 	// req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks", nil)
 	// w := httptest.NewRecorder()
@@ -75,7 +75,7 @@ func TestListAudiobooksDatabaseError(t *testing.T) {
 	// database.GlobalStore = mockStore
 	// defer func() { database.GlobalStore = nil }()
 	//
-	// server := NewServer()
+	// server := NewServer(nil)
 	//
 	// req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks", nil)
 	// w := httptest.NewRecorder()
@@ -116,7 +116,7 @@ func TestUpdateAudiobookWithVerification(t *testing.T) {
 	// database.GlobalStore = mockStore
 	// defer func() { database.GlobalStore = nil }()
 	//
-	// server := NewServer()
+	// server := NewServer(nil)
 	//
 	// updateData := map[string]interface{}{
 	// 	"title": "Updated Title",
@@ -147,7 +147,7 @@ func TestCountAudiobooksWithSearch(t *testing.T) {
 	// database.GlobalStore = mockStore
 	// defer func() { database.GlobalStore = nil }()
 	//
-	// server := NewServer()
+	// server := NewServer(nil)
 	//
 	// req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/count?search=test", nil)
 	// w := httptest.NewRecorder()
@@ -177,7 +177,7 @@ func TestAddBlockedHashWithMockery(t *testing.T) {
 	// database.GlobalStore = mockStore
 	// defer func() { database.GlobalStore = nil }()
 	//
-	// server := NewServer()
+	// server := NewServer(nil)
 	//
 	// hashData := map[string]interface{}{
 	// 	"hash":   testHash,
@@ -221,7 +221,7 @@ func TestWorkEndpointSequentialCalls(t *testing.T) {
 	// database.GlobalStore = mockStore
 	// defer func() { database.GlobalStore = nil }()
 	//
-	// server := NewServer()
+	// server := NewServer(nil)
 	//
 	// // Create work
 	// workData := map[string]interface{}{"title": "New Work"}

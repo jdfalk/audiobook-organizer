@@ -45,7 +45,7 @@ func TestOrganizeService_ViaHTTP(t *testing.T) {
 	}))
 
 	// Trigger organize via HTTP
-	server := NewServer()
+	server := NewServer(nil)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operations/organize", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
