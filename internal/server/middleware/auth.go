@@ -1,5 +1,5 @@
 // file: internal/server/middleware/auth.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 83c42ecb-1df2-4baf-9890-3f91ab4db6fe
 
 package middleware
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -118,6 +119,78 @@ func RequireAuth(store database.Store) gin.HandlerFunc {
 
 		c.Set(contextUserKey, user)
 		c.Set(contextSessionKey, session)
+
+		// Also attach user + effective permissions on the request
+		// context using the typed helpers from internal/auth so
+		// handlers can call auth.Can(ctx, perm) directly. Permissions
+		// are the union of every role's permission list — computed
+		// on each request. Spec 3.7 calls for caching this on the
+		// session blob for perf; that optimization is a follow-up.
+		perms := effectivePermissionsFor(store, user)
+		ctx := auth.WithUser(c.Request.Context(), user)
+		ctx = auth.WithPermissions(ctx, perms)
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
+}
+
+// effectivePermissionsFor resolves the union of every role's
+// Permissions slice for the given user. Unknown roles are skipped.
+// Returns nil if the user has no roles (which makes every Can()
+// check return false — safe default).
+func effectivePermissionsFor(store database.Store, user *database.User) []auth.Permission {
+	if user == nil || len(user.Roles) == 0 || store == nil {
+		return nil
+	}
+	seen := make(map[auth.Permission]struct{})
+	for _, roleID := range user.Roles {
+		role, err := store.GetRoleByID(roleID)
+		if err != nil || role == nil {
+			continue
+		}
+		for _, p := range role.Permissions {
+			seen[p] = struct{}{}
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]auth.Permission, 0, len(seen))
+	for p := range seen {
+		out = append(out, p)
+	}
+	return out
+}
+
+// RequirePermission returns a middleware that aborts with 403 if the
+// calling user doesn't have permission p. Must be chained after
+// RequireAuth (which loads the user + permission set into the
+// request context).
+//
+// Exception: if no users exist yet (first-run bootstrap), the check
+// is bypassed so the /setup wizard can run unauthenticated.
+func RequirePermission(store database.Store, p auth.Permission) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// First-run bypass — RequireAuth uses the same pattern.
+		if store != nil {
+			if n, err := store.CountUsers(); err == nil && n == 0 {
+				c.Next()
+				return
+			}
+		}
+		if !auth.Can(c.Request.Context(), p) {
+			// Distinguish unauth (no user on ctx) from authz fail
+			// (user present but missing perm) so API clients get a
+			// meaningful status code.
+			if _, ok := auth.UserFromContext(c.Request.Context()); !ok {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			} else {
+				c.JSON(http.StatusForbidden, gin.H{"error": "permission denied: " + p})
+			}
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }
