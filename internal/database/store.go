@@ -696,6 +696,7 @@ type ImportPath struct {
 // Operation represents an async operation
 type Operation struct {
 	ID           string     `json:"id"`
+	UserID       string     `json:"user_id,omitempty"`
 	Type         string     `json:"type"`
 	Status       string     `json:"status"`
 	Progress     int        `json:"progress"`
@@ -723,6 +724,7 @@ type OperationLog struct {
 type OperationChange struct {
 	ID          string     `json:"id"`
 	OperationID string     `json:"operation_id"`
+	UserID      string     `json:"user_id,omitempty"`
 	BookID      string     `json:"book_id"`
 	ChangeType  string     `json:"change_type"`  // "file_move", "metadata_update", "tag_write"
 	FieldName   string     `json:"field_name"`
@@ -735,6 +737,7 @@ type OperationChange struct {
 // SystemActivityLog represents a log entry from a housekeeping goroutine.
 type SystemActivityLog struct {
 	ID        int       `json:"id"`
+	UserID    string    `json:"user_id,omitempty"`
 	Source    string    `json:"source"`
 	Level     string    `json:"level"`
 	Message   string    `json:"message"`
