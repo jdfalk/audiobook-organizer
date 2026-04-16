@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -146,10 +146,10 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 			return e
 		}
 		e := enriched{}
-		if book, err := database.GlobalStore.GetBookByID(id); err == nil && book != nil {
+		if book, err := s.Store().GetBookByID(id); err == nil && book != nil {
 			e.title = book.Title
 			if book.AuthorID != nil {
-				if a, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && a != nil {
+				if a, err := s.Store().GetAuthorByID(*book.AuthorID); err == nil && a != nil {
 					e.author = a.Name
 				}
 			}
@@ -307,7 +307,7 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 		if v, ok := bookSeries[id]; ok {
 			return v
 		}
-		book, err := database.GlobalStore.GetBookByID(id)
+		book, err := s.Store().GetBookByID(id)
 		if err != nil || book == nil || book.SeriesID == nil {
 			bookSeries[id] = 0
 			return 0
@@ -364,7 +364,7 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 		}
 
 		name := ""
-		if series, err := database.GlobalStore.GetSeriesByID(seriesID); err == nil && series != nil {
+		if series, err := s.Store().GetSeriesByID(seriesID); err == nil && series != nil {
 			name = series.Name
 		}
 		summary = append(summary, dedupSeriesSummary{
@@ -435,7 +435,7 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 		if v, ok := bookSeries[id]; ok {
 			return v
 		}
-		book, err := database.GlobalStore.GetBookByID(id)
+		book, err := s.Store().GetBookByID(id)
 		if err != nil || book == nil || book.SeriesID == nil {
 			bookSeries[id] = 0
 			return 0
@@ -1002,7 +1002,7 @@ func (s *Server) triggerDedupScan(c *gin.Context) {
 	}
 
 	opID := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(opID, "dedup-scan", nil)
+	op, err := s.Store().CreateOperation(opID, "dedup-scan", nil)
 	if err != nil {
 		internalError(c, "failed to create dedup-scan operation", err)
 		return
@@ -1072,7 +1072,7 @@ func (s *Server) triggerDedupLLM(c *gin.Context) {
 	}
 
 	opID := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(opID, "dedup-llm-review", nil)
+	op, err := s.Store().CreateOperation(opID, "dedup-llm-review", nil)
 	if err != nil {
 		internalError(c, "failed to create dedup-llm-review operation", err)
 		return
