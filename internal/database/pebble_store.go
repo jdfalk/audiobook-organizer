@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.47.0
+// version: 1.48.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -21,6 +21,17 @@ import (
 	"github.com/cockroachdb/pebble/v2"
 	ulid "github.com/oklog/ulid/v2"
 )
+
+// prefixEnd returns an upper-bound key for Pebble range iteration
+// over all keys sharing `prefix`. It creates a separate byte slice
+// so the increment doesn't mutate the original prefix.
+func prefixEnd(prefix []byte) []byte {
+	upper := make([]byte, len(prefix))
+	copy(upper, prefix)
+	upper[len(upper)-1]++
+	return upper
+}
+
 
 // PebbleStore implements the Store interface using PebbleDB (LSM key-value store)
 //
@@ -5782,7 +5793,7 @@ func (p *PebbleStore) GetOperationChanges(operationID string) ([]*OperationChang
 	prefix := []byte(fmt.Sprintf("opchange:%s:", operationID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6178,7 +6189,7 @@ func (p *PebbleStore) GetBookPathHistory(bookID string) ([]BookPathChange, error
 	prefix := []byte(fmt.Sprintf("path_history:%s:", bookID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6300,7 +6311,7 @@ func (p *PebbleStore) GetBookTags(bookID string) ([]string, error) {
 	prefix := []byte(fmt.Sprintf("book_tag:%s:", bookID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6327,7 +6338,7 @@ func (p *PebbleStore) GetBookTagsDetailed(bookID string) ([]BookTag, error) {
 	prefix := []byte(fmt.Sprintf("book_tag:%s:", bookID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6406,7 +6417,7 @@ func (p *PebbleStore) ListAllTags() ([]TagWithCount, error) {
 	prefix := []byte("tag_idx:")
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6443,7 +6454,7 @@ func (p *PebbleStore) GetBooksByTag(tag string) ([]string, error) {
 	prefix := []byte(fmt.Sprintf("tag_idx:%s:", tag))
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6549,7 +6560,7 @@ func (p *PebbleStore) pebbleGetTags(ks pebbleTagKeyspace, entityID string) ([]st
 	prefix := []byte(fmt.Sprintf("%s%s:", ks.tagPrefix, entityID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6572,7 +6583,7 @@ func (p *PebbleStore) pebbleGetTagsDetailed(ks pebbleTagKeyspace, entityID strin
 	prefix := []byte(fmt.Sprintf("%s%s:", ks.tagPrefix, entityID))
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6661,7 +6672,7 @@ func (p *PebbleStore) pebbleListAllTags(ks pebbleTagKeyspace) ([]TagWithCount, e
 	prefix := []byte(ks.indexPrefix)
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
@@ -6697,7 +6708,7 @@ func (p *PebbleStore) pebbleEntitiesByTag(ks pebbleTagKeyspace, tag string) ([]s
 	prefix := []byte(fmt.Sprintf("%s%s:", ks.indexPrefix, tag))
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: append(prefix[:len(prefix)-1], prefix[len(prefix)-1]+1),
+		UpperBound: prefixEnd(prefix),
 	})
 	if err != nil {
 		return nil, err
