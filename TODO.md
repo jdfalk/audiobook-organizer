@@ -206,11 +206,11 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 - [x] [2026-04-09 Embedding dedup](docs/superpowers/plans/2026-04-09-embedding-dedup.md)
 - [x] [2026-04-10 Metadata candidate scoring PR1](docs/superpowers/plans/2026-04-10-metadata-candidate-scoring-pr1.md)
 - [x] [2026-04-10 Metadata candidate scoring PR2](docs/superpowers/plans/2026-04-10-metadata-candidate-scoring-pr2.md)
-- ⏳ [2026-04-15 Library centralization](docs/superpowers/plans/2026-04-15-library-centralization.md) — tasks 1-4 done (schema, fs, swap, fingerprint)
-- ⏳ [2026-04-15 Bulk organize undo](docs/superpowers/plans/2026-04-15-bulk-organize-undo.md) — tasks 1, 3, 5 done (schema, engine, preflight)
+- ⏳ [2026-04-15 Library centralization](docs/superpowers/plans/2026-04-15-library-centralization.md) — tasks 1-6 done (schema→lifecycle, frontend remaining)
+- ⏳ [2026-04-15 Bulk organize undo](docs/superpowers/plans/2026-04-15-bulk-organize-undo.md) — tasks 1-3, 5 done (schema, tracking, engine, preflight)
 - ⏳ [2026-04-15 Smart + static playlists](docs/superpowers/plans/2026-04-15-smart-and-static-playlists.md) — tasks 1-3 done (schema, evaluator, HTTP)
 - ⏳ [2026-04-15 Read/unread tracking](docs/superpowers/plans/2026-04-15-read-unread-tracking.md) — tasks 1-4 done (schema, HTTP, engine, iTunes sync)
-- ⏳ [2026-04-15 Multi-user support](docs/superpowers/plans/2026-04-15-multi-user-support.md) — tasks 1-4, 6-7 done (schema→admin API)
+- ⏳ [2026-04-15 Multi-user support](docs/superpowers/plans/2026-04-15-multi-user-support.md) — tasks 1-8 done (backend complete, OAuth deferred)
 - ⏳ [2026-04-15 Bleve library search (DES-1)](docs/superpowers/plans/2026-04-15-bleve-library-search.md) — tasks 1-6 done (skeleton through frontend)
 - [x] [2026-04-15 DI migration (4.4)](docs/superpowers/plans/2026-04-15-di-migration.md) — complete
 

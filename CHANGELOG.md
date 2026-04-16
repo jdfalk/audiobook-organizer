@@ -11,7 +11,7 @@
 
 #### April 16, 2026 — Feature Foundations (v0.209.0 + v0.210.0)
 
-Major backend foundation work spanning 6 design specs and 39 PRs (#280-#319).
+Major backend foundation work spanning 6 design specs and 46 PRs (#280-#326).
 
 ##### DI Migration (4.4) — Complete
 - Replaced `database.GlobalStore` package global with constructor injection across all services (#280-#291)
@@ -23,11 +23,13 @@ Major backend foundation work spanning 6 design specs and 39 PRs (#280-#319).
 - Login lockout after 10 consecutive failures (in-memory, 15-min window) (#313)
 - All 247 routes now have permission middleware (#314)
 
-##### Library Centralization (3.1) — Schema + Operations
+##### Library Centralization (3.1) — Tasks 1-6 Complete
 - BookVersion type with 8 status constants + single-active invariant
 - `.versions/` filesystem operations (idempotent, ZFS-optimized) (#306)
 - Primary-swap tracked operation with crash-recovery (#315)
 - Fingerprint check for incoming files (#316)
+- Ingest versioning: CreateIngestVersion creates version + SHA-256 hash on import (#324)
+- Delete/trash/purge lifecycle: trash with 14-day TTL, auto-promote, restore, purge-now, hard-delete (#325)
 
 ##### Read/Unread Tracking (3.6) — Backend Complete
 - UserPosition + UserBookState types with auto-derived status (95% threshold)
@@ -51,9 +53,14 @@ Major backend foundation work spanning 6 design specs and 39 PRs (#280-#319).
 - User management admin API: list users, invite generation, deactivation/reactivation, password reset, invite acceptance (#322)
 - ListUsers() added to Store interface + PebbleStore impl
 
-##### Undo Engine (3.2) — Core + Pre-flight
+##### Undo Engine (3.2) — Tasks 1-3, 5
 - Undo engine: reverses operation changes (file moves, metadata, dir cleanup) (#318)
 - Pre-flight conflict detection endpoint (#319)
+- Organize now tracks library_state changes for undo (#326)
+
+##### Auth audit (3.7 task 8)
+- UserID field on Operation, OperationChange, SystemActivityLog (backward-compatible)
+- `_system` pseudo-user seeded at startup for background task attribution
 
 ### Fixed
 - **Pebble prefix iteration slice aliasing** (#318): `append(prefix[:n-1], ...)` mutated the original slice, producing empty ranges. Fixed 10 instances.
