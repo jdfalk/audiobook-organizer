@@ -1,15 +1,181 @@
 <!-- file: docs/superpowers/specs/2026-04-11-bleve-library-search.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: d2e3f4a5-b6c7-8901-2345-67890abcdef1 -->
-<!-- last-edited: 2026-04-11 -->
+<!-- last-edited: 2026-04-15 -->
 
 # bleve Library Search Design
 
-**Status:** Design spec — not yet implemented.
+**Status:** Design spec — not yet implemented. v1.1 folds in decisions from the 2026-04-15 brainstorm (DSL integration, query usage map, new operators, default match mode, perf targets, per-user indexing future-work).
 **Owner:** TBD.
-**Parent task:** Backlog item 4.7 (per-workload DB evaluation).
-**Depends on:** Nothing. Standalone replacement for the current
-SQLite FTS5 + LIKE + Go-rerank search path.
+**Parent tasks:** TODO.md DES-1 (primary); pairs with 3.4 playlists (shares the DSL) and 3.6 read/unread tracking (Go-side post-filter for per-user fields).
+**Depends on:** Nothing. Standalone replacement for the current SQLite FTS5 + LIKE + Go-rerank search path.
+
+## v1.1 summary of additions (2026-04-15)
+
+Bleve becomes **THE engine** driving the library search bar and smart-playlist query evaluation — not a side-index used only for free-text. Our locked DSL (from §3.4 design) compiles to Bleve `query.Query` objects so one engine serves everything user-facing. New sections added below:
+
+- **§ Integration with our query DSL** — translator from our AST to Bleve programmatic queries
+- **§ Where Bleve drives behavior** — usage map, explicit "where Bleve does NOT run"
+- **§ Syntax comparison table** — our DSL vs Bleve native string syntax, differences called out
+- **§ Default match mode change** — substring → tokenized + stemmed, plus the UI auto-append-`*` workaround to preserve typeahead UX
+- **§ New operators added to our DSL** — `*` (prefix/wildcard), `~` (fuzzy), `^N` (boost), consistent `field:<op>value` placement (e.g. `year:>2022`, not `year>2022`)
+- **§ Perf targets** — concrete per-query-type timings at 24K-book scale, typeahead budget
+- **§ Per-user indexing (deferred)** — shared-library index + Go post-filter for per-user fields (`read_status`, `progress_pct`, `last_played`); shard model documented as future work if scale demands it
+
+The v1.0 document model, field boosts, index lifecycle, concurrency model, migration phases, and risks all stand.
+
+## Integration with our query DSL
+
+Our DSL (defined in the 3.4 playlists spec) is the user-facing query language. Bleve is the backend evaluator. Users don't see Bleve's native syntax — it's an implementation detail.
+
+Translation pipeline:
+
+```
+User input ──▶ DSL parser ──▶ AST ──▶ translator ──▶ Bleve query.Query ──▶ Bleve index
+                               │
+                               └─▶ Go post-filter pass for per-user fields
+```
+
+Translator rules:
+
+| Our AST node | Bleve query |
+|---|---|
+| `AND` | `ConjunctionQuery` |
+| `OR` | `DisjunctionQuery` |
+| `NOT` | `BooleanQuery{MustNot: [...]}` |
+| Field leaf (single term) | `MatchQuery{Field, Term}` (tokenized + analyzed) |
+| Field leaf (quoted, multi-word) | `MatchPhraseQuery{Field, Text}` |
+| Field leaf with `*` wildcard | `WildcardQuery` (or `PrefixQuery` for trailing `*`) |
+| Field leaf with `~` fuzzy | `FuzzyQuery{Field, Term, Fuzziness}` |
+| Field leaf with `^N` boost | any above, with `boost` parameter |
+| Within-field alt `field:(a\|b\|c)` | `DisjunctionQuery` of `MatchQuery`s |
+| Numeric `field:>N` | `NumericRangeQuery{Min: N, Min: false}` (exclusive) |
+| Numeric `field:>=N` | `NumericRangeQuery{Min: N, Min: true}` (inclusive) |
+| Numeric `field:<N` / `field:<=N` | `NumericRangeQuery{Max: N, ...}` |
+| Numeric `field:[A TO B]` | `NumericRangeQuery{Min: A, Max: B, both inclusive}` |
+| Date range | `DateRangeQuery` |
+| Per-user field (`read_status`, `progress_pct`, `last_played`) | **Not sent to Bleve.** Added to the Go post-filter list. Bleve returns a larger candidate set; Go narrows to matches for the calling user. |
+
+Per-user post-filter:
+
+1. Bleve evaluates the index-backed portion, returns scored candidate book IDs
+2. Go pass applies per-user filters using the calling user's state from the `user_book_state` / `user_position` PebbleDB keys
+3. Intersection returned, preserving Bleve's score order so relevance is honored
+
+## Where Bleve drives behavior
+
+| Surface | Uses Bleve | Notes |
+|---|---|---|
+| Library search bar (free-text + field:value) | **Yes** | Primary use. TF-IDF scoring, stemmed match, highlights. |
+| Smart playlist query evaluation | **Yes** | Shares DSL + engine with search bar. Results preserve Bleve score ordering. |
+| Quick filter autocomplete (typeahead on authors, series, tags) | **Yes** | `PrefixQuery` on indexed fields. Search bar auto-appends `*` to the last typed token. |
+| "Similar books" on BookDetail (future 5.2) | **Yes** | Bleve's `more-like-this` / `SimilarQuery` fits naturally. |
+| Book dedup candidate matching | No | Separate engine (embedding + heuristic) already in place. Different problem — similarity, not retrieval. |
+| BookDetail direct lookup by book ID | No | PebbleDB point lookup is 10-20× faster than routing through Bleve. |
+| Full-library paginated list (no search term, page 47 of everything) | No | PebbleDB prefix scan with cursor is the right tool; scoring irrelevant. |
+| Activity log search | Later | Existing FTS works; migrate post-MVP if Bleve replaces the shared search infra. |
+| Per-user filter fields (`read_status`, `progress_pct`, `last_played`) | No | Go post-filter over the current user's state; see integration section above. |
+
+## Syntax comparison
+
+Users write our DSL. Bleve syntax shown for reference (useful if we ever expose a "raw Bleve" advanced mode).
+
+| Operation | Our DSL | Bleve native string | Notes |
+|---|---|---|---|
+| AND | space, `&&`, `AND` | space, `AND` | Bleve has no `&&` — our parser accepts both |
+| OR | `OR`, `||` (double pipe) | `OR` only | Bleve has no `||` — our parser accepts both |
+| NOT | `-`, `NOT` | `-`, `NOT` | Same |
+| Within-field alt | `title:(a|b|c)` | `title:(a OR b OR c)` | Our `|` is sugar; translates to `DisjunctionQuery` of `MatchQuery`s |
+| Range open | `year:>2000` | `year:>2000` | Colon before comparator on both sides |
+| Range closed (inclusive) | `year:[2000 TO 2010]` | `year:[2000 TO 2010]` | Same |
+| Prefix | `title:vamp*` | `title:vamp*` | Same |
+| Wildcard | `title:*vamp*` | `title:*vamp*` | Same; slower than prefix on both sides |
+| Fuzzy | `author:smith~` | `author:smith~` | Same |
+| Boost | `title:vampire^3` | `title:vampire^3` | Same |
+| Exact (reserved, future) | `title:=value` | (use Term query programmatically) | Bleve's string DSL has no exact operator — reserved in ours for later |
+| Phrase | `title:"New Dawn"` | `title:"New Dawn"` | Same |
+
+## Default match mode change (semantics)
+
+v1.0 design implied field matches were tokenized. Making it explicit here as a locked-in semantic choice in v1.1.
+
+| Query | Before (substring-anywhere, current SQLite LIKE) | After (tokenized + stemmed, Bleve) |
+|---|---|---|
+| `title:vampire` | matches "vampirically-inclined", "revampire" | matches "vampire", "vampires", "vampiric" (stemmer expands) |
+| `title:vamp` | matches "The Vampire Diaries" | does NOT match (needs `vamp*`) |
+| `author:mart` | matches "Martin", "Smart" | does NOT match (needs `mart*`) |
+
+Tokenized + stemmed is better for audiobook discovery: noise matches ("vampirically") disappear, morphology ("vampires", "vampiric") is captured. Trade-off: partial-word queries need an explicit `*`.
+
+**Typeahead workaround:** the library search bar UI auto-appends `*` to the last typed token in the free-text portion. `vamp` → `vamp*` behind the scenes, so users typing `vamp` still see "The Vampire Diaries" in live suggestions. Explicit queries (smart playlist definitions) receive no auto-append — if a user writes `title:vamp` in a saved query, they meant the whole word.
+
+## New operators added to our DSL
+
+Added in v1.1 to match Bleve's core capabilities. Consistent placement: always `field:<op><value>` or `field:<value><op>` — the colon sits between field and the value-expression, operators live inside the value-expression.
+
+| Operator | Syntax | Meaning | Example |
+|---|---|---|---|
+| Prefix / suffix / substring wildcard | `*` | Star matches zero-or-more chars | `title:vamp*`, `title:*vamp`, `title:*vamp*` |
+| Fuzzy | `~` | Edit-distance match (default distance 2) | `author:smith~` matches Smyth, Smiht |
+| Boost | `^N` | Multiply relevance score by N for this clause | `title:vampire^3` |
+| Numeric comparators | `:>`, `:<`, `:>=`, `:<=` | Inline with `field:` prefix (consistent style) | `year:>2022`, `duration:<3600` |
+| Numeric range | `:[A TO B]` | Inclusive range (reserved; MVP unfolds to `&&`) | `year:[2000 TO 2010]` |
+| Exact (reserved) | `:=` | Exact match, no tokenization | `title:="Twilight"` (future; MVP approximates) |
+
+**Consistency rule:** every value-side operator goes inside the `field:` expression. No more `year>2022` — it's `year:>2022`. Same everywhere.
+
+## Perf targets (at 24K-book scale)
+
+Ballpark numbers on a modest machine; validate in phase 2 of the migration plan.
+
+| Operation | Bleve | Current (FTS5 + LIKE + Go re-rank) | PebbleDB point lookup |
+|---|---|---|---|
+| Exact term match (`author:sanderson`) | 1-3 ms | 20-50 ms | — |
+| Prefix (`title:vamp*`) | 2-10 ms | 100-500 ms (full scan via LIKE) | — |
+| Fuzzy (`author:smith~`) | 10-50 ms | — (not supported) | — |
+| Multi-field boolean (`a && b`) | 2-10 ms | 30-100 ms | — |
+| Phrase (`"lord of the rings"`) | 1-5 ms | — (not supported as configured) | — |
+| Direct get-book-by-ID | — (not the right tool) | — | 50-200 μs |
+| Iterate all 24K books, no filter | — (not the right tool) | 200-500 ms | 100-300 ms (prefix scan) |
+
+**Typeahead budget** (target <100 ms keystroke → suggestions rendered):
+
+- Bleve prefix query: 2-10 ms
+- HTTP round-trip: 10-30 ms (localhost) / 30-80 ms (LAN)
+- React render: 20-40 ms
+- **Total: 30-80 ms at 24K books. Comfortably inside the <100 ms target.**
+
+**Caveats (honest):**
+
+- **First-time index build** after upgrade: 10-30 seconds for 24K books. Runs in background, UI shows "indexing…" on first hit.
+- **Per-document update**: sub-millisecond.
+- **Disk**: ~20-30% of raw indexed text, so 50-100 MB for our library.
+- **Memory**: Scorch backend, ~50-100 MB working set at current scale.
+- **Cold start**: first query after process boot takes 100-500 ms to load index segments; warm after.
+
+## Per-user indexing — deferred
+
+MVP indexes shared library state only. Per-user fields (`read_status`, `progress_pct`, `last_played`) are **Go-side post-filters** applied to Bleve's candidate result set using the calling user's state from PebbleDB (`user_book_state`, `user_position`).
+
+Why deferred:
+
+- Current scale (dozens of users max per install) doesn't justify per-user indexes
+- Post-filter on top of a scored candidate set is cheap — Bleve narrows from 24K to, say, 200; Go filters 200 → 50 in under a millisecond
+- Per-user indexes would multiply disk + memory cost by N users and complicate index maintenance on every status change
+
+When to revisit:
+
+1. Hundreds of active users and post-filter becomes a hot path (visible in profiles)
+2. Users want per-user smart playlists with complex per-user-field-first queries ("books I finished last month that nobody else finished") where post-filter over a large candidate set is actually slow
+3. A different use case needs per-user full-text indexing (notes on books, per-user tags)
+
+Options when the time comes:
+
+- **Sharded index keyed on userID** — one Bleve index per user for per-user fields only; shared index remains for library state. Query fanout: union results.
+- **Separate per-user small index** for status/progress, composed with shared library index at query time.
+- **Materialize per-user views** — periodically snapshot (user × book) state into a join-friendly structure.
+
+No code changes needed now to keep this door open; Go post-filter is just a function call that can be swapped for an index lookup later.
 
 ## Problem statement
 
