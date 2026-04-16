@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.32.0
+// version: 1.33.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -201,6 +201,16 @@ type MockStore struct {
 	GetBookVersionByTorrentHashFunc func(hash string) (*BookVersion, error)
 	ListTrashedBookVersionsFunc     func() ([]BookVersion, error)
 	ListPurgedBookVersionsFunc      func() ([]BookVersion, error)
+
+	// User playlists (spec 3.4)
+	CreateUserPlaylistFunc          func(pl *UserPlaylist) (*UserPlaylist, error)
+	GetUserPlaylistFunc             func(id string) (*UserPlaylist, error)
+	GetUserPlaylistByNameFunc       func(name string) (*UserPlaylist, error)
+	GetUserPlaylistByITunesPIDFunc  func(pid string) (*UserPlaylist, error)
+	ListUserPlaylistsFunc           func(playlistType string, limit, offset int) ([]UserPlaylist, int, error)
+	UpdateUserPlaylistFunc          func(pl *UserPlaylist) error
+	DeleteUserPlaylistFunc          func(id string) error
+	ListDirtyUserPlaylistsFunc      func() ([]UserPlaylist, error)
 
 	// API keys
 	CreateAPIKeyFunc        func(key *APIKey) (*APIKey, error)
@@ -1283,6 +1293,64 @@ func (m *MockStore) ListTrashedBookVersions() ([]BookVersion, error) {
 func (m *MockStore) ListPurgedBookVersions() ([]BookVersion, error) {
 	if m.ListPurgedBookVersionsFunc != nil {
 		return m.ListPurgedBookVersionsFunc()
+	}
+	return nil, nil
+}
+
+// ---- User playlists (spec 3.4) ----
+
+func (m *MockStore) CreateUserPlaylist(pl *UserPlaylist) (*UserPlaylist, error) {
+	if m.CreateUserPlaylistFunc != nil {
+		return m.CreateUserPlaylistFunc(pl)
+	}
+	return pl, nil
+}
+
+func (m *MockStore) GetUserPlaylist(id string) (*UserPlaylist, error) {
+	if m.GetUserPlaylistFunc != nil {
+		return m.GetUserPlaylistFunc(id)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetUserPlaylistByName(name string) (*UserPlaylist, error) {
+	if m.GetUserPlaylistByNameFunc != nil {
+		return m.GetUserPlaylistByNameFunc(name)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, error) {
+	if m.GetUserPlaylistByITunesPIDFunc != nil {
+		return m.GetUserPlaylistByITunesPIDFunc(pid)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
+	if m.ListUserPlaylistsFunc != nil {
+		return m.ListUserPlaylistsFunc(playlistType, limit, offset)
+	}
+	return nil, 0, nil
+}
+
+func (m *MockStore) UpdateUserPlaylist(pl *UserPlaylist) error {
+	if m.UpdateUserPlaylistFunc != nil {
+		return m.UpdateUserPlaylistFunc(pl)
+	}
+	return nil
+}
+
+func (m *MockStore) DeleteUserPlaylist(id string) error {
+	if m.DeleteUserPlaylistFunc != nil {
+		return m.DeleteUserPlaylistFunc(id)
+	}
+	return nil
+}
+
+func (m *MockStore) ListDirtyUserPlaylists() ([]UserPlaylist, error) {
+	if m.ListDirtyUserPlaylistsFunc != nil {
+		return m.ListDirtyUserPlaylistsFunc()
 	}
 	return nil, nil
 }

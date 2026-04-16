@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.46.0
+// version: 1.47.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -3388,6 +3388,265 @@ func (p *PebbleStore) DeleteRole(id string) error {
 		return err
 	}
 	return b.Commit(pebble.Sync)
+}
+
+// User playlists (spec 3.4)
+//
+// Key schema:
+//   upl:{id}                    → UserPlaylist JSON
+//   idx:upl:name:{lcase-name}   → playlist ID
+//   idx:upl:itunes:{pid}        → playlist ID
+//   idx:upl:dirty:{id}          → "1" (pending-push set)
+
+func (p *PebbleStore) CreateUserPlaylist(pl *UserPlaylist) (*UserPlaylist, error) {
+	if pl == nil || pl.Name == "" {
+		return nil, fmt.Errorf("playlist: name required")
+	}
+	if pl.Type != UserPlaylistTypeStatic && pl.Type != UserPlaylistTypeSmart {
+		return nil, fmt.Errorf("playlist: type must be static or smart")
+	}
+	if pl.ID == "" {
+		id, err := newULID()
+		if err != nil {
+			return nil, err
+		}
+		pl.ID = id
+	}
+	lower := strings.ToLower(pl.Name)
+	if v, closer, err := p.db.Get([]byte("idx:upl:name:" + lower)); err == nil {
+		existing := string(v)
+		closer.Close()
+		if existing != pl.ID {
+			return nil, fmt.Errorf("playlist name %q already in use", pl.Name)
+		}
+	}
+	now := time.Now()
+	if pl.CreatedAt.IsZero() {
+		pl.CreatedAt = now
+	}
+	pl.UpdatedAt = now
+	if pl.Version == 0 {
+		pl.Version = 1
+	}
+	data, err := json.Marshal(pl)
+	if err != nil {
+		return nil, err
+	}
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("upl:"+pl.ID), data, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:upl:name:"+lower), []byte(pl.ID), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if pl.ITunesPersistentID != "" {
+		if err := b.Set([]byte("idx:upl:itunes:"+pl.ITunesPersistentID), []byte(pl.ID), nil); err != nil {
+			b.Close()
+			return nil, err
+		}
+	}
+	if pl.Dirty {
+		if err := b.Set([]byte("idx:upl:dirty:"+pl.ID), []byte("1"), nil); err != nil {
+			b.Close()
+			return nil, err
+		}
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
+	return pl, nil
+}
+
+func (p *PebbleStore) GetUserPlaylist(id string) (*UserPlaylist, error) {
+	data, closer, err := p.db.Get([]byte("upl:" + id))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	var pl UserPlaylist
+	if err := json.Unmarshal(data, &pl); err != nil {
+		return nil, err
+	}
+	return &pl, nil
+}
+
+func (p *PebbleStore) GetUserPlaylistByName(name string) (*UserPlaylist, error) {
+	v, closer, err := p.db.Get([]byte("idx:upl:name:" + strings.ToLower(name)))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	id := string(v)
+	closer.Close()
+	return p.GetUserPlaylist(id)
+}
+
+func (p *PebbleStore) GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, error) {
+	if pid == "" {
+		return nil, nil
+	}
+	v, closer, err := p.db.Get([]byte("idx:upl:itunes:" + pid))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	id := string(v)
+	closer.Close()
+	return p.GetUserPlaylist(id)
+}
+
+func (p *PebbleStore) ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("upl:"),
+		UpperBound: []byte("upl:~"),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer iter.Close()
+	var all []UserPlaylist
+	for iter.First(); iter.Valid(); iter.Next() {
+		var pl UserPlaylist
+		if err := json.Unmarshal(iter.Value(), &pl); err != nil {
+			continue
+		}
+		if playlistType != "" && pl.Type != playlistType {
+			continue
+		}
+		all = append(all, pl)
+	}
+	total := len(all)
+	if offset >= total {
+		return []UserPlaylist{}, total, nil
+	}
+	end := offset + limit
+	if limit <= 0 || end > total {
+		end = total
+	}
+	return all[offset:end], total, nil
+}
+
+func (p *PebbleStore) UpdateUserPlaylist(pl *UserPlaylist) error {
+	if pl == nil || pl.ID == "" {
+		return fmt.Errorf("playlist id required")
+	}
+	prev, err := p.GetUserPlaylist(pl.ID)
+	if err != nil {
+		return err
+	}
+	if prev == nil {
+		return fmt.Errorf("playlist %s not found", pl.ID)
+	}
+	pl.UpdatedAt = time.Now()
+	pl.Version = prev.Version + 1
+	data, err := json.Marshal(pl)
+	if err != nil {
+		return err
+	}
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("upl:"+pl.ID), data, nil); err != nil {
+		b.Close()
+		return err
+	}
+	if strings.ToLower(prev.Name) != strings.ToLower(pl.Name) {
+		if err := b.Delete([]byte("idx:upl:name:"+strings.ToLower(prev.Name)), nil); err != nil {
+			b.Close()
+			return err
+		}
+		if err := b.Set([]byte("idx:upl:name:"+strings.ToLower(pl.Name)), []byte(pl.ID), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	if prev.ITunesPersistentID != pl.ITunesPersistentID {
+		if prev.ITunesPersistentID != "" {
+			if err := b.Delete([]byte("idx:upl:itunes:"+prev.ITunesPersistentID), nil); err != nil {
+				b.Close()
+				return err
+			}
+		}
+		if pl.ITunesPersistentID != "" {
+			if err := b.Set([]byte("idx:upl:itunes:"+pl.ITunesPersistentID), []byte(pl.ID), nil); err != nil {
+				b.Close()
+				return err
+			}
+		}
+	}
+	if pl.Dirty {
+		if err := b.Set([]byte("idx:upl:dirty:"+pl.ID), []byte("1"), nil); err != nil {
+			b.Close()
+			return err
+		}
+	} else if prev.Dirty {
+		if err := b.Delete([]byte("idx:upl:dirty:"+pl.ID), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	return b.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) DeleteUserPlaylist(id string) error {
+	pl, err := p.GetUserPlaylist(id)
+	if err != nil {
+		return err
+	}
+	if pl == nil {
+		return nil
+	}
+	b := p.db.NewBatch()
+	if err := b.Delete([]byte("upl:"+id), nil); err != nil {
+		b.Close()
+		return err
+	}
+	if err := b.Delete([]byte("idx:upl:name:"+strings.ToLower(pl.Name)), nil); err != nil {
+		b.Close()
+		return err
+	}
+	if pl.ITunesPersistentID != "" {
+		if err := b.Delete([]byte("idx:upl:itunes:"+pl.ITunesPersistentID), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	if pl.Dirty {
+		if err := b.Delete([]byte("idx:upl:dirty:"+id), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	return b.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) ListDirtyUserPlaylists() ([]UserPlaylist, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("idx:upl:dirty:"),
+		UpperBound: []byte("idx:upl:dirty:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []UserPlaylist
+	prefix := []byte("idx:upl:dirty:")
+	for iter.First(); iter.Valid(); iter.Next() {
+		id := string(iter.Key()[len(prefix):])
+		pl, err := p.GetUserPlaylist(id)
+		if err != nil || pl == nil {
+			continue
+		}
+		out = append(out, *pl)
+	}
+	return out, nil
 }
 
 // User positions + book state (spec 3.6)

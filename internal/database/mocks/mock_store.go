@@ -2788,6 +2788,68 @@ func (_c *MockStore_CreateUser_Call) RunAndReturn(run func(username string, emai
 	return _c
 }
 
+// CreateUserPlaylist provides a mock function for the type MockStore
+func (_mock *MockStore) CreateUserPlaylist(pl *database.UserPlaylist) (*database.UserPlaylist, error) {
+	ret := _mock.Called(pl)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateUserPlaylist")
+	}
+
+	var r0 *database.UserPlaylist
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(*database.UserPlaylist) (*database.UserPlaylist, error)); ok {
+		return returnFunc(pl)
+	}
+	if returnFunc, ok := ret.Get(0).(func(*database.UserPlaylist) *database.UserPlaylist); ok {
+		r0 = returnFunc(pl)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.UserPlaylist)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(*database.UserPlaylist) error); ok {
+		r1 = returnFunc(pl)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CreateUserPlaylist_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateUserPlaylist'
+type MockStore_CreateUserPlaylist_Call struct {
+	*mock.Call
+}
+
+// CreateUserPlaylist is a helper method to define mock.On call
+//   - pl *database.UserPlaylist
+func (_e *MockStore_Expecter) CreateUserPlaylist(pl interface{}) *MockStore_CreateUserPlaylist_Call {
+	return &MockStore_CreateUserPlaylist_Call{Call: _e.mock.On("CreateUserPlaylist", pl)}
+}
+
+func (_c *MockStore_CreateUserPlaylist_Call) Run(run func(pl *database.UserPlaylist)) *MockStore_CreateUserPlaylist_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.UserPlaylist
+		if args[0] != nil {
+			arg0 = args[0].(*database.UserPlaylist)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateUserPlaylist_Call) Return(userPlaylist *database.UserPlaylist, err error) *MockStore_CreateUserPlaylist_Call {
+	_c.Call.Return(userPlaylist, err)
+	return _c
+}
+
+func (_c *MockStore_CreateUserPlaylist_Call) RunAndReturn(run func(pl *database.UserPlaylist) (*database.UserPlaylist, error)) *MockStore_CreateUserPlaylist_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateWork provides a mock function for the type MockStore
 func (_mock *MockStore) CreateWork(work *database.Work) (*database.Work, error) {
 	ret := _mock.Called(work)
@@ -3737,6 +3799,57 @@ func (_c *MockStore_DeleteSetting_Call) Return(err error) *MockStore_DeleteSetti
 }
 
 func (_c *MockStore_DeleteSetting_Call) RunAndReturn(run func(key string) error) *MockStore_DeleteSetting_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteUserPlaylist provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteUserPlaylist(id string) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteUserPlaylist")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DeleteUserPlaylist_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteUserPlaylist'
+type MockStore_DeleteUserPlaylist_Call struct {
+	*mock.Call
+}
+
+// DeleteUserPlaylist is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) DeleteUserPlaylist(id interface{}) *MockStore_DeleteUserPlaylist_Call {
+	return &MockStore_DeleteUserPlaylist_Call{Call: _e.mock.On("DeleteUserPlaylist", id)}
+}
+
+func (_c *MockStore_DeleteUserPlaylist_Call) Run(run func(id string)) *MockStore_DeleteUserPlaylist_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteUserPlaylist_Call) Return(err error) *MockStore_DeleteUserPlaylist_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteUserPlaylist_Call) RunAndReturn(run func(id string) error) *MockStore_DeleteUserPlaylist_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -10554,6 +10667,192 @@ func (_c *MockStore_GetUserByUsername_Call) RunAndReturn(run func(username strin
 	return _c
 }
 
+// GetUserPlaylist provides a mock function for the type MockStore
+func (_mock *MockStore) GetUserPlaylist(id string) (*database.UserPlaylist, error) {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserPlaylist")
+	}
+
+	var r0 *database.UserPlaylist
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.UserPlaylist, error)); ok {
+		return returnFunc(id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.UserPlaylist); ok {
+		r0 = returnFunc(id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.UserPlaylist)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetUserPlaylist_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUserPlaylist'
+type MockStore_GetUserPlaylist_Call struct {
+	*mock.Call
+}
+
+// GetUserPlaylist is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) GetUserPlaylist(id interface{}) *MockStore_GetUserPlaylist_Call {
+	return &MockStore_GetUserPlaylist_Call{Call: _e.mock.On("GetUserPlaylist", id)}
+}
+
+func (_c *MockStore_GetUserPlaylist_Call) Run(run func(id string)) *MockStore_GetUserPlaylist_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetUserPlaylist_Call) Return(userPlaylist *database.UserPlaylist, err error) *MockStore_GetUserPlaylist_Call {
+	_c.Call.Return(userPlaylist, err)
+	return _c
+}
+
+func (_c *MockStore_GetUserPlaylist_Call) RunAndReturn(run func(id string) (*database.UserPlaylist, error)) *MockStore_GetUserPlaylist_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetUserPlaylistByITunesPID provides a mock function for the type MockStore
+func (_mock *MockStore) GetUserPlaylistByITunesPID(pid string) (*database.UserPlaylist, error) {
+	ret := _mock.Called(pid)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserPlaylistByITunesPID")
+	}
+
+	var r0 *database.UserPlaylist
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.UserPlaylist, error)); ok {
+		return returnFunc(pid)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.UserPlaylist); ok {
+		r0 = returnFunc(pid)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.UserPlaylist)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(pid)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetUserPlaylistByITunesPID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUserPlaylistByITunesPID'
+type MockStore_GetUserPlaylistByITunesPID_Call struct {
+	*mock.Call
+}
+
+// GetUserPlaylistByITunesPID is a helper method to define mock.On call
+//   - pid string
+func (_e *MockStore_Expecter) GetUserPlaylistByITunesPID(pid interface{}) *MockStore_GetUserPlaylistByITunesPID_Call {
+	return &MockStore_GetUserPlaylistByITunesPID_Call{Call: _e.mock.On("GetUserPlaylistByITunesPID", pid)}
+}
+
+func (_c *MockStore_GetUserPlaylistByITunesPID_Call) Run(run func(pid string)) *MockStore_GetUserPlaylistByITunesPID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetUserPlaylistByITunesPID_Call) Return(userPlaylist *database.UserPlaylist, err error) *MockStore_GetUserPlaylistByITunesPID_Call {
+	_c.Call.Return(userPlaylist, err)
+	return _c
+}
+
+func (_c *MockStore_GetUserPlaylistByITunesPID_Call) RunAndReturn(run func(pid string) (*database.UserPlaylist, error)) *MockStore_GetUserPlaylistByITunesPID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetUserPlaylistByName provides a mock function for the type MockStore
+func (_mock *MockStore) GetUserPlaylistByName(name string) (*database.UserPlaylist, error) {
+	ret := _mock.Called(name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserPlaylistByName")
+	}
+
+	var r0 *database.UserPlaylist
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.UserPlaylist, error)); ok {
+		return returnFunc(name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.UserPlaylist); ok {
+		r0 = returnFunc(name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.UserPlaylist)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetUserPlaylistByName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUserPlaylistByName'
+type MockStore_GetUserPlaylistByName_Call struct {
+	*mock.Call
+}
+
+// GetUserPlaylistByName is a helper method to define mock.On call
+//   - name string
+func (_e *MockStore_Expecter) GetUserPlaylistByName(name interface{}) *MockStore_GetUserPlaylistByName_Call {
+	return &MockStore_GetUserPlaylistByName_Call{Call: _e.mock.On("GetUserPlaylistByName", name)}
+}
+
+func (_c *MockStore_GetUserPlaylistByName_Call) Run(run func(name string)) *MockStore_GetUserPlaylistByName_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetUserPlaylistByName_Call) Return(userPlaylist *database.UserPlaylist, err error) *MockStore_GetUserPlaylistByName_Call {
+	_c.Call.Return(userPlaylist, err)
+	return _c
+}
+
+func (_c *MockStore_GetUserPlaylistByName_Call) RunAndReturn(run func(name string) (*database.UserPlaylist, error)) *MockStore_GetUserPlaylistByName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetUserPosition provides a mock function for the type MockStore
 func (_mock *MockStore) GetUserPosition(userID string, bookID string) (*database.UserPosition, error) {
 	ret := _mock.Called(userID, bookID)
@@ -11522,6 +11821,61 @@ func (_c *MockStore_ListBookTombstones_Call) RunAndReturn(run func(limit int) ([
 	return _c
 }
 
+// ListDirtyUserPlaylists provides a mock function for the type MockStore
+func (_mock *MockStore) ListDirtyUserPlaylists() ([]database.UserPlaylist, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListDirtyUserPlaylists")
+	}
+
+	var r0 []database.UserPlaylist
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.UserPlaylist, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.UserPlaylist); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.UserPlaylist)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListDirtyUserPlaylists_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListDirtyUserPlaylists'
+type MockStore_ListDirtyUserPlaylists_Call struct {
+	*mock.Call
+}
+
+// ListDirtyUserPlaylists is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListDirtyUserPlaylists() *MockStore_ListDirtyUserPlaylists_Call {
+	return &MockStore_ListDirtyUserPlaylists_Call{Call: _e.mock.On("ListDirtyUserPlaylists")}
+}
+
+func (_c *MockStore_ListDirtyUserPlaylists_Call) Run(run func()) *MockStore_ListDirtyUserPlaylists_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListDirtyUserPlaylists_Call) Return(userPlaylists []database.UserPlaylist, err error) *MockStore_ListDirtyUserPlaylists_Call {
+	_c.Call.Return(userPlaylists, err)
+	return _c
+}
+
+func (_c *MockStore_ListDirtyUserPlaylists_Call) RunAndReturn(run func() ([]database.UserPlaylist, error)) *MockStore_ListDirtyUserPlaylists_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListNarrators provides a mock function for the type MockStore
 func (_mock *MockStore) ListNarrators() ([]database.Narrator, error) {
 	ret := _mock.Called()
@@ -12108,6 +12462,86 @@ func (_c *MockStore_ListUserBookStatesByStatus_Call) Return(userBookStates []dat
 }
 
 func (_c *MockStore_ListUserBookStatesByStatus_Call) RunAndReturn(run func(userID string, status string, limit int, offset int) ([]database.UserBookState, error)) *MockStore_ListUserBookStatesByStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListUserPlaylists provides a mock function for the type MockStore
+func (_mock *MockStore) ListUserPlaylists(playlistType string, limit int, offset int) ([]database.UserPlaylist, int, error) {
+	ret := _mock.Called(playlistType, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUserPlaylists")
+	}
+
+	var r0 []database.UserPlaylist
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) ([]database.UserPlaylist, int, error)); ok {
+		return returnFunc(playlistType, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) []database.UserPlaylist); ok {
+		r0 = returnFunc(playlistType, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.UserPlaylist)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, int, int) int); ok {
+		r1 = returnFunc(playlistType, limit, offset)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, int, int) error); ok {
+		r2 = returnFunc(playlistType, limit, offset)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockStore_ListUserPlaylists_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUserPlaylists'
+type MockStore_ListUserPlaylists_Call struct {
+	*mock.Call
+}
+
+// ListUserPlaylists is a helper method to define mock.On call
+//   - playlistType string
+//   - limit int
+//   - offset int
+func (_e *MockStore_Expecter) ListUserPlaylists(playlistType interface{}, limit interface{}, offset interface{}) *MockStore_ListUserPlaylists_Call {
+	return &MockStore_ListUserPlaylists_Call{Call: _e.mock.On("ListUserPlaylists", playlistType, limit, offset)}
+}
+
+func (_c *MockStore_ListUserPlaylists_Call) Run(run func(playlistType string, limit int, offset int)) *MockStore_ListUserPlaylists_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListUserPlaylists_Call) Return(userPlaylists []database.UserPlaylist, n int, err error) *MockStore_ListUserPlaylists_Call {
+	_c.Call.Return(userPlaylists, n, err)
+	return _c
+}
+
+func (_c *MockStore_ListUserPlaylists_Call) RunAndReturn(run func(playlistType string, limit int, offset int) ([]database.UserPlaylist, int, error)) *MockStore_ListUserPlaylists_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -16172,6 +16606,57 @@ func (_c *MockStore_UpdateUser_Call) Return(err error) *MockStore_UpdateUser_Cal
 }
 
 func (_c *MockStore_UpdateUser_Call) RunAndReturn(run func(user *database.User) error) *MockStore_UpdateUser_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateUserPlaylist provides a mock function for the type MockStore
+func (_mock *MockStore) UpdateUserPlaylist(pl *database.UserPlaylist) error {
+	ret := _mock.Called(pl)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateUserPlaylist")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.UserPlaylist) error); ok {
+		r0 = returnFunc(pl)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_UpdateUserPlaylist_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateUserPlaylist'
+type MockStore_UpdateUserPlaylist_Call struct {
+	*mock.Call
+}
+
+// UpdateUserPlaylist is a helper method to define mock.On call
+//   - pl *database.UserPlaylist
+func (_e *MockStore_Expecter) UpdateUserPlaylist(pl interface{}) *MockStore_UpdateUserPlaylist_Call {
+	return &MockStore_UpdateUserPlaylist_Call{Call: _e.mock.On("UpdateUserPlaylist", pl)}
+}
+
+func (_c *MockStore_UpdateUserPlaylist_Call) Run(run func(pl *database.UserPlaylist)) *MockStore_UpdateUserPlaylist_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.UserPlaylist
+		if args[0] != nil {
+			arg0 = args[0].(*database.UserPlaylist)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_UpdateUserPlaylist_Call) Return(err error) *MockStore_UpdateUserPlaylist_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_UpdateUserPlaylist_Call) RunAndReturn(run func(pl *database.UserPlaylist) error) *MockStore_UpdateUserPlaylist_Call {
 	_c.Call.Return(run)
 	return _c
 }

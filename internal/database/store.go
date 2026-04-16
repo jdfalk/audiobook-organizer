@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.54.0
+// version: 2.55.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -228,6 +228,17 @@ type Store interface {
 	CreateRole(role *Role) (*Role, error)
 	UpdateRole(role *Role) error
 	DeleteRole(id string) error
+
+	// User playlists (spec 3.4 — static + smart). Distinct from the
+	// auto-generated series-playlists above (Playlist / PlaylistItem).
+	CreateUserPlaylist(pl *UserPlaylist) (*UserPlaylist, error)
+	GetUserPlaylist(id string) (*UserPlaylist, error)
+	GetUserPlaylistByName(name string) (*UserPlaylist, error)
+	GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, error)
+	ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error)
+	UpdateUserPlaylist(pl *UserPlaylist) error
+	DeleteUserPlaylist(id string) error
+	ListDirtyUserPlaylists() ([]UserPlaylist, error)
 
 	// User positions + book state (spec 3.6 read/unread tracking).
 	// Per-user, per-book-segment position tracking. UserBookState is
@@ -609,13 +620,58 @@ type Work struct {
 	AltTitles []string `json:"alt_titles,omitempty"` // Optional alternate titles
 }
 
-// Playlist represents a playlist
+// Playlist represents an auto-generated series playlist (the old
+// M3U-style playlist generator). For the 3.4 user-facing playlist
+// feature, see UserPlaylist below.
 type Playlist struct {
 	ID       int    `json:"id"`
 	Name     string `json:"name"`
 	SeriesID *int   `json:"series_id,omitempty"`
 	FilePath string `json:"file_path"`
 }
+
+// UserPlaylist represents a user-created playlist (spec 3.4) —
+// either a static ordered book list or a smart (live-evaluated)
+// filter expression. Distinct from the auto-generated Playlist
+// type above which is part of the older series-playlist generator.
+type UserPlaylist struct {
+	ID          string `json:"id"` // ULID
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// Type discriminator: "static" or "smart"
+	Type string `json:"type"`
+	// Static playlists: ordered book ID list.
+	BookIDs []string `json:"book_ids,omitempty"`
+	// Smart playlists: DSL query string, sort + limit directives.
+	Query string `json:"query,omitempty"`
+	// SortJSON is a JSON-encoded []{field, direction} for stable
+	// ordering in smart playlists.
+	SortJSON string `json:"sort_json,omitempty"`
+	Limit    int    `json:"limit,omitempty"`
+	// MaterializedBookIDs caches the last evaluation of a smart
+	// playlist for fast iTunes-sync pushes without re-running the
+	// query. Refreshed on every sync pass.
+	MaterializedBookIDs []string `json:"materialized_book_ids,omitempty"`
+	// ITunesPersistentID links the playlist to its iTunes row
+	// once it's been pushed. Null until first sync.
+	ITunesPersistentID string `json:"itunes_persistent_id,omitempty"`
+	// ITunesRawCriteriaB64 stores the original iTunes Smart
+	// Criteria blob for playlists imported from iTunes (migration
+	// audit trail). Empty for app-native playlists.
+	ITunesRawCriteriaB64 string `json:"itunes_raw_criteria_b64,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
+	CreatedByUserID      string    `json:"created_by_user_id,omitempty"`
+	// Dirty marks the playlist as pending iTunes push.
+	Dirty   bool `json:"dirty"`
+	Version int  `json:"version"`
+}
+
+// UserPlaylist type constants.
+const (
+	UserPlaylistTypeStatic = "static"
+	UserPlaylistTypeSmart  = "smart"
+)
 
 // PlaylistItem represents an item in a playlist
 type PlaylistItem struct {
