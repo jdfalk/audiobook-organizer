@@ -34,17 +34,22 @@ Major backend foundation work spanning 6 design specs and 39 PRs (#280-#319).
 - HTTP endpoints: position, state, manual status override, list-by-status
 - iTunes Bookmark bidirectional sync (#317)
 
-##### Bleve Library Search (DES-1) — End-to-End Working
+##### Bleve Library Search (DES-1) — End-to-End + Frontend
 - Bleve v2 index with English analyzer, field-level boost
 - DSL query parser: &&/||/NOT/field-scoped/range/fuzzy/boost/prefix
 - AST → Bleve translator with per-user post-filter split
 - indexedStore decorator: async worker keeps index in sync on every book CUD (#311)
 - /audiobooks?search= now routes through Bleve (#312)
+- Frontend: search field autocomplete for read_status/progress_pct/last_played, prefix wildcard suggestions, DSL operator help panel (#321)
 
 ##### Smart + Static Playlists (3.4) — Schema + HTTP
 - UserPlaylist type (static book lists + smart DSL queries) (#307)
 - Smart playlist evaluator: Bleve + per-user post-filter + sort + limit (#308)
 - 9 HTTP endpoints: CRUD, add/remove books, reorder, materialize (#309)
+
+##### Multi-User Auth (3.7) — continued
+- User management admin API: list users, invite generation, deactivation/reactivation, password reset, invite acceptance (#322)
+- ListUsers() added to Store interface + PebbleStore impl
 
 ##### Undo Engine (3.2) — Core + Pre-flight
 - Undo engine: reverses operation changes (file moves, metadata, dir cleanup) (#318)
