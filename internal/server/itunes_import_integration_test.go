@@ -162,7 +162,7 @@ func TestITunesImport_AuthorAndSeriesCreation(t *testing.T) {
 		Artist: "Frank Herbert",
 		Album:  "Dune Chronicles",
 	}
-	assignAuthorAndSeries(book1, track1)
+	assignAuthorAndSeries(database.GetGlobalStore(), book1, track1)
 
 	require.NotNil(t, book1.AuthorID, "AuthorID should be set")
 	author, err := database.GlobalStore.GetAuthorByName("Frank Herbert")
@@ -184,7 +184,7 @@ func TestITunesImport_AuthorAndSeriesCreation(t *testing.T) {
 		Artist: "Frank Herbert",
 		Album:  "Dune Messiah",
 	}
-	assignAuthorAndSeries(book2, track2)
+	assignAuthorAndSeries(database.GetGlobalStore(), book2, track2)
 
 	require.NotNil(t, book2.AuthorID)
 	assert.Equal(t, *book1.AuthorID, *book2.AuthorID, "same author should be reused")
@@ -195,7 +195,7 @@ func TestITunesImport_AuthorAndSeriesCreation(t *testing.T) {
 		Artist: "J.R.R. Tolkien",
 		Album:  "Middle-earth, Book 1",
 	}
-	assignAuthorAndSeries(book3, track3)
+	assignAuthorAndSeries(database.GetGlobalStore(), book3, track3)
 
 	require.NotNil(t, book3.SeriesID)
 	// extractSeriesName("Middle-earth, Book 1") should return "Middle-earth"
@@ -213,11 +213,11 @@ func TestITunesImport_AuthorDedup(t *testing.T) {
 
 	bookA := &database.Book{Title: "Book A"}
 	trackA := &itunes.Track{Artist: "Isaac Asimov", Album: "Foundation"}
-	assignAuthorAndSeries(bookA, trackA)
+	assignAuthorAndSeries(database.GetGlobalStore(), bookA, trackA)
 
 	bookB := &database.Book{Title: "Book B"}
 	trackB := &itunes.Track{Artist: "Isaac Asimov", Album: "I, Robot"}
-	assignAuthorAndSeries(bookB, trackB)
+	assignAuthorAndSeries(database.GetGlobalStore(), bookB, trackB)
 
 	require.NotNil(t, bookA.AuthorID)
 	require.NotNil(t, bookB.AuthorID)
@@ -263,7 +263,7 @@ func TestITunesImport_SeriesExtraction(t *testing.T) {
 		Artist: "Test Author",
 		Album:  "Middle-earth, Book 1",
 	}
-	assignAuthorAndSeries(book, track)
+	assignAuthorAndSeries(database.GetGlobalStore(), book, track)
 
 	require.NotNil(t, book.SeriesID)
 	series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID)
@@ -277,7 +277,7 @@ func TestITunesImport_SeriesExtraction(t *testing.T) {
 		Artist: "Test Author",
 		Album:  "Middle-earth, Book 2",
 	}
-	assignAuthorAndSeries(book2, track2)
+	assignAuthorAndSeries(database.GetGlobalStore(), book2, track2)
 	require.NotNil(t, book2.SeriesID)
 	assert.Equal(t, *book.SeriesID, *book2.SeriesID, "same series name should yield same series ID")
 }
