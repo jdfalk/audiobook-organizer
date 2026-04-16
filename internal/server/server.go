@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.174.0
+// version: 1.175.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -706,7 +706,14 @@ type Server struct {
 	// searchIndex is the Bleve library search index (spec DES-1).
 	// Opened at startup, nil if DB path isn't set yet.
 	searchIndex *search.BleveIndex
-	http3Server *http3.Server
+	// indexQueue feeds the single index worker goroutine. Allocated
+	// when searchIndex opens, closed in Shutdown. Bounded channel —
+	// a full queue drops events and the startup reindex heals gaps.
+	// indexQueueMu guards against concurrent close vs. send races.
+	indexQueue       chan indexRequest
+	indexQueueMu     sync.RWMutex
+	indexQueueClosed bool
+	http3Server      *http3.Server
 
 	// Shutdown coordination. bgCtx is canceled when Shutdown() runs, and
 	// bgWG tracks every fire-and-forget background goroutine (embedding
@@ -1476,6 +1483,23 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}
 
+	// Install the indexing store decorator + worker once the index is
+	// open. Every downstream book mutation flows through s.Store()
+	// (or the package-level global) so wrapping both keeps the index
+	// in sync regardless of whether a caller has migrated to DI yet.
+	if s.searchIndex != nil {
+		s.indexQueue = make(chan indexRequest, 1024)
+		inner := s.Store()
+		wrapped := &indexedStore{Store: inner, server: s}
+		s.store = wrapped
+		database.SetGlobalStore(wrapped)
+		s.bgWG.Add(1)
+		go func() {
+			defer s.bgWG.Done()
+			s.runIndexWorker()
+		}()
+	}
+
 	// Build the search index on first startup (or if it got wiped).
 	// Tracked via bgWG so shutdown can wait for in-flight indexing
 	// instead of letting it run under a closing DB.
@@ -1699,6 +1723,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 		log.Println("[INFO] Canceling background goroutines...")
 		s.bgCancel()
 	}
+	// Close the index queue so the index worker goroutine can
+	// finish its range loop and decrement bgWG. Leaving it open
+	// would deadlock the wait below because the worker doesn't
+	// listen on bgCtx — its termination signal is the queue close.
+	s.closeIndexQueue()
 	bgDone := make(chan struct{})
 	go func() {
 		s.bgWG.Wait()
