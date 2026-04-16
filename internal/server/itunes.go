@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.22.0
+// version: 2.23.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -316,7 +316,7 @@ func (s *Server) handleITunesTestMapping(c *gin.Context) {
 
 // handleITunesImport starts an asynchronous iTunes library import operation.
 func (s *Server) handleITunesImport(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -337,7 +337,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 	}
 
 	opID := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(opID, "itunes_import", &req.LibraryPath)
+	op, err := s.Store().CreateOperation(opID, "itunes_import", &req.LibraryPath)
 	if err != nil {
 		internalError(c, "failed to create operation", err)
 		return
@@ -365,7 +365,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 // handleITunesWriteBack updates the iTunes ITL binary with new file paths.
 // XML write-back has been removed; only ITL write-back is supported.
 func (s *Server) handleITunesWriteBack(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -392,7 +392,7 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 
 	var itlUpdates []itunes.ITLLocationUpdate
 	for _, id := range req.AudiobookIDs {
-		book, err := database.GlobalStore.GetBookByID(id)
+		book, err := s.Store().GetBookByID(id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": fmt.Sprintf("failed to get audiobook %s: %v", id, err),
@@ -597,7 +597,7 @@ func collectITLUpdatesWithBookIDs(store database.Store) ([]itunes.ITLLocationUpd
 }
 
 func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -626,7 +626,7 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 
 	// Collect updates from primary versions only (avoids duplicate PIDs
 	// from imported + organized copies of the same book)
-	itlUpdates, writtenBookIDs := collectITLUpdatesWithBookIDs(database.GlobalStore)
+	itlUpdates, writtenBookIDs := collectITLUpdatesWithBookIDs(s.Store())
 
 	if len(itlUpdates) == 0 {
 		c.JSON(http.StatusOK, gin.H{
@@ -656,7 +656,7 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	stdlog.Printf("[INFO] Bulk ITL write-back: updated %d tracks out of %d candidates", itlResult.UpdatedCount, len(itlUpdates))
 
 	// Mark all written books as synced with iTunes
-	if n, markErr := database.GlobalStore.MarkITunesSynced(writtenBookIDs); markErr == nil && n > 0 {
+	if n, markErr := s.Store().MarkITunesSynced(writtenBookIDs); markErr == nil && n > 0 {
 		stdlog.Printf("[INFO] Marked %d books as iTunes-synced after write-back", n)
 	}
 
@@ -670,7 +670,7 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 
 // handleITunesWriteBackPreview returns a comparison of local paths vs iTunes paths.
 func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -709,7 +709,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 	var books []database.Book
 	if len(req.BookIDs) > 0 {
 		for _, id := range req.BookIDs {
-			book, bErr := database.GlobalStore.GetBookByID(id)
+			book, bErr := s.Store().GetBookByID(id)
 			if bErr != nil || book == nil {
 				continue
 			}
@@ -719,7 +719,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 		}
 	} else {
 		// Get all books and filter to those with iTunes persistent IDs
-		allBooks, bErr := database.GlobalStore.GetAllBooks(0, 0)
+		allBooks, bErr := s.Store().GetAllBooks(0, 0)
 		if bErr != nil {
 			internalError(c, "failed to list books", bErr)
 			return
@@ -743,7 +743,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 		itunesPath := itunesLocations[persistentID]
 		author := ""
 		if book.AuthorID != nil {
-			if a, aErr := database.GlobalStore.GetAuthorByID(*book.AuthorID); aErr == nil && a != nil {
+			if a, aErr := s.Store().GetAuthorByID(*book.AuthorID); aErr == nil && a != nil {
 				author = a.Name
 			}
 		}
@@ -768,7 +768,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 
 // handleListITunesBooks returns paginated books that have iTunes persistent IDs.
 func (s *Server) handleListITunesBooks(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -790,9 +790,9 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 	var allBooks []database.Book
 	var err error
 	if search != "" {
-		allBooks, err = database.GlobalStore.SearchBooks(search, 0, 0)
+		allBooks, err = s.Store().SearchBooks(search, 0, 0)
 	} else {
-		allBooks, err = database.GlobalStore.GetAllBooks(0, 0)
+		allBooks, err = s.Store().GetAllBooks(0, 0)
 	}
 	if err != nil {
 		internalError(c, "failed to list books", err)
@@ -824,7 +824,7 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 	for _, book := range filtered {
 		author := ""
 		if book.AuthorID != nil {
-			if a, aErr := database.GlobalStore.GetAuthorByID(*book.AuthorID); aErr == nil && a != nil {
+			if a, aErr := s.Store().GetAuthorByID(*book.AuthorID); aErr == nil && a != nil {
 				author = a.Name
 			}
 		}
@@ -845,13 +845,13 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 
 // handleITunesImportStatus returns the status of an iTunes import operation.
 func (s *Server) handleITunesImportStatus(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
 	opID := c.Param("id")
-	op, err := database.GlobalStore.GetOperationByID(opID)
+	op, err := s.Store().GetOperationByID(opID)
 	if err != nil || op == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
 		return
@@ -875,7 +875,7 @@ func (s *Server) handleITunesImportStatus(c *gin.Context) {
 }
 
 func (s *Server) handleITunesImportStatusBulk(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -890,7 +890,7 @@ func (s *Server) handleITunesImportStatusBulk(c *gin.Context) {
 
 	results := make(map[string]ITunesImportStatusResponse, len(req.IDs))
 	for _, opID := range req.IDs {
-		op, err := database.GlobalStore.GetOperationByID(opID)
+		op, err := s.Store().GetOperationByID(opID)
 		if err != nil || op == nil {
 			continue
 		}
@@ -1926,12 +1926,12 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 		return
 	}
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	rec, err := database.GlobalStore.GetLibraryFingerprint(path)
+	rec, err := s.Store().GetLibraryFingerprint(path)
 	if err != nil {
 		internalError(c, "failed to get library fingerprint", err)
 		return
@@ -1982,7 +1982,7 @@ type ITunesSyncResponse struct {
 
 // handleITunesSync triggers an incremental sync from iTunes Library.xml.
 func (s *Server) handleITunesSync(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -2017,7 +2017,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 
 	// Check fingerprint — skip if unchanged (unless forced)
 	if !req.Force {
-		if rec, err := database.GlobalStore.GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
+		if rec, err := s.Store().GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
 			if info, statErr := os.Stat(libraryPath); statErr == nil {
 				if info.Size() == rec.Size && info.ModTime().Equal(rec.ModTime) {
 					c.JSON(http.StatusOK, gin.H{"message": "no changes detected — use force:true to sync anyway", "operation_id": ""})
@@ -2028,7 +2028,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 	}
 
 	opID := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(opID, "itunes_sync", &libraryPath)
+	op, err := s.Store().CreateOperation(opID, "itunes_sync", &libraryPath)
 	if err != nil {
 		internalError(c, "failed to create operation", err)
 		return
