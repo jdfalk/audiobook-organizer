@@ -1,5 +1,5 @@
 // file: cmd/diagnostics.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c8f6a0d4-2a8b-48cf-9d08-02cc9915d9fc
 
 package cmd
@@ -88,7 +88,7 @@ func runCleanupInvalidBooks(force, dryRun bool) error {
 	placeholders := []string{"{series}", "{narrator}", "{author}", "{title}"}
 
 	for {
-		books, err := database.GlobalStore.GetAllBooks(batchSize, offset)
+		books, err := database.GetGlobalStore().GetAllBooks(batchSize, offset)
 		if err != nil {
 			return fmt.Errorf("failed to fetch books: %w", err)
 		}
@@ -136,7 +136,7 @@ func runCleanupInvalidBooks(force, dryRun bool) error {
 
 	deleted := 0
 	for _, book := range invalid {
-		if err := database.GlobalStore.DeleteBook(book.ID); err != nil {
+		if err := database.GetGlobalStore().DeleteBook(book.ID); err != nil {
 			fmt.Printf("Failed to delete %s: %v\n", book.ID, err)
 			continue
 		}
@@ -165,7 +165,7 @@ func runDiagnosticsQuery(limit int, prefix string, raw bool) error {
 	}
 	defer closer()
 
-	books, err := database.GlobalStore.GetAllBooks(limit, 0)
+	books, err := database.GetGlobalStore().GetAllBooks(limit, 0)
 	if err != nil {
 		return fmt.Errorf("failed to fetch books: %w", err)
 	}
