@@ -1,5 +1,5 @@
 // file: internal/server/entities_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 52cb6f75-cb3e-44e3-bf36-a8bba8a24d21
 //
 // Entity HTTP handlers split out of server.go: works, authors, series,
@@ -94,12 +94,12 @@ func (s *Server) deleteWork(c *gin.Context) {
 }
 
 func (s *Server) listWorkBooks(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 	id := c.Param("id")
-	books, err := database.GlobalStore.GetBooksByWorkID(id)
+	books, err := s.Store().GetBooksByWorkID(id)
 	if err != nil {
 		internalError(c, "failed to list work books", err)
 		return
@@ -112,13 +112,13 @@ func (s *Server) listWorkBooks(c *gin.Context) {
 
 // listWork returns all work items (audiobooks grouped by work entity)
 func (s *Server) listWork(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
 	// Get all works
-	works, err := database.GlobalStore.GetAllWorks()
+	works, err := s.Store().GetAllWorks()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve works"})
 		return
@@ -127,7 +127,7 @@ func (s *Server) listWork(c *gin.Context) {
 	// For each work, get associated books
 	items := make([]map[string]any, 0, len(works))
 	for _, work := range works {
-		books, err := database.GlobalStore.GetBooksByWorkID(work.ID)
+		books, err := s.Store().GetBooksByWorkID(work.ID)
 		if err != nil {
 			books = []database.Book{}
 		}
@@ -149,12 +149,12 @@ func (s *Server) listWork(c *gin.Context) {
 
 // getWorkStats returns statistics about work items
 func (s *Server) getWorkStats(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	works, err := database.GlobalStore.GetAllWorks()
+	works, err := s.Store().GetAllWorks()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve works"})
 		return
@@ -165,7 +165,7 @@ func (s *Server) getWorkStats(c *gin.Context) {
 	worksWithMultipleEditions := 0
 
 	for _, work := range works {
-		books, err := database.GlobalStore.GetBooksByWorkID(work.ID)
+		books, err := s.Store().GetBooksByWorkID(work.ID)
 		if err != nil {
 			continue
 		}
@@ -194,7 +194,7 @@ func (s *Server) listAuthors(c *gin.Context) {
 }
 
 func (s *Server) countAuthors(c *gin.Context) {
-	count, err := database.GlobalStore.CountAuthors()
+	count, err := s.Store().CountAuthors()
 	if err != nil {
 		internalError(c, "failed to count authors", err)
 		return
@@ -223,7 +223,7 @@ func (s *Server) renameAuthor(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	if err := store.UpdateAuthorName(authorID, name); err != nil {
 		internalError(c, "failed to rename author", err)
 		return
@@ -242,7 +242,7 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	author, err := store.GetAuthorByID(authorID)
 	if err != nil || author == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "author not found"})
@@ -369,7 +369,7 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	keepAuthor, err := store.GetAuthorByID(req.KeepID)
 	if err != nil || keepAuthor == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "keep author not found"})
@@ -531,7 +531,7 @@ func (s *Server) deleteAuthorHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	books, err := store.GetBooksByAuthorID(authorID)
 	if err != nil {
 		internalError(c, "failed to get author books", err)
@@ -557,7 +557,7 @@ func (s *Server) bulkDeleteAuthors(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	deleted := 0
 	skipped := 0
 	var errors []string
@@ -591,7 +591,7 @@ func (s *Server) getAuthorBooks(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	books, err := store.GetBooksByAuthorID(authorID)
 	if err != nil {
 		internalError(c, "failed to get author books", err)
@@ -610,7 +610,7 @@ func (s *Server) getAuthorAliases(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author ID"})
 		return
 	}
-	aliases, err := database.GlobalStore.GetAuthorAliases(authorID)
+	aliases, err := s.Store().GetAuthorAliases(authorID)
 	if err != nil {
 		internalError(c, "failed to get author aliases", err)
 		return
@@ -639,7 +639,7 @@ func (s *Server) createAuthorAlias(c *gin.Context) {
 	if req.AliasType == "" {
 		req.AliasType = "alias"
 	}
-	alias, err := database.GlobalStore.CreateAuthorAlias(authorID, req.AliasName, req.AliasType)
+	alias, err := s.Store().CreateAuthorAlias(authorID, req.AliasName, req.AliasType)
 	if err != nil {
 		internalError(c, "failed to create author alias", err)
 		return
@@ -653,7 +653,7 @@ func (s *Server) deleteAuthorAlias(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid alias ID"})
 		return
 	}
-	if err := database.GlobalStore.DeleteAuthorAlias(aliasID); err != nil {
+	if err := s.Store().DeleteAuthorAlias(aliasID); err != nil {
 		internalError(c, "failed to delete author alias", err)
 		return
 	}
@@ -667,7 +667,7 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	author, err := store.GetAuthorByID(authorID)
 	if err != nil || author == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "author not found"})
@@ -754,7 +754,7 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	author, err := store.GetAuthorByID(authorID)
 	if err != nil || author == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "author not found"})
@@ -869,7 +869,7 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 }
 
 func (s *Server) countSeries(c *gin.Context) {
-	count, err := database.GlobalStore.CountSeries()
+	count, err := s.Store().CountSeries()
 	if err != nil {
 		internalError(c, "failed to count series", err)
 		return
@@ -892,7 +892,7 @@ func (s *Server) getSeriesBooks(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series ID"})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	books, err := store.GetBooksBySeriesID(seriesID)
 	if err != nil {
 		internalError(c, "failed to get series books", err)
@@ -923,7 +923,7 @@ func (s *Server) renameSeriesHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name must not be empty"})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	if err := store.UpdateSeriesName(seriesID, name); err != nil {
 		internalError(c, "failed to rename series", err)
 		return
@@ -952,7 +952,7 @@ func (s *Server) splitSeriesHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids must not be empty"})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	oldSeries, err := store.GetSeriesByID(seriesID)
 	if err != nil || oldSeries == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "series not found"})
@@ -990,7 +990,7 @@ func (s *Server) deleteEmptySeries(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series ID"})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	books, err := store.GetBooksBySeriesID(seriesID)
 	if err != nil {
 		internalError(c, "failed to get series books", err)
@@ -1016,7 +1016,7 @@ func (s *Server) bulkDeleteSeries(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	deleted := 0
 	skipped := 0
 	var errors []string
@@ -1063,7 +1063,7 @@ func (s *Server) updateSeriesName(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "name cannot be empty"})
 		return
 	}
-	store := database.GlobalStore
+	store := s.Store()
 	if err := store.UpdateSeriesName(id, name); err != nil {
 		internalError(c, "failed to update series", err)
 		return
@@ -1074,11 +1074,11 @@ func (s *Server) updateSeriesName(c *gin.Context) {
 }
 
 func (s *Server) listNarrators(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	narrators, err := database.GlobalStore.ListNarrators()
+	narrators, err := s.Store().ListNarrators()
 	if err != nil {
 		internalError(c, "failed to list narrators", err)
 		return
@@ -1087,11 +1087,11 @@ func (s *Server) listNarrators(c *gin.Context) {
 }
 
 func (s *Server) countNarrators(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	narrators, err := database.GlobalStore.ListNarrators()
+	narrators, err := s.Store().ListNarrators()
 	if err != nil {
 		internalError(c, "failed to count narrators", err)
 		return
@@ -1101,11 +1101,11 @@ func (s *Server) countNarrators(c *gin.Context) {
 
 func (s *Server) listAudiobookNarrators(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	narrators, err := database.GlobalStore.GetBookNarrators(id)
+	narrators, err := s.Store().GetBookNarrators(id)
 	if err != nil {
 		internalError(c, "failed to list audiobook narrators", err)
 		return
@@ -1118,7 +1118,7 @@ func (s *Server) listAudiobookNarrators(c *gin.Context) {
 
 func (s *Server) setAudiobookNarrators(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -1127,7 +1127,7 @@ func (s *Server) setAudiobookNarrators(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := database.GlobalStore.SetBookNarrators(id, narrators); err != nil {
+	if err := s.Store().SetBookNarrators(id, narrators); err != nil {
 		internalError(c, "failed to set audiobook narrators", err)
 		return
 	}

@@ -1,5 +1,5 @@
 // file: internal/server/user_tags.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 
 package server
@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 // setupUserTagRoutes registers the user tag API routes on the given router group.
@@ -21,7 +20,7 @@ func (s *Server) setupUserTagRoutes(protected *gin.RouterGroup) {
 
 // setBookUserTags replaces all user-defined tags on a book.
 func (s *Server) setBookUserTags(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -61,7 +60,7 @@ func (s *Server) setBookUserTags(c *gin.Context) {
 
 // addBookUserTag adds a single user-defined tag to a book.
 func (s *Server) addBookUserTag(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -94,7 +93,7 @@ func (s *Server) addBookUserTag(c *gin.Context) {
 
 // removeBookUserTag removes a single user-defined tag from a book.
 func (s *Server) removeBookUserTag(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
