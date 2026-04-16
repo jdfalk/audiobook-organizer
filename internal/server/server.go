@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.170.0
+// version: 1.171.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -23,6 +23,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -1328,6 +1329,15 @@ func (s *Server) Start(cfg ServerConfig) error {
 				log.Printf("Failed to start server: %v", err)
 			}
 		}()
+	}
+
+	// Seed / refresh the multi-user roles (spec 3.7). Idempotent: if
+	// the permission set in auth.SeedRoles has grown since last boot,
+	// existing roles pick up the new entries automatically.
+	if created, updated, err := auth.SeedRoles(s.Store()); err != nil {
+		log.Printf("[WARN] seed roles: %v", err)
+	} else if created > 0 || updated > 0 {
+		log.Printf("[INFO] seed roles: %d created, %d updated", created, updated)
 	}
 
 	// Resume any operations that were interrupted by a previous shutdown/crash
