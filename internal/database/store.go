@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.51.0
+// version: 2.52.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -228,6 +228,23 @@ type Store interface {
 	CreateRole(role *Role) (*Role, error)
 	UpdateRole(role *Role) error
 	DeleteRole(id string) error
+
+	// API keys (personal JWT bearer tokens per spec 3.7). The ID is
+	// carried as the JWT's jti claim; verification loads this row to
+	// check RevokedAt before trusting the token.
+	CreateAPIKey(key *APIKey) (*APIKey, error)
+	GetAPIKey(id string) (*APIKey, error)
+	ListAPIKeysForUser(userID string) ([]APIKey, error)
+	RevokeAPIKey(id string) error
+	TouchAPIKeyLastUsed(id string, at time.Time) error
+
+	// Invites (single-use admin-generated account creation tokens per
+	// spec 3.7). ConsumeInvite is atomic and returns the created User.
+	CreateInvite(invite *Invite) (*Invite, error)
+	GetInvite(token string) (*Invite, error)
+	ListActiveInvites() ([]Invite, error)
+	DeleteInvite(token string) error
+	ConsumeInvite(token, passwordHashAlgo, passwordHash string) (*User, error)
 
 	// Per-user preferences
 	SetUserPreferenceForUser(userID, key, value string) error
@@ -710,6 +727,35 @@ type Role struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	Version     int       `json:"version"`
+}
+
+// APIKey is a personal bearer token (JWT jti) for a user (spec 3.7).
+// The JWT itself carries the ID as `jti`; verification loads this
+// row to check RevokedAt. Stored separately from Session so rotating
+// API keys doesn't require a re-login.
+type APIKey struct {
+	ID         string     `json:"id"`
+	UserID     string     `json:"user_id"`
+	Name       string     `json:"name"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+}
+
+// Invite is a single-use admin-generated token for creating a new
+// user account (spec 3.7). Token is the PK since lookup is always
+// by the token-in-URL the invitee opens. ConsumeInvite is atomic:
+// invite row deleted + user created + role membership written in
+// one Pebble batch.
+type Invite struct {
+	Token           string     `json:"token"`
+	Username        string     `json:"username"`
+	Email           string     `json:"email,omitempty"`
+	RoleID          string     `json:"role_id"`
+	CreatedByUserID string     `json:"created_by_user_id"`
+	CreatedAt       time.Time  `json:"created_at"`
+	ExpiresAt       time.Time  `json:"expires_at"`
+	UsedAt          *time.Time `json:"used_at,omitempty"`
 }
 
 // Session represents an authenticated session token
