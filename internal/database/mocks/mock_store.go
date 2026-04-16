@@ -929,6 +929,63 @@ func (_c *MockStore_BulkCreateExternalIDMappings_Call) RunAndReturn(run func(map
 	return _c
 }
 
+// ClearUserPositions provides a mock function for the type MockStore
+func (_mock *MockStore) ClearUserPositions(userID string, bookID string) error {
+	ret := _mock.Called(userID, bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearUserPositions")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(userID, bookID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_ClearUserPositions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearUserPositions'
+type MockStore_ClearUserPositions_Call struct {
+	*mock.Call
+}
+
+// ClearUserPositions is a helper method to define mock.On call
+//   - userID string
+//   - bookID string
+func (_e *MockStore_Expecter) ClearUserPositions(userID interface{}, bookID interface{}) *MockStore_ClearUserPositions_Call {
+	return &MockStore_ClearUserPositions_Call{Call: _e.mock.On("ClearUserPositions", userID, bookID)}
+}
+
+func (_c *MockStore_ClearUserPositions_Call) Run(run func(userID string, bookID string)) *MockStore_ClearUserPositions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ClearUserPositions_Call) Return(err error) *MockStore_ClearUserPositions_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_ClearUserPositions_Call) RunAndReturn(run func(userID string, bookID string) error) *MockStore_ClearUserPositions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Close provides a mock function for the type MockStore
 func (_mock *MockStore) Close() error {
 	ret := _mock.Called()
@@ -10243,6 +10300,74 @@ func (_c *MockStore_GetSystemActivityLogs_Call) RunAndReturn(run func(source str
 	return _c
 }
 
+// GetUserBookState provides a mock function for the type MockStore
+func (_mock *MockStore) GetUserBookState(userID string, bookID string) (*database.UserBookState, error) {
+	ret := _mock.Called(userID, bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserBookState")
+	}
+
+	var r0 *database.UserBookState
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (*database.UserBookState, error)); ok {
+		return returnFunc(userID, bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) *database.UserBookState); ok {
+		r0 = returnFunc(userID, bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.UserBookState)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(userID, bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetUserBookState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUserBookState'
+type MockStore_GetUserBookState_Call struct {
+	*mock.Call
+}
+
+// GetUserBookState is a helper method to define mock.On call
+//   - userID string
+//   - bookID string
+func (_e *MockStore_Expecter) GetUserBookState(userID interface{}, bookID interface{}) *MockStore_GetUserBookState_Call {
+	return &MockStore_GetUserBookState_Call{Call: _e.mock.On("GetUserBookState", userID, bookID)}
+}
+
+func (_c *MockStore_GetUserBookState_Call) Run(run func(userID string, bookID string)) *MockStore_GetUserBookState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetUserBookState_Call) Return(userBookState *database.UserBookState, err error) *MockStore_GetUserBookState_Call {
+	_c.Call.Return(userBookState, err)
+	return _c
+}
+
+func (_c *MockStore_GetUserBookState_Call) RunAndReturn(run func(userID string, bookID string) (*database.UserBookState, error)) *MockStore_GetUserBookState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetUserByEmail provides a mock function for the type MockStore
 func (_mock *MockStore) GetUserByEmail(email string) (*database.User, error) {
 	ret := _mock.Called(email)
@@ -10425,6 +10550,74 @@ func (_c *MockStore_GetUserByUsername_Call) Return(user *database.User, err erro
 }
 
 func (_c *MockStore_GetUserByUsername_Call) RunAndReturn(run func(username string) (*database.User, error)) *MockStore_GetUserByUsername_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetUserPosition provides a mock function for the type MockStore
+func (_mock *MockStore) GetUserPosition(userID string, bookID string) (*database.UserPosition, error) {
+	ret := _mock.Called(userID, bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetUserPosition")
+	}
+
+	var r0 *database.UserPosition
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (*database.UserPosition, error)); ok {
+		return returnFunc(userID, bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) *database.UserPosition); ok {
+		r0 = returnFunc(userID, bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.UserPosition)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(userID, bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetUserPosition_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetUserPosition'
+type MockStore_GetUserPosition_Call struct {
+	*mock.Call
+}
+
+// GetUserPosition is a helper method to define mock.On call
+//   - userID string
+//   - bookID string
+func (_e *MockStore_Expecter) GetUserPosition(userID interface{}, bookID interface{}) *MockStore_GetUserPosition_Call {
+	return &MockStore_GetUserPosition_Call{Call: _e.mock.On("GetUserPosition", userID, bookID)}
+}
+
+func (_c *MockStore_GetUserPosition_Call) Run(run func(userID string, bookID string)) *MockStore_GetUserPosition_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetUserPosition_Call) Return(userPosition *database.UserPosition, err error) *MockStore_GetUserPosition_Call {
+	_c.Call.Return(userPosition, err)
+	return _c
+}
+
+func (_c *MockStore_GetUserPosition_Call) RunAndReturn(run func(userID string, bookID string) (*database.UserPosition, error)) *MockStore_GetUserPosition_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -11835,6 +12028,222 @@ func (_c *MockStore_ListTrashedBookVersions_Call) Return(bookVersions []database
 }
 
 func (_c *MockStore_ListTrashedBookVersions_Call) RunAndReturn(run func() ([]database.BookVersion, error)) *MockStore_ListTrashedBookVersions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListUserBookStatesByStatus provides a mock function for the type MockStore
+func (_mock *MockStore) ListUserBookStatesByStatus(userID string, status string, limit int, offset int) ([]database.UserBookState, error) {
+	ret := _mock.Called(userID, status, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUserBookStatesByStatus")
+	}
+
+	var r0 []database.UserBookState
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, int, int) ([]database.UserBookState, error)); ok {
+		return returnFunc(userID, status, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string, int, int) []database.UserBookState); ok {
+		r0 = returnFunc(userID, status, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.UserBookState)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string, int, int) error); ok {
+		r1 = returnFunc(userID, status, limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListUserBookStatesByStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUserBookStatesByStatus'
+type MockStore_ListUserBookStatesByStatus_Call struct {
+	*mock.Call
+}
+
+// ListUserBookStatesByStatus is a helper method to define mock.On call
+//   - userID string
+//   - status string
+//   - limit int
+//   - offset int
+func (_e *MockStore_Expecter) ListUserBookStatesByStatus(userID interface{}, status interface{}, limit interface{}, offset interface{}) *MockStore_ListUserBookStatesByStatus_Call {
+	return &MockStore_ListUserBookStatesByStatus_Call{Call: _e.mock.On("ListUserBookStatesByStatus", userID, status, limit, offset)}
+}
+
+func (_c *MockStore_ListUserBookStatesByStatus_Call) Run(run func(userID string, status string, limit int, offset int)) *MockStore_ListUserBookStatesByStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListUserBookStatesByStatus_Call) Return(userBookStates []database.UserBookState, err error) *MockStore_ListUserBookStatesByStatus_Call {
+	_c.Call.Return(userBookStates, err)
+	return _c
+}
+
+func (_c *MockStore_ListUserBookStatesByStatus_Call) RunAndReturn(run func(userID string, status string, limit int, offset int) ([]database.UserBookState, error)) *MockStore_ListUserBookStatesByStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListUserPositionsForBook provides a mock function for the type MockStore
+func (_mock *MockStore) ListUserPositionsForBook(userID string, bookID string) ([]database.UserPosition, error) {
+	ret := _mock.Called(userID, bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUserPositionsForBook")
+	}
+
+	var r0 []database.UserPosition
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) ([]database.UserPosition, error)); ok {
+		return returnFunc(userID, bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) []database.UserPosition); ok {
+		r0 = returnFunc(userID, bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.UserPosition)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(userID, bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListUserPositionsForBook_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUserPositionsForBook'
+type MockStore_ListUserPositionsForBook_Call struct {
+	*mock.Call
+}
+
+// ListUserPositionsForBook is a helper method to define mock.On call
+//   - userID string
+//   - bookID string
+func (_e *MockStore_Expecter) ListUserPositionsForBook(userID interface{}, bookID interface{}) *MockStore_ListUserPositionsForBook_Call {
+	return &MockStore_ListUserPositionsForBook_Call{Call: _e.mock.On("ListUserPositionsForBook", userID, bookID)}
+}
+
+func (_c *MockStore_ListUserPositionsForBook_Call) Run(run func(userID string, bookID string)) *MockStore_ListUserPositionsForBook_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListUserPositionsForBook_Call) Return(userPositions []database.UserPosition, err error) *MockStore_ListUserPositionsForBook_Call {
+	_c.Call.Return(userPositions, err)
+	return _c
+}
+
+func (_c *MockStore_ListUserPositionsForBook_Call) RunAndReturn(run func(userID string, bookID string) ([]database.UserPosition, error)) *MockStore_ListUserPositionsForBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListUserPositionsSince provides a mock function for the type MockStore
+func (_mock *MockStore) ListUserPositionsSince(userID string, t time.Time) ([]database.UserPosition, error) {
+	ret := _mock.Called(userID, t)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUserPositionsSince")
+	}
+
+	var r0 []database.UserPosition
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) ([]database.UserPosition, error)); ok {
+		return returnFunc(userID, t)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) []database.UserPosition); ok {
+		r0 = returnFunc(userID, t)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.UserPosition)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, time.Time) error); ok {
+		r1 = returnFunc(userID, t)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListUserPositionsSince_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUserPositionsSince'
+type MockStore_ListUserPositionsSince_Call struct {
+	*mock.Call
+}
+
+// ListUserPositionsSince is a helper method to define mock.On call
+//   - userID string
+//   - t time.Time
+func (_e *MockStore_Expecter) ListUserPositionsSince(userID interface{}, t interface{}) *MockStore_ListUserPositionsSince_Call {
+	return &MockStore_ListUserPositionsSince_Call{Call: _e.mock.On("ListUserPositionsSince", userID, t)}
+}
+
+func (_c *MockStore_ListUserPositionsSince_Call) Run(run func(userID string, t time.Time)) *MockStore_ListUserPositionsSince_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 time.Time
+		if args[1] != nil {
+			arg1 = args[1].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListUserPositionsSince_Call) Return(userPositions []database.UserPosition, err error) *MockStore_ListUserPositionsSince_Call {
+	_c.Call.Return(userPositions, err)
+	return _c
+}
+
+func (_c *MockStore_ListUserPositionsSince_Call) RunAndReturn(run func(userID string, t time.Time) ([]database.UserPosition, error)) *MockStore_ListUserPositionsSince_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -14606,6 +15015,126 @@ func (_c *MockStore_SetSetting_Call) Return(err error) *MockStore_SetSetting_Cal
 }
 
 func (_c *MockStore_SetSetting_Call) RunAndReturn(run func(key string, value string, typ string, isSecret bool) error) *MockStore_SetSetting_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetUserBookState provides a mock function for the type MockStore
+func (_mock *MockStore) SetUserBookState(state *database.UserBookState) error {
+	ret := _mock.Called(state)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetUserBookState")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.UserBookState) error); ok {
+		r0 = returnFunc(state)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SetUserBookState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetUserBookState'
+type MockStore_SetUserBookState_Call struct {
+	*mock.Call
+}
+
+// SetUserBookState is a helper method to define mock.On call
+//   - state *database.UserBookState
+func (_e *MockStore_Expecter) SetUserBookState(state interface{}) *MockStore_SetUserBookState_Call {
+	return &MockStore_SetUserBookState_Call{Call: _e.mock.On("SetUserBookState", state)}
+}
+
+func (_c *MockStore_SetUserBookState_Call) Run(run func(state *database.UserBookState)) *MockStore_SetUserBookState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.UserBookState
+		if args[0] != nil {
+			arg0 = args[0].(*database.UserBookState)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SetUserBookState_Call) Return(err error) *MockStore_SetUserBookState_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SetUserBookState_Call) RunAndReturn(run func(state *database.UserBookState) error) *MockStore_SetUserBookState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetUserPosition provides a mock function for the type MockStore
+func (_mock *MockStore) SetUserPosition(userID string, bookID string, segmentID string, positionSeconds float64) error {
+	ret := _mock.Called(userID, bookID, segmentID, positionSeconds)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetUserPosition")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, float64) error); ok {
+		r0 = returnFunc(userID, bookID, segmentID, positionSeconds)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SetUserPosition_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetUserPosition'
+type MockStore_SetUserPosition_Call struct {
+	*mock.Call
+}
+
+// SetUserPosition is a helper method to define mock.On call
+//   - userID string
+//   - bookID string
+//   - segmentID string
+//   - positionSeconds float64
+func (_e *MockStore_Expecter) SetUserPosition(userID interface{}, bookID interface{}, segmentID interface{}, positionSeconds interface{}) *MockStore_SetUserPosition_Call {
+	return &MockStore_SetUserPosition_Call{Call: _e.mock.On("SetUserPosition", userID, bookID, segmentID, positionSeconds)}
+}
+
+func (_c *MockStore_SetUserPosition_Call) Run(run func(userID string, bookID string, segmentID string, positionSeconds float64)) *MockStore_SetUserPosition_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 float64
+		if args[3] != nil {
+			arg3 = args[3].(float64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SetUserPosition_Call) Return(err error) *MockStore_SetUserPosition_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SetUserPosition_Call) RunAndReturn(run func(userID string, bookID string, segmentID string, positionSeconds float64) error) *MockStore_SetUserPosition_Call {
 	_c.Call.Return(run)
 	return _c
 }

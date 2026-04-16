@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.45.0
+// version: 1.46.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -3388,6 +3388,199 @@ func (p *PebbleStore) DeleteRole(id string) error {
 		return err
 	}
 	return b.Commit(pebble.Sync)
+}
+
+// User positions + book state (spec 3.6)
+//
+// Key schema:
+//   upos:{userID}:{bookID}:{segmentID}  → UserPosition JSON
+//   ubs:{userID}:{bookID}               → UserBookState JSON
+//   idx:ubs:status:{userID}:{status}:{bookID} → "1"
+
+func (p *PebbleStore) SetUserPosition(userID, bookID, segmentID string, positionSeconds float64) error {
+	if userID == "" || bookID == "" || segmentID == "" {
+		return fmt.Errorf("user/book/segment required")
+	}
+	pos := UserPosition{
+		UserID: userID, BookID: bookID, SegmentID: segmentID,
+		PositionSeconds: positionSeconds, UpdatedAt: time.Now(),
+	}
+	data, err := json.Marshal(pos)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte("upos:"+userID+":"+bookID+":"+segmentID), data, pebble.NoSync)
+}
+
+func (p *PebbleStore) GetUserPosition(userID, bookID string) (*UserPosition, error) {
+	if userID == "" || bookID == "" {
+		return nil, nil
+	}
+	prefix := []byte("upos:" + userID + ":" + bookID + ":")
+	upper := []byte("upos:" + userID + ":" + bookID + ":~")
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var latest *UserPosition
+	for iter.First(); iter.Valid(); iter.Next() {
+		var pos UserPosition
+		if err := json.Unmarshal(iter.Value(), &pos); err != nil {
+			continue
+		}
+		if latest == nil || pos.UpdatedAt.After(latest.UpdatedAt) {
+			posCopy := pos
+			latest = &posCopy
+		}
+	}
+	return latest, nil
+}
+
+func (p *PebbleStore) ListUserPositionsForBook(userID, bookID string) ([]UserPosition, error) {
+	if userID == "" || bookID == "" {
+		return nil, nil
+	}
+	prefix := []byte("upos:" + userID + ":" + bookID + ":")
+	upper := []byte("upos:" + userID + ":" + bookID + ":~")
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []UserPosition
+	for iter.First(); iter.Valid(); iter.Next() {
+		var pos UserPosition
+		if err := json.Unmarshal(iter.Value(), &pos); err != nil {
+			continue
+		}
+		out = append(out, pos)
+	}
+	return out, nil
+}
+
+func (p *PebbleStore) ClearUserPositions(userID, bookID string) error {
+	positions, err := p.ListUserPositionsForBook(userID, bookID)
+	if err != nil {
+		return err
+	}
+	if len(positions) == 0 {
+		return nil
+	}
+	b := p.db.NewBatch()
+	for _, pos := range positions {
+		if err := b.Delete([]byte("upos:"+pos.UserID+":"+pos.BookID+":"+pos.SegmentID), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	return b.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) SetUserBookState(state *UserBookState) error {
+	if state == nil || state.UserID == "" || state.BookID == "" {
+		return fmt.Errorf("user and book required")
+	}
+	state.UpdatedAt = time.Now()
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+
+	prev, _ := p.GetUserBookState(state.UserID, state.BookID)
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("ubs:"+state.UserID+":"+state.BookID), data, nil); err != nil {
+		b.Close()
+		return err
+	}
+	if prev != nil && prev.Status != "" && prev.Status != state.Status {
+		if err := b.Delete([]byte("idx:ubs:status:"+state.UserID+":"+prev.Status+":"+state.BookID), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	if state.Status != "" {
+		if err := b.Set([]byte("idx:ubs:status:"+state.UserID+":"+state.Status+":"+state.BookID), []byte("1"), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	return b.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) GetUserBookState(userID, bookID string) (*UserBookState, error) {
+	if userID == "" || bookID == "" {
+		return nil, nil
+	}
+	data, closer, err := p.db.Get([]byte("ubs:" + userID + ":" + bookID))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	var s UserBookState
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (p *PebbleStore) ListUserBookStatesByStatus(userID, status string, limit, offset int) ([]UserBookState, error) {
+	if userID == "" || status == "" {
+		return nil, nil
+	}
+	prefix := []byte("idx:ubs:status:" + userID + ":" + status + ":")
+	upper := []byte("idx:ubs:status:" + userID + ":" + status + ":~")
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []UserBookState
+	skipped := 0
+	prefixLen := len(prefix)
+	for iter.First(); iter.Valid(); iter.Next() {
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+		bookID := string(iter.Key()[prefixLen:])
+		if skipped < offset {
+			skipped++
+			continue
+		}
+		state, err := p.GetUserBookState(userID, bookID)
+		if err != nil || state == nil {
+			continue
+		}
+		out = append(out, *state)
+	}
+	return out, nil
+}
+
+func (p *PebbleStore) ListUserPositionsSince(userID string, t time.Time) ([]UserPosition, error) {
+	if userID == "" {
+		return nil, nil
+	}
+	prefix := []byte("upos:" + userID + ":")
+	upper := []byte("upos:" + userID + ":~")
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []UserPosition
+	for iter.First(); iter.Valid(); iter.Next() {
+		var pos UserPosition
+		if err := json.Unmarshal(iter.Value(), &pos); err != nil {
+			continue
+		}
+		if pos.UpdatedAt.After(t) {
+			out = append(out, pos)
+		}
+	}
+	return out, nil
 }
 
 // Book versions (spec 3.1)
