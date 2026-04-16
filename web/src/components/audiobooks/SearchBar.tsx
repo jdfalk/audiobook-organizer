@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/SearchBar.tsx
-// version: 2.0.0
+// version: 2.1.0
 // guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -52,7 +52,7 @@ function saveRecentSearch(query: string) {
   localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
-// Build autocomplete options: field prefixes + recent searches
+// Build autocomplete options: field prefixes, prefix wildcard, + recent searches
 function buildOptions(input: string, recent: string[]): string[] {
   const opts: string[] = [];
   const lower = input.toLowerCase();
@@ -63,6 +63,10 @@ function buildOptions(input: string, recent: string[]): string[] {
       if (field.startsWith(lower)) {
         opts.push(`${field}:`);
       }
+    }
+    // Suggest prefix wildcard for bare words (3+ chars)
+    if (lower.length >= 3 && !lower.endsWith('*')) {
+      opts.push(`${input}*`);
     }
   }
 
@@ -106,6 +110,18 @@ const SEARCH_HELP = [
   { example: 'review:matched has_written:yes -has_organized:yes', desc: 'Written but not organized' },
   { example: 'has_cover:no review:matched', desc: 'Matched but missing cover art' },
   { example: 'library_state:imported -review:matched', desc: 'Imported books needing metadata' },
+  // Read/unread tracking (per-user)
+  { example: 'read_status:finished', desc: 'Books you\'ve finished' },
+  { example: 'read_status:in_progress', desc: 'Books you\'re reading' },
+  { example: '-read_status:finished', desc: 'Unfinished books' },
+  { example: 'progress_pct:>75', desc: 'Nearly finished books' },
+  // Advanced DSL operators
+  { example: 'author:sanderson || author:jemisin', desc: 'OR — match either author' },
+  { example: 'year:>2020', desc: 'Published after 2020' },
+  { example: 'year:[2015 TO 2020]', desc: 'Year range' },
+  { example: 'title:vamp*', desc: 'Prefix wildcard' },
+  { example: 'author:smith~', desc: 'Fuzzy match (~2 edit distance)' },
+  { example: 'format:(m4b|mp3)', desc: 'Match either value' },
 ];
 
 interface SearchBarProps {
