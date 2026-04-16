@@ -50,7 +50,7 @@ func TestITunesImport_FullWorkflow(t *testing.T) {
 	}, xmlPath)
 
 	// Import via HTTP handler
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":true}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -111,7 +111,7 @@ func TestITunesImport_OrganizeMode(t *testing.T) {
 			FilePath: bookPath, TotalTime: 100000},
 	}, xmlPath)
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"organize","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -152,7 +152,7 @@ func TestITunesImport_SkipDuplicates(t *testing.T) {
 			FilePath: bookPath, TotalTime: 50000},
 	}, xmlPath)
 
-	server := NewServer()
+	server := NewServer(nil)
 	importOnce := func() int {
 		body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":true}`, xmlPath)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
@@ -195,7 +195,7 @@ func TestITunesWriteBack(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute write-back via HTTP — ITL is not configured in test, so should return 400
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"audiobook_ids":["%s"]}`, created.ID)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/write-back", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -223,7 +223,7 @@ func TestITunesValidate_Endpoint(t *testing.T) {
 			FilePath: "/nonexistent/missing.m4b", TotalTime: 20000},
 	}, xmlPath)
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s"}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/validate", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

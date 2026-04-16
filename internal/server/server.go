@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.167.0
+// version: 1.168.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -665,6 +665,7 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 
 // Server represents the HTTP server
 type Server struct {
+	store                  database.Store
 	httpServer             *http.Server
 	router                 *gin.Engine
 	audiobookService       *AudiobookService
@@ -729,7 +730,23 @@ type ServerConfig struct {
 }
 
 // NewServer creates a new server instance
-func NewServer() *Server {
+// Store returns the database.Store dependency the server was constructed
+// with. Handlers should prefer s.Store() over database.GlobalStore; the
+// global is being phased out per the 4.4 DI migration.
+func (s *Server) Store() database.Store {
+	if s.store != nil {
+		return s.store
+	}
+	// Fallback during migration: if s.store wasn't set (older construction
+	// paths, tests that build Server literals), fall back to the package
+	// global so behavior is unchanged.
+	return database.GetGlobalStore()
+}
+
+// NewServer constructs a Server with an explicit Store dependency.
+// database.GlobalStore is still assigned at startup for code that hasn't
+// been migrated to use s.Store() yet (see DI migration plan 4.4).
+func NewServer(store database.Store) *Server {
 	router := gin.New() // don't use gin.Default() — we add our own middleware
 
 	// Custom logger that skips noisy polling endpoints
@@ -743,9 +760,12 @@ func NewServer() *Server {
 	// Register metrics (idempotent)
 	metrics.Register()
 
-	store := database.GetGlobalStore()
+	if store == nil {
+		store = database.GetGlobalStore()
+	}
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	server := &Server{
+		store:                  store,
 		bgCtx:                  bgCtx,
 		bgCancel:               bgCancel,
 		router:                 router,
