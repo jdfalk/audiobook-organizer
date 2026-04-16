@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -29,7 +29,7 @@ import (
 )
 
 func (s *Server) startScan(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -46,7 +46,7 @@ func (s *Server) startScan(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 
 	id := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(id, "scan", req.FolderPath)
+	op, err := s.Store().CreateOperation(id, "scan", req.FolderPath)
 	if err != nil {
 		internalError(c, "failed to create operation", err)
 		return
@@ -79,7 +79,7 @@ func (s *Server) startScan(c *gin.Context) {
 }
 
 func (s *Server) startOrganize(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -98,7 +98,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 
 	id := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(id, "organize", req.FolderPath)
+	op, err := s.Store().CreateOperation(id, "organize", req.FolderPath)
 	if err != nil {
 		internalError(c, "failed to create operation", err)
 		return
@@ -134,7 +134,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 }
 
 func (s *Server) startTranscode(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -155,13 +155,13 @@ func (s *Server) startTranscode(c *gin.Context) {
 	}
 
 	// Verify the book exists
-	if _, err := database.GlobalStore.GetBookByID(req.BookID); err != nil {
+	if _, err := s.Store().GetBookByID(req.BookID); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
 		return
 	}
 
 	id := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(id, "transcode", nil)
+	op, err := s.Store().CreateOperation(id, "transcode", nil)
 	if err != nil {
 		internalError(c, "failed to create operation", err)
 		return
@@ -180,13 +180,13 @@ func (s *Server) startTranscode(c *gin.Context) {
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		outputPath, err := transcode.Transcode(ctx, opts, database.GlobalStore, progress)
+		outputPath, err := transcode.Transcode(ctx, opts, s.Store(), progress)
 		if err != nil {
 			return err
 		}
 
 		// Get the original book to preserve its data
-		originalBook, err := database.GlobalStore.GetBookByID(req.BookID)
+		originalBook, err := s.Store().GetBookByID(req.BookID)
 		if err != nil {
 			return fmt.Errorf("failed to get original book: %w", err)
 		}
@@ -205,7 +205,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 		originalBook.IsPrimaryVersion = &notPrimary
 		originalBook.VersionGroupID = &groupID
 		originalBook.VersionNotes = &origNotes
-		if _, err := database.GlobalStore.UpdateBook(req.BookID, originalBook); err != nil {
+		if _, err := s.Store().UpdateBook(req.BookID, originalBook); err != nil {
 			progress.Log("warn", fmt.Sprintf("Failed to update original book version info: %v", err), nil)
 		}
 
@@ -243,7 +243,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 			VersionGroupID:       &groupID,
 			VersionNotes:         &m4bNotes,
 		}
-		if _, err := database.GlobalStore.CreateBook(newBook); err != nil {
+		if _, err := s.Store().CreateBook(newBook); err != nil {
 			// Fallback: update original in-place but preserve all existing fields
 			progress.Log("warn", fmt.Sprintf("Failed to create M4B version record, updating original: %v", err), nil)
 			isPrim := true
@@ -255,7 +255,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 			originalBook.IsPrimaryVersion = &isPrim
 			originalBook.VersionGroupID = &groupID
 			originalBook.VersionNotes = &fallbackNotes
-			if _, updateErr := database.GlobalStore.UpdateBook(req.BookID, originalBook); updateErr != nil {
+			if _, updateErr := s.Store().UpdateBook(req.BookID, originalBook); updateErr != nil {
 				return updateErr
 			}
 			return nil
@@ -268,7 +268,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 		if !config.AppConfig.ITLWriteBackEnabled &&
 			originalBook.ITunesPersistentID != nil &&
 			*originalBook.ITunesPersistentID != "" {
-			if err := database.GlobalStore.CreateDeferredITunesUpdate(
+			if err := s.Store().CreateDeferredITunesUpdate(
 				originalBook.ID,
 				*originalBook.ITunesPersistentID,
 				originalBook.FilePath,
@@ -293,12 +293,12 @@ func (s *Server) startTranscode(c *gin.Context) {
 }
 
 func (s *Server) getOperationStatus(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 	id := c.Param("id")
-	op, err := database.GlobalStore.GetOperationByID(id)
+	op, err := s.Store().GetOperationByID(id)
 	if err != nil || op == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
 		return
@@ -307,7 +307,7 @@ func (s *Server) getOperationStatus(c *gin.Context) {
 }
 
 func (s *Server) cancelOperation(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -337,7 +337,7 @@ func (s *Server) cancelOperation(c *gin.Context) {
 	}
 
 	// Fallback: force-update DB status (e.g., stale after restart)
-	if dbErr := database.GlobalStore.UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
+	if dbErr := s.Store().UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
 		internalError(c, "failed to cancel operation", dbErr)
 		return
 	}
@@ -346,12 +346,12 @@ func (s *Server) cancelOperation(c *gin.Context) {
 
 // clearStaleOperations force-marks all pending/running/queued operations as failed.
 func (s *Server) clearStaleOperations(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	ops, err := database.GlobalStore.GetRecentOperations(500)
+	ops, err := s.Store().GetRecentOperations(500)
 	if err != nil {
 		internalError(c, "failed to get operations", err)
 		return
@@ -360,7 +360,7 @@ func (s *Server) clearStaleOperations(c *gin.Context) {
 	cleared := 0
 	for _, op := range ops {
 		if op.Status == "pending" || op.Status == "running" || op.Status == "queued" {
-			_ = database.GlobalStore.UpdateOperationStatus(op.ID, "failed", 0, 0, "force cleared by user")
+			_ = s.Store().UpdateOperationStatus(op.ID, "failed", 0, 0, "force cleared by user")
 			cleared++
 		}
 	}
@@ -371,7 +371,7 @@ func (s *Server) clearStaleOperations(c *gin.Context) {
 // deleteOperationHistory deletes operations matching the given status(es).
 // Query param: ?status=completed or ?status=failed or ?status=completed,failed
 func (s *Server) deleteOperationHistory(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -392,7 +392,7 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 		}
 	}
 
-	deleted, err := database.GlobalStore.DeleteOperationsByStatus(statuses)
+	deleted, err := s.Store().DeleteOperationsByStatus(statuses)
 	if err != nil {
 		internalError(c, "failed to delete operations", err)
 		return
@@ -403,12 +403,12 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 
 // optimizeDatabase splits &-delimited author/narrator strings and re-extracts empty media info.
 func (s *Server) optimizeDatabase(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	books, err := database.GlobalStore.GetAllBooks(10000, 0)
+	books, err := s.Store().GetAllBooks(10000, 0)
 	if err != nil {
 		internalError(c, "failed to get audiobooks", err)
 		return
@@ -420,15 +420,15 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 	for _, book := range books {
 		// Split compound author names into individual book_authors
 		if book.AuthorID != nil {
-			author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID)
+			author, err := s.Store().GetAuthorByID(*book.AuthorID)
 			if err == nil && author != nil && strings.Contains(author.Name, " & ") {
 				names := splitMultipleNames(author.Name)
 				if len(names) > 1 {
 					var bookAuthors []database.BookAuthor
 					for _, name := range names {
-						a, err := database.GlobalStore.GetAuthorByName(name)
+						a, err := s.Store().GetAuthorByName(name)
 						if err != nil || a == nil {
-							a, err = database.GlobalStore.CreateAuthor(name)
+							a, err = s.Store().CreateAuthor(name)
 							if err != nil {
 								continue
 							}
@@ -439,7 +439,7 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 						})
 					}
 					if len(bookAuthors) > 0 {
-						if err := database.GlobalStore.SetBookAuthors(book.ID, bookAuthors); err == nil {
+						if err := s.Store().SetBookAuthors(book.ID, bookAuthors); err == nil {
 							authorsSplit++
 						}
 					}
@@ -453,9 +453,9 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 			if len(names) > 1 {
 				var bookNarrators []database.BookNarrator
 				for _, name := range names {
-					n, err := database.GlobalStore.GetNarratorByName(name)
+					n, err := s.Store().GetNarratorByName(name)
 					if err != nil || n == nil {
-						n, err = database.GlobalStore.CreateNarrator(name)
+						n, err = s.Store().CreateNarrator(name)
 						if err != nil {
 							continue
 						}
@@ -465,7 +465,7 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 					})
 				}
 				if len(bookNarrators) > 0 {
-					if err := database.GlobalStore.SetBookNarrators(book.ID, bookNarrators); err == nil {
+					if err := s.Store().SetBookNarrators(book.ID, bookNarrators); err == nil {
 						narratorsSplit++
 					}
 				}
@@ -481,11 +481,11 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 }
 
 func (s *Server) sweepTombstones(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	result, err := SweepTombstones(database.GlobalStore)
+	result, err := SweepTombstones(s.Store())
 	if err != nil {
 		internalError(c, "failed to sweep tombstones", err)
 		return
@@ -494,11 +494,11 @@ func (s *Server) sweepTombstones(c *gin.Context) {
 }
 
 func (s *Server) auditFileConsistency(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	result, err := AuditFileConsistency(database.GlobalStore)
+	result, err := AuditFileConsistency(s.Store())
 	if err != nil {
 		internalError(c, "failed to audit file consistency", err)
 		return
@@ -509,7 +509,7 @@ func (s *Server) auditFileConsistency(c *gin.Context) {
 // listActiveOperations returns a snapshot of currently queued/running operations with basic progress
 func (s *Server) listOperations(c *gin.Context) {
 	params := ParsePaginationParams(c)
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusOK, gin.H{"items": []database.Operation{}, "total": 0, "limit": params.Limit, "offset": params.Offset})
 		return
@@ -537,8 +537,8 @@ func (s *Server) listActiveOperations(c *gin.Context) {
 		progress := 0
 		total := 0
 		message := ""
-		if database.GlobalStore != nil {
-			if op, err := database.GlobalStore.GetOperationByID(a.ID); err == nil && op != nil {
+		if s.Store() != nil {
+			if op, err := s.Store().GetOperationByID(a.ID); err == nil && op != nil {
 				status = op.Status
 				progress = op.Progress
 				total = op.Total
@@ -582,12 +582,12 @@ func (s *Server) listStaleOperations(c *gin.Context) {
 
 // getOperationLogs returns logs for a given operation
 func (s *Server) getOperationLogs(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 	id := c.Param("id")
-	logs, err := database.GlobalStore.GetOperationLogs(id)
+	logs, err := s.Store().GetOperationLogs(id)
 	if err != nil {
 		internalError(c, "failed to get operation logs", err)
 		return
@@ -603,7 +603,7 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 
 func (s *Server) getOperationResult(c *gin.Context) {
 	id := c.Param("id")
-	store := database.GlobalStore
+	store := s.Store()
 	op, err := store.GetOperationByID(id)
 	if err != nil {
 		internalError(c, "failed to get operation", err)
@@ -632,7 +632,7 @@ func (s *Server) getOperationResult(c *gin.Context) {
 // getOperationChanges returns change tracking records for an operation.
 func (s *Server) getOperationChanges(c *gin.Context) {
 	id := c.Param("id")
-	changes, err := database.GlobalStore.GetOperationChanges(id)
+	changes, err := s.Store().GetOperationChanges(id)
 	if err != nil {
 		internalError(c, "failed to get operation changes", err)
 		return
@@ -643,7 +643,7 @@ func (s *Server) getOperationChanges(c *gin.Context) {
 // revertOperation undoes all changes from a given operation.
 func (s *Server) revertOperation(c *gin.Context) {
 	id := c.Param("id")
-	revertSvc := NewRevertService(database.GlobalStore)
+	revertSvc := NewRevertService(s.Store())
 	if err := revertSvc.RevertOperation(id); err != nil {
 		internalError(c, "failed to revert operation", err)
 		return
@@ -804,8 +804,8 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 	}
 
 	// Persist to database
-	if database.GlobalStore != nil {
-		if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
+	if s.Store() != nil {
+		if err := config.SaveConfigToDatabase(s.Store()); err != nil {
 			log.Printf("[WARN] Failed to save task config: %v", err)
 		}
 	}

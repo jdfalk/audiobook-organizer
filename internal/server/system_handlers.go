@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
 // System-level HTTP handlers split out of server.go: health, status,
@@ -32,18 +32,18 @@ func (s *Server) healthCheck(c *gin.Context) {
 	// Gather basic metrics; tolerate errors (don't fail health entirely)
 	var bookCount, authorCount, seriesCount, playlistCount int
 	var dbErr error
-	if database.GlobalStore != nil {
-		if bc, err := database.GlobalStore.CountBooks(); err == nil {
+	if s.Store() != nil {
+		if bc, err := s.Store().CountBooks(); err == nil {
 			bookCount = bc
 		} else {
 			dbErr = err
 		}
-		if authors, err := database.GlobalStore.GetAllAuthors(); err == nil {
+		if authors, err := s.Store().GetAllAuthors(); err == nil {
 			authorCount = len(authors)
 		} else if dbErr == nil {
 			dbErr = err
 		}
-		if series, err := database.GlobalStore.GetAllSeries(); err == nil {
+		if series, err := s.Store().GetAllSeries(); err == nil {
 			seriesCount = len(series)
 		} else if dbErr == nil {
 			dbErr = err
@@ -89,10 +89,10 @@ func (s *Server) getSystemAnnouncements(c *gin.Context) {
 	var announcements []Announcement
 
 	// Check for duplicate authors
-	authors, err := database.GlobalStore.GetAllAuthors()
+	authors, err := s.Store().GetAllAuthors()
 	if err == nil {
 		bookCountFn := func(authorID int) int {
-			books, err := database.GlobalStore.GetBooksByAuthorIDWithRole(authorID)
+			books, err := s.Store().GetBooksByAuthorIDWithRole(authorID)
 			if err != nil {
 				return 0
 			}
@@ -110,7 +110,7 @@ func (s *Server) getSystemAnnouncements(c *gin.Context) {
 	}
 
 	// Check for missing files (sample first 100 books)
-	books, err := database.GlobalStore.GetAllBooks(100, 0)
+	books, err := s.Store().GetAllBooks(100, 0)
 	if err == nil {
 		missingCount := 0
 		for _, book := range books {
@@ -194,7 +194,7 @@ func (s *Server) getSystemActivityLog(c *gin.Context) {
 	if l, err := strconv.Atoi(c.Query("limit")); err == nil && l > 0 {
 		limit = l
 	}
-	logs, err := database.GlobalStore.GetSystemActivityLogs(source, limit)
+	logs, err := s.Store().GetSystemActivityLogs(source, limit)
 	if err != nil {
 		internalError(c, "failed to get activity log", err)
 		return
@@ -204,7 +204,7 @@ func (s *Server) getSystemActivityLog(c *gin.Context) {
 
 func (s *Server) resetSystem(c *gin.Context) {
 	// Reset database
-	if err := database.GlobalStore.Reset(); err != nil {
+	if err := s.Store().Reset(); err != nil {
 		internalError(c, "failed to reset database", err)
 		return
 	}
@@ -231,7 +231,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 	log.Printf("[INFO] Factory reset initiated")
 
 	// Reset database (books, authors, series, settings)
-	if err := database.GlobalStore.Reset(); err != nil {
+	if err := s.Store().Reset(); err != nil {
 		log.Printf("[ERROR] Factory reset: database reset failed: %v", err)
 		internalError(c, "failed to reset database", err)
 		return
@@ -276,7 +276,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 	config.ResetToDefaults()
 	config.AppConfig.RootDir = ""
 	config.AppConfig.SetupComplete = false
-	if err := config.SaveConfigToDatabase(database.GlobalStore); err != nil {
+	if err := config.SaveConfigToDatabase(s.Store()); err != nil {
 		log.Printf("[WARN] Factory reset: failed to persist config: %v", err)
 	}
 
@@ -457,7 +457,7 @@ func (s *Server) deleteBackup(c *gin.Context) {
 
 // getDashboard returns dashboard statistics with size and format distributions
 func (s *Server) getDashboard(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -471,14 +471,14 @@ func (s *Server) getDashboard(c *gin.Context) {
 	LogServiceCacheMiss("Dashboard", "dashboard")
 
 	// Use SQL aggregation instead of loading all books
-	stats, err := database.GlobalStore.GetDashboardStats()
+	stats, err := s.Store().GetDashboardStats()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve dashboard stats"})
 		return
 	}
 
 	// Get recent operations
-	recentOps, err := database.GlobalStore.GetRecentOperations(5)
+	recentOps, err := s.Store().GetRecentOperations(5)
 	if err != nil {
 		recentOps = []database.Operation{}
 	}
@@ -498,12 +498,12 @@ func (s *Server) getDashboard(c *gin.Context) {
 
 // listBlockedHashes returns all blocked hashes
 func (s *Server) listBlockedHashes(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	hashes, err := database.GlobalStore.GetAllBlockedHashes()
+	hashes, err := s.Store().GetAllBlockedHashes()
 	if err != nil {
 		internalError(c, "failed to get blocked hashes", err)
 		return
@@ -517,7 +517,7 @@ func (s *Server) listBlockedHashes(c *gin.Context) {
 
 // addBlockedHash adds a hash to the blocklist
 func (s *Server) addBlockedHash(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -538,7 +538,7 @@ func (s *Server) addBlockedHash(c *gin.Context) {
 		return
 	}
 
-	err := database.GlobalStore.AddBlockedHash(req.Hash, req.Reason)
+	err := s.Store().AddBlockedHash(req.Hash, req.Reason)
 	if err != nil {
 		internalError(c, "failed to add blocked hash", err)
 		return
@@ -553,7 +553,7 @@ func (s *Server) addBlockedHash(c *gin.Context) {
 
 // removeBlockedHash removes a hash from the blocklist
 func (s *Server) removeBlockedHash(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -564,7 +564,7 @@ func (s *Server) removeBlockedHash(c *gin.Context) {
 		return
 	}
 
-	err := database.GlobalStore.RemoveBlockedHash(hash)
+	err := s.Store().RemoveBlockedHash(hash)
 	if err != nil {
 		internalError(c, "failed to remove blocked hash", err)
 		return
@@ -583,7 +583,7 @@ func (s *Server) getUserPreference(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "key is required"})
 		return
 	}
-	pref, err := database.GlobalStore.GetUserPreference(key)
+	pref, err := s.Store().GetUserPreference(key)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get preference"})
 		return
@@ -609,7 +609,7 @@ func (s *Server) setUserPreference(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	if err := database.GlobalStore.SetUserPreference(key, body.Value); err != nil {
+	if err := s.Store().SetUserPreference(key, body.Value); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save preference"})
 		return
 	}
@@ -624,7 +624,7 @@ func (s *Server) deleteUserPreference(c *gin.Context) {
 		return
 	}
 	// Set to empty string to "delete" (store doesn't have a delete method)
-	if err := database.GlobalStore.SetUserPreference(key, ""); err != nil {
+	if err := s.Store().SetUserPreference(key, ""); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete preference"})
 		return
 	}
