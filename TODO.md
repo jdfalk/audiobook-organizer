@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 5.1.0 -->
+<!-- version: 5.2.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-04-14 -->
+<!-- last-edited: 2026-04-16 -->
 
 # Project TODO
 
@@ -18,12 +18,12 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🎯 Current Status — April 14, 2026
+## 🎯 Current Status — April 16, 2026
 
-**Library:** 24,022 books / 3,341 authors / 10,924 series (migration 45)
+**Library:** 10,891 books / 2,970 authors / 8,507 series (cleaned)
 **Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
-**Latest shipped release:** v0.206.0 (2026-04-13)
-**In flight:** CI / release workflow fixes (see next section)
+**Latest shipped release:** v0.210.0 (2026-04-16)
+**In flight:** Backend foundations for 6 major features (see below)
 
 ---
 
@@ -206,6 +206,13 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 - [x] [2026-04-09 Embedding dedup](docs/superpowers/plans/2026-04-09-embedding-dedup.md)
 - [x] [2026-04-10 Metadata candidate scoring PR1](docs/superpowers/plans/2026-04-10-metadata-candidate-scoring-pr1.md)
 - [x] [2026-04-10 Metadata candidate scoring PR2](docs/superpowers/plans/2026-04-10-metadata-candidate-scoring-pr2.md)
+- ⏳ [2026-04-15 Library centralization](docs/superpowers/plans/2026-04-15-library-centralization.md) — tasks 1-4 done (schema, fs, swap, fingerprint)
+- ⏳ [2026-04-15 Bulk organize undo](docs/superpowers/plans/2026-04-15-bulk-organize-undo.md) — tasks 1, 3, 5 done (schema, engine, preflight)
+- ⏳ [2026-04-15 Smart + static playlists](docs/superpowers/plans/2026-04-15-smart-and-static-playlists.md) — tasks 1-3 done (schema, evaluator, HTTP)
+- ⏳ [2026-04-15 Read/unread tracking](docs/superpowers/plans/2026-04-15-read-unread-tracking.md) — tasks 1-4 done (schema, HTTP, engine, iTunes sync)
+- ⏳ [2026-04-15 Multi-user support](docs/superpowers/plans/2026-04-15-multi-user-support.md) — tasks 1-4, 6 done (schema, perms, middleware, lockout, route wiring)
+- ⏳ [2026-04-15 Bleve library search (DES-1)](docs/superpowers/plans/2026-04-15-bleve-library-search.md) — tasks 1-5 done (skeleton through endpoint)
+- [x] [2026-04-15 DI migration (4.4)](docs/superpowers/plans/2026-04-15-di-migration.md) — complete
 
 ---
 
@@ -235,6 +242,20 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 ---
 
 ## ✅ Recently Completed
+
+### Sessions 21-22 (2026-04-16) — feature foundations + v0.209.0/v0.210.0
+
+**39 PRs merged (#280-#319)** across two sessions:
+
+- **4.4 DI migration** — complete (#280-#291): replaced `database.GlobalStore` with constructor injection
+- **3.7 Multi-user auth** — tasks 1-4, 6 (#292-#295, #299, #313-#314): schema, permissions, middleware, lockout, 247-route permission wiring
+- **3.1 Library centralization** — tasks 1-4 (#296-#297, #306, #315-#316): BookVersion schema, `.versions/` fs ops, primary swap, fingerprint check
+- **3.6 Read/unread tracking** — tasks 1-4 (#300, #303, #317): position/state schema, recomputation engine, HTTP endpoints, iTunes Bookmark sync
+- **DES-1 Bleve search** — tasks 1-5 (#298, #301-#302, #311-#312): index, parser, translator, indexedStore decorator, endpoint routing
+- **3.4 Playlists** — tasks 1-3 (#307-#309): UserPlaylist schema, smart evaluator, 9 HTTP endpoints
+- **3.2 Undo** — tasks 3, 5 (#318-#319): undo engine, pre-flight conflict detection
+- **Bug fixes**: Pebble prefix iteration slice aliasing (#318), go.mod tidy for release (#310)
+- **Releases**: v0.209.0, v0.210.0 published
 
 ### Session 20 (2026-04-14) — operations infrastructure + UX cleanup
 

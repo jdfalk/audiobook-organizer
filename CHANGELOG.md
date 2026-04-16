@@ -1,13 +1,58 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.1.0 -->
+<!-- version: 2.2.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-11 -->
+<!-- last-edited: 2026-04-16 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 16, 2026 — Feature Foundations (v0.209.0 + v0.210.0)
+
+Major backend foundation work spanning 6 design specs and 39 PRs (#280-#319).
+
+##### DI Migration (4.4) — Complete
+- Replaced `database.GlobalStore` package global with constructor injection across all services (#280-#291)
+
+##### Multi-User Auth (3.7) — Backend Complete
+- User/Role/Session/APIKey/Invite types + Pebble implementations
+- `internal/auth` package: 11 permission constants, `Can(ctx, perm)`, context helpers
+- Auth middleware loads user+permissions; RequirePermission factory
+- Login lockout after 10 consecutive failures (in-memory, 15-min window) (#313)
+- All 247 routes now have permission middleware (#314)
+
+##### Library Centralization (3.1) — Schema + Operations
+- BookVersion type with 8 status constants + single-active invariant
+- `.versions/` filesystem operations (idempotent, ZFS-optimized) (#306)
+- Primary-swap tracked operation with crash-recovery (#315)
+- Fingerprint check for incoming files (#316)
+
+##### Read/Unread Tracking (3.6) — Backend Complete
+- UserPosition + UserBookState types with auto-derived status (95% threshold)
+- HTTP endpoints: position, state, manual status override, list-by-status
+- iTunes Bookmark bidirectional sync (#317)
+
+##### Bleve Library Search (DES-1) — End-to-End Working
+- Bleve v2 index with English analyzer, field-level boost
+- DSL query parser: &&/||/NOT/field-scoped/range/fuzzy/boost/prefix
+- AST → Bleve translator with per-user post-filter split
+- indexedStore decorator: async worker keeps index in sync on every book CUD (#311)
+- /audiobooks?search= now routes through Bleve (#312)
+
+##### Smart + Static Playlists (3.4) — Schema + HTTP
+- UserPlaylist type (static book lists + smart DSL queries) (#307)
+- Smart playlist evaluator: Bleve + per-user post-filter + sort + limit (#308)
+- 9 HTTP endpoints: CRUD, add/remove books, reorder, materialize (#309)
+
+##### Undo Engine (3.2) — Core + Pre-flight
+- Undo engine: reverses operation changes (file moves, metadata, dir cleanup) (#318)
+- Pre-flight conflict detection endpoint (#319)
+
+### Fixed
+- **Pebble prefix iteration slice aliasing** (#318): `append(prefix[:n-1], ...)` mutated the original slice, producing empty ranges. Fixed 10 instances.
+- **go.mod tidy for release** (#310): bleve dep promotion dirtied go.mod in CI
 
 #### April 11, 2026 — Cluster UX, Metadata Integrations, ITL Safety, server.go Refactor (v4.1.0)
 
