@@ -46,7 +46,7 @@ func setupHandlerTestServer(t *testing.T) *Server {
 		database.GlobalStore = oldStore
 	})
 
-	return NewServer()
+	return NewServer(nil)
 }
 
 // TestListWorks_Success tests the listWorks handler with successful response

@@ -62,7 +62,7 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	realtime.SetGlobalHub(hub)
 
 	// Create server
-	server := NewServer()
+	server := NewServer(nil)
 
 	// Cleanup function
 	cleanup := func() {
@@ -92,7 +92,7 @@ func setupTestServerWithStore(t *testing.T, store database.Store) (*Server, func
 	database.SetGlobalStore(store)
 
 	// Create server with the provided store (services will use it)
-	server := NewServer()
+	server := NewServer(nil)
 
 	// Cleanup function
 	cleanup := func() {

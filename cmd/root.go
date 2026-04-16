@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -305,8 +305,10 @@ var serveCmd = &cobra.Command{
 		}()
 		fmt.Printf("Operation queue initialized with %d workers\n", workers)
 
-		// Create and start server
-		srv := newServer()
+		// Create and start server. Store is passed explicitly per the 4.4 DI
+		// migration; database.GlobalStore remains assigned for call sites that
+		// haven't yet been migrated to use s.Store().
+		srv := newServer(database.GetGlobalStore())
 		cfg := getDefaultServerConfig()
 
 		// Apply command line flags (use defaults or user-provided values)

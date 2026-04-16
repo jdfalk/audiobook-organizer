@@ -28,7 +28,7 @@ func TestITunesImport_CorruptXML(t *testing.T) {
 	xmlPath := filepath.Join(env.TempDir, "corrupt.xml")
 	require.NoError(t, os.WriteFile(xmlPath, []byte("this is not valid XML at all <broken"), 0644))
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -51,7 +51,7 @@ func TestITunesImport_NonexistentFile(t *testing.T) {
 	_, cleanup := testutil.SetupIntegration(t)
 	defer cleanup()
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := `{"library_path":"/nonexistent/path/library.xml","import_mode":"import","skip_duplicates":false}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -68,7 +68,7 @@ func TestITunesImport_EmptyXML(t *testing.T) {
 	xmlPath := filepath.Join(env.TempDir, "empty.xml")
 	testutil.GenerateITunesXML(t, []testutil.ITunesTestTrack{}, xmlPath)
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -106,7 +106,7 @@ func TestITunesImport_MissingFilesPartial(t *testing.T) {
 			FilePath: "/nonexistent/missing2.m4b", TotalTime: 30000},
 	}, xmlPath)
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -129,7 +129,7 @@ func TestITunesImport_InvalidMode(t *testing.T) {
 	_, cleanup := testutil.SetupIntegration(t)
 	defer cleanup()
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := `{"library_path":"/tmp/fake.xml","import_mode":"invalid_mode","skip_duplicates":false}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -142,7 +142,7 @@ func TestITunesImport_MissingRequiredFields(t *testing.T) {
 	_, cleanup := testutil.SetupIntegration(t)
 	defer cleanup()
 
-	server := NewServer()
+	server := NewServer(nil)
 
 	tests := []struct {
 		name string
@@ -168,7 +168,7 @@ func TestITunesValidate_NonexistentFile(t *testing.T) {
 	_, cleanup := testutil.SetupIntegration(t)
 	defer cleanup()
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := `{"library_path":"/nonexistent/library.xml"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/validate", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -184,7 +184,7 @@ func TestITunesValidate_CorruptXML(t *testing.T) {
 	xmlPath := filepath.Join(env.TempDir, "corrupt.xml")
 	require.NoError(t, os.WriteFile(xmlPath, []byte("not xml"), 0644))
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s"}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/validate", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -200,7 +200,7 @@ func TestITunesWriteBack_NonexistentBook(t *testing.T) {
 	xmlPath := filepath.Join(env.TempDir, "Library.xml")
 	testutil.GenerateITunesXML(t, []testutil.ITunesTestTrack{}, xmlPath)
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s","audiobook_ids":["nonexistent-id"],"create_backup":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/write-back", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -226,7 +226,7 @@ func TestITunesWriteBack_NoITunesPersistentID(t *testing.T) {
 	xmlPath := filepath.Join(env.TempDir, "Library.xml")
 	testutil.GenerateITunesXML(t, []testutil.ITunesTestTrack{}, xmlPath)
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s","audiobook_ids":["%s"],"create_backup":false}`, xmlPath, created.ID)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/write-back", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -250,7 +250,7 @@ func TestITunesImport_RealTestLibrary(t *testing.T) {
 	// The paths are: file://localhost/Users/testuser/Music/iTunes/...
 	// These won't exist, so books with missing files will be skipped during import
 
-	server := NewServer()
+	server := NewServer(nil)
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

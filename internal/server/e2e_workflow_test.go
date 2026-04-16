@@ -43,7 +43,7 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 			FilePath: dunePath, TotalTime: 72000000},
 	}, xmlPath)
 
-	server := NewServer()
+	server := NewServer(nil)
 
 	// Step 3: Import (non-organize mode)
 	importBody := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)

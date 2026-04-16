@@ -49,7 +49,7 @@ func TestGetAudiobookTagsErrors(t *testing.T) {
 			database.GlobalStore = mockStore
 			defer func() { database.GlobalStore = oldStore }()
 
-			srv := NewServer()
+			srv := NewServer(nil)
 
 			req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/"+tt.bookID+"/tags", nil)
 			w := httptest.NewRecorder()
@@ -104,7 +104,7 @@ func TestAddBlockedHashErrors(t *testing.T) {
 			database.GlobalStore = mockStore
 			defer func() { database.GlobalStore = oldStore }()
 
-			srv := NewServer()
+			srv := NewServer(nil)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/blocked-hashes", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -135,7 +135,7 @@ func TestAddBlockedHashDatabaseError(t *testing.T) {
 	database.GlobalStore = mockStore
 	defer func() { database.GlobalStore = oldStore }()
 
-	srv := NewServer()
+	srv := NewServer(nil)
 
 	body := `{"hash": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", "reason": "duplicate file"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/blocked-hashes", bytes.NewBufferString(body))
@@ -183,7 +183,7 @@ func TestDeleteWorkErrors(t *testing.T) {
 			database.GlobalStore = mockStore
 			defer func() { database.GlobalStore = oldStore }()
 
-			srv := NewServer()
+			srv := NewServer(nil)
 
 			req := httptest.NewRequest(http.MethodDelete, "/api/v1/works/"+tt.workID, nil)
 			w := httptest.NewRecorder()
