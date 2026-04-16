@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.52.0
+// version: 2.53.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -228,6 +228,25 @@ type Store interface {
 	CreateRole(role *Role) (*Role, error)
 	UpdateRole(role *Role) error
 	DeleteRole(id string) error
+
+	// Book versions (spec 3.1 library centralization). Every book has
+	// ≥1 version with status=active; alt versions live under
+	// .versions/{id}/ on the filesystem. File-level data stays in
+	// book_files scoped by version_id.
+	CreateBookVersion(v *BookVersion) (*BookVersion, error)
+	GetBookVersion(id string) (*BookVersion, error)
+	GetBookVersionsByBookID(bookID string) ([]BookVersion, error)
+	GetActiveVersionForBook(bookID string) (*BookVersion, error)
+	UpdateBookVersion(v *BookVersion) error
+	DeleteBookVersion(id string) error
+	// GetBookVersionByTorrentHash is the fast-path fingerprint lookup
+	// used when a new torrent arrives via deluge. Returns nil if no
+	// match (new content) or the version row if the hash matches a
+	// previously-seen version (which may be inactive_purged or
+	// blocked_for_redownload — caller decides the UX).
+	GetBookVersionByTorrentHash(hash string) (*BookVersion, error)
+	ListTrashedBookVersions() ([]BookVersion, error)
+	ListPurgedBookVersions() ([]BookVersion, error)
 
 	// API keys (personal JWT bearer tokens per spec 3.7). The ID is
 	// carried as the JWT's jti claim; verification loads this row to
@@ -712,6 +731,43 @@ type User struct {
 	Version          int       `json:"version"`
 }
 
+// BookVersion represents one version of a book's content (spec 3.1
+// library centralization). Every book has at least one version with
+// status = active; alt versions (different format, quality, source)
+// live under `.versions/{version_id}/` on the filesystem. File-level
+// data (paths, hashes, sizes) lives on BookFile rows scoped by
+// version_id; this struct carries only version-level metadata.
+type BookVersion struct {
+	ID                 string    `json:"id"`
+	BookID             string    `json:"book_id"`
+	Status             string    `json:"status"` // see BookVersionStatus* constants below
+	Format             string    `json:"format"` // m4b | mp3 | flac | ...
+	Source             string    `json:"source"` // deluge | manual | transcoded | imported
+	SourceOriginalPath string    `json:"source_original_path,omitempty"`
+	TorrentHash        string    `json:"torrent_hash,omitempty"` // infohash, fast-path fingerprint match
+	IngestDate         time.Time `json:"ingest_date"`
+	PurgedDate         *time.Time `json:"purged_date,omitempty"`
+	MetadataJSON       string    `json:"metadata_json,omitempty"` // source-specific catch-all
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	Version            int       `json:"version"`
+}
+
+// BookVersionStatus values. See spec 3.1 for the full state
+// machine — the transitions users trigger (trash/restore, swap
+// primary, hard-delete from Purged view) are enforced in the
+// server layer, not in the store.
+const (
+	BookVersionStatusPending              = "pending"
+	BookVersionStatusActive               = "active"
+	BookVersionStatusAlt                  = "alt"
+	BookVersionStatusSwappingIn           = "swapping_in"
+	BookVersionStatusSwappingOut          = "swapping_out"
+	BookVersionStatusTrash                = "trash"
+	BookVersionStatusInactivePurged       = "inactive_purged"
+	BookVersionStatusBlockedForRedownload = "blocked_for_redownload"
+)
+
 // Role is a named bundle of permissions for the multi-user model
 // (spec 3.7). Permissions are Go string constants validated at
 // route-registration time, carried inline on the Role to avoid a
@@ -804,6 +860,11 @@ type BookSegment struct {
 type BookFile struct {
 	ID                 string    `json:"id"`
 	BookID             string    `json:"book_id"`
+	// VersionID ties this file to a specific book_versions row when
+	// library centralization (spec 3.1) is rolled out. NULL until
+	// migration runs; after migration, every file belongs to exactly
+	// one version. Cascaded delete with book_versions.
+	VersionID          string    `json:"version_id,omitempty"`
 	FilePath           string    `json:"file_path"`
 	OriginalFilename   string    `json:"original_filename,omitempty"`
 	ITunesPath         string    `json:"itunes_path,omitempty"`
