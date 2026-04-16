@@ -1,5 +1,5 @@
 // file: internal/server/auth_handlers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1457df2f-af76-46cb-a2f4-c9f6f275f93a
 
 package server
@@ -7,6 +7,7 @@ package server
 import (
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,52 @@ import (
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const (
+	maxFailedLogins      = 10
+	lockoutWindowMinutes = 15
+)
+
+type failedAttempt struct {
+	count   int
+	firstAt time.Time
+}
+
+var (
+	loginLockoutMu sync.Mutex
+	loginLockout   = map[string]*failedAttempt{}
+)
+
+func isLockedOut(userID string) bool {
+	loginLockoutMu.Lock()
+	defer loginLockoutMu.Unlock()
+	a, ok := loginLockout[userID]
+	if !ok {
+		return false
+	}
+	if time.Since(a.firstAt) > lockoutWindowMinutes*time.Minute {
+		delete(loginLockout, userID)
+		return false
+	}
+	return a.count >= maxFailedLogins
+}
+
+func recordFailedLogin(userID string) {
+	loginLockoutMu.Lock()
+	defer loginLockoutMu.Unlock()
+	a, ok := loginLockout[userID]
+	if !ok || time.Since(a.firstAt) > lockoutWindowMinutes*time.Minute {
+		loginLockout[userID] = &failedAttempt{count: 1, firstAt: time.Now()}
+		return
+	}
+	a.count++
+}
+
+func clearFailedLogins(userID string) {
+	loginLockoutMu.Lock()
+	defer loginLockoutMu.Unlock()
+	delete(loginLockout, userID)
+}
 
 const defaultSessionTTL = 24 * time.Hour
 
@@ -175,10 +222,18 @@ func (s *Server) login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
+
+	if isLockedOut(user.ID) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "account temporarily locked — try again later"})
+		return
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		recordFailedLogin(user.ID)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
+	clearFailedLogins(user.ID)
 
 	session, err := s.Store().CreateSession(
 		user.ID,
