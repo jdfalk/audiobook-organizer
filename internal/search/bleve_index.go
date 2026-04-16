@@ -26,6 +26,7 @@ import (
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/standard"
 	"github.com/blevesearch/bleve/v2/analysis/lang/en"
 	"github.com/blevesearch/bleve/v2/mapping"
+	"github.com/blevesearch/bleve/v2/search/query"
 )
 
 // BleveIndex wraps a bleve.Index with a small, opinionated API tuned
@@ -125,6 +126,38 @@ func (b *BleveIndex) Search(queryString string, from, size int) ([]SearchResult,
 		size = 20
 	}
 	q := bleve.NewQueryStringQuery(queryString)
+	req := bleve.NewSearchRequestOptions(q, size, from, false)
+	req.Highlight = bleve.NewHighlight()
+	res, err := b.idx.Search(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	out := make([]SearchResult, 0, len(res.Hits))
+	for _, hit := range res.Hits {
+		out = append(out, SearchResult{
+			BookID:     hit.ID,
+			Score:      hit.Score,
+			Highlights: hit.Fragments,
+		})
+	}
+	return out, res.Total, nil
+}
+
+// SearchNative runs a pre-built query.Query (typically produced by
+// the AST → Bleve translator) against the index. Used by smart
+// playlists and the library search path after DSL translation.
+func (b *BleveIndex) SearchNative(q query.Query, from, size int) ([]SearchResult, uint64, error) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.idx == nil {
+		return nil, 0, fmt.Errorf("bleve index not open")
+	}
+	if q == nil {
+		return nil, 0, fmt.Errorf("nil query")
+	}
+	if size <= 0 {
+		size = 20
+	}
 	req := bleve.NewSearchRequestOptions(q, size, from, false)
 	req.Highlight = bleve.NewHighlight()
 	res, err := b.idx.Search(req)
