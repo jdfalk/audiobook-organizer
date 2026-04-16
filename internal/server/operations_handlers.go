@@ -640,6 +640,18 @@ func (s *Server) getOperationChanges(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"changes": changes})
 }
 
+// undoPreflightHandler checks for conflicts before executing an undo.
+// GET /api/v1/operations/:id/undo/preflight
+func (s *Server) undoPreflightHandler(c *gin.Context) {
+	id := c.Param("id")
+	report, err := PreflightUndoConflicts(s.Store(), id)
+	if err != nil {
+		internalError(c, "failed to check conflicts", err)
+		return
+	}
+	c.JSON(http.StatusOK, report)
+}
+
 // revertOperation undoes all changes from a given operation.
 func (s *Server) revertOperation(c *gin.Context) {
 	id := c.Param("id")

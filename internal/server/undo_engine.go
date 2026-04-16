@@ -218,3 +218,122 @@ func parentDir(path string) string {
 	}
 	return "."
 }
+
+// UndoConflictReport summarizes potential conflicts detected before
+// executing an undo operation. The caller shows this to the user
+// so they can decide whether to proceed.
+type UndoConflictReport struct {
+	TotalChanges    int                `json:"total_changes"`
+	AlreadyReverted int                `json:"already_reverted"`
+	ContentChanged  []UndoConflictItem `json:"content_changed,omitempty"`
+	BookDeleted     []UndoConflictItem `json:"book_deleted,omitempty"`
+	ReOrganized     []UndoConflictItem `json:"re_organized,omitempty"`
+	Safe            int                `json:"safe"`
+}
+
+// UndoConflictItem describes one change that may conflict.
+type UndoConflictItem struct {
+	ChangeID   string `json:"change_id"`
+	BookID     string `json:"book_id"`
+	ChangeType string `json:"change_type"`
+	Reason     string `json:"reason"`
+}
+
+// PreflightUndoConflicts scans the operation's changes and reports
+// which ones can be safely undone vs which have conflicts.
+func PreflightUndoConflicts(store database.Store, operationID string) (*UndoConflictReport, error) {
+	changes, err := store.GetOperationChanges(operationID)
+	if err != nil {
+		return nil, fmt.Errorf("load changes: %w", err)
+	}
+
+	report := &UndoConflictReport{TotalChanges: len(changes)}
+
+	for _, c := range changes {
+		if c.RevertedAt != nil {
+			report.AlreadyReverted++
+			continue
+		}
+
+		switch c.ChangeType {
+		case "file_move", "organize_rename":
+			if conflict := checkFileMoveConflict(store, c); conflict != nil {
+				switch conflict.Reason {
+				case "content changed":
+					report.ContentChanged = append(report.ContentChanged, *conflict)
+				case "book deleted":
+					report.BookDeleted = append(report.BookDeleted, *conflict)
+				case "re-organized":
+					report.ReOrganized = append(report.ReOrganized, *conflict)
+				default:
+					report.ContentChanged = append(report.ContentChanged, *conflict)
+				}
+			} else {
+				report.Safe++
+			}
+		case "metadata_update", "db_update":
+			if c.BookID != "" {
+				book, _ := store.GetBookByID(c.BookID)
+				if book == nil {
+					report.BookDeleted = append(report.BookDeleted, UndoConflictItem{
+						ChangeID: c.ID, BookID: c.BookID, ChangeType: c.ChangeType,
+						Reason: "book deleted",
+					})
+				} else if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+					report.BookDeleted = append(report.BookDeleted, UndoConflictItem{
+						ChangeID: c.ID, BookID: c.BookID, ChangeType: c.ChangeType,
+						Reason: "book deleted",
+					})
+				} else {
+					report.Safe++
+				}
+			} else {
+				report.Safe++
+			}
+		default:
+			report.Safe++
+		}
+	}
+
+	return report, nil
+}
+
+func checkFileMoveConflict(store database.Store, c *database.OperationChange) *UndoConflictItem {
+	if c.NewValue == "" {
+		return nil
+	}
+
+	// Check if the file at new location was modified after the op.
+	info, err := os.Stat(c.NewValue)
+	if os.IsNotExist(err) {
+		return &UndoConflictItem{
+			ChangeID: c.ID, BookID: c.BookID, ChangeType: c.ChangeType,
+			Reason: "content changed",
+		}
+	}
+	if err == nil && info.ModTime().After(c.CreatedAt) {
+		return &UndoConflictItem{
+			ChangeID: c.ID, BookID: c.BookID, ChangeType: c.ChangeType,
+			Reason: "content changed",
+		}
+	}
+
+	// Check if book was deleted or re-organized.
+	if c.BookID != "" {
+		book, _ := store.GetBookByID(c.BookID)
+		if book == nil || (book.MarkedForDeletion != nil && *book.MarkedForDeletion) {
+			return &UndoConflictItem{
+				ChangeID: c.ID, BookID: c.BookID, ChangeType: c.ChangeType,
+				Reason: "book deleted",
+			}
+		}
+		if book.LastOrganizedAt != nil && book.LastOrganizedAt.After(c.CreatedAt) {
+			return &UndoConflictItem{
+				ChangeID: c.ID, BookID: c.BookID, ChangeType: c.ChangeType,
+				Reason: "re-organized",
+			}
+		}
+	}
+
+	return nil
+}
