@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -191,7 +191,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("author-dedup-scan", func(ctx context.Context, progress operations.ProgressReporter) error {
-				store := database.GlobalStore
+				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
 				}
@@ -262,7 +262,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperationWithID("series-prune", func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
-				store := database.GlobalStore
+				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
 				}
@@ -303,7 +303,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				if s.metadataFetchService == nil {
 					return fmt.Errorf("metadata fetch service not initialized")
 				}
-				svc := NewMetadataUpgradeService(database.GlobalStore, s.metadataFetchService)
+				svc := NewMetadataUpgradeService(ts.server.Store(), s.metadataFetchService)
 				_ = progress.Log("info", "Scanning for books with upgradeable metadata sources...", nil)
 				result, err := svc.RunUpgrade(ctx, 200)
 				if err != nil {
@@ -328,7 +328,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("author-split-scan", func(ctx context.Context, progress operations.ProgressReporter) error {
-				store := database.GlobalStore
+				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
 				}
@@ -481,7 +481,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("db-optimize", func(ctx context.Context, progress operations.ProgressReporter) error {
-				store := database.GlobalStore
+				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
 				}
@@ -626,7 +626,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("tombstone-cleanup", func(ctx context.Context, progress operations.ProgressReporter) error {
-				store := database.GlobalStore
+				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
 				}
@@ -654,7 +654,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("resolve-production-authors", func(ctx context.Context, progress operations.ProgressReporter) error {
-				store := database.GlobalStore
+				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
 				}
@@ -744,7 +744,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Find books with missing files and match to untracked files on disk",
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
-			store := database.GlobalStore
+			store := ts.server.Store()
 			if store == nil {
 				return nil, fmt.Errorf("database not initialized")
 			}
@@ -795,7 +795,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Run AI author dedup via Batch API (50% cheaper, up to 24h)",
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
-			store := database.GlobalStore
+			store := ts.server.Store()
 			if store == nil {
 				return nil, fmt.Errorf("database not initialized")
 			}
@@ -957,14 +957,14 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			opID := ulid.Make().String()
-			op, err := database.GlobalStore.CreateOperation(opID, "purge_old_logs", nil)
+			op, err := ts.server.Store().CreateOperation(opID, "purge_old_logs", nil)
 			if err != nil {
 				return nil, err
 			}
 			_ = operations.GlobalQueue.Enqueue(opID, "purge_old_logs", operations.PriorityLow,
 				func(ctx context.Context, progress operations.ProgressReporter) error {
 					retLog := logger.New("purge_old_logs")
-					_, err := logger.PruneOldLogs(database.GlobalStore, config.AppConfig.LogRetentionDays, retLog)
+					_, err := logger.PruneOldLogs(ts.server.Store(), config.AppConfig.LogRetentionDays, retLog)
 					return err
 				},
 			)
@@ -983,7 +983,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			opID := ulid.Make().String()
-			op, err := database.GlobalStore.CreateOperation(opID, "cleanup_activity_log", nil)
+			op, err := ts.server.Store().CreateOperation(opID, "cleanup_activity_log", nil)
 			if err != nil {
 				return nil, err
 			}
@@ -1042,7 +1042,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 
 // triggerOperation is a helper that creates a DB operation and enqueues it.
 func (ts *TaskScheduler) triggerOperation(opType string, fn func(context.Context, operations.ProgressReporter) error) (*database.Operation, error) {
-	store := database.GlobalStore
+	store := ts.server.Store()
 	if store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -1065,7 +1065,7 @@ func (ts *TaskScheduler) triggerOperation(opType string, fn func(context.Context
 
 // triggerOperationWithID is like triggerOperation but passes the operation ID to the function.
 func (ts *TaskScheduler) triggerOperationWithID(opType string, fn func(context.Context, operations.ProgressReporter, string) error) (*database.Operation, error) {
-	store := database.GlobalStore
+	store := ts.server.Store()
 	if store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -1250,7 +1250,7 @@ func isInMaintenanceWindow() bool {
 
 // loadLastMaintenanceRun reads the persisted last-run date from the database.
 func (ts *TaskScheduler) loadLastMaintenanceRun() {
-	store := database.GlobalStore
+	store := ts.server.Store()
 	if store == nil {
 		return
 	}
@@ -1267,7 +1267,7 @@ func (ts *TaskScheduler) loadLastMaintenanceRun() {
 
 // saveLastMaintenanceRun persists today's date as the last-run date.
 func (ts *TaskScheduler) saveLastMaintenanceRun() {
-	store := database.GlobalStore
+	store := ts.server.Store()
 	if store == nil {
 		return
 	}
@@ -1284,7 +1284,7 @@ func (ts *TaskScheduler) hasRunToday() bool {
 
 // isTaskRunning checks if a task's operation is currently in progress.
 func (ts *TaskScheduler) isTaskRunning(name string) bool {
-	store := database.GlobalStore
+	store := ts.server.Store()
 	if store == nil {
 		return false
 	}
@@ -1316,7 +1316,7 @@ func (ts *TaskScheduler) isTaskRunning(name string) bool {
 
 // waitForOperation polls until an operation completes or the context is canceled.
 func (ts *TaskScheduler) waitForOperation(ctx context.Context, opID string) {
-	store := database.GlobalStore
+	store := ts.server.Store()
 	if store == nil {
 		return
 	}
@@ -1341,7 +1341,7 @@ func (ts *TaskScheduler) waitForOperation(ctx context.Context, opID string) {
 // RunMaintenanceWindow runs all maintenance-window-eligible tasks in order.
 // Step 1: auto-update (if enabled). Step 2+: maintenance tasks in fixed order.
 func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
-	store := database.GlobalStore
+	store := ts.server.Store()
 	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}
