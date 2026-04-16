@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -142,7 +142,7 @@ func (s *Server) runAutoPurgeSoftDeleted() {
 	if config.AppConfig.PurgeSoftDeletedAfterDays <= 0 {
 		return
 	}
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		log.Printf("[DEBUG] Auto-purge skipped: database not initialized")
 		return
 	}
@@ -224,18 +224,18 @@ func (s *Server) getAudiobook(c *gin.Context) {
 // legacy BookSegment JSON shape so the frontend continues to work.
 func (s *Server) listAudiobookSegments(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}
 
-	files, err := database.GlobalStore.GetBookFiles(book.ID)
+	files, err := s.Store().GetBookFiles(book.ID)
 	if err != nil {
 		internalError(c, "failed to list book files", err)
 		return
@@ -273,11 +273,11 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 // listBookFiles returns all book_files rows for a book with live disk-existence check.
 func (s *Server) listBookFiles(c *gin.Context) {
 	bookID := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	files, err := database.GlobalStore.GetBookFiles(bookID)
+	files, err := s.Store().GetBookFiles(bookID)
 	if err != nil {
 		internalError(c, "failed to get book files", err)
 		return
@@ -321,18 +321,18 @@ func (s *Server) listBookFiles(c *gin.Context) {
 // extractTrackInfo parses track/disk numbers from segment filenames and updates segments.
 func (s *Server) extractTrackInfo(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}
 
-	files, err := database.GlobalStore.GetBookFiles(book.ID)
+	files, err := s.Store().GetBookFiles(book.ID)
 	if err != nil {
 		internalError(c, "failed to list book files", err)
 		return
@@ -395,7 +395,7 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 		if info.TotalTracks != nil {
 			files[i].TrackCount = *info.TotalTracks
 		}
-		if err := database.GlobalStore.UpdateBookFile(files[i].ID, &files[i]); err != nil {
+		if err := s.Store().UpdateBookFile(files[i].ID, &files[i]); err != nil {
 			log.Printf("WARN: failed to update book file %s track info: %v", files[i].ID, err)
 			continue
 		}
@@ -411,7 +411,7 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 		}
 		prev := prevVal
 		nv := newVal
-		_ = database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+		_ = s.Store().RecordMetadataChange(&database.MetadataChangeRecord{
 			BookID:        id,
 			Field:         "track_number",
 			PreviousValue: &prev,
@@ -432,12 +432,12 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 // relocateBookFiles updates segment file paths when files have been moved.
 func (s *Server) relocateBookFiles(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
@@ -449,7 +449,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		return
 	}
 
-	files, err := database.GlobalStore.GetBookFiles(book.ID)
+	files, err := s.Store().GetBookFiles(book.ID)
 	if err != nil {
 		internalError(c, "failed to list book files", err)
 		return
@@ -466,7 +466,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 					return
 				}
 				files[i].FilePath = req.NewPath
-				if err := database.GlobalStore.UpdateBookFile(files[i].ID, &files[i]); err != nil {
+				if err := s.Store().UpdateBookFile(files[i].ID, &files[i]); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("update file %s: %v", f.ID, err))
 				} else {
 					result.Updated++
@@ -494,7 +494,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 			oldName := filepath.Base(f.FilePath)
 			if newPath, ok := fileMap[oldName]; ok {
 				files[i].FilePath = newPath
-				if err := database.GlobalStore.UpdateBookFile(files[i].ID, &files[i]); err != nil {
+				if err := s.Store().UpdateBookFile(files[i].ID, &files[i]); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("update file %s: %v", f.ID, err))
 				} else {
 					result.Updated++
@@ -509,7 +509,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 	// Update book's file_path to match first file
 	if result.Updated > 0 && len(files) > 0 {
 		book.FilePath = files[0].FilePath
-		if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
+		if _, err := s.Store().UpdateBook(book.ID, book); err != nil {
 			log.Printf("[WARN] failed to update book file_path: %v", err)
 		}
 	}
@@ -521,18 +521,18 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 func (s *Server) getSegmentTags(c *gin.Context) {
 	id := c.Param("id")
 	segmentId := c.Param("segmentId")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}
 
-	found, err := database.GlobalStore.GetBookFileByID(book.ID, segmentId)
+	found, err := s.Store().GetBookFileByID(book.ID, segmentId)
 	if err != nil {
 		internalError(c, "failed to get book file", err)
 		return
@@ -612,7 +612,7 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 
 func (s *Server) getBookMetadataHistory(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -622,7 +622,7 @@ func (s *Server) getBookMetadataHistory(c *gin.Context) {
 			limit = parsed
 		}
 	}
-	records, err := database.GlobalStore.GetBookChangeHistory(id, limit)
+	records, err := s.Store().GetBookChangeHistory(id, limit)
 	if err != nil {
 		internalError(c, "failed to get metadata history", err)
 		return
@@ -646,7 +646,7 @@ func (s *Server) getAudiobookFieldStates(c *gin.Context) {
 func (s *Server) getFieldMetadataHistory(c *gin.Context) {
 	id := c.Param("id")
 	field := c.Param("field")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -656,7 +656,7 @@ func (s *Server) getFieldMetadataHistory(c *gin.Context) {
 			limit = parsed
 		}
 	}
-	records, err := database.GlobalStore.GetMetadataChangeHistory(id, field, limit)
+	records, err := s.Store().GetMetadataChangeHistory(id, field, limit)
 	if err != nil {
 		internalError(c, "failed to get field history", err)
 		return
@@ -670,13 +670,13 @@ func (s *Server) getFieldMetadataHistory(c *gin.Context) {
 func (s *Server) undoMetadataChange(c *gin.Context) {
 	id := c.Param("id")
 	field := c.Param("field")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
 	// Get the latest change for this field
-	records, err := database.GlobalStore.GetMetadataChangeHistory(id, field, 1)
+	records, err := s.Store().GetMetadataChangeHistory(id, field, 1)
 	if err != nil {
 		internalError(c, "failed to get field history", err)
 		return
@@ -719,7 +719,7 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 		Source:        "manual",
 		ChangedAt:     time.Now(),
 	}
-	if err := database.GlobalStore.RecordMetadataChange(undoRecord); err != nil {
+	if err := s.Store().RecordMetadataChange(undoRecord); err != nil {
 		log.Printf("[WARN] failed to record undo change for %s/%s: %v", id, field, err)
 	}
 
@@ -729,13 +729,13 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 // undoLastApply reverts all fields changed in the most recent metadata apply for a book.
 func (s *Server) undoLastApply(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
 	// Get recent history for this book (enough to find the last apply batch)
-	history, err := database.GlobalStore.GetBookChangeHistory(id, 50)
+	history, err := s.Store().GetBookChangeHistory(id, 50)
 	if err != nil {
 		internalError(c, "failed to get change history", err)
 		return
@@ -811,7 +811,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 			Source:        "bulk-search-undo",
 			ChangedAt:     time.Now(),
 		}
-		if recErr := database.GlobalStore.RecordMetadataChange(undoRec); recErr != nil {
+		if recErr := s.Store().RecordMetadataChange(undoRec); recErr != nil {
 			log.Printf("[WARN] undo-last-apply: failed to record undo for %s/%s: %v", id, rec.Field, recErr)
 		}
 	}
@@ -829,7 +829,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 
 func (s *Server) getBookPathHistory(c *gin.Context) {
 	id := c.Param("id")
-	history, err := database.GlobalStore.GetBookPathHistory(id)
+	history, err := s.Store().GetBookPathHistory(id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"history": []any{}})
 		return
@@ -839,7 +839,7 @@ func (s *Server) getBookPathHistory(c *gin.Context) {
 
 func (s *Server) getAudiobookExternalIDs(c *gin.Context) {
 	id := c.Param("id")
-	eidStore := asExternalIDStore(database.GlobalStore)
+	eidStore := asExternalIDStore(s.Store())
 	if eidStore == nil {
 		c.JSON(http.StatusOK, gin.H{"external_ids": []any{}, "itunes_linked": false})
 		return
@@ -927,7 +927,7 @@ func (s *Server) getBookTagsDetailed(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
 		return
 	}
-	tags, err := database.GlobalStore.GetBookTagsDetailed(id)
+	tags, err := s.Store().GetBookTagsDetailed(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -947,7 +947,7 @@ func (s *Server) getBookAlternativeTitles(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
-	alts, err := database.GlobalStore.GetBookAlternativeTitles(id)
+	alts, err := s.Store().GetBookAlternativeTitles(id)
 	if err != nil {
 		internalError(c, "failed to get alternative titles", err)
 		return
@@ -978,15 +978,15 @@ func (s *Server) addBookAlternativeTitle(c *gin.Context) {
 	}
 	// Confirm the book exists before inserting — avoids orphan alt
 	// title rows for deleted books.
-	if book, err := database.GlobalStore.GetBookByID(id); err != nil || book == nil {
+	if book, err := s.Store().GetBookByID(id); err != nil || book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
 		return
 	}
-	if err := database.GlobalStore.AddBookAlternativeTitle(id, body.Title, body.Source, body.Language); err != nil {
+	if err := s.Store().AddBookAlternativeTitle(id, body.Title, body.Source, body.Language); err != nil {
 		internalError(c, "failed to add alternative title", err)
 		return
 	}
-	alts, _ := database.GlobalStore.GetBookAlternativeTitles(id)
+	alts, _ := s.Store().GetBookAlternativeTitles(id)
 	c.JSON(http.StatusOK, gin.H{"alternative_titles": alts})
 }
 
@@ -1007,11 +1007,11 @@ func (s *Server) removeBookAlternativeTitle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
 		return
 	}
-	if err := database.GlobalStore.RemoveBookAlternativeTitle(id, body.Title); err != nil {
+	if err := s.Store().RemoveBookAlternativeTitle(id, body.Title); err != nil {
 		internalError(c, "failed to remove alternative title", err)
 		return
 	}
-	alts, _ := database.GlobalStore.GetBookAlternativeTitles(id)
+	alts, _ := s.Store().GetBookAlternativeTitles(id)
 	c.JSON(http.StatusOK, gin.H{"alternative_titles": alts})
 }
 
@@ -1077,8 +1077,8 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 
 	// Fetch old book for change history comparison
 	var oldBook *database.Book
-	if database.GlobalStore != nil {
-		oldBook, _ = database.GlobalStore.GetBookByID(id)
+	if s.Store() != nil {
+		oldBook, _ = s.Store().GetBookByID(id)
 	}
 
 	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(id, payload)
@@ -1092,7 +1092,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	}
 
 	// Record metadata change history for manual edits
-	if oldBook != nil && database.GlobalStore != nil {
+	if oldBook != nil && s.Store() != nil {
 		now := time.Now()
 		manualChanges := []struct {
 			field  string
@@ -1107,13 +1107,13 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		// Compare author names
 		oldAuthor := ""
 		if oldBook.AuthorID != nil {
-			if a, err := database.GlobalStore.GetAuthorByID(*oldBook.AuthorID); err == nil && a != nil {
+			if a, err := s.Store().GetAuthorByID(*oldBook.AuthorID); err == nil && a != nil {
 				oldAuthor = a.Name
 			}
 		}
 		newAuthor := ""
 		if updatedBook.AuthorID != nil {
-			if a, err := database.GlobalStore.GetAuthorByID(*updatedBook.AuthorID); err == nil && a != nil {
+			if a, err := s.Store().GetAuthorByID(*updatedBook.AuthorID); err == nil && a != nil {
 				newAuthor = a.Name
 			}
 		}
@@ -1154,7 +1154,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 				Source:        "manual",
 				ChangedAt:     now,
 			}
-			if err := database.GlobalStore.RecordMetadataChange(record); err != nil {
+			if err := s.Store().RecordMetadataChange(record); err != nil {
 				log.Printf("[WARN] failed to record manual metadata change for %s.%s: %v", id, c.field, err)
 			}
 		}
@@ -1179,11 +1179,11 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 			tagMap["year"] = int(v)
 		}
 		// If we have multiple authors in join table, combine with " & " for file tags
-		if _, hasAuthor := tagMap["artist"]; !hasAuthor && database.GlobalStore != nil {
-			if authors, err := database.GlobalStore.GetBookAuthors(id); err == nil && len(authors) > 1 {
+		if _, hasAuthor := tagMap["artist"]; !hasAuthor && s.Store() != nil {
+			if authors, err := s.Store().GetBookAuthors(id); err == nil && len(authors) > 1 {
 				names := make([]string, 0, len(authors))
 				for _, ba := range authors {
-					if a, err := database.GlobalStore.GetAuthorByID(ba.AuthorID); err == nil && a != nil {
+					if a, err := s.Store().GetAuthorByID(ba.AuthorID); err == nil && a != nil {
 						names = append(names, a.Name)
 					}
 				}
@@ -1193,11 +1193,11 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 			}
 		}
 		// If we have multiple narrators in join table, combine with " & " for file tags
-		if _, hasNarr := tagMap["album_artist"]; !hasNarr && database.GlobalStore != nil {
-			if narrators, err := database.GlobalStore.GetBookNarrators(id); err == nil && len(narrators) > 1 {
+		if _, hasNarr := tagMap["album_artist"]; !hasNarr && s.Store() != nil {
+			if narrators, err := s.Store().GetBookNarrators(id); err == nil && len(narrators) > 1 {
 				names := make([]string, 0, len(narrators))
 				for _, bn := range narrators {
-					if n, err := database.GlobalStore.GetNarratorByID(bn.NarratorID); err == nil && n != nil {
+					if n, err := s.Store().GetNarratorByID(bn.NarratorID); err == nil && n != nil {
 						names = append(names, n.Name)
 					}
 				}
@@ -1215,7 +1215,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 					log.Printf("[WARN] write-back failed for %s: %v", updatedBook.FilePath, writeErr)
 				} else {
 					// Stamp last_written_at after successful write-back.
-					if stampErr := database.GlobalStore.SetLastWrittenAt(updatedBook.ID, time.Now()); stampErr != nil {
+					if stampErr := s.Store().SetLastWrittenAt(updatedBook.ID, time.Now()); stampErr != nil {
 						log.Printf("[WARN] failed to stamp last_written_at for book %s: %v", updatedBook.ID, stampErr)
 					}
 				}
@@ -1306,7 +1306,7 @@ func (s *Server) batchOperations(c *gin.Context) {
 // getBookChanges returns change tracking records for a book.
 func (s *Server) getBookChanges(c *gin.Context) {
 	id := c.Param("id")
-	changes, err := database.GlobalStore.GetBookChanges(id)
+	changes, err := s.Store().GetBookChanges(id)
 	if err != nil {
 		internalError(c, "failed to get book changes", err)
 		return

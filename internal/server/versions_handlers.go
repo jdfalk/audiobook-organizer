@@ -1,5 +1,5 @@
 // file: internal/server/versions_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2fde2ee-5301-4240-9def-503917e19a78
 //
 // Version-grouping HTTP handlers split out of server.go: list/link/
@@ -23,12 +23,12 @@ import (
 func (s *Server) listAudiobookVersions(c *gin.Context) {
 	id := c.Param("id")
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
@@ -39,7 +39,7 @@ func (s *Server) listAudiobookVersions(c *gin.Context) {
 		return
 	}
 
-	books, err := database.GlobalStore.GetBooksByVersionGroup(*book.VersionGroupID)
+	books, err := s.Store().GetBooksByVersionGroup(*book.VersionGroupID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch versions"})
 		return
@@ -61,18 +61,18 @@ func (s *Server) linkAudiobookVersion(c *gin.Context) {
 		return
 	}
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	book1, err := database.GlobalStore.GetBookByID(id)
+	book1, err := s.Store().GetBookByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}
 
-	book2, err := database.GlobalStore.GetBookByID(req.OtherID)
+	book2, err := s.Store().GetBookByID(req.OtherID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "other audiobook not found"})
 		return
@@ -90,12 +90,12 @@ func (s *Server) linkAudiobookVersion(c *gin.Context) {
 	book1.VersionGroupID = &versionGroupID
 	book2.VersionGroupID = &versionGroupID
 
-	if _, err := database.GlobalStore.UpdateBook(id, book1); err != nil {
+	if _, err := s.Store().UpdateBook(id, book1); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update audiobook"})
 		return
 	}
 
-	if _, err := database.GlobalStore.UpdateBook(req.OtherID, book2); err != nil {
+	if _, err := s.Store().UpdateBook(req.OtherID, book2); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update other audiobook"})
 		return
 	}
@@ -107,12 +107,12 @@ func (s *Server) linkAudiobookVersion(c *gin.Context) {
 func (s *Server) setAudiobookPrimary(c *gin.Context) {
 	id := c.Param("id")
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
@@ -121,7 +121,7 @@ func (s *Server) setAudiobookPrimary(c *gin.Context) {
 	if book.VersionGroupID == nil {
 		primaryFlag := true
 		book.IsPrimaryVersion = &primaryFlag
-		if _, err := database.GlobalStore.UpdateBook(id, book); err != nil {
+		if _, err := s.Store().UpdateBook(id, book); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update audiobook"})
 			return
 		}
@@ -129,7 +129,7 @@ func (s *Server) setAudiobookPrimary(c *gin.Context) {
 		return
 	}
 
-	books, err := database.GlobalStore.GetBooksByVersionGroup(*book.VersionGroupID)
+	books, err := s.Store().GetBooksByVersionGroup(*book.VersionGroupID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch versions"})
 		return
@@ -138,7 +138,7 @@ func (s *Server) setAudiobookPrimary(c *gin.Context) {
 	for i := range books {
 		primaryFlag := books[i].ID == id
 		books[i].IsPrimaryVersion = &primaryFlag
-		if _, err := database.GlobalStore.UpdateBook(books[i].ID, &books[i]); err != nil {
+		if _, err := s.Store().UpdateBook(books[i].ID, &books[i]); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update version"})
 			return
 		}
@@ -151,12 +151,12 @@ func (s *Server) setAudiobookPrimary(c *gin.Context) {
 func (s *Server) getVersionGroup(c *gin.Context) {
 	groupID := c.Param("id")
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	books, err := database.GlobalStore.GetBooksByVersionGroup(groupID)
+	books, err := s.Store().GetBooksByVersionGroup(groupID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch version group"})
 		return
@@ -182,13 +182,13 @@ func (s *Server) splitVersion(c *gin.Context) {
 		return
 	}
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
 	// 1. Get source book
-	sourceBook, err := database.GlobalStore.GetBookByID(id)
+	sourceBook, err := s.Store().GetBookByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
@@ -201,14 +201,14 @@ func (s *Server) splitVersion(c *gin.Context) {
 	} else {
 		versionGroupID = ulid.Make().String()
 		sourceBook.VersionGroupID = &versionGroupID
-		if _, err := database.GlobalStore.UpdateBook(id, sourceBook); err != nil {
+		if _, err := s.Store().UpdateBook(id, sourceBook); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update source book version group"})
 			return
 		}
 	}
 
 	// 3. Count existing versions to determine suffix
-	existingVersions, _ := database.GlobalStore.GetBooksByVersionGroup(versionGroupID)
+	existingVersions, _ := s.Store().GetBooksByVersionGroup(versionGroupID)
 	versionNum := len(existingVersions) + 1
 
 	// 4. Create new book entry (copy metadata from source, but NOT FilePath —
@@ -230,14 +230,14 @@ func (s *Server) splitVersion(c *gin.Context) {
 		IsPrimaryVersion: &primaryFlag,
 	}
 
-	createdBook, err := database.GlobalStore.CreateBook(newBook)
+	createdBook, err := s.Store().CreateBook(newBook)
 	if err != nil {
 		internalError(c, "failed to create new version", err)
 		return
 	}
 
 	// 5. Move files to the new book (DB-only, does NOT touch files on disk)
-	if err := database.GlobalStore.MoveBookFilesToBook(req.SegmentIDs, sourceBook.ID, createdBook.ID); err != nil {
+	if err := s.Store().MoveBookFilesToBook(req.SegmentIDs, sourceBook.ID, createdBook.ID); err != nil {
 		internalError(c, "failed to move files", err)
 		return
 	}
@@ -245,25 +245,25 @@ func (s *Server) splitVersion(c *gin.Context) {
 	// 6. Derive the new book's FilePath from its files.
 	// For multi-file books, FilePath is the common parent directory.
 	// For single-file books, FilePath is the file path itself.
-	newFiles, _ := database.GlobalStore.GetBookFiles(createdBook.ID)
+	newFiles, _ := s.Store().GetBookFiles(createdBook.ID)
 	if len(newFiles) > 0 {
 		if len(newFiles) == 1 {
 			createdBook.FilePath = newFiles[0].FilePath
 		} else {
 			createdBook.FilePath = filesCommonDir(newFiles)
 		}
-		database.GlobalStore.UpdateBook(createdBook.ID, createdBook)
+		s.Store().UpdateBook(createdBook.ID, createdBook)
 	}
 
 	// 7. Also update the source book's FilePath from its remaining files
-	remainingFiles, _ := database.GlobalStore.GetBookFiles(sourceBook.ID)
+	remainingFiles, _ := s.Store().GetBookFiles(sourceBook.ID)
 	if len(remainingFiles) > 0 {
 		if len(remainingFiles) == 1 {
 			sourceBook.FilePath = remainingFiles[0].FilePath
 		} else {
 			sourceBook.FilePath = filesCommonDir(remainingFiles)
 		}
-		database.GlobalStore.UpdateBook(sourceBook.ID, sourceBook)
+		s.Store().UpdateBook(sourceBook.ID, sourceBook)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -291,19 +291,19 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 		return
 	}
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
-	sourceBook, err := database.GlobalStore.GetBookByID(id)
+	sourceBook, err := s.Store().GetBookByID(id)
 	if err != nil || sourceBook == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
 	}
 
 	// Build a lookup of file ID → BookFile
-	allFiles, err := database.GlobalStore.GetBookFiles(sourceBook.ID)
+	allFiles, err := s.Store().GetBookFiles(sourceBook.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list book files"})
 		return
@@ -342,14 +342,14 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 			FileSize:  &f.FileSize,
 		}
 
-		created, createErr := database.GlobalStore.CreateBook(newBook)
+		created, createErr := s.Store().CreateBook(newBook)
 		if createErr != nil {
 			log.Printf("[WARN] splitSegmentsToBooks: failed to create book for file %s: %v", fileID, createErr)
 			continue
 		}
 
 		// Copy book_authors from source
-		if authors, aErr := database.GlobalStore.GetBookAuthors(sourceBook.ID); aErr == nil && len(authors) > 0 {
+		if authors, aErr := s.Store().GetBookAuthors(sourceBook.ID); aErr == nil && len(authors) > 0 {
 			var newAuthors []database.BookAuthor
 			for _, ba := range authors {
 				newAuthors = append(newAuthors, database.BookAuthor{
@@ -358,11 +358,11 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 					Role:     ba.Role,
 				})
 			}
-			_ = database.GlobalStore.SetBookAuthors(created.ID, newAuthors)
+			_ = s.Store().SetBookAuthors(created.ID, newAuthors)
 		}
 
 		// Move the file to the new book
-		_ = database.GlobalStore.MoveBookFilesToBook([]string{fileID}, sourceBook.ID, created.ID)
+		_ = s.Store().MoveBookFilesToBook([]string{fileID}, sourceBook.ID, created.ID)
 
 		// Reassign external ID mappings (iTunes PIDs) that belong to the moved file
 		reassignExternalIDsForFiles(sourceBook.ID, created.ID, []database.BookFile{f})
@@ -371,14 +371,14 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 	}
 
 	// Update source book's FilePath from remaining files
-	remainingFiles, _ := database.GlobalStore.GetBookFiles(sourceBook.ID)
+	remainingFiles, _ := s.Store().GetBookFiles(sourceBook.ID)
 	if len(remainingFiles) > 0 {
 		if len(remainingFiles) == 1 {
 			sourceBook.FilePath = remainingFiles[0].FilePath
 		} else {
 			sourceBook.FilePath = filesCommonDir(remainingFiles)
 		}
-		database.GlobalStore.UpdateBook(sourceBook.ID, sourceBook)
+		s.Store().UpdateBook(sourceBook.ID, sourceBook)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -404,19 +404,19 @@ func (s *Server) moveSegments(c *gin.Context) {
 		return
 	}
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
 	// 1. Get source and target books
-	sourceBook, err := database.GlobalStore.GetBookByID(id)
+	sourceBook, err := s.Store().GetBookByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "source audiobook not found"})
 		return
 	}
 
-	targetBook, err := database.GlobalStore.GetBookByID(req.TargetBookID)
+	targetBook, err := s.Store().GetBookByID(req.TargetBookID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "target audiobook not found"})
 		return
@@ -433,7 +433,7 @@ func (s *Server) moveSegments(c *gin.Context) {
 	}
 
 	// 3. Verify the files belong to the source book
-	sourceFiles, err := database.GlobalStore.GetBookFiles(id)
+	sourceFiles, err := s.Store().GetBookFiles(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list source book files"})
 		return
@@ -462,7 +462,7 @@ func (s *Server) moveSegments(c *gin.Context) {
 	}
 
 	// 5. Move files
-	if err := database.GlobalStore.MoveBookFilesToBook(req.SegmentIDs, id, req.TargetBookID); err != nil {
+	if err := s.Store().MoveBookFilesToBook(req.SegmentIDs, id, req.TargetBookID); err != nil {
 		internalError(c, "failed to move files", err)
 		return
 	}
