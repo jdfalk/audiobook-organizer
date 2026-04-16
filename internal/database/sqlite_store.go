@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.52.0
+// version: 1.53.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -916,6 +916,21 @@ func (s *SQLiteStore) UpdateRole(role *Role) error {
 
 func (s *SQLiteStore) DeleteRole(id string) error {
 	return nil
+}
+
+// ---- API keys + Invites (SQLite no-op stubs) ----
+
+func (s *SQLiteStore) CreateAPIKey(key *APIKey) (*APIKey, error)             { return key, nil }
+func (s *SQLiteStore) GetAPIKey(id string) (*APIKey, error)                  { return nil, nil }
+func (s *SQLiteStore) ListAPIKeysForUser(userID string) ([]APIKey, error)    { return nil, nil }
+func (s *SQLiteStore) RevokeAPIKey(id string) error                          { return nil }
+func (s *SQLiteStore) TouchAPIKeyLastUsed(id string, at time.Time) error     { return nil }
+func (s *SQLiteStore) CreateInvite(invite *Invite) (*Invite, error)          { return invite, nil }
+func (s *SQLiteStore) GetInvite(token string) (*Invite, error)               { return nil, nil }
+func (s *SQLiteStore) ListActiveInvites() ([]Invite, error)                  { return nil, nil }
+func (s *SQLiteStore) DeleteInvite(token string) error                       { return nil }
+func (s *SQLiteStore) ConsumeInvite(token, algo, hash string) (*User, error) {
+	return nil, fmt.Errorf("invites not supported on SQLite backend")
 }
 
 // ---- Per-User Preferences ----

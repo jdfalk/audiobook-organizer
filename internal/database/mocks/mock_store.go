@@ -973,6 +973,80 @@ func (_c *MockStore_Close_Call) RunAndReturn(run func() error) *MockStore_Close_
 	return _c
 }
 
+// ConsumeInvite provides a mock function for the type MockStore
+func (_mock *MockStore) ConsumeInvite(token string, passwordHashAlgo string, passwordHash string) (*database.User, error) {
+	ret := _mock.Called(token, passwordHashAlgo, passwordHash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ConsumeInvite")
+	}
+
+	var r0 *database.User
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string) (*database.User, error)); ok {
+		return returnFunc(token, passwordHashAlgo, passwordHash)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string, string) *database.User); ok {
+		r0 = returnFunc(token, passwordHashAlgo, passwordHash)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.User)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string, string) error); ok {
+		r1 = returnFunc(token, passwordHashAlgo, passwordHash)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ConsumeInvite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ConsumeInvite'
+type MockStore_ConsumeInvite_Call struct {
+	*mock.Call
+}
+
+// ConsumeInvite is a helper method to define mock.On call
+//   - token string
+//   - passwordHashAlgo string
+//   - passwordHash string
+func (_e *MockStore_Expecter) ConsumeInvite(token interface{}, passwordHashAlgo interface{}, passwordHash interface{}) *MockStore_ConsumeInvite_Call {
+	return &MockStore_ConsumeInvite_Call{Call: _e.mock.On("ConsumeInvite", token, passwordHashAlgo, passwordHash)}
+}
+
+func (_c *MockStore_ConsumeInvite_Call) Run(run func(token string, passwordHashAlgo string, passwordHash string)) *MockStore_ConsumeInvite_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ConsumeInvite_Call) Return(user *database.User, err error) *MockStore_ConsumeInvite_Call {
+	_c.Call.Return(user, err)
+	return _c
+}
+
+func (_c *MockStore_ConsumeInvite_Call) RunAndReturn(run func(token string, passwordHashAlgo string, passwordHash string) (*database.User, error)) *MockStore_ConsumeInvite_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CountAuthors provides a mock function for the type MockStore
 func (_mock *MockStore) CountAuthors() (int, error) {
 	ret := _mock.Called()
@@ -1234,6 +1308,68 @@ func (_c *MockStore_CountUsers_Call) Return(n int, err error) *MockStore_CountUs
 }
 
 func (_c *MockStore_CountUsers_Call) RunAndReturn(run func() (int, error)) *MockStore_CountUsers_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateAPIKey provides a mock function for the type MockStore
+func (_mock *MockStore) CreateAPIKey(key *database.APIKey) (*database.APIKey, error) {
+	ret := _mock.Called(key)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateAPIKey")
+	}
+
+	var r0 *database.APIKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(*database.APIKey) (*database.APIKey, error)); ok {
+		return returnFunc(key)
+	}
+	if returnFunc, ok := ret.Get(0).(func(*database.APIKey) *database.APIKey); ok {
+		r0 = returnFunc(key)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.APIKey)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(*database.APIKey) error); ok {
+		r1 = returnFunc(key)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CreateAPIKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateAPIKey'
+type MockStore_CreateAPIKey_Call struct {
+	*mock.Call
+}
+
+// CreateAPIKey is a helper method to define mock.On call
+//   - key *database.APIKey
+func (_e *MockStore_Expecter) CreateAPIKey(key interface{}) *MockStore_CreateAPIKey_Call {
+	return &MockStore_CreateAPIKey_Call{Call: _e.mock.On("CreateAPIKey", key)}
+}
+
+func (_c *MockStore_CreateAPIKey_Call) Run(run func(key *database.APIKey)) *MockStore_CreateAPIKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.APIKey
+		if args[0] != nil {
+			arg0 = args[0].(*database.APIKey)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateAPIKey_Call) Return(aPIKey *database.APIKey, err error) *MockStore_CreateAPIKey_Call {
+	_c.Call.Return(aPIKey, err)
+	return _c
+}
+
+func (_c *MockStore_CreateAPIKey_Call) RunAndReturn(run func(key *database.APIKey) (*database.APIKey, error)) *MockStore_CreateAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1853,6 +1989,68 @@ func (_c *MockStore_CreateImportPath_Call) Return(importPath *database.ImportPat
 }
 
 func (_c *MockStore_CreateImportPath_Call) RunAndReturn(run func(path string, name string) (*database.ImportPath, error)) *MockStore_CreateImportPath_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateInvite provides a mock function for the type MockStore
+func (_mock *MockStore) CreateInvite(invite *database.Invite) (*database.Invite, error) {
+	ret := _mock.Called(invite)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateInvite")
+	}
+
+	var r0 *database.Invite
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(*database.Invite) (*database.Invite, error)); ok {
+		return returnFunc(invite)
+	}
+	if returnFunc, ok := ret.Get(0).(func(*database.Invite) *database.Invite); ok {
+		r0 = returnFunc(invite)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Invite)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(*database.Invite) error); ok {
+		r1 = returnFunc(invite)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CreateInvite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateInvite'
+type MockStore_CreateInvite_Call struct {
+	*mock.Call
+}
+
+// CreateInvite is a helper method to define mock.On call
+//   - invite *database.Invite
+func (_e *MockStore_Expecter) CreateInvite(invite interface{}) *MockStore_CreateInvite_Call {
+	return &MockStore_CreateInvite_Call{Call: _e.mock.On("CreateInvite", invite)}
+}
+
+func (_c *MockStore_CreateInvite_Call) Run(run func(invite *database.Invite)) *MockStore_CreateInvite_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.Invite
+		if args[0] != nil {
+			arg0 = args[0].(*database.Invite)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateInvite_Call) Return(invite1 *database.Invite, err error) *MockStore_CreateInvite_Call {
+	_c.Call.Return(invite1, err)
+	return _c
+}
+
+func (_c *MockStore_CreateInvite_Call) RunAndReturn(run func(invite *database.Invite) (*database.Invite, error)) *MockStore_CreateInvite_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2950,6 +3148,57 @@ func (_c *MockStore_DeleteImportPath_Call) RunAndReturn(run func(id int) error) 
 	return _c
 }
 
+// DeleteInvite provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteInvite(token string) error {
+	ret := _mock.Called(token)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteInvite")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(token)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DeleteInvite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteInvite'
+type MockStore_DeleteInvite_Call struct {
+	*mock.Call
+}
+
+// DeleteInvite is a helper method to define mock.On call
+//   - token string
+func (_e *MockStore_Expecter) DeleteInvite(token interface{}) *MockStore_DeleteInvite_Call {
+	return &MockStore_DeleteInvite_Call{Call: _e.mock.On("DeleteInvite", token)}
+}
+
+func (_c *MockStore_DeleteInvite_Call) Run(run func(token string)) *MockStore_DeleteInvite_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteInvite_Call) Return(err error) *MockStore_DeleteInvite_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteInvite_Call) RunAndReturn(run func(token string) error) *MockStore_DeleteInvite_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteMetadataFieldState provides a mock function for the type MockStore
 func (_mock *MockStore) DeleteMetadataFieldState(bookID string, field string) error {
 	ret := _mock.Called(bookID, field)
@@ -3431,6 +3680,68 @@ func (_c *MockStore_FindAuthorByAlias_Call) Return(author *database.Author, err 
 }
 
 func (_c *MockStore_FindAuthorByAlias_Call) RunAndReturn(run func(aliasName string) (*database.Author, error)) *MockStore_FindAuthorByAlias_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetAPIKey provides a mock function for the type MockStore
+func (_mock *MockStore) GetAPIKey(id string) (*database.APIKey, error) {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAPIKey")
+	}
+
+	var r0 *database.APIKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.APIKey, error)); ok {
+		return returnFunc(id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.APIKey); ok {
+		r0 = returnFunc(id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.APIKey)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetAPIKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAPIKey'
+type MockStore_GetAPIKey_Call struct {
+	*mock.Call
+}
+
+// GetAPIKey is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) GetAPIKey(id interface{}) *MockStore_GetAPIKey_Call {
+	return &MockStore_GetAPIKey_Call{Call: _e.mock.On("GetAPIKey", id)}
+}
+
+func (_c *MockStore_GetAPIKey_Call) Run(run func(id string)) *MockStore_GetAPIKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetAPIKey_Call) Return(aPIKey *database.APIKey, err error) *MockStore_GetAPIKey_Call {
+	_c.Call.Return(aPIKey, err)
+	return _c
+}
+
+func (_c *MockStore_GetAPIKey_Call) RunAndReturn(run func(id string) (*database.APIKey, error)) *MockStore_GetAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -7509,6 +7820,68 @@ func (_c *MockStore_GetInterruptedOperations_Call) RunAndReturn(run func() ([]da
 	return _c
 }
 
+// GetInvite provides a mock function for the type MockStore
+func (_mock *MockStore) GetInvite(token string) (*database.Invite, error) {
+	ret := _mock.Called(token)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetInvite")
+	}
+
+	var r0 *database.Invite
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.Invite, error)); ok {
+		return returnFunc(token)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.Invite); ok {
+		r0 = returnFunc(token)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Invite)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(token)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetInvite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInvite'
+type MockStore_GetInvite_Call struct {
+	*mock.Call
+}
+
+// GetInvite is a helper method to define mock.On call
+//   - token string
+func (_e *MockStore_Expecter) GetInvite(token interface{}) *MockStore_GetInvite_Call {
+	return &MockStore_GetInvite_Call{Call: _e.mock.On("GetInvite", token)}
+}
+
+func (_c *MockStore_GetInvite_Call) Run(run func(token string)) *MockStore_GetInvite_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetInvite_Call) Return(invite *database.Invite, err error) *MockStore_GetInvite_Call {
+	_c.Call.Return(invite, err)
+	return _c
+}
+
+func (_c *MockStore_GetInvite_Call) RunAndReturn(run func(token string) (*database.Invite, error)) *MockStore_GetInvite_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetLibraryFingerprint provides a mock function for the type MockStore
 func (_mock *MockStore) GetLibraryFingerprint(path string) (*database.LibraryFingerprintRecord, error) {
 	ret := _mock.Called(path)
@@ -10189,6 +10562,123 @@ func (_c *MockStore_IsHashBlocked_Call) RunAndReturn(run func(hash string) (bool
 	return _c
 }
 
+// ListAPIKeysForUser provides a mock function for the type MockStore
+func (_mock *MockStore) ListAPIKeysForUser(userID string) ([]database.APIKey, error) {
+	ret := _mock.Called(userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAPIKeysForUser")
+	}
+
+	var r0 []database.APIKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.APIKey, error)); ok {
+		return returnFunc(userID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.APIKey); ok {
+		r0 = returnFunc(userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.APIKey)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListAPIKeysForUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAPIKeysForUser'
+type MockStore_ListAPIKeysForUser_Call struct {
+	*mock.Call
+}
+
+// ListAPIKeysForUser is a helper method to define mock.On call
+//   - userID string
+func (_e *MockStore_Expecter) ListAPIKeysForUser(userID interface{}) *MockStore_ListAPIKeysForUser_Call {
+	return &MockStore_ListAPIKeysForUser_Call{Call: _e.mock.On("ListAPIKeysForUser", userID)}
+}
+
+func (_c *MockStore_ListAPIKeysForUser_Call) Run(run func(userID string)) *MockStore_ListAPIKeysForUser_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListAPIKeysForUser_Call) Return(aPIKeys []database.APIKey, err error) *MockStore_ListAPIKeysForUser_Call {
+	_c.Call.Return(aPIKeys, err)
+	return _c
+}
+
+func (_c *MockStore_ListAPIKeysForUser_Call) RunAndReturn(run func(userID string) ([]database.APIKey, error)) *MockStore_ListAPIKeysForUser_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListActiveInvites provides a mock function for the type MockStore
+func (_mock *MockStore) ListActiveInvites() ([]database.Invite, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListActiveInvites")
+	}
+
+	var r0 []database.Invite
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.Invite, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.Invite); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Invite)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListActiveInvites_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListActiveInvites'
+type MockStore_ListActiveInvites_Call struct {
+	*mock.Call
+}
+
+// ListActiveInvites is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListActiveInvites() *MockStore_ListActiveInvites_Call {
+	return &MockStore_ListActiveInvites_Call{Call: _e.mock.On("ListActiveInvites")}
+}
+
+func (_c *MockStore_ListActiveInvites_Call) Run(run func()) *MockStore_ListActiveInvites_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListActiveInvites_Call) Return(invites []database.Invite, err error) *MockStore_ListActiveInvites_Call {
+	_c.Call.Return(invites, err)
+	return _c
+}
+
+func (_c *MockStore_ListActiveInvites_Call) RunAndReturn(run func() ([]database.Invite, error)) *MockStore_ListActiveInvites_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListAllAuthorTags provides a mock function for the type MockStore
 func (_mock *MockStore) ListAllAuthorTags() ([]database.TagWithCount, error) {
 	ret := _mock.Called()
@@ -12532,6 +13022,57 @@ func (_c *MockStore_RevertOperationChanges_Call) RunAndReturn(run func(operation
 	return _c
 }
 
+// RevokeAPIKey provides a mock function for the type MockStore
+func (_mock *MockStore) RevokeAPIKey(id string) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevokeAPIKey")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_RevokeAPIKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RevokeAPIKey'
+type MockStore_RevokeAPIKey_Call struct {
+	*mock.Call
+}
+
+// RevokeAPIKey is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) RevokeAPIKey(id interface{}) *MockStore_RevokeAPIKey_Call {
+	return &MockStore_RevokeAPIKey_Call{Call: _e.mock.On("RevokeAPIKey", id)}
+}
+
+func (_c *MockStore_RevokeAPIKey_Call) Run(run func(id string)) *MockStore_RevokeAPIKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_RevokeAPIKey_Call) Return(err error) *MockStore_RevokeAPIKey_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_RevokeAPIKey_Call) RunAndReturn(run func(id string) error) *MockStore_RevokeAPIKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RevokeSession provides a mock function for the type MockStore
 func (_mock *MockStore) RevokeSession(id string) error {
 	ret := _mock.Called(id)
@@ -13771,6 +14312,63 @@ func (_c *MockStore_TombstoneExternalID_Call) Return(err error) *MockStore_Tombs
 }
 
 func (_c *MockStore_TombstoneExternalID_Call) RunAndReturn(run func(source string, externalID string) error) *MockStore_TombstoneExternalID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// TouchAPIKeyLastUsed provides a mock function for the type MockStore
+func (_mock *MockStore) TouchAPIKeyLastUsed(id string, at time.Time) error {
+	ret := _mock.Called(id, at)
+
+	if len(ret) == 0 {
+		panic("no return value specified for TouchAPIKeyLastUsed")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) error); ok {
+		r0 = returnFunc(id, at)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_TouchAPIKeyLastUsed_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TouchAPIKeyLastUsed'
+type MockStore_TouchAPIKeyLastUsed_Call struct {
+	*mock.Call
+}
+
+// TouchAPIKeyLastUsed is a helper method to define mock.On call
+//   - id string
+//   - at time.Time
+func (_e *MockStore_Expecter) TouchAPIKeyLastUsed(id interface{}, at interface{}) *MockStore_TouchAPIKeyLastUsed_Call {
+	return &MockStore_TouchAPIKeyLastUsed_Call{Call: _e.mock.On("TouchAPIKeyLastUsed", id, at)}
+}
+
+func (_c *MockStore_TouchAPIKeyLastUsed_Call) Run(run func(id string, at time.Time)) *MockStore_TouchAPIKeyLastUsed_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 time.Time
+		if args[1] != nil {
+			arg1 = args[1].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_TouchAPIKeyLastUsed_Call) Return(err error) *MockStore_TouchAPIKeyLastUsed_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_TouchAPIKeyLastUsed_Call) RunAndReturn(run func(id string, at time.Time) error) *MockStore_TouchAPIKeyLastUsed_Call {
 	_c.Call.Return(run)
 	return _c
 }

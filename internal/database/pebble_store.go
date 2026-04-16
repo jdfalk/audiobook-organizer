@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.43.0
+// version: 1.44.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -3388,6 +3388,291 @@ func (p *PebbleStore) DeleteRole(id string) error {
 		return err
 	}
 	return b.Commit(pebble.Sync)
+}
+
+// API keys
+
+func (p *PebbleStore) CreateAPIKey(key *APIKey) (*APIKey, error) {
+	if key == nil || key.UserID == "" {
+		return nil, fmt.Errorf("api key: user_id required")
+	}
+	if key.ID == "" {
+		id, err := newULID()
+		if err != nil {
+			return nil, err
+		}
+		key.ID = id
+	}
+	if key.CreatedAt.IsZero() {
+		key.CreatedAt = time.Now()
+	}
+	data, err := json.Marshal(key)
+	if err != nil {
+		return nil, err
+	}
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("apikey:"+key.ID), data, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:apikey:user:"+key.UserID+":"+key.ID), []byte("1"), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func (p *PebbleStore) GetAPIKey(id string) (*APIKey, error) {
+	v, closer, err := p.db.Get([]byte("apikey:" + id))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	var k APIKey
+	if err := json.Unmarshal(v, &k); err != nil {
+		return nil, err
+	}
+	return &k, nil
+}
+
+func (p *PebbleStore) ListAPIKeysForUser(userID string) ([]APIKey, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("idx:apikey:user:" + userID + ":"),
+		UpperBound: []byte("idx:apikey:user:" + userID + ":~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []APIKey
+	prefix := "idx:apikey:user:" + userID + ":"
+	for iter.First(); iter.Valid(); iter.Next() {
+		keyID := strings.TrimPrefix(string(iter.Key()), prefix)
+		k, err := p.GetAPIKey(keyID)
+		if err != nil || k == nil {
+			continue
+		}
+		out = append(out, *k)
+	}
+	return out, nil
+}
+
+func (p *PebbleStore) RevokeAPIKey(id string) error {
+	k, err := p.GetAPIKey(id)
+	if err != nil {
+		return err
+	}
+	if k == nil {
+		return nil
+	}
+	now := time.Now()
+	k.RevokedAt = &now
+	data, err := json.Marshal(k)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte("apikey:"+id), data, pebble.Sync)
+}
+
+func (p *PebbleStore) TouchAPIKeyLastUsed(id string, at time.Time) error {
+	k, err := p.GetAPIKey(id)
+	if err != nil {
+		return err
+	}
+	if k == nil {
+		return nil
+	}
+	k.LastUsedAt = &at
+	data, err := json.Marshal(k)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte("apikey:"+id), data, pebble.NoSync)
+}
+
+// Invites
+
+func (p *PebbleStore) CreateInvite(invite *Invite) (*Invite, error) {
+	if invite == nil || invite.Token == "" {
+		return nil, fmt.Errorf("invite: token required")
+	}
+	if invite.Username == "" {
+		return nil, fmt.Errorf("invite: username required")
+	}
+	if invite.RoleID == "" {
+		return nil, fmt.Errorf("invite: role_id required")
+	}
+	if invite.CreatedAt.IsZero() {
+		invite.CreatedAt = time.Now()
+	}
+	if invite.ExpiresAt.IsZero() {
+		invite.ExpiresAt = invite.CreatedAt.Add(7 * 24 * time.Hour)
+	}
+	lower := strings.ToLower(invite.Username)
+	if v, closer, err := p.db.Get([]byte("idx:invite:username:" + lower)); err == nil {
+		existingToken := string(v)
+		closer.Close()
+		if existingToken != invite.Token {
+			return nil, fmt.Errorf("invite already pending for username %q", invite.Username)
+		}
+	}
+	data, err := json.Marshal(invite)
+	if err != nil {
+		return nil, err
+	}
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("invite:"+invite.Token), data, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:invite:username:"+lower), []byte(invite.Token), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
+	return invite, nil
+}
+
+func (p *PebbleStore) GetInvite(token string) (*Invite, error) {
+	v, closer, err := p.db.Get([]byte("invite:" + token))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	var i Invite
+	if err := json.Unmarshal(v, &i); err != nil {
+		return nil, err
+	}
+	return &i, nil
+}
+
+func (p *PebbleStore) ListActiveInvites() ([]Invite, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("invite:"),
+		UpperBound: []byte("invite:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	now := time.Now()
+	var out []Invite
+	for iter.First(); iter.Valid(); iter.Next() {
+		var i Invite
+		if err := json.Unmarshal(iter.Value(), &i); err != nil {
+			continue
+		}
+		if i.UsedAt != nil {
+			continue
+		}
+		if now.After(i.ExpiresAt) {
+			continue
+		}
+		out = append(out, i)
+	}
+	return out, nil
+}
+
+func (p *PebbleStore) DeleteInvite(token string) error {
+	inv, err := p.GetInvite(token)
+	if err != nil {
+		return err
+	}
+	if inv == nil {
+		return nil
+	}
+	b := p.db.NewBatch()
+	if err := b.Delete([]byte("invite:"+token), nil); err != nil {
+		b.Close()
+		return err
+	}
+	if err := b.Delete([]byte("idx:invite:username:"+strings.ToLower(inv.Username)), nil); err != nil {
+		b.Close()
+		return err
+	}
+	return b.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) ConsumeInvite(token, passwordHashAlgo, passwordHash string) (*User, error) {
+	inv, err := p.GetInvite(token)
+	if err != nil {
+		return nil, err
+	}
+	if inv == nil {
+		return nil, fmt.Errorf("invite not found")
+	}
+	if inv.UsedAt != nil {
+		return nil, fmt.Errorf("invite already used")
+	}
+	if time.Now().After(inv.ExpiresAt) {
+		return nil, fmt.Errorf("invite expired")
+	}
+	lowerUser := strings.ToLower(inv.Username)
+	if _, closer, err := p.db.Get([]byte("idx:user:username:" + lowerUser)); err == nil {
+		closer.Close()
+		return nil, fmt.Errorf("username %q taken since invite was created", inv.Username)
+	}
+
+	id, err := newULID()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	user := &User{
+		ID: id, Username: inv.Username, Email: inv.Email,
+		PasswordHashAlgo: passwordHashAlgo, PasswordHash: passwordHash,
+		Roles: []string{inv.RoleID}, Status: "active",
+		CreatedAt: now, UpdatedAt: now, Version: 1,
+	}
+	inv.UsedAt = &now
+
+	userData, err := json.Marshal(user)
+	if err != nil {
+		return nil, err
+	}
+	invData, err := json.Marshal(inv)
+	if err != nil {
+		return nil, err
+	}
+
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("u:"+id), userData, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:user:username:"+lowerUser), []byte(id), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if inv.Email != "" {
+		if err := b.Set([]byte("idx:user:email:"+strings.ToLower(inv.Email)), []byte(id), nil); err != nil {
+			b.Close()
+			return nil, err
+		}
+	}
+	if err := b.Set([]byte("invite:"+token), invData, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Delete([]byte("idx:invite:username:"+lowerUser), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 // Sessions

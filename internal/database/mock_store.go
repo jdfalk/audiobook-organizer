@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.29.0
+// version: 1.30.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -180,6 +180,20 @@ type MockStore struct {
 	CreateRoleFunc    func(role *Role) (*Role, error)
 	UpdateRoleFunc    func(role *Role) error
 	DeleteRoleFunc    func(id string) error
+
+	// API keys
+	CreateAPIKeyFunc        func(key *APIKey) (*APIKey, error)
+	GetAPIKeyFunc           func(id string) (*APIKey, error)
+	ListAPIKeysForUserFunc  func(userID string) ([]APIKey, error)
+	RevokeAPIKeyFunc        func(id string) error
+	TouchAPIKeyLastUsedFunc func(id string, at time.Time) error
+
+	// Invites
+	CreateInviteFunc      func(invite *Invite) (*Invite, error)
+	GetInviteFunc         func(token string) (*Invite, error)
+	ListActiveInvitesFunc func() ([]Invite, error)
+	DeleteInviteFunc      func(token string) error
+	ConsumeInviteFunc     func(token, passwordHashAlgo, passwordHash string) (*User, error)
 
 	// Per-user preferences
 	SetUserPreferenceForUserFunc func(userID, key, value string) error
@@ -1131,6 +1145,76 @@ func (m *MockStore) DeleteRole(id string) error {
 		return m.DeleteRoleFunc(id)
 	}
 	return nil
+}
+
+func (m *MockStore) CreateAPIKey(key *APIKey) (*APIKey, error) {
+	if m.CreateAPIKeyFunc != nil {
+		return m.CreateAPIKeyFunc(key)
+	}
+	return key, nil
+}
+
+func (m *MockStore) GetAPIKey(id string) (*APIKey, error) {
+	if m.GetAPIKeyFunc != nil {
+		return m.GetAPIKeyFunc(id)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListAPIKeysForUser(userID string) ([]APIKey, error) {
+	if m.ListAPIKeysForUserFunc != nil {
+		return m.ListAPIKeysForUserFunc(userID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) RevokeAPIKey(id string) error {
+	if m.RevokeAPIKeyFunc != nil {
+		return m.RevokeAPIKeyFunc(id)
+	}
+	return nil
+}
+
+func (m *MockStore) TouchAPIKeyLastUsed(id string, at time.Time) error {
+	if m.TouchAPIKeyLastUsedFunc != nil {
+		return m.TouchAPIKeyLastUsedFunc(id, at)
+	}
+	return nil
+}
+
+func (m *MockStore) CreateInvite(invite *Invite) (*Invite, error) {
+	if m.CreateInviteFunc != nil {
+		return m.CreateInviteFunc(invite)
+	}
+	return invite, nil
+}
+
+func (m *MockStore) GetInvite(token string) (*Invite, error) {
+	if m.GetInviteFunc != nil {
+		return m.GetInviteFunc(token)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListActiveInvites() ([]Invite, error) {
+	if m.ListActiveInvitesFunc != nil {
+		return m.ListActiveInvitesFunc()
+	}
+	return nil, nil
+}
+
+func (m *MockStore) DeleteInvite(token string) error {
+	if m.DeleteInviteFunc != nil {
+		return m.DeleteInviteFunc(token)
+	}
+	return nil
+}
+
+func (m *MockStore) ConsumeInvite(token, passwordHashAlgo, passwordHash string) (*User, error) {
+	if m.ConsumeInviteFunc != nil {
+		return m.ConsumeInviteFunc(token, passwordHashAlgo, passwordHash)
+	}
+	return nil, nil
 }
 
 func (m *MockStore) SetUserPreferenceForUser(userID, key, value string) error {
