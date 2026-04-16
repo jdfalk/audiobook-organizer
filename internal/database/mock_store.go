@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.31.0
+// version: 1.32.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -180,6 +180,16 @@ type MockStore struct {
 	CreateRoleFunc    func(role *Role) (*Role, error)
 	UpdateRoleFunc    func(role *Role) error
 	DeleteRoleFunc    func(id string) error
+
+	// User positions + book state (spec 3.6)
+	SetUserPositionFunc            func(userID, bookID, segmentID string, positionSeconds float64) error
+	GetUserPositionFunc            func(userID, bookID string) (*UserPosition, error)
+	ListUserPositionsForBookFunc   func(userID, bookID string) ([]UserPosition, error)
+	ClearUserPositionsFunc         func(userID, bookID string) error
+	SetUserBookStateFunc           func(state *UserBookState) error
+	GetUserBookStateFunc           func(userID, bookID string) (*UserBookState, error)
+	ListUserBookStatesByStatusFunc func(userID, status string, limit, offset int) ([]UserBookState, error)
+	ListUserPositionsSinceFunc     func(userID string, t time.Time) ([]UserPosition, error)
 
 	// Book versions
 	CreateBookVersionFunc           func(v *BookVersion) (*BookVersion, error)
@@ -1156,6 +1166,62 @@ func (m *MockStore) DeleteRole(id string) error {
 		return m.DeleteRoleFunc(id)
 	}
 	return nil
+}
+
+func (m *MockStore) SetUserPosition(userID, bookID, segmentID string, positionSeconds float64) error {
+	if m.SetUserPositionFunc != nil {
+		return m.SetUserPositionFunc(userID, bookID, segmentID, positionSeconds)
+	}
+	return nil
+}
+
+func (m *MockStore) GetUserPosition(userID, bookID string) (*UserPosition, error) {
+	if m.GetUserPositionFunc != nil {
+		return m.GetUserPositionFunc(userID, bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListUserPositionsForBook(userID, bookID string) ([]UserPosition, error) {
+	if m.ListUserPositionsForBookFunc != nil {
+		return m.ListUserPositionsForBookFunc(userID, bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ClearUserPositions(userID, bookID string) error {
+	if m.ClearUserPositionsFunc != nil {
+		return m.ClearUserPositionsFunc(userID, bookID)
+	}
+	return nil
+}
+
+func (m *MockStore) SetUserBookState(state *UserBookState) error {
+	if m.SetUserBookStateFunc != nil {
+		return m.SetUserBookStateFunc(state)
+	}
+	return nil
+}
+
+func (m *MockStore) GetUserBookState(userID, bookID string) (*UserBookState, error) {
+	if m.GetUserBookStateFunc != nil {
+		return m.GetUserBookStateFunc(userID, bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListUserBookStatesByStatus(userID, status string, limit, offset int) ([]UserBookState, error) {
+	if m.ListUserBookStatesByStatusFunc != nil {
+		return m.ListUserBookStatesByStatusFunc(userID, status, limit, offset)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListUserPositionsSince(userID string, t time.Time) ([]UserPosition, error) {
+	if m.ListUserPositionsSinceFunc != nil {
+		return m.ListUserPositionsSinceFunc(userID, t)
+	}
+	return nil, nil
 }
 
 func (m *MockStore) CreateBookVersion(v *BookVersion) (*BookVersion, error) {

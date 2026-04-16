@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.53.0
+// version: 2.54.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -228,6 +228,22 @@ type Store interface {
 	CreateRole(role *Role) (*Role, error)
 	UpdateRole(role *Role) error
 	DeleteRole(id string) error
+
+	// User positions + book state (spec 3.6 read/unread tracking).
+	// Per-user, per-book-segment position tracking. UserBookState is
+	// the derived aggregate — computed from UserPosition rows plus
+	// book_files durations — cached on write for fast UI reads.
+	SetUserPosition(userID, bookID, segmentID string, positionSeconds float64) error
+	GetUserPosition(userID, bookID string) (*UserPosition, error)        // latest across segments
+	ListUserPositionsForBook(userID, bookID string) ([]UserPosition, error)
+	ClearUserPositions(userID, bookID string) error
+	SetUserBookState(state *UserBookState) error
+	GetUserBookState(userID, bookID string) (*UserBookState, error)
+	ListUserBookStatesByStatus(userID, status string, limit, offset int) ([]UserBookState, error)
+	// ListUserPositionsSince returns all UserPosition rows for a
+	// given user whose UpdatedAt is strictly after t. Used by the
+	// iTunes Bookmark write-back pass for the attributed admin user.
+	ListUserPositionsSince(userID string, t time.Time) ([]UserPosition, error)
 
 	// Book versions (spec 3.1 library centralization). Every book has
 	// ≥1 version with status=active; alt versions live under
@@ -889,6 +905,49 @@ type BookFile struct {
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
+
+// UserPosition is one user's resume point for one segment of one
+// book (spec 3.6). Keyed per (user, book, segment) — a multi-file
+// audiobook has one row per chapter/segment actively listened to.
+// The canonical "where am I in the book" is derived from the most
+// recently-updated UserPosition for the book.
+type UserPosition struct {
+	UserID          string    `json:"user_id"`
+	BookID          string    `json:"book_id"`
+	SegmentID       string    `json:"segment_id"`
+	PositionSeconds float64   `json:"position_seconds"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// UserBookState is the per-(user, book) derived state used by UI and
+// filters (spec 3.6): read status, last activity timestamp, resume
+// pointer, cached listened-seconds and progress percent. Recomputed
+// when positions change; can be manually overridden (status_manual).
+type UserBookState struct {
+	UserID                string    `json:"user_id"`
+	BookID                string    `json:"book_id"`
+	Status                string    `json:"status"` // see UserBookStatus* constants
+	StatusManual          bool      `json:"status_manual"`
+	LastActivityAt        time.Time `json:"last_activity_at"`
+	LastSegmentID         string    `json:"last_segment_id,omitempty"`
+	TotalListenedSeconds  float64   `json:"total_listened_seconds,omitempty"`
+	ProgressPct           int       `json:"progress_pct"` // 0-100
+	UpdatedAt             time.Time `json:"updated_at"`
+}
+
+// UserBookStatus values. Auto-computed from UserPosition rows
+// unless StatusManual=true, in which case the server leaves the
+// stored value alone. See spec 3.6 §6-7 for the state machine.
+const (
+	UserBookStatusUnstarted  = "unstarted"
+	UserBookStatusInProgress = "in_progress"
+	UserBookStatusFinished   = "finished"
+	UserBookStatusAbandoned  = "abandoned"
+)
+
+// FinishedThreshold is the fraction of total duration that triggers
+// an auto-flip to UserBookStatusFinished. Spec 3.6 §6.
+const FinishedThreshold = 0.95
 
 // PlaybackEvent immutable event
 type PlaybackEvent struct {

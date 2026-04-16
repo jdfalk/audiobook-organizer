@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.54.0
+// version: 1.55.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -916,6 +916,29 @@ func (s *SQLiteStore) UpdateRole(role *Role) error {
 
 func (s *SQLiteStore) DeleteRole(id string) error {
 	return nil
+}
+
+// ---- User positions + book state (SQLite no-op stubs, spec 3.6) ----
+
+func (s *SQLiteStore) SetUserPosition(userID, bookID, segmentID string, positionSeconds float64) error {
+	return nil
+}
+func (s *SQLiteStore) GetUserPosition(userID, bookID string) (*UserPosition, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) ListUserPositionsForBook(userID, bookID string) ([]UserPosition, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) ClearUserPositions(userID, bookID string) error { return nil }
+func (s *SQLiteStore) SetUserBookState(state *UserBookState) error    { return nil }
+func (s *SQLiteStore) GetUserBookState(userID, bookID string) (*UserBookState, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) ListUserBookStatesByStatus(userID, status string, limit, offset int) ([]UserBookState, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) ListUserPositionsSince(userID string, t time.Time) ([]UserPosition, error) {
+	return nil, nil
 }
 
 // ---- Book versions (SQLite no-op stubs, spec 3.1) ----
