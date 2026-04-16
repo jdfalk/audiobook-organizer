@@ -6672,24 +6672,24 @@ func (_c *MockStore_GetBookUserTags_Call) RunAndReturn(run func(bookID string) (
 	return _c
 }
 
-// GetBookVersions provides a mock function for the type MockStore
-func (_mock *MockStore) GetBookVersions(id string, limit int) ([]database.BookVersion, error) {
+// GetBookSnapshots provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookSnapshots(id string, limit int) ([]database.BookSnapshot, error) {
 	ret := _mock.Called(id, limit)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetBookVersions")
+		panic("no return value specified for GetBookSnapshots")
 	}
 
-	var r0 []database.BookVersion
+	var r0 []database.BookSnapshot
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, int) ([]database.BookVersion, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(string, int) ([]database.BookSnapshot, error)); ok {
 		return returnFunc(id, limit)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string, int) []database.BookVersion); ok {
+	if returnFunc, ok := ret.Get(0).(func(string, int) []database.BookSnapshot); ok {
 		r0 = returnFunc(id, limit)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]database.BookVersion)
+			r0 = ret.Get(0).([]database.BookSnapshot)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(string, int) error); ok {
@@ -6700,16 +6700,16 @@ func (_mock *MockStore) GetBookVersions(id string, limit int) ([]database.BookVe
 	return r0, r1
 }
 
-// MockStore_GetBookVersions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookVersions'
+// MockStore_GetBookVersions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookSnapshots'
 type MockStore_GetBookVersions_Call struct {
 	*mock.Call
 }
 
-// GetBookVersions is a helper method to define mock.On call
+// GetBookSnapshots is a helper method to define mock.On call
 //   - id string
 //   - limit int
-func (_e *MockStore_Expecter) GetBookVersions(id interface{}, limit interface{}) *MockStore_GetBookVersions_Call {
-	return &MockStore_GetBookVersions_Call{Call: _e.mock.On("GetBookVersions", id, limit)}
+func (_e *MockStore_Expecter) GetBookSnapshots(id interface{}, limit interface{}) *MockStore_GetBookVersions_Call {
+	return &MockStore_GetBookVersions_Call{Call: _e.mock.On("GetBookSnapshots", id, limit)}
 }
 
 func (_c *MockStore_GetBookVersions_Call) Run(run func(id string, limit int)) *MockStore_GetBookVersions_Call {
@@ -6730,12 +6730,12 @@ func (_c *MockStore_GetBookVersions_Call) Run(run func(id string, limit int)) *M
 	return _c
 }
 
-func (_c *MockStore_GetBookVersions_Call) Return(bookVersions []database.BookVersion, err error) *MockStore_GetBookVersions_Call {
+func (_c *MockStore_GetBookVersions_Call) Return(bookVersions []database.BookSnapshot, err error) *MockStore_GetBookVersions_Call {
 	_c.Call.Return(bookVersions, err)
 	return _c
 }
 
-func (_c *MockStore_GetBookVersions_Call) RunAndReturn(run func(id string, limit int) ([]database.BookVersion, error)) *MockStore_GetBookVersions_Call {
+func (_c *MockStore_GetBookVersions_Call) RunAndReturn(run func(id string, limit int) ([]database.BookSnapshot, error)) *MockStore_GetBookVersions_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -11876,12 +11876,12 @@ func (_c *MockStore_Optimize_Call) RunAndReturn(run func() error) *MockStore_Opt
 	return _c
 }
 
-// PruneBookVersions provides a mock function for the type MockStore
-func (_mock *MockStore) PruneBookVersions(id string, keepCount int) (int, error) {
+// PruneBookSnapshots provides a mock function for the type MockStore
+func (_mock *MockStore) PruneBookSnapshots(id string, keepCount int) (int, error) {
 	ret := _mock.Called(id, keepCount)
 
 	if len(ret) == 0 {
-		panic("no return value specified for PruneBookVersions")
+		panic("no return value specified for PruneBookSnapshots")
 	}
 
 	var r0 int
@@ -11902,16 +11902,16 @@ func (_mock *MockStore) PruneBookVersions(id string, keepCount int) (int, error)
 	return r0, r1
 }
 
-// MockStore_PruneBookVersions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PruneBookVersions'
+// MockStore_PruneBookVersions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PruneBookSnapshots'
 type MockStore_PruneBookVersions_Call struct {
 	*mock.Call
 }
 
-// PruneBookVersions is a helper method to define mock.On call
+// PruneBookSnapshots is a helper method to define mock.On call
 //   - id string
 //   - keepCount int
-func (_e *MockStore_Expecter) PruneBookVersions(id interface{}, keepCount interface{}) *MockStore_PruneBookVersions_Call {
-	return &MockStore_PruneBookVersions_Call{Call: _e.mock.On("PruneBookVersions", id, keepCount)}
+func (_e *MockStore_Expecter) PruneBookSnapshots(id interface{}, keepCount interface{}) *MockStore_PruneBookVersions_Call {
+	return &MockStore_PruneBookVersions_Call{Call: _e.mock.On("PruneBookSnapshots", id, keepCount)}
 }
 
 func (_c *MockStore_PruneBookVersions_Call) Run(run func(id string, keepCount int)) *MockStore_PruneBookVersions_Call {

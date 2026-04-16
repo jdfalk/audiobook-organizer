@@ -1733,8 +1733,8 @@ func (p *PebbleStore) GetITunesDirtyBooks() ([]Book, error) {
 	return dirty, nil
 }
 
-// GetBookVersions returns CoW version snapshots for a book, newest-first.
-func (p *PebbleStore) GetBookVersions(id string, limit int) ([]BookVersion, error) {
+// GetBookSnapshots returns CoW version snapshots for a book, newest-first.
+func (p *PebbleStore) GetBookSnapshots(id string, limit int) ([]BookSnapshot, error) {
 	prefix := fmt.Sprintf("book_ver:%s:", id)
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte(prefix),
@@ -1745,7 +1745,7 @@ func (p *PebbleStore) GetBookVersions(id string, limit int) ([]BookVersion, erro
 	}
 	defer iter.Close()
 
-	var versions []BookVersion
+	var versions []BookSnapshot
 	for iter.First(); iter.Valid(); iter.Next() {
 		key := string(iter.Key())
 		parts := strings.SplitN(key, ":", 3)
@@ -1758,7 +1758,7 @@ func (p *PebbleStore) GetBookVersions(id string, limit int) ([]BookVersion, erro
 		}
 		dataCopy := make([]byte, len(iter.Value()))
 		copy(dataCopy, iter.Value())
-		versions = append(versions, BookVersion{
+		versions = append(versions, BookSnapshot{
 			BookID:    id,
 			Timestamp: time.Unix(0, nsec),
 			Data:      dataCopy,
@@ -1803,12 +1803,12 @@ func (p *PebbleStore) RevertBookToVersion(id string, ts time.Time) (*Book, error
 	return p.UpdateBook(id, oldBook)
 }
 
-// PruneBookVersions keeps the newest keepCount versions and deletes the rest.
-func (p *PebbleStore) PruneBookVersions(id string, keepCount int) (int, error) {
+// PruneBookSnapshots keeps the newest keepCount versions and deletes the rest.
+func (p *PebbleStore) PruneBookSnapshots(id string, keepCount int) (int, error) {
 	if keepCount < 0 {
 		keepCount = 0
 	}
-	versions, err := p.GetBookVersions(id, 0)
+	versions, err := p.GetBookSnapshots(id, 0)
 	if err != nil {
 		return 0, err
 	}
