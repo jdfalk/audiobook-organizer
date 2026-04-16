@@ -2061,6 +2061,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/merge-novg-duplicates", s.perm(auth.PermSettingsManage), s.mergeNoVGDuplicatesHandler)
 			protected.POST("/operations/assign-orphan-vgs", s.perm(auth.PermSettingsManage), s.assignOrphanVGsHandler)
 			protected.GET("/operations/:id/changes", s.perm(auth.PermLibraryView), s.getOperationChanges)
+			protected.GET("/operations/:id/undo/preflight", s.perm(auth.PermLibraryView), s.undoPreflightHandler)
 			protected.POST("/operations/:id/revert", s.perm(auth.PermLibraryOrganize), s.revertOperation)
 
 			// Import routes
