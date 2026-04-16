@@ -526,6 +526,19 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 							OldValue:    oldPath,
 							NewValue:    newPath,
 						})
+						oldState := ""
+						if book.LibraryState != nil {
+							oldState = *book.LibraryState
+						}
+						_ = orgSvc.db.CreateOperationChange(&database.OperationChange{
+							ID:          ulid.Make().String(),
+							OperationID: operationID,
+							BookID:      book.ID,
+							ChangeType:  "metadata_update",
+							FieldName:   "library_state",
+							OldValue:    oldState,
+							NewValue:    "organized",
+						})
 					}
 				} else {
 					// Version-aware organize: create a new book record for the organized copy
