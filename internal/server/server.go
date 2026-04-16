@@ -1895,6 +1895,7 @@ func (s *Server) setupRoutes() {
 			authGroup.GET("/status", s.getAuthStatus)
 			authGroup.POST("/setup", s.setupInitialAdmin)
 			authGroup.POST("/login", s.login)
+			authGroup.POST("/accept-invite", s.handleAcceptInvite)
 		}
 
 		authProtected := authGroup.Group("")
@@ -2240,6 +2241,7 @@ func (s *Server) setupRoutes() {
 			s.setupUserTagRoutes(protected)
 			s.registerReadingRoutes(protected)
 			s.registerPlaylistRoutes(protected)
+			s.registerUserAdminRoutes(protected)
 			s.setupBenchRoutes(protected)
 		}
 	}
