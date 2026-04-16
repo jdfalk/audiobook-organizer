@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.28.0
+// version: 1.29.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -172,6 +172,14 @@ type MockStore struct {
 	ListUserSessionsFunc      func(userID string) ([]Session, error)
 	DeleteExpiredSessionsFunc func(now time.Time) (int, error)
 	CountUsersFunc            func() (int, error)
+
+	// Roles
+	GetRoleByIDFunc   func(id string) (*Role, error)
+	GetRoleByNameFunc func(name string) (*Role, error)
+	ListRolesFunc     func() ([]Role, error)
+	CreateRoleFunc    func(role *Role) (*Role, error)
+	UpdateRoleFunc    func(role *Role) error
+	DeleteRoleFunc    func(id string) error
 
 	// Per-user preferences
 	SetUserPreferenceForUserFunc func(userID, key, value string) error
@@ -1081,6 +1089,48 @@ func (m *MockStore) CountUsers() (int, error) {
 		return m.CountUsersFunc()
 	}
 	return 0, nil
+}
+
+func (m *MockStore) GetRoleByID(id string) (*Role, error) {
+	if m.GetRoleByIDFunc != nil {
+		return m.GetRoleByIDFunc(id)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetRoleByName(name string) (*Role, error) {
+	if m.GetRoleByNameFunc != nil {
+		return m.GetRoleByNameFunc(name)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListRoles() ([]Role, error) {
+	if m.ListRolesFunc != nil {
+		return m.ListRolesFunc()
+	}
+	return nil, nil
+}
+
+func (m *MockStore) CreateRole(role *Role) (*Role, error) {
+	if m.CreateRoleFunc != nil {
+		return m.CreateRoleFunc(role)
+	}
+	return role, nil
+}
+
+func (m *MockStore) UpdateRole(role *Role) error {
+	if m.UpdateRoleFunc != nil {
+		return m.UpdateRoleFunc(role)
+	}
+	return nil
+}
+
+func (m *MockStore) DeleteRole(id string) error {
+	if m.DeleteRoleFunc != nil {
+		return m.DeleteRoleFunc(id)
+	}
+	return nil
 }
 
 func (m *MockStore) SetUserPreferenceForUser(userID, key, value string) error {

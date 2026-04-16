@@ -2169,6 +2169,68 @@ func (_c *MockStore_CreatePlaylist_Call) RunAndReturn(run func(name string, seri
 	return _c
 }
 
+// CreateRole provides a mock function for the type MockStore
+func (_mock *MockStore) CreateRole(role *database.Role) (*database.Role, error) {
+	ret := _mock.Called(role)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateRole")
+	}
+
+	var r0 *database.Role
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(*database.Role) (*database.Role, error)); ok {
+		return returnFunc(role)
+	}
+	if returnFunc, ok := ret.Get(0).(func(*database.Role) *database.Role); ok {
+		r0 = returnFunc(role)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Role)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(*database.Role) error); ok {
+		r1 = returnFunc(role)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CreateRole_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateRole'
+type MockStore_CreateRole_Call struct {
+	*mock.Call
+}
+
+// CreateRole is a helper method to define mock.On call
+//   - role *database.Role
+func (_e *MockStore_Expecter) CreateRole(role interface{}) *MockStore_CreateRole_Call {
+	return &MockStore_CreateRole_Call{Call: _e.mock.On("CreateRole", role)}
+}
+
+func (_c *MockStore_CreateRole_Call) Run(run func(role *database.Role)) *MockStore_CreateRole_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.Role
+		if args[0] != nil {
+			arg0 = args[0].(*database.Role)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateRole_Call) Return(role1 *database.Role, err error) *MockStore_CreateRole_Call {
+	_c.Call.Return(role1, err)
+	return _c
+}
+
+func (_c *MockStore_CreateRole_Call) RunAndReturn(run func(role *database.Role) (*database.Role, error)) *MockStore_CreateRole_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateSeries provides a mock function for the type MockStore
 func (_mock *MockStore) CreateSeries(name string, authorID *int) (*database.Series, error) {
 	ret := _mock.Called(name, authorID)
@@ -3103,6 +3165,57 @@ func (_c *MockStore_DeleteRaw_Call) Return(err error) *MockStore_DeleteRaw_Call 
 }
 
 func (_c *MockStore_DeleteRaw_Call) RunAndReturn(run func(key string) error) *MockStore_DeleteRaw_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteRole provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteRole(id string) error {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteRole")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DeleteRole_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteRole'
+type MockStore_DeleteRole_Call struct {
+	*mock.Call
+}
+
+// DeleteRole is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) DeleteRole(id interface{}) *MockStore_DeleteRole_Call {
+	return &MockStore_DeleteRole_Call{Call: _e.mock.On("DeleteRole", id)}
+}
+
+func (_c *MockStore_DeleteRole_Call) Run(run func(id string)) *MockStore_DeleteRole_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteRole_Call) Return(err error) *MockStore_DeleteRole_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteRole_Call) RunAndReturn(run func(id string) error) *MockStore_DeleteRole_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -8709,6 +8822,130 @@ func (_c *MockStore_GetRemovedExternalIDs_Call) RunAndReturn(run func(source str
 	return _c
 }
 
+// GetRoleByID provides a mock function for the type MockStore
+func (_mock *MockStore) GetRoleByID(id string) (*database.Role, error) {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetRoleByID")
+	}
+
+	var r0 *database.Role
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.Role, error)); ok {
+		return returnFunc(id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.Role); ok {
+		r0 = returnFunc(id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Role)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetRoleByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetRoleByID'
+type MockStore_GetRoleByID_Call struct {
+	*mock.Call
+}
+
+// GetRoleByID is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) GetRoleByID(id interface{}) *MockStore_GetRoleByID_Call {
+	return &MockStore_GetRoleByID_Call{Call: _e.mock.On("GetRoleByID", id)}
+}
+
+func (_c *MockStore_GetRoleByID_Call) Run(run func(id string)) *MockStore_GetRoleByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetRoleByID_Call) Return(role *database.Role, err error) *MockStore_GetRoleByID_Call {
+	_c.Call.Return(role, err)
+	return _c
+}
+
+func (_c *MockStore_GetRoleByID_Call) RunAndReturn(run func(id string) (*database.Role, error)) *MockStore_GetRoleByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetRoleByName provides a mock function for the type MockStore
+func (_mock *MockStore) GetRoleByName(name string) (*database.Role, error) {
+	ret := _mock.Called(name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetRoleByName")
+	}
+
+	var r0 *database.Role
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.Role, error)); ok {
+		return returnFunc(name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.Role); ok {
+		r0 = returnFunc(name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.Role)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetRoleByName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetRoleByName'
+type MockStore_GetRoleByName_Call struct {
+	*mock.Call
+}
+
+// GetRoleByName is a helper method to define mock.On call
+//   - name string
+func (_e *MockStore_Expecter) GetRoleByName(name interface{}) *MockStore_GetRoleByName_Call {
+	return &MockStore_GetRoleByName_Call{Call: _e.mock.On("GetRoleByName", name)}
+}
+
+func (_c *MockStore_GetRoleByName_Call) Run(run func(name string)) *MockStore_GetRoleByName_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetRoleByName_Call) Return(role *database.Role, err error) *MockStore_GetRoleByName_Call {
+	_c.Call.Return(role, err)
+	return _c
+}
+
+func (_c *MockStore_GetRoleByName_Call) RunAndReturn(run func(name string) (*database.Role, error)) *MockStore_GetRoleByName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetScanCacheMap provides a mock function for the type MockStore
 func (_mock *MockStore) GetScanCacheMap() (map[string]database.ScanCacheEntry, error) {
 	ret := _mock.Called()
@@ -10508,6 +10745,61 @@ func (_c *MockStore_ListPlaybackEvents_Call) Return(playbackEvents []database.Pl
 }
 
 func (_c *MockStore_ListPlaybackEvents_Call) RunAndReturn(run func(userID string, bookNumericID int, limit int) ([]database.PlaybackEvent, error)) *MockStore_ListPlaybackEvents_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListRoles provides a mock function for the type MockStore
+func (_mock *MockStore) ListRoles() ([]database.Role, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListRoles")
+	}
+
+	var r0 []database.Role
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.Role, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.Role); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Role)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListRoles_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListRoles'
+type MockStore_ListRoles_Call struct {
+	*mock.Call
+}
+
+// ListRoles is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListRoles() *MockStore_ListRoles_Call {
+	return &MockStore_ListRoles_Call{Call: _e.mock.On("ListRoles")}
+}
+
+func (_c *MockStore_ListRoles_Call) Run(run func()) *MockStore_ListRoles_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListRoles_Call) Return(roles []database.Role, err error) *MockStore_ListRoles_Call {
+	_c.Call.Return(roles, err)
+	return _c
+}
+
+func (_c *MockStore_ListRoles_Call) RunAndReturn(run func() ([]database.Role, error)) *MockStore_ListRoles_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -14009,6 +14301,57 @@ func (_c *MockStore_UpdatePlaybackProgress_Call) Return(err error) *MockStore_Up
 }
 
 func (_c *MockStore_UpdatePlaybackProgress_Call) RunAndReturn(run func(progress *database.PlaybackProgress) error) *MockStore_UpdatePlaybackProgress_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateRole provides a mock function for the type MockStore
+func (_mock *MockStore) UpdateRole(role *database.Role) error {
+	ret := _mock.Called(role)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateRole")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.Role) error); ok {
+		r0 = returnFunc(role)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_UpdateRole_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateRole'
+type MockStore_UpdateRole_Call struct {
+	*mock.Call
+}
+
+// UpdateRole is a helper method to define mock.On call
+//   - role *database.Role
+func (_e *MockStore_Expecter) UpdateRole(role interface{}) *MockStore_UpdateRole_Call {
+	return &MockStore_UpdateRole_Call{Call: _e.mock.On("UpdateRole", role)}
+}
+
+func (_c *MockStore_UpdateRole_Call) Run(run func(role *database.Role)) *MockStore_UpdateRole_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.Role
+		if args[0] != nil {
+			arg0 = args[0].(*database.Role)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_UpdateRole_Call) Return(err error) *MockStore_UpdateRole_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_UpdateRole_Call) RunAndReturn(run func(role *database.Role) error) *MockStore_UpdateRole_Call {
 	_c.Call.Return(run)
 	return _c
 }

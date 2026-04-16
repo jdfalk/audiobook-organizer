@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.51.0
+// version: 1.52.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -885,6 +885,37 @@ func (s *SQLiteStore) CountUsers() (int, error) {
 		return 0, err
 	}
 	return count, nil
+}
+
+// ---- Roles ----
+//
+// SQLite support for multi-user roles is a no-op. The SQLite backend
+// is deprecated for production use (PebbleDB is canonical); adding a
+// roles schema + migration there is tracked but not worth the cost.
+// Callers hitting SQLite get empty results and silent success.
+
+func (s *SQLiteStore) GetRoleByID(id string) (*Role, error) {
+	return nil, nil
+}
+
+func (s *SQLiteStore) GetRoleByName(name string) (*Role, error) {
+	return nil, nil
+}
+
+func (s *SQLiteStore) ListRoles() ([]Role, error) {
+	return nil, nil
+}
+
+func (s *SQLiteStore) CreateRole(role *Role) (*Role, error) {
+	return role, nil
+}
+
+func (s *SQLiteStore) UpdateRole(role *Role) error {
+	return nil
+}
+
+func (s *SQLiteStore) DeleteRole(id string) error {
+	return nil
 }
 
 // ---- Per-User Preferences ----
