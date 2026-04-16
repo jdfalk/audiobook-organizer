@@ -59,7 +59,7 @@ func waitForOperationStatus(t *testing.T, id string, timeout time.Duration) *dat
 
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		op, err := database.GlobalStore.GetOperationByID(id)
+		op, err := database.GetGlobalStore().GetOperationByID(id)
 		if err == nil && op != nil {
 			switch op.Status {
 			case "completed", "failed", "canceled":
@@ -192,7 +192,7 @@ func TestSearchAndFetchMetadata(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Test Book",
 		FilePath: "/tmp/test-book.m4b",
 	})
@@ -328,12 +328,12 @@ func TestServerStartGracefulShutdown(t *testing.T) {
 	config.AppConfig.PurgeSoftDeletedAfterDays = 1
 	config.AppConfig.PurgeSoftDeletedDeleteFiles = false
 
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Heartbeat Book",
 		FilePath: "/tmp/heartbeat.m4b",
 	})
 	require.NoError(t, err)
-	_, err = database.GlobalStore.CreateImportPath(t.TempDir(), "Heartbeat Import")
+	_, err = database.GetGlobalStore().CreateImportPath(t.TempDir(), "Heartbeat Import")
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
@@ -393,10 +393,10 @@ func TestGetOperationLogsEndpoint(t *testing.T) {
 	defer cleanup()
 
 	opID := "op-logs"
-	_, err := database.GlobalStore.CreateOperation(opID, "scan", nil)
+	_, err := database.GetGlobalStore().CreateOperation(opID, "scan", nil)
 	require.NoError(t, err)
 	detail := "details"
-	require.NoError(t, database.GlobalStore.AddOperationLog(opID, "info", "message", &detail))
+	require.NoError(t, database.GetGlobalStore().AddOperationLog(opID, "info", "message", &detail))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/operations/"+opID+"/logs?tail=1", nil)
 	w := httptest.NewRecorder()
@@ -416,13 +416,13 @@ func TestGetAudiobookAndDashboard(t *testing.T) {
 	tempDir := t.TempDir()
 	filePath := copyFixtureToDir(t, "test_sample.m4b", tempDir)
 
-	author, err := database.GlobalStore.CreateAuthor("Author Name")
+	author, err := database.GetGlobalStore().CreateAuthor("Author Name")
 	require.NoError(t, err)
-	series, err := database.GlobalStore.CreateSeries("Series Name", &author.ID)
+	series, err := database.GetGlobalStore().CreateSeries("Series Name", &author.ID)
 	require.NoError(t, err)
 
 	size := int64(50 * 1024 * 1024)
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Dashboard Book",
 		FilePath: filePath,
 		FileSize: &size,
@@ -437,7 +437,7 @@ func TestGetAudiobookAndDashboard(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	size2 := int64(600 * 1024 * 1024)
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Dashboard Book 2",
 		FilePath: filepath.Join(tempDir, "book2.mp3"),
 		FileSize: &size2,
@@ -454,7 +454,7 @@ func TestExportMetadataEndpoint(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Exported Book",
 		FilePath: "/tmp/export.m4b",
 	})
@@ -477,7 +477,7 @@ func TestParseAudiobookWithAIEndpoint(t *testing.T) {
 	config.AppConfig.EnableAIParsing = false
 	config.AppConfig.OpenAIAPIKey = ""
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "AI Book",
 		FilePath: "/tmp/ai.m4b",
 	})
@@ -495,7 +495,7 @@ func TestParseAudiobookAIPayloadSplitsAuthors(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Multi Author Book",
 		FilePath: "/tmp/multi.m4b",
 	})
@@ -518,32 +518,32 @@ func TestParseAudiobookAIPayloadSplitsAuthors(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	// Verify book_authors junction table has 2 entries
-	bookAuthors, err := database.GlobalStore.GetBookAuthors(book.ID)
+	bookAuthors, err := database.GetGlobalStore().GetBookAuthors(book.ID)
 	require.NoError(t, err)
 	require.Len(t, bookAuthors, 2, "expected 2 book_authors after splitting on &")
 
 	// Verify first author
-	author1, err := database.GlobalStore.GetAuthorByID(bookAuthors[0].AuthorID)
+	author1, err := database.GetGlobalStore().GetAuthorByID(bookAuthors[0].AuthorID)
 	require.NoError(t, err)
 	require.Equal(t, "Author A", author1.Name)
 	require.Equal(t, "author", bookAuthors[0].Role)
 
 	// Verify second author
-	author2, err := database.GlobalStore.GetAuthorByID(bookAuthors[1].AuthorID)
+	author2, err := database.GetGlobalStore().GetAuthorByID(bookAuthors[1].AuthorID)
 	require.NoError(t, err)
 	require.Equal(t, "Author B", author2.Name)
 	require.Equal(t, "co-author", bookAuthors[1].Role)
 
 	// Verify book_narrators junction table has 2 entries
-	bookNarrators, err := database.GlobalStore.GetBookNarrators(book.ID)
+	bookNarrators, err := database.GetGlobalStore().GetBookNarrators(book.ID)
 	require.NoError(t, err)
 	require.Len(t, bookNarrators, 2, "expected 2 book_narrators after splitting on &")
 
-	narr1, err := database.GlobalStore.GetNarratorByID(bookNarrators[0].NarratorID)
+	narr1, err := database.GetGlobalStore().GetNarratorByID(bookNarrators[0].NarratorID)
 	require.NoError(t, err)
 	require.Equal(t, "Narrator X", narr1.Name)
 
-	narr2, err := database.GlobalStore.GetNarratorByID(bookNarrators[1].NarratorID)
+	narr2, err := database.GetGlobalStore().GetNarratorByID(bookNarrators[1].NarratorID)
 	require.NoError(t, err)
 	require.Equal(t, "Narrator Y", narr2.Name)
 }
@@ -556,7 +556,7 @@ func TestUpdateDeleteBatchAudiobook(t *testing.T) {
 	filePath := filepath.Join(tempDir, "book.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 	hash := "hash-1"
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Old Title",
 		FilePath: filePath,
 		FileHash: &hash,
@@ -604,7 +604,7 @@ func TestUpdateDeleteBatchAudiobook(t *testing.T) {
 	filePath2 := filepath.Join(tempDir, "book2.m4b")
 	require.NoError(t, os.WriteFile(filePath2, []byte("audio"), 0o644))
 	hash2 := "hash-2"
-	book2, err := database.GlobalStore.CreateBook(&database.Book{
+	book2, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Hard Delete",
 		FilePath: filePath2,
 		FileHash: &hash2,
@@ -636,7 +636,7 @@ func TestStartScanOperation(t *testing.T) {
 	copyFixtureToDir(t, "test_sample.m4b", rootDir)
 	copyFixtureToDir(t, "test_sample.m4b", importDir)
 
-	_, err := database.GlobalStore.CreateImportPath(importDir, "Import")
+	_, err := database.GetGlobalStore().CreateImportPath(importDir, "Import")
 	require.NoError(t, err)
 
 	payload := map[string]any{
@@ -674,7 +674,7 @@ func TestStartOrganizeOperation(t *testing.T) {
 	config.AppConfig.ConcurrentScans = 1
 
 	filePath := copyFixtureToDir(t, "test_sample.m4b", sourceDir)
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Organize Me",
 		FilePath: filePath,
 	})
@@ -698,7 +698,7 @@ func TestListActiveOperations(t *testing.T) {
 
 	block := make(chan struct{})
 	opID := "op-block"
-	_, err := database.GlobalStore.CreateOperation(opID, "scan", nil)
+	_, err := database.GetGlobalStore().CreateOperation(opID, "scan", nil)
 	require.NoError(t, err)
 
 	err = operations.GlobalQueue.Enqueue(opID, "scan", operations.PriorityNormal, func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -734,7 +734,7 @@ func TestRunAutoPurgeSoftDeleted(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 	marked := true
 	deletedAt := time.Now().AddDate(0, 0, -2)
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:               "Old Book",
 		FilePath:            filePath,
 		MarkedForDeletion:   &marked,
@@ -744,7 +744,7 @@ func TestRunAutoPurgeSoftDeleted(t *testing.T) {
 
 	server.runAutoPurgeSoftDeleted()
 
-	if got, err := database.GlobalStore.GetBookByID(book.ID); err == nil && got != nil {
+	if got, err := database.GetGlobalStore().GetBookByID(book.ID); err == nil && got != nil {
 		t.Fatal("expected book to be purged")
 	}
 	if _, err := os.Stat(filePath); !os.IsNotExist(err) {

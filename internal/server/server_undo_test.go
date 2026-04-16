@@ -30,7 +30,7 @@ func TestUndoLastApply_NoHistory(t *testing.T) {
 	// Create a book with no change history
 	tempFile := filepath.Join(t.TempDir(), "undo-no-history.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "No History Book",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -55,7 +55,7 @@ func TestUndoLastApply_OnlyUndoRecords(t *testing.T) {
 	// Create a book
 	tempFile := filepath.Join(t.TempDir(), "undo-only-undos.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Only Undos Book",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -65,7 +65,7 @@ func TestUndoLastApply_OnlyUndoRecords(t *testing.T) {
 	// Insert only undo-type records
 	oldVal := `"Old Title"`
 	newVal := `"New Title"`
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "title",
 		PreviousValue: &oldVal,
@@ -93,7 +93,7 @@ func TestUndoLastApply_RevertsBatch(t *testing.T) {
 	// Create a book
 	tempFile := filepath.Join(t.TempDir(), "undo-batch.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Batch Undo Book",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -107,7 +107,7 @@ func TestUndoLastApply_RevertsBatch(t *testing.T) {
 	oldAuthor := `"Original Author"`
 	newAuthor := `"Updated Author"`
 
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "title",
 		PreviousValue: &oldTitle,
@@ -116,7 +116,7 @@ func TestUndoLastApply_RevertsBatch(t *testing.T) {
 		Source:        "Open Library",
 		ChangedAt:     batchTime,
 	}))
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "author",
 		PreviousValue: &oldAuthor,
@@ -146,7 +146,7 @@ func TestUndoLastApply_RevertsBatch(t *testing.T) {
 	assert.Len(t, undoneFields, 2)
 
 	// Verify undo records were written to history
-	history, err := database.GlobalStore.GetBookChangeHistory(book.ID, 50)
+	history, err := database.GetGlobalStore().GetBookChangeHistory(book.ID, 50)
 	require.NoError(t, err)
 
 	undoCount := 0
@@ -166,7 +166,7 @@ func TestUndoLastApply_SkipsOldChanges(t *testing.T) {
 	// Create a book
 	tempFile := filepath.Join(t.TempDir(), "undo-skip-old.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Skip Old Changes Book",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -177,7 +177,7 @@ func TestUndoLastApply_SkipsOldChanges(t *testing.T) {
 	oldTime := time.Now().Add(-10 * time.Second)
 	oldPublisher := `"Old Publisher"`
 	newPublisher := `"New Publisher"`
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "publisher",
 		PreviousValue: &oldPublisher,
@@ -191,7 +191,7 @@ func TestUndoLastApply_SkipsOldChanges(t *testing.T) {
 	recentTime := time.Now()
 	oldTitle := `"Title A"`
 	newTitle := `"Title B"`
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "title",
 		PreviousValue: &oldTitle,
@@ -229,7 +229,7 @@ func TestUndoLastApply_SkipsUndoRecordsInBatchDetection(t *testing.T) {
 	// Create a book
 	tempFile := filepath.Join(t.TempDir(), "undo-skip-undo-type.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Skip Undo Type Book",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -241,7 +241,7 @@ func TestUndoLastApply_SkipsUndoRecordsInBatchDetection(t *testing.T) {
 	// Record a real change first
 	oldTitle := `"Before"`
 	newTitle := `"After"`
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "title",
 		PreviousValue: &oldTitle,
@@ -252,7 +252,7 @@ func TestUndoLastApply_SkipsUndoRecordsInBatchDetection(t *testing.T) {
 	}))
 
 	// Record a more recent undo record (should be skipped when finding batch time)
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "author",
 		PreviousValue: &newTitle,
@@ -285,7 +285,7 @@ func TestUndoLastApply_NilPreviousValueClearsOverride(t *testing.T) {
 	// Create a book
 	tempFile := filepath.Join(t.TempDir(), "undo-nil-prev.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Nil Previous Value Book",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -294,7 +294,7 @@ func TestUndoLastApply_NilPreviousValueClearsOverride(t *testing.T) {
 
 	// Record a change where previous value is nil (field was empty before)
 	newISBN := `"1234567890"`
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "isbn",
 		PreviousValue: nil,
@@ -326,7 +326,7 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 	// Create a book
 	tempFile := filepath.Join(t.TempDir(), "undo-writeback.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "WriteBack Undo Book",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -336,7 +336,7 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 	// Record a change to undo
 	oldVal := `"Old"`
 	newVal := `"New"`
-	require.NoError(t, database.GlobalStore.RecordMetadataChange(&database.MetadataChangeRecord{
+	require.NoError(t, database.GetGlobalStore().RecordMetadataChange(&database.MetadataChangeRecord{
 		BookID:        book.ID,
 		Field:         "title",
 		PreviousValue: &oldVal,
@@ -386,7 +386,7 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 	// Create a book to apply metadata to
 	tempFile := filepath.Join(t.TempDir(), "apply-wb-true.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Apply WriteBack True",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -449,7 +449,7 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 	// Create a book
 	tempFile := filepath.Join(t.TempDir(), "apply-wb-omit.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Apply WriteBack Omit",
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -511,7 +511,7 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 	// Create a book
 	tempFile := filepath.Join(t.TempDir(), "apply-wb-false.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Apply WriteBack False",
 		FilePath: tempFile,
 		Format:   "m4b",

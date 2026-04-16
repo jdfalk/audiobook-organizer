@@ -443,14 +443,14 @@ func TestSaveBookToDatabaseCodePaths(t *testing.T) {
 	// a full database setup, which can be complex and fragile in tests.
 
 	t.Run("no database available", func(t *testing.T) {
-		origStore := database.GlobalStore
+		origStore := database.GetGlobalStore()
 		origDB := database.DB
 		defer func() {
-			database.GlobalStore = origStore
+			database.SetGlobalStore(origStore)
 			database.DB = origDB
 		}()
 
-		database.GlobalStore = nil
+		database.SetGlobalStore(nil)
 		database.DB = nil
 
 		book := &Book{
@@ -481,8 +481,8 @@ func TestSaveBookToDatabaseCodePaths(t *testing.T) {
 		}
 		defer database.CloseStore()
 
-		origStore := database.GlobalStore
-		defer func() { database.GlobalStore = origStore }()
+		origStore := database.GetGlobalStore()
+		defer func() { database.SetGlobalStore(origStore) }()
 
 		config.AppConfig.RootDir = tmpDir
 
@@ -513,10 +513,10 @@ func TestSaveBookToDatabaseCodePaths(t *testing.T) {
 // TestSaveBookToDatabaseWithoutStore tests fallback when GlobalStore is nil
 func TestSaveBookToDatabaseWithoutStore(t *testing.T) {
 	// Save and clear GlobalStore
-	origStore := database.GlobalStore
-	database.GlobalStore = nil
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
 	t.Cleanup(func() {
-		database.GlobalStore = origStore
+		database.SetGlobalStore(origStore)
 	})
 
 	// Also need to set database.DB for the fallback path
@@ -548,15 +548,15 @@ func TestSaveBookToDatabaseWithoutStore(t *testing.T) {
 // TestSaveBookToDatabaseNoDatabase tests error when no database is available
 func TestSaveBookToDatabaseNoDatabase(t *testing.T) {
 	// Save originals
-	origStore := database.GlobalStore
+	origStore := database.GetGlobalStore()
 	origDB := database.DB
 
 	// Clear both
-	database.GlobalStore = nil
+	database.SetGlobalStore(nil)
 	database.DB = nil
 
 	t.Cleanup(func() {
-		database.GlobalStore = origStore
+		database.SetGlobalStore(origStore)
 		database.DB = origDB
 	})
 

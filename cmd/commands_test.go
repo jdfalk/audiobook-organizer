@@ -48,11 +48,11 @@ func stubCommandDeps(t *testing.T) {
 		// methods, add them here and the test will tell you which.
 		ms := mocks.NewMockStore(t)
 		ms.EXPECT().GetAllImportPaths().Return(nil, nil).Maybe()
-		database.GlobalStore = ms
+		database.SetGlobalStore(ms)
 		return nil
 	}
 	closeStore = func() error {
-		database.GlobalStore = nil
+		database.SetGlobalStore(nil)
 		return nil
 	}
 	scanDirectory = func(rootDir string, _ logger.Logger) ([]scanner.Book, error) {
@@ -97,7 +97,7 @@ func stubCommandDeps(t *testing.T) {
 		newServer = origNewServer
 		getDefaultServerConfig = origDefaultCfg
 		startServer = origStart
-		database.GlobalStore = nil
+		database.SetGlobalStore(nil)
 	})
 }
 

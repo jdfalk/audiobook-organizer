@@ -21,7 +21,7 @@ func TestSearchMetadata_ReturnsResults(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	bookID := ulid.Make().String()
 	book := &database.Book{
 		ID:       bookID,
@@ -64,7 +64,7 @@ func TestMarkNoMatch_SetsStatus(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	bookID := ulid.Make().String()
 	book := &database.Book{
 		ID:       bookID,
@@ -91,7 +91,7 @@ func TestApplyMetadata_AppliesCandidate(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	bookID := ulid.Make().String()
 	book := &database.Book{
 		ID:       bookID,
@@ -127,7 +127,7 @@ func TestApplyMetadata_FieldFiltering(t *testing.T) {
 	srv, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	bookID := ulid.Make().String()
 	book := &database.Book{
 		ID:       bookID,

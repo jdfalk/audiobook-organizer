@@ -32,7 +32,7 @@ func TestListNarrators(t *testing.T) {
 	assert.Empty(t, narrators)
 
 	// Add a narrator and re-check
-	store := database.GlobalStore.(*database.SQLiteStore)
+	store := database.GetGlobalStore().(*database.SQLiteStore)
 	_, err = store.CreateNarrator("Morgan Freeman")
 	require.NoError(t, err)
 	_, err = store.CreateNarrator("Stephen Fry")
@@ -64,7 +64,7 @@ func TestCountNarrators(t *testing.T) {
 	assert.Equal(t, float64(0), resp["count"])
 
 	// Add narrators
-	store := database.GlobalStore.(*database.SQLiteStore)
+	store := database.GetGlobalStore().(*database.SQLiteStore)
 	_, err = store.CreateNarrator("Narrator A")
 	require.NoError(t, err)
 	_, err = store.CreateNarrator("Narrator B")
@@ -85,7 +85,7 @@ func TestListAudiobookNarrators(t *testing.T) {
 	defer cleanup()
 
 	// Create a book
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Test Book",
 		FilePath: "/tmp/test.m4b",
 	})
@@ -103,11 +103,11 @@ func TestListAudiobookNarrators(t *testing.T) {
 	assert.Empty(t, narrators)
 
 	// Create narrator and assign to book
-	store := database.GlobalStore.(*database.SQLiteStore)
+	store := database.GetGlobalStore().(*database.SQLiteStore)
 	narrator, err := store.CreateNarrator("Test Narrator")
 	require.NoError(t, err)
 
-	err = database.GlobalStore.SetBookNarrators(book.ID, []database.BookNarrator{
+	err = database.GetGlobalStore().SetBookNarrators(book.ID, []database.BookNarrator{
 		{BookID: book.ID, NarratorID: narrator.ID, Role: "narrator", Position: 0},
 	})
 	require.NoError(t, err)
@@ -128,13 +128,13 @@ func TestSetAudiobookNarrators(t *testing.T) {
 	defer cleanup()
 
 	// Create a book and narrator
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Narrator Set Test",
 		FilePath: "/tmp/narrator-set.m4b",
 	})
 	require.NoError(t, err)
 
-	store := database.GlobalStore.(*database.SQLiteStore)
+	store := database.GetGlobalStore().(*database.SQLiteStore)
 	narrator, err := store.CreateNarrator("PUT Narrator")
 	require.NoError(t, err)
 
@@ -157,7 +157,7 @@ func TestSetAudiobookNarrators(t *testing.T) {
 	assert.Equal(t, "ok", resp["status"])
 
 	// Verify by reading back
-	narrators, err := database.GlobalStore.GetBookNarrators(book.ID)
+	narrators, err := database.GetGlobalStore().GetBookNarrators(book.ID)
 	require.NoError(t, err)
 	assert.Len(t, narrators, 1)
 	assert.Equal(t, narrator.ID, narrators[0].NarratorID)
@@ -175,7 +175,7 @@ func TestGetAudiobookFieldStates(t *testing.T) {
 	defer cleanup()
 
 	// Create a book
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Field States Test",
 		FilePath: "/tmp/field-states.m4b",
 	})

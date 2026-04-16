@@ -42,8 +42,8 @@ func TestImportFile_WithMockMetadata_CreateAuthorAndBook(t *testing.T) {
 
 	// Mocks
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
-	t.Cleanup(func() { database.GlobalStore = nil })
+	database.SetGlobalStore(mockStore)
+	t.Cleanup(func() { database.SetGlobalStore(nil) })
 
 	mockMeta := metamocks.NewMockMetadataExtractor(t)
 	metadata.GlobalMetadataExtractor = mockMeta
@@ -90,8 +90,8 @@ func TestImportFile_WithOrganize_QueuesOperation(t *testing.T) {
 	require.NoError(t, os.WriteFile(testFile, []byte("audio"), 0o644))
 
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
-	t.Cleanup(func() { database.GlobalStore = nil })
+	database.SetGlobalStore(mockStore)
+	t.Cleanup(func() { database.SetGlobalStore(nil) })
 	mockMeta := metamocks.NewMockMetadataExtractor(t)
 	metadata.GlobalMetadataExtractor = mockMeta
 	t.Cleanup(func() { metadata.GlobalMetadataExtractor = nil })
@@ -133,8 +133,8 @@ func TestImportFile_MetadataExtractError_Returns500(t *testing.T) {
 	require.NoError(t, os.WriteFile(testFile, []byte("audio"), 0o644))
 
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
-	t.Cleanup(func() { database.GlobalStore = nil })
+	database.SetGlobalStore(mockStore)
+	t.Cleanup(func() { database.SetGlobalStore(nil) })
 	mockMeta := metamocks.NewMockMetadataExtractor(t)
 	metadata.GlobalMetadataExtractor = mockMeta
 	t.Cleanup(func() { metadata.GlobalMetadataExtractor = nil })
@@ -164,8 +164,8 @@ func TestImportFile_CreateBookError_Returns500(t *testing.T) {
 	require.NoError(t, os.WriteFile(testFile, []byte("audio"), 0o644))
 
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
-	t.Cleanup(func() { database.GlobalStore = nil })
+	database.SetGlobalStore(mockStore)
+	t.Cleanup(func() { database.SetGlobalStore(nil) })
 	mockMeta := metamocks.NewMockMetadataExtractor(t)
 	metadata.GlobalMetadataExtractor = mockMeta
 	t.Cleanup(func() { metadata.GlobalMetadataExtractor = nil })

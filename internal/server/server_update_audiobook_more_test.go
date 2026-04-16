@@ -27,7 +27,7 @@ func TestUpdateAudiobook_EmptyBody_Returns400(t *testing.T) {
 	tempFile := filepath.Join(t.TempDir(), "book-empty-body.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
 
-	created, err := database.GlobalStore.CreateBook(&database.Book{Title: "T", FilePath: tempFile, Format: "m4b"})
+	created, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "T", FilePath: tempFile, Format: "m4b"})
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/audiobooks/%s", created.ID), nil)
@@ -45,7 +45,7 @@ func TestUpdateAudiobook_InvalidJSON_Returns400(t *testing.T) {
 	tempFile := filepath.Join(t.TempDir(), "book-bad-json.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
 
-	created, err := database.GlobalStore.CreateBook(&database.Book{Title: "T", FilePath: tempFile, Format: "m4b"})
+	created, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "T", FilePath: tempFile, Format: "m4b"})
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/v1/audiobooks/%s", created.ID), bytes.NewBufferString("{"))
@@ -63,7 +63,7 @@ func TestUpdateAudiobook_CreatesAuthorSeries_AndUpdatesOverrideState(t *testing.
 	tempFile := filepath.Join(t.TempDir(), "book-update.m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
 
-	created, err := database.GlobalStore.CreateBook(&database.Book{Title: "Original", FilePath: tempFile, Format: "m4b"})
+	created, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Original", FilePath: tempFile, Format: "m4b"})
 	require.NoError(t, err)
 
 	payload := map[string]interface{}{
@@ -100,7 +100,7 @@ func TestUpdateAudiobook_CreatesAuthorSeries_AndUpdatesOverrideState(t *testing.
 	require.NotNil(t, updated.SeriesID)
 	assert.Equal(t, "Override Title", updated.Title)
 
-	states, err := database.GlobalStore.GetMetadataFieldStates(created.ID)
+	states, err := database.GetGlobalStore().GetMetadataFieldStates(created.ID)
 	require.NoError(t, err)
 	stateByField := map[string]database.MetadataFieldState{}
 	for _, st := range states {

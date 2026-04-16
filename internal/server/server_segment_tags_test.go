@@ -37,7 +37,7 @@ func TestGetSegmentTags_SegmentNotFound(t *testing.T) {
 	defer cleanup()
 
 	// Create a book first
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Segment Tags Test Book",
 		FilePath: "/tmp/test-segment-tags.m4b",
 	})
@@ -60,7 +60,7 @@ func TestGetSegmentTags_Success(t *testing.T) {
 	defer cleanup()
 
 	// Create a book
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Multi-File Book",
 		FilePath: "/tmp/multi-file-book/part1.m4b",
 	})
@@ -68,7 +68,7 @@ func TestGetSegmentTags_Success(t *testing.T) {
 
 	// Create a book file
 	fileID := ulid.Make().String()
-	err = database.GlobalStore.CreateBookFile(&database.BookFile{
+	err = database.GetGlobalStore().CreateBookFile(&database.BookFile{
 		ID:          fileID,
 		BookID:      book.ID,
 		FilePath:    "/tmp/multi-file-book/part1.m4b",

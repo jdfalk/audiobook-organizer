@@ -21,7 +21,7 @@ func TestUpdateAudiobook_FieldExtractorRecordsHistory(t *testing.T) {
 	_, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	bookID := ulid.Make().String()
 	book := &database.Book{
@@ -71,7 +71,7 @@ func TestUpdateAudiobook_NoHistoryWhenValueUnchanged(t *testing.T) {
 	_, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	bookID := ulid.Make().String()
 	book := &database.Book{

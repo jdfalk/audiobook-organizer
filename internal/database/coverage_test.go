@@ -13,10 +13,10 @@ import (
 
 func TestInitializeStoreAndClose(t *testing.T) {
 	tempDir := t.TempDir()
-	origStore := GlobalStore
+	origStore := globalStore
 	origDB := DB
 	defer func() {
-		GlobalStore = origStore
+		globalStore = origStore
 		DB = origDB
 	}()
 
@@ -27,13 +27,13 @@ func TestInitializeStoreAndClose(t *testing.T) {
 	if err := InitializeStore("sqlite", filepath.Join(tempDir, "db.sqlite"), true); err != nil {
 		t.Fatalf("unexpected sqlite init error: %v", err)
 	}
-	if GlobalStore == nil {
+	if globalStore == nil {
 		t.Fatal("expected global store to be set")
 	}
 	if err := CloseStore(); err != nil {
 		t.Fatalf("failed to close sqlite store: %v", err)
 	}
-	GlobalStore = nil
+	globalStore = nil
 	DB = nil
 
 	pebbleDir := filepath.Join(tempDir, "pebble")
@@ -43,7 +43,7 @@ func TestInitializeStoreAndClose(t *testing.T) {
 	if err := CloseStore(); err != nil {
 		t.Fatalf("failed to close pebble store: %v", err)
 	}
-	GlobalStore = nil
+	globalStore = nil
 
 	if err := InitializeStore("unknown", filepath.Join(tempDir, "bad"), false); err == nil {
 		t.Fatal("expected error for unsupported database type")
@@ -774,14 +774,14 @@ func TestGetOrCreateSeries(t *testing.T) {
 	}
 }
 
-// TestCloseStoreWithNilStore tests CloseStore when GlobalStore is nil
+// TestCloseStoreWithNilStore tests CloseStore when globalStore is nil
 func TestCloseStoreWithNilStore(t *testing.T) {
-	origStore := GlobalStore
+	origStore := globalStore
 	defer func() {
-		GlobalStore = origStore
+		globalStore = origStore
 	}()
 
-	GlobalStore = nil
+	globalStore = nil
 	if err := CloseStore(); err != nil {
 		t.Errorf("CloseStore() with nil store returned error: %v", err)
 	}

@@ -672,7 +672,7 @@ func TestITunesSyncForceFlag_NoChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to stat library file: %v", err)
 	}
-	err = database.GlobalStore.SaveLibraryFingerprint(libPath, info.Size(), info.ModTime(), 0)
+	err = database.GetGlobalStore().SaveLibraryFingerprint(libPath, info.Size(), info.ModTime(), 0)
 	if err != nil {
 		t.Fatalf("failed to save fingerprint: %v", err)
 	}
@@ -725,7 +725,7 @@ func TestITunesSyncForceFlag_Bypass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to stat library file: %v", err)
 	}
-	err = database.GlobalStore.SaveLibraryFingerprint(libPath, info.Size(), info.ModTime(), 0)
+	err = database.GetGlobalStore().SaveLibraryFingerprint(libPath, info.Size(), info.ModTime(), 0)
 	if err != nil {
 		t.Fatalf("failed to save fingerprint: %v", err)
 	}

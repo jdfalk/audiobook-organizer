@@ -38,7 +38,7 @@ func TestChangelogService_WithPathHistory(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	book, err := store.CreateBook(&database.Book{
 		Title:    "Changelog Test",
 		FilePath: "/tmp/changelog-test.m4b",
@@ -67,7 +67,7 @@ func TestChangelogEndpoint_Returns200(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	book, err := store.CreateBook(&database.Book{
 		Title:    "Changelog Endpoint Test",
 		FilePath: "/tmp/changelog-endpoint-test.m4b",
@@ -90,7 +90,7 @@ func TestChangelogEndpoint_WithEntries(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	book, err := store.CreateBook(&database.Book{
 		Title:    "Changelog With Entries",
 		FilePath: "/tmp/changelog-entries.m4b",

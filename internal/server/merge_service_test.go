@@ -19,7 +19,7 @@ func TestMergeService_MergeBooks(t *testing.T) {
 	defer cleanup()
 	_ = server
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	// Create two test books
 	book1 := &database.Book{
@@ -70,7 +70,7 @@ func TestMergeService_MergeBooks_ExplicitPrimary(t *testing.T) {
 	defer cleanup()
 	_ = server
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	book1 := &database.Book{
 		ID:       ulid.Make().String(),
@@ -115,7 +115,7 @@ func TestMergeService_MergeBooks_SoftDeletesLosers(t *testing.T) {
 	defer cleanup()
 	_ = server
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	book1 := &database.Book{
 		ID:       ulid.Make().String(),
@@ -175,7 +175,7 @@ func TestMergeService_MergeBooks_PrefersCuratedOverPristine(t *testing.T) {
 	defer cleanup()
 	_ = server
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	// Pristine M4B with high bitrate — would normally win by format+bitrate
 	pristineM4B := &database.Book{
@@ -277,7 +277,7 @@ func TestMergeService_MergeBooks_PrefersOrganizedOverITunesGhost(t *testing.T) {
 	defer cleanup()
 	_ = server
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	// iTunes ghost — better format on paper (M4B, higher bitrate)
 	ghost := &database.Book{
@@ -343,7 +343,7 @@ func TestMergeService_MergeBooks_NotFound(t *testing.T) {
 	defer cleanup()
 	_ = server
 
-	ms := NewMergeService(database.GlobalStore)
+	ms := NewMergeService(database.GetGlobalStore())
 	_, err := ms.MergeBooks([]string{"nonexistent1", "nonexistent2"}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")

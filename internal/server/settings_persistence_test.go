@@ -26,7 +26,7 @@ func TestAPIKeyPersistenceRoundtrip(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 
 	// Step 1: Initialize encryption (required for secret storage)
 	tempDir := config.AppConfig.RootDir
@@ -155,7 +155,7 @@ func TestAPIKeyConfigFileFallback(t *testing.T) {
 	defer cleanup()
 	_ = server
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	err := database.InitEncryption(config.AppConfig.RootDir)
 	require.NoError(t, err)
 

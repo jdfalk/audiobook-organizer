@@ -38,10 +38,10 @@ func TestSaveBookToDatabase_GlobalStoreCreateAndUpdate(t *testing.T) {
 	store, cleanup := setupSQLiteStore(t)
 	defer cleanup()
 
-	prevStore := database.GlobalStore
-	database.GlobalStore = store
+	prevStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
 	t.Cleanup(func() {
-		database.GlobalStore = prevStore
+		database.SetGlobalStore(prevStore)
 	})
 
 	prevConfig := config.AppConfig
@@ -101,10 +101,10 @@ func TestSaveBookToDatabase_GlobalStoreCreateAndUpdate(t *testing.T) {
 func TestSaveBookToDatabase_BlocklistSkips(t *testing.T) {
 	store, cleanup := setupSQLiteStore(t)
 	defer cleanup()
-	prevStore := database.GlobalStore
-	database.GlobalStore = store
+	prevStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
 	t.Cleanup(func() {
-		database.GlobalStore = prevStore
+		database.SetGlobalStore(prevStore)
 	})
 
 	prevConfig := config.AppConfig
@@ -158,9 +158,9 @@ func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
 	store, cleanup := setupSQLiteStore(t)
 	defer cleanup()
 
-	prevStore := database.GlobalStore
-	database.GlobalStore = store
-	t.Cleanup(func() { database.GlobalStore = prevStore })
+	prevStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(prevStore) })
 
 	prevConfig := config.AppConfig
 	t.Cleanup(func() { config.AppConfig = prevConfig })

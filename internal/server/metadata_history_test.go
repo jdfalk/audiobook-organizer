@@ -122,7 +122,7 @@ func TestUndoMetadataChange_Handler(t *testing.T) {
 		Title:    "Test Book",
 		FilePath: "/tmp/test.m4b",
 	}
-	createdBook, err := database.GlobalStore.CreateBook(book)
+	createdBook, err := database.GetGlobalStore().CreateBook(book)
 	require.NoError(t, err)
 
 	// Record a change to undo
@@ -137,7 +137,7 @@ func TestUndoMetadataChange_Handler(t *testing.T) {
 		Source:        "manual",
 		ChangedAt:     time.Now(),
 	}
-	err = database.GlobalStore.RecordMetadataChange(record)
+	err = database.GetGlobalStore().RecordMetadataChange(record)
 	require.NoError(t, err)
 
 	// POST undo
@@ -163,7 +163,7 @@ func TestUndoMetadataChange_NoHistory(t *testing.T) {
 		Title:    "Test Book",
 		FilePath: "/tmp/test2.m4b",
 	}
-	createdBook, err := database.GlobalStore.CreateBook(book)
+	createdBook, err := database.GetGlobalStore().CreateBook(book)
 	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
@@ -186,7 +186,7 @@ func TestGetBookMetadataHistory_Handler(t *testing.T) {
 		Title:    "History Book",
 		FilePath: "/tmp/history.m4b",
 	}
-	createdBook, err := database.GlobalStore.CreateBook(book)
+	createdBook, err := database.GetGlobalStore().CreateBook(book)
 	require.NoError(t, err)
 
 	// Record a couple of changes
@@ -200,7 +200,7 @@ func TestGetBookMetadataHistory_Handler(t *testing.T) {
 			ChangeType: "fetched",
 			ChangedAt:  now.Add(time.Duration(i) * time.Second),
 		}
-		err := database.GlobalStore.RecordMetadataChange(record)
+		err := database.GetGlobalStore().RecordMetadataChange(record)
 		require.NoError(t, err)
 	}
 
@@ -228,7 +228,7 @@ func TestGetFieldMetadataHistory_Handler(t *testing.T) {
 		Title:    "Field History Book",
 		FilePath: "/tmp/field-history.m4b",
 	}
-	createdBook, err := database.GlobalStore.CreateBook(book)
+	createdBook, err := database.GetGlobalStore().CreateBook(book)
 	require.NoError(t, err)
 
 	// Record changes to two different fields
@@ -242,7 +242,7 @@ func TestGetFieldMetadataHistory_Handler(t *testing.T) {
 			ChangeType: "override",
 			ChangedAt:  now.Add(time.Duration(i) * time.Second),
 		}
-		err := database.GlobalStore.RecordMetadataChange(record)
+		err := database.GetGlobalStore().RecordMetadataChange(record)
 		require.NoError(t, err)
 	}
 
