@@ -164,6 +164,7 @@ type MockStore struct {
 	GetUserByUsernameFunc func(username string) (*User, error)
 	GetUserByEmailFunc    func(email string) (*User, error)
 	UpdateUserFunc        func(user *User) error
+	ListUsersFunc         func() ([]User, error)
 
 	// Sessions
 	CreateSessionFunc         func(userID, ip, userAgent string, ttl time.Duration) (*Session, error)
@@ -1092,6 +1093,13 @@ func (m *MockStore) UpdateUser(user *User) error {
 		return m.UpdateUserFunc(user)
 	}
 	return nil
+}
+
+func (m *MockStore) ListUsers() ([]User, error) {
+	if m.ListUsersFunc != nil {
+		return m.ListUsersFunc()
+	}
+	return nil, nil
 }
 
 func (m *MockStore) CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error) {

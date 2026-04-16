@@ -879,6 +879,8 @@ func (s *SQLiteStore) DeleteExpiredSessions(now time.Time) (int, error) {
 	return int(rows), nil
 }
 
+func (s *SQLiteStore) ListUsers() ([]User, error) { return nil, nil }
+
 func (s *SQLiteStore) CountUsers() (int, error) {
 	var count int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {

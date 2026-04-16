@@ -208,6 +208,7 @@ type Store interface {
 	GetUserByUsername(username string) (*User, error)
 	GetUserByEmail(email string) (*User, error)
 	UpdateUser(user *User) error
+	ListUsers() ([]User, error)
 
 	// Sessions
 	CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error)
