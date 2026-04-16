@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.44.0
+// version: 1.45.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -3388,6 +3388,258 @@ func (p *PebbleStore) DeleteRole(id string) error {
 		return err
 	}
 	return b.Commit(pebble.Sync)
+}
+
+// Book versions (spec 3.1)
+
+func (p *PebbleStore) CreateBookVersion(v *BookVersion) (*BookVersion, error) {
+	if v == nil || v.BookID == "" {
+		return nil, fmt.Errorf("book version: book_id required")
+	}
+	if v.Status == "" {
+		return nil, fmt.Errorf("book version: status required")
+	}
+	if v.ID == "" {
+		id, err := newULID()
+		if err != nil {
+			return nil, err
+		}
+		v.ID = id
+	}
+	now := time.Now()
+	if v.CreatedAt.IsZero() {
+		v.CreatedAt = now
+	}
+	if v.IngestDate.IsZero() {
+		v.IngestDate = now
+	}
+	v.UpdatedAt = now
+	if v.Version == 0 {
+		v.Version = 1
+	}
+
+	// Single-active invariant: callers swapping primary go through
+	// the version_swap tracked op per spec 3.1 §4.
+	if v.Status == BookVersionStatusActive {
+		if existing, err := p.GetActiveVersionForBook(v.BookID); err == nil && existing != nil && existing.ID != v.ID {
+			return nil, fmt.Errorf("book %s already has an active version (%s); use version_swap to change primary", v.BookID, existing.ID)
+		}
+	}
+
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("bv:"+v.ID), data, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:bv:book:"+v.BookID+":"+v.ID), []byte("1"), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if v.Status == BookVersionStatusActive {
+		if err := b.Set([]byte("idx:bv:active:"+v.BookID), []byte(v.ID), nil); err != nil {
+			b.Close()
+			return nil, err
+		}
+	}
+	if v.TorrentHash != "" {
+		if err := b.Set([]byte("idx:bv:torrent:"+v.TorrentHash), []byte(v.ID), nil); err != nil {
+			b.Close()
+			return nil, err
+		}
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+func (p *PebbleStore) GetBookVersion(id string) (*BookVersion, error) {
+	data, closer, err := p.db.Get([]byte("bv:" + id))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	var v BookVersion
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (p *PebbleStore) GetBookVersionsByBookID(bookID string) ([]BookVersion, error) {
+	prefix := []byte("idx:bv:book:" + bookID + ":")
+	upper := []byte("idx:bv:book:" + bookID + ":~")
+	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []BookVersion
+	for iter.First(); iter.Valid(); iter.Next() {
+		versionID := strings.TrimPrefix(string(iter.Key()), string(prefix))
+		v, err := p.GetBookVersion(versionID)
+		if err != nil || v == nil {
+			continue
+		}
+		out = append(out, *v)
+	}
+	return out, nil
+}
+
+func (p *PebbleStore) GetActiveVersionForBook(bookID string) (*BookVersion, error) {
+	data, closer, err := p.db.Get([]byte("idx:bv:active:" + bookID))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	versionID := string(data)
+	closer.Close()
+	return p.GetBookVersion(versionID)
+}
+
+func (p *PebbleStore) UpdateBookVersion(v *BookVersion) error {
+	if v == nil || v.ID == "" {
+		return fmt.Errorf("book version: id required")
+	}
+	prev, err := p.GetBookVersion(v.ID)
+	if err != nil {
+		return err
+	}
+	if prev == nil {
+		return fmt.Errorf("book version %s not found", v.ID)
+	}
+	v.UpdatedAt = time.Now()
+	v.Version = prev.Version + 1
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("bv:"+v.ID), data, nil); err != nil {
+		b.Close()
+		return err
+	}
+	if prev.Status == BookVersionStatusActive && v.Status != BookVersionStatusActive {
+		if err := b.Delete([]byte("idx:bv:active:"+v.BookID), nil); err != nil {
+			b.Close()
+			return err
+		}
+	} else if v.Status == BookVersionStatusActive {
+		if err := b.Set([]byte("idx:bv:active:"+v.BookID), []byte(v.ID), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	if prev.TorrentHash != v.TorrentHash {
+		if prev.TorrentHash != "" {
+			if err := b.Delete([]byte("idx:bv:torrent:"+prev.TorrentHash), nil); err != nil {
+				b.Close()
+				return err
+			}
+		}
+		if v.TorrentHash != "" {
+			if err := b.Set([]byte("idx:bv:torrent:"+v.TorrentHash), []byte(v.ID), nil); err != nil {
+				b.Close()
+				return err
+			}
+		}
+	}
+	return b.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) DeleteBookVersion(id string) error {
+	v, err := p.GetBookVersion(id)
+	if err != nil {
+		return err
+	}
+	if v == nil {
+		return nil
+	}
+	b := p.db.NewBatch()
+	if err := b.Delete([]byte("bv:"+id), nil); err != nil {
+		b.Close()
+		return err
+	}
+	if err := b.Delete([]byte("idx:bv:book:"+v.BookID+":"+id), nil); err != nil {
+		b.Close()
+		return err
+	}
+	if v.Status == BookVersionStatusActive {
+		if err := b.Delete([]byte("idx:bv:active:"+v.BookID), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	if v.TorrentHash != "" {
+		if err := b.Delete([]byte("idx:bv:torrent:"+v.TorrentHash), nil); err != nil {
+			b.Close()
+			return err
+		}
+	}
+	return b.Commit(pebble.Sync)
+}
+
+func (p *PebbleStore) GetBookVersionByTorrentHash(hash string) (*BookVersion, error) {
+	if hash == "" {
+		return nil, nil
+	}
+	data, closer, err := p.db.Get([]byte("idx:bv:torrent:" + hash))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	versionID := string(data)
+	closer.Close()
+	return p.GetBookVersion(versionID)
+}
+
+func (p *PebbleStore) ListTrashedBookVersions() ([]BookVersion, error) {
+	return p.listBookVersionsByStatus(BookVersionStatusTrash)
+}
+
+func (p *PebbleStore) ListPurgedBookVersions() ([]BookVersion, error) {
+	purged, err := p.listBookVersionsByStatus(BookVersionStatusInactivePurged)
+	if err != nil {
+		return nil, err
+	}
+	blocked, err := p.listBookVersionsByStatus(BookVersionStatusBlockedForRedownload)
+	if err != nil {
+		return nil, err
+	}
+	return append(purged, blocked...), nil
+}
+
+func (p *PebbleStore) listBookVersionsByStatus(status string) ([]BookVersion, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("bv:"),
+		UpperBound: []byte("bv:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []BookVersion
+	for iter.First(); iter.Valid(); iter.Next() {
+		var v BookVersion
+		if err := json.Unmarshal(iter.Value(), &v); err != nil {
+			continue
+		}
+		if v.Status == status {
+			out = append(out, v)
+		}
+	}
+	return out, nil
 }
 
 // API keys

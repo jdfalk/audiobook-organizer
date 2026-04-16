@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.30.0
+// version: 1.31.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -180,6 +180,17 @@ type MockStore struct {
 	CreateRoleFunc    func(role *Role) (*Role, error)
 	UpdateRoleFunc    func(role *Role) error
 	DeleteRoleFunc    func(id string) error
+
+	// Book versions
+	CreateBookVersionFunc           func(v *BookVersion) (*BookVersion, error)
+	GetBookVersionFunc              func(id string) (*BookVersion, error)
+	GetBookVersionsByBookIDFunc     func(bookID string) ([]BookVersion, error)
+	GetActiveVersionForBookFunc     func(bookID string) (*BookVersion, error)
+	UpdateBookVersionFunc           func(v *BookVersion) error
+	DeleteBookVersionFunc           func(id string) error
+	GetBookVersionByTorrentHashFunc func(hash string) (*BookVersion, error)
+	ListTrashedBookVersionsFunc     func() ([]BookVersion, error)
+	ListPurgedBookVersionsFunc      func() ([]BookVersion, error)
 
 	// API keys
 	CreateAPIKeyFunc        func(key *APIKey) (*APIKey, error)
@@ -1145,6 +1156,69 @@ func (m *MockStore) DeleteRole(id string) error {
 		return m.DeleteRoleFunc(id)
 	}
 	return nil
+}
+
+func (m *MockStore) CreateBookVersion(v *BookVersion) (*BookVersion, error) {
+	if m.CreateBookVersionFunc != nil {
+		return m.CreateBookVersionFunc(v)
+	}
+	return v, nil
+}
+
+func (m *MockStore) GetBookVersion(id string) (*BookVersion, error) {
+	if m.GetBookVersionFunc != nil {
+		return m.GetBookVersionFunc(id)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetBookVersionsByBookID(bookID string) ([]BookVersion, error) {
+	if m.GetBookVersionsByBookIDFunc != nil {
+		return m.GetBookVersionsByBookIDFunc(bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetActiveVersionForBook(bookID string) (*BookVersion, error) {
+	if m.GetActiveVersionForBookFunc != nil {
+		return m.GetActiveVersionForBookFunc(bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) UpdateBookVersion(v *BookVersion) error {
+	if m.UpdateBookVersionFunc != nil {
+		return m.UpdateBookVersionFunc(v)
+	}
+	return nil
+}
+
+func (m *MockStore) DeleteBookVersion(id string) error {
+	if m.DeleteBookVersionFunc != nil {
+		return m.DeleteBookVersionFunc(id)
+	}
+	return nil
+}
+
+func (m *MockStore) GetBookVersionByTorrentHash(hash string) (*BookVersion, error) {
+	if m.GetBookVersionByTorrentHashFunc != nil {
+		return m.GetBookVersionByTorrentHashFunc(hash)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListTrashedBookVersions() ([]BookVersion, error) {
+	if m.ListTrashedBookVersionsFunc != nil {
+		return m.ListTrashedBookVersionsFunc()
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListPurgedBookVersions() ([]BookVersion, error) {
+	if m.ListPurgedBookVersionsFunc != nil {
+		return m.ListPurgedBookVersionsFunc()
+	}
+	return nil, nil
 }
 
 func (m *MockStore) CreateAPIKey(key *APIKey) (*APIKey, error) {

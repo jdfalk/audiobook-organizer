@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.53.0
+// version: 1.54.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -917,6 +917,24 @@ func (s *SQLiteStore) UpdateRole(role *Role) error {
 func (s *SQLiteStore) DeleteRole(id string) error {
 	return nil
 }
+
+// ---- Book versions (SQLite no-op stubs, spec 3.1) ----
+
+func (s *SQLiteStore) CreateBookVersion(v *BookVersion) (*BookVersion, error) { return v, nil }
+func (s *SQLiteStore) GetBookVersion(id string) (*BookVersion, error)         { return nil, nil }
+func (s *SQLiteStore) GetBookVersionsByBookID(bookID string) ([]BookVersion, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) GetActiveVersionForBook(bookID string) (*BookVersion, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) UpdateBookVersion(v *BookVersion) error { return nil }
+func (s *SQLiteStore) DeleteBookVersion(id string) error      { return nil }
+func (s *SQLiteStore) GetBookVersionByTorrentHash(hash string) (*BookVersion, error) {
+	return nil, nil
+}
+func (s *SQLiteStore) ListTrashedBookVersions() ([]BookVersion, error) { return nil, nil }
+func (s *SQLiteStore) ListPurgedBookVersions() ([]BookVersion, error)  { return nil, nil }
 
 // ---- API keys + Invites (SQLite no-op stubs) ----
 
