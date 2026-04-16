@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.42.0
+// version: 1.43.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -3253,6 +3253,141 @@ func (p *PebbleStore) UpdateUser(user *User) error {
 	user.UpdatedAt = time.Now()
 	data, _ := json.Marshal(user)
 	return p.db.Set([]byte("u:"+user.ID), data, pebble.Sync)
+}
+
+// Roles
+
+func (p *PebbleStore) GetRoleByID(id string) (*Role, error) {
+	v, closer, err := p.db.Get([]byte("role:" + id))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	var r Role
+	if err := json.Unmarshal(v, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (p *PebbleStore) GetRoleByName(name string) (*Role, error) {
+	lower := strings.ToLower(name)
+	v, closer, err := p.db.Get([]byte("idx:role:name:" + lower))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	return p.GetRoleByID(string(v))
+}
+
+func (p *PebbleStore) ListRoles() ([]Role, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("role:"),
+		UpperBound: []byte("role:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []Role
+	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip name-index entries (separate prefix already, but be defensive).
+		var r Role
+		if err := json.Unmarshal(iter.Value(), &r); err != nil {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func (p *PebbleStore) CreateRole(role *Role) (*Role, error) {
+	if role == nil || role.Name == "" {
+		return nil, fmt.Errorf("role name required")
+	}
+	if role.ID == "" {
+		// Seed roles use their name as ID; others get a ULID.
+		id, err := newULID()
+		if err != nil {
+			return nil, err
+		}
+		role.ID = id
+	}
+	// Uniqueness check on name.
+	lower := strings.ToLower(role.Name)
+	if existing, closer, err := p.db.Get([]byte("idx:role:name:" + lower)); err == nil {
+		closer.Close()
+		if string(existing) != role.ID {
+			return nil, fmt.Errorf("role name already exists")
+		}
+	}
+	now := time.Now()
+	if role.CreatedAt.IsZero() {
+		role.CreatedAt = now
+	}
+	role.UpdatedAt = now
+	if role.Version == 0 {
+		role.Version = 1
+	}
+	data, err := json.Marshal(role)
+	if err != nil {
+		return nil, err
+	}
+	b := p.db.NewBatch()
+	if err := b.Set([]byte("role:"+role.ID), data, nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Set([]byte("idx:role:name:"+lower), []byte(role.ID), nil); err != nil {
+		b.Close()
+		return nil, err
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return nil, err
+	}
+	return role, nil
+}
+
+func (p *PebbleStore) UpdateRole(role *Role) error {
+	if role == nil || role.ID == "" {
+		return fmt.Errorf("role id required")
+	}
+	role.UpdatedAt = time.Now()
+	role.Version++
+	data, err := json.Marshal(role)
+	if err != nil {
+		return err
+	}
+	return p.db.Set([]byte("role:"+role.ID), data, pebble.Sync)
+}
+
+func (p *PebbleStore) DeleteRole(id string) error {
+	r, err := p.GetRoleByID(id)
+	if err != nil {
+		return err
+	}
+	if r == nil {
+		return nil
+	}
+	if r.IsSeed {
+		return fmt.Errorf("cannot delete seed role %q", r.Name)
+	}
+	b := p.db.NewBatch()
+	if err := b.Delete([]byte("role:"+id), nil); err != nil {
+		b.Close()
+		return err
+	}
+	if err := b.Delete([]byte("idx:role:name:"+strings.ToLower(r.Name)), nil); err != nil {
+		b.Close()
+		return err
+	}
+	return b.Commit(pebble.Sync)
 }
 
 // Sessions

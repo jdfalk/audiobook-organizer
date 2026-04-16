@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.50.0
+// version: 2.51.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -218,6 +218,16 @@ type Store interface {
 
 	// Auth bootstrap helpers
 	CountUsers() (int, error)
+
+	// Roles (for multi-user permission model per spec 3.7). Roles are named
+	// bundles of permissions; permissions themselves are Go string constants
+	// validated at route-registration time, not DB rows.
+	GetRoleByID(id string) (*Role, error)
+	GetRoleByName(name string) (*Role, error)
+	ListRoles() ([]Role, error)
+	CreateRole(role *Role) (*Role, error)
+	UpdateRole(role *Role) error
+	DeleteRole(id string) error
 
 	// Per-user preferences
 	SetUserPreferenceForUser(userID, key, value string) error
@@ -683,6 +693,23 @@ type User struct {
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 	Version          int       `json:"version"`
+}
+
+// Role is a named bundle of permissions for the multi-user model
+// (spec 3.7). Permissions are Go string constants validated at
+// route-registration time, carried inline on the Role to avoid a
+// separate role_permissions join table. ID is typically the
+// lowercase role name (e.g. "admin", "editor", "viewer") so seeded
+// roles have stable, well-known IDs; custom roles get a ULID.
+type Role struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Permissions []string  `json:"permissions"`
+	IsSeed      bool      `json:"is_seed,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Version     int       `json:"version"`
 }
 
 // Session represents an authenticated session token
