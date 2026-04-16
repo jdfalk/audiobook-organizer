@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -31,7 +31,7 @@ import (
 
 // batchUpdateMetadata handles batch metadata updates with validation
 func (s *Server) batchUpdateMetadata(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -46,7 +46,7 @@ func (s *Server) batchUpdateMetadata(c *gin.Context) {
 		return
 	}
 
-	errors, successCount := metadata.BatchUpdateMetadata(req.Updates, database.GlobalStore, req.Validate)
+	errors, successCount := metadata.BatchUpdateMetadata(req.Updates, s.Store(), req.Validate)
 
 	response := gin.H{
 		"success_count": successCount,
@@ -98,13 +98,13 @@ func (s *Server) validateMetadata(c *gin.Context) {
 
 // exportMetadata exports all audiobook metadata
 func (s *Server) exportMetadata(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
 	// Get all books
-	books, err := database.GlobalStore.GetAllBooks(0, 0) // No limit/offset
+	books, err := s.Store().GetAllBooks(0, 0) // No limit/offset
 	if err != nil {
 		internalError(c, "failed to get audiobooks", err)
 		return
@@ -122,7 +122,7 @@ func (s *Server) exportMetadata(c *gin.Context) {
 
 // importMetadata imports audiobook metadata
 func (s *Server) importMetadata(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -137,7 +137,7 @@ func (s *Server) importMetadata(c *gin.Context) {
 		return
 	}
 
-	importCount, errors := metadata.ImportMetadata(req.Data, database.GlobalStore, req.Validate)
+	importCount, errors := metadata.ImportMetadata(req.Data, s.Store(), req.Validate)
 
 	response := gin.H{
 		"import_count": importCount,
@@ -192,7 +192,7 @@ func (s *Server) searchMetadata(c *gin.Context) {
 func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -210,7 +210,7 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 
 	// Re-fetch to get fully enriched book with author/series/narrator names
 	enrichedBook := resp.Book
-	if fresh, err := database.GlobalStore.GetBookByID(id); err == nil && fresh != nil {
+	if fresh, err := s.Store().GetBookByID(id); err == nil && fresh != nil {
 		enrichedBook = fresh
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -223,7 +223,7 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 // searchAudiobookMetadata handles POST /api/v1/audiobooks/:id/search-metadata.
 func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -263,7 +263,7 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 // applyAudiobookMetadata handles POST /api/v1/audiobooks/:id/apply-metadata.
 func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -303,7 +303,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 
 	// Re-fetch to get fully enriched book with author/series/narrator names
 	enrichedBook := resp.Book
-	if fresh, err := database.GlobalStore.GetBookByID(id); err == nil && fresh != nil {
+	if fresh, err := s.Store().GetBookByID(id); err == nil && fresh != nil {
 		enrichedBook = fresh
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -316,7 +316,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 // markAudiobookNoMatch handles POST /api/v1/audiobooks/:id/mark-no-match.
 func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -331,7 +331,7 @@ func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 // It restores a book to a previous CoW version snapshot via the store layer.
 func (s *Server) revertAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -347,7 +347,7 @@ func (s *Server) revertAudiobookMetadata(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timestamp format, use RFC3339Nano"})
 		return
 	}
-	book, err := database.GlobalStore.RevertBookToVersion(id, ts)
+	book, err := s.Store().RevertBookToVersion(id, ts)
 	if err != nil {
 		internalError(c, "failed to revert metadata", err)
 		return
@@ -359,7 +359,7 @@ func (s *Server) revertAudiobookMetadata(c *gin.Context) {
 // Returns copy-on-write version snapshots from the store layer.
 func (s *Server) listBookCOWVersions(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -369,7 +369,7 @@ func (s *Server) listBookCOWVersions(c *gin.Context) {
 			limit = v
 		}
 	}
-	versions, err := database.GlobalStore.GetBookVersions(id, limit)
+	versions, err := s.Store().GetBookVersions(id, limit)
 	if err != nil {
 		internalError(c, "failed to list versions", err)
 		return
@@ -381,7 +381,7 @@ func (s *Server) listBookCOWVersions(c *gin.Context) {
 // Prunes old copy-on-write version snapshots, keeping the most recent N.
 func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 	id := c.Param("id")
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -392,7 +392,7 @@ func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "keep_count must be a positive integer"})
 		return
 	}
-	pruned, err := database.GlobalStore.PruneBookVersions(id, body.KeepCount)
+	pruned, err := s.Store().PruneBookVersions(id, body.KeepCount)
 	if err != nil {
 		internalError(c, "failed to prune versions", err)
 		return
@@ -416,7 +416,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&body)
 
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
@@ -431,7 +431,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 		} else {
 			renamed = 1
 			// Re-fetch book after rename since file_path may have changed
-			book, _ = database.GlobalStore.GetBookByID(id)
+			book, _ = s.Store().GetBookByID(id)
 		}
 	}
 
@@ -465,7 +465,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 // bulkFetchMetadata fetches external metadata for multiple audiobooks and applies
 // fields only when they are missing and not manually overridden or locked.
 func (s *Server) bulkFetchMetadata(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -499,7 +499,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			Status: "skipped",
 		}
 
-		book, err := database.GlobalStore.GetBookByID(bookID)
+		book, err := s.Store().GetBookByID(bookID)
 		if err != nil || book == nil {
 			result.Status = "not_found"
 			result.Message = "audiobook not found"
@@ -529,7 +529,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		if book.Author != nil {
 			currentAuthor = book.Author.Name
 		} else if book.AuthorID != nil {
-			if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+			if author, err := s.Store().GetAuthorByID(*book.AuthorID); err == nil && author != nil {
 				currentAuthor = author.Name
 			}
 		}
@@ -646,7 +646,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		if meta.Author != "" && !isGarbageValue(meta.Author) {
 			addFetched("author_name", meta.Author)
 			if shouldApply("author_name", hasBookValue("author_name")) {
-				author, err := database.GlobalStore.GetAuthorByName(meta.Author)
+				author, err := s.Store().GetAuthorByName(meta.Author)
 				if err != nil {
 					result.Status = "error"
 					result.Message = "failed to resolve author"
@@ -654,7 +654,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 					continue
 				}
 				if author == nil {
-					author, err = database.GlobalStore.CreateAuthor(meta.Author)
+					author, err = s.Store().CreateAuthor(meta.Author)
 					if err != nil {
 						result.Status = "error"
 						result.Message = "failed to create author"
@@ -724,7 +724,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			// Record change history before applying
 			s.metadataFetchService.recordChangeHistory(book, meta, sourceName)
 
-			if _, err := database.GlobalStore.UpdateBook(bookID, book); err != nil {
+			if _, err := s.Store().UpdateBook(bookID, book); err != nil {
 				result.Status = "error"
 				result.Message = fmt.Sprintf("failed to update book: %v", err)
 				results = append(results, result)
@@ -756,7 +756,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 // It creates an async operation that writes metadata tags and renames files
 // for all books matching the provided filters (or all organized/imported books).
 func (s *Server) handleBulkWriteBack(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -776,7 +776,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	}
 	_ = c.ShouldBindJSON(&req)
 
-	store := database.GlobalStore
+	store := s.Store()
 
 	// Gather matching books based on filters
 	var books []database.Book
@@ -892,7 +892,7 @@ func (s *Server) runBulkWriteBack(
 	startIdx int,
 	progress operations.ProgressReporter,
 ) error {
-	store := database.GlobalStore
+	store := s.Store()
 	mfs := s.metadataFetchService
 	total := len(bookIDs)
 	written := 0
@@ -984,7 +984,7 @@ func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.Prog
 // runMetadataRefreshScan reports books with incomplete metadata. Read-only,
 // safe to re-run on restart with no state.
 func (s *Server) runMetadataRefreshScan(ctx context.Context, progress operations.ProgressReporter) error {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -1032,7 +1032,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	doOrganize := req.Organize || req.Rename
 
 	// Create a supervisor operation for tracking
