@@ -1,5 +1,5 @@
 // file: cmd/dedup_bench.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 //go:build bench
@@ -113,7 +113,7 @@ func runDedupBench(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to initialize database: %w", initErr)
 		}
 		defer closeStore()
-		authorData, err = extractAuthorData(database.GlobalStore)
+		authorData, err = extractAuthorData(database.GetGlobalStore())
 	}
 	if err != nil {
 		return fmt.Errorf("failed to extract author data: %w", err)
