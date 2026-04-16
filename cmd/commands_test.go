@@ -1,5 +1,5 @@
 // file: cmd/commands_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6f5b7d78-11d8-4c1a-a150-96d2c4a1a885
 
 package cmd
@@ -76,7 +76,7 @@ func stubCommandDeps(t *testing.T) {
 	syncConfigFromEnv = func() {}
 	initializeQueue = func(store database.Store, workers int) {}
 	shutdownQueue = func(timeout time.Duration) error { return nil }
-	newServer = func() *server.Server { return &server.Server{} }
+	newServer = func(_ database.Store) *server.Server { return &server.Server{} }
 	getDefaultServerConfig = func() server.ServerConfig {
 		return server.ServerConfig{Host: "localhost", Port: "8484"}
 	}
