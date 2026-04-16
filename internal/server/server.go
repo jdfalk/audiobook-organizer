@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.172.0
+// version: 1.173.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2193,6 +2193,7 @@ func (s *Server) setupRoutes() {
 
 			// Bench routes (only available with -tags bench)
 			s.setupUserTagRoutes(protected)
+			s.registerReadingRoutes(protected)
 			s.setupBenchRoutes(protected)
 		}
 	}
