@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.171.0
+// version: 1.172.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -27,6 +27,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/search"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
@@ -702,7 +703,10 @@ type Server struct {
 	embeddingStore         *database.EmbeddingStore
 	dedupEngine            *DedupEngine
 	activityWriter         *activityWriter
-	http3Server            *http3.Server
+	// searchIndex is the Bleve library search index (spec DES-1).
+	// Opened at startup, nil if DB path isn't set yet.
+	searchIndex *search.BleveIndex
+	http3Server *http3.Server
 
 	// Shutdown coordination. bgCtx is canceled when Shutdown() runs, and
 	// bgWG tracks every fire-and-forget background goroutine (embedding
@@ -1041,6 +1045,10 @@ func NewServer(store database.Store) *Server {
 		log.Println("[INFO] Activity log service initialized and recording")
 	}
 
+	// Note: the search index is opened in Start(), not here, so
+	// tests that construct a Server without calling Start don't
+	// leak Bleve file handles.
+
 	server.setupRoutes()
 
 	// Initialize the iTunes auto write-back batcher
@@ -1052,6 +1060,101 @@ func NewServer(store database.Store) *Server {
 	InitFileIOPool()
 
 	return server
+}
+
+// SearchIndex returns the server's Bleve index, or nil if none is
+// open. Handlers use this to decide whether to route queries
+// through Bleve or fall back to the legacy SearchBooks path.
+func (s *Server) SearchIndex() *search.BleveIndex {
+	return s.searchIndex
+}
+
+// buildSearchIndexIfEmpty runs a full reindex of the library when
+// the search index has zero documents. Honors s.bgCtx so shutdown
+// stops the backfill cleanly. Page size matches the existing
+// backfill code to keep memory bounded.
+func (s *Server) buildSearchIndexIfEmpty() {
+	if s.searchIndex == nil {
+		return
+	}
+	count, err := s.searchIndex.DocCount()
+	if err != nil {
+		log.Printf("[WARN] search index DocCount: %v", err)
+		return
+	}
+	if count > 0 {
+		return
+	}
+	store := s.Store()
+	if store == nil {
+		return
+	}
+	log.Printf("[INFO] Search index empty — starting full backfill")
+	start := time.Now()
+	indexed := 0
+	const pageSize = 500
+	offset := 0
+	for {
+		select {
+		case <-s.bgCtx.Done():
+			log.Printf("[INFO] Search backfill canceled at %d books (bgCtx)", indexed)
+			return
+		default:
+		}
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil {
+			log.Printf("[WARN] search backfill GetAllBooks: %v", err)
+			return
+		}
+		if len(books) == 0 {
+			break
+		}
+		for i := range books {
+			select {
+			case <-s.bgCtx.Done():
+				log.Printf("[INFO] Search backfill canceled at %d books", indexed)
+				return
+			default:
+			}
+			doc := search.BookToDoc(store, &books[i])
+			if err := s.searchIndex.IndexBook(doc); err != nil {
+				log.Printf("[WARN] search backfill index %s: %v", books[i].ID, err)
+				continue
+			}
+			indexed++
+		}
+		offset += len(books)
+		if len(books) < pageSize {
+			break
+		}
+	}
+	log.Printf("[INFO] Search backfill complete: %d books in %s", indexed, time.Since(start))
+}
+
+// IndexBookByID reads a book (plus its related rows) and upserts
+// the flat BookDocument into the search index. Best-effort: logs
+// and returns nil if the index isn't open or the book is missing.
+// Callers: handlers that create or update a book, plus the startup
+// full-build goroutine.
+func (s *Server) IndexBookByID(bookID string) error {
+	if s.searchIndex == nil || bookID == "" {
+		return nil
+	}
+	book, err := s.Store().GetBookByID(bookID)
+	if err != nil || book == nil {
+		return err
+	}
+	return s.searchIndex.IndexBook(search.BookToDoc(s.Store(), book))
+}
+
+// DeleteIndexedBook removes a book from the search index. Called
+// after a book delete (soft or hard). Safe when the index isn't
+// open.
+func (s *Server) DeleteIndexedBook(bookID string) error {
+	if s.searchIndex == nil || bookID == "" {
+		return nil
+	}
+	return s.searchIndex.DeleteBook(bookID)
 }
 
 // fireDedupOnImport runs the dedup engine's Layer 1 + Layer 2 checks for
@@ -1358,6 +1461,32 @@ func (s *Server) Start(cfg ServerConfig) error {
 		s.backfillExternalIDs()
 	}()
 
+	// Open the library search index (Bleve, spec DES-1). Opened here
+	// rather than in NewServer so tests that skip Start don't leak
+	// Bleve handles. Failures are non-fatal — server runs without
+	// search until the index comes back.
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && s.searchIndex == nil {
+		indexPath := filepath.Join(filepath.Dir(dbPath), "library.bleve")
+		idx, err := search.Open(indexPath)
+		if err != nil {
+			log.Printf("[WARN] Failed to open search index: %v", err)
+		} else {
+			s.searchIndex = idx
+			log.Printf("[INFO] Search index opened at %s", indexPath)
+		}
+	}
+
+	// Build the search index on first startup (or if it got wiped).
+	// Tracked via bgWG so shutdown can wait for in-flight indexing
+	// instead of letting it run under a closing DB.
+	if s.searchIndex != nil {
+		s.bgWG.Add(1)
+		go func() {
+			defer s.bgWG.Done()
+			s.buildSearchIndexIfEmpty()
+		}()
+	}
+
 	// Start periodic cleanup of stale transcode temp files
 	if s.Store() != nil {
 		if paths, err := s.Store().GetAllImportPaths(); err == nil {
@@ -1592,6 +1721,18 @@ func (s *Server) Start(cfg ServerConfig) error {
 	if GlobalWriteBackBatcher != nil {
 		log.Println("[INFO] Flushing iTunes write-back batcher...")
 		GlobalWriteBackBatcher.Stop()
+	}
+
+	// Close the search index before the DB goes away — the index is
+	// independent storage but closing it here keeps shutdown order
+	// predictable and avoids Bleve holding file handles after the
+	// process starts tearing down.
+	if s.searchIndex != nil {
+		if err := s.searchIndex.Close(); err != nil {
+			log.Printf("[WARN] Failed to close search index: %v", err)
+		} else {
+			log.Println("[INFO] Search index closed")
+		}
 	}
 
 	// Stop activity writer before closing store
