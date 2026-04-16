@@ -1,5 +1,5 @@
 // file: web/src/utils/searchParser.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: ADC8CF65-5107-463A-891C-CABE8C1D74CF
 
 /**
@@ -55,6 +55,9 @@ export const SEARCH_FIELDS: readonly string[] = [
   'has_written',
   'has_organized',
   'itunes_sync_status',
+  'read_status',
+  'progress_pct',
+  'last_played',
 ] as const;
 
 const searchFieldSet = new Set<string>(SEARCH_FIELDS);
