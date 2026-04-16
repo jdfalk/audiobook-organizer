@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/search"
 )
 
 // AudiobookService handles all audiobook business logic
@@ -28,11 +29,22 @@ type AudiobookService struct {
 	bookCache       *cache.Cache[*database.Book]
 	listCache       *cache.Cache[[]database.Book]
 	activityService *ActivityService
+	// searchIndex is the Bleve index for full-text search. When nil
+	// the service falls back to the legacy Store.SearchBooks path.
+	// Wired in by the Server after Bleve opens in Start(), which is
+	// after NewAudiobookService runs in NewServer.
+	searchIndex *search.BleveIndex
 }
 
 // SetActivityService wires the activity service for snapshot fallback in GetAudiobookTags.
 func (svc *AudiobookService) SetActivityService(as *ActivityService) {
 	svc.activityService = as
+}
+
+// SetSearchIndex wires the Bleve index for Bleve-backed search.
+// Calling with nil reverts to the Store.SearchBooks fallback.
+func (svc *AudiobookService) SetSearchIndex(idx *search.BleveIndex) {
+	svc.searchIndex = idx
 }
 
 // NewAudiobookService creates a new AudiobookService instance
@@ -430,7 +442,11 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 
 	// Apply filters in order of precedence
 	if search != "" {
-		books, err = svc.store.SearchBooks(search, limit, offset)
+		if svc.searchIndex != nil {
+			books, err = svc.searchWithBleve(search, limit, offset)
+		} else {
+			books, err = svc.store.SearchBooks(search, limit, offset)
+		}
 	} else if authorID != nil {
 		books, err = svc.store.GetBooksByAuthorID(*authorID)
 	} else if seriesID != nil {
@@ -1609,4 +1625,39 @@ func (svc *AudiobookService) BatchUpdateUserTags(bookIDs []string, addTags []str
 		svc.InvalidateBookCaches()
 	}
 	return updated, nil
+}
+
+// searchWithBleve parses the query via the DSL, translates to a
+// Bleve native query, and returns the matching books. Per-user
+// filters produced by the translator (read_status / progress_pct /
+// last_played) are currently dropped here — the library-list route
+// doesn't carry user state. Spec 3.6 will wire them back in at the
+// handler layer once the user context is plumbed.
+//
+// Falls back to an empty slice (not nil) on zero matches so callers
+// get consistent JSON shape.
+func (svc *AudiobookService) searchWithBleve(query string, limit, offset int) ([]database.Book, error) {
+	ast, err := search.ParseQuery(query)
+	if err != nil {
+		// Parser failure: fall back to the substring search path so
+		// users still see results for simple queries the DSL parser
+		// rejects (e.g. punctuation-heavy book titles).
+		return svc.store.SearchBooks(query, limit, offset)
+	}
+	bleveQ, _, err := search.Translate(ast)
+	if err != nil {
+		return svc.store.SearchBooks(query, limit, offset)
+	}
+	hits, _, err := svc.searchIndex.SearchNative(bleveQ, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("bleve search: %w", err)
+	}
+	books := make([]database.Book, 0, len(hits))
+	for _, h := range hits {
+		b, _ := svc.store.GetBookByID(h.BookID)
+		if b != nil {
+			books = append(books, *b)
+		}
+	}
+	return books, nil
 }
