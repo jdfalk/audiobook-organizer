@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 3.1.0
+// version: 3.2.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -257,6 +257,18 @@ func (b *WriteBackBatcher) flush() {
 	if err := safeWriteITL(itlPath, ops); err != nil {
 		log.Printf("[WARN] iTunes write-back failed: %v", err)
 		return
+	}
+
+	// Mark the books we wrote as iTunes-synced so downstream UI /
+	// filters reflect current state. Only books with at least one
+	// update (location or metadata) count — pendingBooks may include
+	// IDs whose PIDs weren't found in the DB, those stay unmarked.
+	if len(bookIDs) > 0 {
+		if n, markErr := store.MarkITunesSynced(bookIDs); markErr != nil {
+			log.Printf("[WARN] iTunes write-back: MarkITunesSynced failed: %v", markErr)
+		} else if n > 0 {
+			log.Printf("[INFO] iTunes write-back: marked %d books as iTunes-synced", n)
+		}
 	}
 }
 

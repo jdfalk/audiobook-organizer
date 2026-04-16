@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.166.0
+// version: 1.167.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1155,6 +1155,11 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.runReconcileScan(ctx, scanOpID, progress)
 			}
+		case "itunes_path_reconcile":
+			reconcileOpID := opID
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.runITunesPathReconcile(ctx, reconcileOpID, progress)
+			}
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
@@ -1828,6 +1833,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/reconcile", s.startReconcile)
 			protected.POST("/operations/reconcile/scan", s.startReconcileScan)
 			protected.GET("/operations/reconcile/scan/latest", s.latestReconcileScan)
+			protected.POST("/operations/itunes-path-reconcile", s.startITunesPathReconcile)
 			protected.POST("/operations/cleanup-version-groups", s.cleanupDuplicateVersionGroupsHandler)
 			protected.POST("/operations/mark-broken-segments", s.markBrokenSegmentBooksHandler)
 			protected.POST("/operations/merge-novg-duplicates", s.mergeNoVGDuplicatesHandler)
