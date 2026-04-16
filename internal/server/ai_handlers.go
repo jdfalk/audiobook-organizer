@@ -1,5 +1,5 @@
 // file: internal/server/ai_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5d3a6a95-4ac8-42c2-a7fe-5ff4857dd31a
 //
 // AI-related HTTP handlers split out of server.go: filename parsing,
@@ -131,13 +131,13 @@ func (s *Server) testMetadataSource(c *gin.Context) {
 func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 	id := c.Param("id")
 
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 
 	// Get the book
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
 		return
@@ -163,7 +163,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 	}
 	// Resolve author name from author_id
 	if book.AuthorID != nil {
-		if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil {
+		if author, err := s.Store().GetAuthorByID(*book.AuthorID); err == nil {
 			abCtx.AuthorName = author.Name
 		}
 	}
@@ -460,7 +460,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 
 	// Check for an already-running ai-author-review of the same mode — block concurrent same-mode runs
 	opType := "ai-author-review-" + mode
@@ -733,7 +733,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "ai-author-merge-apply", nil)
 	if err != nil {
