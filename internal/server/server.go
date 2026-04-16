@@ -2245,6 +2245,7 @@ func (s *Server) setupRoutes() {
 			s.registerReadingRoutes(protected)
 			s.registerPlaylistRoutes(protected)
 			s.registerUserAdminRoutes(protected)
+			s.registerVersionLifecycleRoutes(protected)
 			s.setupBenchRoutes(protected)
 		}
 	}
