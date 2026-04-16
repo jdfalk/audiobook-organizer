@@ -696,7 +696,7 @@ func TestCoverage_AuthorTombstoneStubs(t *testing.T) {
 func TestCoverage_BookVersionStubs(t *testing.T) {
 	store := setupCoverageDB(t)
 
-	versions, err := store.GetBookVersions("some-id", 10)
+	versions, err := store.GetBookSnapshots("some-id", 10)
 	assert.NoError(t, err)
 	assert.Nil(t, versions)
 
@@ -706,7 +706,7 @@ func TestCoverage_BookVersionStubs(t *testing.T) {
 	_, err = store.RevertBookToVersion("some-id", time.Now())
 	assert.Error(t, err)
 
-	n, err := store.PruneBookVersions("some-id", 5)
+	n, err := store.PruneBookSnapshots("some-id", 5)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, n)
 }

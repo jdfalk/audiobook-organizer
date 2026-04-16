@@ -369,7 +369,7 @@ func (s *Server) listBookCOWVersions(c *gin.Context) {
 			limit = v
 		}
 	}
-	versions, err := s.Store().GetBookVersions(id, limit)
+	versions, err := s.Store().GetBookSnapshots(id, limit)
 	if err != nil {
 		internalError(c, "failed to list versions", err)
 		return
@@ -392,7 +392,7 @@ func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "keep_count must be a positive integer"})
 		return
 	}
-	pruned, err := s.Store().PruneBookVersions(id, body.KeepCount)
+	pruned, err := s.Store().PruneBookSnapshots(id, body.KeepCount)
 	if err != nil {
 		internalError(c, "failed to prune versions", err)
 		return

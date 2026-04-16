@@ -100,10 +100,10 @@ type Store interface {
 	UpdateBook(id string, book *Book) (*Book, error) // ID is ULID string
 
 	// Book Version History (copy-on-write)
-	GetBookVersions(id string, limit int) ([]BookVersion, error)
+	GetBookSnapshots(id string, limit int) ([]BookSnapshot, error)
 	GetBookAtVersion(id string, ts time.Time) (*Book, error)
 	RevertBookToVersion(id string, ts time.Time) (*Book, error)
-	PruneBookVersions(id string, keepCount int) (int, error)
+	PruneBookSnapshots(id string, keepCount int) (int, error)
 	SetLastWrittenAt(id string, t time.Time) error   // Stamps last_written_at for write-back
 	MarkITunesSynced(bookIDs []string) (int64, error) // Marks books as synced with iTunes
 	GetITunesDirtyBooks() ([]Book, error)             // Returns books that need iTunes write-back
@@ -890,8 +890,8 @@ type MetadataChangeRecord struct {
 	ChangedAt     time.Time `json:"changed_at"`
 }
 
-// BookVersion represents an immutable snapshot of a book at a point in time.
-type BookVersion struct {
+// BookSnapshot represents an immutable snapshot of a book at a point in time.
+type BookSnapshot struct {
 	BookID    string    `json:"book_id"`
 	Timestamp time.Time `json:"timestamp"`
 	Data      []byte    `json:"data"` // Full JSON-serialized Book
