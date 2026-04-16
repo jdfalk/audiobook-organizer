@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-04-05
 
@@ -76,7 +76,7 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 
 	// Exclude books already in an active metadata fetch to avoid duplicate API calls
 	activeOps, _ := store.GetRecentOperations(50)
@@ -322,7 +322,7 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 
 	op, err := store.GetOperationByID(opID)
 	if err != nil || op == nil {
@@ -374,7 +374,7 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 // plus a review backlog without overwhelming the dialog".
 func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
 	const maxOps = 10
-	store := database.GlobalStore
+	store := s.Store()
 	// Scan more than maxOps from recent history because the filter
 	// (type + completed + non-empty results) can reject many rows.
 	ops, err := store.GetRecentOperations(200)
@@ -470,7 +470,7 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	mfs := s.metadataFetchService
 
 	// Load all operation results for the given operation.
@@ -574,7 +574,7 @@ func (s *Server) handleRejectCandidates(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 
 	// For each book, update the stored result status to "rejected"
 	results, err := store.GetOperationResults(req.OperationID)
@@ -632,7 +632,7 @@ func (s *Server) handleUnrejectCandidates(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 
 	results, err := store.GetOperationResults(req.OperationID)
 	if err != nil {
@@ -687,7 +687,7 @@ func (s *Server) handleGetRecentOperations(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 
 	// Get recent operations and filter to metadata_candidate_fetch type.
 	ops, err := store.GetRecentOperations(50)
@@ -714,7 +714,7 @@ func (s *Server) handleGetRecentOperations(c *gin.Context) {
 // resumeInterruptedMetadataFetch checks for metadata_candidate_fetch operations
 // that were interrupted (status=running) and re-enqueues the remaining books.
 func (s *Server) resumeInterruptedMetadataFetch() {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		return
 	}

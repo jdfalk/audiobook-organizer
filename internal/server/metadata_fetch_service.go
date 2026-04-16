@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.50.0
+// version: 4.51.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -169,6 +169,8 @@ func buildSearchContext(book *database.Book, searchTitle, author, narrator strin
 		if book.ASIN != nil {
 			ctx.ASIN = *book.ASIN
 		}
+		// buildSearchContext is a top-level helper; use the package
+		// global here until the function is refactored into a method.
 		if book.SeriesID != nil && database.GlobalStore != nil {
 			if series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
 				ctx.Series = series.Name

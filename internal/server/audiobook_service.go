@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
