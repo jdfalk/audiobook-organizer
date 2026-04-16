@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.169.0
+// version: 1.170.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -126,7 +126,7 @@ func encodeMetadataValue(value any) (*string, error) {
 func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	state := map[string]metadataFieldState{}
 
-	pref, err := database.GlobalStore.GetUserPreference(metadataStateKey(bookID))
+	pref, err := database.GetGlobalStore().GetUserPreference(metadataStateKey(bookID))
 	if err != nil {
 		return state, err
 	}
@@ -142,11 +142,11 @@ func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, erro
 
 func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	state := map[string]metadataFieldState{}
-	if database.GlobalStore == nil {
+	if database.GetGlobalStore() == nil {
 		return state, fmt.Errorf("database not initialized")
 	}
 
-	stored, err := database.GlobalStore.GetMetadataFieldStates(bookID)
+	stored, err := database.GetGlobalStore().GetMetadataFieldStates(bookID)
 	if err != nil {
 		return state, err
 	}
@@ -177,11 +177,11 @@ func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 }
 
 func saveMetadataState(bookID string, state map[string]metadataFieldState) error {
-	if database.GlobalStore == nil {
+	if database.GetGlobalStore() == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
-	existing, err := database.GlobalStore.GetMetadataFieldStates(bookID)
+	existing, err := database.GetGlobalStore().GetMetadataFieldStates(bookID)
 	if err != nil {
 		return err
 	}
@@ -213,14 +213,14 @@ func saveMetadataState(bookID string, state map[string]metadataFieldState) error
 			UpdatedAt:      entry.UpdatedAt,
 		}
 
-		if err := database.GlobalStore.UpsertMetadataFieldState(&dbState); err != nil {
+		if err := database.GetGlobalStore().UpsertMetadataFieldState(&dbState); err != nil {
 			return fmt.Errorf("failed to persist metadata state for %s: %w", field, err)
 		}
 		delete(existingFields, field)
 	}
 
 	for field := range existingFields {
-		if err := database.GlobalStore.DeleteMetadataFieldState(bookID, field); err != nil {
+		if err := database.GetGlobalStore().DeleteMetadataFieldState(bookID, field); err != nil {
 			return fmt.Errorf("failed to clean up metadata state for %s: %w", field, err)
 		}
 	}
@@ -275,7 +275,7 @@ func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
 	if book.Author != nil {
 		authorName = book.Author.Name
 	} else if book.AuthorID != nil {
-		if author, err := database.GlobalStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+		if author, err := database.GetGlobalStore().GetAuthorByID(*book.AuthorID); err == nil && author != nil {
 			authorName = author.Name
 		}
 	}
@@ -284,7 +284,7 @@ func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
 	if book.Series != nil {
 		seriesName = book.Series.Name
 	} else if book.SeriesID != nil {
-		if series, err := database.GlobalStore.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+		if series, err := database.GetGlobalStore().GetSeriesByID(*book.SeriesID); err == nil && series != nil {
 			seriesName = series.Name
 		}
 	}
@@ -335,10 +335,10 @@ func enrichBookForResponse(book *database.Book) enrichedBookResponse {
 		resp.FileExists = &exists
 	}
 
-	if database.GlobalStore != nil {
-		if bookAuthors, err := database.GlobalStore.GetBookAuthors(book.ID); err == nil && len(bookAuthors) > 0 {
+	if database.GetGlobalStore() != nil {
+		if bookAuthors, err := database.GetGlobalStore().GetBookAuthors(book.ID); err == nil && len(bookAuthors) > 0 {
 			for _, ba := range bookAuthors {
-				if author, err := database.GlobalStore.GetAuthorByID(ba.AuthorID); err == nil && author != nil {
+				if author, err := database.GetGlobalStore().GetAuthorByID(ba.AuthorID); err == nil && author != nil {
 					resp.Authors = append(resp.Authors, authorEntry{
 						ID: author.ID, Name: author.Name, Role: ba.Role, Position: ba.Position,
 					})
@@ -354,9 +354,9 @@ func enrichBookForResponse(book *database.Book) enrichedBookResponse {
 			}
 		}
 
-		if bookNarrators, err := database.GlobalStore.GetBookNarrators(book.ID); err == nil && len(bookNarrators) > 0 {
+		if bookNarrators, err := database.GetGlobalStore().GetBookNarrators(book.ID); err == nil && len(bookNarrators) > 0 {
 			for _, bn := range bookNarrators {
-				if narrator, err := database.GlobalStore.GetNarratorByID(bn.NarratorID); err == nil && narrator != nil {
+				if narrator, err := database.GetGlobalStore().GetNarratorByID(bn.NarratorID); err == nil && narrator != nil {
 					resp.Narrators = append(resp.Narrators, narratorEntry{
 						ID: narrator.ID, Name: narrator.Name, Role: bn.Role, Position: bn.Position,
 					})
@@ -731,7 +731,7 @@ type ServerConfig struct {
 
 // NewServer creates a new server instance
 // Store returns the database.Store dependency the server was constructed
-// with. Handlers should prefer s.Store() over database.GlobalStore; the
+// with. Handlers should prefer s.Store() over database.GetGlobalStore(); the
 // global is being phased out per the 4.4 DI migration.
 func (s *Server) Store() database.Store {
 	if s.store != nil {
@@ -744,7 +744,7 @@ func (s *Server) Store() database.Store {
 }
 
 // NewServer constructs a Server with an explicit Store dependency.
-// database.GlobalStore is still assigned at startup for code that hasn't
+// s.Store() is still assigned at startup for code that hasn't
 // been migrated to use s.Store() yet (see DI migration plan 4.4).
 func NewServer(store database.Store) *Server {
 	router := gin.New() // don't use gin.Default() — we add our own middleware
@@ -765,7 +765,7 @@ func NewServer(store database.Store) *Server {
 	// passed-in store on s.store when the caller provided one — if
 	// the caller passed nil, s.Store() falls through to the package
 	// global dynamically, which matters for tests that swap
-	// database.GlobalStore mid-test.
+	// database.GetGlobalStore() mid-test.
 	resolvedStore := store
 	if resolvedStore == nil {
 		resolvedStore = database.GetGlobalStore()
@@ -822,7 +822,7 @@ func NewServer(store database.Store) *Server {
 	isbnSources := server.metadataFetchService.BuildSourceChain()
 	if len(isbnSources) > 0 {
 		server.metadataFetchService.SetISBNEnrichment(
-			NewISBNEnrichmentService(database.GlobalStore, isbnSources),
+			NewISBNEnrichmentService(database.GetGlobalStore(), isbnSources),
 		)
 	}
 
@@ -836,8 +836,8 @@ func NewServer(store database.Store) *Server {
 			server.aiScanStore = aiScanStore
 			aiParserInst := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 			if p, ok := aiParserInst.(*ai.OpenAIParser); ok {
-				server.pipelineManager = NewPipelineManager(aiScanStore, database.GlobalStore, p, server)
-				server.batchPoller = NewBatchPoller(database.GlobalStore, p)
+				server.pipelineManager = NewPipelineManager(aiScanStore, database.GetGlobalStore(), p, server)
+				server.batchPoller = NewBatchPoller(database.GetGlobalStore(), p)
 				server.registerBatchPollerHandlers()
 			}
 		}
@@ -878,7 +878,7 @@ func NewServer(store database.Store) *Server {
 				llmParser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 				server.dedupEngine = NewDedupEngine(
 					embeddingStore,
-					database.GlobalStore,
+					database.GetGlobalStore(),
 					embedClient,
 					llmParser,
 					server.mergeService,
@@ -916,13 +916,13 @@ func NewServer(store database.Store) *Server {
 				// Runs inside a bgWG-tracked goroutine so it doesn't block
 				// the organize caller and shutdown drains it cleanly.
 				organizer.OrganizeCollisionHook = func(currentBookID, occupantPath string) {
-					if server.embeddingStore == nil || database.GlobalStore == nil {
+					if server.embeddingStore == nil || database.GetGlobalStore() == nil {
 						return
 					}
 					server.bgWG.Add(1)
 					go func() {
 						defer server.bgWG.Done()
-						occupant, err := database.GlobalStore.GetBookByFilePath(occupantPath)
+						occupant, err := database.GetGlobalStore().GetBookByFilePath(occupantPath)
 						if err != nil {
 							log.Printf("[WARN] organize-collision hook: lookup %s failed: %v", occupantPath, err)
 							return
@@ -1085,7 +1085,7 @@ func (s *Server) fireDedupOnImport(bookID string) {
 // resumeInterruptedOperations checks for operations left in running/queued state
 // from a previous server lifecycle and re-enqueues them.
 func (s *Server) resumeInterruptedOperations() {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil || operations.GlobalQueue == nil {
 		return
 	}
@@ -1130,7 +1130,7 @@ func (s *Server) resumeInterruptedOperations() {
 				for from, to := range params.PathMappings {
 					mappings = append(mappings, itunes.PathMapping{From: from, To: to})
 				}
-				return executeITunesImport(ctx, operations.LoggerFromReporter(progress), opID, ITunesImportRequest{
+				return executeITunesImport(ctx, s.Store(), operations.LoggerFromReporter(progress), opID, ITunesImportRequest{
 					LibraryPath:      params.LibraryXMLPath,
 					ImportMode:       params.ImportMode,
 					PathMappings:     mappings,
@@ -1349,8 +1349,8 @@ func (s *Server) Start(cfg ServerConfig) error {
 	}()
 
 	// Start periodic cleanup of stale transcode temp files
-	if database.GlobalStore != nil {
-		if paths, err := database.GlobalStore.GetAllImportPaths(); err == nil {
+	if s.Store() != nil {
+		if paths, err := s.Store().GetAllImportPaths(); err == nil {
 			for _, p := range paths {
 				stopCleanup := transcode.StartCleanupTicker(p.Path, 1*time.Hour, 2*time.Hour)
 				defer stopCleanup()
@@ -1382,11 +1382,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 					runtime.ReadMemStats(&alloc)
 					bookCount := 0
 					folderCount := 0
-					if database.GlobalStore != nil {
-						if bc, err := database.GlobalStore.CountBooks(); err == nil {
+					if s.Store() != nil {
+						if bc, err := s.Store().CountBooks(); err == nil {
 							bookCount = bc
 						}
-						if folders, err := database.GlobalStore.GetAllImportPaths(); err == nil {
+						if folders, err := s.Store().GetAllImportPaths(); err == nil {
 							folderCount = len(folders)
 						}
 					}
@@ -1416,8 +1416,8 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// so users with multiple import locations had silent blind spots on
 	// every path after the first.
 	var fileWatchers []*watcher.Watcher
-	if config.AppConfig.AutoScanEnabled && database.GlobalStore != nil {
-		importPaths, err := database.GlobalStore.GetAllImportPaths()
+	if config.AppConfig.AutoScanEnabled && s.Store() != nil {
+		importPaths, err := s.Store().GetAllImportPaths()
 		if err == nil && len(importPaths) > 0 {
 			var watchPaths []string
 			for _, ip := range importPaths {
@@ -1430,7 +1430,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 				if config.AppConfig.AutoScanDebounceSeconds > 0 {
 					debounce = time.Duration(config.AppConfig.AutoScanDebounceSeconds) * time.Second
 				}
-				watchLog := logger.NewWithActivityLog("auto-scan", database.GlobalStore)
+				watchLog := logger.NewWithActivityLog("auto-scan", s.Store())
 				// The same callback is reused across watchers because
 				// each watcher invokes it with its own root path, so
 				// the scan target is correct per event.
@@ -1446,7 +1446,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 						go func() {
 							scanPath := path
 							id := ulid.Make().String()
-							op, opErr := database.GlobalStore.CreateOperation(id, "scan", &scanPath)
+							op, opErr := s.Store().CreateOperation(id, "scan", &scanPath)
 							if opErr != nil {
 								watchLog.Error("Auto-scan: failed to create operation: %v", opErr)
 								return
@@ -1475,8 +1475,8 @@ func (s *Server) Start(cfg ServerConfig) error {
 	}
 
 	// Periodic cleanup of expired/revoked auth sessions.
-	if database.GlobalStore != nil {
-		sessionLog := logger.NewWithActivityLog("session-cleanup", database.GlobalStore)
+	if s.Store() != nil {
+		sessionLog := logger.NewWithActivityLog("session-cleanup", s.Store())
 		sessionCleanupTicker := time.NewTicker(10 * time.Minute)
 		backgroundWG.Add(1)
 		go func() {
@@ -1485,7 +1485,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 			for {
 				select {
 				case <-sessionCleanupTicker.C:
-					if deleted, err := database.GlobalStore.DeleteExpiredSessions(time.Now()); err != nil {
+					if deleted, err := s.Store().DeleteExpiredSessions(time.Now()); err != nil {
 						sessionLog.Warn("failed to clean up expired sessions: %v", err)
 					} else if deleted > 0 {
 						sessionLog.Info("cleaned up %d expired/revoked sessions", deleted)
@@ -1498,7 +1498,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 	}
 
 	// Periodically mark stale operations as failed.
-	if database.GlobalStore != nil && config.AppConfig.OperationTimeoutMinutes > 0 {
+	if s.Store() != nil && config.AppConfig.OperationTimeoutMinutes > 0 {
 		staleTimeout := time.Duration(config.AppConfig.OperationTimeoutMinutes) * time.Minute
 		staleTicker := time.NewTicker(1 * time.Minute)
 		backgroundWG.Add(1)
@@ -1687,7 +1687,7 @@ func (s *Server) setupRoutes() {
 		c.Next()
 	})
 	if config.AppConfig.EnableAuth {
-		authMiddleware = servermiddleware.RequireAuth(database.GlobalStore)
+		authMiddleware = servermiddleware.RequireAuth(s.Store())
 	}
 
 	// API routes (auth + rate limits + request-size limits)
@@ -2119,8 +2119,8 @@ func isProtectedPath(filePath string) bool {
 	absPath, _ := filepath.Abs(filePath)
 
 	// Check import paths
-	if database.GlobalStore != nil {
-		importPaths, err := database.GlobalStore.GetAllImportPaths()
+	if database.GetGlobalStore() != nil {
+		importPaths, err := database.GetGlobalStore().GetAllImportPaths()
 		if err == nil {
 			for _, ip := range importPaths {
 				ipAbs, _ := filepath.Abs(ip.Path)
@@ -2285,17 +2285,17 @@ func saveDismissedDedupGroups(store database.Store, dismissed map[string]bool) {
 
 // triggerITunesSync finds the library path from DB and enqueues a sync if the file changed.
 func (s *Server) triggerITunesSync() {
-	if database.GlobalStore == nil || operations.GlobalQueue == nil {
+	if s.Store() == nil || operations.GlobalQueue == nil {
 		return
 	}
 
-	libraryPath := discoverITunesLibraryPath()
+	libraryPath := discoverITunesLibraryPath(s.Store())
 	if libraryPath == "" {
 		return
 	}
 
 	// Check fingerprint — skip if unchanged (quick mtime+size check)
-	if rec, err := database.GlobalStore.GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
+	if rec, err := s.Store().GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
 		if info, statErr := os.Stat(libraryPath); statErr == nil {
 			if info.Size() == rec.Size && info.ModTime().Equal(rec.ModTime) {
 				return // No changes
@@ -2303,9 +2303,9 @@ func (s *Server) triggerITunesSync() {
 		}
 	}
 
-	itunesTriggerLog := logger.NewWithActivityLog("itunes-scheduler", database.GlobalStore)
+	itunesTriggerLog := logger.NewWithActivityLog("itunes-scheduler", s.Store())
 	opID := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(opID, "itunes_sync", &libraryPath)
+	op, err := s.Store().CreateOperation(opID, "itunes_sync", &libraryPath)
 	if err != nil {
 		itunesTriggerLog.Warn("iTunes sync scheduler: failed to create operation: %v", err)
 		return
@@ -2318,7 +2318,7 @@ func (s *Server) triggerITunesSync() {
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesSync(ctx, operations.LoggerFromReporter(progress), libraryPath, scheduledMappings)
+		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, scheduledMappings)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
@@ -2349,11 +2349,11 @@ func (s *Server) collectStaleOperations(timeout time.Duration) ([]database.Opera
 	if timeout <= 0 {
 		return []database.Operation{}, nil
 	}
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	ops, err := database.GlobalStore.GetRecentOperations(500)
+	ops, err := s.Store().GetRecentOperations(500)
 	if err != nil {
 		return nil, err
 	}
@@ -2373,7 +2373,7 @@ func (s *Server) collectStaleOperations(timeout time.Duration) ([]database.Opera
 }
 
 func (s *Server) failStaleOperations(timeout time.Duration) {
-	staleLog := logger.NewWithActivityLog("reaper", database.GlobalStore)
+	staleLog := logger.NewWithActivityLog("reaper", s.Store())
 	stale, err := s.collectStaleOperations(timeout)
 	if err != nil {
 		staleLog.Warn("stale operation check failed: %v", err)
@@ -2385,7 +2385,7 @@ func (s *Server) failStaleOperations(timeout time.Duration) {
 
 	for _, op := range stale {
 		msg := fmt.Sprintf("operation timed out after %s", timeout)
-		if err := database.GlobalStore.UpdateOperationError(op.ID, msg); err != nil {
+		if err := s.Store().UpdateOperationError(op.ID, msg); err != nil {
 			staleLog.Warn("failed to mark stale operation %s as failed: %v", op.ID, err)
 			continue
 		}
@@ -2671,7 +2671,7 @@ func extractTitleFromSegmentFilename(filename string) string {
 // sourceBookID to targetBookID for the given files. It matches by file_path or
 // ITunesPersistentID on the external_id_map entries.
 func reassignExternalIDsForFiles(sourceBookID, targetBookID string, files []database.BookFile) {
-	eidStore := asExternalIDStore(database.GlobalStore)
+	eidStore := asExternalIDStore(database.GetGlobalStore())
 	if eidStore == nil {
 		return
 	}
@@ -2708,7 +2708,7 @@ func reassignExternalIDsForFiles(sourceBookID, targetBookID string, files []data
 	// Reassign each mapping: delete old reverse key, update primary, add new reverse key
 	for _, m := range toMove {
 		oldReverseKey := fmt.Sprintf("ext_id:book:%s:%s:%s", sourceBookID, m.Source, m.ExternalID)
-		_ = database.GlobalStore.DeleteRaw(oldReverseKey)
+		_ = database.GetGlobalStore().DeleteRaw(oldReverseKey)
 
 		m.BookID = targetBookID
 		if createErr := eidStore.CreateExternalIDMapping(&m); createErr != nil {
