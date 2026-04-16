@@ -3266,6 +3266,31 @@ func (p *PebbleStore) UpdateUser(user *User) error {
 	return p.db.Set([]byte("u:"+user.ID), data, pebble.Sync)
 }
 
+func (p *PebbleStore) ListUsers() ([]User, error) {
+	prefix := []byte("u:")
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: prefixEnd(prefix),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var users []User
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":idx:") || strings.Contains(key, ":username:") || strings.Contains(key, ":email:") {
+			continue
+		}
+		var u User
+		if err := json.Unmarshal(iter.Value(), &u); err != nil {
+			continue
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
 // Roles
 
 func (p *PebbleStore) GetRoleByID(id string) (*Role, error) {

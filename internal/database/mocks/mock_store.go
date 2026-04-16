@@ -12744,6 +12744,61 @@ func (_c *MockStore_ListUserSessions_Call) RunAndReturn(run func(userID string) 
 	return _c
 }
 
+// ListUsers provides a mock function for the type MockStore
+func (_mock *MockStore) ListUsers() ([]database.User, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListUsers")
+	}
+
+	var r0 []database.User
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.User, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.User); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.User)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListUsers_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUsers'
+type MockStore_ListUsers_Call struct {
+	*mock.Call
+}
+
+// ListUsers is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListUsers() *MockStore_ListUsers_Call {
+	return &MockStore_ListUsers_Call{Call: _e.mock.On("ListUsers")}
+}
+
+func (_c *MockStore_ListUsers_Call) Run(run func()) *MockStore_ListUsers_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListUsers_Call) Return(users []database.User, err error) *MockStore_ListUsers_Call {
+	_c.Call.Return(users, err)
+	return _c
+}
+
+func (_c *MockStore_ListUsers_Call) RunAndReturn(run func() ([]database.User, error)) *MockStore_ListUsers_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // MarkDeferredITunesUpdateApplied provides a mock function for the type MockStore
 func (_mock *MockStore) MarkDeferredITunesUpdateApplied(id int) error {
 	ret := _mock.Called(id)
