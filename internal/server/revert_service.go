@@ -1,5 +1,5 @@
 // file: internal/server/revert_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-b8c9-d0e1-f2a3-b4c5d6e7f8a9
 
 package server
@@ -66,12 +66,19 @@ func (rs *RevertService) RevertOperation(operationID string) error {
 
 func (rs *RevertService) revertChange(c *database.OperationChange) error {
 	switch c.ChangeType {
-	case "file_move":
+	case "file_move", "organize_rename":
+		// organize_rename writes the same (OldValue, NewValue) shape as
+		// file_move — old path → new path, Book.file_path updated. The
+		// reversal is identical: move the file back and restore
+		// Book.file_path.
 		return rs.revertFileMove(c)
 	case "metadata_update":
 		return rs.revertMetadataUpdate(c)
 	case "tag_write":
 		return rs.revertTagWrite(c)
+	case "organize_failed", "organize_skipped", "organize_summary":
+		// No filesystem or DB mutation recorded; nothing to reverse.
+		return nil
 	default:
 		return fmt.Errorf("unknown change type: %s", c.ChangeType)
 	}
