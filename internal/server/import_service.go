@@ -156,6 +156,14 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 		return nil, fmt.Errorf("failed to create book: %w", err)
 	}
 
+	// Create version row for the imported file (spec 3.1).
+	if _, verErr := CreateIngestVersion(is.db, IngestVersionParams{
+		BookID: created.ID, FilePath: created.FilePath,
+		Format: created.Format, Source: "imported",
+	}); verErr != nil {
+		log.Printf("[WARN] create ingest version for %s: %v", created.ID, verErr)
+	}
+
 	// Provision ITL track (generates PID, stores in external_id_map, enqueues add)
 	if err := ProvisionITLTracksForBook(is.db, created); err != nil {
 		// Non-fatal: book was created, ITL provisioning can be retried
