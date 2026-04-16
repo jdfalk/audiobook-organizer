@@ -910,13 +910,13 @@ type DashboardStats struct {
 
 // Global store instance — use GetGlobalStore/SetGlobalStore for concurrent access.
 // Direct assignment is allowed in single-goroutine contexts (init, main).
-var GlobalStore Store
+var globalStore Store
 var globalStoreMu sync.RWMutex
 
 // GetGlobalStore returns the global store with read-lock protection.
 func GetGlobalStore() Store {
 	globalStoreMu.RLock()
-	s := GlobalStore
+	s := globalStore
 	globalStoreMu.RUnlock()
 	return s
 }
@@ -924,7 +924,7 @@ func GetGlobalStore() Store {
 // SetGlobalStore sets the global store with write-lock protection.
 func SetGlobalStore(s Store) {
 	globalStoreMu.Lock()
-	GlobalStore = s
+	globalStore = s
 	globalStoreMu.Unlock()
 }
 
@@ -937,13 +937,13 @@ func InitializeStore(dbType, path string, enableSQLite bool) error {
 		if !enableSQLite {
 			return fmt.Errorf("SQLite3 is not enabled. To use SQLite3, you must explicitly enable it with --enable-sqlite3-i-know-the-risks or set 'enable_sqlite3_i_know_the_risks: true' in your config file. PebbleDB is the recommended database for production use")
 		}
-		GlobalStore, err = NewSQLiteStore(path)
+		globalStore, err = NewSQLiteStore(path)
 		if err != nil {
 			return fmt.Errorf("failed to initialize SQLite store: %w", err)
 		}
 	case "pebble", "":
 		// PebbleDB is the default
-		GlobalStore, err = NewPebbleStore(path)
+		globalStore, err = NewPebbleStore(path)
 		if err != nil {
 			return fmt.Errorf("failed to initialize PebbleDB store: %w", err)
 		}
@@ -952,12 +952,12 @@ func InitializeStore(dbType, path string, enableSQLite bool) error {
 	}
 
 	// Maintain backwards compatibility with the global DB variable for SQLite
-	if sqliteStore, ok := GlobalStore.(*SQLiteStore); ok {
+	if sqliteStore, ok := globalStore.(*SQLiteStore); ok {
 		DB = sqliteStore.db
 	}
 
 	// Run migrations to ensure schema is up to date
-	if err := RunMigrations(GlobalStore); err != nil {
+	if err := RunMigrations(globalStore); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
@@ -968,8 +968,8 @@ func InitializeStore(dbType, path string, enableSQLite bool) error {
 func CloseStore() error {
 	// Grab and nil the global ref first so lingering goroutines
 	// see nil and fail gracefully instead of hitting a closed DB.
-	store := GlobalStore
-	GlobalStore = nil
+	store := globalStore
+	globalStore = nil
 
 	if store != nil {
 		// Brief pause to let in-flight goroutines notice the nil

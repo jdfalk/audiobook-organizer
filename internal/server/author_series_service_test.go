@@ -16,9 +16,9 @@ func TestAuthorSeriesService_ListAuthors_Empty(t *testing.T) {
 			return nil, nil
 		},
 	}
-	origStore := database.GlobalStore
-	database.GlobalStore = mockDB
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	as := NewAuthorSeriesService(mockDB)
 
@@ -38,9 +38,9 @@ func TestAuthorSeriesService_ListSeries_Empty(t *testing.T) {
 			return nil, nil
 		},
 	}
-	origStore := database.GlobalStore
-	database.GlobalStore = mockDB
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	as := NewAuthorSeriesService(mockDB)
 

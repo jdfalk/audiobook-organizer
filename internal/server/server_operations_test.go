@@ -29,7 +29,7 @@ func TestStartScan_WithMocks_Success(t *testing.T) {
 
 	// Arrange globals
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
+	database.SetGlobalStore(mockStore)
 
 	mockQueue := queuemocks.NewMockQueue(t)
 	operations.GlobalQueue = mockQueue
@@ -68,7 +68,7 @@ func TestStartScan_QueueNil_Returns500(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
+	database.SetGlobalStore(mockStore)
 	operations.GlobalQueue = nil
 
 	srv := &Server{router: gin.New()}
@@ -87,7 +87,7 @@ func TestStartScan_EnqueueError_Returns500(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
+	database.SetGlobalStore(mockStore)
 	mockQueue := queuemocks.NewMockQueue(t)
 	operations.GlobalQueue = mockQueue
 
@@ -111,7 +111,7 @@ func TestStartOrganize_WithMocks_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
+	database.SetGlobalStore(mockStore)
 	mockQueue := queuemocks.NewMockQueue(t)
 	operations.GlobalQueue = mockQueue
 
@@ -138,7 +138,7 @@ func TestStartOrganize_EnqueueError_Returns500(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockStore := dbmocks.NewMockStore(t)
-	database.GlobalStore = mockStore
+	database.SetGlobalStore(mockStore)
 	mockQueue := queuemocks.NewMockQueue(t)
 	operations.GlobalQueue = mockQueue
 

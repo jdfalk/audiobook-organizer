@@ -89,7 +89,7 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 	// 3) POST /audiobooks/:id/parse-with-ai should update a book.
 	filePath := filepath.Join(t.TempDir(), "The Hobbit - J.R.R. Tolkien.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{Title: "Old", FilePath: filePath, Format: "m4b"})
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Old", FilePath: filePath, Format: "m4b"})
 	require.NoError(t, err)
 
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/audiobooks/"+book.ID+"/parse-with-ai", bytes.NewBufferString(`{}`))
@@ -98,7 +98,7 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	updated, err := database.GlobalStore.GetBookByID(book.ID)
+	updated, err := database.GetGlobalStore().GetBookByID(book.ID)
 	require.NoError(t, err)
 	require.NotNil(t, updated)
 	assert.Equal(t, "The Hobbit", updated.Title)

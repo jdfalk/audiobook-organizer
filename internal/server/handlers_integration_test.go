@@ -40,10 +40,10 @@ func setupHandlerTestServer(t *testing.T) *Server {
 	}
 
 	// Temporarily set the global store for this test
-	oldStore := database.GlobalStore
-	database.GlobalStore = mockDB
+	oldStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
 	t.Cleanup(func() {
-		database.GlobalStore = oldStore
+		database.SetGlobalStore(oldStore)
 	})
 
 	return NewServer(nil)
@@ -91,7 +91,7 @@ func TestCreateWork_Success(t *testing.T) {
 	c.Request = req
 
 	// Mock the CreateWork function
-	if store, ok := database.GlobalStore.(*database.MockStore); ok {
+	if store, ok := database.GetGlobalStore().(*database.MockStore); ok {
 		store.CreateWorkFunc = func(w *database.Work) (*database.Work, error) {
 			w.ID = "new-123"
 			return w, nil
@@ -133,7 +133,7 @@ func TestGetWork_Success(t *testing.T) {
 	c.Params = append(c.Params, gin.Param{Key: "id", Value: "1"})
 
 	// Mock the GetWorkByID function
-	if store, ok := database.GlobalStore.(*database.MockStore); ok {
+	if store, ok := database.GetGlobalStore().(*database.MockStore); ok {
 		store.GetWorkByIDFunc = func(id string) (*database.Work, error) {
 			return &database.Work{ID: id, Title: "Work 1"}, nil
 		}
@@ -157,7 +157,7 @@ func TestGetWork_NotFound(t *testing.T) {
 	c.Params = append(c.Params, gin.Param{Key: "id", Value: "nonexistent"})
 
 	// Mock the GetWorkByID function to return nil
-	if store, ok := database.GlobalStore.(*database.MockStore); ok {
+	if store, ok := database.GetGlobalStore().(*database.MockStore); ok {
 		store.GetWorkByIDFunc = func(id string) (*database.Work, error) {
 			return nil, nil
 		}
@@ -279,7 +279,7 @@ func TestDeleteWork_Success(t *testing.T) {
 	c.Params = append(c.Params, gin.Param{Key: "id", Value: "1"})
 
 	// Mock the DeleteWork function
-	if store, ok := database.GlobalStore.(*database.MockStore); ok {
+	if store, ok := database.GetGlobalStore().(*database.MockStore); ok {
 		store.DeleteWorkFunc = func(id string) error {
 			return nil
 		}

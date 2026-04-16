@@ -28,7 +28,7 @@ func TestAudiobookCountEndpoint(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
 	// Create a test book
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Count Test Book",
 		FilePath: filePath,
 		Format:   "m4b",
@@ -51,7 +51,7 @@ func TestMetadataFetchAndUpdate(t *testing.T) {
 	filePath := filepath.Join(tempDir, "book.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Fetch Test Book",
 		FilePath: filePath,
 		Format:   "m4b",
@@ -83,7 +83,7 @@ func TestSearchAudiobooks(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
 	// Create a test book
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Searchable Book",
 		FilePath: filePath,
 		Format:   "m4b",
@@ -115,7 +115,7 @@ func TestListAudiobooksWithPagination(t *testing.T) {
 		filePath := filepath.Join(tempDir, "book"+string(rune(i))+".m4b")
 		os.WriteFile(filePath, []byte("audio"), 0o644)
 
-		database.GlobalStore.CreateBook(&database.Book{
+		database.GetGlobalStore().CreateBook(&database.Book{
 			Title:    "Book " + string(rune(48+i)),
 			FilePath: filePath,
 			Format:   "m4b",
@@ -216,7 +216,7 @@ func TestSoftDeleteOperations(t *testing.T) {
 	filePath := filepath.Join(tempDir, "delete_test.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Book to Delete",
 		FilePath: filePath,
 		Format:   "m4b",
@@ -250,14 +250,14 @@ func TestDuplicateDetectionEndpoint(t *testing.T) {
 	os.WriteFile(file1, []byte("same"), 0o644)
 	os.WriteFile(file2, []byte("same"), 0o644)
 
-	database.GlobalStore.CreateBook(&database.Book{
+	database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Dup 1",
 		FilePath: file1,
 		FileHash: &sharedHash,
 		Format:   "m4b",
 	})
 
-	database.GlobalStore.CreateBook(&database.Book{
+	database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Dup 2",
 		FilePath: file2,
 		FileHash: &sharedHash,

@@ -16,9 +16,9 @@ func TestWorkService_ListWorks_Empty(t *testing.T) {
 			return nil, nil
 		},
 	}
-	origStore := database.GlobalStore
-	database.GlobalStore = mockDB
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	ws := NewWorkService(mockDB)
 
@@ -41,9 +41,9 @@ func TestWorkService_CreateWork_Success(t *testing.T) {
 			return w, nil
 		},
 	}
-	origStore := database.GlobalStore
-	database.GlobalStore = mockDB
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	ws := NewWorkService(mockDB)
 
@@ -60,9 +60,9 @@ func TestWorkService_CreateWork_Success(t *testing.T) {
 
 func TestWorkService_CreateWork_MissingTitle(t *testing.T) {
 	mockDB := &database.MockStore{}
-	origStore := database.GlobalStore
-	database.GlobalStore = mockDB
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	ws := NewWorkService(mockDB)
 
@@ -80,9 +80,9 @@ func TestWorkService_GetWork_NotFound(t *testing.T) {
 			return nil, nil
 		},
 	}
-	origStore := database.GlobalStore
-	database.GlobalStore = mockDB
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	ws := NewWorkService(mockDB)
 

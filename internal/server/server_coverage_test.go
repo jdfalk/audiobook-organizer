@@ -29,7 +29,7 @@ func createTestBookFmt(t *testing.T, title, format string) *database.Book {
 	filePath := filepath.Join(tempDir, title+"."+format)
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    title,
 		FilePath: filePath,
 		Format:   format,
@@ -384,10 +384,10 @@ func TestCoverageListAuthors(t *testing.T) {
 		filePath := filepath.Join(tempDir, "authored.m4b")
 		require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-		author, err := database.GlobalStore.CreateAuthor("Test Author")
+		author, err := database.GetGlobalStore().CreateAuthor("Test Author")
 		require.NoError(t, err)
 
-		_, err = database.GlobalStore.CreateBook(&database.Book{
+		_, err = database.GetGlobalStore().CreateBook(&database.Book{
 			Title:    "Authored Book",
 			FilePath: filePath,
 			Format:   "m4b",
@@ -431,10 +431,10 @@ func TestCoverageListSeries(t *testing.T) {
 		filePath := filepath.Join(tempDir, "series.m4b")
 		require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
-		series, err := database.GlobalStore.CreateSeries("Test Series", nil)
+		series, err := database.GetGlobalStore().CreateSeries("Test Series", nil)
 		require.NoError(t, err)
 
-		_, err = database.GlobalStore.CreateBook(&database.Book{
+		_, err = database.GetGlobalStore().CreateBook(&database.Book{
 			Title:    "Series Book",
 			FilePath: filePath,
 			Format:   "m4b",
@@ -1086,13 +1086,13 @@ func TestCoverageAuthorBooks(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	author, err := database.GlobalStore.CreateAuthor("Book Author")
+	author, err := database.GetGlobalStore().CreateAuthor("Book Author")
 	require.NoError(t, err)
 
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "authorbook.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Author Book",
 		FilePath: filePath,
 		Format:   "m4b",
@@ -1123,13 +1123,13 @@ func TestCoverageSeriesBooks(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	series, err := database.GlobalStore.CreateSeries("Book Series", nil)
+	series, err := database.GetGlobalStore().CreateSeries("Book Series", nil)
 	require.NoError(t, err)
 
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "seriesbook.m4b")
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Series Book",
 		FilePath: filePath,
 		Format:   "m4b",

@@ -50,9 +50,9 @@ func TestGetAudiobookTags_UsesSnapshotComparisonValues(t *testing.T) {
 		},
 	}
 
-	oldGlobal := database.GlobalStore
-	database.GlobalStore = store
-	defer func() { database.GlobalStore = oldGlobal }()
+	oldGlobal := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	defer func() { database.SetGlobalStore(oldGlobal) }()
 
 	svc := NewAudiobookService(store)
 	resp, err := svc.GetAudiobookTags(context.Background(), "book-1", "", timestamp.Format(time.RFC3339Nano))

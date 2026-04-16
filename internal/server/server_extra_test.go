@@ -79,14 +79,14 @@ func TestDuplicateAndSoftDeleteEndpoints(t *testing.T) {
 	require.NoError(t, os.WriteFile(file2, []byte("audio"), 0o644))
 
 	hash := "dup-hash"
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:             "Dup One",
 		FilePath:          file1,
 		FileHash:          &hash,
 		OrganizedFileHash: &hash,
 	})
 	require.NoError(t, err)
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:             "Dup Two",
 		FilePath:          file2,
 		FileHash:          &hash,
@@ -103,7 +103,7 @@ func TestDuplicateAndSoftDeleteEndpoints(t *testing.T) {
 	require.NoError(t, os.WriteFile(softFile, []byte("audio"), 0o644))
 	marked := true
 	deletedAt := time.Now().Add(-24 * time.Hour)
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:               "Soft Delete",
 		FilePath:            softFile,
 		MarkedForDeletion:   &marked,
@@ -126,7 +126,7 @@ func TestDuplicateAndSoftDeleteEndpoints(t *testing.T) {
 
 	restoreFile := filepath.Join(tempDir, "restore.m4b")
 	require.NoError(t, os.WriteFile(restoreFile, []byte("audio"), 0o644))
-	restoreBook, err := database.GlobalStore.CreateBook(&database.Book{
+	restoreBook, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:               "Restore",
 		FilePath:            restoreFile,
 		MarkedForDeletion:   &marked,
@@ -178,7 +178,7 @@ func TestWorkEndpoints(t *testing.T) {
 
 	bookPath := filepath.Join(t.TempDir(), "work.m4b")
 	require.NoError(t, os.WriteFile(bookPath, []byte("audio"), 0o644))
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Work Book",
 		FilePath: bookPath,
 		WorkID:   &created.ID,
@@ -315,9 +315,9 @@ func TestSystemLogsEndpoints(t *testing.T) {
 	defer cleanup()
 
 	folder := "/tmp"
-	op, err := database.GlobalStore.CreateOperation("log-op", "scan", &folder)
+	op, err := database.GetGlobalStore().CreateOperation("log-op", "scan", &folder)
 	require.NoError(t, err)
-	require.NoError(t, database.GlobalStore.AddOperationLog(op.ID, "info", "hello", nil))
+	require.NoError(t, database.GetGlobalStore().AddOperationLog(op.ID, "info", "hello", nil))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/system/logs?level=info", nil)
 	w := httptest.NewRecorder()
@@ -367,7 +367,7 @@ func TestAIEndpoints(t *testing.T) {
 
 	bookPath := filepath.Join(t.TempDir(), "ai.m4b")
 	require.NoError(t, os.WriteFile(bookPath, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "AI Book",
 		FilePath: bookPath,
 	})
@@ -389,9 +389,9 @@ func TestVersionEndpoints(t *testing.T) {
 	require.NoError(t, os.WriteFile(book1Path, []byte("audio"), 0o644))
 	require.NoError(t, os.WriteFile(book2Path, []byte("audio"), 0o644))
 
-	book1, err := database.GlobalStore.CreateBook(&database.Book{Title: "Version One", FilePath: book1Path})
+	book1, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Version One", FilePath: book1Path})
 	require.NoError(t, err)
-	book2, err := database.GlobalStore.CreateBook(&database.Book{Title: "Version Two", FilePath: book2Path})
+	book2, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Version Two", FilePath: book2Path})
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks/"+book1.ID+"/versions", nil)
@@ -422,7 +422,7 @@ func TestVersionEndpoints(t *testing.T) {
 
 	book3Path := filepath.Join(t.TempDir(), "v3.m4b")
 	require.NoError(t, os.WriteFile(book3Path, []byte("audio"), 0o644))
-	book3, err := database.GlobalStore.CreateBook(&database.Book{Title: "Version Three", FilePath: book3Path})
+	book3, err := database.GetGlobalStore().CreateBook(&database.Book{Title: "Version Three", FilePath: book3Path})
 	require.NoError(t, err)
 
 	req = httptest.NewRequest(http.MethodPut, "/api/v1/audiobooks/"+book3.ID+"/set-primary", nil)
@@ -435,7 +435,7 @@ func TestBlockedHashEndpoints(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	require.NoError(t, database.RunMigrations(database.GlobalStore))
+	require.NoError(t, database.RunMigrations(database.GetGlobalStore()))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/blocked-hashes", nil)
 	w := httptest.NewRecorder()
@@ -531,7 +531,7 @@ func TestDetectDuplicatesByFileHash(t *testing.T) {
 	require.NoError(t, os.WriteFile(file2, []byte("content"), 0o644))
 
 	// Create books with the same file hash
-	book1, err := database.GlobalStore.CreateBook(&database.Book{
+	book1, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Book One",
 		FilePath: file1,
 		FileHash: &sharedHash,
@@ -539,7 +539,7 @@ func TestDetectDuplicatesByFileHash(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	book2, err := database.GlobalStore.CreateBook(&database.Book{
+	book2, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Book Two",
 		FilePath: file2,
 		FileHash: &sharedHash,
@@ -548,7 +548,7 @@ func TestDetectDuplicatesByFileHash(t *testing.T) {
 	require.NoError(t, err)
 
 	// Retrieve duplicates
-	duplicates, err := database.GlobalStore.GetDuplicateBooks()
+	duplicates, err := database.GetGlobalStore().GetDuplicateBooks()
 	require.NoError(t, err)
 
 	// Verify our books are in the duplicates list
@@ -578,7 +578,7 @@ func TestMarkDuplicateForDeletion(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o644))
 
 	// Create a book
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Book to Delete",
 		FilePath: filePath,
 		Format:   "m4b",
@@ -594,11 +594,11 @@ func TestMarkDuplicateForDeletion(t *testing.T) {
 		Format:            book.Format,
 		MarkedForDeletion: &trueVal,
 	}
-	_, err = database.GlobalStore.UpdateBook(book.ID, updated)
+	_, err = database.GetGlobalStore().UpdateBook(book.ID, updated)
 	require.NoError(t, err)
 
 	// Retrieve and verify
-	retrieved, err := database.GlobalStore.GetBookByID(book.ID)
+	retrieved, err := database.GetGlobalStore().GetBookByID(book.ID)
 	require.NoError(t, err)
 	require.NotNil(t, retrieved.MarkedForDeletion)
 	require.True(t, *retrieved.MarkedForDeletion)
@@ -623,7 +623,7 @@ func TestListDuplicateBooks(t *testing.T) {
 	hash3 := "hash_3"
 
 	// Create books: 2 with hash1, 1 with hash3
-	_, err := database.GlobalStore.CreateBook(&database.Book{
+	_, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Book A",
 		FilePath: file1,
 		FileHash: &hash1,
@@ -631,7 +631,7 @@ func TestListDuplicateBooks(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Book B",
 		FilePath: file2,
 		FileHash: &hash1,
@@ -639,7 +639,7 @@ func TestListDuplicateBooks(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = database.GlobalStore.CreateBook(&database.Book{
+	_, err = database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Book C",
 		FilePath: file3,
 		FileHash: &hash3,
@@ -648,7 +648,7 @@ func TestListDuplicateBooks(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get duplicates
-	duplicates, err := database.GlobalStore.GetDuplicateBooks()
+	duplicates, err := database.GetGlobalStore().GetDuplicateBooks()
 	require.NoError(t, err)
 
 	// Should have at least one group with 2+ books
@@ -684,7 +684,7 @@ func TestSoftDeleteExcludeFromList(t *testing.T) {
 	require.NoError(t, os.WriteFile(file2, []byte("content"), 0o644))
 
 	// Create active book
-	active, err := database.GlobalStore.CreateBook(&database.Book{
+	active, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Active Book",
 		FilePath: file1,
 		Format:   "m4b",
@@ -692,7 +692,7 @@ func TestSoftDeleteExcludeFromList(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create and mark deleted book
-	deleted, err := database.GlobalStore.CreateBook(&database.Book{
+	deleted, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    "Deleted Book",
 		FilePath: file2,
 		Format:   "m4b",
@@ -707,11 +707,11 @@ func TestSoftDeleteExcludeFromList(t *testing.T) {
 		Format:            deleted.Format,
 		MarkedForDeletion: &trueVal,
 	}
-	_, err = database.GlobalStore.UpdateBook(deleted.ID, deletedUpdate)
+	_, err = database.GetGlobalStore().UpdateBook(deleted.ID, deletedUpdate)
 	require.NoError(t, err)
 
 	// List all books
-	all, err := database.GlobalStore.GetAllBooks(100, 0)
+	all, err := database.GetGlobalStore().GetAllBooks(100, 0)
 	require.NoError(t, err)
 
 	// Count them

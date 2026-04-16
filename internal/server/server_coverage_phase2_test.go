@@ -45,9 +45,9 @@ func TestGetAudiobookTagsErrors(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.mockSetup(mockStore)
 
-			oldStore := database.GlobalStore
-			database.GlobalStore = mockStore
-			defer func() { database.GlobalStore = oldStore }()
+			oldStore := database.GetGlobalStore()
+			database.SetGlobalStore(mockStore)
+			defer func() { database.SetGlobalStore(oldStore) }()
 
 			srv := NewServer(nil)
 
@@ -100,9 +100,9 @@ func TestAddBlockedHashErrors(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			mockStore := mocks.NewMockStore(t)
 
-			oldStore := database.GlobalStore
-			database.GlobalStore = mockStore
-			defer func() { database.GlobalStore = oldStore }()
+			oldStore := database.GetGlobalStore()
+			database.SetGlobalStore(mockStore)
+			defer func() { database.SetGlobalStore(oldStore) }()
 
 			srv := NewServer(nil)
 
@@ -131,9 +131,9 @@ func TestAddBlockedHashDatabaseError(t *testing.T) {
 		Return(errors.New("database error: constraint violation")).
 		Once()
 
-	oldStore := database.GlobalStore
-	database.GlobalStore = mockStore
-	defer func() { database.GlobalStore = oldStore }()
+	oldStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockStore)
+	defer func() { database.SetGlobalStore(oldStore) }()
 
 	srv := NewServer(nil)
 
@@ -179,9 +179,9 @@ func TestDeleteWorkErrors(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.mockSetup(mockStore)
 
-			oldStore := database.GlobalStore
-			database.GlobalStore = mockStore
-			defer func() { database.GlobalStore = oldStore }()
+			oldStore := database.GetGlobalStore()
+			database.SetGlobalStore(mockStore)
+			defer func() { database.SetGlobalStore(oldStore) }()
 
 			srv := NewServer(nil)
 

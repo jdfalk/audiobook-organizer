@@ -25,7 +25,7 @@ func createTestBook(t *testing.T, title string) *database.Book {
 	t.Helper()
 	tempFile := filepath.Join(t.TempDir(), title+".m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    title,
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -39,7 +39,7 @@ func createTestBookWithFields(t *testing.T, title string, genre, language *strin
 	t.Helper()
 	tempFile := filepath.Join(t.TempDir(), title+".m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
-	book, err := database.GlobalStore.CreateBook(&database.Book{
+	book, err := database.GetGlobalStore().CreateBook(&database.Book{
 		Title:    title,
 		FilePath: tempFile,
 		Format:   "m4b",
@@ -238,7 +238,7 @@ func TestTagBatchOperations(t *testing.T) {
 
 		// Verify each book has both tags
 		for _, bookID := range []string{book1.ID, book2.ID, book3.ID} {
-			tags, err := database.GlobalStore.GetBookTags(bookID)
+			tags, err := database.GetGlobalStore().GetBookTags(bookID)
 			require.NoError(t, err)
 			assert.Contains(t, tags, "scifi")
 			assert.Contains(t, tags, "new")
@@ -260,12 +260,12 @@ func TestTagBatchOperations(t *testing.T) {
 
 		// book1 and book2 should only have "scifi"
 		for _, bookID := range []string{book1.ID, book2.ID} {
-			tags, err := database.GlobalStore.GetBookTags(bookID)
+			tags, err := database.GetGlobalStore().GetBookTags(bookID)
 			require.NoError(t, err)
 			assert.Equal(t, []string{"scifi"}, tags)
 		}
 		// book3 should still have both
-		tags3, err := database.GlobalStore.GetBookTags(book3.ID)
+		tags3, err := database.GetGlobalStore().GetBookTags(book3.ID)
 		require.NoError(t, err)
 		assert.Contains(t, tags3, "scifi")
 		assert.Contains(t, tags3, "new")
@@ -370,8 +370,8 @@ func TestListBooksWithTagFilter(t *testing.T) {
 	_ = createTestBook(t, "TagFilterBook3") // no tag
 
 	// Tag books 1 and 2 with "scifi"
-	require.NoError(t, database.GlobalStore.AddBookTag(book1.ID, "scifi"))
-	require.NoError(t, database.GlobalStore.AddBookTag(book2.ID, "scifi"))
+	require.NoError(t, database.GetGlobalStore().AddBookTag(book1.ID, "scifi"))
+	require.NoError(t, database.GetGlobalStore().AddBookTag(book2.ID, "scifi"))
 
 	t.Run("filter by tag returns only tagged books", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks?tag=scifi", nil)
@@ -399,7 +399,7 @@ func TestListBooksWithTagFilter(t *testing.T) {
 		// Set library_state on book1
 		organized := "organized"
 		book1.LibraryState = &organized
-		_, err := database.GlobalStore.UpdateBook(book1.ID, book1)
+		_, err := database.GetGlobalStore().UpdateBook(book1.ID, book1)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks?tag=scifi&library_state=organized", nil)
@@ -442,7 +442,7 @@ func TestServerSideSorting(t *testing.T) {
 	// Without a post-filter, GetAudiobooks returns cached results before applySorting runs,
 	// which means different sort orders within the same test would all see the first sort.
 	for _, id := range []string{bookA.ID, bookB.ID, bookC.ID, bookD.ID} {
-		require.NoError(t, database.GlobalStore.AddBookTag(id, "sorttest"))
+		require.NoError(t, database.GetGlobalStore().AddBookTag(id, "sorttest"))
 	}
 
 	// Base URL includes tag filter to ensure cache bypass and sorting actually runs each time
@@ -712,17 +712,17 @@ func TestUserPreferencesColumnConfig(t *testing.T) {
 	// This validates the persistence layer that the frontend column config feature relies on.
 
 	t.Run("get non-existent preference returns nil", func(t *testing.T) {
-		pref, err := database.GlobalStore.GetUserPreference("library_column_config")
+		pref, err := database.GetGlobalStore().GetUserPreference("library_column_config")
 		assert.NoError(t, err)
 		assert.Nil(t, pref)
 	})
 
 	t.Run("save and retrieve column config", func(t *testing.T) {
 		configJSON := `{"visibleColumns":["title","author"]}`
-		err := database.GlobalStore.SetUserPreference("library_column_config", configJSON)
+		err := database.GetGlobalStore().SetUserPreference("library_column_config", configJSON)
 		require.NoError(t, err)
 
-		pref, err := database.GlobalStore.GetUserPreference("library_column_config")
+		pref, err := database.GetGlobalStore().GetUserPreference("library_column_config")
 		require.NoError(t, err)
 		require.NotNil(t, pref)
 		require.NotNil(t, pref.Value)
@@ -731,10 +731,10 @@ func TestUserPreferencesColumnConfig(t *testing.T) {
 
 	t.Run("update existing preference", func(t *testing.T) {
 		updatedJSON := `{"visibleColumns":["title","author","narrator","genre"]}`
-		err := database.GlobalStore.SetUserPreference("library_column_config", updatedJSON)
+		err := database.GetGlobalStore().SetUserPreference("library_column_config", updatedJSON)
 		require.NoError(t, err)
 
-		pref, err := database.GlobalStore.GetUserPreference("library_column_config")
+		pref, err := database.GetGlobalStore().GetUserPreference("library_column_config")
 		require.NoError(t, err)
 		require.NotNil(t, pref)
 		require.NotNil(t, pref.Value)

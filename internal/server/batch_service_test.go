@@ -12,9 +12,9 @@ import (
 
 func TestBatchUpdateAudiobooks_EmptyBatch(t *testing.T) {
 	mockDB := &database.MockStore{}
-	origStore := database.GlobalStore
-	database.GlobalStore = mockDB
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	bs := NewBatchService(mockDB)
 
@@ -48,9 +48,9 @@ func TestBatchUpdateAudiobooks_SingleBook(t *testing.T) {
 			return book, nil
 		},
 	}
-	origStore := database.GlobalStore
-	database.GlobalStore = mockDB
-	t.Cleanup(func() { database.GlobalStore = origStore })
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(mockDB)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
 
 	bs := NewBatchService(mockDB)
 
