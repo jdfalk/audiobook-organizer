@@ -3,6 +3,7 @@ module github.com/jdfalk/audiobook-organizer
 go 1.26.0
 
 require (
+	github.com/blevesearch/bleve/v2 v2.5.7
 	github.com/cockroachdb/pebble/v2 v2.1.4
 	github.com/dhowden/tag v0.0.0-20240417053706-3d75831295e8
 	github.com/fsnotify/fsnotify v1.9.0
@@ -33,7 +34,6 @@ require (
 	github.com/RoaringBitmap/roaring/v2 v2.4.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.22.0 // indirect
-	github.com/blevesearch/bleve/v2 v2.5.7 // indirect
 	github.com/blevesearch/bleve_index_api v1.2.11 // indirect
 	github.com/blevesearch/geo v0.2.4 // indirect
 	github.com/blevesearch/go-faiss v1.0.26 // indirect
