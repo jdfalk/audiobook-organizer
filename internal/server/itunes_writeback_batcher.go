@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 3.2.0
+// version: 3.3.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -100,7 +100,7 @@ func (b *WriteBackBatcher) EnqueueRemove(pid string) {
 
 	// Mark as removed in DB (best-effort, outside lock)
 	go func() {
-		if store := database.GlobalStore; store != nil {
+		if store := database.GetGlobalStore(); store != nil {
 			_ = store.MarkExternalIDRemoved("itunes", pid)
 		}
 	}()
@@ -156,7 +156,7 @@ func (b *WriteBackBatcher) flush() {
 	b.firstEnqueue = time.Time{} // reset for next batch
 	b.mu.Unlock()
 
-	store := database.GlobalStore
+	store := database.GetGlobalStore()
 	if store == nil {
 		log.Printf("[WARN] iTunes write-back: no database store")
 		return

@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -184,7 +184,7 @@ func (orgSvc *OrganizeService) autoBackup(log logger.Logger) {
 }
 
 func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log logger.Logger) {
-	libraryPath := discoverITunesLibraryPath()
+	libraryPath := discoverITunesLibraryPath(orgSvc.db)
 	if libraryPath == "" {
 		log.Info("Skipping iTunes sync: no library found")
 		return
@@ -192,7 +192,7 @@ func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log
 
 	log.Info("Running iTunes sync before organize: %s", libraryPath)
 
-	if err := executeITunesSync(ctx, log, libraryPath, nil); err != nil {
+	if err := executeITunesSync(ctx, orgSvc.db, log, libraryPath, nil); err != nil {
 		log.Warn("iTunes pre-sync failed (continuing with organize): %s", err.Error())
 		return
 	}

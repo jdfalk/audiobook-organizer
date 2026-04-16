@@ -1,5 +1,5 @@
 // file: internal/server/itunes.go
-// version: 2.23.0
+// version: 2.24.0
 // guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
 
 package server
@@ -347,7 +347,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 	itunesImportStatuses.Store(op.ID, status)
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesImport(ctx, operations.LoggerFromReporter(progress), op.ID, req)
+		return executeITunesImport(ctx, s.Store(), operations.LoggerFromReporter(progress), op.ID, req)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_import", operations.PriorityNormal, operationFunc); err != nil {
@@ -919,9 +919,7 @@ type albumGroup struct {
 	tracks []*itunes.Track
 }
 
-func executeITunesImport(ctx context.Context, log logger.Logger, opID string, req ITunesImportRequest) error {
-	store := database.GlobalStore
-
+func executeITunesImport(ctx context.Context, store database.Store, log logger.Logger, opID string, req ITunesImportRequest) error {
 	// Persist operation parameters for resume
 	pathMappings := make(map[string]string)
 	for _, pm := range req.PathMappings {
@@ -1005,7 +1003,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 		}
 
 		// Use first track for author/series assignment
-		assignAuthorAndSeries(book, group.tracks[0])
+		assignAuthorAndSeries(store, book, group.tracks[0])
 
 		// Resolve first track's actual file path (book.FilePath may be a directory for multi-track albums)
 		firstTrackPath := book.FilePath
@@ -1027,8 +1025,8 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 				}
 				// Check if we already have a mapping for this PID
 				if bookID, err := eidStore.GetBookByExternalID("itunes", firstPID); err == nil && bookID != "" {
-					if existing, err := database.GlobalStore.GetBookByID(bookID); err == nil && existing != nil {
-						linkITunesMetadata(existing, book, group.tracks[0], log)
+					if existing, err := store.GetBookByID(bookID); err == nil && existing != nil {
+						linkITunesMetadata(store, existing, book, group.tracks[0], log)
 						updateITunesLinked(status)
 						updateITunesProgress(log, status, processed, totalGroups, book.Title)
 						continue
@@ -1039,8 +1037,8 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 
 		if req.SkipDuplicates {
 			// Fast check: file path match (no disk I/O, just DB lookup)
-			if existing, err := database.GlobalStore.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
-				linkITunesMetadata(existing, book, group.tracks[0], log)
+			if existing, err := store.GetBookByFilePath(book.FilePath); err == nil && existing != nil {
+				linkITunesMetadata(store, existing, book, group.tracks[0], log)
 				updateITunesLinked(status)
 				updateITunesProgress(log, status, processed, totalGroups, book.Title)
 				continue
@@ -1062,7 +1060,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			book.CoverURL = stringPtr("/api/v1/covers/local/" + coverFilename)
 		}
 
-		created, err := database.GlobalStore.CreateBook(book)
+		created, err := store.CreateBook(book)
 		if err != nil {
 			recordITunesFailure(status, fmt.Sprintf("Failed to save '%s': %v", book.Title, err))
 			log.Error("Failed to save '%s': %v", book.Title, err)
@@ -1124,7 +1122,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 				if segHash, hashErr := scanner.ComputeSegmentFileHash(trackPath); hashErr == nil {
 					bf.FileHash = segHash
 				}
-				if createErr := database.GlobalStore.CreateBookFile(bf); createErr != nil {
+				if createErr := store.CreateBookFile(bf); createErr != nil {
 					log.Warn("Failed to create book file for track %d of '%s': %v", track.TrackNumber, book.Title, createErr)
 				}
 			}
@@ -1135,9 +1133,9 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			for i := range book.Authors {
 				book.Authors[i].BookID = created.ID
 			}
-			_ = database.GlobalStore.SetBookAuthors(created.ID, book.Authors)
+			_ = store.SetBookAuthors(created.ID, book.Authors)
 		} else if created.AuthorID != nil {
-			_ = database.GlobalStore.SetBookAuthors(created.ID, []database.BookAuthor{
+			_ = store.SetBookAuthors(created.ID, []database.BookAuthor{
 				{BookID: created.ID, AuthorID: *created.AuthorID, Role: "author", Position: 0},
 			})
 		}
@@ -1176,7 +1174,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 				break
 			}
 
-			book, err := database.GlobalStore.GetBookByID(bookID)
+			book, err := store.GetBookByID(bookID)
 			if err != nil || book == nil {
 				continue
 			}
@@ -1198,19 +1196,19 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			}
 
 			// Check for blocked hash
-			if blocked, err := database.GlobalStore.IsHashBlocked(hash); err == nil && blocked {
+			if blocked, err := store.IsHashBlocked(hash); err == nil && blocked {
 				log.Warn("Hash validation: blocked hash for %s, soft-deleting", book.Title)
 				marked := true
 				now := time.Now()
 				book.MarkedForDeletion = &marked
 				book.MarkedForDeletionAt = &now
-				database.GlobalStore.UpdateBook(book.ID, book)
+				store.UpdateBook(book.ID, book)
 				hashBlocked++
 				continue
 			}
 
 			// Check for existing book with same hash — merge into its VG
-			if existing, err := database.GlobalStore.GetBookByFileHash(hash); err == nil && existing != nil && existing.ID != book.ID {
+			if existing, err := store.GetBookByFileHash(hash); err == nil && existing != nil && existing.ID != book.ID {
 				// This new book is a duplicate — link it to the existing book's VG
 				if existing.VersionGroupID != nil && *existing.VersionGroupID != "" {
 					book.VersionGroupID = existing.VersionGroupID
@@ -1222,7 +1220,7 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 			}
 
 			// Save the hash (and any VG changes) to the book
-			if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
+			if _, err := store.UpdateBook(book.ID, book); err != nil {
 				log.Warn("Hash validation: failed to update %s: %v", book.ID, err)
 			}
 
@@ -1240,14 +1238,14 @@ func executeITunesImport(ctx context.Context, log logger.Logger, opID string, re
 	if req.FetchMetadata {
 		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "enriching", 0, 0)
 		log.Info("Starting metadata enrichment phase...")
-		enrichITunesImportedBooks(log, status)
+		enrichITunesImportedBooks(store, log, status)
 	}
 
 	// Phase 5: Organize (if requested) — runs after enrichment
 	if importMode == itunes.ImportModeOrganize && !req.PreserveLocation {
 		_ = operations.SaveCheckpoint(store, opID, "itunes_import", "organizing", 0, 0)
 		log.Info("Starting organize phase...")
-		organizeImportedBooks(log, status)
+		organizeImportedBooks(store, log, status)
 	}
 
 	// Clear checkpoint on successful completion
@@ -1310,11 +1308,11 @@ func groupTracksByAlbum(library *itunes.Library) []albumGroup {
 
 // enrichITunesImportedBooks fetches metadata for recently imported books
 // to normalize author names and get cover art before organizing.
-func enrichITunesImportedBooks(log logger.Logger, status *itunesImportStatus) {
-	mfs := NewMetadataFetchService(database.GlobalStore)
+func enrichITunesImportedBooks(store database.Store, log logger.Logger, status *itunesImportStatus) {
+	mfs := NewMetadataFetchService(store)
 
 	// Get all imported books (library_state = 'imported')
-	books, err := database.GlobalStore.GetAllBooks(10000, 0)
+	books, err := store.GetAllBooks(10000, 0)
 	if err != nil {
 		log.Error("Failed to list books for enrichment: %v", err)
 		return
@@ -1347,10 +1345,10 @@ func enrichITunesImportedBooks(log logger.Logger, status *itunesImportStatus) {
 		enriched++
 		// If metadata found a new author, add to book_authors without clobbering existing multi-author links
 		if resp.Book != nil && resp.Book.AuthorID != nil {
-			existing, _ := database.GlobalStore.GetBookAuthors(book.ID)
+			existing, _ := store.GetBookAuthors(book.ID)
 			if len(existing) <= 1 {
 				// Only one or zero authors — safe to replace with metadata result
-				_ = database.GlobalStore.SetBookAuthors(book.ID, []database.BookAuthor{
+				_ = store.SetBookAuthors(book.ID, []database.BookAuthor{
 					{BookID: book.ID, AuthorID: *resp.Book.AuthorID, Role: "author", Position: 0},
 				})
 			}
@@ -1369,8 +1367,8 @@ func enrichITunesImportedBooks(log logger.Logger, status *itunesImportStatus) {
 
 // organizeImportedBooks moves all imported books into the organized folder structure.
 // Runs as a separate phase after metadata enrichment so author/title are accurate.
-func organizeImportedBooks(log logger.Logger, status *itunesImportStatus) {
-	books, err := database.GlobalStore.GetAllBooks(100000, 0)
+func organizeImportedBooks(store database.Store, log logger.Logger, status *itunesImportStatus) {
+	books, err := store.GetAllBooks(100000, 0)
 	if err != nil {
 		log.Error("Failed to list books for organize: %v", err)
 		return
@@ -1392,7 +1390,7 @@ func organizeImportedBooks(log logger.Logger, status *itunesImportStatus) {
 			log.Warn("Failed to organize '%s': %v", book.Title, err)
 		} else {
 			book.LibraryState = stringPtr("organized")
-			if _, err := database.GlobalStore.UpdateBook(book.ID, book); err != nil {
+			if _, err := store.UpdateBook(book.ID, book); err != nil {
 				log.Error("Failed to update organized path for '%s': %v — rolling back", book.Title, err)
 				if book.FilePath != oldPath {
 					if rbErr := os.Rename(book.FilePath, oldPath); rbErr != nil {
@@ -1417,7 +1415,7 @@ func organizeImportedBooks(log logger.Logger, status *itunesImportStatus) {
 // linkITunesMetadata copies iTunes-specific fields (play count, rating, bookmark,
 // persistent ID, date added) from an import book onto an existing book that was
 // matched by file path. Also ensures the existing book has a version group.
-func linkITunesMetadata(existing *database.Book, importBook *database.Book, track *itunes.Track, log logger.Logger) {
+func linkITunesMetadata(store database.Store, existing *database.Book, importBook *database.Book, track *itunes.Track, log logger.Logger) {
 	changed := false
 	if existing.ITunesPersistentID == nil && importBook.ITunesPersistentID != nil {
 		existing.ITunesPersistentID = importBook.ITunesPersistentID
@@ -1455,7 +1453,7 @@ func linkITunesMetadata(existing *database.Book, importBook *database.Book, trac
 		changed = true
 	}
 	if changed {
-		if _, err := database.GlobalStore.UpdateBook(existing.ID, existing); err != nil {
+		if _, err := store.UpdateBook(existing.ID, existing); err != nil {
 			log.Warn("Failed to link iTunes metadata to %s: %v", existing.ID, err)
 		}
 	}
@@ -1463,14 +1461,14 @@ func linkITunesMetadata(existing *database.Book, importBook *database.Book, trac
 
 // linkAsVersion creates the import book as a non-primary version linked to the
 // existing book's version group. The existing book (organized copy) stays primary.
-func linkAsVersion(existing *database.Book, importBook *database.Book, track *itunes.Track, log logger.Logger) {
+func linkAsVersion(store database.Store, existing *database.Book, importBook *database.Book, track *itunes.Track, log logger.Logger) {
 	// Ensure the existing book has a version group
 	if existing.VersionGroupID == nil || *existing.VersionGroupID == "" {
 		vgID := fmt.Sprintf("vg-%s", ulid.Make().String())
 		existing.VersionGroupID = &vgID
 		isPrimary := true
 		existing.IsPrimaryVersion = &isPrimary
-		if _, err := database.GlobalStore.UpdateBook(existing.ID, existing); err != nil {
+		if _, err := store.UpdateBook(existing.ID, existing); err != nil {
 			log.Warn("Failed to set VG on existing book %s: %v", existing.ID, err)
 			return
 		}
@@ -1482,14 +1480,14 @@ func linkAsVersion(existing *database.Book, importBook *database.Book, track *it
 	importBook.IsPrimaryVersion = &isPrimary
 	importBook.LibraryState = stringPtr("imported")
 
-	created, err := database.GlobalStore.CreateBook(importBook)
+	created, err := store.CreateBook(importBook)
 	if err != nil {
 		log.Warn("Failed to create version link for %s: %v", importBook.Title, err)
 		return
 	}
 
 	// Copy iTunes metadata to the existing primary if it's missing
-	linkITunesMetadata(existing, importBook, track, log)
+	linkITunesMetadata(store, existing, importBook, track, log)
 
 	log.Info("Created version link: %s (iTunes) → %s (primary) in %s", created.ID, existing.ID, *existing.VersionGroupID)
 }
@@ -1625,13 +1623,13 @@ func commonParentDir(tracks []*itunes.Track, opts itunes.ImportOptions) string {
 // records (splitting composites like "A / B") and links them to the book.
 // The first author becomes the primary AuthorID; all are stored in book_authors.
 // This is called both during import and sync for new books.
-func assignAuthorAndSeries(book *database.Book, track *itunes.Track) {
+func assignAuthorAndSeries(store database.Store, book *database.Book, track *itunes.Track) {
 	if book == nil || track == nil {
 		return
 	}
 
 	if track.Artist != "" {
-		ids, err := ensureAuthorIDs(track.Artist)
+		ids, err := ensureAuthorIDs(store, track.Artist)
 		if err == nil && len(ids) > 0 {
 			book.AuthorID = &ids[0]
 			// Store multi-author links (needs book.ID set — caller must
@@ -1650,7 +1648,7 @@ func assignAuthorAndSeries(book *database.Book, track *itunes.Track) {
 
 	seriesName := extractSeriesName(track.Album)
 	if seriesName != "" {
-		seriesID, err := ensureSeriesID(seriesName, book.AuthorID)
+		seriesID, err := ensureSeriesID(store, seriesName, book.AuthorID)
 		if err == nil {
 			book.SeriesID = seriesID
 		}
@@ -1661,7 +1659,7 @@ func assignAuthorAndSeries(book *database.Book, track *itunes.Track) {
 // "Author1 / Author2") into individual author records. Returns all author IDs
 // with the first being the primary. If the name is not composite, returns a
 // single-element slice.
-func ensureAuthorIDs(name string) ([]int, error) {
+func ensureAuthorIDs(store database.Store, name string) ([]int, error) {
 	parts := SplitCompositeAuthorName(name)
 	if len(parts) == 0 {
 		// Not composite — treat as single author
@@ -1675,12 +1673,12 @@ func ensureAuthorIDs(name string) ([]int, error) {
 			continue
 		}
 		part = NormalizeAuthorName(part)
-		author, err := database.GlobalStore.GetAuthorByName(part)
+		author, err := store.GetAuthorByName(part)
 		if err != nil {
 			return nil, err
 		}
 		if author == nil {
-			author, err = database.GlobalStore.CreateAuthor(part)
+			author, err = store.CreateAuthor(part)
 			if err != nil {
 				return nil, err
 			}
@@ -1693,25 +1691,16 @@ func ensureAuthorIDs(name string) ([]int, error) {
 	return ids, nil
 }
 
-// ensureAuthorID resolves a (possibly composite) author name and returns the
-// primary author ID. For backwards compatibility with callers that only need one ID.
-func ensureAuthorID(name string) (*int, error) {
-	ids, err := ensureAuthorIDs(name)
-	if err != nil {
-		return nil, err
-	}
-	return &ids[0], nil
-}
 
-func ensureSeriesID(name string, authorID *int) (*int, error) {
-	series, err := database.GlobalStore.GetSeriesByName(name, authorID)
+func ensureSeriesID(store database.Store, name string, authorID *int) (*int, error) {
+	series, err := store.GetSeriesByName(name, authorID)
 	if err != nil {
 		return nil, err
 	}
 	if series != nil {
 		return &series.ID, nil
 	}
-	series, err = database.GlobalStore.CreateSeries(name, authorID)
+	series, err = store.CreateSeries(name, authorID)
 	if err != nil {
 		return nil, err
 	}
@@ -2003,7 +1992,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		libraryPath = config.AppConfig.ITunesLibraryReadPath
 	}
 	if libraryPath == "" {
-		libraryPath = discoverITunesLibraryPath()
+		libraryPath = discoverITunesLibraryPath(s.Store())
 	}
 	if libraryPath == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no iTunes library path configured or provided"})
@@ -2042,7 +2031,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		}
 	}
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesSync(ctx, operations.LoggerFromReporter(progress), libraryPath, pathMappings)
+		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, pathMappings)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
@@ -2057,11 +2046,11 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 }
 
 // discoverITunesLibraryPath finds the library path from the most recent imported book.
-func discoverITunesLibraryPath() string {
-	if database.GlobalStore == nil {
+func discoverITunesLibraryPath(store database.Store) string {
+	if store == nil {
 		return ""
 	}
-	books, err := database.GlobalStore.GetAllBooks(100, 0)
+	books, err := store.GetAllBooks(100, 0)
 	if err != nil {
 		return ""
 	}
@@ -2075,9 +2064,7 @@ func discoverITunesLibraryPath() string {
 
 // executeITunesSync re-reads an iTunes Library.xml and updates changed fields
 // or imports new audiobooks.
-func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath string, pathMappings []itunes.PathMapping) error {
-	store := database.GlobalStore
-
+func executeITunesSync(ctx context.Context, store database.Store, log logger.Logger, libraryPath string, pathMappings []itunes.PathMapping) error {
 	log.UpdateProgress(0, 0, "Parsing iTunes library XML...")
 	log.Info("Starting iTunes sync from %s", libraryPath)
 
@@ -2316,7 +2303,7 @@ func executeITunesSync(ctx context.Context, log logger.Logger, libraryPath strin
 				log.Warn("Failed to build book from group '%s': %v", group.key, err)
 				continue
 			}
-			assignAuthorAndSeries(book, firstTrack)
+			assignAuthorAndSeries(store, book, firstTrack)
 			book.LibraryState = stringPtr("imported")
 
 			created, err := store.CreateBook(book)
