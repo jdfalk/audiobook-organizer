@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 565db679-19ba-4518-b63e-6892663be41b
 //
 // Filesystem HTTP handlers split out of server.go: home directory,
@@ -79,11 +79,11 @@ func (s *Server) removeExclusion(c *gin.Context) {
 }
 
 func (s *Server) listImportPaths(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	folders, err := database.GlobalStore.GetAllImportPaths()
+	folders, err := s.Store().GetAllImportPaths()
 	if err != nil {
 		internalError(c, "failed to list import paths", err)
 		return
@@ -98,7 +98,7 @@ func (s *Server) listImportPaths(c *gin.Context) {
 }
 
 func (s *Server) addImportPath(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -119,7 +119,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 	folder := createdPath
 	if req.Enabled != nil && !*req.Enabled {
 		folder.Enabled = false
-		if err := database.GlobalStore.UpdateImportPath(folder.ID, folder); err != nil {
+		if err := s.Store().UpdateImportPath(folder.ID, folder); err != nil {
 			// Non-fatal; return created folder anyway with note
 			c.JSON(http.StatusCreated, gin.H{"importPath": folder, "warning": "created but could not update enabled flag"})
 			return
@@ -130,7 +130,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 	if folder.Enabled && operations.GlobalQueue != nil {
 		opID := ulid.Make().String()
 		folderPath := folder.Path
-		op, err := database.GlobalStore.CreateOperation(opID, "scan", &folderPath)
+		op, err := s.Store().CreateOperation(opID, "scan", &folderPath)
 		if err == nil {
 			// Create scan operation function
 			operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -166,7 +166,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 						organized := 0
 						for _, b := range books {
 							// Lookup DB book by file path
-							dbBook, err := database.GlobalStore.GetBookByFilePath(b.FilePath)
+							dbBook, err := s.Store().GetBookByFilePath(b.FilePath)
 							if err != nil || dbBook == nil {
 								continue
 							}
@@ -178,7 +178,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 							if newPath != dbBook.FilePath {
 								dbBook.FilePath = newPath
 								applyOrganizedFileMetadata(dbBook, newPath)
-								if _, err := database.GlobalStore.UpdateBook(dbBook.ID, dbBook); err != nil {
+								if _, err := s.Store().UpdateBook(dbBook.ID, dbBook); err != nil {
 									_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
 								} else {
 									organized++
@@ -195,7 +195,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 				if s.dedupEngine != nil && len(books) > 0 {
 					go func() {
 						for _, b := range books {
-							dbBook, err := database.GlobalStore.GetBookByFilePath(b.FilePath)
+							dbBook, err := s.Store().GetBookByFilePath(b.FilePath)
 							if err != nil || dbBook == nil {
 								continue
 							}
@@ -210,7 +210,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 				folder.BookCount = len(books)
 				now := time.Now()
 				folder.LastScan = &now
-				if err := database.GlobalStore.UpdateImportPath(folder.ID, folder); err != nil {
+				if err := s.Store().UpdateImportPath(folder.ID, folder); err != nil {
 					_ = progress.Log("warn", fmt.Sprintf("Failed to update book count: %v", err), nil)
 				}
 
@@ -238,7 +238,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 					if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
 						org := organizer.NewOrganizer(&config.AppConfig)
 						for _, b := range books {
-							dbBook, err := database.GlobalStore.GetBookByFilePath(b.FilePath)
+							dbBook, err := s.Store().GetBookByFilePath(b.FilePath)
 							if err != nil || dbBook == nil {
 								continue
 							}
@@ -249,7 +249,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 							if newPath != dbBook.FilePath {
 								dbBook.FilePath = newPath
 								applyOrganizedFileMetadata(dbBook, newPath)
-								_, _ = database.GlobalStore.UpdateBook(dbBook.ID, dbBook)
+								_, _ = s.Store().UpdateBook(dbBook.ID, dbBook)
 							}
 						}
 					} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
@@ -259,7 +259,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 				folder.BookCount = len(books)
 				now := time.Now()
 				folder.LastScan = &now
-				_ = database.GlobalStore.UpdateImportPath(folder.ID, folder)
+				_ = s.Store().UpdateImportPath(folder.ID, folder)
 			}
 		}
 	}
@@ -268,7 +268,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 }
 
 func (s *Server) removeImportPath(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -278,7 +278,7 @@ func (s *Server) removeImportPath(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid import path id"})
 		return
 	}
-	if err := database.GlobalStore.DeleteImportPath(id); err != nil {
+	if err := s.Store().DeleteImportPath(id); err != nil {
 		internalError(c, "failed to remove import path", err)
 		return
 	}

@@ -1,5 +1,5 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
@@ -16,7 +16,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -57,7 +56,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -114,7 +113,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 func (s *Server) downloadDiagnosticsExport(c *gin.Context) {
 	opID := c.Param("operationId")
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -181,7 +180,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 		req.Category = "general"
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -291,7 +290,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
 	opID := c.Param("operationId")
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -353,7 +352,7 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return

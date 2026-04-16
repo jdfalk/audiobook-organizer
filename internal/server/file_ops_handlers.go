@@ -1,5 +1,5 @@
 // file: internal/server/file_ops_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5a2e0c6b-1d4f-4a9e-9c3b-6f1a2d7e8b01
 //
 // HTTP handlers for in-flight file I/O operations. Exposes the
@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
 type pendingFileOp struct {
@@ -35,7 +34,7 @@ func (s *Server) handleListPendingFileOps(c *gin.Context) {
 
 	jobs := pool.PendingJobs()
 	out := make([]pendingFileOp, 0, len(jobs))
-	store := database.GlobalStore
+	store := s.Store()
 	for _, j := range jobs {
 		op := pendingFileOp{
 			BookID:    j.BookID,

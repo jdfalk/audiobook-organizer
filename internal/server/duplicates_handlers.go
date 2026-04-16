@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -62,7 +62,7 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "book-dedup-scan", nil)
 	if err != nil {
@@ -188,7 +188,7 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 
 	ms := s.mergeService
 	if ms == nil {
-		ms = NewMergeService(database.GlobalStore)
+		ms = NewMergeService(s.Store())
 	}
 
 	result, err := ms.MergeBooks(req.BookIDs, "")
@@ -221,7 +221,7 @@ func (s *Server) dismissBookDuplicateGroup(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -252,7 +252,7 @@ func (s *Server) mergeBooks(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	keepBook, err := store.GetBookByID(req.KeepID)
 	if err != nil || keepBook == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "keep book not found"})
@@ -373,7 +373,7 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "author-dedup-scan", nil)
 	if err != nil {
@@ -491,7 +491,7 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "series-dedup-scan", nil)
 	if err != nil {
@@ -743,7 +743,7 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 }
 
 func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -853,7 +853,7 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 }
 
 func (s *Server) seriesPrunePreview(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -869,7 +869,7 @@ func (s *Server) seriesPrunePreview(c *gin.Context) {
 }
 
 func (s *Server) seriesPrune(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -1084,7 +1084,7 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	keepSeries, err := store.GetSeriesByID(req.KeepID)
 	if err != nil || keepSeries == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "keep series not found"})
