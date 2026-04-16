@@ -1,5 +1,5 @@
 // file: internal/server/metadata_fetch_service.go
-// version: 4.49.0
+// version: 4.50.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -3281,6 +3281,14 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 		}
 	}
 
+	// Enqueue iTunes writeback so the batcher picks up both location
+	// (if the file was renamed) and metadata changes. The apply
+	// handler also enqueues after this returns; the batcher dedupes
+	// on book ID so the duplicate is harmless.
+	if GlobalWriteBackBatcher != nil {
+		GlobalWriteBackBatcher.Enqueue(id)
+	}
+
 	return nil
 }
 
@@ -3453,6 +3461,13 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 				log.Printf("[WARN] dedup re-check failed for book %s after metadata apply: %v", id, err)
 			}
 		}()
+	}
+
+	// Enqueue iTunes writeback so location changes from the rename
+	// propagate to iTunes. Callers (bulk write-back) also enqueue,
+	// the batcher dedupes.
+	if GlobalWriteBackBatcher != nil {
+		GlobalWriteBackBatcher.Enqueue(id)
 	}
 
 	return nil

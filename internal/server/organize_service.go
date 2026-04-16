@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.23.0
+// version: 1.24.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -18,7 +18,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
@@ -144,34 +143,20 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	// Perform organization
 	stats := orgSvc.organizeBooks(ctx, booksToOrganize, alreadyCorrect, log, req.OperationID)
 
-	// Auto write-back and post-organize tasks
+	// Post-organize auto write-back now rides the batcher.
+	// Previously this ran a bulk location-only write via
+	// collectITLUpdatesWithBookIDs + UpdateITLLocations inline.
+	// That path (a) skipped metadata refresh, (b) only read
+	// book.ITunesPath (stale for older organize runs), and
+	// (c) raced with the batcher writing to the same file.
+	// Each organize worker now calls GlobalWriteBackBatcher.Enqueue
+	// per book; the batcher flushes once after its debounce with
+	// both location + metadata updates and calls MarkITunesSynced
+	// on success.
 	if stats.Organized > 0 || stats.ReOrganized > 0 {
 		// Note: auto-rescan disabled — organize already updates all paths and book_files.
 		// A rescan after organize can trigger another organize, creating an infinite loop.
 		// If a rescan is needed, trigger it manually.
-
-		// Auto write-back to ITL after organize (paths have changed)
-		if writePath := config.AppConfig.ITunesLibraryWritePath; writePath != "" {
-			log.Info("Auto write-back: writing organized paths to ITL")
-			itlUpdates, bookIDs := collectITLUpdatesWithBookIDs(orgSvc.db)
-			if len(itlUpdates) > 0 {
-				result, err := itunes.UpdateITLLocations(writePath, writePath+".tmp", itlUpdates)
-				if err != nil {
-					log.Warn("Auto write-back failed: %v", err)
-				} else {
-					if renameErr := itunes.RenameITLFile(writePath+".tmp", writePath); renameErr != nil {
-						log.Warn("Auto write-back rename failed: %v", renameErr)
-					} else {
-						recordITLReadTime() // mark our write as the latest known state
-						log.Info("Auto write-back: updated %d tracks in ITL", result.UpdatedCount)
-						// Mark written books as synced with iTunes
-						if n, markErr := orgSvc.db.MarkITunesSynced(bookIDs); markErr == nil && n > 0 {
-							log.Info("Auto write-back: marked %d books as iTunes-synced", n)
-						}
-					}
-				}
-			}
-		}
 	}
 
 	return nil
@@ -382,8 +367,13 @@ func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger
 		return "", fmt.Errorf("cannot move %s -> %s: %w (verify both paths exist, target not in use, same filesystem, write permission)", oldPath, targetPath, err)
 	}
 
-	// Update the book record — set path and mark as organized
+	// Update the book record — set path and mark as organized.
+	// ITunesPath is kept in sync so iTunes writeback sends the new
+	// location. Without this, iTunes keeps pointing at the old path
+	// and shows "file missing."
 	book.FilePath = targetPath
+	newITunesPath := computeITunesPath(targetPath)
+	book.ITunesPath = &newITunesPath
 	organizedState := "organized"
 	book.LibraryState = &organizedState
 	now := time.Now()
@@ -436,9 +426,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 
 	// Thread-safe counters and collectors
 	var statsMu sync.Mutex
-	var itlMu sync.Mutex
 	var progressCounter int64
-	var itlUpdates []itunes.ITLLocationUpdate
 
 	const numWorkers = 8
 	jobs := make(chan int, numWorkers*2)
@@ -565,14 +553,13 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 					statsMu.Unlock()
 				}
 
-				// --- Step 3: Collect ITL updates ---
-				if err == nil && oldPath != newPath && book.ITunesPersistentID != nil {
-					itlMu.Lock()
-					itlUpdates = append(itlUpdates, itunes.ITLLocationUpdate{
-						PersistentID: *book.ITunesPersistentID,
-						NewLocation:  newPath,
-					})
-					itlMu.Unlock()
+				// --- Step 3: Enqueue iTunes writeback ---
+				// Route through the global batcher so location + metadata
+				// updates ride together. The batcher iterates book_files to
+				// pick up per-segment PIDs (multi-file books), falling back
+				// to book.ITunesPersistentID for single-file books.
+				if err == nil && oldPath != newPath && GlobalWriteBackBatcher != nil {
+					GlobalWriteBackBatcher.Enqueue(book.ID)
 				}
 
 			progress:
@@ -611,10 +598,10 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		stats.AlreadyCorrect += len(alreadyCorrect)
 	}
 
-	// Write back location changes to iTunes Library.itl
-	if len(itlUpdates) > 0 && config.AppConfig.ITLWriteBackEnabled && config.AppConfig.ITunesLibraryWritePath != "" {
-		orgSvc.writeBackITLLocations(itlUpdates, log)
-	}
+	// iTunes writeback happens via GlobalWriteBackBatcher (enqueued per
+	// book inside the worker loop above). The batcher handles both
+	// location and metadata updates and correctly iterates book_files
+	// to pick up per-segment PIDs for multi-file books.
 
 	summary := fmt.Sprintf("Organize complete: %d organized, %d re-organized, %d already correct (stamped), %d skipped",
 		stats.Organized, stats.ReOrganized, stats.AlreadyCorrect, stats.Skipped)
@@ -845,44 +832,6 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 	}
 
 	return createdBook, nil
-}
-
-func (orgSvc *OrganizeService) writeBackITLLocations(updates []itunes.ITLLocationUpdate, log logger.Logger) {
-	itlPath := config.AppConfig.ITunesLibraryWritePath
-
-	// Create backup before modifying
-	backupPath := itlPath + ".bak"
-	srcData, err := os.ReadFile(itlPath)
-	if err != nil {
-		log.Warn("ITL write-back: failed to read %s: %s", itlPath, err.Error())
-		return
-	}
-	if err := os.WriteFile(backupPath, srcData, 0644); err != nil {
-		log.Warn("ITL write-back: failed to create backup: %s", err.Error())
-		return
-	}
-
-	result, err := itunes.UpdateITLLocations(itlPath, itlPath, updates)
-	if err != nil {
-		log.Warn("ITL write-back failed: %s", err.Error())
-		// Restore backup on failure
-		if restoreErr := os.WriteFile(itlPath, srcData, 0644); restoreErr != nil {
-			log.Error("ITL restore from backup also failed: %s", restoreErr.Error())
-		}
-		return
-	}
-
-	// Validate the written file
-	if err := itunes.ValidateITL(itlPath); err != nil {
-		log.Warn("ITL validation failed after write-back: %s", err.Error())
-		// Restore backup
-		if restoreErr := os.WriteFile(itlPath, srcData, 0644); restoreErr != nil {
-			log.Error("ITL restore from backup also failed: %s", restoreErr.Error())
-		}
-		return
-	}
-
-	log.Info("ITL write-back: updated %d/%d locations in %s", result.UpdatedCount, len(updates), itlPath)
 }
 
 func (orgSvc *OrganizeService) triggerAutomaticRescan(ctx context.Context, log logger.Logger) {
