@@ -1,5 +1,5 @@
 // file: internal/server/organize_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1522f0ec-663c-4527-a6d0-645658206a24
 //
 // Organize/rename HTTP handlers split out of server.go: preview/apply
@@ -31,7 +31,7 @@ func (s *Server) previewRename(c *gin.Context) {
 		return
 	}
 
-	svc := NewRenameService(database.GlobalStore)
+	svc := NewRenameService(s.Store())
 	preview, err := svc.PreviewRename(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -55,14 +55,14 @@ func (s *Server) applyRename(c *gin.Context) {
 
 	// Create an operation for tracking and undo support
 	opID := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(opID, "rename", stringPtr(id))
+	op, err := s.Store().CreateOperation(opID, "rename", stringPtr(id))
 	if err != nil {
 		log.Printf("[ERROR] rename: failed to create operation: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation record"})
 		return
 	}
 
-	svc := NewRenameService(database.GlobalStore)
+	svc := NewRenameService(s.Store())
 	result, err := svc.ApplyRename(id, op.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -84,7 +84,7 @@ func (s *Server) previewOrganize(c *gin.Context) {
 		return
 	}
 
-	svc := NewOrganizePreviewService(database.GlobalStore)
+	svc := NewOrganizePreviewService(s.Store())
 	preview, err := svc.PreviewOrganize(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -112,14 +112,14 @@ func (s *Server) organizeBook(c *gin.Context) {
 
 	// Create an operation for tracking and undo support
 	opID := ulid.Make().String()
-	op, err := database.GlobalStore.CreateOperation(opID, "organize", stringPtr(id))
+	op, err := s.Store().CreateOperation(opID, "organize", stringPtr(id))
 	if err != nil {
 		log.Printf("[ERROR] organize: failed to create operation: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation record"})
 		return
 	}
 
-	book, err := database.GlobalStore.GetBookByID(id)
+	book, err := s.Store().GetBookByID(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
@@ -131,11 +131,11 @@ func (s *Server) organizeBook(c *gin.Context) {
 
 	oldPath := book.FilePath
 	org := organizer.NewOrganizer(&config.AppConfig)
-	log2 := logger.NewWithActivityLog("organize", database.GlobalStore)
+	log2 := logger.NewWithActivityLog("organize", s.Store())
 
 	// Determine whether this is a directory-based (multi-file) book.
 	// Prefer book_files count; fall back to os.Stat only when necessary.
-	bookFiles, _ := database.GlobalStore.GetBookFiles(id)
+	bookFiles, _ := s.Store().GetBookFiles(id)
 	isDir := false
 	if len(bookFiles) > 1 {
 		isDir = true
@@ -182,10 +182,10 @@ func (s *Server) organizeBook(c *gin.Context) {
 		now := time.Now()
 		book.LastOrganizeOperationID = &opID
 		book.LastOrganizedAt = &now
-		if _, updateErr := database.GlobalStore.UpdateBook(book.ID, book); updateErr != nil {
+		if _, updateErr := s.Store().UpdateBook(book.ID, book); updateErr != nil {
 			log.Printf("[WARN] organize: failed to stamp book %s: %v", book.ID, updateErr)
 		}
-		_ = database.GlobalStore.CreateOperationChange(&database.OperationChange{
+		_ = s.Store().CreateOperationChange(&database.OperationChange{
 			ID:          ulid.Make().String(),
 			OperationID: op.ID,
 			BookID:      book.ID,
@@ -214,7 +214,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 	now := time.Now()
 	createdBook.LastOrganizeOperationID = &opID
 	createdBook.LastOrganizedAt = &now
-	if _, updateErr := database.GlobalStore.UpdateBook(createdBook.ID, createdBook); updateErr != nil {
+	if _, updateErr := s.Store().UpdateBook(createdBook.ID, createdBook); updateErr != nil {
 		log.Printf("[WARN] organize: failed to stamp organized book %s: %v", createdBook.ID, updateErr)
 	}
 

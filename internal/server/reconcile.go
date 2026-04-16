@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -71,7 +71,7 @@ type ReconcileApplyResult struct {
 
 // reconcilePreview handles GET /api/v1/operations/reconcile/preview (sync, kept for backward compat)
 func (s *Server) reconcilePreview(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -87,7 +87,7 @@ func (s *Server) reconcilePreview(c *gin.Context) {
 
 // startReconcileScan handles POST /api/v1/operations/reconcile/scan — async background scan
 func (s *Server) startReconcileScan(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -120,7 +120,7 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 // Read-only over DB and filesystem — safe to re-run on restart with no
 // checkpoint, the same shape as runIsbnEnrichment / runMetadataRefreshScan.
 func (s *Server) runReconcileScan(ctx context.Context, opID string, progress operations.ProgressReporter) error {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -140,7 +140,7 @@ func (s *Server) runReconcileScan(ctx context.Context, opID string, progress ope
 
 // latestReconcileScan handles GET /api/v1/operations/reconcile/scan/latest
 func (s *Server) latestReconcileScan(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -181,7 +181,7 @@ func (s *Server) latestReconcileScan(c *gin.Context) {
 
 // startReconcile handles POST /api/v1/operations/reconcile
 func (s *Server) startReconcile(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -762,7 +762,7 @@ func cleanupDuplicateVersionGroups(store database.Store, rootDir string, dryRun 
 // cleanupDuplicateVersionGroupsHandler is the HTTP handler for POST /api/v1/operations/cleanup-version-groups
 func (s *Server) cleanupDuplicateVersionGroupsHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
-	result, err := cleanupDuplicateVersionGroups(database.GlobalStore, config.AppConfig.RootDir, dryRun)
+	result, err := cleanupDuplicateVersionGroups(s.Store(), config.AppConfig.RootDir, dryRun)
 	if err != nil {
 		internalError(c, "failed to cleanup version groups", err)
 		return
@@ -864,7 +864,7 @@ func findBrokenSegmentBooks(store database.Store, dryRun bool) (*BrokenSegmentRe
 // markBrokenSegmentBooksHandler handles POST /api/v1/operations/mark-broken-segments
 func (s *Server) markBrokenSegmentBooksHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
-	result, err := findBrokenSegmentBooks(database.GlobalStore, dryRun)
+	result, err := findBrokenSegmentBooks(s.Store(), dryRun)
 	if err != nil {
 		internalError(c, "failed to find broken segments", err)
 		return
@@ -1222,7 +1222,7 @@ func mergeBookMetadata(dst, src *database.Book) []string {
 // mergeNoVGDuplicatesHandler handles POST /api/v1/operations/merge-novg-duplicates
 func (s *Server) mergeNoVGDuplicatesHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
-	result, err := mergeNoVGDuplicates(database.GlobalStore, config.AppConfig.RootDir, dryRun)
+	result, err := mergeNoVGDuplicates(s.Store(), config.AppConfig.RootDir, dryRun)
 	if err != nil {
 		internalError(c, "failed to merge duplicates", err)
 		return
@@ -1297,7 +1297,7 @@ func assignOrphanVGs(store database.Store, rootDir string) (*AssignVGResult, err
 
 // assignOrphanVGsHandler handles POST /api/v1/operations/assign-orphan-vgs
 func (s *Server) assignOrphanVGsHandler(c *gin.Context) {
-	result, err := assignOrphanVGs(database.GlobalStore, config.AppConfig.RootDir)
+	result, err := assignOrphanVGs(s.Store(), config.AppConfig.RootDir)
 	if err != nil {
 		internalError(c, "failed to assign version groups", err)
 		return

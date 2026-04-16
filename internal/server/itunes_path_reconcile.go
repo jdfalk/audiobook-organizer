@@ -1,5 +1,5 @@
 // file: internal/server/itunes_path_reconcile.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9e3b7a1d-4c2f-4a60-b8d5-2f1e8c0d9a47
 //
 // One-time (repeatable) backfill that walks every book with an
@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -35,7 +34,7 @@ type iTunesPathReconcileResult struct {
 // library and re-enqueues every iTunes-tracked book so the batcher
 // pushes updated locations + metadata back to the ITL.
 func (s *Server) startITunesPathReconcile(c *gin.Context) {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		c.JSON(500, gin.H{"error": "database not initialized"})
 		return
@@ -68,7 +67,7 @@ func (s *Server) startITunesPathReconcile(c *gin.Context) {
 // PIDs (PIDs are not changed), read-write over ITunesPath fields.
 // Idempotent — safe to re-run. Skips books without an iTunes PID.
 func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progress operations.ProgressReporter) error {
-	store := database.GlobalStore
+	store := s.Store()
 	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}
