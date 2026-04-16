@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.168.0
+// version: 1.169.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -760,8 +760,15 @@ func NewServer(store database.Store) *Server {
 	// Register metrics (idempotent)
 	metrics.Register()
 
-	if store == nil {
-		store = database.GetGlobalStore()
+	// Services below need a concrete Store at construction time, so
+	// resolve a non-nil value here for them. But we only pin the
+	// passed-in store on s.store when the caller provided one — if
+	// the caller passed nil, s.Store() falls through to the package
+	// global dynamically, which matters for tests that swap
+	// database.GlobalStore mid-test.
+	resolvedStore := store
+	if resolvedStore == nil {
+		resolvedStore = database.GetGlobalStore()
 	}
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	server := &Server{
@@ -769,29 +776,29 @@ func NewServer(store database.Store) *Server {
 		bgCtx:                  bgCtx,
 		bgCancel:               bgCancel,
 		router:                 router,
-		audiobookService:       NewAudiobookService(store),
-		audiobookUpdateService: NewAudiobookUpdateService(store),
-		batchService:           NewBatchService(store),
-		workService:            NewWorkService(store),
-		authorSeriesService:    NewAuthorSeriesService(store),
+		audiobookService:       NewAudiobookService(resolvedStore),
+		audiobookUpdateService: NewAudiobookUpdateService(resolvedStore),
+		batchService:           NewBatchService(resolvedStore),
+		workService:            NewWorkService(resolvedStore),
+		authorSeriesService:    NewAuthorSeriesService(resolvedStore),
 		filesystemService:      NewFilesystemService(),
-		importPathService:      NewImportPathService(store),
-		importService:          NewImportService(store),
-		scanService:            NewScanService(store),
-		organizeService:        NewOrganizeService(store),
-		metadataFetchService:   NewMetadataFetchService(store),
-		configUpdateService:    NewConfigUpdateService(store),
-		systemService:          NewSystemService(store),
-		metadataStateService:   NewMetadataStateService(store),
-		dashboardService:       NewDashboardService(store),
+		importPathService:      NewImportPathService(resolvedStore),
+		importService:          NewImportService(resolvedStore),
+		scanService:            NewScanService(resolvedStore),
+		organizeService:        NewOrganizeService(resolvedStore),
+		metadataFetchService:   NewMetadataFetchService(resolvedStore),
+		configUpdateService:    NewConfigUpdateService(resolvedStore),
+		systemService:          NewSystemService(resolvedStore),
+		metadataStateService:   NewMetadataStateService(resolvedStore),
+		dashboardService:       NewDashboardService(resolvedStore),
 		dashboardCache:         cache.New[gin.H](30 * time.Second),
 		dedupCache:             cache.New[gin.H](5 * time.Minute),
 		listCache:              cache.New[gin.H](30 * time.Second),
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
-		mergeService:           NewMergeService(store),
-		diagnosticsService:     NewDiagnosticsService(store, nil, config.AppConfig.ITunesLibraryReadPath),
-		changelogService:       NewChangelogService(store),
+		mergeService:           NewMergeService(resolvedStore),
+		diagnosticsService:     NewDiagnosticsService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
+		changelogService:       NewChangelogService(resolvedStore),
 	}
 
 	// Initialize update scheduler

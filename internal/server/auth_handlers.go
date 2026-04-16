@@ -1,5 +1,5 @@
 // file: internal/server/auth_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 1457df2f-af76-46cb-a2f4-c9f6f275f93a
 
 package server
@@ -77,11 +77,11 @@ func clearSessionCookie(c *gin.Context) {
 }
 
 func (s *Server) getAuthStatus(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	count, err := database.GlobalStore.CountUsers()
+	count, err := s.Store().CountUsers()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read auth status"})
 		return
@@ -97,7 +97,7 @@ func (s *Server) getAuthStatus(c *gin.Context) {
 }
 
 func (s *Server) setupInitialAdmin(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -122,7 +122,7 @@ func (s *Server) setupInitialAdmin(c *gin.Context) {
 		req.Email = req.Username + "@local"
 	}
 
-	count, err := database.GlobalStore.CountUsers()
+	count, err := s.Store().CountUsers()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check existing users"})
 		return
@@ -138,7 +138,7 @@ func (s *Server) setupInitialAdmin(c *gin.Context) {
 		return
 	}
 
-	created, err := database.GlobalStore.CreateUser(req.Username, req.Email, "bcrypt", string(hash), []string{"admin"}, "active")
+	created, err := s.Store().CreateUser(req.Username, req.Email, "bcrypt", string(hash), []string{"admin"}, "active")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to create initial user"})
 		return
@@ -151,7 +151,7 @@ func (s *Server) setupInitialAdmin(c *gin.Context) {
 }
 
 func (s *Server) login(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -170,7 +170,7 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	user, err := database.GlobalStore.GetUserByUsername(req.Username)
+	user, err := s.Store().GetUserByUsername(req.Username)
 	if err != nil || user == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
@@ -180,7 +180,7 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 
-	session, err := database.GlobalStore.CreateSession(
+	session, err := s.Store().CreateSession(
 		user.ID,
 		strings.TrimSpace(c.ClientIP()),
 		strings.TrimSpace(c.Request.UserAgent()),
@@ -208,20 +208,20 @@ func (s *Server) me(c *gin.Context) {
 }
 
 func (s *Server) logout(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
 	session, ok := servermiddleware.CurrentSession(c)
 	if ok && session != nil {
-		_ = database.GlobalStore.RevokeSession(session.ID)
+		_ = s.Store().RevokeSession(session.ID)
 	}
 	clearSessionCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
 
 func (s *Server) listMySessions(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -232,7 +232,7 @@ func (s *Server) listMySessions(c *gin.Context) {
 	}
 	currentSession, _ := servermiddleware.CurrentSession(c)
 
-	sessions, err := database.GlobalStore.ListUserSessions(user.ID)
+	sessions, err := s.Store().ListUserSessions(user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list sessions"})
 		return
@@ -253,7 +253,7 @@ func (s *Server) listMySessions(c *gin.Context) {
 }
 
 func (s *Server) revokeMySession(c *gin.Context) {
-	if database.GlobalStore == nil {
+	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
@@ -270,7 +270,7 @@ func (s *Server) revokeMySession(c *gin.Context) {
 		return
 	}
 
-	targetSession, err := database.GlobalStore.GetSession(sessionID)
+	targetSession, err := s.Store().GetSession(sessionID)
 	if err != nil || targetSession == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
@@ -280,7 +280,7 @@ func (s *Server) revokeMySession(c *gin.Context) {
 		return
 	}
 
-	if err := database.GlobalStore.RevokeSession(sessionID); err != nil {
+	if err := s.Store().RevokeSession(sessionID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke session"})
 		return
 	}
