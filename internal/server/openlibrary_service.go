@@ -1,5 +1,5 @@
 // file: internal/server/openlibrary_service.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
@@ -17,7 +17,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/oklog/ulid/v2"
@@ -153,7 +152,7 @@ func (s *Server) startOLDownload(c *gin.Context) {
 	}
 
 	tracker := s.olService.tracker
-	store := database.GlobalStore
+	store := s.Store()
 	opID := ulid.Make().String()
 	folderPath := targetDir
 	if store != nil {
@@ -234,7 +233,7 @@ func (s *Server) startOLImport(c *gin.Context) {
 	}
 	svc.mu.Unlock()
 
-	store := database.GlobalStore
+	store := s.Store()
 	opID := ulid.Make().String()
 	folderPath := targetDir
 	if store != nil {

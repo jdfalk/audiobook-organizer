@@ -1,5 +1,5 @@
 // file: internal/server/itl_rebuild.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8f7e6d5c-4b3a-2c1d-0e9f-8a7b6c5d4e3f
 //
 // iTunes library rebuild service: diffs the current DB state
@@ -234,7 +234,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 		return
 	}
 
-	store := database.GlobalStore
+	store := s.Store()
 	ops, preview, err := computeITLDiff(store, itlPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("diff failed: %v", err)})
