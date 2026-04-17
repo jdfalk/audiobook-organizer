@@ -112,7 +112,7 @@ since it was last edited on 2026-04-11).
 - [x] **6.1** Deluge `move_storage` integration (**M**) — #349
 - [x] **6.2** Audnexus + Hardcover full integration (#7daef15)
 - [x] **6.3** Tag writeback to iTunes via ITL updates (shipped previously)
-- [ ] **6.4** ITL upload / download / partial export (**M**) — tasks 1-3 done (download, upload+validate, backup list+restore); task 4 (partial export) depends on 7.9; task 5 (frontend) pending
+- [ ] **6.4** ITL upload / download / partial export (**M**) — tasks 1-3 + 5 done (download, upload+validate, backup list+restore, frontend panel); task 4 (partial export) depends on 7.9
 
 ### 7. Tagging as Infrastructure — [section](docs/backlog-2026-04-10.md#7-tagging-as-infrastructure)
 

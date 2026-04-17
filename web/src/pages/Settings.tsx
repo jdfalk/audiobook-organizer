@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.36.0
+// version: 1.37.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -44,6 +44,7 @@ import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import BlockedHashesTab from '../components/settings/BlockedHashesTab';
 import DelugeSettingsTab from '../components/settings/DelugeSettingsTab';
 import { ITunesImport } from '../components/settings/ITunesImport';
+import { ITunesTransfer } from '../components/settings/ITunesTransfer';
 import { OpenLibraryDumps } from '../components/settings/OpenLibraryDumps';
 import { SystemInfoTab } from '../components/system/SystemInfoTab';
 import {
@@ -2499,6 +2500,7 @@ export function Settings() {
 
         <TabPanel value={tabValue} index={1}>
           <ITunesImport />
+          <ITunesTransfer />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
