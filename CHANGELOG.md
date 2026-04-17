@@ -11,7 +11,7 @@
 
 #### April 16, 2026 — Feature Foundations (v0.209.0 → v0.211.0)
 
-Major feature work spanning 6 design specs and 49 PRs (#280-#329). Three releases published.
+Major feature work spanning 6 design specs and 54 PRs (#280-#334). Three releases published (v0.209.0, v0.210.0, v0.211.0).
 
 ##### DI Migration (4.4) — Complete
 - Replaced `database.GlobalStore` package global with constructor injection across all services (#280-#291)
@@ -62,12 +62,16 @@ Major feature work spanning 6 design specs and 49 PRs (#280-#329). Three release
 - UserID field on Operation, OperationChange, SystemActivityLog (backward-compatible)
 - `_system` pseudo-user seeded at startup for background task attribution
 
-##### Frontend — API Services + Pages (#328-#329)
+##### Frontend — Full UI (#328-#334)
 - `readingApi.ts`, `playlistApi.ts`, `versionApi.ts`: typed API services for all new features
-- `ReadStatusChip`: clickable status chip with progress bar + manual override menu
-- `Playlists` page: tabbed list + create dialog (static + smart DSL)
-- `Setup` page: first-run admin account wizard
-- Routes + sidebar wired for /playlists and /setup
+- `ReadStatusChip`: clickable status chip with progress bar + manual override menu (#331)
+- `read_status` column in Library grid (hidden by default) (#331)
+- `Playlists` page: tabbed list + create dialog (static + smart DSL) (#328-#329)
+- `Setup` page: first-run admin account wizard (#328)
+- `Users` admin page: user table, invite management, deactivate/reactivate/reset (#334)
+- `AddToPlaylistDialog`: multi-select + create new, wired into BookDetail (#333)
+- Undo button on completed organize operations with preflight conflict check (#332)
+- Routes + sidebar wired for /playlists, /setup, /users
 
 ### Fixed
 - **Pebble prefix iteration slice aliasing** (#318): `append(prefix[:n-1], ...)` mutated the original slice, producing empty ranges. Fixed 10 instances.
