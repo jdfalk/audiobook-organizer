@@ -2251,6 +2251,7 @@ func (s *Server) setupRoutes() {
 			s.registerUserAdminRoutes(protected)
 			s.registerVersionLifecycleRoutes(protected)
 			s.registerEntityTagRoutes(protected)
+			s.registerDelugeRoutes(protected)
 			s.setupBenchRoutes(protected)
 		}
 	}
