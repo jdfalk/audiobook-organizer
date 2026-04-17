@@ -103,7 +103,7 @@ since it was last edited on 2026-04-11).
 - [x] **5.4** Better error messages on organize failures (#273)
 - [x] **5.5** Dev mode "seed library" command (#274)
 - [ ] **5.6** Frontend test coverage baseline (**M**)
-- [ ] **5.7** API documentation (**M**)
+- [x] **5.7** API documentation (**M**) — OpenAPI 3.0.3 spec, 266 paths / 291 ops
 - [x] **5.8** Regenerate ITL test fixtures after format work (**S**) — #348
 - [x] **5.9** Enforce mockery-generated mocks via CI gate (commit `45492c3`)
 
