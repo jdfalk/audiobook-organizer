@@ -140,7 +140,7 @@ func TestCoverage_SetGlobalOperationTimeout(t *testing.T) {
 	defer func() { GlobalQueue = oldQueue }()
 
 	store := newMockStore(t)
-	GlobalQueue = NewOperationQueue(store, 1)
+	GlobalQueue = NewOperationQueue(store, 1, nil)
 	defer GlobalQueue.Shutdown(time.Second)
 
 	SetGlobalOperationTimeout(10 * time.Minute)
@@ -199,7 +199,7 @@ func TestCoverage_LoggerFromReporter(t *testing.T) {
 
 func TestCoverage_EnqueueResume(t *testing.T) {
 	store := newMockStore(t)
-	q := NewOperationQueue(store, 1)
+	q := NewOperationQueue(store, 1, nil)
 	defer q.Shutdown(time.Second)
 
 	t.Run("resume operation executes", func(t *testing.T) {

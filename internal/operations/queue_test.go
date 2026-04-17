@@ -1,5 +1,5 @@
 // file: internal/operations/queue_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 package operations
@@ -43,7 +43,7 @@ func TestNewOperationQueue(t *testing.T) {
 	store := newMockStore(t)
 
 	t.Run("creates queue with specified workers", func(t *testing.T) {
-		q := NewOperationQueue(store, 4)
+		q := NewOperationQueue(store, 4, nil)
 		defer q.Shutdown(time.Second)
 
 		if q.workers != 4 {
@@ -55,7 +55,7 @@ func TestNewOperationQueue(t *testing.T) {
 	})
 
 	t.Run("defaults to 2 workers when 0 specified", func(t *testing.T) {
-		q := NewOperationQueue(store, 0)
+		q := NewOperationQueue(store, 0, nil)
 		defer q.Shutdown(time.Second)
 
 		if q.workers != 2 {
@@ -64,7 +64,7 @@ func TestNewOperationQueue(t *testing.T) {
 	})
 
 	t.Run("defaults to 2 workers when negative specified", func(t *testing.T) {
-		q := NewOperationQueue(store, -1)
+		q := NewOperationQueue(store, -1, nil)
 		defer q.Shutdown(time.Second)
 
 		if q.workers != 2 {
@@ -75,7 +75,7 @@ func TestNewOperationQueue(t *testing.T) {
 
 func TestOperationQueue_Enqueue(t *testing.T) {
 	store := newMockStore(t)
-	q := NewOperationQueue(store, 1)
+	q := NewOperationQueue(store, 1, nil)
 	defer q.Shutdown(time.Second)
 
 	t.Run("enqueues operation successfully", func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestOperationQueue_Enqueue(t *testing.T) {
 
 func TestOperationQueue_Cancel(t *testing.T) {
 	store := newMockStore(t)
-	q := NewOperationQueue(store, 1)
+	q := NewOperationQueue(store, 1, nil)
 	defer q.Shutdown(time.Second)
 
 	t.Run("cancels existing operation", func(t *testing.T) {
@@ -171,7 +171,7 @@ func TestOperationQueue_Cancel(t *testing.T) {
 
 func TestOperationQueue_GetStatus(t *testing.T) {
 	store := newMockStore(t)
-	q := NewOperationQueue(store, 1)
+	q := NewOperationQueue(store, 1, nil)
 	defer q.Shutdown(time.Second)
 
 	t.Run("returns error when store is nil", func(t *testing.T) {
@@ -200,7 +200,7 @@ func TestOperationQueue_GetStatus(t *testing.T) {
 
 func TestOperationQueue_Listeners(t *testing.T) {
 	store := newMockStore(t)
-	q := NewOperationQueue(store, 1)
+	q := NewOperationQueue(store, 1, nil)
 	defer q.Shutdown(time.Second)
 
 	t.Run("adds and notifies listeners", func(t *testing.T) {
@@ -254,7 +254,7 @@ func TestOperationQueue_Shutdown(t *testing.T) {
 	store := newMockStore(t)
 
 	t.Run("graceful shutdown", func(t *testing.T) {
-		q := NewOperationQueue(store, 2)
+		q := NewOperationQueue(store, 2, nil)
 
 		err := q.Shutdown(time.Second)
 		if err != nil {
@@ -263,7 +263,7 @@ func TestOperationQueue_Shutdown(t *testing.T) {
 	})
 
 	t.Run("shutdown with timeout", func(t *testing.T) {
-		q := NewOperationQueue(store, 1)
+		q := NewOperationQueue(store, 1, nil)
 
 		// Add a blocking operation
 		blocker := make(chan struct{})
@@ -290,7 +290,7 @@ func TestOperationQueue_Shutdown(t *testing.T) {
 
 func TestOperationQueue_WorkerExecution(t *testing.T) {
 	store := newMockStore(t)
-	q := NewOperationQueue(store, 2)
+	q := NewOperationQueue(store, 2, nil)
 	defer q.Shutdown(time.Second)
 
 	t.Run("executes operations with progress reporting", func(t *testing.T) {
@@ -362,7 +362,7 @@ func TestOperationQueue_WorkerExecution(t *testing.T) {
 
 func TestOperationQueue_ConcurrentOperations(t *testing.T) {
 	store := newMockStore(t)
-	q := NewOperationQueue(store, 4)
+	q := NewOperationQueue(store, 4, nil)
 	defer q.Shutdown(2 * time.Second)
 
 	var wg sync.WaitGroup
@@ -499,7 +499,7 @@ func TestOperationProgressReporter(t *testing.T) {
 
 func TestActiveOperations(t *testing.T) {
 	store := newMockStore(t)
-	q := NewOperationQueue(store, 1)
+	q := NewOperationQueue(store, 1, nil)
 	defer q.Shutdown(time.Second)
 
 	t.Run("returns empty when no operations", func(t *testing.T) {
@@ -609,7 +609,7 @@ func TestGlobalQueueFunctions(t *testing.T) {
 
 	t.Run("InitializeQueue warns on double init", func(t *testing.T) {
 		store := newMockStore(t)
-		GlobalQueue = NewOperationQueue(store, 1)
+		GlobalQueue = NewOperationQueue(store, 1, nil)
 		defer GlobalQueue.Shutdown(time.Second)
 
 		// Should not panic, just log warning
@@ -633,7 +633,7 @@ func TestGlobalQueueFunctions(t *testing.T) {
 
 	t.Run("ShutdownQueue shuts down global queue", func(t *testing.T) {
 		store := newMockStore(t)
-		GlobalQueue = NewOperationQueue(store, 1)
+		GlobalQueue = NewOperationQueue(store, 1, nil)
 
 		err := ShutdownQueue(time.Second)
 		if err != nil {

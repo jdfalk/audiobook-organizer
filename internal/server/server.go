@@ -666,6 +666,15 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 }
 
 // Server represents the HTTP server
+// activityServiceLogger adapts ActivityService to the operations.ActivityLogger interface.
+type activityServiceLogger struct {
+	svc *ActivityService
+}
+
+func (a *activityServiceLogger) RecordActivity(entry database.ActivityEntry) {
+	_ = a.svc.Record(entry)
+}
+
 type Server struct {
 	store                  database.Store
 	httpServer             *http.Server
@@ -1018,9 +1027,9 @@ func NewServer(store database.Store) *Server {
 
 	// Wire activity log dual-write hooks
 	if server.activityService != nil {
-		// Task 10: Operation changes → activity log
-		operations.ActivityRecorder = func(entry database.ActivityEntry) {
-			_ = server.activityService.Record(entry)
+		// Task 10: Operation changes → activity log (injected via interface)
+		if oq, ok := operations.GlobalQueue.(*operations.OperationQueue); ok {
+			oq.SetActivityLogger(&activityServiceLogger{svc: server.activityService})
 		}
 
 		// Task 11/14: Metadata fetch service → activity log
