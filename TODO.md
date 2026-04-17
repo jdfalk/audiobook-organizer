@@ -109,7 +109,7 @@ since it was last edited on 2026-04-11).
 
 ### 6. Integration / Ecosystem — [section](docs/backlog-2026-04-10.md#6-integration--ecosystem)
 
-- [ ] **6.1** Deluge `move_storage` integration (**M**) — pairs with 3.1
+- [x] **6.1** Deluge `move_storage` integration (**M**) — #349
 - [x] **6.2** Audnexus + Hardcover full integration (#7daef15)
 - [x] **6.3** Tag writeback to iTunes via ITL updates (shipped previously)
 - [ ] **6.4** ITL upload / download / partial export (**M**)

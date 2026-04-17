@@ -146,7 +146,8 @@ func RunVersionSwap(
 	}
 	progress("db_finalized", 90)
 
-	// ── Step 5: Enqueue iTunes writeback ────────────────────────
+	// ── Step 5: Notify Deluge + enqueue iTunes writeback ────────
+	NotifyDelugeAfterVersionSwap(store, fromVer, toVer, book.FilePath)
 	if GlobalWriteBackBatcher != nil {
 		GlobalWriteBackBatcher.Enqueue(params.BookID)
 	}
