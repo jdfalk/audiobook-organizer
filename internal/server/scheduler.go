@@ -329,6 +329,23 @@ func (ts *TaskScheduler) registerAllTasks() {
 	})
 
 	ts.registerTask(TaskDefinition{
+		Name:        "archive_sweep",
+		Description: "Remove soft-deleted books past the 30-day retention window",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperation("archive-sweep", func(_ context.Context, progress operations.ProgressReporter) error {
+				cleaned := SweepArchivedBooks(s.Store())
+				_ = progress.Log("info", fmt.Sprintf("Archive sweep: cleaned %d books", cleaned), nil)
+				return nil
+			})
+		},
+		IsEnabled:              func() bool { return true },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return true },
+	})
+
+	ts.registerTask(TaskDefinition{
 		Name:        "metadata_upgrade",
 		Description: "Upgrade metadata from lower-quality sources (Google Books, Wikipedia) to richer ones (Hardcover, Audible) when a high-confidence match is available",
 		Category:    "maintenance",
