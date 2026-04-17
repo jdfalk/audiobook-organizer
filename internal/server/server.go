@@ -2070,6 +2070,7 @@ func (s *Server) setupRoutes() {
 
 			// Import routes
 			protected.POST("/import/file", s.perm(auth.PermScanTrigger), s.importFile)
+			protected.POST("/import/collision-preview", s.perm(auth.PermLibraryView), s.handleImportCollisionPreview)
 
 			// iTunes import routes
 			itunesGroup := protected.Group("/itunes")
