@@ -160,7 +160,7 @@ Full details: [`memory/project_graceful_file_ops.md`](../../.claude/projects/-Us
 - [x] **GFO-1** UI indicator for in-flight file ops + `GET /api/v1/file-ops/pending` (#270)
 - [x] **GFO-2** Per-book tracking key collision — moved to `pending_file_op:{bookID}:{opType}` (#270)
 - [x] **GFO-3** Resumable ops — `bulk_write_back`, `isbn-enrichment`, `metadata-refresh` (#270), `reconcile_scan` (#272). ~13 cleanup/maintenance types still silently fail on restart but are low-impact.
-- [ ] **GFO-4** No sub-operation phase tracking — if ffmpeg (cover) succeeds but taglib (tags) fails, recovery re-runs ffmpeg pointlessly. Add phase checkpoints inside the apply pipeline
+- [x] **GFO-4** Phase checkpoints in apply pipeline — rename/tags/itunes phases skip on recovery
 - [x] **GFO-5** `GET /operations/recent` ~900ms — fixed by replacing O(N²) bubble sort with `sort.Slice` (#270). Side-index deferred until benchmarks show it's needed.
 
 ### Bulk Metadata Review — Audible series format bug
