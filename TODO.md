@@ -172,7 +172,7 @@ Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/
 ### Design Spec Already Written (but not yet planned)
 
 - [x] **DES-1** Bleve library search — complete 6/7 (#298, #301-#302, #311-#312, #321)
-- [ ] **DES-2** chromem-go embedding store — spec at [`docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md`](docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md)
+- [x] **DES-2** chromem-go embedding store — #351 (store impl + tests; dedup engine wiring follows)
 
 ---
 
