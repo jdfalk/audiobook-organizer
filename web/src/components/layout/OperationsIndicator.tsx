@@ -32,6 +32,7 @@ import {
   getRecentCompletedOperations,
   type Operation,
 } from '../../services/api';
+import { getUndoPreflight, revertOperation as revertOp } from '../../services/versionApi';
 
 function formatOperationType(type: string): string {
   switch (type) {
@@ -467,11 +468,40 @@ export function OperationsIndicator() {
                     e.stopPropagation();
                     e.preventDefault();
                     setAnchorEl(null);
-                    // Use window.location to force full navigation even if already on /library
                     window.location.href = `/library?reviewOp=${op.id}`;
                   }}
                 >
                   Review Results
+                </Button>
+              )}
+              {(op.type === 'organize' || op.type === 'scan_and_organize') && op.status === 'completed' && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  sx={{ mt: 0.5, textTransform: 'none', fontSize: '0.7rem', py: 0, minHeight: 22 }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    try {
+                      const preflight = await getUndoPreflight(op.id);
+                      const conflicts = (preflight.content_changed?.length || 0) +
+                        (preflight.book_deleted?.length || 0) +
+                        (preflight.re_organized?.length || 0);
+                      const msg = conflicts > 0
+                        ? `${preflight.safe} changes can be undone. ${conflicts} conflict(s) detected. Proceed?`
+                        : `Undo ${preflight.safe} change(s) from this operation?`;
+                      if (confirm(msg)) {
+                        await revertOp(op.id);
+                        alert('Operation reverted successfully');
+                      }
+                    } catch (err: unknown) {
+                      const msg = (err as { message?: string })?.message || 'Undo failed';
+                      alert(msg);
+                    }
+                  }}
+                >
+                  Undo
                 </Button>
               )}
             </Box>
