@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.55.0
+// version: 2.56.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -10,439 +10,44 @@ import (
 	"time"
 )
 
-// Store defines the interface for our database operations
-// This abstraction allows us to support both PebbleDB (default) and SQLite3 (opt-in)
+// Store defines the full database surface. Most services should depend
+// on a narrower sub-interface defined in iface_*.go; Store itself is
+// used by the server bootstrap and test fixtures that genuinely need
+// wide access. See docs/superpowers/specs/2026-04-17-store-interface-segregation-design.md.
 type Store interface {
-	// Lifecycle
-	Close() error
-	Reset() error
-
-	// Metadata provenance and overrides
-	GetMetadataFieldStates(bookID string) ([]MetadataFieldState, error)
-	UpsertMetadataFieldState(state *MetadataFieldState) error
-	DeleteMetadataFieldState(bookID, field string) error
-
-	// Metadata change history
-	RecordMetadataChange(record *MetadataChangeRecord) error
-	GetMetadataChangeHistory(bookID string, field string, limit int) ([]MetadataChangeRecord, error)
-	GetBookChangeHistory(bookID string, limit int) ([]MetadataChangeRecord, error)
-
-	// Authors
-	GetAllAuthors() ([]Author, error)
-	GetAuthorByID(id int) (*Author, error)
-	GetAuthorByName(name string) (*Author, error)
-	CreateAuthor(name string) (*Author, error)
-	DeleteAuthor(id int) error
-	UpdateAuthorName(id int, name string) error
-
-	// Author Tombstones (merged author redirects)
-	CreateAuthorTombstone(oldID, canonicalID int) error
-	GetAuthorTombstone(oldID int) (int, error)
-	ResolveTombstoneChains() (int, error)
-
-	// Author Aliases
-	GetAuthorAliases(authorID int) ([]AuthorAlias, error)
-	GetAllAuthorAliases() ([]AuthorAlias, error)
-	CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*AuthorAlias, error)
-	DeleteAuthorAlias(id int) error
-	FindAuthorByAlias(aliasName string) (*Author, error)
-
-	// Book-Author relationships
-	GetBookAuthors(bookID string) ([]BookAuthor, error)
-	SetBookAuthors(bookID string, authors []BookAuthor) error
-	GetBooksByAuthorIDWithRole(authorID int) ([]Book, error)
-	GetAllAuthorBookCounts() (map[int]int, error)
-	GetAllAuthorFileCounts() (map[int]int, error)
-
-	// Narrators
-	CreateNarrator(name string) (*Narrator, error)
-	GetNarratorByID(id int) (*Narrator, error)
-	GetNarratorByName(name string) (*Narrator, error)
-	ListNarrators() ([]Narrator, error)
-
-	// Book-Narrator relationships
-	GetBookNarrators(bookID string) ([]BookNarrator, error)
-	SetBookNarrators(bookID string, narrators []BookNarrator) error
-
-	// Series
-	GetAllSeries() ([]Series, error)
-	GetSeriesByID(id int) (*Series, error)
-	GetSeriesByName(name string, authorID *int) (*Series, error)
-	CreateSeries(name string, authorID *int) (*Series, error)
-	DeleteSeries(id int) error
-	UpdateSeriesName(id int, name string) error
-	GetAllSeriesBookCounts() (map[int]int, error)
-	GetAllSeriesFileCounts() (map[int]int, error)
-
-	// Works (logical title-level grouping across editions/narrations)
-	GetAllWorks() ([]Work, error)
-	GetWorkByID(id string) (*Work, error) // ULID ID
-	CreateWork(work *Work) (*Work, error) // Generates ULID if empty
-	UpdateWork(id string, work *Work) (*Work, error)
-	DeleteWork(id string) error
-	GetBooksByWorkID(workID string) ([]Book, error)
-
-	// Books
-	GetAllBooks(limit, offset int) ([]Book, error)
-	GetBookByID(id string) (*Book, error) // ID is ULID string
-	GetBookByFilePath(path string) (*Book, error)
-	GetBookByITunesPersistentID(persistentID string) (*Book, error)
-	GetBookByFileHash(hash string) (*Book, error)
-	GetBookByOriginalHash(hash string) (*Book, error)
-	GetBookByOrganizedHash(hash string) (*Book, error)
-	GetDuplicateBooks() ([][]Book, error)                            // Returns groups of duplicate books (by hash)
-	GetFolderDuplicates() ([][]Book, error)                        // Returns groups of duplicate books (same folder + title)
-	GetDuplicateBooksByMetadata(threshold float64) ([][]Book, error) // Returns groups of fuzzy-matched duplicate books (title+author+duration)
-	GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]Book, error) // Find books with same title in same directory
-	GetBooksBySeriesID(seriesID int) ([]Book, error)
-	GetBooksByAuthorID(authorID int) ([]Book, error)
-	CreateBook(book *Book) (*Book, error)            // Generates ULID if ID is empty
-	UpdateBook(id string, book *Book) (*Book, error) // ID is ULID string
-
-	// Book Version History (copy-on-write)
-	GetBookSnapshots(id string, limit int) ([]BookSnapshot, error)
-	GetBookAtVersion(id string, ts time.Time) (*Book, error)
-	RevertBookToVersion(id string, ts time.Time) (*Book, error)
-	PruneBookSnapshots(id string, keepCount int) (int, error)
-	SetLastWrittenAt(id string, t time.Time) error   // Stamps last_written_at for write-back
-	MarkITunesSynced(bookIDs []string) (int64, error) // Marks books as synced with iTunes
-	GetITunesDirtyBooks() ([]Book, error)             // Returns books that need iTunes write-back
-	DeleteBook(id string) error                       // ID is ULID string
-	SearchBooks(query string, limit, offset int) ([]Book, error)
-	CountBooks() (int, error)
-	CountFiles() (int, error)
-	CountAuthors() (int, error)
-	CountSeries() (int, error)
-	GetBookCountsByLocation(rootDir string) (library, import_ int, err error)
-	GetBookSizesByLocation(rootDir string) (librarySize, importSize int64, err error)
-	GetDashboardStats() (*DashboardStats, error)
-	ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error)
-
-	// Tombstone operations (for safe deletion)
-	CreateBookTombstone(book *Book) error             // Copy book to tombstone before hard delete
-	GetBookTombstone(id string) (*Book, error)        // Retrieve a tombstone by original book ID
-	DeleteBookTombstone(id string) error              // Remove tombstone after confirmed cleanup
-	ListBookTombstones(limit int) ([]Book, error)     // List tombstones for sweeper
-
-	// Version Management
-	GetBooksByVersionGroup(groupID string) ([]Book, error)
-
-	// Import Paths
-	GetAllImportPaths() ([]ImportPath, error)
-	GetImportPathByID(id int) (*ImportPath, error)
-	GetImportPathByPath(path string) (*ImportPath, error)
-	CreateImportPath(path, name string) (*ImportPath, error)
-	UpdateImportPath(id int, importPath *ImportPath) error
-	DeleteImportPath(id int) error
-
-	// Operations
-	CreateOperation(id, opType string, folderPath *string) (*Operation, error)
-	GetOperationByID(id string) (*Operation, error)
-	GetRecentOperations(limit int) ([]Operation, error)
-	ListOperations(limit, offset int) ([]Operation, int, error)
-	UpdateOperationStatus(id, status string, progress, total int, message string) error
-	UpdateOperationError(id, errorMessage string) error
-	UpdateOperationResultData(id string, resultData string) error
-
-	// Operation State Persistence (resumable operations)
-	SaveOperationState(opID string, state []byte) error
-	GetOperationState(opID string) ([]byte, error)
-	SaveOperationParams(opID string, params []byte) error
-	GetOperationParams(opID string) ([]byte, error)
-	DeleteOperationState(opID string) error
-	GetInterruptedOperations() ([]Operation, error)
-
-	// Operation Change Tracking (for undo/rollback)
-	CreateOperationChange(change *OperationChange) error
-	GetOperationChanges(operationID string) ([]*OperationChange, error)
-	GetBookChanges(bookID string) ([]*OperationChange, error)
-	RevertOperationChanges(operationID string) error
-
-	// Operation Logs
-	AddOperationLog(operationID, level, message string, details *string) error
-	GetOperationLogs(operationID string) ([]OperationLog, error)
-
-	// Operation Summary Logs (persistent across restarts)
-	SaveOperationSummaryLog(op *OperationSummaryLog) error
-	GetOperationSummaryLog(id string) (*OperationSummaryLog, error)
-	ListOperationSummaryLogs(limit, offset int) ([]OperationSummaryLog, error)
-
-	// Operation Results (structured per-book output)
-	CreateOperationResult(result *OperationResult) error
-	GetOperationResults(operationID string) ([]OperationResult, error)
-	GetRecentCompletedOperations(limit int) ([]Operation, error)
-
-	// System activity log
-	AddSystemActivityLog(source, level, message string) error
-	GetSystemActivityLogs(source string, limit int) ([]SystemActivityLog, error)
-
-	// Retention pruning
-	PruneOperationLogs(olderThan time.Time) (int, error)
-	PruneOperationChanges(olderThan time.Time) (int, error)
-	PruneSystemActivityLogs(olderThan time.Time) (int, error)
-
-	DeleteOperationsByStatus(statuses []string) (int, error)
-
-	// User Preferences
-	GetUserPreference(key string) (*UserPreference, error)
-	SetUserPreference(key, value string) error
-	GetAllUserPreferences() ([]UserPreference, error)
-
-	// Settings (persistent configuration with encryption support)
-	GetSetting(key string) (*Setting, error)
-	SetSetting(key, value, typ string, isSecret bool) error
-	GetAllSettings() ([]Setting, error)
-	DeleteSetting(key string) error
-
-	// Playlists
-	CreatePlaylist(name string, seriesID *int, filePath string) (*Playlist, error)
-	GetPlaylistByID(id int) (*Playlist, error)
-	GetPlaylistBySeriesID(seriesID int) (*Playlist, error)
-	AddPlaylistItem(playlistID, bookID, position int) error
-	GetPlaylistItems(playlistID int) ([]PlaylistItem, error)
-
-	// Advanced (Pebble extended keyspace) - optional no-op for SQLite implementation
-	// Users & Auth
-	CreateUser(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error)
-	GetUserByID(id string) (*User, error)
-	GetUserByUsername(username string) (*User, error)
-	GetUserByEmail(email string) (*User, error)
-	UpdateUser(user *User) error
-	ListUsers() ([]User, error)
-
-	// Sessions
-	CreateSession(userID, ip, userAgent string, ttl time.Duration) (*Session, error)
-	GetSession(id string) (*Session, error)
-	RevokeSession(id string) error
-	ListUserSessions(userID string) ([]Session, error)
-	DeleteExpiredSessions(now time.Time) (int, error)
-
-	// Auth bootstrap helpers
-	CountUsers() (int, error)
-
-	// Roles (for multi-user permission model per spec 3.7). Roles are named
-	// bundles of permissions; permissions themselves are Go string constants
-	// validated at route-registration time, not DB rows.
-	GetRoleByID(id string) (*Role, error)
-	GetRoleByName(name string) (*Role, error)
-	ListRoles() ([]Role, error)
-	CreateRole(role *Role) (*Role, error)
-	UpdateRole(role *Role) error
-	DeleteRole(id string) error
-
-	// User playlists (spec 3.4 — static + smart). Distinct from the
-	// auto-generated series-playlists above (Playlist / PlaylistItem).
-	CreateUserPlaylist(pl *UserPlaylist) (*UserPlaylist, error)
-	GetUserPlaylist(id string) (*UserPlaylist, error)
-	GetUserPlaylistByName(name string) (*UserPlaylist, error)
-	GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, error)
-	ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error)
-	UpdateUserPlaylist(pl *UserPlaylist) error
-	DeleteUserPlaylist(id string) error
-	ListDirtyUserPlaylists() ([]UserPlaylist, error)
-
-	// User positions + book state (spec 3.6 read/unread tracking).
-	// Per-user, per-book-segment position tracking. UserBookState is
-	// the derived aggregate — computed from UserPosition rows plus
-	// book_files durations — cached on write for fast UI reads.
-	SetUserPosition(userID, bookID, segmentID string, positionSeconds float64) error
-	GetUserPosition(userID, bookID string) (*UserPosition, error)        // latest across segments
-	ListUserPositionsForBook(userID, bookID string) ([]UserPosition, error)
-	ClearUserPositions(userID, bookID string) error
-	SetUserBookState(state *UserBookState) error
-	GetUserBookState(userID, bookID string) (*UserBookState, error)
-	ListUserBookStatesByStatus(userID, status string, limit, offset int) ([]UserBookState, error)
-	// ListUserPositionsSince returns all UserPosition rows for a
-	// given user whose UpdatedAt is strictly after t. Used by the
-	// iTunes Bookmark write-back pass for the attributed admin user.
-	ListUserPositionsSince(userID string, t time.Time) ([]UserPosition, error)
-
-	// Book versions (spec 3.1 library centralization). Every book has
-	// ≥1 version with status=active; alt versions live under
-	// .versions/{id}/ on the filesystem. File-level data stays in
-	// book_files scoped by version_id.
-	CreateBookVersion(v *BookVersion) (*BookVersion, error)
-	GetBookVersion(id string) (*BookVersion, error)
-	GetBookVersionsByBookID(bookID string) ([]BookVersion, error)
-	GetActiveVersionForBook(bookID string) (*BookVersion, error)
-	UpdateBookVersion(v *BookVersion) error
-	DeleteBookVersion(id string) error
-	// GetBookVersionByTorrentHash is the fast-path fingerprint lookup
-	// used when a new torrent arrives via deluge. Returns nil if no
-	// match (new content) or the version row if the hash matches a
-	// previously-seen version (which may be inactive_purged or
-	// blocked_for_redownload — caller decides the UX).
-	GetBookVersionByTorrentHash(hash string) (*BookVersion, error)
-	ListTrashedBookVersions() ([]BookVersion, error)
-	ListPurgedBookVersions() ([]BookVersion, error)
-
-	// API keys (personal JWT bearer tokens per spec 3.7). The ID is
-	// carried as the JWT's jti claim; verification loads this row to
-	// check RevokedAt before trusting the token.
-	CreateAPIKey(key *APIKey) (*APIKey, error)
-	GetAPIKey(id string) (*APIKey, error)
-	ListAPIKeysForUser(userID string) ([]APIKey, error)
-	RevokeAPIKey(id string) error
-	TouchAPIKeyLastUsed(id string, at time.Time) error
-
-	// Invites (single-use admin-generated account creation tokens per
-	// spec 3.7). ConsumeInvite is atomic and returns the created User.
-	CreateInvite(invite *Invite) (*Invite, error)
-	GetInvite(token string) (*Invite, error)
-	ListActiveInvites() ([]Invite, error)
-	DeleteInvite(token string) error
-	ConsumeInvite(token, passwordHashAlgo, passwordHash string) (*User, error)
-
-	// Per-user preferences
-	SetUserPreferenceForUser(userID, key, value string) error
-	GetUserPreferenceForUser(userID, key string) (*UserPreferenceKV, error)
-	GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error)
-
-	// Book segments & merge operations (deprecated — use BookFile methods below)
-	CreateBookSegment(bookNumericID int, segment *BookSegment) (*BookSegment, error)
-	UpdateBookSegment(segment *BookSegment) error
-	ListBookSegments(bookNumericID int) ([]BookSegment, error)
-	MergeBookSegments(bookNumericID int, newSegment *BookSegment, supersedeIDs []string) error
-	GetBookSegmentByID(segmentID string) (*BookSegment, error)
-	MoveSegmentsToBook(segmentIDs []string, targetBookNumericID int) error
-
-	// Book files (canonical — replaces book_segments)
-	CreateBookFile(file *BookFile) error
-	UpdateBookFile(id string, file *BookFile) error
-	GetBookFiles(bookID string) ([]BookFile, error)
-	GetBookFileByID(bookID, fileID string) (*BookFile, error)
-	GetBookFileByPID(itunesPID string) (*BookFile, error)
-	GetBookFileByPath(filePath string) (*BookFile, error)
-	DeleteBookFile(id string) error
-	DeleteBookFilesForBook(bookID string) error
-	UpsertBookFile(file *BookFile) error
-	BatchUpsertBookFiles(files []*BookFile) error
-	MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error
-
-	// Playback events & progress
-	AddPlaybackEvent(event *PlaybackEvent) error
-	ListPlaybackEvents(userID string, bookNumericID int, limit int) ([]PlaybackEvent, error)
-	UpdatePlaybackProgress(progress *PlaybackProgress) error
-	GetPlaybackProgress(userID string, bookNumericID int) (*PlaybackProgress, error)
-
-	// Stats aggregation
-	IncrementBookPlayStats(bookNumericID int, seconds int) error
-	GetBookStats(bookNumericID int) (*BookStats, error)
-	IncrementUserListenStats(userID string, seconds int) error
-	GetUserStats(userID string) (*UserStats, error)
-
-	// Hash blocklist (do_not_import)
-	IsHashBlocked(hash string) (bool, error)
-	AddBlockedHash(hash, reason string) error
-	RemoveBlockedHash(hash string) error
-	GetAllBlockedHashes() ([]DoNotImport, error)
-	GetBlockedHashByHash(hash string) (*DoNotImport, error)
-
-	// iTunes Library Fingerprints (change detection)
-	SaveLibraryFingerprint(path string, size int64, modTime time.Time, crc32 uint32) error
-	GetLibraryFingerprint(path string) (*LibraryFingerprintRecord, error)
-
-	// Database maintenance
-	Optimize() error
-
-	// Scan cache for incremental scanning
-	GetScanCacheMap() (map[string]ScanCacheEntry, error)
-	UpdateScanCache(bookID string, mtime int64, size int64) error
-	MarkNeedsRescan(bookID string) error
-	GetDirtyBookFolders() ([]string, error)
-
-	// Deferred iTunes Updates (transcode path changes applied on next sync)
-	CreateDeferredITunesUpdate(bookID, persistentID, oldPath, newPath, updateType string) error
-	GetPendingDeferredITunesUpdates() ([]DeferredITunesUpdate, error)
-	MarkDeferredITunesUpdateApplied(id int) error
-	GetDeferredITunesUpdatesByBookID(bookID string) ([]DeferredITunesUpdate, error)
-
-	// Book Path History (file rename/move tracking)
-	RecordPathChange(change *BookPathChange) error
-	GetBookPathHistory(bookID string) ([]BookPathChange, error)
-
-	// Tags (user-defined labels + system-applied provenance).
-	//
-	// Tags exist on three entity types (books / authors / series)
-	// and share the same shape: (entity_id, tag, source, created_at).
-	// The `source` column distinguishes user-applied tags ('user')
-	// from auto-applied system tags ('system'). System tags follow
-	// a `category:subcategory[:detail]` naming convention — see
-	// migrations 47 and 48 for the current namespace.
-	//
-	// The string-list methods (AddBookTag / GetBookTags / ...) are
-	// the user-facing surface — they default to source='user' and
-	// are what the UI edits. Server code that auto-applies tags
-	// should call the *WithSource variants so provenance is
-	// preserved and system tags can be filtered separately.
-
-	// Book tags
-	AddBookTag(bookID, tag string) error
-	AddBookTagWithSource(bookID, tag, source string) error
-	RemoveBookTag(bookID, tag string) error
-	RemoveBookTagsByPrefix(bookID, prefix, source string) error // clear a namespace
-	GetBookTags(bookID string) ([]string, error)
-	GetBookTagsDetailed(bookID string) ([]BookTag, error)
-	SetBookTags(bookID string, tags []string) error // bulk replace (user source)
-	ListAllTags() ([]TagWithCount, error)
-	GetBooksByTag(tag string) ([]string, error) // returns book IDs
-
-	// Author tags (mirror of book tags, keyed by author integer ID)
-	AddAuthorTag(authorID int, tag string) error
-	AddAuthorTagWithSource(authorID int, tag, source string) error
-	RemoveAuthorTag(authorID int, tag string) error
-	RemoveAuthorTagsByPrefix(authorID int, prefix, source string) error
-	GetAuthorTags(authorID int) ([]string, error)
-	GetAuthorTagsDetailed(authorID int) ([]BookTag, error)
-	SetAuthorTags(authorID int, tags []string) error
-	ListAllAuthorTags() ([]TagWithCount, error)
-	GetAuthorsByTag(tag string) ([]int, error)
-
-	// Series tags (mirror of book tags, keyed by series integer ID)
-	AddSeriesTag(seriesID int, tag string) error
-	AddSeriesTagWithSource(seriesID int, tag, source string) error
-	RemoveSeriesTag(seriesID int, tag string) error
-	RemoveSeriesTagsByPrefix(seriesID int, prefix, source string) error
-	GetSeriesTags(seriesID int) ([]string, error)
-	GetSeriesTagsDetailed(seriesID int) ([]BookTag, error)
-	SetSeriesTags(seriesID int, tags []string) error
-	ListAllSeriesTags() ([]TagWithCount, error)
-	GetSeriesByTag(tag string) ([]int, error)
-
-	// External ID mapping (PID map for iTunes, Audible, etc.)
-	CreateExternalIDMapping(mapping *ExternalIDMapping) error
-	GetBookByExternalID(source, externalID string) (string, error)
-	GetExternalIDsForBook(bookID string) ([]ExternalIDMapping, error)
-	IsExternalIDTombstoned(source, externalID string) (bool, error)
-	TombstoneExternalID(source, externalID string) error
-	ReassignExternalIDs(oldBookID, newBookID string) error
-	BulkCreateExternalIDMappings(mappings []ExternalIDMapping) error
-	MarkExternalIDRemoved(source, externalID string) error
-	SetExternalIDProvenance(source, externalID, provenance string) error
-	GetRemovedExternalIDs(source string) ([]ExternalIDMapping, error)
-
-	// Low-level key-value operations (for persistent tracking)
-	SetRaw(key string, value []byte) error
-	// GetRaw reads a single key. Returns (nil, nil) on miss —
-	// callers should treat a nil value + nil error as "not found"
-	// so they don't need a sentinel error constant. Used by
-	// cache layers and anywhere else that needs a lightweight
-	// key-value lookup against the primary store.
-	GetRaw(key string) ([]byte, error)
-	DeleteRaw(key string) error
-	ScanPrefix(prefix string) ([]KVPair, error)
-
-	// User Tags (free-form labels on books)
-	GetBookUserTags(bookID string) ([]string, error)
-	SetBookUserTags(bookID string, tags []string) error
-	AddBookUserTag(bookID string, tag string) error
-	RemoveBookUserTag(bookID string, tag string) error
-
-	// Book Alternative Titles (variant names used for dedup + search)
-	GetBookAlternativeTitles(bookID string) ([]BookAlternativeTitle, error)
-	AddBookAlternativeTitle(bookID, title, source, language string) error
-	RemoveBookAlternativeTitle(bookID, title string) error
-	SetBookAlternativeTitles(bookID string, titles []BookAlternativeTitle) error
+	LifecycleStore
+	BookStore
+	AuthorStore
+	SeriesStore
+	UserStore
+	NarratorStore
+	WorkStore
+	SessionStore
+	RoleStore
+	APIKeyStore
+	InviteStore
+	UserPreferenceStore
+	UserPositionStore
+	BookVersionStore
+	BookFileStore
+	BookSegmentStore
+	PlaylistStore
+	UserPlaylistStore
+	ImportPathStore
+	OperationStore
+	TagStore
+	UserTagStore
+	MetadataStore
+	HashBlocklistStore
+	ITunesStateStore
+	PathHistoryStore
+	ExternalIDStore
+	RawKVStore
+	PlaybackStore
+	SettingsStore
+	StatsStore
+	MaintenanceStore
+	SystemActivityStore
 }
 
 // BookAlternativeTitle represents a variant name for a book — romaji
