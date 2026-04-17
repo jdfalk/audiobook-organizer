@@ -219,6 +219,10 @@ type Config struct {
 	ITunesPathMappings     []ITunesPathMap `json:"itunes_path_mappings"`      // Stored path mappings for write-back
 	ITunesAutoWriteBack    bool            `json:"itunes_auto_write_back"`    // Auto write-back on every edit (batched)
 
+	// Deluge integration
+	DelugeWebURL      string `json:"deluge_web_url"`      // e.g. "http://172.16.2.30:8112"
+	DelugeWebPassword string `json:"deluge_web_password"` // Web UI password (default: "deluge")
+
 	// Auto-update
 	AutoUpdateEnabled      bool   `json:"auto_update_enabled"`
 	AutoUpdateChannel      string `json:"auto_update_channel"`       // "stable" or "develop"
