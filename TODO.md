@@ -27,29 +27,19 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🔧 CI / Release Infrastructure — In Progress (April 14, 2026)
+## 🔧 CI / Release Infrastructure — Complete
 
-The default `GITHUB_TOKEN` can't push refs whose reachable commits
-modify `.github/workflows/` files. This blocked v0.207.0. Fix is a
-GitHub App that mints short-lived tokens with `workflows: write`.
-
-**Cross-repo work** (ghcommon, audiobook-organizer, release-go-action,
-gha-release-go):
-
-- [x] Revert corrupted `release-go-action/action.yml` (2 MCP push bugs from earlier session)
+- [x] Revert corrupted `release-go-action/action.yml`
 - [x] `ghcommon/scripts/setup-ci-app.sh` — one-shot GitHub App creator + secret distributor
 - [x] `ghcommon/reusable-release.yml` — stale draft + superseded-RC auto-cleanup on stable cuts
 - [x] `ghcommon/reusable-release.yml` — keep-5 most-recent RCs policy (`RC_KEEP_COUNT`)
-- [ ] Create `jdfalk-ci-bot` GitHub App via manifest flow (one browser click)
-- [ ] Distribute `CI_APP_ID` + `CI_APP_PRIVATE_KEY` to: audiobook-organizer, ghcommon, release-go-action, gha-release-go, release-frontend-action, gha-release-frontend, release-docker-action, gha-release-docker
-- [ ] Install App on all target repos
-- [ ] Patch `release-go-action/action.yml` — token-in-URL push using `github-token` input
-- [ ] Wire `github-token` input through `gha-release-go`
-- [ ] Wire `actions/create-github-app-token@v1` into `ghcommon/reusable-release.yml`
-- [ ] Cut production release `v0.207.0`
-- [ ] Cut production release `v0.208.0`
-
-**Session memory:** `project_session_state.md` has full context of what broke and why.
+- [x] Create `jdfalk-ci-bot` GitHub App — done, secrets `CI_APP_ID` + `CI_APP_PRIVATE_KEY` present
+- [x] Distribute secrets to repos — confirmed present on audiobook-organizer
+- [x] Install App on target repos — working (releases use it for tag push)
+- [x] `release-go-action/action.yml` — `github-token` input wired
+- [x] `gha-release-go` — passes token through
+- [x] `ghcommon/reusable-release.yml` — `create-github-app-token` wired
+- [x] v0.207.0 through v0.213.0 all released successfully
 
 ---
 
@@ -65,7 +55,7 @@ since it was last edited on 2026-04-11).
 - [x] **1.2** Duration-based similarity signal (shipped v0.206.0, commit `4c6139e`)
 - [x] **1.3** Dedup scan as a real Operation (#227)
 - [x] **1.4** LLM verdict auto-apply above confidence threshold (shipped v0.206.0, commit `28257a9`)
-- [ ] **1.5** Side-by-side metadata diff in cluster card (**M**)
+- [x] **1.5** Side-by-side metadata diff in cluster card (**M**) — MetadataDiffTable component #348
 - [x] **1.6** Import-time collision preview (**M**) — #343
 - [x] **1.7** Per-side "merge into this" quick action (#230)
 - [x] **1.8** Smarter "split cluster" with edge preview (#233)
@@ -114,7 +104,7 @@ since it was last edited on 2026-04-11).
 - [x] **5.5** Dev mode "seed library" command (#274)
 - [ ] **5.6** Frontend test coverage baseline (**M**)
 - [ ] **5.7** API documentation (**M**)
-- [ ] **5.8** Regenerate ITL test fixtures after format work (**S**) — prereq for 7.9
+- [x] **5.8** Regenerate ITL test fixtures after format work (**S**) — #348
 - [x] **5.9** Enforce mockery-generated mocks via CI gate (commit `45492c3`)
 
 ### 6. Integration / Ecosystem — [section](docs/backlog-2026-04-10.md#6-integration--ecosystem)
