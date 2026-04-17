@@ -71,6 +71,7 @@ import {
   type EventSourceStatus,
 } from '../services/eventSourceManager';
 import { pollOperation } from '../utils/operationPolling';
+import AddToPlaylistDialog from '../components/audiobooks/AddToPlaylistDialog';
 
 interface ImportPath {
   id: number;
@@ -284,6 +285,7 @@ export const Library = () => {
   const [batchDeleteInProgress, setBatchDeleteInProgress] = useState(false);
   const [batchRestoreInProgress, setBatchRestoreInProgress] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [batchPlaylistOpen, setBatchPlaylistOpen] = useState(false);
   const [mergePrimaryId, setMergePrimaryId] = useState<string>('');
   const [metadataReviewOpId, setMetadataReviewOpId] = useState<string | null>(
     searchParams.get('reviewOp')
@@ -2172,6 +2174,14 @@ export const Library = () => {
                       </Button>
                     </span>
                   </Tooltip>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setBatchPlaylistOpen(true)}
+                    disabled={selectedAudiobooks.length === 0}
+                  >
+                    Add to Playlist
+                  </Button>
                   <Tooltip
                     title={selectedAudiobooks.length < 2 ? 'Select 2+ books' : ''}
                     disableHoverListener={selectedAudiobooks.length >= 2}
@@ -3332,6 +3342,11 @@ export const Library = () => {
           </Paper>
         )}
       </Box>
+      <AddToPlaylistDialog
+        open={batchPlaylistOpen}
+        onClose={() => setBatchPlaylistOpen(false)}
+        bookIds={selectedAudiobooks.map((b) => b.id)}
+      />
     </Box>
   );
 };
