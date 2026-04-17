@@ -900,6 +900,17 @@ func NewServer(store database.Store) *Server {
 				server.dedupEngine.AuthorHighThreshold = config.AppConfig.DedupAuthorHighThreshold
 				server.dedupEngine.AuthorLowThreshold = config.AppConfig.DedupAuthorLowThreshold
 				server.dedupEngine.AutoMergeEnabled = config.AppConfig.DedupAutoMergeEnabled
+
+				// Wire chromem-go ANN store if available.
+				chromemDir := filepath.Dir(embeddingDBPath)
+				chromemStore, chromemErr := database.NewChromemEmbeddingStore(chromemDir, 3072)
+				if chromemErr != nil {
+					log.Printf("[WARN] chromem-go init failed (falling back to SQLite linear scan): %v", chromemErr)
+				} else {
+					server.dedupEngine.SetChromemStore(chromemStore)
+					log.Println("[INFO] chromem-go ANN store active for dedup Layer 2")
+				}
+
 				log.Println("[INFO] Embedding store and dedup engine initialized")
 				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
 

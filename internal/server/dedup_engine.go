@@ -23,6 +23,7 @@ import (
 //   - Layer 3: LLM review (expensive, batch only) — for ambiguous candidates
 type DedupEngine struct {
 	embedStore   *database.EmbeddingStore
+	chromemStore *database.ChromemEmbeddingStore
 	bookStore    database.Store
 	embedClient  *ai.EmbeddingClient
 	llmParser    *ai.OpenAIParser
@@ -73,6 +74,13 @@ func NewDedupEngine(
 		LLMAuthorHigh:       0.85,
 		LLMMaxPairsPerRun:   200,
 	}
+}
+
+// SetChromemStore configures the ANN vector store for Layer 2.
+// When set, FindSimilar queries go through chromem instead of
+// the SQLite linear scan.
+func (de *DedupEngine) SetChromemStore(cs *database.ChromemEmbeddingStore) {
+	de.chromemStore = cs
 }
 
 // CheckBook runs Layer 1 (exact) and Layer 2 (embedding) dedup checks for a book.
@@ -656,9 +664,27 @@ func (de *DedupEngine) findSimilarBooks(ctx context.Context, bookID string) erro
 		querySeriesNum = seriesNumberOf(queryBook)
 	}
 
-	results, err := de.embedStore.FindSimilar("book", emb.Vector, float32(de.BookLowThreshold), 20)
-	if err != nil {
-		return err
+	var results []database.SimilarityResult
+	if de.chromemStore != nil {
+		filter := map[string]string{"is_primary_version": "true"}
+		chromemResults, cErr := de.chromemStore.FindSimilar(ctx, "book", emb.Vector, 20, filter)
+		if cErr != nil {
+			return cErr
+		}
+		for _, cr := range chromemResults {
+			if cr.Similarity >= float32(de.BookLowThreshold) {
+				results = append(results, database.SimilarityResult{
+					EntityID:   cr.EntityID,
+					Similarity: cr.Similarity,
+				})
+			}
+		}
+	} else {
+		var fErr error
+		results, fErr = de.embedStore.FindSimilar("book", emb.Vector, float32(de.BookLowThreshold), 20)
+		if fErr != nil {
+			return fErr
+		}
 	}
 
 	for _, r := range results {
@@ -736,9 +762,23 @@ func (de *DedupEngine) CheckAuthor(ctx context.Context, authorID int) error {
 		return nil // no embedding, nothing to compare
 	}
 
-	results, err := de.embedStore.FindSimilar("author", emb.Vector, float32(de.AuthorLowThreshold), 20)
-	if err != nil {
-		return err
+	var results []database.SimilarityResult
+	if de.chromemStore != nil {
+		chromemResults, cErr := de.chromemStore.FindSimilar(ctx, "author", emb.Vector, 20, nil)
+		if cErr != nil {
+			return cErr
+		}
+		for _, cr := range chromemResults {
+			if cr.Similarity >= float32(de.AuthorLowThreshold) {
+				results = append(results, database.SimilarityResult{EntityID: cr.EntityID, Similarity: cr.Similarity})
+			}
+		}
+	} else {
+		var fErr error
+		results, fErr = de.embedStore.FindSimilar("author", emb.Vector, float32(de.AuthorLowThreshold), 20)
+		if fErr != nil {
+			return fErr
+		}
 	}
 
 	for _, r := range results {
