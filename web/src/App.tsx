@@ -58,6 +58,8 @@ const Diagnostics = lazy(() =>
   import('./pages/Diagnostics').then((m) => ({ default: m.Diagnostics }))
 );
 const ActivityLog = lazy(() => import('./pages/ActivityLog'));
+const Playlists = lazy(() => import('./pages/Playlists'));
+const Setup = lazy(() => import('./pages/Setup'));
 
 function App() {
   const auth = useAuth();
@@ -210,6 +212,8 @@ function App() {
               <Route path="/authors" element={<Authors />} />
               <Route path="/diagnostics" element={<Diagnostics />} />
               <Route path="/activity" element={<ActivityLog />} />
+              <Route path="/playlists" element={<Playlists />} />
+              <Route path="/setup" element={<Setup />} />
             </Routes>
           </Suspense>
         </MainLayout>
