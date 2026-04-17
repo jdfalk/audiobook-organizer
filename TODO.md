@@ -92,7 +92,7 @@ since it was last edited on 2026-04-11).
 - [x] **4.3** Move write-back queue to a durable outbox (**M**) — #344
 - [x] **4.4** Replace `database.GlobalStore` package var with DI (**L**) — complete (#280-#291)
 - [x] **4.5** Property-based tests for dedup engine (expanded to full codebase) (**M**) — complete (#357, #359, #361, #362, #363, #365, #366, #367, #368 — ~57 property tests across database / search / server / auth)
-- [ ] **4.6** Chaos tests for the embedding store under shutdown (**M**)
+- [x] **4.6** Chaos tests for the embedding store under shutdown (**M**) — 7 tests: double-close, ops-after-close, concurrent write/read during close, mixed access, durability, WAL checkpoint
 - [ ] **4.7** Per-workload store evaluation: Pebble vs SQLite vs PostgreSQL vs Go-native NoSQL (**L** research)
 
 ### 5. UX / DX Polish — [section](docs/backlog-2026-04-10.md#5-ux--dx-polish)
