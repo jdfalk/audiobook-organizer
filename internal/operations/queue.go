@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -18,10 +18,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 )
-
-// ActivityRecorder is a package-level hook for dual-writing operation changes
-// to the unified activity log. Set by server.go after the ActivityService is created.
-var ActivityRecorder func(entry database.ActivityEntry)
 
 // Priority levels for operations
 const (
@@ -80,7 +76,8 @@ type OperationQueue struct {
 	wg         sync.WaitGroup
 	ctx        context.Context
 	cancel     context.CancelFunc
-	listeners  map[string][]ProgressListener
+	listeners      map[string][]ProgressListener
+	activityLogger ActivityLogger
 }
 
 // ProgressListener receives progress updates
@@ -94,7 +91,7 @@ type OperationProgress struct {
 }
 
 // NewOperationQueue creates a new operation queue
-func NewOperationQueue(store database.Store, workers int) *OperationQueue {
+func NewOperationQueue(store database.Store, workers int, activityLogger ActivityLogger) *OperationQueue {
 	if workers <= 0 {
 		workers = 2 // Default to 2 workers
 	}
@@ -109,7 +106,8 @@ func NewOperationQueue(store database.Store, workers int) *OperationQueue {
 		timeout:    120 * time.Minute,
 		ctx:        ctx,
 		cancel:     cancel,
-		listeners:  make(map[string][]ProgressListener),
+		listeners:      make(map[string][]ProgressListener),
+		activityLogger: activityLogger,
 	}
 
 	// Start worker goroutines
@@ -283,8 +281,8 @@ func (q *OperationQueue) worker(id int) {
 
 			// Activity log: operation started
 			log.Printf("[audit] Operation started: %s (id=%s)", op.Type, op.ID)
-			if ActivityRecorder != nil {
-				ActivityRecorder(database.ActivityEntry{
+			if q.activityLogger != nil {
+				q.activityLogger.RecordActivity(database.ActivityEntry{
 					Tier:        "audit",
 					Type:        "operation_started",
 					Level:       "info",
@@ -296,7 +294,7 @@ func (q *OperationQueue) worker(id int) {
 			}
 
 			// Create progress reporter backed by OperationLogger.
-			storeAdapter := &queueStoreAdapter{store: q.store}
+			storeAdapter := &queueStoreAdapter{store: q.store, activityLogger: q.activityLogger}
 			var realtimeHub logger.RealtimeHub
 			if hub := realtime.GetGlobalHub(); hub != nil {
 				realtimeHub = hub
@@ -344,9 +342,9 @@ func (q *OperationQueue) worker(id int) {
 				log.Printf("Operation %s failed: %v", op.ID, err)
 				// Activity log: operation failed
 				log.Printf("[audit] Operation failed: %s: %v", op.Type, err)
-				if ActivityRecorder != nil {
+				if q.activityLogger != nil {
 					errMsg := err.Error()
-					ActivityRecorder(database.ActivityEntry{
+					q.activityLogger.RecordActivity(database.ActivityEntry{
 						Tier:        "audit",
 						Type:        "operation_failed",
 						Level:       "error",
@@ -382,8 +380,8 @@ func (q *OperationQueue) worker(id int) {
 				log.Printf("Operation %s completed successfully", op.ID)
 				// Activity log: operation completed
 				log.Printf("[audit] Operation completed: %s", op.Type)
-				if ActivityRecorder != nil {
-					ActivityRecorder(database.ActivityEntry{
+				if q.activityLogger != nil {
+					q.activityLogger.RecordActivity(database.ActivityEntry{
 						Tier:        "audit",
 						Type:        "operation_completed",
 						Level:       "info",
@@ -553,7 +551,8 @@ func (r *operationProgressReporter) IsCanceled() bool {
 
 // queueStoreAdapter bridges database.Store to logger.OperationStore.
 type queueStoreAdapter struct {
-	store database.Store
+	store          database.Store
+	activityLogger ActivityLogger
 }
 
 func (a *queueStoreAdapter) AddOperationLog(operationID, level, message string, details *string) error {
@@ -570,8 +569,8 @@ func (a *queueStoreAdapter) CreateOperationChange(change interface{}) error {
 	if c, ok := change.(*database.OperationChange); ok {
 		err := a.store.CreateOperationChange(c)
 		// Dual-write to unified activity log
-		if ActivityRecorder != nil {
-			ActivityRecorder(database.ActivityEntry{
+		if a.activityLogger != nil {
+			a.activityLogger.RecordActivity(database.ActivityEntry{
 				Tier:        "change",
 				Type:        c.ChangeType,
 				Level:       "info",
@@ -716,8 +715,18 @@ func InitializeQueue(store database.Store, workers int) {
 		log.Println("Warning: operation queue already initialized")
 		return
 	}
-	GlobalQueue = NewOperationQueue(store, workers)
+	GlobalQueue = NewOperationQueue(store, workers, nil) // logger wired later by server
 	log.Printf("Operation queue initialized with %d workers", workers)
+}
+
+// SetActivityLogger assigns an ActivityLogger to the queue after construction.
+// This supports the pattern where the queue is created before the activity service
+// is available (e.g., InitializeQueue runs before NewServer).
+func (q *OperationQueue) SetActivityLogger(logger ActivityLogger) {
+	if q == nil {
+		return
+	}
+	q.activityLogger = logger
 }
 
 // SetStore assigns a database store to an already-initialized queue if it doesn't have one yet.

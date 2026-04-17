@@ -50,7 +50,7 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 
 	database.SetGlobalStore(store)
 
-	queue := operations.NewOperationQueue(store, 2)
+	queue := operations.NewOperationQueue(store, 2, nil)
 	operations.GlobalQueue = queue
 
 	hub := realtime.NewEventHub()
