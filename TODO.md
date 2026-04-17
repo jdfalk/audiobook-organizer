@@ -88,7 +88,7 @@ since it was last edited on 2026-04-11).
 - [x] **3.2** Bulk organize undo via `operation_changes` (**M**) — 6/7 tasks (#318-#319, #326, #332)
 - [x] **3.3** Bulk edit metadata across selected books (shipped v0.206.0)
 - [x] **3.4** Smart playlists (**M**) — complete 9/9 (#307-#309, #338-#340)
-- [ ] **3.5** Cover art browse/restore UI (**S**)
+- [x] **3.5** Cover art browse/restore UI (**S**) — #346
 - [x] **3.6** Read/unread tracking (**M**) — complete 8/8 (#300, #303, #317, #331, #336)
 - [x] **3.7** Multi-user support (**L**) — complete 8/8 (#292-#295, #313-#314, #322, #334)
 - [ ] **3.8** Plex-style HTTP media server API (**L**)

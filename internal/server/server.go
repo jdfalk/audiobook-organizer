@@ -2097,6 +2097,8 @@ func (s *Server) setupRoutes() {
 			// Cover art
 			protected.GET("/covers/proxy", s.perm(auth.PermLibraryView), s.handleCoverProxy)
 			protected.GET("/covers/local/:filename", s.perm(auth.PermLibraryView), s.handleLocalCover)
+			protected.GET("/audiobooks/:id/cover-history", s.perm(auth.PermLibraryView), s.handleListCoverHistory)
+			protected.POST("/audiobooks/:id/cover-history/restore", s.perm(auth.PermLibraryEditMetadata), s.handleRestoreCover)
 
 			// Unified task/scheduler routes
 			protected.GET("/tasks", s.perm(auth.PermSettingsManage), s.listTasks)
