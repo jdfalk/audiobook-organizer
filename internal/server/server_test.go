@@ -54,7 +54,7 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	require.NoError(t, err)
 
 	// Initialize operation queue (with 2 workers)
-	queue := operations.NewOperationQueue(store, 2)
+	queue := operations.NewOperationQueue(store, 2, nil)
 	operations.GlobalQueue = queue
 
 	// Initialize realtime hub
