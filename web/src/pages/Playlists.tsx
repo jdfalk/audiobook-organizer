@@ -3,6 +3,7 @@
 // guid: 2b0c1d6e-3f4a-4a70-b8c5-3d7e0f1b9a99
 
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -37,6 +38,7 @@ import {
 } from '../services/playlistApi';
 
 export default function Playlists() {
+  const navigate = useNavigate();
   const [playlists, setPlaylists] = useState<UserPlaylist[]>([]);
   const [tab, setTab] = useState<'all' | 'static' | 'smart'>('all');
   const [createOpen, setCreateOpen] = useState(false);
@@ -93,7 +95,7 @@ export default function Playlists() {
                 </IconButton>
               }
             >
-              <ListItemButton>
+              <ListItemButton onClick={() => navigate(`/playlists/${pl.id}`)}>
                 <ListItemText
                   primary={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
