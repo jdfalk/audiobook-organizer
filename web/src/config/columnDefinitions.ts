@@ -469,6 +469,18 @@ export const ALL_COLUMNS: ColumnDefinition[] = [
     defaultVisible: false,
   },
   {
+    id: 'read_status',
+    label: 'Read Status',
+    category: 'Lifecycle',
+    accessor: () => '',
+    sortKey: 'read_status',
+    searchKey: 'read_status',
+    defaultWidth: 120,
+    minWidth: 80,
+    sortable: false,
+    defaultVisible: false,
+  },
+  {
     id: 'created_at',
     label: 'Created',
     category: 'Lifecycle',
