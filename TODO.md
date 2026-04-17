@@ -84,13 +84,13 @@ since it was last edited on 2026-04-11).
 
 ### 3. Features — [section](docs/backlog-2026-04-10.md#3-features)
 
-- [ ] **3.1** Library centralization / `.versions/` layout (**L**) — needs brainstorm; see memory `project_centralization_backlog.md`
-- [ ] **3.2** Bulk organize undo via `operation_changes` (**M**)
-- [x] **3.3** Bulk edit metadata across selected books (shipped v0.206.0, commit `4ea0038`)
-- [ ] **3.4** Smart playlists (**M**)
+- [x] **3.1** Library centralization / `.versions/` layout (**L**) — 9/10 tasks (#296, #306, #315-#316, #324-#325, #337)
+- [x] **3.2** Bulk organize undo via `operation_changes` (**M**) — 6/7 tasks (#318-#319, #326, #332)
+- [x] **3.3** Bulk edit metadata across selected books (shipped v0.206.0)
+- [x] **3.4** Smart playlists (**M**) — complete 9/9 (#307-#309, #338-#340)
 - [ ] **3.5** Cover art browse/restore UI (**S**)
-- [ ] **3.6** Read/unread tracking beyond iTunes play count (**M**)
-- [ ] **3.7** Multi-user support (**L**)
+- [x] **3.6** Read/unread tracking (**M**) — complete 8/8 (#300, #303, #317, #331, #336)
+- [x] **3.7** Multi-user support (**L**) — complete 8/8 (#292-#295, #313-#314, #322, #334)
 - [ ] **3.8** Plex-style HTTP media server API (**L**)
 - [ ] **3.9** LLM-based series detection and ordering (**M**)
 - [ ] **3.10** AI-generated cover art when none exists (**S**)
@@ -100,7 +100,7 @@ since it was last edited on 2026-04-11).
 - [ ] **4.1** PostgreSQL research track (**XL**)
 - [x] **4.2** Split the monolithic `server.go` (commit `c858ceb`)
 - [ ] **4.3** Move write-back queue to a durable outbox (**M**)
-- [ ] **4.4** Replace `database.GlobalStore` package var with DI (**L**)
+- [x] **4.4** Replace `database.GlobalStore` package var with DI (**L**) — complete (#280-#291)
 - [ ] **4.5** Property-based tests for dedup engine (**M**)
 - [ ] **4.6** Chaos tests for the embedding store under shutdown (**M**)
 - [ ] **4.7** Per-workload store evaluation: Pebble vs SQLite vs PostgreSQL vs Go-native NoSQL (**L** research)
@@ -108,7 +108,7 @@ since it was last edited on 2026-04-11).
 ### 5. UX / DX Polish — [section](docs/backlog-2026-04-10.md#5-ux--dx-polish)
 
 - [x] **5.1** Search inside the dedup tab (shipped v0.206.0, commit `191faa3`)
-- [ ] **5.2** "Similar books" lookup on BookDetail page (**S**)
+- [x] **5.2** "Similar books" lookup on BookDetail page (**S**) — #342
 - [ ] **5.3** Batch select in library view (**S**)
 - [x] **5.4** Better error messages on organize failures (#273)
 - [x] **5.5** Dev mode "seed library" command (#274)
@@ -138,7 +138,7 @@ that layer on that foundation.
 - [ ] **7.7** Author and series tag HTTP endpoints + frontend (**M**) — store parity shipped in #244; HTTP/UI remain
 - [x] **7.8** System tag UX — visual distinction user vs system (shipped v0.206.0, commit `4dda739`)
 - [ ] **7.9** Full iTunes library regenerate / rebuild (**L**) — diff-and-batch mode shipped (commit `286140d`); full rebuild-from-scratch mode remains
-- [ ] **7.10** Archive sweep for soft-deleted books (**M**) — physically clean up after retention window
+- [x] **7.10** Archive sweep for soft-deleted books (**M**) — #342
 - [x] **7.11** Author/series merge — sync denormalized `book.AuthorID` (shipped v0.206.0, commit `f244824`)
 - [x] **7.12** Organize rewrites file tags on every run even when unchanged (shipped v0.206.0, commit `2d4ad01`)
 
@@ -181,7 +181,7 @@ Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/
 
 ### Design Spec Already Written (but not yet planned)
 
-- [ ] **DES-1** Bleve library search — spec at [`docs/superpowers/specs/2026-04-11-bleve-library-search.md`](docs/superpowers/specs/2026-04-11-bleve-library-search.md)
+- [x] **DES-1** Bleve library search — complete 6/7 (#298, #301-#302, #311-#312, #321)
 - [ ] **DES-2** chromem-go embedding store — spec at [`docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md`](docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md)
 
 ---
