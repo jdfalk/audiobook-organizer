@@ -96,7 +96,11 @@ func RunUndoOperation(
 func revertChange(store database.Store, change *database.OperationChange) error {
 	switch change.ChangeType {
 	case "file_move", "organize_rename":
-		return revertFileMove(change)
+		if err := revertFileMove(change); err != nil {
+			return err
+		}
+		NotifyDelugeAfterUndo(store, change.BookID, change.OldValue)
+		return nil
 	case "metadata_update", "db_update":
 		return revertMetadataUpdate(store, change)
 	case "dir_create":

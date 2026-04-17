@@ -42,6 +42,7 @@ import {
 import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import BlockedHashesTab from '../components/settings/BlockedHashesTab';
+import DelugeSettingsTab from '../components/settings/DelugeSettingsTab';
 import { ITunesImport } from '../components/settings/ITunesImport';
 import { OpenLibraryDumps } from '../components/settings/OpenLibraryDumps';
 import { SystemInfoTab } from '../components/system/SystemInfoTab';
@@ -1725,6 +1726,7 @@ export function Settings() {
             <Tab label="Metadata" />
             <Tab label="Performance" />
             <Tab label="Security" />
+            <Tab label="Deluge" />
             <Tab label="System Info" />
           </Tabs>
         </Box>
@@ -3164,6 +3166,10 @@ export function Settings() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={5}>
+          <DelugeSettingsTab />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={6}>
           <SystemInfoTab />
 
           <UpdatesSection settings={settings} setSettings={setSettings} />
