@@ -74,6 +74,7 @@ import { ChangeLog } from '../components/ChangeLog';
 import { useToast } from '../components/toast/ToastProvider';
 import ReadStatusChip from '../components/audiobooks/ReadStatusChip';
 import AddToPlaylistDialog from '../components/audiobooks/AddToPlaylistDialog';
+import VersionsPanel from '../components/audiobooks/VersionsPanel';
 import type { Audiobook } from '../types';
 
 const SEGMENT_PREVIEW_COUNT = 5;
@@ -2412,6 +2413,11 @@ export const BookDetail = () => {
             }
           }}
         />
+      )}
+      {book && (
+        <Box sx={{ mt: 3 }}>
+          <VersionsPanel bookId={book.id} />
+        </Box>
       )}
       {book && (
         <AddToPlaylistDialog
