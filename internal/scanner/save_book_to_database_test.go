@@ -1,5 +1,5 @@
 // file: internal/scanner/save_book_to_database_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 0f1e2d3c-4b5a-6978-8899-aabbccddeeff
 
 package scanner
@@ -148,6 +148,15 @@ func TestSaveBookToDatabase_BlocklistSkips(t *testing.T) {
 	}
 }
 
+// testDedupScanHooks is a test implementation of ScanHooks that records
+// OnImportDedup calls for assertion.
+type testDedupScanHooks struct{ calls []string }
+
+func (h *testDedupScanHooks) OnBookScanned(_, _ string) {}
+func (h *testDedupScanHooks) OnImportDedup(bookID string) {
+	h.calls = append(h.calls, bookID)
+}
+
 // TestSaveBookToDatabase_DedupOnImportHook verifies that the dedup-on-import
 // hook fires exactly once per newly created book and is NOT called when an
 // existing book is updated via the same code path. This is the contract the
@@ -166,14 +175,11 @@ func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
 	t.Cleanup(func() { config.AppConfig = prevConfig })
 	config.AppConfig.RootDir = t.TempDir()
 
-	// Install the hook and make sure we uninstall on test exit so other
+	// Install scan hooks and make sure we uninstall on test exit so other
 	// tests in the same package aren't affected.
-	var hookCalls []string
-	prevHook := DedupOnImportHook
-	DedupOnImportHook = func(bookID string) {
-		hookCalls = append(hookCalls, bookID)
-	}
-	t.Cleanup(func() { DedupOnImportHook = prevHook })
+	th := &testDedupScanHooks{}
+	SetScanHooks(th)
+	t.Cleanup(func() { SetScanHooks(nil) })
 
 	filePath := filepath.Join(config.AppConfig.RootDir, "dedup-hook.m4b")
 	if err := os.WriteFile(filePath, []byte("hook test"), 0o644); err != nil {
@@ -191,10 +197,10 @@ func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
 	if err := saveBookToDatabase(book); err != nil {
 		t.Fatalf("saveBookToDatabase create failed: %v", err)
 	}
-	if len(hookCalls) != 1 {
-		t.Fatalf("expected 1 hook call on create, got %d: %v", len(hookCalls), hookCalls)
+	if len(th.calls) != 1 {
+		t.Fatalf("expected 1 hook call on create, got %d: %v", len(th.calls), th.calls)
 	}
-	firstCallID := hookCalls[0]
+	firstCallID := th.calls[0]
 	if firstCallID == "" {
 		t.Error("expected non-empty book ID in hook call")
 	}
@@ -206,7 +212,7 @@ func TestSaveBookToDatabase_DedupOnImportHook(t *testing.T) {
 	if err := saveBookToDatabase(book); err != nil {
 		t.Fatalf("saveBookToDatabase update failed: %v", err)
 	}
-	if len(hookCalls) != 1 {
-		t.Errorf("expected hook call count to stay at 1 after update, got %d: %v", len(hookCalls), hookCalls)
+	if len(th.calls) != 1 {
+		t.Errorf("expected hook call count to stay at 1 after update, got %d: %v", len(th.calls), th.calls)
 	}
 }
