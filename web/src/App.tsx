@@ -59,6 +59,7 @@ const Diagnostics = lazy(() =>
 );
 const ActivityLog = lazy(() => import('./pages/ActivityLog'));
 const Playlists = lazy(() => import('./pages/Playlists'));
+const PlaylistDetail = lazy(() => import('./pages/PlaylistDetail'));
 const Setup = lazy(() => import('./pages/Setup'));
 const Users = lazy(() => import('./pages/Users'));
 const TrashedVersions = lazy(() => import('./pages/TrashedVersions'));
@@ -215,6 +216,7 @@ function App() {
               <Route path="/diagnostics" element={<Diagnostics />} />
               <Route path="/activity" element={<ActivityLog />} />
               <Route path="/playlists" element={<Playlists />} />
+              <Route path="/playlists/:id" element={<PlaylistDetail />} />
               <Route path="/setup" element={<Setup />} />
               <Route path="/users" element={<Users />} />
               <Route path="/versions" element={<TrashedVersions />} />
