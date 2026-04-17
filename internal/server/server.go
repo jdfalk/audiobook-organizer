@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.177.0
+// version: 1.178.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2103,6 +2103,12 @@ func (s *Server) setupRoutes() {
 				// safeWriteITL call. Supports dry_run=true to
 				// preview without applying. Backlog 7.9.
 				itunesGroup.POST("/rebuild", s.perm(auth.PermLibraryEditMetadata), s.rebuildITLHandler)
+
+				// ITL file transfer (6.4)
+				itunesGroup.GET("/library/download", s.perm(auth.PermIntegrationsManage), s.handleITLDownload)
+				itunesGroup.POST("/library/upload", s.perm(auth.PermIntegrationsManage), s.handleITLUpload)
+				itunesGroup.GET("/library/backups", s.perm(auth.PermIntegrationsManage), s.handleITLBackupList)
+				itunesGroup.POST("/library/restore", s.perm(auth.PermIntegrationsManage), s.handleITLRestore)
 			}
 
 			// Cover art

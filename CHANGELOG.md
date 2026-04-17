@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.3.0 -->
+<!-- version: 2.4.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-17 -->
 
@@ -8,6 +8,15 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 17, 2026 — ITL Transfer Endpoints (6.4 tasks 1-3)
+
+- **Download**: `GET /api/v1/itunes/library/download` — serves current ITL as binary download with Content-Disposition
+- **Upload + validate**: `POST /api/v1/itunes/library/upload` — multipart upload (500 MB limit), validates via ParseITL, optional `?install=true` with automatic backup
+- **Backup list**: `GET /api/v1/itunes/library/backups` — lists `.bak-*` files sorted newest-first
+- **Restore**: `POST /api/v1/itunes/library/restore` — validates backup, backs up current, copies backup into place
+- All endpoints gated on `integrations.manage` permission
+- Atomic file operations: temp-write + rename for crash safety
 
 #### April 17, 2026 — Frontend Test Baseline (5.6)
 
