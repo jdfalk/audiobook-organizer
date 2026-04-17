@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.4.0 -->
+<!-- version: 5.5.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-17 -->
 
@@ -112,7 +112,7 @@ since it was last edited on 2026-04-11).
 - [x] **6.1** Deluge `move_storage` integration (**M**) — #349
 - [x] **6.2** Audnexus + Hardcover full integration (#7daef15)
 - [x] **6.3** Tag writeback to iTunes via ITL updates (shipped previously)
-- [ ] **6.4** ITL upload / download / partial export (**M**)
+- [ ] **6.4** ITL upload / download / partial export (**M**) — tasks 1-3 done (download, upload+validate, backup list+restore); task 4 (partial export) depends on 7.9; task 5 (frontend) pending
 
 ### 7. Tagging as Infrastructure — [section](docs/backlog-2026-04-10.md#7-tagging-as-infrastructure)
 
