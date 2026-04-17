@@ -2250,6 +2250,7 @@ func (s *Server) setupRoutes() {
 			s.registerPlaylistRoutes(protected)
 			s.registerUserAdminRoutes(protected)
 			s.registerVersionLifecycleRoutes(protected)
+			s.registerEntityTagRoutes(protected)
 			s.setupBenchRoutes(protected)
 		}
 	}
