@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.4.0 -->
+<!-- version: 2.5.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-17 -->
 
@@ -8,6 +8,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 17, 2026 — Embedding Store Chaos Tests (4.6)
+
+- 7 chaos tests for `EmbeddingStore` under shutdown: double-close, operations-after-close, concurrent writes/reads during close, mixed read-write during close, data durability after graceful close, WAL checkpoint verification
+- All tests confirm no panics under concurrent access during shutdown
 
 #### April 17, 2026 — ITL Transfer Endpoints (6.4 tasks 1-3)
 
