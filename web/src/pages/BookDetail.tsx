@@ -73,6 +73,7 @@ import { TagComparison } from '../components/TagComparison';
 import { ChangeLog } from '../components/ChangeLog';
 import { useToast } from '../components/toast/ToastProvider';
 import ReadStatusChip from '../components/audiobooks/ReadStatusChip';
+import AddToPlaylistDialog from '../components/audiobooks/AddToPlaylistDialog';
 import type { Audiobook } from '../types';
 
 const SEGMENT_PREVIEW_COUNT = 5;
@@ -109,6 +110,7 @@ export const BookDetail = () => {
     setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', v); return next; }, { replace: true });
   };
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [playlistDialogOpen, setPlaylistDialogOpen] = useState(false);
   const [deleteOptions, setDeleteOptions] = useState({
     softDelete: true,
     blockHash: true,
@@ -1192,6 +1194,13 @@ export const BookDetail = () => {
               disabled={actionLoading}
             >
               Search Metadata
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => setPlaylistDialogOpen(true)}
+              disabled={actionLoading}
+            >
+              Add to Playlist
             </Button>
             {book && book.format?.toLowerCase() !== 'm4b' && (
               <Button
@@ -2402,6 +2411,13 @@ export const BookDetail = () => {
               await reloadCurrentBookFiles(id);
             }
           }}
+        />
+      )}
+      {book && (
+        <AddToPlaylistDialog
+          open={playlistDialogOpen}
+          onClose={() => setPlaylistDialogOpen(false)}
+          bookIds={[book.id]}
         />
       )}
     </Box>
