@@ -72,6 +72,7 @@ import { RelocateFileDialog } from '../components/audiobooks/RelocateFileDialog'
 import { TagComparison } from '../components/TagComparison';
 import { ChangeLog } from '../components/ChangeLog';
 import { useToast } from '../components/toast/ToastProvider';
+import ReadStatusChip from '../components/audiobooks/ReadStatusChip';
 import type { Audiobook } from '../types';
 
 const SEGMENT_PREVIEW_COUNT = 5;
@@ -1015,6 +1016,7 @@ export const BookDetail = () => {
               {book.is_primary_version && (
                 <Chip label="Primary Version" color="primary" />
               )}
+              <ReadStatusChip bookId={book.id} />
             </Box>
             <Typography variant="subtitle1" color="text.secondary">
               {book.authors && book.authors.length > 0
