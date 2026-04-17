@@ -9,9 +9,9 @@
 
 ### Added / Changed
 
-#### April 16, 2026 — Feature Foundations (v0.209.0 + v0.210.0)
+#### April 16, 2026 — Feature Foundations (v0.209.0 → v0.211.0)
 
-Major backend foundation work spanning 6 design specs and 46 PRs (#280-#326).
+Major feature work spanning 6 design specs and 49 PRs (#280-#329). Three releases published.
 
 ##### DI Migration (4.4) — Complete
 - Replaced `database.GlobalStore` package global with constructor injection across all services (#280-#291)
@@ -61,6 +61,13 @@ Major backend foundation work spanning 6 design specs and 46 PRs (#280-#326).
 ##### Auth audit (3.7 task 8)
 - UserID field on Operation, OperationChange, SystemActivityLog (backward-compatible)
 - `_system` pseudo-user seeded at startup for background task attribution
+
+##### Frontend — API Services + Pages (#328-#329)
+- `readingApi.ts`, `playlistApi.ts`, `versionApi.ts`: typed API services for all new features
+- `ReadStatusChip`: clickable status chip with progress bar + manual override menu
+- `Playlists` page: tabbed list + create dialog (static + smart DSL)
+- `Setup` page: first-run admin account wizard
+- Routes + sidebar wired for /playlists and /setup
 
 ### Fixed
 - **Pebble prefix iteration slice aliasing** (#318): `append(prefix[:n-1], ...)` mutated the original slice, producing empty ranges. Fixed 10 instances.
