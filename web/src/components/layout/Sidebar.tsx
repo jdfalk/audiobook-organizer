@@ -53,6 +53,7 @@ const menuItems = [
   { text: 'Dedup', icon: <MergeTypeIcon />, path: '/dedup' },
   { text: 'Diagnostics', icon: <BugReportIcon />, path: '/diagnostics' },
   { text: 'System', icon: <MonitorIcon />, path: '/system' },
+  { text: 'Users', icon: <PeopleIcon />, path: '/users' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
 
