@@ -109,7 +109,7 @@ since it was last edited on 2026-04-11).
 
 - [x] **5.1** Search inside the dedup tab (shipped v0.206.0, commit `191faa3`)
 - [x] **5.2** "Similar books" lookup on BookDetail page (**S**) — #342
-- [ ] **5.3** Batch select in library view (**S**)
+- [x] **5.3** Batch select in library view (**S**) — "Add to Playlist" batch action #345
 - [x] **5.4** Better error messages on organize failures (#273)
 - [x] **5.5** Dev mode "seed library" command (#274)
 - [ ] **5.6** Frontend test coverage baseline (**M**)
