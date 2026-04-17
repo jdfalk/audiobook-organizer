@@ -3201,7 +3201,7 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 
 	entries := ComputeTargetPaths(config.AppConfig.RootDir, pathFormat, segTitleFormat, book, bookFiles, vars)
 
-	if config.AppConfig.AutoRenameOnApply {
+	if config.AppConfig.AutoRenameOnApply && !hasCheckpoint(mfs.db, id, phaseRename) {
 		renameResult, err := RenameFiles(entries)
 		if err != nil {
 			return fmt.Errorf("rename files: %w", err)
@@ -3262,6 +3262,7 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 				}
 			}
 		}
+		setCheckpoint(mfs.db, id, phaseRename)
 	}
 
 	// Always ensure itunes_path is set if a mapping exists (for already-organized books)
@@ -3275,11 +3276,12 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 	}
 
 	// Write metadata tags to audio files
-	if config.AppConfig.AutoWriteTagsOnApply {
+	if config.AppConfig.AutoWriteTagsOnApply && !hasCheckpoint(mfs.db, id, phaseTags) {
 		if written, err := mfs.WriteBackMetadataForBook(id); err != nil {
 			log.Printf("[WARN] tag writing failed for book %s: %v", id, err)
 		} else {
 			log.Printf("[INFO] wrote metadata tags to %d file(s) for book %s", written, id)
+			setCheckpoint(mfs.db, id, phaseTags)
 		}
 	}
 
@@ -3287,10 +3289,13 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 	// (if the file was renamed) and metadata changes. The apply
 	// handler also enqueues after this returns; the batcher dedupes
 	// on book ID so the duplicate is harmless.
-	if GlobalWriteBackBatcher != nil {
+	if GlobalWriteBackBatcher != nil && !hasCheckpoint(mfs.db, id, phaseITunes) {
 		GlobalWriteBackBatcher.Enqueue(id)
+		setCheckpoint(mfs.db, id, phaseITunes)
 	}
 
+	// All phases complete — clear checkpoints.
+	clearCheckpoints(mfs.db, id)
 	return nil
 }
 
