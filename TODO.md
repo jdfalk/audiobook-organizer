@@ -99,7 +99,7 @@ since it was last edited on 2026-04-11).
 
 - [ ] **4.1** PostgreSQL research track (**XL**)
 - [x] **4.2** Split the monolithic `server.go` (commit `c858ceb`)
-- [ ] **4.3** Move write-back queue to a durable outbox (**M**)
+- [x] **4.3** Move write-back queue to a durable outbox (**M**) — #344
 - [x] **4.4** Replace `database.GlobalStore` package var with DI (**L**) — complete (#280-#291)
 - [ ] **4.5** Property-based tests for dedup engine (**M**)
 - [ ] **4.6** Chaos tests for the embedding store under shutdown (**M**)
