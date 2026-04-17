@@ -245,7 +245,7 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 
 ### Sessions 21-22 (2026-04-16) — feature foundations + v0.209.0/v0.210.0
 
-**49 PRs merged (#280-#329)** across two sessions + 3 releases (v0.209.0, v0.210.0, v0.211.0):
+**54 PRs merged (#280-#334)** across two sessions + 3 releases (v0.209.0, v0.210.0, v0.211.0):
 
 - **4.4 DI migration** — complete (#280-#291): replaced `database.GlobalStore` with constructor injection
 - **3.7 Multi-user auth** — tasks 1-4, 6 (#292-#295, #299, #313-#314): schema, permissions, middleware, lockout, 247-route permission wiring
