@@ -66,7 +66,7 @@ since it was last edited on 2026-04-11).
 - [x] **1.3** Dedup scan as a real Operation (#227)
 - [x] **1.4** LLM verdict auto-apply above confidence threshold (shipped v0.206.0, commit `28257a9`)
 - [ ] **1.5** Side-by-side metadata diff in cluster card (**M**)
-- [ ] **1.6** Import-time collision preview (**M**)
+- [x] **1.6** Import-time collision preview (**M**) — #343
 - [x] **1.7** Per-side "merge into this" quick action (#230)
 - [x] **1.8** Smarter "split cluster" with edge preview (#233)
 - [x] **1.9** Series-aware bulk merge (#232)
