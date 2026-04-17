@@ -17,6 +17,7 @@
 - **Restore**: `POST /api/v1/itunes/library/restore` — validates backup, backs up current, copies backup into place
 - All endpoints gated on `integrations.manage` permission
 - Atomic file operations: temp-write + rename for crash safety
+- **Frontend**: `ITunesTransfer` panel in Settings → iTunes tab (download button, upload with validate/install, backup list with restore)
 
 #### April 17, 2026 — Frontend Test Baseline (5.6)
 

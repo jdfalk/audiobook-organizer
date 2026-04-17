@@ -141,10 +141,7 @@ describe('Playlists', () => {
         expect(screen.getByText('Delete Me')).toBeInTheDocument();
       });
 
-      // Find and click the delete button
-      const deleteBtn = screen.getByRole('button', { name: '' });
-      // There should be a delete button (IconButton with DeleteIcon)
-      // The delete button is in the secondaryAction of the ListItem
+      // Find and click the delete button (IconButton with DeleteIcon)
       const buttons = screen.getAllByRole('button');
       const delBtn = buttons.find(
         (btn) => btn.querySelector('[data-testid="DeleteIcon"]') !== null
