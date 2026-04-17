@@ -206,11 +206,11 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 - [x] [2026-04-09 Embedding dedup](docs/superpowers/plans/2026-04-09-embedding-dedup.md)
 - [x] [2026-04-10 Metadata candidate scoring PR1](docs/superpowers/plans/2026-04-10-metadata-candidate-scoring-pr1.md)
 - [x] [2026-04-10 Metadata candidate scoring PR2](docs/superpowers/plans/2026-04-10-metadata-candidate-scoring-pr2.md)
-- ⏳ [2026-04-15 Library centralization](docs/superpowers/plans/2026-04-15-library-centralization.md) — tasks 1-6 done (schema→lifecycle, frontend remaining)
-- ⏳ [2026-04-15 Bulk organize undo](docs/superpowers/plans/2026-04-15-bulk-organize-undo.md) — tasks 1-3, 5 done (schema, tracking, engine, preflight)
-- ⏳ [2026-04-15 Smart + static playlists](docs/superpowers/plans/2026-04-15-smart-and-static-playlists.md) — tasks 1-3 done (schema, evaluator, HTTP)
-- ⏳ [2026-04-15 Read/unread tracking](docs/superpowers/plans/2026-04-15-read-unread-tracking.md) — tasks 1-4 done (schema, HTTP, engine, iTunes sync)
-- ⏳ [2026-04-15 Multi-user support](docs/superpowers/plans/2026-04-15-multi-user-support.md) — tasks 1-8 done (backend complete, OAuth deferred)
+- ⏳ [2026-04-15 Library centralization](docs/superpowers/plans/2026-04-15-library-centralization.md) — tasks 1-9 done (deluge integration deferred)
+- ⏳ [2026-04-15 Bulk organize undo](docs/superpowers/plans/2026-04-15-bulk-organize-undo.md) — tasks 1-6 done (torrent move_storage deferred)
+- [x] [2026-04-15 Smart + static playlists](docs/superpowers/plans/2026-04-15-smart-and-static-playlists.md) — complete (9/9 tasks)
+- [x] [2026-04-15 Read/unread tracking](docs/superpowers/plans/2026-04-15-read-unread-tracking.md) — complete (8/8 tasks)
+- [x] [2026-04-15 Multi-user support](docs/superpowers/plans/2026-04-15-multi-user-support.md) — complete (8/8, OAuth deferred)
 - ⏳ [2026-04-15 Bleve library search (DES-1)](docs/superpowers/plans/2026-04-15-bleve-library-search.md) — tasks 1-6 done (skeleton through frontend)
 - [x] [2026-04-15 DI migration (4.4)](docs/superpowers/plans/2026-04-15-di-migration.md) — complete
 
@@ -245,7 +245,7 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 
 ### Sessions 21-22 (2026-04-16) — feature foundations + v0.209.0/v0.210.0
 
-**54 PRs merged (#280-#334)** across two sessions + 3 releases (v0.209.0, v0.210.0, v0.211.0):
+**60 PRs merged (#280-#340)** across two sessions + 3 releases (v0.209.0, v0.210.0, v0.211.0):
 
 - **4.4 DI migration** — complete (#280-#291): replaced `database.GlobalStore` with constructor injection
 - **3.7 Multi-user auth** — tasks 1-4, 6 (#292-#295, #299, #313-#314): schema, permissions, middleware, lockout, 247-route permission wiring

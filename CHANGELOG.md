@@ -11,7 +11,7 @@
 
 #### April 16, 2026 — Feature Foundations (v0.209.0 → v0.211.0)
 
-Major feature work spanning 6 design specs and 54 PRs (#280-#334). Three releases published (v0.209.0, v0.210.0, v0.211.0).
+Major feature work spanning 6 design specs and 60 PRs (#280-#340). Three releases published (v0.209.0, v0.210.0, v0.211.0). All 6 features complete or nearly complete.
 
 ##### DI Migration (4.4) — Complete
 - Replaced `database.GlobalStore` package global with constructor injection across all services (#280-#291)
@@ -44,10 +44,12 @@ Major feature work spanning 6 design specs and 54 PRs (#280-#334). Three release
 - /audiobooks?search= now routes through Bleve (#312)
 - Frontend: search field autocomplete for read_status/progress_pct/last_played, prefix wildcard suggestions, DSL operator help panel (#321)
 
-##### Smart + Static Playlists (3.4) — Schema + HTTP
+##### Smart + Static Playlists (3.4) — Complete
 - UserPlaylist type (static book lists + smart DSL queries) (#307)
 - Smart playlist evaluator: Bleve + per-user post-filter + sort + limit (#308)
 - 9 HTTP endpoints: CRUD, add/remove books, reorder, materialize (#309)
+- iTunes Smart Criteria binary parser + DSL translator (#339)
+- One-time iTunes dynamic playlist migration + dirty playlist push (#340)
 
 ##### Multi-User Auth (3.7) — continued
 - User management admin API: list users, invite generation, deactivation/reactivation, password reset, invite acceptance (#322)
@@ -72,6 +74,10 @@ Major feature work spanning 6 design specs and 54 PRs (#280-#334). Three release
 - `AddToPlaylistDialog`: multi-select + create new, wired into BookDetail (#333)
 - Undo button on completed organize operations with preflight conflict check (#332)
 - Routes + sidebar wired for /playlists, /setup, /users
+- Sidebar "In Progress" / "Finished" quick-access links (#336)
+- `VersionsPanel` in BookDetail + `TrashedVersions` page (#337)
+- `PlaylistDetail` editor page with inline editing + snapshot (#338)
+- `itunes_position_sync` + `trash_cleanup` maintenance tasks (#336)
 
 ### Fixed
 - **Pebble prefix iteration slice aliasing** (#318): `append(prefix[:n-1], ...)` mutated the original slice, producing empty ranges. Fixed 10 instances.
