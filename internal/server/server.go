@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.178.0
+// version: 1.179.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -923,18 +923,9 @@ func NewServer(store database.Store) *Server {
 				log.Println("[INFO] Embedding store and dedup engine initialized")
 				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
 
-				// Wire the dedup-on-import hook. When scanner.CreateBook
-				// succeeds, the scanner calls DedupOnImportHook(bookID) in
-				// the scan-loop goroutine. We spin a fresh goroutine so the
-				// scan loop is never blocked by embedding API calls, and
-				// register it with bgWG so shutdown waits for in-flight
-				// work before closing Pebble. Without this, a freshly
-				// imported book would wait for the next user-triggered
-				// Re-scan before dedup ever saw it — which meant a
-				// "Foundation & Empire" re-import would stay invisible to
-				// the cluster tab for hours or days.
-				scanner.DedupOnImportHook = server.fireDedupOnImport
-				log.Println("[INFO] Dedup-on-import hook wired")
+				// Dedup-on-import is now wired via SetScanHooks below
+				// (together with the activity recorder).
+				log.Println("[INFO] Dedup-on-import hook wired via SetScanHooks")
 
 				// Wire the organize collision hook. When OrganizeBook
 				// hits ErrTargetOccupied (two books with identical
@@ -1049,17 +1040,11 @@ func NewServer(store database.Store) *Server {
 			_ = server.activityService.Record(entry)
 		}
 
-		// Task 16: Scanner → activity log
-		scanner.ScanActivityRecorder = func(bookID, title string) {
-			_ = server.activityService.Record(database.ActivityEntry{
-				Tier:    "change",
-				Type:    "scan",
-				Level:   "info",
-				Source:  "background",
-				BookID:  bookID,
-				Summary: fmt.Sprintf("Scan found: %s", title),
-			})
-		}
+		// Task 16: Scanner → activity log (via ScanHooks interface)
+		scanner.SetScanHooks(&serverScanHooks{
+			activityService: server.activityService,
+			dedupFn:         server.fireDedupOnImport,
+		})
 
 		// Record server startup in activity log
 		_ = server.activityService.Record(database.ActivityEntry{
@@ -1184,12 +1169,38 @@ func (s *Server) DeleteIndexedBook(bookID string) error {
 	return s.searchIndex.DeleteBook(bookID)
 }
 
+// serverScanHooks implements scanner.ScanHooks, bridging scanner
+// callbacks to the server's activity service and dedup engine.
+type serverScanHooks struct {
+	activityService *ActivityService
+	dedupFn         func(bookID string)
+}
+
+func (h *serverScanHooks) OnBookScanned(bookID, title string) {
+	if h.activityService != nil {
+		_ = h.activityService.Record(database.ActivityEntry{
+			Tier:    "change",
+			Type:    "scan",
+			Level:   "info",
+			Source:  "background",
+			BookID:  bookID,
+			Summary: fmt.Sprintf("Scan found: %s", title),
+		})
+	}
+}
+
+func (h *serverScanHooks) OnImportDedup(bookID string) {
+	if h.dedupFn != nil {
+		h.dedupFn(bookID)
+	}
+}
+
 // fireDedupOnImport runs the dedup engine's Layer 1 + Layer 2 checks for
 // a freshly created book, in a bgWG-tracked goroutine so it doesn't
 // block the caller and shutdown drains it before closing Pebble.
 //
 // This is the single entry point used by every CreateBook path —
-// scanner imports (via scanner.DedupOnImportHook), iTunes sync, manual
+// scanner imports (via ScanHooks.OnImportDedup), iTunes sync, manual
 // book creation, etc. Having every create path fire the hook means new
 // books get exact-match hash/ISBN/title checks against the whole
 // library immediately, instead of waiting for a user-triggered Re-scan.
