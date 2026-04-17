@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.3.0 -->
+<!-- version: 5.4.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-17 -->
 
@@ -102,7 +102,7 @@ since it was last edited on 2026-04-11).
 - [x] **5.3** Batch select in library view (**S**) — "Add to Playlist" batch action #345
 - [x] **5.4** Better error messages on organize failures (#273)
 - [x] **5.5** Dev mode "seed library" command (#274)
-- [x] **5.6** Frontend test coverage baseline (**M**) — Vitest + RTL tests for SearchBar, ReadStatusChip, Playlists, AddToPlaylistDialog; shared renderWithProviders + factories
+- [x] **5.6** Frontend test coverage baseline (**M**) — 22 test files / 160 tests: shared renderWithProviders + factories; component tests (SearchBar, ReadStatusChip, AddToPlaylistDialog, FilterSidebar); page tests (Playlists, Dashboard); CI: `make test-frontend`, `--run` flag, coverage thresholds
 - [x] **5.7** API documentation (**M**) — OpenAPI 3.0.3 spec, 266 paths / 291 ops
 - [x] **5.8** Regenerate ITL test fixtures after format work (**S**) — #348
 - [x] **5.9** Enforce mockery-generated mocks via CI gate (commit `45492c3`)

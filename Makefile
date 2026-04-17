@@ -1,5 +1,5 @@
 # file: Makefile
-# version: 2.7.0
+# version: 2.8.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
@@ -14,7 +14,7 @@ export GOEXPERIMENT := jsonv2
 
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
-        test test-all test-e2e coverage coverage-check ci \
+        test test-all test-frontend test-e2e coverage coverage-check ci \
         vet mocks mocks-check \
         docker docker-run docker-stop \
         release-dry-run release-snapshot version \
@@ -42,6 +42,7 @@ help:
 	@echo "Testing:"
 	@echo "  make test           - Run Go backend tests"
 	@echo "  make test-all       - Run all tests (backend + frontend)"
+	@echo "  make test-frontend  - Run frontend tests only"
 	@echo "  make test-e2e       - Run Playwright E2E tests"
 	@echo "  make coverage       - Generate coverage report"
 	@echo "  make coverage-check - Verify 30% coverage threshold"
@@ -123,10 +124,10 @@ web-build: web-install
 web-dev:
 	@cd $(WEB_DIR) && npm run dev
 
-## web-test: Run frontend unit tests
+## web-test: Run frontend unit tests (single pass, no watch)
 web-test:
 	@echo "🧪 Running frontend tests..."
-	@cd $(WEB_DIR) && npm run test
+	@cd $(WEB_DIR) && npm run test -- --run
 	@echo "✅ Frontend tests passed"
 
 ## web-lint: Lint frontend code
@@ -172,6 +173,9 @@ mocks-check:
 
 ## test-all: Run all tests (backend + frontend)
 test-all: test web-test
+
+## test-frontend: Run frontend tests independently (alias for web-test)
+test-frontend: web-test
 
 ## test-e2e: Run Playwright E2E tests
 test-e2e:

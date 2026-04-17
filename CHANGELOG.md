@@ -1,13 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.2.0 -->
+<!-- version: 2.3.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-16 -->
+<!-- last-edited: 2026-04-17 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 17, 2026 — Frontend Test Baseline (5.6)
+
+- **Test utilities**: `renderWithProviders` (MemoryRouter + ThemeProvider), factory functions (`buildBook`, `buildAuthor`, `buildSeries`, `buildPlaylist`, `buildBookState`)
+- **Component tests**: SearchBar (17), ReadStatusChip (10), AddToPlaylistDialog (11), FilterSidebar (13)
+- **Page tests**: Playlists (11), Dashboard (12) — loading/populated/error states, stat cards, operations, storage
+- **CI integration**: `make test-frontend` target, `--run` flag for single-pass execution, coverage thresholds (15% statements/lines/functions, 10% branches)
+- **Total**: 22 test files, 160 tests passing
 
 #### April 16, 2026 — Feature Foundations (v0.209.0 → v0.211.0)
 

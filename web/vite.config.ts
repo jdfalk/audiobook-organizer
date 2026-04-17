@@ -1,5 +1,5 @@
 // file: web/vite.config.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d
 
 import { defineConfig } from 'vite';
@@ -42,6 +42,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      thresholds: {
+        statements: 15,
+        branches: 10,
+        functions: 15,
+        lines: 15,
+      },
     },
   },
 });
