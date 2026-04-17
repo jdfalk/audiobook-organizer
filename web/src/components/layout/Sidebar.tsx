@@ -39,6 +39,8 @@ interface SidebarProps {
 
 const librarySubItems = [
   { text: 'All Books', icon: <LibraryBooksIcon />, path: '/library' },
+  { text: 'In Progress', icon: <MenuBookIcon />, path: '/library?search=read_status:in_progress' },
+  { text: 'Finished', icon: <LibraryBooksIcon />, path: '/library?search=read_status:finished' },
   { text: 'Series', icon: <CollectionsBookmarkIcon />, path: '/series' },
   { text: 'Authors', icon: <PeopleIcon />, path: '/authors' },
 ];
