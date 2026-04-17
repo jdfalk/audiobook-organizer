@@ -40,6 +40,9 @@ const mockCountAuthors = vi.mocked(countAuthors);
 const mockCountSeries = vi.mocked(countSeries);
 const mockCountBooksFiltered = vi.mocked(countBooksFiltered);
 
+const mockMemory = { alloc_bytes: 0, total_alloc_bytes: 0, sys_bytes: 0, num_gc: 0, heap_alloc: 0, heap_sys: 0 };
+const mockRuntime = { go_version: '1.24', num_goroutine: 10, num_cpu: 8, os: 'linux', arch: 'amd64' };
+
 function mockSuccessfulAPIs() {
   mockGetSystemStatus.mockResolvedValue({
     status: 'ok',
@@ -56,8 +59,8 @@ function mockSuccessfulAPIs() {
     disk_used_bytes: 52 * 1024 * 1024 * 1024,
     library: { book_count: 500, folder_count: 1, total_size: 50 * 1024 * 1024 * 1024 },
     import_paths: { book_count: 25, folder_count: 2, total_size: 2 * 1024 * 1024 * 1024 },
-    memory: {},
-    runtime: {},
+    memory: mockMemory,
+    runtime: mockRuntime,
     operations: { recent: [] },
   });
   mockCountAuthors.mockResolvedValue(120);
@@ -158,14 +161,16 @@ describe('Dashboard', () => {
         status: 'ok',
         library: { book_count: 10, folder_count: 1, total_size: 0 },
         import_paths: { book_count: 0, folder_count: 0, total_size: 0 },
-        memory: {},
-        runtime: {},
+        memory: mockMemory,
+        runtime: mockRuntime,
         operations: {
           recent: [
             {
               id: 'op-1',
               type: 'scan',
               status: 'completed',
+              progress: 50,
+              total: 50,
               message: 'Scanned 50 books',
               created_at: '2026-04-17T10:00:00Z',
             },
@@ -173,6 +178,8 @@ describe('Dashboard', () => {
               id: 'op-2',
               type: 'organize',
               status: 'failed',
+              progress: 0,
+              total: 0,
               message: 'Organization failed',
               created_at: '2026-04-17T09:00:00Z',
             },
