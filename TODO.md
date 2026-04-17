@@ -135,7 +135,7 @@ that layer on that foundation.
 - [x] **7.4** Google Books → Audible auto-upgrade maintenance job (shipped v0.206.0, commit `24201d4`)
 - [x] **7.5** Metadata fetch caching (shipped v0.206.0, commit `2080c87`)
 - [x] **7.6** Persistent review dialog + concurrent review during fetch (shipped v0.206.0, commit `1d2bf53`)
-- [ ] **7.7** Author and series tag HTTP endpoints + frontend (**M**) — store parity shipped in #244; HTTP/UI remain
+- [x] **7.7** Author and series tag HTTP endpoints (**M**) — #347; frontend UI remains
 - [x] **7.8** System tag UX — visual distinction user vs system (shipped v0.206.0, commit `4dda739`)
 - [ ] **7.9** Full iTunes library regenerate / rebuild (**L**) — diff-and-batch mode shipped (commit `286140d`); full rebuild-from-scratch mode remains
 - [x] **7.10** Archive sweep for soft-deleted books (**M**) — #342
