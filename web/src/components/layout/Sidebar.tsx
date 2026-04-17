@@ -47,6 +47,7 @@ const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'File Browser', icon: <FolderOpenIcon />, path: '/files' },
   { text: 'Works', icon: <MenuBookIcon />, path: '/works' },
+  { text: 'Playlists', icon: <MenuBookIcon />, path: '/playlists' },
   { text: 'Activity', icon: <TimelineIcon />, path: '/activity' },
   { text: 'Maintenance', icon: <BuildIcon />, path: '/maintenance' },
   { text: 'Dedup', icon: <MergeTypeIcon />, path: '/dedup' },
