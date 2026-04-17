@@ -61,6 +61,7 @@ const ActivityLog = lazy(() => import('./pages/ActivityLog'));
 const Playlists = lazy(() => import('./pages/Playlists'));
 const Setup = lazy(() => import('./pages/Setup'));
 const Users = lazy(() => import('./pages/Users'));
+const TrashedVersions = lazy(() => import('./pages/TrashedVersions'));
 
 function App() {
   const auth = useAuth();
@@ -216,6 +217,7 @@ function App() {
               <Route path="/playlists" element={<Playlists />} />
               <Route path="/setup" element={<Setup />} />
               <Route path="/users" element={<Users />} />
+              <Route path="/versions" element={<TrashedVersions />} />
             </Routes>
           </Suspense>
         </MainLayout>
