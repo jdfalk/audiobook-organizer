@@ -1,5 +1,5 @@
 // file: internal/transcode/transcode.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: f8a1b2c3-d4e5-6789-abcd-ef0123456789
 
 package transcode
@@ -188,7 +188,7 @@ func BuildChapterMetadataWithProber(inputFiles []string, prober func(string) (fl
 }
 
 // Transcode converts audio files for a book into a single M4B.
-func Transcode(ctx context.Context, opts TranscodeOpts, store database.Store, progress operations.ProgressReporter) (string, error) {
+func Transcode(ctx context.Context, opts TranscodeOpts, store interface { database.BookReader; database.BookFileStore }, progress operations.ProgressReporter) (string, error) {
 	ffmpegPath, err := FindFFmpeg()
 	if err != nil {
 		return "", err
