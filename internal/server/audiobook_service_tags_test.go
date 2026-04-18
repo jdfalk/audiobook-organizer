@@ -74,15 +74,14 @@ func TestGetAudiobookTags_UsesSnapshotComparisonValues(t *testing.T) {
 }
 
 func TestExtractBookFileMetadata_FallsBackToDatabaseAuthorWhenArtistMatchesNarrator(t *testing.T) {
-	oldExtractor := metadata.GlobalMetadataExtractor
-	metadata.GlobalMetadataExtractor = stubMetadataExtractor{
+	metadata.SetMetadataExtractor(stubMetadataExtractor{
 		meta: metadata.Metadata{
 			Artist:              "Narrator Name",
 			Narrator:            "Narrator Name",
 			OrganizerTagVersion: "",
 		},
-	}
-	defer func() { metadata.GlobalMetadataExtractor = oldExtractor }()
+	})
+	defer func() { metadata.SetMetadataExtractor(nil) }()
 
 	svc := NewAudiobookService(&database.MockStore{})
 	meta := svc.extractBookFileMetadata(&database.Book{FilePath: "/tmp/book.m4b"}, "Database Author")
