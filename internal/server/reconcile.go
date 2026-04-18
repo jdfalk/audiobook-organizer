@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -23,6 +23,17 @@ import (
 	"github.com/oklog/ulid/v2"
 	"net/http"
 )
+
+// reconcileStore is the narrow slice of database.Store that reconcile
+// helpers need. Every free function in this file takes the same shape
+// so a single file-local alias keeps signatures short. See plan
+// docs/superpowers/plans/2026-04-17-store-interface-segregation.md.
+type reconcileStore interface {
+	database.BookStore
+	database.BookFileStore
+	database.ImportPathStore
+	database.OperationStore
+}
 
 // ReconcileMatch represents a potential match between a broken DB record and an untracked file.
 type ReconcileMatch struct {
@@ -225,13 +236,13 @@ func (s *Server) startReconcile(c *gin.Context) {
 }
 
 // buildReconcilePreview builds the full reconciliation preview (sync, no progress).
-func buildReconcilePreview(store database.Store) (*ReconcilePreviewResult, error) {
+func buildReconcilePreview(store reconcileStore) (*ReconcilePreviewResult, error) {
 	return buildReconcilePreviewWithProgress(store, nil)
 }
 
 // buildReconcilePreviewWithProgress builds the full reconciliation preview with
 // progress reporting for background operations. log may be nil.
-func buildReconcilePreviewWithProgress(store database.Store, log logger.Logger) (*ReconcilePreviewResult, error) {
+func buildReconcilePreviewWithProgress(store reconcileStore, log logger.Logger) (*ReconcilePreviewResult, error) {
 	if log == nil {
 		log = logger.New("reconcile")
 	}
@@ -473,7 +484,7 @@ func buildReconcilePreviewWithProgress(store database.Store, log logger.Logger) 
 // then import paths, then iTunes paths), collecting audio files not in the DB.
 // Priority matters: if the same file exists in the library and an import path,
 // the library copy is preferred for matching.
-func findUntrackedFiles(store database.Store, knownPaths map[string]bool) ([]string, error) {
+func findUntrackedFiles(store reconcileStore, knownPaths map[string]bool) ([]string, error) {
 	var dirs []string
 
 	// Priority 1: Library root (our organized folder — always preferred)
@@ -557,7 +568,7 @@ func findUntrackedFiles(store database.Store, knownPaths map[string]bool) ([]str
 }
 
 // executeReconcile applies confirmed matches: updates DB file_path and records OperationChanges.
-func executeReconcile(ctx context.Context, store database.Store, operationID string, matches []ReconcileApplyItem, log logger.Logger) error {
+func executeReconcile(ctx context.Context, store reconcileStore, operationID string, matches []ReconcileApplyItem, log logger.Logger) error {
 	result := &ReconcileApplyResult{
 		Errors: []string{},
 	}
@@ -665,7 +676,7 @@ type VersionGroupCleanupResult struct {
 // cleanupDuplicateVersionGroups finds version groups with more than 2 members
 // (1 original + 1 organized) and removes the extra organized copies that were
 // created by the organize-reprocessing bug.
-func cleanupDuplicateVersionGroups(store database.Store, rootDir string, dryRun bool) (*VersionGroupCleanupResult, error) {
+func cleanupDuplicateVersionGroups(store reconcileStore, rootDir string, dryRun bool) (*VersionGroupCleanupResult, error) {
 	result := &VersionGroupCleanupResult{}
 
 	// Fetch all books and group by version_group_id
@@ -793,7 +804,7 @@ type BrokenSegmentEntry struct {
 
 // findBrokenSegmentBooks finds books whose segment files don't exist on disk
 // and optionally marks them as needs_review.
-func findBrokenSegmentBooks(store database.Store, dryRun bool) (*BrokenSegmentResult, error) {
+func findBrokenSegmentBooks(store reconcileStore, dryRun bool) (*BrokenSegmentResult, error) {
 	allBooks, err := store.GetAllBooks(100000, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get books: %w", err)
@@ -898,7 +909,7 @@ type MergeDuplicateEntry struct {
 
 // mergeNoVGDuplicates finds no-VG books that match VG books by title, merges metadata, and soft-deletes.
 // It also deduplicates among the remaining no-VG orphans (keeping one per title, soft-deleting extras).
-func mergeNoVGDuplicates(store database.Store, rootDir string, dryRun bool) (*MergeDuplicatesResult, error) {
+func mergeNoVGDuplicates(store reconcileStore, rootDir string, dryRun bool) (*MergeDuplicatesResult, error) {
 	result := &MergeDuplicatesResult{}
 
 	// Load all books in pages
@@ -1245,7 +1256,7 @@ type AssignVGResult struct {
 // assignOrphanVGs finds books in the library directory that have no version group,
 // creates a VG for each, and marks them as primary. This fixes books that were
 // organized before a DB wipe and re-scanned without linkage.
-func assignOrphanVGs(store database.Store, rootDir string) (*AssignVGResult, error) {
+func assignOrphanVGs(store reconcileStore, rootDir string) (*AssignVGResult, error) {
 	result := &AssignVGResult{}
 
 	var allBooks []database.Book
