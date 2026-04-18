@@ -1,8 +1,8 @@
-// file: internal/server/diagnostics_service.go
+// file: internal/diagnostics/service.go
 // version: 1.2.0
 // guid: d1a9n0st-1cs0-s3rv-1c3z-1pexp0rt001
 
-package server
+package diagnostics
 
 import (
 	"archive/zip"
@@ -15,35 +15,24 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
 
-// diagnosticsStore is the narrow slice of database.Store this service uses.
-type diagnosticsStore interface {
-	database.AuthorReader
-	database.BookReader
-	database.OperationStore
-	database.SeriesReader
-	database.StatsStore
-	database.SystemActivityStore
-}
-
-
-// DiagnosticsService generates diagnostic ZIP exports for troubleshooting and AI analysis.
-type DiagnosticsService struct {
-	db diagnosticsStore
+// Service generates diagnostic ZIP exports for troubleshooting and AI analysis.
+type Service struct {
+	db            database.Store
 	aiPipeline    interface{} // *ai.Pipeline or nil
 	itunesXMLPath string
 }
 
-// NewDiagnosticsService creates a new DiagnosticsService.
-func NewDiagnosticsService(db diagnosticsStore, aiPipeline interface{}, itunesXMLPath string) *DiagnosticsService {
-	return &DiagnosticsService{
+// NewService creates a new diagnostics Service.
+func NewService(db database.Store, aiPipeline interface{}, itunesXMLPath string) *Service {
+	return &Service{
 		db:            db,
 		aiPipeline:    aiPipeline,
 		itunesXMLPath: itunesXMLPath,
 	}
 }
 
-// slimBook is a reduced representation of a book for diagnostics export.
-type slimBook struct {
+// SlimBook is a reduced representation of a book for diagnostics export.
+type SlimBook struct {
 	ID                   string  `json:"id"`
 	Title                string  `json:"title"`
 	AuthorID             *int    `json:"author_id,omitempty"`
@@ -63,8 +52,9 @@ type slimBook struct {
 	MarkedForDeletion    *bool   `json:"marked_for_deletion,omitempty"`
 }
 
-func toSlimBook(b database.Book) slimBook {
-	return slimBook{
+// ToSlimBook converts a database.Book to a SlimBook.
+func ToSlimBook(b database.Book) SlimBook {
+	return SlimBook{
 		ID:                   b.ID,
 		Title:                b.Title,
 		AuthorID:             b.AuthorID,
@@ -114,11 +104,11 @@ type seriesWithCounts struct {
 // versionGroup represents a group of books sharing a version group ID.
 type versionGroup struct {
 	GroupID string     `json:"group_id"`
-	Books   []slimBook `json:"books"`
+	Books   []SlimBook `json:"books"`
 }
 
-// itunesAlbumSummary summarizes tracks grouped by album from iTunes XML.
-type itunesAlbumSummary struct {
+// ITunesAlbumSummary summarizes tracks grouped by album from iTunes XML.
+type ITunesAlbumSummary struct {
 	Album      string `json:"album"`
 	TrackCount int    `json:"track_count"`
 	Artist     string `json:"artist,omitempty"`
@@ -133,7 +123,7 @@ type missingFieldEntry struct {
 
 // GenerateExport creates a temporary ZIP file containing diagnostic data.
 // Category must be one of: "deduplication", "error_analysis", "metadata_quality", "general".
-func (ds *DiagnosticsService) GenerateExport(category, description string) (string, error) {
+func (ds *Service) GenerateExport(category, description string) (string, error) {
 	// Create temp file for the ZIP
 	tmpFile, err := os.CreateTemp("", "diagnostics-*.zip")
 	if err != nil {
@@ -144,7 +134,7 @@ func (ds *DiagnosticsService) GenerateExport(category, description string) (stri
 	zw := zip.NewWriter(tmpFile)
 
 	// Collect all books (paginated)
-	allBooks, err := ds.collectAllBooks()
+	allBooks, err := ds.CollectAllBooks()
 	if err != nil {
 		zw.Close()
 		tmpFile.Close()
@@ -245,8 +235,8 @@ func (ds *DiagnosticsService) GenerateExport(category, description string) (stri
 	return zipPath, nil
 }
 
-// collectAllBooks paginates through GetAllBooks until no more results.
-func (ds *DiagnosticsService) collectAllBooks() ([]database.Book, error) {
+// CollectAllBooks paginates through GetAllBooks until no more results.
+func (ds *Service) CollectAllBooks() ([]database.Book, error) {
 	const pageSize = 10000
 	var allBooks []database.Book
 	offset := 0
@@ -264,8 +254,8 @@ func (ds *DiagnosticsService) collectAllBooks() ([]database.Book, error) {
 	return allBooks, nil
 }
 
-// writeJSON is a helper that marshals data and writes it into the ZIP.
-func writeJSON(zw *zip.Writer, filename string, data interface{}) error {
+// WriteJSON is a helper that marshals data and writes it into the ZIP.
+func WriteJSON(zw *zip.Writer, filename string, data interface{}) error {
 	w, err := zw.Create(filename)
 	if err != nil {
 		return err
@@ -275,8 +265,8 @@ func writeJSON(zw *zip.Writer, filename string, data interface{}) error {
 	return enc.Encode(data)
 }
 
-// writeRaw writes raw bytes into the ZIP.
-func writeRaw(zw *zip.Writer, filename string, data []byte) error {
+// WriteRaw writes raw bytes into the ZIP.
+func WriteRaw(zw *zip.Writer, filename string, data []byte) error {
 	w, err := zw.Create(filename)
 	if err != nil {
 		return err
@@ -285,7 +275,7 @@ func writeRaw(zw *zip.Writer, filename string, data []byte) error {
 	return err
 }
 
-func (ds *DiagnosticsService) writeSystemInfo(zw *zip.Writer, category, description string) error {
+func (ds *Service) writeSystemInfo(zw *zip.Writer, category, description string) error {
 	bookCount, _ := ds.db.CountBooks()
 	authorCount, _ := ds.db.CountAuthors()
 	seriesCount, _ := ds.db.CountSeries()
@@ -300,18 +290,18 @@ func (ds *DiagnosticsService) writeSystemInfo(zw *zip.Writer, category, descript
 		Category:    category,
 		Description: description,
 	}
-	return writeJSON(zw, "system_info.json", info)
+	return WriteJSON(zw, "system_info.json", info)
 }
 
-func (ds *DiagnosticsService) writeBooks(zw *zip.Writer, allBooks []database.Book) error {
-	slim := make([]slimBook, len(allBooks))
+func (ds *Service) writeBooks(zw *zip.Writer, allBooks []database.Book) error {
+	slim := make([]SlimBook, len(allBooks))
 	for i, b := range allBooks {
-		slim[i] = toSlimBook(b)
+		slim[i] = ToSlimBook(b)
 	}
-	return writeJSON(zw, "books.json", slim)
+	return WriteJSON(zw, "books.json", slim)
 }
 
-func (ds *DiagnosticsService) writeAuthors(zw *zip.Writer) error {
+func (ds *Service) writeAuthors(zw *zip.Writer) error {
 	authors, err := ds.db.GetAllAuthors()
 	if err != nil {
 		return err
@@ -335,10 +325,10 @@ func (ds *DiagnosticsService) writeAuthors(zw *zip.Writer) error {
 			FileCount: fileCounts[a.ID],
 		}
 	}
-	return writeJSON(zw, "authors.json", result)
+	return WriteJSON(zw, "authors.json", result)
 }
 
-func (ds *DiagnosticsService) writeSeries(zw *zip.Writer) error {
+func (ds *Service) writeSeries(zw *zip.Writer) error {
 	series, err := ds.db.GetAllSeries()
 	if err != nil {
 		return err
@@ -362,24 +352,24 @@ func (ds *DiagnosticsService) writeSeries(zw *zip.Writer) error {
 			FileCount: fileCounts[s.ID],
 		}
 	}
-	return writeJSON(zw, "series.json", result)
+	return WriteJSON(zw, "series.json", result)
 }
 
 // writeBatchJSONL writes a batch.jsonl file based on current category and books.
-func (ds *DiagnosticsService) writeBatchJSONL(zw *zip.Writer, category, description string, allBooks []database.Book) error {
-	slimBooks := make([]slimBook, len(allBooks))
+func (ds *Service) writeBatchJSONL(zw *zip.Writer, category, description string, allBooks []database.Book) error {
+	slimBooks := make([]SlimBook, len(allBooks))
 	for i, b := range allBooks {
-		slimBooks[i] = toSlimBook(b)
+		slimBooks[i] = ToSlimBook(b)
 	}
 
-	data, err := buildBatchJSONL(category, description, slimBooks, nil, nil, nil)
+	data, err := BuildBatchJSONL(category, description, slimBooks, nil, nil, nil)
 	if err != nil {
 		return err
 	}
-	return writeRaw(zw, "batch.jsonl", data)
+	return WriteRaw(zw, "batch.jsonl", data)
 }
 
-func (ds *DiagnosticsService) writeLogs(zw *zip.Writer) error {
+func (ds *Service) writeLogs(zw *zip.Writer) error {
 	logs, err := ds.db.GetSystemActivityLogs("", 10000)
 	if err != nil {
 		logs = []database.SystemActivityLog{}
@@ -394,22 +384,22 @@ func (ds *DiagnosticsService) writeLogs(zw *zip.Writer) error {
 		}
 	}
 
-	return writeJSON(zw, "logs.json", filtered)
+	return WriteJSON(zw, "logs.json", filtered)
 }
 
-func (ds *DiagnosticsService) writeOperations(zw *zip.Writer) error {
+func (ds *Service) writeOperations(zw *zip.Writer) error {
 	ops, err := ds.db.GetRecentOperations(100)
 	if err != nil {
 		ops = []database.Operation{}
 	}
-	return writeJSON(zw, "operations.json", ops)
+	return WriteJSON(zw, "operations.json", ops)
 }
 
-func (ds *DiagnosticsService) writeVersionGroups(zw *zip.Writer, allBooks []database.Book) error {
-	groups := map[string][]slimBook{}
+func (ds *Service) writeVersionGroups(zw *zip.Writer, allBooks []database.Book) error {
+	groups := map[string][]SlimBook{}
 	for _, b := range allBooks {
 		if b.VersionGroupID != nil && *b.VersionGroupID != "" {
-			groups[*b.VersionGroupID] = append(groups[*b.VersionGroupID], toSlimBook(b))
+			groups[*b.VersionGroupID] = append(groups[*b.VersionGroupID], ToSlimBook(b))
 		}
 	}
 
@@ -417,21 +407,21 @@ func (ds *DiagnosticsService) writeVersionGroups(zw *zip.Writer, allBooks []data
 	for gid, books := range groups {
 		result = append(result, versionGroup{GroupID: gid, Books: books})
 	}
-	return writeJSON(zw, "version_groups.json", result)
+	return WriteJSON(zw, "version_groups.json", result)
 }
 
-func (ds *DiagnosticsService) writeITunesAlbums(zw *zip.Writer) error {
+func (ds *Service) writeITunesAlbums(zw *zip.Writer) error {
 	if ds.itunesXMLPath == "" {
-		return writeJSON(zw, "itunes_albums.json", []itunesAlbumSummary{})
+		return WriteJSON(zw, "itunes_albums.json", []ITunesAlbumSummary{})
 	}
 
 	lib, err := itunes.ParseLibrary(ds.itunesXMLPath)
 	if err != nil {
 		// If parsing fails, write empty array
-		return writeJSON(zw, "itunes_albums.json", []itunesAlbumSummary{})
+		return WriteJSON(zw, "itunes_albums.json", []ITunesAlbumSummary{})
 	}
 
-	albumMap := map[string]*itunesAlbumSummary{}
+	albumMap := map[string]*ITunesAlbumSummary{}
 	for _, track := range lib.Tracks {
 		album := track.Album
 		if album == "" {
@@ -440,7 +430,7 @@ func (ds *DiagnosticsService) writeITunesAlbums(zw *zip.Writer) error {
 		if existing, ok := albumMap[album]; ok {
 			existing.TrackCount++
 		} else {
-			albumMap[album] = &itunesAlbumSummary{
+			albumMap[album] = &ITunesAlbumSummary{
 				Album:      album,
 				TrackCount: 1,
 				Artist:     track.Artist,
@@ -448,14 +438,14 @@ func (ds *DiagnosticsService) writeITunesAlbums(zw *zip.Writer) error {
 		}
 	}
 
-	result := make([]itunesAlbumSummary, 0, len(albumMap))
+	result := make([]ITunesAlbumSummary, 0, len(albumMap))
 	for _, summary := range albumMap {
 		result = append(result, *summary)
 	}
-	return writeJSON(zw, "itunes_albums.json", result)
+	return WriteJSON(zw, "itunes_albums.json", result)
 }
 
-func (ds *DiagnosticsService) writeMissingFields(zw *zip.Writer, allBooks []database.Book) error {
+func (ds *Service) writeMissingFields(zw *zip.Writer, allBooks []database.Book) error {
 	var missing []missingFieldEntry
 	for _, b := range allBooks {
 		var fields []string
@@ -479,5 +469,5 @@ func (ds *DiagnosticsService) writeMissingFields(zw *zip.Writer, allBooks []data
 	if missing == nil {
 		missing = []missingFieldEntry{}
 	}
-	return writeJSON(zw, "missing_fields.json", missing)
+	return WriteJSON(zw, "missing_fields.json", missing)
 }
