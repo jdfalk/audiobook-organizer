@@ -1,5 +1,5 @@
 // file: internal/auth/seed.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2e8f4a1d-7c3b-4f60-b9d5-1c6e0f2b9a57
 //
 // Seed roles — idempotent upsert of the three canonical roles
@@ -63,7 +63,7 @@ func viewerPermissions() []Permission {
 // reaches admin's effective set.
 //
 // Returns the number of roles created + updated.
-func SeedRoles(store database.Store) (created, updated int, err error) {
+func SeedRoles(store database.RoleStore) (created, updated int, err error) {
 	if store == nil {
 		return 0, 0, fmt.Errorf("seed roles: store is nil")
 	}
@@ -115,7 +115,7 @@ const SystemUserID = "_system"
 // SeedSystemUser creates the _system pseudo-user if absent.
 // It has no password and cannot log in — it exists solely as an
 // audit attribution target.
-func SeedSystemUser(store database.Store) error {
+func SeedSystemUser(store interface { database.UserStore; database.RoleStore }) error {
 	if store == nil {
 		return nil
 	}

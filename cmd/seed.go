@@ -1,5 +1,5 @@
 // file: cmd/seed.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7d2e9a4f-1b85-4c63-9f0a-3e8d7b2c1f56
 //
 // `seed` populates a fresh database with synthetic books for local
@@ -228,21 +228,21 @@ func pickTitle(rng *rand.Rand) string {
 	return fmt.Sprintf("The %s %s", adj, noun)
 }
 
-func upsertAuthor(store database.Store, name string) (*database.Author, error) {
+func upsertAuthor(store database.AuthorStore, name string) (*database.Author, error) {
 	if existing, err := store.GetAuthorByName(name); err == nil && existing != nil {
 		return existing, nil
 	}
 	return store.CreateAuthor(name)
 }
 
-func upsertSeries(store database.Store, name string, authorID *int) (*database.Series, error) {
+func upsertSeries(store database.SeriesStore, name string, authorID *int) (*database.Series, error) {
 	if existing, err := store.GetSeriesByName(name, authorID); err == nil && existing != nil {
 		return existing, nil
 	}
 	return store.CreateSeries(name, authorID)
 }
 
-func purgeSeedBooks(store database.Store) (int, error) {
+func purgeSeedBooks(store database.BookStore) (int, error) {
 	books, err := store.GetAllBooks(100000, 0)
 	if err != nil {
 		return 0, err
