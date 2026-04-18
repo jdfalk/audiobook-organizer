@@ -1,5 +1,5 @@
 // file: internal/server/metadata_state_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 package server
@@ -13,13 +13,21 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
+// metadataStateStore is the narrow slice of database.Store that
+// MetadataStateService needs: metadata field state + change history
+// plus the user preference used as the cache key for state blobs.
+type metadataStateStore interface {
+	database.MetadataStore
+	database.UserPreferenceStore
+}
+
 // MetadataStateService handles metadata field state operations
 type MetadataStateService struct {
-	db database.Store
+	db metadataStateStore
 }
 
 // NewMetadataStateService creates a new metadata state service
-func NewMetadataStateService(db database.Store) *MetadataStateService {
+func NewMetadataStateService(db metadataStateStore) *MetadataStateService {
 	return &MetadataStateService{db: db}
 }
 

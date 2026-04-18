@@ -27,9 +27,12 @@ type ExternalIDStore interface {
 	BulkCreateExternalIDMappings(mappings []database.ExternalIDMapping) error
 }
 
-// asExternalIDStore returns the ExternalIDStore if the given Store implements
-// it, or nil otherwise. Callers should check for nil before using.
-func asExternalIDStore(s database.Store) ExternalIDStore {
+// asExternalIDStore returns the ExternalIDStore if the given store implements
+// it, or nil otherwise. Callers should check for nil before using. Accepts
+// `any` so callers holding a narrow sub-interface of database.Store (e.g.
+// audiobookStore) can still pass through — the type assertion checks the
+// underlying concrete type regardless of the static handle type.
+func asExternalIDStore(s any) ExternalIDStore {
 	if s == nil {
 		return nil
 	}
