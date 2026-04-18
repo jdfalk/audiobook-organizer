@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 5.6.0 -->
+<!-- version: 5.7.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-04-17 -->
+<!-- last-edited: 2026-04-18 -->
 
 # Project TODO
 
@@ -107,6 +107,7 @@ since it was last edited on 2026-04-11).
 - [x] **5.7** API documentation (**M**) — OpenAPI 3.0.3 spec, 266 paths / 291 ops
 - [x] **5.8** Regenerate ITL test fixtures after format work (**S**) — #348
 - [x] **5.9** Enforce mockery-generated mocks via CI gate (commit `45492c3`)
+- [x] **5.10** Fast-iteration backend test mode — `make test-short` + `testing.Short()` gates on 33 slow property tests (#384); `internal/server` drops from 760s → 63s
 
 ### 6. Integration / Ecosystem — [section](docs/backlog-2026-04-10.md#6-integration--ecosystem)
 
