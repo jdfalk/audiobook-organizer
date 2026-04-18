@@ -1,10 +1,10 @@
-// file: internal/server/merge_service_test.go
-// version: 1.2.0
-// guid: 8e847d3e-f1a0-41be-a05c-1b18cd3fb7af
+// file: internal/merge/service_test.go
+// version: 1.0.0
 
-package server
+package merge
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,14 +14,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMergeService_MergeBooks(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-	_ = server
+func setupTestStore(t *testing.T) database.Store {
+	t.Helper()
+	pebblePath := filepath.Join(t.TempDir(), "pebble")
+	store, err := database.NewPebbleStore(pebblePath)
+	if err != nil {
+		t.Fatalf("open pebble: %v", err)
+	}
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() {
+		database.SetGlobalStore(origStore)
+		store.Close()
+	})
+	return store
+}
 
-	store := database.GetGlobalStore()
+func TestService_MergeBooks(t *testing.T) {
+	store := setupTestStore(t)
 
-	// Create two test books
 	book1 := &database.Book{
 		ID:       ulid.Make().String(),
 		Title:    "Test Book MP3",
@@ -40,7 +51,7 @@ func TestMergeService_MergeBooks(t *testing.T) {
 	_, err = store.CreateBook(book2)
 	require.NoError(t, err)
 
-	ms := NewMergeService(store)
+	ms := NewService(store)
 	result, err := ms.MergeBooks([]string{book1.ID, book2.ID}, "")
 	require.NoError(t, err)
 
@@ -65,12 +76,8 @@ func TestMergeService_MergeBooks(t *testing.T) {
 	assert.True(t, *b2.IsPrimaryVersion)
 }
 
-func TestMergeService_MergeBooks_ExplicitPrimary(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-	_ = server
-
-	store := database.GetGlobalStore()
+func TestService_MergeBooks_ExplicitPrimary(t *testing.T) {
+	store := setupTestStore(t)
 
 	book1 := &database.Book{
 		ID:       ulid.Make().String(),
@@ -90,7 +97,7 @@ func TestMergeService_MergeBooks_ExplicitPrimary(t *testing.T) {
 	_, err = store.CreateBook(book2)
 	require.NoError(t, err)
 
-	ms := NewMergeService(store)
+	ms := NewService(store)
 	// Force MP3 as primary even though M4B would normally win
 	result, err := ms.MergeBooks([]string{book1.ID, book2.ID}, book1.ID)
 	require.NoError(t, err)
@@ -98,24 +105,18 @@ func TestMergeService_MergeBooks_ExplicitPrimary(t *testing.T) {
 	assert.Equal(t, book1.ID, result.PrimaryID)
 }
 
-func TestMergeService_MergeBooks_TooFew(t *testing.T) {
-	ms := NewMergeService(nil)
+func TestService_MergeBooks_TooFew(t *testing.T) {
+	ms := NewService(nil)
 	_, err := ms.MergeBooks([]string{"one"}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "at least 2")
 }
 
-// TestMergeService_MergeBooks_SoftDeletesLosers verifies the
+// TestService_MergeBooks_SoftDeletesLosers verifies the
 // post-2026-04-11 merge semantics: losers get soft-deleted
-// (MarkedForDeletion=true) after merge so they drop off the
-// default library view, while the winner stays active with
-// the version group pointing at all of them.
-func TestMergeService_MergeBooks_SoftDeletesLosers(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-	_ = server
-
-	store := database.GetGlobalStore()
+// (MarkedForDeletion=true) after merge.
+func TestService_MergeBooks_SoftDeletesLosers(t *testing.T) {
+	store := setupTestStore(t)
 
 	book1 := &database.Book{
 		ID:       ulid.Make().String(),
@@ -135,7 +136,7 @@ func TestMergeService_MergeBooks_SoftDeletesLosers(t *testing.T) {
 	_, err = store.CreateBook(book2)
 	require.NoError(t, err)
 
-	ms := NewMergeService(store)
+	ms := NewService(store)
 	result, err := ms.MergeBooks([]string{book1.ID, book2.ID}, "")
 	require.NoError(t, err)
 	require.Equal(t, book2.ID, result.PrimaryID, "M4B should auto-win")
@@ -150,8 +151,7 @@ func TestMergeService_MergeBooks_SoftDeletesLosers(t *testing.T) {
 		assert.False(t, *winner.MarkedForDeletion, "winner must not be soft-deleted")
 	}
 
-	// Loser IS soft-deleted, with the version group still pointing
-	// at it so the relationship survives for recovery.
+	// Loser IS soft-deleted.
 	loser, err := store.GetBookByID(book1.ID)
 	require.NoError(t, err)
 	require.NotNil(t, loser)
@@ -165,19 +165,11 @@ func TestMergeService_MergeBooks_SoftDeletesLosers(t *testing.T) {
 	assert.Equal(t, result.VersionGroupID, *loser.VersionGroupID)
 }
 
-// TestMergeService_MergeBooks_PrefersCuratedOverPristine verifies that a
-// book the user has curated (metadata match accepted, tags written back)
-// wins the primary slot over a duplicate with a better format or bitrate.
-// This matches the user-intuitive rule "don't throw away my work": if I've
-// spent effort on one entry, dedup should keep that entry as primary.
-func TestMergeService_MergeBooks_PrefersCuratedOverPristine(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-	_ = server
+// TestService_MergeBooks_PrefersCuratedOverPristine verifies that a
+// curated book wins the primary slot over a pristine duplicate.
+func TestService_MergeBooks_PrefersCuratedOverPristine(t *testing.T) {
+	store := setupTestStore(t)
 
-	store := database.GetGlobalStore()
-
-	// Pristine M4B with high bitrate — would normally win by format+bitrate
 	pristineM4B := &database.Book{
 		ID:       ulid.Make().String(),
 		Title:    "Foundation and Empire",
@@ -187,7 +179,6 @@ func TestMergeService_MergeBooks_PrefersCuratedOverPristine(t *testing.T) {
 	highBitrate := 192
 	pristineM4B.Bitrate = &highBitrate
 
-	// MP3 with user-curated metadata. Lower bitrate, "worse" format.
 	curatedMP3 := &database.Book{
 		ID:       ulid.Make().String(),
 		Title:    "Foundation and Empire",
@@ -202,17 +193,13 @@ func TestMergeService_MergeBooks_PrefersCuratedOverPristine(t *testing.T) {
 	_, err = store.CreateBook(curatedMP3)
 	require.NoError(t, err)
 
-	// CreateBook does NOT persist metadata_review_status or
-	// last_written_at — those fields are set through UpdateBook and
-	// SetLastWrittenAt after creation. Set them the real way so the
-	// curation score we read back matches production behavior.
 	matched := "matched"
 	curatedMP3.MetadataReviewStatus = &matched
 	_, err = store.UpdateBook(curatedMP3.ID, curatedMP3)
 	require.NoError(t, err)
 	require.NoError(t, store.SetLastWrittenAt(curatedMP3.ID, time.Now()))
 
-	ms := NewMergeService(store)
+	ms := NewService(store)
 	result, err := ms.MergeBooks([]string{pristineM4B.ID, curatedMP3.ID}, "")
 	require.NoError(t, err)
 
@@ -220,9 +207,6 @@ func TestMergeService_MergeBooks_PrefersCuratedOverPristine(t *testing.T) {
 		"curated MP3 should beat pristine M4B — user's work is the strongest signal")
 }
 
-// TestBookCurationScore sanity-checks the three signals that feed into the
-// curation tiebreaker. Each signal is worth one point; an entry with none is
-// zero; an entry with all three is three.
 func TestBookCurationScore(t *testing.T) {
 	matched := "matched"
 	noMatch := "no_match"
@@ -261,25 +245,14 @@ func TestBookCurationScore(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, bookCurationScore(tc.book))
+			assert.Equal(t, tc.want, BookCurationScore(tc.book))
 		})
 	}
 }
 
-// TestMergeService_MergeBooks_PrefersOrganizedOverITunesGhost verifies that
-// when a cluster mixes books under the managed library with books still
-// pointing at the iTunes Media folder, the organized copy wins the primary
-// slot even if the iTunes one has a "better" format. Without this bias a
-// M4B iTunes ghost would steal primary from an MP3 that's already been
-// organized into our library — that's the opposite of what we want.
-func TestMergeService_MergeBooks_PrefersOrganizedOverITunesGhost(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-	_ = server
+func TestService_MergeBooks_PrefersOrganizedOverITunesGhost(t *testing.T) {
+	store := setupTestStore(t)
 
-	store := database.GetGlobalStore()
-
-	// iTunes ghost — better format on paper (M4B, higher bitrate)
 	ghost := &database.Book{
 		ID:       ulid.Make().String(),
 		Title:    "Foundation and Empire",
@@ -289,8 +262,6 @@ func TestMergeService_MergeBooks_PrefersOrganizedOverITunesGhost(t *testing.T) {
 	bitrate := 128
 	ghost.Bitrate = &bitrate
 
-	// Organized library copy — worse format on paper but this is the one
-	// the user actually owns and manages.
 	organized := &database.Book{
 		ID:       ulid.Make().String(),
 		Title:    "Foundation and Empire",
@@ -305,19 +276,14 @@ func TestMergeService_MergeBooks_PrefersOrganizedOverITunesGhost(t *testing.T) {
 	_, err = store.CreateBook(organized)
 	require.NoError(t, err)
 
-	ms := NewMergeService(store)
+	ms := NewService(store)
 	result, err := ms.MergeBooks([]string{ghost.ID, organized.ID}, "")
 	require.NoError(t, err)
 
-	// The organized MP3 must win even though the iTunes ghost is M4B +
-	// higher bitrate — path origin is the strongest tiebreaker.
 	assert.Equal(t, organized.ID, result.PrimaryID,
 		"organized library path should beat iTunes ghost regardless of format")
 }
 
-// TestIsITunesGhostPath sanity-checks the path classifier against the
-// shapes we see in production. Exhaustive because the classifier is the
-// load-bearing piece of the primary-pick bias above.
 func TestIsITunesGhostPath(t *testing.T) {
 	cases := []struct {
 		name string
@@ -333,17 +299,15 @@ func TestIsITunesGhostPath(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, isITunesGhostPath(tc.path))
+			assert.Equal(t, tc.want, IsITunesGhostPath(tc.path))
 		})
 	}
 }
 
-func TestMergeService_MergeBooks_NotFound(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-	_ = server
+func TestService_MergeBooks_NotFound(t *testing.T) {
+	store := setupTestStore(t)
 
-	ms := NewMergeService(database.GetGlobalStore())
+	ms := NewService(store)
 	_, err := ms.MergeBooks([]string{"nonexistent1", "nonexistent2"}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")

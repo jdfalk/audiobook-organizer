@@ -1,52 +1,65 @@
-// file: internal/server/merge_service.go
+// file: internal/merge/service.go
 // version: 1.3.0
 // guid: 7d736d2d-e0df-40bd-9f4b-0a07bc2eb6ae
 
-package server
+package merge
 
 import (
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	ulid "github.com/oklog/ulid/v2"
 )
 
-// mergeServiceStore is the narrow slice of database.Store this service uses.
-// Widened to satisfy the transitive `maintenanceStore` composite expected by
-// softDeleteBook in maintenance_fixups.go.
-type mergeServiceStore interface {
-	database.BookStore
-	database.AuthorStore
-	database.SeriesStore
-	database.BookFileStore
-	database.UserTagStore
-	database.ExternalIDStore
-	database.StatsStore
+// WriteBackEnqueuer is satisfied by anything that can enqueue an iTunes
+// track removal (e.g. *server.WriteBackBatcher).
+type WriteBackEnqueuer interface {
+	EnqueueRemove(pid string)
 }
 
+// ExternalIDReassigner is the subset of external-ID operations that
+// Service needs. Satisfied by the concrete store when it implements
+// ReassignExternalIDs.
+type ExternalIDReassigner interface {
+	ReassignExternalIDs(oldBookID, newBookID string) error
+}
 
-// MergeService handles merging duplicate books into version groups.
-type MergeService struct {
-	db mergeServiceStore
-	writeBackBatcher *WriteBackBatcher
+// AsExternalIDReassigner returns the ExternalIDReassigner if the given
+// store implements it, or nil otherwise.
+func AsExternalIDReassigner(s any) ExternalIDReassigner {
+	if s == nil {
+		return nil
+	}
+	if eid, ok := s.(ExternalIDReassigner); ok {
+		return eid
+	}
+	return nil
+}
+
+// Service handles merging duplicate books into version groups.
+type Service struct {
+	db               database.Store
+	writeBackBatcher WriteBackEnqueuer
 }
 
 // SetWriteBackBatcher sets the iTunes write-back batcher.
-func (ms *MergeService) SetWriteBackBatcher(b *WriteBackBatcher) {
+func (ms *Service) SetWriteBackBatcher(b WriteBackEnqueuer) {
 	ms.writeBackBatcher = b
 }
 
-// MergeResult contains the outcome of a merge operation.
-type MergeResult struct {
+// Result contains the outcome of a merge operation.
+type Result struct {
 	PrimaryID      string `json:"primary_id"`
 	VersionGroupID string `json:"version_group_id"`
 	MergedCount    int    `json:"merged_count"`
 }
 
-// NewMergeService creates a new MergeService.
-func NewMergeService(db mergeServiceStore) *MergeService {
-	return &MergeService{db: db}
+// NewService creates a new Service.
+func NewService(db database.Store) *Service {
+	return &Service{db: db}
 }
 
 // MergeBooks merges a set of books into a single version group.
@@ -55,7 +68,7 @@ func NewMergeService(db mergeServiceStore) *MergeService {
 // orphaned ITL entries):
 //
 //  1. Winner is chosen (user-supplied primaryID or auto-picked
-//     via bookIsBetter) and given IsPrimaryVersion=true. Losers
+//     via BookIsBetter) and given IsPrimaryVersion=true. Losers
 //     get IsPrimaryVersion=false and are soft-deleted.
 //  2. External IDs (iTunes PIDs, Audible ASINs, etc.) are
 //     reassigned from losers to the winner so lookups still
@@ -76,7 +89,7 @@ func NewMergeService(db mergeServiceStore) *MergeService {
 // If primaryID is empty, the best book is auto-selected (M4B
 // preferred, then highest bitrate, then largest file).
 // If primaryID is provided, that book is set as the primary.
-func (ms *MergeService) MergeBooks(bookIDs []string, primaryID string) (*MergeResult, error) {
+func (ms *Service) MergeBooks(bookIDs []string, primaryID string) (*Result, error) {
 	if len(bookIDs) < 2 {
 		return nil, fmt.Errorf("need at least 2 book IDs to merge")
 	}
@@ -108,7 +121,7 @@ func (ms *MergeService) MergeBooks(bookIDs []string, primaryID string) (*MergeRe
 	} else {
 		// Auto-select best: M4B preferred, then highest bitrate, then largest file
 		for i := 1; i < len(books); i++ {
-			if bookIsBetter(books[i], books[bestIdx]) {
+			if BookIsBetter(books[i], books[bestIdx]) {
 				bestIdx = i
 			}
 		}
@@ -154,7 +167,7 @@ func (ms *MergeService) MergeBooks(bookIDs []string, primaryID string) (*MergeRe
 	//  (d) soft-delete the loser so it drops off the default
 	//      library view. Files on disk are left alone for the
 	//      archive sweep to handle later.
-	eidStore := asExternalIDStore(ms.db)
+	eidStore := AsExternalIDReassigner(ms.db)
 	for _, book := range books {
 		if book.ID == resolvedPrimaryID {
 			continue
@@ -189,16 +202,119 @@ func (ms *MergeService) MergeBooks(bookIDs []string, primaryID string) (*MergeRe
 		}
 
 		// (d) Soft-delete the loser. If UpdateBook fails inside
-		// softDeleteBook it falls back to hard delete, so we
+		// SoftDeleteBook it falls back to hard delete, so we
 		// never leave a zombie non-primary row behind.
-		if err := softDeleteBook(ms.db, book.ID); err != nil {
+		if err := SoftDeleteBook(ms.db, book.ID); err != nil {
 			log.Printf("[WARN] merge: soft-delete %s: %v", book.ID, err)
 		}
 	}
 
-	return &MergeResult{
+	return &Result{
 		PrimaryID:      resolvedPrimaryID,
 		VersionGroupID: versionGroupID,
 		MergedCount:    len(books),
 	}, nil
+}
+
+// SoftDeleteBook marks a book as deleted using the MarkedForDeletion flag.
+// If UpdateBook fails, falls back to hard-delete via DeleteBook.
+func SoftDeleteBook(store database.Store, bookID string) error {
+	current, err := store.GetBookByID(bookID)
+	if err != nil {
+		return fmt.Errorf("GetBookByID %s: %w", bookID, err)
+	}
+	if current == nil {
+		return nil // Already gone
+	}
+
+	t := true
+	now := time.Now()
+	current.MarkedForDeletion = &t
+	current.MarkedForDeletionAt = &now
+
+	if _, upErr := store.UpdateBook(bookID, current); upErr != nil {
+		// Fall back to hard delete.
+		log.Printf("[WARN] dedup-books: soft-delete failed for %s (%v), falling back to hard delete", bookID, upErr)
+		return store.DeleteBook(bookID)
+	}
+	return nil
+}
+
+// IsITunesGhostPath reports whether a book's file path points at the
+// iTunes media folder rather than the managed audiobook-organizer library.
+func IsITunesGhostPath(p string) bool {
+	if p == "" {
+		return false
+	}
+	lower := strings.ToLower(p)
+	return strings.Contains(lower, "/itunes media/") || strings.Contains(lower, "/itunes/itunes")
+}
+
+// BookCurationScore returns a coarse "how much effort has the user put into
+// this entry" score. Higher means more curated.
+//
+// Signals, each worth one point:
+//   - MetadataReviewStatus == "matched" (user explicitly accepted a match)
+//   - LastWrittenAt set (tags have been written back to the file)
+//   - MetadataUpdatedAt strictly newer than CreatedAt (user-visible metadata
+//     field has been edited since the row was created)
+func BookCurationScore(b *database.Book) int {
+	score := 0
+	if b.MetadataReviewStatus != nil && *b.MetadataReviewStatus == "matched" {
+		score++
+	}
+	if b.LastWrittenAt != nil {
+		score++
+	}
+	if b.MetadataUpdatedAt != nil && b.CreatedAt != nil && b.MetadataUpdatedAt.After(*b.CreatedAt) {
+		score++
+	}
+	return score
+}
+
+// BookIsBetter returns true if a is a "better" primary version than b.
+// Preference order (strongest first):
+//  1. Organized library path over iTunes-ghost path
+//  2. Higher curation score (user effort beats technical quality)
+//  3. M4B over other formats
+//  4. Higher bitrate
+//  5. Larger file size
+func BookIsBetter(a, b *database.Book) bool {
+	aGhost := IsITunesGhostPath(a.FilePath)
+	bGhost := IsITunesGhostPath(b.FilePath)
+	if aGhost != bGhost {
+		return !aGhost
+	}
+
+	aCur := BookCurationScore(a)
+	bCur := BookCurationScore(b)
+	if aCur != bCur {
+		return aCur > bCur
+	}
+
+	aM4B := strings.EqualFold(a.Format, "m4b")
+	bM4B := strings.EqualFold(b.Format, "m4b")
+	if aM4B != bM4B {
+		return aM4B
+	}
+	aBitrate := 0
+	if a.Bitrate != nil {
+		aBitrate = *a.Bitrate
+	}
+	bBitrate := 0
+	if b.Bitrate != nil {
+		bBitrate = *b.Bitrate
+	}
+	if aBitrate != bBitrate {
+		return aBitrate > bBitrate
+	}
+	aSize := int64(0)
+	if a.FileSize != nil {
+		aSize = *a.FileSize
+	}
+	bSize := int64(0)
+	if b.FileSize != nil {
+		bSize = *b.FileSize
+	}
+	return aSize > bSize
 }
