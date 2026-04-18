@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
@@ -453,7 +454,7 @@ func buildComparisonValuesFromBook(book *database.Book, authorName, seriesName s
 // old_value (i.e. the value BEFORE that operation) is used as the comparison
 // value. This is the fallback when GetBookAtVersion is unavailable (SQLite) or
 // when the exact version key is not present in PebbleDB.
-func buildComparisonValuesFromActivityLog(as *ActivityService, bookID string, ts time.Time) map[string]any {
+func buildComparisonValuesFromActivityLog(as *activity.Service, bookID string, ts time.Time) map[string]any {
 	window := 5 * time.Second
 	since := ts.Add(-window)
 	until := ts.Add(window)
@@ -665,9 +666,9 @@ func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) 
 }
 
 // Server represents the HTTP server
-// activityServiceLogger adapts ActivityService to the operations.ActivityLogger interface.
+// activityServiceLogger adapts activity.Service to the operations.ActivityLogger interface.
 type activityServiceLogger struct {
-	svc *ActivityService
+	svc *activity.Service
 }
 
 func (a *activityServiceLogger) RecordActivity(entry database.ActivityEntry) {
@@ -706,11 +707,11 @@ type Server struct {
 	batchPoller            *BatchPoller
 	mergeService           *MergeService
 	diagnosticsService     *DiagnosticsService
-	changelogService       *ChangelogService
-	activityService        *ActivityService
+	changelogService       *activity.ChangelogService
+	activityService        *activity.Service
 	embeddingStore         *database.EmbeddingStore
 	dedupEngine            *DedupEngine
-	activityWriter         *activityWriter
+	activityWriter         *activity.Writer
 	itunesActivityFn       func(entry database.ActivityEntry)
 	// searchIndex is the Bleve library search index (spec DES-1).
 	// Opened at startup, nil if DB path isn't set yet.
@@ -824,7 +825,7 @@ func NewServer(store database.Store) *Server {
 		updater:                updater.NewUpdater(appVersion),
 		mergeService:           NewMergeService(resolvedStore),
 		diagnosticsService:     NewDiagnosticsService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
-		changelogService:       NewChangelogService(resolvedStore),
+		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
 
 	// Initialize update scheduler
@@ -876,7 +877,7 @@ func NewServer(store database.Store) *Server {
 		if err != nil {
 			log.Printf("[WARN] Failed to open activity log store: %v", err)
 		} else {
-			server.activityService = NewActivityService(activityStore)
+			server.activityService = activity.NewService(activityStore)
 		}
 	}
 
@@ -1038,7 +1039,7 @@ func NewServer(store database.Store) *Server {
 		server.audiobookService.SetActivityService(server.activityService)
 
 		// Global log capture via teeWriter — replaces globalActivityRecorder
-		aw := newActivityWriter(server.activityService.Store(), 10000)
+		aw := activity.NewWriter(server.activityService.Store(), 10000)
 		aw.Start()
 		server.activityWriter = aw
 		log.SetOutput(aw)
@@ -1172,7 +1173,7 @@ func (s *Server) DeleteIndexedBook(bookID string) error {
 // serverScanHooks implements scanner.ScanHooks, bridging scanner
 // callbacks to the server's activity service and dedup engine.
 type serverScanHooks struct {
-	activityService *ActivityService
+	activityService *activity.Service
 	dedupFn         func(bookID string)
 }
 

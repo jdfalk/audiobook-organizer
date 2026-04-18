@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -25,7 +26,7 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	}
 	defer store.Close()
 
-	svc := NewActivityService(store)
+	svc := activity.NewService(store)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	srv := &Server{activityService: svc}
@@ -144,7 +145,7 @@ func TestActivity_Integration_TeeWriterCapture(t *testing.T) {
 	}
 	defer store.Close()
 
-	w := newActivityWriter(store, 1000)
+	w := activity.NewWriter(store, 1000)
 	w.Start()
 
 	fmt.Fprintln(w, "2026/03/25 17:35:08 logger.go:103: [info] scheduler: iTunes sync started")

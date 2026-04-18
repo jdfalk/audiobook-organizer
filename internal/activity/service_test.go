@@ -1,8 +1,8 @@
-// file: internal/server/activity_service_test.go
+// file: internal/activity/service_test.go
 // version: 1.0.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
-package server
+package activity
 
 import (
 	"os"
@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestActivityService_RecordAndQuery(t *testing.T) {
+func TestService_RecordAndQuery(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "activity_test.db")
 
@@ -26,7 +26,7 @@ func TestActivityService_RecordAndQuery(t *testing.T) {
 		os.Remove(dbPath)
 	}()
 
-	svc := NewActivityService(store)
+	svc := NewService(store)
 	require.NotNil(t, svc)
 	assert.Equal(t, store, svc.Store())
 

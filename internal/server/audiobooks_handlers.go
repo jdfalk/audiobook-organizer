@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
@@ -1061,7 +1062,7 @@ func (s *Server) getBookChangelog(c *gin.Context) {
 		return
 	}
 	if entries == nil {
-		entries = []ChangeLogEntry{}
+		entries = []activity.ChangeLogEntry{}
 	}
 	c.JSON(http.StatusOK, gin.H{"entries": entries})
 }

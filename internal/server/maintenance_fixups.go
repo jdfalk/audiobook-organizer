@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
@@ -3283,7 +3284,7 @@ func wipeExternalIDs(store maintenanceStore, dryRun bool) (int64, error) {
 }
 
 // wipeActivity deletes all activity log entries.
-func wipeActivity(svc *ActivityService, dryRun bool) (int64, error) {
+func wipeActivity(svc *activity.Service, dryRun bool) (int64, error) {
 	if dryRun {
 		entries, total, err := svc.Query(database.ActivityFilter{Limit: 1})
 		if err != nil {

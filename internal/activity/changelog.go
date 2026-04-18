@@ -1,8 +1,8 @@
-// file: internal/server/changelog_service.go
+// file: internal/activity/changelog.go
 // version: 1.2.0
 // guid: 93167949-a587-41e9-8ef9-92d03f86aea6
 
-package server
+package activity
 
 import (
 	"fmt"
@@ -38,8 +38,8 @@ func NewChangelogService(db changelogStore) *ChangelogService {
 	return &ChangelogService{db: db}
 }
 
-// maxChangelogEntries is the maximum number of entries returned by GetBookChangelog.
-const maxChangelogEntries = 50
+// MaxChangelogEntries is the maximum number of entries returned by GetBookChangelog.
+const MaxChangelogEntries = 50
 
 // GetBookChangelog returns a merged, time-sorted changelog for the given book.
 // It pulls data from book_path_history (renames), metadata_change_history
@@ -78,11 +78,11 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	} else {
 		for _, mh := range metaHistory {
 			entryType := "metadata_apply"
-			summary := fmt.Sprintf("Metadata applied — %s: %s (%s)", mh.Field, derefStrDisplay(mh.NewValue), mh.Source)
+			summary := fmt.Sprintf("Metadata applied — %s: %s (%s)", mh.Field, DerefStrDisplay(mh.NewValue), mh.Source)
 
 			if mh.ChangeType == "override" || mh.ChangeType == "clear" || mh.ChangeType == "undo" {
 				entryType = "tag_write"
-				summary = fmt.Sprintf("Tag written — %s set to %s (%s)", mh.Field, derefStrDisplay(mh.NewValue), mh.ChangeType)
+				summary = fmt.Sprintf("Tag written — %s set to %s (%s)", mh.Field, DerefStrDisplay(mh.NewValue), mh.ChangeType)
 			}
 
 			details := map[string]any{
@@ -152,16 +152,16 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 		return entries[i].Timestamp.After(entries[j].Timestamp)
 	})
 
-	// Limit to maxChangelogEntries
-	if len(entries) > maxChangelogEntries {
-		entries = entries[:maxChangelogEntries]
+	// Limit to MaxChangelogEntries
+	if len(entries) > MaxChangelogEntries {
+		entries = entries[:MaxChangelogEntries]
 	}
 
 	return entries, nil
 }
 
-// derefStrDisplay safely dereferences a *string, returning "<nil>" for nil pointers (display-oriented).
-func derefStrDisplay(s *string) string {
+// DerefStrDisplay safely dereferences a *string, returning "<nil>" for nil pointers (display-oriented).
+func DerefStrDisplay(s *string) string {
 	if s == nil {
 		return "<nil>"
 	}

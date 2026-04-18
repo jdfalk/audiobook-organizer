@@ -21,6 +21,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -36,7 +37,7 @@ type MetadataFetchService struct {
 	olStore          *openlibrary.OLStore
 	overrideSources  []metadata.MetadataSource // for testing
 	isbnEnrichment   *ISBNEnrichmentService
-	activityService  *ActivityService
+	activityService  *activity.Service
 	dedupEngine      *DedupEngine
 	metadataScorer   ai.MetadataCandidateScorer // optional; nil = fallback to F1
 	llmScorer        ai.MetadataCandidateScorer // optional; nil = no LLM rerank tier
@@ -44,7 +45,7 @@ type MetadataFetchService struct {
 }
 
 // SetActivityService sets the activity service for dual-writing to the unified activity log.
-func (mfs *MetadataFetchService) SetActivityService(svc *ActivityService) {
+func (mfs *MetadataFetchService) SetActivityService(svc *activity.Service) {
 	mfs.activityService = svc
 }
 
