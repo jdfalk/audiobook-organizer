@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -48,7 +49,7 @@ type AudiobookService struct {
 	store           audiobookStore
 	bookCache       *cache.Cache[*database.Book]
 	listCache       *cache.Cache[[]database.Book]
-	activityService *ActivityService
+	activityService *activity.Service
 	// searchIndex is the Bleve index for full-text search. When nil
 	// the service falls back to the legacy Store.SearchBooks path.
 	// Wired in by the Server after Bleve opens in Start(), which is
@@ -57,7 +58,7 @@ type AudiobookService struct {
 }
 
 // SetActivityService wires the activity service for snapshot fallback in GetAudiobookTags.
-func (svc *AudiobookService) SetActivityService(as *ActivityService) {
+func (svc *AudiobookService) SetActivityService(as *activity.Service) {
 	svc.activityService = as
 }
 

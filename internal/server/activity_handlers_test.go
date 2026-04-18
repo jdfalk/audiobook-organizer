@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func setupActivityTestRouter(t *testing.T) (*gin.Engine, func()) {
 	store, err := database.NewActivityStore(dbPath)
 	require.NoError(t, err)
 
-	svc := NewActivityService(store)
+	svc := activity.NewService(store)
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -78,7 +79,7 @@ func TestListActivity_WithFilters(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	svc := NewActivityService(store)
+	svc := activity.NewService(store)
 	gin.SetMode(gin.TestMode)
 	filterRouter := gin.New()
 	srv := &Server{activityService: svc}
@@ -134,7 +135,7 @@ func TestListActivity_SearchParam(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	svc := NewActivityService(store)
+	svc := activity.NewService(store)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	srv := &Server{activityService: svc}
@@ -184,7 +185,7 @@ func TestListActivitySources(t *testing.T) {
 	require.NoError(t, err)
 	defer store.Close()
 
-	svc := NewActivityService(store)
+	svc := activity.NewService(store)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	srv := &Server{activityService: svc}
