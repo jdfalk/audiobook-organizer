@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-04-05
 
@@ -213,7 +213,7 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 func (s *Server) fetchCandidateForBook(
 	ctx context.Context,
 	mfs *MetadataFetchService,
-	store database.Store,
+	store interface { database.BookReader; database.OperationStore; database.RawKVStore },
 	limiter *rate.Limiter,
 	opID, bookID string,
 ) CandidateResult {
@@ -543,7 +543,7 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 // loadRejectedCandidateKeys finds previously rejected candidates for a book.
 // Uses a dedicated rejection key prefix for fast lookup instead of scanning
 // all operation results.
-func loadRejectedCandidateKeys(store database.Store, bookID string) map[string]bool {
+func loadRejectedCandidateKeys(store database.RawKVStore, bookID string) map[string]bool {
 	keys := make(map[string]bool)
 	// Scan only rejection keys for this specific book
 	pairs, err := store.ScanPrefix(fmt.Sprintf("rejected_candidate:%s:", bookID))
