@@ -1,5 +1,5 @@
 // file: internal/server/itl_rebuild.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8f7e6d5c-4b3a-2c1d-0e9f-8a7b6c5d4e3f
 //
 // iTunes library rebuild service: diffs the current DB state
@@ -47,7 +47,7 @@ type ITLRebuildResult struct {
 // computeITLDiff reads the current ITL and the current DB state,
 // and returns the ITLOperationSet that would synchronize them
 // plus a preview of what that set contains.
-func computeITLDiff(store database.Store, itlPath string) (*itunes.ITLOperationSet, *ITLRebuildPreview, error) {
+func computeITLDiff(store database.BookReader, itlPath string) (*itunes.ITLOperationSet, *ITLRebuildPreview, error) {
 	// Parse the current ITL to get all existing tracks.
 	lib, err := itunes.ParseITL(itlPath)
 	if err != nil {
@@ -179,7 +179,7 @@ func computeITLDiff(store database.Store, itlPath string) (*itunes.ITLOperationS
 // buildNewTrackFromBook constructs an ITLNewTrack from a database
 // Book for insertion into the ITL. Fills as many fields as
 // possible from the book's metadata.
-func buildNewTrackFromBook(store database.Store, book *database.Book) itunes.ITLNewTrack {
+func buildNewTrackFromBook(store database.BookReader, book *database.Book) itunes.ITLNewTrack {
 	authorName, _ := resolveAuthorAndSeriesNames(book)
 	genre := "Audiobook"
 	if book.Genre != nil && *book.Genre != "" {
