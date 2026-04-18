@@ -1,5 +1,5 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -72,7 +73,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 
 	ds := s.diagnosticsService
 	if ds == nil {
-		ds = NewDiagnosticsService(store, nil, config.AppConfig.ITunesLibraryReadPath)
+		ds = diagnostics.NewService(store, nil, config.AppConfig.ITunesLibraryReadPath)
 	}
 
 	category := req.Category
@@ -196,7 +197,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 
 	ds := s.diagnosticsService
 	if ds == nil {
-		ds = NewDiagnosticsService(store, nil, config.AppConfig.ITunesLibraryReadPath)
+		ds = diagnostics.NewService(store, nil, config.AppConfig.ITunesLibraryReadPath)
 	}
 
 	category := req.Category
@@ -213,20 +214,20 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 		_ = store.UpdateOperationStatus(opID, "running", 10, 100, "Generating export data")
 
 		// Collect books for JSONL
-		allBooks, collectErr := ds.collectAllBooks()
+		allBooks, collectErr := ds.CollectAllBooks()
 		if collectErr != nil {
 			_ = store.UpdateOperationError(opID, collectErr.Error())
 			return
 		}
 
-		slimBooks := make([]slimBook, len(allBooks))
+		slimBooks := make([]diagnostics.SlimBook, len(allBooks))
 		for i, b := range allBooks {
-			slimBooks[i] = toSlimBook(b)
+			slimBooks[i] = diagnostics.ToSlimBook(b)
 		}
 
 		_ = store.UpdateOperationStatus(opID, "running", 50, 100, "Building batch JSONL")
 
-		jsonlData, buildErr := buildBatchJSONL(category, description, slimBooks, nil, nil, nil)
+		jsonlData, buildErr := diagnostics.BuildBatchJSONL(category, description, slimBooks, nil, nil, nil)
 		if buildErr != nil {
 			_ = store.UpdateOperationError(opID, buildErr.Error())
 			return

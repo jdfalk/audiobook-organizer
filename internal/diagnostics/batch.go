@@ -1,8 +1,8 @@
-// file: internal/server/diagnostics_batch.go
-// version: 1.0.0
+// file: internal/diagnostics/batch.go
+// version: 1.1.0
 // guid: b4c5d6e7-f8a9-40b1-c2d3-e4f5a6b7c8d9
 
-package server
+package diagnostics
 
 import (
 	"bytes"
@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	batchChunkBooks  = 500
-	batchChunkLogs   = 200
-	batchChunkItunes = 500
-	batchModel       = "o4-mini"
-	batchMaxTokens   = 16000
-	batchTemperature = 0.1
+	BatchChunkBooks  = 500
+	BatchChunkLogs   = 200
+	BatchChunkItunes = 500
+	BatchModel       = "o4-mini"
+	BatchMaxTokens   = 16000
+	BatchTemperature = 0.1
 )
 
 // batchRequest represents a single line in OpenAI batch JSONL format.
@@ -35,8 +35,8 @@ var categorySystemPrompts = map[string]string{
 	"metadata_quality": `You are an audiobook metadata quality analyst. Analyze these records and identify: 1) WRONG AUTHORS (narrator listed as author), 2) BAD TITLES (track names, garbled text), 3) MISSING SERIES (books that should be in a series), 4) WRONG SERIES ASSIGNMENTS. Output ONLY a JSON array of objects with: action (fix_metadata|reassign_series), book_ids, reason, fix.`,
 }
 
-// getSystemPrompt returns the appropriate system prompt for the given category.
-func getSystemPrompt(category string) string {
+// GetSystemPrompt returns the appropriate system prompt for the given category.
+func GetSystemPrompt(category string) string {
 	if prompt, ok := categorySystemPrompts[category]; ok {
 		return prompt
 	}
@@ -46,16 +46,16 @@ func getSystemPrompt(category string) string {
 		categorySystemPrompts["metadata_quality"]
 }
 
-// buildBatchJSONL constructs the OpenAI batch JSONL payload for diagnostics analysis.
+// BuildBatchJSONL constructs the OpenAI batch JSONL payload for diagnostics analysis.
 // Data is chunked into manageable pieces per request line.
-func buildBatchJSONL(category, description string, books []slimBook, itunesAlbums []itunesAlbumSummary, logs, operationsData interface{}) ([]byte, error) {
-	systemPrompt := getSystemPrompt(category)
+func BuildBatchJSONL(category, description string, books []SlimBook, itunesAlbums []ITunesAlbumSummary, logs, operationsData interface{}) ([]byte, error) {
+	systemPrompt := GetSystemPrompt(category)
 	var buf bytes.Buffer
 	chunkIdx := 0
 
 	// Chunk books
-	for start := 0; start < len(books); start += batchChunkBooks {
-		end := start + batchChunkBooks
+	for start := 0; start < len(books); start += BatchChunkBooks {
+		end := start + BatchChunkBooks
 		if end > len(books) {
 			end = len(books)
 		}
@@ -86,8 +86,8 @@ func buildBatchJSONL(category, description string, books []slimBook, itunesAlbum
 
 	// Chunk iTunes albums if present
 	if len(itunesAlbums) > 0 {
-		for start := 0; start < len(itunesAlbums); start += batchChunkItunes {
-			end := start + batchChunkItunes
+		for start := 0; start < len(itunesAlbums); start += BatchChunkItunes {
+			end := start + BatchChunkItunes
 			if end > len(itunesAlbums) {
 				end = len(itunesAlbums)
 			}
@@ -115,8 +115,8 @@ func buildBatchJSONL(category, description string, books []slimBook, itunesAlbum
 			// Parse as array and chunk
 			var logEntries []interface{}
 			if json.Unmarshal(logsJSON, &logEntries) == nil && len(logEntries) > 0 {
-				for start := 0; start < len(logEntries); start += batchChunkLogs {
-					end := start + batchChunkLogs
+				for start := 0; start < len(logEntries); start += BatchChunkLogs {
+					end := start + BatchChunkLogs
 					if end > len(logEntries) {
 						end = len(logEntries)
 					}
@@ -149,9 +149,9 @@ func writeRequestLine(buf *bytes.Buffer, idx int, systemPrompt, userContent stri
 		Method:   "POST",
 		URL:      "/v1/chat/completions",
 		Body: map[string]interface{}{
-			"model":       batchModel,
-			"max_tokens":  batchMaxTokens,
-			"temperature": batchTemperature,
+			"model":       BatchModel,
+			"max_tokens":  BatchMaxTokens,
+			"temperature": BatchTemperature,
 			"messages": []map[string]string{
 				{"role": "system", "content": systemPrompt},
 				{"role": "user", "content": userContent},
