@@ -18,6 +18,7 @@ import time
 import urllib.request
 import ssl
 
+
 def api(host, method, path, data=None):
     """Make an API call to the audiobook-organizer server."""
     ctx = ssl.create_default_context()
@@ -28,7 +29,9 @@ def api(host, method, path, data=None):
     headers = {"Content-Type": "application/json"}
 
     if data is not None:
-        req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers, method=method)
+        req = urllib.request.Request(
+            url, data=json.dumps(data).encode(), headers=headers, method=method
+        )
     else:
         req = urllib.request.Request(url, headers=headers, method=method)
 
@@ -40,10 +43,13 @@ def api(host, method, path, data=None):
         print(f"  HTTP {e.code}: {body[:200]}")
         return None
 
+
 def main():
     parser = argparse.ArgumentParser(description="Test tag write/read round-trip")
     parser.add_argument("--host", default="172.16.2.30:8484", help="Server host:port")
-    parser.add_argument("--book-id", help="Book ID to test (uses first book if not specified)")
+    parser.add_argument(
+        "--book-id", help="Book ID to test (uses first book if not specified)"
+    )
     args = parser.parse_args()
 
     host = args.host
@@ -87,7 +93,12 @@ def main():
     missing_in_file = []
     for field, sv in db_values.items():
         fv = file_values_before.get(field)
-        if (fv is None or fv == "" or fv == "\u2014") and sv and sv != "" and sv != "\u2014":
+        if (
+            (fv is None or fv == "" or fv == "\u2014")
+            and sv
+            and sv != ""
+            and sv != "\u2014"
+        ):
             missing_in_file.append(field)
 
     if missing_in_file:
@@ -97,7 +108,9 @@ def main():
 
     # Step 2: Trigger write-back
     print("\n2. Triggering write-back...")
-    wb_result = api(host, "POST", f"/audiobooks/{book_id}/write-back", {"rename": False})
+    wb_result = api(
+        host, "POST", f"/audiobooks/{book_id}/write-back", {"rename": False}
+    )
     if wb_result:
         print(f"  Write-back result: {wb_result.get('message', 'OK')}")
     else:
@@ -131,14 +144,18 @@ def main():
             if fv_after and str(fv_after) != "" and str(fv_after) != "\u2014":
                 print(f"  FIXED: {field} now has file value: {fv_after}")
             else:
-                issues.append(f"STILL MISSING: {field} - DB has '{sv}' but file still empty")
+                issues.append(
+                    f"STILL MISSING: {field} - DB has '{sv}' but file still empty"
+                )
 
     # Check: fields that had values before shouldn't lose them
     for field, fv_before in file_values_before.items():
         fv_after = file_values_after.get(field)
         if fv_before and str(fv_before) != "\u2014":
             if not fv_after or str(fv_after) == "\u2014" or str(fv_after) == "":
-                issues.append(f"LOST: {field} had '{fv_before}' but now empty after write-back")
+                issues.append(
+                    f"LOST: {field} had '{fv_before}' but now empty after write-back"
+                )
             elif str(fv_before) != str(fv_after):
                 # Value changed — not necessarily bad (could be normalization)
                 print(f"  CHANGED: {field}: '{fv_before}' -> '{fv_after}'")
@@ -150,7 +167,7 @@ def main():
             print(f"  NEW: {field} = {file_values_after[field]}")
 
     # Report
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     if issues:
         print(f"RESULT: {len(issues)} issue(s) found:")
         for issue in issues:
@@ -160,6 +177,7 @@ def main():
         print("RESULT: All tags round-tripped successfully!")
         print(f"  {len(file_values_after)} fields with file values after write-back")
         sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

@@ -59,7 +59,9 @@ def test_library_soft_deleted_section(driver, base_url):
     wait_for_text(driver, "Soft-Deleted Books")
 
     # Expect either empty-state alert or a list with purge/restore buttons present
-    soft_deleted_heading = driver.find_element(By.XPATH, "//h6[contains(., 'Soft-Deleted Books')]")
+    soft_deleted_heading = driver.find_element(
+        By.XPATH, "//h6[contains(., 'Soft-Deleted Books')]"
+    )
     assert soft_deleted_heading.is_displayed()
 
     # If list exists, buttons should be present

@@ -76,10 +76,12 @@ def fetch_books_for_authors(server_url: str, author_ids: list) -> dict:
             if aid in author_ids:
                 if aid not in books_by_author:
                     books_by_author[aid] = []
-                books_by_author[aid].append({
-                    "title": book.get("title", ""),
-                    "series": book.get("series", ""),
-                })
+                books_by_author[aid].append(
+                    {
+                        "title": book.get("title", ""),
+                        "series": book.get("series", ""),
+                    }
+                )
 
         if len(items) < page_size:
             break
@@ -89,15 +91,31 @@ def fetch_books_for_authors(server_url: str, author_ids: list) -> dict:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Second-pass enrichment for uncertain suggestions")
+    parser = argparse.ArgumentParser(
+        description="Second-pass enrichment for uncertain suggestions"
+    )
     parser.add_argument("--server", required=True, help="Server URL")
-    parser.add_argument("--results", required=True, help="Path to first-pass batch_output.jsonl")
-    parser.add_argument("--groups", required=True, help="Path to groups.json from first pass")
-    parser.add_argument("--model", default="gpt-5.1", help="Model to use for second pass")
-    parser.add_argument("--threshold", default="medium", choices=["medium", "low"],
-                        help="Include suggestions at this confidence and below (default: medium = medium+low)")
-    parser.add_argument("--output", default="testdata/dedup-bench", help="Output base directory")
-    parser.add_argument("--dry-run", action="store_true", help="Build prompts but don't submit")
+    parser.add_argument(
+        "--results", required=True, help="Path to first-pass batch_output.jsonl"
+    )
+    parser.add_argument(
+        "--groups", required=True, help="Path to groups.json from first pass"
+    )
+    parser.add_argument(
+        "--model", default="gpt-5.1", help="Model to use for second pass"
+    )
+    parser.add_argument(
+        "--threshold",
+        default="medium",
+        choices=["medium", "low"],
+        help="Include suggestions at this confidence and below (default: medium = medium+low)",
+    )
+    parser.add_argument(
+        "--output", default="testdata/dedup-bench", help="Output base directory"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Build prompts but don't submit"
+    )
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -119,7 +137,9 @@ def main():
     # Filter uncertain ones
     thresholds = ["low"] if args.threshold == "low" else ["medium", "low"]
     uncertain = [s for s in suggestions if s.get("confidence") in thresholds]
-    print(f"First pass: {len(suggestions)} total, {len(uncertain)} uncertain ({', '.join(thresholds)})")
+    print(
+        f"First pass: {len(suggestions)} total, {len(uncertain)} uncertain ({', '.join(thresholds)})"
+    )
 
     if not uncertain:
         print("No uncertain suggestions to enrich. Done.")
@@ -176,24 +196,33 @@ def main():
                     for t in titles[:10]
                 ]
 
-        enriched_items.append({
-            "group_index": gi,
-            "original_group": {
-                "canonical": {"name": canonical.get("name", ""), "id": canonical.get("id")},
-                "variants": [{"name": v.get("name", ""), "id": v.get("id")} for v in variants],
-            },
-            "previous_suggestion": {
-                "action": s.get("action"),
-                "canonical_name": s.get("canonical_name"),
-                "confidence": s.get("confidence"),
-                "reason": s.get("reason"),
-            },
-            "book_evidence": evidence,
-        })
+        enriched_items.append(
+            {
+                "group_index": gi,
+                "original_group": {
+                    "canonical": {
+                        "name": canonical.get("name", ""),
+                        "id": canonical.get("id"),
+                    },
+                    "variants": [
+                        {"name": v.get("name", ""), "id": v.get("id")} for v in variants
+                    ],
+                },
+                "previous_suggestion": {
+                    "action": s.get("action"),
+                    "canonical_name": s.get("canonical_name"),
+                    "confidence": s.get("confidence"),
+                    "reason": s.get("reason"),
+                },
+                "book_evidence": evidence,
+            }
+        )
 
     # Build the batch request
     user_content = json.dumps(enriched_items, indent=2)
-    print(f"\nEnriched payload: {len(enriched_items)} items, ~{len(user_content)//4} tokens")
+    print(
+        f"\nEnriched payload: {len(enriched_items)} items, ~{len(user_content) // 4} tokens"
+    )
 
     # Create run directory
     ts = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -202,13 +231,18 @@ def main():
 
     # Save enriched data
     (run_dir / "enriched_input.json").write_text(json.dumps(enriched_items, indent=2))
-    (run_dir / "config.json").write_text(json.dumps({
-        "model": args.model,
-        "mode": "pass2-enrichment",
-        "first_pass_results": str(args.results),
-        "threshold": args.threshold,
-        "uncertain_count": len(enriched_items),
-    }, indent=2))
+    (run_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "model": args.model,
+                "mode": "pass2-enrichment",
+                "first_pass_results": str(args.results),
+                "threshold": args.threshold,
+                "uncertain_count": len(enriched_items),
+            },
+            indent=2,
+        )
+    )
 
     if args.dry_run:
         print(f"Dry run — enriched data saved to {run_dir}")
@@ -223,7 +257,10 @@ def main():
         "model": args.model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"Review these uncertain suggestions with the new book title evidence:\n\n{user_content}"},
+            {
+                "role": "user",
+                "content": f"Review these uncertain suggestions with the new book title evidence:\n\n{user_content}",
+            },
         ],
         "max_completion_tokens": 16000,
     }
@@ -233,12 +270,17 @@ def main():
         body["top_p"] = 1.0
         body["response_format"] = {"type": "json_object"}
 
-    req_line = json.dumps({
-        "custom_id": f"pass2_{args.model}_{ts}",
-        "method": "POST",
-        "url": "/v1/chat/completions",
-        "body": body,
-    }) + "\n"
+    req_line = (
+        json.dumps(
+            {
+                "custom_id": f"pass2_{args.model}_{ts}",
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": body,
+            }
+        )
+        + "\n"
+    )
 
     # Save JSONL
     (run_dir / "batch_input.jsonl").write_text(req_line)
@@ -263,12 +305,22 @@ def main():
     (run_dir / "batch_info.json").write_text(json.dumps(job_info, indent=2))
 
     # Also save as batch_jobs.json for compatibility with check script
-    (run_dir / "batch_jobs.json").write_text(json.dumps([{
-        "batch_id": batch.id,
-        "config": {"model": args.model, "prompt_variant": "pass2-enrichment"},
-        "mode": "pass2",
-        "run_dir": str(run_dir),
-    }], indent=2))
+    (run_dir / "batch_jobs.json").write_text(
+        json.dumps(
+            [
+                {
+                    "batch_id": batch.id,
+                    "config": {
+                        "model": args.model,
+                        "prompt_variant": "pass2-enrichment",
+                    },
+                    "mode": "pass2",
+                    "run_dir": str(run_dir),
+                }
+            ],
+            indent=2,
+        )
+    )
 
     print(f"\nSubmitted batch job: {batch.id}")
     print(f"Output: {run_dir}")
