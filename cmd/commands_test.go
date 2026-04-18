@@ -70,7 +70,7 @@ func stubCommandDeps(t *testing.T) {
 	initEncryption = func(dir string) error {
 		return nil
 	}
-	loadConfigFromDB = func(store database.Store) error {
+	loadConfigFromDB = func(store database.SettingsStore) error {
 		return nil
 	}
 	syncConfigFromEnv = func() {}
