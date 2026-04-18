@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -24,6 +24,20 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/oklog/ulid/v2"
 )
+
+// maintenanceStore is the narrow slice of database.Store that
+// maintenance-fixup helpers share. Every free function in this file
+// accepts it — the shape is wide but still far narrower than full
+// Store (no sessions, no tags, no operations tracking, no auth).
+type maintenanceStore interface {
+	database.BookStore
+	database.AuthorStore
+	database.SeriesStore
+	database.BookFileStore
+	database.UserTagStore
+	database.ExternalIDStore
+	database.StatsStore
+}
 
 // readByFixResult describes one book that was (or would be) fixed.
 type readByFixResult struct {
@@ -240,7 +254,7 @@ func titleFromFilePath(fp string) string {
 
 // applyReadByFix updates the book in the database with corrected title and narrator.
 // It fetches the current book first (UpdateBook does full column replacement).
-func applyReadByFix(store database.Store, book *database.Book, fix *readByFixResult) error {
+func applyReadByFix(store maintenanceStore, book *database.Book, fix *readByFixResult) error {
 	// Re-fetch to get the latest state (UpdateBook does FULL column replacement)
 	current, err := store.GetBookByID(book.ID)
 	if err != nil {
@@ -517,7 +531,7 @@ func (s *Server) handleCleanupSeries(c *gin.Context) {
 
 // unlinkAndDeleteSeries sets the book's series_id to nil and then deletes the
 // now-empty series record.
-func unlinkAndDeleteSeries(store database.Store, book *database.Book, seriesID int) error {
+func unlinkAndDeleteSeries(store maintenanceStore, book *database.Book, seriesID int) error {
 	// Re-fetch to avoid stale data (UpdateBook does FULL column replacement)
 	current, err := store.GetBookByID(book.ID)
 	if err != nil {
@@ -543,7 +557,7 @@ func unlinkAndDeleteSeries(store database.Store, book *database.Book, seriesID i
 
 // mergeSeriesGroup moves all books from each series in mergeIDs to keepID,
 // then deletes the now-empty series.
-func mergeSeriesGroup(store database.Store, keepID int, mergeIDs []int) error {
+func mergeSeriesGroup(store maintenanceStore, keepID int, mergeIDs []int) error {
 	for _, fromID := range mergeIDs {
 		books, err := store.GetBooksBySeriesID(fromID)
 		if err != nil {
@@ -1187,7 +1201,7 @@ func (s *Server) handleFixAuthorNarratorSwap(c *gin.Context) {
 }
 
 // createBookFilesForBook inserts a BookFile row for each path in filePaths.
-func createBookFilesForBook(store database.Store, book *database.Book, filePaths []string, missing bool) error {
+func createBookFilesForBook(store maintenanceStore, book *database.Book, filePaths []string, missing bool) error {
 	for _, fp := range filePaths {
 		ext := strings.ToLower(filepath.Ext(fp))
 		// Strip leading dot from extension for the format field.
@@ -1523,7 +1537,7 @@ func longWords(s string) map[string]bool {
 
 // unlinkVersionGroupOutliers gives each outlier book its own fresh
 // version_group_id, effectively removing it from the shared group.
-func unlinkVersionGroupOutliers(store database.Store, outliers []vgBook) error {
+func unlinkVersionGroupOutliers(store maintenanceStore, outliers []vgBook) error {
 	for _, ob := range outliers {
 		current, err := store.GetBookByID(ob.ID)
 		if err != nil {
@@ -1612,7 +1626,7 @@ func bestMatchSubdir(parent, title string) string {
 
 // fixAuthorDirPath updates the book's file_path to the given subdir, then
 // rebuilds book_files rows from that directory.
-func fixAuthorDirPath(store database.Store, book *database.Book, subdir string) error {
+func fixAuthorDirPath(store maintenanceStore, book *database.Book, subdir string) error {
 	// Re-fetch to avoid stale data (UpdateBook does FULL column replacement).
 	current, err := store.GetBookByID(book.ID)
 	if err != nil {
@@ -2390,7 +2404,7 @@ func (s *Server) handleDedupBooks(c *gin.Context) {
 
 // fetchAllBooksPaginated retrieves all books in pages of 500 to avoid
 // loading 12K+ records in one shot.
-func fetchAllBooksPaginated(store database.Store) ([]database.Book, error) {
+func fetchAllBooksPaginated(store maintenanceStore) ([]database.Book, error) {
 	const pageSize = 500
 	var all []database.Book
 	offset := 0
@@ -2497,7 +2511,7 @@ func bookScore(b *database.Book) int {
 
 // mergeDuplicateBook transfers data from dup into keeper and then soft-deletes dup.
 // When dryRun is true the function returns nil without modifying the database.
-func mergeDuplicateBook(store database.Store, keeper *database.Book, dup *database.Book, dryRun bool, batcher *WriteBackBatcher) error {
+func mergeDuplicateBook(store maintenanceStore, keeper *database.Book, dup *database.Book, dryRun bool, batcher *WriteBackBatcher) error {
 	if dryRun {
 		return nil
 	}
@@ -2640,7 +2654,7 @@ func mergeBookFields(dst, src *database.Book) {
 
 // softDeleteBook marks a book as deleted using the MarkedForDeletion flag.
 // If UpdateBook fails, falls back to hard-delete via DeleteBook.
-func softDeleteBook(store database.Store, bookID string) error {
+func softDeleteBook(store maintenanceStore, bookID string) error {
 	current, err := store.GetBookByID(bookID)
 	if err != nil {
 		return fmt.Errorf("GetBookByID %s: %w", bookID, err)
@@ -3138,7 +3152,7 @@ func dryRunLabel(dryRun bool) string {
 }
 
 // wipeBookFiles deletes all book_file rows using the appropriate store backend.
-func wipeBookFiles(store database.Store, dryRun bool) (int64, error) {
+func wipeBookFiles(store maintenanceStore, dryRun bool) (int64, error) {
 	if dryRun {
 		// Count only.
 		n, err := store.CountFiles()
@@ -3175,7 +3189,7 @@ func wipeBookFiles(store database.Store, dryRun bool) (int64, error) {
 }
 
 // wipeSegments deletes all book_segment rows using the appropriate store backend.
-func wipeSegments(store database.Store, dryRun bool) (int64, error) {
+func wipeSegments(store maintenanceStore, dryRun bool) (int64, error) {
 	switch s := store.(type) {
 	case *database.SQLiteStore:
 		if dryRun {
@@ -3196,7 +3210,7 @@ func wipeSegments(store database.Store, dryRun bool) (int64, error) {
 }
 
 // wipeBooks deletes all book rows using the appropriate store backend.
-func wipeBooks(store database.Store, dryRun bool) (int64, error) {
+func wipeBooks(store maintenanceStore, dryRun bool) (int64, error) {
 	if dryRun {
 		n, err := store.CountBooks()
 		return int64(n), err
@@ -3214,7 +3228,7 @@ func wipeBooks(store database.Store, dryRun bool) (int64, error) {
 }
 
 // wipeAuthors deletes all author rows using the appropriate store backend.
-func wipeAuthors(store database.Store, dryRun bool) (int64, error) {
+func wipeAuthors(store maintenanceStore, dryRun bool) (int64, error) {
 	if dryRun {
 		n, err := store.CountAuthors()
 		return int64(n), err
@@ -3231,7 +3245,7 @@ func wipeAuthors(store database.Store, dryRun bool) (int64, error) {
 }
 
 // wipeSeries deletes all series rows using the appropriate store backend.
-func wipeSeries(store database.Store, dryRun bool) (int64, error) {
+func wipeSeries(store maintenanceStore, dryRun bool) (int64, error) {
 	if dryRun {
 		n, err := store.CountSeries()
 		return int64(n), err
@@ -3248,7 +3262,7 @@ func wipeSeries(store database.Store, dryRun bool) (int64, error) {
 }
 
 // wipeExternalIDs deletes all external_id_map rows using the appropriate store backend.
-func wipeExternalIDs(store database.Store, dryRun bool) (int64, error) {
+func wipeExternalIDs(store maintenanceStore, dryRun bool) (int64, error) {
 	switch s := store.(type) {
 	case *database.SQLiteStore:
 		if dryRun {
