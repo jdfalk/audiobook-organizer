@@ -208,7 +208,7 @@ func (orgSvc *OrganizeService) syncITunesBeforeOrganize(ctx context.Context, log
 
 	log.Info("Running iTunes sync before organize: %s", libraryPath)
 
-	if err := executeITunesSync(ctx, orgSvc.db, log, libraryPath, nil); err != nil {
+	if err := executeITunesSync(ctx, orgSvc.db, log, libraryPath, nil, nil); err != nil {
 		log.Warn("iTunes pre-sync failed (continuing with organize): %s", err.Error())
 		return
 	}
