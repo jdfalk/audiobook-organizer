@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service_prop_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 864889b2-5529-4d23-9220-2f17e11fab35
 
 // Property-based tests for the library-list sort, filter, and pagination
@@ -110,6 +110,9 @@ func genBookSlice(t *rapid.T, label string, minLen, maxLen int) []database.Book 
 // an ID tiebreaker, so the second call must be a no-op at the order
 // level.
 func TestProp_SortStability(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		books := genBookSlice(t, "books", 0, 40)
 		field := rapid.SampledFrom(sortableFields).Draw(t, "sort_field")
@@ -142,6 +145,9 @@ func TestProp_SortStability(t *testing.T) {
 // removes elements: the multiset of book IDs before and after sorting
 // must be identical.
 func TestProp_SortIsPermutation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		books := genBookSlice(t, "books", 0, 40)
 		field := rapid.SampledFrom(sortableFields).Draw(t, "sort_field")
@@ -168,6 +174,9 @@ func TestProp_SortIsPermutation(t *testing.T) {
 // the books matching P and the books NOT matching P together form
 // exactly the original input, with no overlap.
 func TestProp_FilterPartitioning(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		books := genBookSlice(t, "books", 0, 40)
 		field := rapid.SampledFrom(filterableFields).Draw(t, "filter_field")
@@ -228,6 +237,9 @@ func TestProp_FilterPartitioning(t *testing.T) {
 // duplicates across the two halves. This exercises PebbleStore.GetAllBooks
 // offset/limit arithmetic through random book counts and page sizes.
 func TestProp_PaginationConsistency(outer *testing.T) {
+	if testing.Short() {
+		outer.Skip("slow property test; run without -short")
+	}
 	// Root temp dir for the whole test; each rapid iteration gets a
 	// fresh subdirectory so PebbleDB file locks never collide.
 	root := outer.TempDir()

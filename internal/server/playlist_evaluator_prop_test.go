@@ -1,5 +1,5 @@
 // file: internal/server/playlist_evaluator_prop_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: bcc094f5-1645-44d3-be21-3087888fdaea
 
 // Property-based tests for the smart-playlist evaluator in
@@ -86,6 +86,9 @@ func buildPropEvalFixture(t *testing.T, rt *rapid.T, n int) (*database.PebbleSto
 // EvaluateSmartPlaylist(limit=N) returns at most N IDs for any query
 // that produces a non-trivial candidate set.
 func TestProp_LimitIsRespected(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(rt *rapid.T) {
 		n := rapid.IntRange(1, 12).Draw(rt, "n_books")
 		limit := rapid.IntRange(1, 20).Draw(rt, "limit")
@@ -105,6 +108,9 @@ func TestProp_LimitIsRespected(t *testing.T) {
 // TestProp_EmptyQueryErrors verifies that empty / whitespace-only
 // queries always return a non-nil error and a nil result slice.
 func TestProp_EmptyQueryErrors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(rt *rapid.T) {
 		// Draw a random whitespace-only string (possibly empty).
 		ws := rapid.StringMatching(`[ \t\n\r]{0,16}`).Draw(rt, "whitespace")
@@ -125,6 +131,9 @@ func TestProp_EmptyQueryErrors(t *testing.T) {
 // query against the same seeded store+index twice yields the same
 // result IDs in the same order.
 func TestProp_DeterministicEvaluation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(rt *rapid.T) {
 		n := rapid.IntRange(1, 10).Draw(rt, "n_books")
 		limit := rapid.IntRange(0, 20).Draw(rt, "limit")
@@ -156,6 +165,9 @@ func TestProp_DeterministicEvaluation(t *testing.T) {
 // sort.SliceStable with a deterministic comparator, so the second
 // call must reproduce the first call exactly.
 func TestProp_SortIsStable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(rt *rapid.T) {
 		n := rapid.IntRange(2, 10).Draw(rt, "n_books")
 		field := rapid.SampledFrom([]string{"title", "year", "date_added"}).Draw(rt, "sort_field")
@@ -188,6 +200,9 @@ func TestProp_SortIsStable(t *testing.T) {
 // B on `read_status:finished` must return zero books when only A has
 // any finished rows.
 func TestProp_PerUserFilterIsolation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(rt *rapid.T) {
 		n := rapid.IntRange(1, 8).Draw(rt, "n_books")
 		store, idx, bookIDs := buildPropEvalFixture(t, rt, n)

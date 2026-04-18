@@ -1,5 +1,5 @@
 // file: internal/server/version_lifecycle_prop_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4c4cd2b-c578-4a11-8229-83a516271b1b
 
 // Property-based tests for BookVersion lifecycle transitions (spec 4.5 task 6).
@@ -89,6 +89,9 @@ func restoreVersion(store database.Store, ver *database.BookVersion) error {
 // ----------------------------------------------------------------------------
 
 func TestProp_TrashIsReversible(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		store := newPropLifecycleStore(t)
 
@@ -130,6 +133,9 @@ func TestProp_TrashIsReversible(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestProp_PurgeIsIrreversible(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		store := newPropLifecycleStore(t)
 
@@ -174,6 +180,9 @@ func TestProp_PurgeIsIrreversible(t *testing.T) {
 // ----------------------------------------------------------------------------
 
 func TestProp_AutoPromotePicksMostRecent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		store := newPropLifecycleStore(t)
 
@@ -260,6 +269,9 @@ const (
 )
 
 func TestProp_SingleActiveInvariantMaintained(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		store := newPropLifecycleStore(t)
 

@@ -1,5 +1,5 @@
 # file: Makefile
-# version: 2.8.0
+# version: 2.9.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
@@ -40,7 +40,8 @@ help:
 	@echo "  make web-lint       - Lint frontend code"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test           - Run Go backend tests"
+	@echo "  make test           - Run Go backend tests (full — includes slow prop tests, ~15 min)"
+	@echo "  make test-short     - Run Go backend tests in -short mode (slow prop tests skipped, ~1 min)"
 	@echo "  make test-all       - Run all tests (backend + frontend)"
 	@echo "  make test-frontend  - Run frontend tests only"
 	@echo "  make test-e2e       - Run Playwright E2E tests"
@@ -138,11 +139,20 @@ web-lint:
 
 # --- Testing targets ---
 
-## test: Run Go backend tests
+## test: Run Go backend tests (full — includes slow property tests)
 test: vet
-	@echo "🧪 Running backend tests..."
+	@echo "🧪 Running backend tests (full suite)..."
 	@go test ./... -v -race
 	@echo "✅ Backend tests passed"
+
+## test-short: Run Go backend tests in short mode — skips slow property
+## tests (undo/playlist/dedup/etc.) that create per-iteration PebbleStores.
+## Use for fast dev iteration and for sweep-style refactors where the
+## primary gate is `go build ./...`. CI still runs the full suite.
+test-short: vet
+	@echo "🧪 Running backend tests (-short — slow prop tests skipped)..."
+	@go test ./... -short -race
+	@echo "✅ Short backend tests passed"
 
 ## vet: Run go vet across every package. Catches hand-written mock
 ## drift (the stubStore / PR #234 incident) before tests even compile.
