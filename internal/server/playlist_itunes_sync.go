@@ -90,7 +90,7 @@ func MigrateITunesSmartPlaylists(store database.Store, lib *itunes.ITLLibrary) (
 // the ITL write-back batcher. Full ITL playlist creation requires
 // the ITL writer to support playlist insertion, which is tracked
 // separately.
-func PushDirtyPlaylistsToITunes(store database.Store) int {
+func PushDirtyPlaylistsToITunes(store database.Store, batcher *WriteBackBatcher) int {
 	dirties, err := store.ListDirtyUserPlaylists()
 	if err != nil {
 		log.Printf("[WARN] list dirty playlists: %v", err)
@@ -112,9 +112,9 @@ func PushDirtyPlaylistsToITunes(store database.Store) int {
 		}
 
 		// Enqueue each book for ITL writeback so its track exists.
-		if GlobalWriteBackBatcher != nil {
+		if batcher != nil {
 			for _, bid := range bookIDs {
-				GlobalWriteBackBatcher.Enqueue(bid)
+				batcher.Enqueue(bid)
 			}
 		}
 

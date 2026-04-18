@@ -83,13 +83,8 @@ func TestWriteBackOutbox_ReplayOrphans_NoBatcher(t *testing.T) {
 	}
 	t.Cleanup(func() { store.Close() })
 
-	// Save original batcher and ensure it's nil.
-	origBatcher := GlobalWriteBackBatcher
-	GlobalWriteBackBatcher = nil
-	defer func() { GlobalWriteBackBatcher = origBatcher }()
-
 	outbox := NewWriteBackOutbox(store)
-	replayed := outbox.ReplayOrphans()
+	replayed := outbox.ReplayOrphans(nil)
 	if replayed != 0 {
 		t.Errorf("expected 0 replayed with nil batcher, got %d", replayed)
 	}
@@ -117,10 +112,6 @@ func TestWriteBackOutbox_ListPending(t *testing.T) {
 
 func TestEnqueueWithOutbox_NilOutbox(t *testing.T) {
 	// Should not panic with nil outbox and nil batcher.
-	origBatcher := GlobalWriteBackBatcher
-	GlobalWriteBackBatcher = nil
-	defer func() { GlobalWriteBackBatcher = origBatcher }()
-
 	// Should silently no-op.
-	EnqueueWithOutbox(nil, "book-789")
+	EnqueueWithOutbox(nil, nil, "book-789")
 }

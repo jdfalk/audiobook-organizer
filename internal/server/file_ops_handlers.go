@@ -26,7 +26,7 @@ type pendingFileOp struct {
 // handleListPendingFileOps returns currently-queued + in-flight file I/O jobs.
 // Used by the frontend toast + Operations page + Activity Log page.
 func (s *Server) handleListPendingFileOps(c *gin.Context) {
-	pool := GetGlobalFileIOPool()
+	pool := s.fileIOPool
 	if pool == nil {
 		c.JSON(http.StatusOK, gin.H{"operations": []pendingFileOp{}, "count": 0})
 		return

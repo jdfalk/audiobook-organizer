@@ -78,6 +78,7 @@ type OperationQueue struct {
 	cancel     context.CancelFunc
 	listeners      map[string][]ProgressListener
 	activityLogger ActivityLogger
+	hub            *realtime.EventHub
 }
 
 // ProgressListener receives progress updates
@@ -91,7 +92,7 @@ type OperationProgress struct {
 }
 
 // NewOperationQueue creates a new operation queue
-func NewOperationQueue(store database.Store, workers int, activityLogger ActivityLogger) *OperationQueue {
+func NewOperationQueue(store database.Store, workers int, activityLogger ActivityLogger, hub *realtime.EventHub) *OperationQueue {
 	if workers <= 0 {
 		workers = 2 // Default to 2 workers
 	}
@@ -108,6 +109,7 @@ func NewOperationQueue(store database.Store, workers int, activityLogger Activit
 		cancel:     cancel,
 		listeners:      make(map[string][]ProgressListener),
 		activityLogger: activityLogger,
+		hub:            hub,
 	}
 
 	// Start worker goroutines
@@ -296,14 +298,15 @@ func (q *OperationQueue) worker(id int) {
 			// Create progress reporter backed by OperationLogger.
 			storeAdapter := &queueStoreAdapter{store: q.store, activityLogger: q.activityLogger}
 			var realtimeHub logger.RealtimeHub
-			if hub := realtime.GetGlobalHub(); hub != nil {
-				realtimeHub = hub
+			if q.hub != nil {
+				realtimeHub = q.hub
 			}
 			opLogger := logger.ForOperation(op.ID, storeAdapter, realtimeHub)
 			reporter := &loggerProgressReporter{
 				logger: opLogger,
 				store:  q.store,
 				queue:  q,
+				hub:    q.hub,
 			}
 
 			// Execute the operation with timeout protection and panic recovery.
@@ -334,8 +337,8 @@ func (q *OperationQueue) worker(id int) {
 				}
 				metrics.IncOperationFailed(op.Type)
 				// Send real-time error status
-				if hub := realtime.GetGlobalHub(); hub != nil {
-					hub.SendOperationStatus(op.ID, "failed", map[string]interface{}{
+				if q.hub != nil {
+					q.hub.SendOperationStatus(op.ID, "failed", map[string]interface{}{
 						"error": err.Error(),
 					})
 				}
@@ -358,8 +361,8 @@ func (q *OperationQueue) worker(id int) {
 				// Already marked as canceled
 				metrics.IncOperationCanceled(op.Type)
 				// Send real-time canceled status
-				if hub := realtime.GetGlobalHub(); hub != nil {
-					hub.SendOperationStatus(op.ID, "canceled", map[string]interface{}{
+				if q.hub != nil {
+					q.hub.SendOperationStatus(op.ID, "canceled", map[string]interface{}{
 						"message": "operation canceled",
 					})
 				}
@@ -370,8 +373,8 @@ func (q *OperationQueue) worker(id int) {
 				}
 				metrics.IncOperationCompleted(op.Type)
 				// Send real-time completed status
-				if hub := realtime.GetGlobalHub(); hub != nil {
-					hub.SendOperationStatus(op.ID, "completed", map[string]interface{}{
+				if q.hub != nil {
+					q.hub.SendOperationStatus(op.ID, "completed", map[string]interface{}{
 						"current": reporter.current,
 						"total":   reporter.total,
 						"message": "operation completed",
@@ -486,6 +489,7 @@ type operationProgressReporter struct {
 	operationID string
 	store       database.Store
 	queue       *OperationQueue
+	hub         *realtime.EventHub
 	current     int
 	total       int
 	canceled    bool
@@ -510,8 +514,8 @@ func (r *operationProgressReporter) UpdateProgress(current, total int, message s
 	})
 
 	// Send real-time event
-	if hub := realtime.GetGlobalHub(); hub != nil {
-		hub.SendOperationProgress(r.operationID, current, total, message)
+	if r.hub != nil {
+		r.hub.SendOperationProgress(r.operationID, current, total, message)
 	}
 
 	return nil
@@ -525,8 +529,8 @@ func (r *operationProgressReporter) Log(level, message string, details *string) 
 	}
 
 	// Send real-time log event
-	if hub := realtime.GetGlobalHub(); hub != nil {
-		hub.SendOperationLog(r.operationID, level, message, details)
+	if r.hub != nil {
+		r.hub.SendOperationLog(r.operationID, level, message, details)
 	}
 
 	return nil
@@ -617,6 +621,7 @@ type loggerProgressReporter struct {
 	logger  *logger.OperationLogger
 	store   database.Store
 	queue   *OperationQueue
+	hub     *realtime.EventHub
 	current int
 	total   int
 }
@@ -640,8 +645,8 @@ func (r *loggerProgressReporter) UpdateProgress(current, total int, message stri
 	})
 
 	// Send real-time event.
-	if hub := realtime.GetGlobalHub(); hub != nil {
-		hub.SendOperationProgress(r.logger.OperationID(), current, total, message)
+	if r.hub != nil {
+		r.hub.SendOperationProgress(r.logger.OperationID(), current, total, message)
 	}
 
 	return nil
@@ -706,16 +711,19 @@ func (r *simpleLoggerReporter) IsCanceled() bool {
 	return r.log.IsCanceled()
 }
 
-// Global queue instance
+// Global queue instance — DEPRECATED: use Server.queue instead.
+// Kept temporarily for call sites that haven't been migrated yet.
 var GlobalQueue Queue
 
-// InitializeQueue initializes the global operation queue
+// InitializeQueue initializes the global operation queue.
+// DEPRECATED: the queue is now created inside NewServer. This remains
+// for main.go early init and cmd/root.go compatibility.
 func InitializeQueue(store database.Store, workers int) {
 	if GlobalQueue != nil {
 		log.Println("Warning: operation queue already initialized")
 		return
 	}
-	GlobalQueue = NewOperationQueue(store, workers, nil) // logger wired later by server
+	GlobalQueue = NewOperationQueue(store, workers, nil, nil)
 	log.Printf("Operation queue initialized with %d workers", workers)
 }
 

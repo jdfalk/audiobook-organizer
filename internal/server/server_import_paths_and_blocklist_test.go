@@ -77,13 +77,13 @@ func TestImportPaths_ListNilAndRemoveInvalidID(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	store := dbmocks.NewMockStore(t)
-	store.EXPECT().GetAllImportPaths().Return(([]database.ImportPath)(nil), nil)
-	store.EXPECT().DeleteImportPath(mock.Anything).Return(nil).Maybe()
+	mockStore := dbmocks.NewMockStore(t)
+	mockStore.EXPECT().GetAllImportPaths().Return(([]database.ImportPath)(nil), nil)
+	mockStore.EXPECT().DeleteImportPath(mock.Anything).Return(nil).Maybe()
 
-	origStore := database.GetGlobalStore()
-	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	origStore := server.store
+	server.store = mockStore
+	t.Cleanup(func() { server.store = origStore })
 
 	// listImportPaths should return [] not null.
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/import-paths", nil)
@@ -119,15 +119,15 @@ func TestAddImportPath_EnqueuesAndExecutesOperationFunc(t *testing.T) {
 	queue := qmock.NewMockQueue(t)
 	scannerMock := scannermocks.NewMockScanner(t)
 
-	origQueue := operations.GlobalQueue
 	origScanner := scanner.GlobalScanner
-	operations.GlobalQueue = queue
+	origQueue := server.queue
+	server.queue = queue
 	scanner.GlobalScanner = scannerMock
-	t.Cleanup(func() {
+	defer func() {
+		server.queue = origQueue
 		database.SetGlobalStore(origStore)
-		operations.GlobalQueue = origQueue
 		scanner.GlobalScanner = origScanner
-	})
+	}()
 
 	importDir := t.TempDir()
 	bookPath := filepath.Join(importDir, "The Hobbit - J.R.R. Tolkien.m4b")
@@ -166,9 +166,9 @@ func TestBlockedHashes_CRUD(t *testing.T) {
 	defer cleanup()
 
 	store := dbmocks.NewMockStore(t)
-	origStore := database.GetGlobalStore()
-	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+	origStore := server.store
+	server.store = store
+	t.Cleanup(func() { server.store = origStore })
 
 	// addBlockedHash invalid hash length
 	bad := bytes.NewBufferString(`{"hash":"abc","reason":"nope"}`)

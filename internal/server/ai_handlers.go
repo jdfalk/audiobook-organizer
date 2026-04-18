@@ -441,7 +441,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -526,7 +526,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 		return fmt.Errorf("unknown mode: %s", mode)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, opType, operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(opID, opType, operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -728,7 +728,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 		return
 	}
 
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -914,7 +914,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, "ai-author-merge-apply", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "ai-author-merge-apply", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}

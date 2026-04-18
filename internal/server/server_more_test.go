@@ -73,12 +73,12 @@ func waitForOperationStatus(t *testing.T, id string, timeout time.Duration) *dat
 	return nil
 }
 
-func waitForQueueIdle(t *testing.T, timeout time.Duration) {
+func waitForQueueIdle(t *testing.T, srv *Server, timeout time.Duration) {
 	t.Helper()
 
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		if operations.GlobalQueue == nil || len(operations.GlobalQueue.ActiveOperations()) == 0 {
+		if srv.queue == nil || len(srv.queue.ActiveOperations()) == 0 {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -289,13 +289,13 @@ func TestAddImportPathFallbackScan(t *testing.T) {
 	defer cleanup()
 
 	origConfig := config.AppConfig
-	origQueue := operations.GlobalQueue
+	origQueue := server.queue
 	t.Cleanup(func() {
 		config.AppConfig = origConfig
-		operations.GlobalQueue = origQueue
+		server.queue = origQueue
 	})
 
-	operations.GlobalQueue = nil
+	server.queue = nil
 	importDir := t.TempDir()
 	copyFixtureToDir(t, "test_sample.m4b", importDir)
 	config.AppConfig.SupportedExtensions = []string{".m4b"}
@@ -689,7 +689,7 @@ func TestStartOrganizeOperation(t *testing.T) {
 	var op database.Operation
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &op))
 	waitForOperationStatus(t, op.ID, 10*time.Second)
-	waitForQueueIdle(t, 10*time.Second)
+	waitForQueueIdle(t, server, 10*time.Second)
 }
 
 func TestListActiveOperations(t *testing.T) {
@@ -701,7 +701,7 @@ func TestListActiveOperations(t *testing.T) {
 	_, err := database.GetGlobalStore().CreateOperation(opID, "scan", nil)
 	require.NoError(t, err)
 
-	err = operations.GlobalQueue.Enqueue(opID, "scan", operations.PriorityNormal, func(ctx context.Context, progress operations.ProgressReporter) error {
+	err = server.queue.Enqueue(opID, "scan", operations.PriorityNormal, func(ctx context.Context, progress operations.ProgressReporter) error {
 		<-block
 		return nil
 	})

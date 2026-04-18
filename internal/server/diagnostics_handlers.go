@@ -77,8 +77,8 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 	category := req.Category
 	description := req.Description
 
-	if operations.GlobalQueue != nil {
-		_ = operations.GlobalQueue.Enqueue(opID, "diagnostics_export", 5, func(_ context.Context, _ operations.ProgressReporter) error {
+	if s.queue != nil {
+		_ = s.queue.Enqueue(opID, "diagnostics_export", 5, func(_ context.Context, _ operations.ProgressReporter) error {
 			zipPath, genErr := ds.GenerateExport(category, description)
 			if genErr != nil {
 				_ = store.UpdateOperationError(opID, genErr.Error())

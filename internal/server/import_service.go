@@ -17,7 +17,13 @@ import (
 )
 
 type ImportService struct {
-	db database.Store
+	db               database.Store
+	writeBackBatcher *WriteBackBatcher
+}
+
+// SetWriteBackBatcher sets the iTunes write-back batcher.
+func (is *ImportService) SetWriteBackBatcher(b *WriteBackBatcher) {
+	is.writeBackBatcher = b
 }
 
 func NewImportService(db database.Store) *ImportService {
@@ -165,7 +171,7 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 	}
 
 	// Provision ITL track (generates PID, stores in external_id_map, enqueues add)
-	if err := ProvisionITLTracksForBook(is.db, created); err != nil {
+	if err := ProvisionITLTracksForBook(is.db, created, is.writeBackBatcher); err != nil {
 		// Non-fatal: book was created, ITL provisioning can be retried
 		log.Printf("[WARN] ITL track provisioning failed for %s: %v", created.ID, err)
 	}

@@ -316,7 +316,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -346,7 +346,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		return executeITunesImport(ctx, s.Store(), operations.LoggerFromReporter(progress), op.ID, req)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_import", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "itunes_import", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -1971,7 +1971,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -2030,7 +2030,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, pathMappings, s.itunesActivityFn)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}

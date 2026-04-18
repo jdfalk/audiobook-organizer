@@ -16,9 +16,6 @@ import (
 
 func TestHandleListPendingFileOps_NoPool(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	prev := GetGlobalFileIOPool()
-	SetGlobalFileIOPool(nil)
-	t.Cleanup(func() { SetGlobalFileIOPool(prev) })
 
 	srv := &Server{router: gin.New()}
 	srv.router.GET("/api/v1/file-ops/pending", srv.handleListPendingFileOps)
@@ -51,14 +48,10 @@ func TestHandleListPendingFileOps_PopulatedPool(t *testing.T) {
 		ch:       make(chan fileIOJobEntry, 8),
 		overflow: make(chan struct{}, 1),
 	}
-	prev := GetGlobalFileIOPool()
-	SetGlobalFileIOPool(pool)
-	t.Cleanup(func() { SetGlobalFileIOPool(prev) })
-
 	pool.SubmitTyped("book-A", "apply_metadata", func() {})
 	pool.SubmitTyped("book-B", "tag_writeback", func() {})
 
-	srv := &Server{router: gin.New()}
+	srv := &Server{router: gin.New(), fileIOPool: pool}
 	srv.router.GET("/api/v1/file-ops/pending", srv.handleListPendingFileOps)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/file-ops/pending", nil)
@@ -98,16 +91,12 @@ func TestHandleListPendingFileOps_SortedByStartedAt(t *testing.T) {
 		ch:       make(chan fileIOJobEntry, 8),
 		overflow: make(chan struct{}, 1),
 	}
-	prev := GetGlobalFileIOPool()
-	SetGlobalFileIOPool(pool)
-	t.Cleanup(func() { SetGlobalFileIOPool(prev) })
-
 	// Submit A first — should sort earlier than B since started_at is set in SubmitTyped.
 	pool.SubmitTyped("first", "apply_metadata", func() {})
 	pool.SubmitTyped("second", "apply_metadata", func() {})
 	pool.SubmitTyped("third", "apply_metadata", func() {})
 
-	srv := &Server{router: gin.New()}
+	srv := &Server{router: gin.New(), fileIOPool: pool}
 	srv.router.GET("/api/v1/file-ops/pending", srv.handleListPendingFileOps)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/file-ops/pending", nil)

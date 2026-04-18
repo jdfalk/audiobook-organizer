@@ -23,7 +23,7 @@ import (
 // and enqueues an ITL add operation. Called after importing a non-iTunes book.
 //
 // Skips if the book file already has an iTunes PID or if auto write-back is disabled.
-func ProvisionITLTrack(store database.Store, book *database.Book, bookFile *database.BookFile) error {
+func ProvisionITLTrack(store database.Store, book *database.Book, bookFile *database.BookFile, batcher *WriteBackBatcher) error {
 	if !config.AppConfig.ITunesAutoWriteBack {
 		return nil
 	}
@@ -67,8 +67,8 @@ func ProvisionITLTrack(store database.Store, book *database.Book, bookFile *data
 	kind := kindFromExt(filepath.Ext(bookFile.FilePath))
 
 	// Enqueue the ITL add
-	if GlobalWriteBackBatcher != nil {
-		GlobalWriteBackBatcher.EnqueueAdd(itunes.ITLNewTrack{
+	if batcher != nil {
+		batcher.EnqueueAdd(itunes.ITLNewTrack{
 			Location:    itunesPath,
 			Name:        bookFile.Title,
 			Album:       book.Title,
@@ -89,13 +89,13 @@ func ProvisionITLTrack(store database.Store, book *database.Book, bookFile *data
 }
 
 // ProvisionITLTracksForBook provisions ITL tracks for all files of a book.
-func ProvisionITLTracksForBook(store database.Store, book *database.Book) error {
+func ProvisionITLTracksForBook(store database.Store, book *database.Book, batcher *WriteBackBatcher) error {
 	files, err := store.GetBookFiles(book.ID)
 	if err != nil {
 		return err
 	}
 	for i := range files {
-		if err := ProvisionITLTrack(store, book, &files[i]); err != nil {
+		if err := ProvisionITLTrack(store, book, &files[i], batcher); err != nil {
 			log.Printf("[WARN] Failed to provision ITL track for file %s: %v", files[i].ID, err)
 		}
 	}

@@ -39,7 +39,7 @@ func (s *Server) startITunesPathReconcile(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(500, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -55,7 +55,7 @@ func (s *Server) startITunesPathReconcile(c *gin.Context) {
 		return s.runITunesPathReconcile(ctx, id, progress)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_path_reconcile", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "itunes_path_reconcile", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -149,8 +149,8 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 
 		// Enqueue the batcher so the next flush pushes both location
 		// and metadata updates to iTunes for this book.
-		if GlobalWriteBackBatcher != nil {
-			GlobalWriteBackBatcher.Enqueue(b.ID)
+		if s.writeBackBatcher != nil {
+			s.writeBackBatcher.Enqueue(b.ID)
 			result.EnqueuedForWrite++
 		}
 
@@ -165,7 +165,7 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 	// Nudge the batcher to flush sooner rather than waiting out its
 	// maxDelay. Give it a brief grace window so log output stays
 	// ordered with the flush INFO line.
-	if GlobalWriteBackBatcher != nil && result.EnqueuedForWrite > 0 {
+	if s.writeBackBatcher != nil && result.EnqueuedForWrite > 0 {
 		time.Sleep(200 * time.Millisecond)
 	}
 

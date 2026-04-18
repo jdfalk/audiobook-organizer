@@ -127,9 +127,9 @@ func TestUndoLastApply_RevertsBatch(t *testing.T) {
 	}))
 
 	// Ensure GlobalWriteBackBatcher is nil so we don't trigger actual write-back
-	origBatcher := GlobalWriteBackBatcher
-	GlobalWriteBackBatcher = nil
-	defer func() { GlobalWriteBackBatcher = origBatcher }()
+	origBatcher := server.writeBackBatcher
+	server.writeBackBatcher = nil
+	defer func() { server.writeBackBatcher = origBatcher }()
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/audiobooks/%s/undo-last-apply", book.ID), nil)
 	w := httptest.NewRecorder()
@@ -201,9 +201,9 @@ func TestUndoLastApply_SkipsOldChanges(t *testing.T) {
 		ChangedAt:     recentTime,
 	}))
 
-	origBatcher := GlobalWriteBackBatcher
-	GlobalWriteBackBatcher = nil
-	defer func() { GlobalWriteBackBatcher = origBatcher }()
+	origBatcher := server.writeBackBatcher
+	server.writeBackBatcher = nil
+	defer func() { server.writeBackBatcher = origBatcher }()
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/audiobooks/%s/undo-last-apply", book.ID), nil)
 	w := httptest.NewRecorder()
@@ -262,9 +262,9 @@ func TestUndoLastApply_SkipsUndoRecordsInBatchDetection(t *testing.T) {
 		ChangedAt:     now,
 	}))
 
-	origBatcher := GlobalWriteBackBatcher
-	GlobalWriteBackBatcher = nil
-	defer func() { GlobalWriteBackBatcher = origBatcher }()
+	origBatcher := server.writeBackBatcher
+	server.writeBackBatcher = nil
+	defer func() { server.writeBackBatcher = origBatcher }()
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/audiobooks/%s/undo-last-apply", book.ID), nil)
 	w := httptest.NewRecorder()
@@ -304,9 +304,9 @@ func TestUndoLastApply_NilPreviousValueClearsOverride(t *testing.T) {
 		ChangedAt:     time.Now(),
 	}))
 
-	origBatcher := GlobalWriteBackBatcher
-	GlobalWriteBackBatcher = nil
-	defer func() { GlobalWriteBackBatcher = origBatcher }()
+	origBatcher := server.writeBackBatcher
+	server.writeBackBatcher = nil
+	defer func() { server.writeBackBatcher = origBatcher }()
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/audiobooks/%s/undo-last-apply", book.ID), nil)
 	w := httptest.NewRecorder()
@@ -347,12 +347,12 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 	}))
 
 	// Set up a real batcher (with auto write-back enabled)
-	origBatcher := GlobalWriteBackBatcher
+	origBatcher := server.writeBackBatcher
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
 	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
 	batcher := NewWriteBackBatcher(1 * time.Hour) // long delay so it won't flush
-	GlobalWriteBackBatcher = batcher
+	server.writeBackBatcher = batcher
 	defer func() {
 		// Stop pool workers before restoring globals to avoid races
 		if p := GetGlobalFileIOPool(); p != nil {
@@ -360,7 +360,7 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 			SetGlobalFileIOPool(nil)
 		}
 		batcher.Stop()
-		GlobalWriteBackBatcher = origBatcher
+		server.writeBackBatcher = origBatcher
 		config.AppConfig = origConfig
 	}()
 
@@ -394,12 +394,12 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up batcher
-	origBatcher := GlobalWriteBackBatcher
+	origBatcher := server.writeBackBatcher
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
 	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
 	batcher := NewWriteBackBatcher(1 * time.Hour)
-	GlobalWriteBackBatcher = batcher
+	server.writeBackBatcher = batcher
 	defer func() {
 		// Stop pool workers before restoring globals to avoid races
 		if p := GetGlobalFileIOPool(); p != nil {
@@ -407,7 +407,7 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 			SetGlobalFileIOPool(nil)
 		}
 		batcher.Stop()
-		GlobalWriteBackBatcher = origBatcher
+		server.writeBackBatcher = origBatcher
 		config.AppConfig = origConfig
 	}()
 
@@ -457,12 +457,12 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up batcher
-	origBatcher := GlobalWriteBackBatcher
+	origBatcher := server.writeBackBatcher
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
 	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
 	batcher := NewWriteBackBatcher(1 * time.Hour)
-	GlobalWriteBackBatcher = batcher
+	server.writeBackBatcher = batcher
 	defer func() {
 		// Stop pool workers before restoring globals to avoid races
 		if p := GetGlobalFileIOPool(); p != nil {
@@ -470,7 +470,7 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 			SetGlobalFileIOPool(nil)
 		}
 		batcher.Stop()
-		GlobalWriteBackBatcher = origBatcher
+		server.writeBackBatcher = origBatcher
 		config.AppConfig = origConfig
 	}()
 
@@ -519,12 +519,12 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set up batcher
-	origBatcher := GlobalWriteBackBatcher
+	origBatcher := server.writeBackBatcher
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
 	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
 	batcher := NewWriteBackBatcher(1 * time.Hour)
-	GlobalWriteBackBatcher = batcher
+	server.writeBackBatcher = batcher
 	defer func() {
 		// Stop pool workers before restoring globals to avoid races
 		if p := GetGlobalFileIOPool(); p != nil {
@@ -532,7 +532,7 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 			SetGlobalFileIOPool(nil)
 		}
 		batcher.Stop()
-		GlobalWriteBackBatcher = origBatcher
+		server.writeBackBatcher = origBatcher
 		config.AppConfig = origConfig
 	}()
 

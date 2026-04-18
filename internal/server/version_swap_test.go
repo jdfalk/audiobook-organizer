@@ -93,7 +93,7 @@ func TestVersionSwap_BasicRoundTrip(t *testing.T) {
 		ToVersionID:   altVer.ID,
 	}, func(step string, pct int) {
 		steps = append(steps, step)
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("swap: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestVersionSwap_BookNotFound(t *testing.T) {
 		BookID:        "nonexistent",
 		FromVersionID: "v1",
 		ToVersionID:   "v2",
-	}, nil)
+	}, nil, nil)
 	if err == nil {
 		t.Error("expected error on nonexistent version")
 	}

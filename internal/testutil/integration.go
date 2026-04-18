@@ -50,11 +50,11 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 
 	database.SetGlobalStore(store)
 
-	queue := operations.NewOperationQueue(store, 2, nil)
-	operations.GlobalQueue = queue
-
 	hub := realtime.NewEventHub()
 	realtime.SetGlobalHub(hub)
+
+	queue := operations.NewOperationQueue(store, 2, nil, hub)
+	operations.GlobalQueue = queue
 
 	config.AppConfig = config.Config{
 		DatabaseType:         "sqlite",

@@ -102,7 +102,7 @@ func TestPushDirtyPlaylistsToITunes_NoDirty(t *testing.T) {
 		store.Close()
 	})
 
-	pushed := PushDirtyPlaylistsToITunes(store)
+	pushed := PushDirtyPlaylistsToITunes(store, nil)
 	if pushed != 0 {
 		t.Errorf("expected 0 pushed with no dirty playlists, got %d", pushed)
 	}

@@ -14,7 +14,13 @@ import (
 
 // MergeService handles merging duplicate books into version groups.
 type MergeService struct {
-	db database.Store
+	db               database.Store
+	writeBackBatcher *WriteBackBatcher
+}
+
+// SetWriteBackBatcher sets the iTunes write-back batcher.
+func (ms *MergeService) SetWriteBackBatcher(b *WriteBackBatcher) {
+	ms.writeBackBatcher = b
 }
 
 // MergeResult contains the outcome of a merge operation.
@@ -42,7 +48,7 @@ func NewMergeService(db database.Store) *MergeService {
 //     resolve to the surviving entity.
 //  3. **iTunes ITL cleanup**: before reassignment, we collect
 //     each loser's iTunes PIDs and enqueue them for removal via
-//     GlobalWriteBackBatcher.EnqueueRemove. This matches the
+//     writeBackBatcher.EnqueueRemove. This matches the
 //     behavior of maintenance_fixups.mergeDuplicateBook — the
 //     UI merge path used to skip this step, which left the
 //     losers' tracks alive in the iTunes library forever.
@@ -161,9 +167,9 @@ func (ms *MergeService) MergeBooks(bookIDs []string, primaryID string) (*MergeRe
 		// the ITL stops showing them. Best-effort — a nil
 		// batcher (e.g. tests, or iTunes write-back disabled)
 		// means we just skip.
-		if GlobalWriteBackBatcher != nil && len(dupPIDs) > 0 {
+		if ms.writeBackBatcher != nil && len(dupPIDs) > 0 {
 			for _, pid := range dupPIDs {
-				GlobalWriteBackBatcher.EnqueueRemove(pid)
+				ms.writeBackBatcher.EnqueueRemove(pid)
 			}
 			log.Printf("[INFO] merge: queued %d ITL removals for loser %s", len(dupPIDs), book.ID)
 		}

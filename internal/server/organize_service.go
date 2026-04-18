@@ -26,8 +26,20 @@ import (
 )
 
 type OrganizeService struct {
-	db             database.Store
-	organizeHooks  organizer.OrganizeHooks
+	db               database.Store
+	organizeHooks    organizer.OrganizeHooks
+	writeBackBatcher *WriteBackBatcher
+	queue            operations.Queue
+}
+
+// SetWriteBackBatcher sets the iTunes write-back batcher.
+func (orgSvc *OrganizeService) SetWriteBackBatcher(b *WriteBackBatcher) {
+	orgSvc.writeBackBatcher = b
+}
+
+// SetQueue sets the operation queue for enqueuing background operations.
+func (orgSvc *OrganizeService) SetQueue(q operations.Queue) {
+	orgSvc.queue = q
 }
 
 // SetOrganizeHooks sets optional hooks that are propagated to every
@@ -165,7 +177,7 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	// That path (a) skipped metadata refresh, (b) only read
 	// book.ITunesPath (stale for older organize runs), and
 	// (c) raced with the batcher writing to the same file.
-	// Each organize worker now calls GlobalWriteBackBatcher.Enqueue
+	// Each organize worker now calls orgSvc.writeBackBatcher.Enqueue
 	// per book; the batcher flushes once after its debounce with
 	// both location + metadata updates and calls MarkITunesSynced
 	// on success.
@@ -587,8 +599,8 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 				// updates ride together. The batcher iterates book_files to
 				// pick up per-segment PIDs (multi-file books), falling back
 				// to book.ITunesPersistentID for single-file books.
-				if err == nil && oldPath != newPath && GlobalWriteBackBatcher != nil {
-					GlobalWriteBackBatcher.Enqueue(book.ID)
+				if err == nil && oldPath != newPath && orgSvc.writeBackBatcher != nil {
+					orgSvc.writeBackBatcher.Enqueue(book.ID)
 				}
 
 			progress:
@@ -627,7 +639,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		stats.AlreadyCorrect += len(alreadyCorrect)
 	}
 
-	// iTunes writeback happens via GlobalWriteBackBatcher (enqueued per
+	// iTunes writeback happens via orgSvc.writeBackBatcher (enqueued per
 	// book inside the worker loop above). The batcher handles both
 	// location and metadata updates and correctly iterates book_files
 	// to pick up per-segment PIDs for multi-file books.
@@ -925,9 +937,11 @@ func (orgSvc *OrganizeService) triggerAutomaticRescan(ctx context.Context, log l
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(scanOp.ID, "scan", operations.PriorityLow, scanFunc); err != nil {
-		log.Warn("Failed to enqueue rescan: %s", err.Error())
-	} else {
-		log.Info("Rescan operation queued successfully")
+	if orgSvc.queue != nil {
+		if err := orgSvc.queue.Enqueue(scanOp.ID, "scan", operations.PriorityLow, scanFunc); err != nil {
+			log.Warn("Failed to enqueue rescan: %s", err.Error())
+		} else {
+			log.Info("Rescan operation queued successfully")
+		}
 	}
 }

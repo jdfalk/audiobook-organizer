@@ -127,7 +127,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 	}
 
 	// Auto-scan the newly added folder if enabled and operation queue is available
-	if folder.Enabled && operations.GlobalQueue != nil {
+	if folder.Enabled && s.queue != nil {
 		opID := ulid.Make().String()
 		folderPath := folder.Path
 		op, err := s.Store().CreateOperation(opID, "scan", &folderPath)
@@ -219,7 +219,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 			}
 
 			// Enqueue the scan operation with normal priority
-			_ = operations.GlobalQueue.Enqueue(op.ID, "scan", operations.PriorityNormal, operationFunc)
+			_ = s.queue.Enqueue(op.ID, "scan", operations.PriorityNormal, operationFunc)
 
 			c.JSON(http.StatusCreated, gin.H{"importPath": folder, "scan_operation_id": op.ID})
 			return
@@ -227,7 +227,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 	}
 
 	// Fallback: if enabled but queue unavailable OR operation creation failed, run synchronous scan
-	if folder.Enabled && operations.GlobalQueue == nil {
+	if folder.Enabled && s.queue == nil {
 		// Basic scan without progress reporter
 		if _, err := os.Stat(folder.Path); err == nil {
 			books, err := scanner.ScanDirectory(folder.Path, nil)
