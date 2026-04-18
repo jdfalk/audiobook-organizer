@@ -134,10 +134,6 @@ type itunesImportStatus struct {
 	Errors    []string
 }
 
-// itunesActivityRecorder is a package-level hook for dual-writing iTunes sync
-// changes to the unified activity log. Set by server.go.
-var itunesActivityRecorder func(entry database.ActivityEntry)
-
 var itunesImportStatuses sync.Map
 
 // itlLastReadMtime tracks when we last read the ITL file, so we can detect
@@ -2031,7 +2027,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		}
 	}
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, pathMappings)
+		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, pathMappings, s.itunesActivityFn)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
@@ -2064,7 +2060,7 @@ func discoverITunesLibraryPath(store database.Store) string {
 
 // executeITunesSync re-reads an iTunes Library.xml and updates changed fields
 // or imports new audiobooks.
-func executeITunesSync(ctx context.Context, store database.Store, log logger.Logger, libraryPath string, pathMappings []itunes.PathMapping) error {
+func executeITunesSync(ctx context.Context, store database.Store, log logger.Logger, libraryPath string, pathMappings []itunes.PathMapping, activityFn func(database.ActivityEntry)) error {
 	log.UpdateProgress(0, 0, "Parsing iTunes library XML...")
 	log.Info("Starting iTunes sync from %s", libraryPath)
 
@@ -2245,8 +2241,8 @@ func executeITunesSync(ctx context.Context, store database.Store, log logger.Log
 				} else {
 					updated++
 					// Dual-write to unified activity log
-					if itunesActivityRecorder != nil {
-						itunesActivityRecorder(database.ActivityEntry{
+					if activityFn != nil {
+						activityFn(database.ActivityEntry{
 							Tier:    "change",
 							Type:    "itunes_sync",
 							Level:   "info",

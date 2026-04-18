@@ -711,6 +711,7 @@ type Server struct {
 	embeddingStore         *database.EmbeddingStore
 	dedupEngine            *DedupEngine
 	activityWriter         *activityWriter
+	itunesActivityFn       func(entry database.ActivityEntry)
 	// searchIndex is the Bleve library search index (spec DES-1).
 	// Opened at startup, nil if DB path isn't set yet.
 	searchIndex *search.BleveIndex
@@ -1004,7 +1005,7 @@ func NewServer(store database.Store) *Server {
 		log.SetOutput(aw)
 
 		// Task 15: iTunes sync → activity log
-		itunesActivityRecorder = func(entry database.ActivityEntry) {
+		server.itunesActivityFn = func(entry database.ActivityEntry) {
 			_ = server.activityService.Record(entry)
 		}
 
@@ -2572,7 +2573,7 @@ func (s *Server) triggerITunesSync() {
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, scheduledMappings)
+		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, scheduledMappings, s.itunesActivityFn)
 	}
 
 	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
