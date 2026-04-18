@@ -1,5 +1,5 @@
 # file: .mockery.yaml
-# version: 1.12.0
+# version: 1.13.0
 # guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 # Mockery configuration (v3)
@@ -18,6 +18,47 @@ packages:
   github.com/jdfalk/audiobook-organizer/internal/database:
     interfaces:
       Store:
+      LifecycleStore:
+      BookReader:
+      BookWriter:
+      BookStore:
+      AuthorReader:
+      AuthorWriter:
+      AuthorStore:
+      SeriesReader:
+      SeriesWriter:
+      SeriesStore:
+      UserReader:
+      UserWriter:
+      UserStore:
+      NarratorStore:
+      WorkStore:
+      SessionStore:
+      RoleStore:
+      APIKeyStore:
+      InviteStore:
+      UserPreferenceStore:
+      UserPositionStore:
+      BookVersionStore:
+      BookFileStore:
+      BookSegmentStore:
+      PlaylistStore:
+      UserPlaylistStore:
+      ImportPathStore:
+      OperationStore:
+      TagStore:
+      UserTagStore:
+      MetadataStore:
+      HashBlocklistStore:
+      ITunesStateStore:
+      PathHistoryStore:
+      ExternalIDStore:
+      RawKVStore:
+      PlaybackStore:
+      SettingsStore:
+      StatsStore:
+      MaintenanceStore:
+      SystemActivityStore:
   github.com/jdfalk/audiobook-organizer/internal/operations:
     config:
       dir: internal/operations/mocks
