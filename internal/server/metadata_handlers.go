@@ -1098,7 +1098,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 					var newPath string
 					var orgErr error
 					if alreadyInRoot {
-						newPath, orgErr = orgSvc.reOrganizeInPlace(book, log2)
+						newPath, orgErr = orgSvc.ReOrganizeInPlace(book, log2)
 					} else {
 						bookFiles, _ := store.GetBookFiles(id)
 						isDir := len(bookFiles) > 1
@@ -1108,7 +1108,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 							}
 						}
 						if isDir {
-							newPath, orgErr = orgSvc.organizeDirectoryBook(org, book, log2)
+							newPath, orgErr = orgSvc.OrganizeDirectoryBook(org, book, log2)
 						} else {
 							newPath, _, orgErr = org.OrganizeBook(book)
 						}

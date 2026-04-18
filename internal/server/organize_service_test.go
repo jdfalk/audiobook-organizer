@@ -22,7 +22,7 @@ func TestOrganizeService_FilterBooksNeedingOrganization(t *testing.T) {
 	}
 
 	testLog := logger.New("test")
-	filtered, alreadyCorrect := os.filterBooksNeedingOrganization(books, testLog)
+	filtered, alreadyCorrect := os.FilterBooksNeedingOrganization(books, testLog)
 
 	// Should filter out books already in library
 	if len(filtered)+len(alreadyCorrect) > len(books) {
