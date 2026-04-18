@@ -1,5 +1,5 @@
 // file: internal/server/read_status_engine.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6e2f8a1d-4c5b-4f70-a9c7-2d8e0f1b9a57
 //
 // RecomputeUserBookState derives a UserBookState from the current
@@ -33,7 +33,7 @@ import (
 // updates user_book_state with fresh auto-computed fields. Returns
 // the new state (or a no-op unchanged state if there's nothing to
 // record — e.g. a user who's never touched this book).
-func RecomputeUserBookState(store database.Store, userID, bookID string) (*database.UserBookState, error) {
+func RecomputeUserBookState(store interface { database.BookFileStore; database.UserPositionStore }, userID, bookID string) (*database.UserBookState, error) {
 	if store == nil || userID == "" || bookID == "" {
 		return nil, nil
 	}
@@ -126,7 +126,7 @@ func RecomputeUserBookState(store database.Store, userID, bookID string) (*datab
 // RecomputeUserBookState leaves it alone going forward. Passing
 // empty string reverts to auto — next Recompute call derives a
 // fresh status from positions.
-func SetManualStatus(store database.Store, userID, bookID, status string) (*database.UserBookState, error) {
+func SetManualStatus(store interface { database.BookFileStore; database.UserPositionStore }, userID, bookID, status string) (*database.UserBookState, error) {
 	if store == nil {
 		return nil, nil
 	}

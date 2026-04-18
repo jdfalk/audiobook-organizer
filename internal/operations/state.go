@@ -1,5 +1,5 @@
 // file: internal/operations/state.go
-// version: 1.1.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package operations
@@ -64,7 +64,7 @@ type MetadataRefreshParams struct {
 }
 
 // SaveCheckpoint persists an operation's progress checkpoint.
-func SaveCheckpoint(store database.Store, opID, opType, phase string, index, total int) error {
+func SaveCheckpoint(store database.OperationStore, opID, opType, phase string, index, total int) error {
 	state := OperationState{
 		OperationID: opID,
 		Type:        opType,
@@ -82,7 +82,7 @@ func SaveCheckpoint(store database.Store, opID, opType, phase string, index, tot
 }
 
 // LoadCheckpoint loads an operation's progress checkpoint. Returns nil if none exists.
-func LoadCheckpoint(store database.Store, opID string) (*OperationState, error) {
+func LoadCheckpoint(store database.OperationStore, opID string) (*OperationState, error) {
 	data, err := store.GetOperationState(opID)
 	if err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func LoadCheckpoint(store database.Store, opID string) (*OperationState, error) 
 }
 
 // SaveParams persists an operation's immutable parameters.
-func SaveParams(store database.Store, opID string, params any) error {
+func SaveParams(store database.OperationStore, opID string, params any) error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return err
@@ -123,6 +123,6 @@ func LoadParams[T any](store database.Store, opID string) (*T, error) {
 }
 
 // ClearState removes all persisted state for an operation (called on completion/failure).
-func ClearState(store database.Store, opID string) error {
+func ClearState(store database.OperationStore, opID string) error {
 	return store.DeleteOperationState(opID)
 }
