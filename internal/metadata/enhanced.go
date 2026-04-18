@@ -1,5 +1,5 @@
 // file: internal/metadata/enhanced.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata
@@ -158,7 +158,7 @@ func ValidateMetadata(updates map[string]interface{}, rules map[string]Validatio
 }
 
 // BatchUpdateMetadata applies metadata updates to multiple books with validation
-func BatchUpdateMetadata(updates []MetadataUpdate, store database.Store, validate bool) ([]error, int) {
+func BatchUpdateMetadata(updates []MetadataUpdate, store database.BookStore, validate bool) ([]error, int) {
 	var errors []error
 	successCount := 0
 	rules := DefaultValidationRules()
@@ -596,7 +596,7 @@ func RecordMetadataChange(bookID string, field, oldValue, newValue, updatedBy st
 
 // GetMetadataHistory retrieves metadata change history for a book
 // This is a placeholder for future database implementation
-func GetMetadataHistory(bookID string, store database.Store) ([]MetadataHistory, error) {
+func GetMetadataHistory(bookID string, store database.BookStore) ([]MetadataHistory, error) {
 	// TODO: Implement metadata history storage and retrieval in database
 	return nil, fmt.Errorf("metadata history not yet implemented in database")
 }
@@ -627,7 +627,7 @@ func ExportMetadata(books []database.Book) (map[string]interface{}, error) {
 }
 
 // ImportMetadata imports book metadata from a structured format
-func ImportMetadata(data map[string]interface{}, store database.Store, validate bool) (int, []error) {
+func ImportMetadata(data map[string]interface{}, store database.BookStore, validate bool) (int, []error) {
 	var errors []error
 	importCount := 0
 

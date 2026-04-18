@@ -206,7 +206,7 @@ func (_c *MockQueue_Enqueue_Call) RunAndReturn(run func(id string, opType string
 }
 
 // SetStore provides a mock function for the type MockQueue
-func (_mock *MockQueue) SetStore(store database.Store) {
+func (_mock *MockQueue) SetStore(store database.OperationStore) {
 	_mock.Called(store)
 	return
 }
@@ -217,16 +217,16 @@ type MockQueue_SetStore_Call struct {
 }
 
 // SetStore is a helper method to define mock.On call
-//   - store database.Store
+//   - store database.OperationStore
 func (_e *MockQueue_Expecter) SetStore(store interface{}) *MockQueue_SetStore_Call {
 	return &MockQueue_SetStore_Call{Call: _e.mock.On("SetStore", store)}
 }
 
-func (_c *MockQueue_SetStore_Call) Run(run func(store database.Store)) *MockQueue_SetStore_Call {
+func (_c *MockQueue_SetStore_Call) Run(run func(store database.OperationStore)) *MockQueue_SetStore_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 database.Store
+		var arg0 database.OperationStore
 		if args[0] != nil {
-			arg0 = args[0].(database.Store)
+			arg0 = args[0].(database.OperationStore)
 		}
 		run(
 			arg0,
@@ -240,7 +240,7 @@ func (_c *MockQueue_SetStore_Call) Return() *MockQueue_SetStore_Call {
 	return _c
 }
 
-func (_c *MockQueue_SetStore_Call) RunAndReturn(run func(store database.Store)) *MockQueue_SetStore_Call {
+func (_c *MockQueue_SetStore_Call) RunAndReturn(run func(store database.OperationStore)) *MockQueue_SetStore_Call {
 	_c.Run(run)
 	return _c
 }

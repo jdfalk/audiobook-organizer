@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -62,7 +62,7 @@ type Queue interface {
 	Cancel(id string) error
 	ActiveOperations() []ActiveOperation
 	Shutdown(timeout time.Duration) error
-	SetStore(store database.Store)
+	SetStore(store database.OperationStore)
 }
 
 // OperationQueue manages async operations with priority handling
@@ -71,7 +71,7 @@ type OperationQueue struct {
 	operations map[string]*QueuedOperation
 	pending    chan *QueuedOperation
 	workers    int
-	store      database.Store
+	store      database.OperationStore
 	timeout    time.Duration
 	wg         sync.WaitGroup
 	ctx        context.Context
@@ -92,7 +92,7 @@ type OperationProgress struct {
 }
 
 // NewOperationQueue creates a new operation queue
-func NewOperationQueue(store database.Store, workers int, activityLogger ActivityLogger, hub *realtime.EventHub) *OperationQueue {
+func NewOperationQueue(store database.OperationStore, workers int, activityLogger ActivityLogger, hub *realtime.EventHub) *OperationQueue {
 	if workers <= 0 {
 		workers = 2 // Default to 2 workers
 	}
@@ -487,7 +487,7 @@ func (q *OperationQueue) Shutdown(timeout time.Duration) error {
 // operationProgressReporter implements ProgressReporter
 type operationProgressReporter struct {
 	operationID string
-	store       database.Store
+	store       database.OperationStore
 	queue       *OperationQueue
 	hub         *realtime.EventHub
 	current     int
@@ -555,7 +555,7 @@ func (r *operationProgressReporter) IsCanceled() bool {
 
 // queueStoreAdapter bridges database.Store to logger.OperationStore.
 type queueStoreAdapter struct {
-	store          database.Store
+	store          database.OperationStore
 	activityLogger ActivityLogger
 }
 
@@ -619,7 +619,7 @@ func (a *queueStoreAdapter) UpdateOperationProgress(id string, current, total in
 // It is the authoritative reporter used by the queue worker.
 type loggerProgressReporter struct {
 	logger  *logger.OperationLogger
-	store   database.Store
+	store   database.OperationStore
 	queue   *OperationQueue
 	hub     *realtime.EventHub
 	current int
@@ -740,7 +740,7 @@ func (q *OperationQueue) SetActivityLogger(logger ActivityLogger) {
 // SetStore assigns a database store to an already-initialized queue if it doesn't have one yet.
 // This enables early queue initialization (before database setup) while still allowing
 // operation status persistence once the database becomes available.
-func (q *OperationQueue) SetStore(store database.Store) {
+func (q *OperationQueue) SetStore(store database.OperationStore) {
 	if q == nil || store == nil {
 		return
 	}

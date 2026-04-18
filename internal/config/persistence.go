@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -141,7 +141,7 @@ func SaveConfigToFile() error {
 
 // LoadConfigFromDatabase loads settings from database and applies them to AppConfig
 // This is called after database initialization to override defaults with persisted values
-func LoadConfigFromDatabase(store database.Store) error {
+func LoadConfigFromDatabase(store database.SettingsStore) error {
 	if store == nil {
 		return fmt.Errorf("store is nil")
 	}
@@ -235,7 +235,7 @@ func LoadConfigFromDatabase(store database.Store) error {
 
 // MigrateMaintenanceWindow migrates auto-update window fields to maintenance window.
 // Idempotent — safe to call multiple times.
-func MigrateMaintenanceWindow(store database.Store) {
+func MigrateMaintenanceWindow(store database.SettingsStore) {
 	migrated, _ := store.GetSetting("maintenance_window_migrated")
 	if migrated != nil && migrated.Value == "true" {
 		return
@@ -643,7 +643,7 @@ func applySetting(key, value, typ string) error {
 
 // SaveConfigToDatabase persists current AppConfig to database AND config file.
 // This should be called whenever config is modified via API.
-func SaveConfigToDatabase(store database.Store) error {
+func SaveConfigToDatabase(store database.SettingsStore) error {
 	if store == nil {
 		return fmt.Errorf("store is nil")
 	}

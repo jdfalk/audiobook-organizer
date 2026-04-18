@@ -1,5 +1,5 @@
 // file: internal/search/index_builder.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8a1c2f4d-5b3e-4f70-b7d6-2e8d0f1b9a57
 //
 // Helpers that project a database.Book (with its author, series,
@@ -17,7 +17,7 @@ import (
 // BookToDoc resolves a Book's related rows through the Store and
 // returns the flat BookDocument for indexing. Missing relations are
 // silently skipped — the document is built best-effort.
-func BookToDoc(store database.Store, book *database.Book) BookDocument {
+func BookToDoc(store interface { database.AuthorReader; database.BookReader; database.SeriesReader; database.TagStore }, book *database.Book) BookDocument {
 	doc := BookDocument{
 		BookID: book.ID,
 		Type:   BookDocType,
@@ -105,7 +105,7 @@ func BookToDoc(store database.Store, book *database.Book) BookDocument {
 // ReindexBookByID convenience: load the book + project + index.
 // Used by the update/create hook path; callers that already have a
 // Book struct should call BookToDoc + IndexBook directly.
-func ReindexBookByID(store database.Store, idx *BleveIndex, bookID string) error {
+func ReindexBookByID(store interface { database.AuthorReader; database.BookReader; database.SeriesReader; database.TagStore }, idx *BleveIndex, bookID string) error {
 	if store == nil || idx == nil {
 		return nil
 	}

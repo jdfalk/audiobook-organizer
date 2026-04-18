@@ -1,5 +1,5 @@
 // file: internal/testutil/integration.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package testutil
@@ -20,7 +20,7 @@ import (
 
 // IntegrationEnv holds all resources for an integration test.
 type IntegrationEnv struct {
-	Store     database.Store
+	Store     interface { database.LifecycleStore; database.OperationStore }
 	RootDir   string
 	ImportDir string
 	TempDir   string
@@ -124,7 +124,7 @@ func FindRepoRoot(t *testing.T) string {
 }
 
 // WaitForOp polls until an operation completes or times out.
-func WaitForOp(t *testing.T, store database.Store, opID string, timeout time.Duration) {
+func WaitForOp(t *testing.T, store database.OperationStore, opID string, timeout time.Duration) {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		op, err := store.GetOperationByID(opID)
