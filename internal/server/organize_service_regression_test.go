@@ -56,7 +56,7 @@ func TestOrganizeDirectoryBook_AllSourceFilesMissing(t *testing.T) {
 		Author:   &database.Author{Name: "Ghost Author"},
 	}
 
-	_, err := svc.organizeDirectoryBook(org, book, testLog)
+	_, err := svc.OrganizeDirectoryBook(org, book, testLog)
 	assert.Error(t, err, "should fail when all source files are missing")
 	assert.Contains(t, err.Error(), "all source files missing")
 }
@@ -87,7 +87,7 @@ func TestOrganizeDirectoryBook_NoBookFiles(t *testing.T) {
 		Author:   &database.Author{Name: "No Files Author"},
 	}
 
-	_, err := svc.organizeDirectoryBook(org, book, testLog)
+	_, err := svc.OrganizeDirectoryBook(org, book, testLog)
 	assert.Error(t, err, "should fail with no book_files")
 	assert.Contains(t, err.Error(), "no segments tracked")
 }
@@ -121,7 +121,7 @@ func TestOrganizeDirectoryBook_AllBookFilesMarkedMissing(t *testing.T) {
 		Author:   &database.Author{Name: "Missing Author"},
 	}
 
-	_, err := svc.organizeDirectoryBook(org, book, testLog)
+	_, err := svc.OrganizeDirectoryBook(org, book, testLog)
 	assert.Error(t, err, "should fail when all book_files are marked missing")
 	assert.Contains(t, err.Error(), "marked missing")
 }
@@ -161,7 +161,7 @@ func TestOrganizeDirectoryBook_SuccessWithRealFiles(t *testing.T) {
 		Author:   &database.Author{Name: "Real Author"},
 	}
 
-	targetDir, err := svc.organizeDirectoryBook(org, book, testLog)
+	targetDir, err := svc.OrganizeDirectoryBook(org, book, testLog)
 	require.NoError(t, err)
 	assert.NotEmpty(t, targetDir)
 	assert.DirExists(t, targetDir)
@@ -207,7 +207,7 @@ func TestOrganizeDirectoryBook_PartialMissing(t *testing.T) {
 	}
 
 	// Should succeed with partial files (at least one copied)
-	targetDir, err := svc.organizeDirectoryBook(org, book, testLog)
+	targetDir, err := svc.OrganizeDirectoryBook(org, book, testLog)
 	require.NoError(t, err)
 	assert.NotEmpty(t, targetDir)
 
@@ -284,7 +284,7 @@ func TestCreateOrganizedVersion_RecomputesITunesPath(t *testing.T) {
 		Author:           &database.Author{Name: "Author"},
 	}
 
-	created, err := svc.createOrganizedVersion(org, book, organizedPath, true, "op-1", testLog)
+	created, err := svc.CreateOrganizedVersion(org, book, organizedPath, true, "op-1", testLog)
 	require.NoError(t, err)
 	assert.NotNil(t, created)
 
@@ -325,7 +325,7 @@ func TestFilterBooksNeedingOrganization_SkipsSoftDeleted(t *testing.T) {
 		{ID: "4", Title: "Another Active", FilePath: "/import/book4.m4b", MarkedForDeletion: &notDeleted},
 	}
 
-	needsOrganize, _ := svc.filterBooksNeedingOrganization(books, testLog)
+	needsOrganize, _ := svc.FilterBooksNeedingOrganization(books, testLog)
 
 	// Should only have the non-deleted books
 	ids := make(map[string]bool)
@@ -369,7 +369,7 @@ func TestFilterBooksNeedingOrganization_SkipsNonPrimaryWithPrimary(t *testing.T)
 			IsPrimaryVersion: &isNotPrimary, VersionGroupID: &vgID},
 	}
 
-	needsOrganize, _ := svc.filterBooksNeedingOrganization(books, testLog)
+	needsOrganize, _ := svc.FilterBooksNeedingOrganization(books, testLog)
 	assert.Empty(t, needsOrganize, "non-primary book with existing primary should be skipped")
 }
 
@@ -398,7 +398,7 @@ func TestFilterBooksNeedingOrganization_AllowsNonPrimaryWithoutPrimary(t *testin
 			IsPrimaryVersion: &isNotPrimary, VersionGroupID: &vgID},
 	}
 
-	needsOrganize, _ := svc.filterBooksNeedingOrganization(books, testLog)
+	needsOrganize, _ := svc.FilterBooksNeedingOrganization(books, testLog)
 	assert.Len(t, needsOrganize, 1, "non-primary without existing primary should be allowed")
 }
 
@@ -415,7 +415,7 @@ func TestFilterBooksNeedingOrganization_SkipsEmptyFilePath(t *testing.T) {
 		{ID: "1", Title: "No Path", FilePath: ""},
 	}
 
-	needsOrganize, _ := svc.filterBooksNeedingOrganization(books, testLog)
+	needsOrganize, _ := svc.FilterBooksNeedingOrganization(books, testLog)
 	assert.Empty(t, needsOrganize, "book with empty FilePath should be skipped")
 }
 
@@ -439,7 +439,7 @@ func TestFilterBooksNeedingOrganization_SkipsAllMissingBookFiles(t *testing.T) {
 		{ID: "1", Title: "All Missing Files", FilePath: "/import/book"},
 	}
 
-	needsOrganize, _ := svc.filterBooksNeedingOrganization(books, testLog)
+	needsOrganize, _ := svc.FilterBooksNeedingOrganization(books, testLog)
 	assert.Empty(t, needsOrganize, "book with all missing book_files should be skipped")
 }
 
@@ -500,7 +500,7 @@ func TestCreateOrganizedVersion_CopiesAllBookFiles(t *testing.T) {
 		Author:           &database.Author{Name: "Author"},
 	}
 
-	_, err := svc.createOrganizedVersion(org, book, targetDir, true, "op-1", testLog)
+	_, err := svc.CreateOrganizedVersion(org, book, targetDir, true, "op-1", testLog)
 	require.NoError(t, err)
 
 	assert.Len(t, createdFiles, 3, "all 3 book_files should be copied to organized version")
@@ -559,7 +559,7 @@ func TestCreateOrganizedVersion_SetsCorrectStates(t *testing.T) {
 		Author:           &database.Author{Name: "Author"},
 	}
 
-	created, err := svc.createOrganizedVersion(org, book, filepath.Join(rootDir, "test.m4b"), false, "op-1", testLog)
+	created, err := svc.CreateOrganizedVersion(org, book, filepath.Join(rootDir, "test.m4b"), false, "op-1", testLog)
 	require.NoError(t, err)
 
 	// New organized copy should be primary

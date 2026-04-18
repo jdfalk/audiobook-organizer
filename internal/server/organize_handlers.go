@@ -154,9 +154,9 @@ func (s *Server) organizeBook(c *gin.Context) {
 
 	var newPath string
 	if alreadyInRoot {
-		newPath, err = s.organizeService.reOrganizeInPlace(book, log2)
+		newPath, err = s.organizeService.ReOrganizeInPlace(book, log2)
 	} else if isDir {
-		newPath, err = s.organizeService.organizeDirectoryBook(org, book, log2)
+		newPath, err = s.organizeService.OrganizeDirectoryBook(org, book, log2)
 	} else {
 		newPath, _, err = org.OrganizeBook(book)
 	}
@@ -205,7 +205,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 	}
 
 	// Version-aware organize: create a new organized book record linked to the original
-	createdBook, createErr := s.organizeService.createOrganizedVersion(org, book, newPath, isDir, op.ID, log2)
+	createdBook, createErr := s.organizeService.CreateOrganizedVersion(org, book, newPath, isDir, op.ID, log2)
 	if createErr != nil {
 		internalError(c, "failed to create organized version", createErr)
 		return
