@@ -1,5 +1,5 @@
 // file: internal/server/isbn_enrichment.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 34290bd0-745e-4509-ad2d-e237785bb7ef
 
 package server
@@ -13,16 +13,24 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
+// isbnEnrichmentStore is the narrow slice of database.Store this service uses.
+type isbnEnrichmentStore interface {
+	database.AuthorReader
+	database.BookReader
+	database.BookWriter
+}
+
+
 // ISBNEnrichmentService searches external metadata sources for ISBN (and ASIN)
 // when a book is missing those identifiers after a metadata fetch/apply.
 type ISBNEnrichmentService struct {
-	db      database.Store
+	db isbnEnrichmentStore
 	sources []metadata.MetadataSource
 }
 
 // NewISBNEnrichmentService creates an enrichment service that will search the
 // given metadata sources for ISBN/ASIN data.
-func NewISBNEnrichmentService(db database.Store, sources []metadata.MetadataSource) *ISBNEnrichmentService {
+func NewISBNEnrichmentService(db isbnEnrichmentStore, sources []metadata.MetadataSource) *ISBNEnrichmentService {
 	return &ISBNEnrichmentService{db: db, sources: sources}
 }
 

@@ -1,5 +1,5 @@
 // file: internal/server/scan_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -20,11 +20,21 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 )
 
-type ScanService struct {
-	db database.Store
+// scanServiceStore is the narrow slice of database.Store this service uses.
+type scanServiceStore interface {
+	database.OperationStore
+	database.BookReader
+	database.BookWriter
+	database.ImportPathStore
+	database.MaintenanceStore
 }
 
-func NewScanService(db database.Store) *ScanService {
+
+type ScanService struct {
+	db scanServiceStore
+}
+
+func NewScanService(db scanServiceStore) *ScanService {
 	return &ScanService{db: db}
 }
 

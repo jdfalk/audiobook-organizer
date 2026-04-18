@@ -1,5 +1,5 @@
 // file: internal/server/author_series_service.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 
 package server
@@ -8,11 +8,18 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-type AuthorSeriesService struct {
-	db database.Store
+// authorSeriesStore is the narrow slice of database.Store this service uses.
+type authorSeriesStore interface {
+	database.AuthorReader
+	database.SeriesReader
 }
 
-func NewAuthorSeriesService(db database.Store) *AuthorSeriesService {
+
+type AuthorSeriesService struct {
+	db authorSeriesStore
+}
+
+func NewAuthorSeriesService(db authorSeriesStore) *AuthorSeriesService {
 	return &AuthorSeriesService{db: db}
 }
 
