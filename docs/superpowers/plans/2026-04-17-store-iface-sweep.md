@@ -1,8 +1,38 @@
 <!-- file: docs/superpowers/plans/2026-04-17-store-iface-sweep.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: bc332f80-16ea-44bd-afa9-a0634820909f -->
 
 # Store Interface Sweep — Follow-on Migration Plan
+
+> **STATUS: COMPLETE (2026-04-18).** Eight sweep PRs shipped (#387–#395). The six files still on full `database.Store` are documented below as intentional wide consumers — further narrowing has diminishing returns. Leaving this plan in place for historical context and as a template for future ISP sweeps.
+
+## Completion note
+
+**What shipped:** ~50 of 79 consumers migrated to narrow sub-interfaces. Plus `IntegrationEnv.Store` deliberately left wide (PR #394) — test scaffolding is anti-ISP.
+
+**What intentionally stayed wide:**
+
+| File | Reason |
+|---|---|
+| `internal/server/server.go` | Bootstrap — genuinely needs every domain during startup |
+| `internal/server/indexed_store.go` | Decorator — must be a drop-in `Store` so every forwarded method works |
+| `internal/server/itunes.go` | Hub — forwards to 8+ helpers across metadata-fetch + organize pipelines; narrowing cascades 15+ more signatures |
+| `internal/server/metadata_fetch_service.go` | Hub — 79 method calls spanning ~8 sub-interfaces; narrow composite ≈ full `Store` |
+| `internal/server/organize_service.go` | Hub — 30 calls across book + author + series + ops + files |
+| `internal/server/dedup_engine.go` | Hub — 22 calls, similar shape |
+| `internal/testutil/integration.go` | Test fixture — integration tests hit every domain; narrowing moves pain into every test file |
+
+**Optional future cleanups** (low ROI):
+- `internal/server/config_update_service.go` — unused `db database.Store` field; removing it churns ~20 test call sites for zero behavioral change.
+- The hubs could be narrowed, but each would produce a composite embedding 6–10 sub-interfaces — not materially more discoverable than the full `Store`, and each needs its own transitive-dep untangle.
+
+**Process lessons captured elsewhere:**
+- `CHANGELOG.md` April 18 entries — PR #394 incident post-mortem (scoped `go vet` misses test-file breakage; ran scoped instead of full-tree and paid for it)
+- `scripts/check_store_noops.py`, `narrow_struct_services.py`, `apply_narrowing.py` — reusable tooling for the next ISP sweep or for finishing this one if scope changes
+
+---
+
+## Original plan (historical — kept for reference)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development. Foundation is already merged — this plan migrates the remaining 58 files one-by-one. The three proof-point migrations (#379, #380, #381) are the templates to follow.
 
