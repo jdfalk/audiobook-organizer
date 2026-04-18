@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine_prop_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e6425d8b-3ab4-4e0c-86fd-71ece563085e
 
 package server
@@ -60,6 +60,9 @@ func genNonZeroVector(t *rapid.T, dim int, label string) []float32 {
 // product and norms are symmetric), so any asymmetry would indicate
 // a numerical or refactor bug.
 func TestProp_CosineSimilaritySymmetry(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		a := genVector(t, propVectorDim, "a")
 		b := genVector(t, propVectorDim, "b")
@@ -79,6 +82,9 @@ func TestProp_CosineSimilaritySymmetry(t *testing.T) {
 // few ULPs, so we allow a 1e-5 tolerance rather than requiring
 // exact equality.
 func TestProp_CosineSelfSimilarity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		v := genNonZeroVector(t, propVectorDim, "v")
 		sim := database.CosineSimilarity(v, v)
@@ -95,6 +101,9 @@ func TestProp_CosineSelfSimilarity(t *testing.T) {
 // 1.0000001 under pathological floats). Anything outside
 // [-1-eps, 1+eps] is a real violation.
 func TestProp_CosineRange(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		a := genVector(t, propVectorDim, "a")
 		b := genVector(t, propVectorDim, "b")
@@ -110,6 +119,9 @@ func TestProp_CosineRange(t *testing.T) {
 // against anything returns exactly 0 — CosineSimilarity short-
 // circuits when either norm is zero to avoid a NaN divide.
 func TestProp_CosineZeroVector(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		v := genVector(t, propVectorDim, "v")
 		zero := make([]float32, propVectorDim)
@@ -156,6 +168,9 @@ func tPropTempDir(t *rapid.T) string {
 // holds regardless of input distribution because FindSimilar
 // sort.Slice'es by Similarity before applying the maxResults cap.
 func TestProp_FindSimilarOrdering(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		es := newPropEmbedStore(t)
 		n := rapid.IntRange(2, 12).Draw(t, "n")
@@ -193,6 +208,9 @@ func TestProp_FindSimilarOrdering(t *testing.T) {
 // The filter happens inside the scan loop (sim >= minSimilarity)
 // before sort+cap so any leak past it would be a real bug.
 func TestProp_FindSimilarThreshold(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		es := newPropEmbedStore(t)
 		n := rapid.IntRange(2, 12).Draw(t, "n")
@@ -227,6 +245,9 @@ func TestProp_FindSimilarThreshold(t *testing.T) {
 // permits maxResults == 0 meaning "no cap", which we don't test
 // because the invariant is vacuous.
 func TestProp_FindSimilarMaxResults(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		es := newPropEmbedStore(t)
 		n := rapid.IntRange(5, 20).Draw(t, "n")
@@ -272,6 +293,9 @@ func TestProp_FindSimilarMaxResults(t *testing.T) {
 // stop the test from going flaky the day chromem tightens its
 // indexing heuristics.
 func TestProp_ChromemMatchesSqlite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(t *rapid.T) {
 		ctx := context.Background()
 		es := newPropEmbedStore(t)

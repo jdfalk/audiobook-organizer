@@ -78,10 +78,12 @@ For each row of the migration table:
 4. Enumerate method calls — e.g., `grep -oE "store\.[A-Z][a-zA-Z]+" <file> | sort -u` (adjust variable name as needed). Sanity-check against the table row's target interfaces.
 5. Pick pattern A, B, or C based on the file's shape.
 6. Make the edit. Bump the file's `// version:` header one minor.
-7. **Fast verification — do NOT run the full `go test ./...` suite.** The property-based tests in `internal/server` take 15+ minutes. Instead:
+7. **Fast verification — use `-short` mode.** The 33 slow property tests (undo, playlist, dedup, version lifecycle, pebble CRUD, audiobook sort/filter) call `testing.Short()` and skip under `-short`. Full suite under `-short` is ~1 min (vs. 15+ min without). Use:
     - `go build ./...` — primary gate. If the type refactor is correct, this passes. If a transitively-dependent helper still wants `database.Store`, the build fails with a clear error (see "Transitive dependencies" below).
     - `go vet ./<package>/` — always run, it's fast.
-    - Run only the targeted tests for the file touched — e.g., `go test ./internal/server/ -run "<TestNamePrefix>" -count=1 -timeout 60s -short`.
+    - `make test-short` (or `go test ./... -short`) — full suite in `-short` mode, ~1 min.
+    - Or targeted: `go test ./internal/server/ -run "<TestNamePrefix>" -count=1 -timeout 60s -short` when even that's overkill.
+    CI still runs `make test` (full suite) on every PR, so the slow prop tests never stop catching regressions — they just don't block every local iteration.
 8. Commit with `refactor: narrow <file> Store deps (ISP sweep)` and a body listing which sub-interfaces replaced `database.Store`.
 9. Push, PR, merge with `--rebase --admin`.
 
@@ -227,7 +229,7 @@ git checkout main && git pull
 go build ./... && go vet ./...
 ```
 
-Both must be clean. **Do NOT run the full `go test ./...` — it takes ~15 min because of property-based tests in `internal/server`.** The type refactor is caught by `go build` + targeted tests. If `go build` succeeds, `go test` was already green at each PR commit time.
+Both must be clean. For a broader test sanity check without paying the full 15-min price, run `make test-short` (or `go test ./... -short`) — that skips the slow property tests in `internal/server` but still exercises everything else. The full suite runs in CI on every PR, so you don't need to run it locally unless you're debugging a specific prop-test failure.
 
 If a regression appears, the last PR's narrowing was incorrect — revert via `gh pr revert <n>` and re-classify.
 
