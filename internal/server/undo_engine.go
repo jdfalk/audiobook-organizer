@@ -1,5 +1,5 @@
 // file: internal/server/undo_engine.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 0b8c9d6e-1f7a-4a70-b8c5-3d7e0f1b9a99
 //
 // Undo engine (spec 3.2 task 3). Reverses the destructive changes
@@ -39,7 +39,7 @@ type UndoResult struct {
 // reverse order, and applies the inverse of each change. Progress
 // is reported via the callback (step description + percentage).
 func RunUndoOperation(
-	store database.Store,
+	store interface { database.BookStore; database.BookVersionStore; database.OperationStore },
 	targetOpID string,
 	progress func(step string, pct int),
 ) (*UndoResult, error) {
@@ -93,7 +93,7 @@ func RunUndoOperation(
 }
 
 // revertChange applies the inverse of a single operation change.
-func revertChange(store database.Store, change *database.OperationChange) error {
+func revertChange(store interface { database.BookStore; database.BookVersionStore; database.OperationStore }, change *database.OperationChange) error {
 	switch change.ChangeType {
 	case "file_move", "organize_rename":
 		if err := revertFileMove(change); err != nil {
@@ -141,7 +141,7 @@ func revertFileMove(change *database.OperationChange) error {
 // revertMetadataUpdate restores a book field from the change's
 // OldValue. OldValue is either a plain string (for single-field
 // changes) or a JSON object (for multi-field snapshots).
-func revertMetadataUpdate(store database.Store, change *database.OperationChange) error {
+func revertMetadataUpdate(store database.BookStore, change *database.OperationChange) error {
 	if change.BookID == "" {
 		return fmt.Errorf("no book_id on metadata change %s", change.ID)
 	}

@@ -1,5 +1,5 @@
 // file: internal/server/writeback_outbox.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5c3d4e2f-6a7b-4a70-b8c5-3d7e0f1b9a99
 //
 // Durable outbox for the ITL write-back queue (backlog 4.3).
@@ -27,11 +27,11 @@ const outboxPrefix = "outbox:writeback:"
 // WriteBackOutbox persists pending ITL write-back book IDs to the
 // store so they survive server restarts.
 type WriteBackOutbox struct {
-	store database.Store
+	store interface { database.BookReader; database.UserPreferenceStore }
 }
 
 // NewWriteBackOutbox creates an outbox backed by the given store.
-func NewWriteBackOutbox(store database.Store) *WriteBackOutbox {
+func NewWriteBackOutbox(store interface { database.BookReader; database.UserPreferenceStore }) *WriteBackOutbox {
 	return &WriteBackOutbox{store: store}
 }
 

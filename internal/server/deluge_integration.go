@@ -1,5 +1,5 @@
 // file: internal/server/deluge_integration.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1c9d0e8f-2a3b-4a70-b8c5-3d7e0f1b9a99
 //
 // Deluge integration for library centralization (backlog 6.1).
@@ -172,7 +172,7 @@ func (s *Server) registerDelugeRoutes(protected *gin.RouterGroup) {
 
 // NotifyDelugeAfterUndo checks whether the reverted operation moved
 // Deluge-sourced files and updates the torrent storage path.
-func NotifyDelugeAfterUndo(store database.Store, bookID, oldFilePath string) {
+func NotifyDelugeAfterUndo(store interface { database.BookReader; database.BookVersionStore }, bookID, oldFilePath string) {
 	book, _ := store.GetBookByID(bookID)
 	if book == nil {
 		return
