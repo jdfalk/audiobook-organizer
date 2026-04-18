@@ -1,8 +1,8 @@
-// file: internal/server/author_dedup_test.go
-// version: 1.4.0
+// file: internal/dedup/author_test.go
+// version: 1.5.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
 
-package server
+package dedup
 
 import (
 	"testing"
@@ -235,7 +235,7 @@ func TestIsProductionCompany(t *testing.T) {
 		"Some Theatre", // suffix match
 	}
 	for _, name := range companies {
-		if !isProductionCompany(name) {
+		if !IsProductionCompany(name) {
 			t.Errorf("expected %q to be a production company", name)
 		}
 	}
@@ -247,7 +247,7 @@ func TestIsProductionCompany(t *testing.T) {
 		"Michael Grant",
 	}
 	for _, name := range notCompanies {
-		if isProductionCompany(name) {
+		if IsProductionCompany(name) {
 			t.Errorf("expected %q to NOT be a production company", name)
 		}
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/oklog/ulid/v2"
@@ -2852,7 +2853,7 @@ func (s *Server) handleRefetchMissingAuthors(c *gin.Context) {
 				}
 			}
 
-			normalizedName := NormalizeAuthorName(candidateAuthor)
+			normalizedName := dedup.NormalizeAuthorName(candidateAuthor)
 			if normalizedName == "" {
 				result.Skipped = true
 				result.SkipReason = "normalized author name is empty"

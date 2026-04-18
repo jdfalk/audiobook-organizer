@@ -1,8 +1,8 @@
-// file: internal/server/dedup_engine_test.go
-// version: 1.1.0
+// file: internal/dedup/engine_test.go
+// version: 1.2.0
 // guid: 2a7e4d91-c538-4f06-b1d3-9e8c5a6f0d72
 
-package server
+package dedup
 
 import (
 	"context"
@@ -16,8 +16,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 )
 
-// setupTestEngine creates a DedupEngine with an in-memory EmbeddingStore and MockStore.
-func setupTestEngine(t *testing.T) (*DedupEngine, *database.MockStore, *database.EmbeddingStore) {
+// setupTestEngine creates a Engine with an in-memory EmbeddingStore and MockStore.
+func setupTestEngine(t *testing.T) (*Engine, *database.MockStore, *database.EmbeddingStore) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test_embeddings.db")
@@ -30,14 +30,14 @@ func setupTestEngine(t *testing.T) (*DedupEngine, *database.MockStore, *database
 
 	mock := &database.MockStore{}
 	ms := merge.NewService(mock)
-	engine := NewDedupEngine(es, mock, nil, nil, ms)
+	engine := NewEngine(es, mock, nil, nil, ms)
 
 	return engine, mock, es
 }
 
-// strPtr, intPtr, boolPtr are defined in other test files in this package
+// strPtr is defined in helpers_test.go
 
-func TestDedupEngine_ExactMatch_FileHash(t *testing.T) {
+func TestEngine_ExactMatch_FileHash(t *testing.T) {
 	engine, mock, es := setupTestEngine(t)
 	engine.AutoMergeEnabled = false
 
@@ -106,7 +106,7 @@ func TestDedupEngine_ExactMatch_FileHash(t *testing.T) {
 	}
 }
 
-func TestDedupEngine_ExactMatch_FileHash_AutoMerge(t *testing.T) {
+func TestEngine_ExactMatch_FileHash_AutoMerge(t *testing.T) {
 	engine, mock, _ := setupTestEngine(t)
 	engine.AutoMergeEnabled = true
 
@@ -160,13 +160,13 @@ func TestDedupEngine_ExactMatch_FileHash_AutoMerge(t *testing.T) {
 	}
 }
 
-// TestDedupEngine_DurationMatch_EmitsCandidate verifies the
+// TestEngine_DurationMatch_EmitsCandidate verifies the
 // duration signal: two books by the same author with
 // near-identical durations (±2%) and recognizably similar
 // titles should produce an exact-layer candidate. The threshold
 // is loose enough to catch formatting drift but strict enough
 // to exclude abridged editions.
-func TestDedupEngine_DurationMatch_EmitsCandidate(t *testing.T) {
+func TestEngine_DurationMatch_EmitsCandidate(t *testing.T) {
 	engine, mock, es := setupTestEngine(t)
 	engine.AutoMergeEnabled = false
 
@@ -224,11 +224,11 @@ func TestDedupEngine_DurationMatch_EmitsCandidate(t *testing.T) {
 	}
 }
 
-// TestDedupEngine_DurationMatch_RejectsAbridged verifies that
+// TestEngine_DurationMatch_RejectsAbridged verifies that
 // when durations differ substantially (>= 20%) the duration
 // signal produces NO candidate — abridged/unabridged editions
 // are legitimately different content.
-func TestDedupEngine_DurationMatch_RejectsAbridged(t *testing.T) {
+func TestEngine_DurationMatch_RejectsAbridged(t *testing.T) {
 	engine, mock, es := setupTestEngine(t)
 	engine.AutoMergeEnabled = false
 
@@ -296,7 +296,7 @@ func TestDedupEngine_DurationMatch_RejectsAbridged(t *testing.T) {
 	}
 }
 
-func TestDedupEngine_ExactMatch_ISBN(t *testing.T) {
+func TestEngine_ExactMatch_ISBN(t *testing.T) {
 	engine, mock, es := setupTestEngine(t)
 
 	authorID := 1
@@ -355,7 +355,7 @@ func TestDedupEngine_ExactMatch_ISBN(t *testing.T) {
 	}
 }
 
-func TestDedupEngine_ExactMatch_NoMatch(t *testing.T) {
+func TestEngine_ExactMatch_NoMatch(t *testing.T) {
 	engine, mock, es := setupTestEngine(t)
 
 	authorID1 := 1
@@ -408,7 +408,7 @@ func TestDedupEngine_ExactMatch_NoMatch(t *testing.T) {
 	}
 }
 
-func TestDedupEngine_EmbedBook_NilClient(t *testing.T) {
+func TestEngine_EmbedBook_NilClient(t *testing.T) {
 	engine, mock, _ := setupTestEngine(t)
 	// embedClient is nil by default in setupTestEngine
 

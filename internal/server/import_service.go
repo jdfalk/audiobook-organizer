@@ -13,6 +13,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
@@ -122,7 +123,7 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 
 	// Set author if available
 	if meta.Artist != "" {
-		normalizedArtist := NormalizeAuthorName(meta.Artist)
+		normalizedArtist := dedup.NormalizeAuthorName(meta.Artist)
 		author, err := is.db.GetAuthorByName(normalizedArtist)
 		if err != nil {
 			author, err = is.db.CreateAuthor(normalizedArtist)

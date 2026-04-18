@@ -15,6 +15,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 )
 
 // aiScanPipelineStore is the narrow slice of database.Store this service uses.
@@ -248,14 +249,14 @@ func (pm *PipelineManager) failPhase(scanID int, phaseType string, err error) {
 }
 
 // buildGroupsInput builds AuthorDedupInput from heuristic groups, replicating the logic from server.go.
-func (pm *PipelineManager) buildGroupsInput(authors []database.Author) ([]ai.AuthorDedupInput, []AuthorDedupGroup, error) {
+func (pm *PipelineManager) buildGroupsInput(authors []database.Author) ([]ai.AuthorDedupInput, []dedup.AuthorDedupGroup, error) {
 	bookCounts, err := pm.mainStore.GetAllAuthorBookCounts()
 	if err != nil {
 		return nil, nil, fmt.Errorf("get book counts: %w", err)
 	}
 	bookCountFn := func(authorID int) int { return bookCounts[authorID] }
 
-	groups := FindDuplicateAuthors(authors, 0.9, bookCountFn)
+	groups := dedup.FindDuplicateAuthors(authors, 0.9, bookCountFn)
 
 	var inputs []ai.AuthorDedupInput
 	for i, group := range groups {
@@ -312,11 +313,11 @@ func (pm *PipelineManager) buildFullInput(authors []database.Author) []ai.Author
 }
 
 // groupsSuggestionsToScanSuggestions converts AI groups suggestions to normalized ScanSuggestions.
-func groupsSuggestionsToScanSuggestions(suggestions []ai.AuthorDedupSuggestion, groups []AuthorDedupGroup) []database.ScanSuggestion {
+func groupsSuggestionsToScanSuggestions(suggestions []ai.AuthorDedupSuggestion, groups []dedup.AuthorDedupGroup) []database.ScanSuggestion {
 	var result []database.ScanSuggestion
 	for _, s := range suggestions {
 		// Normalize initials formatting
-		canonicalName := NormalizeAuthorName(s.CanonicalName)
+		canonicalName := dedup.NormalizeAuthorName(s.CanonicalName)
 
 		// Build author IDs from the group
 		var authorIDs []int
@@ -351,7 +352,7 @@ func groupsSuggestionsToScanSuggestions(suggestions []ai.AuthorDedupSuggestion, 
 func fullSuggestionsToScanSuggestions(suggestions []ai.AuthorDiscoverySuggestion) []database.ScanSuggestion {
 	var result []database.ScanSuggestion
 	for _, s := range suggestions {
-		canonicalName := NormalizeAuthorName(s.CanonicalName)
+		canonicalName := dedup.NormalizeAuthorName(s.CanonicalName)
 
 		var rolesJSON json.RawMessage
 		if s.Roles != nil {
