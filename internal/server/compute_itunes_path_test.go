@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,7 +24,7 @@ func TestComputeITunesPath_AudiobookOrganizerPath(t *testing.T) {
 		{From: "W:/audiobook-organizer", To: "/mnt/bigdata/books/audiobook-organizer"},
 	}
 
-	result := computeITunesPath("/mnt/bigdata/books/audiobook-organizer/Author/Title/file.m4b")
+	result := metafetch.ComputeITunesPath("/mnt/bigdata/books/audiobook-organizer/Author/Title/file.m4b")
 	assert.Equal(t,
 		"file://localhost/W:/audiobook-organizer/Author/Title/file.m4b",
 		result)
@@ -37,7 +38,7 @@ func TestComputeITunesPath_ITunesMediaPath(t *testing.T) {
 		{From: "W:/itunes/iTunes Media", To: "/mnt/bigdata/books/itunes/iTunes Media"},
 	}
 
-	result := computeITunesPath("/mnt/bigdata/books/itunes/iTunes Media/Audiobooks/Author/book.m4b")
+	result := metafetch.ComputeITunesPath("/mnt/bigdata/books/itunes/iTunes Media/Audiobooks/Author/book.m4b")
 	assert.Equal(t,
 		"file://localhost/W:/itunes/iTunes%20Media/Audiobooks/Author/book.m4b",
 		result)
@@ -51,12 +52,12 @@ func TestComputeITunesPath_NoMatchingMapping(t *testing.T) {
 		{From: "W:/audiobook-organizer", To: "/mnt/bigdata/books/audiobook-organizer"},
 	}
 
-	result := computeITunesPath("/some/random/path/file.m4b")
+	result := metafetch.ComputeITunesPath("/some/random/path/file.m4b")
 	assert.Equal(t, "", result, "unmatched path should return empty string")
 }
 
 func TestComputeITunesPath_EmptyPath(t *testing.T) {
-	result := computeITunesPath("")
+	result := metafetch.ComputeITunesPath("")
 	assert.Equal(t, "", result)
 }
 
@@ -66,7 +67,7 @@ func TestComputeITunesPath_NoMappingsConfigured(t *testing.T) {
 
 	config.AppConfig.ITunesPathMappings = nil
 
-	result := computeITunesPath("/mnt/bigdata/books/audiobook-organizer/Author/file.m4b")
+	result := metafetch.ComputeITunesPath("/mnt/bigdata/books/audiobook-organizer/Author/file.m4b")
 	assert.Equal(t, "", result, "no mappings should return empty string")
 }
 
@@ -82,7 +83,7 @@ func TestComputeITunesPath_SpacesEncoded(t *testing.T) {
 		{From: "W:/audiobook-organizer", To: "/mnt/bigdata/books/audiobook-organizer"},
 	}
 
-	result := computeITunesPath("/mnt/bigdata/books/audiobook-organizer/Brandon Sanderson/The Way of Kings/file.m4b")
+	result := metafetch.ComputeITunesPath("/mnt/bigdata/books/audiobook-organizer/Brandon Sanderson/The Way of Kings/file.m4b")
 	assert.Contains(t, result, "Brandon%20Sanderson")
 	assert.Contains(t, result, "The%20Way%20of%20Kings")
 	// Slashes and colons should NOT be encoded
@@ -123,7 +124,7 @@ func TestComputeITunesPath_SpecialCharsInTitle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := computeITunesPath(tt.path)
+			result := metafetch.ComputeITunesPath(tt.path)
 			assert.NotEmpty(t, result)
 			assert.Contains(t, result, tt.contains)
 		})
@@ -147,8 +148,8 @@ func TestComputeITunesPath_OrganizedVsITunes_Distinction(t *testing.T) {
 	organizedPath := "/mnt/bigdata/books/audiobook-organizer/Author/Title/file.m4b"
 	itunesPath := "/mnt/bigdata/books/itunes/iTunes Media/Audiobooks/Author/file.m4b"
 
-	organizedURL := computeITunesPath(organizedPath)
-	itunesURL := computeITunesPath(itunesPath)
+	organizedURL := metafetch.ComputeITunesPath(organizedPath)
+	itunesURL := metafetch.ComputeITunesPath(itunesPath)
 
 	assert.Contains(t, organizedURL, "W:/audiobook-organizer",
 		"organized path should map to audiobook-organizer Windows path")
@@ -173,7 +174,7 @@ func TestComputeITunesPath_FirstMappingWins(t *testing.T) {
 		{From: "W:/books", To: "/mnt/bigdata/books"},
 	}
 
-	result := computeITunesPath("/mnt/bigdata/books/audiobook-organizer/Author/file.m4b")
+	result := metafetch.ComputeITunesPath("/mnt/bigdata/books/audiobook-organizer/Author/file.m4b")
 	assert.Contains(t, result, "W:/audiobook-organizer",
 		"more specific mapping should win when listed first")
 }
@@ -191,7 +192,7 @@ func TestComputeITunesPath_TrailingSlashConsistency(t *testing.T) {
 		{From: "W:/audiobook-organizer", To: "/mnt/bigdata/books/audiobook-organizer"},
 	}
 
-	result := computeITunesPath("/mnt/bigdata/books/audiobook-organizer/Author/file.m4b")
+	result := metafetch.ComputeITunesPath("/mnt/bigdata/books/audiobook-organizer/Author/file.m4b")
 	assert.NotEmpty(t, result)
 	// Should NOT produce double slashes
 	assert.NotContains(t, result, "audiobook-organizer//Author")

@@ -25,6 +25,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 )
 
 // Handler functions (stubs for now)
@@ -240,14 +241,14 @@ func (s *Server) factoryReset(c *gin.Context) {
 
 	// Delete OL data (pebble store + dump files)
 	if s.olService != nil {
-		s.olService.mu.Lock()
-		if s.olService.store != nil {
-			s.olService.store.Close()
-			s.olService.store = nil
+		s.olService.Mu.Lock()
+		if s.olService.OLStore != nil {
+			s.olService.OLStore.Close()
+			s.olService.OLStore = nil
 		}
-		s.olService.mu.Unlock()
+		s.olService.Mu.Unlock()
 
-		targetDir := getOLDumpDir()
+		targetDir := metafetch.GetOLDumpDir()
 		if targetDir != "" {
 			if err := os.RemoveAll(targetDir); err != nil {
 				log.Printf("[WARN] Factory reset: failed to remove OL data dir: %v", err)

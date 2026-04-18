@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
@@ -33,7 +34,7 @@ func TestEnrichBookISBN_SkipsWhenAlreadyHasISBN(t *testing.T) {
 			return &database.Book{ID: id, Title: "Test Book", ISBN13: &isbn13}, nil
 		},
 	}
-	svc := NewISBNEnrichmentService(mock, nil)
+	svc := metafetch.NewISBNService(mock, nil)
 	found, err := svc.EnrichBookISBN("book-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -60,7 +61,7 @@ func TestEnrichBookISBN_FindsISBN13(t *testing.T) {
 			{Title: "The Great Gatsby", ISBN: "9780743273565"},
 		},
 	}
-	svc := NewISBNEnrichmentService(mock, []metadata.MetadataSource{src})
+	svc := metafetch.NewISBNService(mock, []metadata.MetadataSource{src})
 	found, err := svc.EnrichBookISBN("book-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -90,7 +91,7 @@ func TestEnrichBookISBN_FindsISBN10(t *testing.T) {
 			{Title: "Dune", ISBN: "0441172717"},
 		},
 	}
-	svc := NewISBNEnrichmentService(mock, []metadata.MetadataSource{src})
+	svc := metafetch.NewISBNService(mock, []metadata.MetadataSource{src})
 	found, err := svc.EnrichBookISBN("book-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -121,7 +122,7 @@ func TestEnrichBookISBN_FindsASIN(t *testing.T) {
 			{Title: "Neuromancer", ASIN: "B000SEGUDE"},
 		},
 	}
-	svc := NewISBNEnrichmentService(mock, []metadata.MetadataSource{src})
+	svc := metafetch.NewISBNService(mock, []metadata.MetadataSource{src})
 	found, err := svc.EnrichBookISBN("book-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -144,7 +145,7 @@ func TestEnrichBookISBN_NoResultsReturnsFalse(t *testing.T) {
 		name:    "Open Library",
 		results: nil,
 	}
-	svc := NewISBNEnrichmentService(mock, []metadata.MetadataSource{src})
+	svc := metafetch.NewISBNService(mock, []metadata.MetadataSource{src})
 	found, err := svc.EnrichBookISBN("book-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -166,7 +167,7 @@ func TestEnrichBookISBN_StrictTitleMismatchSkips(t *testing.T) {
 			{Title: "Dune Messiah", ISBN: "9780441172696"},
 		},
 	}
-	svc := NewISBNEnrichmentService(mock, []metadata.MetadataSource{src})
+	svc := metafetch.NewISBNService(mock, []metadata.MetadataSource{src})
 	found, err := svc.EnrichBookISBN("book-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -190,9 +191,9 @@ func TestIsStrictTitleMatch(t *testing.T) {
 		{"Completely Different", "Unrelated Book", false},
 	}
 	for _, tt := range tests {
-		got := isStrictTitleMatch(tt.a, tt.b)
+		got := metafetch.IsStrictTitleMatch(tt.a, tt.b)
 		if got != tt.want {
-			t.Errorf("isStrictTitleMatch(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
+			t.Errorf("metafetch.IsStrictTitleMatch(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
 		}
 	}
 }
@@ -233,7 +234,7 @@ func TestEnrichMissingISBNs_RespectsLimit(t *testing.T) {
 			{Title: "Three", ISBN: "9780000000003"},
 		},
 	}
-	svc := NewISBNEnrichmentService(mock, []metadata.MetadataSource{src})
+	svc := metafetch.NewISBNService(mock, []metadata.MetadataSource{src})
 
 	checked, updated, err := svc.EnrichMissingISBNs(context.Background(), 2)
 	if err != nil {

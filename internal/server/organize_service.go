@@ -19,6 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -133,7 +134,7 @@ func (orgSvc *OrganizeService) PerformOrganize(ctx context.Context, req *Organiz
 	// Optional: fetch metadata before organizing to normalize author names
 	if req.FetchMetadataFirst {
 		log.Info("Fetching metadata before organizing...")
-		mfs := NewMetadataFetchService(orgSvc.db)
+		mfs := metafetch.NewService(orgSvc.db)
 		enriched := 0
 		for i := range allBooks {
 			book := &allBooks[i]
@@ -400,7 +401,7 @@ func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger
 	// location. Without this, iTunes keeps pointing at the old path
 	// and shows "file missing."
 	book.FilePath = targetPath
-	newITunesPath := computeITunesPath(targetPath)
+	newITunesPath := metafetch.ComputeITunesPath(targetPath)
 	book.ITunesPath = &newITunesPath
 	organizedState := "organized"
 	book.LibraryState = &organizedState
@@ -417,7 +418,7 @@ func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger
 				if strings.HasPrefix(bf.FilePath, oldPath) {
 					bf.FilePath = filepath.Join(targetPath, strings.TrimPrefix(bf.FilePath, oldPath+"/"))
 					if bf.FilePath != "" {
-						bf.ITunesPath = computeITunesPath(bf.FilePath)
+						bf.ITunesPath = metafetch.ComputeITunesPath(bf.FilePath)
 					}
 					_ = orgSvc.db.UpdateBookFile(bf.ID, &bf)
 				}
@@ -835,7 +836,7 @@ func (orgSvc *OrganizeService) createOrganizedVersion(org *organizer.Organizer, 
 			// files in the audiobook-organizer folder don't keep a stale
 			// W:/itunes/... path from the original iTunes source.
 			if newBF.FilePath != "" {
-				newBF.ITunesPath = computeITunesPath(newBF.FilePath)
+				newBF.ITunesPath = metafetch.ComputeITunesPath(newBF.FilePath)
 			}
 			_ = orgSvc.db.CreateBookFile(&newBF)
 		}

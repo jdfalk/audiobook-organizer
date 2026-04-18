@@ -20,6 +20,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 )
 
@@ -47,7 +48,7 @@ type CandidateBookInfo struct {
 // CandidateResult holds the metadata candidate search result for a single book.
 type CandidateResult struct {
 	Book      CandidateBookInfo  `json:"book"`
-	Candidate *MetadataCandidate `json:"candidate,omitempty"`
+	Candidate *metafetch.MetadataCandidate `json:"candidate,omitempty"`
 	Status    string             `json:"status"` // "matched", "no_match", "error"
 	Error     string             `json:"error_message,omitempty"`
 }
@@ -212,8 +213,8 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 // the rate limiter. Returns a CandidateResult.
 func (s *Server) fetchCandidateForBook(
 	ctx context.Context,
-	mfs *MetadataFetchService,
-	store interface { database.BookReader; database.OperationStore; database.RawKVStore },
+	mfs *metafetch.Service,
+	store database.Store,
 	limiter *rate.Limiter,
 	opID, bookID string,
 ) CandidateResult {
@@ -261,7 +262,7 @@ func (s *Server) fetchCandidateForBook(
 	// Load previously rejected candidates for this book (across all operations)
 	// and filter them out so we pick the next best match.
 	rejectedKeys := loadRejectedCandidateKeys(store, bookID)
-	var filtered []MetadataCandidate
+	var filtered []metafetch.MetadataCandidate
 	for _, c := range resp.Results {
 		key := c.Source + "|" + c.Title
 		if !rejectedKeys[key] {

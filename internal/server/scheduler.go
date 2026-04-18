@@ -289,7 +289,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("isbn-enrichment", s.runIsbnEnrichment)
 		},
-		IsEnabled:              func() bool { return s.metadataFetchService != nil && s.metadataFetchService.isbnEnrichment != nil },
+		IsEnabled:              func() bool { return s.metadataFetchService != nil && s.metadataFetchService.ISBNEnrichment() != nil },
 		GetInterval:            func() time.Duration { return 0 },
 		RunOnStart:             func() bool { return false },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowMetadataRefresh },

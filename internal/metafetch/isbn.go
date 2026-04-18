@@ -1,8 +1,8 @@
-// file: internal/server/isbn_enrichment.go
+// file: internal/metafetch/isbn.go
 // version: 1.2.0
 // guid: 34290bd0-745e-4509-ad2d-e237785bb7ef
 
-package server
+package metafetch
 
 import (
 	"context"
@@ -13,31 +13,23 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
-// isbnEnrichmentStore is the narrow slice of database.Store this service uses.
-type isbnEnrichmentStore interface {
-	database.AuthorReader
-	database.BookReader
-	database.BookWriter
-}
-
-
-// ISBNEnrichmentService searches external metadata sources for ISBN (and ASIN)
+// ISBNService searches external metadata sources for ISBN (and ASIN)
 // when a book is missing those identifiers after a metadata fetch/apply.
-type ISBNEnrichmentService struct {
-	db isbnEnrichmentStore
+type ISBNService struct {
+	db      database.Store
 	sources []metadata.MetadataSource
 }
 
-// NewISBNEnrichmentService creates an enrichment service that will search the
+// NewISBNService creates an enrichment service that will search the
 // given metadata sources for ISBN/ASIN data.
-func NewISBNEnrichmentService(db isbnEnrichmentStore, sources []metadata.MetadataSource) *ISBNEnrichmentService {
-	return &ISBNEnrichmentService{db: db, sources: sources}
+func NewISBNService(db database.Store, sources []metadata.MetadataSource) *ISBNService {
+	return &ISBNService{db: db, sources: sources}
 }
 
 // EnrichBookISBN searches external sources for ISBN if the book doesn't have one.
 // It also back-fills ASIN from Audible when missing. Returns true if any
 // identifier was found and saved.
-func (s *ISBNEnrichmentService) EnrichBookISBN(bookID string) (bool, error) {
+func (s *ISBNService) EnrichBookISBN(bookID string) (bool, error) {
 	book, err := s.db.GetBookByID(bookID)
 	if err != nil || book == nil {
 		return false, err
@@ -103,7 +95,7 @@ func (s *ISBNEnrichmentService) EnrichBookISBN(bookID string) (bool, error) {
 
 // EnrichMissingISBNs scans books missing ISBN data and enriches up to limit of them.
 // It returns the number of candidate books checked and the number updated.
-func (s *ISBNEnrichmentService) EnrichMissingISBNs(ctx context.Context, limit int) (int, int, error) {
+func (s *ISBNService) EnrichMissingISBNs(ctx context.Context, limit int) (int, int, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -154,7 +146,7 @@ func (s *ISBNEnrichmentService) EnrichMissingISBNs(ctx context.Context, limit in
 }
 
 // resolveAuthor returns the author name for the book, or "" if unknown.
-func (s *ISBNEnrichmentService) resolveAuthor(book *database.Book) string {
+func (s *ISBNService) resolveAuthor(book *database.Book) string {
 	if book.AuthorID == nil {
 		return ""
 	}
@@ -175,7 +167,7 @@ func needsIdentifierEnrichment(book *database.Book) bool {
 
 // searchSourceForISBN queries a single metadata source and returns the first
 // ISBN that matches the title strictly, along with its length (10 or 13).
-func (s *ISBNEnrichmentService) searchSourceForISBN(src metadata.MetadataSource, title, author string) (string, int) {
+func (s *ISBNService) searchSourceForISBN(src metadata.MetadataSource, title, author string) (string, int) {
 	var results []metadata.BookMetadata
 
 	if author != "" {
@@ -186,7 +178,7 @@ func (s *ISBNEnrichmentService) searchSourceForISBN(src metadata.MetadataSource,
 	}
 
 	for _, r := range results {
-		if !isStrictTitleMatch(title, r.Title) {
+		if !IsStrictTitleMatch(title, r.Title) {
 			continue
 		}
 		if r.ISBN != "" {
@@ -198,7 +190,7 @@ func (s *ISBNEnrichmentService) searchSourceForISBN(src metadata.MetadataSource,
 
 // searchSourceForASIN queries a single metadata source and returns the first
 // ASIN that matches the title strictly.
-func (s *ISBNEnrichmentService) searchSourceForASIN(src metadata.MetadataSource, title, author string) string {
+func (s *ISBNService) searchSourceForASIN(src metadata.MetadataSource, title, author string) string {
 	var results []metadata.BookMetadata
 
 	if author != "" {
@@ -209,7 +201,7 @@ func (s *ISBNEnrichmentService) searchSourceForASIN(src metadata.MetadataSource,
 	}
 
 	for _, r := range results {
-		if isStrictTitleMatch(title, r.Title) && r.ASIN != "" {
+		if IsStrictTitleMatch(title, r.Title) && r.ASIN != "" {
 			return r.ASIN
 		}
 	}
@@ -217,7 +209,7 @@ func (s *ISBNEnrichmentService) searchSourceForASIN(src metadata.MetadataSource,
 }
 
 // isStrictTitleMatch returns true if titles are close enough to be the same book.
-func isStrictTitleMatch(dbTitle, searchTitle string) bool {
+func IsStrictTitleMatch(dbTitle, searchTitle string) bool {
 	a := strings.ToLower(strings.TrimSpace(dbTitle))
 	b := strings.ToLower(strings.TrimSpace(searchTitle))
 	if a == "" || b == "" {

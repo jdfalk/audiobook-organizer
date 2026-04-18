@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -111,7 +112,7 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 
 		// Recompute book.ITunesPath from the current FilePath if needed.
 		if b.FilePath != "" {
-			wantBookITunesPath := computeITunesPath(b.FilePath)
+			wantBookITunesPath := metafetch.ComputeITunesPath(b.FilePath)
 			if wantBookITunesPath != "" {
 				current := ""
 				if b.ITunesPath != nil {
@@ -134,7 +135,7 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 			if bf.ITunesPersistentID == "" || bf.FilePath == "" {
 				continue
 			}
-			want := computeITunesPath(bf.FilePath)
+			want := metafetch.ComputeITunesPath(bf.FilePath)
 			if want == "" || want == bf.ITunesPath {
 				continue
 			}

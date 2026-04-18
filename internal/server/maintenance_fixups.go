@@ -22,6 +22,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/oklog/ulid/v2"
 )
@@ -710,7 +711,7 @@ func (s *Server) handleBackfillBookFiles(c *gin.Context) {
 			isMissing = true
 		} else if fi.IsDir() {
 			// Directory: glob for audio files using the shared audioFilesInDir helper.
-			filesToCreate = audioFilesInDir(book.FilePath)
+			filesToCreate = metafetch.AudioFilesInDir(book.FilePath)
 			if len(filesToCreate) == 0 {
 				results = append(results, bookFilesBackfillResult{
 					BookID:     book.ID,
@@ -1571,7 +1572,7 @@ func isAuthorDirectory(dir string) bool {
 			continue
 		}
 		subPath := filepath.Join(dir, e.Name())
-		if len(audioFilesInDir(subPath)) > 0 {
+		if len(metafetch.AudioFilesInDir(subPath)) > 0 {
 			bookSubdirs++
 			if bookSubdirs >= 2 {
 				return true
@@ -1601,7 +1602,7 @@ func bestMatchSubdir(parent, title string) string {
 		}
 		// Only consider subdirs that actually contain audio files.
 		sub := filepath.Join(parent, e.Name())
-		if len(audioFilesInDir(sub)) == 0 {
+		if len(metafetch.AudioFilesInDir(sub)) == 0 {
 			continue
 		}
 
@@ -1648,7 +1649,7 @@ func fixAuthorDirPath(store maintenanceStore, book *database.Book, subdir string
 		return fmt.Errorf("DeleteBookFilesForBook: %w", err)
 	}
 
-	newFiles := audioFilesInDir(subdir)
+	newFiles := metafetch.AudioFilesInDir(subdir)
 	if len(newFiles) == 0 {
 		// No audio files found — leave book_files empty for now (not an error).
 		return nil
@@ -1946,7 +1947,7 @@ func (s *Server) handleFixBookFilePaths(c *gin.Context) {
 
 			if info.IsDir() {
 				// file_path points to a directory — find real audio files.
-				audioFiles := audioFilesInDir(f.FilePath)
+				audioFiles := metafetch.AudioFilesInDir(f.FilePath)
 
 				switch len(audioFiles) {
 				case 0:
@@ -3456,7 +3457,7 @@ func (s *Server) handleRecomputeITunesPaths(c *gin.Context) {
 				continue
 			}
 
-			want := computeITunesPath(bf.FilePath)
+			want := metafetch.ComputeITunesPath(bf.FilePath)
 			if bf.ITunesPath == want {
 				skipCount++
 				continue

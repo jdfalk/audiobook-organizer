@@ -26,26 +26,20 @@ import (
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 )
-
-// metadataUpgradeStore is the narrow slice of database.Store this service uses.
-type metadataUpgradeStore interface {
-	database.BookReader
-	database.TagStore
-}
-
 
 // MetadataUpgradeService finds books with low-quality metadata
 // sources and attempts to upgrade them to richer sources.
 type MetadataUpgradeService struct {
-	db metadataUpgradeStore
-	fetcher *MetadataFetchService
+	db      database.Store
+	fetcher *metafetch.Service
 }
 
 // NewMetadataUpgradeService creates an upgrade service. The fetcher
 // provides the search + apply pipeline; the db provides the tag
 // lookup for finding eligible books.
-func NewMetadataUpgradeService(db metadataUpgradeStore, fetcher *MetadataFetchService) *MetadataUpgradeService {
+func NewMetadataUpgradeService(db database.Store, fetcher *metafetch.Service) *MetadataUpgradeService {
 	return &MetadataUpgradeService{db: db, fetcher: fetcher}
 }
 
@@ -143,7 +137,7 @@ func (s *MetadataUpgradeService) tryUpgradeBook(ctx context.Context, bookID, cur
 	}
 
 	// Find the best candidate from a source OTHER than the current one.
-	var bestCandidate *MetadataCandidate
+	var bestCandidate *metafetch.MetadataCandidate
 	for i := range resp.Results {
 		c := &resp.Results[i]
 		candidateSlug := strings.ToLower(strings.ReplaceAll(c.Source, " ", "_"))

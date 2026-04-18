@@ -7,6 +7,7 @@ package server
 import (
 	"testing"
 
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
@@ -16,7 +17,7 @@ func TestNormalizeMetaSeries_AlreadySplit(t *testing.T) {
 		Series:         "Mistborn",
 		SeriesPosition: "1",
 	}
-	normalizeMetaSeries(&meta)
+	metafetch.NormalizeMetaSeries(&meta)
 	if meta.Series != "Mistborn" || meta.SeriesPosition != "1" || meta.Title != "The Final Empire" {
 		t.Fatalf("clean fields should not be modified, got %+v", meta)
 	}
@@ -30,7 +31,7 @@ func TestNormalizeMetaSeries_BookNumberInSeries(t *testing.T) {
 		Title:  "The Hero of Ages",
 		Series: "Mistborn, Book 3",
 	}
-	normalizeMetaSeries(&meta)
+	metafetch.NormalizeMetaSeries(&meta)
 	if meta.Series != "Mistborn" {
 		t.Errorf("Series = %q, want %q", meta.Series, "Mistborn")
 	}
@@ -47,7 +48,7 @@ func TestNormalizeMetaSeries_BookNumberInTitle(t *testing.T) {
 	meta := metadata.BookMetadata{
 		Title: "(Long Earth 5) The Long Cosmos",
 	}
-	normalizeMetaSeries(&meta)
+	metafetch.NormalizeMetaSeries(&meta)
 	if meta.Series != "Long Earth" {
 		t.Errorf("Series = %q, want %q", meta.Series, "Long Earth")
 	}
@@ -64,7 +65,7 @@ func TestNormalizeMetaSeries_NoMatch(t *testing.T) {
 		Title:  "Some Standalone Book",
 		Series: "",
 	}
-	normalizeMetaSeries(&meta)
+	metafetch.NormalizeMetaSeries(&meta)
 	if meta.Title != "Some Standalone Book" || meta.Series != "" {
 		t.Fatalf("non-matching input should be untouched, got %+v", meta)
 	}
@@ -78,7 +79,7 @@ func TestNormalizeMetaSeries_PreservesExistingPositionWhenSeriesUnchanged(t *tes
 		Series:         "The Stormlight Archive",
 		SeriesPosition: "5",
 	}
-	normalizeMetaSeries(&meta)
+	metafetch.NormalizeMetaSeries(&meta)
 	if meta.SeriesPosition != "5" {
 		t.Errorf("SeriesPosition lost, got %q", meta.SeriesPosition)
 	}
@@ -89,9 +90,9 @@ func TestNormalizeMetaSeries_Idempotent(t *testing.T) {
 		Title:  "The Hero of Ages",
 		Series: "Mistborn, Book 3",
 	}
-	normalizeMetaSeries(&meta)
+	metafetch.NormalizeMetaSeries(&meta)
 	first := meta
-	normalizeMetaSeries(&meta)
+	metafetch.NormalizeMetaSeries(&meta)
 	if meta != first {
 		t.Errorf("second call mutated meta; before=%+v after=%+v", first, meta)
 	}

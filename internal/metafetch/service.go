@@ -1,8 +1,8 @@
-// file: internal/server/metadata_fetch_service.go
+// file: internal/metafetch/service.go
 // version: 4.52.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
-package server
+package metafetch
 
 import (
 	"context"
@@ -33,39 +33,49 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 )
 
-type MetadataFetchService struct {
+// WriteBackEnqueuer is satisfied by server.WriteBackBatcher.
+type WriteBackEnqueuer interface {
+	Enqueue(bookID string)
+}
+
+type Service struct {
 	db               database.Store
 	olStore          *openlibrary.OLStore
 	overrideSources  []metadata.MetadataSource // for testing
-	isbnEnrichment   *ISBNEnrichmentService
+	isbnEnrichment   *ISBNService
 	activityService  *activity.Service
 	dedupEngine      *dedup.Engine
 	metadataScorer   ai.MetadataCandidateScorer // optional; nil = fallback to F1
 	llmScorer        ai.MetadataCandidateScorer // optional; nil = no LLM rerank tier
-	writeBackBatcher *WriteBackBatcher
+	writeBackBatcher WriteBackEnqueuer
+}
+
+// SetOverrideSources overrides the metadata source chain for testing.
+func (mfs *Service) SetOverrideSources(sources []metadata.MetadataSource) {
+	mfs.overrideSources = sources
 }
 
 // SetActivityService sets the activity service for dual-writing to the unified activity log.
-func (mfs *MetadataFetchService) SetActivityService(svc *activity.Service) {
+func (mfs *Service) SetActivityService(svc *activity.Service) {
 	mfs.activityService = svc
 }
 
 // SetWriteBackBatcher sets the iTunes write-back batcher.
-func (mfs *MetadataFetchService) SetWriteBackBatcher(b *WriteBackBatcher) {
+func (mfs *Service) SetWriteBackBatcher(b WriteBackEnqueuer) {
 	mfs.writeBackBatcher = b
 }
 
-func NewMetadataFetchService(db database.Store) *MetadataFetchService {
-	return &MetadataFetchService{db: db}
+func NewService(db database.Store) *Service {
+	return &Service{db: db}
 }
 
 // SetOLStore sets the Open Library dump store for local-first lookups.
-func (mfs *MetadataFetchService) SetOLStore(store *openlibrary.OLStore) {
+func (mfs *Service) SetOLStore(store *openlibrary.OLStore) {
 	mfs.olStore = store
 }
 
 // SetDedupEngine sets the dedup engine for post-apply dedup checks.
-func (mfs *MetadataFetchService) SetDedupEngine(engine *dedup.Engine) {
+func (mfs *Service) SetDedupEngine(engine *dedup.Engine) {
 	mfs.dedupEngine = engine
 }
 
@@ -73,25 +83,30 @@ func (mfs *MetadataFetchService) SetDedupEngine(engine *dedup.Engine) {
 // scorer (or a scorer that returns errors at runtime) makes the search
 // pipeline fall back to the pre-existing significantWords F1 path, so this
 // method is safe to leave unset.
-func (mfs *MetadataFetchService) SetMetadataScorer(scorer ai.MetadataCandidateScorer) {
+func (mfs *Service) SetMetadataScorer(scorer ai.MetadataCandidateScorer) {
 	mfs.metadataScorer = scorer
 }
 
 // SetMetadataLLMScorer injects the LLM rerank scorer. A nil scorer or a
 // scorer that returns errors at runtime makes the rerank pass a no-op, so
 // this method is safe to leave unset.
-func (mfs *MetadataFetchService) SetMetadataLLMScorer(scorer ai.MetadataCandidateScorer) {
+func (mfs *Service) SetMetadataLLMScorer(scorer ai.MetadataCandidateScorer) {
 	mfs.llmScorer = scorer
 }
 
 // SetISBNEnrichment sets the ISBN enrichment service for background ISBN/ASIN lookups.
-func (mfs *MetadataFetchService) SetISBNEnrichment(svc *ISBNEnrichmentService) {
+func (mfs *Service) SetISBNEnrichment(svc *ISBNService) {
 	mfs.isbnEnrichment = svc
+}
+
+// ISBNEnrichment returns the ISBN enrichment service (may be nil).
+func (mfs *Service) ISBNEnrichment() *ISBNService {
+	return mfs.isbnEnrichment
 }
 
 // queueISBNEnrichment starts a background goroutine to enrich ISBN/ASIN for a book
 // if the book is missing those identifiers.
-func (mfs *MetadataFetchService) queueISBNEnrichment(id string, book *database.Book) {
+func (mfs *Service) queueISBNEnrichment(id string, book *database.Book) {
 	if mfs.isbnEnrichment == nil {
 		return
 	}
@@ -188,7 +203,7 @@ func buildSearchContext(book *database.Book, searchTitle, author, narrator strin
 	return ctx
 }
 
-func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
+func (mfs *Service) BuildSourceChain() []metadata.MetadataSource {
 	// Copy and sort by priority
 	sources := make([]config.MetadataSource, len(config.AppConfig.MetadataSources))
 	copy(sources, config.AppConfig.MetadataSources)
@@ -250,7 +265,7 @@ func (mfs *MetadataFetchService) BuildSourceChain() []metadata.MetadataSource {
 
 // FetchMetadataForBook fetches and applies metadata for a single audiobook,
 // trying each configured source in priority order until one succeeds.
-func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadataResponse, error) {
+func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, error) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
@@ -281,11 +296,11 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			currentAuthor = author.Name
 		}
 	}
-	if isGarbageValue(currentAuthor) {
+	if IsGarbageValue(currentAuthor) {
 		currentAuthor = ""
 	}
 	currentNarrator := ""
-	if book.Narrator != nil && *book.Narrator != "" && !isGarbageValue(*book.Narrator) {
+	if book.Narrator != nil && *book.Narrator != "" && !IsGarbageValue(*book.Narrator) {
 		currentNarrator = *book.Narrator
 	}
 
@@ -362,7 +377,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			}
 			// Apply series position filter if the book's position is already known.
 			if book.SeriesSequence != nil {
-				scored = applySeriesPositionFilter(scored, *book.SeriesSequence)
+				scored = ApplySeriesPositionFilter(scored, *book.SeriesSequence)
 				if len(scored) == 0 {
 					log.Printf("[DEBUG] %s: best result rejected by series position filter for %q",
 						src.Name(), searchTitle)
@@ -370,7 +385,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 				}
 			}
 			meta := scored[0]
-			normalizeMetaSeries(&meta)
+			NormalizeMetaSeries(&meta)
 
 			// Safety: never apply empty/untitled metadata
 			if meta.Title == "" || strings.ToLower(meta.Title) == "untitled" {
@@ -378,10 +393,10 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 			}
 
 			// Record history before applying changes
-			mfs.recordChangeHistory(book, meta, src.Name())
+			mfs.RecordChangeHistory(book, meta, src.Name())
 
 			// Apply metadata with downgrade protection
-			mfs.applyMetadataToBook(book, meta)
+			mfs.ApplyMetadataToBook(book, meta)
 
 			updatedBook, updateErr := mfs.db.UpdateBook(id, book)
 			if updateErr != nil {
@@ -439,7 +454,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBook(id string) (*FetchMetadata
 // FetchMetadataForBookByTitle searches metadata sources using only the book's title,
 // suppressing the author name. This is useful when the current author is a production
 // company and we want to discover the real author from external sources.
-func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchMetadataResponse, error) {
+func (mfs *Service) FetchMetadataForBookByTitle(id string) (*FetchMetadataResponse, error) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
@@ -459,7 +474,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 
 	// Resolve narrator for scoring (author intentionally suppressed in this path)
 	titleOnlyNarrator := ""
-	if book.Narrator != nil && *book.Narrator != "" && !isGarbageValue(*book.Narrator) {
+	if book.Narrator != nil && *book.Narrator != "" && !IsGarbageValue(*book.Narrator) {
 		titleOnlyNarrator = *book.Narrator
 	}
 
@@ -496,10 +511,10 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 			continue
 		}
 		meta := scored[0]
-		normalizeMetaSeries(&meta)
+		NormalizeMetaSeries(&meta)
 
-		mfs.recordChangeHistory(book, meta, src.Name())
-		mfs.applyMetadataToBook(book, meta)
+		mfs.RecordChangeHistory(book, meta, src.Name())
+		mfs.ApplyMetadataToBook(book, meta)
 
 		updatedBook, updateErr := mfs.db.UpdateBook(id, book)
 		if updateErr != nil {
@@ -511,7 +526,7 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 		// Mirror of ApplyMetadataCandidate: tag the book with the
 		// source and language so downstream filters (review dialog,
 		// upgrade jobs) have provenance to key on.
-		mfs.applyMetadataSystemTags(id, src.Name(), meta.Language)
+		mfs.ApplyMetadataSystemTags(id, src.Name(), meta.Language)
 
 		return &FetchMetadataResponse{
 			Message: "metadata fetched by title only",
@@ -526,11 +541,11 @@ func (mfs *MetadataFetchService) FetchMetadataForBookByTitle(id string) (*FetchM
 	return nil, fmt.Errorf("no metadata found for '%s' from any source (title-only search)", book.Title)
 }
 
-func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {
+func (mfs *Service) ApplyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {
 	originalTitle := book.Title
-	if meta.Title != "" && meta.Title != "Untitled" && isBetterValue(book.Title, meta.Title) {
+	if meta.Title != "" && meta.Title != "Untitled" && IsBetterValue(book.Title, meta.Title) {
 		// Don't replace a real title with something shorter/worse
-		if book.Title != "" && !isGarbageValue(book.Title) && len(meta.Title) < 3 {
+		if book.Title != "" && !IsGarbageValue(book.Title) && len(meta.Title) < 3 {
 			// Skip very short replacement titles
 		} else {
 			book.Title = meta.Title
@@ -541,10 +556,10 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 		book.Title = originalTitle
 		log.Printf("[WARN] applyMetadataToBook: prevented title from being cleared for book %s", book.ID)
 	}
-	if meta.Publisher != "" && isBetterStringPtr(book.Publisher, meta.Publisher) {
+	if meta.Publisher != "" && IsBetterStringPtr(book.Publisher, meta.Publisher) {
 		book.Publisher = stringPtr(meta.Publisher)
 	}
-	if meta.Language != "" && isBetterStringPtr(book.Language, meta.Language) {
+	if meta.Language != "" && IsBetterStringPtr(book.Language, meta.Language) {
 		book.Language = stringPtr(meta.Language)
 	}
 	if meta.PublishYear != 0 {
@@ -553,14 +568,14 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 	if meta.CoverURL != "" {
 		book.CoverURL = stringPtr(meta.CoverURL)
 	}
-	if meta.Narrator != "" && !isGarbageValue(meta.Narrator) && isBetterStringPtr(book.Narrator, meta.Narrator) {
+	if meta.Narrator != "" && !IsGarbageValue(meta.Narrator) && IsBetterStringPtr(book.Narrator, meta.Narrator) {
 		book.Narrator = stringPtr(meta.Narrator)
 	}
 
 	// Apply author if fetched data is better — resolve to AuthorID and
 	// replace the book_authors join table so stale associations are removed.
 	extractedAuthor := meta.Author
-	if extractedAuthor != "" && !isGarbageValue(extractedAuthor) {
+	if extractedAuthor != "" && !IsGarbageValue(extractedAuthor) {
 		// Guard: if extracted artist matches the book's narrator (not the author),
 		// the tag has narrator in the artist field — keep the DB author.
 		if book.AuthorID != nil && book.Narrator != nil {
@@ -577,7 +592,7 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 			}
 		}
 	}
-	if extractedAuthor != "" && !isGarbageValue(extractedAuthor) {
+	if extractedAuthor != "" && !IsGarbageValue(extractedAuthor) {
 		author, err := mfs.db.GetAuthorByName(extractedAuthor)
 		if err == nil && author == nil {
 			author, err = mfs.db.CreateAuthor(extractedAuthor)
@@ -609,7 +624,7 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 	}
 
 	// Apply series info if available
-	if meta.Series != "" && !isGarbageValue(meta.Series) {
+	if meta.Series != "" && !IsGarbageValue(meta.Series) {
 		series, err := mfs.db.GetSeriesByName(meta.Series, book.AuthorID)
 		if err == nil && series == nil {
 			series, err = mfs.db.CreateSeries(meta.Series, book.AuthorID)
@@ -626,7 +641,9 @@ func (mfs *MetadataFetchService) applyMetadataToBook(book *database.Book, meta m
 }
 
 // isGarbageValue returns true if a string value is effectively useless metadata.
-func isGarbageValue(s string) bool {
+// IsGarbageValue returns true if the string looks like garbage metadata
+// (e.g. hex-only, or other patterns known to be non-meaningful).
+func IsGarbageValue(s string) bool {
 	lower := strings.ToLower(strings.TrimSpace(s))
 	garbage := []string{"unknown", "narrator", "various", "n/a", "none", "null", "undefined", "",
 		"test", "untitled", "no title", "no author", "various authors", "various artists"}
@@ -645,11 +662,11 @@ func isGarbageValue(s string) bool {
 
 // isBetterValue returns true if newVal should replace oldVal.
 // Never replaces a good value with garbage.
-func isBetterValue(oldVal, newVal string) bool {
-	if isGarbageValue(newVal) {
+func IsBetterValue(oldVal, newVal string) bool {
+	if IsGarbageValue(newVal) {
 		return false
 	}
-	if isGarbageValue(oldVal) {
+	if IsGarbageValue(oldVal) {
 		return true
 	}
 	// Both are real values; allow the update (fetched data may be more accurate)
@@ -657,19 +674,19 @@ func isBetterValue(oldVal, newVal string) bool {
 }
 
 // isBetterStringPtr returns true if newVal should replace the existing *string.
-func isBetterStringPtr(oldPtr *string, newVal string) bool {
-	if isGarbageValue(newVal) {
+func IsBetterStringPtr(oldPtr *string, newVal string) bool {
+	if IsGarbageValue(newVal) {
 		return false
 	}
-	if oldPtr == nil || isGarbageValue(*oldPtr) {
+	if oldPtr == nil || IsGarbageValue(*oldPtr) {
 		return true
 	}
 	// Both are real values; allow the update
 	return true
 }
 
-// recordChangeHistory records metadata changes before they are applied.
-func (mfs *MetadataFetchService) recordChangeHistory(book *database.Book, meta metadata.BookMetadata, sourceName string) {
+// RecordChangeHistory records metadata changes before they are applied.
+func (mfs *Service) RecordChangeHistory(book *database.Book, meta metadata.BookMetadata, sourceName string) {
 	now := time.Now()
 
 	// Resolve current author name for history
@@ -772,10 +789,10 @@ func jsonEncodeString(s string) string {
 //
 // Safe to call multiple times: a no-match leaves meta untouched, and an
 // already-split series field will not match Pattern 3.
-func normalizeMetaSeries(meta *metadata.BookMetadata) {
-	parsedSeries, parsedPosition, parsedTitle := parseSeriesFromTitle(meta.Title)
+func NormalizeMetaSeries(meta *metadata.BookMetadata) {
+	parsedSeries, parsedPosition, parsedTitle := ParseSeriesFromTitle(meta.Title)
 	if parsedSeries == "" && meta.Series != "" {
-		parsedSeries, parsedPosition, parsedTitle = parseSeriesFromTitle(meta.Series)
+		parsedSeries, parsedPosition, parsedTitle = ParseSeriesFromTitle(meta.Series)
 		if parsedTitle == "" {
 			parsedTitle = meta.Title
 		}
@@ -796,7 +813,7 @@ func normalizeMetaSeries(meta *metadata.BookMetadata) {
 //   - "(Long Earth 05) The Long Cosmos" -> series="Long Earth", pos="5", title="The Long Cosmos"
 //   - "(Series Name 3) Title" -> series="Series Name", pos="3", title="Title"
 //   - "Long Earth 05 - The Long Cosmos" -> series="Long Earth", pos="5", title="The Long Cosmos"
-func parseSeriesFromTitle(s string) (series, position, title string) {
+func ParseSeriesFromTitle(s string) (series, position, title string) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return "", "", ""
@@ -836,7 +853,7 @@ func parseSeriesFromTitle(s string) (series, position, title string) {
 }
 
 // writeBackMetadata writes enriched metadata back to audio file(s).
-func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta metadata.BookMetadata) {
+func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMetadata) {
 	// --- Resolve author names (same logic as WriteBackMetadataForBook) ---
 	var authorNames []string
 	if bookAuthors, err := mfs.db.GetBookAuthors(book.ID); err == nil && len(bookAuthors) > 0 {
@@ -913,8 +930,8 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 			trackNum := i + 1
 			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, bookTitle)
 			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
-			tagMap := mfs.buildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
-			tagMap = filterUnchangedTags(bf.FilePath, tagMap)
+			tagMap := mfs.BuildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
+			tagMap = FilterUnchangedTags(bf.FilePath, tagMap)
 			if len(tagMap) == 0 {
 				continue
 			}
@@ -931,19 +948,19 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 		// Single-file or no segments: write to book.FilePath.
 		// If book.FilePath is a directory (multi-file book with no segment records),
 		// glob for audio files inside and write to each one individually.
-		tagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
+		tagMap := mfs.BuildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
 		log.Printf("[DEBUG] write-back: full tag map has %d entries for %s", len(tagMap), book.FilePath)
 		for k, v := range tagMap {
 			log.Printf("[DEBUG] write-back:   %s = %v", k, v)
 		}
 
-		dirFiles := audioFilesInDir(book.FilePath)
+		dirFiles := AudioFilesInDir(book.FilePath)
 		if len(dirFiles) > 0 {
 			// book.FilePath is a directory — write to each audio file found inside.
 			log.Printf("[INFO] write-back: %s is a directory; writing to %d audio file(s) inside", book.FilePath, len(dirFiles))
 			wroteAny := false
 			for _, f := range dirFiles {
-				fm := filterUnchangedTags(f, tagMap)
+				fm := FilterUnchangedTags(f, tagMap)
 				if len(fm) == 0 {
 					log.Printf("[DEBUG] write-back: all tags match, skipping %s", f)
 					continue
@@ -963,7 +980,7 @@ func (mfs *MetadataFetchService) writeBackMetadata(book *database.Book, meta met
 				_ = mfs.db.MarkNeedsRescan(book.ID)
 			}
 		} else {
-			tagMap = filterUnchangedTags(book.FilePath, tagMap)
+			tagMap = FilterUnchangedTags(book.FilePath, tagMap)
 			log.Printf("[DEBUG] write-back: after filter, %d entries remain", len(tagMap))
 			if len(tagMap) == 0 {
 				log.Printf("[DEBUG] write-back: all tags match, skipping write for %s", book.FilePath)
@@ -1013,7 +1030,8 @@ var compilationPhrases = []string{
 
 // significantWords returns the deduplicated set of words longer than 2 chars
 // that are not stop-words, all lowercased.
-func significantWords(s string) map[string]bool {
+// SignificantWords extracts meaningful words from a string for title matching.
+func SignificantWords(s string) map[string]bool {
 	words := map[string]bool{}
 	var allWords []string
 	for _, w := range strings.Fields(strings.ToLower(s)) {
@@ -1090,7 +1108,7 @@ func normalizeSeriesNumber(pos string) string {
 // LLM, reranker) can supply their own base score and reuse the shared
 // non-base adjustment function.
 func computeF1Base(r metadata.BookMetadata, searchWords map[string]bool) float64 {
-	resultWords := significantWords(r.Title)
+	resultWords := SignificantWords(r.Title)
 	if len(searchWords) == 0 || len(resultWords) == 0 {
 		return 0
 	}
@@ -1127,7 +1145,9 @@ func computeF1Base(r metadata.BookMetadata, searchWords map[string]bool) float64
 // baseWordCount is the number of significant words in the search title —
 // used for the length penalty. Pass 0 to disable the length penalty (e.g.
 // when the length ratio is meaningless for a non-token-overlap scorer).
-func applyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWordCount int) float64 {
+// ApplyNonBaseAdjustments applies bonuses/penalties to a base similarity score
+// based on metadata heuristics (series, narrator, language, etc.).
+func ApplyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWordCount int) float64 {
 	score := baseScore
 
 	// Compilation penalty
@@ -1138,7 +1158,7 @@ func applyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWor
 	// Length penalty: penalise results that are much longer than the search.
 	// Only applies when baseWordCount > 0 (the F1 path).
 	if baseWordCount > 0 {
-		resultWords := significantWords(r.Title)
+		resultWords := SignificantWords(r.Title)
 		nSearch := float64(baseWordCount)
 		nResult := float64(len(resultWords))
 		if nResult > 1.5*nSearch {
@@ -1213,12 +1233,12 @@ func pickBestMatchFromScored(
 			if baseScore == 0 {
 				continue
 			}
-			score = applyNonBaseAdjustments(baseScore, r, len(searchWords))
+			score = ApplyNonBaseAdjustments(baseScore, r, len(searchWords))
 		} else {
 			// Non-F1 tiers (embedding, etc.) skip the length penalty by
 			// passing baseWordCount=0; the cosine-based base has no
 			// token-overlap ratio for the penalty to be meaningful.
-			score = applyNonBaseAdjustments(baseScore, r, 0)
+			score = ApplyNonBaseAdjustments(baseScore, r, 0)
 		}
 
 		// Author-based scoring: boost matches, penalize mismatches or missing.
@@ -1268,12 +1288,12 @@ func pickBestMatchFromScored(
 // against a set of search-title significant words. It preserves the
 // pre-refactor signature and behavior, composing computeF1Base and
 // applyNonBaseAdjustments. Existing callers are unchanged.
-func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float64 {
+func ScoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float64 {
 	base := computeF1Base(r, searchWords)
 	if base == 0 {
 		return 0 // preserve original early-return behavior (skips bonus)
 	}
-	return applyNonBaseAdjustments(base, r, len(searchWords))
+	return ApplyNonBaseAdjustments(base, r, len(searchWords))
 }
 
 // scoreBaseCandidates picks the highest-available base scorer tier and
@@ -1288,7 +1308,7 @@ func scoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float6
 // Any scorer error is logged and falls through to the F1 tier. The search
 // path must never fail because of a scorer problem — F1 is always reachable
 // as a last resort since it only depends on the in-memory result data.
-func (mfs *MetadataFetchService) scoreBaseCandidates(
+func (mfs *Service) ScoreBaseCandidates(
 	ctx context.Context,
 	book *database.Book,
 	results []metadata.BookMetadata,
@@ -1346,7 +1366,7 @@ func (mfs *MetadataFetchService) scoreBaseCandidates(
 // still use F1 — they're kept for the test suite and for code paths that
 // don't have a Book in scope. This method is the preferred entry point
 // for production call sites that do.
-func (mfs *MetadataFetchService) bestTitleMatchForBook(
+func (mfs *Service) bestTitleMatchForBook(
 	book *database.Book,
 	results []metadata.BookMetadata,
 	bookAuthor, bookNarrator string,
@@ -1357,12 +1377,12 @@ func (mfs *MetadataFetchService) bestTitleMatchForBook(
 	// pickBestMatchFromScored for the length penalty.
 	searchWords := map[string]bool{}
 	for _, t := range titles {
-		for w := range significantWords(t) {
+		for w := range SignificantWords(t) {
 			searchWords[w] = true
 		}
 	}
 
-	baseScores, baseTier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
+	baseScores, baseTier := mfs.ScoreBaseCandidates(context.Background(), book, results, searchWords)
 	return pickBestMatchFromScored(results, baseScores, baseTier, searchWords, bookAuthor, bookNarrator)
 }
 
@@ -1377,7 +1397,7 @@ func (mfs *MetadataFetchService) bestTitleMatchForBook(
 // values for the top-K slots, re-sorted descending by Score. On any failure
 // (LLM disabled, backend error, fewer than 2 ambiguous candidates to resolve)
 // the input slice is returned unchanged so the search path degrades cleanly.
-func (mfs *MetadataFetchService) rerankTopK(
+func (mfs *Service) RerankTopK(
 	ctx context.Context,
 	book *database.Book,
 	candidates []MetadataCandidate,
@@ -1471,7 +1491,7 @@ func (mfs *MetadataFetchService) rerankTopK(
 // applySeriesPositionFilter rejects the top result if it claims a different
 // series position than the book's known position. If the result has no
 // SeriesPosition or the book has no known position, results pass through.
-func applySeriesPositionFilter(
+func ApplySeriesPositionFilter(
 	results []metadata.BookMetadata,
 	knownPosition int,
 ) []metadata.BookMetadata {
@@ -1494,15 +1514,15 @@ func applySeriesPositionFilter(
 // It replaces the old recall-only word-overlap function. A result must score
 // at least 0.35 to be returned; if none qualify, nil is returned so the
 // caller can fall through to the next source or report "no metadata found".
-func bestTitleMatch(results []metadata.BookMetadata, titles ...string) []metadata.BookMetadata {
-	return bestTitleMatchWithContext(results, "", "", titles...)
+func BestTitleMatch(results []metadata.BookMetadata, titles ...string) []metadata.BookMetadata {
+	return BestTitleMatchWithContext(results, "", "", titles...)
 }
 
-func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, bookNarrator string, titles ...string) []metadata.BookMetadata {
+func BestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, bookNarrator string, titles ...string) []metadata.BookMetadata {
 	// Union of significant words from all title variants.
 	searchWords := map[string]bool{}
 	for _, t := range titles {
-		for w := range significantWords(t) {
+		for w := range SignificantWords(t) {
 			searchWords[w] = true
 		}
 	}
@@ -1521,7 +1541,7 @@ func bestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 // the library copy so that both DB records stay in sync. This is needed because
 // ApplyMetadataCandidate only updates the original book's DB record, leaving
 // the library copy with stale metadata.
-func (mfs *MetadataFetchService) syncMetadataToLibraryCopy(original, libCopy *database.Book) {
+func (mfs *Service) syncMetadataToLibraryCopy(original, libCopy *database.Book) {
 	// Sync display/metadata fields — preserve library copy's file/path/version fields
 	libCopy.Title = original.Title
 	libCopy.AuthorID = original.AuthorID
@@ -1578,7 +1598,7 @@ func (mfs *MetadataFetchService) syncMetadataToLibraryCopy(original, libCopy *da
 // protected path (iTunes/import), looks for an existing library version or
 // organizes (hard-links) the file(s) to the library and creates a new version record.
 // For multi-file books, all segments are also organized and recreated.
-func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *database.Book {
+func (mfs *Service) ensureLibraryCopy(book *database.Book) *database.Book {
 	if config.AppConfig.RootDir == "" {
 		return book // no library configured
 	}
@@ -1684,7 +1704,7 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 			newBF.BookID = created.ID
 			if newPath, ok := pathMap[bf.FilePath]; ok {
 				newBF.FilePath = newPath
-				newBF.ITunesPath = computeITunesPath(newPath)
+				newBF.ITunesPath = ComputeITunesPath(newPath)
 			}
 			if err := mfs.db.CreateBookFile(&newBF); err != nil {
 				log.Printf("[WARN] failed to copy book_file %s for library book %s: %v", bf.ID, created.ID, err)
@@ -1705,7 +1725,7 @@ func (mfs *MetadataFetchService) ensureLibraryCopy(book *database.Book) *databas
 // Always overwrites existing cover art. Before overwriting, extracts the old
 // cover and saves it as a timestamped version in covers/history/ so it can be
 // restored later via the changelog.
-func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, coverPath string) {
+func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string) {
 	if book == nil || book.FilePath == "" || coverPath == "" {
 		return
 	}
@@ -1790,7 +1810,7 @@ func (mfs *MetadataFetchService) embedCoverInBookFiles(book *database.Book, cove
 // archiveExistingCover extracts the current embedded cover art from an audio
 // file and saves it as a timestamped version in covers/history/{bookID}/ so it
 // can be restored later. Records a metadata change for changelog tracking.
-func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePath string) {
+func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 	data, mimeType, err := metadata.ExtractCoverArtBytes(audioFilePath)
 	if err != nil || len(data) == 0 {
 		return // no existing cover to archive
@@ -1875,7 +1895,7 @@ func (mfs *MetadataFetchService) archiveExistingCover(bookID string, audioFilePa
 	}
 }
 
-func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta metadata.BookMetadata) {
+func (mfs *Service) persistFetchedMetadata(bookID string, meta metadata.BookMetadata) {
 	fetchedValues := map[string]any{}
 	if meta.Title != "" {
 		fetchedValues["title"] = meta.Title
@@ -1917,7 +1937,7 @@ func (mfs *MetadataFetchService) persistFetchedMetadata(bookID string, meta meta
 // SearchMetadataForBook is the backward-compatible variadic entry point.
 // New callers should prefer SearchMetadataForBookWithOptions — the variadic
 // author/narrator/series positioning is historical and easy to get wrong.
-func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, authorHint ...string) (*SearchMetadataResponse, error) {
+func (mfs *Service) SearchMetadataForBook(id string, query string, authorHint ...string) (*SearchMetadataResponse, error) {
 	var author, narrator, series string
 	if len(authorHint) > 0 {
 		author = authorHint[0]
@@ -1935,7 +1955,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBook(id string, query string, 
 // old variadic signature wraps this and passes default options. All new call
 // sites should use this method directly so they can pass SearchOptions fields
 // (UseRerank etc.) explicitly.
-func (mfs *MetadataFetchService) SearchMetadataForBookWithOptions(
+func (mfs *Service) SearchMetadataForBookWithOptions(
 	id, query, author, narrator, series string,
 	opts SearchOptions,
 ) (*SearchMetadataResponse, error) {
@@ -1985,20 +2005,20 @@ func (mfs *MetadataFetchService) SearchMetadataForBookWithOptions(
 			bookAuthor = author.Name
 		}
 	}
-	if isGarbageValue(bookAuthor) {
+	if IsGarbageValue(bookAuthor) {
 		bookAuthor = ""
 	}
 	bookNarrator := searchNarrator
 	if bookNarrator == "" && book.Narrator != nil && *book.Narrator != "" {
 		bookNarrator = *book.Narrator
 	}
-	if isGarbageValue(bookNarrator) {
+	if IsGarbageValue(bookNarrator) {
 		bookNarrator = ""
 	}
 
-	searchWords := significantWords(searchTitle)
+	searchWords := SignificantWords(searchTitle)
 	if book.Title != searchTitle {
-		for w := range significantWords(book.Title) {
+		for w := range SignificantWords(book.Title) {
 			searchWords[w] = true
 		}
 	}
@@ -2094,7 +2114,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBookWithOptions(
 			}
 		}
 
-		baseScores, baseTier := mfs.scoreBaseCandidates(context.Background(), book, allResults, searchWords)
+		baseScores, baseTier := mfs.ScoreBaseCandidates(context.Background(), book, allResults, searchWords)
 		log.Printf("[DEBUG] metadata-search: scored %d results from %s with tier %s", len(allResults), src.Name(), baseTier)
 
 		for i, r := range allResults {
@@ -2114,7 +2134,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBookWithOptions(
 			if baseTier == "f1" {
 				baseWordCount = len(searchWords)
 			}
-			score := applyNonBaseAdjustments(baseScore, r, baseWordCount)
+			score := ApplyNonBaseAdjustments(baseScore, r, baseWordCount)
 
 			// Tier-specific minimum on the adjusted score. F1 path filters at <= 0
 			// (preserves original behavior); embedding path uses the configured
@@ -2208,7 +2228,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBookWithOptions(
 		if err == nil && result != nil {
 			key := strings.ToLower(result.Title + "|" + result.Author)
 			if !seen[key] {
-				score := scoreOneResult(*result, searchWords)
+				score := ScoreOneResult(*result, searchWords)
 				if score <= 0 {
 					score = 1.0 // Direct ASIN match always scores high
 				}
@@ -2285,7 +2305,7 @@ func (mfs *MetadataFetchService) SearchMetadataForBookWithOptions(
 
 	// Optional LLM rerank pass on the top ambiguous candidates.
 	if opts.UseRerank && mfs.llmScorer != nil && config.AppConfig.MetadataLLMScoringEnabled {
-		candidates = mfs.rerankTopK(context.Background(), book, candidates)
+		candidates = mfs.RerankTopK(context.Background(), book, candidates)
 	}
 
 	log.Printf("[DEBUG] metadata-search: returning %d candidates for %q (search words: %v)", len(candidates), searchTitle, searchWords)
@@ -2327,7 +2347,7 @@ func extractASIN(s string) string {
 
 // ApplyMetadataCandidate applies a user-selected metadata candidate to a book.
 // If fields is non-empty, only the listed fields are applied.
-func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate MetadataCandidate, fields []string) (*FetchMetadataResponse, error) {
+func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidate, fields []string) (*FetchMetadataResponse, error) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
@@ -2389,12 +2409,12 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 	// Strip embedded "Series Name, Book N" before persisting — protects
 	// against Audible/Audnexus candidates where the book number is baked
 	// into the series name. Same normalization the auto-fetch paths run.
-	normalizeMetaSeries(&meta)
+	NormalizeMetaSeries(&meta)
 
 	// Record history BEFORE applying changes so old values are correct
-	mfs.recordChangeHistory(book, meta, candidate.Source)
+	mfs.RecordChangeHistory(book, meta, candidate.Source)
 
-	mfs.applyMetadataToBook(book, meta)
+	mfs.ApplyMetadataToBook(book, meta)
 
 	// Set review status to matched
 	matched := "matched"
@@ -2439,7 +2459,7 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 	// helpers so a no-op re-apply of the same source/language is
 	// a true no-op at the tag layer (no wasted writes). Done after
 	// UpdateBook so a failed update never leaves stale tags behind.
-	mfs.applyMetadataSystemTags(id, candidate.Source, meta.Language)
+	mfs.ApplyMetadataSystemTags(id, candidate.Source, meta.Language)
 
 	// Invalidate the metadata fetch cache for this book. After a
 	// successful apply the book's title/author may have changed,
@@ -2457,13 +2477,13 @@ func (mfs *MetadataFetchService) ApplyMetadataCandidate(id string, candidate Met
 	}, nil
 }
 
-// applyMetadataSystemTags writes the metadata:source:* and
+// ApplyMetadataSystemTags writes the metadata:source:* and
 // metadata:language:* system tags for a book. Logs but doesn't
 // propagate errors — tagging is provenance metadata, not part
 // of the apply transaction, so a tag write failure shouldn't
 // fail the apply itself.
-func (mfs *MetadataFetchService) applyMetadataSystemTags(bookID, sourceName, language string) {
-	sourceTag := metadataSourceTag(sourceName)
+func (mfs *Service) ApplyMetadataSystemTags(bookID, sourceName, language string) {
+	sourceTag := MetadataSourceTag(sourceName)
 	if sourceTag != "" {
 		if err := database.EnsureSingletonBookTag(
 			mfs.db, bookID, "metadata:source:", sourceTag, "system",
@@ -2471,7 +2491,7 @@ func (mfs *MetadataFetchService) applyMetadataSystemTags(bookID, sourceName, lan
 			log.Printf("[WARN] failed to tag book %s with %s: %v", bookID, sourceTag, err)
 		}
 	}
-	langTag := metadataLanguageTag(language)
+	langTag := MetadataLanguageTag(language)
 	if langTag != "" {
 		if err := database.EnsureSingletonBookTag(
 			mfs.db, bookID, "metadata:language:", langTag, "system",
@@ -2491,7 +2511,7 @@ func (mfs *MetadataFetchService) applyMetadataSystemTags(bookID, sourceName, lan
 //	"Google Books"       → "metadata:source:google_books"
 //	"Audnexus (Audible)" → "metadata:source:audnexus"
 //	"Audible"            → "metadata:source:audible"
-func metadataSourceTag(name string) string {
+func MetadataSourceTag(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return ""
@@ -2517,7 +2537,7 @@ func metadataSourceTag(name string) string {
 // full English names ("English"); normalizes to the 2-letter
 // form where recognized and lowercases everything else. Returns
 // "" for empty inputs so the caller can skip the tag write.
-func metadataLanguageTag(lang string) string {
+func MetadataLanguageTag(lang string) string {
 	lang = strings.ToLower(strings.TrimSpace(lang))
 	if lang == "" {
 		return ""
@@ -2572,7 +2592,7 @@ func metadataLanguageTag(lang string) string {
 // cover embed, tag write-back, file rename. Cover download is done inline
 // in ApplyMetadataCandidate so the response includes the updated cover URL.
 // Designed to run in a background goroutine.
-func (mfs *MetadataFetchService) ApplyMetadataFileIO(id string) {
+func (mfs *Service) ApplyMetadataFileIO(id string) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return
@@ -2592,7 +2612,7 @@ func (mfs *MetadataFetchService) ApplyMetadataFileIO(id string) {
 }
 
 // MarkNoMatch marks a book as having no metadata match.
-func (mfs *MetadataFetchService) MarkNoMatch(id string) error {
+func (mfs *Service) MarkNoMatch(id string) error {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return fmt.Errorf("audiobook not found")
@@ -2607,7 +2627,7 @@ func (mfs *MetadataFetchService) MarkNoMatch(id string) error {
 // WriteBackMetadataForBook reads current DB metadata for the book, resolves authors and
 // narrators, writes comprehensive tags to all active audio file segments, and records a
 // history entry. It is called by POST /api/v1/audiobooks/:id/write-back.
-func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilter ...[]string) (int, error) {
+func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]string) (int, error) {
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return 0, fmt.Errorf("audiobook not found: %s", id)
@@ -2721,8 +2741,8 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			trackNum := i + 1
 			segTitle := fmt.Sprintf(trackFmt+" - %s", trackNum, bookTitle)
 			trackStr := fmt.Sprintf("%d/%d", trackNum, totalTracks)
-			tagMap := mfs.buildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
-			tagMap = filterUnchangedTags(bf.FilePath, tagMap)
+			tagMap := mfs.BuildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
+			tagMap = FilterUnchangedTags(bf.FilePath, tagMap)
 			if len(tagMap) == 0 {
 				log.Printf("[DEBUG] write-back: file %s tags already match, skipping", bf.FilePath)
 				continue
@@ -2747,7 +2767,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			log.Printf("[DEBUG] skipping write-back for protected path: %s", book.FilePath)
 			skippedProtected++
 		} else {
-			fullTagMap := mfs.buildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
+			fullTagMap := mfs.BuildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
 			// Filter out tags whose current on-disk value already
 			// matches the DB state, so a re-run of bulk write-back
 			// is near-free when nothing actually changed.
@@ -2755,7 +2775,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 			// composer (both narrator-sourced in our convention),
 			// so the filter correctly no-ops on unchanged books
 			// instead of always-writing because of those keys.
-			dirFiles := audioFilesInDir(book.FilePath)
+			dirFiles := AudioFilesInDir(book.FilePath)
 			if len(dirFiles) > 0 {
 				// book.FilePath is a directory — write to each audio file found inside.
 				log.Printf("[INFO] write-back: %s is a directory; writing to %d audio file(s) inside", book.FilePath, len(dirFiles))
@@ -2765,7 +2785,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 						skippedProtected++
 						continue
 					}
-					fm := filterUnchangedTags(f, fullTagMap)
+					fm := FilterUnchangedTags(f, fullTagMap)
 					if len(fm) == 0 {
 						log.Printf("[DEBUG] write-back: all tags match, skipping %s", f)
 						continue
@@ -2779,7 +2799,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 					}
 				}
 			} else {
-				fm := filterUnchangedTags(book.FilePath, fullTagMap)
+				fm := FilterUnchangedTags(book.FilePath, fullTagMap)
 				if len(fm) == 0 {
 					log.Printf("[DEBUG] write-back: all tags match, skipping %s", book.FilePath)
 				} else {
@@ -2808,8 +2828,8 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 				if isProtectedPath(sib.FilePath) {
 					continue
 				}
-				tagMap := mfs.buildTagMap(bookTitle, bookTitle, artistStr, narratorStr, year, "")
-				tagMap = filterUnchangedTags(sib.FilePath, tagMap)
+				tagMap := mfs.BuildTagMap(bookTitle, bookTitle, artistStr, narratorStr, year, "")
+				tagMap = FilterUnchangedTags(sib.FilePath, tagMap)
 				if len(tagMap) == 0 {
 					continue // tags already match, nothing to write
 				}
@@ -2875,7 +2895,7 @@ func (mfs *MetadataFetchService) WriteBackMetadataForBook(id string, segmentFilt
 // directory or contains no matching files.
 var audioExtensions = []string{"*.m4b", "*.m4a", "*.mp3", "*.flac", "*.ogg", "*.opus", "*.wma", "*.aac"}
 
-func audioFilesInDir(dir string) []string {
+func AudioFilesInDir(dir string) []string {
 	info, err := os.Stat(dir)
 	if err != nil || !info.IsDir() {
 		return nil
@@ -2933,7 +2953,7 @@ func backupFileBeforeWrite(filePath string) {
 
 // buildTagMap constructs the tag map shared by all write-back paths.
 // Includes all available metadata fields — standard and custom tags.
-func (mfs *MetadataFetchService) buildTagMap(
+func (mfs *Service) BuildTagMap(
 	albumTitle, trackTitle, artist, narrator string, year int, track string,
 ) map[string]interface{} {
 	tagMap := make(map[string]interface{})
@@ -2957,10 +2977,10 @@ func (mfs *MetadataFetchService) buildTagMap(
 
 // buildFullTagMap constructs a tag map with ALL available metadata from the book record,
 // including custom tags for fields that don't have standard audio tag equivalents.
-func (mfs *MetadataFetchService) buildFullTagMap(
+func (mfs *Service) BuildFullTagMap(
 	book *database.Book, albumTitle, trackTitle, artist, narrator string, year int, track string,
 ) map[string]interface{} {
-	tagMap := mfs.buildTagMap(albumTitle, trackTitle, artist, narrator, year, track)
+	tagMap := mfs.BuildTagMap(albumTitle, trackTitle, artist, narrator, year, track)
 
 	// Add fields that have standard or custom tag equivalents
 	if book.Language != nil && *book.Language != "" {
@@ -3018,7 +3038,7 @@ func (mfs *MetadataFetchService) buildFullTagMap(
 // filterUnchangedTags reads the current tags from filePath and removes any
 // entries from tagMap whose values already match, so only changed fields are
 // written back to the file.
-func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[string]interface{} {
+func FilterUnchangedTags(filePath string, tagMap map[string]interface{}) map[string]interface{} {
 	current, err := metadata.ExtractMetadata(filePath, nil)
 	if err != nil {
 		// Can't read current tags — write everything to be safe
@@ -3088,7 +3108,7 @@ func filterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 }
 
 // generateSegmentTitles computes and persists file titles for all book files of a book.
-func (mfs *MetadataFetchService) generateSegmentTitles(bookID string, bookTitle string) error {
+func (mfs *Service) generateSegmentTitles(bookID string, bookTitle string) error {
 	bookFiles, err := mfs.db.GetBookFiles(bookID)
 	if err != nil {
 		return fmt.Errorf("list book files: %w", err)
@@ -3143,7 +3163,7 @@ func (mfs *MetadataFetchService) generateSegmentTitles(bookID string, bookTitle 
 // runApplyPipeline runs the file rename pipeline after metadata is applied.
 // For protected books (iTunes/import paths), it operates on the library copy
 // instead of the original to avoid moving source files.
-func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book) error {
+func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 	// If the book is in a protected path, run the pipeline on the library copy instead
 	if isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
@@ -3226,7 +3246,7 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 		for _, entry := range renameResult.Succeeded {
 			if bf, ok := bfMap[entry.SegmentID]; ok {
 				bf.FilePath = entry.TargetPath
-				bf.ITunesPath = computeITunesPath(entry.TargetPath)
+				bf.ITunesPath = ComputeITunesPath(entry.TargetPath)
 				if err := mfs.db.UpdateBookFile(bf.ID, bf); err != nil {
 					log.Printf("[WARN] failed to update book_file path for %s: %v", bf.ID, err)
 				}
@@ -3260,7 +3280,7 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 			newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
 			if newBookPath != book.FilePath {
 				book.FilePath = newBookPath
-				if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+				if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
 					book.ITunesPath = &itunesPath
 				}
 				if _, err := mfs.db.UpdateBook(id, book); err != nil {
@@ -3275,7 +3295,7 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 
 	// Always ensure itunes_path is set if a mapping exists (for already-organized books)
 	if book.ITunesPath == nil || *book.ITunesPath == "" {
-		if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+		if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
 			book.ITunesPath = &itunesPath
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
 				log.Printf("[WARN] failed to update itunes_path for %s: %v", id, err)
@@ -3309,7 +3329,7 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 
 // RunApplyPipelineRenameOnly runs only the rename portion of the apply pipeline.
 // Used by the "Save to Files" button to rename files without re-writing tags (tags are written separately).
-func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *database.Book) error {
+func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) error {
 	// If the book is in a protected path, run on library copy
 	if isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
@@ -3397,7 +3417,7 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		if strings.HasPrefix(entry.SegmentID, "virtual-") {
 			// Virtual entry = single-file book. Update book.FilePath directly to the new file path.
 			book.FilePath = entry.TargetPath
-			if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+			if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
 				book.ITunesPath = &itunesPath
 			}
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
@@ -3407,7 +3427,7 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 			}
 		} else if bf, ok := bfMap[entry.SegmentID]; ok {
 			bf.FilePath = entry.TargetPath
-			bf.ITunesPath = computeITunesPath(entry.TargetPath)
+			bf.ITunesPath = ComputeITunesPath(entry.TargetPath)
 			if err := mfs.db.UpdateBookFile(bf.ID, bf); err != nil {
 				log.Printf("[WARN] failed to update book_file path for %s: %v", bf.ID, err)
 			}
@@ -3440,7 +3460,7 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 		newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
 		if newBookPath != book.FilePath {
 			book.FilePath = newBookPath
-			if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+			if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
 				book.ITunesPath = &itunesPath
 			}
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
@@ -3453,7 +3473,7 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 
 	// Always ensure itunes_path is set if a mapping exists (for already-organized books)
 	if book.ITunesPath == nil || *book.ITunesPath == "" {
-		if itunesPath := computeITunesPath(book.FilePath); itunesPath != "" {
+		if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
 			book.ITunesPath = &itunesPath
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
 				log.Printf("[WARN] failed to update itunes_path for %s: %v", id, err)
@@ -3499,7 +3519,7 @@ func truncateActivity(s string, maxLen int) string {
 // computeITunesPath converts a local file path to an iTunes file:// URL
 // using the configured path mappings (m.To = Linux prefix, m.From = Windows prefix).
 // Returns an empty string if no mapping matches.
-func computeITunesPath(localPath string) string {
+func ComputeITunesPath(localPath string) string {
 	for _, m := range config.AppConfig.ITunesPathMappings {
 		if m.To != "" && m.From != "" && strings.HasPrefix(localPath, m.To) {
 			remainder := localPath[len(m.To):]

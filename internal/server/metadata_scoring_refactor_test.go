@@ -15,6 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
@@ -22,7 +23,7 @@ import (
 // scoreOneResult against representative inputs so the split into base +
 // non-base halves can't accidentally change the combined result.
 func TestScoreOneResult_RefactorEquivalence(t *testing.T) {
-	searchWords := significantWords("The Way of Kings")
+	searchWords := metafetch.SignificantWords("The Way of Kings")
 
 	cases := []struct {
 		name   string
@@ -62,11 +63,23 @@ func TestScoreOneResult_RefactorEquivalence(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := scoreOneResult(tc.input, searchWords)
+			got := metafetch.ScoreOneResult(tc.input, searchWords)
 			assert.GreaterOrEqual(t, got, tc.minExp, "score below expected range")
 			assert.LessOrEqual(t, got, tc.maxExp, "score above expected range")
 		})
 	}
+}
+
+// newScoringTestService creates a metafetch.Service with the given scorer(s) set.
+func newScoringTestService(scorer, llmScorer ai.MetadataCandidateScorer) *metafetch.Service {
+	svc := metafetch.NewService(nil)
+	if scorer != nil {
+		svc.SetMetadataScorer(scorer)
+	}
+	if llmScorer != nil {
+		svc.SetMetadataLLMScorer(llmScorer)
+	}
+	return svc
 }
 
 // scorerStub is a controllable MetadataCandidateScorer for tests.
@@ -88,10 +101,10 @@ func (s *scorerStub) Score(ctx context.Context, q ai.Query, cands []ai.Candidate
 func (s *scorerStub) Name() string { return s.name }
 
 func TestScoreBaseCandidates_EmbeddingTierUsed(t *testing.T) {
-	mfs := &MetadataFetchService{metadataScorer: &scorerStub{
+	mfs := newScoringTestService(&scorerStub{
 		name:   "embedding",
 		scores: []float64{0.9, 0.7, 0.3},
-	}}
+	}, nil)
 	prev := config.AppConfig.MetadataEmbeddingScoringEnabled
 	config.AppConfig.MetadataEmbeddingScoringEnabled = true
 	defer func() { config.AppConfig.MetadataEmbeddingScoringEnabled = prev }()
@@ -99,19 +112,19 @@ func TestScoreBaseCandidates_EmbeddingTierUsed(t *testing.T) {
 	results := []metadata.BookMetadata{
 		{Title: "A"}, {Title: "B"}, {Title: "C"},
 	}
-	searchWords := significantWords("A")
+	searchWords := metafetch.SignificantWords("A")
 	book := &database.Book{ID: "BOOK1", Title: "A"}
 
-	scores, tier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
+	scores, tier := mfs.ScoreBaseCandidates(context.Background(), book, results, searchWords)
 	assert.Equal(t, "embedding", tier)
 	assert.Equal(t, []float64{0.9, 0.7, 0.3}, scores)
 }
 
 func TestScoreBaseCandidates_ConfigDisabledFallsBackToF1(t *testing.T) {
-	mfs := &MetadataFetchService{metadataScorer: &scorerStub{
+	mfs := newScoringTestService(&scorerStub{
 		name:   "embedding",
 		scores: []float64{1.0, 1.0, 1.0},
-	}}
+	}, nil)
 	prev := config.AppConfig.MetadataEmbeddingScoringEnabled
 	config.AppConfig.MetadataEmbeddingScoringEnabled = false
 	defer func() { config.AppConfig.MetadataEmbeddingScoringEnabled = prev }()
@@ -120,10 +133,10 @@ func TestScoreBaseCandidates_ConfigDisabledFallsBackToF1(t *testing.T) {
 		{Title: "The Way of Kings"},
 		{Title: "Completely Unrelated Book"},
 	}
-	searchWords := significantWords("The Way of Kings")
+	searchWords := metafetch.SignificantWords("The Way of Kings")
 	book := &database.Book{ID: "BOOK1", Title: "The Way of Kings"}
 
-	scores, tier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
+	scores, tier := mfs.ScoreBaseCandidates(context.Background(), book, results, searchWords)
 	assert.Equal(t, "f1", tier)
 	assert.Len(t, scores, 2)
 	assert.InDelta(t, 1.0, scores[0], 0.01)
@@ -132,32 +145,32 @@ func TestScoreBaseCandidates_ConfigDisabledFallsBackToF1(t *testing.T) {
 
 func TestScoreBaseCandidates_ScorerErrorFallsBackToF1(t *testing.T) {
 	stub := &scorerStub{name: "embedding", err: errors.New("api boom")}
-	mfs := &MetadataFetchService{metadataScorer: stub}
+	mfs := newScoringTestService(stub, nil)
 	prev := config.AppConfig.MetadataEmbeddingScoringEnabled
 	config.AppConfig.MetadataEmbeddingScoringEnabled = true
 	defer func() { config.AppConfig.MetadataEmbeddingScoringEnabled = prev }()
 
 	results := []metadata.BookMetadata{{Title: "The Way of Kings"}}
-	searchWords := significantWords("The Way of Kings")
+	searchWords := metafetch.SignificantWords("The Way of Kings")
 	book := &database.Book{ID: "BOOK1", Title: "The Way of Kings"}
 
-	scores, tier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
+	scores, tier := mfs.ScoreBaseCandidates(context.Background(), book, results, searchWords)
 	assert.Equal(t, "f1", tier, "scorer error should fall back to F1 tier")
 	assert.Equal(t, 1, stub.callCount, "scorer should be called exactly once")
 	assert.InDelta(t, 1.0, scores[0], 0.01)
 }
 
 func TestScoreBaseCandidates_NilScorerFallsBackSilently(t *testing.T) {
-	mfs := &MetadataFetchService{metadataScorer: nil}
+	mfs := newScoringTestService(nil, nil)
 	prev := config.AppConfig.MetadataEmbeddingScoringEnabled
 	config.AppConfig.MetadataEmbeddingScoringEnabled = true
 	defer func() { config.AppConfig.MetadataEmbeddingScoringEnabled = prev }()
 
 	results := []metadata.BookMetadata{{Title: "The Way of Kings"}}
-	searchWords := significantWords("The Way of Kings")
+	searchWords := metafetch.SignificantWords("The Way of Kings")
 	book := &database.Book{ID: "BOOK1", Title: "The Way of Kings"}
 
-	scores, tier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
+	scores, tier := mfs.ScoreBaseCandidates(context.Background(), book, results, searchWords)
 	assert.Equal(t, "f1", tier)
 	assert.Len(t, scores, 1)
 }
@@ -173,7 +186,7 @@ func TestMetadataScorer_WiredEndToEnd(t *testing.T) {
 		scores: []float64{0.30, 0.95},
 	}
 
-	mfs := &MetadataFetchService{metadataScorer: stub}
+	mfs := newScoringTestService(stub, nil)
 	prev := config.AppConfig.MetadataEmbeddingScoringEnabled
 	prevMin := config.AppConfig.MetadataEmbeddingMinScore
 	config.AppConfig.MetadataEmbeddingScoringEnabled = true
@@ -188,9 +201,9 @@ func TestMetadataScorer_WiredEndToEnd(t *testing.T) {
 		{Title: "Weak Match", Author: "Someone"},
 		{Title: "Strong Match", Author: "Someone"},
 	}
-	searchWords := significantWords("Query Title")
+	searchWords := metafetch.SignificantWords("Query Title")
 
-	scores, tier := mfs.scoreBaseCandidates(context.Background(), book, results, searchWords)
+	scores, tier := mfs.ScoreBaseCandidates(context.Background(), book, results, searchWords)
 	assert.Equal(t, "embedding", tier)
 	assert.Equal(t, []float64{0.30, 0.95}, scores)
 	assert.Equal(t, 1, stub.callCount, "scorer called exactly once")
@@ -199,7 +212,7 @@ func TestMetadataScorer_WiredEndToEnd(t *testing.T) {
 	// main search loop's minScore check after applyNonBaseAdjustments).
 	var kept []int
 	for i, s := range scores {
-		adjusted := applyNonBaseAdjustments(s, results[i], 0)
+		adjusted := metafetch.ApplyNonBaseAdjustments(s, results[i], 0)
 		if adjusted > config.AppConfig.MetadataEmbeddingMinScore {
 			kept = append(kept, i)
 		}
@@ -217,7 +230,7 @@ func TestRerankTopK_FiresOnAmbiguousTop(t *testing.T) {
 		name:   "llm",
 		scores: []float64{0.60, 0.95}, // indices 0 and 1 of the ambiguous top
 	}
-	mfs := &MetadataFetchService{llmScorer: llm}
+	mfs := newScoringTestService(nil, llm)
 
 	prevEps := config.AppConfig.MetadataLLMRerankEpsilon
 	prevK := config.AppConfig.MetadataLLMRerankTopK
@@ -229,14 +242,14 @@ func TestRerankTopK_FiresOnAmbiguousTop(t *testing.T) {
 	}()
 
 	book := &database.Book{ID: "BOOK", Title: "Query"}
-	candidates := []MetadataCandidate{
+	candidates := []metafetch.MetadataCandidate{
 		{Title: "A", Score: 0.90},
 		{Title: "B", Score: 0.88}, // within epsilon of 0.90 → rerank
 		{Title: "C", Score: 0.70}, // outside epsilon → untouched
 		{Title: "D", Score: 0.50}, // outside epsilon → untouched
 	}
 
-	got := mfs.rerankTopK(context.Background(), book, candidates)
+	got := mfs.RerankTopK(context.Background(), book, candidates)
 	assert.Equal(t, 1, llm.callCount, "LLM should be called exactly once")
 	require.Len(t, got, 4)
 
@@ -259,7 +272,7 @@ func TestRerankTopK_HonorsTopKCap(t *testing.T) {
 		name:   "llm",
 		scores: []float64{0.90, 0.80, 0.70}, // 3 scores, matching topK=3
 	}
-	mfs := &MetadataFetchService{llmScorer: llm}
+	mfs := newScoringTestService(nil, llm)
 
 	prevEps := config.AppConfig.MetadataLLMRerankEpsilon
 	prevK := config.AppConfig.MetadataLLMRerankTopK
@@ -271,7 +284,7 @@ func TestRerankTopK_HonorsTopKCap(t *testing.T) {
 	}()
 
 	book := &database.Book{ID: "BOOK", Title: "Query"}
-	candidates := []MetadataCandidate{
+	candidates := []metafetch.MetadataCandidate{
 		{Title: "A", Score: 0.85},
 		{Title: "B", Score: 0.80},
 		{Title: "C", Score: 0.75},
@@ -279,7 +292,7 @@ func TestRerankTopK_HonorsTopKCap(t *testing.T) {
 		{Title: "E", Score: 0.65},
 	}
 
-	mfs.rerankTopK(context.Background(), book, candidates)
+	mfs.RerankTopK(context.Background(), book, candidates)
 	assert.Equal(t, 1, llm.callCount)
 	// The stub received exactly 3 candidates — verify via scores slice length
 	// we handed it (the stub returned a 3-element slice).
@@ -290,18 +303,18 @@ func TestRerankTopK_HonorsTopKCap(t *testing.T) {
 // candidate is within epsilon of the best, rerank is a no-op.
 func TestRerankTopK_NoAmbiguityReturnsUnchanged(t *testing.T) {
 	llm := &scorerStub{name: "llm", scores: []float64{0.9}}
-	mfs := &MetadataFetchService{llmScorer: llm}
+	mfs := newScoringTestService(nil, llm)
 
 	prevEps := config.AppConfig.MetadataLLMRerankEpsilon
 	config.AppConfig.MetadataLLMRerankEpsilon = 0.01
 	defer func() { config.AppConfig.MetadataLLMRerankEpsilon = prevEps }()
 
-	candidates := []MetadataCandidate{
+	candidates := []metafetch.MetadataCandidate{
 		{Title: "A", Score: 0.95},
 		{Title: "B", Score: 0.70}, // 0.25 below best → outside epsilon
 		{Title: "C", Score: 0.50},
 	}
-	got := mfs.rerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
+	got := mfs.RerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
 	assert.Equal(t, 0, llm.callCount, "LLM should not be called when only 1 candidate is ambiguous")
 	assert.Equal(t, "A", got[0].Title)
 	assert.InDelta(t, 0.95, got[0].Score, 0.0001)
@@ -309,12 +322,12 @@ func TestRerankTopK_NoAmbiguityReturnsUnchanged(t *testing.T) {
 
 // TestRerankTopK_NilScorerIsNoOp verifies the nil-scorer fallback.
 func TestRerankTopK_NilScorerIsNoOp(t *testing.T) {
-	mfs := &MetadataFetchService{llmScorer: nil}
-	candidates := []MetadataCandidate{
+	mfs := newScoringTestService(nil, nil)
+	candidates := []metafetch.MetadataCandidate{
 		{Title: "A", Score: 0.95},
 		{Title: "B", Score: 0.94},
 	}
-	got := mfs.rerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
+	got := mfs.RerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
 	assert.Equal(t, "A", got[0].Title, "nil scorer should return candidates unchanged")
 	assert.InDelta(t, 0.95, got[0].Score, 0.0001)
 }
@@ -323,17 +336,17 @@ func TestRerankTopK_NilScorerIsNoOp(t *testing.T) {
 // the base scores untouched.
 func TestRerankTopK_LLMErrorKeepsBaseScores(t *testing.T) {
 	llm := &scorerStub{name: "llm", err: errors.New("openai boom")}
-	mfs := &MetadataFetchService{llmScorer: llm}
+	mfs := newScoringTestService(nil, llm)
 
 	prevEps := config.AppConfig.MetadataLLMRerankEpsilon
 	config.AppConfig.MetadataLLMRerankEpsilon = 0.10
 	defer func() { config.AppConfig.MetadataLLMRerankEpsilon = prevEps }()
 
-	candidates := []MetadataCandidate{
+	candidates := []metafetch.MetadataCandidate{
 		{Title: "A", Score: 0.95},
 		{Title: "B", Score: 0.92},
 	}
-	got := mfs.rerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
+	got := mfs.RerankTopK(context.Background(), &database.Book{ID: "B"}, candidates)
 	assert.Equal(t, 1, llm.callCount)
 	assert.Equal(t, "A", got[0].Title)
 	assert.InDelta(t, 0.95, got[0].Score, 0.0001, "base score preserved on LLM error")
