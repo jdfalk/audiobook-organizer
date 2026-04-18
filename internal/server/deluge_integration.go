@@ -172,7 +172,7 @@ func (s *Server) registerDelugeRoutes(protected *gin.RouterGroup) {
 
 // NotifyDelugeAfterUndo checks whether the reverted operation moved
 // Deluge-sourced files and updates the torrent storage path.
-func NotifyDelugeAfterUndo(store database.Store, bookID, oldFilePath string) {
+func NotifyDelugeAfterUndo(store interface { database.BookReader; database.BookVersionStore }, bookID, oldFilePath string) {
 	book, _ := store.GetBookByID(bookID)
 	if book == nil {
 		return
