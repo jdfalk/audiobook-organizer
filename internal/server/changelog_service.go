@@ -1,5 +1,5 @@
 // file: internal/server/changelog_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 93167949-a587-41e9-8ef9-92d03f86aea6
 
 package server
@@ -12,6 +12,14 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
+// changelogStore is the narrow slice of database.Store this service uses.
+type changelogStore interface {
+	database.MetadataStore
+	database.OperationStore
+	database.PathHistoryStore
+}
+
+
 // ChangeLogEntry represents a single entry in a book's changelog timeline.
 type ChangeLogEntry struct {
 	Timestamp time.Time      `json:"timestamp"`
@@ -22,11 +30,11 @@ type ChangeLogEntry struct {
 
 // ChangelogService merges history data from multiple sources into a unified changelog.
 type ChangelogService struct {
-	db database.Store
+	db changelogStore
 }
 
 // NewChangelogService creates a new ChangelogService instance.
-func NewChangelogService(db database.Store) *ChangelogService {
+func NewChangelogService(db changelogStore) *ChangelogService {
 	return &ChangelogService{db: db}
 }
 

@@ -1,5 +1,5 @@
 // file: internal/server/import_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a
 
 package server
@@ -16,8 +16,24 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
+// importServiceStore is the narrow slice of database.Store this service uses.
+// Includes the transitive surfaces required by forwarded helpers:
+// CreateIngestVersion needs BookVersionStore + BookFileStore; ProvisionITLTracksForBook
+// needs ExternalIDStore (plus the AuthorReader + BookFileStore already present).
+type importServiceStore interface {
+	database.AuthorReader
+	database.AuthorWriter
+	database.BookWriter
+	database.SeriesReader
+	database.SeriesWriter
+	database.BookVersionStore
+	database.BookFileStore
+	database.ExternalIDStore
+}
+
+
 type ImportService struct {
-	db               database.Store
+	db importServiceStore
 	writeBackBatcher *WriteBackBatcher
 }
 
@@ -26,7 +42,7 @@ func (is *ImportService) SetWriteBackBatcher(b *WriteBackBatcher) {
 	is.writeBackBatcher = b
 }
 
-func NewImportService(db database.Store) *ImportService {
+func NewImportService(db importServiceStore) *ImportService {
 	return &ImportService{db: db}
 }
 

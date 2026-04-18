@@ -20,6 +20,10 @@ import (
 
 // IntegrationEnv holds all resources for an integration test.
 type IntegrationEnv struct {
+	// Store is intentionally the full database.Store surface. Integration
+	// tests poke at fixtures across any domain the scenario requires —
+	// narrowing here forces churn in every test file for no real benefit
+	// (see PR #394 for the regression this deliberate wide type prevents).
 	Store     database.Store
 	RootDir   string
 	ImportDir string

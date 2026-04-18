@@ -1,5 +1,5 @@
 // file: internal/server/batch_service.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -11,12 +11,18 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-// BatchService handles bulk operations on audiobooks.
-type BatchService struct {
-	db database.Store
+// batchServiceStore is the narrow slice of database.Store this service uses.
+type batchServiceStore interface {
+	database.BookStore
 }
 
-func NewBatchService(db database.Store) *BatchService {
+
+// BatchService handles bulk operations on audiobooks.
+type BatchService struct {
+	db batchServiceStore
+}
+
+func NewBatchService(db batchServiceStore) *BatchService {
 	return &BatchService{db: db}
 }
 

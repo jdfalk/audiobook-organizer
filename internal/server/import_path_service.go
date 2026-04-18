@@ -1,5 +1,5 @@
 // file: internal/server/import_path_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6g7-h8i9-j0k1-l2m3-n4o5p6q7r8s9
 
 package server
@@ -13,10 +13,10 @@ import (
 )
 
 type ImportPathService struct {
-	db database.Store
+	db database.ImportPathStore
 }
 
-func NewImportPathService(db database.Store) *ImportPathService {
+func NewImportPathService(db database.ImportPathStore) *ImportPathService {
 	return &ImportPathService{db: db}
 }
 

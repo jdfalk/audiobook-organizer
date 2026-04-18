@@ -1,5 +1,5 @@
 // file: internal/server/work_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 package server
@@ -12,10 +12,10 @@ import (
 )
 
 type WorkService struct {
-	db database.Store
+	db database.WorkStore
 }
 
-func NewWorkService(db database.Store) *WorkService {
+func NewWorkService(db database.WorkStore) *WorkService {
 	return &WorkService{db: db}
 }
 

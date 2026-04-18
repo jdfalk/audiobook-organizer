@@ -1,5 +1,5 @@
 // file: internal/server/diagnostics_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d1a9n0st-1cs0-s3rv-1c3z-1pexp0rt001
 
 package server
@@ -15,15 +15,26 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
 
+// diagnosticsStore is the narrow slice of database.Store this service uses.
+type diagnosticsStore interface {
+	database.AuthorReader
+	database.BookReader
+	database.OperationStore
+	database.SeriesReader
+	database.StatsStore
+	database.SystemActivityStore
+}
+
+
 // DiagnosticsService generates diagnostic ZIP exports for troubleshooting and AI analysis.
 type DiagnosticsService struct {
-	db            database.Store
+	db diagnosticsStore
 	aiPipeline    interface{} // *ai.Pipeline or nil
 	itunesXMLPath string
 }
 
 // NewDiagnosticsService creates a new DiagnosticsService.
-func NewDiagnosticsService(db database.Store, aiPipeline interface{}, itunesXMLPath string) *DiagnosticsService {
+func NewDiagnosticsService(db diagnosticsStore, aiPipeline interface{}, itunesXMLPath string) *DiagnosticsService {
 	return &DiagnosticsService{
 		db:            db,
 		aiPipeline:    aiPipeline,
