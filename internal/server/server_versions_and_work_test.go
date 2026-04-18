@@ -71,14 +71,7 @@ func TestVersionEndpoints_HappyPaths(t *testing.T) {
 }
 
 func TestWorkEndpoints_WithMockStore(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
 	store := dbmocks.NewMockStore(t)
-	origStore := database.GetGlobalStore()
-	database.SetGlobalStore(store)
-	t.Cleanup(func() { database.SetGlobalStore(origStore) })
-
 	author1 := 1
 	author2 := 2
 	works := []database.Work{{ID: "w1", Title: "Work One", AuthorID: &author1}, {ID: "w2", Title: "Work Two", AuthorID: &author2}}
@@ -86,20 +79,24 @@ func TestWorkEndpoints_WithMockStore(t *testing.T) {
 	store.EXPECT().GetBooksByWorkID("w1").Return([]database.Book{{ID: "b1"}, {ID: "b2"}}, nil)
 	store.EXPECT().GetBooksByWorkID("w2").Return(nil, assert.AnError)
 
+	server, cleanup := setupTestServerWithStore(t, store)
+	defer cleanup()
+
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/work", nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	store2 := dbmocks.NewMockStore(t)
-	database.SetGlobalStore(store2)
 	store2.EXPECT().GetAllWorks().Return(works, nil)
 	store2.EXPECT().GetBooksByWorkID("w1").Return([]database.Book{{ID: "b1"}, {ID: "b2"}}, nil)
 	store2.EXPECT().GetBooksByWorkID("w2").Return(nil, assert.AnError)
+	server2, cleanup2 := setupTestServerWithStore(t, store2)
+	defer cleanup2()
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/work/stats", nil)
 	w = httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
+	server2.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var statsResp map[string]interface{}
