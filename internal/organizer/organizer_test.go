@@ -25,10 +25,7 @@ func (h *testOrganizeHooks) OnCollision(bookID, occupant string) {
 	h.calls = append(h.calls, collisionCall{bookID, occupant})
 }
 
-// Helper function to create string pointer
-func stringPtr(s string) *string {
-	return &s
-}
+// stringPtr is now defined in rename.go (same package)
 
 func TestSanitizeFilename(t *testing.T) {
 	tests := []struct {
