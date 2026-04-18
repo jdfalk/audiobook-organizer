@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.5.0 -->
+<!-- version: 5.6.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-17 -->
 
@@ -94,6 +94,7 @@ since it was last edited on 2026-04-11).
 - [x] **4.5** Property-based tests for dedup engine (expanded to full codebase) (**M**) — complete (#357, #359, #361, #362, #363, #365, #366, #367, #368 — ~57 property tests across database / search / server / auth)
 - [x] **4.6** Chaos tests for the embedding store under shutdown (**M**) — 7 tests: double-close, ops-after-close, concurrent write/read during close, mixed access, durability, WAL checkpoint
 - [ ] **4.7** Per-workload store evaluation: Pebble vs SQLite vs PostgreSQL vs Go-native NoSQL (**L** research)
+- [~] **4.8** Split the `database.Store` interface (ISP refactor) (**L**) — foundation + 3 proof-points shipped (#372, #376, #379, #380, #381, #382); ~38-file sweep + 18-file noop cleanup remain per [`docs/superpowers/plans/2026-04-17-store-iface-sweep.md`](docs/superpowers/plans/2026-04-17-store-iface-sweep.md)
 
 ### 5. UX / DX Polish — [section](docs/backlog-2026-04-10.md#5-ux--dx-polish)
 
