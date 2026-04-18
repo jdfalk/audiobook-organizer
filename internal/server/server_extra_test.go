@@ -19,8 +19,6 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/stretchr/testify/require"
 )
 
@@ -223,10 +221,10 @@ func TestImportPathEndpoints(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origQueue := operations.GlobalQueue
-	operations.GlobalQueue = nil
+	origQueue := server.queue
+	server.queue = nil
 	defer func() {
-		operations.GlobalQueue = origQueue
+		server.queue = origQueue
 	}()
 
 	dir := t.TempDir()
@@ -257,8 +255,8 @@ func TestOperationEndpointsErrors(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origQueue := operations.GlobalQueue
-	operations.GlobalQueue = nil
+	origQueue := server.queue
+	server.queue = nil
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operations/scan", nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
@@ -273,7 +271,7 @@ func TestOperationEndpointsErrors(t *testing.T) {
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-	operations.GlobalQueue = origQueue
+	server.queue = origQueue
 
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/operations/bad-id", nil)
 	w = httptest.NewRecorder()
@@ -465,10 +463,10 @@ func TestHandleEventsUnavailable(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origHub := realtime.GetGlobalHub()
-	realtime.SetGlobalHub(nil)
+	origHub := server.hub
+	server.hub = nil
 	defer func() {
-		realtime.SetGlobalHub(origHub)
+		server.hub = origHub
 	}()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)

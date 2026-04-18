@@ -204,8 +204,8 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	}
 
 	// Enqueue for iTunes auto write-back if metadata was updated
-	if GlobalWriteBackBatcher != nil {
-		GlobalWriteBackBatcher.Enqueue(id)
+	if s.writeBackBatcher != nil {
+		s.writeBackBatcher.Enqueue(id)
 	}
 
 	// Re-fetch to get fully enriched book with author/series/narrator names
@@ -285,7 +285,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	// Kick off slow file I/O (cover embed, tags, rename) in background.
 	// Cover download is already done inline so the response has the URL.
 	shouldWriteBack := body.WriteBack == nil || *body.WriteBack
-	if pool := GetGlobalFileIOPool(); pool != nil {
+	if pool := s.fileIOPool; pool != nil {
 		bookID := id
 		mfs := s.metadataFetchService
 		pool.Submit(bookID, func() {
@@ -294,8 +294,8 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 				if _, wbErr := mfs.WriteBackMetadataForBook(bookID); wbErr != nil {
 					log.Printf("[WARN] background write-back for %s: %v", bookID, wbErr)
 				}
-				if GlobalWriteBackBatcher != nil {
-					GlobalWriteBackBatcher.Enqueue(bookID)
+				if s.writeBackBatcher != nil {
+					s.writeBackBatcher.Enqueue(bookID)
 				}
 			}
 		})
@@ -760,7 +760,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -869,7 +869,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 		return s.runBulkWriteBack(ctx, op.ID, bookIDs, doRename, 0, progress)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "bulk_write_back", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "bulk_write_back", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -1122,8 +1122,8 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 			}
 
 			// Enqueue ITL write-back
-			if GlobalWriteBackBatcher != nil {
-				GlobalWriteBackBatcher.Enqueue(id)
+			if s.writeBackBatcher != nil {
+				s.writeBackBatcher.Enqueue(id)
 			}
 
 			_ = progress.UpdateProgress(i+1, totalBooks,
@@ -1136,7 +1136,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, "batch_save_to_files", operations.PriorityNormal, opFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "batch_save_to_files", operations.PriorityNormal, opFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}

@@ -196,7 +196,7 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, "metadata_candidate_fetch", operations.PriorityNormal, opFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "metadata_candidate_fetch", operations.PriorityNormal, opFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -517,15 +517,15 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 		applied++
 
 		// Queue file I/O through the worker pool (bounded concurrency).
-		if pool := GetGlobalFileIOPool(); pool != nil {
+		if pool := s.fileIOPool; pool != nil {
 			bid := bookID
 			pool.Submit(bid, func() {
 				mfs.ApplyMetadataFileIO(bid)
 				if _, err := mfs.WriteBackMetadataForBook(bid); err != nil {
 					log.Printf("[WARN] write-back failed for %s: %v", bid, err)
 				}
-				if GlobalWriteBackBatcher != nil {
-					GlobalWriteBackBatcher.Enqueue(bid)
+				if s.writeBackBatcher != nil {
+					s.writeBackBatcher.Enqueue(bid)
 				}
 			})
 		}
@@ -812,7 +812,7 @@ func (s *Server) resumeInterruptedMetadataFetch() {
 			return nil
 		}
 
-		if err := operations.GlobalQueue.Enqueue(opID, "metadata_candidate_fetch", operations.PriorityNormal, opFunc); err != nil {
+		if err := s.queue.Enqueue(opID, "metadata_candidate_fetch", operations.PriorityNormal, opFunc); err != nil {
 			log.Printf("[WARN] failed to re-enqueue metadata fetch %s: %v", opID, err)
 			_ = store.UpdateOperationStatus(opID, "failed", alreadyDone, totalBooks, "failed to resume")
 		}

@@ -724,6 +724,11 @@ type Server struct {
 	indexQueueClosed bool
 	http3Server      *http3.Server
 
+	queue            operations.Queue
+	hub              *realtime.EventHub
+	writeBackBatcher *WriteBackBatcher
+	fileIOPool       *FileIOPool
+
 	// Shutdown coordination. bgCtx is canceled when Shutdown() runs, and
 	// bgWG tracks every fire-and-forget background goroutine (embedding
 	// backfill, async dedup scans, etc.) so Shutdown can wait for them to
@@ -985,10 +990,44 @@ func NewServer(store database.Store) *Server {
 		}()
 	}
 
+	// Create hub, queue, batcher, and file I/O pool as Server fields
+	server.hub = realtime.NewEventHub()
+	// Also set the global for backward compatibility during migration
+	realtime.SetGlobalHub(server.hub)
+
+	server.queue = operations.NewOperationQueue(resolvedStore, 2, nil, server.hub)
+	// Also set the global for backward compatibility during migration
+	operations.GlobalQueue = server.queue
+
+	server.writeBackBatcher = NewWriteBackBatcher(5 * time.Second)
+	server.fileIOPool = NewFileIOPool(4)
+
+	// Wire writeBackBatcher into services that need it
+	server.metadataFetchService.SetWriteBackBatcher(server.writeBackBatcher)
+	server.organizeService.SetWriteBackBatcher(server.writeBackBatcher)
+	server.organizeService.SetQueue(server.queue)
+	server.mergeService.SetWriteBackBatcher(server.writeBackBatcher)
+	server.importService.SetWriteBackBatcher(server.writeBackBatcher)
+
+	// Register file-op recovery handler (uses server closure instead of globalServer)
+	RegisterFileOpRecovery("apply_metadata", func(bookID string) {
+		if server.metadataFetchService == nil {
+			log.Printf("[WARN] no server instance for apply_metadata recovery of book %s", bookID)
+			return
+		}
+		server.metadataFetchService.ApplyMetadataFileIO(bookID)
+		if _, err := server.metadataFetchService.WriteBackMetadataForBook(bookID); err != nil {
+			log.Printf("[WARN] recovery write-back for %s: %v", bookID, err)
+		}
+		if server.writeBackBatcher != nil {
+			server.writeBackBatcher.Enqueue(bookID)
+		}
+	})
+
 	// Wire activity log dual-write hooks
 	if server.activityService != nil {
 		// Task 10: Operation changes → activity log (injected via interface)
-		if oq, ok := operations.GlobalQueue.(*operations.OperationQueue); ok {
+		if oq, ok := server.queue.(*operations.OperationQueue); ok {
 			oq.SetActivityLogger(&activityServiceLogger{svc: server.activityService})
 		}
 
@@ -1031,14 +1070,6 @@ func NewServer(store database.Store) *Server {
 	// leak Bleve file handles.
 
 	server.setupRoutes()
-
-	// Initialize the iTunes auto write-back batcher
-	InitWriteBackBatcher()
-
-	// Initialize the file I/O worker pool (bounded concurrency for embed/tag/rename)
-	// Set global server ref for recovery of interrupted file ops
-	globalServer = server
-	InitFileIOPool()
 
 	return server
 }
@@ -1236,7 +1267,7 @@ func (s *Server) fireDedupOnImport(bookID string) {
 // from a previous server lifecycle and re-enqueues them.
 func (s *Server) resumeInterruptedOperations() {
 	store := s.Store()
-	if store == nil || operations.GlobalQueue == nil {
+	if store == nil || s.queue == nil {
 		return
 	}
 
@@ -1246,7 +1277,7 @@ func (s *Server) resumeInterruptedOperations() {
 		return
 	}
 
-	oq, ok := operations.GlobalQueue.(*operations.OperationQueue)
+	oq, ok := s.queue.(*operations.OperationQueue)
 	if !ok {
 		return
 	}
@@ -1496,7 +1527,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 	s.resumeInterruptedOperations()
 
 	// Recover interrupted file I/O operations (cover embed, tag write, rename)
-	RecoverInterruptedFileOps()
+	RecoverInterruptedFileOps(s.fileIOPool)
 
 	// Resume interrupted metadata candidate fetch operations
 	s.resumeInterruptedMetadataFetch()
@@ -1585,7 +1616,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 		for {
 			select {
 			case <-ticker.C:
-				if hub := realtime.GetGlobalHub(); hub != nil {
+				if s.hub != nil {
 					// Gather lightweight metrics
 					var alloc runtime.MemStats
 					runtime.ReadMemStats(&alloc)
@@ -1606,7 +1637,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 					metrics.SetMemoryAlloc(alloc.Alloc)
 					metrics.SetGoroutines(runtime.NumGoroutine())
 
-					hub.SendSystemStatus(map[string]any{
+					s.hub.SendSystemStatus(map[string]any{
 						"books":        bookCount,
 						"folders":      folderCount,
 						"memory_alloc": alloc.Alloc,
@@ -1645,13 +1676,13 @@ func (s *Server) Start(cfg ServerConfig) error {
 				// the scan target is correct per event.
 				cb := func(path string) {
 					watchLog.Info("Auto-scan triggered for: %s", path)
-					if hub := realtime.GetGlobalHub(); hub != nil {
-						hub.Broadcast(&realtime.Event{
+					if s.hub != nil {
+						s.hub.Broadcast(&realtime.Event{
 							Type: "scan.auto_triggered",
 							Data: map[string]any{"path": path},
 						})
 					}
-					if s.scanService != nil && operations.GlobalQueue != nil {
+					if s.scanService != nil && s.queue != nil {
 						go func() {
 							scanPath := path
 							id := ulid.Make().String()
@@ -1664,7 +1695,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 							opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
 								return s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
 							}
-							if enqueueErr := operations.GlobalQueue.Enqueue(op.ID, "scan", operations.PriorityLow, opFunc); enqueueErr != nil {
+							if enqueueErr := s.queue.Enqueue(op.ID, "scan", operations.PriorityLow, opFunc); enqueueErr != nil {
 								watchLog.Error("Auto-scan: failed to enqueue: %v", enqueueErr)
 							}
 						}()
@@ -1733,8 +1764,8 @@ func (s *Server) Start(cfg ServerConfig) error {
 	log.Println("Shutting down server...")
 
 	// Broadcast shutdown event to all connected clients FIRST
-	if hub := realtime.GetGlobalHub(); hub != nil {
-		hub.Broadcast(&realtime.Event{
+	if s.hub != nil {
+		s.hub.Broadcast(&realtime.Event{
 			Type: "system.shutdown",
 			Data: map[string]any{
 				"message": "Server is shutting down",
@@ -1787,15 +1818,15 @@ func (s *Server) Start(cfg ServerConfig) error {
 	}
 
 	// Stop the file I/O pool — waits for in-flight jobs to finish
-	if p := GetGlobalFileIOPool(); p != nil {
+	if p := s.fileIOPool; p != nil {
 		log.Println("[INFO] Waiting for file I/O operations to complete...")
 		p.Stop()
 	}
 
 	// Flush the ITL write-back batcher
-	if GlobalWriteBackBatcher != nil {
+	if s.writeBackBatcher != nil {
 		log.Println("[INFO] Flushing iTunes write-back batcher...")
-		GlobalWriteBackBatcher.Stop()
+		s.writeBackBatcher.Stop()
 	}
 
 	// Close the search index before the DB goes away — the index is
@@ -2540,7 +2571,7 @@ func saveDismissedDedupGroups(store database.Store, dismissed map[string]bool) {
 
 // triggerITunesSync finds the library path from DB and enqueues a sync if the file changed.
 func (s *Server) triggerITunesSync() {
-	if s.Store() == nil || operations.GlobalQueue == nil {
+	if s.Store() == nil || s.queue == nil {
 		return
 	}
 
@@ -2576,7 +2607,7 @@ func (s *Server) triggerITunesSync() {
 		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, scheduledMappings, s.itunesActivityFn)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
 		itunesTriggerLog.Warn("iTunes sync scheduler: failed to enqueue: %v", err)
 		return
 	}
@@ -2644,8 +2675,8 @@ func (s *Server) failStaleOperations(timeout time.Duration) {
 			staleLog.Warn("failed to mark stale operation %s as failed: %v", op.ID, err)
 			continue
 		}
-		if hub := realtime.GetGlobalHub(); hub != nil {
-			hub.SendOperationStatus(op.ID, "failed", map[string]any{
+		if s.hub != nil {
+			s.hub.SendOperationStatus(op.ID, "failed", map[string]any{
 				"error": msg,
 			})
 		}

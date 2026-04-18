@@ -817,8 +817,8 @@ func (s *Server) undoLastApply(c *gin.Context) {
 	}
 
 	// Re-write tags to files if write-back is enabled, restoring original values
-	if len(undoneFields) > 0 && GlobalWriteBackBatcher != nil {
-		GlobalWriteBackBatcher.Enqueue(id)
+	if len(undoneFields) > 0 && s.writeBackBatcher != nil {
+		s.writeBackBatcher.Enqueue(id)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1224,8 +1224,8 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	}
 
 	// Enqueue for iTunes auto write-back if enabled
-	if GlobalWriteBackBatcher != nil {
-		GlobalWriteBackBatcher.Enqueue(id)
+	if s.writeBackBatcher != nil {
+		s.writeBackBatcher.Enqueue(id)
 	}
 
 	c.JSON(http.StatusOK, enrichBookForResponse(updatedBook))
@@ -1264,10 +1264,10 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	resp := s.batchService.UpdateAudiobooks(&req)
 
 	// Enqueue all updated books for iTunes auto write-back
-	if GlobalWriteBackBatcher != nil && resp != nil {
+	if s.writeBackBatcher != nil && resp != nil {
 		for _, item := range resp.Results {
 			if item.Success {
-				GlobalWriteBackBatcher.Enqueue(item.ID)
+				s.writeBackBatcher.Enqueue(item.ID)
 			}
 		}
 	}
@@ -1292,10 +1292,10 @@ func (s *Server) batchOperations(c *gin.Context) {
 
 	resp := s.batchService.ExecuteOperations(&req)
 
-	if GlobalWriteBackBatcher != nil {
+	if s.writeBackBatcher != nil {
 		for _, r := range resp.Results {
 			if r.Success {
-				GlobalWriteBackBatcher.Enqueue(r.ID)
+				s.writeBackBatcher.Enqueue(r.ID)
 			}
 		}
 	}

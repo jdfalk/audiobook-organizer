@@ -33,7 +33,7 @@ func (s *Server) startScan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -70,7 +70,7 @@ func (s *Server) startScan(c *gin.Context) {
 	}
 
 	// Enqueue the operation
-	if err := operations.GlobalQueue.Enqueue(op.ID, "scan", priority, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "scan", priority, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -83,7 +83,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -125,7 +125,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 	}
 
 	// Enqueue the operation
-	if err := operations.GlobalQueue.Enqueue(op.ID, "organize", priority, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "organize", priority, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -138,7 +138,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -284,7 +284,7 @@ func (s *Server) startTranscode(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "transcode", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "transcode", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -329,8 +329,8 @@ func (s *Server) cancelOperation(c *gin.Context) {
 	}
 
 	// Try cancel via queue (for running queue operations)
-	if operations.GlobalQueue != nil {
-		if err := operations.GlobalQueue.Cancel(id); err == nil {
+	if s.queue != nil {
+		if err := s.queue.Cancel(id); err == nil {
 			c.Status(http.StatusNoContent)
 			return
 		}
@@ -526,11 +526,11 @@ func (s *Server) listOperations(c *gin.Context) {
 }
 
 func (s *Server) listActiveOperations(c *gin.Context) {
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusOK, gin.H{"operations": []gin.H{}})
 		return
 	}
-	active := operations.GlobalQueue.ActiveOperations()
+	active := s.queue.ActiveOperations()
 	results := make([]gin.H, 0, len(active))
 	for _, a := range active {
 		status := "queued"

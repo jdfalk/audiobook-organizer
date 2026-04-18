@@ -42,6 +42,7 @@ func RunVersionSwap(
 	store database.Store,
 	params VersionSwapParams,
 	progress func(step string, pct int),
+	batcher *WriteBackBatcher,
 ) error {
 	if progress == nil {
 		progress = func(string, int) {}
@@ -148,8 +149,8 @@ func RunVersionSwap(
 
 	// ── Step 5: Notify Deluge + enqueue iTunes writeback ────────
 	NotifyDelugeAfterVersionSwap(store, fromVer, toVer, book.FilePath)
-	if GlobalWriteBackBatcher != nil {
-		GlobalWriteBackBatcher.Enqueue(params.BookID)
+	if batcher != nil {
+		batcher.Enqueue(params.BookID)
 	}
 	progress("complete", 100)
 

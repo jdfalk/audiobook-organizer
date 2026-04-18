@@ -24,7 +24,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 )
 
 // Handler functions (stubs for now)
@@ -333,12 +332,11 @@ func (s *Server) updateConfig(c *gin.Context) {
 
 // handleEvents handles Server-Sent Events (SSE) for real-time updates
 func (s *Server) handleEvents(c *gin.Context) {
-	hub := realtime.GetGlobalHub()
-	if hub == nil {
+	if s.hub == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "event hub not initialized"})
 		return
 	}
-	hub.HandleSSE(c)
+	s.hub.HandleSSE(c)
 }
 
 // createBackup creates a database backup

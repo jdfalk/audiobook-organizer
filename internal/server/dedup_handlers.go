@@ -996,7 +996,7 @@ func (s *Server) triggerDedupScan(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dedup engine not available"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -1050,7 +1050,7 @@ func (s *Server) triggerDedupScan(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, "dedup-scan", operations.PriorityLow, opFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "dedup-scan", operations.PriorityLow, opFunc); err != nil {
 		internalError(c, "failed to enqueue dedup scan", err)
 		return
 	}
@@ -1066,7 +1066,7 @@ func (s *Server) triggerDedupLLM(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dedup engine not available"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -1087,7 +1087,7 @@ func (s *Server) triggerDedupLLM(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, "dedup-llm-review", operations.PriorityLow, opFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "dedup-llm-review", operations.PriorityLow, opFunc); err != nil {
 		internalError(c, "failed to enqueue LLM review", err)
 		return
 	}

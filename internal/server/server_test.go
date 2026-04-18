@@ -20,8 +20,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,25 +51,19 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	err = database.RunMigrations(store)
 	require.NoError(t, err)
 
-	// Initialize operation queue (with 2 workers)
-	queue := operations.NewOperationQueue(store, 2, nil)
-	operations.GlobalQueue = queue
-
-	// Initialize realtime hub
-	hub := realtime.NewEventHub()
-	realtime.SetGlobalHub(hub)
-
-	// Create server
-	server := NewServer(nil)
+	// Create server (NewServer creates hub, queue, batcher, fileIOPool internally)
+	server := NewServer(store)
 
 	// Cleanup function
 	cleanup := func() {
-		if p := GetGlobalFileIOPool(); p != nil {
-			p.Stop()
-			SetGlobalFileIOPool(nil)
+		if server.fileIOPool != nil {
+			server.fileIOPool.Stop()
 		}
-		if queue != nil {
-			_ = queue.Shutdown(5 * time.Second)
+		if server.writeBackBatcher != nil {
+			server.writeBackBatcher.Stop()
+		}
+		if server.queue != nil {
+			_ = server.queue.Shutdown(5 * time.Second)
 		}
 		if store != nil {
 			database.SetGlobalStore(nil)
@@ -92,13 +84,18 @@ func setupTestServerWithStore(t *testing.T, store database.Store) (*Server, func
 	database.SetGlobalStore(store)
 
 	// Create server with the provided store (services will use it)
-	server := NewServer(nil)
+	server := NewServer(store)
 
 	// Cleanup function
 	cleanup := func() {
-		if p := GetGlobalFileIOPool(); p != nil {
-			p.Stop()
-			SetGlobalFileIOPool(nil)
+		if server.fileIOPool != nil {
+			server.fileIOPool.Stop()
+		}
+		if server.writeBackBatcher != nil {
+			server.writeBackBatcher.Stop()
+		}
+		if server.queue != nil {
+			_ = server.queue.Shutdown(5 * time.Second)
 		}
 		// Don't close the store - caller is responsible for cleanup
 	}

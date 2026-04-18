@@ -33,9 +33,9 @@ const adminUserID = "_local"
 // SyncITunesPositions runs a full bidirectional position sync for the
 // admin user. Pull then push order ensures we don't immediately
 // overwrite a newly-seeded position.
-func SyncITunesPositions(store database.Store) (pulled, pushed int) {
+func SyncITunesPositions(store database.Store, batcher *WriteBackBatcher) (pulled, pushed int) {
 	pulled = pullITunesBookmarks(store)
-	pushed = pushPositionsToITunes(store)
+	pushed = pushPositionsToITunes(store, batcher)
 	return pulled, pushed
 }
 
@@ -107,7 +107,7 @@ func pullITunesBookmarks(store database.Store) int {
 // position was updated since the last sync, enqueue the book for
 // bookmark writeback. If the book was marked finished, also enqueue
 // a play-count increment.
-func pushPositionsToITunes(store database.Store) int {
+func pushPositionsToITunes(store database.Store, batcher *WriteBackBatcher) int {
 	// Get all admin positions that changed in the last 24 hours.
 	// A more precise cutoff would use a last-sync-at timestamp;
 	// for now 24h is a safe window for the maintenance task that
@@ -119,7 +119,7 @@ func pushPositionsToITunes(store database.Store) int {
 		return 0
 	}
 
-	if GlobalWriteBackBatcher == nil {
+	if batcher == nil {
 		return 0
 	}
 
@@ -143,7 +143,7 @@ func pushPositionsToITunes(store database.Store) int {
 			log.Printf("[WARN] update bookmark for %s: %v", book.ID, err)
 			continue
 		}
-		GlobalWriteBackBatcher.Enqueue(book.ID)
+		batcher.Enqueue(book.ID)
 		pushed++
 
 		// If the book is marked finished and iTunes play count hasn't

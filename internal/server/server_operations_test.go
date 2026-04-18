@@ -32,7 +32,7 @@ func TestStartScan_WithMocks_Success(t *testing.T) {
 	database.SetGlobalStore(mockStore)
 
 	mockQueue := queuemocks.NewMockQueue(t)
-	operations.GlobalQueue = mockQueue
+	server.queue = mockQueue
 
 	// Request body
 	folder := "/tmp/folderA"
@@ -69,7 +69,7 @@ func TestStartScan_QueueNil_Returns500(t *testing.T) {
 
 	mockStore := dbmocks.NewMockStore(t)
 	database.SetGlobalStore(mockStore)
-	operations.GlobalQueue = nil
+	server.queue = nil
 
 	srv := &Server{router: gin.New()}
 	srv.setupRoutes()
@@ -89,7 +89,7 @@ func TestStartScan_EnqueueError_Returns500(t *testing.T) {
 	mockStore := dbmocks.NewMockStore(t)
 	database.SetGlobalStore(mockStore)
 	mockQueue := queuemocks.NewMockQueue(t)
-	operations.GlobalQueue = mockQueue
+	server.queue = mockQueue
 
 	returnedOp := &database.Operation{ID: "op-scan-err", Type: "scan"}
 	mockStore.EXPECT().CreateOperation(mock.Anything, "scan", (*string)(nil)).Return(returnedOp, nil).Once()
@@ -113,7 +113,7 @@ func TestStartOrganize_WithMocks_Success(t *testing.T) {
 	mockStore := dbmocks.NewMockStore(t)
 	database.SetGlobalStore(mockStore)
 	mockQueue := queuemocks.NewMockQueue(t)
-	operations.GlobalQueue = mockQueue
+	server.queue = mockQueue
 
 	returnedOp := &database.Operation{ID: "op-org-123", Type: "organize"}
 	mockStore.EXPECT().CreateOperation(mock.Anything, "organize", (*string)(nil)).Return(returnedOp, nil).Once()
@@ -140,7 +140,7 @@ func TestStartOrganize_EnqueueError_Returns500(t *testing.T) {
 	mockStore := dbmocks.NewMockStore(t)
 	database.SetGlobalStore(mockStore)
 	mockQueue := queuemocks.NewMockQueue(t)
-	operations.GlobalQueue = mockQueue
+	server.queue = mockQueue
 
 	returnedOp := &database.Operation{ID: "op-org-err", Type: "organize"}
 	mockStore.EXPECT().CreateOperation(mock.Anything, "organize", (*string)(nil)).Return(returnedOp, nil).Once()

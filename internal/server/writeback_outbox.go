@@ -65,8 +65,8 @@ func (o *WriteBackOutbox) ListPending() []string {
 // ReplayOrphans finds pending outbox items on startup and re-enqueues
 // them into the in-memory batcher. Call from Server.Start() after
 // the batcher is initialized.
-func (o *WriteBackOutbox) ReplayOrphans() int {
-	if GlobalWriteBackBatcher == nil {
+func (o *WriteBackOutbox) ReplayOrphans(batcher *WriteBackBatcher) int {
+	if batcher == nil {
 		return 0
 	}
 
@@ -90,7 +90,7 @@ func (o *WriteBackOutbox) ReplayOrphans() int {
 		if err != nil || time.Since(enqueued) < time.Minute {
 			continue
 		}
-		GlobalWriteBackBatcher.Enqueue(book.ID)
+		batcher.Enqueue(book.ID)
 		replayed++
 	}
 
@@ -104,14 +104,14 @@ func (o *WriteBackOutbox) ReplayOrphans() int {
 // outbox and the in-memory batcher. The batcher handles debounce +
 // flush; the outbox survives crashes. After flush, the caller should
 // call Dequeue to clean up.
-func EnqueueWithOutbox(outbox *WriteBackOutbox, bookID string) {
+func EnqueueWithOutbox(outbox *WriteBackOutbox, batcher *WriteBackBatcher, bookID string) {
 	if outbox != nil {
 		if err := outbox.Enqueue(bookID); err != nil {
 			log.Printf("[WARN] outbox enqueue %s: %v", bookID, err)
 		}
 	}
-	if GlobalWriteBackBatcher != nil {
-		GlobalWriteBackBatcher.Enqueue(bookID)
+	if batcher != nil {
+		batcher.Enqueue(bookID)
 	}
 }
 
