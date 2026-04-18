@@ -1,5 +1,5 @@
 // file: internal/server/version_fingerprint.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8d5e7f4c-9c5a-4a70-b8c5-3d7e0f1b9a99
 //
 // Fingerprint check for incoming files (spec 3.1 task 4).
@@ -36,7 +36,7 @@ type FingerprintMatch struct {
 // fallback for content without a torrent (manual imports). Both
 // can be empty — in which case no match is returned.
 func CheckFingerprint(
-	store database.Store,
+	store database.BookVersionStore,
 	torrentHash string,
 	fileHashes []string,
 ) *FingerprintMatch {
@@ -92,7 +92,7 @@ func isPurgedOrBlocked(status string) bool {
 // (torrent hash) fails, which is rare for automated ingestion.
 // A future optimization would add a file_hash→version_id index in
 // PebbleDB.
-func scanFileHashMatch(store database.Store, hash string) *FingerprintMatch {
+func scanFileHashMatch(store database.BookVersionStore, hash string) *FingerprintMatch {
 	// The current Store interface doesn't expose GetBookFileByHash.
 	// For now, this is a stub that returns nil. A follow-up PR will
 	// add the index + method.
