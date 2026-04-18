@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -188,7 +189,7 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 
 	ms := s.mergeService
 	if ms == nil {
-		ms = NewMergeService(s.Store())
+		ms = merge.NewService(s.Store())
 	}
 
 	result, err := ms.MergeBooks(req.BookIDs, "")

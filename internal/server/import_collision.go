@@ -10,26 +10,14 @@
 package server
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
-
-// CollisionCandidate describes one existing book that may collide
-// with a file about to be imported.
-type CollisionCandidate struct {
-	BookID    string `json:"book_id"`
-	Title     string `json:"title"`
-	MatchType string `json:"match_type"` // "title", "file_hash", "fingerprint"
-	FilePath  string `json:"file_path,omitempty"`
-}
 
 // handleImportCollisionPreview checks whether importing a file
 // would collide with existing library content.
@@ -44,15 +32,15 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 		return
 	}
 
-	var candidates []CollisionCandidate
+	var candidates []merge.CollisionCandidate
 
 	// 1. Fingerprint check (purged/blocked content).
 	if req.TorrentHash != "" {
 		match := CheckFingerprint(s.Store(), req.TorrentHash, nil)
 		if match != nil && match.Matched {
-			candidates = append(candidates, CollisionCandidate{
+			candidates = append(candidates, merge.CollisionCandidate{
 				BookID:    match.BookID,
-				Title:     bookTitle(s.Store(), match.BookID),
+				Title:     merge.BookTitle(s.Store(), match.BookID),
 				MatchType: "fingerprint",
 			})
 		}
@@ -60,11 +48,11 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 
 	// 2. File hash check against existing books.
 	if _, err := os.Stat(req.FilePath); err == nil {
-		hash := quickHash(req.FilePath)
+		hash := merge.QuickHash(req.FilePath)
 		if hash != "" {
 			existing, _ := s.Store().GetBookByFileHash(hash)
 			if existing != nil {
-				candidates = append(candidates, CollisionCandidate{
+				candidates = append(candidates, merge.CollisionCandidate{
 					BookID:    existing.ID,
 					Title:     existing.Title,
 					MatchType: "file_hash",
@@ -89,7 +77,7 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 					}
 				}
 				if !alreadyListed {
-					candidates = append(candidates, CollisionCandidate{
+					candidates = append(candidates, merge.CollisionCandidate{
 						BookID:    b.ID,
 						Title:     b.Title,
 						MatchType: "title",
@@ -101,32 +89,11 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 	}
 
 	if candidates == nil {
-		candidates = []CollisionCandidate{}
+		candidates = []merge.CollisionCandidate{}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"collisions": candidates,
-		"count":      len(candidates),
+		"collisions":    candidates,
+		"count":         len(candidates),
 		"has_collision": len(candidates) > 0,
 	})
-}
-
-func bookTitle(store database.BookReader, id string) string {
-	b, _ := store.GetBookByID(id)
-	if b != nil {
-		return b.Title
-	}
-	return ""
-}
-
-func quickHash(path string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, io.LimitReader(f, 1<<20)); err != nil {
-		return ""
-	}
-	return hex.EncodeToString(h.Sum(nil))
 }

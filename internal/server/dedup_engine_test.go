@@ -13,6 +13,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/merge"
 )
 
 // setupTestEngine creates a DedupEngine with an in-memory EmbeddingStore and MockStore.
@@ -28,7 +29,7 @@ func setupTestEngine(t *testing.T) (*DedupEngine, *database.MockStore, *database
 	t.Cleanup(func() { _ = es.Close(); _ = os.RemoveAll(tmpDir) })
 
 	mock := &database.MockStore{}
-	ms := NewMergeService(mock)
+	ms := merge.NewService(mock)
 	engine := NewDedupEngine(es, mock, nil, nil, ms)
 
 	return engine, mock, es
