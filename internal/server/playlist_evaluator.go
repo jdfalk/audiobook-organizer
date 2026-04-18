@@ -1,5 +1,5 @@
 // file: internal/server/playlist_evaluator.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9c2d5f1e-6b4a-4a70-b8c5-3d7e0f1b9a68
 //
 // Smart playlist query evaluator (spec 3.4 task 2).
@@ -52,6 +52,16 @@ const defaultEvalPageSize = 10000
 // Callers can retry once the server has finished its startup phase.
 var ErrSearchIndexUnavailable = errors.New("search index not yet available")
 
+// playlistEvalStore is the narrow slice of database.Store that the
+// playlist evaluator actually needs: BookReader for sort enrichment
+// (GetBookByID) and UserPositionStore for per-user filter lookups
+// (GetUserBookState). Declared as a file-local composite so the
+// entry point's dependency surface is inspectable in one place.
+type playlistEvalStore interface {
+	database.BookReader
+	database.UserPositionStore
+}
+
 // EvaluateSmartPlaylist parses the playlist query, runs it against
 // the Bleve index, applies any per-user post-filters, sorts, caps
 // to Limit, and returns the ordered list of matching book IDs.
@@ -61,7 +71,7 @@ var ErrSearchIndexUnavailable = errors.New("search index not yet available")
 // userID is the user the playlist evaluates for — per-user filters
 // read that user's state rows.
 func EvaluateSmartPlaylist(
-	store database.Store,
+	store playlistEvalStore,
 	idx *search.BleveIndex,
 	query string,
 	sortJSON string,
@@ -115,7 +125,7 @@ func EvaluateSmartPlaylist(
 // hasn't engaged with the book, so e.g. `read_status:finished`
 // doesn't match an unstarted book).
 func applyPerUserFilters(
-	store database.Store,
+	store database.UserPositionStore,
 	ids []string,
 	filters []search.PerUserFilter,
 	userID string,
@@ -242,7 +252,7 @@ func timeFieldMatches(got time.Time, node *search.FieldNode) bool {
 // Empty or invalid SortJSON leaves ids in the order Bleve returned
 // them (relevance order). Unknown fields are skipped with no error
 // so a partly-broken sort spec still produces a stable result.
-func sortBookIDs(store database.Store, ids []string, sortJSON string) ([]string, error) {
+func sortBookIDs(store database.BookReader, ids []string, sortJSON string) ([]string, error) {
 	if strings.TrimSpace(sortJSON) == "" || len(ids) < 2 {
 		return ids, nil
 	}
