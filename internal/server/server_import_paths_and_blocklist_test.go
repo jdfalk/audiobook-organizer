@@ -119,14 +119,13 @@ func TestAddImportPath_EnqueuesAndExecutesOperationFunc(t *testing.T) {
 	queue := qmock.NewMockQueue(t)
 	scannerMock := scannermocks.NewMockScanner(t)
 
-	origScanner := scanner.GlobalScanner
 	origQueue := server.queue
 	server.queue = queue
-	scanner.GlobalScanner = scannerMock
+	scanner.SetScanner(scannerMock)
 	defer func() {
 		server.queue = origQueue
 		database.SetGlobalStore(origStore)
-		scanner.GlobalScanner = origScanner
+		scanner.SetScanner(nil)
 	}()
 
 	importDir := t.TempDir()

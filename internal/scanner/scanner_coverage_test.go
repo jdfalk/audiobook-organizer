@@ -719,15 +719,15 @@ func TestIsExcludedPath(t *testing.T) {
 	}
 }
 
-// TestScanDirectoryGlobalScanner tests that ScanDirectory uses GlobalScanner when set
+// TestScanDirectoryGlobalScanner tests that ScanDirectory uses activeScanner when set
 func TestScanDirectoryGlobalScanner(t *testing.T) {
-	oldScanner := GlobalScanner
-	t.Cleanup(func() { GlobalScanner = oldScanner })
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
 
 	// Set a mock scanner
-	GlobalScanner = &fullMockScanner{
+	SetScanner(&fullMockScanner{
 		books: []Book{{FilePath: "/mock/book.m4b", Title: "Mock Book"}},
-	}
+	})
 
 	books, err := ScanDirectory("/any/dir", nil)
 	if err != nil {
@@ -762,11 +762,10 @@ func (m *fullMockScanner) ComputeFileHash(filePath string) (string, error) {
 	return "mockhash", nil
 }
 
-// TestProcessBooksDefault tests ProcessBooks without GlobalScanner
+// TestProcessBooksDefault tests ProcessBooks without activeScanner
 func TestProcessBooksDefault(t *testing.T) {
-	oldScanner := GlobalScanner
-	t.Cleanup(func() { GlobalScanner = oldScanner })
-	GlobalScanner = nil
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
 
 	oldExts := config.AppConfig.SupportedExtensions
 	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })

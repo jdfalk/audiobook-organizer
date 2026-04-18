@@ -1,5 +1,5 @@
 // file: internal/metadata/metadata.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 9d0e1f2a-3b4c-5d6e-7f8a-9b0c1d2e3f4a
 
 package metadata
@@ -22,14 +22,18 @@ import (
 var yearPattern = regexp.MustCompile(`(\d{4})`)
 
 // MetadataExtractor defines the interface for extracting metadata from files.
-// Tests can swap a mock implementation via GlobalMetadataExtractor.
+// Tests can swap a mock implementation via SetMetadataExtractor.
 type MetadataExtractor interface {
 	ExtractMetadata(filePath string) (Metadata, error)
 }
 
-// GlobalMetadataExtractor, when set, is used by ExtractMetadata.
-// If nil, the default implementation in this file is used.
-var GlobalMetadataExtractor MetadataExtractor
+// activeExtractor overrides the default implementation. Set by tests via SetMetadataExtractor.
+var activeExtractor MetadataExtractor
+
+// SetMetadataExtractor overrides the default metadata extractor for testing.
+func SetMetadataExtractor(e MetadataExtractor) {
+	activeExtractor = e
+}
 
 // Metadata holds audio file metadata
 type Metadata struct {
@@ -95,8 +99,8 @@ func sourceOrUnknown(sources map[string]string, field string) string {
 // ExtractMetadata reads metadata from audio files.
 // If metaLog is nil, a default logger is used.
 func ExtractMetadata(filePath string, metaLog logger.Logger) (Metadata, error) {
-	if GlobalMetadataExtractor != nil {
-		return GlobalMetadataExtractor.ExtractMetadata(filePath)
+	if activeExtractor != nil {
+		return activeExtractor.ExtractMetadata(filePath)
 	}
 	if metaLog == nil {
 		metaLog = logger.New("metadata")
