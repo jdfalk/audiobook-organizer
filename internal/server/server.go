@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.179.0
+// version: 1.180.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -33,7 +33,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
@@ -938,39 +937,8 @@ func NewServer(store database.Store) *Server {
 				//
 				// Runs inside a bgWG-tracked goroutine so it doesn't block
 				// the organize caller and shutdown drains it cleanly.
-				organizer.OrganizeCollisionHook = func(currentBookID, occupantPath string) {
-					if server.embeddingStore == nil || database.GetGlobalStore() == nil {
-						return
-					}
-					server.bgWG.Add(1)
-					go func() {
-						defer server.bgWG.Done()
-						occupant, err := database.GetGlobalStore().GetBookByFilePath(occupantPath)
-						if err != nil {
-							log.Printf("[WARN] organize-collision hook: lookup %s failed: %v", occupantPath, err)
-							return
-						}
-						if occupant == nil || occupant.ID == currentBookID {
-							return
-						}
-						sim := 1.0
-						if err := server.embeddingStore.UpsertCandidate(database.DedupCandidate{
-							EntityType: "book",
-							EntityAID:  currentBookID,
-							EntityBID:  occupant.ID,
-							Layer:      "exact",
-							Similarity: &sim,
-							Status:     "pending",
-						}); err != nil {
-							log.Printf("[WARN] organize-collision hook: upsert candidate %s/%s failed: %v",
-								currentBookID, occupant.ID, err)
-							return
-						}
-						log.Printf("[INFO] organize-collision: created dedup candidate between %s and %s (occupant of %s)",
-							currentBookID, occupant.ID, occupantPath)
-					}()
-				}
-				log.Println("[INFO] Organize collision hook wired")
+				server.organizeService.SetOrganizeHooks(&serverOrganizeHooks{server: server})
+				log.Println("[INFO] Organize collision hook wired via OrganizeService")
 
 				// Wire the embedding-based metadata candidate scorer. The
 				// scorer reuses the same embedClient + embeddingStore as the
@@ -1193,6 +1161,45 @@ func (h *serverScanHooks) OnImportDedup(bookID string) {
 	if h.dedupFn != nil {
 		h.dedupFn(bookID)
 	}
+}
+
+// serverOrganizeHooks implements organizer.OrganizeHooks, bridging
+// collision callbacks to the server's dedup engine.
+type serverOrganizeHooks struct {
+	server *Server
+}
+
+func (h *serverOrganizeHooks) OnCollision(currentBookID, occupantPath string) {
+	if h.server.embeddingStore == nil || h.server.store == nil {
+		return
+	}
+	h.server.bgWG.Add(1)
+	go func() {
+		defer h.server.bgWG.Done()
+		occupant, err := h.server.store.GetBookByFilePath(occupantPath)
+		if err != nil {
+			log.Printf("[WARN] organize-collision hook: lookup %s failed: %v", occupantPath, err)
+			return
+		}
+		if occupant == nil || occupant.ID == currentBookID {
+			return
+		}
+		sim := 1.0
+		if err := h.server.embeddingStore.UpsertCandidate(database.DedupCandidate{
+			EntityType: "book",
+			EntityAID:  currentBookID,
+			EntityBID:  occupant.ID,
+			Layer:      "exact",
+			Similarity: &sim,
+			Status:     "pending",
+		}); err != nil {
+			log.Printf("[WARN] organize-collision hook: upsert candidate %s/%s failed: %v",
+				currentBookID, occupant.ID, err)
+			return
+		}
+		log.Printf("[INFO] organize-collision: created dedup candidate between %s and %s (occupant of %s)",
+			currentBookID, occupant.ID, occupantPath)
+	}()
 }
 
 // fireDedupOnImport runs the dedup engine's Layer 1 + Layer 2 checks for

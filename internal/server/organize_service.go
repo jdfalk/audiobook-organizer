@@ -1,5 +1,5 @@
 // file: internal/server/organize_service.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package server
@@ -26,7 +26,23 @@ import (
 )
 
 type OrganizeService struct {
-	db database.Store
+	db             database.Store
+	organizeHooks  organizer.OrganizeHooks
+}
+
+// SetOrganizeHooks sets optional hooks that are propagated to every
+// Organizer instance created by this service.
+func (orgSvc *OrganizeService) SetOrganizeHooks(hooks organizer.OrganizeHooks) {
+	orgSvc.organizeHooks = hooks
+}
+
+// newOrganizer creates an Organizer with the service's hooks pre-wired.
+func (orgSvc *OrganizeService) newOrganizer() *organizer.Organizer {
+	org := organizer.NewOrganizer(&config.AppConfig)
+	if orgSvc.organizeHooks != nil {
+		org.SetHooks(orgSvc.organizeHooks)
+	}
+	return org
 }
 
 func NewOrganizeService(db database.Store) *OrganizeService {
@@ -297,7 +313,7 @@ func (orgSvc *OrganizeService) filterBooksNeedingOrganization(allBooks []databas
 // moved because its current path doesn't match the target path derived from
 // current metadata.
 func (orgSvc *OrganizeService) bookNeedsReOrganize(book *database.Book, log logger.Logger) (bool, error) {
-	org := organizer.NewOrganizer(&config.AppConfig)
+	org := orgSvc.newOrganizer()
 
 	// Determine dir vs file by extension — avoids os.Stat (the main scan bottleneck)
 	ext := strings.ToLower(filepath.Ext(book.FilePath))
@@ -322,7 +338,7 @@ func (orgSvc *OrganizeService) bookNeedsReOrganize(book *database.Book, log logg
 // reOrganizeInPlace renames/moves a book that is already in RootDir to its
 // correct location based on current metadata. Returns the new path.
 func (orgSvc *OrganizeService) reOrganizeInPlace(book *database.Book, log logger.Logger) (string, error) {
-	org := organizer.NewOrganizer(&config.AppConfig)
+	org := orgSvc.newOrganizer()
 	oldPath := book.FilePath
 
 	info, err := os.Stat(oldPath)
@@ -439,7 +455,7 @@ func (orgSvc *OrganizeService) organizeBooks(ctx context.Context, booksToOrganiz
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			workerOrg := organizer.NewOrganizer(&config.AppConfig)
+			workerOrg := orgSvc.newOrganizer()
 
 			for i := range jobs {
 				book := booksToOrganize[i]

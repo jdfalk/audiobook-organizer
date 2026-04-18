@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer_test.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package organizer
@@ -14,6 +14,16 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+// collisionCall records a single OnCollision invocation for test assertions.
+type collisionCall struct{ bookID, occupant string }
+
+// testOrganizeHooks implements OrganizeHooks for tests.
+type testOrganizeHooks struct{ calls []collisionCall }
+
+func (h *testOrganizeHooks) OnCollision(bookID, occupant string) {
+	h.calls = append(h.calls, collisionCall{bookID, occupant})
+}
 
 // Helper function to create string pointer
 func stringPtr(s string) *string {
@@ -940,13 +950,9 @@ func TestOrganizeBook_CollisionHookFires(t *testing.T) {
 	}
 	org := NewOrganizer(cfg)
 
-	type call struct{ bookID, occupant string }
-	var calls []call
-	prev := OrganizeCollisionHook
-	OrganizeCollisionHook = func(bookID, occupant string) {
-		calls = append(calls, call{bookID, occupant})
-	}
-	t.Cleanup(func() { OrganizeCollisionHook = prev })
+	th := &testOrganizeHooks{}
+	org.SetHooks(th)
+	t.Cleanup(func() { org.SetHooks(nil) })
 
 	bookA := &database.Book{
 		ID: "book-a", Title: "Foundation", FilePath: srcA,
@@ -960,20 +966,20 @@ func TestOrganizeBook_CollisionHookFires(t *testing.T) {
 	if _, _, err := org.OrganizeBook(bookA); err != nil {
 		t.Fatalf("OrganizeBook(A): %v", err)
 	}
-	if len(calls) != 0 {
-		t.Errorf("hook fired for successful organize: %v", calls)
+	if len(th.calls) != 0 {
+		t.Errorf("hook fired for successful organize: %v", th.calls)
 	}
 
 	if _, _, err := org.OrganizeBook(bookB); err == nil {
 		t.Fatal("expected error for B")
 	}
-	if len(calls) != 1 {
-		t.Fatalf("expected 1 hook call, got %d: %v", len(calls), calls)
+	if len(th.calls) != 1 {
+		t.Fatalf("expected 1 hook call, got %d: %v", len(th.calls), th.calls)
 	}
-	if calls[0].bookID != "book-b" {
-		t.Errorf("hook bookID = %q, want book-b", calls[0].bookID)
+	if th.calls[0].bookID != "book-b" {
+		t.Errorf("hook bookID = %q, want book-b", th.calls[0].bookID)
 	}
-	if !strings.HasSuffix(calls[0].occupant, "Foundation.m4b") {
-		t.Errorf("hook occupant = %q, want ...Foundation.m4b", calls[0].occupant)
+	if !strings.HasSuffix(th.calls[0].occupant, "Foundation.m4b") {
+		t.Errorf("hook occupant = %q, want ...Foundation.m4b", th.calls[0].occupant)
 	}
 }

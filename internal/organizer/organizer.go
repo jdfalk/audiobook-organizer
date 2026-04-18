@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -34,17 +34,15 @@ import (
 // the user to resolve the collision before retrying.
 var ErrTargetOccupied = errors.New("organize: target path already occupied by a different file")
 
-// OrganizeCollisionHook is an optional package-level hook fired when
-// OrganizeBook hits ErrTargetOccupied. The server package wires it to
-// create a pending dedup candidate between the current book and the
-// occupant, so the collision surfaces in the dedup tab instead of
-// becoming an invisible data-integrity problem. nil-safe — the
-// organizer runs fine in tests or CLI contexts where no hook is set.
-var OrganizeCollisionHook func(currentBookID, occupantPath string)
-
 // Organizer handles file organization operations
 type Organizer struct {
 	config *config.Config
+	hooks  OrganizeHooks
+}
+
+// SetHooks sets the optional organize hooks (e.g. collision callback).
+func (o *Organizer) SetHooks(hooks OrganizeHooks) {
+	o.hooks = hooks
 }
 
 const (
@@ -119,8 +117,8 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, string, error) {
 				// Content-identical book already organized under a
 				// different row. This is a true duplicate — fire the
 				// collision hook so the dedup tab picks it up.
-				if OrganizeCollisionHook != nil {
-					OrganizeCollisionHook(book.ID, existingBook.FilePath)
+				if o.hooks != nil {
+					o.hooks.OnCollision(book.ID, existingBook.FilePath)
 				}
 				return existingBook.FilePath, "", fmt.Errorf("duplicate file already organized at: %s", existingBook.FilePath)
 			}
@@ -158,8 +156,8 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, string, error) {
 		// silently returned nil here, which caused the caller to set
 		// this book's file_path to the occupant's file — two DB rows
 		// pointing at one file on disk.
-		if OrganizeCollisionHook != nil {
-			OrganizeCollisionHook(book.ID, targetPath)
+		if o.hooks != nil {
+			o.hooks.OnCollision(book.ID, targetPath)
 		}
 		return targetPath, "", fmt.Errorf("%w: %s", ErrTargetOccupied, targetPath)
 	}
