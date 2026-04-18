@@ -1,8 +1,8 @@
-// file: internal/server/activity_writer_test.go
-// version: 1.1.0
+// file: internal/activity/writer_test.go
+// version: 1.0.0
 // guid: f7e8d9c0-b1a2-4e3f-9c8d-7b6a5e4f3d2c
 
-package server
+package activity
 
 import (
 	"fmt"
@@ -70,7 +70,7 @@ func TestParseLogLine(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			level, source, msg := parseLogLine(tc.line)
+			level, source, msg := ParseLogLine(tc.line)
 			if level != tc.wantLevel {
 				t.Errorf("level: got %q, want %q", level, tc.wantLevel)
 			}
@@ -88,7 +88,7 @@ func TestParseLogLine(t *testing.T) {
 	}
 }
 
-func TestActivityWriter_CapturesLogs(t *testing.T) {
+func TestWriter_CapturesLogs(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "activity_test.db")
 
@@ -107,7 +107,7 @@ func TestActivityWriter_CapturesLogs(t *testing.T) {
 		devNull.Close()
 	}()
 
-	w := newActivityWriter(store, 100)
+	w := NewWriter(store, 100)
 	w.stdout = devNull
 	w.Start()
 
@@ -167,7 +167,7 @@ func TestActivityWriter_CapturesLogs(t *testing.T) {
 // source prefix is parsed with the full message text preserved.
 func TestParseLogLine_SyncCompleted(t *testing.T) {
 	line := "[info] Sync completed: 321 updated, 0 new"
-	level, source, msg := parseLogLine(line)
+	level, source, msg := ParseLogLine(line)
 
 	if level != "info" {
 		t.Errorf("level: expected %q, got %q", "info", level)
@@ -186,7 +186,7 @@ func TestParseLogLine_SyncCompleted(t *testing.T) {
 // containing a hyphen is correctly extracted as the source field.
 func TestParseLogLine_SubsystemWithColon(t *testing.T) {
 	line := "[info] itunes-sync: Starting sync"
-	level, source, msg := parseLogLine(line)
+	level, source, msg := ParseLogLine(line)
 
 	if level != "info" {
 		t.Errorf("level: expected %q, got %q", "info", level)
@@ -204,7 +204,7 @@ func TestParseLogLine_SubsystemWithColon(t *testing.T) {
 // message (including additional colons) is kept intact.
 func TestParseLogLine_MessageWithMultipleColons(t *testing.T) {
 	line := "[warn] server: path not found: /foo/bar"
-	level, source, msg := parseLogLine(line)
+	level, source, msg := ParseLogLine(line)
 
 	if level != "warn" {
 		t.Errorf("level: expected %q, got %q", "warn", level)
@@ -219,14 +219,9 @@ func TestParseLogLine_MessageWithMultipleColons(t *testing.T) {
 	}
 }
 
-// TestActivityWriter_Flush verifies that Flush() synchronously drains all
+// TestWriter_Flush verifies that Flush() synchronously drains all
 // pending channel entries into the store.
-//
-// The background drain goroutine is intentionally NOT started (no w.Start())
-// so that all written entries accumulate in the buffered channel and Flush()
-// is the only thing that persists them. This isolates Flush() from the timer-
-// based drain path and avoids races between the goroutine and the test query.
-func TestActivityWriter_Flush(t *testing.T) {
+func TestWriter_Flush(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "flush_test.db")
 
@@ -239,9 +234,7 @@ func TestActivityWriter_Flush(t *testing.T) {
 	devNull, _ := os.Open(os.DevNull)
 	defer devNull.Close()
 
-	// Large channel so all writes buffer without blocking; no Start() call —
-	// the drain goroutine is not running for this test.
-	w := newActivityWriter(store, 50)
+	w := NewWriter(store, 50)
 	w.stdout = devNull
 
 	lines := []string{
@@ -281,7 +274,7 @@ func TestActivityWriter_Flush(t *testing.T) {
 	}
 }
 
-func TestActivityWriter_DropsDebugOnBackpressure(t *testing.T) {
+func TestWriter_DropsDebugOnBackpressure(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "activity_bp_test.db")
 
@@ -295,7 +288,7 @@ func TestActivityWriter_DropsDebugOnBackpressure(t *testing.T) {
 	defer devNull.Close()
 
 	// chanSize=2, drain goroutine NOT started — channel will fill up
-	w := newActivityWriter(store, 2)
+	w := NewWriter(store, 2)
 	w.stdout = devNull
 
 	done := make(chan struct{})

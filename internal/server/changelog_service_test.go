@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestChangelogService_GetBookChangelog_Empty(t *testing.T) {
 }
 
 func TestChangelogService_GetBookChangelog_NilDB(t *testing.T) {
-	svc := &ChangelogService{db: nil}
+	svc := activity.NewChangelogService(nil)
 	_, err := svc.GetBookChangelog("some-id")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "database not initialized")
@@ -113,7 +114,7 @@ func TestChangelogEndpoint_WithEntries(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp struct {
-		Entries []ChangeLogEntry `json:"entries"`
+		Entries []activity.ChangeLogEntry `json:"entries"`
 	}
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
@@ -123,6 +124,6 @@ func TestChangelogEndpoint_WithEntries(t *testing.T) {
 
 func TestDerefStrDisplay(t *testing.T) {
 	s := "hello"
-	assert.Equal(t, "hello", derefStrDisplay(&s))
-	assert.Equal(t, "<nil>", derefStrDisplay(nil))
+	assert.Equal(t, "hello", activity.DerefStrDisplay(&s))
+	assert.Equal(t, "<nil>", activity.DerefStrDisplay(nil))
 }

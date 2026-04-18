@@ -1,8 +1,8 @@
-// file: internal/server/activity_writer.go
+// file: internal/activity/writer.go
 // version: 1.0.0
 // guid: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
 
-package server
+package activity
 
 import (
 	"io"
@@ -15,9 +15,9 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-// activityWriter is an io.Writer that tees log output to stdout AND sends
+// Writer is an io.Writer that tees log output to stdout AND sends
 // parsed entries through a buffered channel to an ActivityStore.
-type activityWriter struct {
+type Writer struct {
 	stdout   io.Writer
 	ch       chan database.ActivityEntry
 	store    *database.ActivityStore
@@ -29,10 +29,10 @@ type activityWriter struct {
 	closed   atomic.Bool
 }
 
-// newActivityWriter creates a new activityWriter backed by store.
+// NewWriter creates a new Writer backed by store.
 // chanSize controls the depth of the internal entry buffer.
-func newActivityWriter(store *database.ActivityStore, chanSize int) *activityWriter {
-	return &activityWriter{
+func NewWriter(store *database.ActivityStore, chanSize int) *Writer {
+	return &Writer{
 		stdout: os.Stdout,
 		ch:     make(chan database.ActivityEntry, chanSize),
 		store:  store,
@@ -41,14 +41,14 @@ func newActivityWriter(store *database.ActivityStore, chanSize int) *activityWri
 }
 
 // Start launches the background drain goroutine. Call once before writing.
-func (w *activityWriter) Start() {
+func (w *Writer) Start() {
 	w.wg.Add(1)
 	go w.drain()
 }
 
 // Write implements io.Writer. Always writes to stdout first, then parses
 // complete lines and sends ActivityEntry values to the background drain.
-func (w *activityWriter) Write(p []byte) (n int, err error) {
+func (w *Writer) Write(p []byte) (n int, err error) {
 	n, err = w.stdout.Write(p)
 
 	w.mu.Lock()
@@ -75,11 +75,11 @@ func (w *activityWriter) Write(p []byte) (n int, err error) {
 // sendEntry parses a single log line and enqueues an ActivityEntry.
 // Debug entries are silently dropped when the channel is full.
 // Non-debug entries emit a warning to stdout when dropped.
-func (w *activityWriter) sendEntry(line string) {
+func (w *Writer) sendEntry(line string) {
 	if w.closed.Load() {
 		return
 	}
-	level, source, message := parseLogLine(line)
+	level, source, message := ParseLogLine(line)
 	entry := database.ActivityEntry{
 		Tier:    "debug",
 		Type:    "system",
@@ -98,7 +98,7 @@ func (w *activityWriter) sendEntry(line string) {
 
 // drain reads from the channel and persists entries in batches of up to 100,
 // flushing at least every 500 ms. It stops when the done signal is received.
-func (w *activityWriter) drain() {
+func (w *Writer) drain() {
 	defer w.wg.Done()
 	batch := make([]database.ActivityEntry, 0, 100)
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -137,7 +137,7 @@ func (w *activityWriter) drain() {
 }
 
 // writeBatch persists a slice of entries to the store, ignoring individual errors.
-func (w *activityWriter) writeBatch(entries []database.ActivityEntry) {
+func (w *Writer) writeBatch(entries []database.ActivityEntry) {
 	for _, e := range entries {
 		w.store.Record(e) //nolint:errcheck
 	}
@@ -145,7 +145,7 @@ func (w *activityWriter) writeBatch(entries []database.ActivityEntry) {
 
 // Flush synchronously drains any entries currently in the channel without
 // stopping the background goroutine.
-func (w *activityWriter) Flush() {
+func (w *Writer) Flush() {
 	for {
 		select {
 		case e := <-w.ch:
@@ -158,7 +158,7 @@ func (w *activityWriter) Flush() {
 
 // Stop marks the writer as closed, signals the drain goroutine to finish,
 // and waits for it to flush all remaining entries. Safe to call multiple times.
-func (w *activityWriter) Stop() {
+func (w *Writer) Stop() {
 	w.closed.Store(true)
 	w.stopOnce.Do(func() { close(w.done) })
 	w.wg.Wait()
@@ -166,13 +166,13 @@ func (w *activityWriter) Stop() {
 
 // ── log line parser ───────────────────────────────────────────────────────────
 
-// parseLogLine extracts (level, source, message) from a single log line.
+// ParseLogLine extracts (level, source, message) from a single log line.
 //
 // Recognised formats:
 //   - GIN: "[GIN] YYYY/MM/DD - HH:MM:SS | STATUS | ..."
 //   - Go standard log: "YYYY/MM/DD HH:MM:SS file.go:NNN: [level] source: message"
 //   - Bare text: returned as-is with level=info, source=server.
-func parseLogLine(line string) (level, source, message string) {
+func ParseLogLine(line string) (level, source, message string) {
 	// GIN logs: [GIN] YYYY/MM/DD - HH:MM:SS | STATUS | ...
 	if strings.HasPrefix(line, "[GIN]") {
 		rest := line[5:]
