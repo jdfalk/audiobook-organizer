@@ -1,13 +1,25 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.6.0 -->
+<!-- version: 2.7.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-17 -->
+<!-- last-edited: 2026-04-18 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 18, 2026 — Fast-iteration test mode (`make test-short`)
+
+Property-based tests added in 4.5 were making local test iteration painful — the `internal/server` package alone took 15+ minutes because 33 prop tests create a fresh PebbleStore per `rapid.Check` iteration. Added `testing.Short()` gates so those tests skip under `-short`, cutting local iteration ~12×.
+
+- **33 slow prop tests annotated** (#384): `pebble_store_prop_test.go`, `audiobook_service_prop_test.go`, `dedup_engine_prop_test.go`, `playlist_evaluator_prop_test.go`, `undo_engine_prop_test.go`, `version_lifecycle_prop_test.go` — each `TestProp_*` calls `testing.Short()` and skips with a clear message
+- **Fast prop tests unchanged** — auth permissions, query parser, rapidgen smoke tests take seconds either way; no skip needed
+- **`make test-short`** — new target runs `go test ./... -short -race` (~1 min vs 15+ min for `make test`)
+- **CI behavior unchanged** — still runs `make test` (full suite) on every PR, so slow prop tests keep catching regressions; they just don't block every local iteration
+- **`scripts/add_short_skip.py`** — idempotent helper retained so newly-added slow prop tests can be annotated in one command
+
+Timing: `go test ./internal/server/ -short` drops from 760s → 63s.
 
 #### April 17, 2026 — Store Interface Segregation (ISP refactor)
 
