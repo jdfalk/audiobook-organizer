@@ -1,5 +1,5 @@
 // file: internal/server/dashboard_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f
 
 package server
@@ -12,13 +12,23 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
+// dashboardStore is the narrow slice of database.Store this service uses.
+type dashboardStore interface {
+	database.AuthorReader
+	database.BookReader
+	database.PlaylistStore
+	database.SeriesReader
+	database.StatsStore
+}
+
+
 // DashboardService handles dashboard statistics and metrics collection
 type DashboardService struct {
-	db database.Store
+	db dashboardStore
 }
 
 // NewDashboardService creates a new dashboard service
-func NewDashboardService(db database.Store) *DashboardService {
+func NewDashboardService(db dashboardStore) *DashboardService {
 	return &DashboardService{db: db}
 }
 

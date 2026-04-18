@@ -1,5 +1,5 @@
 // file: internal/server/organize_preview_service.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: f1a2b3c4-d5e6-7890-abcd-ef1234567890
 
 package server
@@ -14,6 +14,16 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 )
+
+// organizePreviewStore is the narrow slice of database.Store this service uses.
+type organizePreviewStore interface {
+	database.BookWriter
+	database.NarratorStore
+	database.OperationStore
+	database.BookFileStore
+	database.BookReader
+}
+
 
 // OrganizePreviewStep describes a single step in the organize preview.
 type OrganizePreviewStep struct {
@@ -41,11 +51,11 @@ type OrganizePreviewResponse struct {
 
 // OrganizePreviewService builds a read-only preview of what a single-book organize would do.
 type OrganizePreviewService struct {
-	db database.Store
+	db organizePreviewStore
 }
 
 // NewOrganizePreviewService creates a new OrganizePreviewService.
-func NewOrganizePreviewService(db database.Store) *OrganizePreviewService {
+func NewOrganizePreviewService(db organizePreviewStore) *OrganizePreviewService {
 	return &OrganizePreviewService{db: db}
 }
 

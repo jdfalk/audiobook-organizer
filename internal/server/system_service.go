@@ -1,5 +1,5 @@
 // file: internal/server/system_service.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
 
 package server
@@ -15,11 +15,19 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 )
 
-type SystemService struct {
-	db database.Store
+// systemServiceStore is the narrow slice of database.Store this service uses.
+type systemServiceStore interface {
+	database.ImportPathStore
+	database.OperationStore
+	database.StatsStore
 }
 
-func NewSystemService(db database.Store) *SystemService {
+
+type SystemService struct {
+	db systemServiceStore
+}
+
+func NewSystemService(db systemServiceStore) *SystemService {
 	return &SystemService{db: db}
 }
 

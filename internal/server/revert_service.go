@@ -1,5 +1,5 @@
 // file: internal/server/revert_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6a7-b8c9-d0e1-f2a3-b4c5d6e7f8a9
 
 package server
@@ -15,13 +15,21 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
+// revertServiceStore is the narrow slice of database.Store this service uses.
+type revertServiceStore interface {
+	database.BookReader
+	database.BookWriter
+	database.OperationStore
+}
+
+
 // RevertService handles reverting operations by undoing recorded changes.
 type RevertService struct {
-	db database.Store
+	db revertServiceStore
 }
 
 // NewRevertService creates a new RevertService.
-func NewRevertService(db database.Store) *RevertService {
+func NewRevertService(db revertServiceStore) *RevertService {
 	return &RevertService{db: db}
 }
 

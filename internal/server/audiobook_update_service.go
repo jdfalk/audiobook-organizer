@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_update_service.go
-// version: 1.1.1
+// version: 1.2.0
 // guid: b2c3d4e5-f6g7-h8i9-j0k1-l2m3n4o5p6q7
 
 package server
@@ -13,12 +13,26 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/util"
 )
 
+// audiobookUpdateStore is the narrow slice of database.Store this service uses.
+type audiobookUpdateStore interface {
+	database.BookStore
+	database.AuthorStore
+	database.SeriesStore
+	database.NarratorStore
+	database.BookFileStore
+	database.HashBlocklistStore
+	database.TagStore
+	database.MetadataStore
+	database.UserPreferenceStore
+}
+
+
 type AudiobookUpdateService struct {
-	db               database.Store
+	db audiobookUpdateStore
 	audiobookService *AudiobookService
 }
 
-func NewAudiobookUpdateService(db database.Store) *AudiobookUpdateService {
+func NewAudiobookUpdateService(db audiobookUpdateStore) *AudiobookUpdateService {
 	return &AudiobookUpdateService{
 		db:               db,
 		audiobookService: NewAudiobookService(db),

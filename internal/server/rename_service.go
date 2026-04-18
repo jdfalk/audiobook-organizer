@@ -1,5 +1,5 @@
 // file: internal/server/rename_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package server
@@ -19,13 +19,23 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 )
 
+// renameServiceStore is the narrow slice of database.Store this service uses.
+type renameServiceStore interface {
+	database.BookFileStore
+	database.BookReader
+	database.BookWriter
+	database.NarratorStore
+	database.OperationStore
+}
+
+
 // RenameService handles preview and execution of file rename + tag write operations.
 type RenameService struct {
-	db database.Store
+	db renameServiceStore
 }
 
 // NewRenameService creates a new RenameService.
-func NewRenameService(db database.Store) *RenameService {
+func NewRenameService(db renameServiceStore) *RenameService {
 	return &RenameService{db: db}
 }
 

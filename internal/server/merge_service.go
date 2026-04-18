@@ -1,5 +1,5 @@
 // file: internal/server/merge_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7d736d2d-e0df-40bd-9f4b-0a07bc2eb6ae
 
 package server
@@ -12,9 +12,23 @@ import (
 	ulid "github.com/oklog/ulid/v2"
 )
 
+// mergeServiceStore is the narrow slice of database.Store this service uses.
+// Widened to satisfy the transitive `maintenanceStore` composite expected by
+// softDeleteBook in maintenance_fixups.go.
+type mergeServiceStore interface {
+	database.BookStore
+	database.AuthorStore
+	database.SeriesStore
+	database.BookFileStore
+	database.UserTagStore
+	database.ExternalIDStore
+	database.StatsStore
+}
+
+
 // MergeService handles merging duplicate books into version groups.
 type MergeService struct {
-	db               database.Store
+	db mergeServiceStore
 	writeBackBatcher *WriteBackBatcher
 }
 
@@ -31,7 +45,7 @@ type MergeResult struct {
 }
 
 // NewMergeService creates a new MergeService.
-func NewMergeService(db database.Store) *MergeService {
+func NewMergeService(db mergeServiceStore) *MergeService {
 	return &MergeService{db: db}
 }
 

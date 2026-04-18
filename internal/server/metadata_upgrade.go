@@ -1,5 +1,5 @@
 // file: internal/server/metadata_upgrade.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4a3b2c1d-0e9f-8a7b-6c5d-4e3f2a1b0c9d
 //
 // Background job that upgrades metadata from lower-quality sources
@@ -28,17 +28,24 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
+// metadataUpgradeStore is the narrow slice of database.Store this service uses.
+type metadataUpgradeStore interface {
+	database.BookReader
+	database.TagStore
+}
+
+
 // MetadataUpgradeService finds books with low-quality metadata
 // sources and attempts to upgrade them to richer sources.
 type MetadataUpgradeService struct {
-	db      database.Store
+	db metadataUpgradeStore
 	fetcher *MetadataFetchService
 }
 
 // NewMetadataUpgradeService creates an upgrade service. The fetcher
 // provides the search + apply pipeline; the db provides the tag
 // lookup for finding eligible books.
-func NewMetadataUpgradeService(db database.Store, fetcher *MetadataFetchService) *MetadataUpgradeService {
+func NewMetadataUpgradeService(db metadataUpgradeStore, fetcher *MetadataFetchService) *MetadataUpgradeService {
 	return &MetadataUpgradeService{db: db, fetcher: fetcher}
 }
 

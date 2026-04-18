@@ -1,5 +1,5 @@
 // file: internal/server/ai_scan_pipeline.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: b8c4d0e2-5f6a-7b8c-9d0e-1f2a3b4c5d6e
 
 package server
@@ -17,10 +17,17 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
+// aiScanPipelineStore is the narrow slice of database.Store this service uses.
+type aiScanPipelineStore interface {
+	database.AuthorReader
+	database.OperationStore
+}
+
+
 // PipelineManager coordinates the multi-pass AI author dedup pipeline.
 type PipelineManager struct {
 	scanStore *database.AIScanStore
-	mainStore database.Store
+	mainStore aiScanPipelineStore
 	parser    *ai.OpenAIParser
 	server    *Server
 	mu        sync.Mutex
@@ -29,7 +36,7 @@ type PipelineManager struct {
 }
 
 // NewPipelineManager creates a new pipeline manager.
-func NewPipelineManager(scanStore *database.AIScanStore, mainStore database.Store, parser *ai.OpenAIParser, server *Server) *PipelineManager {
+func NewPipelineManager(scanStore *database.AIScanStore, mainStore aiScanPipelineStore, parser *ai.OpenAIParser, server *Server) *PipelineManager {
 	return &PipelineManager{
 		scanStore: scanStore,
 		mainStore: mainStore,
