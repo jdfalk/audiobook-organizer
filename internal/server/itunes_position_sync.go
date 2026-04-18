@@ -1,5 +1,5 @@
 // file: internal/server/itunes_position_sync.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9f7a8b5c-0d6e-4a70-b8c5-3d7e0f1b9a99
 //
 // Bidirectional sync between the app's per-user position/state
@@ -33,7 +33,7 @@ const adminUserID = "_local"
 // SyncITunesPositions runs a full bidirectional position sync for the
 // admin user. Pull then push order ensures we don't immediately
 // overwrite a newly-seeded position.
-func SyncITunesPositions(store database.Store, batcher *WriteBackBatcher) (pulled, pushed int) {
+func SyncITunesPositions(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }, batcher *WriteBackBatcher) (pulled, pushed int) {
 	pulled = pullITunesBookmarks(store)
 	pushed = pushPositionsToITunes(store, batcher)
 	return pulled, pushed
@@ -42,7 +42,7 @@ func SyncITunesPositions(store database.Store, batcher *WriteBackBatcher) (pulle
 // pullITunesBookmarks seeds admin positions from iTunes Bookmark data.
 // Iterates books with an iTunes Bookmark value and creates a position
 // row if none exists yet.
-func pullITunesBookmarks(store database.Store) int {
+func pullITunesBookmarks(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }) int {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {
 		log.Printf("[WARN] itunes position sync: list books: %v", err)
@@ -107,7 +107,7 @@ func pullITunesBookmarks(store database.Store) int {
 // position was updated since the last sync, enqueue the book for
 // bookmark writeback. If the book was marked finished, also enqueue
 // a play-count increment.
-func pushPositionsToITunes(store database.Store, batcher *WriteBackBatcher) int {
+func pushPositionsToITunes(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }, batcher *WriteBackBatcher) int {
 	// Get all admin positions that changed in the last 24 hours.
 	// A more precise cutoff would use a last-sync-at timestamp;
 	// for now 24h is a safe window for the maintenance task that
