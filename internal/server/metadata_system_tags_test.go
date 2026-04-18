@@ -4,7 +4,11 @@
 
 package server
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+)
 
 // TestMetadataSourceTag locks in the slug format for the
 // metadata:source:* namespace. Every metadata source's Name()
@@ -33,9 +37,9 @@ func TestMetadataSourceTag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := metadataSourceTag(tt.in)
+			got := metafetch.MetadataSourceTag(tt.in)
 			if got != tt.want {
-				t.Errorf("metadataSourceTag(%q) = %q, want %q", tt.in, got, tt.want)
+				t.Errorf("metafetch.MetadataSourceTag(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
@@ -71,9 +75,9 @@ func TestMetadataLanguageTag(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			got := metadataLanguageTag(tt.in)
+			got := metafetch.MetadataLanguageTag(tt.in)
 			if got != tt.want {
-				t.Errorf("metadataLanguageTag(%q) = %q, want %q", tt.in, got, tt.want)
+				t.Errorf("metafetch.MetadataLanguageTag(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}

@@ -23,6 +23,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
@@ -1306,7 +1307,7 @@ func groupTracksByAlbum(library *itunes.Library) []albumGroup {
 // enrichITunesImportedBooks fetches metadata for recently imported books
 // to normalize author names and get cover art before organizing.
 func enrichITunesImportedBooks(store database.Store, log logger.Logger, status *itunesImportStatus) {
-	mfs := NewMetadataFetchService(store)
+	mfs := metafetch.NewService(store)
 
 	// Get all imported books (library_state = 'imported')
 	books, err := store.GetAllBooks(10000, 0)

@@ -31,6 +31,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
@@ -692,13 +693,13 @@ type Server struct {
 	importService          *ImportService
 	scanService            *ScanService
 	organizeService        *OrganizeService
-	metadataFetchService   *MetadataFetchService
+	metadataFetchService   *metafetch.Service
 	configUpdateService    *ConfigUpdateService
 	systemService          *SystemService
 	metadataStateService   *MetadataStateService
 	dashboardService       *DashboardService
 	dashboardCache         *cache.Cache[gin.H]
-	olService              *OpenLibraryService
+	olService              *metafetch.OpenLibraryService
 	dedupCache             *cache.Cache[gin.H]
 	listCache              *cache.Cache[gin.H]
 	libraryWatcher         *itunes.LibraryWatcher
@@ -816,7 +817,7 @@ func NewServer(store database.Store) *Server {
 		importService:          NewImportService(resolvedStore),
 		scanService:            NewScanService(resolvedStore),
 		organizeService:        NewOrganizeService(resolvedStore),
-		metadataFetchService:   NewMetadataFetchService(resolvedStore),
+		metadataFetchService:   metafetch.NewService(resolvedStore),
 		configUpdateService:    NewConfigUpdateService(resolvedStore),
 		systemService:          NewSystemService(resolvedStore),
 		metadataStateService:   NewMetadataStateService(resolvedStore),
@@ -824,7 +825,7 @@ func NewServer(store database.Store) *Server {
 		dashboardCache:         cache.New[gin.H](30 * time.Second),
 		dedupCache:             cache.New[gin.H](5 * time.Minute),
 		listCache:              cache.New[gin.H](30 * time.Second),
-		olService:              NewOpenLibraryService(),
+		olService:              metafetch.NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
 		mergeService:           merge.NewService(resolvedStore),
 		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
@@ -852,7 +853,7 @@ func NewServer(store database.Store) *Server {
 	isbnSources := server.metadataFetchService.BuildSourceChain()
 	if len(isbnSources) > 0 {
 		server.metadataFetchService.SetISBNEnrichment(
-			NewISBNEnrichmentService(database.GetGlobalStore(), isbnSources),
+			metafetch.NewISBNService(database.GetGlobalStore(), isbnSources),
 		)
 	}
 

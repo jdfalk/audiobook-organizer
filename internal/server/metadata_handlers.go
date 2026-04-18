@@ -22,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -248,7 +249,7 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 
 	resp, err := s.metadataFetchService.SearchMetadataForBookWithOptions(
 		id, body.Query, body.Author, body.Narrator, body.Series,
-		SearchOptions{UseRerank: body.UseRerank},
+		metafetch.SearchOptions{UseRerank: body.UseRerank},
 	)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -268,7 +269,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Candidate MetadataCandidate `json:"candidate"`
+		Candidate metafetch.MetadataCandidate `json:"candidate"`
 		Fields    []string          `json:"fields"`
 		WriteBack *bool             `json:"write_back"`
 	}
@@ -634,7 +635,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 		didUpdate := false
 
-		if meta.Title != "" && !isGarbageValue(meta.Title) {
+		if meta.Title != "" && !metafetch.IsGarbageValue(meta.Title) {
 			addFetched("title", meta.Title)
 			if shouldApply("title", hasBookValue("title")) {
 				book.Title = meta.Title
@@ -643,7 +644,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			}
 		}
 
-		if meta.Author != "" && !isGarbageValue(meta.Author) {
+		if meta.Author != "" && !metafetch.IsGarbageValue(meta.Author) {
 			addFetched("author_name", meta.Author)
 			if shouldApply("author_name", hasBookValue("author_name")) {
 				author, err := s.Store().GetAuthorByName(meta.Author)
@@ -668,7 +669,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			}
 		}
 
-		if meta.Publisher != "" && !isGarbageValue(meta.Publisher) {
+		if meta.Publisher != "" && !metafetch.IsGarbageValue(meta.Publisher) {
 			addFetched("publisher", meta.Publisher)
 			if shouldApply("publisher", hasBookValue("publisher")) {
 				book.Publisher = stringPtr(meta.Publisher)
@@ -677,7 +678,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			}
 		}
 
-		if meta.Language != "" && !isGarbageValue(meta.Language) {
+		if meta.Language != "" && !metafetch.IsGarbageValue(meta.Language) {
 			addFetched("language", meta.Language)
 			if shouldApply("language", hasBookValue("language")) {
 				book.Language = stringPtr(meta.Language)
@@ -722,7 +723,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 		if didUpdate {
 			// Record change history before applying
-			s.metadataFetchService.recordChangeHistory(book, meta, sourceName)
+			s.metadataFetchService.RecordChangeHistory(book, meta, sourceName)
 
 			if _, err := s.Store().UpdateBook(bookID, book); err != nil {
 				result.Status = "error"
@@ -735,7 +736,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 			// System tag the source and language so the review UI
 			// and future upgrade jobs know where this came from.
-			s.metadataFetchService.applyMetadataSystemTags(bookID, sourceName, meta.Language)
+			s.metadataFetchService.ApplyMetadataSystemTags(bookID, sourceName, meta.Language)
 		} else if len(fetchedValues) > 0 {
 			result.Status = "fetched"
 		}
@@ -966,12 +967,12 @@ func (s *Server) runBulkWriteBack(
 // Idempotent — books that already have an ISBN are skipped, so a restart
 // safely re-runs from scratch (no checkpoint needed).
 func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.ProgressReporter) error {
-	if s.metadataFetchService == nil || s.metadataFetchService.isbnEnrichment == nil {
+	if s.metadataFetchService == nil || s.metadataFetchService.ISBNEnrichment() == nil {
 		_ = progress.Log("info", "ISBN enrichment service is not configured, skipping", nil)
 		return nil
 	}
 	_ = progress.Log("info", "Scanning for books missing ISBN identifiers", nil)
-	checked, updated, err := s.metadataFetchService.isbnEnrichment.EnrichMissingISBNs(ctx, 100)
+	checked, updated, err := s.metadataFetchService.ISBNEnrichment().EnrichMissingISBNs(ctx, 100)
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,5 @@
 // file: internal/server/openlibrary_service.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
@@ -17,86 +17,23 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/oklog/ulid/v2"
 )
 
-// OpenLibraryService manages the Open Library data dump lifecycle.
-type OpenLibraryService struct {
-	store     *openlibrary.OLStore
-	tracker   *openlibrary.DownloadTracker
-	mu        sync.Mutex
-	importing map[string]bool
-}
-
-// getOLDumpDir returns the configured dump directory, falling back to {RootDir}/openlibrary-dumps.
-func getOLDumpDir() string {
-	if config.AppConfig.OpenLibraryDumpDir != "" {
-		return config.AppConfig.OpenLibraryDumpDir
-	}
-	if config.AppConfig.RootDir != "" {
-		return filepath.Join(config.AppConfig.RootDir, "openlibrary-dumps")
-	}
-	return ""
-}
-
-// NewOpenLibraryService creates a new service, optionally opening the existing store.
-// If an existing oldb directory is found, it auto-enables Open Library dumps in config.
-func NewOpenLibraryService() *OpenLibraryService {
-	svc := &OpenLibraryService{
-		tracker:   openlibrary.NewDownloadTracker(),
-		importing: make(map[string]bool),
-	}
-
-	storePath := filepath.Join(getOLDumpDir(), "oldb")
-	if info, err := os.Stat(storePath); err == nil && info.IsDir() {
-		// Auto-enable if store directory exists on disk
-		if !config.AppConfig.OpenLibraryDumpEnabled {
-			log.Printf("[INFO] Found existing OL dump store at %s, auto-enabling OpenLibraryDumpEnabled", storePath)
-			config.AppConfig.OpenLibraryDumpEnabled = true
-		}
-		store, err := openlibrary.NewOLStore(storePath)
-		if err != nil {
-			log.Printf("[WARN] Failed to open OL dump store: %v", err)
-		} else {
-			svc.store = store
-		}
-	}
-
-	return svc
-}
-
-// Store returns the underlying OLStore (may be nil).
-func (svc *OpenLibraryService) Store() *openlibrary.OLStore {
-	return svc.store
-}
-
-// Close closes the underlying store.
-func (svc *OpenLibraryService) Close() {
-	if svc.store != nil {
-		svc.store.Close()
-	}
-}
-
 // --- HTTP Handlers ---
-
-// uploadedFileInfo describes a dump file on disk that hasn't been imported yet.
-type uploadedFileInfo struct {
-	Filename string `json:"filename"`
-	Size     int64  `json:"size"`
-	ModTime  string `json:"mod_time"`
-}
 
 func (s *Server) getOLStatus(c *gin.Context) {
 	svc := s.olService
 	resp := gin.H{
 		"enabled":   config.AppConfig.OpenLibraryDumpEnabled,
-		"downloads": svc.tracker.GetAll(),
+		"downloads": svc.Tracker.GetAll(),
 	}
 
-	if svc.store != nil {
-		status, err := svc.store.GetStatus()
+	if svc.OLStore != nil {
+		status, err := svc.OLStore.GetStatus()
 		if err != nil {
 			internalError(c, "failed to get OpenLibrary status", err)
 			return
@@ -105,13 +42,13 @@ func (s *Server) getOLStatus(c *gin.Context) {
 	}
 
 	// Check for uploaded dump files on disk
-	dumpDir := getOLDumpDir()
+	dumpDir := metafetch.GetOLDumpDir()
 	if dumpDir != "" {
-		files := map[string]uploadedFileInfo{}
+		files := map[string]metafetch.UploadedFileInfo{}
 		for _, dumpType := range []string{"editions", "authors", "works"} {
 			path := filepath.Join(dumpDir, openlibrary.DumpFilename(dumpType))
 			if info, err := os.Stat(path); err == nil {
-				files[dumpType] = uploadedFileInfo{
+				files[dumpType] = metafetch.UploadedFileInfo{
 					Filename: info.Name(),
 					Size:     info.Size(),
 					ModTime:  info.ModTime().UTC().Format("2006-01-02T15:04:05Z"),
@@ -130,8 +67,6 @@ type olDownloadRequest struct {
 	Types []string `json:"types"`
 }
 
-var validDumpTypes = map[string]bool{"editions": true, "authors": true, "works": true}
-
 func (s *Server) startOLDownload(c *gin.Context) {
 	var req olDownloadRequest
 	if err := c.ShouldBindJSON(&req); err != nil || len(req.Types) == 0 {
@@ -139,19 +74,19 @@ func (s *Server) startOLDownload(c *gin.Context) {
 	}
 
 	for _, t := range req.Types {
-		if !validDumpTypes[t] {
+		if !metafetch.ValidDumpTypes[t] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid dump type: %s", t)})
 			return
 		}
 	}
 
-	targetDir := getOLDumpDir()
+	targetDir := metafetch.GetOLDumpDir()
 	if targetDir == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "openlibrary_dump_dir not configured"})
 		return
 	}
 
-	tracker := s.olService.tracker
+	tracker := s.olService.Tracker
 	store := s.Store()
 	opID := ulid.Make().String()
 	folderPath := targetDir
@@ -213,25 +148,17 @@ func (s *Server) startOLImport(c *gin.Context) {
 		req.Types = []string{"editions", "authors", "works"}
 	}
 
-	targetDir := getOLDumpDir()
+	targetDir := metafetch.GetOLDumpDir()
 	if targetDir == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "openlibrary_dump_dir not configured"})
 		return
 	}
 
 	svc := s.olService
-	svc.mu.Lock()
-	if svc.store == nil {
-		storePath := filepath.Join(targetDir, "oldb")
-		store, err := openlibrary.NewOLStore(storePath)
-		if err != nil {
-			svc.mu.Unlock()
-			internalError(c, "failed to open store", err)
-			return
-		}
-		svc.store = store
+	if err := svc.EnsureStore(targetDir); err != nil {
+		internalError(c, "failed to open store", err)
+		return
 	}
-	svc.mu.Unlock()
 
 	store := s.Store()
 	opID := ulid.Make().String()
@@ -265,7 +192,7 @@ func (s *Server) startOLImport(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"message": "import started", "types": req.Types, "operation_id": opID})
 }
 
-func (s *Server) executeOLImport(ctx context.Context, progress operations.ProgressReporter, svc *OpenLibraryService, targetDir string, types []string) error {
+func (s *Server) executeOLImport(ctx context.Context, progress operations.ProgressReporter, svc *metafetch.OpenLibraryService, targetDir string, types []string) error {
 	if progress != nil {
 		_ = progress.UpdateProgress(0, len(types), fmt.Sprintf("Starting Open Library import (%d dump types)", len(types)))
 	}
@@ -275,14 +202,14 @@ func (s *Server) executeOLImport(ctx context.Context, progress operations.Progre
 	var mu sync.Mutex
 
 	for i, dumpType := range types {
-		svc.mu.Lock()
-		if svc.importing[dumpType] {
-			svc.mu.Unlock()
+		svc.Mu.Lock()
+		if svc.Importing[dumpType] {
+			svc.Mu.Unlock()
 			log.Printf("[WARN] OL import already in progress for %s", dumpType)
 			continue
 		}
-		svc.importing[dumpType] = true
-		svc.mu.Unlock()
+		svc.Importing[dumpType] = true
+		svc.Mu.Unlock()
 
 		if progress != nil {
 			_ = progress.Log("info", fmt.Sprintf("Starting %s import", dumpType), nil)
@@ -292,16 +219,16 @@ func (s *Server) executeOLImport(ctx context.Context, progress operations.Progre
 		go func(dt string, idx int) {
 			defer importWg.Done()
 			defer func() {
-				svc.mu.Lock()
-				delete(svc.importing, dt)
-				svc.mu.Unlock()
+				svc.Mu.Lock()
+				delete(svc.Importing, dt)
+				svc.Mu.Unlock()
 			}()
 
 			filePath := filepath.Join(targetDir, openlibrary.DumpFilename(dt))
 			log.Printf("[INFO] Starting OL dump import: %s from %s", dt, filePath)
 
 			lastReported := 0
-			err := svc.store.ImportDump(dt, filePath, func(count int) {
+			err := svc.OLStore.ImportDump(dt, filePath, func(count int) {
 				if count-lastReported >= 50000 {
 					lastReported = count
 					if progress != nil {
@@ -345,12 +272,12 @@ func (s *Server) uploadOLDump(c *gin.Context) {
 	log.Printf("[DEBUG] uploadOLDump: Content-Type=%s, ContentLength=%d", c.ContentType(), c.Request.ContentLength)
 	dumpType := c.PostForm("type")
 	log.Printf("[DEBUG] uploadOLDump: dumpType=%q", dumpType)
-	if !validDumpTypes[dumpType] {
+	if !metafetch.ValidDumpTypes[dumpType] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "type must be one of: editions, authors, works"})
 		return
 	}
 
-	targetDir := getOLDumpDir()
+	targetDir := metafetch.GetOLDumpDir()
 	if targetDir == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "openlibrary_dump_dir not configured"})
 		return
@@ -403,15 +330,15 @@ func (s *Server) deleteOLData(c *gin.Context) {
 		return
 	}
 
-	svc.mu.Lock()
-	defer svc.mu.Unlock()
+	svc.Mu.Lock()
+	defer svc.Mu.Unlock()
 
-	if svc.store != nil {
-		svc.store.Close()
-		svc.store = nil
+	if svc.OLStore != nil {
+		svc.OLStore.Close()
+		svc.OLStore = nil
 	}
 
-	targetDir := getOLDumpDir()
+	targetDir := metafetch.GetOLDumpDir()
 	if targetDir != "" {
 		if err := os.RemoveAll(targetDir); err != nil {
 			internalError(c, "failed to delete data", err)

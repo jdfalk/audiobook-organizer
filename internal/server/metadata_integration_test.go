@@ -12,6 +12,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,7 +52,7 @@ func TestMetadataFetch_WithMockAPI(t *testing.T) {
 	created, err := env.Store.CreateBook(book)
 	require.NoError(t, err)
 
-	svc := NewMetadataFetchService(env.Store)
+	svc := metafetch.NewService(env.Store)
 	resp, err := svc.FetchMetadataForBook(created.ID)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -97,7 +98,7 @@ func TestMetadataFetch_FallbackToAuthorSearch(t *testing.T) {
 	created, err := env.Store.CreateBook(book)
 	require.NoError(t, err)
 
-	svc := NewMetadataFetchService(env.Store)
+	svc := metafetch.NewService(env.Store)
 	resp, err := svc.FetchMetadataForBook(created.ID)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -127,7 +128,7 @@ func TestMetadataFetch_NotFound(t *testing.T) {
 	created, err := env.Store.CreateBook(book)
 	require.NoError(t, err)
 
-	svc := NewMetadataFetchService(env.Store)
+	svc := metafetch.NewService(env.Store)
 	_, err = svc.FetchMetadataForBook(created.ID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no metadata found")

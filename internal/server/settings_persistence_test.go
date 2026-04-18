@@ -16,6 +16,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -311,6 +312,6 @@ func TestOLDumpDirAutoDerive(t *testing.T) {
 	config.AppConfig.OpenLibraryDumpDir = ""
 	config.AppConfig.RootDir = "/tmp/test-audiobooks"
 
-	dir := getOLDumpDir()
+	dir := metafetch.GetOLDumpDir()
 	assert.Equal(t, "/tmp/test-audiobooks/openlibrary-dumps", dir)
 }
