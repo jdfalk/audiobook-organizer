@@ -1,5 +1,5 @@
 // file: internal/server/version_swap.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6c3d5a2e-8b4c-4a70-b8c5-3d7e0f1b9a99
 //
 // Primary-version swap tracked operation (spec 3.1 task 3).
@@ -39,7 +39,7 @@ type VersionSwapParams struct {
 // primary files live (the parent of .versions/).
 func RunVersionSwap(
 	ctx context.Context,
-	store database.Store,
+	store interface { database.BookStore; database.BookVersionStore; database.BookFileStore },
 	params VersionSwapParams,
 	progress func(step string, pct int),
 	batcher *WriteBackBatcher,
@@ -161,7 +161,7 @@ func RunVersionSwap(
 // If the library hasn't been migrated yet (VersionID still empty),
 // returns all files for the book — the caller's move operations are
 // still correct because the active version owns all top-level files.
-func filesForVersion(store database.Store, bookID, versionID string) ([]database.BookFile, error) {
+func filesForVersion(store database.BookFileStore, bookID, versionID string) ([]database.BookFile, error) {
 	all, err := store.GetBookFiles(bookID)
 	if err != nil {
 		return nil, err
@@ -186,7 +186,7 @@ func filePaths(files []database.BookFile) []string {
 // ResumeVersionSwaps checks for any BookVersions in swapping_in or
 // swapping_out status and resumes the swap operation. Called on
 // server startup to recover from interrupted swaps.
-func ResumeVersionSwaps(ctx context.Context, store database.Store) {
+func ResumeVersionSwaps(ctx context.Context, store interface { database.BookStore; database.BookVersionStore; database.BookFileStore }) {
 	// Find versions in transitional states by scanning all versions.
 	// In a large library this could be slow — a future optimization
 	// would add an index key for transitional statuses. For now,

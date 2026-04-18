@@ -1,5 +1,5 @@
 // file: internal/server/deluge_integration.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1c9d0e8f-2a3b-4a70-b8c5-3d7e0f1b9a99
 //
 // Deluge integration for library centralization (backlog 6.1).
@@ -187,7 +187,7 @@ func NotifyDelugeAfterUndo(store database.Store, bookID, oldFilePath string) {
 
 // NotifyDelugeAfterVersionSwap checks whether the swapped versions
 // have torrent hashes and updates Deluge accordingly.
-func NotifyDelugeAfterVersionSwap(store database.Store, fromVer, toVer *database.BookVersion, bookFilePath string) {
+func NotifyDelugeAfterVersionSwap(store interface { database.BookReader; database.BookVersionStore }, fromVer, toVer *database.BookVersion, bookFilePath string) {
 	if toVer != nil && toVer.TorrentHash != "" {
 		NotifyDelugeMoveStorage(toVer.TorrentHash, bookFilePath)
 	}

@@ -1,5 +1,5 @@
 // file: internal/server/version_ingest.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3e1f2a9b-4c5d-4a70-b8c5-3d7e0f1b9a99
 //
 // Version creation on ingest (spec 3.1 task 5).
@@ -41,7 +41,7 @@ type IngestVersionParams struct {
 //
 // Also computes and stores the file's SHA-256 hash on the BookFile row
 // (if one exists for the book + file path).
-func CreateIngestVersion(store database.Store, params IngestVersionParams) (*database.BookVersion, error) {
+func CreateIngestVersion(store interface { database.BookVersionStore; database.BookFileStore }, params IngestVersionParams) (*database.BookVersion, error) {
 	if params.BookID == "" || params.FilePath == "" {
 		return nil, fmt.Errorf("book_id and file_path required")
 	}

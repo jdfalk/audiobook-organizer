@@ -1,5 +1,5 @@
 // file: internal/server/version_lifecycle.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5a3b4c0d-6e7f-4a70-b8c5-3d7e0f1b9a99
 //
 // Version lifecycle operations (spec 3.1 task 6).
@@ -141,7 +141,7 @@ func (s *Server) handleHardDeleteVersion(c *gin.Context) {
 
 // autoPromoteAlt selects the most recent alt version and promotes it
 // to active. Called when the active version is trashed.
-func autoPromoteAlt(store database.Store, bookID string) error {
+func autoPromoteAlt(store interface { database.BookReader; database.BookVersionStore; database.BookFileStore }, bookID string) error {
 	allVers, err := store.GetBookVersionsByBookID(bookID)
 	if err != nil {
 		return err
@@ -165,7 +165,7 @@ func autoPromoteAlt(store database.Store, bookID string) error {
 
 // purgeVersion physically deletes the version's files and marks it
 // inactive_purged. Keeps the DB rows for fingerprint matching.
-func purgeVersion(store database.Store, ver *database.BookVersion) error {
+func purgeVersion(store interface { database.BookReader; database.BookVersionStore; database.BookFileStore }, ver *database.BookVersion) error {
 	book, err := store.GetBookByID(ver.BookID)
 	if err != nil || book == nil {
 		return fmt.Errorf("book %s not found", ver.BookID)
@@ -207,7 +207,7 @@ func purgeVersion(store database.Store, ver *database.BookVersion) error {
 
 // CleanupTrashedVersions is the maintenance task that purges versions
 // past their TTL. Called by the scheduler.
-func CleanupTrashedVersions(store database.Store) (purged int) {
+func CleanupTrashedVersions(store interface { database.BookReader; database.BookVersionStore; database.BookFileStore }) (purged int) {
 	trashed, err := store.ListTrashedBookVersions()
 	if err != nil {
 		log.Printf("[WARN] list trashed versions: %v", err)
