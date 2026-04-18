@@ -12,6 +12,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,7 +73,7 @@ func TestPipeline_ImportThenFetchMetadata(t *testing.T) {
 	t.Setenv("OPENLIBRARY_BASE_URL", olServer.URL)
 
 	// 6. Call FetchMetadataForBook
-	svc := NewMetadataFetchService(env.Store)
+	svc := metafetch.NewService(env.Store)
 	resp, err := svc.FetchMetadataForBook(book.ID)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -139,7 +140,7 @@ func TestPipeline_FetchMetadata_MultiSourceFallback(t *testing.T) {
 	t.Setenv("GOOGLE_BOOKS_BASE_URL", gbServer.URL)
 
 	// 5. Call FetchMetadataForBook
-	svc := NewMetadataFetchService(env.Store)
+	svc := metafetch.NewService(env.Store)
 	resp, err := svc.FetchMetadataForBook(book.ID)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -202,7 +203,7 @@ func TestPipeline_ChapterTitle_StillFindsBook(t *testing.T) {
 	t.Setenv("OPENLIBRARY_BASE_URL", olServer.URL)
 
 	// 4. Call FetchMetadataForBook
-	svc := NewMetadataFetchService(env.Store)
+	svc := metafetch.NewService(env.Store)
 	resp, err := svc.FetchMetadataForBook(book.ID)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -252,7 +253,7 @@ func TestPipeline_FetchMetadata_NoResults_AllSources(t *testing.T) {
 	t.Setenv("GOOGLE_BOOKS_BASE_URL", gbServer.URL)
 
 	// 4. Call FetchMetadataForBook
-	svc := NewMetadataFetchService(env.Store)
+	svc := metafetch.NewService(env.Store)
 	resp, err := svc.FetchMetadataForBook(book.ID)
 
 	// 5. Assert: error contains "no metadata found"

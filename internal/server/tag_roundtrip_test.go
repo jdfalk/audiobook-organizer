@@ -9,6 +9,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -20,7 +21,7 @@ func TestBuildFullTagMap_AllFields(t *testing.T) {
 	mockStore := &mocks.MockStore{}
 	mockStore.On("GetSeriesByID", 42).Return(&database.Series{ID: 42, Name: "Omega Force"}, nil)
 
-	mfs := &MetadataFetchService{db: mockStore}
+	mfs := metafetch.NewService(mockStore)
 
 	book := &database.Book{
 		ID:             "BOOK123",
@@ -41,7 +42,7 @@ func TestBuildFullTagMap_AllFields(t *testing.T) {
 		CoverURL:       stringPtr("https://example.com/cover.jpg"),
 	}
 
-	tagMap := mfs.buildFullTagMap(book, "Return of the Archon", "Return of the Archon", "Joshua Dalzelle", "Paul Heitsch", 2015, "")
+	tagMap := mfs.BuildFullTagMap(book, "Return of the Archon", "Return of the Archon", "Joshua Dalzelle", "Paul Heitsch", 2015, "")
 
 	// Standard tags
 	assert.Equal(t, "Return of the Archon", tagMap["title"])
@@ -91,14 +92,14 @@ func TestBuildFullTagMap_EmptyOptionalFields(t *testing.T) {
 	mockStore := &mocks.MockStore{}
 	mockStore.On("GetSeriesByID", mock.Anything).Return(nil, nil)
 
-	mfs := &MetadataFetchService{db: mockStore}
+	mfs := metafetch.NewService(mockStore)
 
 	book := &database.Book{
 		ID:    "BOOK456",
 		Title: "Simple Book",
 	}
 
-	tagMap := mfs.buildFullTagMap(book, "Simple Book", "Simple Book", "", "", 0, "")
+	tagMap := mfs.BuildFullTagMap(book, "Simple Book", "Simple Book", "", "", 0, "")
 
 	// Should always have title, album, genre, book_id
 	assert.Equal(t, "Simple Book", tagMap["title"])

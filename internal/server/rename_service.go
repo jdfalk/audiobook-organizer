@@ -14,6 +14,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	enhanced "github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
@@ -140,7 +141,7 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 	// current file's tags, compares each key, and drops matches.
 	// When nothing remains we skip the write entirely.
 	if len(tagMeta) > 0 && !isProtectedPath(tagWriteTarget) {
-		filtered := filterUnchangedTags(tagWriteTarget, tagMeta)
+		filtered := metafetch.FilterUnchangedTags(tagWriteTarget, tagMeta)
 		if len(filtered) == 0 {
 			log.Printf("[DEBUG] rename: all tags match, skipping write for %s", tagWriteTarget)
 		} else {
@@ -219,7 +220,7 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 			for _, bf := range bookFiles {
 				if bf.FilePath == oldPath {
 					bf.FilePath = proposedPath
-					bf.ITunesPath = computeITunesPath(proposedPath)
+					bf.ITunesPath = metafetch.ComputeITunesPath(proposedPath)
 					if ufErr := rs.db.UpdateBookFile(bf.ID, &bf); ufErr != nil {
 						log.Printf("[WARN] rename: failed to update book_file %s path: %v", bf.ID, ufErr)
 					}

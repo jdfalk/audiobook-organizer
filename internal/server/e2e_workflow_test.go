@@ -18,6 +18,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -144,7 +145,7 @@ func TestE2E_ScanAndFetchMetadata(t *testing.T) {
 	bookID := books[0].ID
 
 	// Step 2: Fetch metadata
-	metaSvc := NewMetadataFetchService(env.Store)
+	metaSvc := metafetch.NewService(env.Store)
 	resp, err := metaSvc.FetchMetadataForBook(bookID)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)

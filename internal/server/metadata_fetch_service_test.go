@@ -13,6 +13,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/stretchr/testify/mock"
 )
@@ -62,7 +63,7 @@ func TestMetadataFetchService_FetchMetadataForBook_NotFound(t *testing.T) {
 			return nil, nil
 		},
 	}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	_, err := mfs.FetchMetadataForBook("nonexistent")
 
@@ -73,7 +74,7 @@ func TestMetadataFetchService_FetchMetadataForBook_NotFound(t *testing.T) {
 
 func TestMetadataFetchService_ApplyMetadataToBook(t *testing.T) {
 	mockDB := &database.MockStore{}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	book := &database.Book{ID: "1", Title: "Original Title"}
 	meta := metadata.BookMetadata{
@@ -81,7 +82,7 @@ func TestMetadataFetchService_ApplyMetadataToBook(t *testing.T) {
 		Publisher: "Test Publisher",
 	}
 
-	mfs.applyMetadataToBook(book, meta)
+	mfs.ApplyMetadataToBook(book, meta)
 
 	if book.Title != "Fetched Title" {
 		t.Errorf("expected title 'Fetched Title', got %q", book.Title)
@@ -103,7 +104,7 @@ func TestMetadataFetchService_BuildSourceChain(t *testing.T) {
 	}
 
 	mockDB := &database.MockStore{}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 	chain := mfs.BuildSourceChain()
 
 	if len(chain) != 2 {
@@ -131,7 +132,7 @@ func TestMetadataFetchService_NoSourcesEnabled(t *testing.T) {
 			return &database.Book{ID: id, Title: "Test", AuthorID: &authorID}, nil
 		},
 	}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	_, err := mfs.FetchMetadataForBook("book1")
 	if err == nil {
@@ -152,7 +153,7 @@ func TestMetadataFetchService_Source1Fails_Source2Succeeds(t *testing.T) {
 			return book, nil
 		},
 	}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	source1 := &mockMetadataSource{
 		name: "FailSource",
@@ -166,7 +167,7 @@ func TestMetadataFetchService_Source1Fails_Source2Succeeds(t *testing.T) {
 			return []metadata.BookMetadata{{Title: "The Hobbit", Author: "J.R.R. Tolkien"}}, nil
 		},
 	}
-	mfs.overrideSources = []metadata.MetadataSource{source1, source2}
+	mfs.SetOverrideSources([]metadata.MetadataSource{source1, source2})
 
 	resp, err := mfs.FetchMetadataForBook("book1")
 	if err != nil {
@@ -192,7 +193,7 @@ func TestMetadataFetchService_TitleStrippingFallback(t *testing.T) {
 			return book, nil
 		},
 	}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	var searchCount int32
 	src := &mockMetadataSource{
@@ -206,7 +207,7 @@ func TestMetadataFetchService_TitleStrippingFallback(t *testing.T) {
 			return nil, nil
 		},
 	}
-	mfs.overrideSources = []metadata.MetadataSource{src}
+	mfs.SetOverrideSources([]metadata.MetadataSource{src})
 
 	resp, err := mfs.FetchMetadataForBook("book1")
 	if err != nil {
@@ -228,7 +229,7 @@ func TestMetadataFetchService_AllSourcesNoResults(t *testing.T) {
 			return &database.Book{ID: id, Title: "Nonexistent Book"}, nil
 		},
 	}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	emptySrc := func(name string) *mockMetadataSource {
 		return &mockMetadataSource{
@@ -238,7 +239,7 @@ func TestMetadataFetchService_AllSourcesNoResults(t *testing.T) {
 			},
 		}
 	}
-	mfs.overrideSources = []metadata.MetadataSource{emptySrc("A"), emptySrc("B"), emptySrc("C")}
+	mfs.SetOverrideSources([]metadata.MetadataSource{emptySrc("A"), emptySrc("B"), emptySrc("C")})
 
 	_, err := mfs.FetchMetadataForBook("book1")
 	if err == nil {
@@ -255,7 +256,7 @@ func TestMetadataFetchService_AllSourcesError(t *testing.T) {
 			return &database.Book{ID: id, Title: "Some Book"}, nil
 		},
 	}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	errSrc := func(name string) *mockMetadataSource {
 		return &mockMetadataSource{
@@ -265,7 +266,7 @@ func TestMetadataFetchService_AllSourcesError(t *testing.T) {
 			},
 		}
 	}
-	mfs.overrideSources = []metadata.MetadataSource{errSrc("SourceA"), errSrc("SourceB")}
+	mfs.SetOverrideSources([]metadata.MetadataSource{errSrc("SourceA"), errSrc("SourceB")})
 
 	_, err := mfs.FetchMetadataForBook("book1")
 	if err == nil {
@@ -278,7 +279,7 @@ func TestMetadataFetchService_AllSourcesError(t *testing.T) {
 
 func TestMetadataFetchService_ApplyMetadata_AllFields(t *testing.T) {
 	mockDB := &database.MockStore{}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	book := &database.Book{ID: "1", Title: "Old"}
 	meta := metadata.BookMetadata{
@@ -289,7 +290,7 @@ func TestMetadataFetchService_ApplyMetadata_AllFields(t *testing.T) {
 		CoverURL:    "https://example.com/cover.jpg",
 	}
 
-	mfs.applyMetadataToBook(book, meta)
+	mfs.ApplyMetadataToBook(book, meta)
 
 	if book.Title != "New Title" {
 		t.Errorf("Title: want 'New Title', got %q", book.Title)
@@ -310,7 +311,7 @@ func TestMetadataFetchService_ApplyMetadata_AllFields(t *testing.T) {
 
 func TestMetadataFetchService_ApplyMetadata_EmptyFieldsPreserved(t *testing.T) {
 	mockDB := &database.MockStore{}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	origPublisher := "Original Publisher"
 	origLang := "fr"
@@ -327,7 +328,7 @@ func TestMetadataFetchService_ApplyMetadata_EmptyFieldsPreserved(t *testing.T) {
 
 	// Empty metadata should not overwrite existing fields
 	meta := metadata.BookMetadata{}
-	mfs.applyMetadataToBook(book, meta)
+	mfs.ApplyMetadataToBook(book, meta)
 
 	if book.Title != "Original Title" {
 		t.Errorf("Title should be preserved, got %q", book.Title)
@@ -361,7 +362,7 @@ func TestMetadataFetchService_AuthorLookupFails(t *testing.T) {
 			return book, nil
 		},
 	}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	src := &mockMetadataSource{
 		name: "TestSource",
@@ -369,7 +370,7 @@ func TestMetadataFetchService_AuthorLookupFails(t *testing.T) {
 			return []metadata.BookMetadata{{Title: "Test Book", Publisher: "Found Publisher"}}, nil
 		},
 	}
-	mfs.overrideSources = []metadata.MetadataSource{src}
+	mfs.SetOverrideSources([]metadata.MetadataSource{src})
 
 	resp, err := mfs.FetchMetadataForBook("book1")
 	if err != nil {
@@ -448,7 +449,7 @@ func TestBestTitleMatch(t *testing.T) {
 		{Title: "Great Adventure"},
 	}
 
-	got := bestTitleMatch(results, "The Great Adventure")
+	got := metafetch.BestTitleMatch(results, "The Great Adventure")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -469,19 +470,19 @@ func TestBestTitleMatch_NoOverlap(t *testing.T) {
 		{Title: "Another Unrelated Title"},
 	}
 
-	got := bestTitleMatch(results, "Xyz Qwerty")
+	got := metafetch.BestTitleMatch(results, "Xyz Qwerty")
 	if got != nil {
 		t.Errorf("expected nil for no overlap, got %v", got)
 	}
 }
 
 func TestBestTitleMatch_EmptyResults(t *testing.T) {
-	got := bestTitleMatch(nil, "Some Title")
+	got := metafetch.BestTitleMatch(nil, "Some Title")
 	if got != nil {
 		t.Errorf("expected nil for empty results, got %v", got)
 	}
 
-	got = bestTitleMatch([]metadata.BookMetadata{}, "Some Title")
+	got = metafetch.BestTitleMatch([]metadata.BookMetadata{}, "Some Title")
 	if got != nil {
 		t.Errorf("expected nil for empty slice, got %v", got)
 	}
@@ -504,8 +505,8 @@ func TestIsGarbageValue(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			if got := isGarbageValue(tc.input); got != tc.want {
-				t.Errorf("isGarbageValue(%q) = %v, want %v", tc.input, got, tc.want)
+			if got := metafetch.IsGarbageValue(tc.input); got != tc.want {
+				t.Errorf("metafetch.IsGarbageValue(%q) = %v, want %v", tc.input, got, tc.want)
 			}
 		})
 	}
@@ -513,19 +514,19 @@ func TestIsGarbageValue(t *testing.T) {
 
 func TestIsBetterValue_NeverDowngrade(t *testing.T) {
 	// Real author -> "Unknown" should NOT replace
-	if isBetterValue("Terry Pratchett", "Unknown") {
+	if metafetch.IsBetterValue("Terry Pratchett", "Unknown") {
 		t.Error("should not replace real author with Unknown")
 	}
 	// Empty -> real value should replace
-	if !isBetterValue("", "Terry Pratchett") {
+	if !metafetch.IsBetterValue("", "Terry Pratchett") {
 		t.Error("should replace empty with real value")
 	}
 	// "Unknown" -> real value should replace
-	if !isBetterValue("Unknown", "Terry Pratchett") {
+	if !metafetch.IsBetterValue("Unknown", "Terry Pratchett") {
 		t.Error("should replace Unknown with real value")
 	}
 	// Real -> real is allowed
-	if !isBetterValue("Old Title", "New Title") {
+	if !metafetch.IsBetterValue("Old Title", "New Title") {
 		t.Error("should allow real->real replacement")
 	}
 }
@@ -533,16 +534,16 @@ func TestIsBetterValue_NeverDowngrade(t *testing.T) {
 func TestIsBetterStringPtr_NeverDowngrade(t *testing.T) {
 	real := "Real Narrator"
 	// Real narrator -> "narrator" garbage should NOT replace
-	if isBetterStringPtr(&real, "narrator") {
+	if metafetch.IsBetterStringPtr(&real, "narrator") {
 		t.Error("should not replace real narrator with garbage 'narrator'")
 	}
 	// nil -> real should replace
-	if !isBetterStringPtr(nil, "John Smith") {
+	if !metafetch.IsBetterStringPtr(nil, "John Smith") {
 		t.Error("should replace nil with real value")
 	}
 	// garbage -> real should replace
 	unknown := "Unknown"
-	if !isBetterStringPtr(&unknown, "John Smith") {
+	if !metafetch.IsBetterStringPtr(&unknown, "John Smith") {
 		t.Error("should replace Unknown with real value")
 	}
 }
@@ -564,7 +565,7 @@ func TestParseSeriesFromTitle(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			series, pos, title := parseSeriesFromTitle(tc.input)
+			series, pos, title := metafetch.ParseSeriesFromTitle(tc.input)
 			if series != tc.wantSeries {
 				t.Errorf("series: got %q, want %q", series, tc.wantSeries)
 			}
@@ -580,7 +581,7 @@ func TestParseSeriesFromTitle(t *testing.T) {
 
 func TestApplyMetadataToBook_NoDowngrade(t *testing.T) {
 	mockDB := &database.MockStore{}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	realAuthor := "Terry Pratchett & Stephen Baxter"
 	realNarrator := "Michael Fenton Stevens"
@@ -598,7 +599,7 @@ func TestApplyMetadataToBook_NoDowngrade(t *testing.T) {
 		Author:   "Unknown",
 	}
 
-	mfs.applyMetadataToBook(book, meta)
+	mfs.ApplyMetadataToBook(book, meta)
 
 	// Title should NOT be replaced with "Unknown"
 	if book.Title != "The Long Cosmos" {
@@ -624,7 +625,7 @@ func TestRecordChangeHistory(t *testing.T) {
 			return nil
 		},
 	}
-	mfs := NewMetadataFetchService(mockDB)
+	mfs := metafetch.NewService(mockDB)
 
 	authorID := 1
 	seriesID := 2
@@ -640,7 +641,7 @@ func TestRecordChangeHistory(t *testing.T) {
 		Publisher: "New Publisher",
 	}
 
-	mfs.recordChangeHistory(book, meta, "TestSource")
+	mfs.RecordChangeHistory(book, meta, "TestSource")
 
 	if len(recorded) < 3 {
 		t.Fatalf("expected at least 3 change records, got %d", len(recorded))
@@ -669,7 +670,7 @@ func TestScoreTitleMatch_BoxSetPenalised(t *testing.T) {
 		{Title: "The Long Earth Series 5 Books Collection Terry Pratchett and Stephen Baxter Box Set"},
 		{Title: "The Long Earth", Description: "A novel.", CoverURL: "https://example.com/cover.jpg"},
 	}
-	got := bestTitleMatch(results, "The Long Earth")
+	got := metafetch.BestTitleMatch(results, "The Long Earth")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -686,7 +687,7 @@ func TestScoreTitleMatch_CollectionPenalised(t *testing.T) {
 		{Title: "Discworld Collection: Books 1-5"},
 		{Title: "The Colour of Magic", Description: "First Discworld novel.", CoverURL: "https://cdn.example.com/cover.jpg", Narrator: "Tony Robinson"},
 	}
-	got := bestTitleMatch(results, "The Colour of Magic")
+	got := metafetch.BestTitleMatch(results, "The Colour of Magic")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -700,7 +701,7 @@ func TestScoreTitleMatch_OmnibusPenalised(t *testing.T) {
 		{Title: "Foundation Omnibus: Foundation, Foundation and Empire, Second Foundation"},
 		{Title: "Foundation", Author: "Isaac Asimov", Description: "The galactic empire crumbles.", ISBN: "9780553293357"},
 	}
-	got := bestTitleMatch(results, "Foundation")
+	got := metafetch.BestTitleMatch(results, "Foundation")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -715,7 +716,7 @@ func TestScoreTitleMatch_ExactMatchWins(t *testing.T) {
 		{Title: "The Long Cosmos and Other Stories Collection"},
 		{Title: "The Long Cosmos", Description: "Book 5 of the Long Earth series.", CoverURL: "https://example.com/c.jpg"},
 	}
-	got := bestTitleMatch(results, "The Long Cosmos")
+	got := metafetch.BestTitleMatch(results, "The Long Cosmos")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -730,7 +731,7 @@ func TestScoreTitleMatch_BelowThresholdReturnsNil(t *testing.T) {
 	results := []metadata.BookMetadata{
 		{Title: "A Completely Unrelated Title About Cooking"},
 	}
-	got := bestTitleMatch(results, "The Long Cosmos")
+	got := metafetch.BestTitleMatch(results, "The Long Cosmos")
 	if got != nil {
 		t.Errorf("expected nil (below quality threshold), got %v", got)
 	}
@@ -743,7 +744,7 @@ func TestScoreTitleMatch_RichMetadataBonus(t *testing.T) {
 		{Title: "Dune"},
 		{Title: "Dune", Description: "Paul Atreides travels to Arrakis.", CoverURL: "https://example.com/dune.jpg", ISBN: "9780441013593"},
 	}
-	got := bestTitleMatch(results, "Dune")
+	got := metafetch.BestTitleMatch(results, "Dune")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -762,7 +763,7 @@ func TestScoreTitleMatch_LengthPenalty(t *testing.T) {
 		// Concise exact match
 		{Title: "Ender's Game", Description: "Military sci-fi classic.", CoverURL: "https://example.com/enders.jpg"},
 	}
-	got := bestTitleMatch(results, "Ender's Game")
+	got := metafetch.BestTitleMatch(results, "Ender's Game")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -777,7 +778,7 @@ func TestScoreTitleMatch_NDigitBooksPenalised(t *testing.T) {
 		{Title: "Hitchhiker 5 Books Complete Collection Douglas Adams"},
 		{Title: "The Hitchhiker's Guide to the Galaxy", Description: "Don't panic.", CoverURL: "https://example.com/h2g2.jpg"},
 	}
-	got := bestTitleMatch(results, "The Hitchhiker's Guide to the Galaxy")
+	got := metafetch.BestTitleMatch(results, "The Hitchhiker's Guide to the Galaxy")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -794,7 +795,7 @@ func TestScoreTitleMatch_MultipleVariants(t *testing.T) {
 		{Title: "Fellowship of the Ring", Description: "Part one of LOTR.", CoverURL: "https://example.com/lotr.jpg"},
 	}
 	// Provide both a cleaned and raw title variant.
-	got := bestTitleMatch(results, "Fellowship of the Ring", "The Fellowship of the Ring")
+	got := metafetch.BestTitleMatch(results, "Fellowship of the Ring", "The Fellowship of the Ring")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -807,7 +808,7 @@ func TestApplySeriesPositionFilter_RejectsWrongPosition(t *testing.T) {
 	results := []metadata.BookMetadata{
 		{Title: "The Long Cosmos", SeriesPosition: "3"}, // wrong — book is #5
 	}
-	got := applySeriesPositionFilter(results, 5)
+	got := metafetch.ApplySeriesPositionFilter(results, 5)
 	if got != nil {
 		t.Errorf("expected nil (wrong position), got %v", got)
 	}
@@ -817,7 +818,7 @@ func TestApplySeriesPositionFilter_AcceptsCorrectPosition(t *testing.T) {
 	results := []metadata.BookMetadata{
 		{Title: "The Long Cosmos", SeriesPosition: "5"},
 	}
-	got := applySeriesPositionFilter(results, 5)
+	got := metafetch.ApplySeriesPositionFilter(results, 5)
 	if got == nil {
 		t.Fatal("expected result, got nil")
 	}
@@ -831,7 +832,7 @@ func TestApplySeriesPositionFilter_NoKnownPosition(t *testing.T) {
 		{Title: "Some Book", SeriesPosition: "3"},
 	}
 	// knownPosition == 0 means "we don't know" — pass through unchanged
-	got := applySeriesPositionFilter(results, 0)
+	got := metafetch.ApplySeriesPositionFilter(results, 0)
 	if len(got) != 1 {
 		t.Errorf("expected 1 result, got %d", len(got))
 	}
@@ -842,7 +843,7 @@ func TestApplySeriesPositionFilter_NoPositionInResult(t *testing.T) {
 	results := []metadata.BookMetadata{
 		{Title: "The Long Cosmos"},
 	}
-	got := applySeriesPositionFilter(results, 5)
+	got := metafetch.ApplySeriesPositionFilter(results, 5)
 	if len(got) != 1 {
 		t.Errorf("expected 1 result (no position to reject), got %d", len(got))
 	}
@@ -885,8 +886,8 @@ func TestFetchMetadataForBook_BoxSetRejected_IndividualBookApplied(t *testing.T)
 		},
 	}
 
-	mfs := NewMetadataFetchService(mockDB)
-	mfs.overrideSources = []metadata.MetadataSource{src}
+	mfs := metafetch.NewService(mockDB)
+	mfs.SetOverrideSources([]metadata.MetadataSource{src})
 
 	resp, err := mfs.FetchMetadataForBook("book1")
 	if err != nil {
@@ -916,7 +917,7 @@ func TestWriteBackMetadataForBook_NotFound(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	mockStore.On("GetBookByID", "missing-id").Return(nil, nil)
 
-	svc := NewMetadataFetchService(mockStore)
+	svc := metafetch.NewService(mockStore)
 	_, err := svc.WriteBackMetadataForBook("missing-id")
 	if err == nil {
 		t.Fatal("expected error for missing book")
@@ -948,7 +949,7 @@ func TestWriteBackMetadataForBook_SingleFile(t *testing.T) {
 	mockStore.On("GetBookFiles", book.ID).Return([]database.BookFile{}, nil)
 	mockStore.On("RecordMetadataChange", mock.AnythingOfType("*database.MetadataChangeRecord")).Return(nil)
 
-	svc := NewMetadataFetchService(mockStore)
+	svc := metafetch.NewService(mockStore)
 	// WriteMetadataToFile will fail because the file doesn't exist, but the
 	// function should return (0, nil) — failures are logged not returned.
 	count, err := svc.WriteBackMetadataForBook(book.ID)
@@ -972,7 +973,7 @@ func TestBestTitleMatchWithContext_AuthorTiebreaking(t *testing.T) {
 		{Title: "Dune", Author: "Someone Else", Narrator: "Jane Doe"},
 	}
 
-	got := bestTitleMatchWithContext(results, "Frank Herbert", "", "Dune")
+	got := metafetch.BestTitleMatchWithContext(results, "Frank Herbert", "", "Dune")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -991,7 +992,7 @@ func TestBestTitleMatchWithContext_AuthorTiebreaking_Substring(t *testing.T) {
 		{Title: "The Colour of Magic", Author: "Unknown Publisher", Narrator: "Nigel Planer"},
 	}
 
-	got := bestTitleMatchWithContext(results, "Pratchett", "", "The Colour of Magic")
+	got := metafetch.BestTitleMatchWithContext(results, "Pratchett", "", "The Colour of Magic")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -1008,7 +1009,7 @@ func TestBestTitleMatchWithContext_MissingAuthorPenalty(t *testing.T) {
 		{Title: "Foundation", Author: "Isaac Asimov", Narrator: "Scott Brick"}, // matching → 1.5x
 	}
 
-	got := bestTitleMatchWithContext(results, "Isaac Asimov", "", "Foundation")
+	got := metafetch.BestTitleMatchWithContext(results, "Isaac Asimov", "", "Foundation")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -1025,8 +1026,8 @@ func TestBestTitleMatchWithContext_MissingAuthorPenalty_NoBookAuthor(t *testing.
 
 	// Both have same narrator so narrator boost is the same.
 	// With empty bookAuthor, neither gets author boost/penalty.
-	gotWith := bestTitleMatchWithContext([]metadata.BookMetadata{withAuthor}, "", "", "Foundation")
-	gotWithout := bestTitleMatchWithContext([]metadata.BookMetadata{withoutAuthor}, "", "", "Foundation")
+	gotWith := metafetch.BestTitleMatchWithContext([]metadata.BookMetadata{withAuthor}, "", "", "Foundation")
+	gotWithout := metafetch.BestTitleMatchWithContext([]metadata.BookMetadata{withoutAuthor}, "", "", "Foundation")
 
 	// Both should return results (no penalty kills them)
 	if gotWith == nil {
@@ -1045,7 +1046,7 @@ func TestBestTitleMatchWithContext_NarratorBoost(t *testing.T) {
 		{Title: "Neuromancer", Author: "William Gibson", Narrator: "Robertson Dean"}, // narrator → 1.15x
 	}
 
-	got := bestTitleMatchWithContext(results, "", "", "Neuromancer")
+	got := metafetch.BestTitleMatchWithContext(results, "", "", "Neuromancer")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -1061,7 +1062,7 @@ func TestBestTitleMatchWithContext_NarratorMatchBoost(t *testing.T) {
 		{Title: "Dune", Author: "Frank Herbert", Narrator: "Scott Brick"},
 	}
 
-	got := bestTitleMatchWithContext(results, "Frank Herbert", "Scott Brick", "Dune")
+	got := metafetch.BestTitleMatchWithContext(results, "Frank Herbert", "Scott Brick", "Dune")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -1080,7 +1081,7 @@ func TestBestTitleMatchWithContext_AudiobookSourcePreference(t *testing.T) {
 		{Title: "The Name of the Wind", Author: "Patrick Rothfuss", Narrator: "Nick Podehl", Description: "A novel."},
 	}
 
-	got := bestTitleMatchWithContext(results, "Patrick Rothfuss", "", "The Name of the Wind")
+	got := metafetch.BestTitleMatchWithContext(results, "Patrick Rothfuss", "", "The Name of the Wind")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -1100,7 +1101,7 @@ func TestBestTitleMatchWithContext_AuthorMismatchPenalty(t *testing.T) {
 		{Title: "Storm Front", Author: "R.S. Belcher", Narrator: "Bronson Pinchot"},
 	}
 
-	got := bestTitleMatchWithContext(results, "Jim Butcher", "", "Storm Front")
+	got := metafetch.BestTitleMatchWithContext(results, "Jim Butcher", "", "Storm Front")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
@@ -1128,8 +1129,8 @@ func TestSearchMetadataForBook_SeriesBoost(t *testing.T) {
 		},
 	}
 
-	mfs := NewMetadataFetchService(mockDB)
-	mfs.overrideSources = []metadata.MetadataSource{src}
+	mfs := metafetch.NewService(mockDB)
+	mfs.SetOverrideSources([]metadata.MetadataSource{src})
 
 	// Pass series as the third authorHint parameter
 	resp, err := mfs.SearchMetadataForBook("book1", "Storm Front", "Jim Butcher", "", "The Dresden Files")
@@ -1182,8 +1183,8 @@ func TestIsGarbageValue_ExtendedValues(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
-			if got := isGarbageValue(tc.input); got != tc.want {
-				t.Errorf("isGarbageValue(%q) = %v, want %v", tc.input, got, tc.want)
+			if got := metafetch.IsGarbageValue(tc.input); got != tc.want {
+				t.Errorf("metafetch.IsGarbageValue(%q) = %v, want %v", tc.input, got, tc.want)
 			}
 		})
 	}
@@ -1213,8 +1214,8 @@ func TestSearchMetadataForBook_ResultLimitCap50(t *testing.T) {
 		},
 	}
 
-	mfs := NewMetadataFetchService(mockDB)
-	mfs.overrideSources = []metadata.MetadataSource{src}
+	mfs := metafetch.NewService(mockDB)
+	mfs.SetOverrideSources([]metadata.MetadataSource{src})
 
 	resp, err := mfs.SearchMetadataForBook("book1", "Test")
 	if err != nil {
@@ -1251,8 +1252,8 @@ func TestSearchMetadataForBook_GarbageAuthorTreatedAsEmpty(t *testing.T) {
 		},
 	}
 
-	mfs := NewMetadataFetchService(mockDB)
-	mfs.overrideSources = []metadata.MetadataSource{src}
+	mfs := metafetch.NewService(mockDB)
+	mfs.SetOverrideSources([]metadata.MetadataSource{src})
 
 	resp, err := mfs.SearchMetadataForBook("book1", "Test Book")
 	if err != nil {
@@ -1285,8 +1286,8 @@ func TestSearchMetadataForBook_GarbageNarratorTreatedAsEmpty(t *testing.T) {
 		},
 	}
 
-	mfs := NewMetadataFetchService(mockDB)
-	mfs.overrideSources = []metadata.MetadataSource{src}
+	mfs := metafetch.NewService(mockDB)
+	mfs.SetOverrideSources([]metadata.MetadataSource{src})
 
 	resp, err := mfs.SearchMetadataForBook("book1", "Test Book")
 	if err != nil {
@@ -1336,9 +1337,9 @@ func TestScoreOneResult_BasicScoring(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			score := scoreOneResult(tc.result, searchWords)
+			score := metafetch.ScoreOneResult(tc.result, searchWords)
 			if score < tc.minExp || score > tc.maxExp {
-				t.Errorf("scoreOneResult() = %.3f, want [%.3f, %.3f]", score, tc.minExp, tc.maxExp)
+				t.Errorf("metafetch.ScoreOneResult() = %.3f, want [%.3f, %.3f]", score, tc.minExp, tc.maxExp)
 			}
 		})
 	}
@@ -1359,7 +1360,7 @@ func TestBestTitleMatchWithContext_AllMultipliersCombine(t *testing.T) {
 	}
 
 	results := []metadata.BookMetadata{poor, ideal}
-	got := bestTitleMatchWithContext(results, "J.R.R. Tolkien", "Martin Freeman", "The Hobbit")
+	got := metafetch.BestTitleMatchWithContext(results, "J.R.R. Tolkien", "Martin Freeman", "The Hobbit")
 	if got == nil {
 		t.Fatal("expected a match, got nil")
 	}
