@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -900,7 +900,7 @@ func (s *Server) seriesPrune(c *gin.Context) {
 }
 
 // executeSeriesPrune performs the actual series prune logic (used by both HTTP handler and scheduler).
-func (s *Server) executeSeriesPrune(ctx context.Context, store database.Store, progress operations.ProgressReporter, operationID string) error {
+func (s *Server) executeSeriesPrune(ctx context.Context, store interface { database.BookStore; database.AuthorStore; database.SeriesStore; database.OperationStore }, progress operations.ProgressReporter, operationID string) error {
 	_ = progress.Log("info", "Starting series auto-prune...", nil)
 
 	allSeries, err := store.GetAllSeries()

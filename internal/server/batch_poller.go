@@ -1,5 +1,5 @@
 // file: internal/server/batch_poller.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f8a1b2c3-d4e5-6789-abcd-0123456789ab
 
 package server
@@ -22,7 +22,7 @@ type BatchCompletionHandler func(ctx context.Context, batchID string, outputFile
 // BatchPoller is a unified poller that discovers completed OpenAI batches
 // tagged with project metadata and routes them to the appropriate handler.
 type BatchPoller struct {
-	db       database.Store
+	db       database.OperationStore
 	parser   *ai.OpenAIParser
 	handlers map[string]BatchCompletionHandler
 
@@ -33,7 +33,7 @@ type BatchPoller struct {
 }
 
 // NewBatchPoller creates a new BatchPoller.
-func NewBatchPoller(db database.Store, parser *ai.OpenAIParser) *BatchPoller {
+func NewBatchPoller(db database.OperationStore, parser *ai.OpenAIParser) *BatchPoller {
 	return &BatchPoller{
 		db:               db,
 		parser:           parser,

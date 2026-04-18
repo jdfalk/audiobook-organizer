@@ -1,5 +1,5 @@
 // file: internal/server/middleware/auth.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 83c42ecb-1df2-4baf-9890-3f91ab4db6fe
 
 package middleware
@@ -66,7 +66,7 @@ func CurrentSession(c *gin.Context) (*database.Session, bool) {
 }
 
 // RequireAuth enforces session-based auth when at least one user exists.
-func RequireAuth(store database.Store) gin.HandlerFunc {
+func RequireAuth(store interface { database.UserReader; database.RoleStore; database.SessionStore }) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if store == nil {
 			c.Next()
@@ -139,7 +139,7 @@ func RequireAuth(store database.Store) gin.HandlerFunc {
 // Permissions slice for the given user. Unknown roles are skipped.
 // Returns nil if the user has no roles (which makes every Can()
 // check return false — safe default).
-func effectivePermissionsFor(store database.Store, user *database.User) []auth.Permission {
+func effectivePermissionsFor(store database.RoleStore, user *database.User) []auth.Permission {
 	if user == nil || len(user.Roles) == 0 || store == nil {
 		return nil
 	}
@@ -170,7 +170,7 @@ func effectivePermissionsFor(store database.Store, user *database.User) []auth.P
 //
 // Exception: if no users exist yet (first-run bootstrap), the check
 // is bypassed so the /setup wizard can run unauthenticated.
-func RequirePermission(store database.Store, p auth.Permission) gin.HandlerFunc {
+func RequirePermission(store interface { database.UserReader; database.RoleStore; database.SessionStore }, p auth.Permission) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// First-run bypass — RequireAuth uses the same pattern.
 		if store != nil {
