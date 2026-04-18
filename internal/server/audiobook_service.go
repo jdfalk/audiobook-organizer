@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -23,9 +23,29 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 )
 
+// audiobookStore is the narrow slice of database.Store that
+// AudiobookService actually needs — both for its own method calls
+// and for the helpers it forwards the store to (asExternalIDStore,
+// NewMetadataStateService). Declared as a named composite so the
+// service's dependency surface is inspectable in one place.
+type audiobookStore interface {
+	database.BookStore
+	database.AuthorStore
+	database.SeriesStore
+	database.NarratorStore
+	database.BookFileStore
+	database.HashBlocklistStore
+	database.TagStore
+	// Transitively required — audiobook_service forwards svc.store to
+	// NewMetadataStateService for change history tracking and to
+	// asExternalIDStore for tombstone cleanup.
+	database.MetadataStore
+	database.UserPreferenceStore
+}
+
 // AudiobookService handles all audiobook business logic
 type AudiobookService struct {
-	store           database.Store
+	store           audiobookStore
 	bookCache       *cache.Cache[*database.Book]
 	listCache       *cache.Cache[[]database.Book]
 	activityService *ActivityService
@@ -48,7 +68,7 @@ func (svc *AudiobookService) SetSearchIndex(idx *search.BleveIndex) {
 }
 
 // NewAudiobookService creates a new AudiobookService instance
-func NewAudiobookService(store database.Store) *AudiobookService {
+func NewAudiobookService(store audiobookStore) *AudiobookService {
 	return &AudiobookService{
 		store:     store,
 		bookCache: cache.New[*database.Book](30 * time.Second),
