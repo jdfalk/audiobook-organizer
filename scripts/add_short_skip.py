@@ -7,6 +7,7 @@ Slow = creates a PebbleStore per rapid.Check iteration, or does filesystem I/O.
 Fast prop tests (pure compute — permissions, query parser, rapidgen) are not
 touched: they take seconds and carry no value from -short gating.
 """
+
 from __future__ import annotations
 
 import pathlib
@@ -30,9 +31,9 @@ FUNC_PATTERN = re.compile(
 
 def skip_block(receiver: str) -> str:
     return (
-        f'\tif testing.Short() {{\n'
+        f"\tif testing.Short() {{\n"
         f'\t\t{receiver}.Skip("slow property test; run without -short")\n'
-        f'\t}}\n'
+        f"\t}}\n"
     )
 
 
@@ -57,7 +58,9 @@ def process(path: pathlib.Path) -> tuple[int, int]:
         receiver = match.group(2)
         if already_annotated(new_text, opening_end):
             continue
-        new_text = new_text[:opening_end] + skip_block(receiver) + new_text[opening_end:]
+        new_text = (
+            new_text[:opening_end] + skip_block(receiver) + new_text[opening_end:]
+        )
         inserted += 1
     if new_text != text:
         path.write_text(new_text)

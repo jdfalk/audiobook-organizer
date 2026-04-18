@@ -38,7 +38,7 @@ def get_git_commits_since_last_tag() -> list[str]:
             text=True,
             check=False,
         )
-        
+
         if result.returncode == 0:
             last_tag = result.stdout.strip()
             # Get commits since last tag
@@ -83,7 +83,7 @@ def generate_changelog() -> None:
     """Generate changelog from git history for prerelease builds."""
     commits = get_git_commits_since_last_tag()
     current_commit = get_current_commit()
-    
+
     # Build changelog content
     content_parts = [
         "## Changelog",
@@ -91,19 +91,21 @@ def generate_changelog() -> None:
         "### Changes in this release",
         "",
     ]
-    
+
     if commits:
         content_parts.extend(commits)
     else:
         content_parts.append("- Initial release")
-    
-    content_parts.extend([
-        "",
-        f"**Commit**: {current_commit[:8]}",
-        "",
-        "This is an automated prerelease build from the main branch.",
-    ])
-    
+
+    content_parts.extend(
+        [
+            "",
+            f"**Commit**: {current_commit[:8]}",
+            "",
+            "This is an automated prerelease build from the main branch.",
+        ]
+    )
+
     content = "\n".join(content_parts)
     write_output("changelog_content", content)
 
@@ -121,7 +123,10 @@ def main(argv: list[str]) -> int:
             # Write a minimal changelog so the workflow step does not fail
             # silently — the release can still proceed with a stub.
             print(f"Warning: changelog generation failed: {e}", file=sys.stderr)
-            write_output("changelog_content", f"## Changelog\n\nError generating changelog: {e}\n")
+            write_output(
+                "changelog_content",
+                f"## Changelog\n\nError generating changelog: {e}\n",
+            )
         return 0
 
     print(f"unknown command: {command}", file=sys.stderr)

@@ -32,6 +32,7 @@ FIX_FILE = os.path.join(TESTDATA_DIR, "series_fix.json")
 
 # ── Jaro-Winkler implementation ──────────────────────────────────────────────
 
+
 def jaro_similarity(s1: str, s2: str) -> float:
     """Compute Jaro similarity between two strings."""
     if s1 == s2:
@@ -74,8 +75,9 @@ def jaro_similarity(s1: str, s2: str) -> float:
             transpositions += 1
         k += 1
 
-    return (matches / len1 + matches / len2 +
-            (matches - transpositions / 2) / matches) / 3
+    return (
+        matches / len1 + matches / len2 + (matches - transpositions / 2) / matches
+    ) / 3
 
 
 def jaro_winkler_similarity(s1: str, s2: str, p: float = 0.1) -> float:
@@ -119,19 +121,20 @@ def api_delete(path: str):
 
 # ── Junk detection ────────────────────────────────────────────────────────────
 
+
 def is_junk_series(name: str) -> bool:
     """Detect series names that are junk."""
     trimmed = name.strip()
     if not trimmed:
         return True
     # Pure numbers
-    if re.match(r'^\d+$', trimmed):
+    if re.match(r"^\d+$", trimmed):
         return True
     # Single character
     if len(trimmed) <= 1:
         return True
     # Pure punctuation
-    if re.match(r'^[^a-zA-Z0-9]+$', trimmed):
+    if re.match(r"^[^a-zA-Z0-9]+$", trimmed):
         return True
     return False
 
@@ -140,12 +143,13 @@ def looks_like_author_name(name: str) -> bool:
     """Heuristic: detect series names that look like author names."""
     trimmed = name.strip()
     # "Last, First" pattern
-    if re.match(r'^[A-Z][a-z]+,\s*[A-Z][a-z]+', trimmed):
+    if re.match(r"^[A-Z][a-z]+,\s*[A-Z][a-z]+", trimmed):
         return True
     return False
 
 
 # ── Book count fetching ───────────────────────────────────────────────────────
+
 
 def fetch_all_book_series_ids() -> dict[int, int]:
     """Fetch all audiobooks and count how many belong to each series.
@@ -182,6 +186,7 @@ def fetch_all_book_series_ids() -> dict[int, int]:
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 
+
 def fetch_series() -> list[dict]:
     """Fetch all series from the API."""
     print("Fetching all series...")
@@ -208,20 +213,26 @@ def analyze_duplicates(series_list: list[dict], book_counts: dict[int, int]):
             continue
         exact_dup_count += 1
         # Pick the one with most books as canonical
-        group_sorted = sorted(group, key=lambda x: book_counts.get(x["id"], 0), reverse=True)
+        group_sorted = sorted(
+            group, key=lambda x: book_counts.get(x["id"], 0), reverse=True
+        )
         canonical = group_sorted[0]
         dupes = group_sorted[1:]
-        print(f"  '{name}': {len(group)} copies -> keep ID {canonical['id']} ({book_counts.get(canonical['id'], 0)} books)")
+        print(
+            f"  '{name}': {len(group)} copies -> keep ID {canonical['id']} ({book_counts.get(canonical['id'], 0)} books)"
+        )
         for d in dupes:
             if d["id"] not in processed_ids:
-                actions.append({
-                    "action": "merge",
-                    "keep_id": canonical["id"],
-                    "merge_ids": [d["id"]],
-                    "reason": f"exact duplicate of '{name}'",
-                    "keep_name": canonical["name"],
-                    "merge_name": d["name"],
-                })
+                actions.append(
+                    {
+                        "action": "merge",
+                        "keep_id": canonical["id"],
+                        "merge_ids": [d["id"]],
+                        "reason": f"exact duplicate of '{name}'",
+                        "keep_name": canonical["name"],
+                        "merge_name": d["name"],
+                    }
+                )
                 processed_ids.add(d["id"])
         processed_ids.add(canonical["id"])
 
@@ -242,7 +253,9 @@ def analyze_duplicates(series_list: list[dict], book_counts: dict[int, int]):
         if len(unprocessed) < 1:
             continue
         # Find canonical (prefer already-processed one with most books, or pick best)
-        group_sorted = sorted(group, key=lambda x: book_counts.get(x["id"], 0), reverse=True)
+        group_sorted = sorted(
+            group, key=lambda x: book_counts.get(x["id"], 0), reverse=True
+        )
         canonical = group_sorted[0]
         dupes = [d for d in group_sorted[1:] if d["id"] not in processed_ids]
         if not dupes:
@@ -252,14 +265,16 @@ def analyze_duplicates(series_list: list[dict], book_counts: dict[int, int]):
         names = [s["name"] for s in group]
         print(f"  {names} -> keep '{canonical['name']}' (ID {canonical['id']})")
         for d in dupes:
-            actions.append({
-                "action": "merge",
-                "keep_id": canonical["id"],
-                "merge_ids": [d["id"]],
-                "reason": f"case-insensitive duplicate: '{d['name']}' -> '{canonical['name']}'",
-                "keep_name": canonical["name"],
-                "merge_name": d["name"],
-            })
+            actions.append(
+                {
+                    "action": "merge",
+                    "keep_id": canonical["id"],
+                    "merge_ids": [d["id"]],
+                    "reason": f"case-insensitive duplicate: '{d['name']}' -> '{canonical['name']}'",
+                    "keep_name": canonical["name"],
+                    "merge_name": d["name"],
+                }
+            )
             processed_ids.add(d["id"])
         processed_ids.add(canonical["id"])
 
@@ -326,7 +341,9 @@ def analyze_duplicates(series_list: list[dict], book_counts: dict[int, int]):
 
         if len(group) > 1:
             fuzzy_checked.add(s1["id"])
-            group_sorted = sorted(group, key=lambda x: book_counts.get(x["id"], 0), reverse=True)
+            group_sorted = sorted(
+                group, key=lambda x: book_counts.get(x["id"], 0), reverse=True
+            )
             canonical = group_sorted[0]
             dupes = group_sorted[1:]
             cn = canonical["name"].strip().lower()
@@ -337,20 +354,24 @@ def analyze_duplicates(series_list: list[dict], book_counts: dict[int, int]):
                 names_with_scores.append(f"'{d['name']}' ({score:.3f})")
 
             if fuzzy_count < 50:  # Don't flood output
-                print(f"  Keep '{canonical['name']}' (ID {canonical['id']}, {book_counts.get(canonical['id'], 0)} books)")
+                print(
+                    f"  Keep '{canonical['name']}' (ID {canonical['id']}, {book_counts.get(canonical['id'], 0)} books)"
+                )
                 print(f"    Merge: {', '.join(names_with_scores)}")
             fuzzy_count += 1
 
             for d in dupes:
                 score = jaro_winkler_similarity(cn, d["name"].strip().lower())
-                actions.append({
-                    "action": "merge",
-                    "keep_id": canonical["id"],
-                    "merge_ids": [d["id"]],
-                    "reason": f"fuzzy match (JW={score:.3f}): '{d['name']}' -> '{canonical['name']}'",
-                    "keep_name": canonical["name"],
-                    "merge_name": d["name"],
-                })
+                actions.append(
+                    {
+                        "action": "merge",
+                        "keep_id": canonical["id"],
+                        "merge_ids": [d["id"]],
+                        "reason": f"fuzzy match (JW={score:.3f}): '{d['name']}' -> '{canonical['name']}'",
+                        "keep_name": canonical["name"],
+                        "merge_name": d["name"],
+                    }
+                )
                 processed_ids.add(d["id"])
             processed_ids.add(canonical["id"])
 
@@ -364,12 +385,14 @@ def analyze_duplicates(series_list: list[dict], book_counts: dict[int, int]):
     for s in series_list:
         if book_counts.get(s["id"], 0) == 0 and s["id"] not in processed_ids:
             empty_count += 1
-            actions.append({
-                "action": "delete",
-                "series_id": s["id"],
-                "series_name": s["name"],
-                "reason": "0 books attached",
-            })
+            actions.append(
+                {
+                    "action": "delete",
+                    "series_id": s["id"],
+                    "series_name": s["name"],
+                    "reason": "0 books attached",
+                }
+            )
             processed_ids.add(s["id"])
     print(f"  Total empty series: {empty_count}")
 
@@ -382,17 +405,21 @@ def analyze_duplicates(series_list: list[dict], book_counts: dict[int, int]):
             continue
         if is_junk_series(s["name"]):
             junk_count += 1
-            actions.append({
-                "action": "delete",
-                "series_id": s["id"],
-                "series_name": s["name"],
-                "reason": f"junk series name: '{s['name']}'",
-            })
+            actions.append(
+                {
+                    "action": "delete",
+                    "series_id": s["id"],
+                    "series_name": s["name"],
+                    "reason": f"junk series name: '{s['name']}'",
+                }
+            )
             processed_ids.add(s["id"])
         elif looks_like_author_name(s["name"]):
             author_name_count += 1
             if author_name_count <= 20:
-                print(f"  Possible author name (skipping): '{s['name']}' (ID {s['id']}, {book_counts.get(s['id'], 0)} books)")
+                print(
+                    f"  Possible author name (skipping): '{s['name']}' (ID {s['id']}, {book_counts.get(s['id'], 0)} books)"
+                )
 
     if author_name_count > 20:
         print(f"  ... ({author_name_count - 20} more possible author names not shown)")
@@ -404,6 +431,7 @@ def analyze_duplicates(series_list: list[dict], book_counts: dict[int, int]):
 
 # ── Fix application ──────────────────────────────────────────────────────────
 
+
 def apply_fixes(actions: list[dict], dry_run: bool = False):
     """Apply the fix actions via the API."""
     prefix = "DRY RUN - " if dry_run else ""
@@ -411,7 +439,9 @@ def apply_fixes(actions: list[dict], dry_run: bool = False):
     delete_actions = [a for a in actions if a["action"] == "delete"]
 
     print(f"\n{'=' * 60}")
-    print(f"{prefix}Applying {len(actions)} fixes ({len(merge_actions)} merges, {len(delete_actions)} deletes)")
+    print(
+        f"{prefix}Applying {len(actions)} fixes ({len(merge_actions)} merges, {len(delete_actions)} deletes)"
+    )
     print(f"{'=' * 60}")
 
     merge_count = 0
@@ -429,13 +459,18 @@ def apply_fixes(actions: list[dict], dry_run: bool = False):
     # Apply merges
     for keep_id, merge_ids in merge_groups.items():
         unique_merge_ids = sorted(set(merge_ids))
-        print(f"  MERGE: '{merge_names.get(keep_id, keep_id)}' (ID {keep_id}) <- {len(unique_merge_ids)} duplicates")
+        print(
+            f"  MERGE: '{merge_names.get(keep_id, keep_id)}' (ID {keep_id}) <- {len(unique_merge_ids)} duplicates"
+        )
         if not dry_run:
             try:
-                result = api_post("/series/merge", {
-                    "keep_id": keep_id,
-                    "merge_ids": unique_merge_ids,
-                })
+                result = api_post(
+                    "/series/merge",
+                    {
+                        "keep_id": keep_id,
+                        "merge_ids": unique_merge_ids,
+                    },
+                )
                 op_id = result.get("operation_id", result.get("id", "?"))
                 print(f"    -> OK (operation: {op_id})")
                 merge_count += 1
@@ -443,7 +478,7 @@ def apply_fixes(actions: list[dict], dry_run: bool = False):
                 time.sleep(0.1)
             except requests.exceptions.HTTPError as e:
                 print(f"    -> ERROR: {e}")
-                if hasattr(e, 'response') and e.response is not None:
+                if hasattr(e, "response") and e.response is not None:
                     try:
                         print(f"       Detail: {e.response.json()}")
                     except Exception:
@@ -459,7 +494,9 @@ def apply_fixes(actions: list[dict], dry_run: bool = False):
     for i, action in enumerate(delete_actions):
         sid = action["series_id"]
         if i < 20 or i == len(delete_actions) - 1:
-            print(f"  DELETE: series {sid} ('{action['series_name']}') - {action['reason']}")
+            print(
+                f"  DELETE: series {sid} ('{action['series_name']}') - {action['reason']}"
+            )
         elif i == 20:
             print(f"  ... ({len(delete_actions) - 20} more deletes)")
 
@@ -468,10 +505,14 @@ def apply_fixes(actions: list[dict], dry_run: bool = False):
                 api_delete(f"/series/{sid}")
                 delete_count += 1
                 if (i + 1) % 100 == 0:
-                    print(f"    Deleted {i+1}/{len(delete_actions)}...")
+                    print(f"    Deleted {i + 1}/{len(delete_actions)}...")
                     time.sleep(0.05)
             except requests.exceptions.HTTPError as e:
-                if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
+                if (
+                    hasattr(e, "response")
+                    and e.response is not None
+                    and e.response.status_code == 404
+                ):
                     delete_count += 1  # Already gone
                 else:
                     error_count += 1
@@ -480,19 +521,29 @@ def apply_fixes(actions: list[dict], dry_run: bool = False):
         else:
             delete_count += 1
 
-    print(f"\n{prefix}Summary: {merge_count} merges, {delete_count} deletes, {error_count} errors")
+    print(
+        f"\n{prefix}Summary: {merge_count} merges, {delete_count} deletes, {error_count} errors"
+    )
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="Series deduplication tool")
-    parser.add_argument("--dry-run", action="store_true",
-                       help="Analyze and create fix script but don't apply changes")
-    parser.add_argument("--analyze-only", action="store_true",
-                       help="Only analyze, don't apply fixes")
-    parser.add_argument("--apply-only", action="store_true",
-                       help="Only apply fixes from existing series_fix.json")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Analyze and create fix script but don't apply changes",
+    )
+    parser.add_argument(
+        "--analyze-only", action="store_true", help="Only analyze, don't apply fixes"
+    )
+    parser.add_argument(
+        "--apply-only",
+        action="store_true",
+        help="Only apply fixes from existing series_fix.json",
+    )
     args = parser.parse_args()
 
     os.makedirs(TESTDATA_DIR, exist_ok=True)
@@ -536,7 +587,9 @@ def main():
     print(f"{'=' * 60}")
     print(f"  Total series: {len(series_list)}")
     print(f"  Series with books: {len(book_counts)}")
-    print(f"  Series without books: {len(series_list) - len([s for s in series_list if s['id'] in book_counts])}")
+    print(
+        f"  Series without books: {len(series_list) - len([s for s in series_list if s['id'] in book_counts])}"
+    )
     print(f"  Merge actions: {len(merge_actions)}")
     print(f"  Delete actions: {len(delete_actions)}")
     print(f"  Total actions: {len(actions)}")

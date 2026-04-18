@@ -38,10 +38,10 @@ def check_batches(run_dir: str, api_key: str, label: str):
     failed = 0
     pending = 0
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Checking {len(jobs)} batches with key: {label}")
     print(f"Run dir: {run_dir}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     header = f"{'Model':<15} {'Prompt':<18} {'Mode':<6} {'Status':<12} {'OK':>4} {'Fail':>4} {'Total':>5} {'Error'}"
     print(header)
@@ -56,7 +56,9 @@ def check_batches(run_dir: str, api_key: str, label: str):
         try:
             batch = client.batches.retrieve(bid)
         except Exception as e:
-            print(f"{model:<15} {prompt:<18} {mode:<6} {'ERROR':<12} {'':>4} {'':>4} {'':>5} {str(e)[:60]}")
+            print(
+                f"{model:<15} {prompt:<18} {mode:<6} {'ERROR':<12} {'':>4} {'':>4} {'':>5} {str(e)[:60]}"
+            )
             failed += 1
             continue
 
@@ -70,7 +72,9 @@ def check_batches(run_dir: str, api_key: str, label: str):
         if batch.errors and batch.errors.data:
             err_msg = batch.errors.data[0].message[:80]
 
-        print(f"{model:<15} {prompt:<18} {mode:<6} {status:<12} {ok:>4} {fail:>4} {total:>5} {err_msg}")
+        print(
+            f"{model:<15} {prompt:<18} {mode:<6} {status:<12} {ok:>4} {fail:>4} {total:>5} {err_msg}"
+        )
 
         # Download error details for failed requests
         if batch.error_file_id and fail > 0:

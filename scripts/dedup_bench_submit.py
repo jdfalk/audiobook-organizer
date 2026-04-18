@@ -35,26 +35,26 @@ from openai import OpenAI
 # ── Rate limits from the audiobook-organizer project ──
 # Batch queue limits (TPD = tokens per day in batch queue)
 BATCH_LIMITS = {
-    "gpt-4o":       90_000,      # Very low!
-    "gpt-4o-mini":  2_000_000,
-    "gpt-4.1":      900_000,
+    "gpt-4o": 90_000,  # Very low!
+    "gpt-4o-mini": 2_000_000,
+    "gpt-4.1": 900_000,
     "gpt-4.1-mini": 2_000_000,
-    "gpt-4-turbo":  90_000,
-    "gpt-5.1":      900_000,
-    "gpt-5-mini":   5_000_000,
-    "gpt-5-nano":   2_000_000,
-    "o3-mini":      2_000_000,
-    "o4-mini":      2_000_000,
+    "gpt-4-turbo": 90_000,
+    "gpt-5.1": 900_000,
+    "gpt-5-mini": 5_000_000,
+    "gpt-5-nano": 2_000_000,
+    "o3-mini": 2_000_000,
+    "o4-mini": 2_000_000,
 }
 
 # Max completion tokens per model (some models have lower limits)
 MAX_COMPLETION_TOKENS = {
-    "gpt-4o":       16384,
-    "gpt-4o-mini":  16384,
-    "gpt-4.1":      32768,
+    "gpt-4o": 16384,
+    "gpt-4o-mini": 16384,
+    "gpt-4.1": 32768,
     "gpt-4.1-mini": 32768,
-    "o3-mini":      65536,
-    "o4-mini":      65536,
+    "o3-mini": 65536,
+    "o4-mini": 65536,
 }
 DEFAULT_MAX_TOKENS = 16000
 
@@ -209,12 +209,14 @@ def build_full_input(authors: list, book_counts: dict, sample_books: dict) -> li
     inputs = []
     for a in authors:
         aid = a["id"]
-        inputs.append({
-            "id": aid,
-            "name": a["name"],
-            "book_count": book_counts.get(aid, 0),
-            "sample_titles": sample_books.get(aid, []),
-        })
+        inputs.append(
+            {
+                "id": aid,
+                "name": a["name"],
+                "book_count": book_counts.get(aid, 0),
+                "sample_titles": sample_books.get(aid, []),
+            }
+        )
     return inputs
 
 
@@ -225,7 +227,7 @@ def estimate_tokens(text: str) -> int:
 
 def chunk_list(items: list, chunk_size: int) -> list:
     """Split a list into chunks."""
-    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+    return [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
 def submit_batch(
@@ -241,7 +243,12 @@ def submit_batch(
     out_dir: Path,
 ) -> dict | None:
     """Build JSONL, upload, and submit a batch job. Returns job info or None on error."""
-    is_reasoning = model.startswith("o3") or model.startswith("o4") or model.startswith("o1") or model.startswith("gpt-5")
+    is_reasoning = (
+        model.startswith("o3")
+        or model.startswith("o4")
+        or model.startswith("o1")
+        or model.startswith("gpt-5")
+    )
     # Cap max_tokens to model limit
     model_max = MAX_COMPLETION_TOKENS.get(model, DEFAULT_MAX_TOKENS)
     max_tokens = min(max_tokens, model_max)
@@ -276,19 +283,26 @@ def submit_batch(
     # Check batch queue limit
     limit = BATCH_LIMITS.get(model, 100_000)
     if total_tokens > limit:
-        print(f"  SKIP: estimated {total_tokens} tokens > batch limit {limit} for {model}")
+        print(
+            f"  SKIP: estimated {total_tokens} tokens > batch limit {limit} for {model}"
+        )
         return None
 
     # Save JSONL locally
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "batch_input.jsonl").write_text(jsonl)
-    (out_dir / "config.json").write_text(json.dumps({
-        "model": model,
-        "prompt_variant": prompt_variant,
-        "mode": mode,
-        "temperature": temperature,
-        "estimated_tokens": total_tokens,
-    }, indent=2))
+    (out_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "model": model,
+                "prompt_variant": prompt_variant,
+                "mode": mode,
+                "temperature": temperature,
+                "estimated_tokens": total_tokens,
+            },
+            indent=2,
+        )
+    )
 
     # Upload
     try:
@@ -298,18 +312,28 @@ def submit_batch(
             endpoint="/v1/chat/completions",
             completion_window="24h",
         )
-        (out_dir / "batch_info.json").write_text(json.dumps({
-            "batch_id": batch.id,
-            "input_file_id": file.id,
-            "model": model,
-            "prompt_variant": prompt_variant,
-            "mode": mode,
-            "temperature": temperature,
-            "estimated_tokens": total_tokens,
-        }, indent=2))
+        (out_dir / "batch_info.json").write_text(
+            json.dumps(
+                {
+                    "batch_id": batch.id,
+                    "input_file_id": file.id,
+                    "model": model,
+                    "prompt_variant": prompt_variant,
+                    "mode": mode,
+                    "temperature": temperature,
+                    "estimated_tokens": total_tokens,
+                },
+                indent=2,
+            )
+        )
         return {
             "batch_id": batch.id,
-            "config": {"model": model, "prompt_variant": prompt_variant, "temperature": temperature, "top_p": 1.0},
+            "config": {
+                "model": model,
+                "prompt_variant": prompt_variant,
+                "temperature": temperature,
+                "top_p": 1.0,
+            },
             "mode": mode,
             "num_chunks": 1,
             "num_requests": 1,
@@ -325,13 +349,23 @@ def submit_batch(
 
 def main():
     parser = argparse.ArgumentParser(description="Submit dedup benchmark batch jobs")
-    parser.add_argument("--server", required=True, help="Server URL (e.g., https://172.16.2.30:8484)")
-    parser.add_argument("--output", default="testdata/dedup-bench", help="Output directory")
-    parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS, help="Models to test")
+    parser.add_argument(
+        "--server", required=True, help="Server URL (e.g., https://172.16.2.30:8484)"
+    )
+    parser.add_argument(
+        "--output", default="testdata/dedup-bench", help="Output directory"
+    )
+    parser.add_argument(
+        "--models", nargs="+", default=DEFAULT_MODELS, help="Models to test"
+    )
     parser.add_argument("--mode", default="both", choices=["groups", "full", "both"])
-    parser.add_argument("--chunk-size", type=int, default=500, help="Max authors per chunk")
+    parser.add_argument(
+        "--chunk-size", type=int, default=500, help="Max authors per chunk"
+    )
     parser.add_argument("--dry-run", action="store_true", help="Extract data only")
-    parser.add_argument("--groups-json", help="Path to pre-computed groups.json (from Go binary)")
+    parser.add_argument(
+        "--groups-json", help="Path to pre-computed groups.json (from Go binary)"
+    )
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -368,7 +402,9 @@ def main():
                 gf = d / "groups.json"
                 if gf.exists():
                     groups_input = json.loads(gf.read_text())
-                    (run_dir / "groups.json").write_text(json.dumps(groups_input, indent=2))
+                    (run_dir / "groups.json").write_text(
+                        json.dumps(groups_input, indent=2)
+                    )
                     print(f"Loaded {len(groups_input)} groups from {gf}")
                     break
 
@@ -421,12 +457,27 @@ def main():
                     for ci, chunk in enumerate(chunks):
                         chunk_dir = run_dir / "runs" / f"{dir_name}_chunk{ci}"
                         user_data = json.dumps(chunk)
-                        user_prompt = f"Find duplicate authors in this list:\n\n{user_data}"
+                        user_prompt = (
+                            f"Find duplicate authors in this list:\n\n{user_data}"
+                        )
                         cid = f"{model}_baseline_t0.0_{mode_name}_chunk{ci}"
 
-                        print(f"[{job_num}] {model} baseline {mode_name} chunk {ci}/{len(chunks)}", end=" ")
-                        job = submit_batch(client, model, "baseline", mode_name, 0.0,
-                                           system_prompt, user_prompt, 16000, cid, chunk_dir)
+                        print(
+                            f"[{job_num}] {model} baseline {mode_name} chunk {ci}/{len(chunks)}",
+                            end=" ",
+                        )
+                        job = submit_batch(
+                            client,
+                            model,
+                            "baseline",
+                            mode_name,
+                            0.0,
+                            system_prompt,
+                            user_prompt,
+                            16000,
+                            cid,
+                            chunk_dir,
+                        )
                         if job:
                             all_jobs.append(job)
                             print(f"-> {job['batch_id']}")
@@ -439,8 +490,18 @@ def main():
 
             cid = f"{model}_baseline_t0.0_{mode_name}"
             print(f"[{job_num}] {model} baseline {mode_name}", end=" ")
-            job = submit_batch(client, model, "baseline", mode_name, 0.0,
-                               system_prompt, user_prompt, max_tokens, cid, out_dir)
+            job = submit_batch(
+                client,
+                model,
+                "baseline",
+                mode_name,
+                0.0,
+                system_prompt,
+                user_prompt,
+                max_tokens,
+                cid,
+                out_dir,
+            )
             if job:
                 all_jobs.append(job)
                 print(f"-> {job['batch_id']}")
@@ -464,7 +525,9 @@ def main():
 
                 if mode_name == "groups":
                     user_data = json.dumps(groups_input)
-                    user_prompt = f"Review these duplicate author groups:\n\n{user_data}"
+                    user_prompt = (
+                        f"Review these duplicate author groups:\n\n{user_data}"
+                    )
                     max_tokens = 32000
                 else:
                     chunks = chunk_list(full_input, args.chunk_size)
@@ -472,11 +535,26 @@ def main():
                         for ci, chunk in enumerate(chunks):
                             chunk_dir = run_dir / "runs" / f"{dir_name}_chunk{ci}"
                             user_data = json.dumps(chunk)
-                            user_prompt = f"Find duplicate authors in this list:\n\n{user_data}"
+                            user_prompt = (
+                                f"Find duplicate authors in this list:\n\n{user_data}"
+                            )
                             cid = f"{model}_{variant}_t0.0_{mode_name}_chunk{ci}"
-                            print(f"[{job_num}] {model} {variant} {mode_name} chunk {ci}/{len(chunks)}", end=" ")
-                            job = submit_batch(client, model, variant, mode_name, 0.0,
-                                               system_prompt, user_prompt, 16000, cid, chunk_dir)
+                            print(
+                                f"[{job_num}] {model} {variant} {mode_name} chunk {ci}/{len(chunks)}",
+                                end=" ",
+                            )
+                            job = submit_batch(
+                                client,
+                                model,
+                                variant,
+                                mode_name,
+                                0.0,
+                                system_prompt,
+                                user_prompt,
+                                16000,
+                                cid,
+                                chunk_dir,
+                            )
                             if job:
                                 all_jobs.append(job)
                                 print(f"-> {job['batch_id']}")
@@ -484,13 +562,25 @@ def main():
                         continue
                     else:
                         user_data = json.dumps(full_input)
-                        user_prompt = f"Find duplicate authors in this list:\n\n{user_data}"
+                        user_prompt = (
+                            f"Find duplicate authors in this list:\n\n{user_data}"
+                        )
                         max_tokens = 16000
 
                 cid = f"{model}_{variant}_t0.0_{mode_name}"
                 print(f"[{job_num}] {model} {variant} {mode_name}", end=" ")
-                job = submit_batch(client, model, variant, mode_name, 0.0,
-                                   system_prompt, user_prompt, max_tokens, cid, out_dir)
+                job = submit_batch(
+                    client,
+                    model,
+                    variant,
+                    mode_name,
+                    0.0,
+                    system_prompt,
+                    user_prompt,
+                    max_tokens,
+                    cid,
+                    out_dir,
+                )
                 if job:
                     all_jobs.append(job)
                     print(f"-> {job['batch_id']}")
@@ -513,7 +603,9 @@ def main():
 
                 if mode_name == "groups":
                     user_data = json.dumps(groups_input)
-                    user_prompt = f"Review these duplicate author groups:\n\n{user_data}"
+                    user_prompt = (
+                        f"Review these duplicate author groups:\n\n{user_data}"
+                    )
                     max_tokens = 32000
                 else:
                     chunks = chunk_list(full_input, args.chunk_size)
@@ -521,11 +613,26 @@ def main():
                         for ci, chunk in enumerate(chunks):
                             chunk_dir = run_dir / "runs" / f"{dir_name}_chunk{ci}"
                             user_data = json.dumps(chunk)
-                            user_prompt = f"Find duplicate authors in this list:\n\n{user_data}"
+                            user_prompt = (
+                                f"Find duplicate authors in this list:\n\n{user_data}"
+                            )
                             cid = f"gpt-4.1-mini_baseline_t{temp}_{mode_name}_chunk{ci}"
-                            print(f"[{job_num}] gpt-4.1-mini baseline t={temp} {mode_name} chunk {ci}/{len(chunks)}", end=" ")
-                            job = submit_batch(client, "gpt-4.1-mini", "baseline", mode_name, temp,
-                                               system_prompt, user_prompt, 16000, cid, chunk_dir)
+                            print(
+                                f"[{job_num}] gpt-4.1-mini baseline t={temp} {mode_name} chunk {ci}/{len(chunks)}",
+                                end=" ",
+                            )
+                            job = submit_batch(
+                                client,
+                                "gpt-4.1-mini",
+                                "baseline",
+                                mode_name,
+                                temp,
+                                system_prompt,
+                                user_prompt,
+                                16000,
+                                cid,
+                                chunk_dir,
+                            )
                             if job:
                                 all_jobs.append(job)
                                 print(f"-> {job['batch_id']}")
@@ -533,13 +640,27 @@ def main():
                         continue
                     else:
                         user_data = json.dumps(full_input)
-                        user_prompt = f"Find duplicate authors in this list:\n\n{user_data}"
+                        user_prompt = (
+                            f"Find duplicate authors in this list:\n\n{user_data}"
+                        )
                         max_tokens = 16000
 
                 cid = f"gpt-4.1-mini_baseline_t{temp}_{mode_name}"
-                print(f"[{job_num}] gpt-4.1-mini baseline t={temp} {mode_name}", end=" ")
-                job = submit_batch(client, "gpt-4.1-mini", "baseline", mode_name, temp,
-                                   system_prompt, user_prompt, max_tokens, cid, out_dir)
+                print(
+                    f"[{job_num}] gpt-4.1-mini baseline t={temp} {mode_name}", end=" "
+                )
+                job = submit_batch(
+                    client,
+                    "gpt-4.1-mini",
+                    "baseline",
+                    mode_name,
+                    temp,
+                    system_prompt,
+                    user_prompt,
+                    max_tokens,
+                    cid,
+                    out_dir,
+                )
                 if job:
                     all_jobs.append(job)
                     print(f"-> {job['batch_id']}")
