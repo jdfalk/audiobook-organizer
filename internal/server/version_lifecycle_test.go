@@ -1,5 +1,5 @@
 // file: internal/server/version_lifecycle_test.go
-// version: 1.0.0
+// version: 1.1.0
 
 package server
 
@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/versions"
 )
 
 func setupVersionLifecycleServer(t *testing.T) (*Server, database.Store) {
@@ -148,7 +149,7 @@ func TestAutoPromoteAlt(t *testing.T) {
 		Source: "imported", IngestDate: newer,
 	})
 
-	if err := autoPromoteAlt(store, "b1"); err != nil {
+	if err := versions.AutoPromoteAlt(store, "b1"); err != nil {
 		t.Fatalf("auto-promote: %v", err)
 	}
 
