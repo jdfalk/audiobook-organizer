@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -258,7 +259,7 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 	// If no explicit names, auto-detect split
 	names := req.Names
 	if len(names) == 0 {
-		names = SplitCompositeAuthorName(author.Name)
+		names = dedup.SplitCompositeAuthorName(author.Name)
 	}
 	if len(names) <= 1 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "author name does not appear to be composite"})
@@ -761,7 +762,7 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 		return
 	}
 
-	if !isProductionCompany(author.Name) {
+	if !dedup.IsProductionCompany(author.Name) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%q is not a recognized production company", author.Name)})
 		return
 	}
@@ -794,7 +795,7 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 			if fetchErr == nil && resp != nil && resp.Book != nil && resp.Book.AuthorID != nil {
 				// Check if the found author is different from the production company
 				newAuthor, _ := store.GetAuthorByID(*resp.Book.AuthorID)
-				if newAuthor != nil && !isProductionCompany(newAuthor.Name) {
+				if newAuthor != nil && !dedup.IsProductionCompany(newAuthor.Name) {
 					_ = progress.Log("info", fmt.Sprintf("Resolved %q → author %q (source: %s)", book.Title, newAuthor.Name, resp.Source), nil)
 					// Reclassify production company as publisher
 					if book.Publisher == nil || *book.Publisher == "" {

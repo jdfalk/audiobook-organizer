@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -404,7 +405,7 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 			_ = progress.UpdateProgress(pct, 100, message)
 		}
 
-		groups := FindDuplicateAuthors(authors, 0.9, bookCountFn, progressFn)
+		groups := dedup.FindDuplicateAuthors(authors, 0.9, bookCountFn, progressFn)
 
 		// Filter out groups already reviewed by AI scans
 		groups = s.filterReviewedAuthorGroups(groups)
@@ -426,7 +427,7 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 
 // filterReviewedAuthorGroups removes author dedup groups where all author IDs
 // have already been reviewed via AI scans (applied results with skip/split/merge).
-func (s *Server) filterReviewedAuthorGroups(groups []AuthorDedupGroup) []AuthorDedupGroup {
+func (s *Server) filterReviewedAuthorGroups(groups []dedup.AuthorDedupGroup) []dedup.AuthorDedupGroup {
 	if s.aiScanStore == nil {
 		return groups
 	}
@@ -456,7 +457,7 @@ func (s *Server) filterReviewedAuthorGroups(groups []AuthorDedupGroup) []AuthorD
 	}
 
 	// Filter: exclude groups whose author IDs match a reviewed set
-	filtered := make([]AuthorDedupGroup, 0, len(groups))
+	filtered := make([]dedup.AuthorDedupGroup, 0, len(groups))
 	for _, g := range groups {
 		ids := make([]int, 0, 1+len(g.Variants))
 		ids = append(ids, g.Canonical.ID)

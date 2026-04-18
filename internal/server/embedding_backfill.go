@@ -7,6 +7,8 @@ package server
 import (
 	"context"
 	"log"
+
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 )
 
 // backfillVersionMarker identifies the current generation of the dedup
@@ -99,13 +101,13 @@ func (s *Server) runEmbeddingBackfill() {
 				continue
 			}
 			switch status {
-			case EmbedStatusEmbedded:
+			case dedup.EmbedStatusEmbedded:
 				statEmbedded++
-			case EmbedStatusCached:
+			case dedup.EmbedStatusCached:
 				statCached++
-			case EmbedStatusSkippedNonPrimary:
+			case dedup.EmbedStatusSkippedNonPrimary:
 				statSkippedNonPrimary++
-			case EmbedStatusSkippedEmptyTitle:
+			case dedup.EmbedStatusSkippedEmptyTitle:
 				statSkippedEmptyTitle++
 			}
 			visited++
@@ -198,7 +200,7 @@ func (s *Server) runEmbeddingBackfill() {
 }
 
 // newDedupScanProgressLogger returns a progress callback suitable for
-// DedupEngine.FullScan that logs once every `interval` books processed (plus
+// dedup.Engine.FullScan that logs once every `interval` books processed (plus
 // one final line at completion).
 //
 // It exists because FullScan passes `done = i+1` at a step of 10, so values
