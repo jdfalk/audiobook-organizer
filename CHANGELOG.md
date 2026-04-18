@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.7.0 -->
+<!-- version: 2.8.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-18 -->
 
@@ -8,6 +8,27 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 18, 2026 — Store ISP sweep (4.8 bulk migration)
+
+Eight PRs (#387–#395, incl. the #394 test-scaffolding fix) migrating ~50 consumers of `database.Store` onto the narrow sub-interfaces defined in #372. Most services now declare their real database surface inline on the struct field or function parameter instead of carrying the 281-method `Store` into every constructor.
+
+- **#387** — 6 leaf files (file_move, import_collision, itl_rebuild, sweeper, pipeline_checkpoint, playlist_itunes_sync) — single-interface surfaces
+- **#388** — version lifecycle cluster (5 files) + transitive deluge_integration narrowing
+- **#389** — iTunes sync + read-status (4 files); `itunes.go` left on full `Store` as an intentional hub consumer
+- **#390** — undo/outbox/archive + deluge NotifyDelugeAfterUndo
+- **#391** — cross-package (cmd/*, auth/seed, config, metadata, operations/queue + mock regen, search, transcode, testutil)
+- **#392** — remaining server files (ai_handlers, batch_poller, duplicates_handlers, metadata_batch_candidates, external_id_backfill, middleware/auth)
+- **#393** — `maintenance_fixups.go` (15 functions on a file-local 7-interface composite)
+- **#395** — 18 struct-based services narrowed to file-local composites; scripts/ tooling for classification + auto-narrowing
+
+**Left as hub/legitimate wide consumers** (documented in the sweep plan, not mistakes):
+- `server.go` (bootstrap), `indexed_store.go` (Store decorator — must stay wide to forward every method)
+- `itunes.go` (forwards to 8+ metadata/organize helpers; narrowing cascades 15+ more signatures)
+- `metadata_fetch_service.go` (79 calls), `organize_service.go` (30 calls), `dedup_engine.go` (22 calls) — same shape
+- `config_update_service.go` — 1 true unused-field noop; removal churns ~20 test sites for marginal gain
+
+**Incident along the way (PR #394):** narrowing `IntegrationEnv.Store` broke ~10 integration tests at compile time. Root cause: ran `go vet ./internal/server/` (scoped) instead of `go vet ./...`, which would have caught the test-file breakage. Test scaffolding is deliberately wide — narrowing it moves pain from production callers into every test file, which is anti-ISP for the test use case.
 
 #### April 18, 2026 — Fast-iteration test mode (`make test-short`)
 
