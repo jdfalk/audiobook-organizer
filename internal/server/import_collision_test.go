@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/merge"
 )
 
 func setupImportCollisionServer(t *testing.T) (*Server, database.Store) {
@@ -56,7 +57,7 @@ func TestHandleImportCollisionPreview_NoCollisions(t *testing.T) {
 	}
 
 	var resp struct {
-		Collisions   []CollisionCandidate `json:"collisions"`
+		Collisions   []merge.CollisionCandidate `json:"collisions"`
 		Count        int                  `json:"count"`
 		HasCollision bool                 `json:"has_collision"`
 	}
@@ -88,7 +89,7 @@ func TestHandleImportCollisionPreview_FileHashCollision(t *testing.T) {
 	content := []byte("this is some audio content for hash matching")
 	_ = os.WriteFile(tmpFile, content, 0o644)
 
-	hash := quickHash(tmpFile)
+	hash := merge.QuickHash(tmpFile)
 	if hash == "" {
 		t.Fatal("failed to compute hash")
 	}
@@ -112,7 +113,7 @@ func TestHandleImportCollisionPreview_FileHashCollision(t *testing.T) {
 	}
 
 	var resp struct {
-		Collisions   []CollisionCandidate `json:"collisions"`
+		Collisions   []merge.CollisionCandidate `json:"collisions"`
 		Count        int                  `json:"count"`
 		HasCollision bool                 `json:"has_collision"`
 	}
@@ -136,7 +137,7 @@ func TestQuickHash(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "test.bin")
 	_ = os.WriteFile(tmpFile, []byte("hello world"), 0o644)
 
-	h := quickHash(tmpFile)
+	h := merge.QuickHash(tmpFile)
 	if h == "" {
 		t.Error("expected non-empty hash")
 	}
@@ -145,13 +146,13 @@ func TestQuickHash(t *testing.T) {
 	tmpFile2 := filepath.Join(t.TempDir(), "test2.bin")
 	_ = os.WriteFile(tmpFile2, []byte("hello world"), 0o644)
 
-	h2 := quickHash(tmpFile2)
+	h2 := merge.QuickHash(tmpFile2)
 	if h != h2 {
 		t.Errorf("expected same hash, got %s vs %s", h, h2)
 	}
 
 	// Nonexistent file returns empty.
-	if quickHash("/nonexistent/path") != "" {
+	if merge.QuickHash("/nonexistent/path") != "" {
 		t.Error("expected empty hash for nonexistent file")
 	}
 }

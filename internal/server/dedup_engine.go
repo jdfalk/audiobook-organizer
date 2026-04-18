@@ -15,6 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/merge"
 )
 
 // DedupEngine orchestrates a 3-layer dedup system:
@@ -27,7 +28,7 @@ type DedupEngine struct {
 	bookStore    database.Store
 	embedClient  *ai.EmbeddingClient
 	llmParser    *ai.OpenAIParser
-	mergeService *MergeService
+	mergeService *merge.Service
 
 	// Thresholds (read from config or set directly)
 	BookHighThreshold   float64
@@ -55,7 +56,7 @@ func NewDedupEngine(
 	bookStore database.Store,
 	embedClient *ai.EmbeddingClient,
 	llmParser *ai.OpenAIParser,
-	mergeService *MergeService,
+	mergeService *merge.Service,
 ) *DedupEngine {
 	return &DedupEngine{
 		embedStore:          embedStore,

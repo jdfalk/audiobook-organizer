@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -396,7 +397,7 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 
 	ms := s.mergeService
 	if ms == nil {
-		ms = NewMergeService(store)
+		ms = merge.NewService(store)
 	}
 
 	applied := 0

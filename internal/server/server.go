@@ -28,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
@@ -705,7 +706,7 @@ type Server struct {
 	aiScanStore            *database.AIScanStore
 	pipelineManager        *PipelineManager
 	batchPoller            *BatchPoller
-	mergeService           *MergeService
+	mergeService           *merge.Service
 	diagnosticsService     *DiagnosticsService
 	changelogService       *activity.ChangelogService
 	activityService        *activity.Service
@@ -823,7 +824,7 @@ func NewServer(store database.Store) *Server {
 		listCache:              cache.New[gin.H](30 * time.Second),
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
-		mergeService:           NewMergeService(resolvedStore),
+		mergeService:           merge.NewService(resolvedStore),
 		diagnosticsService:     NewDiagnosticsService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
@@ -2440,101 +2441,6 @@ func isProtectedPath(filePath string) bool {
 	}
 
 	return false
-}
-
-// isITunesGhostPath reports whether a book's file path points at the
-// iTunes media folder rather than the managed audiobook-organizer library.
-// Such books are "ghost" references — iTunes knows about them but they
-// live outside the library we actually manage, so they should never be
-// chosen as the primary version of a merge.
-func isITunesGhostPath(p string) bool {
-	if p == "" {
-		return false
-	}
-	lower := strings.ToLower(p)
-	return strings.Contains(lower, "/itunes media/") || strings.Contains(lower, "/itunes/itunes")
-}
-
-// bookCurationScore returns a coarse "how much effort has the user put into
-// this entry" score. Higher means more curated. Used by bookIsBetter as the
-// tiebreaker right below path origin — a user-curated MP3 should beat an
-// untouched M4B because the whole point of merging is to keep the entry
-// that already has the right metadata.
-//
-// Signals, each worth one point:
-//
-//   - MetadataReviewStatus == "matched" (user explicitly accepted a match)
-//   - LastWrittenAt set (tags have been written back to the file)
-//   - MetadataUpdatedAt strictly newer than CreatedAt (user-visible metadata
-//     field has been edited since the row was created)
-func bookCurationScore(b *database.Book) int {
-	score := 0
-	if b.MetadataReviewStatus != nil && *b.MetadataReviewStatus == "matched" {
-		score++
-	}
-	if b.LastWrittenAt != nil {
-		score++
-	}
-	if b.MetadataUpdatedAt != nil && b.CreatedAt != nil && b.MetadataUpdatedAt.After(*b.CreatedAt) {
-		score++
-	}
-	return score
-}
-
-// bookIsBetter returns true if a is a "better" primary version than b.
-// Preference order (strongest first):
-//  1. Organized library path over iTunes-ghost path
-//  2. Higher curation score (user effort beats technical quality)
-//  3. M4B over other formats
-//  4. Higher bitrate
-//  5. Larger file size
-func bookIsBetter(a, b *database.Book) bool {
-	// Path origin trumps everything else — an organized-library copy is
-	// always a better primary than an iTunes ghost, regardless of format or
-	// bitrate. Otherwise a high-bitrate iTunes import would steal the
-	// primary slot from the file the user has actually organized.
-	aGhost := isITunesGhostPath(a.FilePath)
-	bGhost := isITunesGhostPath(b.FilePath)
-	if aGhost != bGhost {
-		return !aGhost
-	}
-
-	// Curation beats format quality. If the user has spent effort on one
-	// entry (accepted a metadata match, written tags back, edited fields),
-	// that entry wins even if a pristine duplicate has a "better" format
-	// or bitrate — the curated one is where the user's work lives and
-	// where any linked relationships (external IDs, tags, notes) point.
-	aCur := bookCurationScore(a)
-	bCur := bookCurationScore(b)
-	if aCur != bCur {
-		return aCur > bCur
-	}
-
-	aM4B := strings.EqualFold(a.Format, "m4b")
-	bM4B := strings.EqualFold(b.Format, "m4b")
-	if aM4B != bM4B {
-		return aM4B
-	}
-	aBitrate := 0
-	if a.Bitrate != nil {
-		aBitrate = *a.Bitrate
-	}
-	bBitrate := 0
-	if b.Bitrate != nil {
-		bBitrate = *b.Bitrate
-	}
-	if aBitrate != bBitrate {
-		return aBitrate > bBitrate
-	}
-	aSize := int64(0)
-	if a.FileSize != nil {
-		aSize = *a.FileSize
-	}
-	bSize := int64(0)
-	if b.FileSize != nil {
-		bSize = *b.FileSize
-	}
-	return aSize > bSize
 }
 
 // loadDismissedDedupGroups loads the set of dismissed dedup group keys from user preferences.
