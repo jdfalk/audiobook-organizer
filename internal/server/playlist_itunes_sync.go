@@ -1,5 +1,5 @@
 // file: internal/server/playlist_itunes_sync.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1e9f0a8b-2c3d-4a70-b8c5-3d7e0f1b9a99
 //
 // iTunes playlist sync (spec 3.4 tasks 5-6).
@@ -32,7 +32,7 @@ import (
 // MigrateITunesSmartPlaylists reads smart playlists from the ITL
 // library and creates UserPlaylist rows for each. Idempotent —
 // playlists already imported (by iTunes PID) are skipped.
-func MigrateITunesSmartPlaylists(store database.Store, lib *itunes.ITLLibrary) (imported, skipped int) {
+func MigrateITunesSmartPlaylists(store database.UserPlaylistStore, lib *itunes.ITLLibrary) (imported, skipped int) {
 	if lib == nil {
 		return 0, 0
 	}
@@ -90,7 +90,7 @@ func MigrateITunesSmartPlaylists(store database.Store, lib *itunes.ITLLibrary) (
 // the ITL write-back batcher. Full ITL playlist creation requires
 // the ITL writer to support playlist insertion, which is tracked
 // separately.
-func PushDirtyPlaylistsToITunes(store database.Store, batcher *WriteBackBatcher) int {
+func PushDirtyPlaylistsToITunes(store database.UserPlaylistStore, batcher *WriteBackBatcher) int {
 	dirties, err := store.ListDirtyUserPlaylists()
 	if err != nil {
 		log.Printf("[WARN] list dirty playlists: %v", err)

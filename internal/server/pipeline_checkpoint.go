@@ -1,5 +1,5 @@
 // file: internal/server/pipeline_checkpoint.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7f8a9b0c-1d2e-4a70-b8c5-3d7e0f1b9a99
 //
 // Phase checkpoints for the metadata apply pipeline (GFO-4).
@@ -38,13 +38,13 @@ const (
 )
 
 // setCheckpoint marks a phase as complete for a book.
-func setCheckpoint(store database.Store, bookID, phase string) {
+func setCheckpoint(store database.UserPreferenceStore, bookID, phase string) {
 	key := checkpointPrefix + bookID + ":" + phase
 	_ = store.SetUserPreferenceForUser("_system", key, time.Now().Format(time.RFC3339))
 }
 
 // hasCheckpoint returns true if the phase was already completed.
-func hasCheckpoint(store database.Store, bookID, phase string) bool {
+func hasCheckpoint(store database.UserPreferenceStore, bookID, phase string) bool {
 	key := checkpointPrefix + bookID + ":" + phase
 	pref, _ := store.GetUserPreferenceForUser("_system", key)
 	return pref != nil && pref.Value != ""
@@ -52,7 +52,7 @@ func hasCheckpoint(store database.Store, bookID, phase string) bool {
 
 // clearCheckpoints removes all phase markers for a book.
 // Called after the full pipeline completes successfully.
-func clearCheckpoints(store database.Store, bookID string) {
+func clearCheckpoints(store database.UserPreferenceStore, bookID string) {
 	for _, phase := range []string{phaseRename, phaseTags, phaseITunes} {
 		key := checkpointPrefix + bookID + ":" + phase
 		_ = store.SetUserPreferenceForUser("_system", key, "")
