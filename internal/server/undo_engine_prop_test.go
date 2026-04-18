@@ -1,5 +1,5 @@
 // file: internal/server/undo_engine_prop_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1ff3d071-4c60-4bb0-92ed-d197fe8ad9d0
 //
 // Property-based tests for the undo engine (plan 4.5 task 8).
@@ -56,6 +56,9 @@ func newPropStore(t *testing.T) database.Store {
 // (because the random BookID doesn't resolve) — both outcomes preserve the
 // idempotency invariant.
 func TestProp_UndoIdempotent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(rt *rapid.T) {
 		store := newPropStore(t)
 
@@ -107,6 +110,9 @@ func TestProp_UndoIdempotent(t *testing.T) {
 // reversibility story: the undo engine must cleanly release its hold on the
 // new path so the caller can re-execute the original operation.
 func TestProp_UndoRedoRoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(rt *rapid.T) {
 		store := newPropStore(t)
 
@@ -190,6 +196,9 @@ func TestProp_UndoRedoRoundTrip(t *testing.T) {
 // content-change conflict. The undo engine must refuse to silently clobber
 // user edits made between the original operation and the undo.
 func TestProp_UndoConflictConservative(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow property test; run without -short")
+	}
 	rapid.Check(t, func(rt *rapid.T) {
 		store := newPropStore(t)
 
