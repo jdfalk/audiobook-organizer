@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.5.0 -->
+<!-- version: 2.6.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-17 -->
 
@@ -8,6 +8,36 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 17, 2026 — Store Interface Segregation (ISP refactor)
+
+Split the 281-method `database.Store` monolith into 41 focused sub-interfaces following Interface Segregation Principle. Services can now declare narrow dependencies inline (e.g., `BookReader + UserPositionStore`) instead of carrying the full `Store` surface into every constructor.
+
+- **Foundation** (#372): 8 new `internal/database/iface_*.go` files + `iface_assert.go` compile-time proofs. Hybrid slicing — Reader/Writer split for hot domains (Book, Author, Series, User), single interface for 29 others (OperationStore, TagStore, SessionStore, etc.). `Store` becomes a pure embedding block; `*PebbleStore` satisfies every sub-interface structurally
+- **Mocks** (#376): `.mockery.yaml` adds 41 entries; all Mock* types (MockBookReader, MockTagStore, etc.) available under `internal/database/mocks`
+- **Proof-point migrations**:
+  - #379 — `playlist_evaluator.go`: 3 free-function signatures narrowed to `BookReader + UserPositionStore`
+  - #380 — `audiobook_service.go`: struct field narrowed to `audiobookStore` composite (9 sub-interfaces); transitively narrowed `asExternalIDStore` (to `any`) and `NewMetadataStateService` (to `metadataStateStore` composite)
+  - #381 — `reconcile.go`: 8 free-function signatures narrowed to shared `reconcileStore` alias (BookStore + BookFileStore + ImportPathStore + OperationStore)
+- **Follow-on plan** (#382): executable per-PR migration catalog for the remaining ~38 files + ~18 noop-field cleanups. Documents 3 narrowing patterns (inline anonymous, named composite, file-local alias) with transitive-dependency guidance
+
+No behavior changes — tests + build + vet green across every PR. `*PebbleStore` continues to satisfy every consumer.
+
+#### April 17, 2026 — Property-Based Tests with rapid (4.5)
+
+Added ~57 property-based tests using `pgregory.net/rapid` across the codebase. Each property generates random inputs and asserts an invariant that must always hold, catching edge cases hand-written unit tests miss.
+
+- **Generators** (#357): reusable rapid generators for Book, Author, Series, BookFile, BookVersion, User, UserPlaylist, Tag, OperationChange in new `internal/testutil/rapidgen` package (non-test so cross-package tests can import)
+- **PebbleStore CRUD** (#368): 10 round-trip invariants — Book create/get/update/delete, BookVersion single-active, UserPlaylist + User uniqueness, tag add/remove, Session + OperationChange persistence
+- **Search parser** (#359): 7 properties — no-panic on arbitrary input, AST shape stability, field-name non-emptiness, AND/OR arity ≥ 2, NotNode child present, valid-DSL round-trip, generated-valid-queries parse
+- **Dedup similarity** (#363): 8 properties — cosine symmetry + self-similarity + range + zero-vector, FindSimilar ordering + threshold + maxResults, chromem-vs-SQLite backend set-overlap (Jaccard ≥ 50%)
+- **Sort + filter** (#362): 4 properties — sort stability, sort is a permutation, filter partitioning, pagination consistency (limit+offset vs 2N)
+- **Version lifecycle** (#365): 4 properties — trash reversible, purge irreversible, auto-promote picks most-recent alt, single-active invariant across random op sequences
+- **Auth permissions** (#361): 6 properties — All() known, admin superset, viewer/editor/admin subset chain, context round-trip, Can() membership
+- **Undo engine** (#366): 3 properties — double-undo idempotent, undo+redo preserves file content, conservative conflict detection on mtime bump
+- **Playlist evaluator** (#367): 5 properties — limit respected, empty query errors, determinism, sort stability, per-user filter isolation
+
+All tests run 100 random inputs per property. No production bugs surfaced — the properties hold.
 
 #### April 17, 2026 — Embedding Store Chaos Tests (4.6)
 
