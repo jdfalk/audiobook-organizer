@@ -23,6 +23,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
@@ -145,7 +146,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 		}
 
 		bookCountFn := func(id int) int { return authorData.BookCounts[id] }
-		groups := FindDuplicateAuthors(authorData.Authors, 0.90, bookCountFn)
+		groups := dedup.FindDuplicateAuthors(authorData.Authors, 0.90, bookCountFn)
 
 		_ = benchWriteJSON(filepath.Join(runDir, "authors.json"), authorData.Authors)
 		_ = benchWriteJSON(filepath.Join(runDir, "groups.json"), groups)
@@ -484,7 +485,7 @@ func benchResolveModes(mode string) []string {
 	}
 }
 
-func benchBuildGroupsInput(groups []AuthorDedupGroup, data *benchAuthorData) []map[string]interface{} {
+func benchBuildGroupsInput(groups []dedup.AuthorDedupGroup, data *benchAuthorData) []map[string]interface{} {
 	var input []map[string]interface{}
 	for _, g := range groups {
 		canonical := map[string]interface{}{

@@ -18,6 +18,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -208,7 +209,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				bookCounts, _ := store.GetAllAuthorBookCounts()
 
 				total := len(authors)
-				groups := FindDuplicateAuthors(authors, 0.85, func(id int) int { return bookCounts[id] },
+				groups := dedup.FindDuplicateAuthors(authors, 0.85, func(id int) int { return bookCounts[id] },
 					func(current, t int, message string) {
 						pct := 25 + (70 * current / total)
 						_ = progress.UpdateProgress(pct, 100, message)
@@ -400,7 +401,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 						return ctx.Err()
 					}
 
-					parts := SplitCompositeAuthorName(author.Name)
+					parts := dedup.SplitCompositeAuthorName(author.Name)
 					if len(parts) <= 1 {
 						if (i+1)%200 == 0 {
 							_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("Checked %d/%d authors", i+1, total))
@@ -717,7 +718,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 
 				var prodAuthors []database.Author
 				for _, a := range authors {
-					if isProductionCompany(a.Name) {
+					if dedup.IsProductionCompany(a.Name) {
 						prodAuthors = append(prodAuthors, a)
 					}
 				}
@@ -740,7 +741,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 						resp, fetchErr := s.metadataFetchService.FetchMetadataForBookByTitle(book.ID)
 						if fetchErr == nil && resp != nil && resp.Book != nil && resp.Book.AuthorID != nil {
 							newAuthor, _ := store.GetAuthorByID(*resp.Book.AuthorID)
-							if newAuthor != nil && !isProductionCompany(newAuthor.Name) {
+							if newAuthor != nil && !dedup.IsProductionCompany(newAuthor.Name) {
 								resolved++
 							}
 						}

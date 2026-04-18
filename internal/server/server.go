@@ -28,6 +28,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
@@ -707,11 +709,11 @@ type Server struct {
 	pipelineManager        *PipelineManager
 	batchPoller            *BatchPoller
 	mergeService           *merge.Service
-	diagnosticsService     *DiagnosticsService
+	diagnosticsService     *diagnostics.Service
 	changelogService       *activity.ChangelogService
 	activityService        *activity.Service
 	embeddingStore         *database.EmbeddingStore
-	dedupEngine            *DedupEngine
+	dedupEngine            *dedup.Engine
 	activityWriter         *activity.Writer
 	itunesActivityFn       func(entry database.ActivityEntry)
 	// searchIndex is the Bleve library search index (spec DES-1).
@@ -825,7 +827,7 @@ func NewServer(store database.Store) *Server {
 		olService:              NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
 		mergeService:           merge.NewService(resolvedStore),
-		diagnosticsService:     NewDiagnosticsService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
+		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
 
@@ -904,7 +906,7 @@ func NewServer(store database.Store) *Server {
 				// Dedup Layer 3 uses a dedicated chat parser so it can call
 				// OpenAIParser.ReviewDedupPairs during maintenance runs.
 				llmParser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
-				server.dedupEngine = NewDedupEngine(
+				server.dedupEngine = dedup.NewEngine(
 					embeddingStore,
 					database.GetGlobalStore(),
 					embedClient,

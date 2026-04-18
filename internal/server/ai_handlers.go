@@ -24,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -473,7 +474,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 	}
 
 	// For groups mode, we need dedup groups — use cache if available, otherwise compute inline
-	var dedupGroups []AuthorDedupGroup
+	var dedupGroups []dedup.AuthorDedupGroup
 	if mode == "groups" {
 		cached, ok := s.dedupCache.Get("author-duplicates")
 		if ok {
@@ -498,7 +499,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 				return
 			}
 			bookCountFn := func(authorID int) int { return bookCounts[authorID] }
-			dedupGroups = FindDuplicateAuthors(authors, 0.9, bookCountFn, nil)
+			dedupGroups = dedup.FindDuplicateAuthors(authors, 0.9, bookCountFn, nil)
 			// Warm the cache for subsequent requests
 			result := gin.H{"groups": dedupGroups, "count": len(dedupGroups)}
 			s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
@@ -535,7 +536,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 }
 
 // aiReviewGroupsMode is the existing Groups mode — local heuristics build groups, AI validates.
-func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store interface { database.AuthorStore; database.OperationStore }, opID string, dedupGroups []AuthorDedupGroup) error {
+func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store database.Store, opID string, dedupGroups []dedup.AuthorDedupGroup) error {
 	_ = progress.Log("info", fmt.Sprintf("Starting AI review (groups mode) of %d duplicate author groups", len(dedupGroups)), nil)
 	_ = progress.UpdateProgress(0, len(dedupGroups), "Building AI review input...")
 
@@ -559,7 +560,7 @@ func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.Pro
 		}
 		inputs = append(inputs, ai.AuthorDedupInput{
 			Index:         i,
-			CanonicalName: NormalizeAuthorName(group.Canonical.Name),
+			CanonicalName: dedup.NormalizeAuthorName(group.Canonical.Name),
 			VariantNames:  variantNames,
 			BookCount:     group.BookCount,
 			SampleTitles:  sampleTitles,
@@ -575,7 +576,7 @@ func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.Pro
 
 	// Normalize initials formatting in AI-returned canonical names
 	for i := range suggestions {
-		suggestions[i].CanonicalName = NormalizeAuthorName(suggestions[i].CanonicalName)
+		suggestions[i].CanonicalName = dedup.NormalizeAuthorName(suggestions[i].CanonicalName)
 	}
 
 	_ = progress.Log("info", fmt.Sprintf("Received %d suggestions from AI", len(suggestions)), nil)
@@ -647,7 +648,7 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 
 	// Convert discovery suggestions to standard AuthorDedupSuggestion + AuthorDedupGroup format
 	var suggestions []ai.AuthorDedupSuggestion
-	var groups []AuthorDedupGroup
+	var groups []dedup.AuthorDedupGroup
 	for _, disc := range discoveries {
 		if len(disc.AuthorIDs) < 2 && disc.Action != "rename" {
 			continue
@@ -664,7 +665,7 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 				variants = append(variants, a)
 			}
 		}
-		groups = append(groups, AuthorDedupGroup{
+		groups = append(groups, dedup.AuthorDedupGroup{
 			Canonical: canonical,
 			Variants:  variants,
 			BookCount: disc.AuthorIDs[0], // placeholder; we just need a count
@@ -682,7 +683,7 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 		suggestions = append(suggestions, ai.AuthorDedupSuggestion{
 			GroupIndex:    len(groups) - 1, // index into groups slice, not discoveries
 			Action:        disc.Action,
-			CanonicalName: NormalizeAuthorName(disc.CanonicalName),
+			CanonicalName: dedup.NormalizeAuthorName(disc.CanonicalName),
 			Reason:        disc.Reason,
 			Confidence:    disc.Confidence,
 			IsNarrator:    disc.IsNarrator,
@@ -765,7 +766,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 
 			case "rename":
 				if sug.KeepID > 0 && sug.CanonicalName != "" {
-					if err := store.UpdateAuthorName(sug.KeepID, NormalizeAuthorName(sug.CanonicalName)); err != nil {
+					if err := store.UpdateAuthorName(sug.KeepID, dedup.NormalizeAuthorName(sug.CanonicalName)); err != nil {
 						applyErrors = append(applyErrors, fmt.Sprintf("rename author %d: %v", sug.KeepID, err))
 					} else {
 						applied++
@@ -776,7 +777,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 			case "merge":
 				// Rename canonical if needed
 				if sug.Rename && sug.KeepID > 0 && sug.CanonicalName != "" {
-					if err := store.UpdateAuthorName(sug.KeepID, NormalizeAuthorName(sug.CanonicalName)); err != nil {
+					if err := store.UpdateAuthorName(sug.KeepID, dedup.NormalizeAuthorName(sug.CanonicalName)); err != nil {
 						applyErrors = append(applyErrors, fmt.Sprintf("rename before merge %d: %v", sug.KeepID, err))
 					}
 				}
@@ -837,7 +838,7 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 				// Keep canonical author, add variants as aliases instead of merging
 				if sug.KeepID > 0 && sug.CanonicalName != "" {
 					if sug.Rename {
-						if err := store.UpdateAuthorName(sug.KeepID, NormalizeAuthorName(sug.CanonicalName)); err != nil {
+						if err := store.UpdateAuthorName(sug.KeepID, dedup.NormalizeAuthorName(sug.CanonicalName)); err != nil {
 							applyErrors = append(applyErrors, fmt.Sprintf("rename for alias %d: %v", sug.KeepID, err))
 						}
 					}

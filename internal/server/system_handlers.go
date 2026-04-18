@@ -24,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 )
 
 // Handler functions (stubs for now)
@@ -97,7 +98,7 @@ func (s *Server) getSystemAnnouncements(c *gin.Context) {
 			}
 			return len(books)
 		}
-		groups := s.filterReviewedAuthorGroups(FindDuplicateAuthors(authors, 0.9, bookCountFn))
+		groups := s.filterReviewedAuthorGroups(dedup.FindDuplicateAuthors(authors, 0.9, bookCountFn))
 		if len(groups) > 0 {
 			announcements = append(announcements, Announcement{
 				ID:       "duplicate-authors",

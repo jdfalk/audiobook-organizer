@@ -25,6 +25,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
@@ -38,7 +39,7 @@ type MetadataFetchService struct {
 	overrideSources  []metadata.MetadataSource // for testing
 	isbnEnrichment   *ISBNEnrichmentService
 	activityService  *activity.Service
-	dedupEngine      *DedupEngine
+	dedupEngine      *dedup.Engine
 	metadataScorer   ai.MetadataCandidateScorer // optional; nil = fallback to F1
 	llmScorer        ai.MetadataCandidateScorer // optional; nil = no LLM rerank tier
 	writeBackBatcher *WriteBackBatcher
@@ -64,7 +65,7 @@ func (mfs *MetadataFetchService) SetOLStore(store *openlibrary.OLStore) {
 }
 
 // SetDedupEngine sets the dedup engine for post-apply dedup checks.
-func (mfs *MetadataFetchService) SetDedupEngine(engine *DedupEngine) {
+func (mfs *MetadataFetchService) SetDedupEngine(engine *dedup.Engine) {
 	mfs.dedupEngine = engine
 }
 

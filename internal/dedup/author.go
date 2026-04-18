@@ -1,8 +1,8 @@
-// file: internal/server/author_dedup.go
-// version: 1.9.0
+// file: internal/dedup/author.go
+// version: 1.10.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
-package server
+package dedup
 
 import (
 	"fmt"
@@ -45,8 +45,8 @@ var knownProductionCompanies = map[string]bool{
 	"simon & schuster audio": true,
 }
 
-// isProductionCompany returns true if the name matches a known audiobook production company.
-func isProductionCompany(name string) bool {
+// IsProductionCompany returns true if the name matches a known audiobook production company.
+func IsProductionCompany(name string) bool {
 	lower := strings.ToLower(strings.TrimSpace(name))
 	if knownProductionCompanies[lower] {
 		return true
@@ -139,7 +139,7 @@ func isDirtyAuthorName(name string) bool {
 		}
 	}
 
-	if isProductionCompany(name) {
+	if IsProductionCompany(name) {
 		return true
 	}
 
@@ -1084,7 +1084,7 @@ func findDuplicateAuthorsInternal(authors []database.Author, threshold float64, 
 		if used[authors[i].ID] {
 			continue
 		}
-		if isProductionCompany(authors[i].Name) {
+		if IsProductionCompany(authors[i].Name) {
 			bc := bookCountFn(authors[i].ID)
 			if bc > 0 {
 				groups = append(groups, AuthorDedupGroup{

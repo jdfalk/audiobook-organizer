@@ -19,6 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
@@ -1216,7 +1217,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 				if aName == "" {
 					continue
 				}
-				normalizedName := NormalizeAuthorName(aName)
+				normalizedName := dedup.NormalizeAuthorName(aName)
 				author, err := svc.store.GetAuthorByName(normalizedName)
 				if err != nil {
 					return nil, fmt.Errorf("failed to resolve author")

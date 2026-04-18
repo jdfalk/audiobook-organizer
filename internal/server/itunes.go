@@ -20,6 +20,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
@@ -1656,7 +1657,7 @@ func assignAuthorAndSeries(store database.Store, book *database.Book, track *itu
 // with the first being the primary. If the name is not composite, returns a
 // single-element slice.
 func ensureAuthorIDs(store database.Store, name string) ([]int, error) {
-	parts := SplitCompositeAuthorName(name)
+	parts := dedup.SplitCompositeAuthorName(name)
 	if len(parts) == 0 {
 		// Not composite — treat as single author
 		parts = []string{name}
@@ -1668,7 +1669,7 @@ func ensureAuthorIDs(store database.Store, name string) ([]int, error) {
 		if part == "" {
 			continue
 		}
-		part = NormalizeAuthorName(part)
+		part = dedup.NormalizeAuthorName(part)
 		author, err := store.GetAuthorByName(part)
 		if err != nil {
 			return nil, err

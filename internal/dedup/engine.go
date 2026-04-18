@@ -1,8 +1,8 @@
-// file: internal/server/dedup_engine.go
-// version: 1.10.0
+// file: internal/dedup/engine.go
+// version: 1.11.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
-package server
+package dedup
 
 import (
 	"context"
@@ -18,11 +18,11 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 )
 
-// DedupEngine orchestrates a 3-layer dedup system:
+// Engine orchestrates a 3-layer dedup system:
 //   - Layer 1: Exact matching (free, instant) — same file hash, ISBN/ASIN, or near-identical titles
 //   - Layer 2: Embedding similarity (cheap, ~250ms) — cosine similarity of OpenAI embeddings
 //   - Layer 3: LLM review (expensive, batch only) — for ambiguous candidates
-type DedupEngine struct {
+type Engine struct {
 	embedStore   *database.EmbeddingStore
 	chromemStore *database.ChromemEmbeddingStore
 	bookStore    database.Store
@@ -49,16 +49,16 @@ type DedupEngine struct {
 	LLMMaxPairsPerRun int
 }
 
-// NewDedupEngine creates a DedupEngine with sensible defaults.
+// NewEngine creates a Engine with sensible defaults.
 // llmParser may be nil if Layer 3 LLM review should be disabled.
-func NewDedupEngine(
+func NewEngine(
 	embedStore *database.EmbeddingStore,
 	bookStore database.Store,
 	embedClient *ai.EmbeddingClient,
 	llmParser *ai.OpenAIParser,
 	mergeService *merge.Service,
-) *DedupEngine {
-	return &DedupEngine{
+) *Engine {
+	return &Engine{
 		embedStore:          embedStore,
 		bookStore:           bookStore,
 		embedClient:         embedClient,
@@ -80,7 +80,7 @@ func NewDedupEngine(
 // SetChromemStore configures the ANN vector store for Layer 2.
 // When set, FindSimilar queries go through chromem instead of
 // the SQLite linear scan.
-func (de *DedupEngine) SetChromemStore(cs *database.ChromemEmbeddingStore) {
+func (de *Engine) SetChromemStore(cs *database.ChromemEmbeddingStore) {
 	de.chromemStore = cs
 }
 
@@ -88,7 +88,7 @@ func (de *DedupEngine) SetChromemStore(cs *database.ChromemEmbeddingStore) {
 // Returns true if the book was auto-merged (Layer 1 only, when AutoMergeEnabled).
 // Honors ctx cancellation so the dedup-on-import hook can bail immediately
 // when the server is shutting down, rather than racing Pebble close.
-func (de *DedupEngine) CheckBook(ctx context.Context, bookID string) (bool, error) {
+func (de *Engine) CheckBook(ctx context.Context, bookID string) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -146,7 +146,7 @@ func (de *DedupEngine) CheckBook(ctx context.Context, bookID string) (bool, erro
 
 // checkExactFileHash checks if any other book shares a file hash.
 // Auto-merges if hashes match AND same normalized author AND same normalized title.
-func (de *DedupEngine) checkExactFileHash(book *database.Book, authorName string) (bool, error) {
+func (de *Engine) checkExactFileHash(book *database.Book, authorName string) (bool, error) {
 	// Check book-level file hash
 	if book.FileHash != nil && *book.FileHash != "" {
 		other, err := de.bookStore.GetBookByFileHash(*book.FileHash)
@@ -185,7 +185,7 @@ func (de *DedupEngine) checkExactFileHash(book *database.Book, authorName string
 }
 
 // handleFileHashMatch decides whether to auto-merge or create a candidate for a file hash match.
-func (de *DedupEngine) handleFileHashMatch(book, other *database.Book, authorName string) (bool, error) {
+func (de *Engine) handleFileHashMatch(book, other *database.Book, authorName string) (bool, error) {
 	otherAuthorName := ""
 	if other.AuthorID != nil {
 		otherAuthor, err := de.bookStore.GetAuthorByID(*other.AuthorID)
@@ -219,7 +219,7 @@ func (de *DedupEngine) handleFileHashMatch(book, other *database.Book, authorNam
 }
 
 // checkExactISBN scans all books for matching ISBN10, ISBN13, or ASIN.
-func (de *DedupEngine) checkExactISBN(book *database.Book) error {
+func (de *Engine) checkExactISBN(book *database.Book) error {
 	bookISBN10 := derefStr(book.ISBN10)
 	bookISBN13 := derefStr(book.ISBN13)
 	bookASIN := derefStr(book.ASIN)
@@ -290,7 +290,7 @@ func (de *DedupEngine) checkExactISBN(book *database.Book) error {
 // Books with empty or near-empty titles are also rejected here — a pair
 // of empty strings has a Levenshtein distance of 0 and would otherwise
 // match every other empty-titled book by the same author.
-func (de *DedupEngine) checkExactTitle(book *database.Book, authorName string) error {
+func (de *Engine) checkExactTitle(book *database.Book, authorName string) error {
 	if book.AuthorID == nil {
 		return nil
 	}
@@ -404,7 +404,7 @@ const durationLevenshteinMax = 6
 // signal fires first; duration is the "I know these are the same
 // book but the title encoding differs enough that the strict
 // check missed it" fallback.
-func (de *DedupEngine) checkDurationMatch(book *database.Book) error {
+func (de *Engine) checkDurationMatch(book *database.Book) error {
 	if book.AuthorID == nil {
 		return nil
 	}
@@ -639,7 +639,7 @@ func extractDigits(s string) string {
 }
 
 // findSimilarBooks runs Layer 2 embedding similarity search for a book.
-func (de *DedupEngine) findSimilarBooks(ctx context.Context, bookID string) error {
+func (de *Engine) findSimilarBooks(ctx context.Context, bookID string) error {
 	emb, err := de.embedStore.Get("book", bookID)
 	if err != nil || emb == nil {
 		return fmt.Errorf("no embedding for book %s", bookID)
@@ -742,7 +742,7 @@ func (de *DedupEngine) findSimilarBooks(ctx context.Context, bookID string) erro
 }
 
 // CheckAuthor runs Layer 2 embedding similarity for an author.
-func (de *DedupEngine) CheckAuthor(ctx context.Context, authorID int) error {
+func (de *Engine) CheckAuthor(ctx context.Context, authorID int) error {
 	author, err := de.bookStore.GetAuthorByID(authorID)
 	if err != nil {
 		return fmt.Errorf("get author %d: %w", authorID, err)
@@ -867,7 +867,7 @@ func (s EmbedStatus) String() string {
 // book is deleted on the spot so historical rows from earlier backfills get
 // cleaned up as we walk the library. Empty-title books are skipped with
 // the same cleanup behavior.
-func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) (EmbedStatus, error) {
+func (de *Engine) EmbedBook(ctx context.Context, bookID string) (EmbedStatus, error) {
 	if de.embedClient == nil {
 		return 0, fmt.Errorf("no embedding client configured")
 	}
@@ -937,7 +937,7 @@ func (de *DedupEngine) EmbedBook(ctx context.Context, bookID string) (EmbedStatu
 }
 
 // EmbedAuthor generates and stores an embedding for the given author.
-func (de *DedupEngine) EmbedAuthor(ctx context.Context, authorID int) error {
+func (de *Engine) EmbedAuthor(ctx context.Context, authorID int) error {
 	if de.embedClient == nil {
 		return fmt.Errorf("no embedding client configured")
 	}
@@ -982,7 +982,7 @@ func (de *DedupEngine) EmbedAuthor(ctx context.Context, authorID int) error {
 // since the initial backfill. Running it inside FullScan populates the
 // bucket with the hash/ISBN/near-title-match candidates that were always
 // there but never surfaced.
-func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total int)) error {
+func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) error {
 	books, err := de.getAllBooks()
 	if err != nil {
 		return fmt.Errorf("get all books: %w", err)
@@ -1052,7 +1052,7 @@ func (de *DedupEngine) FullScan(ctx context.Context, progress func(done, total i
 // after the backfill completes and again at the start of a user-triggered
 // Re-scan so the candidate table stays clean after the Layer 1 + Layer 2
 // rules tighten.
-func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
+func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 	if de.embedStore == nil || de.bookStore == nil {
 		return 0, nil
 	}
@@ -1182,7 +1182,7 @@ func (de *DedupEngine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 // which is O(n). The memory cost is ~50MB for 24K Book structs — same
 // order of magnitude as the old cumulative batch allocation and far
 // cheaper than the wasted CPU on re-walked iterators.
-func (de *DedupEngine) getAllBooks() ([]database.Book, error) {
+func (de *Engine) getAllBooks() ([]database.Book, error) {
 	batch, err := de.bookStore.GetAllBooks(0, 0)
 	if err != nil {
 		return nil, err
@@ -1206,7 +1206,7 @@ func (de *DedupEngine) getAllBooks() ([]database.Book, error) {
 // Candidates that are already at layer='llm' are skipped — rerunning is cheap in
 // bookkeeping but expensive in API calls, so callers should use UpsertCandidate to
 // clear the layer back to 'embedding' if they want a re-review.
-func (de *DedupEngine) RunLLMReview(ctx context.Context) error {
+func (de *Engine) RunLLMReview(ctx context.Context) error {
 	if de.llmParser == nil || !de.llmParser.IsEnabled() {
 		log.Println("dedup: LLM review skipped — llmParser not configured")
 		return nil
@@ -1263,7 +1263,7 @@ func (de *DedupEngine) RunLLMReview(ctx context.Context) error {
 
 // listAmbiguousCandidates returns pending embedding-layer candidates whose
 // similarity falls inside [low, high].
-func (de *DedupEngine) listAmbiguousCandidates(entityType string, low, high float64) ([]database.DedupCandidate, error) {
+func (de *Engine) listAmbiguousCandidates(entityType string, low, high float64) ([]database.DedupCandidate, error) {
 	filter := database.CandidateFilter{
 		EntityType:    entityType,
 		Status:        "pending",
@@ -1278,7 +1278,7 @@ func (de *DedupEngine) listAmbiguousCandidates(entityType string, low, high floa
 
 // buildPairInput enriches a stored candidate with entity details suitable for
 // the LLM prompt. Returns false if either entity could not be loaded.
-func (de *DedupEngine) buildPairInput(index int, c database.DedupCandidate) (ai.DedupPairInput, bool) {
+func (de *Engine) buildPairInput(index int, c database.DedupCandidate) (ai.DedupPairInput, bool) {
 	input := ai.DedupPairInput{
 		Index:      index,
 		EntityType: c.EntityType,
@@ -1312,7 +1312,7 @@ func (de *DedupEngine) buildPairInput(index int, c database.DedupCandidate) (ai.
 
 // loadBookEntity fetches a book and converts it into a DedupEntity. The caller
 // may rely on ID always being populated when the second return value is true.
-func (de *DedupEngine) loadBookEntity(bookID string) (ai.DedupEntity, bool) {
+func (de *Engine) loadBookEntity(bookID string) (ai.DedupEntity, bool) {
 	book, err := de.bookStore.GetBookByID(bookID)
 	if err != nil || book == nil {
 		return ai.DedupEntity{}, false
@@ -1340,7 +1340,7 @@ func (de *DedupEngine) loadBookEntity(bookID string) (ai.DedupEntity, bool) {
 // loadAuthorEntity fetches an author and converts it into a DedupEntity. The
 // Title field carries the author name so the prompt treats both entity types
 // uniformly.
-func (de *DedupEngine) loadAuthorEntity(entityID string) (ai.DedupEntity, bool) {
+func (de *Engine) loadAuthorEntity(entityID string) (ai.DedupEntity, bool) {
 	id, err := strconv.Atoi(entityID)
 	if err != nil {
 		return ai.DedupEntity{}, false
@@ -1367,7 +1367,7 @@ func (de *DedupEngine) loadAuthorEntity(entityID string) (ai.DedupEntity, bool) 
 //
 // Errors are logged and skipped so one bad row doesn't abort
 // the whole batch.
-func (de *DedupEngine) applyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]database.DedupCandidate) int {
+func (de *Engine) applyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]database.DedupCandidate) int {
 	applied := 0
 	autoMerged := 0
 	for _, v := range verdicts {
@@ -1581,7 +1581,7 @@ func normalizeTitle(title string) string {
 // Errors from the alt-title lookup are swallowed and logged — if
 // the alt-title store is unavailable we fall back to primary-only
 // matching, which is the pre-alt-titles behavior.
-func (de *DedupEngine) allNormalizedTitleForms(book *database.Book) []string {
+func (de *Engine) allNormalizedTitleForms(book *database.Book) []string {
 	forms := []string{normalizeTitle(book.Title)}
 	seen := map[string]struct{}{forms[0]: {}}
 	if de.bookStore != nil {
