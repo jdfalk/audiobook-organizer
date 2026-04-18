@@ -32,19 +32,25 @@ import (
 )
 
 type MetadataFetchService struct {
-	db              database.Store
-	olStore         *openlibrary.OLStore
-	overrideSources []metadata.MetadataSource // for testing
-	isbnEnrichment  *ISBNEnrichmentService
-	activityService *ActivityService
-	dedupEngine     *DedupEngine
-	metadataScorer  ai.MetadataCandidateScorer // optional; nil = fallback to F1
-	llmScorer       ai.MetadataCandidateScorer // optional; nil = no LLM rerank tier
+	db               database.Store
+	olStore          *openlibrary.OLStore
+	overrideSources  []metadata.MetadataSource // for testing
+	isbnEnrichment   *ISBNEnrichmentService
+	activityService  *ActivityService
+	dedupEngine      *DedupEngine
+	metadataScorer   ai.MetadataCandidateScorer // optional; nil = fallback to F1
+	llmScorer        ai.MetadataCandidateScorer // optional; nil = no LLM rerank tier
+	writeBackBatcher *WriteBackBatcher
 }
 
 // SetActivityService sets the activity service for dual-writing to the unified activity log.
 func (mfs *MetadataFetchService) SetActivityService(svc *ActivityService) {
 	mfs.activityService = svc
+}
+
+// SetWriteBackBatcher sets the iTunes write-back batcher.
+func (mfs *MetadataFetchService) SetWriteBackBatcher(b *WriteBackBatcher) {
+	mfs.writeBackBatcher = b
 }
 
 func NewMetadataFetchService(db database.Store) *MetadataFetchService {
@@ -3289,8 +3295,8 @@ func (mfs *MetadataFetchService) runApplyPipeline(id string, book *database.Book
 	// (if the file was renamed) and metadata changes. The apply
 	// handler also enqueues after this returns; the batcher dedupes
 	// on book ID so the duplicate is harmless.
-	if GlobalWriteBackBatcher != nil && !hasCheckpoint(mfs.db, id, phaseITunes) {
-		GlobalWriteBackBatcher.Enqueue(id)
+	if mfs.writeBackBatcher != nil && !hasCheckpoint(mfs.db, id, phaseITunes) {
+		mfs.writeBackBatcher.Enqueue(id)
 		setCheckpoint(mfs.db, id, phaseITunes)
 	}
 
@@ -3473,8 +3479,8 @@ func (mfs *MetadataFetchService) RunApplyPipelineRenameOnly(id string, book *dat
 	// Enqueue iTunes writeback so location changes from the rename
 	// propagate to iTunes. Callers (bulk write-back) also enqueue,
 	// the batcher dedupes.
-	if GlobalWriteBackBatcher != nil {
-		GlobalWriteBackBatcher.Enqueue(id)
+	if mfs.writeBackBatcher != nil {
+		mfs.writeBackBatcher.Enqueue(id)
 	}
 
 	return nil

@@ -57,7 +57,7 @@ func (s *Server) listBookDuplicateScanResults(c *gin.Context) {
 
 // scanBookDuplicates triggers an async scan for book duplicates using metadata matching.
 func (s *Server) scanBookDuplicates(c *gin.Context) {
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -164,7 +164,7 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, "book-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "book-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -259,7 +259,7 @@ func (s *Server) mergeBooks(c *gin.Context) {
 		return
 	}
 
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -349,7 +349,7 @@ func (s *Server) mergeBooks(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "book-merge", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "book-merge", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -368,7 +368,7 @@ func (s *Server) listDuplicateAuthors(c *gin.Context) {
 }
 
 func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -415,7 +415,7 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, "author-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "author-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -486,7 +486,7 @@ func (s *Server) listSeriesDuplicates(c *gin.Context) {
 }
 
 func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -668,7 +668,7 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(opID, "series-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "series-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -748,7 +748,7 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -844,7 +844,7 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "series-dedup", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "series-dedup", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -874,7 +874,7 @@ func (s *Server) seriesPrune(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -891,7 +891,7 @@ func (s *Server) seriesPrune(c *gin.Context) {
 		return s.executeSeriesPrune(ctx, store, progress, op.ID)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "series-prune", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "series-prune", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -1091,7 +1091,7 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 		return
 	}
 
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -1252,7 +1252,7 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 		return nil
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "series-merge", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "series-merge", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}

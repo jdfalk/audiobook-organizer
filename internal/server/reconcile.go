@@ -103,7 +103,7 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -119,7 +119,7 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 		return s.runReconcileScan(ctx, id, progress)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -197,7 +197,7 @@ func (s *Server) startReconcile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if operations.GlobalQueue == nil {
+	if s.queue == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
@@ -227,7 +227,7 @@ func (s *Server) startReconcile(c *gin.Context) {
 		return executeReconcile(ctx, store, id, matches, operations.LoggerFromReporter(progress))
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile", operations.PriorityNormal, operationFunc); err != nil {
+	if err := s.queue.Enqueue(op.ID, "reconcile", operations.PriorityNormal, operationFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}

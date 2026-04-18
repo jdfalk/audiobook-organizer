@@ -19,7 +19,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/playlist"
-	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/server"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
@@ -284,31 +283,26 @@ var serveCmd = &cobra.Command{
 
 		fmt.Println("Starting audiobook organizer web server...")
 
-		// Initialize real-time event hub
-		realtime.InitializeEventHub()
-		fmt.Println("Real-time event hub initialized")
-
-		// Initialize operation queue with 2 workers
-		workers := 2
-		if w := cmd.Flag("workers").Value.String(); w != "" {
-			fmt.Sscanf(w, "%d", &workers)
-		}
-		initializeQueue(database.GetGlobalStore(), workers)
-		if config.AppConfig.OperationTimeoutMinutes > 0 {
-			operations.SetGlobalOperationTimeout(time.Duration(config.AppConfig.OperationTimeoutMinutes) * time.Minute)
-		}
+		// Hub and queue are now created inside NewServer.
+		// Shutdown of the queue is handled via the global reference
+		// that NewServer sets for backward compatibility.
 		defer func() {
 			fmt.Println("Shutting down operation queue...")
 			if err := shutdownQueue(30 * time.Second); err != nil {
 				fmt.Printf("Warning: operation queue shutdown error: %v\n", err)
 			}
 		}()
-		fmt.Printf("Operation queue initialized with %d workers\n", workers)
 
 		// Create and start server. Store is passed explicitly per the 4.4 DI
 		// migration; database.GlobalStore remains assigned for call sites that
 		// haven't yet been migrated to use s.Store().
 		srv := newServer(database.GetGlobalStore())
+
+		// Apply operation timeout if configured
+		if config.AppConfig.OperationTimeoutMinutes > 0 {
+			operations.SetGlobalOperationTimeout(time.Duration(config.AppConfig.OperationTimeoutMinutes) * time.Minute)
+		}
+		fmt.Println("Server initialized (hub, queue, batcher, file I/O pool)")
 		cfg := getDefaultServerConfig()
 
 		// Apply command line flags (use defaults or user-provided values)

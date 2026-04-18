@@ -2210,7 +2210,7 @@ func (s *Server) handleDedupBooks(c *gin.Context) {
 
 		var mergeErrs []string
 		for _, dup := range dups {
-			if mergeErr := mergeDuplicateBook(store, keeper, dup, dryRun); mergeErr != nil {
+			if mergeErr := mergeDuplicateBook(store, keeper, dup, dryRun, s.writeBackBatcher); mergeErr != nil {
 				msg := fmt.Sprintf("phase2 merge %s->%s: %v", dup.ID, keeper.ID, mergeErr)
 				errorMessages = append(errorMessages, msg)
 				mergeErrs = append(mergeErrs, mergeErr.Error())
@@ -2299,7 +2299,7 @@ func (s *Server) handleDedupBooks(c *gin.Context) {
 		}
 
 		for _, dup := range dups {
-			if mergeErr := mergeDuplicateBook(store, keeper, dup, dryRun); mergeErr != nil {
+			if mergeErr := mergeDuplicateBook(store, keeper, dup, dryRun, s.writeBackBatcher); mergeErr != nil {
 				msg := fmt.Sprintf("phase3 merge %s->%s: %v", dup.ID, keeper.ID, mergeErr)
 				errorMessages = append(errorMessages, msg)
 				result.Errors++
@@ -2497,7 +2497,7 @@ func bookScore(b *database.Book) int {
 
 // mergeDuplicateBook transfers data from dup into keeper and then soft-deletes dup.
 // When dryRun is true the function returns nil without modifying the database.
-func mergeDuplicateBook(store database.Store, keeper *database.Book, dup *database.Book, dryRun bool) error {
+func mergeDuplicateBook(store database.Store, keeper *database.Book, dup *database.Book, dryRun bool, batcher *WriteBackBatcher) error {
 	if dryRun {
 		return nil
 	}
@@ -2530,9 +2530,9 @@ func mergeDuplicateBook(store database.Store, keeper *database.Book, dup *databa
 
 	// Queue ITL removal for the dup's tracks (they now point to the wrong file).
 	// The keeper's tracks remain; dup's tracks are redundant entries in iTunes.
-	if GlobalWriteBackBatcher != nil && len(dupPIDs) > 0 {
+	if batcher != nil && len(dupPIDs) > 0 {
 		for _, pid := range dupPIDs {
-			GlobalWriteBackBatcher.EnqueueRemove(pid)
+			batcher.EnqueueRemove(pid)
 		}
 		log.Printf("[INFO] dedup-books: queued %d ITL removals for dup %s", len(dupPIDs), dup.ID)
 	}

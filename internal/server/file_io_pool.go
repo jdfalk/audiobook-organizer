@@ -228,8 +228,8 @@ func InitFileIOPool() {
 
 // RecoverInterruptedFileOps re-queues any interrupted file I/O jobs.
 // Called from the server startup sequence after services are ready.
-func RecoverInterruptedFileOps() {
-	recoverInterruptedFileOps()
+func RecoverInterruptedFileOps(pool *FileIOPool) {
+	recoverInterruptedFileOps(pool)
 }
 
 // --- Persistent tracking via PebbleDB ---
@@ -277,7 +277,7 @@ func removePendingFileOp(bookID, opType string) {
 
 // recoverInterruptedFileOps re-queues any file I/O jobs that were in-flight
 // when the server last shut down (or crashed).
-func recoverInterruptedFileOps() {
+func recoverInterruptedFileOps(pool *FileIOPool) {
 	store := database.GetGlobalStore()
 	if store == nil {
 		return
@@ -326,6 +326,8 @@ func recoverInterruptedFileOps() {
 		bookID := job.BookID
 		opType := job.OpType
 		log.Printf("[INFO] re-queuing file I/O for book %s (type=%s, started=%s)", bookID, opType, job.CreatedAt.Format(time.RFC3339))
-		GlobalFileIOPool.SubmitTyped(bookID, opType, func() { fn(bookID) })
+		if pool != nil {
+			pool.SubmitTyped(bookID, opType, func() { fn(bookID) })
+		}
 	}
 }

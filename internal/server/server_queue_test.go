@@ -78,18 +78,18 @@ func TestCancelOperationWithQueueMock(t *testing.T) {
 			tt.mockStoreSetup(mockStore)
 			database.SetGlobalStore(mockStore)
 
+			// Create server
+			server := &Server{
+				router: gin.New(),
+			}
+
 			// Create and setup mock queue (or leave nil for nil test)
 			if tt.mockQueueSetup != nil {
 				mockQueue := queuemocks.NewMockQueue(t)
 				tt.mockQueueSetup(mockQueue)
-				operations.GlobalQueue = mockQueue
+				server.queue = mockQueue
 			} else {
-				operations.GlobalQueue = nil
-			}
-
-			// Create server
-			server := &Server{
-				router: gin.New(),
+				server.queue = nil
 			}
 			server.setupRoutes()
 
@@ -184,18 +184,18 @@ func TestGetOperationsWithQueueMock(t *testing.T) {
 			tt.mockStoreSetup(mockStore)
 			database.SetGlobalStore(mockStore)
 
+			// Create server
+			server := &Server{
+				router: gin.New(),
+			}
+
 			// Create and setup mock queue (or leave nil)
 			if tt.mockQueueSetup != nil {
 				mockQueue := queuemocks.NewMockQueue(t)
 				tt.mockQueueSetup(mockQueue)
-				operations.GlobalQueue = mockQueue
+				server.queue = mockQueue
 			} else {
-				operations.GlobalQueue = nil
-			}
-
-			// Create server
-			server := &Server{
-				router: gin.New(),
+				server.queue = nil
 			}
 			server.setupRoutes()
 

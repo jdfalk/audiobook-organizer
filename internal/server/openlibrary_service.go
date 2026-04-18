@@ -159,7 +159,7 @@ func (s *Server) startOLDownload(c *gin.Context) {
 		_, _ = store.CreateOperation(opID, "ol_dump_download", &folderPath)
 	}
 
-	oq := operations.GlobalQueue
+	oq := s.queue
 	if oq != nil {
 		err := oq.Enqueue(opID, "ol_dump_download", operations.PriorityNormal,
 			func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -240,7 +240,7 @@ func (s *Server) startOLImport(c *gin.Context) {
 		_, _ = store.CreateOperation(opID, "ol_dump_import", &folderPath)
 	}
 
-	oq := operations.GlobalQueue
+	oq := s.queue
 	if oq != nil {
 		typesStr := strings.Join(req.Types, ",")
 		err := oq.Enqueue(opID, "ol_dump_import", operations.PriorityNormal,

@@ -116,11 +116,11 @@ func TestSyncITunesPositions_EndToEnd(t *testing.T) {
 		ID: "f1", BookID: book.ID, FilePath: "/tmp/f1", Duration: 3600,
 	})
 
-	pulled, pushed := SyncITunesPositions(store)
+	pulled, pushed := SyncITunesPositions(store, nil)
 	if pulled != 1 {
 		t.Errorf("pulled = %d, want 1", pulled)
 	}
-	// Push returns 0 because GlobalWriteBackBatcher is nil in tests.
+	// Push returns 0 because writeBackBatcher is nil in tests.
 	if pushed != 0 {
 		t.Errorf("pushed = %d, want 0 (no batcher)", pushed)
 	}

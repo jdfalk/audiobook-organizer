@@ -96,8 +96,8 @@ func TestImportFile_WithOrganize_QueuesOperation(t *testing.T) {
 	metadata.GlobalMetadataExtractor = mockMeta
 	t.Cleanup(func() { metadata.GlobalMetadataExtractor = nil })
 	mockQueue := queuemocks.NewMockQueue(t)
-	operations.GlobalQueue = mockQueue
-	t.Cleanup(func() { operations.GlobalQueue = nil })
+	server.queue = mockQueue
+	t.Cleanup(func() { server.queue = nil })
 
 	mockMeta.EXPECT().ExtractMetadata(testFile).Return(metadata.Metadata{Title: "Meta Title"}, nil).Once()
 	mockStore.EXPECT().CreateBook(mock.Anything).Return(&database.Book{ID: "B2", Title: "Meta Title", FilePath: testFile}, nil).Once()

@@ -300,7 +300,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("itunes-position-sync", func(_ context.Context, progress operations.ProgressReporter) error {
-				pulled, pushed := SyncITunesPositions(s.Store())
+				pulled, pushed := SyncITunesPositions(ts.server.Store(), ts.server.writeBackBatcher)
 				_ = progress.Log("info", fmt.Sprintf("iTunes position sync: pulled %d, pushed %d", pulled, pushed), nil)
 				return nil
 			})
@@ -804,7 +804,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err != nil {
 				return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
-			if err := operations.GlobalQueue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal,
+			if err := ts.server.queue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal,
 				func(ctx context.Context, progress operations.ProgressReporter) error {
 					reconcileLog := operations.LoggerFromReporter(progress)
 					result, scanErr := buildReconcilePreviewWithProgress(store, reconcileLog)
@@ -850,7 +850,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if store == nil {
 				return nil, fmt.Errorf("database not initialized")
 			}
-			if operations.GlobalQueue == nil {
+			if ts.server.queue == nil {
 				return nil, fmt.Errorf("operation queue not initialized")
 			}
 			opID := ulid.Make().String()
@@ -858,7 +858,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err != nil {
 				return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
-			if err := operations.GlobalQueue.Enqueue(op.ID, "ai-dedup-batch", operations.PriorityLow, func(ctx context.Context, progress operations.ProgressReporter) error {
+			if err := ts.server.queue.Enqueue(op.ID, "ai-dedup-batch", operations.PriorityLow, func(ctx context.Context, progress operations.ProgressReporter) error {
 				parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 				if !parser.IsEnabled() {
 					return fmt.Errorf("AI parsing is not enabled")
@@ -1012,7 +1012,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err != nil {
 				return nil, err
 			}
-			_ = operations.GlobalQueue.Enqueue(opID, "purge_old_logs", operations.PriorityLow,
+			_ = ts.server.queue.Enqueue(opID, "purge_old_logs", operations.PriorityLow,
 				func(ctx context.Context, progress operations.ProgressReporter) error {
 					retLog := logger.New("purge_old_logs")
 					_, err := logger.PruneOldLogs(ts.server.Store(), config.AppConfig.LogRetentionDays, retLog)
@@ -1038,7 +1038,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err != nil {
 				return nil, err
 			}
-			_ = operations.GlobalQueue.Enqueue(opID, "cleanup_activity_log", operations.PriorityLow,
+			_ = ts.server.queue.Enqueue(opID, "cleanup_activity_log", operations.PriorityLow,
 				func(ctx context.Context, progress operations.ProgressReporter) error {
 					if ts.server.activityService == nil {
 						return nil
@@ -1097,7 +1097,7 @@ func (ts *TaskScheduler) triggerOperation(opType string, fn func(context.Context
 	if store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	if operations.GlobalQueue == nil {
+	if ts.server.queue == nil {
 		return nil, fmt.Errorf("operation queue not initialized")
 	}
 
@@ -1107,7 +1107,7 @@ func (ts *TaskScheduler) triggerOperation(opType string, fn func(context.Context
 		return nil, fmt.Errorf("failed to create operation: %w", err)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, opType, operations.PriorityNormal, fn); err != nil {
+	if err := ts.server.queue.Enqueue(op.ID, opType, operations.PriorityNormal, fn); err != nil {
 		return nil, fmt.Errorf("failed to enqueue operation: %w", err)
 	}
 
@@ -1120,7 +1120,7 @@ func (ts *TaskScheduler) triggerOperationWithID(opType string, fn func(context.C
 	if store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	if operations.GlobalQueue == nil {
+	if ts.server.queue == nil {
 		return nil, fmt.Errorf("operation queue not initialized")
 	}
 
@@ -1134,7 +1134,7 @@ func (ts *TaskScheduler) triggerOperationWithID(opType string, fn func(context.C
 		return fn(ctx, progress, op.ID)
 	}
 
-	if err := operations.GlobalQueue.Enqueue(op.ID, opType, operations.PriorityNormal, wrappedFn); err != nil {
+	if err := ts.server.queue.Enqueue(op.ID, opType, operations.PriorityNormal, wrappedFn); err != nil {
 		return nil, fmt.Errorf("failed to enqueue operation: %w", err)
 	}
 
@@ -1396,7 +1396,7 @@ func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
 	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	if operations.GlobalQueue == nil {
+	if ts.server.queue == nil {
 		return fmt.Errorf("operation queue not initialized")
 	}
 
@@ -1410,7 +1410,7 @@ func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
 	// while the async operation is still running.
 	ts.saveLastMaintenanceRun()
 
-	_ = operations.GlobalQueue.Enqueue(op.ID, "maintenance-window", operations.PriorityNormal,
+	_ = ts.server.queue.Enqueue(op.ID, "maintenance-window", operations.PriorityNormal,
 		func(innerCtx context.Context, progress operations.ProgressReporter) error {
 			ignoreWindow := ctx.Value(ignoreWindowKey) != nil
 
