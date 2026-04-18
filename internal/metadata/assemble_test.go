@@ -247,14 +247,13 @@ func TestAssembleBookMetadataIntegration(t *testing.T) {
 	}
 
 	// Use a mock extractor to simulate real tag data
-	oldExtractor := GlobalMetadataExtractor
-	GlobalMetadataExtractor = newAssembleExtractorStub(t, Metadata{
+	SetMetadataExtractor(newAssembleExtractorStub(t, Metadata{
 		Title:  "The Colour of Magic",
 		Artist: "Terry Pratchett",
 		Year:   1983,
 		Genre:  "Fantasy",
-	}, nil)
-	defer func() { GlobalMetadataExtractor = oldExtractor }()
+	}, nil))
+	defer func() { SetMetadataExtractor(nil) }()
 
 	bm, err := AssembleBookMetadata(bookDir, fakeFile, 3, 12345.0)
 	if err != nil {

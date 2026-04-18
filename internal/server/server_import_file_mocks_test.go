@@ -46,8 +46,8 @@ func TestImportFile_WithMockMetadata_CreateAuthorAndBook(t *testing.T) {
 	t.Cleanup(func() { database.SetGlobalStore(nil) })
 
 	mockMeta := metamocks.NewMockMetadataExtractor(t)
-	metadata.GlobalMetadataExtractor = mockMeta
-	t.Cleanup(func() { metadata.GlobalMetadataExtractor = nil })
+	metadata.SetMetadataExtractor(mockMeta)
+	t.Cleanup(func() { metadata.SetMetadataExtractor(nil) })
 
 	// Expectations: metadata returns title and artist; author missing -> create
 	mockMeta.EXPECT().ExtractMetadata(testFile).Return(metadata.Metadata{
@@ -93,8 +93,8 @@ func TestImportFile_WithOrganize_QueuesOperation(t *testing.T) {
 	database.SetGlobalStore(mockStore)
 	t.Cleanup(func() { database.SetGlobalStore(nil) })
 	mockMeta := metamocks.NewMockMetadataExtractor(t)
-	metadata.GlobalMetadataExtractor = mockMeta
-	t.Cleanup(func() { metadata.GlobalMetadataExtractor = nil })
+	metadata.SetMetadataExtractor(mockMeta)
+	t.Cleanup(func() { metadata.SetMetadataExtractor(nil) })
 	mockQueue := queuemocks.NewMockQueue(t)
 	server.queue = mockQueue
 	t.Cleanup(func() { server.queue = nil })
@@ -136,8 +136,8 @@ func TestImportFile_MetadataExtractError_Returns500(t *testing.T) {
 	database.SetGlobalStore(mockStore)
 	t.Cleanup(func() { database.SetGlobalStore(nil) })
 	mockMeta := metamocks.NewMockMetadataExtractor(t)
-	metadata.GlobalMetadataExtractor = mockMeta
-	t.Cleanup(func() { metadata.GlobalMetadataExtractor = nil })
+	metadata.SetMetadataExtractor(mockMeta)
+	t.Cleanup(func() { metadata.SetMetadataExtractor(nil) })
 
 	mockMeta.EXPECT().ExtractMetadata(testFile).Return(metadata.Metadata{}, assert.AnError).Once()
 
@@ -167,8 +167,8 @@ func TestImportFile_CreateBookError_Returns500(t *testing.T) {
 	database.SetGlobalStore(mockStore)
 	t.Cleanup(func() { database.SetGlobalStore(nil) })
 	mockMeta := metamocks.NewMockMetadataExtractor(t)
-	metadata.GlobalMetadataExtractor = mockMeta
-	t.Cleanup(func() { metadata.GlobalMetadataExtractor = nil })
+	metadata.SetMetadataExtractor(mockMeta)
+	t.Cleanup(func() { metadata.SetMetadataExtractor(nil) })
 
 	mockMeta.EXPECT().ExtractMetadata(testFile).Return(metadata.Metadata{Title: "Meta Title"}, nil).Once()
 	mockStore.EXPECT().CreateBook(mock.Anything).Return((*database.Book)(nil), assert.AnError).Once()
