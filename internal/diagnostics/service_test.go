@@ -1,16 +1,14 @@
-// file: internal/server/diagnostics_service_test.go
-// version: 1.1.0
+// file: internal/diagnostics/service_test.go
+// version: 1.2.0
 // guid: d1a9n0st-1cs0-t3st-s3rv-1c3t3st0001
 
-package server
+package diagnostics
 
 import (
 	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -58,10 +56,10 @@ func readZipFile(t *testing.T, r *zip.ReadCloser, name string) []byte {
 	return nil
 }
 
-func TestDiagnosticsService_GenerateExport_Deduplication(t *testing.T) {
+func TestService_GenerateExport_Deduplication(t *testing.T) {
 	store := setupDiagnosticsMocks(t)
 
-	svc := NewDiagnosticsService(store, nil, "")
+	svc := NewService(store, nil, "")
 	zipPath, err := svc.GenerateExport("deduplication", "test export")
 	require.NoError(t, err)
 	defer os.Remove(zipPath)
@@ -107,7 +105,7 @@ func TestDiagnosticsService_GenerateExport_Deduplication(t *testing.T) {
 	assert.Equal(t, "Test Book", books[0]["title"])
 }
 
-func TestDiagnosticsService_GenerateExport_ErrorAnalysis(t *testing.T) {
+func TestService_GenerateExport_ErrorAnalysis(t *testing.T) {
 	store := setupDiagnosticsMocks(t)
 
 	now := time.Now()
@@ -117,7 +115,7 @@ func TestDiagnosticsService_GenerateExport_ErrorAnalysis(t *testing.T) {
 		{ID: 2, Source: "scanner", Level: "info", Message: "old log", CreatedAt: now.Add(-48 * time.Hour)},
 	}, nil).Maybe()
 
-	svc := NewDiagnosticsService(store, nil, "")
+	svc := NewService(store, nil, "")
 	zipPath, err := svc.GenerateExport("error_analysis", "debug errors")
 	require.NoError(t, err)
 	defer os.Remove(zipPath)
@@ -147,7 +145,7 @@ func TestDiagnosticsService_GenerateExport_ErrorAnalysis(t *testing.T) {
 	assert.Equal(t, "scan failed", logs[0].Message)
 }
 
-func TestDiagnosticsService_GenerateExport_MetadataQuality(t *testing.T) {
+func TestService_GenerateExport_MetadataQuality(t *testing.T) {
 	store := setupDiagnosticsMocks(t)
 
 	authorID := 1
@@ -163,7 +161,7 @@ func TestDiagnosticsService_GenerateExport_MetadataQuality(t *testing.T) {
 	store.EXPECT().CountBooks().Unset()
 	store.EXPECT().CountBooks().Return(3, nil).Maybe()
 
-	svc := NewDiagnosticsService(store, nil, "")
+	svc := NewService(store, nil, "")
 	zipPath, err := svc.GenerateExport("metadata_quality", "check quality")
 	require.NoError(t, err)
 	defer os.Remove(zipPath)
@@ -187,10 +185,10 @@ func TestDiagnosticsService_GenerateExport_MetadataQuality(t *testing.T) {
 	assert.Len(t, missingFields, 2, "should have 2 books with missing fields")
 }
 
-func TestDiagnosticsService_GenerateExport_General(t *testing.T) {
+func TestService_GenerateExport_General(t *testing.T) {
 	store := setupDiagnosticsMocks(t)
 
-	svc := NewDiagnosticsService(store, nil, "")
+	svc := NewService(store, nil, "")
 	zipPath, err := svc.GenerateExport("general", "full export")
 	require.NoError(t, err)
 	defer os.Remove(zipPath)
@@ -217,52 +215,11 @@ func TestDiagnosticsService_GenerateExport_General(t *testing.T) {
 	assert.True(t, fileNames["missing_fields.json"], "general should include missing_fields.json")
 }
 
-func TestDiagnosticsExportEndpoint(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	body := `{"category":"deduplication","description":"test"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/export", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusAccepted, w.Code)
-	var resp map[string]interface{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.NotEmpty(t, resp["operation_id"])
-	assert.Equal(t, "generating", resp["status"])
-}
-
-func TestDiagnosticsExportEndpoint_InvalidCategory(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	body := `{"category":"invalid_cat","description":"test"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/export", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestDiagnosticsDownload_NotFound(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/diagnostics/export/nonexistent/download", nil)
-	w := httptest.NewRecorder()
-	server.router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
 func TestBuildBatchJSONL(t *testing.T) {
-	books := []slimBook{
+	books := []SlimBook{
 		{ID: "b1", Title: "Book One", Format: "mp3"},
 	}
-	data, err := buildBatchJSONL("deduplication", "test", books, nil, nil, nil)
+	data, err := BuildBatchJSONL("deduplication", "test", books, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Greater(t, len(data), 0)
 
@@ -277,7 +234,7 @@ func TestBuildBatchJSONL(t *testing.T) {
 
 		body, ok := req["body"].(map[string]interface{})
 		require.True(t, ok)
-		assert.Equal(t, batchModel, body["model"])
+		assert.Equal(t, BatchModel, body["model"])
 
 		messages, ok := body["messages"].([]interface{})
 		require.True(t, ok)
@@ -286,13 +243,13 @@ func TestBuildBatchJSONL(t *testing.T) {
 }
 
 func TestBuildBatchJSONL_Categories(t *testing.T) {
-	books := []slimBook{
+	books := []SlimBook{
 		{ID: "b1", Title: "Book One"},
 	}
 
 	for _, category := range []string{"deduplication", "error_analysis", "metadata_quality", "general"} {
 		t.Run(category, func(t *testing.T) {
-			data, err := buildBatchJSONL(category, "test", books, nil, nil, nil)
+			data, err := BuildBatchJSONL(category, "test", books, nil, nil, nil)
 			require.NoError(t, err)
 			assert.Greater(t, len(data), 0)
 
@@ -308,12 +265,12 @@ func TestBuildBatchJSONL_Categories(t *testing.T) {
 
 func TestBuildBatchJSONL_Chunking(t *testing.T) {
 	// Create 600 books to test chunking at 500
-	books := make([]slimBook, 600)
+	books := make([]SlimBook, 600)
 	for i := 0; i < 600; i++ {
-		books[i] = slimBook{ID: "b" + strings.Repeat("x", 5), Title: "Book"}
+		books[i] = SlimBook{ID: "b" + strings.Repeat("x", 5), Title: "Book"}
 	}
 
-	data, err := buildBatchJSONL("deduplication", "test", books, nil, nil, nil)
+	data, err := BuildBatchJSONL("deduplication", "test", books, nil, nil, nil)
 	require.NoError(t, err)
 
 	lines := bytes.Split(bytes.TrimSpace(data), []byte("\n"))
@@ -321,7 +278,7 @@ func TestBuildBatchJSONL_Chunking(t *testing.T) {
 }
 
 func TestBuildBatchJSONL_EmptyBooks(t *testing.T) {
-	data, err := buildBatchJSONL("deduplication", "test", []slimBook{}, nil, nil, nil)
+	data, err := BuildBatchJSONL("deduplication", "test", []SlimBook{}, nil, nil, nil)
 	require.NoError(t, err)
 	assert.Greater(t, len(data), 0, "should still produce at least one request line")
 }
