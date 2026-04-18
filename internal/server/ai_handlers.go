@@ -1,5 +1,5 @@
 // file: internal/server/ai_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5d3a6a95-4ac8-42c2-a7fe-5ff4857dd31a
 //
 // AI-related HTTP handlers split out of server.go: filename parsing,
@@ -535,7 +535,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 }
 
 // aiReviewGroupsMode is the existing Groups mode — local heuristics build groups, AI validates.
-func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store database.Store, opID string, dedupGroups []AuthorDedupGroup) error {
+func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store interface { database.AuthorStore; database.OperationStore }, opID string, dedupGroups []AuthorDedupGroup) error {
 	_ = progress.Log("info", fmt.Sprintf("Starting AI review (groups mode) of %d duplicate author groups", len(dedupGroups)), nil)
 	_ = progress.UpdateProgress(0, len(dedupGroups), "Building AI review input...")
 
@@ -598,7 +598,7 @@ func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.Pro
 }
 
 // aiReviewFullMode sends all authors to AI for duplicate discovery.
-func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store database.Store, opID string) error {
+func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store interface { database.AuthorStore; database.OperationStore }, opID string) error {
 	_ = progress.Log("info", "Starting AI review (full mode) — discovering duplicates from all authors", nil)
 	_ = progress.UpdateProgress(0, 100, "Loading all authors...")
 
