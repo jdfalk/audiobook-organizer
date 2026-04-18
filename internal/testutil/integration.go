@@ -1,5 +1,5 @@
 // file: internal/testutil/integration.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package testutil
@@ -20,7 +20,7 @@ import (
 
 // IntegrationEnv holds all resources for an integration test.
 type IntegrationEnv struct {
-	Store     interface { database.LifecycleStore; database.OperationStore }
+	Store     database.Store
 	RootDir   string
 	ImportDir string
 	TempDir   string
