@@ -1,5 +1,5 @@
 // file: internal/server/sweeper.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-abcd-ef2345678901
 
 package server
@@ -23,7 +23,7 @@ type SweeperResult struct {
 // SweepTombstones cleans up tombstone records where:
 // - The original book record is gone (deleted successfully)
 // - The file no longer exists on disk (deleted or moved)
-func SweepTombstones(store database.Store) (*SweeperResult, error) {
+func SweepTombstones(store database.BookStore) (*SweeperResult, error) {
 	result := &SweeperResult{
 		Errors: []string{},
 	}
@@ -75,7 +75,7 @@ func SweepTombstones(store database.Store) (*SweeperResult, error) {
 // AuditFileConsistency checks all books in the database and reports:
 // - Books pointing to files that don't exist
 // It does NOT fix anything — just reports.
-func AuditFileConsistency(store database.Store) (*SweeperResult, error) {
+func AuditFileConsistency(store database.BookStore) (*SweeperResult, error) {
 	result := &SweeperResult{
 		MissingFiles: []string{},
 		Errors:       []string{},

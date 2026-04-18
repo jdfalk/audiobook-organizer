@@ -1,5 +1,5 @@
 // file: internal/server/import_collision.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4b2c3d1e-5f6a-4a70-b8c5-3d7e0f1b9a99
 //
 // Import-time collision preview (backlog 1.6). Before importing a
@@ -110,7 +110,7 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 	})
 }
 
-func bookTitle(store database.Store, id string) string {
+func bookTitle(store database.BookReader, id string) string {
 	b, _ := store.GetBookByID(id)
 	if b != nil {
 		return b.Title
