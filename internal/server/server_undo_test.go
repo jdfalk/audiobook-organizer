@@ -126,7 +126,7 @@ func TestUndoLastApply_RevertsBatch(t *testing.T) {
 		ChangedAt:     batchTime.Add(500 * time.Millisecond),
 	}))
 
-	// Ensure GlobalWriteBackBatcher is nil so we don't trigger actual write-back
+	// Ensure server.writeBackBatcher is nil so we don't trigger actual write-back
 	origBatcher := server.writeBackBatcher
 	server.writeBackBatcher = nil
 	defer func() { server.writeBackBatcher = origBatcher }()

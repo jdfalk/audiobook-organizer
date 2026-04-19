@@ -220,8 +220,8 @@ func InitFileIOPool() {
 		if _, err := srv.metadataFetchService.WriteBackMetadataForBook(bookID); err != nil {
 			log.Printf("[WARN] recovery write-back for %s: %v", bookID, err)
 		}
-		if GlobalWriteBackBatcher != nil {
-			GlobalWriteBackBatcher.Enqueue(bookID)
+		if srv.writeBackBatcher != nil {
+			srv.writeBackBatcher.Enqueue(bookID)
 		}
 	})
 }
