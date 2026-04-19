@@ -9,6 +9,28 @@
 
 ### Added / Changed
 
+#### April 17-19, 2026 — Architecture + Test Coverage Push (4.9, 4.10, 4.11)
+
+##### Globals Elimination (4.9) — PR #386
+- Replaced 10 package-level globals with interface injection + Server struct fields
+- New interfaces: `ActivityLogger`, `ScanHooks`, `OrganizeHooks`
+- Singleton services (`GlobalQueue`, `GlobalHub`, `GlobalWriteBackBatcher`, `GlobalFileIOPool`) moved to Server fields
+- `GlobalScanner` + `GlobalMetadataExtractor` replaced with setter injection
+
+##### Server Package Split (4.11) — PR #398
+- Extracted 7 service groups from `internal/server` (~17K LOC) into focused packages:
+  - `internal/activity` (441 LOC), `internal/merge` (322 LOC), `internal/versions` (653 LOC)
+  - `internal/dedup` (2,770 LOC), `internal/diagnostics` (641 LOC), `internal/metafetch` (5,018 LOC)
+  - Expanded `internal/organizer` (1,927 LOC)
+- Server struct remains as DI wiring hub; handlers stay in `internal/server`
+
+##### Service-Layer Unit Tests (4.10)
+- ~300 new backend unit tests using mock stores across 8 packages
+- Coverage highlights: config 96.7%, activity 90.4%, merge 84.0%, scanner 81.7%, versions 74.9%, dedup 59.9%, organizer 50.4%, metafetch 42.8%
+- 84 HTTP handler unit tests using httptest + MockStore
+- 40 new frontend tests (Vitest + React Testing Library)
+- Overall project coverage: ~48%
+
 #### April 18, 2026 — Store ISP sweep (4.8 bulk migration)
 
 Eight PRs (#387–#395, incl. the #394 test-scaffolding fix) migrating ~50 consumers of `database.Store` onto the narrow sub-interfaces defined in #372. Most services now declare their real database surface inline on the struct field or function parameter instead of carrying the 281-method `Store` into every constructor.

@@ -95,6 +95,11 @@ since it was last edited on 2026-04-11).
 - [x] **4.6** Chaos tests for the embedding store under shutdown (**M**) — 7 tests: double-close, ops-after-close, concurrent write/read during close, mixed access, durability, WAL checkpoint
 - [ ] **4.7** Per-workload store evaluation: Pebble vs SQLite vs PostgreSQL vs Go-native NoSQL (**L** research)
 - [x] **4.8** Split the `database.Store` interface (ISP refactor) (**L**) — complete. Foundation + 3 proof-points + 8-PR sweep + doc closure: #372, #376, #379–#382, #387–#395. ~50 of 79 consumers migrated to narrow sub-interfaces. Six files remain on full `Store` as intentional wide consumers (server bootstrap, decorator, 4 hubs) — see [sweep plan Completion note](docs/superpowers/plans/2026-04-17-store-iface-sweep.md) for the rationale.
+- [x] **4.9** Eliminate remaining package globals (DI Phase 2) (**M**) — 10 globals replaced with interface injection + Server fields (#386)
+- [x] **4.10** Service-layer unit tests with mock stores (**L**) — ~300 new tests across merge, dedup, metafetch, activity, versions, AudiobookService, BatchService, ScanService, config (96.7%), scanner (81.7%); overall coverage ~48%
+- [x] **4.11** Split `internal/server` into sub-packages (**XL**) — 7 extractions: activity, merge, versions, dedup, diagnostics, metafetch + organizer expansion; ~17K LOC extracted (#398)
+- [ ] **4.12** Narrow extracted service dependencies to ISP sub-interfaces (**M**) — after 4.8 + 4.11, update extracted packages to accept narrow store interfaces (BookReader, etc.) instead of full database.Store
+- [ ] **4.13** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
 
 ### 5. UX / DX Polish — [section](docs/backlog-2026-04-10.md#5-ux--dx-polish)
 
