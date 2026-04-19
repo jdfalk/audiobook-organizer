@@ -42,8 +42,6 @@ type WriteBackBatcher struct {
 	stopped        bool
 }
 
-// GlobalWriteBackBatcher is the singleton batcher instance.
-var GlobalWriteBackBatcher *WriteBackBatcher
 
 // NewWriteBackBatcher creates a batcher with the given debounce delay.
 func NewWriteBackBatcher(delay time.Duration) *WriteBackBatcher {
@@ -448,9 +446,4 @@ func (b *WriteBackBatcher) Stop() {
 	}
 	b.mu.Unlock()
 	b.flush()
-}
-
-// InitWriteBackBatcher initializes the global write-back batcher.
-func InitWriteBackBatcher() {
-	GlobalWriteBackBatcher = NewWriteBackBatcher(5 * time.Second)
 }
