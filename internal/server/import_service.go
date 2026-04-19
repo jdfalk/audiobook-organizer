@@ -30,11 +30,11 @@ type importServiceStore = database.Store
 
 type ImportService struct {
 	db importServiceStore
-	writeBackBatcher *WriteBackBatcher
+	writeBackBatcher Enqueuer
 }
 
 // SetWriteBackBatcher sets the iTunes write-back batcher.
-func (is *ImportService) SetWriteBackBatcher(b *WriteBackBatcher) {
+func (is *ImportService) SetWriteBackBatcher(b Enqueuer) {
 	is.writeBackBatcher = b
 }
 
