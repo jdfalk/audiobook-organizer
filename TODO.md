@@ -98,8 +98,15 @@ since it was last edited on 2026-04-11).
 - [x] **4.9** Eliminate remaining package globals (DI Phase 2) (**M**) — 10 globals replaced with interface injection + Server fields (#386)
 - [x] **4.10** Service-layer unit tests with mock stores (**L**) — ~300 new tests across merge, dedup, metafetch, activity, versions, AudiobookService, BatchService, ScanService, config (96.7%), scanner (81.7%); overall coverage ~48%
 - [x] **4.11** Split `internal/server` into sub-packages (**XL**) — 7 extractions: activity, merge, versions, dedup, diagnostics, metafetch + organizer expansion; ~17K LOC extracted (#398)
-- [ ] **4.12** Narrow extracted service dependencies to ISP sub-interfaces (**M**) — after 4.8 + 4.11, update extracted packages to accept narrow store interfaces (BookReader, etc.) instead of full database.Store
-- [ ] **4.13** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
+- [ ] **4.12** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
+
+> **Architecture cleanup notes for future work:**
+> When touching these areas, narrow `database.Store` params to ISP sub-interfaces and extract remaining services as opportunities arise:
+> - Extracted packages (`dedup`, `metafetch`, `organizer`, `merge`, `versions`, `activity`, `diagnostics`) still accept full `database.Store` — narrow to sub-interfaces (e.g., `BookReader`) when modifying constructors
+> - `TaskScheduler` still takes `*Server` — extract to `internal/schedule` once it accepts an interface instead
+> - `maintenance_fixups.go` (3,654 LOC) — all methods on `*Server`, extract when feasible
+> - `reconcile.go` (1,317 LOC) — cross-domain orchestration, extract when dependencies are clearer
+> - `internal/server` handler tests cover 35.2% — add tests when modifying handlers
 
 ### 5. UX / DX Polish — [section](docs/backlog-2026-04-10.md#5-ux--dx-polish)
 
