@@ -33,7 +33,7 @@ const adminUserID = "_local"
 // SyncITunesPositions runs a full bidirectional position sync for the
 // admin user. Pull then push order ensures we don't immediately
 // overwrite a newly-seeded position.
-func SyncITunesPositions(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }, batcher *WriteBackBatcher) (pulled, pushed int) {
+func SyncITunesPositions(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }, batcher Enqueuer) (pulled, pushed int) {
 	pulled = pullITunesBookmarks(store)
 	pushed = pushPositionsToITunes(store, batcher)
 	return pulled, pushed
@@ -107,7 +107,7 @@ func pullITunesBookmarks(store interface { database.BookStore; database.BookFile
 // position was updated since the last sync, enqueue the book for
 // bookmark writeback. If the book was marked finished, also enqueue
 // a play-count increment.
-func pushPositionsToITunes(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }, batcher *WriteBackBatcher) int {
+func pushPositionsToITunes(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }, batcher Enqueuer) int {
 	// Get all admin positions that changed in the last 24 hours.
 	// A more precise cutoff would use a last-sync-at timestamp;
 	// for now 24h is a safe window for the maintenance task that
