@@ -99,6 +99,7 @@ since it was last edited on 2026-04-11).
 - [x] **4.10** Service-layer unit tests with mock stores (**L**) — ~300 new tests across merge, dedup, metafetch, activity, versions, AudiobookService, BatchService, ScanService, config (96.7%), scanner (81.7%); overall coverage ~48%
 - [x] **4.11** Split `internal/server` into sub-packages (**XL**) — 7 extractions: activity, merge, versions, dedup, diagnostics, metafetch + organizer expansion; ~17K LOC extracted (#398)
 - [ ] **4.12** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
+- [ ] **4.13** Comprehensive iTunes test suite (**L**) — after 4.12 extraction, add exhaustive unit tests: mock store tests for every service method, error path coverage, edge cases (empty library, corrupt XML, concurrent sync), position sync, writeback batcher, path reconciliation, track provisioning; target 80%+ coverage on the extracted package
 
 > **Architecture cleanup notes for future work:**
 > When touching these areas, narrow `database.Store` params to ISP sub-interfaces and extract remaining services as opportunities arise:
