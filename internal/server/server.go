@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.180.0
+// version: 1.181.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -34,6 +34,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
@@ -703,6 +704,7 @@ type Server struct {
 	dedupCache             *cache.Cache[gin.H]
 	listCache              *cache.Cache[gin.H]
 	libraryWatcher         *itunes.LibraryWatcher
+	itunesSvc              *itunesservice.Service
 	updater                *updater.Updater
 	updateScheduler        *updater.Scheduler
 	scheduler              *TaskScheduler
@@ -831,6 +833,12 @@ func NewServer(store database.Store) *Server {
 		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
+
+	// Construct the iTunes service. PR 1 always uses NewDisabled — PR 2
+	// flips to conditional New based on config once sub-components are
+	// moved. Server still has the old *WriteBackBatcher, *LibraryWatcher,
+	// etc. fields populated via the existing code paths during PR 1+2.
+	server.itunesSvc = itunesservice.NewDisabled()
 
 	// Initialize update scheduler
 	server.updateScheduler = updater.NewScheduler(server.updater, func() updater.SchedulerConfig {
@@ -1398,6 +1406,9 @@ func (s *Server) resumeInterruptedOperations() {
 
 // Start starts the HTTP server
 func (s *Server) Start(cfg ServerConfig) error {
+	if err := s.itunesSvc.Start(s.bgCtx); err != nil {
+		return fmt.Errorf("itunes service start: %w", err)
+	}
 	s.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
 		Handler:           s.router,
@@ -1832,6 +1843,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 	if s.writeBackBatcher != nil {
 		log.Println("[INFO] Flushing iTunes write-back batcher...")
 		s.writeBackBatcher.Stop()
+	}
+
+	// Shut down the iTunes service (no-op in PR 1 since NewDisabled is
+	// always used; PR 2 onward may have live sub-components to flush).
+	if s.itunesSvc != nil {
+		if err := s.itunesSvc.Shutdown(30 * time.Second); err != nil {
+			log.Printf("[WARN] itunes service shutdown: %v", err)
+		}
 	}
 
 	// Close the search index before the DB goes away — the index is
