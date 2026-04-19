@@ -20,7 +20,7 @@ type VersionSwapParams = versions.VersionSwapParams
 // WriteBackBatcher and NotifyDelugeAfterVersionSwap callbacks.
 func RunVersionSwap(
 	ctx context.Context,
-	store interface{ database.BookStore; database.BookVersionStore; database.BookFileStore },
+	store database.Store,
 	params VersionSwapParams,
 	progress func(step string, pct int),
 	batcher *WriteBackBatcher,
