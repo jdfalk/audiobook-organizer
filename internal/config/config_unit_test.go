@@ -1,18 +1,71 @@
 // file: internal/config/config_unit_test.go
-// version: 1.0.0
+// version: 1.1.0
 
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// mockSettingsStore implements database.SettingsStore for testing.
+type mockSettingsStore struct {
+	settings  map[string]*database.Setting
+	setErr    error
+	getAllErr error
+	getErr    error
+	deleteErr error
+}
+
+func newMockSettingsStore() *mockSettingsStore {
+	return &mockSettingsStore{settings: make(map[string]*database.Setting)}
+}
+
+func (m *mockSettingsStore) GetSetting(key string) (*database.Setting, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	s, ok := m.settings[key]
+	if !ok {
+		return nil, fmt.Errorf("not found")
+	}
+	return s, nil
+}
+
+func (m *mockSettingsStore) SetSetting(key, value, typ string, isSecret bool) error {
+	if m.setErr != nil {
+		return m.setErr
+	}
+	m.settings[key] = &database.Setting{Key: key, Value: value, Type: typ, IsSecret: isSecret}
+	return nil
+}
+
+func (m *mockSettingsStore) GetAllSettings() ([]database.Setting, error) {
+	if m.getAllErr != nil {
+		return nil, m.getAllErr
+	}
+	var result []database.Setting
+	for _, s := range m.settings {
+		result = append(result, *s)
+	}
+	return result, nil
+}
+
+func (m *mockSettingsStore) DeleteSetting(key string) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	delete(m.settings, key)
+	return nil
+}
 
 func TestHasBalancedBraces(t *testing.T) {
 	tests := []struct {
