@@ -2514,7 +2514,7 @@ func bookScore(b *database.Book) int {
 
 // mergeDuplicateBook transfers data from dup into keeper and then soft-deletes dup.
 // When dryRun is true the function returns nil without modifying the database.
-func mergeDuplicateBook(store maintenanceStore, keeper *database.Book, dup *database.Book, dryRun bool, batcher *WriteBackBatcher) error {
+func mergeDuplicateBook(store maintenanceStore, keeper *database.Book, dup *database.Book, dryRun bool, batcher Enqueuer) error {
 	if dryRun {
 		return nil
 	}

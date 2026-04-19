@@ -23,7 +23,7 @@ func RunVersionSwap(
 	store database.Store,
 	params VersionSwapParams,
 	progress func(step string, pct int),
-	batcher *WriteBackBatcher,
+	batcher Enqueuer,
 ) error {
 	var onWriteBack func(bookID string)
 	if batcher != nil {

@@ -23,7 +23,7 @@ import (
 // and enqueues an ITL add operation. Called after importing a non-iTunes book.
 //
 // Skips if the book file already has an iTunes PID or if auto write-back is disabled.
-func ProvisionITLTrack(store interface { database.AuthorReader; database.BookFileStore; database.ExternalIDStore }, book *database.Book, bookFile *database.BookFile, batcher *WriteBackBatcher) error {
+func ProvisionITLTrack(store interface { database.AuthorReader; database.BookFileStore; database.ExternalIDStore }, book *database.Book, bookFile *database.BookFile, batcher Enqueuer) error {
 	if !config.AppConfig.ITunesAutoWriteBack {
 		return nil
 	}
@@ -89,7 +89,7 @@ func ProvisionITLTrack(store interface { database.AuthorReader; database.BookFil
 }
 
 // ProvisionITLTracksForBook provisions ITL tracks for all files of a book.
-func ProvisionITLTracksForBook(store interface { database.AuthorReader; database.BookFileStore; database.ExternalIDStore }, book *database.Book, batcher *WriteBackBatcher) error {
+func ProvisionITLTracksForBook(store interface { database.AuthorReader; database.BookFileStore; database.ExternalIDStore }, book *database.Book, batcher Enqueuer) error {
 	files, err := store.GetBookFiles(book.ID)
 	if err != nil {
 		return err
