@@ -1012,7 +1012,11 @@ func NewServer(store database.Store) *Server {
 	// Also set the global for backward compatibility during migration
 	operations.GlobalQueue = server.queue
 
-	server.writeBackBatcher = NewWriteBackBatcher(5 * time.Second)
+	server.writeBackBatcher = NewWriteBackBatcher(5*time.Second, WriteBackBatcherConfig{
+		AutoWriteBack:       config.AppConfig.ITunesAutoWriteBack,
+		ITLWriteBackEnabled: config.AppConfig.ITLWriteBackEnabled,
+		LibraryWritePath:    config.AppConfig.ITunesLibraryWritePath,
+	})
 	server.fileIOPool = NewFileIOPool(4)
 
 	// Wire writeBackBatcher into services that need it

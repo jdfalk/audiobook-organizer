@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 3.3.0
+// version: 3.4.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -17,10 +17,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
+
+// WriteBackBatcherConfig is the tiny config surface the batcher needs.
+// Deliberately not using config.AppConfig directly — this makes the
+// batcher movable to a package that doesn't import internal/config
+// (see iTunes service extraction, spec 2026-04-18). Populated at
+// construction and mutable via UpdateConfig for hot-reload support.
+type WriteBackBatcherConfig struct {
+	AutoWriteBack       bool
+	ITLWriteBackEnabled bool
+	LibraryWritePath    string
+}
 
 // WriteBackBatcher collects ITL operations and flushes them in a single batch
 // after a debounce delay. Supports location updates, track additions, and
@@ -40,23 +50,59 @@ type WriteBackBatcher struct {
 	firstEnqueue   time.Time // when the first enqueue in this batch happened
 	stopCh         chan struct{}
 	stopped        bool
+
+	// Config fields — populated at construction, mutable via UpdateConfig.
+	// Reads use cfgMu (separate from mu so config-reload doesn't block the
+	// main pending-ops critical section).
+	cfgMu               sync.RWMutex
+	autoWriteBack       bool
+	itlWriteBackEnabled bool
+	libraryWritePath    string
 }
 
 
 // NewWriteBackBatcher creates a batcher with the given debounce delay.
-func NewWriteBackBatcher(delay time.Duration) *WriteBackBatcher {
+func NewWriteBackBatcher(delay time.Duration, cfg WriteBackBatcherConfig) *WriteBackBatcher {
 	return &WriteBackBatcher{
-		pendingBooks:   make(map[string]bool),
-		pendingRemoves: make(map[string]bool),
-		delay:          delay,
-		maxDelay:       30 * time.Second,
-		stopCh:         make(chan struct{}),
+		pendingBooks:        make(map[string]bool),
+		pendingRemoves:      make(map[string]bool),
+		delay:               delay,
+		maxDelay:            30 * time.Second,
+		stopCh:              make(chan struct{}),
+		autoWriteBack:       cfg.AutoWriteBack,
+		itlWriteBackEnabled: cfg.ITLWriteBackEnabled,
+		libraryWritePath:    cfg.LibraryWritePath,
 	}
+}
+
+// UpdateConfig is safe to call while the flush goroutine is running.
+// Use from the server's config-reload path when/if one is wired up.
+func (b *WriteBackBatcher) UpdateConfig(cfg WriteBackBatcherConfig) {
+	b.cfgMu.Lock()
+	b.autoWriteBack = cfg.AutoWriteBack
+	b.itlWriteBackEnabled = cfg.ITLWriteBackEnabled
+	b.libraryWritePath = cfg.LibraryWritePath
+	b.cfgMu.Unlock()
+}
+
+// autoWriteBackEnabled returns the current AutoWriteBack value under RLock.
+func (b *WriteBackBatcher) autoWriteBackEnabled() bool {
+	b.cfgMu.RLock()
+	defer b.cfgMu.RUnlock()
+	return b.autoWriteBack
+}
+
+// flushEnabled returns the current ITLWriteBackEnabled + LibraryWritePath
+// pair under RLock, for use at flush time.
+func (b *WriteBackBatcher) flushEnabled() (bool, string) {
+	b.cfgMu.RLock()
+	defer b.cfgMu.RUnlock()
+	return b.itlWriteBackEnabled, b.libraryWritePath
 }
 
 // Enqueue adds a book ID to the pending location-update batch.
 func (b *WriteBackBatcher) Enqueue(bookID string) {
-	if !config.AppConfig.ITunesAutoWriteBack {
+	if !b.autoWriteBackEnabled() {
 		return
 	}
 	b.mu.Lock()
@@ -70,7 +116,7 @@ func (b *WriteBackBatcher) Enqueue(bookID string) {
 
 // EnqueueAdd queues a new track for insertion into the ITL.
 func (b *WriteBackBatcher) EnqueueAdd(track itunes.ITLNewTrack) {
-	if !config.AppConfig.ITunesAutoWriteBack {
+	if !b.autoWriteBackEnabled() {
 		return
 	}
 	b.mu.Lock()
@@ -85,7 +131,7 @@ func (b *WriteBackBatcher) EnqueueAdd(track itunes.ITLNewTrack) {
 // EnqueueRemove queues a track PID for removal from the ITL.
 // Also marks the PID as removed in the external_id_map.
 func (b *WriteBackBatcher) EnqueueRemove(pid string) {
-	if !config.AppConfig.ITunesAutoWriteBack {
+	if !b.autoWriteBackEnabled() {
 		return
 	}
 	b.mu.Lock()
@@ -160,7 +206,8 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
-	if !config.AppConfig.ITLWriteBackEnabled || config.AppConfig.ITunesLibraryWritePath == "" {
+	itlEnabled, writePath := b.flushEnabled()
+	if !itlEnabled || writePath == "" {
 		log.Printf("[WARN] iTunes write-back: ITL write-back not configured")
 		return
 	}
@@ -251,7 +298,7 @@ func (b *WriteBackBatcher) flush() {
 	log.Printf("[INFO] iTunes write-back: flushing %d location updates, %d metadata updates, %d adds, %d removes",
 		len(locationUpdates), len(metadataUpdates), len(adds), len(removes))
 
-	itlPath := config.AppConfig.ITunesLibraryWritePath
+	itlPath := writePath // from b.flushEnabled() above
 	if err := safeWriteITL(itlPath, ops); err != nil {
 		log.Printf("[WARN] iTunes write-back failed: %v", err)
 		return
