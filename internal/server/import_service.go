@@ -21,16 +21,11 @@ import (
 // Includes the transitive surfaces required by forwarded helpers:
 // CreateIngestVersion needs BookVersionStore + BookFileStore; ProvisionITLTracksForBook
 // needs ExternalIDStore (plus the AuthorReader + BookFileStore already present).
-type importServiceStore interface {
-	database.AuthorReader
-	database.AuthorWriter
-	database.BookWriter
-	database.SeriesReader
-	database.SeriesWriter
-	database.BookVersionStore
-	database.BookFileStore
-	database.ExternalIDStore
-}
+// importServiceStore is temporarily widened to database.Store because
+// CreateIngestVersion (in the extracted versions package) requires
+// the full Store interface. A future ISP pass on the versions package
+// will re-narrow this.
+type importServiceStore = database.Store
 
 
 type ImportService struct {
