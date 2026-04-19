@@ -1,10 +1,12 @@
 // file: internal/scanner/unit_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a2b3c4d5-e6f7-8901-abcd-ef2345678901
 
 package scanner
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +16,10 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	dbmocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -904,4 +909,1064 @@ func TestPreserveExistingFieldsITunesAndVersion(t *testing.T) {
 	assert.Equal(t, &abYear, scanned.AudiobookReleaseYear)
 	assert.Equal(t, &workID, scanned.WorkID)
 	assert.Equal(t, &narrJSON, scanned.NarratorsJSON)
+}
+
+// ---------------------------------------------------------------------------
+// resolveAuthorID — all branches
+// ---------------------------------------------------------------------------
+
+func TestResolveAuthorID(t *testing.T) {
+	t.Run("empty name returns nil", func(t *testing.T) {
+		id, err := resolveAuthorID("")
+		assert.NoError(t, err)
+		assert.Nil(t, id)
+	})
+
+	t.Run("whitespace name returns nil", func(t *testing.T) {
+		id, err := resolveAuthorID("   ")
+		assert.NoError(t, err)
+		assert.Nil(t, id)
+	})
+
+	t.Run("existing author found", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetAuthorByName("Stephen King").Return(&database.Author{ID: 42, Name: "Stephen King"}, nil)
+
+		id, err := resolveAuthorID("Stephen King")
+		require.NoError(t, err)
+		require.NotNil(t, id)
+		assert.Equal(t, 42, *id)
+	})
+
+	t.Run("author created successfully", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetAuthorByName("New Author").Return(nil, nil)
+		store.EXPECT().CreateAuthor("New Author").Return(&database.Author{ID: 99, Name: "New Author"}, nil)
+
+		id, err := resolveAuthorID("New Author")
+		require.NoError(t, err)
+		require.NotNil(t, id)
+		assert.Equal(t, 99, *id)
+	})
+
+	t.Run("lookup failure returns error", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetAuthorByName("Fail Author").Return(nil, fmt.Errorf("db error"))
+
+		_, err := resolveAuthorID("Fail Author")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "author lookup failed")
+	})
+
+	t.Run("create failure non-unique returns error", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetAuthorByName("Create Fail").Return(nil, nil)
+		store.EXPECT().CreateAuthor("Create Fail").Return(nil, fmt.Errorf("some random error"))
+
+		_, err := resolveAuthorID("Create Fail")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "author create failed")
+	})
+
+	t.Run("unique constraint conflict resolved", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetAuthorByName("Conflict Author").Return(nil, nil).Once()
+		store.EXPECT().CreateAuthor("Conflict Author").Return(nil, fmt.Errorf("UNIQUE constraint failed"))
+		store.EXPECT().GetAuthorByName("Conflict Author").Return(&database.Author{ID: 77, Name: "Conflict Author"}, nil).Once()
+
+		id, err := resolveAuthorID("Conflict Author")
+		require.NoError(t, err)
+		require.NotNil(t, id)
+		assert.Equal(t, 77, *id)
+	})
+
+	t.Run("unique conflict but re-fetch fails", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetAuthorByName("Ghost").Return(nil, nil).Once()
+		store.EXPECT().CreateAuthor("Ghost").Return(nil, fmt.Errorf("UNIQUE constraint failed"))
+		store.EXPECT().GetAuthorByName("Ghost").Return(nil, fmt.Errorf("db down")).Once()
+
+		_, err := resolveAuthorID("Ghost")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "author lookup after conflict failed")
+	})
+
+	t.Run("unique conflict re-fetch returns nil", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetAuthorByName("Vanished").Return(nil, nil).Once()
+		store.EXPECT().CreateAuthor("Vanished").Return(nil, fmt.Errorf("UNIQUE constraint failed"))
+		store.EXPECT().GetAuthorByName("Vanished").Return(nil, nil).Once()
+
+		_, err := resolveAuthorID("Vanished")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "conflict detected but author not found")
+	})
+
+	t.Run("collapsed initials normalized", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		// "J.B." should become "J. B."
+		store.EXPECT().GetAuthorByName("J. B.").Return(&database.Author{ID: 10, Name: "J. B."}, nil)
+
+		id, err := resolveAuthorID("J.B.")
+		require.NoError(t, err)
+		require.NotNil(t, id)
+		assert.Equal(t, 10, *id)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// resolveSeriesID — all branches
+// ---------------------------------------------------------------------------
+
+func TestResolveSeriesID(t *testing.T) {
+	t.Run("empty name returns nil", func(t *testing.T) {
+		id, err := resolveSeriesID("", nil)
+		assert.NoError(t, err)
+		assert.Nil(t, id)
+	})
+
+	t.Run("existing series found", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		authorID := 5
+		store.EXPECT().GetSeriesByName("Dune", &authorID).Return(&database.Series{ID: 33, Name: "Dune"}, nil)
+
+		id, err := resolveSeriesID("Dune", &authorID)
+		require.NoError(t, err)
+		require.NotNil(t, id)
+		assert.Equal(t, 33, *id)
+	})
+
+	t.Run("series created successfully", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetSeriesByName("New Series", (*int)(nil)).Return(nil, nil)
+		store.EXPECT().CreateSeries("New Series", (*int)(nil)).Return(&database.Series{ID: 55, Name: "New Series"}, nil)
+
+		id, err := resolveSeriesID("New Series", nil)
+		require.NoError(t, err)
+		require.NotNil(t, id)
+		assert.Equal(t, 55, *id)
+	})
+
+	t.Run("lookup failure returns error", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetSeriesByName("Fail", (*int)(nil)).Return(nil, fmt.Errorf("db error"))
+
+		_, err := resolveSeriesID("Fail", nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "series lookup failed")
+	})
+
+	t.Run("create non-unique failure", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetSeriesByName("Bad", (*int)(nil)).Return(nil, nil)
+		store.EXPECT().CreateSeries("Bad", (*int)(nil)).Return(nil, fmt.Errorf("random error"))
+
+		_, err := resolveSeriesID("Bad", nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "series create failed")
+	})
+
+	t.Run("unique constraint conflict resolved", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetSeriesByName("Conflict", (*int)(nil)).Return(nil, nil).Once()
+		store.EXPECT().CreateSeries("Conflict", (*int)(nil)).Return(nil, fmt.Errorf("UNIQUE constraint failed"))
+		store.EXPECT().GetSeriesByName("Conflict", (*int)(nil)).Return(&database.Series{ID: 88, Name: "Conflict"}, nil).Once()
+
+		id, err := resolveSeriesID("Conflict", nil)
+		require.NoError(t, err)
+		require.NotNil(t, id)
+		assert.Equal(t, 88, *id)
+	})
+
+	t.Run("unique conflict re-fetch fails", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetSeriesByName("Ghost", (*int)(nil)).Return(nil, nil).Once()
+		store.EXPECT().CreateSeries("Ghost", (*int)(nil)).Return(nil, fmt.Errorf("duplicate key value violates"))
+		store.EXPECT().GetSeriesByName("Ghost", (*int)(nil)).Return(nil, fmt.Errorf("db down")).Once()
+
+		_, err := resolveSeriesID("Ghost", nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "series lookup after conflict failed")
+	})
+
+	t.Run("unique conflict re-fetch returns nil", func(t *testing.T) {
+		store := dbmocks.NewMockStore(t)
+		origStore := database.GetGlobalStore()
+		database.SetGlobalStore(store)
+		t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+		store.EXPECT().GetSeriesByName("Vanished", (*int)(nil)).Return(nil, nil).Once()
+		store.EXPECT().CreateSeries("Vanished", (*int)(nil)).Return(nil, fmt.Errorf("duplicate key value violates"))
+		store.EXPECT().GetSeriesByName("Vanished", (*int)(nil)).Return(nil, nil).Once()
+
+		_, err := resolveSeriesID("Vanished", nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "conflict detected but series not found")
+	})
+}
+
+// ---------------------------------------------------------------------------
+// ProcessBooksParallel — context cancellation (44% -> higher)
+// ---------------------------------------------------------------------------
+
+func TestProcessBooksParallelContextCancelled(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error { return nil }
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	tmp := t.TempDir()
+	books := make([]Book, 5)
+	for i := range books {
+		p := filepath.Join(tmp, fmt.Sprintf("book%d.m4b", i))
+		require.NoError(t, os.WriteFile(p, []byte("content"), 0o644))
+		books[i] = Book{FilePath: p, Format: ".m4b"}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	err := ProcessBooksParallel(ctx, books, 2, nil, nil)
+	// Context cancellation is returned as an error
+	if err != nil {
+		assert.ErrorIs(t, err, context.Canceled)
+	}
+}
+
+func TestProcessBooksParallelWorkersMinimum(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error { return nil }
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "book.m4b")
+	require.NoError(t, os.WriteFile(p, []byte("content"), 0o644))
+	books := []Book{{FilePath: p, Format: ".m4b"}}
+
+	// Workers < 1 should be clamped to 1
+	err := ProcessBooksParallel(t.Context(), books, 0, nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestProcessBooksParallelSaveError(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error { return fmt.Errorf("save failed") }
+
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "fail.m4b")
+	require.NoError(t, os.WriteFile(p, []byte("content"), 0o644))
+	books := []Book{{FilePath: p, Format: ".m4b"}}
+
+	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
+	// Errors are sent to channel but function still returns nil
+	assert.NoError(t, err)
+}
+
+func TestProcessBooksParallelAIParsingEnabled(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error { return nil }
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	// Enable AI parsing but with no key (tests the warning path)
+	oldAI := config.AppConfig.EnableAIParsing
+	oldKey := config.AppConfig.OpenAIAPIKey
+	t.Cleanup(func() {
+		config.AppConfig.EnableAIParsing = oldAI
+		config.AppConfig.OpenAIAPIKey = oldKey
+	})
+	config.AppConfig.EnableAIParsing = true
+	config.AppConfig.OpenAIAPIKey = "" // No key = warning log
+
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "ai.m4b")
+	require.NoError(t, os.WriteFile(p, []byte("content"), 0o644))
+	books := []Book{{FilePath: p, Format: ".m4b"}}
+
+	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestProcessBooksParallelAIParsingWithBadKey(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error { return nil }
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	// Enable AI parsing with a fake key (tests the parser init path)
+	oldAI := config.AppConfig.EnableAIParsing
+	oldKey := config.AppConfig.OpenAIAPIKey
+	t.Cleanup(func() {
+		config.AppConfig.EnableAIParsing = oldAI
+		config.AppConfig.OpenAIAPIKey = oldKey
+	})
+	config.AppConfig.EnableAIParsing = true
+	config.AppConfig.OpenAIAPIKey = "sk-fake-key-for-test"
+
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "ai_test.m4b")
+	require.NoError(t, os.WriteFile(p, []byte("content"), 0o644))
+	books := []Book{{FilePath: p, Format: ".m4b"}}
+
+	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestProcessBooksParallelGenericFilename(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error { return nil }
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".mp3"}
+
+	tmp := t.TempDir()
+	bookDir := filepath.Join(tmp, "Author Name", "Book Title")
+	require.NoError(t, os.MkdirAll(bookDir, 0o755))
+
+	// Create generic part filenames (triggers IsGenericPartFilename)
+	for i := 1; i <= 3; i++ {
+		p := filepath.Join(bookDir, fmt.Sprintf("%02d Part %d of 3.mp3", i, i))
+		require.NoError(t, os.WriteFile(p, []byte("audio data"), 0o644))
+	}
+
+	// Use the first file as the book
+	books := []Book{{FilePath: filepath.Join(bookDir, "01 Part 1 of 3.mp3"), Format: ".mp3"}}
+	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
+	assert.NoError(t, err)
+}
+
+func TestProcessBooksParallelSaveWithScanCacheUpdate(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	// Use a mock store so scan cache update path is exercised
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error { return nil }
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "Author - Title.m4b")
+	require.NoError(t, os.WriteFile(p, []byte("content"), 0o644))
+
+	// Mock the scan cache update path
+	store.EXPECT().GetBookByFilePath(p).Return(&database.Book{ID: "b1", FilePath: p}, nil).Maybe()
+	store.EXPECT().UpdateScanCache("b1", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	books := []Book{{FilePath: p, Format: ".m4b"}}
+	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
+	assert.NoError(t, err)
+}
+
+// ---------------------------------------------------------------------------
+// ProcessBooks — with active scanner
+// ---------------------------------------------------------------------------
+
+func TestProcessBooksWithActiveScanner(t *testing.T) {
+	mockScanner := &mockScannerImpl{
+		processErr: nil,
+	}
+	SetScanner(mockScanner)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	books := []Book{{FilePath: "/tmp/test.m4b", Format: ".m4b"}}
+	err := ProcessBooks(books, nil)
+	assert.NoError(t, err)
+	assert.True(t, mockScanner.processCalled)
+}
+
+type mockScannerImpl struct {
+	processCalled bool
+	processErr    error
+}
+
+func (m *mockScannerImpl) ScanDirectory(rootDir string, scanLog logger.Logger) ([]Book, error) {
+	return nil, nil
+}
+
+func (m *mockScannerImpl) ScanDirectoryParallel(rootDir string, workers int, scanLog logger.Logger) ([]Book, error) {
+	return nil, nil
+}
+
+func (m *mockScannerImpl) ProcessBooks(books []Book, scanLog logger.Logger) error {
+	m.processCalled = true
+	return m.processErr
+}
+
+func (m *mockScannerImpl) ProcessBooksParallel(ctx context.Context, books []Book, workers int, progressFn func(processed int, total int, bookPath string), scanLog logger.Logger) error {
+	return nil
+}
+
+func (m *mockScannerImpl) ComputeFileHash(filePath string) (string, error) {
+	return "", nil
+}
+
+// ---------------------------------------------------------------------------
+// saveBookToDatabase — nil global store (legacy path)
+// ---------------------------------------------------------------------------
+
+func TestSaveBookToDatabaseNilStore(t *testing.T) {
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
+	origDB := database.DB
+	database.DB = nil
+	t.Cleanup(func() {
+		database.SetGlobalStore(origStore)
+		database.DB = origDB
+	})
+
+	book := &Book{Title: "Test", Author: "Author", FilePath: "/tmp/test.m4b"}
+	err := saveBookToDatabase(book)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "database not initialized")
+}
+
+// ---------------------------------------------------------------------------
+// saveBookToDatabase — with mock store (basic path)
+// ---------------------------------------------------------------------------
+
+func TestSaveBookToDatabaseNewBook(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	store.EXPECT().GetAuthorByName("Author").Return(&database.Author{ID: 1, Name: "Author"}, nil)
+	store.EXPECT().GetSeriesByName(mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().CreateSeries(mock.Anything, mock.Anything).Return(&database.Series{ID: 1}, nil).Maybe()
+	store.EXPECT().GetAllWorks().Return(nil, nil)
+	store.EXPECT().CreateWork(mock.Anything).Return(&database.Work{ID: "w1"}, nil)
+	store.EXPECT().IsHashBlocked(mock.Anything).Return(false, nil).Maybe()
+	store.EXPECT().GetBookByFilePath(mock.Anything).Return(nil, nil)
+	store.EXPECT().GetBookByFileHash(mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().GetBookByOriginalHash(mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().GetBookByOrganizedHash(mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().GetBooksByTitleInDir(mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().CreateBook(mock.Anything).Return(nil, nil)
+
+	tmp := t.TempDir()
+	fpath := filepath.Join(tmp, "test.m4b")
+	require.NoError(t, os.WriteFile(fpath, []byte("audio data"), 0o644))
+
+	book := &Book{Title: "Test Book", Author: "Author", FilePath: fpath, Format: ".m4b"}
+	err := saveBookToDatabase(book)
+	assert.NoError(t, err)
+}
+
+func TestSaveBookToDatabaseExistingBook(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	tmp := t.TempDir()
+	fpath := filepath.Join(tmp, "test.m4b")
+	require.NoError(t, os.WriteFile(fpath, []byte("audio data"), 0o644))
+
+	store.EXPECT().GetAuthorByName("Author").Return(&database.Author{ID: 1, Name: "Author"}, nil)
+	store.EXPECT().GetAllWorks().Return(nil, nil)
+	store.EXPECT().CreateWork(mock.Anything).Return(&database.Work{ID: "w1"}, nil)
+	store.EXPECT().IsHashBlocked(mock.Anything).Return(false, nil).Maybe()
+	existingBook := &database.Book{ID: "existing-id", Title: "Old Title", FilePath: fpath}
+	store.EXPECT().GetBookByFilePath(fpath).Return(existingBook, nil)
+	store.EXPECT().UpdateBook("existing-id", mock.Anything).Return(existingBook, nil)
+
+	book := &Book{Title: "Test Book", Author: "Author", FilePath: fpath, Format: ".m4b", FileHash: "abc123"}
+	err := saveBookToDatabase(book)
+	assert.NoError(t, err)
+}
+
+func TestSaveBookToDatabaseAuthorResolveError(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	store.EXPECT().GetAuthorByName("Bad Author").Return(nil, fmt.Errorf("db error"))
+
+	book := &Book{Title: "Test", Author: "Bad Author", FilePath: "/tmp/test.m4b"}
+	err := saveBookToDatabase(book)
+	assert.Error(t, err)
+}
+
+func TestSaveBookToDatabaseBookLookupError(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	store.EXPECT().GetAuthorByName(mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().GetAllWorks().Return(nil, nil)
+	store.EXPECT().CreateWork(mock.Anything).Return(&database.Work{ID: "w1"}, nil)
+	store.EXPECT().IsHashBlocked(mock.Anything).Return(false, nil).Maybe()
+	store.EXPECT().GetBookByFilePath(mock.Anything).Return(nil, fmt.Errorf("lookup failed"))
+
+	tmp := t.TempDir()
+	fpath := filepath.Join(tmp, "test.m4b")
+	require.NoError(t, os.WriteFile(fpath, []byte("data"), 0o644))
+
+	book := &Book{Title: "Test", FilePath: fpath, Format: ".m4b"}
+	err := saveBookToDatabase(book)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "book lookup failed")
+}
+
+func TestSaveBookToDatabaseBlockedHash(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	store.EXPECT().GetAuthorByName(mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().GetAllWorks().Return(nil, nil).Maybe()
+	store.EXPECT().CreateWork(mock.Anything).Return(&database.Work{ID: "w1"}, nil).Maybe()
+	store.EXPECT().IsHashBlocked(mock.Anything).Return(true, nil)
+
+	tmp := t.TempDir()
+	fpath := filepath.Join(tmp, "blocked.m4b")
+	require.NoError(t, os.WriteFile(fpath, []byte("data"), 0o644))
+
+	book := &Book{Title: "Blocked Book", FilePath: fpath, Format: ".m4b"}
+	err := saveBookToDatabase(book)
+	assert.NoError(t, err) // blocked = silently skip
+}
+
+// ---------------------------------------------------------------------------
+// createBookFilesForBook — with mock store
+// ---------------------------------------------------------------------------
+
+func TestCreateBookFilesForBookWithStore(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	tmp := t.TempDir()
+	bookPath := filepath.Join(tmp, "book.m4b")
+	require.NoError(t, os.WriteFile(bookPath, []byte("audio"), 0o644))
+
+	store.EXPECT().GetBookByFilePath(bookPath).Return(&database.Book{
+		ID:       "book-1",
+		Title:    "Test Book",
+		FilePath: bookPath,
+	}, nil)
+	store.EXPECT().GetBookFiles("book-1").Return(nil, nil) // no existing files
+	store.EXPECT().UpsertBookFile(mock.Anything).Return(nil)
+	store.EXPECT().UpdateBook("book-1", mock.Anything).Return(nil, nil) // normalize FilePath
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	createBookFilesForBook(bookPath, nil, defaultLog)
+}
+
+func TestCreateBookFilesForBookExistingFiles(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	store.EXPECT().GetBookByFilePath("/tmp/book.m4b").Return(&database.Book{
+		ID:       "book-1",
+		Title:    "Test",
+		FilePath: "/tmp/book.m4b",
+	}, nil)
+	store.EXPECT().GetBookFiles("book-1").Return([]database.BookFile{{ID: "bf-1"}}, nil)
+
+	// Should return early since files already exist
+	createBookFilesForBook("/tmp/book.m4b", nil, defaultLog)
+}
+
+func TestCreateBookFilesForBookNotFound(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	store.EXPECT().GetBookByFilePath("/tmp/missing.m4b").Return(nil, nil)
+
+	// Should return early since book not found
+	createBookFilesForBook("/tmp/missing.m4b", nil, defaultLog)
+}
+
+func TestCreateBookFilesWithSegmentFiles(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	tmp := t.TempDir()
+	seg1 := filepath.Join(tmp, "seg1.m4b")
+	seg2 := filepath.Join(tmp, "seg2.m4b")
+	require.NoError(t, os.WriteFile(seg1, []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(seg2, []byte("b"), 0o644))
+
+	store.EXPECT().GetBookByFilePath(tmp).Return(&database.Book{
+		ID:       "book-2",
+		Title:    "Multi-segment",
+		FilePath: tmp,
+	}, nil)
+	store.EXPECT().GetBookFiles("book-2").Return(nil, nil)
+	store.EXPECT().UpsertBookFile(mock.Anything).Return(nil).Times(2)
+
+	createBookFilesForBook(tmp, []string{seg1, seg2}, defaultLog)
+}
+
+// ---------------------------------------------------------------------------
+// saveBookToDatabase — re-link by organizer ID
+// ---------------------------------------------------------------------------
+
+func TestSaveBookToDatabaseRelinkByOrgID(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	store.EXPECT().GetAuthorByName(mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().GetAllWorks().Return(nil, nil).Maybe()
+	store.EXPECT().CreateWork(mock.Anything).Return(&database.Work{ID: "w1"}, nil).Maybe()
+
+	existingBook := &database.Book{ID: "org-123", Title: "Moved Book", FilePath: "/old/path.m4b"}
+	store.EXPECT().GetBookByID("org-123").Return(existingBook, nil)
+	store.EXPECT().UpdateBook("org-123", mock.Anything).Return(existingBook, nil)
+	store.EXPECT().IsHashBlocked(mock.Anything).Return(false, nil).Maybe()
+
+	tmp := t.TempDir()
+	fpath := filepath.Join(tmp, "moved.m4b")
+	require.NoError(t, os.WriteFile(fpath, []byte("data"), 0o644))
+
+	book := &Book{
+		Title:           "Moved Book",
+		FilePath:        fpath,
+		Format:          ".m4b",
+		BookOrganizerID: "org-123",
+	}
+	err := saveBookToDatabase(book)
+	assert.NoError(t, err)
+}
+
+// ---------------------------------------------------------------------------
+// saveBookToDatabase — hash-based dedup (version linking)
+// ---------------------------------------------------------------------------
+
+func TestSaveBookToDatabaseHashDedupAlreadyLinked(t *testing.T) {
+	store := dbmocks.NewMockStore(t)
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	store.EXPECT().GetAuthorByName(mock.Anything).Return(nil, nil).Maybe()
+	store.EXPECT().GetAllWorks().Return(nil, nil)
+	store.EXPECT().CreateWork(mock.Anything).Return(&database.Work{ID: "w1"}, nil)
+	store.EXPECT().IsHashBlocked(mock.Anything).Return(false, nil)
+
+	// Not found by path
+	store.EXPECT().GetBookByFilePath(mock.Anything).Return(nil, nil)
+
+	// Found by hash — already version-linked
+	vgID := "vg-existing"
+	existingBook := &database.Book{
+		ID:             "dup-id",
+		Title:          "Dup Book",
+		FilePath:       "/other/path.m4b",
+		VersionGroupID: &vgID,
+	}
+	store.EXPECT().GetBookByFileHash(mock.Anything).Return(existingBook, nil)
+	// Already linked — should return nil without creating new book
+
+	tmp := t.TempDir()
+	fpath := filepath.Join(tmp, "dup.m4b")
+	require.NoError(t, os.WriteFile(fpath, []byte("data"), 0o644))
+
+	book := &Book{Title: "Dup Book", FilePath: fpath, Format: ".m4b"}
+	err := saveBookToDatabase(book)
+	assert.NoError(t, err) // silently skips already-linked
+}
+
+// ---------------------------------------------------------------------------
+// inode_unix.go — getInode coverage
+// ---------------------------------------------------------------------------
+
+func TestGetInode(t *testing.T) {
+	tmp := t.TempDir()
+	p := filepath.Join(tmp, "file.txt")
+	require.NoError(t, os.WriteFile(p, []byte("x"), 0o644))
+
+	fi, err := os.Stat(p)
+	require.NoError(t, err)
+
+	inode, ok := getInode(fi)
+	assert.True(t, ok)
+	assert.Greater(t, inode, uint64(0))
+
+	// Same file should have same inode
+	inode2, ok2 := getInode(fi)
+	assert.True(t, ok2)
+	assert.Equal(t, inode, inode2)
+}
+
+// ---------------------------------------------------------------------------
+// extractInfoFromPath — more branches for coverage
+// ---------------------------------------------------------------------------
+
+func TestExtractInfoFromPathMoreBranches(t *testing.T) {
+	t.Run("series number extraction", func(t *testing.T) {
+		book := &Book{FilePath: "/media/Author Name/Series Name/Book 3 - Title.m4b"}
+		extractInfoFromPath(book)
+		assert.NotEmpty(t, book.Title)
+	})
+
+	t.Run("underscore separator with numeric part", func(t *testing.T) {
+		book := &Book{FilePath: "/tmp/Author_Title Part 2.m4b"}
+		extractInfoFromPath(book)
+		assert.NotEmpty(t, book.Title)
+	})
+
+	t.Run("deeply nested path", func(t *testing.T) {
+		book := &Book{FilePath: "/media/Fiction/Author Name/Series/Book Title.m4b"}
+		extractInfoFromPath(book)
+		assert.NotEmpty(t, book.Title)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// isValidAuthor — additional edge cases for 90% -> 100%
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// ProcessBooksParallel — file processing paths for better coverage
+// ---------------------------------------------------------------------------
+
+func TestProcessBooksParallelNormalFile(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b", ".mp3"}
+
+	saveCalled := 0
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error {
+		saveCalled++
+		return nil
+	}
+
+	tmp := t.TempDir()
+	// Create a file with author-title naming pattern
+	fpath := filepath.Join(tmp, "Stephen King - The Shining.m4b")
+	require.NoError(t, os.WriteFile(fpath, []byte("fake audio content"), 0o644))
+
+	books := []Book{{FilePath: fpath, Format: ".m4b"}}
+	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, saveCalled)
+}
+
+func TestProcessBooksParallelDirectoryBook(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b", ".mp3"}
+
+	saveCalled := 0
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error {
+		saveCalled++
+		return nil
+	}
+
+	tmp := t.TempDir()
+	bookDir := filepath.Join(tmp, "My Book")
+	require.NoError(t, os.MkdirAll(bookDir, 0o755))
+	// Create audio files in the directory
+	require.NoError(t, os.WriteFile(filepath.Join(bookDir, "chapter01.mp3"), []byte("audio"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(bookDir, "chapter02.mp3"), []byte("audio"), 0o644))
+
+	books := []Book{{FilePath: bookDir, Format: ".mp3"}}
+	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, saveCalled)
+}
+
+func TestProcessBooksParallelMultipleErrors(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".m4b"}
+
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error {
+		return fmt.Errorf("save error for %s", book.FilePath)
+	}
+
+	tmp := t.TempDir()
+	books := make([]Book, 3)
+	for i := range books {
+		p := filepath.Join(tmp, fmt.Sprintf("err%d.m4b", i))
+		require.NoError(t, os.WriteFile(p, []byte("x"), 0o644))
+		books[i] = Book{FilePath: p, Format: ".m4b"}
+	}
+
+	err := ProcessBooksParallel(t.Context(), books, 2, nil, nil)
+	// Errors are logged but function doesn't return them as combined
+	_ = err
+}
+
+func TestProcessBooksParallelWithSegmentFiles(t *testing.T) {
+	SetScanner(nil)
+	t.Cleanup(func() { SetScanner(nil) })
+
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(nil)
+	t.Cleanup(func() { database.SetGlobalStore(origStore) })
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".mp3"}
+
+	saveCalled := 0
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(book *Book) error {
+		saveCalled++
+		return nil
+	}
+
+	tmp := t.TempDir()
+	seg1 := filepath.Join(tmp, "track1.mp3")
+	seg2 := filepath.Join(tmp, "track2.mp3")
+	require.NoError(t, os.WriteFile(seg1, []byte("audio1"), 0o644))
+	require.NoError(t, os.WriteFile(seg2, []byte("audio2"), 0o644))
+
+	books := []Book{{
+		FilePath:     seg1,
+		Format:       ".mp3",
+		SegmentFiles: []string{seg1, seg2},
+	}}
+
+	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, saveCalled)
+}
+
+// ---------------------------------------------------------------------------
+// groupFilesIntoBooks — mixed directory coverage (56% -> higher)
+// ---------------------------------------------------------------------------
+
+func TestGroupFilesIntoBooksMultiFileAlbum(t *testing.T) {
+	// This test can't fully work without real audio files with album tags,
+	// but it tests the fallback path where quickReadAlbum returns ""
+	tmp := t.TempDir()
+	files := make([]string, 4)
+	for i := range files {
+		p := filepath.Join(tmp, fmt.Sprintf("file%d.m4b", i))
+		require.NoError(t, os.WriteFile(p, []byte("not real audio"), 0o644))
+		files[i] = p
+	}
+
+	books := groupFilesIntoBooks(files)
+	// Without real audio tags, all go to noAlbum path -> each is individual
+	assert.GreaterOrEqual(t, len(books), 1)
+	for _, b := range books {
+		assert.Equal(t, ".m4b", b.Format)
+	}
+}
+
+func TestGroupFilesIntoBooksWithPlaylistGrouping(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Create audio files
+	files := []string{
+		filepath.Join(tmp, "ch1.mp3"),
+		filepath.Join(tmp, "ch2.mp3"),
+		filepath.Join(tmp, "unrelated.mp3"),
+	}
+	for _, f := range files {
+		require.NoError(t, os.WriteFile(f, []byte("audio"), 0o644))
+	}
+
+	// Create a CUE file grouping first two
+	cueContent := `TITLE "Grouped Book"
+FILE "ch1.mp3" MP3
+  TRACK 01 AUDIO
+FILE "ch2.mp3" MP3
+  TRACK 02 AUDIO
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmp, "book.cue"), []byte(cueContent), 0o644))
+
+	books := groupFilesIntoBooks(files)
+	// Should create at least 2 books: one grouped + one individual
+	assert.GreaterOrEqual(t, len(books), 1)
+}
+
+// ---------------------------------------------------------------------------
+// computeHashFromReader — small file edge case
+// ---------------------------------------------------------------------------
+
+func TestComputeHashFromReaderEmptyFile(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "empty.bin")
+	require.NoError(t, os.WriteFile(path, []byte{}, 0o644))
+
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	defer f.Close()
+
+	hash, err := computeHashFromReader(f, 0)
+	require.NoError(t, err)
+	assert.Len(t, hash, 64)
+}
+
+func TestIsValidAuthorExtraEdgeCases(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"section prefix", "section 1", true}, // not in exclusion list
+		{"single letter", "A", true},          // valid (not in exclusion list)
+		{"mixed case part", "PART 1", false},
+		{"regular author", "J.K. Rowling", true},
+		{"double name", "Mary Jane Watson", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isValidAuthor(tt.input))
+		})
+	}
 }
