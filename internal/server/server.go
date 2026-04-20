@@ -1016,7 +1016,7 @@ func NewServer(store database.Store) *Server {
 		AutoWriteBack:       config.AppConfig.ITunesAutoWriteBack,
 		ITLWriteBackEnabled: config.AppConfig.ITLWriteBackEnabled,
 		LibraryWritePath:    config.AppConfig.ITunesLibraryWritePath,
-	})
+	}, resolvedStore)
 	server.fileIOPool = NewFileIOPool(4)
 
 	// Wire writeBackBatcher into services that need it
