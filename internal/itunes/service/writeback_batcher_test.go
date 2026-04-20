@@ -1,8 +1,8 @@
-// file: internal/server/itunes_writeback_batcher_test.go
+// file: internal/itunes/service/writeback_batcher_test.go
 // version: 1.1.0
 // guid: d4e5f6a7-b8c9-0123-def4-56789abcdef0
 
-package server
+package itunesservice
 
 import (
 	"errors"
@@ -15,7 +15,7 @@ import (
 )
 
 // withFakeITLHooks replaces the package-level itunes hooks with
-// test doubles and restores them on cleanup. Lets every safeWriteITL
+// test doubles and restores them on cleanup. Lets every SafeWriteITL
 // test drive the validate + apply paths without needing a real ITL
 // fixture on disk — the fixture is fragile and format changes have
 // broken it before.
@@ -71,11 +71,11 @@ func TestSafeWriteITL_HappyPath(t *testing.T) {
 		},
 	)
 
-	err := safeWriteITL(itlPath, itunes.ITLOperationSet{
+	err := SafeWriteITL(itlPath, itunes.ITLOperationSet{
 		LocationUpdates: []itunes.ITLLocationUpdate{{PersistentID: "aa", NewLocation: "x"}},
 	})
 	if err != nil {
-		t.Fatalf("safeWriteITL happy path failed: %v", err)
+		t.Fatalf("SafeWriteITL happy path failed: %v", err)
 	}
 	if applyCalls != 1 {
 		t.Errorf("expected 1 apply call, got %d", applyCalls)
@@ -106,7 +106,7 @@ func TestSafeWriteITL_HappyPath(t *testing.T) {
 
 // TestSafeWriteITL_RefusesBrokenSource is the regression test for
 // rule #1: never write to an ITL that's already corrupted. The
-// validate call for the source path fails, and safeWriteITL must
+// validate call for the source path fails, and SafeWriteITL must
 // abort without creating a backup or touching the file.
 func TestSafeWriteITL_RefusesBrokenSource(t *testing.T) {
 	dir := t.TempDir()
@@ -122,7 +122,7 @@ func TestSafeWriteITL_RefusesBrokenSource(t *testing.T) {
 		},
 	)
 
-	err := safeWriteITL(itlPath, itunes.ITLOperationSet{
+	err := SafeWriteITL(itlPath, itunes.ITLOperationSet{
 		LocationUpdates: []itunes.ITLLocationUpdate{{PersistentID: "aa", NewLocation: "x"}},
 	})
 	if err == nil {
@@ -168,7 +168,7 @@ func TestSafeWriteITL_TempValidationFailure(t *testing.T) {
 		},
 	)
 
-	err := safeWriteITL(itlPath, itunes.ITLOperationSet{
+	err := SafeWriteITL(itlPath, itunes.ITLOperationSet{
 		LocationUpdates: []itunes.ITLLocationUpdate{{PersistentID: "aa", NewLocation: "x"}},
 	})
 	if err == nil {
@@ -216,7 +216,7 @@ func TestSafeWriteITL_PostRenameRestore(t *testing.T) {
 		},
 	)
 
-	err := safeWriteITL(itlPath, itunes.ITLOperationSet{
+	err := SafeWriteITL(itlPath, itunes.ITLOperationSet{
 		LocationUpdates: []itunes.ITLLocationUpdate{{PersistentID: "aa", NewLocation: "x"}},
 	})
 	if err == nil {

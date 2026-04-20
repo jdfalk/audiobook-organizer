@@ -14,6 +14,9 @@ import itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/serv
 // because Go type aliases make the names interchangeable.
 type Enqueuer = itunesservice.Enqueuer
 
-// Compile-time proof *WriteBackBatcher satisfies Enqueuer. If the batcher
-// gains or renames methods this assertion catches it.
-var _ Enqueuer = (*WriteBackBatcher)(nil)
+// Compile-time proof *itunesservice.WriteBackBatcher satisfies Enqueuer.
+// If the batcher gains or renames methods this assertion catches it.
+// (The batcher moved under internal/itunes/service/ during M1 step 2;
+// the assertion can eventually move alongside it once the server alias
+// disappears.)
+var _ Enqueuer = (*itunesservice.WriteBackBatcher)(nil)
