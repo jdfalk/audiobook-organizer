@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.181.0
+// version: 1.182.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -32,6 +32,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
@@ -719,6 +720,8 @@ type Server struct {
 	dedupEngine            *dedup.Engine
 	activityWriter         *activity.Writer
 	itunesActivityFn       func(entry database.ActivityEntry)
+	eventBus               *plugin.EventBus
+	pluginRegistry         *plugin.Registry
 	// searchIndex is the Bleve library search index (spec DES-1).
 	// Opened at startup, nil if DB path isn't set yet.
 	searchIndex *search.BleveIndex
@@ -774,6 +777,13 @@ func (s *Server) Store() database.Store {
 	// paths, tests that build Server literals), fall back to the package
 	// global so behavior is unchanged.
 	return database.GetGlobalStore()
+}
+
+// publishEvent publishes a lifecycle event to the plugin event bus.
+func (s *Server) publishEvent(ctx context.Context, event plugin.Event) {
+	if s.eventBus != nil {
+		s.eventBus.Publish(ctx, event)
+	}
 }
 
 // NewServer constructs a Server with an explicit Store dependency.
@@ -833,6 +843,10 @@ func NewServer(store database.Store) *Server {
 		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
+
+	// Initialize plugin event bus and registry
+	server.eventBus = plugin.NewEventBus()
+	server.pluginRegistry = plugin.Global()
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
 	// so the real TrackProvisioner gets wired into the import pipeline;
@@ -1880,6 +1894,12 @@ func (s *Server) Start(cfg ServerConfig) error {
 		if err := s.itunesSvc.Shutdown(30 * time.Second); err != nil {
 			log.Printf("[WARN] itunes service shutdown: %v", err)
 		}
+	}
+
+	// Shut down all plugins before closing stores
+	if s.pluginRegistry != nil {
+		log.Println("[INFO] Shutting down plugins...")
+		s.pluginRegistry.ShutdownAll(ctx)
 	}
 
 	// Close the search index before the DB goes away — the index is
