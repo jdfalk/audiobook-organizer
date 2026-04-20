@@ -1,11 +1,11 @@
-// file: internal/server/itunes_writeback_batcher.go
-// version: 3.5.0
+// file: internal/itunes/service/writeback_batcher.go
+// version: 4.0.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
 // and track removals in a single ITL read-modify-write cycle.
 
-package server
+package itunesservice
 
 import (
 	"fmt"
@@ -192,6 +192,16 @@ func (b *WriteBackBatcher) resetTimer() {
 	b.timer = time.AfterFunc(delay, b.flush)
 }
 
+// HasPendingBook reports whether bookID is currently queued for a
+// location update. Intended for test assertions in other packages that
+// can no longer reach b.pendingBooks directly after the M1 step 2 move.
+// Safe to call concurrently with Enqueue.
+func (b *WriteBackBatcher) HasPendingBook(bookID string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.pendingBooks[bookID]
+}
+
 func (b *WriteBackBatcher) hasPending() bool {
 	return len(b.pendingBooks) > 0 || len(b.pendingAdds) > 0 || len(b.pendingRemoves) > 0
 }
@@ -318,7 +328,7 @@ func (b *WriteBackBatcher) flush() {
 		len(locationUpdates), len(metadataUpdates), len(adds), len(removes))
 
 	itlPath := writePath // from b.flushEnabled() above
-	if err := safeWriteITL(itlPath, ops); err != nil {
+	if err := SafeWriteITL(itlPath, ops); err != nil {
 		log.Printf("[WARN] iTunes write-back failed: %v", err)
 		return
 	}
@@ -347,7 +357,7 @@ var (
 	itlApplyOperationsFn    = itunes.ApplyITLOperations
 )
 
-// safeWriteITL performs a backup → write-temp → validate-temp →
+// SafeWriteITL performs a backup → write-temp → validate-temp →
 // rename → validate-final → cleanup cycle for ITL write-back. At
 // every failure point the original ITL is either untouched or
 // restored from the backup, so a corrupted write can never leave
@@ -366,7 +376,7 @@ var (
 //     produced corruption, or the write was partial), copy the
 //     backup back over itlPath.
 //  7. Log the result.
-func safeWriteITL(itlPath string, ops itunes.ITLOperationSet) error {
+func SafeWriteITL(itlPath string, ops itunes.ITLOperationSet) error {
 	// Step 1: sanity-check the source. If the ITL we're about to
 	// write over is ALREADY corrupted, the write has nothing to
 	// validate against and a rollback wouldn't help anyway.

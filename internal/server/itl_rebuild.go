@@ -6,13 +6,14 @@
 // against the current ITL file and computes the minimal set of
 // changes (adds, removes, metadata updates, location patches)
 // to synchronize them. Changes are applied in one atomic
-// ApplyITLOperations call through the existing safeWriteITL
+// ApplyITLOperations call through the existing itunesservice.SafeWriteITL
 // pipeline (backup → validate → apply → validate → rollback on
 // failure). Backlog 7.9 — "diff and batch" mode.
 
 package server
 
 import (
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"fmt"
 	"log"
 	"net/http"
@@ -226,7 +227,7 @@ func pidToHex(pid [8]byte) string {
 
 // rebuildITLHandler handles POST /api/v1/itunes/rebuild.
 // Query param: dry_run=true returns the diff preview without
-// applying. Otherwise applies the diff via safeWriteITL.
+// applying. Otherwise applies the diff via itunesservice.SafeWriteITL.
 func (s *Server) rebuildITLHandler(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
@@ -259,7 +260,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 		return
 	}
 
-	if err := safeWriteITL(itlPath, *ops); err != nil {
+	if err := itunesservice.SafeWriteITL(itlPath, *ops); err != nil {
 		c.JSON(http.StatusInternalServerError, ITLRebuildResult{
 			Preview: *preview,
 			Applied: false,

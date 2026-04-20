@@ -5,6 +5,7 @@
 package server
 
 import (
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -351,7 +352,7 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
 	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
-	batcher := NewWriteBackBatcher(1*time.Hour, WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil) // long delay so it won't flush
+	batcher := itunesservice.NewWriteBackBatcher(1*time.Hour, itunesservice.WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil) // long delay so it won't flush
 	server.writeBackBatcher = batcher
 	defer func() {
 		// Stop pool workers before restoring globals to avoid races
@@ -371,9 +372,7 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Verify the book ID was enqueued in the batcher
-	batcher.mu.Lock()
-	enqueued := batcher.pendingBooks[book.ID]
-	batcher.mu.Unlock()
+	enqueued := batcher.HasPendingBook(book.ID)
 	assert.True(t, enqueued, "expected book ID to be enqueued in WriteBackBatcher")
 }
 
@@ -398,7 +397,7 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
 	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
-	batcher := NewWriteBackBatcher(1*time.Hour, WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
+	batcher := itunesservice.NewWriteBackBatcher(1*time.Hour, itunesservice.WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
 	server.writeBackBatcher = batcher
 	defer func() {
 		// Stop pool workers before restoring globals to avoid races
@@ -436,9 +435,7 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify enqueued
-	batcher.mu.Lock()
-	enqueued := batcher.pendingBooks[book.ID]
-	batcher.mu.Unlock()
+	enqueued := batcher.HasPendingBook(book.ID)
 	assert.True(t, enqueued, "expected book ID to be enqueued when write_back=true")
 }
 
@@ -461,7 +458,7 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
 	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
-	batcher := NewWriteBackBatcher(1*time.Hour, WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
+	batcher := itunesservice.NewWriteBackBatcher(1*time.Hour, itunesservice.WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
 	server.writeBackBatcher = batcher
 	defer func() {
 		// Stop pool workers before restoring globals to avoid races
@@ -498,9 +495,7 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Verify enqueued (defaults to true)
-	batcher.mu.Lock()
-	enqueued := batcher.pendingBooks[book.ID]
-	batcher.mu.Unlock()
+	enqueued := batcher.HasPendingBook(book.ID)
 	assert.True(t, enqueued, "expected book ID to be enqueued when write_back is omitted (defaults to true)")
 }
 
@@ -523,7 +518,7 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 	origConfig := config.AppConfig
 	config.AppConfig.ITunesAutoWriteBack = true
 	config.AppConfig.ITunesLibraryReadPath = "/fake/path.xml"
-	batcher := NewWriteBackBatcher(1*time.Hour, WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
+	batcher := itunesservice.NewWriteBackBatcher(1*time.Hour, itunesservice.WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
 	server.writeBackBatcher = batcher
 	defer func() {
 		// Stop pool workers before restoring globals to avoid races
@@ -558,8 +553,6 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Verify NOT enqueued
-	batcher.mu.Lock()
-	enqueued := batcher.pendingBooks[book.ID]
-	batcher.mu.Unlock()
+	enqueued := batcher.HasPendingBook(book.ID)
 	assert.False(t, enqueued, "expected book ID NOT to be enqueued when write_back=false")
 }

@@ -733,7 +733,7 @@ type Server struct {
 
 	queue            operations.Queue
 	hub              *realtime.EventHub
-	writeBackBatcher *WriteBackBatcher
+	writeBackBatcher *itunesservice.WriteBackBatcher
 	fileIOPool       *FileIOPool
 
 	// Shutdown coordination. bgCtx is canceled when Shutdown() runs, and
@@ -1028,11 +1028,13 @@ func NewServer(store database.Store) *Server {
 	// Also set the global for backward compatibility during migration
 	operations.GlobalQueue = server.queue
 
-	server.writeBackBatcher = NewWriteBackBatcher(5*time.Second, WriteBackBatcherConfig{
-		AutoWriteBack:       config.AppConfig.ITunesAutoWriteBack,
-		ITLWriteBackEnabled: config.AppConfig.ITLWriteBackEnabled,
-		LibraryWritePath:    config.AppConfig.ITunesLibraryWritePath,
-	}, resolvedStore)
+	// The batcher moved under itunesservice.Service in Phase 2 M1 step 2.
+	// Server still keeps a typed field for back-compat with the many call
+	// sites that were already using server.writeBackBatcher — but it now
+	// points at the service-owned instance. When the service is nil (test
+	// paths), the field stays nil and enqueues are silent no-ops via the
+	// `if batcher != nil` guards already in place.
+	server.writeBackBatcher = server.itunesSvc.Batcher
 	server.fileIOPool = NewFileIOPool(4)
 
 	// Wire writeBackBatcher into services that need it
@@ -1045,12 +1047,9 @@ func NewServer(store database.Store) *Server {
 	// during Phase 2 M1 step 1). Nil provisioner → ITL track provisioning
 	// is skipped (service is disabled or construction failed above).
 	server.importService.SetTrackProvisioner(server.itunesSvc.Provisioner)
-	// The provisioner needs the batcher for EnqueueAdd. SetEnqueuer
-	// completes wiring here because the batcher still lives on Server
-	// until Phase 2 M1 step 2 moves it under Service.
-	if server.itunesSvc.Provisioner != nil {
-		server.itunesSvc.Provisioner.SetEnqueuer(server.writeBackBatcher)
-	}
+	// After M1 step 2, the batcher is owned by itunesservice.Service and
+	// Provisioner was wired with the real Enqueuer at Service.New() time.
+	// No SetEnqueuer hop needed.
 
 	// Register file-op recovery handler (uses server closure instead of globalServer)
 	RegisterFileOpRecovery("apply_metadata", func(bookID string) {

@@ -31,14 +31,13 @@ type Deps struct {
 // reference cycle. Each placeholder is deleted and replaced by a real
 // definition in its own file when the corresponding sub-component moves.
 //
-// Status after Phase 2 M1 step 1 (this PR):
+// Status after Phase 2 M1 step 2 (this PR):
 //   - TrackProvisioner: real (track_provisioner.go)
+//   - WriteBackBatcher: real (writeback_batcher.go)
 //   - All others: placeholder
 type (
 	// Importer runs the iTunes import pipeline. Placeholder until moved.
 	Importer struct{}
-	// WriteBackBatcher batches ITL write-backs. Placeholder until moved.
-	WriteBackBatcher struct{}
 	// PositionSync syncs playback positions with iTunes. Placeholder until moved.
 	PositionSync struct{}
 	// PathReconciler reconciles iTunes-vs-library paths. Placeholder until moved.
@@ -79,10 +78,19 @@ func New(deps Deps) (*Service, error) {
 		deps: deps,
 	}
 
-	// Wire real sub-components as they land. M1 step 1: Provisioner.
-	// The enqueuer (batcher) lives on Server until M1 step 2 — server
-	// calls Provisioner.SetEnqueuer after New() to complete wiring.
-	svc.Provisioner = newTrackProvisioner(deps.Store, nil /*enqueuer TBD*/, deps.Config)
+	// M1 step 2: Batcher lives here now. Built first so sub-components
+	// that need it (Provisioner today, Positions/Playlists/etc. in later
+	// M1 steps) can be wired with the real handle at construction time
+	// instead of via post-hoc setters.
+	svc.Batcher = NewWriteBackBatcher(5*time.Second, WriteBackBatcherConfig{
+		AutoWriteBack:       deps.Config.AutoWriteBack,
+		ITLWriteBackEnabled: deps.Config.ITLWriteBackEnabled,
+		LibraryWritePath:    deps.Config.LibraryWritePath,
+	}, deps.Store)
+
+	// M1 step 1: Provisioner. Gets the real batcher directly — no
+	// SetEnqueuer hop needed now that Batcher is wired above.
+	svc.Provisioner = newTrackProvisioner(deps.Store, svc.Batcher, deps.Config)
 
 	return svc, nil
 }
