@@ -1,5 +1,5 @@
-// file: internal/server/read_status_engine.go
-// version: 1.1.0
+// file: internal/readstatus/readstatus.go
+// version: 2.0.0
 // guid: 6e2f8a1d-4c5b-4f70-a9c7-2d8e0f1b9a57
 //
 // RecomputeUserBookState derives a UserBookState from the current
@@ -21,7 +21,12 @@
 //        - else → unstarted
 //      `abandoned` is never auto-computed — user-set only.
 
-package server
+// Extracted from internal/server/ to internal/readstatus/ (pre-work P5)
+// so internal/itunes/service/ can call Recompute / SetManual without
+// creating a cyclic dep (server imports itunes/service; iTunes
+// position-sync calls into here).
+
+package readstatus
 
 import (
 	"time"

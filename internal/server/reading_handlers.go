@@ -12,6 +12,7 @@
 package server
 
 import (
+	"github.com/jdfalk/audiobook-organizer/internal/readstatus"
 	"net/http"
 	"strconv"
 	"time"
@@ -59,7 +60,7 @@ func (s *Server) handleSetPosition(c *gin.Context) {
 		internalError(c, "failed to record position", err)
 		return
 	}
-	state, err := RecomputeUserBookState(s.Store(), userID, bookID)
+	state, err := readstatus.RecomputeUserBookState(s.Store(), userID, bookID)
 	if err != nil {
 		internalError(c, "failed to recompute book state", err)
 		return
@@ -132,7 +133,7 @@ func (s *Server) handleSetBookStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status: " + req.Status})
 		return
 	}
-	state, err := SetManualStatus(s.Store(), callingUserID(c), bookID, req.Status)
+	state, err := readstatus.SetManualStatus(s.Store(), callingUserID(c), bookID, req.Status)
 	if err != nil {
 		internalError(c, "failed to set status", err)
 		return
@@ -149,7 +150,7 @@ func (s *Server) handleClearBookStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "book id required"})
 		return
 	}
-	state, err := SetManualStatus(s.Store(), callingUserID(c), bookID, "")
+	state, err := readstatus.SetManualStatus(s.Store(), callingUserID(c), bookID, "")
 	if err != nil {
 		internalError(c, "failed to clear status", err)
 		return

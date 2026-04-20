@@ -22,6 +22,7 @@
 package server
 
 import (
+	"github.com/jdfalk/audiobook-organizer/internal/readstatus"
 	"log"
 	"time"
 
@@ -77,7 +78,7 @@ func pullITunesBookmarks(store interface { database.BookStore; database.BookFile
 		}
 
 		// Recompute the derived book state from the seeded position.
-		if _, err := RecomputeUserBookState(store, adminUserID, book.ID); err != nil {
+		if _, err := readstatus.RecomputeUserBookState(store, adminUserID, book.ID); err != nil {
 			log.Printf("[WARN] recompute state for %s after bookmark seed: %v", book.ID, err)
 		}
 		seeded++
@@ -92,7 +93,7 @@ func pullITunesBookmarks(store interface { database.BookStore; database.BookFile
 		if state != nil {
 			continue
 		}
-		if _, err := SetManualStatus(store, adminUserID, book.ID, database.UserBookStatusFinished); err != nil {
+		if _, err := readstatus.SetManualStatus(store, adminUserID, book.ID, database.UserBookStatusFinished); err != nil {
 			log.Printf("[WARN] seed finished for %s: %v", book.ID, err)
 			continue
 		}

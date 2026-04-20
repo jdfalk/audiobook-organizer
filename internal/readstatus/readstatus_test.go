@@ -1,8 +1,8 @@
-// file: internal/server/read_status_engine_test.go
+// file: internal/readstatus/readstatus_test.go
 // version: 1.0.0
 // guid: 9e2a8c4d-5b1f-4f70-a7c6-2d8e0f1b9a57
 
-package server
+package readstatus
 
 import (
 	"path/filepath"
