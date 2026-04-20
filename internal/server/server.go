@@ -1422,7 +1422,7 @@ func (s *Server) resumeInterruptedOperations() {
 		case "itunes_path_reconcile":
 			reconcileOpID := opID
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.runITunesPathReconcile(ctx, reconcileOpID, progress)
+				return s.itunesSvc.Paths.Reconcile(ctx, reconcileOpID, progress)
 			}
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
@@ -2202,7 +2202,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/reconcile", s.perm(auth.PermScanTrigger), s.startReconcile)
 			protected.POST("/operations/reconcile/scan", s.perm(auth.PermScanTrigger), s.startReconcileScan)
 			protected.GET("/operations/reconcile/scan/latest", s.perm(auth.PermLibraryView), s.latestReconcileScan)
-			protected.POST("/operations/itunes-path-reconcile", s.perm(auth.PermScanTrigger), s.startITunesPathReconcile)
+			protected.POST("/operations/itunes-path-reconcile", s.perm(auth.PermScanTrigger), s.itunesSvc.Paths.Start)
 			protected.POST("/operations/cleanup-version-groups", s.perm(auth.PermSettingsManage), s.cleanupDuplicateVersionGroupsHandler)
 			protected.POST("/operations/mark-broken-segments", s.perm(auth.PermSettingsManage), s.markBrokenSegmentBooksHandler)
 			protected.POST("/operations/merge-novg-duplicates", s.perm(auth.PermSettingsManage), s.mergeNoVGDuplicatesHandler)
