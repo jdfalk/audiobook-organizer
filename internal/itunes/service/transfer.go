@@ -1,11 +1,11 @@
-// file: internal/server/itunes_transfer.go
-// version: 1.0.0
+// file: internal/itunes/service/transfer.go
+// version: 2.0.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 //
 // ITL file transfer handlers: download, upload+validate, backup
 // list, and restore. Part of backlog 6.4.
 
-package server
+package itunesservice
 
 import (
 	"fmt"
@@ -25,12 +25,17 @@ import (
 // maxITLUploadSize is the maximum allowed ITL upload (500 MB).
 const maxITLUploadSize = 500 << 20
 
-// --- Download ---------------------------------------------------------------
+// TransferService owns the ITL file transfer HTTP handlers: download,
+// upload+validate, backup list, and restore. No store / batcher deps —
+// pure filesystem operations keyed off config.AppConfig.ITunesLibraryWritePath.
+type TransferService struct{}
 
-// handleITLDownload serves the current ITL file as a binary download.
+func newTransferService() *TransferService { return &TransferService{} }
+
+// HandleDownload serves the current ITL file as a binary download.
 //
 // GET /api/v1/itunes/library/download
-func (s *Server) handleITLDownload(c *gin.Context) {
+func (t *TransferService) HandleDownload(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
 		c.JSON(http.StatusNotFound, gin.H{
@@ -59,8 +64,6 @@ func (s *Server) handleITLDownload(c *gin.Context) {
 	c.File(itlPath)
 }
 
-// --- Upload + Validate ------------------------------------------------------
-
 // ITLUploadResponse is returned after uploading an ITL file.
 type ITLUploadResponse struct {
 	Valid     bool   `json:"valid"`
@@ -71,11 +74,11 @@ type ITLUploadResponse struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// handleITLUpload accepts a multipart ITL upload, validates it, and
+// HandleUpload accepts a multipart ITL upload, validates it, and
 // optionally installs it as the active library.
 //
 // POST /api/v1/itunes/library/upload?install=true|false
-func (s *Server) handleITLUpload(c *gin.Context) {
+func (t *TransferService) HandleUpload(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -95,8 +98,6 @@ func (s *Server) handleITLUpload(c *gin.Context) {
 	}
 	defer file.Close()
 
-	// Write to a temp file in the same directory as the target so
-	// os.Rename can be atomic on the same filesystem.
 	dir := filepath.Dir(itlPath)
 	tmp, err := os.CreateTemp(dir, "itl-upload-*.tmp")
 	if err != nil {
@@ -106,7 +107,7 @@ func (s *Server) handleITLUpload(c *gin.Context) {
 		return
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath) // clean up on any error path
+	defer os.Remove(tmpPath)
 
 	if _, err := io.Copy(tmp, file); err != nil {
 		tmp.Close()
@@ -117,7 +118,6 @@ func (s *Server) handleITLUpload(c *gin.Context) {
 	}
 	tmp.Close()
 
-	// Validate: try to parse the uploaded file.
 	lib, parseErr := itunes.ParseITL(tmpPath)
 	if parseErr != nil {
 		c.JSON(http.StatusBadRequest, ITLUploadResponse{
@@ -140,7 +140,6 @@ func (s *Server) handleITLUpload(c *gin.Context) {
 		return
 	}
 
-	// Back up the current file before replacing.
 	if err := backupITLFile(itlPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("failed to back up current ITL: %v", err),
@@ -148,7 +147,6 @@ func (s *Server) handleITLUpload(c *gin.Context) {
 		return
 	}
 
-	// Atomic replace: rename temp → target (same filesystem).
 	if err := os.Rename(tmpPath, itlPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("failed to install uploaded ITL: %v", err),
@@ -160,8 +158,6 @@ func (s *Server) handleITLUpload(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// --- Backup List + Restore --------------------------------------------------
-
 // ITLBackupEntry describes a single .bak-* ITL backup file.
 type ITLBackupEntry struct {
 	Name      string    `json:"name"`
@@ -169,11 +165,11 @@ type ITLBackupEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// handleITLBackupList returns all .bak-* backups of the ITL file,
+// HandleBackupList returns all .bak-* backups of the ITL file,
 // sorted newest-first.
 //
 // GET /api/v1/itunes/library/backups
-func (s *Server) handleITLBackupList(c *gin.Context) {
+func (t *TransferService) HandleBackupList(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -213,7 +209,6 @@ func (s *Server) handleITLBackupList(c *gin.Context) {
 		})
 	}
 
-	// Newest first.
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].Timestamp.After(backups[j].Timestamp)
 	})
@@ -229,10 +224,10 @@ type ITLRestoreRequest struct {
 	BackupName string `json:"backup_name" binding:"required"`
 }
 
-// handleITLRestore restores a named backup as the active ITL file.
+// HandleRestore restores a named backup as the active ITL file.
 //
 // POST /api/v1/itunes/library/restore
-func (s *Server) handleITLRestore(c *gin.Context) {
+func (t *TransferService) HandleRestore(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -249,7 +244,6 @@ func (s *Server) handleITLRestore(c *gin.Context) {
 		return
 	}
 
-	// Sanitize: the backup must be in the same directory.
 	if filepath.Base(req.BackupName) != req.BackupName {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "backup_name must be a filename, not a path",
@@ -261,7 +255,6 @@ func (s *Server) handleITLRestore(c *gin.Context) {
 	base := filepath.Base(itlPath)
 	backupPath := filepath.Join(dir, req.BackupName)
 
-	// Must be a .bak-* file of the ITL base name.
 	if !strings.HasPrefix(req.BackupName, base+".bak-") {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "not a recognized ITL backup file",
@@ -269,7 +262,6 @@ func (s *Server) handleITLRestore(c *gin.Context) {
 		return
 	}
 
-	// Validate the backup parses.
 	lib, err := itunes.ParseITL(backupPath)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -278,7 +270,6 @@ func (s *Server) handleITLRestore(c *gin.Context) {
 		return
 	}
 
-	// Back up the current file before replacing.
 	if err := backupITLFile(itlPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("failed to back up current ITL before restore: %v", err),
@@ -286,7 +277,6 @@ func (s *Server) handleITLRestore(c *gin.Context) {
 		return
 	}
 
-	// Copy backup → itlPath (don't rename — keep the backup in place).
 	if err := copyFile(backupPath, itlPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("failed to restore backup: %v", err),
@@ -302,12 +292,10 @@ func (s *Server) handleITLRestore(c *gin.Context) {
 	})
 }
 
-// --- Helpers ----------------------------------------------------------------
-
 // backupITLFile creates a timestamped .bak-* copy of the given path.
 func backupITLFile(itlPath string) error {
 	if _, err := os.Stat(itlPath); os.IsNotExist(err) {
-		return nil // nothing to back up
+		return nil
 	}
 
 	ts := time.Now().UTC().Format("20060102T150405Z")
