@@ -1,5 +1,5 @@
-// file: internal/server/itunes_path_reconcile.go
-// version: 1.1.0
+// file: internal/itunes/service/path_reconcile.go
+// version: 2.0.0
 // guid: 9e3b7a1d-4c2f-4a60-b8d5-2f1e8c0d9a47
 //
 // One-time (repeatable) backfill that walks every book with an
@@ -9,74 +9,106 @@
 // path-update bug was patched and iTunes now shows "missing files"
 // for books that were moved under the hood.
 
-package server
+package itunesservice
 
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
 
-type iTunesPathReconcileResult struct {
-	Scanned            int `json:"scanned"`
-	ITunesTracked      int `json:"itunes_tracked"`
-	PathsUpdated       int `json:"paths_updated"`
-	FilePathsUpdated   int `json:"file_paths_updated"`
-	EnqueuedForWrite   int `json:"enqueued_for_write"`
-	Errors             int `json:"errors"`
+// pathReconcilerStore is the narrow slice of the service's Store that
+// PathReconciler needs.
+type pathReconcilerStore interface {
+	database.BookStore
+	database.BookFileStore
+	database.OperationStore
 }
 
-// startITunesPathReconcile kicks off a tracked operation that walks the
-// library and re-enqueues every iTunes-tracked book so the batcher
-// pushes updated locations + metadata back to the ITL.
-func (s *Server) startITunesPathReconcile(c *gin.Context) {
-	store := s.Store()
-	if store == nil {
-		c.JSON(500, gin.H{"error": "database not initialized"})
+// PathReconciler walks iTunes-tracked books, recomputes their
+// ITunesPath fields from the current FilePath, and enqueues the
+// write-back batcher so the ITL learns the new locations.
+type PathReconciler struct {
+	store    pathReconcilerStore
+	enqueuer Enqueuer
+	queue    operations.Queue
+}
+
+// newPathReconciler wires a PathReconciler with the given store,
+// enqueuer and operation queue. All three are required in production;
+// nil enqueuer just skips the write-back enqueue step (useful for
+// tests).
+func newPathReconciler(store pathReconcilerStore, enqueuer Enqueuer, queue operations.Queue) *PathReconciler {
+	return &PathReconciler{store: store, enqueuer: enqueuer, queue: queue}
+}
+
+// iTunesPathReconcileResult is the per-run tally returned in
+// progress logs. Exported so the future handler-level test can
+// assert on it.
+type iTunesPathReconcileResult struct {
+	Scanned          int `json:"scanned"`
+	ITunesTracked    int `json:"itunes_tracked"`
+	PathsUpdated     int `json:"paths_updated"`
+	FilePathsUpdated int `json:"file_paths_updated"`
+	EnqueuedForWrite int `json:"enqueued_for_write"`
+	Errors           int `json:"errors"`
+}
+
+// Start kicks off a tracked operation that walks the library and
+// re-enqueues every iTunes-tracked book so the batcher pushes
+// updated locations + metadata back to the ITL. Returns the operation
+// via the gin context.
+func (r *PathReconciler) Start(c *gin.Context) {
+	if r.store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
 	}
-	if s.queue == nil {
-		c.JSON(500, gin.H{"error": "operation queue not initialized"})
+	if r.queue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
 		return
 	}
 
 	id := ulid.Make().String()
-	op, err := store.CreateOperation(id, "itunes_path_reconcile", nil)
+	op, err := r.store.CreateOperation(id, "itunes_path_reconcile", nil)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		log.Printf("[ERROR] failed to create operation: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation"})
 		return
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.runITunesPathReconcile(ctx, id, progress)
+		return r.Reconcile(ctx, id, progress)
 	}
 
-	if err := s.queue.Enqueue(op.ID, "itunes_path_reconcile", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+	if err := r.queue.Enqueue(op.ID, "itunes_path_reconcile", operations.PriorityNormal, operationFunc); err != nil {
+		log.Printf("[ERROR] failed to enqueue operation: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enqueue operation"})
 		return
 	}
 
-	c.JSON(202, op)
+	c.JSON(http.StatusAccepted, op)
 }
 
-// runITunesPathReconcile is the operation body. Read-only over iTunes
-// PIDs (PIDs are not changed), read-write over ITunesPath fields.
-// Idempotent — safe to re-run. Skips books without an iTunes PID.
-func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progress operations.ProgressReporter) error {
-	store := s.Store()
-	if store == nil {
+// Reconcile is the operation body. Read-only over iTunes PIDs (PIDs
+// are not changed), read-write over ITunesPath fields. Idempotent —
+// safe to re-run. Skips books without an iTunes PID.
+func (r *PathReconciler) Reconcile(ctx context.Context, opID string, progress operations.ProgressReporter) error {
+	if r.store == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
 	_ = progress.Log("info", "Starting iTunes path reconcile", nil)
 
 	// Load all books — 100k is the same cap other maintenance ops use.
-	books, err := store.GetAllBooks(100000, 0)
+	books, err := r.store.GetAllBooks(100000, 0)
 	if err != nil {
 		return fmt.Errorf("load books: %w", err)
 	}
@@ -93,10 +125,9 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 		}
 		b := &books[i]
 
-		// Skip books with no iTunes connection at any level.
 		hasITunesBook := b.ITunesPersistentID != nil && *b.ITunesPersistentID != ""
 
-		bookFiles, _ := store.GetBookFiles(b.ID)
+		bookFiles, _ := r.store.GetBookFiles(b.ID)
 		hasITunesFile := false
 		for _, bf := range bookFiles {
 			if bf.ITunesPersistentID != "" {
@@ -110,7 +141,6 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 		}
 		result.ITunesTracked++
 
-		// Recompute book.ITunesPath from the current FilePath if needed.
 		if b.FilePath != "" {
 			wantBookITunesPath := metafetch.ComputeITunesPath(b.FilePath)
 			if wantBookITunesPath != "" {
@@ -120,7 +150,7 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 				}
 				if current != wantBookITunesPath {
 					b.ITunesPath = &wantBookITunesPath
-					if _, err := store.UpdateBook(b.ID, b); err != nil {
+					if _, err := r.store.UpdateBook(b.ID, b); err != nil {
 						result.Errors++
 						_ = progress.Log("warn", fmt.Sprintf("update book %s: %v", b.ID, err), nil)
 					} else {
@@ -130,7 +160,6 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 			}
 		}
 
-		// Recompute book_files.ITunesPath per file.
 		for _, bf := range bookFiles {
 			if bf.ITunesPersistentID == "" || bf.FilePath == "" {
 				continue
@@ -140,7 +169,7 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 				continue
 			}
 			bf.ITunesPath = want
-			if err := store.UpdateBookFile(bf.ID, &bf); err != nil {
+			if err := r.store.UpdateBookFile(bf.ID, &bf); err != nil {
 				result.Errors++
 				_ = progress.Log("warn", fmt.Sprintf("update book_file %s: %v", bf.ID, err), nil)
 				continue
@@ -148,10 +177,8 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 			result.FilePathsUpdated++
 		}
 
-		// Enqueue the batcher so the next flush pushes both location
-		// and metadata updates to iTunes for this book.
-		if s.writeBackBatcher != nil {
-			s.writeBackBatcher.Enqueue(b.ID)
+		if r.enqueuer != nil {
+			r.enqueuer.Enqueue(b.ID)
 			result.EnqueuedForWrite++
 		}
 
@@ -159,18 +186,15 @@ func (s *Server) runITunesPathReconcile(ctx context.Context, opID string, progre
 			_ = progress.UpdateProgress(i+1, len(books),
 				fmt.Sprintf("reconciled %d/%d (%d iTunes-tracked, %d paths fixed, %d files fixed)",
 					i+1, len(books), result.ITunesTracked, result.PathsUpdated, result.FilePathsUpdated))
-			_ = operations.SaveCheckpoint(store, opID, "itunes_path_reconcile", "scanning", i+1, len(books))
+			_ = operations.SaveCheckpoint(r.store, opID, "itunes_path_reconcile", "scanning", i+1, len(books))
 		}
 	}
 
-	// Nudge the batcher to flush sooner rather than waiting out its
-	// maxDelay. Give it a brief grace window so log output stays
-	// ordered with the flush INFO line.
-	if s.writeBackBatcher != nil && result.EnqueuedForWrite > 0 {
+	if r.enqueuer != nil && result.EnqueuedForWrite > 0 {
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	_ = operations.ClearState(store, opID)
+	_ = operations.ClearState(r.store, opID)
 	summary := fmt.Sprintf(
 		"iTunes path reconcile complete: scanned=%d iTunes-tracked=%d book-paths-updated=%d file-paths-updated=%d enqueued=%d errors=%d",
 		result.Scanned, result.ITunesTracked, result.PathsUpdated, result.FilePathsUpdated, result.EnqueuedForWrite, result.Errors,
