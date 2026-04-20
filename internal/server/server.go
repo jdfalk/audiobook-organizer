@@ -834,11 +834,27 @@ func NewServer(store database.Store) *Server {
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
 
-	// Construct the iTunes service. PR 1 always uses NewDisabled — PR 2
-	// flips to conditional New based on config once sub-components are
-	// moved. Server still has the old *WriteBackBatcher, *LibraryWatcher,
-	// etc. fields populated via the existing code paths during PR 1+2.
-	server.itunesSvc = itunesservice.NewDisabled()
+	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
+	// so the real TrackProvisioner gets wired into the import pipeline;
+	// remaining sub-components stay as empty-struct placeholders until
+	// they move in later M1 steps. Disabled fallback is preserved for
+	// construction failures or (future) test paths that explicitly opt out.
+	itunesCfg := itunesservice.Config{
+		Enabled:             true,
+		LibraryReadPath:     config.AppConfig.ITunesLibraryReadPath,
+		LibraryWritePath:    config.AppConfig.ITunesLibraryWritePath,
+		AutoWriteBack:       config.AppConfig.ITunesAutoWriteBack,
+		ITLWriteBackEnabled: config.AppConfig.ITLWriteBackEnabled,
+	}
+	itunesSvc, err := itunesservice.New(itunesservice.Deps{
+		Store:  resolvedStore,
+		Config: itunesCfg,
+	})
+	if err != nil {
+		log.Printf("[WARN] iTunes service construction failed, falling back to disabled: %v", err)
+		itunesSvc = itunesservice.NewDisabled()
+	}
+	server.itunesSvc = itunesSvc
 
 	// Initialize update scheduler
 	server.updateScheduler = updater.NewScheduler(server.updater, func() updater.SchedulerConfig {
@@ -1024,7 +1040,17 @@ func NewServer(store database.Store) *Server {
 	server.organizeService.SetWriteBackBatcher(server.writeBackBatcher)
 	server.organizeService.SetQueue(server.queue)
 	server.mergeService.SetWriteBackBatcher(server.writeBackBatcher)
-	server.importService.SetWriteBackBatcher(server.writeBackBatcher)
+
+	// ImportService uses the iTunes service's TrackProvisioner (moved
+	// during Phase 2 M1 step 1). Nil provisioner → ITL track provisioning
+	// is skipped (service is disabled or construction failed above).
+	server.importService.SetTrackProvisioner(server.itunesSvc.Provisioner)
+	// The provisioner needs the batcher for EnqueueAdd. SetEnqueuer
+	// completes wiring here because the batcher still lives on Server
+	// until Phase 2 M1 step 2 moves it under Service.
+	if server.itunesSvc.Provisioner != nil {
+		server.itunesSvc.Provisioner.SetEnqueuer(server.writeBackBatcher)
+	}
 
 	// Register file-op recovery handler (uses server closure instead of globalServer)
 	RegisterFileOpRecovery("apply_metadata", func(bookID string) {

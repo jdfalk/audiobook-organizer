@@ -1,5 +1,5 @@
 // file: internal/itunes/service/service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 81ccaec6-42b0-4828-83c8-7a96680112d9
 
 package itunesservice
@@ -25,24 +25,27 @@ type Deps struct {
 	Logger     logger.Logger
 }
 
-// Sub-component placeholder types. Real definitions land in PR 2 when
-// each sub-component is moved out of internal/server/. Kept as empty
+// Sub-component placeholder types. Real definitions land in Phase 2 M1
+// as each sub-component is moved out of internal/server/. Kept as empty
 // structs here so Service can declare typed fields without a forward
-// reference cycle or a disabled-only struct shape.
+// reference cycle. Each placeholder is deleted and replaced by a real
+// definition in its own file when the corresponding sub-component moves.
+//
+// Status after Phase 2 M1 step 1 (this PR):
+//   - TrackProvisioner: real (track_provisioner.go)
+//   - All others: placeholder
 type (
-	// Importer runs the iTunes import pipeline. Real type in PR 2.
+	// Importer runs the iTunes import pipeline. Placeholder until moved.
 	Importer struct{}
-	// WriteBackBatcher batches ITL write-backs. Real type in PR 2.
+	// WriteBackBatcher batches ITL write-backs. Placeholder until moved.
 	WriteBackBatcher struct{}
-	// PositionSync syncs playback positions with iTunes. Real type in PR 2.
+	// PositionSync syncs playback positions with iTunes. Placeholder until moved.
 	PositionSync struct{}
-	// PathReconciler reconciles iTunes-vs-library paths. Real type in PR 2.
+	// PathReconciler reconciles iTunes-vs-library paths. Placeholder until moved.
 	PathReconciler struct{}
-	// PlaylistSync syncs iTunes playlists. Real type in PR 2.
+	// PlaylistSync syncs iTunes playlists. Placeholder until moved.
 	PlaylistSync struct{}
-	// TrackProvisioner provisions iTunes tracks. Real type in PR 2.
-	TrackProvisioner struct{}
-	// TransferService transfers ITL files. Real type in PR 2.
+	// TransferService transfers ITL files. Placeholder until moved.
 	TransferService struct{}
 )
 
@@ -72,11 +75,16 @@ func New(deps Deps) (*Service, error) {
 	if deps.Logger == nil {
 		deps.Logger = logger.New("itunes")
 	}
-	return &Service{
+	svc := &Service{
 		deps: deps,
-		// Sub-components populated in PR 2. Until then they stay nil;
-		// method calls on a nil sub-component return ErrNotImplemented.
-	}, nil
+	}
+
+	// Wire real sub-components as they land. M1 step 1: Provisioner.
+	// The enqueuer (batcher) lives on Server until M1 step 2 — server
+	// calls Provisioner.SetEnqueuer after New() to complete wiring.
+	svc.Provisioner = newTrackProvisioner(deps.Store, nil /*enqueuer TBD*/, deps.Config)
+
+	return svc, nil
 }
 
 // NewDisabled constructs a Service whose methods all return
