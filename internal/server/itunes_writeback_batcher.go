@@ -1,5 +1,5 @@
 // file: internal/server/itunes_writeback_batcher.go
-// version: 3.4.0
+// version: 3.5.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -32,6 +32,18 @@ type WriteBackBatcherConfig struct {
 	LibraryWritePath    string
 }
 
+// WriteBackStore is the narrow slice of database.Store the batcher needs.
+// Defined here (not in internal/database) so the batcher stays package-
+// portable: when the concrete type moves to internal/itunes/service/ in
+// Phase 2 M1 it drags its deps along without re-importing internal/database
+// via the service-level Store composite.
+type WriteBackStore interface {
+	database.BookStore        // GetBookByID, MarkITunesSynced
+	database.AuthorReader     // GetAuthorByID
+	database.BookFileStore    // GetBookFiles
+	database.ExternalIDStore  // MarkExternalIDRemoved
+}
+
 // WriteBackBatcher collects ITL operations and flushes them in a single batch
 // after a debounce delay. Supports location updates, track additions, and
 // track removals — all applied in one read-modify-write cycle.
@@ -58,11 +70,17 @@ type WriteBackBatcher struct {
 	autoWriteBack       bool
 	itlWriteBackEnabled bool
 	libraryWritePath    string
+
+	// store is the narrow database surface used by the flush goroutine
+	// and the EnqueueRemove best-effort tombstone marker. May be nil
+	// (pre-wiring path in older test fixtures); runtime call sites
+	// nil-guard.
+	store WriteBackStore
 }
 
 
 // NewWriteBackBatcher creates a batcher with the given debounce delay.
-func NewWriteBackBatcher(delay time.Duration, cfg WriteBackBatcherConfig) *WriteBackBatcher {
+func NewWriteBackBatcher(delay time.Duration, cfg WriteBackBatcherConfig, store WriteBackStore) *WriteBackBatcher {
 	return &WriteBackBatcher{
 		pendingBooks:        make(map[string]bool),
 		pendingRemoves:      make(map[string]bool),
@@ -72,6 +90,7 @@ func NewWriteBackBatcher(delay time.Duration, cfg WriteBackBatcherConfig) *Write
 		autoWriteBack:       cfg.AutoWriteBack,
 		itlWriteBackEnabled: cfg.ITLWriteBackEnabled,
 		libraryWritePath:    cfg.LibraryWritePath,
+		store:               store,
 	}
 }
 
@@ -144,8 +163,8 @@ func (b *WriteBackBatcher) EnqueueRemove(pid string) {
 
 	// Mark as removed in DB (best-effort, outside lock)
 	go func() {
-		if store := database.GetGlobalStore(); store != nil {
-			_ = store.MarkExternalIDRemoved("itunes", pid)
+		if b.store != nil {
+			_ = b.store.MarkExternalIDRemoved("itunes", pid)
 		}
 	}()
 }
@@ -200,7 +219,7 @@ func (b *WriteBackBatcher) flush() {
 	b.firstEnqueue = time.Time{} // reset for next batch
 	b.mu.Unlock()
 
-	store := database.GetGlobalStore()
+	store := b.store
 	if store == nil {
 		log.Printf("[WARN] iTunes write-back: no database store")
 		return
