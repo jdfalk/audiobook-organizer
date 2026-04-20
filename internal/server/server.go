@@ -2237,10 +2237,10 @@ func (s *Server) setupRoutes() {
 				itunesGroup.POST("/rebuild", s.perm(auth.PermLibraryEditMetadata), s.rebuildITLHandler)
 
 				// ITL file transfer (6.4)
-				itunesGroup.GET("/library/download", s.perm(auth.PermIntegrationsManage), s.handleITLDownload)
-				itunesGroup.POST("/library/upload", s.perm(auth.PermIntegrationsManage), s.handleITLUpload)
-				itunesGroup.GET("/library/backups", s.perm(auth.PermIntegrationsManage), s.handleITLBackupList)
-				itunesGroup.POST("/library/restore", s.perm(auth.PermIntegrationsManage), s.handleITLRestore)
+				itunesGroup.GET("/library/download", s.perm(auth.PermIntegrationsManage), s.itunesSvc.Transfer.HandleDownload)
+				itunesGroup.POST("/library/upload", s.perm(auth.PermIntegrationsManage), s.itunesSvc.Transfer.HandleUpload)
+				itunesGroup.GET("/library/backups", s.perm(auth.PermIntegrationsManage), s.itunesSvc.Transfer.HandleBackupList)
+				itunesGroup.POST("/library/restore", s.perm(auth.PermIntegrationsManage), s.itunesSvc.Transfer.HandleRestore)
 			}
 
 			// Cover art
