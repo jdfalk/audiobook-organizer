@@ -301,7 +301,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
 			return ts.triggerOperation("itunes-position-sync", func(_ context.Context, progress operations.ProgressReporter) error {
-				pulled, pushed := SyncITunesPositions(ts.server.Store(), ts.server.writeBackBatcher)
+				pulled, pushed := ts.server.itunesSvc.Positions.Sync()
 				_ = progress.Log("info", fmt.Sprintf("iTunes position sync: pulled %d, pushed %d", pulled, pushed), nil)
 				return nil
 			})

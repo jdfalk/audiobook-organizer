@@ -1,5 +1,5 @@
-// file: internal/server/itunes_position_sync.go
-// version: 1.1.0
+// file: internal/itunes/service/position_sync.go
+// version: 2.0.0
 // guid: 9f7a8b5c-0d6e-4a70-b8c5-3d7e0f1b9a99
 //
 // Bidirectional sync between the app's per-user position/state
@@ -19,7 +19,7 @@
 // The sync runs as a maintenance task (`itunes_position_sync`) in
 // the scheduler. It can also be triggered manually from the API.
 
-package server
+package itunesservice
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/readstatus"
@@ -31,20 +31,45 @@ import (
 
 const adminUserID = "_local"
 
-// SyncITunesPositions runs a full bidirectional position sync for the
+// positionSyncStore is the narrow slice of the service's Store that
+// PositionSync needs. Carries the full (Book + File + UserPosition)
+// surface since the pull/push code paths both read books and positions
+// and write back to user_book_state.
+type positionSyncStore interface {
+	database.BookStore
+	database.BookFileStore
+	database.UserPositionStore
+}
+
+// PositionSync runs the bidirectional bookmark/play-count sync between
+// iTunes ITL data and per-user positions. Owned by the Service; scheduler
+// triggers Sync() on its cadence.
+type PositionSync struct {
+	store    positionSyncStore
+	enqueuer Enqueuer
+}
+
+// newPositionSync constructs a PositionSync wired with the given store
+// and enqueuer. A nil enqueuer disables the push direction (pull still
+// runs) — useful for tests that only verify seeding behavior.
+func newPositionSync(store positionSyncStore, enqueuer Enqueuer) *PositionSync {
+	return &PositionSync{store: store, enqueuer: enqueuer}
+}
+
+// Sync runs a full bidirectional position sync for the
 // admin user. Pull then push order ensures we don't immediately
 // overwrite a newly-seeded position.
-func SyncITunesPositions(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }, batcher Enqueuer) (pulled, pushed int) {
-	pulled = pullITunesBookmarks(store)
-	pushed = pushPositionsToITunes(store, batcher)
+func (p *PositionSync) Sync() (pulled, pushed int) {
+	pulled = p.pullBookmarks()
+	pushed = p.pushPositions()
 	return pulled, pushed
 }
 
 // pullITunesBookmarks seeds admin positions from iTunes Bookmark data.
 // Iterates books with an iTunes Bookmark value and creates a position
 // row if none exists yet.
-func pullITunesBookmarks(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }) int {
-	books, err := store.GetAllBooks(0, 0)
+func (p *PositionSync) pullBookmarks() int {
+	books, err := p.store.GetAllBooks(0, 0)
 	if err != nil {
 		log.Printf("[WARN] itunes position sync: list books: %v", err)
 		return 0
@@ -56,13 +81,13 @@ func pullITunesBookmarks(store interface { database.BookStore; database.BookFile
 			continue
 		}
 
-		existing, _ := store.GetUserPosition(adminUserID, book.ID)
+		existing, _ := p.store.GetUserPosition(adminUserID, book.ID)
 		if existing != nil {
 			continue
 		}
 
 		// Find the first segment to use as the position target.
-		files, _ := store.GetBookFiles(book.ID)
+		files, _ := p.store.GetBookFiles(book.ID)
 		segmentID := ""
 		if len(files) > 0 {
 			segmentID = files[0].ID
@@ -72,13 +97,13 @@ func pullITunesBookmarks(store interface { database.BookStore; database.BookFile
 		}
 
 		bookmarkSeconds := float64(*book.ITunesBookmark) / 1000.0
-		if err := store.SetUserPosition(adminUserID, book.ID, segmentID, bookmarkSeconds); err != nil {
+		if err := p.store.SetUserPosition(adminUserID, book.ID, segmentID, bookmarkSeconds); err != nil {
 			log.Printf("[WARN] seed position for %s: %v", book.ID, err)
 			continue
 		}
 
 		// Recompute the derived book state from the seeded position.
-		if _, err := readstatus.RecomputeUserBookState(store, adminUserID, book.ID); err != nil {
+		if _, err := readstatus.RecomputeUserBookState(p.store, adminUserID, book.ID); err != nil {
 			log.Printf("[WARN] recompute state for %s after bookmark seed: %v", book.ID, err)
 		}
 		seeded++
@@ -89,11 +114,11 @@ func pullITunesBookmarks(store interface { database.BookStore; database.BookFile
 		if book.ITunesPlayCount == nil || *book.ITunesPlayCount <= 0 {
 			continue
 		}
-		state, _ := store.GetUserBookState(adminUserID, book.ID)
+		state, _ := p.store.GetUserBookState(adminUserID, book.ID)
 		if state != nil {
 			continue
 		}
-		if _, err := readstatus.SetManualStatus(store, adminUserID, book.ID, database.UserBookStatusFinished); err != nil {
+		if _, err := readstatus.SetManualStatus(p.store, adminUserID, book.ID, database.UserBookStatusFinished); err != nil {
 			log.Printf("[WARN] seed finished for %s: %v", book.ID, err)
 			continue
 		}
@@ -108,19 +133,19 @@ func pullITunesBookmarks(store interface { database.BookStore; database.BookFile
 // position was updated since the last sync, enqueue the book for
 // bookmark writeback. If the book was marked finished, also enqueue
 // a play-count increment.
-func pushPositionsToITunes(store interface { database.BookStore; database.BookFileStore; database.UserPositionStore }, batcher Enqueuer) int {
+func (p *PositionSync) pushPositions() int {
 	// Get all admin positions that changed in the last 24 hours.
 	// A more precise cutoff would use a last-sync-at timestamp;
 	// for now 24h is a safe window for the maintenance task that
 	// runs every few hours.
 	cutoff := time.Now().Add(-24 * time.Hour)
-	positions, err := store.ListUserPositionsSince(adminUserID, cutoff)
+	positions, err := p.store.ListUserPositionsSince(adminUserID, cutoff)
 	if err != nil {
 		log.Printf("[WARN] itunes position push: list positions: %v", err)
 		return 0
 	}
 
-	if batcher == nil {
+	if p.enqueuer == nil {
 		return 0
 	}
 
@@ -132,7 +157,7 @@ func pushPositionsToITunes(store interface { database.BookStore; database.BookFi
 		}
 		seen[pos.BookID] = true
 
-		book, err := store.GetBookByID(pos.BookID)
+		book, err := p.store.GetBookByID(pos.BookID)
 		if err != nil || book == nil || book.ITunesPersistentID == nil {
 			continue
 		}
@@ -140,16 +165,16 @@ func pushPositionsToITunes(store interface { database.BookStore; database.BookFi
 		// Update bookmark via the batcher (it updates the ITL on flush).
 		bookmarkMs := int64(pos.PositionSeconds * 1000)
 		book.ITunesBookmark = &bookmarkMs
-		if _, err := store.UpdateBook(book.ID, book); err != nil {
+		if _, err := p.store.UpdateBook(book.ID, book); err != nil {
 			log.Printf("[WARN] update bookmark for %s: %v", book.ID, err)
 			continue
 		}
-		batcher.Enqueue(book.ID)
+		p.enqueuer.Enqueue(book.ID)
 		pushed++
 
 		// If the book is marked finished and iTunes play count hasn't
 		// been bumped, increment it.
-		state, _ := store.GetUserBookState(adminUserID, pos.BookID)
+		state, _ := p.store.GetUserBookState(adminUserID, pos.BookID)
 		if state != nil && state.Status == database.UserBookStatusFinished {
 			pc := 0
 			if book.ITunesPlayCount != nil {
@@ -159,7 +184,7 @@ func pushPositionsToITunes(store interface { database.BookStore; database.BookFi
 			now := time.Now()
 			book.ITunesPlayCount = &newPC
 			book.ITunesLastPlayed = &now
-			if _, err := store.UpdateBook(book.ID, book); err != nil {
+			if _, err := p.store.UpdateBook(book.ID, book); err != nil {
 				log.Printf("[WARN] bump play count for %s: %v", book.ID, err)
 			}
 		}

@@ -31,15 +31,14 @@ type Deps struct {
 // reference cycle. Each placeholder is deleted and replaced by a real
 // definition in its own file when the corresponding sub-component moves.
 //
-// Status after Phase 2 M1 step 2 (this PR):
+// Status after Phase 2 M1 step 3 (this PR):
 //   - TrackProvisioner: real (track_provisioner.go)
 //   - WriteBackBatcher: real (writeback_batcher.go)
+//   - PositionSync: real (position_sync.go)
 //   - All others: placeholder
 type (
 	// Importer runs the iTunes import pipeline. Placeholder until moved.
 	Importer struct{}
-	// PositionSync syncs playback positions with iTunes. Placeholder until moved.
-	PositionSync struct{}
 	// PathReconciler reconciles iTunes-vs-library paths. Placeholder until moved.
 	PathReconciler struct{}
 	// PlaylistSync syncs iTunes playlists. Placeholder until moved.
@@ -91,6 +90,10 @@ func New(deps Deps) (*Service, error) {
 	// M1 step 1: Provisioner. Gets the real batcher directly — no
 	// SetEnqueuer hop needed now that Batcher is wired above.
 	svc.Provisioner = newTrackProvisioner(deps.Store, svc.Batcher, deps.Config)
+
+	// M1 step 3: PositionSync. Reads/writes admin user positions and
+	// pushes bookmark updates via the batcher.
+	svc.Positions = newPositionSync(deps.Store, svc.Batcher)
 
 	return svc, nil
 }
