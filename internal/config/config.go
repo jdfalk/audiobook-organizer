@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.34.0
+// version: 1.35.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -75,6 +75,12 @@ type SABnzbdConfig struct {
 	Port     int    `json:"port"`
 	APIKey   string `json:"api_key"`
 	UseHTTPS bool   `json:"use_https"`
+}
+
+// PluginConfig holds per-plugin configuration.
+type PluginConfig struct {
+	Enabled  bool              `json:"enabled"`
+	Settings map[string]string `json:"settings"` // plugin-specific key-value pairs
 }
 
 // Config holds application configuration
@@ -294,6 +300,9 @@ type Config struct {
 	MaintenanceWindowLibraryScan      bool `json:"maintenance_window_library_scan"`
 	MaintenanceWindowLibraryOrganize  bool `json:"maintenance_window_library_organize"`
 	MaintenanceWindowMetadataRefresh  bool `json:"maintenance_window_metadata_refresh"`
+
+	// Plugin system
+	Plugins map[string]PluginConfig `json:"plugins"`
 
 	SupportedExtensions []string `json:"supported_extensions"`
 	ExcludePatterns     []string `json:"exclude_patterns"`
