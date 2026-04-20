@@ -1,5 +1,5 @@
 // file: internal/server/import_service.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a
 
 package server
@@ -14,6 +14,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
@@ -29,13 +30,14 @@ type importServiceStore = database.Store
 
 
 type ImportService struct {
-	db importServiceStore
-	writeBackBatcher Enqueuer
+	db          importServiceStore
+	provisioner *itunesservice.TrackProvisioner
 }
 
-// SetWriteBackBatcher sets the iTunes write-back batcher.
-func (is *ImportService) SetWriteBackBatcher(b Enqueuer) {
-	is.writeBackBatcher = b
+// SetTrackProvisioner wires the iTunes track provisioner for newly-imported
+// books. Pass nil to disable ITL track provisioning (e.g. in tests).
+func (is *ImportService) SetTrackProvisioner(p *itunesservice.TrackProvisioner) {
+	is.provisioner = p
 }
 
 func NewImportService(db importServiceStore) *ImportService {
@@ -182,10 +184,14 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 		log.Printf("[WARN] create ingest version for %s: %v", created.ID, verErr)
 	}
 
-	// Provision ITL track (generates PID, stores in external_id_map, enqueues add)
-	if err := ProvisionITLTracksForBook(is.db, created, is.writeBackBatcher); err != nil {
-		// Non-fatal: book was created, ITL provisioning can be retried
-		log.Printf("[WARN] ITL track provisioning failed for %s: %v", created.ID, err)
+	// Provision ITL track via the injected iTunes service (moved from this
+	// package into internal/itunes/service/ during Phase 2 M1 step 1).
+	// Nil provisioner → iTunes disabled or not wired; book is still created
+	// and ITL provisioning can happen later when iTunes comes online.
+	if is.provisioner != nil {
+		if err := is.provisioner.ProvisionAll(created); err != nil {
+			log.Printf("[WARN] ITL track provisioning failed for %s: %v", created.ID, err)
+		}
 	}
 
 	return &ImportFileResponse{
