@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -956,6 +957,12 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 		internalError(c, "failed to update candidate status", err)
 		return
 	}
+
+	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventDedupMerged, candidate.EntityAID, map[string]any{
+		"entity_b_id": candidate.EntityBID,
+		"entity_type": candidate.EntityType,
+		"candidate_id": id,
+	}))
 
 	c.JSON(http.StatusOK, gin.H{"status": "merged", "result": result})
 }

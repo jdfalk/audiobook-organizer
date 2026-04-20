@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
 // System-level HTTP handlers split out of server.go: health, status,
@@ -74,6 +74,19 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 	if err != nil {
 		internalError(c, "failed to get system status", err)
 		return
+	}
+
+	// Attach plugin health information
+	if s.pluginRegistry != nil {
+		pluginHealth := make(map[string]string)
+		for id, err := range s.pluginRegistry.HealthCheckAll() {
+			if err != nil {
+				pluginHealth[id] = err.Error()
+			} else {
+				pluginHealth[id] = "ok"
+			}
+		}
+		status.PluginHealth = pluginHealth
 	}
 
 	c.JSON(http.StatusOK, status)

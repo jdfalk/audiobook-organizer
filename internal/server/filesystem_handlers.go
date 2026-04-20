@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 565db679-19ba-4518-b63e-6892663be41b
 //
 // Filesystem HTTP handlers split out of server.go: home directory,
@@ -23,6 +23,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -297,5 +298,11 @@ func (s *Server) importFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventBookImported, result.ID, map[string]any{
+		"file_path": result.FilePath,
+		"source":    "import",
+	}))
+
 	c.JSON(http.StatusCreated, result)
 }
