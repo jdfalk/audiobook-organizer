@@ -1731,6 +1731,32 @@ func importLibraryState(mode itunes.ImportMode) string {
 	return "imported"
 }
 
+// BookOrganizer is the narrow slice of *organizer.Organizer that the
+// iTunes import pipeline uses. Defined locally (not in internal/organizer)
+// so this package can depend on an abstraction — and so the upcoming
+// iTunes-service extraction (Phase 2 M1, spec v2 §5.3) can inject its
+// own implementation via Deps.Organizer without this file importing
+// internal/config.
+type BookOrganizer interface {
+	OrganizeBook(book *database.Book) (newPath, sidecar string, err error)
+}
+
+// organizerFactory builds a BookOrganizer on demand. Defaults to reading
+// config.AppConfig at call time so behavior is unchanged from the inline
+// construction this replaces. Overridable for tests and — critically —
+// for the upcoming iTunes-service extraction, which will swap the factory
+// at Service.New() time for a pre-built organizer from Deps.Organizer.
+//
+// Kept as a package-level var rather than an injected dependency because
+// the surrounding functions (organizeImportedBook / organizeImportedBooks /
+// executeITunesImport) already don't take an organizer; threading one
+// through three call sites for pre-work churns more lines than the factory
+// override approach. The factory disappears when the code moves to
+// internal/itunes/service/ and the Service can hold the organizer directly.
+var organizerFactory = func() BookOrganizer {
+	return organizer.NewOrganizer(&config.AppConfig)
+}
+
 func organizeImportedBook(book *database.Book, log logger.Logger) error {
 	if book == nil {
 		return fmt.Errorf("book is nil")
@@ -1739,7 +1765,7 @@ func organizeImportedBook(book *database.Book, log logger.Logger) error {
 		return fmt.Errorf("root_dir is not configured")
 	}
 
-	org := organizer.NewOrganizer(&config.AppConfig)
+	org := organizerFactory()
 	newPath, _, err := org.OrganizeBook(book)
 	if err != nil {
 		return err
