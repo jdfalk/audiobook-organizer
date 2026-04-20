@@ -49,6 +49,7 @@ type SystemStatus struct {
 	Memory           SystemMemoryStatus   `json:"memory"`
 	Runtime          SystemRuntimeStatus  `json:"runtime"`
 	Operations       SystemOperationsInfo `json:"operations"`
+	PluginHealth     map[string]string    `json:"plugin_health,omitempty"`
 }
 
 type SystemLibraryStatus struct {

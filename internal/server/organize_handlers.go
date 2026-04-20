@@ -1,5 +1,5 @@
 // file: internal/server/organize_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 1522f0ec-663c-4527-a6d0-645658206a24
 //
 // Organize/rename HTTP handlers split out of server.go: preview/apply
@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -194,6 +195,11 @@ func (s *Server) organizeBook(c *gin.Context) {
 			OldValue:    oldPath,
 			NewValue:    newPath,
 		})
+		s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventFileOrganized, book.ID, map[string]any{
+			"old_path":     oldPath,
+			"new_path":     newPath,
+			"operation_id": op.ID,
+		}))
 		c.JSON(http.StatusOK, gin.H{
 			"message":      fmt.Sprintf("re-organized: %s → %s", oldPath, newPath),
 			"book_id":      book.ID,
@@ -217,6 +223,13 @@ func (s *Server) organizeBook(c *gin.Context) {
 	if _, updateErr := s.Store().UpdateBook(createdBook.ID, createdBook); updateErr != nil {
 		log.Printf("[WARN] organize: failed to stamp organized book %s: %v", createdBook.ID, updateErr)
 	}
+
+	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventFileOrganized, createdBook.ID, map[string]any{
+		"old_path":         oldPath,
+		"new_path":         newPath,
+		"original_book_id": book.ID,
+		"operation_id":     op.ID,
+	}))
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":          fmt.Sprintf("organized: %s → %s", oldPath, newPath),
