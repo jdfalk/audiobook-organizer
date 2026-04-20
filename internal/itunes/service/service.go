@@ -1,5 +1,5 @@
 // file: internal/itunes/service/service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 81ccaec6-42b0-4828-83c8-7a96680112d9
 
 package itunesservice
@@ -41,8 +41,6 @@ type (
 	Importer struct{}
 	// PathReconciler reconciles iTunes-vs-library paths. Placeholder until moved.
 	PathReconciler struct{}
-	// PlaylistSync syncs iTunes playlists. Placeholder until moved.
-	PlaylistSync struct{}
 	// TransferService transfers ITL files. Placeholder until moved.
 	TransferService struct{}
 )
@@ -94,6 +92,10 @@ func New(deps Deps) (*Service, error) {
 	// M1 step 3: PositionSync. Reads/writes admin user positions and
 	// pushes bookmark updates via the batcher.
 	svc.Positions = newPositionSync(deps.Store, svc.Batcher)
+
+	// M1 step 4: PlaylistSync. Imports smart playlists from the ITL
+	// and pushes dirty playlists back out. Pushes use the batcher.
+	svc.Playlists = newPlaylistSync(deps.Store, svc.Batcher)
 
 	return svc, nil
 }

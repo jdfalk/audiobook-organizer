@@ -1,7 +1,7 @@
-// file: internal/server/playlist_itunes_sync_test.go
-// version: 1.0.0
+// file: internal/itunes/service/playlist_sync_test.go
+// version: 2.0.0
 
-package server
+package itunesservice
 
 import (
 	"path/filepath"
@@ -12,16 +12,17 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
 
-func TestMigrateITunesSmartPlaylists_NilLibrary(t *testing.T) {
+func TestMigrateSmartPlaylists_NilLibrary(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	imported, skipped := MigrateITunesSmartPlaylists(nil, nil)
+	ps := newPlaylistSync(nil, nil)
+	imported, skipped := ps.MigrateSmartPlaylists(nil)
 	if imported != 0 || skipped != 0 {
 		t.Errorf("nil library: imported=%d skipped=%d, want 0/0", imported, skipped)
 	}
 }
 
-func TestMigrateITunesSmartPlaylists_SkipsNonSmart(t *testing.T) {
+func TestMigrateSmartPlaylists_SkipsNonSmart(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	pebblePath := filepath.Join(t.TempDir(), "pebble")
@@ -40,13 +41,14 @@ func TestMigrateITunesSmartPlaylists_SkipsNonSmart(t *testing.T) {
 		},
 	}
 
-	imported, skipped := MigrateITunesSmartPlaylists(store, lib)
+	ps := newPlaylistSync(store, nil)
+	imported, skipped := ps.MigrateSmartPlaylists(lib)
 	if imported != 0 || skipped != 0 {
 		t.Errorf("non-smart: imported=%d skipped=%d, want 0/0", imported, skipped)
 	}
 }
 
-func TestMigrateITunesSmartPlaylists_SkipsAlreadyImported(t *testing.T) {
+func TestMigrateSmartPlaylists_SkipsAlreadyImported(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	pebblePath := filepath.Join(t.TempDir(), "pebble")
@@ -60,7 +62,6 @@ func TestMigrateITunesSmartPlaylists_SkipsAlreadyImported(t *testing.T) {
 	pid[0] = 0xAA
 	pidHex := "aa00000000000000"
 
-	// Pre-create a playlist with this iTunes PID.
 	_, _ = store.CreateUserPlaylist(&database.UserPlaylist{
 		Name:               "Already Imported",
 		Type:               database.UserPlaylistTypeSmart,
@@ -73,12 +74,13 @@ func TestMigrateITunesSmartPlaylists_SkipsAlreadyImported(t *testing.T) {
 				Title:         "Already Imported",
 				IsSmart:       true,
 				PersistentID:  pid,
-				SmartCriteria: []byte{0x01, 0x02, 0x03, 0x04}, // non-empty
+				SmartCriteria: []byte{0x01, 0x02, 0x03, 0x04},
 			},
 		},
 	}
 
-	imported, skipped := MigrateITunesSmartPlaylists(store, lib)
+	ps := newPlaylistSync(store, nil)
+	imported, skipped := ps.MigrateSmartPlaylists(lib)
 	if imported != 0 {
 		t.Errorf("expected 0 imported (already exists), got %d", imported)
 	}
@@ -87,7 +89,7 @@ func TestMigrateITunesSmartPlaylists_SkipsAlreadyImported(t *testing.T) {
 	}
 }
 
-func TestPushDirtyPlaylistsToITunes_NoDirty(t *testing.T) {
+func TestPushDirty_NoDirty(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	pebblePath := filepath.Join(t.TempDir(), "pebble")
@@ -102,7 +104,7 @@ func TestPushDirtyPlaylistsToITunes_NoDirty(t *testing.T) {
 		store.Close()
 	})
 
-	pushed := PushDirtyPlaylistsToITunes(store, nil)
+	pushed := newPlaylistSync(store, nil).PushDirty()
 	if pushed != 0 {
 		t.Errorf("expected 0 pushed with no dirty playlists, got %d", pushed)
 	}

@@ -1,5 +1,5 @@
-// file: internal/server/playlist_itunes_sync.go
-// version: 1.1.0
+// file: internal/itunes/service/playlist_sync.go
+// version: 2.0.0
 // guid: 1e9f0a8b-2c3d-4a70-b8c5-3d7e0f1b9a99
 //
 // iTunes playlist sync (spec 3.4 tasks 5-6).
@@ -17,7 +17,7 @@
 //   track list. Smart playlists are pushed as static (materialized)
 //   since iTunes will manage its own smart criteria.
 
-package server
+package itunesservice
 
 import (
 	"encoding/base64"
@@ -29,10 +29,30 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
 
-// MigrateITunesSmartPlaylists reads smart playlists from the ITL
-// library and creates UserPlaylist rows for each. Idempotent —
-// playlists already imported (by iTunes PID) are skipped.
-func MigrateITunesSmartPlaylists(store database.UserPlaylistStore, lib *itunes.ITLLibrary) (imported, skipped int) {
+// playlistSyncStore is the narrow slice of the service's Store that
+// PlaylistSync needs.
+type playlistSyncStore interface {
+	database.UserPlaylistStore
+}
+
+// PlaylistSync owns the two-way iTunes-playlist sync paths (import
+// smart playlists from the ITL, push dirty playlists back out).
+type PlaylistSync struct {
+	store    playlistSyncStore
+	enqueuer Enqueuer
+}
+
+// newPlaylistSync wires a PlaylistSync with the given store and
+// enqueuer. A nil enqueuer disables the push direction's ITL write-back
+// enqueue (the dirty flag is still cleared).
+func newPlaylistSync(store playlistSyncStore, enqueuer Enqueuer) *PlaylistSync {
+	return &PlaylistSync{store: store, enqueuer: enqueuer}
+}
+
+// MigrateSmartPlaylists reads smart playlists from the ITL library
+// and creates UserPlaylist rows for each. Idempotent — playlists
+// already imported (by iTunes PID) are skipped.
+func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, skipped int) {
 	if lib == nil {
 		return 0, 0
 	}
@@ -44,14 +64,12 @@ func MigrateITunesSmartPlaylists(store database.UserPlaylistStore, lib *itunes.I
 
 		pid := hex.EncodeToString(pl.PersistentID[:])
 
-		// Skip if already imported.
-		existing, _ := store.GetUserPlaylistByITunesPID(pid)
+		existing, _ := p.store.GetUserPlaylistByITunesPID(pid)
 		if existing != nil {
 			skipped++
 			continue
 		}
 
-		// Parse and translate criteria.
 		parsed, err := itunes.ParseSmartCriteria(pl.SmartCriteria)
 		if err != nil {
 			log.Printf("[WARN] parse smart criteria for %q (PID %s): %v", pl.Title, pid, err)
@@ -60,10 +78,9 @@ func MigrateITunesSmartPlaylists(store database.UserPlaylistStore, lib *itunes.I
 		}
 		dslQuery := itunes.TranslateSmartCriteria(parsed)
 
-		// Store the raw criteria for audit.
 		rawB64 := base64.StdEncoding.EncodeToString(pl.SmartCriteria)
 
-		_, err = store.CreateUserPlaylist(&database.UserPlaylist{
+		_, err = p.store.CreateUserPlaylist(&database.UserPlaylist{
 			Name:                 pl.Title,
 			Type:                 database.UserPlaylistTypeSmart,
 			Query:                dslQuery,
@@ -82,16 +99,15 @@ func MigrateITunesSmartPlaylists(store database.UserPlaylistStore, lib *itunes.I
 	return imported, skipped
 }
 
-// PushDirtyPlaylistsToITunes writes dirty playlists to the ITL.
-// Smart playlists are materialized first (the materialized_book_ids
-// field is used). Returns the number pushed.
+// PushDirty writes dirty playlists to the ITL. Smart playlists are
+// materialized first (the materialized_book_ids field is used).
+// Returns the number pushed.
 //
-// This is a placeholder that enqueues the playlist book IDs for
-// the ITL write-back batcher. Full ITL playlist creation requires
-// the ITL writer to support playlist insertion, which is tracked
-// separately.
-func PushDirtyPlaylistsToITunes(store database.UserPlaylistStore, batcher Enqueuer) int {
-	dirties, err := store.ListDirtyUserPlaylists()
+// Placeholder that enqueues the playlist book IDs for the ITL
+// write-back batcher. Full ITL playlist creation requires the ITL
+// writer to support playlist insertion, which is tracked separately.
+func (p *PlaylistSync) PushDirty() int {
+	dirties, err := p.store.ListDirtyUserPlaylists()
 	if err != nil {
 		log.Printf("[WARN] list dirty playlists: %v", err)
 		return 0
@@ -101,7 +117,6 @@ func PushDirtyPlaylistsToITunes(store database.UserPlaylistStore, batcher Enqueu
 	for i := range dirties {
 		pl := &dirties[i]
 
-		// For smart playlists, use materialized book IDs.
 		bookIDs := pl.BookIDs
 		if pl.Type == database.UserPlaylistTypeSmart {
 			bookIDs = pl.MaterializedBookIDs
@@ -111,16 +126,14 @@ func PushDirtyPlaylistsToITunes(store database.UserPlaylistStore, batcher Enqueu
 			continue
 		}
 
-		// Enqueue each book for ITL writeback so its track exists.
-		if batcher != nil {
+		if p.enqueuer != nil {
 			for _, bid := range bookIDs {
-				batcher.Enqueue(bid)
+				p.enqueuer.Enqueue(bid)
 			}
 		}
 
-		// Clear dirty flag.
 		pl.Dirty = false
-		if err := store.UpdateUserPlaylist(pl); err != nil {
+		if err := p.store.UpdateUserPlaylist(pl); err != nil {
 			log.Printf("[WARN] clear dirty for %s: %v", pl.ID, err)
 			continue
 		}
