@@ -100,6 +100,7 @@ since it was last edited on 2026-04-11).
 - [x] **4.11** Split `internal/server` into sub-packages (**XL**) — 7 extractions: activity, merge, versions, dedup, diagnostics, metafetch + organizer expansion; ~17K LOC extracted (#398)
 - [ ] **4.12** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
 - [ ] **4.13** Comprehensive iTunes test suite (**L**) — after 4.12 extraction, add exhaustive unit tests: mock store tests for every service method, error path coverage, edge cases (empty library, corrupt XML, concurrent sync), position sync, writeback batcher, path reconciliation, track provisioning; target 80%+ coverage on the extracted package
+- [~] **4.14** Plugin system framework (**XL**) — V1: Plugin/EventBus/Registry/Router framework + Deluge migration; V2 (future): RPC subprocess plugins + webhook event delivery
 
 > **Architecture cleanup notes for future work:**
 > When touching these areas, narrow `database.Store` params to ISP sub-interfaces and extract remaining services as opportunities arise:

@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -24,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
@@ -301,6 +302,11 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 			}
 		})
 	}
+
+	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventMetadataApplied, id, map[string]any{
+		"source":  resp.Source,
+		"message": resp.Message,
+	}))
 
 	// Re-fetch to get fully enriched book with author/series/narrator names
 	enrichedBook := resp.Book

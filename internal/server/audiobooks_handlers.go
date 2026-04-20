@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -28,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 )
 
 func (s *Server) listAudiobooks(c *gin.Context) {
@@ -1251,6 +1252,11 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
+
+	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventBookDeleted, id, map[string]any{
+		"soft_delete": softDelete,
+		"block_hash":  blockHash,
+	}))
 
 	c.JSON(http.StatusOK, result)
 }
