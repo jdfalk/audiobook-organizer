@@ -24,7 +24,7 @@ import (
 
 func TestServerHelpers(t *testing.T) {
 	resetLibrarySizeCache()
-	if got := *intPtr(7); got != 7 {
+	if got := *intPtrHelper(7); got != 7 {
 		t.Fatalf("expected int pointer 7, got %d", got)
 	}
 	if got := *boolPtr(true); got != true {

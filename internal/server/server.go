@@ -32,6 +32,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
@@ -863,6 +864,14 @@ func NewServer(store database.Store) *Server {
 	itunesSvc, err := itunesservice.New(itunesservice.Deps{
 		Store:  resolvedStore,
 		Config: itunesCfg,
+		OnBookCreated: func(bookID string) {
+			// Resolved lazily via closure so server.fireDedupOnImport is available.
+			server.fireDedupOnImport(bookID)
+		},
+		Metafetch: server.metadataFetchService,
+		OrganizerFactory: func() itunesservice.BookOrganizer {
+			return organizer.NewOrganizer(&config.AppConfig)
+		},
 	})
 	if err != nil {
 		log.Printf("[WARN] iTunes service construction failed, falling back to disabled: %v", err)
@@ -1056,6 +1065,16 @@ func NewServer(store database.Store) *Server {
 	server.organizeService.SetWriteBackBatcher(server.writeBackBatcher)
 	server.organizeService.SetQueue(server.queue)
 	server.mergeService.SetWriteBackBatcher(server.writeBackBatcher)
+
+	// Wire iTunes-specific organizer callbacks now that itunesSvc is ready.
+	if server.itunesSvc.Enabled() {
+		server.organizeService.DiscoverITunesLibraryPath = func(_ database.Store) string {
+			return server.itunesSvc.Importer.DiscoverLibraryPath()
+		}
+		server.organizeService.ExecuteITunesSync = func(ctx context.Context, _ database.Store, log logger.Logger, libraryPath string) error {
+			return server.itunesSvc.Importer.Sync(ctx, libraryPath, nil, server.itunesActivityFn, log)
+		}
+	}
 
 	// ImportService uses the iTunes service's TrackProvisioner (moved
 	// during Phase 2 M1 step 1). Nil provisioner → ITL track provisioning
@@ -1362,19 +1381,18 @@ func (s *Server) resumeInterruptedOperations() {
 				continue
 			}
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				// Rebuild the ITunesImportRequest from saved params
-				var mappings []itunes.PathMapping
+				var mappings []itunesservice.PathMapping
 				for from, to := range params.PathMappings {
-					mappings = append(mappings, itunes.PathMapping{From: from, To: to})
+					mappings = append(mappings, itunesservice.PathMapping{From: from, To: to})
 				}
-				return executeITunesImport(ctx, s.Store(), operations.LoggerFromReporter(progress), opID, ITunesImportRequest{
+				return s.itunesSvc.Importer.Execute(ctx, opID, itunesservice.ImportRequest{
 					LibraryPath:      params.LibraryXMLPath,
 					ImportMode:       params.ImportMode,
 					PathMappings:     mappings,
 					SkipDuplicates:   params.SkipDuplicates,
 					FetchMetadata:    params.EnrichMetadata,
 					PreserveLocation: !params.AutoOrganize,
-				})
+				}, operations.LoggerFromReporter(progress))
 			}
 		case "scan":
 			params, _ := operations.LoadParams[operations.ScanParams](store, opID)
@@ -2553,7 +2571,10 @@ func (s *Server) triggerITunesSync() {
 		return
 	}
 
-	libraryPath := discoverITunesLibraryPath(s.Store())
+	if !s.itunesSvc.Enabled() {
+		return
+	}
+	libraryPath := s.itunesSvc.Importer.DiscoverLibraryPath()
 	if libraryPath == "" {
 		return
 	}
@@ -2582,7 +2603,7 @@ func (s *Server) triggerITunesSync() {
 	}
 
 	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return executeITunesSync(ctx, s.Store(), operations.LoggerFromReporter(progress), libraryPath, scheduledMappings, s.itunesActivityFn)
+		return s.itunesSvc.Importer.Sync(ctx, libraryPath, scheduledMappings, s.itunesActivityFn, operations.LoggerFromReporter(progress))
 	}
 
 	if err := s.queue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {

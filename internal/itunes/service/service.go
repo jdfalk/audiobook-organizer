@@ -1,5 +1,5 @@
 // file: internal/itunes/service/service.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 81ccaec6-42b0-4828-83c8-7a96680112d9
 
 package itunesservice
@@ -10,6 +10,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 )
@@ -17,29 +18,24 @@ import (
 // Deps is the explicit dependency set for Service. No globals, no Server,
 // no config.AppConfig — everything the service needs is passed in.
 type Deps struct {
-	Store      Store
-	OpQueue    operations.Queue
-	ActivityFn func(database.ActivityEntry)
-	Realtime   *realtime.EventHub // may be nil; means no SSE push
-	Config     Config
-	Logger     logger.Logger
+	Store            Store
+	OpQueue          operations.Queue
+	ActivityFn       func(database.ActivityEntry)
+	Realtime         *realtime.EventHub // may be nil; means no SSE push
+	Config           Config
+	Logger           logger.Logger
+	// OnBookCreated fires after CreateBook so the dedup engine can check
+	// new iTunes imports against the organized library. May be nil.
+	OnBookCreated    func(bookID string)
+	// Metafetch is a pre-constructed metafetch service used during
+	// metadata enrichment. May be nil (enrichment becomes a no-op).
+	Metafetch        *metafetch.Service
+	// OrganizerFactory builds a BookOrganizer on demand. Required when
+	// ImportMode is organize/organized. May be nil (organize phase skipped).
+	OrganizerFactory func() BookOrganizer
 }
 
-// Sub-component placeholder types. Real definitions land in Phase 2 M1
-// as each sub-component is moved out of internal/server/. Kept as empty
-// structs here so Service can declare typed fields without a forward
-// reference cycle. Each placeholder is deleted and replaced by a real
-// definition in its own file when the corresponding sub-component moves.
-//
-// Status after Phase 2 M1 step 3 (this PR):
-//   - TrackProvisioner: real (track_provisioner.go)
-//   - WriteBackBatcher: real (writeback_batcher.go)
-//   - PositionSync: real (position_sync.go)
-//   - All others: placeholder
-type (
-	// Importer runs the iTunes import pipeline. Placeholder until moved.
-	Importer struct{}
-)
+// All sub-components are now real (M1 steps 1–7 complete).
 
 // Service owns the iTunes integration. Prefer a single *Service on the
 // Server struct — it composes the seven sub-components below with shared
@@ -100,6 +96,9 @@ func New(deps Deps) (*Service, error) {
 	// M1 step 6: TransferService. ITL download/upload/backup/restore
 	// handlers. No deps — keyed off config.AppConfig.
 	svc.Transfer = newTransferService()
+
+	// M1 step 7: Importer. Owns the full import + sync pipeline.
+	svc.Importer = newImporter(deps)
 
 	return svc, nil
 }
