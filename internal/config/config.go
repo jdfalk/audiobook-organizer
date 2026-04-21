@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.35.0
+// version: 1.36.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -226,8 +226,9 @@ type Config struct {
 	ITunesAutoWriteBack    bool            `json:"itunes_auto_write_back"`    // Auto write-back on every edit (batched)
 
 	// Deluge integration
-	DelugeWebURL      string `json:"deluge_web_url"`      // e.g. "http://172.16.2.30:8112"
-	DelugeWebPassword string `json:"deluge_web_password"` // Web UI password (default: "deluge")
+	DelugeWebURL         string `json:"deluge_web_url"`          // e.g. "http://172.16.2.30:8112"
+	DelugeWebPassword    string `json:"deluge_web_password"`     // Web UI password (default: "deluge")
+	DelugeDiscoveryLabel string `json:"deluge_discovery_label"`  // label to filter for discovery (e.g. "audiobooks")
 
 	// Auto-update
 	AutoUpdateEnabled      bool   `json:"auto_update_enabled"`
