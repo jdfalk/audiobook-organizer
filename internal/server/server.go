@@ -1618,6 +1618,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 		s.backfillExternalIDs()
 	}()
 
+	// Strip shwm/©mvi/©mvn atoms from audiobook files (one-time). These
+	// classical-music atoms crash Apple Devices for Windows at sync.
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		s.stripMovementAtoms()
+	}()
+
 	// Open the library search index (Bleve, spec DES-1). Opened here
 	// rather than in NewServer so tests that skip Start don't leak
 	// Bleve handles. Failures are non-fatal — server runs without

@@ -1,0 +1,99 @@
+// file: internal/server/movement_atom_cleanup.go
+// version: 1.0.0
+// guid: c2d3e4f5-a6b7-8c9d-0e1f-2a3b4c5d6e7f
+
+package server
+
+import (
+	"io/fs"
+	"log"
+	"path/filepath"
+	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	taglib "go.senan.xyz/taglib"
+)
+
+const movementAtomCleanupKey = "movement_atom_cleanup_v1_done"
+
+// movementAtoms are the three classical-music atoms the organizer incorrectly
+// wrote to audiobook files (stik=2). Their presence causes Apple Devices for
+// Windows to crash at "Determining Tracks to Sync".
+var movementAtoms = []string{"SHOWWORKMOVEMENT", "MOVEMENTNUMBER", "MOVEMENTNAME"}
+
+// stripMovementAtoms walks the library root once, removes the three movement
+// atoms from every M4B/M4A file that has them, then marks itself done via a
+// settings flag so it never runs again.
+func (s *Server) stripMovementAtoms() {
+	store := s.Store()
+	if store == nil {
+		return
+	}
+
+	if setting, err := store.GetSetting(movementAtomCleanupKey); err == nil && setting != nil && setting.Value == "true" {
+		log.Printf("[INFO] Movement atom cleanup already completed, skipping")
+		return
+	}
+
+	root := config.AppConfig.RootDir
+	if root == "" {
+		log.Printf("[WARN] stripMovementAtoms: RootDir not configured, skipping")
+		return
+	}
+
+	log.Printf("[INFO] Starting movement atom cleanup under %s …", root)
+	stripped, clean, failed := 0, 0, 0
+
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext != ".m4b" && ext != ".m4a" {
+			return nil
+		}
+
+		changed, err := removeMovementAtomsFromFile(path)
+		switch {
+		case err != nil:
+			log.Printf("[WARN] movement atom cleanup: %s: %v", path, err)
+			failed++
+		case changed:
+			stripped++
+		default:
+			clean++
+		}
+		return nil
+	})
+
+	log.Printf("[INFO] Movement atom cleanup: %d stripped, %d already clean, %d errors", stripped, clean, failed)
+	_ = store.SetSetting(movementAtomCleanupKey, "true", "bool", false)
+}
+
+// removeMovementAtomsFromFile reads the file's tags, removes the three
+// movement atoms if present, and writes back with taglib.Clear (which
+// replaces the full tag set, preserving all other tags and cover art).
+// Returns (true, nil) if the file was modified, (false, nil) if it was
+// already clean, or (false, err) on failure.
+func removeMovementAtomsFromFile(path string) (bool, error) {
+	tags, err := taglib.ReadTags(path)
+	if err != nil {
+		return false, err
+	}
+
+	found := false
+	for _, key := range movementAtoms {
+		if _, ok := tags[key]; ok {
+			delete(tags, key)
+			found = true
+		}
+	}
+	if !found {
+		return false, nil
+	}
+
+	if err := taglib.WriteTags(path, tags, taglib.Clear); err != nil {
+		return false, err
+	}
+	return true, nil
+}
