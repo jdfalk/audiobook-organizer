@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_be.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a3f7c821-5b4e-4d92-8f01-e6a2b9c3d47f
 
 package itunes
@@ -463,8 +463,10 @@ func rewriteHdsmContentBE(hdsm []byte, updateMap map[string]string, currentPID *
 
 		switch tag {
 		case "htim":
-			if subOffset+108 <= len(hdsm) {
-				pid := pidToHex([8]byte(hdsm[subOffset+100 : subOffset+108]))
+			// PID lives at offset 128–135 within htim (matches primary rewriteChunksBE).
+			// Previous code read offset 100–107 (copy-paste error from an older layout).
+			if subOffset+136 <= len(hdsm) {
+				pid := pidToHex([8]byte(hdsm[subOffset+128 : subOffset+136]))
 				*currentPID = strings.ToLower(pid)
 			}
 			out.Write(hdsm[subOffset : subOffset+chunkLen])

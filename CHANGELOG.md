@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.9.0 -->
+<!-- version: 2.10.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-18 -->
 
@@ -8,6 +8,20 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 20, 2026 — iTunes Service Test Suite (4.13)
+
+- **8 new test files**, **~100 new tests** across `internal/itunes/service/`:
+  - `track_provisioner_mock_test.go` — pure functions (`linuxToWindowsPath`, `kindFromExt`) + mock-store tests for `Provision`, `ProvisionAll`, `bookAuthor` (14 tests)
+  - `transfer_handler_test.go` — HTTP handler coverage for `HandleDownload`, `HandleUpload`, `HandleBackupList`, `HandleRestore` using `httptest` + `config.AppConfig` injection (14 tests)
+  - `validate_mock_test.go` — `Validate` (ErrLibraryNotFound + real XML fixture) + `TestMapping` (4 tests)
+  - `importer_helpers_test.go` — `calculatePercent`, `min`, `commonParentDir`, `incImportLinked` (8 tests)
+  - `importer_mock_test.go` — `GetStatus`, `GetStatusBulk`, `CollectITLUpdatesWithBookIDs`, `DiscoverLibraryPath`, `remapWindowsPath`, `toITunesPathMappings` (13 tests)
+  - `importer_execute_test.go` — `RecordITLReadTime`, `CheckITLConflict`, `newImporter`, `Execute` empty-library + parse-failure, `Sync` empty-library + parse-failure, `CollectITLUpdates` (11 tests)
+  - `path_reconcile_test.go` — `newPathReconciler`, `Start` (nil store/queue/DB error/happy path), `Reconcile` (nil store/empty/skip/error) (9 tests)
+  - `writeback_batcher_mock_test.go` — batcher lifecycle, enqueue, flush, auto-writeback (12 tests)
+- **ITL BE htim offset bug fixed** (`itl_be.go` v1.1.0): copy-paste error read PID at offset 100-107 instead of correct 128-135; regression test added.
+- **Coverage: 29.2% → 50.0%** on `internal/itunes/service/` package.
 
 #### April 18-20, 2026 — iTunes Service Extraction complete (4.12) — PR 1-3
 
