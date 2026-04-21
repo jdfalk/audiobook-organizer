@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_regression_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c2d3e4f5-a6b7-c8d9-e0f1-itl-regress01
 
 package itunes
@@ -387,4 +387,109 @@ func TestITLEncryptDecrypt_MultipleVersions(t *testing.T) {
 				"encrypt/decrypt must round-trip for version %s", v)
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Regression: htim PID offset in rewriteHdsmContentBE
+//
+// Bug: an earlier version of rewriteHdsmContentBE read the persistent ID from
+// bytes 100–107 of the htim sub-chunk (a copy-paste error).  The correct
+// offsets are 128–135, matching both the ITL spec and the primary
+// rewriteChunksBE function.  This test builds a minimal hdsm buffer with a
+// known PID at offset 128, verifies currentPID is set correctly, and confirms
+// a hohm 0x0D sub-chunk whose currentPID matches the updateMap gets rewritten.
+// ---------------------------------------------------------------------------
+
+func TestRewriteHdsmContentBE_HTim_CorrectPIDOffset(t *testing.T) {
+	// PID bytes placed at htim sub-chunk offset 128.
+	// pidToHex converts [8]byte to lowercase hex string (big-endian identity).
+	pidBytes := [8]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+	expectedPIDHex := pidToHex(pidBytes) // "0102030405060708"
+
+	// Build htim sub-chunk: length = 144 bytes (≥136 so PID read succeeds).
+	// Layout matches parseHtimBE: tag(4) + length(4) + ... PID at offset 128.
+	const htimLen = 144
+	htimChunk := make([]byte, htimLen)
+	copy(htimChunk[0:4], "htim")
+	writeUint32BE(htimChunk, 4, uint32(htimLen))
+	writeUint32BE(htimChunk, 8, uint32(htimLen)) // recordLength
+	// Place PID at offset 128 (the correct location).
+	copy(htimChunk[128:136], pidBytes[:])
+	// Deliberately leave bytes 100–107 as zero — if the old buggy code ran,
+	// it would read "0000000000000000" instead of the correct PID.
+
+	// Build a hohm 0x0D sub-chunk whose location will be updated.
+	oldLocation := "/old/audiobook.m4b"
+	newLocation := "/new/audiobook.m4b"
+	encodedOld, encFlag := encodeHohmString(oldLocation)
+	const hohmHeaderSize = 40
+	hohmLen := hohmHeaderSize + len(encodedOld)
+	hohmChunk := make([]byte, hohmLen)
+	copy(hohmChunk[0:4], "hohm")
+	writeUint32BE(hohmChunk, 4, uint32(hohmLen))
+	writeUint32BE(hohmChunk, 8, uint32(hohmLen))
+	writeUint32BE(hohmChunk, 12, 0x0D) // hohmType = file location
+	hohmChunk[16+11] = encFlag
+	writeUint32BE(hohmChunk, 28, uint32(len(encodedOld)))
+	copy(hohmChunk[40:], encodedOld)
+
+	// Assemble hdsm buffer: 12-byte header + htim + hohm.
+	totalLen := 12 + htimLen + hohmLen
+	hdsm := make([]byte, totalLen)
+	copy(hdsm[0:4], "hdsm")
+	writeUint32BE(hdsm, 4, uint32(totalLen)) // basicLen = full buffer
+	writeUint32BE(hdsm, 8, 0)                // extLen = 0
+	copy(hdsm[12:12+htimLen], htimChunk)
+	copy(hdsm[12+htimLen:], hohmChunk)
+
+	// Build updateMap: the expected PID hex → new location.
+	updateMap := map[string]string{
+		expectedPIDHex: newLocation,
+	}
+
+	var currentPID string
+	result, updatedCount := rewriteHdsmContentBE(hdsm, updateMap, &currentPID)
+
+	// 1. currentPID must be the correct hex (from offset 128–135, not 100–107).
+	assert.Equal(t, expectedPIDHex, currentPID,
+		"currentPID should reflect PID bytes at htim offset 128–135, not 100–107")
+
+	// 2. The hohm should have been rewritten (updateMap matched the correct PID).
+	assert.Equal(t, 1, updatedCount,
+		"the hohm 0x0D chunk should be updated when the correct PID is found")
+
+	// 3. The result buffer must be well-formed (≥12 bytes hdsm header).
+	require.GreaterOrEqual(t, len(result), 12, "result must contain at least the hdsm header")
+
+	// 4. Verify the new location appears in the result by parsing sub-chunks.
+	// Walk sub-chunks in result[12:] looking for the updated hohm.
+	foundNewLocation := false
+	subOffset := 12
+	for subOffset+8 <= len(result) {
+		tag := readTag(result, subOffset)
+		if tag == "" {
+			break
+		}
+		chunkLen := int(readUint32BE(result, subOffset+4))
+		if chunkLen < 8 || subOffset+chunkLen > len(result) {
+			break
+		}
+		if tag == "hohm" {
+			hohmType := int(readUint32BE(result, subOffset+12))
+			if hohmType == 0x0D && subOffset+40 <= len(result) {
+				strLen := int(readUint32BE(result, subOffset+28))
+				strStart := subOffset + 40
+				if strStart+strLen <= len(result) {
+					encFlag2 := result[subOffset+16+11]
+					s, err := decodeHohmString(result[strStart:strStart+strLen], encFlag2)
+					if err == nil && s == newLocation {
+						foundNewLocation = true
+					}
+				}
+			}
+		}
+		subOffset += chunkLen
+	}
+	assert.True(t, foundNewLocation,
+		"new location %q should appear in a hohm 0x0D sub-chunk of the rewritten hdsm", newLocation)
 }
