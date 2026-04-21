@@ -1,5 +1,5 @@
 // file: internal/server/malformed_m4b_remux.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d3e4f5a6-b7c8-9d0e-1f2a-3b4c5d6e7f8a
 
 package server
@@ -17,7 +17,7 @@ import (
 	taglib "go.senan.xyz/taglib"
 )
 
-const malformedRemuxKey = "malformed_m4b_remux_v1_done"
+const malformedRemuxKey = "malformed_m4b_remux_v2_done"
 
 // remuxMalformedM4BFiles walks the library once and re-muxes any M4B/M4A
 // file that taglib cannot parse (malformed atom structure). Re-muxing with
@@ -104,6 +104,7 @@ func remuxFile(path string) error {
 		"-c", "copy",
 		"-map_metadata", "0",
 		"-map_chapters", "0",
+		"-f", "mp4",
 		tmp,
 	)
 	if out, err := cmd.CombinedOutput(); err != nil {
