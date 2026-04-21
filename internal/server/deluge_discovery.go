@@ -1,5 +1,5 @@
 // file: internal/server/deluge_discovery.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e6f7a8b9-c0d1-2e3f-4a5b-6c7d8e9f0a1b
 //
 // Deluge label-based audiobook discovery.
@@ -14,6 +14,7 @@ package server
 import (
 	"log"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -23,13 +24,14 @@ import (
 
 // DiscoveredTorrent is a Deluge torrent not yet tracked in the library.
 type DiscoveredTorrent struct {
-	Hash      string  `json:"hash"`
-	Name      string  `json:"name"`
-	SavePath  string  `json:"save_path"`
-	Label     string  `json:"label"`
-	State     string  `json:"state"`
-	Progress  float64 `json:"progress"`
-	TotalSize int64   `json:"total_size"`
+	Hash        string  `json:"hash"`
+	Name        string  `json:"name"`
+	SavePath    string  `json:"save_path"`
+	ContentPath string  `json:"content_path"` // filepath.Join(save_path, name) — import this
+	Label       string  `json:"label"`
+	State       string  `json:"state"`
+	Progress    float64 `json:"progress"`
+	TotalSize   int64   `json:"total_size"`
 }
 
 // discoverUnimported fetches labeled torrents from Deluge and returns those
@@ -60,31 +62,43 @@ func (s *Server) discoverUnimported(client *delugeclient.Client, label string) (
 
 	var unimported []DiscoveredTorrent
 	for _, t := range torrents {
-		if !isTracked(t.SavePath, known) {
+		// Deluge saves multi-file torrents to {save_path}/{name}/.
+		// Single-file torrents land at {save_path}/{name} directly.
+		// Either way, filepath.Join(save_path, name) is the unique
+		// content root for this torrent — not save_path alone, which
+		// is a shared download directory.
+		contentPath := filepath.Join(t.SavePath, t.Name)
+		if !isTracked(contentPath, known) {
 			unimported = append(unimported, DiscoveredTorrent{
-				Hash:      t.Hash,
-				Name:      t.Name,
-				SavePath:  t.SavePath,
-				Label:     t.Label,
-				State:     t.State,
-				Progress:  t.Progress,
-				TotalSize: t.TotalSize,
+				Hash:        t.Hash,
+				Name:        t.Name,
+				SavePath:    t.SavePath,
+				ContentPath: contentPath,
+				Label:       t.Label,
+				State:       t.State,
+				Progress:    t.Progress,
+				TotalSize:   t.TotalSize,
 			})
 		}
 	}
 	return unimported, nil
 }
 
-// isTracked returns true if any known file path has savePath as a prefix,
-// meaning the torrent's directory is already represented in the library.
-func isTracked(savePath string, known map[string]struct{}) bool {
-	if savePath == "" {
+// isTracked returns true if contentPath is a prefix of any known file path,
+// meaning the torrent's content directory is already represented in the library.
+//
+// Callers MUST pass filepath.Join(save_path, torrent_name) — NOT save_path
+// alone. A shared download directory (e.g. /mnt/downloads) is itself a prefix
+// of every file in it, so passing raw save_path would make every torrent appear
+// tracked once any file from that directory is imported.
+func isTracked(contentPath string, known map[string]struct{}) bool {
+	if contentPath == "" {
 		return false
 	}
 	// Normalize trailing slash so prefix check is consistent.
-	prefix := strings.TrimRight(savePath, "/") + "/"
+	prefix := strings.TrimRight(contentPath, "/") + "/"
 	for p := range known {
-		if strings.HasPrefix(p, prefix) || p == savePath {
+		if strings.HasPrefix(p, prefix) || p == contentPath {
 			return true
 		}
 	}
@@ -135,12 +149,12 @@ func (s *Server) handleDelugeListLabels(c *gin.Context) {
 }
 
 // handleDelugeDiscoverImport triggers an import of a discovered torrent's
-// save_path into the library. Reuses the existing ImportFile pipeline.
+// content_path into the library. Reuses the existing ImportFile pipeline.
 // POST /api/v1/deluge/discover/import
-// Body: { "save_path": "/mnt/..." , "torrent_hash": "abc123" }
+// Body: { "content_path": "/mnt/downloads/Dune by Frank Herbert", "torrent_hash": "abc123" }
 func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 	var req struct {
-		SavePath    string `json:"save_path" binding:"required"`
+		ContentPath string `json:"content_path" binding:"required"`
 		TorrentHash string `json:"torrent_hash"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -153,7 +167,7 @@ func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 	}
 
 	resp, err := s.importService.ImportFile(&ImportFileRequest{
-		FilePath: req.SavePath,
+		FilePath: req.ContentPath,
 		Organize: false,
 	})
 	if err != nil {
