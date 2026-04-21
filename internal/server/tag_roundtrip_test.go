@@ -26,8 +26,8 @@ func TestBuildFullTagMap_AllFields(t *testing.T) {
 	book := &database.Book{
 		ID:             "BOOK123",
 		Title:          "Return of the Archon",
-		SeriesID:       intPtr(42),
-		SeriesSequence: intPtr(5),
+		SeriesID:       intPtrHelper(42),
+		SeriesSequence: intPtrHelper(5),
 		Language:       stringPtr("english"),
 		Publisher:      stringPtr("Audible Studios"),
 		Description:    stringPtr("A great book"),
@@ -38,7 +38,7 @@ func TestBuildFullTagMap_AllFields(t *testing.T) {
 		HardcoverID:    stringPtr("HC789"),
 		GoogleBooksID:  stringPtr("GB456"),
 		Edition:        stringPtr("First"),
-		PrintYear:      intPtr(2015),
+		PrintYear:      intPtrHelper(2015),
 		CoverURL:       stringPtr("https://example.com/cover.jpg"),
 	}
 

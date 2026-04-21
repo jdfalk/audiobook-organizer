@@ -1533,17 +1533,17 @@ func TestServerHelpers_IntVal(t *testing.T) {
 		},
 		{
 			name:     "non-nil pointer returns value",
-			input:    intPtr(42),
+			input:    intPtrHelper(42),
 			expected: 42,
 		},
 		{
 			name:     "zero value pointer returns zero",
-			input:    intPtr(0),
+			input:    intPtrHelper(0),
 			expected: 0,
 		},
 		{
 			name:     "negative value pointer returns negative",
-			input:    intPtr(-10),
+			input:    intPtrHelper(-10),
 			expected: -10,
 		},
 	}
