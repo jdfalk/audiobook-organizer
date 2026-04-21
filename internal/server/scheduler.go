@@ -313,6 +313,23 @@ func (ts *TaskScheduler) registerAllTasks() {
 	})
 
 	ts.registerTask(TaskDefinition{
+		Name:        "temp_file_cleanup",
+		Description: "Remove orphaned *.tmp.m4b / *.tmp.m4a files left by crashed ffmpeg operations",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperation("temp-file-cleanup", func(_ context.Context, progress operations.ProgressReporter) error {
+				removed := cleanupOrphanedTempFiles(config.AppConfig.RootDir)
+				_ = progress.Log("info", fmt.Sprintf("Temp file cleanup: removed %d orphaned temp files", removed), nil)
+				return nil
+			})
+		},
+		IsEnabled:              func() bool { return true },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return true },
+		RunInMaintenanceWindow: func() bool { return true },
+	})
+
+	ts.registerTask(TaskDefinition{
 		Name:        "trash_cleanup",
 		Description: "Purge trashed book versions past their 14-day TTL",
 		Category:    "maintenance",
