@@ -1,5 +1,5 @@
 // file: internal/deluge/client.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9a7b8c6d-0e1f-4a70-b8c5-3d7e0f1b9a99
 //
 // Deluge Web JSON-RPC client (backlog 6.1).
@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/cookiejar"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -38,11 +39,14 @@ type Client struct {
 
 // TorrentStatus holds the fields we care about from Deluge.
 type TorrentStatus struct {
-	Hash     string `json:"hash"`
-	Name     string `json:"name"`
-	SavePath string `json:"save_path"`
-	State    string `json:"state"`
+	Hash     string  `json:"hash"`
+	Name     string  `json:"name"`
+	SavePath string  `json:"save_path"`
+	State    string  `json:"state"`
 	Progress float64 `json:"progress"`
+	Label    string  `json:"label"`
+	// TotalSize is populated when requested via GetTorrent.
+	TotalSize int64 `json:"total_size"`
 }
 
 type rpcRequest struct {
@@ -130,13 +134,17 @@ func (c *Client) Login() error {
 	return nil
 }
 
-// ListTorrents returns all torrents with the requested fields.
+// torrentFields is the standard field set requested from Deluge.
+// label comes from the Label plugin; Deluge returns "" if it isn't installed
+// or if the torrent has no label — both are safe to ignore.
+var torrentFields = []string{"hash", "name", "save_path", "state", "progress", "label", "total_size"}
+
+// ListTorrents returns all torrents with the standard field set.
 func (c *Client) ListTorrents() (map[string]TorrentStatus, error) {
 	if err := c.Login(); err != nil {
 		return nil, err
 	}
-	fields := []string{"hash", "name", "save_path", "state", "progress"}
-	result, err := c.call("core.get_torrents_status", map[string]interface{}{}, fields)
+	result, err := c.call("core.get_torrents_status", map[string]interface{}{}, torrentFields)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +153,41 @@ func (c *Client) ListTorrents() (map[string]TorrentStatus, error) {
 		return nil, fmt.Errorf("decode torrents: %w", err)
 	}
 	return torrents, nil
+}
+
+// ListTorrentsByLabel returns torrents whose label matches the given string
+// (case-insensitive). An empty label returns all torrents.
+func (c *Client) ListTorrentsByLabel(label string) ([]TorrentStatus, error) {
+	all, err := c.ListTorrents()
+	if err != nil {
+		return nil, err
+	}
+	label = strings.ToLower(strings.TrimSpace(label))
+	out := make([]TorrentStatus, 0, len(all))
+	for _, t := range all {
+		if label == "" || strings.ToLower(t.Label) == label {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+// ListLabels returns all labels defined in Deluge's Label plugin.
+// Returns an empty slice (not an error) if the Label plugin is not installed.
+func (c *Client) ListLabels() ([]string, error) {
+	if err := c.Login(); err != nil {
+		return nil, err
+	}
+	result, err := c.call("label.get_labels")
+	if err != nil {
+		// Label plugin may not be installed — treat as empty list.
+		return []string{}, nil
+	}
+	var labels []string
+	if err := json.Unmarshal(result, &labels); err != nil {
+		return []string{}, nil
+	}
+	return labels, nil
 }
 
 // GetTorrent returns status for a single torrent by hash.

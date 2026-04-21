@@ -1,5 +1,5 @@
 // file: internal/plugins/deluge/plugin.go
-// version: 1.0.0
+// version: 1.1.0
 
 package deluge
 
@@ -95,6 +95,22 @@ func (p *Plugin) MoveStorage(torrentHash, newPath string) error {
 		return fmt.Errorf("deluge: not initialized")
 	}
 	return p.client.MoveStorage([]string{torrentHash}, newPath)
+}
+
+// Discover returns torrents matching label. Empty label returns all torrents.
+func (p *Plugin) Discover(label string) ([]delugeclient.TorrentStatus, error) {
+	if p.client == nil {
+		return nil, fmt.Errorf("deluge: not initialized")
+	}
+	return p.client.ListTorrentsByLabel(label)
+}
+
+// ListLabels returns all labels defined in the Deluge Label plugin.
+func (p *Plugin) ListLabels() ([]string, error) {
+	if p.client == nil {
+		return nil, fmt.Errorf("deluge: not initialized")
+	}
+	return p.client.ListLabels()
 }
 
 // Ensure Plugin satisfies DownloadClient at compile time.
