@@ -1630,6 +1630,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 		s.stripMovementAtoms()
 	}()
 
+	// Re-mux M4B/M4A files with malformed atom structures so taglib,
+	// AtomicParsley, and Apple Devices can read them (one-time).
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		s.remuxMalformedM4BFiles()
+	}()
+
 	// Open the library search index (Bleve, spec DES-1). Opened here
 	// rather than in NewServer so tests that skip Start don't leak
 	// Bleve handles. Failures are non-fatal — server runs without
