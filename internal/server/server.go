@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.183.0
+// version: 1.184.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1145,6 +1145,10 @@ func NewServer(store database.Store) *Server {
 	// leak Bleve file handles.
 
 	server.setupRoutes()
+
+	// Initialize plugins after routes are set up so plugins can register
+	// their own sub-routes under /api/v1/plugins/{id}/.
+	server.initPlugins(bgCtx)
 
 	return server
 }
@@ -2442,6 +2446,17 @@ func (s *Server) setupRoutes() {
 			s.registerEntityTagRoutes(protected)
 			s.registerDelugeRoutes(protected)
 			s.setupBenchRoutes(protected)
+
+			// Plugin management API
+			plugins := protected.Group("/plugins")
+			{
+				plugins.GET("", s.perm(auth.PermSettingsManage), s.listPlugins)
+				plugins.GET("/:id", s.perm(auth.PermSettingsManage), s.getPlugin)
+				plugins.POST("/:id/enable", s.perm(auth.PermSettingsManage), s.enablePlugin)
+				plugins.POST("/:id/disable", s.perm(auth.PermSettingsManage), s.disablePlugin)
+				plugins.GET("/:id/health", s.perm(auth.PermSettingsManage), s.pluginHealth)
+				plugins.PUT("/:id/settings", s.perm(auth.PermSettingsManage), s.updatePluginSettings)
+			}
 		}
 	}
 

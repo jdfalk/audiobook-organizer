@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.37.0
+// version: 1.38.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -43,6 +43,7 @@ import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import BlockedHashesTab from '../components/settings/BlockedHashesTab';
 import DelugeSettingsTab from '../components/settings/DelugeSettingsTab';
+import PluginsTab from '../components/settings/PluginsTab';
 import { ITunesImport } from '../components/settings/ITunesImport';
 import { ITunesTransfer } from '../components/settings/ITunesTransfer';
 import { OpenLibraryDumps } from '../components/settings/OpenLibraryDumps';
@@ -103,7 +104,7 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-const TAB_KEYS = ['library', 'itunes', 'metadata', 'performance', 'security', 'system'] as const;
+const TAB_KEYS = ['library', 'itunes', 'metadata', 'performance', 'security', 'plugins', 'system'] as const;
 
 function tabFromHash(hash: string): number {
   const key = hash.replace('#', '');
@@ -1727,7 +1728,7 @@ export function Settings() {
             <Tab label="Metadata" />
             <Tab label="Performance" />
             <Tab label="Security" />
-            <Tab label="Deluge" />
+            <Tab label="Plugins" />
             <Tab label="System Info" />
           </Tabs>
         </Box>
@@ -3168,10 +3169,14 @@ export function Settings() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={5}>
-          <DelugeSettingsTab />
+          <PluginsTab />
         </TabPanel>
 
         <TabPanel value={tabValue} index={6}>
+          <DelugeSettingsTab />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={7}>
           <SystemInfoTab />
 
           <UpdatesSection settings={settings} setSettings={setSettings} />

@@ -1,5 +1,5 @@
 // file: internal/plugin/registry.go
-// version: 1.0.0
+// version: 1.2.0
 
 package plugin
 
@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log"
 	"sync"
+
+	"github.com/gin-gonic/gin"
 )
 
 // registry is the global plugin registry.
@@ -100,8 +102,16 @@ func (r *Registry) ByCapability(cap Capability) []Plugin {
 	return out
 }
 
-// InitAll initializes all enabled plugins in registration order.
+// InitAll initializes all enabled plugins using shared deps. Plugins receive
+// baseDeps.Config as-is; use InitAllScoped for per-plugin config and routers.
 func (r *Registry) InitAll(ctx context.Context, baseDeps Deps) error {
+	return r.InitAllScoped(ctx, baseDeps, nil, nil)
+}
+
+// InitAllScoped initializes all enabled plugins, threading per-plugin config
+// from pluginConfigs and creating a scoped PluginRouter under parentGroup for
+// each plugin. Either parameter may be nil (falls back to shared deps).
+func (r *Registry) InitAllScoped(ctx context.Context, baseDeps Deps, parentGroup *gin.RouterGroup, pluginConfigs map[string]map[string]string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -113,8 +123,14 @@ func (r *Registry) InitAll(ctx context.Context, baseDeps Deps) error {
 		}
 
 		deps := baseDeps
-		deps.Config = baseDeps.Config // each plugin gets its own config in real wiring
-		deps.Logger = baseDeps.Logger // scoped logger in real wiring
+		if pluginConfigs != nil {
+			if cfg, ok := pluginConfigs[id]; ok {
+				deps.Config = cfg
+			}
+		}
+		if parentGroup != nil {
+			deps.Router = NewPluginRouter(parentGroup, id)
+		}
 
 		if err := p.Init(ctx, deps); err != nil {
 			return fmt.Errorf("plugin %s init failed: %w", id, err)
