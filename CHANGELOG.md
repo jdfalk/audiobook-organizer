@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.10.0 -->
+<!-- version: 2.11.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-18 -->
 
@@ -8,6 +8,19 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 21, 2026 — Plugin System V2
+
+- **Production wiring fixed** (`internal/server/plugins_init.go`): blank imports of `internal/plugins/deluge` and `internal/plugins/webhook` now trigger their `init()` registration; `initPlugins()` called in `NewServer()` after `setupRoutes()` to thread per-plugin config and scoped routers.
+- **`InitAllScoped` added** (`internal/plugin/registry.go` v1.2.0): threads per-plugin `map[string]string` config and creates `NewPluginRouter` scoped under `/api/v1/plugins/{id}/` for each enabled plugin.
+- **Webhook plugin** (`internal/plugins/webhook/plugin.go`): new built-in plugin with `CapEventSubscriber`. Subscribes to configured EventBus event types and POSTs them as JSON to one or more URLs with HMAC-SHA256 signatures. 14 tests covering init validation, delivery, HMAC, multi-URL, shutdown.
+- **Plugin management REST API** (`internal/server/plugins_handlers.go`):
+  - `GET /api/v1/plugins` — list all registered plugins with status, capabilities, and health
+  - `GET /api/v1/plugins/:id` — single plugin detail
+  - `POST /api/v1/plugins/:id/enable` / `disable` — toggle plugin state (persisted to AppConfig)
+  - `GET /api/v1/plugins/:id/health` — per-plugin health check
+  - `PUT /api/v1/plugins/:id/settings` — update plugin key-value settings
+- **Frontend Plugins tab** (`web/src/components/settings/PluginsTab.tsx`): new Settings tab showing plugin table (name, capabilities, health chip, enable/disable button, expandable settings editor). Added as tab index 5 in `Settings.tsx` v1.38.0 with hash key `#plugins`.
 
 #### April 20, 2026 — iTunes Service Test Suite (4.13)
 
