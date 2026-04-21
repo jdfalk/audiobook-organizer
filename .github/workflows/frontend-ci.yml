@@ -48,7 +48,7 @@ jobs:
     name: Frontend Build and Test
     needs: frontend-config
     if: needs.frontend-config.outputs.has-frontend == 'true'
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@f9633c80eb70bbcfb8020bd8e20a6bdcea7eefb3 # latest
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@9796749d08eccc90b20b23ab3a97af28a73a14a0 # latest
     with:
       go-version: '1.26'
       go-experiment: 'jsonv2'
