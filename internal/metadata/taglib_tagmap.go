@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_tagmap.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 //
 // Shared tag map builder used by both WASM and CGO taglib writers.
@@ -53,7 +53,6 @@ func buildWriteTagMap(metadata map[string]interface{}) map[string][]string {
 	}
 	if series, ok := metadata["series"].(string); ok && series != "" {
 		tags["SERIES"] = []string{series}
-		tags["MOVEMENTNAME"] = []string{series}
 		tags["GROUPING"] = []string{series}
 		if _, hasAlbum := metadata["album"]; !hasAlbum {
 			tags["ALBUM"] = []string{""}
@@ -61,10 +60,6 @@ func buildWriteTagMap(metadata map[string]interface{}) map[string][]string {
 	}
 	if si, ok := metadata["series_index"].(int); ok && si > 0 {
 		tags["SERIES_INDEX"] = []string{fmt.Sprintf("%d", si)}
-		tags["MOVEMENTNUMBER"] = []string{fmt.Sprintf("%d", si)}
-	}
-	if _, hasSeries := metadata["series"]; hasSeries {
-		tags["SHOWWORKMOVEMENT"] = []string{"1"}
 	}
 
 	// Custom AUDIOBOOK_ORGANIZER_* tags
