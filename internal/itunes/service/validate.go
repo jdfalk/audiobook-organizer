@@ -1,10 +1,11 @@
 // file: internal/itunes/service/validate.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9e3a7f2b-5d1c-4b8e-a6f0-3c8d5e7b9a1f
 
 package itunesservice
 
 import (
+	"errors"
 	"fmt"
 	stdlog "log"
 	"os"
@@ -13,11 +14,15 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
 
+// ErrLibraryNotFound is returned by Validate when the library file does not exist.
+// Callers can check with errors.Is to send a 400 rather than 500.
+var ErrLibraryNotFound = errors.New("iTunes library file not found")
+
 // Validate opens the iTunes library XML at req.LibraryPath, runs the
 // validator, and returns a summary. Stateless — no Service needed.
 func Validate(req ValidateRequest) (ValidateResponse, error) {
 	if _, err := os.Stat(req.LibraryPath); os.IsNotExist(err) {
-		return ValidateResponse{}, fmt.Errorf("iTunes library file not found")
+		return ValidateResponse{}, ErrLibraryNotFound
 	}
 
 	stdlog.Printf("iTunes validate: library=%s, mappings=%d", req.LibraryPath, len(req.PathMappings))

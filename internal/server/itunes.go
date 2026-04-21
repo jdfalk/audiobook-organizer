@@ -12,6 +12,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	stdlog "log"
 	"net/http"
@@ -170,7 +171,11 @@ func (s *Server) handleITunesValidate(c *gin.Context) {
 		PathMappings: svcMappings,
 	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if errors.Is(err, itunesservice.ErrLibraryNotFound) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			internalError(c, "validation failed", err)
+		}
 		return
 	}
 
