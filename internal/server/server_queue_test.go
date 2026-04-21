@@ -14,12 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestCancelOperationWithQueueMock is disabled because it constructs a bare
-// &Server{} and calls setupRoutes(), which panics on s.itunesSvc.Paths.Start
-// when itunesSvc is nil (wired since M1 step 5). Re-enable once setupRoutes
-// is refactored to guard nil sub-services or the test uses NewServer().
-// TODO: fix and re-enable alongside PR 3 / itunesSvc nil-guard cleanup.
-func DisabledTestCancelOperationWithQueueMock(t *testing.T) {
+// TestCancelOperationWithQueueMock verifies the DELETE /operations/:id handler
+// uses the queue's Cancel method, falling back to DB update when the queue
+// returns an error or is nil.
+func TestCancelOperationWithQueueMock(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
@@ -110,9 +108,9 @@ func DisabledTestCancelOperationWithQueueMock(t *testing.T) {
 	}
 }
 
-// TestGetOperationsWithQueueMock is disabled for the same reason as
-// DisabledTestCancelOperationWithQueueMock: bare &Server{} + setupRoutes() panics.
-func DisabledTestGetOperationsWithQueueMock(t *testing.T) {
+// TestGetOperationsWithQueueMock verifies GET /operations/active returns the
+// active operation list from the queue, returning an empty array when nil.
+func TestGetOperationsWithQueueMock(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {

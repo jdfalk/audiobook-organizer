@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.8.0 -->
+<!-- version: 2.9.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-18 -->
 
@@ -8,6 +8,13 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 18-20, 2026 — iTunes Service Extraction complete (4.12) — PR 1-3
+
+- **PR 1 (foundation):** New `internal/itunes/service/` package with `Service`, `Config`, `Deps`, `Store` narrow interface, `ErrITunesDisabled` sentinel. `NewServer` wires `s.itunesSvc`; `Start`/`Shutdown` plumbed into lifecycle.
+- **PR 2 (per-component move, 7 commits):** TrackProvisioner → WriteBackBatcher → PositionSync → PlaylistSync → PathReconciler → TransferService → Importer all migrated into `itunesservice`. `internal/server/itunes*.go` reduced to thin HTTP shims.
+- **PR 3 (consolidate + delete):** Remaining shims consolidated into `itunes_handlers.go`; old `itunes.go` deleted. `itunesSvcGuard` helper + `itunesEnabledOrError` method added — all iTunes routes return 503 (not panic) when service is nil or disabled. Queue tests re-enabled (`TestCancelOperationWithQueueMock`, `TestGetOperationsWithQueueMock`). Disabled-mode smoke test (`TestITunesDisabled_ReturnsServiceUnavailable`) added.
+- **Net effect:** 4.12 complete. `internal/itunes/service/` ≈ 5,000 LOC; `internal/server/` iTunes surface ≈ 800 LOC (pure handlers).
 
 #### April 17-19, 2026 — Architecture + Test Coverage Push (4.9, 4.10, 4.11)
 

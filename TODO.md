@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.9.0 -->
+<!-- version: 5.10.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-18 -->
 
@@ -98,7 +98,7 @@ since it was last edited on 2026-04-11).
 - [x] **4.9** Eliminate remaining package globals (DI Phase 2) (**M**) — 10 globals replaced with interface injection + Server fields (#386)
 - [x] **4.10** Service-layer unit tests with mock stores (**L**) — ~300 new tests across merge, dedup, metafetch, activity, versions, AudiobookService, BatchService, ScanService, config (96.7%), scanner (81.7%); overall coverage ~48%
 - [x] **4.11** Split `internal/server` into sub-packages (**XL**) — 7 extractions: activity, merge, versions, dedup, diagnostics, metafetch + organizer expansion; ~17K LOC extracted (#398)
-- [ ] **4.12** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
+- [x] **4.12** Extract iTunes integration into `internal/itunes` (**L**) — complete (3 PRs, Apr 18-20 2026). `internal/itunes/service/` ≈ 5K LOC; server iTunes surface ≈ 800 LOC pure handlers with disabled-mode guard.
 - [ ] **4.13** Comprehensive iTunes test suite (**L**) — after 4.12 extraction, add exhaustive unit tests: mock store tests for every service method, error path coverage, edge cases (empty library, corrupt XML, concurrent sync), position sync, writeback batcher, path reconciliation, track provisioning; target 80%+ coverage on the extracted package
 - [~] **4.14** Plugin system framework (**XL**) — V1: Plugin/EventBus/Registry/Router framework + Deluge migration; V2 (future): RPC subprocess plugins + webhook event delivery
 

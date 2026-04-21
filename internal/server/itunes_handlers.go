@@ -1,12 +1,10 @@
-// file: internal/server/itunes.go
-// version: 3.0.0
-// guid: 719912e9-7b5f-48e1-afa6-1b0b7f57c2fa
+// file: internal/server/itunes_handlers.go
+// version: 1.0.0
+// guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
 
-// Package server — iTunes HTTP handlers.
-// All business logic now lives in internal/itunes/service. This file
-// contains only HTTP handler methods that parse requests, delegate to
-// s.itunesSvc, and write responses. PR 3 will consolidate these into
-// itunes_handlers.go and delete this file.
+// iTunes HTTP handlers. All business logic lives in internal/itunes/service.
+// Handlers that call s.itunesSvc.Importer.* guard with itunesEnabledOrError
+// so they return 503 when iTunes is disabled rather than panicking.
 
 package server
 
@@ -28,7 +26,17 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// --- request / response types (moved to itunesservice in PR 3) ---
+// itunesEnabledOrError writes a 503 and returns false when the iTunes service
+// is nil or disabled. Callers should return immediately on false.
+func (s *Server) itunesEnabledOrError(c *gin.Context) bool {
+	if s.itunesSvc == nil || !s.itunesSvc.Enabled() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": itunesservice.ErrITunesDisabled.Error()})
+		return false
+	}
+	return true
+}
+
+// --- request / response types ---
 
 // ITunesValidateRequest represents a validation request for an iTunes library.
 type ITunesValidateRequest struct {
@@ -223,6 +231,9 @@ func (s *Server) handleITunesTestMapping(c *gin.Context) {
 
 // handleITunesImport starts an asynchronous iTunes library import operation.
 func (s *Server) handleITunesImport(c *gin.Context) {
+	if !s.itunesEnabledOrError(c) {
+		return
+	}
 	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -358,6 +369,9 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 
 // handleITunesWriteBackAll writes ALL books with iTunes persistent IDs back to the ITL.
 func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
+	if !s.itunesEnabledOrError(c) {
+		return
+	}
 	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -595,6 +609,9 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 
 // handleITunesImportStatus returns the status of an iTunes import operation.
 func (s *Server) handleITunesImportStatus(c *gin.Context) {
+	if !s.itunesEnabledOrError(c) {
+		return
+	}
 	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -625,6 +642,9 @@ func (s *Server) handleITunesImportStatus(c *gin.Context) {
 }
 
 func (s *Server) handleITunesImportStatusBulk(c *gin.Context) {
+	if !s.itunesEnabledOrError(c) {
+		return
+	}
 	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -716,6 +736,9 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 
 // handleITunesSync triggers an incremental sync from iTunes Library.xml.
 func (s *Server) handleITunesSync(c *gin.Context) {
+	if !s.itunesEnabledOrError(c) {
+		return
+	}
 	if s.Store() == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
 		return
@@ -790,7 +813,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 	})
 }
 
-// --- small helpers used by handlers above ---
+// --- small helpers ---
 
 func calculatePercent(current, total int) int {
 	if total <= 0 {
@@ -805,4 +828,3 @@ func calculatePercent(current, total int) int {
 	}
 	return pct
 }
-

@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.182.0
+// version: 1.183.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1989,6 +1989,20 @@ func (s *Server) perm(p auth.Permission) gin.HandlerFunc {
 	return servermiddleware.RequirePermission(s.Store(), p)
 }
 
+// itunesSvcGuard returns a gin handler that checks s.itunesSvc is non-nil
+// and enabled before delegating to fn. Any route that directly dereferences
+// a sub-component (Paths.Start, Transfer.*) must be wrapped here so that
+// setupRoutes doesn't panic when itunesSvc is nil or disabled.
+func (s *Server) itunesSvcGuard(fn gin.HandlerFunc) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if s.itunesSvc == nil || !s.itunesSvc.Enabled() {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "iTunes service is disabled"})
+			return
+		}
+		fn(c)
+	}
+}
+
 // setupRoutes configures all the routes
 func (s *Server) setupRoutes() {
 	// Health check endpoint
@@ -2220,7 +2234,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/reconcile", s.perm(auth.PermScanTrigger), s.startReconcile)
 			protected.POST("/operations/reconcile/scan", s.perm(auth.PermScanTrigger), s.startReconcileScan)
 			protected.GET("/operations/reconcile/scan/latest", s.perm(auth.PermLibraryView), s.latestReconcileScan)
-			protected.POST("/operations/itunes-path-reconcile", s.perm(auth.PermScanTrigger), s.itunesSvc.Paths.Start)
+			protected.POST("/operations/itunes-path-reconcile", s.perm(auth.PermScanTrigger), s.itunesSvcGuard(func(c *gin.Context) { s.itunesSvc.Paths.Start(c) }))
 			protected.POST("/operations/cleanup-version-groups", s.perm(auth.PermSettingsManage), s.cleanupDuplicateVersionGroupsHandler)
 			protected.POST("/operations/mark-broken-segments", s.perm(auth.PermSettingsManage), s.markBrokenSegmentBooksHandler)
 			protected.POST("/operations/merge-novg-duplicates", s.perm(auth.PermSettingsManage), s.mergeNoVGDuplicatesHandler)
@@ -2255,10 +2269,10 @@ func (s *Server) setupRoutes() {
 				itunesGroup.POST("/rebuild", s.perm(auth.PermLibraryEditMetadata), s.rebuildITLHandler)
 
 				// ITL file transfer (6.4)
-				itunesGroup.GET("/library/download", s.perm(auth.PermIntegrationsManage), s.itunesSvc.Transfer.HandleDownload)
-				itunesGroup.POST("/library/upload", s.perm(auth.PermIntegrationsManage), s.itunesSvc.Transfer.HandleUpload)
-				itunesGroup.GET("/library/backups", s.perm(auth.PermIntegrationsManage), s.itunesSvc.Transfer.HandleBackupList)
-				itunesGroup.POST("/library/restore", s.perm(auth.PermIntegrationsManage), s.itunesSvc.Transfer.HandleRestore)
+				itunesGroup.GET("/library/download", s.perm(auth.PermIntegrationsManage), s.itunesSvcGuard(func(c *gin.Context) { s.itunesSvc.Transfer.HandleDownload(c) }))
+				itunesGroup.POST("/library/upload", s.perm(auth.PermIntegrationsManage), s.itunesSvcGuard(func(c *gin.Context) { s.itunesSvc.Transfer.HandleUpload(c) }))
+				itunesGroup.GET("/library/backups", s.perm(auth.PermIntegrationsManage), s.itunesSvcGuard(func(c *gin.Context) { s.itunesSvc.Transfer.HandleBackupList(c) }))
+				itunesGroup.POST("/library/restore", s.perm(auth.PermIntegrationsManage), s.itunesSvcGuard(func(c *gin.Context) { s.itunesSvc.Transfer.HandleRestore(c) }))
 			}
 
 			// Cover art
