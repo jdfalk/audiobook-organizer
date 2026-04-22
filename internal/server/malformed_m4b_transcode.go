@@ -1,10 +1,11 @@
 // file: internal/server/malformed_m4b_transcode.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 package server
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io/fs"
 	"log"
@@ -18,6 +19,13 @@ import (
 )
 
 const malformedTranscodeKey = "malformed_m4b_transcode_v1_done"
+
+// transcodeSkipKey returns a settings key that marks a specific file as
+// permanently unfixable by transcode, so restarts don't re-attempt it.
+func transcodeSkipKey(path string) string {
+	h := sha256.Sum256([]byte(path))
+	return fmt.Sprintf("transcode_skip_%x", h[:8])
+}
 
 // transcodeMalformedM4BFiles walks the library and re-encodes any M4B/M4A
 // file that taglib cannot parse even after the remux pass. Full AAC transcode
@@ -46,7 +54,7 @@ func (s *Server) transcodeMalformedM4BFiles() {
 	}
 
 	log.Printf("[INFO] Starting malformed M4B transcode scan under %s …", root)
-	transcoded, clean, failed := 0, 0, 0
+	transcoded, clean, failed, skipped := 0, 0, 0, 0
 
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() {
@@ -66,9 +74,18 @@ func (s *Server) transcodeMalformedM4BFiles() {
 			return nil
 		}
 
+		// Skip files that have already been confirmed permanently unfixable.
+		if skip, err := store.GetSetting(transcodeSkipKey(path)); err == nil && skip != nil && skip.Value == "true" {
+			log.Printf("[INFO] malformed M4B transcode: skipping known-unfixable %s", path)
+			skipped++
+			failed++
+			return nil
+		}
+
 		// taglib failed — attempt full AAC transcode.
 		if err := transcodeFile(path); err != nil {
 			log.Printf("[WARN] malformed M4B transcode failed for %s: %v", path, err)
+			_ = store.SetSetting(transcodeSkipKey(path), "true", "bool", false)
 			failed++
 			return nil
 		}
@@ -76,6 +93,7 @@ func (s *Server) transcodeMalformedM4BFiles() {
 		// Verify the output is now readable.
 		if _, err := taglib.ReadTags(path); err != nil {
 			log.Printf("[WARN] malformed M4B transcode produced unreadable file for %s: %v", path, err)
+			_ = store.SetSetting(transcodeSkipKey(path), "true", "bool", false)
 			failed++
 			return nil
 		}
@@ -85,7 +103,7 @@ func (s *Server) transcodeMalformedM4BFiles() {
 		return nil
 	})
 
-	log.Printf("[INFO] Malformed M4B transcode: %d transcoded, %d already readable, %d failed", transcoded, clean, failed)
+	log.Printf("[INFO] Malformed M4B transcode: %d transcoded, %d already readable, %d failed (%d permanently skipped)", transcoded, clean, failed, skipped)
 	_ = store.SetSetting(malformedTranscodeKey, "true", "bool", false)
 }
 
