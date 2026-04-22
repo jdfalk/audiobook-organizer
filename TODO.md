@@ -83,7 +83,6 @@ since it was last edited on 2026-04-11).
 - [x] **3.7** Multi-user support (**L**) — complete 8/8 (#292-#295, #313-#314, #322, #334)
 - [ ] **3.8** Plex-style HTTP media server API (**L**)
 - [ ] **3.9** LLM-based series detection and ordering (**M**)
-- [ ] **3.10** AI-generated cover art when none exists (**S**)
 
 ### 4. Architecture / Future-Proofing — [section](docs/backlog-2026-04-10.md#4-architecture--future-proofing)
 
