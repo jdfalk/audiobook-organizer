@@ -2139,6 +2139,7 @@ func (s *Server) setupRoutes() {
 			protected.PUT("/audiobooks/:id", s.perm(auth.PermLibraryEditMetadata), s.updateAudiobook)
 			protected.DELETE("/audiobooks/:id", s.perm(auth.PermLibraryDelete), s.deleteAudiobook)
 			protected.GET("/audiobooks/:id/cover", s.perm(auth.PermLibraryView), s.serveAudiobookCover)
+			protected.GET("/audiobooks/:id/sample", s.perm(auth.PermLibraryView), s.handleAudioSample)
 			protected.GET("/audiobooks/:id/segments", s.perm(auth.PermLibraryView), s.listAudiobookSegments)
 			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.perm(auth.PermLibraryView), s.getSegmentTags)
 			protected.GET("/audiobooks/:id/files", s.perm(auth.PermLibraryView), s.listBookFiles)

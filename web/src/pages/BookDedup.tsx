@@ -58,6 +58,9 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import * as api from '../services/api';
 import type { Book, AuthorDedupGroup, SeriesDupGroup, ValidationResult, Operation, BookDedupGroup, DedupCandidate, DedupStats } from '../services/api';
 import SearchIcon from '@mui/icons-material/Search';
+import HeadphonesIcon from '@mui/icons-material/Headphones';
+import { AudioSampleCompare } from '../components/AudioSampleCompare';
+import type { SampleBook } from '../components/AudioSampleCompare';
 import ClearIcon from '@mui/icons-material/Clear';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import Collapse from '@mui/material/Collapse';
@@ -2595,6 +2598,7 @@ function EmbeddingDedupTab() {
   const [splitSelections, setSplitSelections] = useState<Map<string, Set<string>>>(new Map());
   const [pageMerging, setPageMerging] = useState(false);
   const [bulkMerging, setBulkMerging] = useState(false);
+  const [compareCluster, setCompareCluster] = useState<{ a: SampleBook; b: SampleBook } | null>(null);
 
   // Load stats
   const loadStats = useCallback(async () => {
@@ -2795,6 +2799,21 @@ function EmbeddingDedupTab() {
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleOpenCompare = (cluster: BookCluster) => {
+    if (cluster.bookIds.length < 2) return;
+    const toSample = (id: string): SampleBook => {
+      const book = bookDetails.get(id);
+      return {
+        id,
+        title: book?.title ?? id,
+        authors: book?.authors?.map((a) => a.name).join(', '),
+        filePath: book?.file_path,
+        duration: book?.duration ?? undefined,
+      };
+    };
+    setCompareCluster({ a: toSample(cluster.bookIds[0]), b: toSample(cluster.bookIds[1]) });
   };
 
   const handleScan = async () => {
@@ -3495,6 +3514,19 @@ function EmbeddingDedupTab() {
                         >
                           Dismiss
                         </Button>
+                        {cluster.bookIds.length === 2 && (
+                          <Tooltip title="Listen to a sample from each version and pick which to keep">
+                            <Button
+                              size="small"
+                              color="secondary"
+                              startIcon={<HeadphonesIcon />}
+                              onClick={() => handleOpenCompare(cluster)}
+                              disabled={actionLoading != null}
+                            >
+                              Compare
+                            </Button>
+                          </Tooltip>
+                        )}
                         {(splitSelections.get(cluster.key)?.size ?? 0) > 0 && (
                           <Button
                             size="small"
@@ -3537,6 +3569,23 @@ function EmbeddingDedupTab() {
             rowsPerPageOptions={[10, 25, 50, 100, 250, 500, 1000]}
           />
         </>
+      )}
+
+      {compareCluster && (
+        <AudioSampleCompare
+          open
+          bookA={compareCluster.a}
+          bookB={compareCluster.b}
+          onClose={() => setCompareCluster(null)}
+          onKeep={(winnerId, loserId) => {
+            setCompareCluster(null);
+            // Find the cluster and merge with the winner as primary.
+            const cluster = allClusters.find(
+              (c) => c.bookIds.includes(winnerId) && c.bookIds.includes(loserId)
+            );
+            if (cluster) handleMergeCluster(cluster, winnerId);
+          }}
+        />
       )}
     </Box>
   );
