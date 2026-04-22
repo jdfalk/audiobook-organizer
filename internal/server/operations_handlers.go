@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -491,6 +491,29 @@ func (s *Server) sweepTombstones(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+// setInternalFlag sets an arbitrary internal settings flag in PebbleDB.
+// Useful for injecting skip/done flags without direct DB access.
+func (s *Server) setInternalFlag(c *gin.Context) {
+	var req struct {
+		Key   string `json:"key" binding:"required"`
+		Value string `json:"value"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if s.Store() == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	if err := s.Store().SetSetting(req.Key, req.Value, "string", false); err != nil {
+		internalError(c, "failed to set flag", err)
+		return
+	}
+	log.Printf("[INFO] setInternalFlag: %s = %q", req.Key, req.Value)
+	c.JSON(http.StatusOK, gin.H{"key": req.Key, "value": req.Value})
 }
 
 func (s *Server) auditFileConsistency(c *gin.Context) {

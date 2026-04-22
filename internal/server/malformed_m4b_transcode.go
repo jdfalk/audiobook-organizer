@@ -1,5 +1,5 @@
 // file: internal/server/malformed_m4b_transcode.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 package server
@@ -51,6 +51,20 @@ func (s *Server) transcodeMalformedM4BFiles() {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		log.Printf("[WARN] transcodeMalformedM4BFiles: ffmpeg not found, skipping")
 		return
+	}
+
+	// Pre-mark files confirmed permanently unfixable by full transcode.
+	// These produce valid ffmpeg output but taglib still cannot parse them.
+	permanentlyUnfixable := []string{
+		"/mnt/bigdata/books/audiobook-organizer/David Petrie/Necrotic Apocalypse (7 book series)/Necrotic Apocalypse (7 book series)/Necrotic Apocalypse (7 book series) - David Petrie - read by narrator.m4b",
+		"/mnt/bigdata/books/audiobook-organizer/Eric Ugland/One More Last Time_ A LitRPG/GameLit Novel (The Good Guys/One More Last Time_ A LitRPG/GameLit Novel (The Good Guys, Book 1)/One More Last Time_ A LitRPG/GameLit Novel (The Good Guys, Book 1) - Eric Ugland - read by narrator.m4b",
+	}
+	for _, p := range permanentlyUnfixable {
+		k := transcodeSkipKey(p)
+		if skip, _ := store.GetSetting(k); skip == nil || skip.Value != "true" {
+			_ = store.SetSetting(k, "true", "bool", false)
+			log.Printf("[INFO] malformed M4B transcode: pre-marked permanently unfixable: %s", p)
+		}
 	}
 
 	log.Printf("[INFO] Starting malformed M4B transcode scan under %s …", root)
