@@ -328,6 +328,12 @@ var migrations = []Migration{
 		Up:          migration048Up,
 		Down:        nil,
 	},
+	{
+		Version:     49,
+		Description: "Add acoustid_fingerprint and acoustid_duration columns to book_files for content-based matching",
+		Up:          migration049Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2489,3 +2495,25 @@ func migration048Up(store Store) error {
 	return nil
 }
 
+
+// migration049Up adds acoustid_fingerprint and acoustid_duration columns to
+// book_files. These store AcoustID fingerprints (from fpcalc) for
+// content-based matching that survives metadata rewrites and file moves.
+func migration049Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB is schema-free; columns live on the struct
+	}
+	stmts := []string{
+		`ALTER TABLE book_files ADD COLUMN acoustid_fingerprint TEXT`,
+		`ALTER TABLE book_files ADD COLUMN acoustid_duration INTEGER`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_acoustid ON book_files(acoustid_fingerprint) WHERE acoustid_fingerprint IS NOT NULL`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 49: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Added acoustid_fingerprint, acoustid_duration to book_files")
+	return nil
+}

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/pebble/v2"
+	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -6880,6 +6881,13 @@ func writeBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 			return err
 		}
 	}
+
+	if f.AcoustIDFingerprint != "" {
+		acoustKey := []byte(fmt.Sprintf("book_file_acoustid:%s", f.AcoustIDFingerprint))
+		if err := batch.Set(acoustKey, ref, nil); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -6896,6 +6904,13 @@ func deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 	if f.FilePath != "" {
 		pathKey := []byte(fmt.Sprintf("book_file_path:%s", bookFilePathCRC(f.FilePath)))
 		if err := batch.Delete(pathKey, nil); err != nil {
+			return err
+		}
+	}
+
+	if f.AcoustIDFingerprint != "" {
+		acoustKey := []byte(fmt.Sprintf("book_file_acoustid:%s", f.AcoustIDFingerprint))
+		if err := batch.Delete(acoustKey, nil); err != nil {
 			return err
 		}
 	}
@@ -7062,6 +7077,63 @@ func (s *PebbleStore) GetBookFileByPath(filePath string) (*BookFile, error) {
 		return nil, nil
 	}
 	return f, nil
+}
+
+// GetBookFileByAcoustID looks up a BookFile by exact AcoustID fingerprint
+// using the book_file_acoustid: secondary index.
+func (s *PebbleStore) GetBookFileByAcoustID(fp string) (*BookFile, error) {
+	if fp == "" {
+		return nil, nil
+	}
+	key := []byte(fmt.Sprintf("book_file_acoustid:%s", fp))
+	value, closer, err := s.db.Get(key)
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	ref := string(value)
+	closer.Close()
+
+	parts := strings.SplitN(ref, ":", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("corrupt book_file_acoustid index: %q", ref)
+	}
+	return s.getBookFileByID(parts[0], parts[1])
+}
+
+// GetBookFileByAcoustIDFuzzy scans all book_file records and returns the first
+// whose AcoustID fingerprint similarity to fp is >= minSimilarity.
+// O(n) over fingerprinted files — only called when exact match misses.
+func (s *PebbleStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float64) (*BookFile, error) {
+	prefix := []byte("book_file:")
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: append(append([]byte{}, prefix...), 0xff),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var f BookFile
+		if err := json.Unmarshal(iter.Value(), &f); err != nil {
+			continue
+		}
+		if f.AcoustIDFingerprint == "" {
+			continue
+		}
+		sim, err := fingerprint.HammingSimilarity(fp, f.AcoustIDFingerprint)
+		if err != nil {
+			continue
+		}
+		if sim >= minSimilarity {
+			return &f, nil
+		}
+	}
+	return nil, iter.Error()
 }
 
 // DeleteBookFile removes the BookFile with the given ID (and its secondary
