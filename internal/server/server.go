@@ -2264,6 +2264,7 @@ func (s *Server) setupRoutes() {
 			protected.DELETE("/operations/history", s.perm(auth.PermSettingsManage), s.deleteOperationHistory)
 			protected.POST("/operations/optimize-database", s.perm(auth.PermSettingsManage), s.optimizeDatabase)
 			protected.POST("/operations/sweep-tombstones", s.perm(auth.PermSettingsManage), s.sweepTombstones)
+			protected.POST("/operations/set-internal-flag", s.perm(auth.PermSettingsManage), s.setInternalFlag)
 			protected.GET("/operations/audit-files", s.perm(auth.PermSettingsManage), s.auditFileConsistency)
 			protected.GET("/operations/reconcile/preview", s.perm(auth.PermLibraryView), s.reconcilePreview)
 			protected.POST("/operations/reconcile", s.perm(auth.PermScanTrigger), s.startReconcile)
