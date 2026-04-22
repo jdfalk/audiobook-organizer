@@ -1,5 +1,5 @@
 // file: internal/server/deluge_discovery.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e6f7a8b9-c0d1-2e3f-4a5b-6c7d8e9f0a1b
 //
 // Deluge label-based audiobook discovery.
@@ -108,6 +108,10 @@ func isTracked(contentPath string, known map[string]struct{}) bool {
 // handleDelugeDiscover returns Deluge torrents not yet in the library.
 // GET /api/v1/deluge/discover?label=audiobooks
 func (s *Server) handleDelugeDiscover(c *gin.Context) {
+	if !config.AppConfig.DelugeDiscoveryEnabled {
+		c.JSON(http.StatusForbidden, gin.H{"error": "deluge discovery is disabled (set deluge_discovery_enabled=true to enable)"})
+		return
+	}
 	client := getDelugeClient()
 	if client == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "deluge not configured"})
@@ -153,6 +157,10 @@ func (s *Server) handleDelugeListLabels(c *gin.Context) {
 // POST /api/v1/deluge/discover/import
 // Body: { "content_path": "/mnt/downloads/Dune by Frank Herbert", "torrent_hash": "abc123" }
 func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
+	if !config.AppConfig.DelugeDiscoveryEnabled {
+		c.JSON(http.StatusForbidden, gin.H{"error": "deluge discovery is disabled (set deluge_discovery_enabled=true to enable)"})
+		return
+	}
 	var req struct {
 		ContentPath string `json:"content_path" binding:"required"`
 		TorrentHash string `json:"torrent_hash"`

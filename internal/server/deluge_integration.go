@@ -76,6 +76,10 @@ func NotifyDelugeMoveStorage(torrentHash, newPath string) {
 	if torrentHash == "" {
 		return
 	}
+	if !config.AppConfig.DelugeMoveEnabled {
+		log.Printf("[INFO] deluge move_storage skipped (deluge_move_enabled=false): %s → %s", torrentHash, newPath)
+		return
+	}
 	c := getDelugeClient()
 	if c == nil {
 		return
@@ -155,8 +159,11 @@ func (s *Server) handleDelugeStatus(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"configured": url != "",
-		"url":        url,
+		"configured":         url != "",
+		"url":                url,
+		"discovery_enabled":  config.AppConfig.DelugeDiscoveryEnabled,
+		"move_enabled":       config.AppConfig.DelugeMoveEnabled,
+		"discovery_label":    config.AppConfig.DelugeDiscoveryLabel,
 	})
 }
 
