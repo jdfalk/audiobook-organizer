@@ -112,6 +112,8 @@ type BookFileStore interface {
 	GetBookFileByID(bookID, fileID string) (*BookFile, error)
 	GetBookFileByPID(itunesPID string) (*BookFile, error)
 	GetBookFileByPath(filePath string) (*BookFile, error)
+	GetBookFileByAcoustID(fingerprint string) (*BookFile, error)
+	GetBookFileByAcoustIDFuzzy(fingerprint string, minSimilarity float64) (*BookFile, error)
 	DeleteBookFile(id string) error
 	DeleteBookFilesForBook(bookID string) error
 	UpsertBookFile(file *BookFile) error

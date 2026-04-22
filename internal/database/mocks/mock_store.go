@@ -11568,6 +11568,58 @@ func (_c *MockBookFileStore_GetBookFileByPath_Call) RunAndReturn(run func(filePa
 	return _c
 }
 
+// GetBookFileByAcoustID provides a mock function for the type MockBookFileStore
+func (_mock *MockBookFileStore) GetBookFileByAcoustID(fp string) (*database.BookFile, error) {
+	ret := _mock.Called(fp)
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookFileByAcoustID")
+	}
+	var r0 *database.BookFile
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string) (*database.BookFile, error)); ok {
+		return rf(fp)
+	}
+	if rf, ok := ret.Get(0).(func(string) *database.BookFile); ok {
+		r0 = rf(fp)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.BookFile)
+		}
+	}
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(fp)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// GetBookFileByAcoustIDFuzzy provides a mock function for the type MockBookFileStore
+func (_mock *MockBookFileStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float64) (*database.BookFile, error) {
+	ret := _mock.Called(fp, minSimilarity)
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookFileByAcoustIDFuzzy")
+	}
+	var r0 *database.BookFile
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, float64) (*database.BookFile, error)); ok {
+		return rf(fp, minSimilarity)
+	}
+	if rf, ok := ret.Get(0).(func(string, float64) *database.BookFile); ok {
+		r0 = rf(fp, minSimilarity)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.BookFile)
+		}
+	}
+	if rf, ok := ret.Get(1).(func(string, float64) error); ok {
+		r1 = rf(fp, minSimilarity)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
 // GetBookFiles provides a mock function for the type MockBookFileStore
 func (_mock *MockBookFileStore) GetBookFiles(bookID string) ([]database.BookFile, error) {
 	ret := _mock.Called(bookID)
@@ -28284,6 +28336,54 @@ func (_c *MockStore_GetBookFileByPath_Call) Return(bookFile *database.BookFile, 
 func (_c *MockStore_GetBookFileByPath_Call) RunAndReturn(run func(filePath string) (*database.BookFile, error)) *MockStore_GetBookFileByPath_Call {
 	_c.Call.Return(run)
 	return _c
+}
+
+// GetBookFileByAcoustID provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookFileByAcoustID(fp string) (*database.BookFile, error) {
+	ret := _mock.Called(fp)
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookFileByAcoustID")
+	}
+	var r0 *database.BookFile
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string) (*database.BookFile, error)); ok {
+		return rf(fp)
+	}
+	if rf, ok := ret.Get(0).(func(string) *database.BookFile); ok {
+		r0 = rf(fp)
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*database.BookFile)
+	}
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(fp)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// GetBookFileByAcoustIDFuzzy provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float64) (*database.BookFile, error) {
+	ret := _mock.Called(fp, minSimilarity)
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookFileByAcoustIDFuzzy")
+	}
+	var r0 *database.BookFile
+	var r1 error
+	if rf, ok := ret.Get(0).(func(string, float64) (*database.BookFile, error)); ok {
+		return rf(fp, minSimilarity)
+	}
+	if rf, ok := ret.Get(0).(func(string, float64) *database.BookFile); ok {
+		r0 = rf(fp, minSimilarity)
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*database.BookFile)
+	}
+	if rf, ok := ret.Get(1).(func(string, float64) error); ok {
+		r1 = rf(fp, minSimilarity)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // GetBookFiles provides a mock function for the type MockStore

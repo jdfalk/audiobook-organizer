@@ -563,9 +563,11 @@ type BookFile struct {
 	SampleRateHz       int       `json:"sample_rate_hz,omitempty"`
 	Channels           int       `json:"channels,omitempty"`
 	BitDepth           int       `json:"bit_depth,omitempty"`
-	FileHash           string    `json:"file_hash,omitempty"`
-	OriginalFileHash   string    `json:"original_file_hash,omitempty"`
-	OrganizeMethod     string    `json:"organize_method,omitempty"` // "reflink", "hardlink", "copy", "symlink"
+	FileHash              string    `json:"file_hash,omitempty"`
+	OriginalFileHash      string    `json:"original_file_hash,omitempty"`
+	AcoustIDFingerprint   string    `json:"acoustid_fingerprint,omitempty"`
+	AcoustIDDuration      int       `json:"acoustid_duration,omitempty"` // seconds, as reported by fpcalc
+	OrganizeMethod        string    `json:"organize_method,omitempty"` // "reflink", "hardlink", "copy", "symlink"
 	Missing            bool      `json:"missing"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`

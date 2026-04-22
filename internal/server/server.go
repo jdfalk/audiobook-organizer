@@ -1622,6 +1622,12 @@ func (s *Server) Start(cfg ServerConfig) error {
 		s.backfillExternalIDs()
 	}()
 
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		s.backfillAcoustIDs()
+	}()
+
 	// Strip shwm/©mvi/©mvn atoms from audiobook files (one-time). These
 	// classical-music atoms crash Apple Devices for Windows at sync.
 	s.bgWG.Add(1)

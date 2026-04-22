@@ -292,9 +292,11 @@ type MockStore struct {
 	UpdateBookFileFunc          func(id string, file *BookFile) error
 	GetBookFilesFunc            func(bookID string) ([]BookFile, error)
 	GetBookFileByIDFunc         func(bookID, fileID string) (*BookFile, error)
-	GetBookFileByPIDFunc        func(itunesPID string) (*BookFile, error)
-	GetBookFileByPathFunc       func(filePath string) (*BookFile, error)
-	DeleteBookFileFunc          func(id string) error
+	GetBookFileByPIDFunc           func(itunesPID string) (*BookFile, error)
+	GetBookFileByPathFunc          func(filePath string) (*BookFile, error)
+	GetBookFileByAcoustIDFunc      func(fingerprint string) (*BookFile, error)
+	GetBookFileByAcoustIDFuzzyFunc func(fingerprint string, minSimilarity float64) (*BookFile, error)
+	DeleteBookFileFunc             func(id string) error
 	DeleteBookFilesForBookFunc  func(bookID string) error
 	UpsertBookFileFunc          func(file *BookFile) error
 	BatchUpsertBookFilesFunc    func(files []*BookFile) error
@@ -2097,6 +2099,18 @@ func (m *MockStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {
 func (m *MockStore) GetBookFileByPath(filePath string) (*BookFile, error) {
 	if m.GetBookFileByPathFunc != nil {
 		return m.GetBookFileByPathFunc(filePath)
+	}
+	return nil, nil
+}
+func (m *MockStore) GetBookFileByAcoustID(fp string) (*BookFile, error) {
+	if m.GetBookFileByAcoustIDFunc != nil {
+		return m.GetBookFileByAcoustIDFunc(fp)
+	}
+	return nil, nil
+}
+func (m *MockStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float64) (*BookFile, error) {
+	if m.GetBookFileByAcoustIDFuzzyFunc != nil {
+		return m.GetBookFileByAcoustIDFuzzyFunc(fp, minSimilarity)
 	}
 	return nil, nil
 }

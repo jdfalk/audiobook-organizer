@@ -39,6 +39,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
+	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 )
 
 // DiscoveredTorrent is a Deluge torrent not yet tracked in the library.
@@ -112,17 +113,12 @@ func (s *Server) discoverUnimported(client *delugeclient.Client, label string) (
 		}
 
 		// Tier 3: torrent name → title candidates against known titles.
-		// When a title match fires, Tier 4 SHA-verifies actual file content
-		// to confirm it's the same edition, not just the same title.
+		// When a title match fires, Tier 4 verifies actual file content.
 		if isTitleTracked(t.Name, idx.titles) {
-			hashLookup := func(hash string) bool {
-				b, _ := s.Store().GetBookByFileHash(hash)
-				return b != nil
+			if s.isContentFingerprintTracked(contentPath) {
+				continue // same audio stream — already in library
 			}
-			if isContentHashTracked(contentPath, hashLookup) {
-				continue // same bits — definitely already in library
-			}
-			// Title matched but files differ → different edition, surface it.
+			// Title matched but audio differs → different edition, surface it.
 		}
 
 		unimported = append(unimported, DiscoveredTorrent{
@@ -137,6 +133,53 @@ func (s *Server) discoverUnimported(client *delugeclient.Client, label string) (
 		})
 	}
 	return unimported, nil
+}
+
+// isContentFingerprintTracked walks contentPath for the first audio file,
+// fingerprints it with fpcalc, and checks the library via exact then fuzzy
+// AcoustID match. Returns true if the audio stream is already tracked.
+//
+// Falls back to SHA-256 walking when fpcalc is not installed so the pipeline
+// is never blocked by a missing dependency.
+func (s *Server) isContentFingerprintTracked(contentPath string) bool {
+	if !fingerprint.Available() {
+		// fpcalc not installed — fall back to SHA-256 content walk.
+		hashLookup := func(hash string) bool {
+			b, _ := s.Store().GetBookByFileHash(hash)
+			return b != nil
+		}
+		return isContentHashTracked(contentPath, hashLookup)
+	}
+
+	// Find the first audio file under contentPath to fingerprint.
+	var firstAudio string
+	_ = filepath.Walk(contentPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || firstAudio != "" {
+			return nil
+		}
+		if _, ok := audioExtensions[strings.ToLower(filepath.Ext(path))]; ok {
+			firstAudio = path
+		}
+		return nil
+	})
+	if firstAudio == "" {
+		return false
+	}
+
+	result, err := fingerprint.File(firstAudio)
+	if err != nil {
+		log.Printf("[WARN] deluge discovery: fpcalc %s: %v", firstAudio, err)
+		return false
+	}
+
+	// Exact match first (O(1) index lookup).
+	if f, _ := s.Store().GetBookFileByAcoustID(result.Fingerprint); f != nil {
+		return true
+	}
+
+	// Fuzzy fallback — catches minor encoding variations.
+	f, _ := s.Store().GetBookFileByAcoustIDFuzzy(result.Fingerprint, fingerprint.FuzzyMinSimilarity)
+	return f != nil
 }
 
 // isPathTracked returns true if contentPath is a prefix of any known file path.
