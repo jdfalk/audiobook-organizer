@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.188.0
+// version: 1.189.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1607,6 +1607,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 		log.Printf("[WARN] seed system user: %v", err)
 	}
 
+	// Initialize the one-time bootstrap token for emergency admin access.
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
+		dataDir := filepath.Dir(dbPath)
+		if err := InitBootstrapToken(s.Store(), dataDir); err != nil {
+			log.Printf("[BOOTSTRAP] Failed to init bootstrap token: %v", err)
+		}
+	}
+
 	// Resume any operations that were interrupted by a previous shutdown/crash
 	s.resumeInterruptedOperations()
 
@@ -2114,6 +2122,7 @@ func (s *Server) setupRoutes() {
 			authGroup.POST("/setup", s.setupInitialAdmin)
 			authGroup.POST("/login", s.login)
 			authGroup.POST("/accept-invite", s.handleAcceptInvite)
+			authGroup.POST("/bootstrap", s.handleBootstrap)
 		}
 
 		authProtected := authGroup.Group("")
