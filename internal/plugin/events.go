@@ -1,5 +1,5 @@
 // file: internal/plugin/events.go
-// version: 1.0.0
+// version: 1.1.0
 
 package plugin
 
@@ -24,6 +24,8 @@ const (
 	EventCoverChanged      EventType = "cover.changed"
 	EventReadStatusChanged EventType = "read_status.changed"
 	EventScanCompleted     EventType = "scan.completed"
+	EventBookQuarantined   EventType = "book.quarantined"
+	EventBookUnquarantined EventType = "book.unquarantined"
 )
 
 // Event is a JSON-serializable lifecycle event.
