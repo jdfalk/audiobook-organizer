@@ -39667,3 +39667,39 @@ func (_c *MockStore_ResetScanFailCount_Call) RunAndReturn(run func(string) error
 	_c.Call.Return(run)
 	return _c
 }
+
+type MockStore_GetBookFileByAcoustID_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetBookFileByAcoustID(fingerprint interface{}) *MockStore_GetBookFileByAcoustID_Call {
+	return &MockStore_GetBookFileByAcoustID_Call{Call: _e.mock.On("GetBookFileByAcoustID", fingerprint)}
+}
+func (_c *MockStore_GetBookFileByAcoustID_Call) Run(run func(string)) *MockStore_GetBookFileByAcoustID_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_GetBookFileByAcoustID_Call) Return(file *database.BookFile, err error) *MockStore_GetBookFileByAcoustID_Call {
+	_c.Call.Return(file, err)
+	return _c
+}
+func (_c *MockStore_GetBookFileByAcoustID_Call) RunAndReturn(run func(string) (*database.BookFile, error)) *MockStore_GetBookFileByAcoustID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+type MockStore_GetBookFileByAcoustIDFuzzy_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetBookFileByAcoustIDFuzzy(fingerprint interface{}, minSimilarity interface{}) *MockStore_GetBookFileByAcoustIDFuzzy_Call {
+	return &MockStore_GetBookFileByAcoustIDFuzzy_Call{Call: _e.mock.On("GetBookFileByAcoustIDFuzzy", fingerprint, minSimilarity)}
+}
+func (_c *MockStore_GetBookFileByAcoustIDFuzzy_Call) Run(run func(string, float64)) *MockStore_GetBookFileByAcoustIDFuzzy_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(float64)) })
+	return _c
+}
+func (_c *MockStore_GetBookFileByAcoustIDFuzzy_Call) Return(file *database.BookFile, err error) *MockStore_GetBookFileByAcoustIDFuzzy_Call {
+	_c.Call.Return(file, err)
+	return _c
+}
+func (_c *MockStore_GetBookFileByAcoustIDFuzzy_Call) RunAndReturn(run func(string, float64) (*database.BookFile, error)) *MockStore_GetBookFileByAcoustIDFuzzy_Call {
+	_c.Call.Return(run)
+	return _c
+}
