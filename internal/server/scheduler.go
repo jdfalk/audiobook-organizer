@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -291,7 +291,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		},
 		IsEnabled:              func() bool { return s.metadataFetchService != nil && s.metadataFetchService.ISBNEnrichment() != nil },
 		GetInterval:            func() time.Duration { return 0 },
-		RunOnStart:             func() bool { return false },
+		RunOnStart:             func() bool { return true },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowMetadataRefresh },
 	})
 
