@@ -1,5 +1,5 @@
 // file: internal/server/bootstrap.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
 
 package server
@@ -25,7 +25,11 @@ import (
 	ulid "github.com/oklog/ulid/v2"
 )
 
-const bootstrapTokenKey = "bootstrap_token_hash"
+const (
+	bootstrapTokenKey    = "bootstrap_token_hash"
+	bootstrapExpiresKey  = "bootstrap_token_expires_at"
+	bootstrapTokenTTL    = 10 * time.Minute
+)
 
 // SettingsReadWriter is the minimal store surface needed by the bootstrap subsystem.
 type SettingsReadWriter interface {
@@ -42,40 +46,40 @@ func BootstrapTokenPath(dataDir string) string {
 	return filepath.Join(dataDir, ".bootstrap-token")
 }
 
-// InitBootstrapToken generates and persists a new bootstrap token if one is not
-// already stored. The plaintext is written to disk (mode 0600) so a local admin
-// can read it and exchange it via POST /api/v1/auth/bootstrap.
+// InitBootstrapToken generates a fresh bootstrap token on every startup.
+// The token expires after bootstrapTokenTTL (10 min). A restart is required
+// to get a new one — so an unexpected restart is visible in the logs.
 func InitBootstrapToken(store SettingsReadWriter, dataDir string) error {
-	existing, err := store.GetSetting(bootstrapTokenKey)
-	if err != nil {
-		return fmt.Errorf("bootstrap: check existing token: %w", err)
-	}
-	if existing != nil && existing.Value != "" {
-		return nil
-	}
+	// Always replace — each restart gets a fresh 10-minute window.
+	_ = store.DeleteSetting(bootstrapTokenKey)
+	_ = store.DeleteSetting(bootstrapExpiresKey)
 
 	raw, hash, err := generateBootstrapToken()
 	if err != nil {
 		return fmt.Errorf("bootstrap: generate token: %w", err)
 	}
 
+	expiresAt := time.Now().Add(bootstrapTokenTTL)
 	if err := store.SetSetting(bootstrapTokenKey, hash, "string", true); err != nil {
 		return fmt.Errorf("bootstrap: persist token hash: %w", err)
+	}
+	if err := store.SetSetting(bootstrapExpiresKey, fmt.Sprintf("%d", expiresAt.Unix()), "string", false); err != nil {
+		return fmt.Errorf("bootstrap: persist token expiry: %w", err)
 	}
 
 	tokenPath := BootstrapTokenPath(dataDir)
 	if err := os.WriteFile(tokenPath, []byte(raw+"\n"), 0600); err != nil {
 		log.Printf("[BOOTSTRAP] WARNING: could not write token file %s: %v", tokenPath, err)
-		return nil
 	}
 
 	log.Printf("[BOOTSTRAP] Emergency access token: %s", raw)
-	log.Printf("[BOOTSTRAP] Token also written to %s — POST /api/v1/auth/bootstrap to exchange for an API key", tokenPath)
+	log.Printf("[BOOTSTRAP] Token expires in 10 minutes. POST /api/v1/auth/bootstrap to exchange for an API key. Restart required to generate a new token.")
 	return nil
 }
 
-// ConsumeBootstrapToken validates plaintext against the stored hash, then atomically
-// deletes both the setting and the on-disk file. Returns (valid, error).
+// ConsumeBootstrapToken validates plaintext against the stored hash, checks
+// the 10-minute expiry, then atomically deletes both settings and the on-disk
+// file. Returns (valid, error). Thread-safe.
 func ConsumeBootstrapToken(store SettingsReadWriter, dataDir, plaintext string) (bool, error) {
 	bootstrapMu.Lock()
 	defer bootstrapMu.Unlock()
@@ -88,13 +92,25 @@ func ConsumeBootstrapToken(store SettingsReadWriter, dataDir, plaintext string) 
 		return false, nil
 	}
 
+	// Check expiry before doing any hash work.
+	if expSetting, err := store.GetSetting(bootstrapExpiresKey); err == nil && expSetting != nil {
+		var expUnix int64
+		fmt.Sscanf(expSetting.Value, "%d", &expUnix)
+		if expUnix > 0 && time.Now().Unix() > expUnix {
+			log.Printf("[BOOTSTRAP] Token exchange attempted but token has expired (restart required to generate a new one)")
+			_ = store.DeleteSetting(bootstrapTokenKey)
+			_ = store.DeleteSetting(bootstrapExpiresKey)
+			_ = os.Remove(BootstrapTokenPath(dataDir))
+			return false, nil
+		}
+	}
+
 	if hashBootstrapToken(plaintext) != setting.Value {
 		return false, nil
 	}
 
-	if err := store.DeleteSetting(bootstrapTokenKey); err != nil {
-		return false, fmt.Errorf("bootstrap: delete token hash: %w", err)
-	}
+	_ = store.DeleteSetting(bootstrapTokenKey)
+	_ = store.DeleteSetting(bootstrapExpiresKey)
 	_ = os.Remove(BootstrapTokenPath(dataDir))
 
 	return true, nil
