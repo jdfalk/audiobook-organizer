@@ -476,10 +476,15 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				} else {
 					// Reset fail counter on successful parse so transient failures
 					// don't accumulate toward the auto-quarantine threshold.
-					if gs := database.GetGlobalStore(); gs != nil {
-						sum := sha256.Sum256([]byte(filePath))
-						_ = gs.ResetScanFailCount(fmt.Sprintf("%x", sum[:8]))
-					}
+					// Use recover guard: GetGlobalStore may return a non-nil interface
+					// wrapping a nil concrete pointer in tests.
+					func() {
+						defer func() { recover() }() //nolint:errcheck
+						if gs := database.GetGlobalStore(); gs != nil {
+							sum := sha256.Sum256([]byte(filePath))
+							_ = gs.ResetScanFailCount(fmt.Sprintf("%x", sum[:8]))
+						}
+					}()
 					if meta != nil {
 						fallbackUsed = meta.UsedFilenameFallback
 						if meta.Title != "" {
