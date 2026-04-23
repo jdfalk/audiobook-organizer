@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_prop_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 15afe4d2-3a00-4326-be15-1e3f0b11a10e
 
 // Black-box test package: internal/testutil/rapidgen imports the database
@@ -55,6 +55,7 @@ func newPropStore(t *rapid.T) *database.PebbleStore {
 // the same user-supplied scalar fields. We check the fields that are
 // not rewritten by the store (ID is assigned, timestamps are set).
 func TestProp_Book_RoundTrip(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -92,6 +93,7 @@ func TestProp_Book_RoundTrip(t *testing.T) {
 // TestProp_Book_UpdatePreservesID: after UpdateBook, the ID is unchanged
 // and modified scalar fields are reflected on subsequent reads.
 func TestProp_Book_UpdatePreservesID(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -132,6 +134,7 @@ func TestProp_Book_UpdatePreservesID(t *testing.T) {
 // TestProp_Book_DeleteThenGetReturnsNil: after DeleteBook, GetBookByID
 // returns (nil, nil).
 func TestProp_Book_DeleteThenGetReturnsNil(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -162,6 +165,7 @@ func TestProp_Book_DeleteThenGetReturnsNil(t *testing.T) {
 // by creating a random mix of statuses and then verifying the
 // active-pointer index matches the stored rows.
 func TestProp_BookVersion_SingleActiveInvariant(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -217,6 +221,7 @@ func TestProp_BookVersion_SingleActiveInvariant(t *testing.T) {
 // TestProp_UserPlaylist_NameUniqueness: creating two distinct playlists
 // with the same (case-insensitive) name — the second create fails.
 func TestProp_UserPlaylist_NameUniqueness(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -240,6 +245,7 @@ func TestProp_UserPlaylist_NameUniqueness(t *testing.T) {
 // TestProp_User_UsernameUniqueness: creating two users with the same
 // (case-insensitive) username — the second create fails.
 func TestProp_User_UsernameUniqueness(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -264,6 +270,7 @@ func TestProp_User_UsernameUniqueness(t *testing.T) {
 // TestProp_Tag_AddRemoveRoundtrip: AddBookTag then GetBookTags contains
 // the tag; RemoveBookTag then GetBookTags no longer contains it.
 func TestProp_Tag_AddRemoveRoundtrip(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -302,6 +309,7 @@ func TestProp_Tag_AddRemoveRoundtrip(t *testing.T) {
 // TestProp_Session_CreateRevoke: CreateSession returns a session we can
 // GetSession back, and RevokeSession flips Revoked to true.
 func TestProp_Session_CreateRevoke(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -352,6 +360,7 @@ func TestProp_Session_CreateRevoke(t *testing.T) {
 // TestProp_OperationChange_Persistence: after CreateOperationChange,
 // GetOperationChanges for the same operation contains the new change.
 func TestProp_OperationChange_Persistence(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
@@ -401,6 +410,7 @@ func TestProp_OperationChange_Persistence(t *testing.T) {
 // TestProp_ListUsers_ContainsCreatedUser: after CreateUser, ListUsers
 // returns a slice that includes the new user's ID.
 func TestProp_ListUsers_ContainsCreatedUser(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
