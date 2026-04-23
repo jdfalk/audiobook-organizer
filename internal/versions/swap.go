@@ -1,5 +1,5 @@
 // file: internal/versions/swap.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6c3d5a2e-8b4c-4a70-b8c5-3d7e0f1b9a99
 //
 // Primary-version swap tracked operation (spec 3.1 task 3).
@@ -146,9 +146,17 @@ func RunVersionSwap(
 	// Update the book's primary file_path to the first file of the
 	// new active version.
 	if len(newToPaths) > 0 {
+		oldPath := book.FilePath
 		book.FilePath = newToPaths[0]
 		if _, err := store.UpdateBook(book.ID, book); err != nil {
 			log.Printf("[WARN] update book file_path: %v", err)
+		} else {
+			_ = store.RecordPathChange(&database.BookPathChange{
+				BookID:     book.ID,
+				OldPath:    oldPath,
+				NewPath:    book.FilePath,
+				ChangeType: "version_swap",
+			})
 		}
 	}
 	progress("db_finalized", 90)
