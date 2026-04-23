@@ -2650,6 +2650,9 @@ func (s *Server) triggerITunesSync() {
 	if !s.itunesSvc.Enabled() {
 		return
 	}
+
+	// Flush any quarantine-triggered ITL removals before the sync read.
+	s.processITunesPurgePending()
 	libraryPath := s.itunesSvc.Importer.DiscoverLibraryPath()
 	if libraryPath == "" {
 		return

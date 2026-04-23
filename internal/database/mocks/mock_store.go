@@ -3464,6 +3464,53 @@ func (_c *MockBookReader_GetFolderDuplicates_Call) RunAndReturn(run func() ([][]
 	return _c
 }
 
+// GetITunesPurgePendingBooks provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) GetITunesPurgePendingBooks() ([]database.Book, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for GetITunesPurgePendingBooks")
+	}
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.Book, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.Book); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockBookReader_GetITunesPurgePendingBooks_Call struct{ *mock.Call }
+
+func (_e *MockBookReader_Expecter) GetITunesPurgePendingBooks() *MockBookReader_GetITunesPurgePendingBooks_Call {
+	return &MockBookReader_GetITunesPurgePendingBooks_Call{Call: _e.mock.On("GetITunesPurgePendingBooks")}
+}
+
+func (_c *MockBookReader_GetITunesPurgePendingBooks_Call) Run(run func()) *MockBookReader_GetITunesPurgePendingBooks_Call {
+	_c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockBookReader_GetITunesPurgePendingBooks_Call) Return(books []database.Book, err error) *MockBookReader_GetITunesPurgePendingBooks_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockBookReader_GetITunesPurgePendingBooks_Call) RunAndReturn(run func() ([]database.Book, error)) *MockBookReader_GetITunesPurgePendingBooks_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetITunesDirtyBooks provides a mock function for the type MockBookReader
 func (_mock *MockBookReader) GetITunesDirtyBooks() ([]database.Book, error) {
 	ret := _mock.Called()
@@ -5650,6 +5697,52 @@ func (_c *MockBookStore_GetFolderDuplicates_Call) RunAndReturn(run func() ([][]d
 }
 
 // GetITunesDirtyBooks provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) GetITunesPurgePendingBooks() ([]database.Book, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for GetITunesPurgePendingBooks")
+	}
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.Book, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.Book); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockBookStore_GetITunesPurgePendingBooks_Call struct{ *mock.Call }
+
+func (_e *MockBookStore_Expecter) GetITunesPurgePendingBooks() *MockBookStore_GetITunesPurgePendingBooks_Call {
+	return &MockBookStore_GetITunesPurgePendingBooks_Call{Call: _e.mock.On("GetITunesPurgePendingBooks")}
+}
+
+func (_c *MockBookStore_GetITunesPurgePendingBooks_Call) Run(run func()) *MockBookStore_GetITunesPurgePendingBooks_Call {
+	_c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockBookStore_GetITunesPurgePendingBooks_Call) Return(books []database.Book, err error) *MockBookStore_GetITunesPurgePendingBooks_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockBookStore_GetITunesPurgePendingBooks_Call) RunAndReturn(run func() ([]database.Book, error)) *MockBookStore_GetITunesPurgePendingBooks_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 func (_mock *MockBookStore) GetITunesDirtyBooks() ([]database.Book, error) {
 	ret := _mock.Called()
 
@@ -30106,6 +30199,53 @@ func (_c *MockStore_GetFolderDuplicates_Call) Return(bookss [][]database.Book, e
 }
 
 func (_c *MockStore_GetFolderDuplicates_Call) RunAndReturn(run func() ([][]database.Book, error)) *MockStore_GetFolderDuplicates_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetITunesPurgePendingBooks provides a mock function for the type MockStore
+func (_mock *MockStore) GetITunesPurgePendingBooks() ([]database.Book, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for GetITunesPurgePendingBooks")
+	}
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.Book, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.Book); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetITunesPurgePendingBooks_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetITunesPurgePendingBooks() *MockStore_GetITunesPurgePendingBooks_Call {
+	return &MockStore_GetITunesPurgePendingBooks_Call{Call: _e.mock.On("GetITunesPurgePendingBooks")}
+}
+
+func (_c *MockStore_GetITunesPurgePendingBooks_Call) Run(run func()) *MockStore_GetITunesPurgePendingBooks_Call {
+	_c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetITunesPurgePendingBooks_Call) Return(books []database.Book, err error) *MockStore_GetITunesPurgePendingBooks_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockStore_GetITunesPurgePendingBooks_Call) RunAndReturn(run func() ([]database.Book, error)) *MockStore_GetITunesPurgePendingBooks_Call {
 	_c.Call.Return(run)
 	return _c
 }
