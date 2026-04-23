@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.184.0
+// version: 1.185.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2581,6 +2581,11 @@ func isProtectedPath(filePath string) bool {
 
 	// Also check if path contains "iTunes Media" as a safety net
 	if strings.Contains(absPath, "iTunes Media") || strings.Contains(absPath, "iTunes%20Media") {
+		return true
+	}
+
+	// Hard-block .failed/ quarantine folder — never write to or move quarantined files.
+	if strings.Contains(filepath.ToSlash(absPath), "/.failed/") {
 		return true
 	}
 

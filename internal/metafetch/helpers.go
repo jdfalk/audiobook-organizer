@@ -1,5 +1,5 @@
 // file: internal/metafetch/helpers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package metafetch
@@ -134,6 +134,11 @@ func isProtectedPath(filePath string) bool {
 
 	// Also check if path contains "iTunes Media" as a safety net
 	if strings.Contains(absPath, "iTunes Media") || strings.Contains(absPath, "iTunes%20Media") {
+		return true
+	}
+
+	// Hard-block .failed/ quarantine folder.
+	if strings.Contains(filepath.ToSlash(absPath), "/.failed/") {
 		return true
 	}
 
