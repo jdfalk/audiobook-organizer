@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -72,6 +72,18 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	if err != nil {
 		internalError(c, "failed to list audiobooks", err)
 		return
+	}
+
+	// Exclude quarantined books unless show_quarantined=true
+	showQuarantined := c.Query("show_quarantined") == "true"
+	if !showQuarantined {
+		filtered := books[:0]
+		for _, b := range books {
+			if b.QuarantinedAt == nil {
+				filtered = append(filtered, b)
+			}
+		}
+		books = filtered
 	}
 
 	// Enrich with author and series names
