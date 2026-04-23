@@ -178,6 +178,52 @@ When taglib `ReadTags` fails on a file during a normal scan:
 
 ---
 
+## Full Path History (companion requirement)
+
+The original filename and folder before any organize operation has permanent
+diagnostic value — e.g. `Audible Downloads/the good guys book 1.m4b` tells
+you the source and original naming convention. This is captured by recording
+a path history entry at every point a book's path changes, not just on
+organize renames.
+
+### New `change_type` values
+
+| Value | When recorded |
+|-------|---------------|
+| `"import"` | `CreateBook` — locks in the original path forever |
+| `"rename"` | Organize pipeline rename/move — already recorded ✅ |
+| `"external_move"` | Scanner re-links a file whose path changed outside the organizer |
+| `"library_copy"` | `ensureLibraryCopy` creates a copy at a new path |
+| `"version_swap"` | Active version swap changes which file is primary |
+| `"itunes_reconcile"` | iTunes path reconcile updates a book's path |
+| `"quarantine"` | File moved to `.failed/` |
+| `"unquarantine"` | File moved back from `.failed/` |
+
+### Call sites to instrument
+
+Each site calls `RecordPathChange` with the appropriate `change_type`,
+`old_path`, and `new_path` immediately after the DB write succeeds:
+
+| File | Line | Event |
+|------|------|-------|
+| `internal/database/pebble_store.go` | `CreateBook` | `"import"` (old_path = `""`) |
+| `internal/scanner/scanner.go` | ~1435 | `"external_move"` |
+| `internal/metafetch/service.go` | ~1682 | `"library_copy"` |
+| `internal/versions/swap.go` | ~150 | `"version_swap"` |
+| `internal/itunes/service/path_reconcile.go` | ~153 | `"itunes_reconcile"` |
+
+`BookFile` path changes (segments) are recorded separately with the same
+scheme, using `BookFile.BookID` as the anchor.
+
+### UI
+
+The Files & History tab timeline already shows path history entries. The
+`change_type` label is shown alongside each entry so the full provenance is
+readable at a glance: Import → Rename → Quarantine, or Import → Rename →
+Version Swap → Rename.
+
+---
+
 ## What Is Not Changing
 
 - The 29 permanently-malformed files that taglib cannot read even after full
@@ -199,13 +245,16 @@ When taglib `ReadTags` fails on a file during a normal scan:
 |------|--------|
 | `internal/database/migrations.go` | New migration: `quarantine_reason`, `quarantined_at` on books; `"quarantine"` / `"unquarantine"` change_type |
 | `internal/database/store.go` | Add fields to `Book` struct; add `"purge_pending"` iTunes status constant |
-| `internal/database/pebble_store.go` | `QuarantineBook`, `UnquarantineBook`, `GetQuarantinedBooks` |
+| `internal/database/pebble_store.go` | `QuarantineBook`, `UnquarantineBook`, `GetQuarantinedBooks`; `RecordPathChange` at `CreateBook` |
 | `internal/server/server.go` | Extend `isProtectedPath` with `/.failed/` branch |
 | `internal/metafetch/helpers.go` | Same `isProtectedPath` extension |
-| `internal/scanner/scanner.go` | Skip `.failed/` directory; scan-fail counter logic |
+| `internal/scanner/scanner.go` | Skip `.failed/` directory; scan-fail counter logic; `RecordPathChange` on external_move |
 | `internal/server/audiobook_service.go` | Wire `QuarantineBook` / `UnquarantineBook` |
 | `internal/server/audiobooks_handlers.go` | New quarantine/unquarantine HTTP handlers |
 | `internal/server/server.go` (routes) | Register `POST/DELETE /audiobooks/:id/quarantine` |
 | `internal/server/quarantine_known_bad.go` | New one-time startup migration for the 29 known-bad files |
 | `internal/plugin/events.go` (or equivalent) | Define `book.quarantined` event type |
+| `internal/metafetch/service.go` | `RecordPathChange` at library_copy creation |
+| `internal/versions/swap.go` | `RecordPathChange` on version_swap |
+| `internal/itunes/service/path_reconcile.go` | `RecordPathChange` on itunes_reconcile |
 | `web/src/` | "Show Failed" toggle; Failed badge; Quarantine button |
