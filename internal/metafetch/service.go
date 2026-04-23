@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.52.0
+// version: 4.53.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -1684,6 +1684,14 @@ func (mfs *Service) ensureLibraryCopy(book *database.Book) *database.Book {
 		log.Printf("[WARN] failed to create library book record for %s: %v", book.ID, err)
 		return nil
 	}
+
+	// Record the library-copy event so history shows where the copy came from.
+	_ = mfs.db.RecordPathChange(&database.BookPathChange{
+		BookID:     created.ID,
+		OldPath:    book.FilePath,
+		NewPath:    created.FilePath,
+		ChangeType: "library_copy",
+	})
 
 	// Copy book_authors to the new record
 	if authors, err := mfs.db.GetBookAuthors(book.ID); err == nil && len(authors) > 0 {
