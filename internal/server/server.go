@@ -1644,13 +1644,6 @@ func (s *Server) Start(cfg ServerConfig) error {
 		s.remuxMalformedM4BFiles()
 	}()
 
-	// Full AAC transcode for files that survived remux but taglib still
-	// cannot parse — deeper corruption requires rebuilding from scratch (one-time).
-	s.bgWG.Add(1)
-	go func() {
-		defer s.bgWG.Done()
-		s.transcodeMalformedM4BFiles()
-	}()
 
 	// Open the library search index (Bleve, spec DES-1). Opened here
 	// rather than in NewServer so tests that skip Start don't leak
