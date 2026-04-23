@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/FilterSidebar.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b
 
 import React from 'react';
@@ -10,11 +10,13 @@ import {
   Button,
   Divider,
   FormControl,
+  FormControlLabel,
   InputLabel,
   Select,
   MenuItem,
   Chip,
   Stack,
+  Switch,
   Autocomplete,
   TextField,
 } from '@mui/material';
@@ -260,6 +262,25 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
               )}
             </div>
           )}
+
+          <Divider />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={!!filters.showFailed}
+                onChange={(e) =>
+                  onFiltersChange({ ...filters, showFailed: e.target.checked })
+                }
+                color="error"
+              />
+            }
+            label={
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <Typography variant="body2">Show Failed</Typography>
+                <Chip label=".failed/" size="small" color="error" variant="outlined" />
+              </Box>
+            }
+          />
 
         </Stack>
       </Box>
