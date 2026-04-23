@@ -38878,3 +38878,177 @@ func (_c *MockStore_UpsertMetadataFieldState_Call) RunAndReturn(run func(state *
 	_c.Call.Return(run)
 	return _c
 }
+
+// GetQuarantinedBooks provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) GetQuarantinedBooks(limit, offset int) ([]database.Book, error) {
+	ret := _mock.Called(limit, offset)
+	if len(ret) == 0 {
+		panic("no return value specified for GetQuarantinedBooks")
+	}
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, int) ([]database.Book, error)); ok {
+		return returnFunc(limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, int) []database.Book); ok {
+		r0 = returnFunc(limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = returnFunc(limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// GetScanFailCount provides a mock function for the type MockBookWriter
+func (_mock *MockBookWriter) GetScanFailCount(pathHash string) (int, error) {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for GetScanFailCount")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
+	return r0, r1
+}
+
+// IncrScanFailCount provides a mock function for the type MockBookWriter
+func (_mock *MockBookWriter) IncrScanFailCount(pathHash string) (int, error) {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for IncrScanFailCount")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
+	return r0, r1
+}
+
+// ResetScanFailCount provides a mock function for the type MockBookWriter
+func (_mock *MockBookWriter) ResetScanFailCount(pathHash string) error {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for ResetScanFailCount")
+	}
+	r0, _ := ret.Get(0).(error)
+	return r0
+}
+
+// GetQuarantinedBooks provides a mock function for the type MockStore
+func (_mock *MockStore) GetQuarantinedBooks(limit, offset int) ([]database.Book, error) {
+	ret := _mock.Called(limit, offset)
+	if len(ret) == 0 {
+		panic("no return value specified for GetQuarantinedBooks")
+	}
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, int) ([]database.Book, error)); ok {
+		return returnFunc(limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, int) []database.Book); ok {
+		r0 = returnFunc(limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = returnFunc(limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// GetScanFailCount provides a mock function for the type MockStore
+func (_mock *MockStore) GetScanFailCount(pathHash string) (int, error) {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for GetScanFailCount")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
+	return r0, r1
+}
+
+// IncrScanFailCount provides a mock function for the type MockStore
+func (_mock *MockStore) IncrScanFailCount(pathHash string) (int, error) {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for IncrScanFailCount")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
+	return r0, r1
+}
+
+// ResetScanFailCount provides a mock function for the type MockStore
+func (_mock *MockStore) ResetScanFailCount(pathHash string) error {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for ResetScanFailCount")
+	}
+	r0, _ := ret.Get(0).(error)
+	return r0
+}
+
+// GetQuarantinedBooks provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) GetQuarantinedBooks(limit, offset int) ([]database.Book, error) {
+	ret := _mock.Called(limit, offset)
+	if len(ret) == 0 {
+		panic("no return value specified for GetQuarantinedBooks")
+	}
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, int) ([]database.Book, error)); ok {
+		return returnFunc(limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, int) []database.Book); ok {
+		r0 = returnFunc(limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = returnFunc(limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// GetScanFailCount provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) GetScanFailCount(pathHash string) (int, error) {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for GetScanFailCount")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
+	return r0, r1
+}
+
+// IncrScanFailCount provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) IncrScanFailCount(pathHash string) (int, error) {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for IncrScanFailCount")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
+	return r0, r1
+}
+
+// ResetScanFailCount provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) ResetScanFailCount(pathHash string) error {
+	ret := _mock.Called(pathHash)
+	if len(ret) == 0 {
+		panic("no return value specified for ResetScanFailCount")
+	}
+	r0, _ := ret.Get(0).(error)
+	return r0
+}

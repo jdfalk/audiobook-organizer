@@ -1,5 +1,5 @@
 // file: internal/database/iface_book.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
 
 package database
@@ -31,6 +31,7 @@ type BookReader interface {
 	GetBookTombstone(id string) (*Book, error)
 	ListBookTombstones(limit int) ([]Book, error)
 	GetITunesDirtyBooks() ([]Book, error)
+	GetQuarantinedBooks(limit, offset int) ([]Book, error)
 }
 
 // BookWriter is the write-only slice of Store for callers that only
@@ -45,6 +46,10 @@ type BookWriter interface {
 	PruneBookSnapshots(id string, keepCount int) (int, error)
 	CreateBookTombstone(book *Book) error
 	DeleteBookTombstone(id string) error
+	// Scan-fail counter for auto-quarantine (keyed on sha256[:8] of path).
+	GetScanFailCount(pathHash string) (int, error)
+	IncrScanFailCount(pathHash string) (int, error)
+	ResetScanFailCount(pathHash string) error
 }
 
 // BookStore combines BookReader and BookWriter for callers that need both.

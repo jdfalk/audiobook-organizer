@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.33.0
+// version: 1.34.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -1644,6 +1644,10 @@ func (m *MockStore) PruneBookSnapshots(id string, keepCount int) (int, error) {
 
 func (m *MockStore) MarkITunesSynced(bookIDs []string) (int64, error) { return int64(len(bookIDs)), nil }
 func (m *MockStore) GetITunesDirtyBooks() ([]Book, error)            { return nil, nil }
+func (m *MockStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) { return nil, nil }
+func (m *MockStore) GetScanFailCount(pathHash string) (int, error)         { return 0, nil }
+func (m *MockStore) IncrScanFailCount(pathHash string) (int, error)        { return 1, nil }
+func (m *MockStore) ResetScanFailCount(pathHash string) error              { return nil }
 
 func (m *MockStore) Optimize() error {
 	return nil
