@@ -1,11 +1,12 @@
 // file: internal/activity/changelog.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 93167949-a587-41e9-8ef9-92d03f86aea6
 
 package activity
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"time"
 
@@ -54,8 +55,7 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	// 1. Path history → rename entries
 	pathHistory, err := svc.db.GetBookPathHistory(bookID)
 	if err != nil {
-		// Non-fatal: log and continue
-		_ = err
+		log.Printf("[WARN] changelog: GetBookPathHistory %s: %v", bookID, err)
 	} else {
 		for _, ph := range pathHistory {
 			entries = append(entries, ChangeLogEntry{
@@ -74,7 +74,7 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	// 2. Metadata change history → metadata_apply and tag_write entries
 	metaHistory, err := svc.db.GetBookChangeHistory(bookID, 100)
 	if err != nil {
-		_ = err
+		log.Printf("[WARN] changelog: GetBookChangeHistory %s: %v", bookID, err)
 	} else {
 		for _, mh := range metaHistory {
 			entryType := "metadata_apply"
@@ -109,7 +109,7 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	// 3. Operation changes → import and transcode entries
 	opChanges, err := svc.db.GetBookChanges(bookID)
 	if err != nil {
-		_ = err
+		log.Printf("[WARN] changelog: GetBookChanges %s: %v", bookID, err)
 	} else {
 		for _, oc := range opChanges {
 			entryType := "import"

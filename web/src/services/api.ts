@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.75.0
+// version: 1.76.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -627,10 +627,14 @@ export async function getBook(id: string): Promise<Book> {
   return response.json();
 }
 
-export async function searchBooks(query: string, limit = 50): Promise<Book[]> {
-  const response = await fetch(
-    `${API_BASE}/audiobooks?search=${encodeURIComponent(query)}&limit=${limit}&is_primary_version=true`
-  );
+export async function searchBooks(
+  query: string,
+  limit = 50,
+  showFailed = false
+): Promise<Book[]> {
+  let url = `${API_BASE}/audiobooks?search=${encodeURIComponent(query)}&limit=${limit}&is_primary_version=true`;
+  if (showFailed) url += '&show_quarantined=true';
+  const response = await fetch(url);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to search books');
   }

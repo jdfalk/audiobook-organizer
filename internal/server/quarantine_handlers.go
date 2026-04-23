@@ -1,5 +1,5 @@
 // file: internal/server/quarantine_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package server
@@ -67,5 +67,6 @@ func (s *Server) listQuarantinedBooks(c *gin.Context) {
 	if books == nil {
 		books = []database.Book{}
 	}
-	c.JSON(http.StatusOK, gin.H{"books": books, "total": len(books)})
+	total, _ := s.Store().CountQuarantinedBooks()
+	c.JSON(http.StatusOK, gin.H{"books": books, "total": total})
 }

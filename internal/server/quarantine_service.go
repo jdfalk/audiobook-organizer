@@ -1,5 +1,5 @@
 // file: internal/server/quarantine_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package server
@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -56,7 +57,13 @@ func (s *Server) QuarantineBook(bookID, reason string) error {
 		title = "Unknown"
 	}
 	filename := filepath.Base(book.FilePath)
-	dest := filepath.Join(root, ".failed", author, title, filename)
+
+	failedRoot := filepath.Clean(filepath.Join(root, ".failed"))
+	dest := filepath.Clean(filepath.Join(failedRoot, author, title, filename))
+	// Boundary check: dest must stay inside .failed/
+	if !strings.HasPrefix(dest, failedRoot+string(filepath.Separator)) {
+		return fmt.Errorf("quarantine path %q escapes .failed directory", dest)
+	}
 
 	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return fmt.Errorf("mkdir .failed: %w", err)
@@ -77,6 +84,10 @@ func (s *Server) QuarantineBook(bookID, reason string) error {
 	}
 
 	if _, err := store.UpdateBook(bookID, book); err != nil {
+		// Rollback: move file back before returning the error.
+		if rollbackErr := os.Rename(dest, oldPath); rollbackErr != nil {
+			log.Printf("[ERROR] QuarantineBook: DB update failed and file rollback failed: %v (original: %v)", rollbackErr, err)
+		}
 		return fmt.Errorf("update book: %w", err)
 	}
 
@@ -121,11 +132,11 @@ func (s *Server) UnquarantineBook(bookID string) error {
 	if err != nil {
 		return fmt.Errorf("get path history: %w", err)
 	}
+	// Find the most-recent quarantine entry (history is ordered oldest-first).
 	var origPath string
 	for _, h := range history {
 		if h.ChangeType == "quarantine" {
 			origPath = h.OldPath
-			break
 		}
 	}
 	if origPath == "" {
@@ -149,6 +160,10 @@ func (s *Server) UnquarantineBook(bookID string) error {
 	}
 
 	if _, err := store.UpdateBook(bookID, book); err != nil {
+		// Rollback: move file back to quarantine location.
+		if rollbackErr := os.Rename(origPath, quarPath); rollbackErr != nil {
+			log.Printf("[ERROR] UnquarantineBook: DB update failed and file rollback failed: %v (original: %v)", rollbackErr, err)
+		}
 		return fmt.Errorf("update book: %w", err)
 	}
 
@@ -178,19 +193,28 @@ func (s *Server) autoQuarantineFailedScans() {
 	if store == nil {
 		return
 	}
-	books, err := store.GetAllBooks(10000, 0)
-	if err != nil {
-		return
-	}
-	for _, b := range books {
-		if b.QuarantinedAt != nil {
-			continue
+	// Paginate to avoid missing books when library exceeds page size.
+	const pageSize = 1000
+	var offset int
+	for {
+		page, err := store.GetAllBooks(pageSize, offset)
+		if err != nil || len(page) == 0 {
+			break
 		}
-		n, _ := store.GetScanFailCount(scanFailKey(b.FilePath))
-		if n >= scanFailThreshold {
-			log.Printf("[INFO] auto-quarantine: %s (fail count %d)", b.FilePath, n)
-			_ = s.QuarantineBook(b.ID, fmt.Sprintf("taglib failed to read file after %d consecutive scan attempts", n))
+		for _, b := range page {
+			if b.QuarantinedAt != nil {
+				continue
+			}
+			n, _ := store.GetScanFailCount(scanFailKey(b.FilePath))
+			if n >= scanFailThreshold {
+				log.Printf("[INFO] auto-quarantine: %s (fail count %d)", b.FilePath, n)
+				_ = s.QuarantineBook(b.ID, fmt.Sprintf("taglib failed to read file after %d consecutive scan attempts", n))
+			}
 		}
+		if len(page) < pageSize {
+			break
+		}
+		offset += pageSize
 	}
 }
 
@@ -223,9 +247,26 @@ func (s *Server) processITunesPurgePending() {
 	}
 }
 
-// sanitizeDirName strips characters unsafe for directory names.
+// sanitizeDirName strips characters unsafe for directory names, including path
+// traversal sequences and control characters.
 func sanitizeDirName(name string) string {
-	replacer := strings.NewReplacer("/", "-", "\\", "-", ":", "-", "*", "-",
-		"?", "-", "\"", "-", "<", "-", ">", "-", "|", "-")
-	return strings.TrimSpace(replacer.Replace(name))
+	// Replace path-separator and shell-special characters.
+	replacer := strings.NewReplacer(
+		"/", "-", "\\", "-", ":", "-", "*", "-",
+		"?", "-", "\"", "-", "<", "-", ">", "-", "|", "-",
+	)
+	name = replacer.Replace(name)
+
+	// Strip control characters (including null bytes).
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, name)
+
+	// Replace ".." traversal component with "-".
+	name = strings.ReplaceAll(name, "..", "-")
+
+	return strings.TrimSpace(name)
 }

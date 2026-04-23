@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.7.0
+// version: 1.8.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -14,6 +14,7 @@ import {
   Menu,
   MenuItem,
   Checkbox,
+  Tooltip,
 } from '@mui/material';
 import {
   MoreVert as MoreVertIcon,
@@ -234,7 +235,9 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
           }}
         >
           {audiobook.quarantined_at && (
-            <Chip label="Failed" size="small" color="error" />
+            <Tooltip title={audiobook.quarantine_reason || 'Quarantined'}>
+              <Chip label="Failed" size="small" color="error" />
+            </Tooltip>
           )}
           {audiobook.version_group_id && (
             <Chip

@@ -5759,6 +5759,13 @@ func (s *SQLiteStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) {
 	return result, nil
 }
 
+// CountQuarantinedBooks returns the total number of quarantined books.
+func (s *SQLiteStore) CountQuarantinedBooks() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM books WHERE quarantined_at IS NOT NULL`).Scan(&n)
+	return n, err
+}
+
 // GetScanFailCount returns the scan-fail counter stored in PebbleDB for the given path hash.
 // SQLiteStore delegates to the settings table using the same key scheme.
 func (s *SQLiteStore) GetScanFailCount(pathHash string) (int, error) {

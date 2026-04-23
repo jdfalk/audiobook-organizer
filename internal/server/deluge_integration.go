@@ -1,5 +1,5 @@
 // file: internal/server/deluge_integration.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1c9d0e8f-2a3b-4a70-b8c5-3d7e0f1b9a99
 //
 // Deluge integration for library centralization (backlog 6.1).
@@ -18,6 +18,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -25,12 +26,16 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 )
 
-// globalDelugeClient is lazily initialized on first use.
-var globalDelugeClient *deluge.Client
+var (
+	globalDelugeClient   *deluge.Client
+	globalDelugeClientMu sync.Mutex
+)
 
 // getDelugeClient returns the Deluge client, initializing it if
 // needed. Returns nil if Deluge is not configured.
 func getDelugeClient() *deluge.Client {
+	globalDelugeClientMu.Lock()
+	defer globalDelugeClientMu.Unlock()
 	if globalDelugeClient != nil {
 		return globalDelugeClient
 	}

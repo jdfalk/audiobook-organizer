@@ -7511,6 +7511,21 @@ func (p *PebbleStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) {
 	return result, nil
 }
 
+// CountQuarantinedBooks returns the total number of quarantined books.
+func (p *PebbleStore) CountQuarantinedBooks() (int, error) {
+	all, err := p.GetAllBooks(100000, 0)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, b := range all {
+		if b.QuarantinedAt != nil {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // GetScanFailCount returns the number of consecutive taglib failures for a file path hash.
 func (p *PebbleStore) GetScanFailCount(pathHash string) (int, error) {
 	key := []byte("scan_fail:" + pathHash)
