@@ -2132,6 +2132,7 @@ func (s *Server) setupRoutes() {
 			authProtected.POST("/logout", s.logout)
 			authProtected.GET("/sessions", s.listMySessions)
 			authProtected.DELETE("/sessions/:id", s.revokeMySession)
+			authProtected.PUT("/me/password", s.changePassword)
 
 			// API key management
 			authProtected.POST("/api-keys", s.createAPIKey)
