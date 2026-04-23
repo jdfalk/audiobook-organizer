@@ -1,5 +1,5 @@
 // file: internal/server/bootstrap.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
 
 package server
@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -17,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
@@ -210,6 +213,15 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 
 	dataDir := filepath.Dir(config.AppConfig.DatabasePath)
 
+	// Find or create admin BEFORE consuming the token, so a creation failure
+	// doesn't burn the one-time token.
+	adminUser, generatedPassword, err := findOrCreateAdminUser(store)
+	if err != nil || adminUser == nil {
+		log.Printf("[BOOTSTRAP] find/create admin error ip=%s err=%v", ip, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to find or create admin user"})
+		return
+	}
+
 	valid, err := ConsumeBootstrapToken(store, dataDir, req.Token)
 	if err != nil {
 		log.Printf("[BOOTSTRAP] consume error ip=%s err=%v", ip, err)
@@ -219,12 +231,6 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	if !valid {
 		time.Sleep(500 * time.Millisecond)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid bootstrap token"})
-		return
-	}
-
-	adminUser, err := findAdminUser(store)
-	if err != nil || adminUser == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "no admin user found — complete setup first"})
 		return
 	}
 
@@ -262,21 +268,29 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 
 	log.Printf("[BOOTSTRAP] Token consumed: new API key created user=%s key_id=%s ip=%s", adminUser.Username, created.ID, ip)
 
-	c.JSON(http.StatusOK, gin.H{
+	resp := gin.H{
 		"api_key":  raw,
 		"key_id":   created.ID,
 		"user_id":  adminUser.ID,
 		"username": adminUser.Username,
 		"scopes":   scopes,
 		"message":  "Bootstrap token consumed. This key will not be shown again.",
-	})
+	}
+	if generatedPassword != "" {
+		resp["generated_password"] = generatedPassword
+		resp["password_message"] = "Admin account created. Change this password after logging in."
+		log.Printf("[BOOTSTRAP] Created admin user=%s — save the generated_password from this response", adminUser.Username)
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
-// findAdminUser returns the first user whose assigned role carries PermUsersManage.
-func findAdminUser(store database.Store) (*database.User, error) {
+// findOrCreateAdminUser returns the first user with PermUsersManage, creating
+// one if none exists. Returns (user, generatedPassword, error); generatedPassword
+// is non-empty only when a new user was created.
+func findOrCreateAdminUser(store database.Store) (*database.User, string, error) {
 	users, err := store.ListUsers()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	for i := range users {
 		u := &users[i]
@@ -290,10 +304,57 @@ func findAdminUser(store database.Store) (*database.User, error) {
 			}
 			for _, perm := range role.Permissions {
 				if perm == auth.PermUsersManage {
-					return u, nil
+					return u, "", nil
 				}
 			}
 		}
 	}
-	return nil, nil
+
+	// No admin found — create one.
+	password := generateReadablePassword()
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, "", fmt.Errorf("hash password: %w", err)
+	}
+
+	// Use the "admin" role if it exists, otherwise assign all permissions directly
+	// via a synthetic role name that the seeder would have created.
+	adminRole, _ := store.GetRoleByName("admin")
+	roleID := "admin"
+	if adminRole != nil {
+		roleID = adminRole.ID
+	}
+
+	u, err := store.CreateUser("admin", "admin@localhost", "bcrypt", string(hash), []string{roleID}, "active")
+	if err != nil {
+		return nil, "", fmt.Errorf("create admin user: %w", err)
+	}
+	log.Printf("[BOOTSTRAP] No admin found — created user=admin with generated password")
+	return u, password, nil
+}
+
+// passphraseWords is a small wordlist for readable password generation.
+var passphraseWords = []string{
+	"amber", "brave", "cedar", "dune", "ember", "flint", "grove", "haven",
+	"ivory", "jade", "kite", "lark", "maple", "nova", "opal", "pine",
+	"quest", "river", "stone", "tide", "ultra", "vale", "wolf", "xenon",
+	"yarn", "zinc", "atlas", "bolt", "crisp", "drift", "eagle", "forge",
+	"gleam", "hawk", "iron", "jest", "kelp", "lunar", "mist", "noble",
+	"orbit", "prism", "quill", "ridge", "swift", "thorn", "umber", "vivid",
+	"wren", "axiom", "brisk", "coral", "delta", "echo", "fable", "gust",
+	"halo", "inlet", "joust", "knoll", "ledge", "marsh", "night", "onyx",
+}
+
+func generateReadablePassword() string {
+	pickWord := func() string {
+		var b [8]byte
+		rand.Read(b[:])
+		idx := binary.BigEndian.Uint64(b[:]) % uint64(len(passphraseWords))
+		w := passphraseWords[idx]
+		return strings.ToUpper(w[:1]) + w[1:]
+	}
+	var numBuf [1]byte
+	rand.Read(numBuf[:])
+	num := int(numBuf[0])%900 + 100 // 100–999
+	return fmt.Sprintf("%s-%s-%s-%d", pickWord(), pickWord(), pickWord(), num)
 }

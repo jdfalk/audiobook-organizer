@@ -1,5 +1,5 @@
 // file: internal/server/auth_handlers.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 1457df2f-af76-46cb-a2f4-c9f6f275f93a
 
 package server
@@ -343,5 +343,97 @@ func (s *Server) revokeMySession(c *gin.Context) {
 	if currentSession != nil && currentSession.ID == sessionID {
 		clearSessionCookie(c)
 	}
+	c.Status(http.StatusNoContent)
+}
+
+// changePassword handles PUT /api/v1/auth/me/password.
+// Users change their own password by providing their current password and a new one.
+// Admins (PermUsersManage) may omit current_password to reset another user's password
+// by also providing a user_id field.
+func (s *Server) changePassword(c *gin.Context) {
+	if s.Store() == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	caller, _ := servermiddleware.CurrentUser(c)
+	if caller == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return
+	}
+
+	var req struct {
+		UserID          string `json:"user_id"`
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "new password must be at least 8 characters"})
+		return
+	}
+
+	// Determine target user.
+	targetID := caller.ID
+	isAdminReset := false
+	if req.UserID != "" && req.UserID != caller.ID {
+		// Only admins may reset another user's password.
+		isAdmin := false
+		for _, roleRef := range caller.Roles {
+			r, _ := s.Store().GetRoleByName(roleRef)
+			if r == nil {
+				r, _ = s.Store().GetRoleByID(roleRef)
+			}
+			if r == nil {
+				continue
+			}
+			for _, p := range r.Permissions {
+				if p == "users.manage" {
+					isAdmin = true
+				}
+			}
+		}
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can reset another user's password"})
+			return
+		}
+		targetID = req.UserID
+		isAdminReset = true
+	}
+
+	target, err := s.Store().GetUserByID(targetID)
+	if err != nil || target == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	// Non-admin users must verify their current password.
+	if !isAdminReset {
+		if req.CurrentPassword == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current_password is required"})
+			return
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(target.PasswordHash), []byte(req.CurrentPassword)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
+			return
+		}
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+		return
+	}
+
+	target.PasswordHash = string(newHash)
+	target.PasswordHashAlgo = "bcrypt"
+	if err := s.Store().UpdateUser(target); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
+		return
+	}
+
 	c.Status(http.StatusNoContent)
 }
