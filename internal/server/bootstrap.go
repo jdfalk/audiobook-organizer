@@ -1,5 +1,5 @@
 // file: internal/server/bootstrap.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
 
 package server
@@ -60,7 +60,7 @@ func InitBootstrapToken(store SettingsReadWriter, dataDir string) error {
 	}
 
 	expiresAt := time.Now().Add(bootstrapTokenTTL)
-	if err := store.SetSetting(bootstrapTokenKey, hash, "string", true); err != nil {
+	if err := store.SetSetting(bootstrapTokenKey, hash, "string", false); err != nil {
 		return fmt.Errorf("bootstrap: persist token hash: %w", err)
 	}
 	if err := store.SetSetting(bootstrapExpiresKey, fmt.Sprintf("%d", expiresAt.Unix()), "string", false); err != nil {
