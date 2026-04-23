@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package dedup
@@ -15,6 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 )
 
@@ -1626,6 +1627,120 @@ func minLevenshteinBetweenForms(a, b []string) int {
 		}
 	}
 	return minDist
+}
+
+// AcoustIDScan walks all primary books, extracts their stored acoustic
+// fingerprint segments, and emits DedupCandidate rows (layer="acoustid")
+// for any two books whose audio content matches.
+//
+// Per-pair deduplication is enforced via a canonical pair key so the scan
+// never emits (A,B) and (B,A) as separate candidates, regardless of which
+// segment triggered the match.
+//
+// Matching strategy per segment:
+//   1. Exact: O(1) index lookup. Similarity = 1.0.
+//   2. Fuzzy: Hamming distance scan. Similarity = actual bit-agreement fraction.
+//
+// The scan skips books whose files have no fingerprints yet (not yet backfilled).
+// Progress callback receives (done, total) book counts.
+func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total int)) error {
+	books, err := de.getAllBooks()
+	if err != nil {
+		return fmt.Errorf("acoustid scan: get all books: %w", err)
+	}
+
+	// emitted tracks canonical pair keys we've already inserted this run so we
+	// don't call UpsertCandidate multiple times for the same pair (can happen
+	// when two books share several segments).
+	emitted := make(map[string]struct{})
+	pairKey := func(a, b string) string {
+		if a > b {
+			a, b = b, a
+		}
+		return a + ":" + b
+	}
+
+	emit := func(bookAID, bookBID string, sim float64) {
+		key := pairKey(bookAID, bookBID)
+		if _, already := emitted[key]; already {
+			return
+		}
+		emitted[key] = struct{}{}
+		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
+			EntityType: "book",
+			EntityAID:  bookAID,
+			EntityBID:  bookBID,
+			Layer:      "acoustid",
+			Similarity: &sim,
+			Status:     "pending",
+		}); err != nil {
+			log.Printf("[dedup] acoustid scan: upsert candidate (%s, %s): %v", bookAID, bookBID, err)
+		}
+	}
+
+	total := len(books)
+	for i, book := range books {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		files, err := de.bookStore.GetBookFiles(book.ID)
+		if err != nil {
+			log.Printf("[dedup] acoustid scan: get files for %s: %v", book.ID, err)
+			continue
+		}
+
+		for _, f := range files {
+			segs := []string{
+				f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2,
+				f.AcoustIDSeg3, f.AcoustIDSeg4, f.AcoustIDSeg5,
+				f.AcoustIDSeg6,
+			}
+			for _, seg := range segs {
+				if seg == "" {
+					continue
+				}
+
+				// Tier 1: exact match.
+				if match, _ := de.bookStore.GetBookFileByAcoustID(seg); match != nil && match.BookID != book.ID {
+					emit(book.ID, match.BookID, 1.0)
+				}
+
+				// Tier 2: fuzzy match (skip if exact already found — same candidate).
+				if match, _ := de.bookStore.GetBookFileByAcoustIDFuzzy(seg, fingerprint.FuzzyMinSimilarity); match != nil && match.BookID != book.ID {
+					sim, simErr := fingerprint.HammingSimilarity(seg, bestSeg(match))
+					if simErr != nil {
+						sim = fingerprint.FuzzyMinSimilarity
+					}
+					emit(book.ID, match.BookID, sim)
+				}
+			}
+		}
+
+		if progress != nil && (i%50 == 0 || i == total-1) {
+			progress(i+1, total)
+		}
+	}
+
+	log.Printf("[dedup] acoustid scan complete: %d books scanned, %d candidate pair(s) emitted", total, len(emitted))
+	return nil
+}
+
+// bestSeg returns the first non-empty segment string from a BookFile,
+// used as the representative fingerprint for Hamming similarity comparison.
+func bestSeg(f *database.BookFile) string {
+	for _, s := range []string{
+		f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2,
+		f.AcoustIDSeg3, f.AcoustIDSeg4, f.AcoustIDSeg5,
+		f.AcoustIDSeg6,
+	} {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }
 
 // derefStr is defined in audiobook_service.go

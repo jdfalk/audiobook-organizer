@@ -3878,6 +3878,14 @@ export async function triggerDedupLLM(): Promise<{ status: string }> {
   return response.json();
 }
 
+export async function triggerDedupAcoustID(): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE}/dedup/scan-acoustid`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to trigger AcoustID scan');
+  }
+  return response.json();
+}
+
 export async function triggerDedupRefresh(): Promise<{ status: string }> {
   const response = await fetch(`${API_BASE}/dedup/refresh`, {
     method: 'POST',

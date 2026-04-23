@@ -2845,6 +2845,20 @@ function EmbeddingDedupTab() {
     }
   };
 
+  const handleAcoustID = async () => {
+    setScanning(true);
+    setScanMsg(null);
+    try {
+      const { status } = await api.triggerDedupAcoustID();
+      setScanMsg(status || 'AcoustID scan triggered');
+      setTimeout(() => { loadCandidates(); loadStats(); }, 3000);
+    } catch (err) {
+      setScanMsg(err instanceof Error ? err.message : 'AcoustID scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   // clusters must be computed before the page-merge handler so the
   // handler closure can read it directly.
   const allClusters = useMemo(() => buildClusters(candidates), [candidates]);
@@ -3133,6 +3147,16 @@ function EmbeddingDedupTab() {
           size="small"
         >
           AI Review
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={scanning ? <CircularProgress size={16} /> : <FingerprintIcon />}
+          onClick={handleAcoustID}
+          disabled={scanning || bulkMerging}
+          size="small"
+          title="Compare acoustic fingerprints across all books to find audio duplicates"
+        >
+          Scan (AcoustID)
         </Button>
         <Button
           variant="outlined"
