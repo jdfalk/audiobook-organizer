@@ -1363,9 +1363,10 @@ func TestProcessBooksParallelSaveWithScanCacheUpdate(t *testing.T) {
 	p := filepath.Join(tmp, "Author - Title.m4b")
 	require.NoError(t, os.WriteFile(p, []byte("content"), 0o644))
 
-	// Mock the scan cache update path
+	// Mock the scan cache update and scan-fail reset paths
 	store.EXPECT().GetBookByFilePath(p).Return(&database.Book{ID: "b1", FilePath: p}, nil).Maybe()
 	store.EXPECT().UpdateScanCache("b1", mock.Anything, mock.Anything).Return(nil).Maybe()
+	store.EXPECT().ResetScanFailCount(mock.Anything).Return(nil).Maybe()
 
 	books := []Book{{FilePath: p, Format: ".m4b"}}
 	err := ProcessBooksParallel(t.Context(), books, 1, nil, nil)
