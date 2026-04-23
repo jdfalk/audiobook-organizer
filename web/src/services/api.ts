@@ -109,6 +109,8 @@ export interface Book {
   quantity?: number;
   marked_for_deletion?: boolean;
   marked_for_deletion_at?: string;
+  quarantine_reason?: string;
+  quarantined_at?: string;
   organize_error?: string;
   metadata_provenance?: Record<string, TagSourceValues>;
   metadata_provenance_at?: string;
