@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -211,9 +211,17 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 			}
 			if plaintext != "" {
 				if err := store.SetSetting(key, plaintext, "string", true); err != nil {
-					log.Printf("WARNING: Failed to re-encrypt setting %q: %v", key, err)
+					log.Printf("[WARN] Failed to re-encrypt setting %q: %v", key, err)
 				} else {
 					log.Printf("[INFO] Re-encrypted setting %q successfully", key)
+				}
+			} else {
+				// Config file also has no value — clear the corrupt DB entry so the
+				// user can re-enter it via the UI and have it save cleanly.
+				if err := store.DeleteSetting(key); err != nil {
+					log.Printf("[WARN] Could not clear corrupt secret %q from DB: %v", key, err)
+				} else {
+					log.Printf("[INFO] Cleared corrupt secret %q from DB — re-enter the value via Settings", key)
 				}
 			}
 		}
