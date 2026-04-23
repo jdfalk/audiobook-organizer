@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.30.0
+// version: 1.31.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -338,6 +338,12 @@ var migrations = []Migration{
 		Version:     50,
 		Description: "Replace single acoustid_fingerprint with 7 segment columns",
 		Up:          migration050Up,
+		Down:        nil,
+	},
+	{
+		Version:     51,
+		Description: "Add quarantine_reason and quarantined_at columns to books",
+		Up:          migration051Up,
 		Down:        nil,
 	},
 }
@@ -2521,6 +2527,25 @@ func migration049Up(store Store) error {
 		}
 	}
 	log.Println("  - Added acoustid_fingerprint, acoustid_duration to book_files")
+	return nil
+}
+
+// migration051Up adds quarantine_reason and quarantined_at columns to books.
+func migration051Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: schema-free, fields live on the struct
+	}
+	stmts := []string{
+		`ALTER TABLE books ADD COLUMN quarantine_reason TEXT`,
+		`ALTER TABLE books ADD COLUMN quarantined_at TIMESTAMP`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 051: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Added quarantine_reason, quarantined_at to books")
 	return nil
 }
 
