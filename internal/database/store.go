@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.57.0
+// version: 2.58.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -170,6 +170,9 @@ type Book struct {
 	Quantity            *int       `json:"quantity,omitempty"`
 	MarkedForDeletion   *bool      `json:"marked_for_deletion,omitempty"`
 	MarkedForDeletionAt *time.Time `json:"marked_for_deletion_at,omitempty"`
+	// QuarantineReason is set when a file is moved to .failed/. Non-nil means quarantined.
+	QuarantineReason *string    `json:"quarantine_reason,omitempty"`
+	QuarantinedAt    *time.Time `json:"quarantined_at,omitempty"`
 	CreatedAt           *time.Time `json:"created_at,omitempty"`
 	// UpdatedAt is set on every DB write (system-level).
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
@@ -185,7 +188,8 @@ type Book struct {
 	MetadataReviewStatus *string `json:"metadata_review_status,omitempty"`
 	// ITunesSyncStatus tracks whether this book's metadata is in sync with the iTunes library.
 	// Values: "synced" (up-to-date in ITL), "dirty" (changed since last write-back),
-	// "unlinked" (no iTunes presence), "pending" (new, needs adding to iTunes).
+	// "unlinked" (no iTunes presence), "pending" (new, needs adding to iTunes),
+	// "purge_pending" (quarantined, delete from iTunes on next sync).
 	ITunesSyncStatus *string `json:"itunes_sync_status,omitempty"`
 	// Cover art
 	CoverURL *string `json:"cover_url,omitempty"`
