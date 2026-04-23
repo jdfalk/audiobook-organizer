@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.49.0
+// version: 1.50.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -7414,4 +7414,56 @@ func (s *PebbleStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, target
 	}
 
 	return batch.Commit(pebble.Sync)
+}
+
+// GetQuarantinedBooks returns books with a non-nil QuarantinedAt, newest first.
+func (p *PebbleStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) {
+	all, err := p.GetAllBooks(100000, 0)
+	if err != nil {
+		return nil, err
+	}
+	var result []Book
+	for _, b := range all {
+		if b.QuarantinedAt != nil {
+			result = append(result, b)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].QuarantinedAt.After(*result[j].QuarantinedAt)
+	})
+	if offset >= len(result) {
+		return nil, nil
+	}
+	result = result[offset:]
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+// GetScanFailCount returns the number of consecutive taglib failures for a file path hash.
+func (p *PebbleStore) GetScanFailCount(pathHash string) (int, error) {
+	key := []byte("scan_fail:" + pathHash)
+	val, closer, err := p.db.Get(key)
+	if err != nil {
+		return 0, nil
+	}
+	defer closer.Close()
+	n := 0
+	_, _ = fmt.Sscanf(string(val), "%d", &n)
+	return n, nil
+}
+
+// IncrScanFailCount increments the scan-fail counter for a file path hash and returns the new count.
+func (p *PebbleStore) IncrScanFailCount(pathHash string) (int, error) {
+	n, _ := p.GetScanFailCount(pathHash)
+	n++
+	key := []byte("scan_fail:" + pathHash)
+	return n, p.db.Set(key, []byte(fmt.Sprintf("%d", n)), pebble.Sync)
+}
+
+// ResetScanFailCount resets the scan-fail counter for a file path hash.
+func (p *PebbleStore) ResetScanFailCount(pathHash string) error {
+	key := []byte("scan_fail:" + pathHash)
+	return p.db.Delete(key, pebble.Sync)
 }

@@ -35,7 +35,8 @@ const bookSelectColumns = `
 	original_file_hash, organized_file_hash, library_state, quantity,
 	marked_for_deletion, marked_for_deletion_at, created_at, updated_at,
 	metadata_updated_at, last_written_at, metadata_review_status, cover_url, narrators_json,
-	last_organize_operation_id, last_organized_at, itunes_sync_status
+	last_organize_operation_id, last_organized_at, itunes_sync_status,
+	quarantine_reason, quarantined_at
 `
 
 // bookSelectColumnsQualified prefixes all columns with "books." for use in JOINs.
@@ -52,7 +53,8 @@ const bookSelectColumnsQualified = `
 	books.original_file_hash, books.organized_file_hash, books.library_state, books.quantity,
 	books.marked_for_deletion, books.marked_for_deletion_at, books.created_at, books.updated_at,
 	books.metadata_updated_at, books.last_written_at, books.metadata_review_status, books.cover_url, books.narrators_json,
-	books.last_organize_operation_id, books.last_organized_at, books.itunes_sync_status
+	books.last_organize_operation_id, books.last_organized_at, books.itunes_sync_status,
+	books.quarantine_reason, books.quarantined_at
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -79,6 +81,8 @@ func scanBook(scanner rowScanner, book *Book) error {
 		lastOrganizeOperationID                                              sql.NullString
 		lastOrganizedAt                                                      sql.NullTime
 		itunesSyncStatus                                                     sql.NullString
+		quarantineReason                                                     sql.NullString
+		quarantinedAt                                                        sql.NullTime
 	)
 
 	if err := scanner.Scan(
@@ -95,6 +99,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&markedForDeletion, &markedForDeletionAt, &createdAt, &updatedAt,
 		&metadataUpdatedAt, &lastWrittenAt, &metadataReviewStatus, &coverURL, &narratorsJSON,
 		&lastOrganizeOperationID, &lastOrganizedAt, &itunesSyncStatus,
+		&quarantineReason, &quarantinedAt,
 	); err != nil {
 		return err
 	}
@@ -185,6 +190,10 @@ func scanBook(scanner rowScanner, book *Book) error {
 		book.LastOrganizedAt = &lastOrganizedAt.Time
 	}
 	book.ITunesSyncStatus = nullableString(itunesSyncStatus)
+	book.QuarantineReason = nullableString(quarantineReason)
+	if quarantinedAt.Valid {
+		book.QuarantinedAt = &quarantinedAt.Time
+	}
 	return nil
 }
 
@@ -2625,6 +2634,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		bit_depth = ?, quality = ?, is_primary_version = ?, version_group_id = ?, version_notes = ?,
 		original_file_hash = ?, organized_file_hash = ?, library_state = ?, quantity = ?,
 		marked_for_deletion = ?, marked_for_deletion_at = ?,
+		quarantine_reason = ?, quarantined_at = ?,
 		updated_at = ?, metadata_updated_at = ?, last_written_at = ?,
 		metadata_review_status = ?, cover_url = ?, narrators_json = ?,
 		last_organize_operation_id = ?, last_organized_at = ?, itunes_sync_status = ?
@@ -2641,6 +2651,7 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.BitDepth, book.Quality, book.IsPrimaryVersion, book.VersionGroupID, book.VersionNotes,
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity,
 		book.MarkedForDeletion, book.MarkedForDeletionAt,
+		book.QuarantineReason, book.QuarantinedAt,
 		book.UpdatedAt, book.MetadataUpdatedAt, book.LastWrittenAt,
 		book.MetadataReviewStatus, book.CoverURL, book.NarratorsJSON,
 		book.LastOrganizeOperationID, book.LastOrganizedAt, book.ITunesSyncStatus, id,
@@ -5691,4 +5702,61 @@ func (s *SQLiteStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, target
 		}
 	}
 	return tx.Commit()
+}
+
+// GetQuarantinedBooks returns books with a non-nil quarantined_at, newest first.
+func (s *SQLiteStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) {
+	q := `SELECT id FROM books WHERE quarantined_at IS NOT NULL ORDER BY quarantined_at DESC LIMIT ? OFFSET ?`
+	if limit <= 0 {
+		limit = 10000
+	}
+	rows, err := s.db.Query(q, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	var result []Book
+	for _, id := range ids {
+		b, err := s.GetBookByID(id)
+		if err != nil || b == nil {
+			continue
+		}
+		result = append(result, *b)
+	}
+	return result, nil
+}
+
+// GetScanFailCount returns the scan-fail counter stored in PebbleDB for the given path hash.
+// SQLiteStore delegates to the settings table using the same key scheme.
+func (s *SQLiteStore) GetScanFailCount(pathHash string) (int, error) {
+	key := "scan_fail:" + pathHash
+	setting, err := s.GetSetting(key)
+	if err != nil || setting == nil {
+		return 0, nil
+	}
+	n := 0
+	_, _ = fmt.Sscanf(setting.Value, "%d", &n)
+	return n, nil
+}
+
+// IncrScanFailCount increments the scan-fail counter and returns the new count.
+func (s *SQLiteStore) IncrScanFailCount(pathHash string) (int, error) {
+	n, _ := s.GetScanFailCount(pathHash)
+	n++
+	key := "scan_fail:" + pathHash
+	return n, s.SetSetting(key, fmt.Sprintf("%d", n), "int", false)
+}
+
+// ResetScanFailCount resets the scan-fail counter to zero.
+func (s *SQLiteStore) ResetScanFailCount(pathHash string) error {
+	key := "scan_fail:" + pathHash
+	return s.SetSetting(key, "0", "int", false)
 }
