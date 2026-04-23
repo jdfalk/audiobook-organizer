@@ -1,5 +1,5 @@
 // file: internal/server/quarantine_service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package server
@@ -190,6 +190,35 @@ func (s *Server) autoQuarantineFailedScans() {
 		if n >= scanFailThreshold {
 			log.Printf("[INFO] auto-quarantine: %s (fail count %d)", b.FilePath, n)
 			_ = s.QuarantineBook(b.ID, fmt.Sprintf("taglib failed to read file after %d consecutive scan attempts", n))
+		}
+	}
+}
+
+// processITunesPurgePending finds books with itunes_sync_status = "purge_pending",
+// enqueues their PIDs for ITL removal, and clears their iTunes linkage.
+// Called at the start of each iTunes sync cycle.
+func (s *Server) processITunesPurgePending() {
+	store := s.Store()
+	if store == nil || s.writeBackBatcher == nil {
+		return
+	}
+	books, err := store.GetITunesPurgePendingBooks()
+	if err != nil || len(books) == 0 {
+		return
+	}
+	for _, b := range books {
+		if b.ITunesPersistentID == nil {
+			continue
+		}
+		s.writeBackBatcher.EnqueueRemove(*b.ITunesPersistentID)
+		log.Printf("[INFO] processITunesPurgePending: queued ITL removal for %s (book %s)", *b.ITunesPersistentID, b.ID)
+
+		// Clear iTunes linkage so the book is no longer tied to iTunes.
+		cleared := "unlinked"
+		b.ITunesSyncStatus = &cleared
+		b.ITunesPersistentID = nil
+		if _, err := store.UpdateBook(b.ID, &b); err != nil {
+			log.Printf("[WARN] processITunesPurgePending: UpdateBook %s: %v", b.ID, err)
 		}
 	}
 }

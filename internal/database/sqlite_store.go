@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.58.0
+// version: 1.59.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -2699,6 +2699,28 @@ func (s *SQLiteStore) MarkITunesSynced(bookIDs []string) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+// GetITunesPurgePendingBooks returns all books with itunes_sync_status = "purge_pending"
+// and a non-null iTunes persistent ID. These are quarantined books that should be
+// removed from iTunes before their PID linkage is cleared.
+func (s *SQLiteStore) GetITunesPurgePendingBooks() ([]Book, error) {
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE itunes_sync_status = 'purge_pending' AND itunes_persistent_id IS NOT NULL`, bookSelectColumns)
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBook(rows, &book); err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+	return books, rows.Err()
 }
 
 // GetITunesDirtyBooks returns all primary books with itunes_sync_status = "dirty".
