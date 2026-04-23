@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.187.0
+// version: 1.188.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2123,6 +2123,13 @@ func (s *Server) setupRoutes() {
 			authProtected.POST("/logout", s.logout)
 			authProtected.GET("/sessions", s.listMySessions)
 			authProtected.DELETE("/sessions/:id", s.revokeMySession)
+
+			// API key management
+			authProtected.POST("/api-keys", s.createAPIKey)
+			authProtected.GET("/api-keys", s.listAPIKeys)
+			authProtected.GET("/api-keys/:id", s.getAPIKey)
+			authProtected.PATCH("/api-keys/:id", s.updateAPIKeyStatus)
+			authProtected.DELETE("/api-keys/:id", s.revokeAPIKey)
 		}
 
 		protected := api.Group("")

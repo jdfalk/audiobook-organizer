@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.34.0
+// version: 1.35.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -216,9 +216,12 @@ type MockStore struct {
 	// API keys
 	CreateAPIKeyFunc        func(key *APIKey) (*APIKey, error)
 	GetAPIKeyFunc           func(id string) (*APIKey, error)
+	GetAPIKeyByHashFunc     func(hash string) (*APIKey, error)
 	ListAPIKeysForUserFunc  func(userID string) ([]APIKey, error)
+	ListAllAPIKeysFunc      func() ([]APIKey, error)
 	RevokeAPIKeyFunc        func(id string) error
-	TouchAPIKeyLastUsedFunc func(id string, at time.Time) error
+	SetAPIKeyStatusFunc     func(id, status string, at time.Time) error
+	TouchAPIKeyLastUsedFunc func(id string, at time.Time, ip string) error
 
 	// Invites
 	CreateInviteFunc      func(invite *Invite) (*Invite, error)
@@ -1379,9 +1382,23 @@ func (m *MockStore) GetAPIKey(id string) (*APIKey, error) {
 	return nil, nil
 }
 
+func (m *MockStore) GetAPIKeyByHash(hash string) (*APIKey, error) {
+	if m.GetAPIKeyByHashFunc != nil {
+		return m.GetAPIKeyByHashFunc(hash)
+	}
+	return nil, nil
+}
+
 func (m *MockStore) ListAPIKeysForUser(userID string) ([]APIKey, error) {
 	if m.ListAPIKeysForUserFunc != nil {
 		return m.ListAPIKeysForUserFunc(userID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListAllAPIKeys() ([]APIKey, error) {
+	if m.ListAllAPIKeysFunc != nil {
+		return m.ListAllAPIKeysFunc()
 	}
 	return nil, nil
 }
@@ -1393,9 +1410,16 @@ func (m *MockStore) RevokeAPIKey(id string) error {
 	return nil
 }
 
-func (m *MockStore) TouchAPIKeyLastUsed(id string, at time.Time) error {
+func (m *MockStore) SetAPIKeyStatus(id, status string, at time.Time) error {
+	if m.SetAPIKeyStatusFunc != nil {
+		return m.SetAPIKeyStatusFunc(id, status, at)
+	}
+	return nil
+}
+
+func (m *MockStore) TouchAPIKeyLastUsed(id string, at time.Time, ip string) error {
 	if m.TouchAPIKeyLastUsedFunc != nil {
-		return m.TouchAPIKeyLastUsedFunc(id, at)
+		return m.TouchAPIKeyLastUsedFunc(id, at, ip)
 	}
 	return nil
 }

@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.74.0
+// version: 1.75.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3918,4 +3918,94 @@ export async function triggerDedupRefresh(): Promise<{ status: string }> {
     throw await buildApiError(response, 'Failed to trigger dedup refresh');
   }
   return response.json();
+}
+
+// ── API Key management ────────────────────────────────────────────────────────
+
+export interface APIKey {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  scopes: string[];
+  status: 'active' | 'inactive' | 'revoked';
+  created_at: string;
+  last_used_at?: string;
+  last_used_ip?: string;
+  use_count: number;
+  expires_at?: string;
+  deactivated_at?: string;
+  revoked_at?: string;
+  identifier: string;
+  days_since_last_use: number | null;
+  never_used: boolean;
+  username?: string;
+}
+
+export interface CreateAPIKeyRequest {
+  name: string;
+  description?: string;
+  scopes?: string[];
+  expires_in_days?: number;
+  user_id?: string;
+}
+
+export interface CreateAPIKeyResponse {
+  id: string;
+  name: string;
+  token: string;
+  scopes: string[];
+  expires_at?: string;
+  created_at: string;
+}
+
+export async function createAPIKey(body: CreateAPIKeyRequest): Promise<CreateAPIKeyResponse> {
+  const response = await fetch(`${API_BASE}/auth/api-keys`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to create API key');
+  }
+  return response.json();
+}
+
+export async function listAPIKeys(all?: boolean): Promise<APIKey[]> {
+  const url = all ? `${API_BASE}/auth/api-keys?all=true` : `${API_BASE}/auth/api-keys`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to list API keys');
+  }
+  const data = await response.json();
+  return data.api_keys ?? [];
+}
+
+export async function getAPIKey(id: string): Promise<APIKey> {
+  const response = await fetch(`${API_BASE}/auth/api-keys/${id}`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to get API key');
+  }
+  return response.json();
+}
+
+export async function updateAPIKeyStatus(id: string, status: 'active' | 'inactive'): Promise<APIKey> {
+  const response = await fetch(`${API_BASE}/auth/api-keys/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to update API key status');
+  }
+  return response.json();
+}
+
+export async function revokeAPIKey(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/auth/api-keys/${id}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to revoke API key');
+  }
 }

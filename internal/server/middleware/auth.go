@@ -1,10 +1,11 @@
 // file: internal/server/middleware/auth.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 83c42ecb-1df2-4baf-9890-3f91ab4db6fe
 
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ const (
 	SessionCookieName = "session_id"
 	contextUserKey    = "auth_user"
 	contextSessionKey = "auth_session"
+	contextAPIKeyKey  = "auth_api_key"
 )
 
 // SessionTokenFromRequest extracts the session token from Bearer auth or cookie.
@@ -65,8 +67,28 @@ func CurrentSession(c *gin.Context) (*database.Session, bool) {
 	return session, ok && session != nil
 }
 
+// CurrentAPIKey fetches the API key that authenticated this request, if any.
+func CurrentAPIKey(c *gin.Context) (*database.APIKey, bool) {
+	if c == nil {
+		return nil, false
+	}
+	value, ok := c.Get(contextAPIKeyKey)
+	if !ok || value == nil {
+		return nil, false
+	}
+	key, ok := value.(*database.APIKey)
+	return key, ok && key != nil
+}
+
 // RequireAuth enforces session-based auth when at least one user exists.
-func RequireAuth(store interface { database.UserReader; database.RoleStore; database.SessionStore }) gin.HandlerFunc {
+// Tokens prefixed with "abk_" are routed through API key validation;
+// all other tokens fall through to session validation.
+func RequireAuth(store interface {
+	database.UserReader
+	database.RoleStore
+	database.SessionStore
+	database.APIKeyStore
+}) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if store == nil {
 			c.Next()
@@ -89,6 +111,11 @@ func RequireAuth(store interface { database.UserReader; database.RoleStore; data
 		if token == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 			c.Abort()
+			return
+		}
+
+		if strings.HasPrefix(token, "abk_") {
+			handleAPIKeyAuth(c, store, token)
 			return
 		}
 
@@ -120,12 +147,8 @@ func RequireAuth(store interface { database.UserReader; database.RoleStore; data
 		c.Set(contextUserKey, user)
 		c.Set(contextSessionKey, session)
 
-		// Also attach user + effective permissions on the request
-		// context using the typed helpers from internal/auth so
-		// handlers can call auth.Can(ctx, perm) directly. Permissions
-		// are the union of every role's permission list — computed
-		// on each request. Spec 3.7 calls for caching this on the
-		// session blob for perf; that optimization is a follow-up.
+		// Attach user + effective permissions on the request context using the
+		// typed helpers from internal/auth so handlers can call auth.Can(ctx, perm).
 		perms := effectivePermissionsFor(store, user)
 		ctx := auth.WithUser(c.Request.Context(), user)
 		ctx = auth.WithPermissions(ctx, perms)
@@ -133,6 +156,94 @@ func RequireAuth(store interface { database.UserReader; database.RoleStore; data
 
 		c.Next()
 	}
+}
+
+// handleAPIKeyAuth validates an "abk_" prefixed token and, on success, binds
+// the user and scoped permissions to the context then calls c.Next().
+func handleAPIKeyAuth(c *gin.Context, store interface {
+	database.UserReader
+	database.RoleStore
+	database.APIKeyStore
+}, rawToken string) {
+	hash := database.HashAPIKeyToken(rawToken)
+	key, err := store.GetAPIKeyByHash(hash)
+	if err != nil {
+		log.Printf("[APIKEY] lookup error: hash=%s err=%v", hash[:8], err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		c.Abort()
+		return
+	}
+	if key == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid API key"})
+		c.Abort()
+		return
+	}
+	if key.Status == "revoked" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "API key has been revoked"})
+		c.Abort()
+		return
+	}
+	if key.Status == "inactive" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "API key is inactive"})
+		c.Abort()
+		return
+	}
+	if key.ExpiresAt != nil && time.Now().After(*key.ExpiresAt) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "API key has expired"})
+		c.Abort()
+		return
+	}
+
+	user, err := store.GetUserByID(key.UserID)
+	if err != nil || user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid API key owner"})
+		c.Abort()
+		return
+	}
+	if status := strings.ToLower(strings.TrimSpace(user.Status)); status != "" && status != "active" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "inactive user"})
+		c.Abort()
+		return
+	}
+
+	// Compute user's role-based permissions, then narrow to key scopes.
+	rolePerms := effectivePermissionsFor(store, user)
+	effectivePerms := intersectPermissions(rolePerms, key.Scopes)
+
+	ip := c.ClientIP()
+	go func() {
+		if touchErr := store.TouchAPIKeyLastUsed(key.ID, time.Now(), ip); touchErr != nil {
+			log.Printf("[APIKEY] touch error: id=%s err=%v", key.ID, touchErr)
+		}
+	}()
+
+	c.Set(contextUserKey, user)
+	c.Set(contextAPIKeyKey, key)
+
+	ctx := auth.WithUser(c.Request.Context(), user)
+	ctx = auth.WithPermissions(ctx, effectivePerms)
+	c.Request = c.Request.WithContext(ctx)
+
+	c.Next()
+}
+
+// intersectPermissions returns only permissions that appear in both rolePerms
+// and scopes. The key can only narrow, never expand, user role permissions.
+func intersectPermissions(rolePerms []auth.Permission, scopes []string) []auth.Permission {
+	if len(scopes) == 0 {
+		return rolePerms
+	}
+	scopeSet := make(map[auth.Permission]bool, len(scopes))
+	for _, s := range scopes {
+		scopeSet[auth.Permission(s)] = true
+	}
+	var out []auth.Permission
+	for _, p := range rolePerms {
+		if scopeSet[p] {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // effectivePermissionsFor resolves the union of every role's
@@ -170,7 +281,12 @@ func effectivePermissionsFor(store database.RoleStore, user *database.User) []au
 //
 // Exception: if no users exist yet (first-run bootstrap), the check
 // is bypassed so the /setup wizard can run unauthenticated.
-func RequirePermission(store interface { database.UserReader; database.RoleStore; database.SessionStore }, p auth.Permission) gin.HandlerFunc {
+func RequirePermission(store interface {
+	database.UserReader
+	database.RoleStore
+	database.SessionStore
+	database.APIKeyStore
+}, p auth.Permission) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// First-run bypass — RequireAuth uses the same pattern.
 		if store != nil {

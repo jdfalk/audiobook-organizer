@@ -1,5 +1,5 @@
 // file: internal/database/apikey_invite_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5d1e8a2f-4c3b-4f70-a9d6-2e7f0c1b9a48
 
 package database
@@ -51,14 +51,20 @@ func TestAPIKey_Lifecycle(t *testing.T) {
 		t.Error("RevokedAt should be non-nil after RevokeAPIKey")
 	}
 
-	// Last-used touch.
+	// Last-used touch with IP.
 	touched := time.Now()
-	if err := store.TouchAPIKeyLastUsed(key.ID, touched); err != nil {
+	if err := store.TouchAPIKeyLastUsed(key.ID, touched, "127.0.0.1"); err != nil {
 		t.Fatalf("touch: %v", err)
 	}
 	got, _ = store.GetAPIKey(key.ID)
 	if got.LastUsedAt == nil || got.LastUsedAt.Unix() != touched.Unix() {
 		t.Errorf("LastUsedAt not updated")
+	}
+	if got.LastUsedIP != "127.0.0.1" {
+		t.Errorf("LastUsedIP = %q, want 127.0.0.1", got.LastUsedIP)
+	}
+	if got.UseCount != 1 {
+		t.Errorf("UseCount = %d, want 1", got.UseCount)
 	}
 }
 

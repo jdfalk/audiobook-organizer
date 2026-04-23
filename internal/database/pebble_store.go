@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.50.0
+// version: 1.51.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -4170,6 +4170,9 @@ func (p *PebbleStore) CreateAPIKey(key *APIKey) (*APIKey, error) {
 	if key.CreatedAt.IsZero() {
 		key.CreatedAt = time.Now()
 	}
+	if key.Status == "" {
+		key.Status = "active"
+	}
 	data, err := json.Marshal(key)
 	if err != nil {
 		return nil, err
@@ -4182,6 +4185,12 @@ func (p *PebbleStore) CreateAPIKey(key *APIKey) (*APIKey, error) {
 	if err := b.Set([]byte("idx:apikey:user:"+key.UserID+":"+key.ID), []byte("1"), nil); err != nil {
 		b.Close()
 		return nil, err
+	}
+	if key.TokenHash != "" {
+		if err := b.Set([]byte("idx:apikey:hash:"+key.TokenHash), []byte(key.ID), nil); err != nil {
+			b.Close()
+			return nil, err
+		}
 	}
 	if err := b.Commit(pebble.Sync); err != nil {
 		return nil, err
@@ -4203,6 +4212,19 @@ func (p *PebbleStore) GetAPIKey(id string) (*APIKey, error) {
 		return nil, err
 	}
 	return &k, nil
+}
+
+func (p *PebbleStore) GetAPIKeyByHash(hash string) (*APIKey, error) {
+	v, closer, err := p.db.Get([]byte("idx:apikey:hash:" + hash))
+	if err == pebble.ErrNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	keyID := string(v)
+	closer.Close()
+	return p.GetAPIKey(keyID)
 }
 
 func (p *PebbleStore) ListAPIKeysForUser(userID string) ([]APIKey, error) {
@@ -4227,7 +4249,31 @@ func (p *PebbleStore) ListAPIKeysForUser(userID string) ([]APIKey, error) {
 	return out, nil
 }
 
+func (p *PebbleStore) ListAllAPIKeys() ([]APIKey, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("apikey:"),
+		UpperBound: []byte("apikey:~"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	var out []APIKey
+	for iter.First(); iter.Valid(); iter.Next() {
+		var k APIKey
+		if err := json.Unmarshal(iter.Value(), &k); err != nil {
+			continue
+		}
+		out = append(out, k)
+	}
+	return out, nil
+}
+
 func (p *PebbleStore) RevokeAPIKey(id string) error {
+	return p.SetAPIKeyStatus(id, "revoked", time.Now())
+}
+
+func (p *PebbleStore) SetAPIKeyStatus(id, status string, at time.Time) error {
 	k, err := p.GetAPIKey(id)
 	if err != nil {
 		return err
@@ -4235,8 +4281,15 @@ func (p *PebbleStore) RevokeAPIKey(id string) error {
 	if k == nil {
 		return nil
 	}
-	now := time.Now()
-	k.RevokedAt = &now
+	k.Status = status
+	switch status {
+	case "revoked":
+		k.RevokedAt = &at
+	case "inactive":
+		k.DeactivatedAt = &at
+	case "active":
+		k.DeactivatedAt = nil
+	}
 	data, err := json.Marshal(k)
 	if err != nil {
 		return err
@@ -4244,7 +4297,7 @@ func (p *PebbleStore) RevokeAPIKey(id string) error {
 	return p.db.Set([]byte("apikey:"+id), data, pebble.Sync)
 }
 
-func (p *PebbleStore) TouchAPIKeyLastUsed(id string, at time.Time) error {
+func (p *PebbleStore) TouchAPIKeyLastUsed(id string, at time.Time, ip string) error {
 	k, err := p.GetAPIKey(id)
 	if err != nil {
 		return err
@@ -4253,6 +4306,8 @@ func (p *PebbleStore) TouchAPIKeyLastUsed(id string, at time.Time) error {
 		return nil
 	}
 	k.LastUsedAt = &at
+	k.LastUsedIP = ip
+	k.UseCount++
 	data, err := json.Marshal(k)
 	if err != nil {
 		return err
