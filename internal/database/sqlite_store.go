@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.57.0
+// version: 1.58.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -2503,6 +2503,15 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Record the original import path so full provenance is preserved forever.
+	_ = s.RecordPathChange(&BookPathChange{
+		BookID:     book.ID,
+		OldPath:    "",
+		NewPath:    book.FilePath,
+		ChangeType: "import",
+	})
+
 	return book, nil
 }
 

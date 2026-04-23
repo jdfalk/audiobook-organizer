@@ -1536,6 +1536,14 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 		return nil, err
 	}
 
+	// Record the original import path so full provenance is preserved forever.
+	_ = p.RecordPathChange(&BookPathChange{
+		BookID:     book.ID,
+		OldPath:    "",
+		NewPath:    book.FilePath,
+		ChangeType: "import",
+	})
+
 	return book, nil
 }
 
