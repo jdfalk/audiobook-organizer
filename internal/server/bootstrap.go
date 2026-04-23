@@ -1,5 +1,5 @@
 // file: internal/server/bootstrap.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
 
 package server
@@ -69,7 +69,8 @@ func InitBootstrapToken(store SettingsReadWriter, dataDir string) error {
 		return nil
 	}
 
-	log.Printf("[BOOTSTRAP] Emergency access token written to %s — use POST /api/v1/auth/bootstrap once to exchange for an API key", tokenPath)
+	log.Printf("[BOOTSTRAP] Emergency access token: %s", raw)
+	log.Printf("[BOOTSTRAP] Token also written to %s — POST /api/v1/auth/bootstrap to exchange for an API key", tokenPath)
 	return nil
 }
 
