@@ -39395,6 +39395,17 @@ func (_mock *MockBookReader) GetQuarantinedBooks(limit, offset int) ([]database.
 	return r0, r1
 }
 
+// CountQuarantinedBooks provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) CountQuarantinedBooks() (int, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for CountQuarantinedBooks")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
+	return r0, r1
+}
+
 // GetScanFailCount provides a mock function for the type MockBookWriter
 func (_mock *MockBookWriter) GetScanFailCount(pathHash string) (int, error) {
 	ret := _mock.Called(pathHash)
@@ -39450,6 +39461,17 @@ func (_mock *MockStore) GetQuarantinedBooks(limit, offset int) ([]database.Book,
 	} else {
 		r1 = ret.Error(1)
 	}
+	return r0, r1
+}
+
+// CountQuarantinedBooks provides a mock function for the type MockStore
+func (_mock *MockStore) CountQuarantinedBooks() (int, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for CountQuarantinedBooks")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
 	return r0, r1
 }
 
@@ -39511,6 +39533,17 @@ func (_mock *MockBookStore) GetQuarantinedBooks(limit, offset int) ([]database.B
 	return r0, r1
 }
 
+// CountQuarantinedBooks provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) CountQuarantinedBooks() (int, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for CountQuarantinedBooks")
+	}
+	r0, _ := ret.Get(0).(int)
+	r1, _ := ret.Get(1).(error)
+	return r0, r1
+}
+
 // GetScanFailCount provides a mock function for the type MockBookStore
 func (_mock *MockBookStore) GetScanFailCount(pathHash string) (int, error) {
 	ret := _mock.Called(pathHash)
@@ -39541,4 +39574,96 @@ func (_mock *MockBookStore) ResetScanFailCount(pathHash string) error {
 	}
 	r0, _ := ret.Get(0).(error)
 	return r0
+}
+
+// --- MockStore Expecter helpers for methods added post-codegen ---
+
+type MockStore_CountQuarantinedBooks_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) CountQuarantinedBooks() *MockStore_CountQuarantinedBooks_Call {
+	return &MockStore_CountQuarantinedBooks_Call{Call: _e.mock.On("CountQuarantinedBooks")}
+}
+func (_c *MockStore_CountQuarantinedBooks_Call) Run(run func()) *MockStore_CountQuarantinedBooks_Call {
+	_c.Call.Run(func(_ mock.Arguments) { run() })
+	return _c
+}
+func (_c *MockStore_CountQuarantinedBooks_Call) Return(n int, err error) *MockStore_CountQuarantinedBooks_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+func (_c *MockStore_CountQuarantinedBooks_Call) RunAndReturn(run func() (int, error)) *MockStore_CountQuarantinedBooks_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+type MockStore_GetQuarantinedBooks_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetQuarantinedBooks(limit, offset interface{}) *MockStore_GetQuarantinedBooks_Call {
+	return &MockStore_GetQuarantinedBooks_Call{Call: _e.mock.On("GetQuarantinedBooks", limit, offset)}
+}
+func (_c *MockStore_GetQuarantinedBooks_Call) Run(run func(int, int)) *MockStore_GetQuarantinedBooks_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(int), args[1].(int)) })
+	return _c
+}
+func (_c *MockStore_GetQuarantinedBooks_Call) Return(books []database.Book, err error) *MockStore_GetQuarantinedBooks_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+func (_c *MockStore_GetQuarantinedBooks_Call) RunAndReturn(run func(int, int) ([]database.Book, error)) *MockStore_GetQuarantinedBooks_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+type MockStore_GetScanFailCount_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetScanFailCount(pathHash interface{}) *MockStore_GetScanFailCount_Call {
+	return &MockStore_GetScanFailCount_Call{Call: _e.mock.On("GetScanFailCount", pathHash)}
+}
+func (_c *MockStore_GetScanFailCount_Call) Run(run func(string)) *MockStore_GetScanFailCount_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_GetScanFailCount_Call) Return(n int, err error) *MockStore_GetScanFailCount_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+func (_c *MockStore_GetScanFailCount_Call) RunAndReturn(run func(string) (int, error)) *MockStore_GetScanFailCount_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+type MockStore_IncrScanFailCount_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) IncrScanFailCount(pathHash interface{}) *MockStore_IncrScanFailCount_Call {
+	return &MockStore_IncrScanFailCount_Call{Call: _e.mock.On("IncrScanFailCount", pathHash)}
+}
+func (_c *MockStore_IncrScanFailCount_Call) Run(run func(string)) *MockStore_IncrScanFailCount_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_IncrScanFailCount_Call) Return(n int, err error) *MockStore_IncrScanFailCount_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+func (_c *MockStore_IncrScanFailCount_Call) RunAndReturn(run func(string) (int, error)) *MockStore_IncrScanFailCount_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+type MockStore_ResetScanFailCount_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) ResetScanFailCount(pathHash interface{}) *MockStore_ResetScanFailCount_Call {
+	return &MockStore_ResetScanFailCount_Call{Call: _e.mock.On("ResetScanFailCount", pathHash)}
+}
+func (_c *MockStore_ResetScanFailCount_Call) Run(run func(string)) *MockStore_ResetScanFailCount_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_ResetScanFailCount_Call) Return(err error) *MockStore_ResetScanFailCount_Call {
+	_c.Call.Return(err)
+	return _c
+}
+func (_c *MockStore_ResetScanFailCount_Call) RunAndReturn(run func(string) error) *MockStore_ResetScanFailCount_Call {
+	_c.Call.Return(run)
+	return _c
 }

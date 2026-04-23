@@ -1,5 +1,5 @@
 // file: internal/database/iface_book.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
 
 package database
@@ -33,6 +33,7 @@ type BookReader interface {
 	GetITunesDirtyBooks() ([]Book, error)
 	GetITunesPurgePendingBooks() ([]Book, error)
 	GetQuarantinedBooks(limit, offset int) ([]Book, error)
+	CountQuarantinedBooks() (int, error)
 }
 
 // BookWriter is the write-only slice of Store for callers that only

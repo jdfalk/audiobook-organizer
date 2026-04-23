@@ -1,5 +1,5 @@
 // file: internal/server/file_io_pool.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: c4d5e6f7-a8b9-0c1d-2e3f-4a5b6c7d8e9f
 //
 // Bounded worker pool for file I/O operations (cover embed, tag write,
@@ -209,7 +209,7 @@ func (p *FileIOPool) Stop() {
 
 // InitFileIOPool creates the global pool and registers the default recovery handler.
 func InitFileIOPool() {
-	GlobalFileIOPool = NewFileIOPool(4)
+	SetGlobalFileIOPool(NewFileIOPool(4))
 	RegisterFileOpRecovery("apply_metadata", func(bookID string) {
 		srv := globalServer
 		if srv == nil || srv.metadataFetchService == nil {

@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.33.0
+// version: 1.34.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -474,6 +474,12 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 						_, _ = gs.IncrScanFailCount(fmt.Sprintf("%x", sum[:8]))
 					}
 				} else {
+					// Reset fail counter on successful parse so transient failures
+					// don't accumulate toward the auto-quarantine threshold.
+					if gs := database.GetGlobalStore(); gs != nil {
+						sum := sha256.Sum256([]byte(filePath))
+						_ = gs.ResetScanFailCount(fmt.Sprintf("%x", sum[:8]))
+					}
 					if meta != nil {
 						fallbackUsed = meta.UsedFilenameFallback
 						if meta.Title != "" {
@@ -581,7 +587,11 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				// Use a deferred recover guard in case GlobalStore is a non-nil interface
 				// wrapping a nil concrete pointer (can happen in tests).
 				func() {
-					defer func() { recover() }() //nolint:errcheck
+					defer func() {
+						if r := recover(); r != nil {
+							scanLog.Warn("scan cache update recovered from panic: %v", r)
+						}
+					}()
 					store := database.GetGlobalStore()
 					if store == nil {
 						return
