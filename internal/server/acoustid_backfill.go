@@ -1,5 +1,5 @@
 // file: internal/server/acoustid_backfill.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package server
@@ -80,7 +80,7 @@ func (s *Server) backfillAcoustIDs() {
 			fingerprinted++
 
 			// Throttle to avoid saturating disk I/O during active use.
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
