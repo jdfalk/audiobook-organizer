@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.29.0
+// version: 1.30.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -332,6 +332,12 @@ var migrations = []Migration{
 		Version:     49,
 		Description: "Add acoustid_fingerprint and acoustid_duration columns to book_files for content-based matching",
 		Up:          migration049Up,
+		Down:        nil,
+	},
+	{
+		Version:     50,
+		Description: "Replace single acoustid_fingerprint with 7 segment columns",
+		Up:          migration050Up,
 		Down:        nil,
 	},
 }
@@ -2515,5 +2521,35 @@ func migration049Up(store Store) error {
 		}
 	}
 	log.Println("  - Added acoustid_fingerprint, acoustid_duration to book_files")
+	return nil
+}
+
+// migration050Up replaces the single acoustid_fingerprint/acoustid_duration
+// columns with 7 per-segment columns: acoustid_seg0 through acoustid_seg6.
+// The old acoustid_fingerprint column is retained (SQLite cannot drop columns
+// in older versions) but is no longer read or written by the application.
+// PebbleDB is schema-free; the new segment fields live on the struct.
+func migration050Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: no schema change needed
+	}
+	stmts := []string{
+		`ALTER TABLE book_files ADD COLUMN acoustid_seg0 TEXT`,
+		`ALTER TABLE book_files ADD COLUMN acoustid_seg1 TEXT`,
+		`ALTER TABLE book_files ADD COLUMN acoustid_seg2 TEXT`,
+		`ALTER TABLE book_files ADD COLUMN acoustid_seg3 TEXT`,
+		`ALTER TABLE book_files ADD COLUMN acoustid_seg4 TEXT`,
+		`ALTER TABLE book_files ADD COLUMN acoustid_seg5 TEXT`,
+		`ALTER TABLE book_files ADD COLUMN acoustid_seg6 TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_acoustid_seg0 ON book_files(acoustid_seg0) WHERE acoustid_seg0 IS NOT NULL`,
+		// Keep old acoustid_fingerprint column — SQLite can't drop columns easily.
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 50: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Added acoustid_seg0–acoustid_seg6 to book_files")
 	return nil
 }

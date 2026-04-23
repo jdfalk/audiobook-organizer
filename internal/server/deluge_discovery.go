@@ -1,5 +1,5 @@
 // file: internal/server/deluge_discovery.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: e6f7a8b9-c0d1-2e3f-4a5b-6c7d8e9f0a1b
 //
 // Deluge label-based audiobook discovery.
@@ -166,19 +166,24 @@ func (s *Server) isContentFingerprintTracked(contentPath string) bool {
 		return false
 	}
 
-	result, err := fingerprint.File(firstAudio)
+	segs, err := fingerprint.FileSegments(firstAudio, 0)
 	if err != nil {
-		log.Printf("[WARN] deluge discovery: fpcalc %s: %v", firstAudio, err)
+		log.Printf("[WARN] deluge discovery: fingerprint %s: %v", firstAudio, err)
+		return false
+	}
+	// Use the intro segment (seg[0]) for exact and fuzzy lookups.
+	introFP := segs[0]
+	if introFP == "" {
 		return false
 	}
 
 	// Exact match first (O(1) index lookup).
-	if f, _ := s.Store().GetBookFileByAcoustID(result.Fingerprint); f != nil {
+	if f, _ := s.Store().GetBookFileByAcoustID(introFP); f != nil {
 		return true
 	}
 
 	// Fuzzy fallback — catches minor encoding variations.
-	f, _ := s.Store().GetBookFileByAcoustIDFuzzy(result.Fingerprint, fingerprint.FuzzyMinSimilarity)
+	f, _ := s.Store().GetBookFileByAcoustIDFuzzy(introFP, fingerprint.FuzzyMinSimilarity)
 	return f != nil
 }
 
