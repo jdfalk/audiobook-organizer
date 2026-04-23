@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.186.0
+// version: 1.187.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1694,6 +1694,16 @@ func (s *Server) Start(cfg ServerConfig) error {
 			s.buildSearchIndexIfEmpty()
 		}()
 	}
+
+	// One-time startup jobs: transcode malformed M4B files, then quarantine any
+	// that remained permanently unreadable. Run sequentially in a bgWG goroutine
+	// so shutdown waits for them and they don't race against the HTTP server.
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		s.transcodeMalformedM4BFiles()
+		s.quarantineKnownBadFiles()
+	}()
 
 	// Start periodic cleanup of stale transcode temp files
 	if s.Store() != nil {
