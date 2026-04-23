@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.56.0
+// version: 1.57.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -5142,7 +5142,7 @@ func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {
 const bookFileCols = `id, book_id, file_path, original_filename, itunes_path, itunes_persistent_id,
 	track_number, track_count, disc_number, disc_count, title, format, codec, duration,
 	file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
-	acoustid_fingerprint, acoustid_duration,
+	acoustid_seg0, acoustid_seg1, acoustid_seg2, acoustid_seg3, acoustid_seg4, acoustid_seg5, acoustid_seg6,
 	missing, created_at, updated_at`
 
 // bookFileScan scans a single row into a BookFile.
@@ -5156,8 +5156,7 @@ func bookFileScan(row interface {
 	var title, format, codec sql.NullString
 	var duration, fileSize, bitrateKbps, sampleRateHz, channels, bitDepth sql.NullInt64
 	var fileHash, originalFileHash sql.NullString
-	var acoustidFingerprint sql.NullString
-	var acoustidDuration sql.NullInt64
+	var acoustidSeg0, acoustidSeg1, acoustidSeg2, acoustidSeg3, acoustidSeg4, acoustidSeg5, acoustidSeg6 sql.NullString
 	var missing int
 	err := row.Scan(
 		&f.ID, &f.BookID, &f.FilePath,
@@ -5166,7 +5165,7 @@ func bookFileScan(row interface {
 		&title, &format, &codec,
 		&duration, &fileSize, &bitrateKbps, &sampleRateHz, &channels, &bitDepth,
 		&fileHash, &originalFileHash,
-		&acoustidFingerprint, &acoustidDuration,
+		&acoustidSeg0, &acoustidSeg1, &acoustidSeg2, &acoustidSeg3, &acoustidSeg4, &acoustidSeg5, &acoustidSeg6,
 		&missing, &f.CreatedAt, &f.UpdatedAt,
 	)
 	if err != nil {
@@ -5226,11 +5225,26 @@ func bookFileScan(row interface {
 	if originalFileHash.Valid {
 		f.OriginalFileHash = originalFileHash.String
 	}
-	if acoustidFingerprint.Valid {
-		f.AcoustIDFingerprint = acoustidFingerprint.String
+	if acoustidSeg0.Valid {
+		f.AcoustIDSeg0 = acoustidSeg0.String
 	}
-	if acoustidDuration.Valid {
-		f.AcoustIDDuration = int(acoustidDuration.Int64)
+	if acoustidSeg1.Valid {
+		f.AcoustIDSeg1 = acoustidSeg1.String
+	}
+	if acoustidSeg2.Valid {
+		f.AcoustIDSeg2 = acoustidSeg2.String
+	}
+	if acoustidSeg3.Valid {
+		f.AcoustIDSeg3 = acoustidSeg3.String
+	}
+	if acoustidSeg4.Valid {
+		f.AcoustIDSeg4 = acoustidSeg4.String
+	}
+	if acoustidSeg5.Valid {
+		f.AcoustIDSeg5 = acoustidSeg5.String
+	}
+	if acoustidSeg6.Valid {
+		f.AcoustIDSeg6 = acoustidSeg6.String
 	}
 	f.Missing = missing != 0
 	return f, nil
@@ -5278,9 +5292,9 @@ func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
 			id, book_id, file_path, original_filename, itunes_path, itunes_persistent_id,
 			track_number, track_count, disc_number, disc_count, title, format, codec, duration,
 			file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
-			acoustid_fingerprint, acoustid_duration,
+			acoustid_seg0, acoustid_seg1, acoustid_seg2, acoustid_seg3, acoustid_seg4, acoustid_seg5, acoustid_seg6,
 			missing, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		file.ID, file.BookID, file.FilePath,
 		nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
 		nullableIntVal(file.TrackNumber), nullableIntVal(file.TrackCount),
@@ -5290,7 +5304,10 @@ func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
 		nullableIntVal(file.BitrateKbps), nullableIntVal(file.SampleRateHz),
 		nullableIntVal(file.Channels), nullableIntVal(file.BitDepth),
 		nullableStringVal(file.FileHash), nullableStringVal(file.OriginalFileHash),
-		nullableStringVal(file.AcoustIDFingerprint), nullableIntVal(file.AcoustIDDuration),
+		nullableStringVal(file.AcoustIDSeg0), nullableStringVal(file.AcoustIDSeg1),
+		nullableStringVal(file.AcoustIDSeg2), nullableStringVal(file.AcoustIDSeg3),
+		nullableStringVal(file.AcoustIDSeg4), nullableStringVal(file.AcoustIDSeg5),
+		nullableStringVal(file.AcoustIDSeg6),
 		missingInt, file.CreatedAt, file.UpdatedAt,
 	)
 	if err != nil {
@@ -5313,7 +5330,8 @@ func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
 			title=?, format=?, codec=?, duration=?,
 			file_size=?, bitrate_kbps=?, sample_rate_hz=?, channels=?, bit_depth=?,
 			file_hash=?, original_file_hash=?,
-			acoustid_fingerprint=?, acoustid_duration=?,
+			acoustid_seg0=?, acoustid_seg1=?, acoustid_seg2=?, acoustid_seg3=?,
+			acoustid_seg4=?, acoustid_seg5=?, acoustid_seg6=?,
 			missing=?, updated_at=?
 		WHERE id=?`,
 		file.BookID, file.FilePath,
@@ -5325,7 +5343,10 @@ func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
 		nullableIntVal(file.BitrateKbps), nullableIntVal(file.SampleRateHz),
 		nullableIntVal(file.Channels), nullableIntVal(file.BitDepth),
 		nullableStringVal(file.FileHash), nullableStringVal(file.OriginalFileHash),
-		nullableStringVal(file.AcoustIDFingerprint), nullableIntVal(file.AcoustIDDuration),
+		nullableStringVal(file.AcoustIDSeg0), nullableStringVal(file.AcoustIDSeg1),
+		nullableStringVal(file.AcoustIDSeg2), nullableStringVal(file.AcoustIDSeg3),
+		nullableStringVal(file.AcoustIDSeg4), nullableStringVal(file.AcoustIDSeg5),
+		nullableStringVal(file.AcoustIDSeg6),
 		missingInt, file.UpdatedAt,
 		id,
 	)
@@ -5393,13 +5414,16 @@ func (s *SQLiteStore) GetBookFileByPath(filePath string) (*BookFile, error) {
 	return &f, nil
 }
 
-// GetBookFileByAcoustID returns the first book_file whose acoustid_fingerprint
-// exactly matches fp, or nil if not found. Exact match is sufficient when the
-// audio stream is unchanged (metadata rewrites, moves, container remux).
+// GetBookFileByAcoustID returns the first book_file whose any of the 7
+// acoustid_seg columns exactly matches fp, or nil if not found.
 func (s *SQLiteStore) GetBookFileByAcoustID(fp string) (*BookFile, error) {
 	row := s.db.QueryRow(
-		`SELECT `+bookFileCols+` FROM book_files WHERE acoustid_fingerprint = ? LIMIT 1`,
-		fp,
+		`SELECT `+bookFileCols+` FROM book_files
+		 WHERE acoustid_seg0 = ? OR acoustid_seg1 = ? OR acoustid_seg2 = ?
+		    OR acoustid_seg3 = ? OR acoustid_seg4 = ? OR acoustid_seg5 = ?
+		    OR acoustid_seg6 = ?
+		 LIMIT 1`,
+		fp, fp, fp, fp, fp, fp, fp,
 	)
 	f, err := bookFileScan(row)
 	if err != nil {
@@ -5412,11 +5436,11 @@ func (s *SQLiteStore) GetBookFileByAcoustID(fp string) (*BookFile, error) {
 }
 
 // GetBookFileByAcoustIDFuzzy scans all fingerprinted book_files and returns the
-// first whose Hamming similarity to fp is >= minSimilarity (0.0–1.0).
+// first whose Hamming similarity to fp across any of the 7 segments is >= minSimilarity.
 // More expensive than GetBookFileByAcoustID — only called when exact match misses.
 func (s *SQLiteStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float64) (*BookFile, error) {
 	rows, err := s.db.Query(
-		`SELECT ` + bookFileCols + ` FROM book_files WHERE acoustid_fingerprint IS NOT NULL AND acoustid_fingerprint != ''`,
+		`SELECT ` + bookFileCols + ` FROM book_files WHERE acoustid_seg0 IS NOT NULL AND acoustid_seg0 != ''`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GetBookFileByAcoustIDFuzzy: %w", err)
@@ -5428,12 +5452,20 @@ func (s *SQLiteStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float6
 		if err != nil {
 			return nil, fmt.Errorf("GetBookFileByAcoustIDFuzzy scan: %w", err)
 		}
-		sim, err := fingerprint.HammingSimilarity(fp, f.AcoustIDFingerprint)
-		if err != nil {
-			continue
-		}
-		if sim >= minSimilarity {
-			return &f, nil
+		// Check all 7 segments for a fuzzy match.
+		segs := [7]string{f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2, f.AcoustIDSeg3,
+			f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6}
+		for _, seg := range segs {
+			if seg == "" {
+				continue
+			}
+			sim, err := fingerprint.HammingSimilarity(fp, seg)
+			if err != nil {
+				continue
+			}
+			if sim >= minSimilarity {
+				return &f, nil
+			}
 		}
 	}
 	return nil, rows.Err()

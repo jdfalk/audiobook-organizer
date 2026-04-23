@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.56.0
+// version: 2.57.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -565,8 +565,14 @@ type BookFile struct {
 	BitDepth           int       `json:"bit_depth,omitempty"`
 	FileHash              string    `json:"file_hash,omitempty"`
 	OriginalFileHash      string    `json:"original_file_hash,omitempty"`
-	AcoustIDFingerprint   string    `json:"acoustid_fingerprint,omitempty"`
-	AcoustIDDuration      int       `json:"acoustid_duration,omitempty"` // seconds, as reported by fpcalc
+	// 7 acoustic fingerprint segments. [0]=intro, [1-5]=body, [6]=outro.
+	AcoustIDSeg0 string `json:"acoustid_seg0,omitempty"`
+	AcoustIDSeg1 string `json:"acoustid_seg1,omitempty"`
+	AcoustIDSeg2 string `json:"acoustid_seg2,omitempty"`
+	AcoustIDSeg3 string `json:"acoustid_seg3,omitempty"`
+	AcoustIDSeg4 string `json:"acoustid_seg4,omitempty"`
+	AcoustIDSeg5 string `json:"acoustid_seg5,omitempty"`
+	AcoustIDSeg6 string `json:"acoustid_seg6,omitempty"`
 	OrganizeMethod        string    `json:"organize_method,omitempty"` // "reflink", "hardlink", "copy", "symlink"
 	Missing            bool      `json:"missing"`
 	CreatedAt          time.Time `json:"created_at"`
