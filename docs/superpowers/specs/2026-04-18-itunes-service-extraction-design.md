@@ -46,13 +46,26 @@ internal/itunes/service/
   transfer.go           — (moved from internal/server/)
   validate.go           — Validate + TestMapping (package-level stateless fns)
   status.go             — importStatusTracker (moved from package-level state in itunes.go)
+  routes.go             — Service.RegisterRoutes + RegisterOperationsRoutes + RegisterMaintenanceRoutes (v2)
+  handlers_import.go    — HTTP handlers for /itunes/import, /itunes/import-status/*, /itunes/validate, /itunes/test-mapping, /itunes/sync, /itunes/library-status, /itunes/books, /itunes/rebuild (v2)
+  handlers_writeback.go — HTTP handlers for /itunes/write-back, /write-back-all, /write-back/preview (v2)
+  handlers_transfer.go  — HTTP handlers for /itunes/library/download, /upload, /backups, /restore (v2)
+  handlers_ops.go       — HTTP handlers registered outside /itunes: /operations/itunes-path-reconcile, /maintenance/recompute-itunes-paths, /maintenance/generate-itl-tests (v2)
 ```
 
-HTTP handlers stay in `internal/server/` but consolidate into one file:
+**HTTP handlers move into the package (v2 change — was server-side in v1).** A single `Service.RegisterRoutes(rg *gin.RouterGroup, perm func(auth.Permission) gin.HandlerFunc)` method registers all `/itunes/*` routes. A second method `RegisterOperationsRoutes(protected *gin.RouterGroup, perm ...)` registers the path-reconcile route. A third `RegisterMaintenanceRoutes(protected ..., perm ...)` registers the two currently-in-maintenance_fixups.go iTunes handlers (`recompute-itunes-paths`, `generate-itl-tests`).
 
+Server glue reduces to:
+
+```go
+// In server.go route setup:
+itunesGroup := protected.Group("/itunes")
+s.itunesSvc.RegisterRoutes(itunesGroup, s.perm)
+s.itunesSvc.RegisterOperationsRoutes(protected, s.perm)
+s.itunesSvc.RegisterMaintenanceRoutes(protected, s.perm)
 ```
-internal/server/itunes_handlers.go  — thin wrappers calling s.itunesSvc.*
-```
+
+When the service is disabled, `RegisterRoutes` installs 503-returning stub handlers so endpoints 503 (not 404) for external API stability.
 
 ### 3.2 Service shape — top-level + sub-components (option 3)
 
@@ -378,3 +391,163 @@ Not designed here. Noted so future readers understand the intent.
 ### 8.3 Reorganize `internal/itunes/` low-level package (scope II from brainstorm)
 
 The low-level ITL parser / writer / fingerprint / watcher / path / smart-criteria code is currently ~11,600 lines in one flat directory. Sub-packaging it (`itunes/itl/`, `itunes/watcher/`, `itunes/path/`, `itunes/smart/`, `itunes/xml/`) would make the structure match the concerns. Not blocking today's work but a reasonable follow-on when a motivated reason arises (adding a new ITL format version, new watcher backend, etc.).
+
+---
+
+## 9. v2 scope expansion — currently-scattered iTunes handlers
+
+Investigation during the v1 PR 2 block found three iTunes handlers that don't live in `internal/server/itunes*.go`:
+
+| Handler | Current file | Route | Moves to |
+|---|---|---|---|
+| `startITunesPathReconcile` | `internal/server/itunes_path_reconcile.go` | `POST /operations/itunes-path-reconcile` | `internal/itunes/service/handlers_ops.go` — registered via `RegisterOperationsRoutes` |
+| `handleRecomputeITunesPaths` | `internal/server/maintenance_fixups.go:3420` | `POST /maintenance/recompute-itunes-paths` | `internal/itunes/service/handlers_ops.go` — registered via `RegisterMaintenanceRoutes` |
+| `handleGenerateITLTests` | `internal/server/maintenance_fixups.go:3502` | `POST /maintenance/generate-itl-tests` | `internal/itunes/service/handlers_ops.go` — registered via `RegisterMaintenanceRoutes` |
+| `rebuildITLHandler` | `internal/server/itl_rebuild.go` | `POST /itunes/rebuild` | `internal/itunes/service/handlers_import.go` — part of the main `/itunes` group |
+
+`rebuildITLHandler` goes under `/itunes` and belongs with the main `RegisterRoutes`. The other three stay under their non-`/itunes` paths (external API stability) but are still registered BY the iTunes service via the dedicated `RegisterOperationsRoutes` and `RegisterMaintenanceRoutes` methods.
+
+After extraction, iTunes owns every handler whose body touches iTunes state. `internal/server/maintenance_fixups.go` and `internal/server/itl_rebuild.go` shrink accordingly. `itl_rebuild.go` likely disappears entirely since its only contents are iTunes-specific.
+
+## 10. Pre-work required before the main extraction PR
+
+The v1 plan assumed `*WriteBackBatcher` could be moved in a single commit. Code inspection found:
+
+- **52+ references** to `*WriteBackBatcher` across 18+ files — most are type references in struct field declarations and constructor params, not method calls
+- **A package-level `GlobalWriteBackBatcher` singleton** in `internal/server/itunes_writeback_batcher.go:46`, used by `internal/server/file_io_pool.go:223–224` from a file-watcher callback that has no direct path to the Server instance
+- **`config.AppConfig.*` reads inline** inside batcher goroutines (lines 61, 75, 90 inside `Enqueue/EnqueueAdd/EnqueueRemove` gating checks; line 165 inside `flush()` timer goroutine; line 256 reading `ITunesLibraryWritePath` inside flush) — not just at construction
+- **Provisioner → Batcher ordering** in v1 plan was circular: Provisioner (step 2b) depends on `*WriteBackBatcher`, but Batcher moves at step 2f. Either Batcher moves first OR Provisioner takes an interface type that Batcher satisfies
+
+v2 factors these into four pre-work PRs that must land before the main extraction. Each is independently small and reviewable; together they make the extraction mechanical.
+
+### 10.1 Pre-PR P1 — Enqueuer interface
+
+Define the narrow interface every batcher consumer actually needs:
+
+```go
+// internal/server/writeback_enqueuer.go (new file — temporary home until extraction lands,
+// at which point the interface moves to internal/itunes/service/enqueuer.go)
+package server
+
+import "github.com/jdfalk/audiobook-organizer/internal/itunes"
+
+// Enqueuer is the narrow slice of *WriteBackBatcher that callers actually
+// need. Kept deliberately small so tests can mock it without spinning up
+// a batcher goroutine, and so services can depend on the interface rather
+// than the concrete type (which lets the concrete move packages without
+// churning every caller).
+type Enqueuer interface {
+	Enqueue(bookID string)
+	EnqueueAdd(track itunes.ITLNewTrack)
+	EnqueueRemove(pid string)
+}
+
+// Compile-time proof *WriteBackBatcher satisfies Enqueuer.
+var _ Enqueuer = (*WriteBackBatcher)(nil)
+```
+
+Update every struct field and function signature that currently holds `*WriteBackBatcher` to use `Enqueuer` instead. Affected files (from the grep during v1's block investigation):
+
+- `internal/merge/service.go` — `writeBackBatcher *server.WriteBackBatcher` → `writeBackBatcher server.Enqueuer`
+- `internal/organizer/service.go` — same
+- `internal/server/itunes_path_reconcile.go` — same (but this file moves during extraction anyway)
+- `internal/server/playlist_itunes_sync.go` — same
+- `internal/server/itunes_position_sync.go` — same
+- `internal/server/itunes.go` — several call sites; use `Enqueuer` as the parameter type where the batcher is threaded
+- `internal/server/writeback_outbox.go` — field type
+- `internal/server/metadata_handlers.go` — three call sites; use `Enqueuer`
+- Constructors that accept a batcher: `NewMergeService`, `NewOrganizerService`, `NewWriteBackOutbox`, etc.
+
+Do NOT change `internal/server/server.go`'s `writeBackBatcher *WriteBackBatcher` field yet — the Server constructs the concrete type and hands it out as `Enqueuer`. Server keeps the concrete for lifecycle.
+
+**Effect:** 20–30 type references change from concrete to interface. Zero behavior change. When the main extraction moves `*WriteBackBatcher` to `internal/itunes/service/`, consumers don't care because they reference `server.Enqueuer` (which gets moved to `internal/itunes/service/Enqueuer` at the same time, or even earlier — keep it in `internal/server/` for now to avoid cross-package interface-migration churn in this PR).
+
+### 10.2 Pre-PR P2 — Resolve `GlobalWriteBackBatcher`
+
+The singleton in `internal/server/itunes_writeback_batcher.go:46` plus its `InitWriteBackBatcher()` initializer plus its single use in `internal/server/file_io_pool.go:223–224` is the hardest knot. Three fix options:
+
+1. **Inject into file_io_pool.** Change `internal/server/file_io_pool.go` to take an `Enqueuer` in its constructor. Every caller that builds a file-io pool already has access to the batcher (it's on Server). Plumbing one argument removes the need for a package global.
+2. **Service singleton.** Accept that iTunes has one batcher per process, expose it as `s.itunesSvc.Batcher.Enqueue(...)`, delete the `GlobalWriteBackBatcher` var. file_io_pool's callback closes over `s.itunesSvc.Batcher`.
+3. **Channel indirection.** file_io_pool.go's callback fires on a channel that Server's goroutine consumes and forwards to the batcher. Most decoupled, most invasive.
+
+**Recommended: option 1.** Mechanical, narrow scope, removes the global.
+
+Deliverable:
+- `internal/server/file_io_pool.go` — constructor gains `Enqueuer` param; callback uses the field instead of the global
+- Every caller of the file-io-pool constructor wires `server.writeBackBatcher` through
+- Delete `var GlobalWriteBackBatcher *WriteBackBatcher` and `InitWriteBackBatcher()` from `itunes_writeback_batcher.go`
+
+### 10.3 Pre-PR P3 — Inject Config into Batcher
+
+Replace the five in-goroutine `config.AppConfig.*` reads with fields on the batcher struct populated at construction. This is what lets the batcher move to a different package without ever importing `internal/config`.
+
+Diff shape:
+
+```go
+// Before (internal/server/itunes_writeback_batcher.go):
+type WriteBackBatcher struct {
+	// ... existing fields ...
+}
+func NewWriteBackBatcher(delay time.Duration) *WriteBackBatcher { ... }
+func (b *WriteBackBatcher) Enqueue(bookID string) {
+	if !config.AppConfig.ITunesAutoWriteBack { return }
+	// ...
+}
+
+// After:
+type WriteBackBatcher struct {
+	// ... existing fields ...
+	autoWriteBack     bool      // from config.AppConfig.ITunesAutoWriteBack
+	itlWriteBackOn    bool      // from config.AppConfig.ITLWriteBackEnabled
+	libraryWritePath  string    // from config.AppConfig.ITunesLibraryWritePath
+	// Mutator for live config reload:
+	cfgMu             sync.RWMutex
+}
+
+func NewWriteBackBatcher(delay time.Duration, cfg Config) *WriteBackBatcher { ... }
+
+func (b *WriteBackBatcher) Enqueue(bookID string) {
+	b.cfgMu.RLock()
+	enabled := b.autoWriteBack
+	b.cfgMu.RUnlock()
+	if !enabled { return }
+	// ...
+}
+
+// UpdateConfig is called by the server when config hot-reloads.
+func (b *WriteBackBatcher) UpdateConfig(cfg Config) {
+	b.cfgMu.Lock()
+	b.autoWriteBack = cfg.AutoWriteBack
+	b.itlWriteBackOn = cfg.ITLWriteBackEnabled
+	b.libraryWritePath = cfg.LibraryWritePath
+	b.cfgMu.Unlock()
+}
+```
+
+`Config` here is a tiny local type (just those three fields), not the full `itunesservice.Config` — avoids having the batcher depend on the service package before it moves. At extraction time the local `Config` becomes `itunesservice.Config`, which is a superset.
+
+Server's config-reload path (grep for `config.AppConfig = ...` reassignments) calls `b.UpdateConfig(...)` to push new values into the batcher. If there's no hot-reload path today, `UpdateConfig` is dead code now but ready for later.
+
+### 10.4 Pre-PR P4 — Correct handler names in v1 plan references
+
+Trivial but necessary: the v1 plan uses names like `handleITunesDownload`/`handleITunesUpload` that don't exist. Actual names are `handleITLDownload`/`handleITLUpload`/`handleITLBackupList`/`handleITLRestore`. Mechanical find-and-replace in the plan file. No code change.
+
+This is a plan-only PR (updates `docs/superpowers/plans/2026-04-18-itunes-service-extraction.md`) that lands before the main extraction starts. Zero code risk.
+
+### 10.5 After pre-work: the main extraction
+
+Once P1–P4 land, the main extraction becomes the 3-PR sequence from §4 — but noticeably simpler because:
+- The `Enqueuer` interface means moving `*WriteBackBatcher` no longer cascades into 52+ signature changes
+- No `GlobalWriteBackBatcher` means moving the type doesn't require special handling for that file_io_pool callsite
+- `config.AppConfig` reads are already out of the goroutines, so the move is a pure file relocation + package rename
+- Handler names in the plan match reality
+
+Revised main-extraction ordering (from v1's per-component steps 2a–2g):
+
+1. **Transfer** (smallest, ~4 handlers, no cross-dependencies) — still first
+2. **TrackProvisioner** — now takes `Enqueuer` instead of `*WriteBackBatcher`, no ordering dependency on Batcher
+3. **WriteBackBatcher** — promoted ahead of PositionSync/PathReconciler/PlaylistSync, since the config injection from P3 landed
+4. **PositionSync**
+5. **PathReconciler**
+6. **PlaylistSync**
+7. **Importer** — last, biggest
