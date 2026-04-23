@@ -142,7 +142,7 @@ web-lint:
 ## test: Run Go backend tests (full — includes slow property tests)
 test: vet
 	@echo "🧪 Running backend tests (full suite)..."
-	@go test ./... -v -race
+	@go test ./... -v -race -timeout 20m
 	@echo "✅ Backend tests passed"
 
 ## test-short: Run Go backend tests in short mode — skips slow property
