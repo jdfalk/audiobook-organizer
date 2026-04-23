@@ -1,13 +1,32 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.11.0 -->
+<!-- version: 2.12.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-18 -->
+<!-- last-edited: 2026-04-22 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 22, 2026 — Failed Book Quarantine (`.failed/`)
+
+- **Migration 051** (`internal/database/migrations.go`): adds `quarantine_reason TEXT` and `quarantined_at TIMESTAMP` to `books` table.
+- **`Book` struct** (`internal/database/store.go`): new `QuarantineReason *string` and `QuarantinedAt *time.Time` fields.
+- **`QuarantineBook` / `UnquarantineBook`** (`internal/server/quarantine_service.go`): moves file to/from `.failed/{author}/{title}/{filename}`, updates DB, records path history, sets `itunes_sync_status = "purge_pending"` for iTunes-linked books, publishes `book.quarantined` / `book.unquarantined` EventBus events.
+- **HTTP API** (`internal/server/quarantine_handlers.go`):
+  - `POST /api/v1/audiobooks/:id/quarantine` — manual quarantine with reason
+  - `DELETE /api/v1/audiobooks/:id/quarantine` — restore from quarantine
+  - `GET /api/v1/audiobooks/quarantined` — list quarantined books
+  - `GET /api/v1/audiobooks?show_quarantined=true` — include failed books in listing
+- **Path history** instrumented at `CreateBook` (import), `ensureLibraryCopy` (library_copy), version swap (version_swap), plus quarantine/unquarantine events.
+- **Scanner** (`internal/scanner/scanner.go`): skips `.failed/` directories; increments per-file scan-fail counter (`sha256[:8]` key) on `ProcessFile` error.
+- **Auto-quarantine** (`internal/server/quarantine_service.go`): `autoQuarantineFailedScans()` checks fail counters post-scan and quarantines files with ≥3 consecutive failures.
+- **`isProtectedPath`** (`internal/server/server.go`, `internal/metafetch/helpers.go`): `.failed/` prefix treated as protected — no write-back, organize, or apply.
+- **iTunes purge**: quarantined books with iTunes PIDs get `itunes_sync_status = "purge_pending"`; `processITunesPurgePending()` queues ITL removal on next sync cycle.
+- **Startup migration** (`internal/server/quarantine_known_bad.go`): `quarantineKnownBadFiles()` runs once at startup — quarantines books marked permanently taglib-unreadable by the transcode pass; `transcodeMalformedM4BFiles()` also wired at startup.
+- **New EventBus events**: `book.quarantined`, `book.unquarantined` (`internal/plugin/events.go`).
+- **UI** (`web/src/`): "Failed" red badge on `AudiobookCard`; "Show Failed" toggle in `FilterSidebar`; Quarantine/Restore buttons + error alert on `BookDetail` page.
 
 #### April 21, 2026 — Plugin System V2
 
