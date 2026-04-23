@@ -1,5 +1,5 @@
 // file: internal/server/scan_service.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -31,7 +31,8 @@ type scanServiceStore interface {
 
 
 type ScanService struct {
-	db scanServiceStore
+	db         scanServiceStore
+	PostScanFn func() // optional hook called after each full scan completes
 }
 
 func NewScanService(db scanServiceStore) *ScanService {
@@ -156,6 +157,9 @@ func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, log lo
 			counters["book_create"], counters["book_update"], counters["book_skip"])
 	}
 	ss.reportCompletion(totalFilesAcrossFolders, int(processedFiles.Load()), stats, log)
+	if ss.PostScanFn != nil {
+		ss.PostScanFn()
+	}
 	return nil
 }
 
