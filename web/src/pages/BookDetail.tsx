@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.44.0
+// version: 1.45.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useState } from 'react';
@@ -429,6 +429,40 @@ export const BookDetail = () => {
     } catch (error) {
       console.error('Failed to purge audiobook', error);
       toast('Failed to purge audiobook.', 'error');
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
+    }
+  };
+
+  const handleQuarantine = async () => {
+    if (!book) return;
+    setActionLoading(true);
+    setActionLabel('Quarantining...');
+    try {
+      await api.quarantineBook(book.id, 'manually quarantined');
+      toast('Book moved to .failed/.', 'success');
+      await loadBook();
+    } catch (error) {
+      console.error('Failed to quarantine book', error);
+      toast('Failed to quarantine book.', 'error');
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
+    }
+  };
+
+  const handleUnquarantine = async () => {
+    if (!book) return;
+    setActionLoading(true);
+    setActionLabel('Restoring from failed...');
+    try {
+      await api.unquarantineBook(book.id);
+      toast('Book restored from .failed/.', 'success');
+      await loadBook();
+    } catch (error) {
+      console.error('Failed to unquarantine book', error);
+      toast('Failed to restore book from quarantine.', 'error');
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -928,6 +962,7 @@ export const BookDetail = () => {
   }
 
   const isSoftDeleted = book.marked_for_deletion;
+  const isQuarantined = !!book.quarantined_at;
   const coverLetter = (book.title || 'A')[0]?.toUpperCase();
   const coverImageUrl = book.cover_url
     ? book.cover_url.startsWith('/')
@@ -1002,6 +1037,11 @@ export const BookDetail = () => {
               </Typography>
               {isSoftDeleted && (
                 <Chip label="Soft Deleted" color="warning" size="small" />
+              )}
+              {isQuarantined && (
+                <Tooltip title={book.quarantine_reason || 'Quarantined'}>
+                  <Chip label="Failed" color="error" size="small" />
+                </Tooltip>
               )}
               {book.library_state && (
                 <Chip
@@ -1097,6 +1137,44 @@ export const BookDetail = () => {
           Last updated {formatDateTime(book.updated_at)}.
           Restore to keep the book or purge to remove it permanently.
         </Alert>
+      )}
+
+      {isQuarantined && (
+        <Alert
+          severity="error"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={handleUnquarantine}
+              disabled={actionLoading}
+            >
+              Restore
+            </Button>
+          }
+          sx={{ mb: 2 }}
+        >
+          Quarantined on {formatDateTime(book.quarantined_at)}.
+          Reason: {book.quarantine_reason || 'unknown'}.
+          File is in .failed/ and excluded from scans and write-back.
+        </Alert>
+      )}
+
+      {!isQuarantined && (
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Tooltip title="Move to .failed/ — excludes from scans and iTunes">
+            <Button
+              size="small"
+              color="error"
+              variant="outlined"
+              startIcon={<WarningAmberIcon />}
+              onClick={handleQuarantine}
+              disabled={actionLoading}
+            >
+              Quarantine
+            </Button>
+          </Tooltip>
+        </Box>
       )}
 
       {book.file_exists === false && (

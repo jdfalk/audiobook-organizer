@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.73.0
+// version: 1.74.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -594,6 +594,7 @@ export async function getBooks(
     tag?: string;
     libraryState?: string;
     filters?: string;
+    showFailed?: boolean;
   }
 ): Promise<Book[]> {
   const params = new URLSearchParams();
@@ -605,6 +606,7 @@ export async function getBooks(
   if (options?.libraryState)
     params.set('library_state', options.libraryState);
   if (options?.filters) params.set('filters', options.filters);
+  if (options?.showFailed) params.set('show_quarantined', 'true');
   params.set('is_primary_version', 'true');
 
   const response = await fetch(`${API_BASE}/audiobooks?${params}`);
@@ -706,6 +708,26 @@ export async function purgeSoftDeletedBooks(
     throw await buildApiError(response, 'Failed to purge soft-deleted books');
   }
   return response.json();
+}
+
+export async function quarantineBook(bookId: string, reason?: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/quarantine`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason: reason || 'manually quarantined' }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to quarantine audiobook');
+  }
+}
+
+export async function unquarantineBook(bookId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/quarantine`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to unquarantine audiobook');
+  }
 }
 
 export async function restoreSoftDeletedBook(bookId: string): Promise<void> {
