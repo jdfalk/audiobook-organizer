@@ -709,6 +709,7 @@ export const Library = () => {
           tag: tagFilter,
           libraryState: libraryState,
           filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
+          showFailed: filters.showFailed,
         });
       }
 
