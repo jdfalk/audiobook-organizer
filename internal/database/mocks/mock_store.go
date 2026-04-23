@@ -9300,6 +9300,121 @@ func (_c *MockAPIKeyStore_ListAPIKeysForUser_Call) RunAndReturn(run func(userID 
 	return _c
 }
 
+// GetAPIKeyByHash provides a mock function for the type MockAPIKeyStore
+func (_mock *MockAPIKeyStore) GetAPIKeyByHash(hash string) (*database.APIKey, error) {
+	ret := _mock.Called(hash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAPIKeyByHash")
+	}
+
+	var r0 *database.APIKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.APIKey, error)); ok {
+		return returnFunc(hash)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.APIKey); ok {
+		r0 = returnFunc(hash)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.APIKey)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(hash)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAPIKeyStore_GetAPIKeyByHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAPIKeyByHash'
+type MockAPIKeyStore_GetAPIKeyByHash_Call struct {
+	*mock.Call
+}
+
+// GetAPIKeyByHash is a helper method to define mock.On call
+//   - hash string
+func (_e *MockAPIKeyStore_Expecter) GetAPIKeyByHash(hash interface{}) *MockAPIKeyStore_GetAPIKeyByHash_Call {
+	return &MockAPIKeyStore_GetAPIKeyByHash_Call{Call: _e.mock.On("GetAPIKeyByHash", hash)}
+}
+
+func (_c *MockAPIKeyStore_GetAPIKeyByHash_Call) Run(run func(hash string)) *MockAPIKeyStore_GetAPIKeyByHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockAPIKeyStore_GetAPIKeyByHash_Call) Return(aPIKey *database.APIKey, err error) *MockAPIKeyStore_GetAPIKeyByHash_Call {
+	_c.Call.Return(aPIKey, err)
+	return _c
+}
+
+func (_c *MockAPIKeyStore_GetAPIKeyByHash_Call) RunAndReturn(run func(hash string) (*database.APIKey, error)) *MockAPIKeyStore_GetAPIKeyByHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListAllAPIKeys provides a mock function for the type MockAPIKeyStore
+func (_mock *MockAPIKeyStore) ListAllAPIKeys() ([]database.APIKey, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAllAPIKeys")
+	}
+
+	var r0 []database.APIKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.APIKey, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.APIKey); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.APIKey)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAPIKeyStore_ListAllAPIKeys_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAllAPIKeys'
+type MockAPIKeyStore_ListAllAPIKeys_Call struct {
+	*mock.Call
+}
+
+// ListAllAPIKeys is a helper method to define mock.On call
+func (_e *MockAPIKeyStore_Expecter) ListAllAPIKeys() *MockAPIKeyStore_ListAllAPIKeys_Call {
+	return &MockAPIKeyStore_ListAllAPIKeys_Call{Call: _e.mock.On("ListAllAPIKeys")}
+}
+
+func (_c *MockAPIKeyStore_ListAllAPIKeys_Call) Run(run func()) *MockAPIKeyStore_ListAllAPIKeys_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockAPIKeyStore_ListAllAPIKeys_Call) Return(aPIKeys []database.APIKey, err error) *MockAPIKeyStore_ListAllAPIKeys_Call {
+	_c.Call.Return(aPIKeys, err)
+	return _c
+}
+
+func (_c *MockAPIKeyStore_ListAllAPIKeys_Call) RunAndReturn(run func() ([]database.APIKey, error)) *MockAPIKeyStore_ListAllAPIKeys_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RevokeAPIKey provides a mock function for the type MockAPIKeyStore
 func (_mock *MockAPIKeyStore) RevokeAPIKey(id string) error {
 	ret := _mock.Called(id)
@@ -9351,17 +9466,75 @@ func (_c *MockAPIKeyStore_RevokeAPIKey_Call) RunAndReturn(run func(id string) er
 	return _c
 }
 
+// SetAPIKeyStatus provides a mock function for the type MockAPIKeyStore
+func (_mock *MockAPIKeyStore) SetAPIKeyStatus(id string, status string, at time.Time) error {
+	ret := _mock.Called(id, status, at)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetAPIKeyStatus")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, time.Time) error); ok {
+		r0 = returnFunc(id, status, at)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockAPIKeyStore_SetAPIKeyStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetAPIKeyStatus'
+type MockAPIKeyStore_SetAPIKeyStatus_Call struct {
+	*mock.Call
+}
+
+// SetAPIKeyStatus is a helper method to define mock.On call
+//   - id string
+//   - status string
+//   - at time.Time
+func (_e *MockAPIKeyStore_Expecter) SetAPIKeyStatus(id interface{}, status interface{}, at interface{}) *MockAPIKeyStore_SetAPIKeyStatus_Call {
+	return &MockAPIKeyStore_SetAPIKeyStatus_Call{Call: _e.mock.On("SetAPIKeyStatus", id, status, at)}
+}
+
+func (_c *MockAPIKeyStore_SetAPIKeyStatus_Call) Run(run func(id string, status string, at time.Time)) *MockAPIKeyStore_SetAPIKeyStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0, arg1 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 time.Time
+		if args[2] != nil {
+			arg2 = args[2].(time.Time)
+		}
+		run(arg0, arg1, arg2)
+	})
+	return _c
+}
+
+func (_c *MockAPIKeyStore_SetAPIKeyStatus_Call) Return(err error) *MockAPIKeyStore_SetAPIKeyStatus_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockAPIKeyStore_SetAPIKeyStatus_Call) RunAndReturn(run func(id string, status string, at time.Time) error) *MockAPIKeyStore_SetAPIKeyStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // TouchAPIKeyLastUsed provides a mock function for the type MockAPIKeyStore
-func (_mock *MockAPIKeyStore) TouchAPIKeyLastUsed(id string, at time.Time) error {
-	ret := _mock.Called(id, at)
+func (_mock *MockAPIKeyStore) TouchAPIKeyLastUsed(id string, at time.Time, ip string) error {
+	ret := _mock.Called(id, at, ip)
 
 	if len(ret) == 0 {
 		panic("no return value specified for TouchAPIKeyLastUsed")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, time.Time) error); ok {
-		r0 = returnFunc(id, at)
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time, string) error); ok {
+		r0 = returnFunc(id, at, ip)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -9376,11 +9549,12 @@ type MockAPIKeyStore_TouchAPIKeyLastUsed_Call struct {
 // TouchAPIKeyLastUsed is a helper method to define mock.On call
 //   - id string
 //   - at time.Time
-func (_e *MockAPIKeyStore_Expecter) TouchAPIKeyLastUsed(id interface{}, at interface{}) *MockAPIKeyStore_TouchAPIKeyLastUsed_Call {
-	return &MockAPIKeyStore_TouchAPIKeyLastUsed_Call{Call: _e.mock.On("TouchAPIKeyLastUsed", id, at)}
+//   - ip string
+func (_e *MockAPIKeyStore_Expecter) TouchAPIKeyLastUsed(id interface{}, at interface{}, ip interface{}) *MockAPIKeyStore_TouchAPIKeyLastUsed_Call {
+	return &MockAPIKeyStore_TouchAPIKeyLastUsed_Call{Call: _e.mock.On("TouchAPIKeyLastUsed", id, at, ip)}
 }
 
-func (_c *MockAPIKeyStore_TouchAPIKeyLastUsed_Call) Run(run func(id string, at time.Time)) *MockAPIKeyStore_TouchAPIKeyLastUsed_Call {
+func (_c *MockAPIKeyStore_TouchAPIKeyLastUsed_Call) Run(run func(id string, at time.Time, ip string)) *MockAPIKeyStore_TouchAPIKeyLastUsed_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -9390,10 +9564,11 @@ func (_c *MockAPIKeyStore_TouchAPIKeyLastUsed_Call) Run(run func(id string, at t
 		if args[1] != nil {
 			arg1 = args[1].(time.Time)
 		}
-		run(
-			arg0,
-			arg1,
-		)
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(arg0, arg1, arg2)
 	})
 	return _c
 }
@@ -9403,7 +9578,7 @@ func (_c *MockAPIKeyStore_TouchAPIKeyLastUsed_Call) Return(err error) *MockAPIKe
 	return _c
 }
 
-func (_c *MockAPIKeyStore_TouchAPIKeyLastUsed_Call) RunAndReturn(run func(id string, at time.Time) error) *MockAPIKeyStore_TouchAPIKeyLastUsed_Call {
+func (_c *MockAPIKeyStore_TouchAPIKeyLastUsed_Call) RunAndReturn(run func(id string, at time.Time, ip string) error) *MockAPIKeyStore_TouchAPIKeyLastUsed_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -26067,6 +26242,66 @@ func (_c *MockStore_GetAPIKey_Call) RunAndReturn(run func(id string) (*database.
 	return _c
 }
 
+// GetAPIKeyByHash provides a mock function for the type MockStore
+func (_mock *MockStore) GetAPIKeyByHash(hash string) (*database.APIKey, error) {
+	ret := _mock.Called(hash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAPIKeyByHash")
+	}
+
+	var r0 *database.APIKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.APIKey, error)); ok {
+		return returnFunc(hash)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.APIKey); ok {
+		r0 = returnFunc(hash)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.APIKey)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(hash)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetAPIKeyByHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAPIKeyByHash'
+type MockStore_GetAPIKeyByHash_Call struct {
+	*mock.Call
+}
+
+// GetAPIKeyByHash is a helper method to define mock.On call
+//   - hash string
+func (_e *MockStore_Expecter) GetAPIKeyByHash(hash interface{}) *MockStore_GetAPIKeyByHash_Call {
+	return &MockStore_GetAPIKeyByHash_Call{Call: _e.mock.On("GetAPIKeyByHash", hash)}
+}
+
+func (_c *MockStore_GetAPIKeyByHash_Call) Run(run func(hash string)) *MockStore_GetAPIKeyByHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetAPIKeyByHash_Call) Return(aPIKey *database.APIKey, err error) *MockStore_GetAPIKeyByHash_Call {
+	_c.Call.Return(aPIKey, err)
+	return _c
+}
+
+func (_c *MockStore_GetAPIKeyByHash_Call) RunAndReturn(run func(hash string) (*database.APIKey, error)) *MockStore_GetAPIKeyByHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetActiveVersionForBook provides a mock function for the type MockStore
 func (_mock *MockStore) GetActiveVersionForBook(bookID string) (*database.BookVersion, error) {
 	ret := _mock.Called(bookID)
@@ -33610,6 +33845,61 @@ func (_c *MockStore_ListAPIKeysForUser_Call) RunAndReturn(run func(userID string
 	return _c
 }
 
+// ListAllAPIKeys provides a mock function for the type MockStore
+func (_mock *MockStore) ListAllAPIKeys() ([]database.APIKey, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAllAPIKeys")
+	}
+
+	var r0 []database.APIKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.APIKey, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.APIKey); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.APIKey)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListAllAPIKeys_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAllAPIKeys'
+type MockStore_ListAllAPIKeys_Call struct {
+	*mock.Call
+}
+
+// ListAllAPIKeys is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListAllAPIKeys() *MockStore_ListAllAPIKeys_Call {
+	return &MockStore_ListAllAPIKeys_Call{Call: _e.mock.On("ListAllAPIKeys")}
+}
+
+func (_c *MockStore_ListAllAPIKeys_Call) Run(run func()) *MockStore_ListAllAPIKeys_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListAllAPIKeys_Call) Return(aPIKeys []database.APIKey, err error) *MockStore_ListAllAPIKeys_Call {
+	_c.Call.Return(aPIKeys, err)
+	return _c
+}
+
+func (_c *MockStore_ListAllAPIKeys_Call) RunAndReturn(run func() ([]database.APIKey, error)) *MockStore_ListAllAPIKeys_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListActiveInvites provides a mock function for the type MockStore
 func (_mock *MockStore) ListActiveInvites() ([]database.Invite, error) {
 	ret := _mock.Called()
@@ -36575,6 +36865,64 @@ func (_c *MockStore_RevokeAPIKey_Call) RunAndReturn(run func(id string) error) *
 	return _c
 }
 
+// SetAPIKeyStatus provides a mock function for the type MockStore
+func (_mock *MockStore) SetAPIKeyStatus(id string, status string, at time.Time) error {
+	ret := _mock.Called(id, status, at)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetAPIKeyStatus")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, time.Time) error); ok {
+		r0 = returnFunc(id, status, at)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SetAPIKeyStatus_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetAPIKeyStatus'
+type MockStore_SetAPIKeyStatus_Call struct {
+	*mock.Call
+}
+
+// SetAPIKeyStatus is a helper method to define mock.On call
+//   - id string
+//   - status string
+//   - at time.Time
+func (_e *MockStore_Expecter) SetAPIKeyStatus(id interface{}, status interface{}, at interface{}) *MockStore_SetAPIKeyStatus_Call {
+	return &MockStore_SetAPIKeyStatus_Call{Call: _e.mock.On("SetAPIKeyStatus", id, status, at)}
+}
+
+func (_c *MockStore_SetAPIKeyStatus_Call) Run(run func(id string, status string, at time.Time)) *MockStore_SetAPIKeyStatus_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0, arg1 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 time.Time
+		if args[2] != nil {
+			arg2 = args[2].(time.Time)
+		}
+		run(arg0, arg1, arg2)
+	})
+	return _c
+}
+
+func (_c *MockStore_SetAPIKeyStatus_Call) Return(err error) *MockStore_SetAPIKeyStatus_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SetAPIKeyStatus_Call) RunAndReturn(run func(id string, status string, at time.Time) error) *MockStore_SetAPIKeyStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RevokeSession provides a mock function for the type MockStore
 func (_mock *MockStore) RevokeSession(id string) error {
 	ret := _mock.Called(id)
@@ -37939,16 +38287,16 @@ func (_c *MockStore_TombstoneExternalID_Call) RunAndReturn(run func(source strin
 }
 
 // TouchAPIKeyLastUsed provides a mock function for the type MockStore
-func (_mock *MockStore) TouchAPIKeyLastUsed(id string, at time.Time) error {
-	ret := _mock.Called(id, at)
+func (_mock *MockStore) TouchAPIKeyLastUsed(id string, at time.Time, ip string) error {
+	ret := _mock.Called(id, at, ip)
 
 	if len(ret) == 0 {
 		panic("no return value specified for TouchAPIKeyLastUsed")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, time.Time) error); ok {
-		r0 = returnFunc(id, at)
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time, string) error); ok {
+		r0 = returnFunc(id, at, ip)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -37963,11 +38311,12 @@ type MockStore_TouchAPIKeyLastUsed_Call struct {
 // TouchAPIKeyLastUsed is a helper method to define mock.On call
 //   - id string
 //   - at time.Time
-func (_e *MockStore_Expecter) TouchAPIKeyLastUsed(id interface{}, at interface{}) *MockStore_TouchAPIKeyLastUsed_Call {
-	return &MockStore_TouchAPIKeyLastUsed_Call{Call: _e.mock.On("TouchAPIKeyLastUsed", id, at)}
+//   - ip string
+func (_e *MockStore_Expecter) TouchAPIKeyLastUsed(id interface{}, at interface{}, ip interface{}) *MockStore_TouchAPIKeyLastUsed_Call {
+	return &MockStore_TouchAPIKeyLastUsed_Call{Call: _e.mock.On("TouchAPIKeyLastUsed", id, at, ip)}
 }
 
-func (_c *MockStore_TouchAPIKeyLastUsed_Call) Run(run func(id string, at time.Time)) *MockStore_TouchAPIKeyLastUsed_Call {
+func (_c *MockStore_TouchAPIKeyLastUsed_Call) Run(run func(id string, at time.Time, ip string)) *MockStore_TouchAPIKeyLastUsed_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -37977,10 +38326,11 @@ func (_c *MockStore_TouchAPIKeyLastUsed_Call) Run(run func(id string, at time.Ti
 		if args[1] != nil {
 			arg1 = args[1].(time.Time)
 		}
-		run(
-			arg0,
-			arg1,
-		)
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(arg0, arg1, arg2)
 	})
 	return _c
 }
@@ -37990,7 +38340,7 @@ func (_c *MockStore_TouchAPIKeyLastUsed_Call) Return(err error) *MockStore_Touch
 	return _c
 }
 
-func (_c *MockStore_TouchAPIKeyLastUsed_Call) RunAndReturn(run func(id string, at time.Time) error) *MockStore_TouchAPIKeyLastUsed_Call {
+func (_c *MockStore_TouchAPIKeyLastUsed_Call) RunAndReturn(run func(id string, at time.Time, ip string) error) *MockStore_TouchAPIKeyLastUsed_Call {
 	_c.Call.Return(run)
 	return _c
 }

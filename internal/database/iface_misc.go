@@ -1,5 +1,5 @@
 // file: internal/database/iface_misc.go
-// version: 1.0.0
+// version: 1.2.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
 
 package database
@@ -55,9 +55,12 @@ type RoleStore interface {
 type APIKeyStore interface {
 	CreateAPIKey(key *APIKey) (*APIKey, error)
 	GetAPIKey(id string) (*APIKey, error)
+	GetAPIKeyByHash(hash string) (*APIKey, error)
 	ListAPIKeysForUser(userID string) ([]APIKey, error)
+	ListAllAPIKeys() ([]APIKey, error)
 	RevokeAPIKey(id string) error
-	TouchAPIKeyLastUsed(id string, at time.Time) error
+	SetAPIKeyStatus(id, status string, at time.Time) error
+	TouchAPIKeyLastUsed(id string, at time.Time, ip string) error
 }
 
 // InviteStore covers Invite CRUD and atomic consume.

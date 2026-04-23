@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.58.0
+// version: 2.59.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -470,17 +470,24 @@ type Role struct {
 	Version     int       `json:"version"`
 }
 
-// APIKey is a personal bearer token (JWT jti) for a user (spec 3.7).
-// The JWT itself carries the ID as `jti`; verification loads this
-// row to check RevokedAt. Stored separately from Session so rotating
-// API keys doesn't require a re-login.
+// APIKey is a scoped bearer token for a user. Only the SHA-256 hash of the
+// raw token is stored; the raw token is shown to the user once at creation.
+// Status follows AWS IAM semantics: "active" | "inactive" | "revoked".
 type APIKey struct {
-	ID         string     `json:"id"`
-	UserID     string     `json:"user_id"`
-	Name       string     `json:"name"`
-	CreatedAt  time.Time  `json:"created_at"`
-	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
-	RevokedAt  *time.Time `json:"revoked_at,omitempty"`
+	ID            string     `json:"id"`
+	UserID        string     `json:"user_id"`
+	Name          string     `json:"name"`
+	Description   string     `json:"description"`
+	TokenHash     string     `json:"token_hash"`
+	Scopes        []string   `json:"scopes"`
+	Status        string     `json:"status"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
+	LastUsedIP    string     `json:"last_used_ip,omitempty"`
+	UseCount      int64      `json:"use_count"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+	RevokedAt     *time.Time `json:"revoked_at,omitempty"`
 }
 
 // Invite is a single-use admin-generated token for creating a new
