@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -1107,4 +1107,64 @@ func (s *Server) triggerDedupLLM(c *gin.Context) {
 // triggerDedupScan — kept as a separate endpoint for backwards compatibility.
 func (s *Server) triggerDedupRefresh(c *gin.Context) {
 	s.triggerDedupScan(c)
+}
+
+// triggerDedupAcoustID handles POST /api/v1/dedup/scan-acoustid.
+// Runs an AcoustID fingerprint-based dedup scan as a tracked Operation.
+// Compares acoustic fingerprints stored in book_files across all primary books
+// and emits DedupCandidate rows with layer="acoustid" for any matches.
+func (s *Server) triggerDedupAcoustID(c *gin.Context) {
+	if s.dedupEngine == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "dedup engine not available"})
+		return
+	}
+	if s.queue == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		return
+	}
+
+	opID := ulid.Make().String()
+	op, err := s.Store().CreateOperation(opID, "dedup-acoustid-scan", nil)
+	if err != nil {
+		internalError(c, "failed to create dedup-acoustid-scan operation", err)
+		return
+	}
+
+	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.UpdateProgress(0, 100, "Starting AcoustID fingerprint scan...")
+
+		var lastPct int
+		scanErr := s.dedupEngine.AcoustIDScan(ctx, func(done, total int) {
+			if total <= 0 {
+				return
+			}
+			pct := 1 + (98 * done / total)
+			if pct == lastPct {
+				return
+			}
+			lastPct = pct
+			_ = progress.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
+		})
+		if scanErr != nil {
+			return fmt.Errorf("acoustid scan: %w", scanErr)
+		}
+
+		pendingCount := 0
+		if s.embeddingStore != nil {
+			filter := database.CandidateFilter{EntityType: "book", Status: "pending", Layer: "acoustid", Limit: 1}
+			if _, total, listErr := s.embeddingStore.ListCandidates(filter); listErr == nil {
+				pendingCount = total
+			}
+		}
+		_ = progress.UpdateProgress(100, 100,
+			fmt.Sprintf("AcoustID scan complete — %d pending candidate(s)", pendingCount))
+		return nil
+	}
+
+	if err := s.queue.Enqueue(opID, "dedup-acoustid-scan", operations.PriorityLow, opFunc); err != nil {
+		internalError(c, "failed to enqueue acoustid scan", err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, op)
 }
