@@ -11,6 +11,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -545,6 +546,20 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		var metaResults []metadata.BookMetadata
 		var sourceName string
 		for _, src := range sourceChain {
+			// Check the persistent fetch cache before hitting the external API.
+			// Populated by FetchMetadataForBook and SearchMetadata — so a prior
+			// full-library fetch or search-dialog open makes this instant.
+			if cached, cerr := database.GetCachedMetadataFetch(s.Store(), bookID, src.Name()); cerr == nil && cached != nil {
+				var cachedResults []metadata.BookMetadata
+				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+					metaResults = cachedResults
+					sourceName = src.Name()
+					log.Printf("[DEBUG] bulkFetchMetadata: cache HIT for (%s, %s) — %d results, age=%s",
+						bookID, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+					break
+				}
+			}
+
 			// If we have an author, try title+author search first for more precise results
 			if currentAuthor != "" {
 				metaResults, err = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
@@ -575,6 +590,15 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 				}
 			}
 			log.Printf("[DEBUG] bulkFetchMetadata: source %s returned no results for %q, trying next", src.Name(), searchTitle)
+
+			// Write results to cache for future calls (fetch or search dialog).
+			if len(metaResults) > 0 {
+				if blob, merr := json.Marshal(metaResults); merr == nil {
+					if perr := database.PutCachedMetadataFetch(s.Store(), bookID, src.Name(), blob, 0); perr != nil {
+						log.Printf("[WARN] bulkFetchMetadata: cache put failed for (%s, %s): %v", bookID, src.Name(), perr)
+					}
+				}
+			}
 		}
 		if len(metaResults) == 0 {
 			result.Status = "not_found"

@@ -106,6 +106,8 @@ since it was last edited on 2026-04-11).
 > **Architecture cleanup notes for future work:**
 > When touching these areas, narrow `database.Store` params to ISP sub-interfaces and extract remaining services as opportunities arise:
 > - Extracted packages (`dedup`, `metafetch`, `organizer`, `merge`, `versions`, `activity`, `diagnostics`) still accept full `database.Store` — narrow to sub-interfaces (e.g., `BookReader`) when modifying constructors
+> - **Refactor `bulkFetchMetadata` (server/metadata_handlers.go) to delegate to `metafetch.Service.FetchMetadataForBook` per book** — the handler duplicates the source-loop logic from the service and diverged (no cache, no ContextualSearch, simpler scoring, no retry variants). Centralizing removes two divergent copies of "try sources, score results, apply best". Medium effort.
+
 > - `TaskScheduler` still takes `*Server` — extract to `internal/schedule` once it accepts an interface instead
 > - `maintenance_fixups.go` (3,654 LOC) — all methods on `*Server`, extract when feasible
 > - `reconcile.go` (1,317 LOC) — cross-domain orchestration, extract when dependencies are clearer
