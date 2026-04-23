@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.53.0
+// version: 4.54.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -309,57 +309,82 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 		var results []metadata.BookMetadata
 		var searchErr error
 
-		// Try the ContextualSearch path first if the source implements
-		// it. This hands richer context (ASIN, ISBN, narrator) to
-		// sources that can use it — Audnexus uses the ASIN for a direct
-		// lookup that works when title search can't, Hardcover uses
-		// the ISBN for a more precise match than the fuzzy GraphQL
-		// search. Sources that don't implement the interface just
-		// fall through to the title/author path below.
-		if ctxSearch, ok := src.(metadata.ContextualSearch); ok {
-			ctx := buildSearchContext(book, searchTitle, currentAuthor, currentNarrator)
-			results, searchErr = ctxSearch.SearchByContext(ctx)
-			if searchErr != nil {
-				log.Printf("[WARN] %s context search failed for %q: %v", src.Name(), book.Title, searchErr)
-				// Context search failure is non-fatal — fall through
-				// to the regular title/author path in case that works.
+		// Check the persistent fetch cache before hitting the external API.
+		// The cache is shared with the search-dialog path — a bulk library
+		// fetch or a prior search dialog populates it, so a subsequent single-
+		// book fetch can return immediately without another network round-trip.
+		if cached, cerr := database.GetCachedMetadataFetch(mfs.db, id, src.Name()); cerr == nil && cached != nil {
+			var cachedResults []metadata.BookMetadata
+			if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+				results = cachedResults
+				log.Printf("[DEBUG] metadata-fetch: cache HIT for (%s, %s) — %d results, age=%s",
+					id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
 			}
 		}
 
-		// Try title+author search first for better match quality
-		if len(results) == 0 && currentAuthor != "" {
-			results, searchErr = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
-			if searchErr != nil {
-				log.Printf("[WARN] %s title+author search failed for %q by %q: %v", src.Name(), searchTitle, currentAuthor, searchErr)
-			}
-		}
-
-		// Fall back to title-only search
 		if len(results) == 0 {
-			results, searchErr = src.SearchByTitle(searchTitle)
-			if searchErr != nil {
-				log.Printf("[WARN] %s failed for %q: %v", src.Name(), searchTitle, searchErr)
-				lastErr = searchErr
+			// Try the ContextualSearch path first if the source implements
+			// it. This hands richer context (ASIN, ISBN, narrator) to
+			// sources that can use it — Audnexus uses the ASIN for a direct
+			// lookup that works when title search can't, Hardcover uses
+			// the ISBN for a more precise match than the fuzzy GraphQL
+			// search. Sources that don't implement the interface just
+			// fall through to the title/author path below.
+			if ctxSearch, ok := src.(metadata.ContextualSearch); ok {
+				ctx := buildSearchContext(book, searchTitle, currentAuthor, currentNarrator)
+				results, searchErr = ctxSearch.SearchByContext(ctx)
+				if searchErr != nil {
+					log.Printf("[WARN] %s context search failed for %q: %v", src.Name(), book.Title, searchErr)
+					// Context search failure is non-fatal — fall through
+					// to the regular title/author path in case that works.
+				}
 			}
-		}
 
-		// Try original title if cleaned title returned nothing
-		if len(results) == 0 && searchTitle != book.Title {
-			results, searchErr = src.SearchByTitle(book.Title)
-			if searchErr != nil {
-				lastErr = searchErr
-				continue
+			// Try title+author search first for better match quality
+			if len(results) == 0 && currentAuthor != "" {
+				results, searchErr = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
+				if searchErr != nil {
+					log.Printf("[WARN] %s title+author search failed for %q by %q: %v", src.Name(), searchTitle, currentAuthor, searchErr)
+				}
 			}
-		}
 
-		// Try with subtitle stripped (e.g. "Title: Subtitle" → "Title")
-		if len(results) == 0 {
-			strippedTitle := stripSubtitle(searchTitle)
-			if strippedTitle != searchTitle && strippedTitle != book.Title {
-				results, searchErr = src.SearchByTitle(strippedTitle)
+			// Fall back to title-only search
+			if len(results) == 0 {
+				results, searchErr = src.SearchByTitle(searchTitle)
+				if searchErr != nil {
+					log.Printf("[WARN] %s failed for %q: %v", src.Name(), searchTitle, searchErr)
+					lastErr = searchErr
+				}
+			}
+
+			// Try original title if cleaned title returned nothing
+			if len(results) == 0 && searchTitle != book.Title {
+				results, searchErr = src.SearchByTitle(book.Title)
 				if searchErr != nil {
 					lastErr = searchErr
 					continue
+				}
+			}
+
+			// Try with subtitle stripped (e.g. "Title: Subtitle" → "Title")
+			if len(results) == 0 {
+				strippedTitle := stripSubtitle(searchTitle)
+				if strippedTitle != searchTitle && strippedTitle != book.Title {
+					results, searchErr = src.SearchByTitle(strippedTitle)
+					if searchErr != nil {
+						lastErr = searchErr
+						continue
+					}
+				}
+			}
+
+			// Write non-empty results to cache so future fetch/search calls
+			// for this book+source can skip the external API entirely.
+			if len(results) > 0 {
+				if blob, merr := json.Marshal(results); merr == nil {
+					if perr := database.PutCachedMetadataFetch(mfs.db, id, src.Name(), blob, 0); perr != nil {
+						log.Printf("[WARN] metadata-fetch: cache put failed for (%s, %s): %v", id, src.Name(), perr)
+					}
 				}
 			}
 		}
