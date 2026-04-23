@@ -1,5 +1,5 @@
 // file: internal/server/deluge_integration_test.go
-// version: 1.0.0
+// version: 1.1.0
 
 package server
 
@@ -68,7 +68,12 @@ func TestNotifyDelugeMoveStorage_WithMockServer(t *testing.T) {
 
 	orig := globalDelugeClient
 	globalDelugeClient = client
-	defer func() { globalDelugeClient = orig }()
+	origMove := config.AppConfig.DelugeMoveEnabled
+	config.AppConfig.DelugeMoveEnabled = true
+	defer func() {
+		globalDelugeClient = orig
+		config.AppConfig.DelugeMoveEnabled = origMove
+	}()
 
 	NotifyDelugeMoveStorage("abc123", "/new/path/to/book.m4b")
 
