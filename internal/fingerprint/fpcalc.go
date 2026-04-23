@@ -1,19 +1,34 @@
 // file: internal/fingerprint/fpcalc.go
-// version: 1.0.0
+// version: 3.0.0
 // guid: b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e
 
-// Package fingerprint wraps the fpcalc CLI (from the Chromaprint project) to
-// generate AcoustID fingerprints for audio files. Fingerprints are used for
-// content-based library matching — they survive metadata rewrites, file moves,
-// and format/container changes as long as the audio stream is unchanged.
+// Package fingerprint generates AcoustID-compatible acoustic fingerprints for
+// audio files. It supports two backends:
 //
-// fpcalc must be installed on the system (e.g. `apt install libchromaprint-tools`
-// or `brew install chromaprint`). If not found, all functions return ErrNotAvailable
-// so callers can gracefully degrade.
+//   - fpcalc (preferred): the official Chromaprint CLI from the AcoustID project.
+//     Produces standard AcoustID fingerprint strings. Install via
+//     `apt install libchromaprint-tools` or `brew install chromaprint`.
+//
+//   - ffmpeg (fallback): when fpcalc is absent, uses the Chromaprint muxer built
+//     into ffmpeg (`-f chromaprint -fp_format base64`). The ffmpeg on the
+//     production server was compiled with --enable-chromaprint.
+//
+// The package generates 7 fingerprint segments per file:
+//
+//	[0] intro:    starting at offset 0
+//	[1–5] body:  at offsets dur*1/6, *2/6, *3/6, *4/6, *5/6
+//	[6] outro:   starting at max(0, dur–SegmentSeconds)
+//
+// Each segment covers SegmentSeconds (5 minutes) of audio. Together the 7
+// segments provide enough coverage for confident content-based matching of
+// long audiobooks that share the same narrator/production regardless of
+// metadata changes, file moves, or container remux.
 package fingerprint
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,99 +36,345 @@ import (
 	"strings"
 )
 
-// ErrNotAvailable is returned when fpcalc is not found on PATH.
-var ErrNotAvailable = errors.New("fpcalc not found — install chromaprint-tools")
+// ErrNotAvailable is returned when neither fpcalc nor ffmpeg is on PATH.
+var ErrNotAvailable = errors.New("fingerprint: neither fpcalc nor ffmpeg found — install chromaprint-tools or ffmpeg with chromaprint support")
 
-// Result holds the output of a single fpcalc run.
+// SegmentSeconds is the audio duration (in seconds) analysed per segment.
+const SegmentSeconds = 300 // 5 minutes
+
+// NumSegments is the number of fingerprint segments generated per file.
+const NumSegments = 7
+
+// FuzzyMinSimilarity is the default threshold for fuzzy Hamming matching.
+// 0.80 means 80% of bits agree — tolerant of minor encoding differences
+// while rejecting different recordings of the same title.
+const FuzzyMinSimilarity = 0.80
+
+// Segments holds the 7 acoustic fingerprint strings for one audio file.
+// [0]=intro, [1–5]=body at evenly-spaced offsets, [6]=outro.
+// Unused segments are empty strings (e.g., when the file is too short).
+type Segments [NumSegments]string
+
+// Result holds the output of a single fingerprint run (backward compat).
 type Result struct {
-	// Duration is the audio duration in seconds as reported by fpcalc.
+	// Duration is the audio duration in seconds.
 	Duration float64 `json:"duration"`
-	// Fingerprint is the raw AcoustID fingerprint string.
-	// For exact matching, compare this string directly.
-	// For fuzzy matching, decode via DecodeFingerprint and compute Hamming distance.
+	// Fingerprint is the AcoustID fingerprint string (first segment).
 	Fingerprint string `json:"fingerprint"`
 }
 
-// File generates an AcoustID fingerprint for the given audio file.
-// Returns ErrNotAvailable if fpcalc is not on PATH.
-// The fingerprint covers the first ~120 seconds of audio (fpcalc default) —
-// enough for reliable identification without reading the entire file.
+// Available reports whether any supported fingerprint backend is on PATH.
+func Available() bool {
+	if _, err := exec.LookPath("fpcalc"); err == nil {
+		return true
+	}
+	_, err := exec.LookPath("ffmpeg")
+	return err == nil
+}
+
+// File generates an AcoustID fingerprint for the first segment of an audio
+// file (backward compatibility wrapper). Returns ErrNotAvailable if no
+// backend is on PATH.
 func File(path string) (*Result, error) {
-	fpcalc, err := exec.LookPath("fpcalc")
+	segs, err := FileSegments(path, 0)
 	if err != nil {
+		return nil, err
+	}
+	dur, err := probeDuration(path)
+	if err != nil {
+		dur = 0
+	}
+	return &Result{
+		Duration:    dur,
+		Fingerprint: segs[0],
+	}, nil
+}
+
+// FileSegments generates all 7 acoustic fingerprint segments for the audio
+// file at path. durationHint provides the file duration in seconds; pass 0
+// to have it probed via ffprobe.
+//
+// Segment offsets:
+//
+//	[0]: 0
+//	[1]: dur/6
+//	[2]: dur*2/6
+//	[3]: dur*3/6
+//	[4]: dur*4/6
+//	[5]: dur*5/6
+//	[6]: max(0, dur-SegmentSeconds)
+//
+// Returns ErrNotAvailable if neither fpcalc nor ffmpeg is on PATH.
+func FileSegments(path string, durationHint int) (*Segments, error) {
+	if !Available() {
 		return nil, ErrNotAvailable
 	}
 
+	dur := float64(durationHint)
+	if dur <= 0 {
+		probed, err := probeDuration(path)
+		if err != nil || probed <= 0 {
+			// Cannot determine duration — fingerprint offset 0 only.
+			fp, ferr := fingerprintAt(path, 0)
+			if ferr != nil {
+				return nil, ferr
+			}
+			var segs Segments
+			segs[0] = fp
+			return &segs, nil
+		}
+		dur = probed
+	}
+
+	// Compute the 7 offsets.
+	offsets := [NumSegments]float64{
+		0,
+		dur * 1 / 6,
+		dur * 2 / 6,
+		dur * 3 / 6,
+		dur * 4 / 6,
+		dur * 5 / 6,
+		dur - SegmentSeconds,
+	}
+	if offsets[6] < 0 {
+		offsets[6] = 0
+	}
+
+	var segs Segments
+	for i, off := range offsets {
+		fp, err := fingerprintAt(path, off)
+		if err != nil {
+			// Non-fatal: leave segment empty.
+			continue
+		}
+		segs[i] = fp
+	}
+	return &segs, nil
+}
+
+// fingerprintAt generates a fingerprint string for SegmentSeconds of audio
+// starting at the given offset (in seconds). It prefers fpcalc, falling back
+// to ffmpeg -f chromaprint.
+func fingerprintAt(path string, offset float64) (string, error) {
+	if fpcalc, err := exec.LookPath("fpcalc"); err == nil {
+		return fpcalcAt(fpcalc, path, offset)
+	}
+	return ffmpegChromaprintAt(path, offset)
+}
+
+// fpcalcAt runs fpcalc on the given file at the given offset.
+// When offset > 0, it pipes PCM audio from ffmpeg into fpcalc -raw.
+func fpcalcAt(fpcalc, path string, offset float64) (string, error) {
+	if offset <= 0 {
+		// Simple case: let fpcalc read the file directly.
+		var stdout, stderr bytes.Buffer
+		cmd := exec.Command(fpcalc, "-json", "-length", fmt.Sprintf("%d", SegmentSeconds), path)
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			msg := strings.TrimSpace(stderr.String())
+			if msg == "" {
+				msg = err.Error()
+			}
+			return "", fmt.Errorf("fpcalc %s: %s", path, msg)
+		}
+		var r Result
+		if err := json.NewDecoder(&stdout).Decode(&r); err != nil {
+			return "", fmt.Errorf("fpcalc parse %s: %w", path, err)
+		}
+		if r.Fingerprint == "" {
+			return "", fmt.Errorf("fpcalc returned empty fingerprint for %s", path)
+		}
+		return r.Fingerprint, nil
+	}
+
+	// Offset > 0: pipe PCM from ffmpeg into fpcalc -raw.
+	// ffmpeg decodes `SegmentSeconds` seconds starting at `offset` to raw s16le/44100/1
+	// which fpcalc can consume via stdin.
+	ffmpegArgs := []string{
+		"-ss", fmt.Sprintf("%.2f", offset),
+		"-i", path,
+		"-t", fmt.Sprintf("%d", SegmentSeconds),
+		"-f", "s16le",
+		"-ac", "1",
+		"-ar", "44100",
+		"pipe:1",
+	}
+
+	ffmpegCmd := exec.Command("ffmpeg", ffmpegArgs...)
+	fpcalcCmd := exec.Command(fpcalc, "-raw", "-json", "-length", fmt.Sprintf("%d", SegmentSeconds), "-")
+
+	// Wire stdout of ffmpeg → stdin of fpcalc.
+	pipe, err := ffmpegCmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("fpcalcAt: pipe: %w", err)
+	}
+	fpcalcCmd.Stdin = pipe
+
+	var fpcalcOut, fpcalcErr bytes.Buffer
+	fpcalcCmd.Stdout = &fpcalcOut
+	fpcalcCmd.Stderr = &fpcalcErr
+
+	// Suppress ffmpeg's stderr noise.
+	ffmpegCmd.Stderr = nil
+
+	if err := ffmpegCmd.Start(); err != nil {
+		return "", fmt.Errorf("fpcalcAt: ffmpeg start: %w", err)
+	}
+	if err := fpcalcCmd.Start(); err != nil {
+		_ = ffmpegCmd.Process.Kill()
+		return "", fmt.Errorf("fpcalcAt: fpcalc start: %w", err)
+	}
+
+	// Wait for ffmpeg first, then fpcalc.
+	_ = ffmpegCmd.Wait()
+	if err := fpcalcCmd.Wait(); err != nil {
+		msg := strings.TrimSpace(fpcalcErr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return "", fmt.Errorf("fpcalcAt: fpcalc: %s", msg)
+	}
+
+	var r Result
+	if err := json.NewDecoder(&fpcalcOut).Decode(&r); err != nil {
+		return "", fmt.Errorf("fpcalcAt: parse: %w", err)
+	}
+	if r.Fingerprint == "" {
+		return "", fmt.Errorf("fpcalcAt: empty fingerprint at offset %.2f", offset)
+	}
+	return r.Fingerprint, nil
+}
+
+// ffmpegChromaprintAt runs ffmpeg with the chromaprint muxer to produce a
+// base64-encoded fingerprint starting at offset for SegmentSeconds.
+func ffmpegChromaprintAt(path string, offset float64) (string, error) {
+	args := []string{
+		"-hide_banner",
+		"-loglevel", "error",
+		"-ss", fmt.Sprintf("%.2f", offset),
+		"-i", path,
+		"-t", fmt.Sprintf("%d", SegmentSeconds),
+		"-f", "chromaprint",
+		"-fp_format", "base64",
+		"pipe:1",
+	}
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(fpcalc, "-json", path)
+	cmd := exec.Command("ffmpeg", args...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = err.Error()
 		}
-		return nil, fmt.Errorf("fpcalc %s: %s", path, msg)
+		return "", fmt.Errorf("ffmpeg chromaprint %s@%.2f: %s", path, offset, msg)
 	}
-
-	var r Result
-	if err := json.NewDecoder(&stdout).Decode(&r); err != nil {
-		return nil, fmt.Errorf("fpcalc parse %s: %w", path, err)
+	fp := strings.TrimSpace(stdout.String())
+	if fp == "" {
+		return "", fmt.Errorf("ffmpeg chromaprint returned empty output for %s", path)
 	}
-	if r.Fingerprint == "" {
-		return nil, fmt.Errorf("fpcalc returned empty fingerprint for %s", path)
-	}
-	return &r, nil
+	return fp, nil
 }
 
-// Available reports whether fpcalc is present on PATH.
-func Available() bool {
-	_, err := exec.LookPath("fpcalc")
-	return err == nil
+// ffprobeResult is the subset of ffprobe JSON output we need.
+type ffprobeResult struct {
+	Format struct {
+		Duration string `json:"duration"`
+	} `json:"format"`
+}
+
+// probeDuration uses ffprobe to return the audio duration in seconds.
+func probeDuration(path string) (float64, error) {
+	var stdout bytes.Buffer
+	cmd := exec.Command("ffprobe",
+		"-v", "error",
+		"-print_format", "json",
+		"-show_format",
+		path,
+	)
+	cmd.Stdout = &stdout
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		return 0, fmt.Errorf("ffprobe %s: %w", path, err)
+	}
+	var r ffprobeResult
+	if err := json.NewDecoder(&stdout).Decode(&r); err != nil {
+		return 0, fmt.Errorf("ffprobe parse %s: %w", path, err)
+	}
+	var dur float64
+	_, err := fmt.Sscanf(r.Format.Duration, "%f", &dur)
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe duration parse %s: %w", path, err)
+	}
+	return dur, nil
 }
 
 // HammingSimilarity returns the fraction of bits that agree between two
-// AcoustID fingerprint strings (0.0–1.0). Used for fuzzy fallback matching.
+// acoustic fingerprint strings (0.0–1.0). It decodes both AcoustID base62
+// fingerprints and standard base64 fingerprints (as produced by ffmpeg
+// -fp_format base64).
+//
 // Returns 0 and an error if either fingerprint cannot be decoded.
 func HammingSimilarity(a, b string) (float64, error) {
-	ints_a, err := decodeFingerprint(a)
+	intsA, err := decodeAnyFingerprint(a)
 	if err != nil {
 		return 0, fmt.Errorf("decode a: %w", err)
 	}
-	ints_b, err := decodeFingerprint(b)
+	intsB, err := decodeAnyFingerprint(b)
 	if err != nil {
 		return 0, fmt.Errorf("decode b: %w", err)
 	}
 
-	// Compare over the shorter length.
-	n := len(ints_a)
-	if len(ints_b) < n {
-		n = len(ints_b)
+	n := len(intsA)
+	if len(intsB) < n {
+		n = len(intsB)
 	}
 	if n == 0 {
 		return 0, errors.New("empty fingerprint")
 	}
 
-	var matching uint32
-	var total uint32
+	var matching, total uint32
 	for i := 0; i < n; i++ {
-		xor := ints_a[i] ^ ints_b[i]
-		// Count bits that match (32 - popcount(xor)).
+		xor := intsA[i] ^ intsB[i]
 		matching += 32 - popcount(xor)
 		total += 32
 	}
 	return float64(matching) / float64(total), nil
 }
 
-// FuzzyMinSimilarity is the default threshold for fuzzy matching.
-// 0.80 means 80% of bits agree — tolerant of minor encoding differences
-// while rejecting different recordings of the same title.
-const FuzzyMinSimilarity = 0.80
+// decodeAnyFingerprint decodes a fingerprint string into its uint32 array.
+// It tries base64 first (ffmpeg chromaprint output), then falls back to the
+// AcoustID base62 encoding.
+func decodeAnyFingerprint(fp string) ([]uint32, error) {
+	// Try standard base64 (ffmpeg -fp_format base64 output).
+	// The chromaprint base64 format: 4-byte header + uint32 little-endian values.
+	if b, err := base64.StdEncoding.DecodeString(fp); err == nil && len(b) >= 8 {
+		// First 4 bytes are a header (magic + version + algo).
+		payload := b[4:]
+		if len(payload)%4 == 0 {
+			ints := make([]uint32, len(payload)/4)
+			for i := range ints {
+				ints[i] = binary.LittleEndian.Uint32(payload[i*4:])
+			}
+			return ints, nil
+		}
+	}
+	// Also try raw base64 without the 4-byte header (some ffmpeg versions).
+	if b, err := base64.StdEncoding.DecodeString(fp); err == nil && len(b) > 0 && len(b)%4 == 0 {
+		ints := make([]uint32, len(b)/4)
+		for i := range ints {
+			ints[i] = binary.LittleEndian.Uint32(b[i*4:])
+		}
+		return ints, nil
+	}
+	// Fall through to AcoustID base62.
+	return decodeBase62Fingerprint(fp)
+}
 
-// decodeFingerprint base62-decodes an AcoustID fingerprint string into its
-// underlying int32 array. AcoustID uses a custom base62 alphabet.
-func decodeFingerprint(fp string) ([]uint32, error) {
+// decodeBase62Fingerprint base62-decodes an AcoustID fingerprint string into
+// its underlying uint32 array. AcoustID uses a custom base62 alphabet.
+func decodeBase62Fingerprint(fp string) ([]uint32, error) {
 	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	lookup := [128]int{}
 	for i := range lookup {

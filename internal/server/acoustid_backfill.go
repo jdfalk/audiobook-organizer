@@ -1,5 +1,5 @@
 // file: internal/server/acoustid_backfill.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package server
@@ -15,13 +15,13 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 )
 
-// backfillAcoustIDs walks all book_files without an acoustid_fingerprint and
-// fingerprints them using fpcalc. Runs as a background goroutine after startup.
-// Safe to run repeatedly — skips files that already have a fingerprint.
-// No-ops silently if fpcalc is not installed.
+// backfillAcoustIDs walks all book_files without acoustid_seg0 and generates
+// 7-segment fingerprints. Runs as a background goroutine after startup.
+// Safe to run repeatedly — skips files that already have seg0 set.
+// No-ops silently if neither fpcalc nor ffmpeg is installed.
 func (s *Server) backfillAcoustIDs() {
 	if !fingerprint.Available() {
-		log.Println("[INFO] acoustid backfill: fpcalc not found, skipping")
+		log.Println("[INFO] acoustid backfill: no fingerprint backend found, skipping")
 		return
 	}
 
@@ -43,7 +43,7 @@ func (s *Server) backfillAcoustIDs() {
 			continue
 		}
 		for _, f := range files {
-			if f.AcoustIDFingerprint != "" {
+			if f.AcoustIDSeg0 != "" {
 				skipped++
 				continue
 			}
@@ -57,16 +57,21 @@ func (s *Server) backfillAcoustIDs() {
 				continue
 			}
 
-			result, err := fingerprint.File(f.FilePath)
+			segs, err := fingerprint.FileSegments(f.FilePath, f.Duration)
 			if err != nil {
-				log.Printf("[WARN] acoustid backfill: fpcalc %s: %v", f.FilePath, err)
+				log.Printf("[WARN] acoustid backfill: fingerprint %s: %v", f.FilePath, err)
 				failed++
 				continue
 			}
 
 			updated := f
-			updated.AcoustIDFingerprint = result.Fingerprint
-			updated.AcoustIDDuration = int(result.Duration)
+			updated.AcoustIDSeg0 = segs[0]
+			updated.AcoustIDSeg1 = segs[1]
+			updated.AcoustIDSeg2 = segs[2]
+			updated.AcoustIDSeg3 = segs[3]
+			updated.AcoustIDSeg4 = segs[4]
+			updated.AcoustIDSeg5 = segs[5]
+			updated.AcoustIDSeg6 = segs[6]
 			if err := store.UpdateBookFile(f.ID, &updated); err != nil {
 				log.Printf("[WARN] acoustid backfill: update %s: %v", f.ID, err)
 				failed++

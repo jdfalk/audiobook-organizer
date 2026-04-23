@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.48.0
+// version: 1.49.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -6882,17 +6882,21 @@ func writeBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 		}
 	}
 
-	if f.AcoustIDFingerprint != "" {
-		acoustKey := []byte(fmt.Sprintf("book_file_acoustid:%s", f.AcoustIDFingerprint))
-		if err := batch.Set(acoustKey, ref, nil); err != nil {
-			return err
+	// Write secondary index for each non-empty fingerprint segment.
+	for _, seg := range [7]string{f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2, f.AcoustIDSeg3,
+		f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6} {
+		if seg != "" {
+			acoustKey := []byte(fmt.Sprintf("book_file_acoustid:%s", seg))
+			if err := batch.Set(acoustKey, ref, nil); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-// deleteBookFileSecondaryIndexes removes PID and path secondary index entries
-// from the batch for the given BookFile.
+// deleteBookFileSecondaryIndexes removes PID, path, and acoustid secondary
+// index entries from the batch for the given BookFile.
 func deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 	if f.ITunesPersistentID != "" {
 		pidKey := []byte(fmt.Sprintf("book_file_pid:%s", f.ITunesPersistentID))
@@ -6908,10 +6912,14 @@ func deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 		}
 	}
 
-	if f.AcoustIDFingerprint != "" {
-		acoustKey := []byte(fmt.Sprintf("book_file_acoustid:%s", f.AcoustIDFingerprint))
-		if err := batch.Delete(acoustKey, nil); err != nil {
-			return err
+	// Delete secondary index for each non-empty fingerprint segment.
+	for _, seg := range [7]string{f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2, f.AcoustIDSeg3,
+		f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6} {
+		if seg != "" {
+			acoustKey := []byte(fmt.Sprintf("book_file_acoustid:%s", seg))
+			if err := batch.Delete(acoustKey, nil); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -7122,14 +7130,24 @@ func (s *PebbleStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float6
 		if err := json.Unmarshal(iter.Value(), &f); err != nil {
 			continue
 		}
-		if f.AcoustIDFingerprint == "" {
-			continue
+		// Check all 7 fingerprint segments for a fuzzy match.
+		segs := [7]string{f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2, f.AcoustIDSeg3,
+			f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6}
+		matched := false
+		for _, seg := range segs {
+			if seg == "" {
+				continue
+			}
+			sim, err := fingerprint.HammingSimilarity(fp, seg)
+			if err != nil {
+				continue
+			}
+			if sim >= minSimilarity {
+				matched = true
+				break
+			}
 		}
-		sim, err := fingerprint.HammingSimilarity(fp, f.AcoustIDFingerprint)
-		if err != nil {
-			continue
-		}
-		if sim >= minSimilarity {
+		if matched {
 			return &f, nil
 		}
 	}
