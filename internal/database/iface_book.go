@@ -1,5 +1,5 @@
 // file: internal/database/iface_book.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
 
 package database
@@ -31,6 +31,7 @@ type BookReader interface {
 	GetBookTombstone(id string) (*Book, error)
 	ListBookTombstones(limit int) ([]Book, error)
 	GetITunesDirtyBooks() ([]Book, error)
+	GetITunesPurgePendingBooks() ([]Book, error)
 	GetQuarantinedBooks(limit, offset int) ([]Book, error)
 }
 

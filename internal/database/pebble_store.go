@@ -1736,6 +1736,21 @@ func (p *PebbleStore) MarkITunesSynced(bookIDs []string) (int64, error) {
 	return count, nil
 }
 
+// GetITunesPurgePendingBooks returns books with itunes_sync_status = "purge_pending" and a PID.
+func (p *PebbleStore) GetITunesPurgePendingBooks() ([]Book, error) {
+	allBooks, err := p.GetAllBooks(100000, 0)
+	if err != nil {
+		return nil, err
+	}
+	var pending []Book
+	for _, b := range allBooks {
+		if b.ITunesSyncStatus != nil && *b.ITunesSyncStatus == "purge_pending" && b.ITunesPersistentID != nil {
+			pending = append(pending, b)
+		}
+	}
+	return pending, nil
+}
+
 // GetITunesDirtyBooks returns all primary books with itunes_sync_status = "dirty".
 func (p *PebbleStore) GetITunesDirtyBooks() ([]Book, error) {
 	allBooks, err := p.GetAllBooks(100000, 0)

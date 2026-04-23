@@ -1643,7 +1643,8 @@ func (m *MockStore) PruneBookSnapshots(id string, keepCount int) (int, error) {
 }
 
 func (m *MockStore) MarkITunesSynced(bookIDs []string) (int64, error) { return int64(len(bookIDs)), nil }
-func (m *MockStore) GetITunesDirtyBooks() ([]Book, error)            { return nil, nil }
+func (m *MockStore) GetITunesDirtyBooks() ([]Book, error)                  { return nil, nil }
+func (m *MockStore) GetITunesPurgePendingBooks() ([]Book, error)           { return nil, nil }
 func (m *MockStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) { return nil, nil }
 func (m *MockStore) GetScanFailCount(pathHash string) (int, error)         { return 0, nil }
 func (m *MockStore) IncrScanFailCount(pathHash string) (int, error)        { return 1, nil }
