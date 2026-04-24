@@ -81,10 +81,12 @@ func TestChangelogEndpoint_Returns200(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp map[string]json.RawMessage
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	var wrapper struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
-	assert.Contains(t, resp, "entries")
+	assert.Contains(t, wrapper.Data, "entries")
 }
 
 func TestChangelogEndpoint_WithEntries(t *testing.T) {
@@ -113,13 +115,23 @@ func TestChangelogEndpoint_WithEntries(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp struct {
-		Entries []activity.ChangeLogEntry `json:"entries"`
+	var wrapper struct {
+		Data struct {
+			Entries []activity.ChangeLogEntry `json:"entries"`
+		} `json:"data"`
 	}
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
-	require.Len(t, resp.Entries, 1)
-	assert.Equal(t, "rename", resp.Entries[0].Type)
+	// CreateBook itself records an import path entry, so expect the rename
+	// to be one of several entries — not necessarily the only one.
+	var hasRename bool
+	for _, e := range wrapper.Data.Entries {
+		if e.Type == "rename" && e.Details != nil && e.Details["change_type"] == "rename" {
+			hasRename = true
+			break
+		}
+	}
+	assert.True(t, hasRename, "expected a rename change_type entry among %v", wrapper.Data.Entries)
 }
 
 func TestDerefStrDisplay(t *testing.T) {

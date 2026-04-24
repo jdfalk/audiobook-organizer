@@ -70,8 +70,10 @@ func parseJSONResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]an
 // getTagsFromResponse extracts the "tags" array from a JSON response.
 func getTagsFromResponse(t *testing.T, resp map[string]any) []string {
 	t.Helper()
-	raw, ok := resp["tags"]
-	require.True(t, ok, "response should have 'tags' key")
+	data, ok := resp["data"].(map[string]any)
+	require.True(t, ok, "response should have 'data' key")
+	raw, ok := data["tags"]
+	require.True(t, ok, "data should have 'tags' key")
 	arr, ok := raw.([]any)
 	require.True(t, ok, "tags should be an array")
 	tags := make([]string, len(arr))
@@ -94,7 +96,8 @@ func TestTagCRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := parseJSONResponse(t, w)
-		tags := resp["tags"].([]any)
+		respData := resp["data"].(map[string]any)
+		tags := respData["tags"].([]any)
 		assert.Empty(t, tags)
 	})
 
@@ -162,7 +165,8 @@ func TestTagCRUD(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := parseJSONResponse(t, w)
-		rawTags := resp["tags"].([]any)
+		respData := resp["data"].(map[string]any)
+		rawTags := respData["tags"].([]any)
 		assert.Len(t, rawTags, 2)
 		// Each entry should have tag and count
 		for _, raw := range rawTags {
@@ -234,7 +238,8 @@ func TestTagBatchOperations(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := parseJSONResponse(t, w)
-		assert.Equal(t, float64(3), resp["updated"])
+		data := resp["data"].(map[string]any)
+		assert.Equal(t, float64(3), data["updated"])
 
 		// Verify each book has both tags
 		for _, bookID := range []string{book1.ID, book2.ID, book3.ID} {
@@ -380,7 +385,7 @@ func TestListBooksWithTagFilter(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := parseJSONResponse(t, w)
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		assert.Len(t, items, 2, "should return only the 2 tagged books")
 	})
 
@@ -391,7 +396,7 @@ func TestListBooksWithTagFilter(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := parseJSONResponse(t, w)
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		assert.Empty(t, items)
 	})
 
@@ -408,7 +413,7 @@ func TestListBooksWithTagFilter(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := parseJSONResponse(t, w)
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		assert.Len(t, items, 1, "should return only the book with both tag and library_state match")
 	})
 }
@@ -430,7 +435,7 @@ func TestServerSideSorting(t *testing.T) {
 	extractTitles := func(t *testing.T, w *httptest.ResponseRecorder) []string {
 		t.Helper()
 		resp := parseJSONResponse(t, w)
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		titles := make([]string, len(items))
 		for i, item := range items {
 			m := item.(map[string]any)
@@ -513,7 +518,7 @@ func TestServerSideSorting(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		resp := parseJSONResponse(t, w)
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		assert.Len(t, items, 4, "should return all tagged books")
 	})
 
@@ -524,7 +529,7 @@ func TestServerSideSorting(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code, "invalid sort_by should not cause an error")
 		resp := parseJSONResponse(t, w)
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		assert.Len(t, items, 4)
 	})
 
@@ -577,7 +582,7 @@ func TestServerSideFieldFiltering(t *testing.T) {
 	extractTitles := func(t *testing.T, w *httptest.ResponseRecorder) []string {
 		t.Helper()
 		resp := parseJSONResponse(t, w)
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		titles := make([]string, len(items))
 		for i, item := range items {
 			m := item.(map[string]any)

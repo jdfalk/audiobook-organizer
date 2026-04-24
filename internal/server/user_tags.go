@@ -1,11 +1,10 @@
 // file: internal/server/user_tags.go
-// version: 1.2.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 
 package server
 
 import (
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -22,20 +21,20 @@ func (s *Server) setupUserTagRoutes(protected *gin.RouterGroup) {
 func (s *Server) setBookUserTags(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	// Verify the book exists before creating tag entries to prevent orphaned rows.
 	if _, err := store.GetBookByID(id); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		RespondWithNotFound(c, "book", id)
 		return
 	}
 	var req struct {
 		Tags []string `json:"tags" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	// Filter empty and normalize to lowercase
@@ -55,27 +54,27 @@ func (s *Server) setBookUserTags(c *gin.Context) {
 		internalError(c, "failed to get tags after set", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
+	RespondWithOK(c, gin.H{"tags": tags})
 }
 
 // addBookUserTag adds a single user-defined tag to a book.
 func (s *Server) addBookUserTag(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	// Verify the book exists before creating tag entries to prevent orphaned rows.
 	if _, err := store.GetBookByID(id); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		RespondWithNotFound(c, "book", id)
 		return
 	}
 	var req struct {
 		Tag string `json:"tag" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	tag := strings.ToLower(strings.TrimSpace(req.Tag))
@@ -88,25 +87,25 @@ func (s *Server) addBookUserTag(c *gin.Context) {
 		internalError(c, "failed to get tags after add", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
+	RespondWithOK(c, gin.H{"tags": tags})
 }
 
 // removeBookUserTag removes a single user-defined tag from a book.
 func (s *Server) removeBookUserTag(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	// Verify the book exists before modifying tag entries to prevent orphaned rows.
 	if _, err := store.GetBookByID(id); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		RespondWithNotFound(c, "book", id)
 		return
 	}
 	tag := c.Param("tag")
 	if tag == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "tag parameter required"})
+		RespondWithBadRequest(c, "tag parameter required")
 		return
 	}
 	if err := store.RemoveBookUserTag(id, tag); err != nil {
@@ -118,5 +117,5 @@ func (s *Server) removeBookUserTag(c *gin.Context) {
 		internalError(c, "failed to get tags after remove", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
+	RespondWithOK(c, gin.H{"tags": tags})
 }

@@ -64,11 +64,14 @@ func TestListWorks_Success(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 
-	var resp WorkListResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	var envelope struct {
+		Data WorkListResponse `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
+	resp := envelope.Data
 	if resp.Count != 2 {
 		t.Errorf("expected count 2, got %d", resp.Count)
 	}
@@ -185,11 +188,14 @@ func TestListAuthors_Success(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 
-	var resp AuthorListResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	var envelope struct {
+		Data AuthorListResponse `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
+	resp := envelope.Data
 	if resp.Count != 2 {
 		t.Errorf("expected count 2, got %d", resp.Count)
 	}
@@ -210,11 +216,14 @@ func TestListSeries_Success(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 
-	var resp SeriesListResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	var envelope struct {
+		Data SeriesListResponse `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
+	resp := envelope.Data
 	if resp.Count != 1 {
 		t.Errorf("expected count 1, got %d", resp.Count)
 	}

@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 1.3.0
+// version: 2.0.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,7 +34,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	// Build cache key from the full query string
 	cacheKey := "list:" + c.Request.URL.RawQuery
 	if cached, ok := s.listCache.Get(cacheKey); ok {
-		c.JSON(http.StatusOK, cached)
+		RespondWithOK(c, cached)
 		return
 	}
 
@@ -61,7 +60,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	if filtersJSON := c.Query("filters"); filtersJSON != "" {
 		var fieldFilters []FieldFilter
 		if err := json.Unmarshal([]byte(filtersJSON), &fieldFilters); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid filters parameter: " + err.Error()})
+			RespondWithBadRequest(c, "invalid filters parameter: "+err.Error())
 			return
 		}
 		filters.FieldFilters = fieldFilters
@@ -106,7 +105,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 
 	resp := gin.H{"items": enriched, "count": totalCount, "limit": params.Limit, "offset": params.Offset}
 	s.listCache.Set(cacheKey, resp)
-	c.JSON(http.StatusOK, resp)
+	RespondWithOK(c, resp)
 }
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
@@ -200,18 +199,18 @@ func (s *Server) countAudiobooks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"count": count})
+	RespondWithOK(c, gin.H{"count": count})
 }
 
 func (s *Server) serveAudiobookCover(c *gin.Context) {
 	id := c.Param("id")
 	if config.AppConfig.RootDir == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "root_dir not configured"})
+		RespondWithInternalError(c, "root_dir not configured")
 		return
 	}
 	coverPath := metadata.CoverPathForBook(config.AppConfig.RootDir, id)
 	if coverPath == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no cover art found"})
+		RespondWithNotFound(c, "cover art", id)
 		return
 	}
 	c.File(coverPath)
@@ -223,14 +222,14 @@ func (s *Server) getAudiobook(c *gin.Context) {
 	book, err := s.audiobookService.GetAudiobook(c.Request.Context(), id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			RespondWithNotFound(c, "audiobook", id)
 			return
 		}
 		internalError(c, "failed to get audiobook", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, enrichBookForResponse(book))
+	RespondWithOK(c, enrichBookForResponse(book))
 }
 
 // listAudiobookSegments returns file segments for a multi-file audiobook.
@@ -239,13 +238,13 @@ func (s *Server) getAudiobook(c *gin.Context) {
 func (s *Server) listAudiobookSegments(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
@@ -281,14 +280,14 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, result)
+	RespondWithOK(c, result)
 }
 
 // listBookFiles returns all book_files rows for a book with live disk-existence check.
 func (s *Server) listBookFiles(c *gin.Context) {
 	bookID := c.Param("id")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	files, err := s.Store().GetBookFiles(bookID)
@@ -329,20 +328,20 @@ func (s *Server) listBookFiles(c *gin.Context) {
 			"updated_at":           f.UpdatedAt,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"files": results, "count": len(results)})
+	RespondWithOK(c, gin.H{"files": results, "count": len(results)})
 }
 
 // extractTrackInfo parses track/disk numbers from segment filenames and updates segments.
 func (s *Server) extractTrackInfo(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
@@ -436,7 +435,7 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"updated": updated,
 		"total":   len(files),
 		"files":   files,
@@ -447,19 +446,19 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 func (s *Server) relocateBookFiles(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	var req RelocateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 
@@ -476,7 +475,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		for i, f := range files {
 			if f.ID == req.SegmentID {
 				if _, statErr := os.Stat(req.NewPath); os.IsNotExist(statErr) {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "new path does not exist on disk"})
+					RespondWithBadRequest(c, "new path does not exist on disk")
 					return
 				}
 				files[i].FilePath = req.NewPath
@@ -492,7 +491,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		// Folder mode: scan folder and match files by name
 		dirEntries, err := os.ReadDir(req.FolderPath)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot read folder: %v", err)})
+			RespondWithBadRequest(c, fmt.Sprintf("cannot read folder: %v", err))
 			return
 		}
 
@@ -516,7 +515,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 			}
 		}
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "must provide segment_id+new_path or folder_path"})
+		RespondWithBadRequest(c, "must provide segment_id+new_path or folder_path")
 		return
 	}
 
@@ -528,7 +527,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, result)
+	RespondWithOK(c, result)
 }
 
 // getSegmentTags returns raw metadata tags for a specific segment file.
@@ -536,13 +535,13 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 	id := c.Param("id")
 	segmentId := c.Param("segmentId")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
@@ -552,7 +551,7 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 		return
 	}
 	if found == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "segment not found"})
+		RespondWithNotFound(c, "segment", segmentId)
 		return
 	}
 
@@ -621,13 +620,13 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 		resp["tags_read_error"] = tagsReadError
 	}
 
-	c.JSON(http.StatusOK, resp)
+	RespondWithOK(c, resp)
 }
 
 func (s *Server) getBookMetadataHistory(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	limit := 100
@@ -644,7 +643,7 @@ func (s *Server) getBookMetadataHistory(c *gin.Context) {
 	if records == nil {
 		records = []database.MetadataChangeRecord{}
 	}
-	c.JSON(http.StatusOK, gin.H{"items": records, "count": len(records)})
+	RespondWithOK(c, gin.H{"items": records, "count": len(records)})
 }
 
 func (s *Server) getAudiobookFieldStates(c *gin.Context) {
@@ -654,14 +653,14 @@ func (s *Server) getAudiobookFieldStates(c *gin.Context) {
 		internalError(c, "failed to get field states", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"field_states": states})
+	RespondWithOK(c, gin.H{"field_states": states})
 }
 
 func (s *Server) getFieldMetadataHistory(c *gin.Context) {
 	id := c.Param("id")
 	field := c.Param("field")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	limit := 50
@@ -678,14 +677,14 @@ func (s *Server) getFieldMetadataHistory(c *gin.Context) {
 	if records == nil {
 		records = []database.MetadataChangeRecord{}
 	}
-	c.JSON(http.StatusOK, gin.H{"items": records, "count": len(records)})
+	RespondWithOK(c, gin.H{"items": records, "count": len(records)})
 }
 
 func (s *Server) undoMetadataChange(c *gin.Context) {
 	id := c.Param("id")
 	field := c.Param("field")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -696,7 +695,7 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 		return
 	}
 	if len(records) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no change history found for this field"})
+		RespondWithNotFound(c, "change history", field)
 		return
 	}
 
@@ -737,14 +736,14 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 		log.Printf("[WARN] failed to record undo change for %s/%s: %v", id, field, err)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "undo applied", "field": field, "reverted_to": latest.PreviousValue})
+	RespondWithOK(c, gin.H{"message": "undo applied", "field": field, "reverted_to": latest.PreviousValue})
 }
 
 // undoLastApply reverts all fields changed in the most recent metadata apply for a book.
 func (s *Server) undoLastApply(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -755,7 +754,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 		return
 	}
 	if len(history) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no change history found"})
+		RespondWithNotFound(c, "change history", id)
 		return
 	}
 
@@ -768,7 +767,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 		}
 	}
 	if batchTime.IsZero() {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no changes to undo"})
+		RespondWithNotFound(c, "changes", "none")
 		return
 	}
 
@@ -789,7 +788,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 	}
 
 	if len(batchRecords) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no changes to undo"})
+		RespondWithNotFound(c, "changes", "none")
 		return
 	}
 
@@ -835,7 +834,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 		s.writeBackBatcher.Enqueue(id)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"message":       fmt.Sprintf("Undid %d field(s)", len(undoneFields)),
 		"undone_fields": undoneFields,
 	})
@@ -845,22 +844,22 @@ func (s *Server) getBookPathHistory(c *gin.Context) {
 	id := c.Param("id")
 	history, err := s.Store().GetBookPathHistory(id)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"history": []any{}})
+		RespondWithOK(c, gin.H{"history": []any{}})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"history": history})
+	RespondWithOK(c, gin.H{"history": history})
 }
 
 func (s *Server) getAudiobookExternalIDs(c *gin.Context) {
 	id := c.Param("id")
 	eidStore := asExternalIDStore(s.Store())
 	if eidStore == nil {
-		c.JSON(http.StatusOK, gin.H{"external_ids": []any{}, "itunes_linked": false})
+		RespondWithOK(c, gin.H{"external_ids": []any{}, "itunes_linked": false})
 		return
 	}
 	extIDs, err := eidStore.GetExternalIDsForBook(id)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"external_ids": []any{}, "itunes_linked": false})
+		RespondWithOK(c, gin.H{"external_ids": []any{}, "itunes_linked": false})
 		return
 	}
 	itunesLinked := false
@@ -870,7 +869,7 @@ func (s *Server) getAudiobookExternalIDs(c *gin.Context) {
 			break
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"external_ids":  extIDs,
 		"itunes_linked": itunesLinked,
 		"total":         len(extIDs),
@@ -883,46 +882,46 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 	snapshotTS := c.Query("snapshot_ts")
 	if snapshotTS != "" {
 		if _, err := time.Parse(time.RFC3339Nano, snapshotTS); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid snapshot_ts format, use RFC3339Nano"})
+			RespondWithBadRequest(c, "invalid snapshot_ts format, use RFC3339Nano")
 			return
 		}
 	}
 	resp, err := s.audiobookService.GetAudiobookTags(c.Request.Context(), id, compareID, snapshotTS)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			RespondWithNotFound(c, "audiobook", id)
 			return
 		}
 		internalError(c, "failed to get tags", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	RespondWithOK(c, resp)
 }
 
 func (s *Server) listAllUserTags(c *gin.Context) {
 	tags, err := s.audiobookService.ListAllUserTags()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		RespondWithInternalError(c, err.Error())
 		return
 	}
 	if tags == nil {
 		tags = []database.TagWithCount{}
 	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
+	RespondWithOK(c, gin.H{"tags": tags})
 }
 
 func (s *Server) getBookUserTags(c *gin.Context) {
 	id := c.Param("id")
 	tags, err := s.audiobookService.GetBookUserTags(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		RespondWithInternalError(c, err.Error())
 		return
 	}
 	if tags == nil {
 		tags = []string{}
 	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
+	RespondWithOK(c, gin.H{"tags": tags})
 }
 
 // getBookTagsDetailed returns a book's tags with their source
@@ -938,18 +937,18 @@ func (s *Server) getBookUserTags(c *gin.Context) {
 func (s *Server) getBookTagsDetailed(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "book id is required"})
+		RespondWithBadRequest(c, "book id is required")
 		return
 	}
 	tags, err := s.Store().GetBookTagsDetailed(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		RespondWithInternalError(c, err.Error())
 		return
 	}
 	if tags == nil {
 		tags = []database.BookTag{}
 	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
+	RespondWithOK(c, gin.H{"tags": tags})
 }
 
 // getBookAlternativeTitles handles GET /audiobooks/:id/alternative-titles.
@@ -958,7 +957,7 @@ func (s *Server) getBookTagsDetailed(c *gin.Context) {
 func (s *Server) getBookAlternativeTitles(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		RespondWithBadRequest(c, "id is required")
 		return
 	}
 	alts, err := s.Store().GetBookAlternativeTitles(id)
@@ -969,7 +968,7 @@ func (s *Server) getBookAlternativeTitles(c *gin.Context) {
 	if alts == nil {
 		alts = []database.BookAlternativeTitle{}
 	}
-	c.JSON(http.StatusOK, gin.H{"alternative_titles": alts})
+	RespondWithOK(c, gin.H{"alternative_titles": alts})
 }
 
 // addBookAlternativeTitle handles POST /audiobooks/:id/alternative-titles.
@@ -978,7 +977,7 @@ func (s *Server) getBookAlternativeTitles(c *gin.Context) {
 func (s *Server) addBookAlternativeTitle(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		RespondWithBadRequest(c, "id is required")
 		return
 	}
 	var body struct {
@@ -987,13 +986,13 @@ func (s *Server) addBookAlternativeTitle(c *gin.Context) {
 		Language string `json:"language,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Title == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		RespondWithBadRequest(c, "title is required")
 		return
 	}
 	// Confirm the book exists before inserting — avoids orphan alt
 	// title rows for deleted books.
 	if book, err := s.Store().GetBookByID(id); err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		RespondWithNotFound(c, "book", id)
 		return
 	}
 	if err := s.Store().AddBookAlternativeTitle(id, body.Title, body.Source, body.Language); err != nil {
@@ -1001,7 +1000,7 @@ func (s *Server) addBookAlternativeTitle(c *gin.Context) {
 		return
 	}
 	alts, _ := s.Store().GetBookAlternativeTitles(id)
-	c.JSON(http.StatusOK, gin.H{"alternative_titles": alts})
+	RespondWithOK(c, gin.H{"alternative_titles": alts})
 }
 
 // removeBookAlternativeTitle handles DELETE /audiobooks/:id/alternative-titles.
@@ -1011,14 +1010,14 @@ func (s *Server) addBookAlternativeTitle(c *gin.Context) {
 func (s *Server) removeBookAlternativeTitle(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		RespondWithBadRequest(c, "id is required")
 		return
 	}
 	var body struct {
 		Title string `json:"title"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Title == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "title is required"})
+		RespondWithBadRequest(c, "title is required")
 		return
 	}
 	if err := s.Store().RemoveBookAlternativeTitle(id, body.Title); err != nil {
@@ -1026,7 +1025,7 @@ func (s *Server) removeBookAlternativeTitle(c *gin.Context) {
 		return
 	}
 	alts, _ := s.Store().GetBookAlternativeTitles(id)
-	c.JSON(http.StatusOK, gin.H{"alternative_titles": alts})
+	RespondWithOK(c, gin.H{"alternative_titles": alts})
 }
 
 func (s *Server) batchUpdateTags(c *gin.Context) {
@@ -1036,15 +1035,15 @@ func (s *Server) batchUpdateTags(c *gin.Context) {
 		RemoveTags []string `json:"remove_tags"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 	if len(body.BookIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids is required"})
+		RespondWithBadRequest(c, "book_ids is required")
 		return
 	}
 	if len(body.AddTags) == 0 && len(body.RemoveTags) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of add_tags or remove_tags is required"})
+		RespondWithBadRequest(c, "at least one of add_tags or remove_tags is required")
 		return
 	}
 	// Filter out empty strings from tag arrays
@@ -1061,10 +1060,10 @@ func (s *Server) batchUpdateTags(c *gin.Context) {
 	body.RemoveTags = filterEmpty(body.RemoveTags)
 	updated, err := s.audiobookService.BatchUpdateUserTags(body.BookIDs, body.AddTags, body.RemoveTags)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		RespondWithInternalError(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"updated": updated})
+	RespondWithOK(c, gin.H{"updated": updated})
 }
 
 func (s *Server) getBookChangelog(c *gin.Context) {
@@ -1077,7 +1076,7 @@ func (s *Server) getBookChangelog(c *gin.Context) {
 	if entries == nil {
 		entries = []activity.ChangeLogEntry{}
 	}
-	c.JSON(http.StatusOK, gin.H{"entries": entries})
+	RespondWithOK(c, gin.H{"entries": entries})
 }
 
 func (s *Server) updateAudiobook(c *gin.Context) {
@@ -1085,7 +1084,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 
 	var payload map[string]any
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -1098,7 +1097,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(id, payload)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			RespondWithNotFound(c, "audiobook", id)
 			return
 		}
 		internalError(c, "failed to update audiobook", err)
@@ -1242,7 +1241,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		s.writeBackBatcher.Enqueue(id)
 	}
 
-	c.JSON(http.StatusOK, enrichBookForResponse(updatedBook))
+	RespondWithOK(c, enrichBookForResponse(updatedBook))
 }
 
 func (s *Server) deleteAudiobook(c *gin.Context) {
@@ -1258,10 +1257,10 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 	result, err := s.audiobookService.DeleteAudiobook(c.Request.Context(), id, opts)
 	if err != nil {
 		if strings.Contains(err.Error(), "already soft deleted") {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			RespondWithConflict(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
@@ -1270,13 +1269,13 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 		"block_hash":  blockHash,
 	}))
 
-	c.JSON(http.StatusOK, result)
+	RespondWithOK(c, result)
 }
 
 func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	var req BatchUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -1291,21 +1290,21 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, resp)
+	RespondWithOK(c, resp)
 }
 
 func (s *Server) batchOperations(c *gin.Context) {
 	var req BatchOperationsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.Operations) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no operations provided"})
+		RespondWithBadRequest(c, "no operations provided")
 		return
 	}
 	if len(req.Operations) > 10000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "max 10000 operations per request"})
+		RespondWithBadRequest(c, "max 10000 operations per request")
 		return
 	}
 
@@ -1319,7 +1318,7 @@ func (s *Server) batchOperations(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, resp)
+	RespondWithOK(c, resp)
 }
 
 // getBookChanges returns change tracking records for a book.
@@ -1330,5 +1329,5 @@ func (s *Server) getBookChanges(c *gin.Context) {
 		internalError(c, "failed to get book changes", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"changes": changes})
+	RespondWithOK(c, gin.H{"changes": changes})
 }

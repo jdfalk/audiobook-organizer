@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.20.0 -->
+<!-- version: 2.21.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -8,6 +8,16 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 24, 2026 — Envelope Migration: Wave 5 — the giants (audiobooks, entities, user_tags)
+
+Final wave — completes TODO 4.15. Shipped as one PR. 2 parallel Haiku sub-agents migrated the two "giant" handler files; coordinator consolidated, fixed test-fixture breakage across 8 test files, and a Sonnet validator audited the diff before merge.
+
+- **`internal/server/audiobooks_handlers.go`** (E2): 83 remaining callsites (on top of Wave 3's partial soft-delete migration) → `RespondWith*`. Covers list/search, single-book CRUD, metadata history, batch/bulk ops, covers, alternative titles, tags, external IDs, path history. 34 handlers total. `api.ts`: 8+ callers unwrap `.data`.
+- **`internal/server/entities_handlers.go`** (E1): 87 callsites across Works (8 handlers / 10 callsites), Authors (14 / 42), Series (8 / 27), Narrators (4 / 8). `api.ts`: 18 callers unwrap `.data`.
+- **`internal/server/user_tags.go`** (coordinator catch): wasn't in any wave but its tests expected envelope — 4 handlers migrated to `RespondWith*`.
+- **Coordinator test fixes**: `handlers_integration_test.go`, `handlers_unit_test.go`, `library_enhancement_test.go` (tag-filter items + batch-tags assertions), `server_bulk_delete_test.go` (7 envelope wrappers), `server_coverage_test.go` (audiobook list envelope), `metadata_history_test.go` (undo + history endpoints), `changelog_service_test.go` (endpoint tests relaxed to tolerate pre-existing CreateBook path-entry side-effect).
+- **Sonnet validator caught**: 2 missed `.data` unwraps in `api.ts` (`getAudiobookFieldStates`, `countBooksFiltered`) — fixed before PR. Without the audit, both would have silently returned 0 / empty in production.
 
 #### April 24, 2026 — Envelope Migration: Wave 4 (operations, ai, metadata, itunes)
 

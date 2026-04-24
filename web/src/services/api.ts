@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.78.0
+// version: 2.0.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -624,7 +624,8 @@ export async function getBook(id: string): Promise<Book> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function searchBooks(
@@ -645,10 +646,10 @@ export async function searchBooks(
 export async function countBooks(): Promise<number> {
   const response = await fetch(`${API_BASE}/audiobooks/count`);
   if (!response.ok) {
-    throw await buildApiError(response, 'Failed to count books');
+    throw await buildApiError(response, "Failed to count books");
   }
-  const data = await response.json();
-  return data.count || 0;
+  const body = await response.json();
+  return body.data?.count || 0;
 }
 
 export async function countBooksFiltered(options: {
@@ -660,8 +661,8 @@ export async function countBooksFiltered(options: {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to count filtered books');
   }
-  const data = await response.json();
-  return data.count || 0;
+  const body = await response.json();
+  return body.data?.count || 0;
 }
 
 export async function getSoftDeletedBooks(
@@ -845,7 +846,8 @@ export interface ChangeLogEntry {
 export async function getBookChangelog(bookId: string): Promise<{ entries: ChangeLogEntry[] }> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/changelog`);
   if (!response.ok) return { entries: [] };
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 /** @deprecated Use getBookFiles instead. This calls the legacy segments endpoint. */
@@ -854,7 +856,8 @@ export async function getBookSegments(bookId: string): Promise<BookSegment[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book segments');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getBookFiles(
@@ -863,7 +866,8 @@ export async function getBookFiles(
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/files`);
   if (!response.ok)
     throw new Error(`Failed to fetch book files: ${response.status}`);
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getSegmentTags(
@@ -876,7 +880,8 @@ export async function getSegmentTags(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch segment tags');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Authors
@@ -885,7 +890,8 @@ export async function getAuthors(): Promise<Author[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch authors');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.items || data.authors || [];
 }
 
@@ -894,7 +900,8 @@ export async function countAuthors(): Promise<number> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to count authors');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.count ?? 0;
 }
 
@@ -954,7 +961,8 @@ export async function mergeAuthors(keepId: number, mergeIds: number[]): Promise<
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge authors');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getBooksByAuthor(authorId: number): Promise<Book[]> {
@@ -975,7 +983,8 @@ export interface AuthorAlias {
 export async function getAuthorAliases(authorId: number): Promise<AuthorAlias[]> {
   const response = await fetch(`${API_BASE}/authors/${authorId}/aliases`);
   if (!response.ok) return [];
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.aliases || [];
 }
 
@@ -988,7 +997,8 @@ export async function createAuthorAlias(authorId: number, aliasName: string, ali
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to create author alias');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function deleteAuthorAlias(authorId: number, aliasId: number): Promise<void> {
@@ -1007,8 +1017,8 @@ export async function resolveProductionAuthor(authorId: number): Promise<Operati
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to resolve production author');
   }
-  const data = await response.json();
-  return data.operation;
+  const body = await response.json();
+  return body.data.operation;
 }
 
 // Book dedup — uses existing /audiobooks/duplicates endpoint which returns Book[][] groups
@@ -1111,7 +1121,8 @@ export async function getSeries(): Promise<SeriesWithCount[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch series');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.items || data.series || [];
 }
 
@@ -1120,7 +1131,8 @@ export async function countSeries(): Promise<number> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to count series');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.count ?? 0;
 }
 
@@ -1129,7 +1141,8 @@ export async function getSeriesBooks(seriesId: number): Promise<Book[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch series books');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.items || data.books || [];
 }
 
@@ -1153,7 +1166,8 @@ export async function splitSeries(seriesId: number, bookIds: string[]): Promise<
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to split series');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function deleteSeries(seriesId: number): Promise<void> {
@@ -1170,7 +1184,8 @@ export async function getAuthorsWithCounts(): Promise<AuthorWithCount[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch authors');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.items || data.authors || [];
 }
 
@@ -1179,7 +1194,8 @@ export async function getAuthorBooks(authorId: number): Promise<Book[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch author books');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.items || data.books || [];
 }
 
@@ -1201,7 +1217,8 @@ export async function bulkDeleteAuthors(ids: number[]): Promise<{ deleted: numbe
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to bulk delete authors');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function bulkDeleteSeries(ids: number[]): Promise<{ deleted: number; skipped: number; errors: string[]; total: number }> {
@@ -1213,7 +1230,8 @@ export async function bulkDeleteSeries(ids: number[]): Promise<{ deleted: number
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to bulk delete series');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Works
@@ -1222,7 +1240,8 @@ export async function getWorks(): Promise<Work[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch works');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.items || data.works || [];
 }
 
@@ -2106,7 +2125,8 @@ export async function updateSeriesName(id: number, name: string): Promise<Series
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to update series name');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Metadata Fetching
@@ -2893,8 +2913,8 @@ export type MetadataFieldStates = Record<string, MetadataFieldStateEntry>;
 export async function getAudiobookFieldStates(bookId: string): Promise<MetadataFieldStates> {
   const response = await fetch(`${API_BASE}/audiobooks/${bookId}/field-states`);
   if (!response.ok) throw await buildApiError(response, 'Failed to fetch field states');
-  const data = await response.json();
-  return data.field_states || {};
+  const body = await response.json();
+  return body.data?.field_states || {};
 }
 
 // Version
@@ -3079,7 +3099,8 @@ export async function splitCompositeAuthor(authorId: number, names?: string[]): 
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to split author');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function renameAuthor(authorId: number, name: string): Promise<{ id: number; name: string }> {
@@ -3091,7 +3112,8 @@ export async function renameAuthor(authorId: number, name: string): Promise<{ id
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to rename author');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function reclassifyAuthorAsNarrator(authorId: number): Promise<{ narrator_id: number; books_updated: number }> {
@@ -3099,7 +3121,8 @@ export async function reclassifyAuthorAsNarrator(authorId: number): Promise<{ na
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to reclassify author as narrator');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // --- Unified Task/Scheduler API ---
