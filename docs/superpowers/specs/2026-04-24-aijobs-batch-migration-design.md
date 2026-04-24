@@ -56,7 +56,7 @@ Goal: **no bulk-scale LLM work touches the synchronous chat-completions endpoint
 
 ### Components
 
-**1. `ai_jobs` table (migration 38) — tracking only**
+**1. `ai_jobs` table (migration 52) — tracking only**
 
 ```
 id              TEXT PK         (ULID)
@@ -153,7 +153,7 @@ Sequential phases; tasks within a phase run in parallel where marked.
 
 ### Phase 1 — Foundation + reference migration (serial)
 
-- **1.1** Migration 38 (`ai_jobs` + `ai_job_payloads` tables) + `internal/database/ai_jobs_store.go` accessor.
+- **1.1** Migration 52 (`ai_jobs` + `ai_job_payloads` tables) + `internal/database/ai_jobs_store.go` accessor.
 - **1.2** `internal/ai/aijobs` package: `Submit`, `Register`, `Dispatch`, in-memory registry. Wire as `aijobs` handler in `batch_poller.go`.
 - **1.3** `TestNoUnmarkedChatCompletionCallers` (allow-list initially contains all 8 current sites; tightens as migrations land).
 - **1.4** Audit `openai_parser.go` lines 544 & 678 — trace callers, confirm priority, record findings at the bottom of this design doc.
