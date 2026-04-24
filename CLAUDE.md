@@ -1,7 +1,7 @@
 <!-- file: CLAUDE.md -->
-<!-- version: 4.2.0 -->
+<!-- version: 4.3.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
-<!-- last-edited: 2026-01-31 -->
+<!-- last-edited: 2026-04-24 -->
 
 # CLAUDE.md
 
@@ -35,6 +35,18 @@ make help            # All targets
 
 > **Note:** `go.mod` currently says `go 1.24.0`. The Go instructions reference 1.25 features — update go.mod when upgrading.
 
+## Workflow Discipline
+
+- ALWAYS use a git worktree for refactors and multi-PR work; never commit directly to main in the primary working tree.
+- ALWAYS present a written plan BEFORE exploring code or making edits for any refactor or multi-step task. Wait for user approval.
+- Before running manual build/deploy steps, check Makefile and Makefile.local for existing targets (e.g., wipe-deploy, fresh-import).
+
+## GitHub Operations
+
+- Do NOT push workflow file changes via the MCP contents API — it has caused file corruption. Use git push instead.
+- Pin all GitHub Action references to SHAs, not tags.
+- Prefer HTTPS remotes over SSH if SSH key issues arise.
+
 ## Quick Fix Workflow
 
 When making small fixes while another Claude process is working on main, use this
@@ -55,3 +67,8 @@ the entire sequence:
 2. **File headers:** All files need versioned headers. Bump version on every change.
 3. **Docs:** Edit files directly. Update version headers. No legacy doc-update scripts.
 4. **Scripts:** Python for anything non-trivial. Shell only for simple ops under 20 lines.
+
+## Post-Task Hygiene
+
+- After completing any feature/fix: update CHANGELOG, update TODO, and commit before moving on.
+- When editing release notes, PREPEND to existing auto-generated content; never replace the body wholesale.
