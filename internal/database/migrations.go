@@ -346,6 +346,12 @@ var migrations = []Migration{
 		Up:          migration051Up,
 		Down:        nil,
 	},
+	{
+		Version:     52,
+		Description: "Add ai_jobs and ai_job_payloads tables for unified batch tracking",
+		Up:          migration052Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2546,6 +2552,48 @@ func migration051Up(store Store) error {
 		}
 	}
 	log.Println("  - Added quarantine_reason, quarantined_at to books")
+	return nil
+}
+
+// migration052Up creates the ai_jobs tracking table and ai_job_payloads
+// blob table used by the internal/ai/aijobs package to route bulk LLM work
+// through the OpenAI Batch API.
+func migration052Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: schema-free
+	}
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS ai_jobs (
+			id TEXT PRIMARY KEY,
+			type TEXT NOT NULL,
+			batch_id TEXT,
+			custom_id_prefix TEXT NOT NULL,
+			status TEXT NOT NULL,
+			item_count INTEGER NOT NULL,
+			success_count INTEGER NOT NULL DEFAULT 0,
+			error_count INTEGER NOT NULL DEFAULT 0,
+			row_errors TEXT,
+			error_msg TEXT,
+			submitted_at TIMESTAMP,
+			completed_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_jobs_status_created ON ai_jobs(status, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_jobs_type_created ON ai_jobs(type, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_ai_jobs_batch_id ON ai_jobs(batch_id) WHERE batch_id IS NOT NULL`,
+		`CREATE TABLE IF NOT EXISTS ai_job_payloads (
+			job_id TEXT PRIMARY KEY,
+			items_json BLOB NOT NULL,
+			FOREIGN KEY (job_id) REFERENCES ai_jobs(id) ON DELETE CASCADE
+		)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 52: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Created ai_jobs, ai_job_payloads")
 	return nil
 }
 
