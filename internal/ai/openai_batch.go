@@ -1,5 +1,5 @@
 // file: internal/ai/openai_batch.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e
 
 package ai
@@ -57,6 +57,11 @@ func (p *OpenAIParser) UploadBatchFile(ctx context.Context, data io.Reader) (str
 		return "", fmt.Errorf("upload batch file: %w", err)
 	}
 	return file.ID, nil
+}
+
+// UploadBatchFileBytes is a convenience for aijobs which already has a []byte buffer.
+func (p *OpenAIParser) UploadBatchFileBytes(ctx context.Context, data []byte) (string, error) {
+	return p.UploadBatchFile(ctx, bytes.NewReader(data))
 }
 
 // CreateBatchWithMetadata creates a batch with custom metadata tags.
