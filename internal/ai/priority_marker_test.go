@@ -21,12 +21,13 @@ func TestNoUnmarkedChatCompletionCallers(t *testing.T) {
 	// Allow-list: functions that currently call Chat.Completions.New synchronously.
 	// Each entry notes which Task will remove it during migration.
 	allowListedSyncCallers := map[string]string{
-		"ParseFilename":       "Task 2.2", // Migrate ParsePath/Series/Metadata
-		"ParseAudiobook":      "Task 2.2", // Migrate ParsePath/Series/Metadata
-		"ParseBatch":          "Task 2.2", // Migrate ParsePath/Series/Metadata
-		"ParseCoverArt":       "Task 2.3", // Migrate cover-image
-		"reviewAuthorBatch":   "Task 2.3", // Migrate sites 544/678
-		"discoverAuthorBatch": "Task 2.3", // Migrate sites 544/678
+		"ParseFilename":        "Task 2.2", // Migrate ParsePath/Series/Metadata
+		"ParseAudiobook":       "Task 2.2", // Migrate ParsePath/Series/Metadata
+		"ParseBatch":           "Task 2.2", // Migrate ParsePath/Series/Metadata
+		"ParseCoverArt":        "Task 2.3", // Migrate cover-image
+		"reviewAuthorBatch":    "Task 2.3", // Migrate sites 544/678
+		"discoverAuthorBatch":  "Task 2.3", // Migrate sites 544/678
+		"scoreMetadataBatch":   "",         // PRIORITY: Interactive — user-waiting metadata search, stays sync
 	}
 
 	// Walk the current directory (package ai) for .go files.

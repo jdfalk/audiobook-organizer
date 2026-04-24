@@ -1033,12 +1033,6 @@ func NewServer(store database.Store) *Server {
 				} else {
 					log.Println("[INFO] Metadata candidate scoring: LLM rerank tier wired but disabled in config")
 				}
-
-				// Wire aijobs store for async metadata review batches.
-				if aiJobsStore, ok := database.GetGlobalStore().(database.AIJobsStore); ok {
-					llmParser.SetAIJobsStore(aiJobsStore)
-					log.Println("[INFO] Metadata async review (aijobs) wired to LLM parser")
-				}
 			} else {
 				log.Println("[INFO] Embedding store opened (dedup engine disabled — no API key or embedding_enabled=false)")
 			}

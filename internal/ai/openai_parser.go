@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 1.12.0
+// version: 13.1.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
@@ -41,7 +40,6 @@ type OpenAIParser struct {
 	maxRetries    int
 	enabled       bool
 	responseCache *cache.Cache[*ParsedMetadata] // Application-level response cache
-	aiJobsStore   database.AIJobsStore          // For batch API submissions (optional)
 }
 
 // Default cache TTL for AI responses (24 hours — metadata doesn't change often)
@@ -93,12 +91,6 @@ func (p *OpenAIParser) InvalidateCache() {
 // IsEnabled returns whether the parser is enabled
 func (p *OpenAIParser) IsEnabled() bool {
 	return p.enabled
-}
-
-// SetAIJobsStore configures the aijobs store for batch API submissions.
-// Optional; if not set, metadata scoring falls back to synchronous mode.
-func (p *OpenAIParser) SetAIJobsStore(store database.AIJobsStore) {
-	p.aiJobsStore = store
 }
 
 // ParseFilename uses OpenAI to parse a filename into structured metadata.
