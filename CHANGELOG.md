@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.14.0 -->
+<!-- version: 2.15.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -8,6 +8,10 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 23, 2026 — Envelope Migration: `quarantine_handlers.go`
+
+- **`internal/server/quarantine_handlers.go`**: migrated all 3 handlers (`quarantineBook`, `unquarantineBook`, `listQuarantinedBooks`) to `RespondWithOK` / `RespondWithBadRequest` / `RespondWithInternalError`. No frontend changes needed: the two UI-facing handlers are called via `Promise<void>` wrappers in `api.ts` (caller never reads the response body), and `listQuarantinedBooks` has no frontend consumer.
 
 #### April 23, 2026 — Envelope Migration: `update_handlers.go` + Settings
 
