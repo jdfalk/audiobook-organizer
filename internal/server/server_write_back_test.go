@@ -60,12 +60,15 @@ func TestBatchWriteBackEndpoint_ReturnsSummary(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	// The endpoint is async — it returns an operation ID, not inline results
-	var resp struct {
-		OperationID string `json:"operation_id"`
-		Message     string `json:"message"`
-		BookCount   int    `json:"book_count"`
+	var wrapper struct {
+		Data struct {
+			OperationID string `json:"operation_id"`
+			Message     string `json:"message"`
+			BookCount   int    `json:"book_count"`
+		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.NotEmpty(t, resp.OperationID)
 	assert.Equal(t, 2, resp.BookCount)

@@ -119,10 +119,13 @@ func TestITunesSyncForceFlag_NoChanges(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	var wrapper struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &wrapper); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
+	resp := wrapper.Data
 	msg, _ := resp["message"].(string)
 	if !strings.Contains(msg, "no changes detected") {
 		t.Errorf("expected 'no changes detected' in message, got %q", msg)
@@ -170,10 +173,13 @@ func TestITunesSyncForceFlag_Bypass(t *testing.T) {
 		t.Fatalf("expected 202 (Accepted), got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	var wrapper struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &wrapper); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
+	resp := wrapper.Data
 	opID, _ := resp["operation_id"].(string)
 	if opID == "" {
 		t.Errorf("expected non-empty operation_id when force=true")

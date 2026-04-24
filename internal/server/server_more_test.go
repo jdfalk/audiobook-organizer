@@ -652,9 +652,11 @@ func TestStartScanOperation(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusAccepted, w.Code)
 
-	var op database.Operation
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &op))
-	waitForOperationStatus(t, op.ID, 10*time.Second)
+	var resp struct {
+		Data database.Operation `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	waitForOperationStatus(t, resp.Data.ID, 10*time.Second)
 }
 
 func TestStartOrganizeOperation(t *testing.T) {
@@ -688,9 +690,11 @@ func TestStartOrganizeOperation(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusAccepted, w.Code)
 
-	var op database.Operation
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &op))
-	waitForOperationStatus(t, op.ID, 10*time.Second)
+	var resp struct {
+		Data database.Operation `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	waitForOperationStatus(t, resp.Data.ID, 10*time.Second)
 	waitForQueueIdle(t, server, 10*time.Second)
 }
 

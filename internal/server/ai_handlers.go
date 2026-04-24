@@ -1,5 +1,5 @@
 // file: internal/server/ai_handlers.go
-// version: 1.2.0
+// version: 2.0.0
 // guid: 5d3a6a95-4ac8-42c2-a7fe-5ff4857dd31a
 //
 // AI-related HTTP handlers split out of server.go: filename parsing,
@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -37,14 +36,14 @@ func (s *Server) parseFilenameWithAI(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "filename is required"})
+		RespondWithBadRequest(c, "filename is required")
 		return
 	}
 
 	// Create AI parser
 	parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 	if !parser.IsEnabled() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled or API key not configured"})
+		RespondWithBadRequest(c, "AI parsing is not enabled or API key not configured")
 		return
 	}
 
@@ -55,7 +54,7 @@ func (s *Server) parseFilenameWithAI(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"metadata": metadata})
+	RespondWithOK(c, gin.H{"metadata": metadata})
 }
 
 // testAIConnection tests the OpenAI API connection
@@ -72,7 +71,7 @@ func (s *Server) testAIConnection(c *gin.Context) {
 	}
 
 	if apiKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "API key not provided", "success": false})
+		RespondWithBadRequest(c, "API key not provided")
 		return
 	}
 
@@ -80,11 +79,11 @@ func (s *Server) testAIConnection(c *gin.Context) {
 	parser := ai.NewOpenAIParser(apiKey, true)
 	if err := parser.TestConnection(c.Request.Context()); err != nil {
 		log.Printf("[ERROR] connection test failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "connection test failed", "success": false})
+		RespondWithInternalError(c, "connection test failed")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "OpenAI connection successful"})
+	RespondWithOK(c, gin.H{"success": true, "message": "OpenAI connection successful"})
 }
 
 // testMetadataSource tests a metadata source API key by performing a simple search.
@@ -94,11 +93,11 @@ func (s *Server) testMetadataSource(c *gin.Context) {
 		APIKey   string `json:"api_key"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.SourceID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "source_id is required", "success": false})
+		RespondWithBadRequest(c, "source_id is required")
 		return
 	}
 	if req.APIKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "api_key is required", "success": false})
+		RespondWithBadRequest(c, "api_key is required")
 		return
 	}
 
@@ -109,22 +108,22 @@ func (s *Server) testMetadataSource(c *gin.Context) {
 		client := metadata.NewGoogleBooksClient(req.APIKey)
 		results, err := client.SearchByTitle(testQuery)
 		if err != nil {
-			c.JSON(http.StatusOK, gin.H{"success": false, "error": fmt.Sprintf("Google Books API error: %v", err)})
+			RespondWithOK(c, gin.H{"success": false, "error": fmt.Sprintf("Google Books API error: %v", err)})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Google Books connection successful (%d results)", len(results))})
+		RespondWithOK(c, gin.H{"success": true, "message": fmt.Sprintf("Google Books connection successful (%d results)", len(results))})
 
 	case "hardcover":
 		client := metadata.NewHardcoverClient(req.APIKey)
 		results, err := client.SearchByTitle(testQuery)
 		if err != nil {
-			c.JSON(http.StatusOK, gin.H{"success": false, "error": fmt.Sprintf("Hardcover API error: %v", err)})
+			RespondWithOK(c, gin.H{"success": false, "error": fmt.Sprintf("Hardcover API error: %v", err)})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("Hardcover connection successful (%d results)", len(results))})
+		RespondWithOK(c, gin.H{"success": true, "message": fmt.Sprintf("Hardcover connection successful (%d results)", len(results))})
 
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unknown source: %s", req.SourceID), "success": false})
+		RespondWithBadRequest(c, fmt.Sprintf("unknown source: %s", req.SourceID))
 	}
 }
 
@@ -133,21 +132,21 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 	id := c.Param("id")
 
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	// Get the book
 	book, err := s.Store().GetBookByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "audiobook not found"})
+		RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	// Create AI parser
 	parser := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 	if !parser.IsEnabled() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled or API key not configured"})
+		RespondWithBadRequest(c, "AI parsing is not enabled or API key not configured")
 		return
 	}
 
@@ -208,7 +207,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"message":    "audiobook updated with AI-parsed metadata",
 		"book":       enrichBookForResponse(updatedBook),
 		"confidence": metadata.Confidence,
@@ -218,7 +217,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 // startAIScan kicks off a new multi-pass AI author dedup scan.
 func (s *Server) startAIScan(c *gin.Context) {
 	if s.pipelineManager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI scan pipeline not configured"})
+		RespondWithInternalError(c, "AI scan pipeline not configured")
 		return
 	}
 	var req struct {
@@ -235,13 +234,13 @@ func (s *Server) startAIScan(c *gin.Context) {
 		internalError(c, "failed to start AI scan", err)
 		return
 	}
-	c.JSON(http.StatusAccepted, scan)
+	RespondWithSuccess(c, 202, scan)
 }
 
 // listAIScans returns all AI scan pipeline runs.
 func (s *Server) listAIScans(c *gin.Context) {
 	if s.aiScanStore == nil {
-		c.JSON(http.StatusOK, gin.H{"scans": []interface{}{}})
+		RespondWithOK(c, gin.H{"scans": []interface{}{}})
 		return
 	}
 	scans, err := s.aiScanStore.ListScans()
@@ -252,18 +251,18 @@ func (s *Server) listAIScans(c *gin.Context) {
 	if scans == nil {
 		scans = []database.Scan{}
 	}
-	c.JSON(http.StatusOK, gin.H{"scans": scans})
+	RespondWithOK(c, gin.H{"scans": scans})
 }
 
 // getAIScan returns a single scan with its phases.
 func (s *Server) getAIScan(c *gin.Context) {
 	if s.aiScanStore == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		RespondWithNotFound(c, "scan store", "")
 		return
 	}
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		RespondWithBadRequest(c, "invalid scan ID")
 		return
 	}
 	scan, err := s.aiScanStore.GetScan(id)
@@ -272,22 +271,22 @@ func (s *Server) getAIScan(c *gin.Context) {
 		return
 	}
 	if scan == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scan not found"})
+		RespondWithNotFound(c, "scan", "")
 		return
 	}
 	phases, _ := s.aiScanStore.GetPhases(id)
-	c.JSON(http.StatusOK, gin.H{"scan": scan, "phases": phases})
+	RespondWithOK(c, gin.H{"scan": scan, "phases": phases})
 }
 
 // getAIScanResults returns results for a scan, with optional agreement filter.
 func (s *Server) getAIScanResults(c *gin.Context) {
 	if s.aiScanStore == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		RespondWithNotFound(c, "scan store", "")
 		return
 	}
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		RespondWithBadRequest(c, "invalid scan ID")
 		return
 	}
 	results, err := s.aiScanStore.GetScanResults(id)
@@ -311,25 +310,25 @@ func (s *Server) getAIScanResults(c *gin.Context) {
 	if results == nil {
 		results = []database.ScanResult{}
 	}
-	c.JSON(http.StatusOK, gin.H{"results": results})
+	RespondWithOK(c, gin.H{"results": results})
 }
 
 // applyAIScanResults marks selected scan results as applied.
 func (s *Server) applyAIScanResults(c *gin.Context) {
 	if s.aiScanStore == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		RespondWithNotFound(c, "scan store", "")
 		return
 	}
 	scanID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		RespondWithBadRequest(c, "invalid scan ID")
 		return
 	}
 	var req struct {
 		ResultIDs []int `json:"result_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 
@@ -343,59 +342,59 @@ func (s *Server) applyAIScanResults(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"applied": applied, "errors": errors})
+	RespondWithOK(c, gin.H{"applied": applied, "errors": errors})
 }
 
 // deleteAIScan removes a scan and all its associated data.
 func (s *Server) deleteAIScan(c *gin.Context) {
 	if s.aiScanStore == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		RespondWithNotFound(c, "scan store", "")
 		return
 	}
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		RespondWithBadRequest(c, "invalid scan ID")
 		return
 	}
 	if err := s.aiScanStore.DeleteScan(id); err != nil {
 		internalError(c, "failed to delete AI scan", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+	RespondWithOK(c, gin.H{"status": "deleted"})
 }
 
 // cancelAIScan cancels a running AI scan, including any in-flight batch jobs.
 func (s *Server) cancelAIScan(c *gin.Context) {
 	if s.pipelineManager == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "AI scan pipeline not configured"})
+		RespondWithInternalError(c, "AI scan pipeline not configured")
 		return
 	}
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID"})
+		RespondWithBadRequest(c, "invalid scan ID")
 		return
 	}
 	if err := s.pipelineManager.CancelScan(id); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		RespondWithNotFound(c, "scan", "")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "canceled"})
+	RespondWithOK(c, gin.H{"status": "canceled"})
 }
 
 // compareAIScans compares results between two scans.
 func (s *Server) compareAIScans(c *gin.Context) {
 	if s.aiScanStore == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scan store not configured"})
+		RespondWithNotFound(c, "scan store", "")
 		return
 	}
 	aID, err := strconv.Atoi(c.Query("a"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID 'a'"})
+		RespondWithBadRequest(c, "invalid scan ID 'a'")
 		return
 	}
 	bID, err := strconv.Atoi(c.Query("b"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid scan ID 'b'"})
+		RespondWithBadRequest(c, "invalid scan ID 'b'")
 		return
 	}
 
@@ -428,7 +427,7 @@ func (s *Server) compareAIScans(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"new_in_b":        newInB,
 		"resolved_from_a": resolvedFromA,
 		"unchanged":       unchanged,
@@ -438,12 +437,12 @@ func (s *Server) compareAIScans(c *gin.Context) {
 func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 	parser := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 	if !parser.IsEnabled() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "AI parsing is not enabled"})
+		RespondWithBadRequest(c, "AI parsing is not enabled")
 		return
 	}
 
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -457,7 +456,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 		mode = "groups"
 	}
 	if mode != "full" && mode != "groups" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid mode %q; must be full or groups", mode)})
+		RespondWithBadRequest(c, fmt.Sprintf("invalid mode %q; must be full or groups", mode))
 		return
 	}
 
@@ -468,7 +467,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 	recentOps, _, _ := store.ListOperations(50, 0)
 	for _, existing := range recentOps {
 		if existing.Type == opType && (existing.Status == "pending" || existing.Status == "running") {
-			c.JSON(http.StatusAccepted, existing)
+			RespondWithSuccess(c, 202, existing)
 			return
 		}
 	}
@@ -505,7 +504,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 			s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
 		}
 		if len(dedupGroups) == 0 {
-			c.JSON(http.StatusOK, gin.H{"message": "no duplicate groups to review"})
+			RespondWithOK(c, gin.H{"message": "no duplicate groups to review"})
 			return
 		}
 	}
@@ -532,7 +531,7 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 // aiReviewGroupsMode is the existing Groups mode — local heuristics build groups, AI validates.
@@ -720,17 +719,17 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 		} `json:"suggestions"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if len(req.Suggestions) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no suggestions provided"})
+		RespondWithBadRequest(c, "no suggestions provided")
 		return
 	}
 
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -920,5 +919,5 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
