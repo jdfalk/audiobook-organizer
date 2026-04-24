@@ -1,13 +1,31 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.21.0 -->
+<!-- version: 2.22.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-23 -->
+<!-- last-edited: 2026-04-24 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 24, 2026 — `/parallel-sweep` slash command — step 1 (skeleton + state schema)
+
+First step of TODO 4.16. Lays the plumbing for the new `/parallel-sweep` slash command (successor to the `parallel-refactor-sweep` user-global skill). No coordinator or dispatch yet — pure state-file infrastructure.
+
+- **Plan doc**: [`docs/superpowers/plans/2026-04-24-parallel-sweep-slash-command.md`](docs/superpowers/plans/2026-04-24-parallel-sweep-slash-command.md) v1.1.0 — open questions resolved, decisions locked. Hardens against three failure modes from the envelope sweep (worktree isolation bypass, missed test fixtures, post-merge schema gaps).
+- **`.claude/skills/parallel-sweep-impl/SKILL.md`**: skill stub + 9-step roadmap.
+- **`.claude/skills/parallel-sweep-impl/references/state-schema.md`**: state file schema, task lifecycle diagram, atomicity contract.
+- **`.claude/skills/parallel-sweep-impl/scripts/state.py`**: state CRUD with atomic checkpoint (tmp + fsync + os.replace). Schema validation on every mutation.
+- **`.claude/skills/parallel-sweep-impl/scripts/test_state.py`**: 19 unit tests (stdlib unittest, no third-party deps). All green.
+- **`.gitignore`**: ignore `.claude/state/` (per-run state files) and `.remember/` (plugin scratch).
+
+Decisions locked 2026-04-24 (full rationale in plan §13):
+- Hook scoping: belt-and-suspenders (PreToolUse hook + post-hoc `git status` cross-check; post-hoc is authoritative)
+- Auto-merge: green PR + local `make ci` both required; GitHub CI is tiebreaker
+- Resume: last completed task, reset worktree to base before re-dispatch
+- Conflict resolver: Sonnet trivial / Opus file-copy fallback (no speculative pass)
+- Scope: project-scope first, universal extraction tracked as future work
 
 #### April 24, 2026 — Envelope Migration: Wave 5 — the giants (audiobooks, entities, user_tags)
 
