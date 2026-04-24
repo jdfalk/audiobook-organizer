@@ -3278,7 +3278,8 @@ export async function previewRename(bookId: string): Promise<RenamePreview> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to preview rename');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function applyRename(bookId: string): Promise<RenameApplyResult> {
@@ -3289,7 +3290,8 @@ export async function applyRename(bookId: string): Promise<RenameApplyResult> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply rename');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // ---- Organize Preview & Execute ----
@@ -3332,7 +3334,8 @@ export async function previewOrganize(bookId: string): Promise<OrganizePreviewRe
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to preview organize');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function organizeBook(bookId: string): Promise<OrganizeResult> {
@@ -3343,7 +3346,8 @@ export async function organizeBook(bookId: string): Promise<OrganizeResult> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to organize book');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // ---- Reconciliation ----
