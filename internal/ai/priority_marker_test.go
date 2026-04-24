@@ -1,5 +1,5 @@
 // file: internal/ai/priority_marker_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8f370c63-462a-4dfa-b899-a5e715e210b0
 
 package ai
@@ -22,9 +22,9 @@ func TestNoUnmarkedChatCompletionCallers(t *testing.T) {
 	// Each entry notes which Task will remove it during migration.
 	allowListedSyncCallers := map[string]string{
 		"ParseBatch":           "Task 2.2", // TODO: migrate to aijobs — requires scanner refactor (see TODO.md AI-BATCH-1)
-		"ParseCoverArt":        "Task 2.3", // Migrate cover-image
-		"reviewAuthorBatch":    "Task 2.3", // Migrate sites 544/678
-		"discoverAuthorBatch":  "Task 2.3", // Migrate sites 544/678
+		"ParseCoverArt":        "Task 2.3", // TODO: defer to follow-up — resolveProductionAuthor loop coupling (see TODO.md AI-BATCH-2)
+		"reviewAuthorBatch":    "Task 2.3", // Out-of-scope — existing author-dedup flow
+		"discoverAuthorBatch":  "Task 2.3", // Out-of-scope — existing author-dedup flow
 		"scoreMetadataBatch":   "",         // PRIORITY: Interactive — user-waiting metadata search, stays sync
 	}
 
