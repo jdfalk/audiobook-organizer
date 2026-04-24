@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.0.0
+// version: 2.1.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3590,6 +3590,43 @@ export async function applyDiagnosticsSuggestions(
   if (!response.ok) throw await buildApiError(response, 'Failed to apply suggestions');
   const body = await response.json();
   return body.data;
+}
+
+// AI Jobs
+export interface AIJob {
+  id: string;
+  type: string;
+  batch_id?: string;
+  custom_id_prefix: string;
+  status: string;
+  item_count: number;
+  success_count: number;
+  error_count: number;
+  row_errors?: string;
+  error_msg?: string;
+  submitted_at?: string;
+  completed_at?: string;
+  created_at: string;
+}
+
+export async function listAIJobs(params?: {
+  type?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<AIJob[]> {
+  const qs = new URLSearchParams();
+  if (params?.type) qs.set('type', params.type);
+  if (params?.status) qs.set('status', params.status);
+  if (params?.limit) qs.set('limit', String(params.limit));
+  if (params?.offset) qs.set('offset', String(params.offset));
+  const url = qs.toString()
+    ? `${API_BASE}/ai-jobs?${qs}`
+    : `${API_BASE}/ai-jobs`;
+  const response = await fetch(url);
+  if (!response.ok) throw await buildApiError(response, 'Failed to fetch AI jobs');
+  const body = await response.json();
+  return body.data?.jobs ?? [];
 }
 
 // External ID mappings

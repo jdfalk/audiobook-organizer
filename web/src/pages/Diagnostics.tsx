@@ -1,8 +1,9 @@
 // file: web/src/pages/Diagnostics.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: f2323fc4-b3e7-4298-9ec5-759447cbd643
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { AIJobsPanel } from '../components/AIJobsPanel';
 import {
   Alert,
   Accordion,
@@ -545,6 +546,9 @@ export function Diagnostics() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* AI Jobs Panel */}
+      <AIJobsPanel />
     </Box>
   );
 }
