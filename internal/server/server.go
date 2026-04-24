@@ -977,6 +977,16 @@ func NewServer(store database.Store) *Server {
 					log.Println("[INFO] chromem-go ANN store active for dedup Layer 2")
 				}
 
+				// Wire aijobs store for async dedup review batches.
+				if aiJobsStore, ok := database.GetGlobalStore().(database.AIJobsStore); ok {
+					server.dedupEngine.SetAIJobsStore(aiJobsStore)
+					// Register the engine as the dedup verdict applier for batch callbacks.
+					ai.SetDedupVerdictApplier(server.dedupEngine)
+					log.Println("[INFO] Dedup async review (aijobs) wired")
+				} else {
+					log.Println("[WARN] Global store does not implement AIJobsStore; dedup async review disabled")
+				}
+
 				log.Println("[INFO] Embedding store and dedup engine initialized")
 				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
 
