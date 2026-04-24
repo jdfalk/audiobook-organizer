@@ -1,5 +1,5 @@
 // file: web/src/services/fileOpsApi.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7b3d5a1e-9c2f-4e80-b1a4-3d8c6e0f4a12
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
@@ -21,5 +21,6 @@ export async function fetchPendingFileOps(): Promise<PendingFileOpsResponse> {
   if (!res.ok) {
     throw new Error(`fetchPendingFileOps failed: ${res.status}`);
   }
-  return res.json() as Promise<PendingFileOpsResponse>;
+  const body = await res.json();
+  return body.data;
 }

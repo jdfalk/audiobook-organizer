@@ -1,5 +1,5 @@
 // file: internal/server/file_ops_handlers_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2c1f8b4d-9e3a-4f50-a7d6-8b1c5e0f9a23
 
 package server
@@ -28,14 +28,16 @@ func TestHandleListPendingFileOps_NoPool(t *testing.T) {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}
 	var resp struct {
-		Count      int             `json:"count"`
-		Operations []pendingFileOp `json:"operations"`
+		Data struct {
+			Count      int             `json:"count"`
+			Operations []pendingFileOp `json:"operations"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.Count != 0 || len(resp.Operations) != 0 {
-		t.Errorf("expected empty result, got count=%d ops=%v", resp.Count, resp.Operations)
+	if resp.Data.Count != 0 || len(resp.Data.Operations) != 0 {
+		t.Errorf("expected empty result, got count=%d ops=%v", resp.Data.Count, resp.Data.Operations)
 	}
 }
 
@@ -62,18 +64,20 @@ func TestHandleListPendingFileOps_PopulatedPool(t *testing.T) {
 		t.Fatalf("status = %d, want 200, body=%s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		Count      int             `json:"count"`
-		Operations []pendingFileOp `json:"operations"`
+		Data struct {
+			Count      int             `json:"count"`
+			Operations []pendingFileOp `json:"operations"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.Count != 2 {
-		t.Fatalf("count = %d, want 2 (response: %s)", resp.Count, w.Body.String())
+	if resp.Data.Count != 2 {
+		t.Fatalf("count = %d, want 2 (response: %s)", resp.Data.Count, w.Body.String())
 	}
 
 	seen := map[string]string{}
-	for _, op := range resp.Operations {
+	for _, op := range resp.Data.Operations {
 		seen[op.BookID] = op.OpType
 	}
 	if seen["book-A"] != "apply_metadata" {
@@ -109,19 +113,21 @@ func TestHandleListPendingFileOps_SortedByStartedAt(t *testing.T) {
 	}
 
 	var resp struct {
-		Count      int             `json:"count"`
-		Operations []pendingFileOp `json:"operations"`
+		Data struct {
+			Count      int             `json:"count"`
+			Operations []pendingFileOp `json:"operations"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp.Operations) != 3 {
-		t.Fatalf("got %d ops, want 3", len(resp.Operations))
+	if len(resp.Data.Operations) != 3 {
+		t.Fatalf("got %d ops, want 3", len(resp.Data.Operations))
 	}
-	for i := 1; i < len(resp.Operations); i++ {
-		if resp.Operations[i].StartedAt.Before(resp.Operations[i-1].StartedAt) {
+	for i := 1; i < len(resp.Data.Operations); i++ {
+		if resp.Data.Operations[i].StartedAt.Before(resp.Data.Operations[i-1].StartedAt) {
 			t.Errorf("operations not sorted by started_at: %v before %v",
-				resp.Operations[i].StartedAt, resp.Operations[i-1].StartedAt)
+				resp.Data.Operations[i].StartedAt, resp.Data.Operations[i-1].StartedAt)
 		}
 	}
 }

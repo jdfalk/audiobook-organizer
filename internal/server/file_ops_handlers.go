@@ -1,5 +1,5 @@
 // file: internal/server/file_ops_handlers.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: 5a2e0c6b-1d4f-4a9e-9c3b-6f1a2d7e8b01
 //
 // HTTP handlers for in-flight file I/O operations. Exposes the
@@ -9,7 +9,6 @@
 package server
 
 import (
-	"net/http"
 	"sort"
 	"time"
 
@@ -28,7 +27,7 @@ type pendingFileOp struct {
 func (s *Server) handleListPendingFileOps(c *gin.Context) {
 	pool := s.fileIOPool
 	if pool == nil {
-		c.JSON(http.StatusOK, gin.H{"operations": []pendingFileOp{}, "count": 0})
+		RespondWithOK(c, gin.H{"operations": []pendingFileOp{}, "count": 0})
 		return
 	}
 
@@ -53,5 +52,5 @@ func (s *Server) handleListPendingFileOps(c *gin.Context) {
 		return out[i].StartedAt.Before(out[j].StartedAt)
 	})
 
-	c.JSON(http.StatusOK, gin.H{"operations": out, "count": len(out)})
+	RespondWithOK(c, gin.H{"operations": out, "count": len(out)})
 }
