@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.13.0 -->
+<!-- version: 5.14.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-24 -->
 
@@ -189,6 +189,10 @@ Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/
 
 - [x] **DES-1** Bleve library search — complete 6/7 (#298, #301-#302, #311-#312, #321)
 - [x] **DES-2** chromem-go embedding store — #351 (store impl + tests; dedup engine wiring follows)
+
+### Per-feature LLM model knob (follow-up to aijobs batch migration)
+
+- [ ] **AI-MODEL-1** Replace the hardcoded `gpt-5-mini` default in `NewOpenAIParser` (and the duplicated string in `dedup.Engine.RunLLMReview`) with per-feature config knobs: `DedupReviewModel`, `MetadataReviewModel`, `FilenameParseModel`, `CoverArtModel`, etc. Rationale: mechanical paths (filename/series parsing) can drop to `gpt-5-nano` for ~5× cost savings while semantic paths (dedup pair judgments, cover art) stay on `gpt-5-mini`. Batch API already gives us 50% off so this is pure margin. Orthogonal to the aijobs migration — open a separate PR once that one merges.
 
 ---
 
