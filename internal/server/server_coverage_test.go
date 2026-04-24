@@ -64,11 +64,12 @@ func TestCoverageListAudiobooks(t *testing.T) {
 			validate: func(t *testing.T, body []byte) {
 				var resp map[string]any
 				require.NoError(t, json.Unmarshal(body, &resp))
-				items := resp["items"].([]any)
+				items := resp["data"].(map[string]any)["items"].([]any)
 				assert.GreaterOrEqual(t, len(items), 3)
-				assert.NotNil(t, resp["count"])
-				assert.NotNil(t, resp["limit"])
-				assert.NotNil(t, resp["offset"])
+				d := resp["data"].(map[string]any)
+				assert.NotNil(t, d["count"])
+				assert.NotNil(t, d["limit"])
+				assert.NotNil(t, d["offset"])
 			},
 		},
 		{
@@ -78,7 +79,7 @@ func TestCoverageListAudiobooks(t *testing.T) {
 			validate: func(t *testing.T, body []byte) {
 				var resp map[string]any
 				require.NoError(t, json.Unmarshal(body, &resp))
-				items := resp["items"].([]any)
+				items := resp["data"].(map[string]any)["items"].([]any)
 				assert.LessOrEqual(t, len(items), 2)
 			},
 		},
@@ -89,7 +90,7 @@ func TestCoverageListAudiobooks(t *testing.T) {
 			validate: func(t *testing.T, body []byte) {
 				var resp map[string]any
 				require.NoError(t, json.Unmarshal(body, &resp))
-				items := resp["items"].([]any)
+				items := resp["data"].(map[string]any)["items"].([]any)
 				assert.GreaterOrEqual(t, len(items), 1)
 			},
 		},
@@ -100,7 +101,7 @@ func TestCoverageListAudiobooks(t *testing.T) {
 			validate: func(t *testing.T, body []byte) {
 				var resp map[string]any
 				require.NoError(t, json.Unmarshal(body, &resp))
-				items := resp["items"].([]any)
+				items := resp["data"].(map[string]any)["items"].([]any)
 				assert.Equal(t, 0, len(items))
 			},
 		},
@@ -141,7 +142,7 @@ func TestCoverageListAudiobooks(t *testing.T) {
 			validate: func(t *testing.T, body []byte) {
 				var resp map[string]any
 				require.NoError(t, json.Unmarshal(body, &resp))
-				items := resp["items"].([]any)
+				items := resp["data"].(map[string]any)["items"].([]any)
 				assert.Equal(t, 0, len(items))
 			},
 		},
@@ -406,7 +407,7 @@ func TestCoverageListAuthors(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		assert.GreaterOrEqual(t, len(items), 1)
 	})
 }
@@ -453,7 +454,7 @@ func TestCoverageListSeries(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		assert.GreaterOrEqual(t, len(items), 1)
 	})
 }
@@ -1159,7 +1160,7 @@ func TestCoverageSeriesBooks(t *testing.T) {
 
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		items := resp["items"].([]any)
+		items := resp["data"].(map[string]any)["items"].([]any)
 		assert.GreaterOrEqual(t, len(items), 1)
 	})
 
