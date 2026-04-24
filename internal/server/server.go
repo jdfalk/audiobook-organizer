@@ -2498,6 +2498,9 @@ func (s *Server) setupRoutes() {
 			protected.GET("/diagnostics/ai-results/:operationId", s.perm(auth.PermSettingsManage), s.getDiagnosticsAIResults)
 			protected.POST("/diagnostics/apply-suggestions", s.perm(auth.PermSettingsManage), s.applyDiagnosticsSuggestions)
 
+			// AI Jobs observability routes
+			protected.GET("/ai-jobs", s.perm(auth.PermSettingsManage), s.handleListAIJobs)
+
 			// Bench routes (only available with -tags bench)
 			s.setupUserTagRoutes(protected)
 			s.registerReadingRoutes(protected)
