@@ -2983,7 +2983,8 @@ export async function getUpdateStatus(): Promise<UpdateInfo> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to get update status');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function checkForUpdate(): Promise<UpdateInfo> {
@@ -2991,7 +2992,8 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to check for updates');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function applyUpdate(): Promise<void> {

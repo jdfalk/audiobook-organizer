@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.13.0 -->
+<!-- version: 2.14.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -8,6 +8,12 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 23, 2026 — Envelope Migration: `update_handlers.go` + Settings
+
+- **`internal/server/update_handlers.go`**: migrated all 3 handlers (`getUpdateStatus`, `checkForUpdate`, `applyUpdate`) to `RespondWithOK` / `RespondWithBadRequest`.
+- **`web/src/services/api.ts`**: updated `getUpdateStatus` and `checkForUpdate` to unwrap `response.data` (matches new backend envelope). `applyUpdate` is unchanged (void return).
+- First coupled backend+frontend slice under TODO 4.15. Settings.tsx call sites unchanged — the adapter lives entirely in `api.ts`.
 
 #### April 23, 2026 — HTTP Response Envelope Migration (pilot)
 
