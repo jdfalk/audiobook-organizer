@@ -58,10 +58,18 @@ func TestChangelogService_WithPathHistory(t *testing.T) {
 
 	entries, err := server.changelogService.GetBookChangelog(book.ID)
 	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	assert.Equal(t, "rename", entries[0].Type)
-	assert.Contains(t, entries[0].Summary, "/old/path.m4b")
-	assert.Contains(t, entries[0].Summary, "/new/path.m4b")
+	// CreateBook records an implicit import entry, so the manual rename
+	// is one of several entries. Find the specific one we recorded.
+	var renameEntry *activity.ChangeLogEntry
+	for i, e := range entries {
+		if e.Type == "rename" && e.Details != nil && e.Details["change_type"] == "rename" {
+			renameEntry = &entries[i]
+			break
+		}
+	}
+	require.NotNil(t, renameEntry, "expected a user-recorded rename entry among %v", entries)
+	assert.Contains(t, renameEntry.Summary, "/old/path.m4b")
+	assert.Contains(t, renameEntry.Summary, "/new/path.m4b")
 }
 
 func TestChangelogEndpoint_Returns200(t *testing.T) {

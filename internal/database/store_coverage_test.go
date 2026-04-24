@@ -906,9 +906,17 @@ func TestCoverage_PathHistory(t *testing.T) {
 
 	history, err := store.GetBookPathHistory(bookID)
 	require.NoError(t, err)
-	assert.Len(t, history, 1)
-	assert.Equal(t, "/tmp/old.m4b", history[0].OldPath)
-	assert.Equal(t, "/library/new.m4b", history[0].NewPath)
+	// CreateBook records an implicit import entry; find the "organize" one.
+	var organizeEntry *BookPathChange
+	for i, h := range history {
+		if h.ChangeType == "organize" {
+			organizeEntry = &history[i]
+			break
+		}
+	}
+	require.NotNil(t, organizeEntry, "expected an organize entry in %v", history)
+	assert.Equal(t, "/tmp/old.m4b", organizeEntry.OldPath)
+	assert.Equal(t, "/library/new.m4b", organizeEntry.NewPath)
 }
 
 // --- Library Fingerprints ---

@@ -89,6 +89,7 @@ func TestGetSegmentTags_Success(t *testing.T) {
 
 	var resp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	resp = resp["data"].(map[string]interface{})
 
 	// File doesn't exist on disk, so we expect a tags_read_error
 	assert.NotEmpty(t, resp["tags_read_error"], "expected tags_read_error since file doesn't exist")

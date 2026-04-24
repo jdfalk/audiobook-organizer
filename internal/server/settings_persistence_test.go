@@ -133,9 +133,12 @@ func TestAPIKeyPersistenceRoundtrip(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var getResp map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &getResp)
+	var getWrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &getWrapper)
 	require.NoError(t, err)
+	getResp := getWrapper.Data
 
 	configData, ok := getResp["config"].(map[string]any)
 	require.True(t, ok, "Response should have config object")
