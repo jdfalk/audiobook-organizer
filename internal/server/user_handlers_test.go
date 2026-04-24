@@ -47,12 +47,14 @@ func TestHandleListUsers_Empty(t *testing.T) {
 	}
 
 	var resp struct {
-		Users []map[string]interface{} `json:"users"`
-		Count int                      `json:"count"`
+		Data struct {
+			Users []map[string]interface{} `json:"users"`
+			Count int                      `json:"count"`
+		} `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Count != 0 {
-		t.Errorf("expected 0 users, got %d", resp.Count)
+	if resp.Data.Count != 0 {
+		t.Errorf("expected 0 users, got %d", resp.Data.Count)
 	}
 }
 
@@ -71,16 +73,18 @@ func TestHandleListUsers_WithUsers(t *testing.T) {
 	}
 
 	var resp struct {
-		Users []map[string]interface{} `json:"users"`
-		Count int                      `json:"count"`
+		Data struct {
+			Users []map[string]interface{} `json:"users"`
+			Count int                      `json:"count"`
+		} `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Count != 2 {
-		t.Errorf("expected 2 users, got %d", resp.Count)
+	if resp.Data.Count != 2 {
+		t.Errorf("expected 2 users, got %d", resp.Data.Count)
 	}
 
 	// Verify password hash is NOT exposed.
-	for _, u := range resp.Users {
+	for _, u := range resp.Data.Users {
 		if _, ok := u["password_hash"]; ok {
 			t.Error("password_hash should not be exposed in list response")
 		}
@@ -109,18 +113,20 @@ func TestHandleCreateInvite(t *testing.T) {
 	}
 
 	var resp struct {
-		Token  string           `json:"token"`
-		Invite *database.Invite `json:"invite"`
+		Data struct {
+			Token  string           `json:"token"`
+			Invite *database.Invite `json:"invite"`
+		} `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Token == "" {
+	if resp.Data.Token == "" {
 		t.Error("expected non-empty token")
 	}
-	if resp.Invite == nil {
+	if resp.Data.Invite == nil {
 		t.Fatal("expected invite in response")
 	}
-	if resp.Invite.Username != "newuser" {
-		t.Errorf("expected username=newuser, got %s", resp.Invite.Username)
+	if resp.Data.Invite.Username != "newuser" {
+		t.Errorf("expected username=newuser, got %s", resp.Data.Invite.Username)
 	}
 }
 
@@ -153,12 +159,14 @@ func TestHandleListInvites(t *testing.T) {
 	}
 
 	var resp struct {
-		Invites []database.Invite `json:"invites"`
-		Count   int               `json:"count"`
+		Data struct {
+			Invites []database.Invite `json:"invites"`
+			Count   int               `json:"count"`
+		} `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Count != 0 {
-		t.Errorf("expected 0 invites, got %d", resp.Count)
+	if resp.Data.Count != 0 {
+		t.Errorf("expected 0 invites, got %d", resp.Data.Count)
 	}
 }
 

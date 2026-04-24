@@ -1,13 +1,22 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.12.0 -->
+<!-- version: 2.13.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-22 -->
+<!-- last-edited: 2026-04-23 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 23, 2026 — HTTP Response Envelope Migration (pilot)
+
+- **Kickoff of TODO 4.15**: adopt `RespondWith*` helpers from `internal/server/error_handler.go` project-wide so all successful responses share the `{"data": {...}}` envelope and errors share the `{"error", "code", "status"}` shape.
+- **`internal/server/entity_tag_handlers.go`**: deduplicated 4 near-identical author/series tag handlers into 2 generic handlers parameterized by an `entityTagOps` descriptor (`name`, `getDetailed`, `add`, `addWithSource`). Added `parseEntityID` helper for int path-param parsing. Fixed latent bug: `handleAddSeriesTag` previously ignored `req.Source`; series now respects source identically to author. All 4 handlers migrated to `RespondWithOK`.
+- **`internal/server/user_handlers.go`**: migrated all 13 `c.JSON` callsites to `RespondWithOK` / `RespondWithCreated` / `RespondWithBadRequest` / `RespondWithNotFound` helpers. Removed a dead `if users == nil` branch (unreachable — `make([]..., 0, ...)` is never nil).
+- **Tests updated**: `entity_tag_handlers_test.go` and `user_handlers_test.go` now decode the `data` envelope.
+- **No frontend changes** this pass — both files are backend-only (admin user management and entity-tag endpoints aren't wired to the UI yet).
+- **Migration strategy documented**: future slices must bundle backend + frontend + tests per feature area to avoid response-shape skew across a merge boundary. Remaining ~37 handler files tracked in TODO 4.15.
 
 #### April 22, 2026 — Failed Book Quarantine (`.failed/`)
 

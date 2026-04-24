@@ -1,5 +1,5 @@
 // file: internal/server/user_handlers.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 2d0e1f8a-3b9c-4a70-b8c5-3d7e0f1b9a99
 //
 // User management admin endpoints (spec 3.7 task 7). All routes
@@ -10,7 +10,6 @@ package server
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"net/http"
 	"strings"
 	"time"
 
@@ -27,9 +26,6 @@ func (s *Server) handleListUsers(c *gin.Context) {
 		internalError(c, "failed to list users", err)
 		return
 	}
-	if users == nil {
-		users = []database.User{}
-	}
 	safe := make([]gin.H, 0, len(users))
 	for _, u := range users {
 		safe = append(safe, gin.H{
@@ -38,7 +34,7 @@ func (s *Server) handleListUsers(c *gin.Context) {
 			"created_at": u.CreatedAt, "updated_at": u.UpdatedAt,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"users": safe, "count": len(safe)})
+	RespondWithOK(c, gin.H{"users": safe, "count": len(safe)})
 }
 
 // handleCreateInvite generates an invite token.
@@ -50,7 +46,7 @@ func (s *Server) handleCreateInvite(c *gin.Context) {
 		ExpiresIn int    `json:"expires_in"` // hours, default 72
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -71,7 +67,7 @@ func (s *Server) handleCreateInvite(c *gin.Context) {
 		internalError(c, "failed to create invite", err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"invite": created, "token": token})
+	RespondWithCreated(c, gin.H{"invite": created, "token": token})
 }
 
 // handleListInvites returns all active (non-expired, non-used) invites.
@@ -85,7 +81,7 @@ func (s *Server) handleListInvites(c *gin.Context) {
 	if invites == nil {
 		invites = []database.Invite{}
 	}
-	c.JSON(http.StatusOK, gin.H{"invites": invites, "count": len(invites)})
+	RespondWithOK(c, gin.H{"invites": invites, "count": len(invites)})
 }
 
 // handleDeleteInvite revokes an invite by token.
@@ -96,7 +92,7 @@ func (s *Server) handleDeleteInvite(c *gin.Context) {
 		internalError(c, "failed to delete invite", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"deleted": token})
+	RespondWithOK(c, gin.H{"deleted": token})
 }
 
 // handleAcceptInvite consumes an invite token and creates a user.
@@ -107,11 +103,11 @@ func (s *Server) handleAcceptInvite(c *gin.Context) {
 		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.Password) < 8 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "password must be at least 8 characters"})
+		RespondWithBadRequest(c, "password must be at least 8 characters")
 		return
 	}
 
@@ -123,7 +119,7 @@ func (s *Server) handleAcceptInvite(c *gin.Context) {
 
 	user, err := s.Store().ConsumeInvite(req.Token, "bcrypt", string(hash))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -134,7 +130,7 @@ func (s *Server) handleAcceptInvite(c *gin.Context) {
 	}
 
 	setSessionCookie(c, sess.ID, sess.ExpiresAt)
-	c.JSON(http.StatusCreated, gin.H{"user": user, "session": sess})
+	RespondWithCreated(c, gin.H{"user": user, "session": sess})
 }
 
 // handleDeactivateUser soft-deactivates a user (sets status=locked).
@@ -147,7 +143,7 @@ func (s *Server) handleDeactivateUser(c *gin.Context) {
 		return
 	}
 	if user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		RespondWithNotFound(c, "user", id)
 		return
 	}
 
@@ -156,7 +152,7 @@ func (s *Server) handleDeactivateUser(c *gin.Context) {
 		internalError(c, "deactivate user", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"user": user})
+	RespondWithOK(c, gin.H{"user": user})
 }
 
 // handleReactivateUser reactivates a locked user.
@@ -169,7 +165,7 @@ func (s *Server) handleReactivateUser(c *gin.Context) {
 		return
 	}
 	if user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		RespondWithNotFound(c, "user", id)
 		return
 	}
 
@@ -178,7 +174,7 @@ func (s *Server) handleReactivateUser(c *gin.Context) {
 		internalError(c, "reactivate user", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"user": user})
+	RespondWithOK(c, gin.H{"user": user})
 }
 
 // handleResetPassword generates a new invite for an existing user
@@ -188,7 +184,7 @@ func (s *Server) handleResetPassword(c *gin.Context) {
 	id := c.Param("id")
 	user, err := s.Store().GetUserByID(id)
 	if err != nil || user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		RespondWithNotFound(c, "user", id)
 		return
 	}
 
@@ -203,7 +199,7 @@ func (s *Server) handleResetPassword(c *gin.Context) {
 		internalError(c, "create reset invite", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"token": token, "expires_at": invite.ExpiresAt})
+	RespondWithOK(c, gin.H{"token": token, "expires_at": invite.ExpiresAt})
 }
 
 // registerUserAdminRoutes wires user management endpoints.
