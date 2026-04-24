@@ -1,5 +1,5 @@
 // file: web/src/services/playlistApi.ts
-// version: 1.1.0
+// version: 2.0.0
 // guid: 8d6e7f2a-9b0c-4a70-b8c5-3d7e0f1b9a99
 
 const API_BASE = '/api/v1';
@@ -31,7 +31,8 @@ async function jsonFetch(url: string, opts?: RequestInit) {
     const body = await resp.json().catch(() => ({}));
     throw Object.assign(new Error(body.error || resp.statusText), { response: { data: body, status: resp.status } });
   }
-  return resp.json();
+  const body = await resp.json();
+  return body.data || body;
 }
 
 export async function listPlaylists(
@@ -41,7 +42,8 @@ export async function listPlaylists(
 ): Promise<{ playlists: UserPlaylist[]; count: number }> {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
   if (type) params.set('type', type);
-  return jsonFetch(`${API_BASE}/playlists?${params}`);
+  const data = await jsonFetch(`${API_BASE}/playlists?${params}`);
+  return { playlists: data.items || [], count: data.count };
 }
 
 export async function getPlaylist(id: string): Promise<{ playlist: UserPlaylist; book_ids: string[] }> {

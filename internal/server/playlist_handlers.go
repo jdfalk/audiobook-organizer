@@ -1,5 +1,5 @@
 // file: internal/server/playlist_handlers.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 7a3d5f2e-8c4b-4a70-b8c5-3d7e0f1b9a79
 //
 // HTTP endpoints for user-created playlists (spec 3.4 task 3).
@@ -17,7 +17,6 @@ package server
 
 import (
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -61,11 +60,11 @@ type playlistReorderReq struct {
 func (s *Server) handleCreatePlaylist(c *gin.Context) {
 	var req playlistCreateReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if err := validatePlaylistCreate(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -83,13 +82,13 @@ func (s *Server) handleCreatePlaylist(c *gin.Context) {
 	created, err := s.Store().CreateUserPlaylist(pl)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			RespondWithConflict(c, err.Error())
 			return
 		}
 		internalError(c, "failed to create playlist", err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"playlist": created})
+	RespondWithCreated(c, created)
 }
 
 // handleListPlaylists — GET /api/v1/playlists?type=static|smart&limit=N&offset=M
@@ -98,7 +97,7 @@ func (s *Server) handleListPlaylists(c *gin.Context) {
 	if plType != "" &&
 		plType != database.UserPlaylistTypeStatic &&
 		plType != database.UserPlaylistTypeSmart {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "type must be static, smart, or empty"})
+		RespondWithBadRequest(c, "type must be static, smart, or empty")
 		return
 	}
 	limit, offset := paginationFromQuery(c)
@@ -107,9 +106,7 @@ func (s *Server) handleListPlaylists(c *gin.Context) {
 		internalError(c, "failed to list playlists", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"playlists": lists, "count": total, "limit": limit, "offset": offset,
-	})
+	RespondWithList(c, lists, total, limit, offset)
 }
 
 // handleGetPlaylist — GET /api/v1/playlists/:id
@@ -125,7 +122,7 @@ func (s *Server) handleGetPlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "playlist not found"})
+		RespondWithNotFound(c, "playlist", id)
 		return
 	}
 
@@ -144,10 +141,10 @@ func (s *Server) handleGetPlaylist(c *gin.Context) {
 			// a transient condition during startup. Actual query
 			// errors are 400 (user's smart-playlist DSL is busted).
 			if evalErr == ErrSearchIndexUnavailable {
-				c.JSON(http.StatusServiceUnavailable, gin.H{"error": evalErr.Error()})
+				RespondWithError(c, 503, evalErr.Error(), "SERVICE_UNAVAILABLE")
 				return
 			}
-			c.JSON(http.StatusBadRequest, gin.H{"error": evalErr.Error()})
+			RespondWithBadRequest(c, evalErr.Error())
 			return
 		}
 		resp["book_ids"] = bookIDs
@@ -157,7 +154,7 @@ func (s *Server) handleGetPlaylist(c *gin.Context) {
 			_ = s.Store().UpdateUserPlaylist(pl)
 		}
 	}
-	c.JSON(http.StatusOK, resp)
+	RespondWithOK(c, resp)
 }
 
 // handleUpdatePlaylist — PUT /api/v1/playlists/:id
@@ -169,13 +166,13 @@ func (s *Server) handleUpdatePlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "playlist not found"})
+		RespondWithNotFound(c, "playlist", id)
 		return
 	}
 
 	var req playlistUpdateReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if req.Name != nil {
@@ -186,18 +183,18 @@ func (s *Server) handleUpdatePlaylist(c *gin.Context) {
 	}
 	if req.BookIDs != nil {
 		if pl.Type != database.UserPlaylistTypeStatic {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids only valid for static playlists"})
+			RespondWithBadRequest(c, "book_ids only valid for static playlists")
 			return
 		}
 		pl.BookIDs = *req.BookIDs
 	}
 	if req.Query != nil {
 		if pl.Type != database.UserPlaylistTypeSmart {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "query only valid for smart playlists"})
+			RespondWithBadRequest(c, "query only valid for smart playlists")
 			return
 		}
 		if _, err := search.ParseQuery(*req.Query); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid query: " + err.Error()})
+			RespondWithBadRequest(c, "invalid query: "+err.Error())
 			return
 		}
 		pl.Query = *req.Query
@@ -213,7 +210,7 @@ func (s *Server) handleUpdatePlaylist(c *gin.Context) {
 		internalError(c, "failed to update playlist", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"playlist": pl})
+	RespondWithOK(c, pl)
 }
 
 // handleDeletePlaylist — DELETE /api/v1/playlists/:id
@@ -223,7 +220,7 @@ func (s *Server) handleDeletePlaylist(c *gin.Context) {
 		internalError(c, "failed to delete playlist", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"deleted": id})
+	RespondWithOK(c, gin.H{"deleted": id})
 }
 
 // handleAddBooksToPlaylist — POST /api/v1/playlists/:id/books
@@ -233,7 +230,7 @@ func (s *Server) handleAddBooksToPlaylist(c *gin.Context) {
 	id := c.Param("id")
 	var req playlistBooksAddReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	pl, err := s.Store().GetUserPlaylist(id)
@@ -242,11 +239,11 @@ func (s *Server) handleAddBooksToPlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "playlist not found"})
+		RespondWithNotFound(c, "playlist", id)
 		return
 	}
 	if pl.Type != database.UserPlaylistTypeStatic {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot add books to smart playlist"})
+		RespondWithBadRequest(c, "cannot add books to smart playlist")
 		return
 	}
 	existing := make(map[string]bool, len(pl.BookIDs))
@@ -265,7 +262,7 @@ func (s *Server) handleAddBooksToPlaylist(c *gin.Context) {
 		internalError(c, "failed to add books", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"playlist": pl})
+	RespondWithOK(c, pl)
 }
 
 // handleRemoveBookFromPlaylist — DELETE /api/v1/playlists/:id/books/:bookID
@@ -278,11 +275,11 @@ func (s *Server) handleRemoveBookFromPlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "playlist not found"})
+		RespondWithNotFound(c, "playlist", id)
 		return
 	}
 	if pl.Type != database.UserPlaylistTypeStatic {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot remove books from smart playlist"})
+		RespondWithBadRequest(c, "cannot remove books from smart playlist")
 		return
 	}
 	filtered := pl.BookIDs[:0]
@@ -297,7 +294,7 @@ func (s *Server) handleRemoveBookFromPlaylist(c *gin.Context) {
 		internalError(c, "failed to remove book", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"playlist": pl})
+	RespondWithOK(c, pl)
 }
 
 // handleReorderPlaylist — POST /api/v1/playlists/:id/reorder
@@ -307,7 +304,7 @@ func (s *Server) handleReorderPlaylist(c *gin.Context) {
 	id := c.Param("id")
 	var req playlistReorderReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	pl, err := s.Store().GetUserPlaylist(id)
@@ -316,15 +313,15 @@ func (s *Server) handleReorderPlaylist(c *gin.Context) {
 		return
 	}
 	if pl == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "playlist not found"})
+		RespondWithNotFound(c, "playlist", id)
 		return
 	}
 	if pl.Type != database.UserPlaylistTypeStatic {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot reorder smart playlist"})
+		RespondWithBadRequest(c, "cannot reorder smart playlist")
 		return
 	}
 	if !sameBookSet(pl.BookIDs, req.BookIDs) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "reorder must keep the same book set"})
+		RespondWithBadRequest(c, "reorder must keep the same book set")
 		return
 	}
 	pl.BookIDs = req.BookIDs
@@ -333,7 +330,7 @@ func (s *Server) handleReorderPlaylist(c *gin.Context) {
 		internalError(c, "failed to reorder", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"playlist": pl})
+	RespondWithOK(c, pl)
 }
 
 // handleMaterializePlaylist — POST /api/v1/playlists/:id/materialize
@@ -347,11 +344,11 @@ func (s *Server) handleMaterializePlaylist(c *gin.Context) {
 		return
 	}
 	if src == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "playlist not found"})
+		RespondWithNotFound(c, "playlist", id)
 		return
 	}
 	if src.Type != database.UserPlaylistTypeSmart {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "only smart playlists can be materialized"})
+		RespondWithBadRequest(c, "only smart playlists can be materialized")
 		return
 	}
 	bookIDs, evalErr := EvaluateSmartPlaylist(
@@ -361,10 +358,10 @@ func (s *Server) handleMaterializePlaylist(c *gin.Context) {
 	)
 	if evalErr != nil {
 		if evalErr == ErrSearchIndexUnavailable {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": evalErr.Error()})
+			RespondWithError(c, 503, evalErr.Error(), "SERVICE_UNAVAILABLE")
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": evalErr.Error()})
+		RespondWithBadRequest(c, evalErr.Error())
 		return
 	}
 
@@ -388,7 +385,7 @@ func (s *Server) handleMaterializePlaylist(c *gin.Context) {
 			return
 		}
 	}
-	c.JSON(http.StatusCreated, gin.H{"playlist": created})
+	RespondWithCreated(c, created)
 }
 
 // validatePlaylistCreate checks required fields and type-specific
