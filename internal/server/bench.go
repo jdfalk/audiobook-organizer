@@ -50,6 +50,10 @@ func (s *Server) benchStatus(c *gin.Context) {
 		return
 	}
 
+	// NOTE: bench.go calls the OpenAI Batches API directly to measure raw
+	// performance characteristics (model latency, token cost). It deliberately
+	// does NOT route through internal/ai/aijobs because the goal is unmediated
+	// benchmarking. Out of scope for the aijobs migration.
 	batches, err := client.Batches.List(c.Request.Context(), openai.BatchListParams{
 		Limit: openai.Int(100),
 	})
