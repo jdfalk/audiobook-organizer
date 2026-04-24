@@ -1,5 +1,5 @@
 // file: web/src/services/readingApi.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6b4c5d0e-7f8a-4a70-b8c5-3d7e0f1b9a99
 
 const API_BASE = '/api/v1';
@@ -43,15 +43,15 @@ export const READ_STATUS_COLORS: Record<ReadStatus, string> = {
 export async function getBookState(bookId: string): Promise<UserBookState | null> {
   const resp = await fetch(`${API_BASE}/books/${bookId}/state`);
   if (!resp.ok) return null;
-  const data = await resp.json();
-  return data?.state ?? null;
+  const body = await resp.json();
+  return body?.data ?? null;
 }
 
 export async function getBookPosition(bookId: string): Promise<UserPosition | null> {
   const resp = await fetch(`${API_BASE}/books/${bookId}/position`);
   if (!resp.ok) return null;
-  const data = await resp.json();
-  return data?.position ?? null;
+  const body = await resp.json();
+  return body?.data ?? null;
 }
 
 export async function setBookPosition(
@@ -64,8 +64,8 @@ export async function setBookPosition(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ segment_id: segmentId, position_seconds: positionSeconds }),
   });
-  const data = await resp.json();
-  return data.state;
+  const body = await resp.json();
+  return body.data;
 }
 
 export async function setBookStatus(
@@ -77,15 +77,15 @@ export async function setBookStatus(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
   });
-  const data = await resp.json();
-  return data.state;
+  const body = await resp.json();
+  return body.data;
 }
 
 export async function clearBookStatus(bookId: string): Promise<UserBookState | null> {
   const resp = await fetch(`${API_BASE}/books/${bookId}/status`, { method: 'DELETE' });
   if (!resp.ok) return null;
-  const data = await resp.json();
-  return data?.state ?? null;
+  const body = await resp.json();
+  return body?.data ?? null;
 }
 
 export async function listByStatus(
@@ -94,5 +94,6 @@ export async function listByStatus(
   offset = 0
 ): Promise<{ states: UserBookState[]; count: number }> {
   const resp = await fetch(`${API_BASE}/me/${status}?limit=${limit}&offset=${offset}`);
-  return resp.json();
+  const body = await resp.json();
+  return body.data;
 }
