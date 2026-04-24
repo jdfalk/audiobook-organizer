@@ -147,11 +147,13 @@ func TestUndoMetadataChange_Handler(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	var wrapper struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
-	assert.Equal(t, "undo applied", resp["message"])
-	assert.Equal(t, "title", resp["field"])
+	assert.Equal(t, "undo applied", wrapper.Data["message"])
+	assert.Equal(t, "title", wrapper.Data["field"])
 }
 
 func TestUndoMetadataChange_NoHistory(t *testing.T) {
@@ -175,7 +177,8 @@ func TestUndoMetadataChange_NoHistory(t *testing.T) {
 	var resp map[string]interface{}
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.Contains(t, resp["error"], "no change history")
+	errMsg, _ := resp["error"].(string)
+	assert.Contains(t, errMsg, "not found")
 }
 
 func TestGetBookMetadataHistory_Handler(t *testing.T) {
@@ -210,12 +213,15 @@ func TestGetBookMetadataHistory_Handler(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp struct {
-		Items []database.MetadataChangeRecord `json:"items"`
-		Count int                             `json:"count"`
+	var wrapper struct {
+		Data struct {
+			Items []database.MetadataChangeRecord `json:"items"`
+			Count int                             `json:"count"`
+		} `json:"data"`
 	}
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
+	resp := wrapper.Data
 	assert.Equal(t, 2, resp.Count)
 	assert.Len(t, resp.Items, 2)
 }
@@ -252,12 +258,15 @@ func TestGetFieldMetadataHistory_Handler(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp struct {
-		Items []database.MetadataChangeRecord `json:"items"`
-		Count int                             `json:"count"`
+	var wrapper struct {
+		Data struct {
+			Items []database.MetadataChangeRecord `json:"items"`
+			Count int                             `json:"count"`
+		} `json:"data"`
 	}
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
+	resp := wrapper.Data
 	assert.Equal(t, 2, resp.Count)
 	for _, item := range resp.Items {
 		assert.Equal(t, "title", item.Field)

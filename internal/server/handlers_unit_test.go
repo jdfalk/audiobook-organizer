@@ -529,7 +529,8 @@ func TestHandler_GetBookTagsDetailed_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	respTags := resp["tags"].([]any)
+	respData := resp["data"].(map[string]any)
+	respTags := respData["tags"].([]any)
 	assert.Len(t, respTags, 2)
 }
 
@@ -547,7 +548,8 @@ func TestHandler_GetBookTagsDetailed_Empty(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	respTags := resp["tags"].([]any)
+	respData := resp["data"].(map[string]any)
+	respTags := respData["tags"].([]any)
 	assert.Len(t, respTags, 0)
 }
 
@@ -570,7 +572,8 @@ func TestHandler_GetBookAlternativeTitles_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	titles := resp["alternative_titles"].([]any)
+	respData := resp["data"].(map[string]any)
+	titles := respData["alternative_titles"].([]any)
 	assert.Len(t, titles, 1)
 }
 
@@ -838,9 +841,11 @@ func TestHandler_ListWorkBooks_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(2), resp["count"])
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.Equal(t, float64(2), envelope.Data["count"])
 }
 
 func TestHandler_ListWorkBooks_Empty(t *testing.T) {
@@ -855,9 +860,11 @@ func TestHandler_ListWorkBooks_Empty(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	items := resp["items"].([]any)
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	items := envelope.Data["items"].([]any)
 	assert.Len(t, items, 0)
 }
 
@@ -875,9 +882,11 @@ func TestHandler_CountAuthors_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(150), resp["count"])
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.Equal(t, float64(150), envelope.Data["count"])
 }
 
 func TestHandler_CountAuthors_StoreError(t *testing.T) {
@@ -924,10 +933,12 @@ func TestHandler_RenameAuthor_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(42), resp["id"])
-	assert.Equal(t, "New Name", resp["name"])
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.Equal(t, float64(42), envelope.Data["id"])
+	assert.Equal(t, "New Name", envelope.Data["name"])
 }
 
 func TestHandler_RenameAuthor_InvalidID(t *testing.T) {
@@ -975,9 +986,11 @@ func TestHandler_GetAuthorAliases_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.NotNil(t, resp["aliases"])
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.NotNil(t, envelope.Data["aliases"])
 }
 
 func TestHandler_GetAuthorAliases_InvalidID(t *testing.T) {
@@ -1110,9 +1123,11 @@ func TestHandler_CountSeries_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(75), resp["count"])
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.Equal(t, float64(75), envelope.Data["count"])
 }
 
 // =============== renameSeriesHandler ===============
@@ -1287,9 +1302,11 @@ func TestHandler_CountNarrators_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(3), resp["count"])
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.Equal(t, float64(3), envelope.Data["count"])
 }
 
 // =============== listAudiobookNarrators ===============

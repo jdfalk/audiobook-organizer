@@ -54,9 +54,12 @@ func TestBulkDeleteAuthors_AllEmpty(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var envelope struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 
+	resp := envelope.Data
 	assert.Equal(t, 2, resp.Deleted)
 	assert.Equal(t, 0, resp.Skipped)
 	assert.Empty(t, resp.Errors)
@@ -97,8 +100,11 @@ func TestBulkDeleteAuthors_SkipsAuthorsWithBooks(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.Equal(t, 1, resp.Deleted)
 	assert.Equal(t, 1, resp.Skipped)
@@ -135,8 +141,11 @@ func TestBulkDeleteAuthors_EmptyIDs(t *testing.T) {
 	// Gin binding:"required" accepts empty slices — returns 200 with zero results
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 	assert.Equal(t, 0, resp.Deleted)
 	assert.Equal(t, 0, resp.Total)
 }
@@ -152,8 +161,11 @@ func TestBulkDeleteAuthors_NonexistentIDs(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	// Either deleted (no books to block) or errored — total should match
 	assert.Equal(t, 2, resp.Total)
@@ -188,8 +200,11 @@ func TestBulkDeleteAuthors_MixedResults(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.Equal(t, 2, resp.Deleted)
 	assert.Equal(t, 1, resp.Skipped)
@@ -219,8 +234,11 @@ func TestBulkDeleteAuthors_StoreError(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.Equal(t, 1, resp.Deleted) // id=2 succeeded
 	assert.Equal(t, 0, resp.Skipped)
@@ -246,8 +264,11 @@ func TestBulkDeleteAuthors_DeleteError(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.Equal(t, 0, resp.Deleted)
 	assert.Equal(t, 0, resp.Skipped)
@@ -274,9 +295,12 @@ func TestBulkDeleteSeries_AllEmpty(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var envelope struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
 
+	resp := envelope.Data
 	assert.Equal(t, 2, resp.Deleted)
 	assert.Equal(t, 0, resp.Skipped)
 	assert.Empty(t, resp.Errors)
@@ -315,8 +339,11 @@ func TestBulkDeleteSeries_SkipsSeriesWithBooks(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.Equal(t, 1, resp.Deleted)
 	assert.Equal(t, 1, resp.Skipped)
@@ -353,8 +380,11 @@ func TestBulkDeleteSeries_EmptyIDs(t *testing.T) {
 	// Gin binding:"required" accepts empty slices — returns 200 with zero results
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 	assert.Equal(t, 0, resp.Deleted)
 	assert.Equal(t, 0, resp.Total)
 }
@@ -385,8 +415,11 @@ func TestBulkDeleteSeries_MixedResults(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.Equal(t, 2, resp.Deleted)
 	assert.Equal(t, 1, resp.Skipped)
@@ -416,8 +449,11 @@ func TestBulkDeleteSeries_StoreError(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.Equal(t, 1, resp.Deleted)
 	assert.Equal(t, 0, resp.Skipped)
@@ -443,8 +479,11 @@ func TestBulkDeleteSeries_DeleteError(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp bulkDeleteResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data bulkDeleteResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	assert.Equal(t, 0, resp.Deleted)
 	assert.Equal(t, 0, resp.Skipped)
