@@ -148,6 +148,7 @@ func TestListAudiobooks(t *testing.T) {
 				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
+				response = response["data"].(map[string]any)
 				assert.NotNil(t, response["items"])
 			},
 		},
@@ -159,6 +160,7 @@ func TestListAudiobooks(t *testing.T) {
 				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
+				response = response["data"].(map[string]any)
 				assert.NotNil(t, response["items"])
 			},
 		},
@@ -170,6 +172,7 @@ func TestListAudiobooks(t *testing.T) {
 				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
+				response = response["data"].(map[string]any)
 				assert.NotNil(t, response["items"])
 			},
 		},
@@ -259,17 +262,20 @@ func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response struct {
-		Tags map[string]struct {
-			EffectiveValue  any    `json:"effective_value"`
-			EffectiveSource string `json:"effective_source"`
-			StoredValue     any    `json:"stored_value"`
-			OverrideValue   any    `json:"override_value"`
-			FetchedValue    any    `json:"fetched_value"`
-			OverrideLocked  bool   `json:"override_locked"`
-		} `json:"tags"`
+	var wrapper struct {
+		Data struct {
+			Tags map[string]struct {
+				EffectiveValue  any    `json:"effective_value"`
+				EffectiveSource string `json:"effective_source"`
+				StoredValue     any    `json:"stored_value"`
+				OverrideValue   any    `json:"override_value"`
+				FetchedValue    any    `json:"fetched_value"`
+				OverrideLocked  bool   `json:"override_locked"`
+			} `json:"tags"`
+		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	response := wrapper.Data
 
 	entry, ok := response.Tags["title"]
 	require.True(t, ok, "title tag should exist")
@@ -328,8 +334,11 @@ func TestUpdateAudiobookOverridesPersist(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var updated database.Book
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updated))
+	var updatedWrap struct {
+		Data database.Book `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updatedWrap))
+	updated := updatedWrap.Data
 	assert.Equal(t, "New Title", updated.Title)
 
 	states, err := database.GetGlobalStore().GetMetadataFieldStates(created.ID)
@@ -396,6 +405,7 @@ func TestListAuthors(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 	assert.NotNil(t, response["items"])
 }
 
@@ -414,6 +424,7 @@ func TestListSeries(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 	assert.NotNil(t, response["items"])
 }
 
@@ -513,6 +524,7 @@ func TestGetConfig(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 	assert.NotNil(t, response["config"])
 }
 
@@ -627,9 +639,11 @@ func TestValidateMetadata(t *testing.T) {
 			var response map[string]any
 			err = json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
-
-			if valid, ok := response["valid"].(bool); ok {
-				assert.Equal(t, tt.expectValid, valid)
+			if tt.expectedStatus == http.StatusOK {
+				response = response["data"].(map[string]any)
+				if valid, ok := response["valid"].(bool); ok {
+					assert.Equal(t, tt.expectValid, valid)
+				}
 			}
 		})
 	}
@@ -986,6 +1000,7 @@ func TestSizeCalculationAccuracy(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 
 	// Verify totalSize is a number
 	totalSize, ok := response["totalSize"].(float64)
@@ -1036,6 +1051,7 @@ func TestSizeBucketDistribution(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 
 	// totalBooks and totalSize should be present
 	_, ok := response["totalBooks"]
@@ -1201,6 +1217,7 @@ func TestGetWork(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 
 	// Verify work queue structure
 	workItems, ok := response["items"].([]any)
@@ -1261,6 +1278,7 @@ func TestWorkQueuePriority(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 
 	workItems, ok := response["items"].([]any)
 	assert.True(t, ok)
@@ -1321,17 +1339,20 @@ func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp struct {
-		Tags map[string]struct {
-			FileValue      any  `json:"file_value"`
-			FetchedValue   any  `json:"fetched_value"`
-			StoredValue    any  `json:"stored_value"`
-			OverrideValue  any  `json:"override_value"`
-			OverrideLocked bool `json:"override_locked"`
-		} `json:"tags"`
+	var wrapper struct {
+		Data struct {
+			Tags map[string]struct {
+				FileValue      any  `json:"file_value"`
+				FetchedValue   any  `json:"fetched_value"`
+				StoredValue    any  `json:"stored_value"`
+				OverrideValue  any  `json:"override_value"`
+				OverrideLocked bool `json:"override_locked"`
+			} `json:"tags"`
+		} `json:"data"`
 	}
 
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 
 	require.Contains(t, resp.Tags, "title")
 	assert.Equal(t, "Stored Title", resp.Tags["title"].StoredValue)
@@ -1471,6 +1492,7 @@ func TestUpdateConfig(t *testing.T) {
 
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	resp = resp["data"].(map[string]any)
 	assert.Equal(t, "/new/root", resp["root_dir"])
 	assert.Equal(t, true, resp["auto_organize"])
 }
@@ -1908,9 +1930,12 @@ func TestListBlockedHashes(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
+	response := wrapper.Data
 
 	assert.NotNil(t, response["items"])
 	assert.NotNil(t, response["total"])
@@ -1953,6 +1978,7 @@ func TestRemoveBlockedHash(t *testing.T) {
 				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
+				response = response["data"].(map[string]any)
 				assert.Equal(t, "hash unblocked successfully", response["message"])
 				assert.Equal(t, "def456", response["hash"])
 			},
@@ -1968,6 +1994,7 @@ func TestRemoveBlockedHash(t *testing.T) {
 				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
+				response = response["data"].(map[string]any)
 				assert.Equal(t, "hash unblocked successfully", response["message"])
 			},
 		},
@@ -2021,6 +2048,7 @@ func TestExportMetadataHandler(t *testing.T) {
 				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
+				response = response["data"].(map[string]any)
 				assert.NotNil(t, response)
 			},
 		},
@@ -2157,6 +2185,7 @@ func TestGetWorkStats(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 	assert.NotNil(t, response)
 }
 
@@ -2272,6 +2301,7 @@ func TestListAudiobooksWithSearchAndPagination(t *testing.T) {
 	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
+	response = response["data"].(map[string]any)
 
 	items, ok := response["items"].([]any)
 	require.True(t, ok)
@@ -2394,6 +2424,7 @@ func TestListAudiobookVersions_ErrorCases(t *testing.T) {
 				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
+				response = response["data"].(map[string]any)
 				versions, ok := response["versions"].([]any)
 				assert.True(t, ok)
 				assert.Equal(t, 1, len(versions))
@@ -2428,6 +2459,7 @@ func TestListAudiobookVersions_ErrorCases(t *testing.T) {
 				var response map[string]any
 				err := json.Unmarshal(body, &response)
 				require.NoError(t, err)
+				response = response["data"].(map[string]any)
 				versions, ok := response["versions"].([]any)
 				assert.True(t, ok)
 				assert.Equal(t, 2, len(versions))

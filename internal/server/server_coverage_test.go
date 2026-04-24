@@ -177,9 +177,11 @@ func TestCoverageGetAudiobook(t *testing.T) {
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]any
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.Equal(t, "Get Me", resp["title"])
+		var wrapper struct {
+			Data map[string]any `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+		assert.Equal(t, "Get Me", wrapper.Data["title"])
 	})
 
 	t.Run("non-existent book", func(t *testing.T) {
@@ -210,9 +212,11 @@ func TestCoverageUpdateAudiobook(t *testing.T) {
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]any
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.Equal(t, "Updated Title", resp["title"])
+		var wrapper struct {
+			Data map[string]any `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+		assert.Equal(t, "Updated Title", wrapper.Data["title"])
 	})
 
 	t.Run("update narrator", func(t *testing.T) {
@@ -380,7 +384,7 @@ func TestCoverageListAuthors(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.NotNil(t, resp["items"])
+		assert.NotNil(t, resp["data"].(map[string]any)["items"])
 	})
 
 	t.Run("authors after creating books with authors", func(t *testing.T) {
@@ -428,7 +432,7 @@ func TestCoverageListSeries(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.NotNil(t, resp["items"])
+		assert.NotNil(t, resp["data"].(map[string]any)["items"])
 	})
 
 	t.Run("series after creating books with series", func(t *testing.T) {
@@ -649,7 +653,7 @@ func TestCoverageBatchOperations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		results := resp["results"].([]any)
+		results := resp["data"].(map[string]any)["results"].([]any)
 		assert.Equal(t, 2, len(results))
 	})
 
@@ -715,7 +719,7 @@ func TestCoverageBatchOperations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		results := resp["results"].([]any)
+		results := resp["data"].(map[string]any)["results"].([]any)
 		first := results[0].(map[string]any)
 		// On error, success is omitted (omitempty) and error is set
 		assert.NotEmpty(t, first["error"])
@@ -740,7 +744,7 @@ func TestCoverageCountEndpoints(t *testing.T) {
 
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		count := resp["count"].(float64)
+		count := resp["data"].(map[string]any)["count"].(float64)
 		assert.GreaterOrEqual(t, count, float64(1))
 	})
 
@@ -928,6 +932,7 @@ func TestCoverageBookSubresources(t *testing.T) {
 
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		resp = resp["data"].(map[string]any)
 		assert.NotNil(t, resp["entries"])
 	})
 
@@ -939,6 +944,7 @@ func TestCoverageBookSubresources(t *testing.T) {
 
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		resp = resp["data"].(map[string]any)
 		// history key exists in response (may be null for no history)
 		_, hasHistory := resp["history"]
 		assert.True(t, hasHistory, "response should contain 'history' key")
@@ -952,6 +958,7 @@ func TestCoverageBookSubresources(t *testing.T) {
 
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		resp = resp["data"].(map[string]any)
 		// external_ids key exists (may be empty array or null)
 		_, hasKey := resp["external_ids"]
 		assert.True(t, hasKey, "response should contain 'external_ids' key")

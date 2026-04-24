@@ -46,7 +46,8 @@ func TestUndoLastApply_NoHistory(t *testing.T) {
 
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Contains(t, resp["error"], "no change history found")
+	errMsg, _ := resp["error"].(string)
+	assert.Contains(t, errMsg, "not found")
 }
 
 func TestUndoLastApply_OnlyUndoRecords(t *testing.T) {
@@ -84,7 +85,8 @@ func TestUndoLastApply_OnlyUndoRecords(t *testing.T) {
 
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Contains(t, resp["error"], "no changes to undo")
+	errMsg, _ := resp["error"].(string)
+	assert.Contains(t, errMsg, "not found")
 }
 
 func TestUndoLastApply_RevertsBatch(t *testing.T) {
@@ -138,8 +140,11 @@ func TestUndoLastApply_RevertsBatch(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 	assert.Contains(t, resp["message"], "2 field(s)")
 
 	undoneFields, ok := resp["undone_fields"].([]any)
@@ -212,8 +217,11 @@ func TestUndoLastApply_SkipsOldChanges(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 	// Only the recent change should be undone, not the old publisher change
 	assert.Contains(t, resp["message"], "1 field(s)")
 
@@ -273,8 +281,11 @@ func TestUndoLastApply_SkipsUndoRecordsInBatchDetection(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 	// Should undo the fetched title change, skipping the undo record
 	assert.Contains(t, resp["message"], "1 field(s)")
 }
@@ -315,8 +326,11 @@ func TestUndoLastApply_NilPreviousValueClearsOverride(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 	assert.Contains(t, resp["message"], "1 field(s)")
 }
 

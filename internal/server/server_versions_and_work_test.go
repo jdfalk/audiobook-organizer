@@ -101,8 +101,11 @@ func TestWorkEndpoints_WithMockStore(t *testing.T) {
 	server2.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var statsResp map[string]interface{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &statsResp))
+	var statsWrapper struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &statsWrapper))
+	statsResp := statsWrapper.Data
 	assert.Equal(t, float64(2), statsResp["total_books"])
 	assert.Equal(t, float64(2), statsResp["total_works"])
 	assert.Equal(t, float64(1), statsResp["works_with_multiple_editions"])

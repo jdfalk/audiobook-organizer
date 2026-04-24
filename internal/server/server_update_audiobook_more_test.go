@@ -94,8 +94,11 @@ func TestUpdateAudiobook_CreatesAuthorSeries_AndUpdatesOverrideState(t *testing.
 
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var updated database.Book
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &updated))
+	var wrapper struct {
+		Data database.Book `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	updated := wrapper.Data
 	require.NotNil(t, updated.AuthorID)
 	require.NotNil(t, updated.SeriesID)
 	assert.Equal(t, "Override Title", updated.Title)

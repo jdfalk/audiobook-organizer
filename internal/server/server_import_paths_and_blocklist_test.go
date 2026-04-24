@@ -56,6 +56,7 @@ func TestListAuthorsAndSeries_ReturnsEmptyArrayWhenNil(t *testing.T) {
 
 	var authorsResp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &authorsResp))
+	authorsResp = authorsResp["data"].(map[string]interface{})
 	items, ok := authorsResp["items"].([]interface{})
 	require.True(t, ok)
 	assert.Len(t, items, 0)
@@ -68,6 +69,7 @@ func TestListAuthorsAndSeries_ReturnsEmptyArrayWhenNil(t *testing.T) {
 
 	var seriesResp map[string]interface{}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &seriesResp))
+	seriesResp = seriesResp["data"].(map[string]interface{})
 	items, ok = seriesResp["items"].([]interface{})
 	require.True(t, ok)
 	assert.Len(t, items, 0)
