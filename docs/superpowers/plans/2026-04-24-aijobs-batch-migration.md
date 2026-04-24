@@ -1060,19 +1060,11 @@ In `registerBatchPollerHandlers` (after the existing `"pipeline"` handler), add:
 		}
 		results := make([]aijobs.RowResult, 0, len(raw))
 		for _, r := range raw {
-			customID, _ := r["custom_id"].(string)
-			row := aijobs.RowResult{CustomID: customID}
-			if resp, ok := r["response"].(map[string]any); ok {
-				if body, ok := resp["body"].(map[string]any); ok {
-					row.Body = body
-				}
-			}
-			if errVal, ok := r["error"].(map[string]any); ok {
-				if msg, ok := errVal["message"].(string); ok {
-					row.Err = msg
-				}
-			}
-			results = append(results, row)
+			results = append(results, aijobs.RowResult{
+				CustomID: r.CustomID,
+				Content:  r.Content,
+				Err:      r.Error,
+			})
 		}
 		return aijobs.Dispatch(ctx, s.Store().(database.AIJobsStore), batchID, results)
 	})
@@ -1476,17 +1468,11 @@ func dedupReviewCallback(ctx context.Context, itemsJSON []byte, results []aijobs
 			rowErrors = append(rowErrors, database.AIJobRowError{CustomID: r.CustomID, Error: r.Err})
 			continue
 		}
-		// response.body is the full chat-completion object; extract the content.
-		content, err := extractChatContent(r.Body)
-		if err != nil {
-			failed++
-			rowErrors = append(rowErrors, database.AIJobRowError{CustomID: r.CustomID, Error: err.Error()})
-			continue
-		}
+		// r.Content is the raw model output string (the JSON from the assistant).
 		var parsed struct {
 			Verdicts []DedupPairVerdict `json:"verdicts"`
 		}
-		if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+		if err := json.Unmarshal([]byte(r.Content), &parsed); err != nil {
 			failed++
 			rowErrors = append(rowErrors, database.AIJobRowError{CustomID: r.CustomID, Error: fmt.Sprintf("parse: %v", err)})
 			continue
@@ -1502,27 +1488,6 @@ func dedupReviewCallback(ctx context.Context, itemsJSON []byte, results []aijobs
 		}
 	}
 	return success, failed, rowErrors, nil
-}
-
-// extractChatContent pulls choices[0].message.content from a chat-completion response body.
-func extractChatContent(body map[string]any) (string, error) {
-	choices, ok := body["choices"].([]any)
-	if !ok || len(choices) == 0 {
-		return "", fmt.Errorf("no choices")
-	}
-	first, ok := choices[0].(map[string]any)
-	if !ok {
-		return "", fmt.Errorf("bad choice shape")
-	}
-	msg, ok := first["message"].(map[string]any)
-	if !ok {
-		return "", fmt.Errorf("no message")
-	}
-	content, ok := msg["content"].(string)
-	if !ok {
-		return "", fmt.Errorf("content not string")
-	}
-	return content, nil
 }
 
 // Guard: keep param import live in case we later add Interactive paths.
@@ -1592,9 +1557,9 @@ func TestDedupReviewCallback_PerRowErrorsIsolated(t *testing.T) {
 	t.Cleanup(func() { SetDedupVerdictSink(nil) })
 
 	results := []aijobs.RowResult{
-		{CustomID: "good", Body: mustJSONBody(`{"verdicts":[{"index":0,"is_duplicate":true,"confidence":"high","reason":""}]}`)},
+		{CustomID: "good", Content: `{"verdicts":[{"index":0,"is_duplicate":true,"confidence":"high","reason":""}]}`},
 		{CustomID: "rowerr", Err: "rate_limit_exceeded"},
-		{CustomID: "badjson", Body: mustJSONBody(`not-valid-json-at-content-level`)},
+		{CustomID: "badjson", Content: `not-valid-json-at-content-level`},
 	}
 	succ, fail, errs, err := dedupReviewCallback(context.Background(), []byte("[]"), results)
 	require.NoError(t, err)
@@ -1623,15 +1588,6 @@ func TestSubmitDedupReviewJob_SplitsIntoSubBatches(t *testing.T) {
 }
 
 // --- shared test helpers used by this and other migration tests ---
-
-func mustJSONBody(content string) map[string]any {
-	// Wrap content string in a minimal chat-completion body shape.
-	return map[string]any{
-		"choices": []any{map[string]any{
-			"message": map[string]any{"content": content},
-		}},
-	}
-}
 
 type memAIJobsStore struct {
 	jobs     map[string]database.AIJob

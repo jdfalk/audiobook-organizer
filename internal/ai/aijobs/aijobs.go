@@ -1,5 +1,5 @@
 // file: internal/ai/aijobs/aijobs.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8231e2ae-fa34-4594-80fd-f0f9dc60bc3b
 
 package aijobs
@@ -46,10 +46,12 @@ type SubmitRequest struct {
 }
 
 // RowResult is one parsed line from an OpenAI batch output file.
+// Content is the raw model output (already extracted from choices[0].message.content).
+// Err is non-empty if OpenAI reported an error for this row.
 type RowResult struct {
 	CustomID string
-	Body     map[string]any // the chat-completion response body for this row
-	Err      string         // non-empty if OpenAI reported an error for this row
+	Content  string
+	Err      string
 }
 
 // CompletionCallback applies a batch's results. It must:
