@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.16.1 -->
+<!-- version: 2.17.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -14,6 +14,12 @@
 - **`internal/server/file_ops_handlers.go`**: migrated 2 c.JSON callsites to `RespondWithOK` in `handleListPendingFileOps`.
 - **`web/src/services/fileOpsApi.ts`**: updated `fetchPendingFileOps` to unwrap `response.data`.
 - **Tests updated**: `file_ops_handlers_test.go` all 3 tests now unwrap the data envelope.
+
+#### April 23, 2026 — Envelope Migration: `activity_handlers.go` (Wave 1 A2)
+
+- **`internal/server/activity_handlers.go`**: migrated 11 `c.JSON` callsites to `RespondWith*` helpers.
+- **`web/src/services/activityApi.ts`**: `fetchActivity`, `fetchActivitySources`, `compactActivityLog` unwrap `response.data`.
+- Tests (`activity_handlers_test.go`, `activity_integration_test.go`) updated to decode the `data` envelope.
 
 #### April 23, 2026 — Envelope Migration: `organize_handlers.go` + rename/organize API
 

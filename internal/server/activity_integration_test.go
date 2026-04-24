@@ -1,5 +1,5 @@
 // file: internal/server/activity_integration_test.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: f8a3b2c1-d4e5-6f7a-8b9c-0d1e2f3a4b5c
 
 package server
@@ -62,8 +62,10 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	})
 
 	type activityResp struct {
-		Entries []database.ActivityEntry `json:"entries"`
-		Total   int                      `json:"total"`
+		Data struct {
+			Entries []database.ActivityEntry `json:"entries"`
+			Total   int                      `json:"total"`
+		} `json:"data"`
 	}
 
 	// Query all
@@ -75,8 +77,8 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if resp.Total != 3 {
-		t.Fatalf("expected 3, got %d", resp.Total)
+	if resp.Data.Total != 3 {
+		t.Fatalf("expected 3, got %d", resp.Data.Total)
 	}
 
 	// Query by operation
@@ -84,8 +86,8 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/api/v1/activity?operation_id=op-sync-1", nil)
 	r.ServeHTTP(w, req)
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Total != 2 {
-		t.Errorf("expected 2 entries for op-sync-1, got %d", resp.Total)
+	if resp.Data.Total != 2 {
+		t.Errorf("expected 2 entries for op-sync-1, got %d", resp.Data.Total)
 	}
 
 	// Query by book
@@ -93,8 +95,8 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/api/v1/activity?book_id=book-1&tier=change", nil)
 	r.ServeHTTP(w, req)
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Total != 1 {
-		t.Errorf("expected 1 entry for book-1, got %d", resp.Total)
+	if resp.Data.Total != 1 {
+		t.Errorf("expected 1 entry for book-1, got %d", resp.Data.Total)
 	}
 
 	// Query by tags
@@ -102,8 +104,8 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/api/v1/activity?tags=itunes", nil)
 	r.ServeHTTP(w, req)
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Total != 1 {
-		t.Errorf("expected 1 entry with tag=itunes, got %d", resp.Total)
+	if resp.Data.Total != 1 {
+		t.Errorf("expected 1 entry with tag=itunes, got %d", resp.Data.Total)
 	}
 
 	// Verify details round-trip
@@ -111,11 +113,11 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/api/v1/activity?type=itunes_sync", nil)
 	r.ServeHTTP(w, req)
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Total != 1 {
-		t.Fatalf("expected 1 itunes_sync, got %d", resp.Total)
+	if resp.Data.Total != 1 {
+		t.Fatalf("expected 1 itunes_sync, got %d", resp.Data.Total)
 	}
-	if v, ok := resp.Entries[0].Details["updated"]; !ok || v != float64(312) {
-		t.Errorf("details.updated mismatch: %v", resp.Entries[0].Details)
+	if v, ok := resp.Data.Entries[0].Details["updated"]; !ok || v != float64(312) {
+		t.Errorf("details.updated mismatch: %v", resp.Data.Entries[0].Details)
 	}
 
 	// Search filter
@@ -123,8 +125,8 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/api/v1/activity?search=312+updated", nil)
 	r.ServeHTTP(w, req)
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Total != 1 {
-		t.Errorf("search '312 updated': expected 1, got %d", resp.Total)
+	if resp.Data.Total != 1 {
+		t.Errorf("search '312 updated': expected 1, got %d", resp.Data.Total)
 	}
 
 	// Exclude sources
@@ -132,8 +134,8 @@ func TestActivity_Integration_RecordAndHTTPQuery(t *testing.T) {
 	req, _ = http.NewRequest("GET", "/api/v1/activity?exclude_sources=background", nil)
 	r.ServeHTTP(w, req)
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Total != 2 {
-		t.Errorf("exclude background: expected 2, got %d", resp.Total)
+	if resp.Data.Total != 2 {
+		t.Errorf("exclude background: expected 2, got %d", resp.Data.Total)
 	}
 }
 

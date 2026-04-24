@@ -1,5 +1,5 @@
 // file: web/src/services/activityApi.ts
-// version: 1.2.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
@@ -73,7 +73,8 @@ export async function fetchActivity(filter?: ActivityFilter): Promise<ActivityRe
   if (!response.ok) {
     throw new Error(`Failed to fetch activity: ${response.status}`);
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function fetchActivitySources(filter: Partial<ActivityFilter> = {}): Promise<SourcesResponse> {
@@ -85,7 +86,8 @@ export async function fetchActivitySources(filter: Partial<ActivityFilter> = {})
   const url = `${API_BASE}/activity/sources?${params.toString()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Sources API error: ${res.status}`);
-  return res.json();
+  const body = await res.json();
+  return body.data;
 }
 
 export interface CompactResult {
@@ -102,5 +104,6 @@ export async function compactActivityLog(olderThanDays: number): Promise<Compact
   if (!response.ok) {
     throw new Error(`Failed to compact activity log: ${response.status}`);
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
