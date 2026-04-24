@@ -1,11 +1,10 @@
 // file: internal/server/activity_handlers.go
-// version: 1.2.0
+// version: 2.0.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
 
 package server
 
 import (
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -33,7 +32,7 @@ import (
 //	exclude_sources  – comma-separated list of sources to hide
 func (s *Server) listActivity(c *gin.Context) {
 	if s.activityService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "activity log not available"})
+		RespondWithInternalError(c, "activity log not available")
 		return
 	}
 
@@ -42,7 +41,7 @@ func (s *Server) listActivity(c *gin.Context) {
 	if v := c.Query("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+			RespondWithBadRequest(c, "invalid limit")
 			return
 		}
 		filter.Limit = n
@@ -51,7 +50,7 @@ func (s *Server) listActivity(c *gin.Context) {
 	if v := c.Query("offset"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid offset"})
+			RespondWithBadRequest(c, "invalid offset")
 			return
 		}
 		filter.Offset = n
@@ -66,7 +65,7 @@ func (s *Server) listActivity(c *gin.Context) {
 	if v := c.Query("since"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid since: must be RFC3339"})
+			RespondWithBadRequest(c, "invalid since: must be RFC3339")
 			return
 		}
 		filter.Since = &t
@@ -75,7 +74,7 @@ func (s *Server) listActivity(c *gin.Context) {
 	if v := c.Query("until"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid until: must be RFC3339"})
+			RespondWithBadRequest(c, "invalid until: must be RFC3339")
 			return
 		}
 		filter.Until = &t
@@ -120,7 +119,7 @@ func (s *Server) listActivity(c *gin.Context) {
 		entries = []database.ActivityEntry{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"entries": entries,
 		"total":   total,
 	})
@@ -132,7 +131,7 @@ func (s *Server) listActivity(c *gin.Context) {
 // tier/level/since/until parameters as listActivity.
 func (s *Server) listActivitySources(c *gin.Context) {
 	if s.activityService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "activity log not available"})
+		RespondWithInternalError(c, "activity log not available")
 		return
 	}
 	filter := database.ActivityFilter{
@@ -157,13 +156,13 @@ func (s *Server) listActivitySources(c *gin.Context) {
 	if sources == nil {
 		sources = []database.SourceCount{}
 	}
-	c.JSON(http.StatusOK, gin.H{"sources": sources})
+	RespondWithOK(c, gin.H{"sources": sources})
 }
 
 // compactActivity handles POST /api/v1/activity/compact.
 func (s *Server) compactActivity(c *gin.Context) {
 	if s.activityService == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "activity log not available"})
+		RespondWithInternalError(c, "activity log not available")
 		return
 	}
 
@@ -171,7 +170,7 @@ func (s *Server) compactActivity(c *gin.Context) {
 		OlderThanDays int `json:"older_than_days"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.OlderThanDays < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "older_than_days must be zero or positive"})
+		RespondWithBadRequest(c, "older_than_days must be zero or positive")
 		return
 	}
 
@@ -183,5 +182,5 @@ func (s *Server) compactActivity(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	RespondWithOK(c, result)
 }

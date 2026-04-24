@@ -1,5 +1,5 @@
 // file: internal/server/activity_handlers_test.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: d4e5f6a7-b8c9-0123-defa-234567890123
 
 package server
@@ -58,15 +58,17 @@ func TestListActivity_Empty(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp struct {
-		Entries []database.ActivityEntry `json:"entries"`
-		Total   int                      `json:"total"`
+		Data struct {
+			Entries []database.ActivityEntry `json:"entries"`
+			Total   int                      `json:"total"`
+		} `json:"data"`
 	}
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.Equal(t, 0, resp.Total)
+	assert.Equal(t, 0, resp.Data.Total)
 	// entries must be an array, not null.
-	assert.NotNil(t, resp.Entries)
-	assert.Empty(t, resp.Entries)
+	assert.NotNil(t, resp.Data.Entries)
+	assert.Empty(t, resp.Data.Entries)
 }
 
 // TestListActivity_WithFilters inserts two entries (tiers: change, debug) and
@@ -115,15 +117,17 @@ func TestListActivity_WithFilters(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp struct {
-		Entries []database.ActivityEntry `json:"entries"`
-		Total   int                      `json:"total"`
+		Data struct {
+			Entries []database.ActivityEntry `json:"entries"`
+			Total   int                      `json:"total"`
+		} `json:"data"`
 	}
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.Equal(t, 1, resp.Total)
-	require.Len(t, resp.Entries, 1)
-	assert.Equal(t, "change", resp.Entries[0].Tier)
-	assert.Equal(t, "metadata_apply", resp.Entries[0].Type)
+	assert.Equal(t, 1, resp.Data.Total)
+	require.Len(t, resp.Data.Entries, 1)
+	assert.Equal(t, "change", resp.Data.Entries[0].Tier)
+	assert.Equal(t, "metadata_apply", resp.Data.Entries[0].Type)
 }
 
 // TestListActivity_SearchParam verifies that the search query param filters
@@ -167,13 +171,15 @@ func TestListActivity_SearchParam(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp struct {
-		Entries []database.ActivityEntry `json:"entries"`
-		Total   int                      `json:"total"`
+		Data struct {
+			Entries []database.ActivityEntry `json:"entries"`
+			Total   int                      `json:"total"`
+		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, 1, resp.Total)
-	require.Len(t, resp.Entries, 1)
-	assert.Contains(t, resp.Entries[0].Summary, "Hail Mary")
+	assert.Equal(t, 1, resp.Data.Total)
+	require.Len(t, resp.Data.Entries, 1)
+	assert.Contains(t, resp.Data.Entries[0].Summary, "Hail Mary")
 }
 
 // TestListActivitySources verifies that the sources endpoint returns distinct
@@ -220,13 +226,15 @@ func TestListActivitySources(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var resp struct {
-		Sources []database.SourceCount `json:"sources"`
+		Data struct {
+			Sources []database.SourceCount `json:"sources"`
+		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Len(t, resp.Sources, 2)
+	require.Len(t, resp.Data.Sources, 2)
 	// Ordered by count DESC: gin (2) first, scanner (1) second.
-	assert.Equal(t, "gin", resp.Sources[0].Source)
-	assert.Equal(t, 2, resp.Sources[0].Count)
-	assert.Equal(t, "scanner", resp.Sources[1].Source)
-	assert.Equal(t, 1, resp.Sources[1].Count)
+	assert.Equal(t, "gin", resp.Data.Sources[0].Source)
+	assert.Equal(t, 2, resp.Data.Sources[0].Count)
+	assert.Equal(t, "scanner", resp.Data.Sources[1].Source)
+	assert.Equal(t, 1, resp.Data.Sources[1].Count)
 }
