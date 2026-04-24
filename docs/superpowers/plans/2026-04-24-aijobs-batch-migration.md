@@ -1906,9 +1906,13 @@ Gin handlers → call `ParseCoverImageInteractive`. Scan loops → call `SubmitP
 
 Replace the `ParseCoverImage` entry with `ParseCoverImageInteractive`. The sync caller test should accept the new name because the marker comment is in place.
 
-### 2.3b — Sites 544 & 678
+### 2.3b — Sites 544 & 678 — OUT OF SCOPE
 
-Use the Phase 1.4 audit decision. Apply Interactive/Bulk/Split treatment accordingly.
+Per the design's Non-Goals and Phase 1.4 audit clarification:
+- `openai_parser.go:544` (`reviewAuthorBatch`) — sync fallback for existing `author_dedup` batch flow (not migrated)
+- `openai_parser.go:678` (`discoverAuthorBatch`) — sync fallback for existing `author_review` batch flow (not migrated)
+
+Both functions remain allow-listed in the enforcement test. **No code changes needed for these sites.** Existing batch infrastructure (`CreateBatchAuthorDedup`/`CreateBatchAuthorReview`) handles the bulk work; these sync fallbacks stay as-is.
 
 - [ ] **Step 5: Tests, build, commit**
 
@@ -1916,14 +1920,16 @@ Use the Phase 1.4 audit decision. Apply Interactive/Bulk/Split treatment accordi
 go build ./...
 go test ./internal/ai/... ./internal/server/... -count=1 -short
 git commit -am "$(cat <<'EOF'
-refactor(ai/openai_parser): split ParseCoverImage + migrate sites 544/678
+refactor(ai/openai_parser): split ParseCoverImage (sites 544/678 out-of-scope)
 
 ParseCoverImage split into ParseCoverImageInteractive (kept sync for UI
 single-book flows, marked PRIORITY: Interactive) and SubmitParseCoverImageJob
 (bulk aijobs batch).
 
-Sites 544 and 678 classified per Phase 1.4 audit and migrated to aijobs
-(or marked Interactive if the caller is user-waiting).
+Sites 544 (reviewAuthorBatch) and 678 (discoverAuthorBatch) identified in
+Phase 1.4 audit as sync fallbacks for existing author_dedup/author_review
+batch flows, which are explicitly out-of-scope per design non-goals.
+These functions remain allow-listed and unchanged.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF

@@ -180,6 +180,6 @@ Each task is self-contained: read the sibling Build/Apply, mirror it for the tar
 
 ### Phase 1.4 audit results
 
-- `openai_parser.go:544` — function: `reviewAuthorBatch`. Callers: `internal/server/ai_handlers.go:571`, `internal/server/ai_scan_pipeline.go:409`. Decision: `Interactive`. Justification: Both call sites lead to Gin handlers (aiReviewDuplicateAuthors, startAIScan) where the user is awaiting an HTTP response.
+- `openai_parser.go:544` — function: `reviewAuthorBatch`. Callers: `internal/server/ai_handlers.go:571`, `internal/server/ai_scan_pipeline.go:409`. **Status: OUT OF SCOPE.** These are sync fallback helpers for the existing `author_dedup` batch flow (see `CreateBatchAuthorDedup` in openai_batch.go). The batch flow itself is explicitly excluded from migration per the Non-Goals section. Their allow-list entries are permanent.
 
-- `openai_parser.go:678` — function: `discoverAuthorBatch`. Callers: `internal/server/ai_handlers.go:635`, `internal/server/ai_scan_pipeline.go:470`, `internal/server/ai_scan_pipeline.go:680`. Decision: `Split`. Justification: Lines 635 and 470 are Interactive (via Gin handlers); line 680 is Bulk (spawned as background goroutine from runEnrichment). Will be handled in Task 2.3.
+- `openai_parser.go:678` — function: `discoverAuthorBatch`. Callers: `internal/server/ai_handlers.go:635`, `internal/server/ai_scan_pipeline.go:470`, `internal/server/ai_scan_pipeline.go:680`. **Status: OUT OF SCOPE.** These are sync fallback helpers for the existing `author_review` batch flow (see `CreateBatchAuthorReview` in openai_batch.go). The batch flow itself is explicitly excluded from migration per the Non-Goals section. Their allow-list entries are permanent.
