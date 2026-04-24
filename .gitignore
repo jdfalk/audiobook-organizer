@@ -181,6 +181,8 @@ local.env
 # Claude Code local settings (user-specific permissions)
 .claude/settings.local.json
 .claude/worktrees/
+.claude/state/
+.remember/
 .superpowers/
 
 # Build output
