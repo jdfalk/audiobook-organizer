@@ -107,7 +107,8 @@ func TestHandler_GetOperationStatus_Found(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "op-123", resp["id"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(t, "op-123", data["id"])
 }
 
 func TestHandler_GetOperationStatus_NotFound(t *testing.T) {
@@ -144,9 +145,10 @@ func TestHandler_ListOperations_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	items := resp["items"].([]any)
+	data := resp["data"].(map[string]any)
+	items := data["items"].([]any)
 	assert.Len(t, items, 2)
-	assert.Equal(t, float64(2), resp["total"])
+	assert.Equal(t, float64(2), data["total"])
 }
 
 func TestHandler_ListOperations_StoreError(t *testing.T) {
@@ -183,7 +185,8 @@ func TestHandler_GetOperationLogs_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(2), resp["count"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(t, float64(2), data["count"])
 }
 
 func TestHandler_GetOperationLogs_WithTail(t *testing.T) {
@@ -205,7 +208,8 @@ func TestHandler_GetOperationLogs_WithTail(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(1), resp["count"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(t, float64(1), data["count"])
 }
 
 // =============== getOperationResult ===============
@@ -226,7 +230,8 @@ func TestHandler_GetOperationResult_WithData(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.NotNil(t, resp["result_data"])
+	data := resp["data"].(map[string]any)
+	assert.NotNil(t, data["result_data"])
 }
 
 func TestHandler_GetOperationResult_NoData(t *testing.T) {

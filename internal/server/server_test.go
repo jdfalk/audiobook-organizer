@@ -721,18 +721,20 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response struct {
-		UpdatedCount int `json:"updated_count"`
-		TotalCount   int `json:"total_count"`
-		Results      []struct {
-			BookID        string   `json:"book_id"`
-			Status        string   `json:"status"`
-			AppliedFields []string `json:"applied_fields"`
-			FetchedFields []string `json:"fetched_fields"`
-		} `json:"results"`
+		Data struct {
+			UpdatedCount int `json:"updated_count"`
+			TotalCount   int `json:"total_count"`
+			Results      []struct {
+				BookID        string   `json:"book_id"`
+				Status        string   `json:"status"`
+				AppliedFields []string `json:"applied_fields"`
+				FetchedFields []string `json:"fetched_fields"`
+			} `json:"results"`
+		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	assert.Equal(t, 2, response.TotalCount)
-	assert.Equal(t, 1, response.UpdatedCount)
+	assert.Equal(t, 2, response.Data.TotalCount)
+	assert.Equal(t, 1, response.Data.UpdatedCount)
 
 	var primaryResult, missingResult *struct {
 		BookID        string   `json:"book_id"`
@@ -740,12 +742,12 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 		AppliedFields []string `json:"applied_fields"`
 		FetchedFields []string `json:"fetched_fields"`
 	}
-	for i := range response.Results {
-		if response.Results[i].BookID == created.ID {
-			primaryResult = &response.Results[i]
+	for i := range response.Data.Results {
+		if response.Data.Results[i].BookID == created.ID {
+			primaryResult = &response.Data.Results[i]
 		}
-		if response.Results[i].BookID == other.ID {
-			missingResult = &response.Results[i]
+		if response.Data.Results[i].BookID == other.ID {
+			missingResult = &response.Data.Results[i]
 		}
 	}
 	require.NotNil(t, primaryResult)
@@ -1087,13 +1089,16 @@ func TestGetMetadataFields(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]any
+	var response struct {
+		Data struct {
+			Fields []any `json:"fields"`
+		} `json:"data"`
+	}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
 	// Verify fields structure
-	fields, ok := response["fields"].([]any)
-	assert.True(t, ok, "fields should be an array")
+	fields := response.Data.Fields
 	assert.NotNil(t, fields)
 
 	// Verify required fields are present
@@ -1110,7 +1115,7 @@ func TestGetMetadataFields(t *testing.T) {
 	}
 
 	for _, required := range requiredFields {
-		assert.True(t, fieldNames[required], "Required field %s should be present", required)
+		assert.True(t, fieldNames[required], fmt.Sprintf("Required field %s should be present", required))
 	}
 }
 
@@ -2316,11 +2321,13 @@ func TestHandleITunesImportStatus(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			validateFunc: func(t *testing.T, body []byte) {
-				var response map[string]any
-				err := json.Unmarshal(body, &response)
+				var wrapper struct {
+					Data map[string]any `json:"data"`
+				}
+				err := json.Unmarshal(body, &wrapper)
 				require.NoError(t, err)
-				assert.NotNil(t, response["operation_id"])
-				assert.NotNil(t, response["status"])
+				assert.NotNil(t, wrapper.Data["operation_id"])
+				assert.NotNil(t, wrapper.Data["status"])
 			},
 		},
 	}

@@ -55,12 +55,13 @@ func TestOrganizeService_ViaHTTP(t *testing.T) {
 	// Wait for operation
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	opID, ok := resp["id"].(string)
+	data := resp["data"].(map[string]any)
+	opID, ok := data["id"].(string)
 	if !ok {
 		// Fallback: try operation_id key
-		opID, ok = resp["operation_id"].(string)
+		opID, ok = data["operation_id"].(string)
 	}
-	require.True(t, ok, "response should contain id or operation_id, got: %v", resp)
+	require.True(t, ok, "response should contain id or operation_id, got: %v", data)
 	testutil.WaitForOp(t, env.Store, opID, 15*time.Second)
 
 	// Verify book was organized — now creates a new version record

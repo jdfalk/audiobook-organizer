@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.19.0 -->
+<!-- version: 2.20.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -8,6 +8,16 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 24, 2026 — Envelope Migration: Wave 4 (operations, ai, metadata, itunes)
+
+Shipped as one PR — 4 parallel Haiku sub-agents; coordinator consolidated + fixed several downstream test failures.
+
+- **`internal/server/operations_handlers.go`** (D1): 24 handlers / 56 callsites → `RespondWith*`. `api.ts`: 8 callers unwrap `.data`. Updated integration tests across `handlers_unit_test.go`, `server_coverage_test.go`, `server_more_test.go`, `organize_integration_test.go`, `itunes_integration_test.go`, `e2e_workflow_test.go`.
+- **`internal/server/ai_handlers.go`** (D2): 17 handlers / 53 callsites → `RespondWith*`. Covers AI scan lifecycle, metadata-source testing, LLM-assisted parsing, AI-driven author-duplicate review. `api.ts`: 12 callers unwrap `.data`. Tests: `server_ai_integration_test.go`.
+- **`internal/server/metadata_handlers.go`** (D3): 52 callsites → `RespondWith*`. Covers metadata search/fetch/apply/write-back across 24 endpoints. `api.ts`: 8 callers unwrap `.data`. Tests: `server_bulk_fetch_metadata_test.go`, `server_test.go`.
+- **`internal/server/itunes_handlers.go`** (D4): 12 handlers / 51 callsites → `RespondWith*`. Covers XML import, write-back, sync, library status, import progress polling. `api.ts`: 11 callers unwrap `.data`. Tests: `itunes_error_test.go`.
+- **Coordinator fixes**: `itunes_integration_test.go`, `itunes_test.go`, `server_test.go`, `server_write_back_test.go` — updated response-shape decoders for envelope + iTunes import-status tests.
 
 #### April 24, 2026 — Envelope Migration: Wave 3 (system, auth, duplicates, dedup)
 

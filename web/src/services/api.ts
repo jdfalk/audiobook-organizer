@@ -1314,7 +1314,8 @@ export async function startScan(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start scan');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function startTranscode(
@@ -1334,7 +1335,8 @@ export async function startTranscode(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start transcode');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getOperationStatus(id: string): Promise<Operation> {
@@ -1342,7 +1344,8 @@ export async function getOperationStatus(id: string): Promise<Operation> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch operation status');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Poll an operation until it completes or fails. Calls onProgress with each update.
@@ -1374,7 +1377,8 @@ export async function optimizeDatabase(): Promise<OptimizeDatabaseResult> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to optimize database');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getOperationLogs(id: string): Promise<OperationLog[]> {
@@ -1416,7 +1420,8 @@ export async function clearStaleOperations(): Promise<{ cleared: number }> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to clear stale operations');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function listOperations(limit = 50, offset = 0): Promise<{ items: Operation[]; total: number; limit: number; offset: number }> {
@@ -1424,7 +1429,8 @@ export async function listOperations(limit = 50, offset = 0): Promise<{ items: O
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch operations');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function deleteOperationHistory(
@@ -1437,7 +1443,8 @@ export async function deleteOperationHistory(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to delete operation history');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export interface OperationChange {
@@ -1541,7 +1548,8 @@ export async function startOrganize(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start organize');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getSystemLogs(params?: {
@@ -1801,7 +1809,8 @@ export async function validateITunesLibrary(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to validate iTunes library');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export interface ITunesTestMappingResponse {
@@ -1823,7 +1832,8 @@ export async function testITunesPathMapping(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to test path mapping');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function importITunesLibrary(
@@ -1837,7 +1847,8 @@ export async function importITunesLibrary(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to import iTunes library');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function writeBackITunesLibrary(
@@ -1855,7 +1866,8 @@ export async function writeBackITunesLibrary(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write back iTunes library');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export interface ITunesBookMapping {
@@ -1881,7 +1893,8 @@ export async function getITunesBooks(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch iTunes books');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function previewITunesWriteBack(
@@ -1896,7 +1909,8 @@ export async function previewITunesWriteBack(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to preview write-back');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function startITunesSync(
@@ -1909,7 +1923,8 @@ export async function startITunesSync(
     body: JSON.stringify({ library_path: libraryPath, force: force ?? true }),
   });
   if (!response.ok) throw await buildApiError(response, 'Sync failed');
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getITunesLibraryStatus(
@@ -1921,7 +1936,8 @@ export async function getITunesLibraryStatus(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch library status');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getITunesImportStatus(
@@ -1933,7 +1949,8 @@ export async function getITunesImportStatus(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch iTunes import status');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getITunesImportStatusBulk(
@@ -1948,7 +1965,7 @@ export async function getITunesImportStatusBulk(
     throw await buildApiError(response, 'Failed to fetch bulk import status');
   }
   const data = await response.json();
-  return data.statuses || {};
+  return data.data.statuses || {};
 }
 
 // Series dedup
@@ -2141,7 +2158,8 @@ export async function searchMetadata(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to search metadata');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function fetchBookMetadata(
@@ -2156,7 +2174,8 @@ export async function fetchBookMetadata(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch metadata');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function searchMetadataForBook(
@@ -2189,7 +2208,8 @@ export async function searchMetadataForBook(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to search metadata');
   }
-  return response.json();
+  const responseBody = await response.json();
+  return responseBody.data;
 }
 
 export async function applyMetadataCandidate(
@@ -2216,7 +2236,8 @@ export async function applyMetadataCandidate(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply metadata');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function markNoMatch(bookId: string): Promise<void> {
@@ -2266,7 +2287,8 @@ export async function writeBackMetadata(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write metadata to files');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function batchWriteBackMetadata(
@@ -2282,7 +2304,8 @@ export async function batchWriteBackMetadata(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to write metadata to files');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Bulk write-back (async operation for all/filtered books)
@@ -2316,7 +2339,8 @@ export async function bulkWriteBackMetadata(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start bulk write-back');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Extract track info from filenames
@@ -2336,7 +2360,8 @@ export async function extractTrackInfo(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to extract track info');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // File Relocation
@@ -2366,7 +2391,8 @@ export async function relocateBookFiles(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to relocate files');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Bulk Metadata Fetching
@@ -2397,7 +2423,8 @@ export async function bulkFetchMetadata(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to bulk fetch metadata');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // AI Parsing
@@ -2423,7 +2450,8 @@ export async function parseFilenameWithAI(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to parse filename with AI');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function testMetadataSource(
@@ -2437,7 +2465,8 @@ export async function testMetadataSource(
     },
     body: JSON.stringify({ source_id: sourceId, api_key: apiKey }),
   });
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function testAIConnection(
@@ -2454,7 +2483,8 @@ export async function testAIConnection(
     const data = await response.json();
     throw new Error(data.error || 'Connection test failed');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function parseAudiobookWithAI(
@@ -2469,7 +2499,8 @@ export async function parseAudiobookWithAI(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to parse audiobook with AI');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Filesystem Browsing
@@ -3133,7 +3164,8 @@ export async function requestAIAuthorReview(mode: AIReviewMode = 'groups'): Prom
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start AI author review');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getOperationResult(id: string): Promise<{ result_data: unknown }> {
@@ -3155,7 +3187,8 @@ export async function applyAIAuthorReview(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply AI author review');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // --- AI Scan Pipeline Types ---
@@ -3218,7 +3251,8 @@ export async function startAIScan(mode: 'batch' | 'realtime'): Promise<AIScan> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start AI scan');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function listAIScans(): Promise<AIScan[]> {
@@ -3226,7 +3260,8 @@ export async function listAIScans(): Promise<AIScan[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to list AI scans');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.scans || [];
 }
 
@@ -3235,7 +3270,8 @@ export async function getAIScan(id: number): Promise<AIScanDetail> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to get AI scan');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return { ...data.scan, phases: data.phases || [] };
 }
 
@@ -3245,7 +3281,8 @@ export async function getAIScanResults(id: number, agreement?: string): Promise<
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to get scan results');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.results || [];
 }
 
@@ -3258,7 +3295,8 @@ export async function applyAIScanResults(scanID: number, resultIDs: number[]): P
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to apply scan results');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function cancelAIScan(id: number): Promise<void> {
@@ -3280,7 +3318,8 @@ export async function compareAIScans(a: number, b: number): Promise<AIScanCompar
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to compare scans');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // --- Rename Preview & Apply ---

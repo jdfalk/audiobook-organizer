@@ -1,7 +1,7 @@
 // file: internal/server/server_ai_integration_test.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: 6d5c4b3a-2918-1706-f5e4-d3c2b1a09f8e
-// last-edited: 2026-01-24
+// last-edited: 2026-04-23
 
 package server
 
@@ -77,6 +77,13 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
+	// Response is wrapped in {"data": ...}
+	var parseResp struct {
+		Data struct {
+			Metadata map[string]interface{} `json:"metadata"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &parseResp))
 
 	// 2) POST /ai/test-connection should succeed using provided api_key.
 	connBody := bytes.NewBufferString(`{"api_key":"test-key"}`)
@@ -85,6 +92,15 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
+	// Response is wrapped in {"data": ...}
+	var connResp struct {
+		Data struct {
+			Success bool   `json:"success"`
+			Message string `json:"message"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &connResp))
+	require.True(t, connResp.Data.Success)
 
 	// 3) POST /audiobooks/:id/parse-with-ai should update a book.
 	filePath := filepath.Join(t.TempDir(), "The Hobbit - J.R.R. Tolkien.m4b")
@@ -97,6 +113,15 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
+	// Response is wrapped in {"data": ...}
+	var parseABResp struct {
+		Data struct {
+			Message    string                 `json:"message"`
+			Book       map[string]interface{} `json:"book"`
+			Confidence string                 `json:"confidence"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &parseABResp))
 
 	updated, err := database.GetGlobalStore().GetBookByID(book.ID)
 	require.NoError(t, err)

@@ -84,23 +84,25 @@ func TestBulkFetchMetadata_MixedResults(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var resp struct {
-		UpdatedCount int `json:"updated_count"`
-		TotalCount   int `json:"total_count"`
-		Results      []struct {
-			BookID  string `json:"book_id"`
-			Status  string `json:"status"`
-			Message string `json:"message"`
-		} `json:"results"`
+		Data struct {
+			UpdatedCount int `json:"updated_count"`
+			TotalCount   int `json:"total_count"`
+			Results      []struct {
+				BookID  string `json:"book_id"`
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			} `json:"results"`
+		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, 4, resp.TotalCount)
-	assert.GreaterOrEqual(t, resp.UpdatedCount, 1)
+	assert.Equal(t, 4, resp.Data.TotalCount)
+	assert.GreaterOrEqual(t, resp.Data.UpdatedCount, 1)
 
 	byID := map[string]struct {
 		Status  string
 		Message string
 	}{}
-	for _, r := range resp.Results {
+	for _, r := range resp.Data.Results {
 		byID[r.BookID] = struct {
 			Status  string
 			Message string

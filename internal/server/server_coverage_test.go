@@ -543,7 +543,8 @@ func TestCoverageStartOrganize(t *testing.T) {
 		assert.Equal(t, http.StatusAccepted, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.NotEmpty(t, resp["id"])
+		data := resp["data"].(map[string]any)
+		assert.NotEmpty(t, data["id"])
 	})
 
 	t.Run("organize with folder_path", func(t *testing.T) {
@@ -586,7 +587,8 @@ func TestCoverageListActiveOperations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		ops := resp["operations"].([]any)
+		data := resp["data"].(map[string]any)
+		ops := data["operations"].([]any)
 		assert.NotNil(t, ops)
 	})
 }
@@ -831,7 +833,8 @@ func TestCoverageListOperations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.NotNil(t, resp["items"])
+		data := resp["data"].(map[string]any)
+		assert.NotNil(t, data["items"])
 	})
 
 	t.Run("list operations with pagination", func(t *testing.T) {
@@ -858,7 +861,8 @@ func TestCoverageListStaleOperations(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.NotNil(t, resp["operations"])
+		data := resp["data"].(map[string]any)
+		assert.NotNil(t, data["operations"])
 	})
 
 	t.Run("custom timeout", func(t *testing.T) {

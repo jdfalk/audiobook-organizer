@@ -59,10 +59,12 @@ func TestITunesImport_FullWorkflow(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
 	// Wait for async import
-	var importResp ITunesImportResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &importResp))
-	require.NotEmpty(t, importResp.OperationID)
-	testutil.WaitForOp(t, env.Store, importResp.OperationID, 15*time.Second)
+	var respEnv map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respEnv))
+	data := respEnv["data"].(map[string]any)
+	opID := data["operation_id"].(string)
+	require.NotEmpty(t, opID)
+	testutil.WaitForOp(t, env.Store, opID, 15*time.Second)
 
 	// Verify books in database
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -119,9 +121,11 @@ func TestITunesImport_OrganizeMode(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
-	var resp ITunesImportResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	testutil.WaitForOp(t, env.Store, resp.OperationID, 15*time.Second)
+	var respEnv map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respEnv))
+	data := respEnv["data"].(map[string]any)
+	opID := data["operation_id"].(string)
+	testutil.WaitForOp(t, env.Store, opID, 15*time.Second)
 
 	// Verify book was imported and organized
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -159,9 +163,11 @@ func TestITunesImport_SkipDuplicates(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
-		var resp ITunesImportResponse
-		json.Unmarshal(w.Body.Bytes(), &resp)
-		testutil.WaitForOp(t, env.Store, resp.OperationID, 15*time.Second)
+		var wrapper struct {
+			Data ITunesImportResponse `json:"data"`
+		}
+		json.Unmarshal(w.Body.Bytes(), &wrapper)
+		testutil.WaitForOp(t, env.Store, wrapper.Data.OperationID, 15*time.Second)
 		books, _ := env.Store.GetAllBooks(100, 0)
 		return len(books)
 	}
@@ -203,9 +209,10 @@ func TestITunesWriteBack(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	// Without ITL configured, endpoint returns 400
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	var resp map[string]string
+	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Contains(t, resp["error"], "ITL write-back is not enabled")
+	errMsg, _ := resp["error"].(string)
+	assert.Contains(t, errMsg, "ITL write-back is not enabled")
 }
 
 func TestITunesValidate_Endpoint(t *testing.T) {
@@ -231,8 +238,11 @@ func TestITunesValidate_Endpoint(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp ITunesValidateResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var wrapper struct {
+		Data ITunesValidateResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	resp := wrapper.Data
 	assert.Equal(t, 2, resp.AudiobookTracks)
 	assert.Equal(t, 1, resp.FilesFound)
 	assert.Equal(t, 1, resp.FilesMissing)
