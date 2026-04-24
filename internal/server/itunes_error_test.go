@@ -1,5 +1,5 @@
 // file: internal/server/itunes_error_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-2345-678901abcdef
 
 package server
@@ -37,8 +37,11 @@ func TestITunesImport_CorruptXML(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code) // async, so it accepts
 
 	// Wait for operation to complete (should fail)
-	var resp ITunesImportResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var respBody struct {
+		Data ITunesImportResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	resp := respBody.Data
 	testutil.WaitForOp(t, env.Store, resp.OperationID, 15*time.Second)
 
 	// Verify operation failed
@@ -76,8 +79,11 @@ func TestITunesImport_EmptyXML(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
-	var resp ITunesImportResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var respBody struct {
+		Data ITunesImportResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	resp := respBody.Data
 	testutil.WaitForOp(t, env.Store, resp.OperationID, 15*time.Second)
 
 	// Should complete with 0 books
@@ -114,8 +120,11 @@ func TestITunesImport_MissingFilesPartial(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
-	var resp ITunesImportResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var respBody struct {
+		Data ITunesImportResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	resp := respBody.Data
 	testutil.WaitForOp(t, env.Store, resp.OperationID, 15*time.Second)
 
 	// Should have imported the existing book, failed on the missing ones
@@ -258,8 +267,11 @@ func TestITunesImport_RealTestLibrary(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
-	var resp ITunesImportResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	var respBody struct {
+		Data ITunesImportResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+	resp := respBody.Data
 	testutil.WaitForOp(t, env.Store, resp.OperationID, 15*time.Second)
 
 	// Operation should complete (files don't exist, so tracks will fail with "file does not exist")

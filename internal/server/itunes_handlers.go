@@ -1,5 +1,5 @@
 // file: internal/server/itunes_handlers.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
 
 // iTunes HTTP handlers. All business logic lives in internal/itunes/service.
@@ -26,11 +26,11 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// itunesEnabledOrError writes a 503 and returns false when the iTunes service
+// itunesEnabledOrError returns false and sends a 503 error when the iTunes service
 // is nil or disabled. Callers should return immediately on false.
 func (s *Server) itunesEnabledOrError(c *gin.Context) bool {
 	if s.itunesSvc == nil || !s.itunesSvc.Enabled() {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": itunesservice.ErrITunesDisabled.Error()})
+		RespondWithServiceUnavailable(c, itunesservice.ErrITunesDisabled.Error())
 		return false
 	}
 	return true
@@ -165,7 +165,7 @@ type ITunesSyncResponse struct {
 func (s *Server) handleITunesValidate(c *gin.Context) {
 	var req ITunesValidateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -180,14 +180,14 @@ func (s *Server) handleITunesValidate(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, itunesservice.ErrLibraryNotFound) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			RespondWithBadRequest(c, err.Error())
 		} else {
 			internalError(c, "validation failed", err)
 		}
 		return
 	}
 
-	c.JSON(http.StatusOK, ITunesValidateResponse{
+	RespondWithOK(c, ITunesValidateResponse{
 		TotalTracks:     resp.TotalTracks,
 		AudiobookTracks: resp.AudiobookTracks,
 		AudiobookCount:  resp.AudiobookCount,
@@ -204,7 +204,7 @@ func (s *Server) handleITunesValidate(c *gin.Context) {
 func (s *Server) handleITunesTestMapping(c *gin.Context) {
 	var req ITunesTestMappingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -214,7 +214,7 @@ func (s *Server) handleITunesTestMapping(c *gin.Context) {
 		To:          req.To,
 	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -222,7 +222,7 @@ func (s *Server) handleITunesTestMapping(c *gin.Context) {
 	for i, e := range resp.Examples {
 		examples[i] = ITunesTestExample{Title: e.Title, Path: e.Path}
 	}
-	c.JSON(http.StatusOK, ITunesTestMappingResponse{
+	RespondWithOK(c, ITunesTestMappingResponse{
 		Tested:   resp.Tested,
 		Found:    resp.Found,
 		Examples: examples,
@@ -235,22 +235,22 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		return
 	}
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
 	var req ITunesImportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if _, err := os.Stat(req.LibraryPath); os.IsNotExist(err) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "iTunes library file not found"})
+		RespondWithBadRequest(c, "iTunes library file not found")
 		return
 	}
 
@@ -284,7 +284,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, ITunesImportResponse{
+	RespondWithSuccess(c, http.StatusAccepted, ITunesImportResponse{
 		OperationID: op.ID,
 		Status:      "queued",
 		Message:     "iTunes import operation queued",
@@ -294,18 +294,18 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 // handleITunesWriteBack updates the iTunes ITL binary with new file paths.
 func (s *Server) handleITunesWriteBack(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	var req ITunesWriteBackRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if !config.AppConfig.ITLWriteBackEnabled || config.AppConfig.ITunesLibraryWritePath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ITL write-back is not enabled in config"})
+		RespondWithBadRequest(c, "ITL write-back is not enabled in config")
 		return
 	}
 
@@ -320,9 +320,7 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 	for _, id := range req.AudiobookIDs {
 		book, err := s.Store().GetBookByID(id)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": fmt.Sprintf("failed to get audiobook %s: %v", id, err),
-			})
+			RespondWithInternalError(c, fmt.Sprintf("failed to get audiobook %s: %v", id, err))
 			return
 		}
 		if book == nil || book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
@@ -337,7 +335,7 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 	}
 
 	if len(itlUpdates) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no audiobooks with iTunes persistent IDs found"})
+		RespondWithBadRequest(c, "no audiobooks with iTunes persistent IDs found")
 		return
 	}
 
@@ -345,22 +343,18 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
 	if itlErr != nil {
 		stdlog.Printf("[WARN] ITL write-back failed: %v", itlErr)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("ITL write-back failed: %v", itlErr),
-		})
+		RespondWithInternalError(c, fmt.Sprintf("ITL write-back failed: %v", itlErr))
 		return
 	}
 
 	if renameErr := itunes.RenameITLFile(itlPath+".tmp", itlPath); renameErr != nil {
 		stdlog.Printf("[WARN] ITL rename failed: %v", renameErr)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("ITL rename failed: %v", renameErr),
-		})
+		RespondWithInternalError(c, fmt.Sprintf("ITL rename failed: %v", renameErr))
 		return
 	}
 
 	stdlog.Printf("[INFO] ITL write-back: updated %d tracks", itlResult.UpdatedCount)
-	c.JSON(http.StatusOK, ITunesWriteBackResponse{
+	RespondWithOK(c, ITunesWriteBackResponse{
 		Success:      true,
 		UpdatedCount: itlResult.UpdatedCount,
 		Message:      fmt.Sprintf("Successfully updated %d audiobook locations in ITL", itlResult.UpdatedCount),
@@ -373,35 +367,35 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		return
 	}
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	if !config.AppConfig.ITLWriteBackEnabled {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ITL write-back is not enabled in config"})
+		RespondWithBadRequest(c, "ITL write-back is not enabled in config")
 		return
 	}
 
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no ITL library path configured"})
+		RespondWithBadRequest(c, "no ITL library path configured")
 		return
 	}
 
 	if _, err := os.Stat(itlPath); os.IsNotExist(err) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ITL file not found at configured path"})
+		RespondWithBadRequest(c, "ITL file not found at configured path")
 		return
 	}
 
 	if err := itunesservice.CheckITLConflict(itlPath); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		RespondWithConflict(c, err.Error())
 		return
 	}
 
 	itlUpdates, writtenBookIDs := s.itunesSvc.Importer.CollectITLUpdatesWithBookIDs()
 
 	if len(itlUpdates) == 0 {
-		c.JSON(http.StatusOK, gin.H{
+		RespondWithOK(c, gin.H{
 			"success":       true,
 			"updated_count": 0,
 			"message":       "no books with iTunes persistent IDs found",
@@ -411,16 +405,12 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 
 	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
 	if itlErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("ITL write-back failed: %v", itlErr),
-		})
+		RespondWithInternalError(c, fmt.Sprintf("ITL write-back failed: %v", itlErr))
 		return
 	}
 
 	if renameErr := itunes.RenameITLFile(itlPath+".tmp", itlPath); renameErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("ITL rename failed: %v", renameErr),
-		})
+		RespondWithInternalError(c, fmt.Sprintf("ITL rename failed: %v", renameErr))
 		return
 	}
 
@@ -431,7 +421,7 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 		stdlog.Printf("[INFO] Marked %d books as iTunes-synced after write-back", n)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"success":       true,
 		"updated_count": itlResult.UpdatedCount,
 		"total_books":   len(itlUpdates),
@@ -442,18 +432,18 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 // handleITunesWriteBackPreview returns a comparison of local paths vs iTunes paths.
 func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	var req ITunesWriteBackPreviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if _, err := os.Stat(req.LibraryPath); os.IsNotExist(err) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "iTunes library file not found"})
+		RespondWithBadRequest(c, "iTunes library file not found")
 		return
 	}
 
@@ -526,7 +516,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, ITunesWriteBackPreviewResponse{
+	RespondWithOK(c, ITunesWriteBackPreviewResponse{
 		Items: items,
 		Total: len(items),
 	})
@@ -535,7 +525,7 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 // handleListITunesBooks returns paginated books that have iTunes persistent IDs.
 func (s *Server) handleListITunesBooks(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -601,7 +591,7 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"items": items,
 		"count": total,
 	})
@@ -613,21 +603,21 @@ func (s *Server) handleITunesImportStatus(c *gin.Context) {
 		return
 	}
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	opID := c.Param("id")
 	op, err := s.Store().GetOperationByID(opID)
 	if err != nil || op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		RespondWithNotFound(c, "operation", opID)
 		return
 	}
 
 	progress := calculatePercent(op.Progress, op.Total)
 	snapshot := s.itunesSvc.Importer.GetStatus(op.ID)
 
-	c.JSON(http.StatusOK, ITunesImportStatusResponse{
+	RespondWithOK(c, ITunesImportStatusResponse{
 		OperationID: op.ID,
 		Status:      op.Status,
 		Progress:    progress,
@@ -646,7 +636,7 @@ func (s *Server) handleITunesImportStatusBulk(c *gin.Context) {
 		return
 	}
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -654,7 +644,7 @@ func (s *Server) handleITunesImportStatusBulk(c *gin.Context) {
 		IDs []string `json:"ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -685,19 +675,19 @@ func (s *Server) handleITunesImportStatusBulk(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"statuses": results})
+	RespondWithOK(c, gin.H{"statuses": results})
 }
 
 // handleITunesLibraryStatus returns the current status of an iTunes library file.
 func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "path query parameter required"})
+		RespondWithBadRequest(c, "path query parameter required")
 		return
 	}
 
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -711,7 +701,7 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 	fileExists := statErr == nil
 
 	if rec == nil {
-		c.JSON(http.StatusOK, gin.H{
+		RespondWithOK(c, gin.H{
 			"path":        path,
 			"exists":      fileExists,
 			"last_synced": nil,
@@ -725,7 +715,7 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 		changed = stat.Size() != rec.Size || !stat.ModTime().Equal(rec.ModTime)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"path":        path,
 		"exists":      fileExists,
 		"last_synced": rec.ModTime,
@@ -740,11 +730,11 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		return
 	}
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -761,12 +751,12 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		libraryPath = s.itunesSvc.Importer.DiscoverLibraryPath()
 	}
 	if libraryPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no iTunes library path configured or provided"})
+		RespondWithBadRequest(c, "no iTunes library path configured or provided")
 		return
 	}
 
 	if _, err := os.Stat(libraryPath); os.IsNotExist(err) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "iTunes library file not found"})
+		RespondWithBadRequest(c, "iTunes library file not found")
 		return
 	}
 
@@ -774,7 +764,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		if rec, err := s.Store().GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
 			if info, statErr := os.Stat(libraryPath); statErr == nil {
 				if info.Size() == rec.Size && info.ModTime().Equal(rec.ModTime) {
-					c.JSON(http.StatusOK, gin.H{"message": "no changes detected — use force:true to sync anyway", "operation_id": ""})
+					RespondWithOK(c, gin.H{"message": "no changes detected — use force:true to sync anyway", "operation_id": ""})
 					return
 				}
 			}
@@ -807,7 +797,7 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, ITunesSyncResponse{
+	RespondWithSuccess(c, http.StatusAccepted, ITunesSyncResponse{
 		OperationID: op.ID,
 		Message:     "iTunes sync operation queued",
 	})

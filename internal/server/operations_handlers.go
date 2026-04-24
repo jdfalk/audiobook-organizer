@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 1.2.0
+// version: 2.0.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -30,11 +29,11 @@ import (
 
 func (s *Server) startScan(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -75,16 +74,16 @@ func (s *Server) startScan(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) startOrganize(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -130,16 +129,16 @@ func (s *Server) startOrganize(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) startTranscode(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -150,13 +149,13 @@ func (s *Server) startTranscode(c *gin.Context) {
 		KeepOriginal *bool  `json:"keep_original"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.BookID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "book_id is required"})
+		RespondWithBadRequest(c, "book_id is required")
 		return
 	}
 
 	// Verify the book exists
 	if _, err := s.Store().GetBookByID(req.BookID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		RespondWithNotFound(c, "book", req.BookID)
 		return
 	}
 
@@ -289,26 +288,26 @@ func (s *Server) startTranscode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) getOperationStatus(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	op, err := s.Store().GetOperationByID(id)
 	if err != nil || op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		RespondWithNotFound(c, "operation", id)
 		return
 	}
-	c.JSON(http.StatusOK, op)
+	RespondWithOK(c, op)
 }
 
 func (s *Server) cancelOperation(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -322,7 +321,7 @@ func (s *Server) cancelOperation(c *gin.Context) {
 				if err := s.pipelineManager.CancelScan(scan.ID); err != nil {
 					log.Printf("[cancelOperation] AI scan %d cancel warning: %v", scan.ID, err)
 				}
-				c.Status(http.StatusNoContent)
+				RespondWithNoContent(c)
 				return
 			}
 		}
@@ -331,7 +330,7 @@ func (s *Server) cancelOperation(c *gin.Context) {
 	// Try cancel via queue (for running queue operations)
 	if s.queue != nil {
 		if err := s.queue.Cancel(id); err == nil {
-			c.Status(http.StatusNoContent)
+			RespondWithNoContent(c)
 			return
 		}
 	}
@@ -341,13 +340,13 @@ func (s *Server) cancelOperation(c *gin.Context) {
 		internalError(c, "failed to cancel operation", dbErr)
 		return
 	}
-	c.Status(http.StatusNoContent)
+	RespondWithNoContent(c)
 }
 
 // clearStaleOperations force-marks all pending/running/queued operations as failed.
 func (s *Server) clearStaleOperations(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -365,20 +364,20 @@ func (s *Server) clearStaleOperations(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"cleared": cleared})
+	RespondWithOK(c, gin.H{"cleared": cleared})
 }
 
 // deleteOperationHistory deletes operations matching the given status(es).
 // Query param: ?status=completed or ?status=failed or ?status=completed,failed
 func (s *Server) deleteOperationHistory(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	statusParam := c.Query("status")
 	if statusParam == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "status parameter required"})
+		RespondWithBadRequest(c, "status parameter required")
 		return
 	}
 
@@ -387,7 +386,7 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 	allowed := map[string]bool{"completed": true, "failed": true, "canceled": true}
 	for _, s := range statuses {
 		if !allowed[s] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("cannot delete operations with status %q", s)})
+			RespondWithBadRequest(c, fmt.Sprintf("cannot delete operations with status %q", s))
 			return
 		}
 	}
@@ -398,13 +397,13 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"deleted": deleted})
+	RespondWithOK(c, gin.H{"deleted": deleted})
 }
 
 // optimizeDatabase splits &-delimited author/narrator strings and re-extracts empty media info.
 func (s *Server) optimizeDatabase(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -473,7 +472,7 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"books_processed": len(books),
 		"authors_split":   authorsSplit,
 		"narrators_split": narratorsSplit,
@@ -482,7 +481,7 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 
 func (s *Server) sweepTombstones(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	result, err := SweepTombstones(s.Store())
@@ -490,7 +489,7 @@ func (s *Server) sweepTombstones(c *gin.Context) {
 		internalError(c, "failed to sweep tombstones", err)
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	RespondWithOK(c, result)
 }
 
 // setInternalFlag sets an arbitrary internal settings flag in PebbleDB.
@@ -501,11 +500,11 @@ func (s *Server) setInternalFlag(c *gin.Context) {
 		Value string `json:"value"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if err := s.Store().SetSetting(req.Key, req.Value, "string", false); err != nil {
@@ -513,12 +512,12 @@ func (s *Server) setInternalFlag(c *gin.Context) {
 		return
 	}
 	log.Printf("[INFO] setInternalFlag: %s = %q", req.Key, req.Value)
-	c.JSON(http.StatusOK, gin.H{"key": req.Key, "value": req.Value})
+	RespondWithOK(c, gin.H{"key": req.Key, "value": req.Value})
 }
 
 func (s *Server) auditFileConsistency(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	result, err := AuditFileConsistency(s.Store())
@@ -526,7 +525,7 @@ func (s *Server) auditFileConsistency(c *gin.Context) {
 		internalError(c, "failed to audit file consistency", err)
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	RespondWithOK(c, result)
 }
 
 // listActiveOperations returns a snapshot of currently queued/running operations with basic progress
@@ -534,7 +533,7 @@ func (s *Server) listOperations(c *gin.Context) {
 	params := ParsePaginationParams(c)
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusOK, gin.H{"items": []database.Operation{}, "total": 0, "limit": params.Limit, "offset": params.Offset})
+		RespondWithOK(c, gin.H{"items": []database.Operation{}, "total": 0, "limit": params.Limit, "offset": params.Offset})
 		return
 	}
 	ops, total, err := store.ListOperations(params.Limit, params.Offset)
@@ -545,12 +544,12 @@ func (s *Server) listOperations(c *gin.Context) {
 	if ops == nil {
 		ops = []database.Operation{}
 	}
-	c.JSON(http.StatusOK, gin.H{"items": ops, "total": total, "limit": params.Limit, "offset": params.Offset})
+	RespondWithOK(c, gin.H{"items": ops, "total": total, "limit": params.Limit, "offset": params.Offset})
 }
 
 func (s *Server) listActiveOperations(c *gin.Context) {
 	if s.queue == nil {
-		c.JSON(http.StatusOK, gin.H{"operations": []gin.H{}})
+		RespondWithOK(c, gin.H{"operations": []gin.H{}})
 		return
 	}
 	active := s.queue.ActiveOperations()
@@ -577,7 +576,7 @@ func (s *Server) listActiveOperations(c *gin.Context) {
 			"message":  message,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"operations": results})
+	RespondWithOK(c, gin.H{"operations": results})
 }
 
 func (s *Server) listStaleOperations(c *gin.Context) {
@@ -593,10 +592,10 @@ func (s *Server) listStaleOperations(c *gin.Context) {
 
 	stale, err := s.collectStaleOperations(time.Duration(timeoutMinutes) * time.Minute)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list stale operations"})
+		RespondWithInternalError(c, "failed to list stale operations")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"timeout_minutes": timeoutMinutes,
 		"count":           len(stale),
 		"operations":      stale,
@@ -606,7 +605,7 @@ func (s *Server) listStaleOperations(c *gin.Context) {
 // getOperationLogs returns logs for a given operation
 func (s *Server) getOperationLogs(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
@@ -621,7 +620,7 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 			logs = logs[len(logs)-n:]
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"items": logs, "count": len(logs)})
+	RespondWithOK(c, gin.H{"items": logs, "count": len(logs)})
 }
 
 func (s *Server) getOperationResult(c *gin.Context) {
@@ -633,23 +632,23 @@ func (s *Server) getOperationResult(c *gin.Context) {
 		return
 	}
 	if op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		RespondWithNotFound(c, "operation", id)
 		return
 	}
 
 	if op.ResultData == nil {
-		c.JSON(http.StatusOK, gin.H{"result_data": nil})
+		RespondWithOK(c, gin.H{"result_data": nil})
 		return
 	}
 
 	// Parse the JSON result data to return as structured JSON
 	var resultData json.RawMessage
 	if err := json.Unmarshal([]byte(*op.ResultData), &resultData); err != nil {
-		c.JSON(http.StatusOK, gin.H{"result_data": *op.ResultData})
+		RespondWithOK(c, gin.H{"result_data": *op.ResultData})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"result_data": resultData})
+	RespondWithOK(c, gin.H{"result_data": resultData})
 }
 
 // getOperationChanges returns change tracking records for an operation.
@@ -660,7 +659,7 @@ func (s *Server) getOperationChanges(c *gin.Context) {
 		internalError(c, "failed to get operation changes", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"changes": changes})
+	RespondWithOK(c, gin.H{"changes": changes})
 }
 
 // undoPreflightHandler checks for conflicts before executing an undo.
@@ -672,7 +671,7 @@ func (s *Server) undoPreflightHandler(c *gin.Context) {
 		internalError(c, "failed to check conflicts", err)
 		return
 	}
-	c.JSON(http.StatusOK, report)
+	RespondWithOK(c, report)
 }
 
 // revertOperation undoes all changes from a given operation.
@@ -683,35 +682,35 @@ func (s *Server) revertOperation(c *gin.Context) {
 		internalError(c, "failed to revert operation", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "operation reverted successfully"})
+	RespondWithOK(c, gin.H{"message": "operation reverted successfully"})
 }
 
 // listTasks returns all registered tasks with their status and schedule.
 func (s *Server) listTasks(c *gin.Context) {
 	if s.scheduler == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "scheduler not initialized"})
+		RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
-	c.JSON(http.StatusOK, s.scheduler.ListTasks())
+	RespondWithOK(c, s.scheduler.ListTasks())
 }
 
 // runTask triggers a task by name.
 func (s *Server) runTask(c *gin.Context) {
 	if s.scheduler == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "scheduler not initialized"})
+		RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
 	name := c.Param("name")
 	op, err := s.scheduler.RunTask(name)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if op == nil {
-		c.JSON(http.StatusAccepted, gin.H{"message": "task triggered"})
+		RespondWithSuccess(c, 202, gin.H{"message": "task triggered"})
 		return
 	}
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 // updateTaskConfig updates schedule config for a task.
@@ -725,7 +724,7 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		RunInMaintenanceWindow *bool `json:"run_in_maintenance_window"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -834,7 +833,7 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 			config.AppConfig.MaintenanceWindowLibraryOrganize = *req.RunInMaintenanceWindow
 		}
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("task %q config is not configurable", name)})
+		RespondWithBadRequest(c, fmt.Sprintf("task %q config is not configurable", name))
 		return
 	}
 
@@ -845,13 +844,13 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "task config updated"})
+	RespondWithOK(c, gin.H{"message": "task config updated"})
 }
 
 // runMaintenanceWindowNow triggers the full maintenance window sequence immediately.
 func (s *Server) runMaintenanceWindowNow(c *gin.Context) {
 	if s.scheduler == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "scheduler not initialized"})
+		RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
 	ctx := context.WithValue(c.Request.Context(), ignoreWindowKey, true)
@@ -859,5 +858,5 @@ func (s *Server) runMaintenanceWindowNow(c *gin.Context) {
 		internalError(c, "failed to run maintenance", err)
 		return
 	}
-	c.JSON(http.StatusAccepted, gin.H{"message": "maintenance window triggered"})
+	RespondWithSuccess(c, 202, gin.H{"message": "maintenance window triggered"})
 }

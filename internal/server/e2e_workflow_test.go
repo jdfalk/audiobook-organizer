@@ -52,9 +52,11 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 	server.router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import",
 		strings.NewReader(importBody)))
 	require.Equal(t, http.StatusAccepted, w.Code)
-	var importResp map[string]string
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &importResp))
-	testutil.WaitForOp(t, env.Store, importResp["operation_id"], 15*time.Second)
+	var respEnv map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respEnv))
+	data := respEnv["data"].(map[string]any)
+	opID := data["operation_id"].(string)
+	testutil.WaitForOp(t, env.Store, opID, 15*time.Second)
 
 	// Step 4: Verify 2 books in DB
 	books, err := env.Store.GetAllBooks(100, 0)
@@ -78,10 +80,11 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, w.Code)
 	var orgResp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &orgResp))
-	opID := ""
-	if id, ok := orgResp["id"].(string); ok {
+	orgData := orgResp["data"].(map[string]any)
+	opID = ""
+	if id, ok := orgData["id"].(string); ok {
 		opID = id
-	} else if id, ok := orgResp["operation_id"].(string); ok {
+	} else if id, ok := orgData["operation_id"].(string); ok {
 		opID = id
 	}
 	require.NotEmpty(t, opID, "organize response should contain id")
