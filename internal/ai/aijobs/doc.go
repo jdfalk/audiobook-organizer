@@ -1,5 +1,5 @@
 // file: internal/ai/aijobs/doc.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 238dd64d-bf97-4fdb-a092-079dce106fac
 
 // Package aijobs routes bulk-scale LLM chat-completion work through the
@@ -13,6 +13,7 @@
 //	    // 2. For each row in results, match by CustomID to an item
 //	    // 3. Apply the result (feature-specific DB mutation), capturing per-row errors
 //	    // 4. Return (successCount, errorCount, rowErrors, nil)
+//	    // RowResult.Content is the raw model output string
 //	})
 //
 //	jobID, err := aijobs.Submit(ctx, deps, aijobs.SubmitRequest{

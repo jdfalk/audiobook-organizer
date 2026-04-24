@@ -1,5 +1,5 @@
 // file: internal/server/batch_poller.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: f8a1b2c3-d4e5-6789-abcd-0123456789ab
 
 package server
@@ -193,18 +193,11 @@ func (s *Server) registerBatchPollerHandlers() {
 		}
 		results := make([]aijobs.RowResult, 0, len(raw))
 		for _, r := range raw {
-			row := aijobs.RowResult{
+			results = append(results, aijobs.RowResult{
 				CustomID: r.CustomID,
+				Content:  r.Content,
 				Err:      r.Error,
-			}
-			// Parse Content as JSON into the Body field
-			if r.Content != "" {
-				var body map[string]any
-				if err := json.Unmarshal([]byte(r.Content), &body); err == nil {
-					row.Body = body
-				}
-			}
-			results = append(results, row)
+			})
 		}
 		store, ok := s.Store().(database.AIJobsStore)
 		if !ok {
