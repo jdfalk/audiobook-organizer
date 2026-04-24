@@ -26,10 +26,12 @@ func TestListNarrators(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var narrators []database.Narrator
-	err := json.Unmarshal(w.Body.Bytes(), &narrators)
+	var wrapper struct {
+		Data []database.Narrator `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
-	assert.Empty(t, narrators)
+	assert.Empty(t, wrapper.Data)
 
 	// Add a narrator and re-check
 	store := database.GetGlobalStore().(*database.SQLiteStore)
@@ -43,9 +45,9 @@ func TestListNarrators(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	err = json.Unmarshal(w.Body.Bytes(), &narrators)
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
-	assert.Len(t, narrators, 2)
+	assert.Len(t, wrapper.Data, 2)
 }
 
 func TestCountNarrators(t *testing.T) {
@@ -61,6 +63,7 @@ func TestCountNarrators(t *testing.T) {
 	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	resp = resp["data"].(map[string]any)
 	assert.Equal(t, float64(0), resp["count"])
 
 	// Add narrators
@@ -77,6 +80,7 @@ func TestCountNarrators(t *testing.T) {
 
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	resp = resp["data"].(map[string]any)
 	assert.Equal(t, float64(2), resp["count"])
 }
 
@@ -97,10 +101,12 @@ func TestListAudiobookNarrators(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var narrators []database.BookNarrator
-	err = json.Unmarshal(w.Body.Bytes(), &narrators)
+	var wrapper struct {
+		Data []database.BookNarrator `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
-	assert.Empty(t, narrators)
+	assert.Empty(t, wrapper.Data)
 
 	// Create narrator and assign to book
 	store := database.GetGlobalStore().(*database.SQLiteStore)
@@ -117,10 +123,10 @@ func TestListAudiobookNarrators(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	err = json.Unmarshal(w.Body.Bytes(), &narrators)
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
-	assert.Len(t, narrators, 1)
-	assert.Equal(t, narrator.ID, narrators[0].NarratorID)
+	assert.Len(t, wrapper.Data, 1)
+	assert.Equal(t, narrator.ID, wrapper.Data[0].NarratorID)
 }
 
 func TestSetAudiobookNarrators(t *testing.T) {
@@ -154,6 +160,7 @@ func TestSetAudiobookNarrators(t *testing.T) {
 	var resp map[string]any
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	resp = resp["data"].(map[string]any)
 	assert.Equal(t, "ok", resp["status"])
 
 	// Verify by reading back
@@ -190,6 +197,7 @@ func TestGetAudiobookFieldStates(t *testing.T) {
 	var resp map[string]any
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
+	resp = resp["data"].(map[string]any)
 	assert.Contains(t, resp, "field_states")
 
 	// field_states should be a map (possibly empty)

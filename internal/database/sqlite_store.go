@@ -372,6 +372,8 @@ func (s *SQLiteStore) createTables() error {
 		last_organize_operation_id TEXT,
 		last_organized_at DATETIME,
 		itunes_sync_status TEXT,
+		quarantine_reason TEXT,
+		quarantined_at TIMESTAMP,
 		FOREIGN KEY (author_id) REFERENCES authors(id),
 		FOREIGN KEY (series_id) REFERENCES series(id)
 	);

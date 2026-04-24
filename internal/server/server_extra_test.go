@@ -154,8 +154,11 @@ func TestWorkEndpoints(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	var created database.Work
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &created))
+	var createdWrap struct {
+		Data database.Work `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &createdWrap))
+	created := createdWrap.Data
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/works", nil)
 	w = httptest.NewRecorder()
