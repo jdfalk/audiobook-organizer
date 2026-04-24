@@ -1,5 +1,5 @@
 // file: internal/server/reading_handlers_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4f9a2c1d-5b8e-4f70-a7d6-2e8c0f1b9a57
 
 package server
@@ -72,13 +72,13 @@ func TestReading_SetAndGetPosition(t *testing.T) {
 		t.Fatalf("GET position: %d", w.Code)
 	}
 	var resp struct {
-		Position *database.UserPosition `json:"position"`
+		Data *database.UserPosition `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.Position == nil || resp.Position.SegmentID != "s1" {
-		t.Errorf("got position %+v", resp.Position)
+	if resp.Data == nil || resp.Data.SegmentID != "s1" {
+		t.Errorf("got position %+v", resp.Data)
 	}
 }
 
@@ -102,19 +102,19 @@ func TestReading_StateComputed(t *testing.T) {
 		t.Fatalf("GET state: %d", w.Code)
 	}
 	var resp struct {
-		State *database.UserBookState `json:"state"`
+		Data *database.UserBookState `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.State == nil {
+	if resp.Data == nil {
 		t.Fatal("state nil")
 	}
-	if resp.State.Status != database.UserBookStatusInProgress {
-		t.Errorf("Status = %q, want in_progress", resp.State.Status)
+	if resp.Data.Status != database.UserBookStatusInProgress {
+		t.Errorf("Status = %q, want in_progress", resp.Data.Status)
 	}
-	if resp.State.ProgressPct != 16 {
-		t.Errorf("ProgressPct = %d, want 16", resp.State.ProgressPct)
+	if resp.Data.ProgressPct != 16 {
+		t.Errorf("ProgressPct = %d, want 16", resp.Data.ProgressPct)
 	}
 }
 
@@ -183,13 +183,15 @@ func TestReading_ListByStatus(t *testing.T) {
 		t.Fatalf("GET me/finished: %d %s", w.Code, w.Body.String())
 	}
 	var resp struct {
-		States []database.UserBookState `json:"states"`
-		Count  int                      `json:"count"`
+		Data struct {
+			States []database.UserBookState `json:"states"`
+			Count  int                      `json:"count"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.Count != 1 {
-		t.Errorf("finished count = %d, want 1", resp.Count)
+	if resp.Data.Count != 1 {
+		t.Errorf("finished count = %d, want 1", resp.Data.Count)
 	}
 }
