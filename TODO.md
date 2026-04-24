@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.11.0 -->
+<!-- version: 5.12.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -100,7 +100,7 @@ since it was last edited on 2026-04-11).
 - [x] **4.12** Extract iTunes integration into `internal/itunes` (**L**) — complete (3 PRs, Apr 18-20 2026). `internal/itunes/service/` ≈ 5K LOC; server iTunes surface ≈ 800 LOC pure handlers with disabled-mode guard.
 - [ ] **4.13** Comprehensive iTunes test suite (**L**) — after 4.12 extraction, add exhaustive unit tests: mock store tests for every service method, error path coverage, edge cases (empty library, corrupt XML, concurrent sync), position sync, writeback batcher, path reconciliation, track provisioning; target 80%+ coverage on the extracted package
 - [~] **4.14** Plugin system framework (**XL**) — V1: Plugin/EventBus/Registry/Router framework + Deluge migration; V2 (future): RPC subprocess plugins + webhook event delivery
-- [~] **4.15** HTTP response envelope migration (**L**) — adopt `RespondWith*` helpers from `internal/server/error_handler.go` across all handlers. Success responses gain `{"data": {...}}` envelope; error responses gain `{"error", "code", "status"}` shape. Current state: 299 helper uses vs. 1,035 raw `c.JSON(...)` calls across 39 handler files. Must migrate backend + frontend consumers together per feature area to avoid response-shape skew. Pilots completed: `entity_tag_handlers.go`, `user_handlers.go` (both backend-only, no UI consumers). Remaining high-traffic targets (each requires matching frontend update): `audiobooks_handlers.go`, `entities_handlers.go`, `auth_handlers.go`, `metadata_handlers.go`, `activity_handlers.go`, `apikey_handlers.go`, `dedup_handlers.go`, `duplicates_handlers.go`, `diagnostics_handlers.go`, `ai_handlers.go`, ~30 more. Also migrates callers to existing-but-unused helpers: `RespondWithList`, `EnsureNotNil`, `ParseQueryInt`.
+- [~] **4.15** HTTP response envelope migration (**L**) — see plan [`docs/superpowers/plans/2026-04-23-envelope-migration-parallel.md`](superpowers/plans/2026-04-23-envelope-migration-parallel.md). Adopt `RespondWith*` helpers from `internal/server/error_handler.go` across all handlers. Success responses gain `{"data": {...}}` envelope; error responses gain `{"error","code","status"}` shape. Shipped so far (#425, #426, #427, #428): `entity_tag_handlers.go`, `user_handlers.go`, `update_handlers.go`, `quarantine_handlers.go`, `organize_handlers.go` — ~37 callsites migrated. Key pattern: unwrap `.data` inside `web/src/services/*.ts` adapter functions, never at component level. Remaining ~807 callsites across 19 handler files planned as 4 parallel Haiku waves + 1 Opus-handled wave for `audiobooks_handlers.go` / `entities_handlers.go`.
 
 > **Architecture cleanup notes for future work:**
 > When touching these areas, narrow `database.Store` params to ISP sub-interfaces and extract remaining services as opportunities arise:
@@ -219,6 +219,7 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 - [x] [2026-04-15 Multi-user support](docs/superpowers/plans/2026-04-15-multi-user-support.md) — complete (8/8, OAuth deferred)
 - ⏳ [2026-04-15 Bleve library search (DES-1)](docs/superpowers/plans/2026-04-15-bleve-library-search.md) — tasks 1-6 done (skeleton through frontend)
 - [x] [2026-04-15 DI migration (4.4)](docs/superpowers/plans/2026-04-15-di-migration.md) — complete
+- ⏳ [2026-04-23 Envelope migration (parallel) (4.15)](docs/superpowers/plans/2026-04-23-envelope-migration-parallel.md) — 5/24 handlers shipped (PRs #425–#428); 17 Haiku-parallel waves + 2 Opus giants remain
 
 ---
 
