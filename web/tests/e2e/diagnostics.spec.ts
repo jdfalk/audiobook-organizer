@@ -61,13 +61,15 @@ async function setupAiResultsMocks(page: Page) {
   await page.route('**/api/v1/diagnostics/submit-ai', async (route) => {
     if (route.request().method() === 'POST') {
       return route.fulfill({
-        status: 200,
+        status: 202,
         contentType: 'application/json',
         body: JSON.stringify({
-          operation_id: 'op-2',
-          batch_id: 'batch-1',
-          status: 'submitted',
-          request_count: 5,
+          data: {
+            operation_id: 'op-2',
+            batch_id: 'batch-1',
+            status: 'submitted',
+            request_count: 5,
+          },
         }),
       });
     }
@@ -97,7 +99,7 @@ async function setupAiResultsMocks(page: Page) {
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(aiResultsPayload),
+      body: JSON.stringify({ data: aiResultsPayload }),
     });
   });
 }
@@ -156,11 +158,13 @@ test.describe('Diagnostics', () => {
     await page.route('**/api/v1/diagnostics/export', async (route) => {
       if (route.request().method() === 'POST') {
         return route.fulfill({
-          status: 200,
+          status: 202,
           contentType: 'application/json',
           body: JSON.stringify({
-            operation_id: 'op-1',
-            status: 'generating',
+            data: {
+              operation_id: 'op-1',
+              status: 'generating',
+            },
           }),
         });
       }
@@ -263,9 +267,11 @@ test.describe('Diagnostics', () => {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            applied: 2,
-            failed: 0,
-            errors: [],
+            data: {
+              applied: 2,
+              failed: 0,
+              errors: [],
+            },
           }),
         });
       }

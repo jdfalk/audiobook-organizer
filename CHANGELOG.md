@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.17.0 -->
+<!-- version: 2.18.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -8,6 +8,16 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 24, 2026 — Envelope Migration: Wave 2 (apikey, filesystem, plugins, diagnostics)
+
+Shipped as one PR — parallel Haiku sub-agents migrated 4 handler files concurrently; coordinator (Opus) consolidated and reviewed.
+
+- **`internal/server/apikey_handlers.go`** (B1): 23 callsites across 5 handlers → `RespondWith*`. `web/src/services/api.ts`: 4 apikey callers unwrap `.data`.
+- **`internal/server/filesystem_handlers.go`** (B2): 22 callsites → `RespondWith*`. `api.ts`: 7 callers unwrap `.data`. 4 test files updated (`server_test.go`, `server_extra_test.go`, `server_import_paths_and_blocklist_test.go`, `server_more_test.go`).
+- **`internal/server/plugins_handlers.go`** (B3): 19 callsites → `RespondWith*`. No `api.ts` entry — `PluginsTab.tsx` has inline fetch and unwraps `.data` directly (acceptable exception).
+- **`internal/server/diagnostics_handlers.go`** (B4): 5 handlers migrated. `api.ts`: 4 callers unwrap `.data`; `downloadDiagnosticsExport` unchanged (blob response). `web/tests/e2e/diagnostics.spec.ts` mock responses wrapped in envelope.
+- **Plan update** (`docs/superpowers/plans/2026-04-23-envelope-migration-parallel.md`): added Section 5b documenting three Wave-1 defects and their fixes (worktree isolation bypass via absolute paths; bash-restricted sub-agents; endpoint-path vs. function-name test grep).
 
 #### April 23, 2026 — Envelope Migration: `file_ops_handlers.go`
 

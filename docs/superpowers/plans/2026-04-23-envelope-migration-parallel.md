@@ -1,7 +1,7 @@
 <!-- file: docs/superpowers/plans/2026-04-23-envelope-migration-parallel.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 2.0.0 -->
 <!-- guid: 3c9d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f -->
-<!-- last-edited: 2026-04-23 -->
+<!-- last-edited: 2026-04-24 -->
 
 # Parallel Envelope Migration Plan (TODO 4.15)
 
@@ -170,6 +170,27 @@ groupings) and run each sub-slice as its own PR with a real review.
 | `entities_handlers.go` | Authors CRUD / Series CRUD / Tag ops / Search |
 | `audiobooks_handlers.go` | List+search / Single-book / Batch ops / Sync+covers |
 
+## 5b. Wave 1 post-mortem (2026-04-24) — REQUIRED READING before dispatch
+
+Wave 1 completed (PRs #430–#434) but the original dispatch had three defects.
+Waves 2+ MUST incorporate these corrections:
+
+1. **Worktree isolation is NOT enough.** Even with `isolation: "worktree"`,
+   if prompts give Haiku absolute paths (`/Users/.../internal/server/...`)
+   the Edit tool writes to those absolute paths and bypasses the worktree.
+   Haiku's edits bled into the coordinator's main working tree.
+   **Fix:** use coordinator-driven git. Agents are forbidden from
+   running any git/gh command. They only edit files. Coordinator handles
+   every branch, commit, push, rebase, and PR.
+2. **Sub-agents cannot run git/gh reliably.** 4 of 5 Wave-1 agents
+   completed the refactor but were blocked on bash for commit/push/PR.
+   **Fix:** bake coordinator-driven git into the template (see Section 6).
+3. **Endpoint-path grep, not function-name grep.** A4 missed a test file
+   (`server_extra_test.go`) because it only searched for version handler
+   names. The test decoded responses by URL, not by function name.
+   **Fix:** agents must grep every endpoint URL path across the entire
+   `internal/server/*_test.go` tree, not just the obvious test file.
+
 ## 6. Agent task template
 
 Every Haiku agent gets **exactly** this prompt template, with the
@@ -231,25 +252,21 @@ STEP 4 — VERIFY
 
 All four MUST be clean. If anything fails, fix it — do NOT weaken tests.
 
-STEP 5 — COMMIT + PR
-Branch: refactor/envelope-<SHORT_NAME>
-Commit message:
-    refactor(server): envelope migration — <SHORT_NAME> handlers
+STEP 5 — REPORT (NO GIT)
+Do NOT run `git`, `gh`, or any branch/commit/push/PR command. Do NOT
+touch `CHANGELOG.md`. The coordinator owns all git + CHANGELOG edits.
 
-    Continues TODO 4.15.
+Your final message MUST list, in this exact format:
+  Handler file modified: <path>
+  API service file modified: <path>
+  Test files modified: <path>, <path>, ...
+  Backend callsites migrated: N
+  Frontend callers unwrapped: M
+  Endpoint paths touched: /api/v1/foo, /api/v1/bar, ...
+  Verification: go build=PASS, go vet=PASS, tsc=PASS, go test -run X=PASS
 
-    - <HANDLER_FILE>.go: migrate N c.JSON callsites to RespondWith*.
-    - <API_FILE>: M callers unwrap `.data`.
-
-    Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
-
-Push with -u, open a PR titled
-    refactor(server): envelope migration — <SHORT_NAME> handlers
-and reference TODO 4.15 in the body.
-
-Do NOT self-merge. Do NOT use `--squash` or `--merge` if the coordinator
-asks you to merge — this repo is **rebase / fast-forward only**. The
-coordinator does the merge with `gh pr merge <n> --rebase`.
+If any verification failed, list the error and stop — do NOT claim
+success.
 
 STEP 6 — CHANGELOG
 Add a bullet under the existing "HTTP Response Envelope Migration"

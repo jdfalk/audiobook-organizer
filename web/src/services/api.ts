@@ -1223,7 +1223,8 @@ export async function getImportPaths(): Promise<ImportPath[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch import paths');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return data.importPaths || [];
 }
 
@@ -1239,9 +1240,9 @@ export async function addImportPath(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to add import path');
   }
-  const data = await response.json();
-  // Server returns { importPath, scan_operation_id?: string }
-  // Gracefully handle both shapes
+  const body = await response.json();
+  // Server returns { data: { importPath, scan_operation_id?: string } }
+  const data = body.data;
   return (data.importPath ? data.importPath : data) as ImportPath;
 }
 
@@ -1263,7 +1264,8 @@ export async function addImportPathDetailed(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to add import path');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   if (data.importPath) {
     return {
       importPath: data.importPath,
@@ -1759,7 +1761,7 @@ export async function moveSegments(bookId: string, segmentIds: string[], targetB
 export async function importFile(
   filePath: string,
   organize = false
-): Promise<{ message: string; book: Book; operation_id?: string }> {
+): Promise<Book> {
   const response = await fetch(`${API_BASE}/import/file`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1768,7 +1770,8 @@ export async function importFile(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to import file');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function validateITunesLibrary(
@@ -2479,7 +2482,8 @@ export async function browseFilesystem(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to browse filesystem');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 /** Fetches the server user's home directory path. */
@@ -2488,8 +2492,8 @@ export async function getHomeDirectory(): Promise<string> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch home directory');
   }
-  const data = await response.json();
-  return data.path as string;
+  const body = await response.json();
+  return body.data.path as string;
 }
 
 export async function excludeFilesystemPath(
@@ -2504,7 +2508,8 @@ export async function excludeFilesystemPath(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to exclude path');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function includeFilesystemPath(path: string): Promise<void> {
@@ -3451,7 +3456,8 @@ export async function startDiagnosticsExport(
     body: JSON.stringify({ category, description }),
   });
   if (!response.ok) throw await buildApiError(response, 'Failed to start export');
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function downloadDiagnosticsExport(operationId: string): Promise<Blob> {
@@ -3470,13 +3476,15 @@ export async function submitDiagnosticsAI(
     body: JSON.stringify({ category, description }),
   });
   if (!response.ok) throw await buildApiError(response, 'Failed to submit AI analysis');
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getDiagnosticsAIResults(operationId: string): Promise<DiagnosticsAIResults> {
   const response = await fetch(`${API_BASE}/diagnostics/ai-results/${operationId}`);
   if (!response.ok) throw await buildApiError(response, 'Failed to get AI results');
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function applyDiagnosticsSuggestions(
@@ -3489,7 +3497,8 @@ export async function applyDiagnosticsSuggestions(
     body: JSON.stringify({ operation_id: operationId, approved_suggestion_ids: approvedIds }),
   });
   if (!response.ok) throw await buildApiError(response, 'Failed to apply suggestions');
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // External ID mappings
@@ -3980,7 +3989,8 @@ export async function createAPIKey(body: CreateAPIKeyRequest): Promise<CreateAPI
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to create API key');
   }
-  return response.json();
+  const body_data = await response.json();
+  return body_data.data;
 }
 
 export async function listAPIKeys(all?: boolean): Promise<APIKey[]> {
@@ -3989,8 +3999,8 @@ export async function listAPIKeys(all?: boolean): Promise<APIKey[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to list API keys');
   }
-  const data = await response.json();
-  return data.api_keys ?? [];
+  const body_data = await response.json();
+  return body_data.data?.api_keys ?? [];
 }
 
 export async function getAPIKey(id: string): Promise<APIKey> {
@@ -3998,7 +4008,8 @@ export async function getAPIKey(id: string): Promise<APIKey> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to get API key');
   }
-  return response.json();
+  const body_data = await response.json();
+  return body_data.data;
 }
 
 export async function updateAPIKeyStatus(id: string, status: 'active' | 'inactive'): Promise<APIKey> {
@@ -4010,7 +4021,8 @@ export async function updateAPIKeyStatus(id: string, status: 'active' | 'inactiv
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to update API key status');
   }
-  return response.json();
+  const body_data = await response.json();
+  return body_data.data;
 }
 
 export async function revokeAPIKey(id: string): Promise<void> {

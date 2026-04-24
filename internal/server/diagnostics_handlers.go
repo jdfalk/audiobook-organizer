@@ -1,5 +1,5 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 1.5.0
+// version: 2.0.0
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -39,7 +38,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -54,13 +53,13 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 		"general":          true,
 	}
 	if !validCategories[req.Category] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid category; must be one of: deduplication, error_analysis, metadata_quality, general"})
+		RespondWithBadRequest(c, "invalid category; must be one of: deduplication, error_analysis, metadata_quality, general")
 		return
 	}
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -105,7 +104,7 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 		}()
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{
+	RespondWithSuccess(c, 202, gin.H{
 		"operation_id": opID,
 		"status":       "generating",
 	})
@@ -117,18 +116,18 @@ func (s *Server) downloadDiagnosticsExport(c *gin.Context) {
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	op, err := store.GetOperationByID(opID)
 	if err != nil || op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		RespondWithNotFound(c, "operation", opID)
 		return
 	}
 
 	if op.Status != "completed" {
-		c.JSON(http.StatusAccepted, gin.H{
+		RespondWithSuccess(c, 202, gin.H{
 			"operation_id": opID,
 			"status":       op.Status,
 			"message":      op.Message,
@@ -137,24 +136,24 @@ func (s *Server) downloadDiagnosticsExport(c *gin.Context) {
 	}
 
 	if op.ResultData == nil || *op.ResultData == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "no result data available"})
+		RespondWithInternalError(c, "no result data available")
 		return
 	}
 
 	var result map[string]string
 	if err := json.Unmarshal([]byte(*op.ResultData), &result); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse result data"})
+		RespondWithInternalError(c, "failed to parse result data")
 		return
 	}
 
 	zipPath := result["zip_path"]
 	if zipPath == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "zip path not found in result"})
+		RespondWithInternalError(c, "zip path not found in result")
 		return
 	}
 
 	if _, err := os.Stat(zipPath); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "export file no longer available"})
+		RespondWithNotFound(c, "export file", "no longer available")
 		return
 	}
 
@@ -165,7 +164,7 @@ func (s *Server) downloadDiagnosticsExport(c *gin.Context) {
 // submitDiagnosticsAI generates a diagnostics export and submits it to OpenAI batch API.
 func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 	if config.AppConfig.OpenAIAPIKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "OpenAI API key not configured"})
+		RespondWithBadRequest(c, "OpenAI API key not configured")
 		return
 	}
 
@@ -174,7 +173,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -184,7 +183,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -282,7 +281,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 		}
 	}()
 
-	c.JSON(http.StatusAccepted, gin.H{
+	RespondWithSuccess(c, 202, gin.H{
 		"operation_id": opID,
 		"status":       "submitted",
 	})
@@ -294,18 +293,18 @@ func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	op, err := store.GetOperationByID(opID)
 	if err != nil || op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		RespondWithNotFound(c, "operation", opID)
 		return
 	}
 
 	if op.Status != "completed" {
-		c.JSON(http.StatusOK, gin.H{
+		RespondWithOK(c, gin.H{
 			"operation_id": opID,
 			"status":       op.Status,
 			"message":      op.Message,
@@ -314,7 +313,7 @@ func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
 	}
 
 	if op.ResultData == nil || *op.ResultData == "" {
-		c.JSON(http.StatusOK, gin.H{
+		RespondWithOK(c, gin.H{
 			"status":      "completed",
 			"suggestions": []interface{}{},
 		})
@@ -323,7 +322,7 @@ func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
 
 	var resultData map[string]interface{}
 	if err := json.Unmarshal([]byte(*op.ResultData), &resultData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse result data"})
+		RespondWithInternalError(c, "failed to parse result data")
 		return
 	}
 
@@ -336,7 +335,7 @@ func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
 		rawResponses = []interface{}{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"status":        op.Status,
 		"suggestions":   suggestions,
 		"raw_responses": rawResponses,
@@ -350,43 +349,43 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 		ApprovedSuggestionIDs []string `json:"approved_suggestion_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	op, err := store.GetOperationByID(req.OperationID)
 	if err != nil || op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		RespondWithNotFound(c, "operation", req.OperationID)
 		return
 	}
 
 	if op.ResultData == nil || *op.ResultData == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no suggestions available"})
+		RespondWithBadRequest(c, "no suggestions available")
 		return
 	}
 
 	var resultData map[string]interface{}
 	if err := json.Unmarshal([]byte(*op.ResultData), &resultData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse result data"})
+		RespondWithInternalError(c, "failed to parse result data")
 		return
 	}
 
 	suggestionsRaw, ok := resultData["suggestions"]
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no suggestions in result data"})
+		RespondWithBadRequest(c, "no suggestions in result data")
 		return
 	}
 
 	suggestionsJSON, _ := json.Marshal(suggestionsRaw)
 	var suggestions []diagnosticsSuggestion
 	if err := json.Unmarshal(suggestionsJSON, &suggestions); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse suggestions"})
+		RespondWithInternalError(c, "failed to parse suggestions")
 		return
 	}
 
@@ -493,7 +492,7 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"applied": applied,
 		"failed":  failed,
 		"errors":  errors,
