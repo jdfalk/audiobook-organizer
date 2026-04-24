@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.15.0 -->
+<!-- version: 2.16.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -8,6 +8,11 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 23, 2026 — Envelope Migration: `organize_handlers.go` + rename/organize API
+
+- **`internal/server/organize_handlers.go`**: migrated all 4 handlers (`previewRename`, `applyRename`, `previewOrganize`, `organizeBook`) and all success/error responses to `RespondWith*` helpers. "book not found" branches now use `RespondWithNotFound(c, "book", id)`.
+- **`web/src/services/api.ts`**: updated `previewRename`, `applyRename`, `previewOrganize`, `organizeBook` to unwrap `response.data`. Page callers (`BookDetail.tsx`) unchanged — envelope adapter stays in the API layer.
 
 #### April 23, 2026 — Envelope Migration: `quarantine_handlers.go`
 
