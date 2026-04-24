@@ -1,5 +1,5 @@
 // file: internal/ai/aijobs/aijobs_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 92b8a4e2-1647-48c3-acc3-ae3e101623d7
 
 package aijobs
@@ -172,8 +172,8 @@ func TestDispatch_PerRowErrorsIsolated(t *testing.T) {
 	_ = store.MarkAIJobSubmitted(jobID, "batch_d")
 
 	results := []RowResult{
-		{CustomID: "good-1", Body: map[string]any{"ok": true}},
-		{CustomID: "bad-1", Body: map[string]any{"ok": false}},
+		{CustomID: "good-1", Content: `{"ok":true}`},
+		{CustomID: "bad-1", Content: `{"ok":false}`},
 	}
 	err := Dispatch(context.Background(), store, "batch_d", results)
 	require.NoError(t, err)
@@ -193,7 +193,7 @@ func TestDispatch_AllSuccess_MarksCompleted(t *testing.T) {
 	_ = store.CreateAIJob(database.AIJob{ID: "01OK", Type: "only_success", CustomIDPrefix: "01OK", Status: "submitted", ItemCount: 1, BatchID: "batch_ok"}, []byte("[]"))
 	_ = store.MarkAIJobSubmitted("01OK", "batch_ok")
 
-	err := Dispatch(context.Background(), store, "batch_ok", []RowResult{{CustomID: "x", Body: map[string]any{}}})
+	err := Dispatch(context.Background(), store, "batch_ok", []RowResult{{CustomID: "x", Content: "{}"}})
 	require.NoError(t, err)
 	j, _ := store.GetAIJob("01OK")
 	assert.Equal(t, "completed", j.Status)
