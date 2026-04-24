@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 13.1.0
+// version: 13.2.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -95,6 +95,7 @@ func (p *OpenAIParser) IsEnabled() bool {
 
 // ParseFilename uses OpenAI to parse a filename into structured metadata.
 // Results are cached locally for 24h and uses OpenAI prompt caching for cost reduction.
+// PRIORITY: Interactive
 func (p *OpenAIParser) ParseFilename(ctx context.Context, filename string) (*ParsedMetadata, error) {
 	if !p.enabled {
 		return nil, fmt.Errorf("OpenAI parser is not enabled")
@@ -178,6 +179,7 @@ type AudiobookContext struct {
 // ParseAudiobook uses OpenAI to parse audiobook metadata from rich context
 // (full file path, existing metadata, file count, duration) rather than just a filename.
 // Results are cached locally for 24h by file path.
+// PRIORITY: Interactive
 func (p *OpenAIParser) ParseAudiobook(ctx context.Context, abCtx AudiobookContext) (*ParsedMetadata, error) {
 	if !p.enabled {
 		return nil, fmt.Errorf("OpenAI parser is not enabled")
