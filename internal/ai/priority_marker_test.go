@@ -27,7 +27,6 @@ func TestNoUnmarkedChatCompletionCallers(t *testing.T) {
 		"ParseCoverArt":       "Task 2.3", // Migrate cover-image
 		"reviewAuthorBatch":   "Task 2.3", // Migrate sites 544/678
 		"discoverAuthorBatch": "Task 2.3", // Migrate sites 544/678
-		"reviewDedupBatch":    "Task 1.5", // Migrate dedup_review
 		"scoreMetadataBatch":  "Task 2.1", // Migrate metadata_llm_review
 	}
 

@@ -689,7 +689,7 @@ func TestApplyVerdicts_PersistsAndRoutes(t *testing.T) {
 		{Index: 99, IsDuplicate: true, Reason: "unknown index — should be ignored"},
 	}
 
-	applied := engine.applyVerdicts(verdicts, byIndex)
+	applied := engine.ApplyVerdicts(verdicts, byIndex)
 	if applied != 2 {
 		t.Errorf("applied = %d, want 2", applied)
 	}
@@ -763,7 +763,7 @@ func TestApplyVerdicts_AutoMergeOnHighConfidence(t *testing.T) {
 		{Index: 0, IsDuplicate: true, Confidence: "high", Reason: "identical metadata"},
 	}
 
-	applied := engine.applyVerdicts(verdicts, byIndex)
+	applied := engine.ApplyVerdicts(verdicts, byIndex)
 	if applied != 1 {
 		t.Errorf("applied = %d, want 1", applied)
 	}
@@ -799,7 +799,7 @@ func TestApplyVerdicts_NoAutoMergeWhenDisabled(t *testing.T) {
 	verdicts := []ai.DedupPairVerdict{
 		{Index: 0, IsDuplicate: true, Confidence: "high", Reason: "identical"},
 	}
-	engine.applyVerdicts(verdicts, byIndex)
+	engine.ApplyVerdicts(verdicts, byIndex)
 
 	got, _, _ := es.ListCandidates(database.CandidateFilter{EntityType: "book"})
 	if got[0].Status == "merged" {
@@ -827,7 +827,7 @@ func TestApplyVerdicts_NoAutoMergeMediumConfidence(t *testing.T) {
 	verdicts := []ai.DedupPairVerdict{
 		{Index: 0, IsDuplicate: true, Confidence: "medium", Reason: "probably same"},
 	}
-	engine.applyVerdicts(verdicts, byIndex)
+	engine.ApplyVerdicts(verdicts, byIndex)
 
 	got, _, _ := es.ListCandidates(database.CandidateFilter{EntityType: "book"})
 	if got[0].Status == "merged" {

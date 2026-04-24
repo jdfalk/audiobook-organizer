@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 
 package dedup
@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
@@ -30,6 +31,7 @@ type Engine struct {
 	embedClient  *ai.EmbeddingClient
 	llmParser    *ai.OpenAIParser
 	mergeService *merge.Service
+	aiJobsStore  database.AIJobsStore
 
 	// Thresholds (read from config or set directly)
 	BookHighThreshold   float64
@@ -52,6 +54,7 @@ type Engine struct {
 
 // NewEngine creates a Engine with sensible defaults.
 // llmParser may be nil if Layer 3 LLM review should be disabled.
+// aiJobsStore may be nil; if so, RunLLMReview will fall back to synchronous ReviewDedupPairs.
 func NewEngine(
 	embedStore *database.EmbeddingStore,
 	bookStore database.Store,
@@ -76,6 +79,27 @@ func NewEngine(
 		LLMAuthorHigh:       0.85,
 		LLMMaxPairsPerRun:   200,
 	}
+}
+
+// SetAIJobsStore configures the aijobs store for async batch submissions.
+// Must be called before RunLLMReview if async review is desired.
+func (de *Engine) SetAIJobsStore(store database.AIJobsStore) {
+	de.aiJobsStore = store
+}
+
+// LookupCandidate reloads a dedup candidate by ID from the embed store.
+// Returns ok=false if the candidate has been deleted or purged since initial submission.
+// Used by the aijobs dedup review callback to reconstruct state after the batch completes.
+func (de *Engine) LookupCandidate(id int64) (database.DedupCandidate, bool) {
+	c, err := de.embedStore.GetCandidateByID(id)
+	if err != nil {
+		log.Printf("dedup: LookupCandidate(%d) error: %v", id, err)
+		return database.DedupCandidate{}, false
+	}
+	if c == nil {
+		return database.DedupCandidate{}, false
+	}
+	return *c, true
 }
 
 // SetChromemStore configures the ANN vector store for Layer 2.
@@ -1251,14 +1275,26 @@ func (de *Engine) RunLLMReview(ctx context.Context) error {
 		return nil
 	}
 
-	verdicts, err := de.llmParser.ReviewDedupPairs(ctx, inputs)
-	if err != nil {
-		// Persist whatever we did get before surfacing the error.
-		de.applyVerdicts(verdicts, byIndex)
-		return fmt.Errorf("LLM review call: %w", err)
+	// Build byIndex as map[int]int64 for the aijobs payload.
+	byIndexIDs := make(map[int]int64, len(byIndex))
+	for idx, c := range byIndex {
+		byIndexIDs[idx] = c.ID
 	}
-	applied := de.applyVerdicts(verdicts, byIndex)
-	log.Printf("dedup: LLM review complete — %d verdict(s) applied", applied)
+
+	if de.aiJobsStore == nil {
+		return fmt.Errorf("dedup: aiJobsStore not configured; cannot submit async batch")
+	}
+
+	deps := aijobs.Deps{
+		Store:  de.aiJobsStore,
+		Client: &ai.AIJobsBatchClient{Parser: de.llmParser},
+	}
+	jobID, err := ai.SubmitDedupReviewJob(ctx, deps, "gpt-5-mini", inputs, byIndexIDs)
+	if err != nil {
+		return fmt.Errorf("submit dedup review job: %w", err)
+	}
+	subBatchCount := (len(inputs) + 24) / 25
+	log.Printf("dedup: LLM review job submitted — %s (%d pair(s), %d row(s))", jobID, len(inputs), subBatchCount)
 	return nil
 }
 
@@ -1353,7 +1389,7 @@ func (de *Engine) loadAuthorEntity(entityID string) (ai.DedupEntity, bool) {
 	return ai.DedupEntity{ID: entityID, Title: author.Name}, true
 }
 
-// applyVerdicts persists each LLM verdict via UpdateCandidateLLM
+// ApplyVerdicts persists each LLM verdict via UpdateCandidateLLM
 // and, when DedupLLMAutoMergeHighConfidence is enabled, fires an
 // immediate merge for "duplicate" verdicts at confidence "high".
 //
@@ -1368,7 +1404,7 @@ func (de *Engine) loadAuthorEntity(entityID string) (ai.DedupEntity, bool) {
 //
 // Errors are logged and skipped so one bad row doesn't abort
 // the whole batch.
-func (de *Engine) applyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]database.DedupCandidate) int {
+func (de *Engine) ApplyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]database.DedupCandidate) int {
 	applied := 0
 	autoMerged := 0
 	for _, v := range verdicts {
