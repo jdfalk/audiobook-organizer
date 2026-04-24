@@ -101,25 +101,27 @@ func TestPlaylist_CreateAndGetStatic(t *testing.T) {
 		t.Fatalf("create: %d %s", w.Code, w.Body.String())
 	}
 	var created struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &created)
-	if created.Playlist == nil || created.Playlist.ID == "" {
+	if created.Data == nil || created.Data.ID == "" {
 		t.Fatalf("missing playlist in response: %+v", created)
 	}
 
 	// GET returns both the playlist and the ordered book_ids.
-	w = doJSONReq(srv, http.MethodGet, "/api/v1/playlists/"+created.Playlist.ID, nil)
+	w = doJSONReq(srv, http.MethodGet, "/api/v1/playlists/"+created.Data.ID, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("get: %d %s", w.Code, w.Body.String())
 	}
 	var got struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
-		BookIDs  []string               `json:"book_ids"`
+		Data struct {
+			Playlist *database.UserPlaylist `json:"playlist"`
+			BookIDs  []string               `json:"book_ids"`
+		} `json:"data"`
 	}
 	decodeJSON(t, w.Body, &got)
-	if len(got.BookIDs) != 2 || got.BookIDs[0] != "b1" {
-		t.Errorf("book_ids = %v, want [b1 b2]", got.BookIDs)
+	if len(got.Data.BookIDs) != 2 || got.Data.BookIDs[0] != "b1" {
+		t.Errorf("book_ids = %v, want [b1 b2]", got.Data.BookIDs)
 	}
 }
 
@@ -167,24 +169,26 @@ func TestPlaylist_GetSmartEvaluates(t *testing.T) {
 		t.Fatalf("create: %d %s", w.Code, w.Body.String())
 	}
 	var created struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &created)
 
-	w = doJSONReq(srv, http.MethodGet, "/api/v1/playlists/"+created.Playlist.ID, nil)
+	w = doJSONReq(srv, http.MethodGet, "/api/v1/playlists/"+created.Data.ID, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("get: %d %s", w.Code, w.Body.String())
 	}
 	var got struct {
-		BookIDs []string `json:"book_ids"`
+		Data struct {
+			BookIDs []string `json:"book_ids"`
+		} `json:"data"`
 	}
 	decodeJSON(t, w.Body, &got)
-	if len(got.BookIDs) != 2 {
-		t.Errorf("smart playlist eval returned %d books, want 2", len(got.BookIDs))
+	if len(got.Data.BookIDs) != 2 {
+		t.Errorf("smart playlist eval returned %d books, want 2", len(got.Data.BookIDs))
 	}
 
 	// Materialized cache should have been persisted.
-	pl, _ := srv.Store().GetUserPlaylist(created.Playlist.ID)
+	pl, _ := srv.Store().GetUserPlaylist(created.Data.ID)
 	if len(pl.MaterializedBookIDs) != 2 {
 		t.Errorf("materialized cache = %v, want 2 entries", pl.MaterializedBookIDs)
 	}
@@ -198,12 +202,12 @@ func TestPlaylist_UpdateStatic(t *testing.T) {
 		"name": "rename-me", "type": "static", "book_ids": []string{"b1"},
 	})
 	var created struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &created)
 
 	newName := "renamed"
-	w = doJSONReq(srv, http.MethodPut, "/api/v1/playlists/"+created.Playlist.ID, gin.H{
+	w = doJSONReq(srv, http.MethodPut, "/api/v1/playlists/"+created.Data.ID, gin.H{
 		"name":     newName,
 		"book_ids": []string{"b1", "b2"},
 	})
@@ -212,7 +216,7 @@ func TestPlaylist_UpdateStatic(t *testing.T) {
 	}
 
 	// Changing query on a static playlist is a type-mismatch error.
-	w = doJSONReq(srv, http.MethodPut, "/api/v1/playlists/"+created.Playlist.ID, gin.H{
+	w = doJSONReq(srv, http.MethodPut, "/api/v1/playlists/"+created.Data.ID, gin.H{
 		"query": "author:sanderson",
 	})
 	if w.Code != http.StatusBadRequest {
@@ -228,35 +232,35 @@ func TestPlaylist_AddAndRemoveBooks(t *testing.T) {
 		"name": "book-ops", "type": "static", "book_ids": []string{"b1"},
 	})
 	var created struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &created)
 
 	// Add b2 + b3 (and a dupe of b1, should be deduped).
-	w = doJSONReq(srv, http.MethodPost, "/api/v1/playlists/"+created.Playlist.ID+"/books", gin.H{
+	w = doJSONReq(srv, http.MethodPost, "/api/v1/playlists/"+created.Data.ID+"/books", gin.H{
 		"book_ids": []string{"b2", "b3", "b1"},
 	})
 	if w.Code != http.StatusOK {
 		t.Fatalf("add: %d %s", w.Code, w.Body.String())
 	}
 	var after struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &after)
-	if len(after.Playlist.BookIDs) != 3 {
-		t.Errorf("after add = %v, want 3 ids", after.Playlist.BookIDs)
+	if len(after.Data.BookIDs) != 3 {
+		t.Errorf("after add = %v, want 3 ids", after.Data.BookIDs)
 	}
 
 	// Remove b2.
-	w = doJSONReq(srv, http.MethodDelete, "/api/v1/playlists/"+created.Playlist.ID+"/books/b2", nil)
+	w = doJSONReq(srv, http.MethodDelete, "/api/v1/playlists/"+created.Data.ID+"/books/b2", nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("remove: %d %s", w.Code, w.Body.String())
 	}
 	decodeJSON(t, w.Body, &after)
-	if len(after.Playlist.BookIDs) != 2 {
-		t.Errorf("after remove = %v, want 2 ids", after.Playlist.BookIDs)
+	if len(after.Data.BookIDs) != 2 {
+		t.Errorf("after remove = %v, want 2 ids", after.Data.BookIDs)
 	}
-	for _, id := range after.Playlist.BookIDs {
+	for _, id := range after.Data.BookIDs {
 		if id == "b2" {
 			t.Errorf("b2 still present after remove")
 		}
@@ -271,27 +275,27 @@ func TestPlaylist_Reorder(t *testing.T) {
 		"name": "reorder-me", "type": "static", "book_ids": []string{"b1", "b2", "b3"},
 	})
 	var created struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &created)
 
 	// Valid reorder — same set.
-	w = doJSONReq(srv, http.MethodPost, "/api/v1/playlists/"+created.Playlist.ID+"/reorder", gin.H{
+	w = doJSONReq(srv, http.MethodPost, "/api/v1/playlists/"+created.Data.ID+"/reorder", gin.H{
 		"book_ids": []string{"b3", "b1", "b2"},
 	})
 	if w.Code != http.StatusOK {
 		t.Fatalf("reorder: %d %s", w.Code, w.Body.String())
 	}
 	var reordered struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &reordered)
-	if reordered.Playlist.BookIDs[0] != "b3" {
-		t.Errorf("reordered first = %q, want b3", reordered.Playlist.BookIDs[0])
+	if reordered.Data.BookIDs[0] != "b3" {
+		t.Errorf("reordered first = %q, want b3", reordered.Data.BookIDs[0])
 	}
 
 	// Invalid reorder — different set.
-	w = doJSONReq(srv, http.MethodPost, "/api/v1/playlists/"+created.Playlist.ID+"/reorder", gin.H{
+	w = doJSONReq(srv, http.MethodPost, "/api/v1/playlists/"+created.Data.ID+"/reorder", gin.H{
 		"book_ids": []string{"b1", "b2"},
 	})
 	if w.Code != http.StatusBadRequest {
@@ -308,28 +312,28 @@ func TestPlaylist_Materialize(t *testing.T) {
 		"name": "Sanderson Live", "type": "smart", "query": "author:sanderson",
 	})
 	var smart struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &smart)
 
 	// Materialize.
-	w = doJSONReq(srv, http.MethodPost, "/api/v1/playlists/"+smart.Playlist.ID+"/materialize", nil)
+	w = doJSONReq(srv, http.MethodPost, "/api/v1/playlists/"+smart.Data.ID+"/materialize", nil)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("materialize: %d %s", w.Code, w.Body.String())
 	}
 	var materialized struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &materialized)
-	if materialized.Playlist.Type != database.UserPlaylistTypeStatic {
-		t.Errorf("materialized type = %q, want static", materialized.Playlist.Type)
+	if materialized.Data.Type != database.UserPlaylistTypeStatic {
+		t.Errorf("materialized type = %q, want static", materialized.Data.Type)
 	}
-	if len(materialized.Playlist.BookIDs) != 2 {
-		t.Errorf("materialized book_ids = %v, want 2", materialized.Playlist.BookIDs)
+	if len(materialized.Data.BookIDs) != 2 {
+		t.Errorf("materialized book_ids = %v, want 2", materialized.Data.BookIDs)
 	}
 
 	// Original smart playlist is still there and still smart.
-	src, _ := srv.Store().GetUserPlaylist(smart.Playlist.ID)
+	src, _ := srv.Store().GetUserPlaylist(smart.Data.ID)
 	if src == nil || src.Type != database.UserPlaylistTypeSmart {
 		t.Errorf("source playlist changed or missing: %+v", src)
 	}
@@ -343,17 +347,17 @@ func TestPlaylist_Delete(t *testing.T) {
 		"name": "delete-me", "type": "static",
 	})
 	var created struct {
-		Playlist *database.UserPlaylist `json:"playlist"`
+		Data *database.UserPlaylist `json:"data"`
 	}
 	decodeJSON(t, w.Body, &created)
 
-	w = doJSONReq(srv, http.MethodDelete, "/api/v1/playlists/"+created.Playlist.ID, nil)
+	w = doJSONReq(srv, http.MethodDelete, "/api/v1/playlists/"+created.Data.ID, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("delete: %d %s", w.Code, w.Body.String())
 	}
 
 	// Subsequent GET should 404.
-	w = doJSONReq(srv, http.MethodGet, "/api/v1/playlists/"+created.Playlist.ID, nil)
+	w = doJSONReq(srv, http.MethodGet, "/api/v1/playlists/"+created.Data.ID, nil)
 	if w.Code != http.StatusNotFound {
 		t.Errorf("after delete GET = %d, want 404", w.Code)
 	}
@@ -372,8 +376,10 @@ func TestPlaylist_ListFiltering(t *testing.T) {
 		t.Fatalf("list: %d %s", w.Code, w.Body.String())
 	}
 	var listResp struct {
-		Playlists []database.UserPlaylist `json:"playlists"`
-		Count     int                     `json:"count"`
+		Items  []database.UserPlaylist `json:"items"`
+		Count  int                     `json:"count"`
+		Limit  int                     `json:"limit"`
+		Offset int                     `json:"offset"`
 	}
 	decodeJSON(t, w.Body, &listResp)
 	if listResp.Count != 2 {
