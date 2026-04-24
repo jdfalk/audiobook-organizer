@@ -404,9 +404,11 @@ func TestVersionEndpoints(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var linkResp map[string]string
+	var linkResp struct {
+		Data map[string]string `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &linkResp))
-	groupID := linkResp["version_group_id"]
+	groupID := linkResp.Data["version_group_id"]
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/version-groups/"+groupID, nil)
 	w = httptest.NewRecorder()
