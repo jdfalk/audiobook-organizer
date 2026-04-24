@@ -1664,8 +1664,8 @@ export async function getBookVersions(bookId: string): Promise<Book[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book versions');
   }
-  const data = await response.json();
-  return data.versions || [];
+  const body = await response.json();
+  return body.data?.versions || [];
 }
 
 export async function linkBookVersion(
@@ -1710,8 +1710,8 @@ export async function getVersionGroup(groupId: string): Promise<Book[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch version group');
   }
-  const data = await response.json();
-  return data.audiobooks || [];
+  const body = await response.json();
+  return body.data?.audiobooks || [];
 }
 
 // Split selected segments into a new version (new book in same version group)
@@ -1724,7 +1724,8 @@ export async function splitVersion(bookId: string, segmentIds: string[]): Promis
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to split version');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Split selected segments into independent new books (one per segment).
@@ -1738,7 +1739,8 @@ export async function splitSegmentsToBooks(bookId: string, segmentIds: string[])
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to split segments to books');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Move segments from one book to another (must be in same version group)

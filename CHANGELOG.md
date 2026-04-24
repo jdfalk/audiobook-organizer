@@ -26,6 +26,11 @@
 - **`internal/server/reading_handlers.go`**: migrated 16 `c.JSON` callsites across 6 handlers to `RespondWith*` helpers.
 - **`web/src/services/readingApi.ts`**: 6 callers unwrap `response.data`.
 - Tests (`reading_handlers_test.go`) updated to decode the `data` envelope.
+#### April 23, 2026 — Envelope Migration: `versions_handlers.go` (Wave 1 A4)
+
+- **`internal/server/versions_handlers.go`**: migrated 8 handlers / ~31 `c.JSON` callsites to `RespondWith*` helpers.
+- **`web/src/services/api.ts`**: `getBookVersions`, `getVersionGroup`, `splitVersion`, `splitSegmentsToBooks` unwrap `response.data`. Void callers unchanged.
+- Tests (`server_versions_and_work_test.go`, `server_extra_test.go`) updated to decode the `data` envelope.
 
 #### April 23, 2026 — Envelope Migration: `organize_handlers.go` + rename/organize API
 
