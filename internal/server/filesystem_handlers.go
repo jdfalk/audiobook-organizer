@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_handlers.go
-// version: 1.2.0
+// version: 2.0.0
 // guid: 565db679-19ba-4518-b63e-6892663be41b
 //
 // Filesystem HTTP handlers split out of server.go: home directory,
@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -32,21 +31,21 @@ import (
 func (s *Server) getHomeDirectory(c *gin.Context) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(homeDir) == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to determine home directory"})
+		RespondWithInternalError(c, "failed to determine home directory")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"path": homeDir})
+	RespondWithOK(c, gin.H{"path": homeDir})
 }
 
 func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
 	result, err := s.filesystemService.BrowseDirectory(path)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	RespondWithOK(c, result)
 }
 
 func (s *Server) createExclusion(c *gin.Context) {
@@ -54,14 +53,14 @@ func (s *Server) createExclusion(c *gin.Context) {
 		Path string `json:"path" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if err := s.filesystemService.CreateExclusion(req.Path); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "exclusion created"})
+	RespondWithCreated(c, gin.H{"message": "exclusion created"})
 }
 
 func (s *Server) removeExclusion(c *gin.Context) {
@@ -69,19 +68,19 @@ func (s *Server) removeExclusion(c *gin.Context) {
 		Path string `json:"path" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if err := s.filesystemService.RemoveExclusion(req.Path); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
-	c.Status(http.StatusNoContent)
+	RespondWithNoContent(c)
 }
 
 func (s *Server) listImportPaths(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	folders, err := s.Store().GetAllImportPaths()
@@ -95,12 +94,12 @@ func (s *Server) listImportPaths(c *gin.Context) {
 		folders = []database.ImportPath{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"importPaths": folders, "count": len(folders)})
+	RespondWithOK(c, gin.H{"importPaths": folders, "count": len(folders)})
 }
 
 func (s *Server) addImportPath(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	var req struct {
@@ -109,12 +108,12 @@ func (s *Server) addImportPath(c *gin.Context) {
 		Enabled *bool  `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	createdPath, err := s.importPathService.CreateImportPath(req.Path, req.Name)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	folder := createdPath
@@ -122,7 +121,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 		folder.Enabled = false
 		if err := s.Store().UpdateImportPath(folder.ID, folder); err != nil {
 			// Non-fatal; return created folder anyway with note
-			c.JSON(http.StatusCreated, gin.H{"importPath": folder, "warning": "created but could not update enabled flag"})
+			RespondWithCreated(c, gin.H{"importPath": folder, "warning": "created but could not update enabled flag"})
 			return
 		}
 	}
@@ -222,7 +221,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 			// Enqueue the scan operation with normal priority
 			_ = s.queue.Enqueue(op.ID, "scan", operations.PriorityNormal, operationFunc)
 
-			c.JSON(http.StatusCreated, gin.H{"importPath": folder, "scan_operation_id": op.ID})
+			RespondWithCreated(c, gin.H{"importPath": folder, "scan_operation_id": op.ID})
 			return
 		}
 	}
@@ -265,37 +264,37 @@ func (s *Server) addImportPath(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"importPath": folder})
+	RespondWithCreated(c, gin.H{"importPath": folder})
 }
 
 func (s *Server) removeImportPath(c *gin.Context) {
 	if s.Store() == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid import path id"})
+		RespondWithBadRequest(c, "invalid import path id")
 		return
 	}
 	if err := s.Store().DeleteImportPath(id); err != nil {
 		internalError(c, "failed to remove import path", err)
 		return
 	}
-	c.Status(http.StatusNoContent)
+	RespondWithNoContent(c)
 }
 
 func (s *Server) importFile(c *gin.Context) {
 	var req ImportFileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	result, err := s.importService.ImportFile(&req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -304,5 +303,5 @@ func (s *Server) importFile(c *gin.Context) {
 		"source":    "import",
 	}))
 
-	c.JSON(http.StatusCreated, result)
+	RespondWithCreated(c, result)
 }

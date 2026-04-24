@@ -48,8 +48,8 @@ interface PluginSettings {
 async function fetchPlugins(): Promise<PluginInfo[]> {
   const resp = await fetch('/api/v1/plugins');
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const data = await resp.json();
-  return data.plugins ?? [];
+  const body = await resp.json();
+  return body.data.plugins ?? [];
 }
 
 async function togglePlugin(id: string, enable: boolean): Promise<void> {

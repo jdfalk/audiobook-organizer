@@ -461,10 +461,12 @@ func TestListImportPaths(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]any
+	var response struct {
+		Data map[string]any `json:"data"`
+	}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.NotNil(t, response["importPaths"])
+	assert.NotNil(t, response.Data["importPaths"])
 }
 
 // TestGetOperationStatus tests getting operation status
