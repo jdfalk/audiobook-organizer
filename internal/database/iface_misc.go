@@ -243,3 +243,15 @@ type SystemActivityStore interface {
 	GetSystemActivityLogs(source string, limit int) ([]SystemActivityLog, error)
 	PruneSystemActivityLogs(olderThan time.Time) (int, error)
 }
+
+// AIJobsStore is the subset of Store used by internal/ai/aijobs.
+type AIJobsStore interface {
+	CreateAIJob(job AIJob, payloadJSON []byte) error
+	GetAIJob(id string) (AIJob, error)
+	GetAIJobByBatchID(batchID string) (AIJob, error)
+	GetAIJobPayload(id string) ([]byte, error)
+	MarkAIJobSubmitted(id, batchID string) error
+	MarkAIJobCompleted(id, status string, successCount, errorCount int, rowErrors []AIJobRowError) error
+	MarkAIJobFailed(id, errMsg string) error
+	ListAIJobs(typeFilter, statusFilter string, limit, offset int) ([]AIJob, error)
+}
