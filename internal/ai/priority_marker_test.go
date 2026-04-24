@@ -1,5 +1,5 @@
 // file: internal/ai/priority_marker_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8f370c63-462a-4dfa-b899-a5e715e210b0
 
 package ai
@@ -27,7 +27,6 @@ func TestNoUnmarkedChatCompletionCallers(t *testing.T) {
 		"ParseCoverArt":       "Task 2.3", // Migrate cover-image
 		"reviewAuthorBatch":   "Task 2.3", // Migrate sites 544/678
 		"discoverAuthorBatch": "Task 2.3", // Migrate sites 544/678
-		"scoreMetadataBatch":  "Task 2.1", // Migrate metadata_llm_review
 	}
 
 	// Walk the current directory (package ai) for .go files.

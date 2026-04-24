@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.189.0
+// version: 1.190.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1032,6 +1032,12 @@ func NewServer(store database.Store) *Server {
 					log.Println("[INFO] Metadata candidate scoring: LLM rerank tier enabled (opt-in per search)")
 				} else {
 					log.Println("[INFO] Metadata candidate scoring: LLM rerank tier wired but disabled in config")
+				}
+
+				// Wire aijobs store for async metadata review batches.
+				if aiJobsStore, ok := database.GetGlobalStore().(database.AIJobsStore); ok {
+					llmParser.SetAIJobsStore(aiJobsStore)
+					log.Println("[INFO] Metadata async review (aijobs) wired to LLM parser")
 				}
 			} else {
 				log.Println("[INFO] Embedding store opened (dedup engine disabled — no API key or embedding_enabled=false)")
