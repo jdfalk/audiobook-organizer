@@ -1,5 +1,5 @@
 // file: internal/server/entity_tag_handlers.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 7e5f6a4b-8c9d-4a70-b8c5-3d7e0f1b9a99
 //
 // HTTP endpoints for author and series tags (backlog 7.7).
@@ -8,35 +8,74 @@
 package server
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-// handleGetAuthorTags returns tags for an author.
-// GET /api/v1/authors/:id/tags
-func (s *Server) handleGetAuthorTags(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author id"})
-		return
-	}
-	tags, err := s.Store().GetAuthorTagsDetailed(id)
-	if err != nil {
-		internalError(c, "get author tags", err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
+// entityTagOps bundles the store operations for one tagged-entity type
+// (author or series). It lets a single generic handler serve both without
+// plumbing the entity name and each function pointer through separately.
+type entityTagOps struct {
+	name          string // "author" or "series" — used in error messages
+	getDetailed   func(id int) ([]database.BookTag, error)
+	add           func(id int, tag string) error
+	addWithSource func(id int, tag, source string) error
 }
 
-// handleAddAuthorTag adds a tag to an author.
-// POST /api/v1/authors/:id/tags
-func (s *Server) handleAddAuthorTag(c *gin.Context) {
+func (s *Server) authorTagOps() entityTagOps {
+	return entityTagOps{
+		name:          "author",
+		getDetailed:   s.Store().GetAuthorTagsDetailed,
+		add:           s.Store().AddAuthorTag,
+		addWithSource: s.Store().AddAuthorTagWithSource,
+	}
+}
+
+func (s *Server) seriesTagOps() entityTagOps {
+	return entityTagOps{
+		name:          "series",
+		getDetailed:   s.Store().GetSeriesTagsDetailed,
+		add:           s.Store().AddSeriesTag,
+		addWithSource: s.Store().AddSeriesTagWithSource,
+	}
+}
+
+// parseEntityID parses the :id path param as an int, responding with a 400 on
+// failure. Returns (id, ok) so callers can bail early.
+func parseEntityID(c *gin.Context, entityName string) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid author id"})
+		RespondWithValidationError(c, entityName+" id", "must be an integer")
+		return 0, false
+	}
+	return id, true
+}
+
+// handleGetEntityTags returns tags for an author or series.
+func (s *Server) handleGetEntityTags(c *gin.Context, ops entityTagOps) {
+	id, ok := parseEntityID(c, ops.name)
+	if !ok {
+		return
+	}
+	tags, err := ops.getDetailed(id)
+	if err != nil {
+		internalError(c, "get "+ops.name+" tags", err)
+		return
+	}
+	if tags == nil {
+		tags = []database.BookTag{}
+	}
+	RespondWithOK(c, gin.H{"tags": tags})
+}
+
+// handleAddEntityTag adds a tag to an author or series, optionally with a
+// source. See TODO below — this is where your input shapes the behavior.
+func (s *Server) handleAddEntityTag(c *gin.Context, ops entityTagOps) {
+	id, ok := parseEntityID(c, ops.name)
+	if !ok {
 		return
 	}
 	var req struct {
@@ -44,64 +83,31 @@ func (s *Server) handleAddAuthorTag(c *gin.Context) {
 		Source string `json:"source,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
+
+	var err error
 	if req.Source != "" {
-		err = s.Store().AddAuthorTagWithSource(id, req.Tag, req.Source)
+		err = ops.addWithSource(id, req.Tag, req.Source)
 	} else {
-		err = s.Store().AddAuthorTag(id, req.Tag)
+		err = ops.add(id, req.Tag)
 	}
 	if err != nil {
-		internalError(c, "add author tag", err)
+		internalError(c, "add "+ops.name+" tag", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"added": req.Tag})
-}
-
-// handleGetSeriesTags returns tags for a series.
-// GET /api/v1/series/:id/tags
-func (s *Server) handleGetSeriesTags(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series id"})
-		return
-	}
-	tags, err := s.Store().GetSeriesTagsDetailed(id)
-	if err != nil {
-		internalError(c, "get series tags", err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"tags": tags})
-}
-
-// handleAddSeriesTag adds a tag to a series.
-// POST /api/v1/series/:id/tags
-func (s *Server) handleAddSeriesTag(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid series id"})
-		return
-	}
-	var req struct {
-		Tag    string `json:"tag" binding:"required"`
-		Source string `json:"source,omitempty"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if err := s.Store().AddSeriesTag(id, req.Tag); err != nil {
-		internalError(c, "add series tag", err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"added": req.Tag})
+	RespondWithOK(c, gin.H{"added": req.Tag})
 }
 
 // registerEntityTagRoutes wires the author/series tag endpoints.
 func (s *Server) registerEntityTagRoutes(protected *gin.RouterGroup) {
-	protected.GET("/authors/:id/tags", s.perm(auth.PermLibraryView), s.handleGetAuthorTags)
-	protected.POST("/authors/:id/tags", s.perm(auth.PermLibraryEditMetadata), s.handleAddAuthorTag)
-	protected.GET("/series/:id/tags", s.perm(auth.PermLibraryView), s.handleGetSeriesTags)
-	protected.POST("/series/:id/tags", s.perm(auth.PermLibraryEditMetadata), s.handleAddSeriesTag)
+	protected.GET("/authors/:id/tags", s.perm(auth.PermLibraryView),
+		func(c *gin.Context) { s.handleGetEntityTags(c, s.authorTagOps()) })
+	protected.POST("/authors/:id/tags", s.perm(auth.PermLibraryEditMetadata),
+		func(c *gin.Context) { s.handleAddEntityTag(c, s.authorTagOps()) })
+	protected.GET("/series/:id/tags", s.perm(auth.PermLibraryView),
+		func(c *gin.Context) { s.handleGetEntityTags(c, s.seriesTagOps()) })
+	protected.POST("/series/:id/tags", s.perm(auth.PermLibraryEditMetadata),
+		func(c *gin.Context) { s.handleAddEntityTag(c, s.seriesTagOps()) })
 }

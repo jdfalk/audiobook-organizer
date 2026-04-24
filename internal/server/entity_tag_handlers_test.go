@@ -50,11 +50,13 @@ func TestHandleGetAuthorTags_Empty(t *testing.T) {
 	}
 
 	var resp struct {
-		Tags []database.BookTag `json:"tags"`
+		Data struct {
+			Tags []database.BookTag `json:"tags"`
+		} `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if len(resp.Tags) != 0 {
-		t.Errorf("expected 0 tags, got %d", len(resp.Tags))
+	if len(resp.Data.Tags) != 0 {
+		t.Errorf("expected 0 tags, got %d", len(resp.Data.Tags))
 	}
 }
 
@@ -75,11 +77,13 @@ func TestHandleAddAuthorTag(t *testing.T) {
 	}
 
 	var resp struct {
-		Added string `json:"added"`
+		Data struct {
+			Added string `json:"added"`
+		} `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Added != "sci-fi" {
-		t.Errorf("expected added=sci-fi, got %s", resp.Added)
+	if resp.Data.Added != "sci-fi" {
+		t.Errorf("expected added=sci-fi, got %s", resp.Data.Added)
 	}
 
 	// Verify via GET.
