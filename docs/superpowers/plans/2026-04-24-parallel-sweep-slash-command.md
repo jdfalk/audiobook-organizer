@@ -1,12 +1,12 @@
 <!-- file: docs/superpowers/plans/2026-04-24-parallel-sweep-slash-command.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d -->
 <!-- last-edited: 2026-04-24 -->
 
 # /parallel-sweep — repo-scoped slash command
 
 Author: Claude Opus 4.7 (planning)
-Status: **DRAFT — awaiting user approval**
+Status: **APPROVED — open questions resolved 2026-04-24; implementation begins at step 1**
 Successor of: `parallel-refactor-sweep` skill (lessons baked in)
 
 ## 1. Goal
@@ -205,13 +205,19 @@ The slash command is purely additive. Rollback = `git revert` the merging PR.
 
 In-flight rollback during a live sweep: coordinator can be killed at any checkpoint; state file persists; orphan worktrees can be cleaned with `git worktree prune` + `git branch -D`. Document this explicitly in `parallel-sweep-impl/SKILL.md`.
 
-## 13. Open design questions (need user input)
+## 13. Resolved design decisions (2026-04-24)
 
-1. **Settings.local.json injection mechanism.** Is dropping a per-worktree `.claude/settings.local.json` the right way to give a child agent its own hooks, or do we need a different scoping (e.g., env var, custom skill argument)? Spike in step 3 will answer this.
-2. **Auto-merge policy.** Should the coordinator admin-merge any PR with green CI, or only PRs whose tasks are tagged `auto-ok`? Default proposed: admin-merge always for refactor PRs (since this is human-initiated via /parallel-sweep). Override: a `--review-only` flag that opens drafts and stops.
-3. **Resume granularity.** Resume from last completed task, or last `TaskUpdate` event? Proposed: last completed task (cleaner semantics; cost is at worst re-running one in-flight child agent).
-4. **Conflict resolver model.** Sonnet by default; opus for complex conflicts? Proposed: Sonnet always for trivial; escalate to Opus only via the file-copy fallback path.
-5. **Where to store the slash command.** Project-scope (`.claude/commands/`) or user-global (`~/.claude/commands/`)? Proposed: project-scope so the worktree-discipline hooks and project-specific paths are local. User-global version can come later as a generic template.
+1. **Hook scoping → belt-and-suspenders.** Drop the per-worktree `.claude/settings.local.json` PreToolUse hook AND run a post-hoc `git -C <worktree> status` cross-check after each child completes. The post-hoc check is the authoritative barrier; the hook is defense in depth. Step 3 spike confirms whether the hook actually fires for sub-agents — if not, delete the hook and rely on the post-hoc check alone.
+
+2. **Auto-merge policy → green PR + local `make ci` both required.** Coordinator admin-merges only when (a) GitHub CI is green AND (b) `make ci` passed in the worktree before PR open. On disagreement: GitHub CI is authoritative — if remote red, don't merge. If local red but remote green, also don't merge (local is authoritative on coverage/tests not run by the workflow).
+
+3. **Resume granularity → last completed task.** Re-dispatching an in-flight task starts from a clean known state: `git -C <worktree> reset --hard <base>` before re-spawn. One code path; no special-case logic for partial state. Worst-case cost: one task's worth of agent work re-done per kill.
+
+4. **Conflict resolver model → Sonnet trivial, Opus fallback.**
+   - Trivial path (≤30 markers, ≤3 files): Sonnet conflict-resolver subagent.
+   - Non-trivial path (file-copy cherry-pick): Opus directly. No speculative Sonnet pass — the heuristic that triggers the fallback already says Sonnet would struggle.
+
+5. **Slash command scope → project first, user-global later.** Ship in `.claude/commands/parallel-sweep.md` for this repo. After ~3 real sweeps, extract the universal parts (coordinator logic, state schema, rebase loop) to `~/.claude/commands/` and leave repo-specific bits (rebase/FF merge, `make ci` 80% gate, taglib deps) as configurable. Tracked as future work — see §15.
 
 ## 14. Definition of done
 
@@ -219,3 +225,12 @@ In-flight rollback during a live sweep: coordinator can be killed at any checkpo
 - Documented in `docs/superpowers/specs/parallel-sweep.md`.
 - TODO 4.16 marked `[x]`.
 - A morning after first real-world use produces no "agent worked on main" or "missed test fixture" surprises.
+
+## 15. Future work — universal extraction
+
+Once the project-scoped command has run cleanly through ~3 real sweeps:
+
+- Extract coordinator/child/conflict-resolver prompts and the state schema into a generic `~/.claude/commands/parallel-sweep.md` + `~/.claude/skills/parallel-sweep-impl/`.
+- Move repo-specific knobs (merge style, CI gate command, post-merge hygiene targets) into a per-repo `.claude/parallel-sweep.local.md` config file (YAML frontmatter), discoverable from `${CLAUDE_PROJECT_DIR}`.
+- Default config falls back to safe-but-conservative behavior (no auto-merge, prompt before each merge, single-task fallback) when no local config is present.
+- Publish as a standalone skill in the `superpowers` plugin so other repos pick it up via plugin install.
