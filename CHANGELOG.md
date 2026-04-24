@@ -21,6 +21,12 @@
 - **`web/src/services/activityApi.ts`**: `fetchActivity`, `fetchActivitySources`, `compactActivityLog` unwrap `response.data`.
 - Tests (`activity_handlers_test.go`, `activity_integration_test.go`) updated to decode the `data` envelope.
 
+#### April 23, 2026 — Envelope Migration: `reading_handlers.go` (Wave 1 A3)
+
+- **`internal/server/reading_handlers.go`**: migrated 16 `c.JSON` callsites across 6 handlers to `RespondWith*` helpers.
+- **`web/src/services/readingApi.ts`**: 6 callers unwrap `response.data`.
+- Tests (`reading_handlers_test.go`) updated to decode the `data` envelope.
+
 #### April 23, 2026 — Envelope Migration: `organize_handlers.go` + rename/organize API
 
 - **`internal/server/organize_handlers.go`**: migrated all 4 handlers (`previewRename`, `applyRename`, `previewOrganize`, `organizeBook`) and all success/error responses to `RespondWith*` helpers. "book not found" branches now use `RespondWithNotFound(c, "book", id)`.
