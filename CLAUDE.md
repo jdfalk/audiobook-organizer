@@ -1,5 +1,5 @@
 <!-- file: CLAUDE.md -->
-<!-- version: 4.3.0 -->
+<!-- version: 4.4.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
 <!-- last-edited: 2026-04-24 -->
 
@@ -37,9 +37,10 @@ make help            # All targets
 
 ## Workflow Discipline
 
-- ALWAYS use a git worktree for refactors and multi-PR work; never commit directly to main in the primary working tree.
-- ALWAYS present a written plan BEFORE exploring code or making edits for any refactor or multi-step task. Wait for user approval.
-- Before running manual build/deploy steps, check Makefile and Makefile.local for existing targets (e.g., wipe-deploy, fresh-import).
+- ALWAYS use a git worktree for refactors and multi-PR work; never commit directly to main in the primary working tree. Check `git worktree list` first; if in the main checkout, create `git worktree add ../<repo>-<branch> -b <branch>` and confirm the path back before any edits.
+- ALWAYS present a written plan (in `PLAN.md` at the worktree root) covering goal / files to change / ordered steps / test strategy / rollback BEFORE exploring code or making edits. STOP and wait for explicit approval.
+- Before running any multi-step build, deploy, or reset sequence, run `grep -E '^[a-z-]+:' Makefile Makefile.local 2>/dev/null` to list targets. Prefer an existing target over manual commands, and state which target is being used and why.
+- For any design doc, plan, or review longer than ~300 lines, write it to a file under `docs/` (shared) or `.claude/notes/` (scratch) and respond with just a summary + file path. Do NOT inline long content in chat.
 
 ## GitHub Operations
 
