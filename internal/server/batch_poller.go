@@ -1,5 +1,5 @@
 // file: internal/server/batch_poller.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: f8a1b2c3-d4e5-6789-abcd-0123456789ab
 
 package server
@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -177,6 +178,39 @@ func (s *Server) registerBatchPollerHandlers() {
 		}
 		s.pipelineManager.PollBatchPhases(ctx)
 		return nil
+	})
+
+	// aijobs: unified layer for all bulk-scale LLM work. All such batches
+	// carry metadata.type="aijobs"; the per-feature routing happens inside
+	// aijobs.Dispatch by looking up the ai_jobs row for this batch_id.
+	s.batchPoller.RegisterHandler("aijobs", func(ctx context.Context, batchID, outputFileID string) error {
+		if outputFileID == "" {
+			return fmt.Errorf("aijobs: no output file for batch %s", batchID)
+		}
+		raw, err := s.batchPoller.parser.DownloadBatchRaw(ctx, outputFileID)
+		if err != nil {
+			return fmt.Errorf("aijobs: download batch %s: %w", batchID, err)
+		}
+		results := make([]aijobs.RowResult, 0, len(raw))
+		for _, r := range raw {
+			row := aijobs.RowResult{
+				CustomID: r.CustomID,
+				Err:      r.Error,
+			}
+			// Parse Content as JSON into the Body field
+			if r.Content != "" {
+				var body map[string]any
+				if err := json.Unmarshal([]byte(r.Content), &body); err == nil {
+					row.Body = body
+				}
+			}
+			results = append(results, row)
+		}
+		store, ok := s.Store().(database.AIJobsStore)
+		if !ok {
+			return fmt.Errorf("aijobs: store does not implement AIJobsStore")
+		}
+		return aijobs.Dispatch(ctx, store, batchID, results)
 	})
 }
 
