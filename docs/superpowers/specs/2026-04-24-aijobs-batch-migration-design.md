@@ -113,7 +113,7 @@ No function offers both in the same path. The enforcement test (`TestNoUnmarkedC
 | File:Line | Current caller | Priority | Action |
 |---|---|---|---|
 | `dedup_review.go:124` | Maintenance `dedup_llm_review` | Bulk | Migrate (reference impl) |
-| `metadata_llm_review.go:147` | Batch metadata apply | Bulk | Migrate |
+| `metadata_llm_review.go:147` | UI metadata search | Interactive | Mark + keep sync; called from metafetch/service.go during user-initiated search |
 | `openai_parser.go:136` (ParsePath) | Scan pipeline | Bulk | Migrate |
 | `openai_parser.go:238` (ParseSeries) | Scan pipeline | Bulk | Migrate |
 | `openai_parser.go:329` (ParseMetadata) | Scan pipeline | Bulk | Migrate |
