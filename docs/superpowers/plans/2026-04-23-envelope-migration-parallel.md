@@ -1,5 +1,5 @@
 <!-- file: docs/superpowers/plans/2026-04-23-envelope-migration-parallel.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 3.0.0 -->
 <!-- guid: 3c9d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f -->
 <!-- last-edited: 2026-04-24 -->
 
@@ -169,6 +169,24 @@ groupings) and run each sub-slice as its own PR with a real review.
 |---|---|
 | `entities_handlers.go` | Authors CRUD / Series CRUD / Tag ops / Search |
 | `audiobooks_handlers.go` | List+search / Single-book / Batch ops / Sync+covers |
+
+## 5c. Wave 2 post-mortem (2026-04-24) — single-PR-per-wave is the default
+
+Wave 2 (PR #435) shipped 4 handler migrations in one consolidated PR
+instead of four separate PRs. Outcome: 1 merge vs. 5 rebases + 5 merges
+in Wave 1. Zero CHANGELOG conflicts. ~10x less coordinator overhead.
+
+**New default for Waves 3+:**
+- Dispatch all wave agents in parallel, each in a worktree.
+- Agents edit files only — no git, no CHANGELOG (same as Wave 2).
+- Coordinator consolidates all 4 agents' edits into ONE branch +
+  ONE commit + ONE PR per wave.
+- CHANGELOG entry covers the whole wave in a single block.
+
+Use per-agent PRs only if: (a) wave files have heavy test-file overlap
+that would make a consolidated diff hard to review, or (b) one agent's
+work needs to ship ahead of the others for feature reasons. Neither
+applies to Waves 3–4.
 
 ## 5b. Wave 1 post-mortem (2026-04-24) — REQUIRED READING before dispatch
 

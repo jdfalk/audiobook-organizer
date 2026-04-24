@@ -1,7 +1,7 @@
 // file: internal/server/error_handler.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 5d6e7f8a-9b0c-1d2e-3f4a-5b6c7d8e9f0a
-// last-edited: 2026-02-04
+// last-edited: 2026-04-23
 
 package server
 
@@ -89,6 +89,11 @@ func RespondWithUnauthorized(c *gin.Context, message string) {
 // RespondWithForbidden sends a 403 Forbidden error response
 func RespondWithForbidden(c *gin.Context, message string) {
 	RespondWithError(c, http.StatusForbidden, message, "FORBIDDEN")
+}
+
+// RespondWithServiceUnavailable sends a 503 Service Unavailable error response
+func RespondWithServiceUnavailable(c *gin.Context, message string) {
+	RespondWithError(c, http.StatusServiceUnavailable, message, "SERVICE_UNAVAILABLE")
 }
 
 // RespondWithSuccess sends a successful response with data

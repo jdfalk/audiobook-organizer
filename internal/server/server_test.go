@@ -116,14 +116,16 @@ func TestHealthCheck(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]any
-		err := json.Unmarshal(w.Body.Bytes(), &response)
+		var wrapper struct {
+			Data map[string]any `json:"data"`
+		}
+		err := json.Unmarshal(w.Body.Bytes(), &wrapper)
 		require.NoError(t, err)
 
-		assert.Equal(t, "ok", response["status"])
-		assert.NotNil(t, response["timestamp"])
-		assert.NotNil(t, response["version"])
-		assert.NotNil(t, response["metrics"])
+		assert.Equal(t, "ok", wrapper.Data["status"])
+		assert.NotNil(t, wrapper.Data["timestamp"])
+		assert.NotNil(t, wrapper.Data["version"])
+		assert.NotNil(t, wrapper.Data["metrics"])
 	}
 }
 
@@ -526,10 +528,12 @@ func TestListBackups(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &response)
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
-	assert.NotNil(t, response["backups"])
+	assert.NotNil(t, wrapper.Data["backups"])
 }
 
 // TestBatchUpdateMetadata tests batch metadata updates
@@ -936,9 +940,12 @@ func TestDashboardSizeFormat(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &response)
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
+	response := wrapper.Data
 
 	// Verify formatDistribution exists
 	formatDistribution, ok := response["formatDistribution"].(map[string]any)
@@ -1047,9 +1054,12 @@ func TestEmptyDashboardSizeFormat(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &response)
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
+	response := wrapper.Data
 
 	// Even with no audiobooks, distributions should exist
 	formatDistribution, ok := response["formatDistribution"].(map[string]any)
@@ -2073,9 +2083,12 @@ func TestGetDashboardWithData(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &wrapper)
 	require.NoError(t, err)
+	response := wrapper.Data
 
 	// Verify dashboard response structure with data
 	assert.NotNil(t, response["totalBooks"])

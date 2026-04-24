@@ -123,7 +123,7 @@ func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 	allBooks, _ := s.audiobookService.GetSoftDeletedBooks(c.Request.Context(), 10000, 0, olderThanDays)
 	total := len(allBooks)
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"items":  books,
 		"count":  len(books),
 		"total":  total,
@@ -149,7 +149,7 @@ func (s *Server) purgeSoftDeletedAudiobooks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	RespondWithOK(c, result)
 }
 
 func (s *Server) runAutoPurgeSoftDeleted() {
@@ -183,11 +183,11 @@ func (s *Server) restoreAudiobook(c *gin.Context) {
 	id := c.Param("id")
 	updated, err := s.audiobookService.RestoreAudiobook(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"message": "audiobook restored",
 		"book":    updated,
 	})
