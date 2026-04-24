@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.15.0 -->
+<!-- version: 5.16.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-24 -->
 
@@ -195,6 +195,8 @@ Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/
 - [ ] **AI-MODEL-1** Replace the hardcoded `gpt-5-mini` default in `NewOpenAIParser` (and the duplicated string in `dedup.Engine.RunLLMReview`) with per-feature config knobs: `DedupReviewModel`, `MetadataReviewModel`, `FilenameParseModel`, `CoverArtModel`, etc. Rationale: mechanical paths (filename/series parsing) can drop to `gpt-5-nano` for ~5× cost savings while semantic paths (dedup pair judgments, cover art) stay on `gpt-5-mini`. Batch API already gives us 50% off so this is pure margin. Orthogonal to the aijobs migration — open a separate PR once that one merges.
 
 - [ ] **AI-BATCH-1** Migrate `OpenAIParser.ParseBatch` (openai_parser.go:271) and its scanner caller (scanner.go:657) to aijobs. Requires substantial refactor of scanner flow: currently results are applied synchronously within the scan loop before books are persisted to DB; async application needs book IDs persisted first. Design: extract ParseBatch application into scanner-level method (takes book IDs, not in-memory books slice), submit aijobs batch with byIndex map (filename index → book ID), register callback to apply verdicts. Deferred to follow-up PR due to scanner architecture scope. Task 2.2 marked it Interactive + added this TODO.
+
+- [ ] **AI-BATCH-2** Migrate `OpenAIParser.ParseCoverArt` (openai_parser.go:364) and its caller in `resolveProductionAuthor` (entities_handlers.go:815) to aijobs. Requires decoupling result application from operation loop: currently ParseCoverArt is called synchronously within the background operation's book-processing loop, with results immediately applied to DB (create/update authors, set book associations). Async design: extract cover art extraction into operation, persist image bytes with tempfile ID, submit batch with image IDs, register callback to apply author lookups/updates once results arrive. Deferred to follow-up PR due to operation architecture scope. Task 2.3 deferred as out-of-scope; marked in allow-list with this TODO.
 
 ---
 
