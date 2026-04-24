@@ -345,9 +345,13 @@ func TestCoverageRestoreAudiobook(t *testing.T) {
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]any
+		var resp struct {
+			Data struct {
+				Message string `json:"message"`
+			} `json:"data"`
+		}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.Equal(t, "audiobook restored", resp["message"])
+		assert.Equal(t, "audiobook restored", resp.Data.Message)
 	})
 
 	t.Run("restore non-existent book", func(t *testing.T) {
@@ -487,12 +491,12 @@ func TestCoverageDashboardStats(t *testing.T) {
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]any
+		var resp struct{ Data map[string]any }
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.NotNil(t, resp["formatDistribution"])
-		assert.NotNil(t, resp["stateDistribution"])
-		assert.NotNil(t, resp["totalBooks"])
-		assert.NotNil(t, resp["totalSize"])
+		assert.NotNil(t, resp.Data["formatDistribution"])
+		assert.NotNil(t, resp.Data["stateDistribution"])
+		assert.NotNil(t, resp.Data["totalBooks"])
+		assert.NotNil(t, resp.Data["totalSize"])
 	})
 
 	t.Run("with books", func(t *testing.T) {
@@ -507,9 +511,9 @@ func TestCoverageDashboardStats(t *testing.T) {
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]any
+		var resp struct{ Data map[string]any }
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		totalBooks := resp["totalBooks"].(float64)
+		totalBooks := resp.Data["totalBooks"].(float64)
 		assert.GreaterOrEqual(t, totalBooks, float64(2))
 	})
 
@@ -773,10 +777,13 @@ func TestCoverageListSoftDeletedAudiobooks(t *testing.T) {
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]any
+		var resp struct {
+			Data struct {
+				Items []any `json:"items"`
+			} `json:"data"`
+		}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		items := resp["items"].([]any)
-		assert.Equal(t, 0, len(items))
+		assert.Equal(t, 0, len(resp.Data.Items))
 	})
 
 	t.Run("with soft-deleted books", func(t *testing.T) {
@@ -791,10 +798,13 @@ func TestCoverageListSoftDeletedAudiobooks(t *testing.T) {
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]any
+		var resp struct {
+			Data struct {
+				Items []any `json:"items"`
+			} `json:"data"`
+		}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		items := resp["items"].([]any)
-		assert.GreaterOrEqual(t, len(items), 1)
+		assert.GreaterOrEqual(t, len(resp.Data.Items), 1)
 	})
 
 	t.Run("with pagination params", func(t *testing.T) {

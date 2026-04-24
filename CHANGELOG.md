@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.18.0 -->
+<!-- version: 2.19.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -8,6 +8,17 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 24, 2026 — Envelope Migration: Wave 3 (system, auth, duplicates, dedup)
+
+Shipped as one PR — 4 parallel Haiku sub-agents; coordinator consolidated + resolved several test failures.
+
+- **`internal/server/system_handlers.go`** (C1): 21 handlers / ~45 callsites → `RespondWith*`. `api.ts`: 11 callers unwrap `.data`. Tests updated: `handlers_unit_test.go`, `server_coverage_test.go`.
+- **`internal/server/auth_handlers.go`** (C2): 8 handlers / 43 callsites → `RespondWith*`. **Cookie-setting order preserved** (`setSessionCookie` / `clearSessionCookie` still called before response body). `api.ts`: 3 callers unwrap `.data`.
+- **`internal/server/duplicates_handlers.go`** (C3): 27 callsites → `RespondWith*`. Also migrated 3 soft-delete handlers inside `audiobooks_handlers.go` since they share the "duplicates" semantic space. `api.ts`: 17 callers unwrap `.data`.
+- **`internal/server/dedup_handlers.go`** (C4): 52 callsites (largest in wave) → `RespondWith*`. Added new `RespondWithServiceUnavailable` helper in `error_handler.go` (v1.4.0). `api.ts`: 12 callers unwrap `.data`.
+- **Coordinator fixes**: updated `server_test.go`, `server_backup_restore_test.go`, `handlers_unit_test.go` for decoded dashboard/backup/position response shapes.
+- **Plan doc** (v3.0.0): added Section 5c documenting single-PR-per-wave as the new default (Wave 2 outcome).
 
 #### April 24, 2026 — Envelope Migration: Wave 2 (apikey, filesystem, plugins, diagnostics)
 
