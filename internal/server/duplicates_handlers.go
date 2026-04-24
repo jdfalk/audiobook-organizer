@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 1.2.0
+// version: 2.0.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -13,7 +13,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,7 +28,7 @@ import (
 
 func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
 	if cached, ok := s.dedupCache.Get("book-duplicates"); ok {
-		c.JSON(http.StatusOK, cached)
+		RespondWithOK(c, cached)
 		return
 	}
 
@@ -45,22 +44,22 @@ func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
 		"duplicate_count": result.DuplicateCount,
 	}
 	s.dedupCache.Set("book-duplicates", resp)
-	c.JSON(http.StatusOK, resp)
+	RespondWithOK(c, resp)
 }
 
 // listBookDuplicateScanResults returns cached results from the last async book-dedup scan.
 func (s *Server) listBookDuplicateScanResults(c *gin.Context) {
 	if cached, ok := s.dedupCache.Get("book-dedup-scan"); ok {
-		c.JSON(http.StatusOK, cached)
+		RespondWithOK(c, cached)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"groups": []any{}, "group_count": 0, "duplicate_count": 0, "needs_refresh": true})
+	RespondWithOK(c, gin.H{"groups": []any{}, "group_count": 0, "duplicate_count": 0, "needs_refresh": true})
 }
 
 // scanBookDuplicates triggers an async scan for book duplicates using metadata matching.
 func (s *Server) scanBookDuplicates(c *gin.Context) {
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -171,7 +170,7 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 // mergeBookDuplicatesAsVersions merges a group of duplicate books into a version group.
@@ -180,11 +179,11 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 		BookIDs []string `json:"book_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.BookIDs) < 2 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "need at least 2 book IDs"})
+		RespondWithBadRequest(c, "need at least 2 book IDs")
 		return
 	}
 
@@ -196,7 +195,7 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 	result, err := ms.MergeBooks(req.BookIDs, "")
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			RespondWithNotFound(c, "book", "")
 		} else {
 			internalError(c, "failed to merge duplicate books", err)
 		}
@@ -206,7 +205,7 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 	s.dedupCache.Invalidate("book-dedup-scan")
 	s.dedupCache.Invalidate("book-duplicates")
 
-	c.JSON(http.StatusOK, gin.H{
+	RespondWithOK(c, gin.H{
 		"message":          fmt.Sprintf("Merged %d books into version group", result.MergedCount),
 		"version_group_id": result.VersionGroupID,
 		"primary_id":       result.PrimaryID,
@@ -219,13 +218,13 @@ func (s *Server) dismissBookDuplicateGroup(c *gin.Context) {
 		GroupKey string `json:"group_key" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -236,7 +235,7 @@ func (s *Server) dismissBookDuplicateGroup(c *gin.Context) {
 
 	s.dedupCache.Invalidate("book-dedup-scan")
 
-	c.JSON(http.StatusOK, gin.H{"message": "Group dismissed"})
+	RespondWithOK(c, gin.H{"message": "Group dismissed"})
 }
 
 func (s *Server) mergeBooks(c *gin.Context) {
@@ -245,24 +244,24 @@ func (s *Server) mergeBooks(c *gin.Context) {
 		MergeIDs []string `json:"merge_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if len(req.MergeIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "merge_ids must not be empty"})
+		RespondWithBadRequest(c, "merge_ids must not be empty")
 		return
 	}
 
 	store := s.Store()
 	keepBook, err := store.GetBookByID(req.KeepID)
 	if err != nil || keepBook == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "keep book not found"})
+		RespondWithNotFound(c, "book", req.KeepID)
 		return
 	}
 
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -356,22 +355,22 @@ func (s *Server) mergeBooks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) listDuplicateAuthors(c *gin.Context) {
 	if cached, ok := s.dedupCache.Get("author-duplicates"); ok {
-		c.JSON(http.StatusOK, cached)
+		RespondWithOK(c, cached)
 		return
 	}
 
 	// No cache — return empty with needs_refresh flag so frontend triggers async scan
-	c.JSON(http.StatusOK, gin.H{"groups": []any{}, "count": 0, "needs_refresh": true})
+	RespondWithOK(c, gin.H{"groups": []any{}, "count": 0, "needs_refresh": true})
 }
 
 func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -422,7 +421,7 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 // filterReviewedAuthorGroups removes author dedup groups where all author IDs
@@ -479,17 +478,17 @@ func (s *Server) filterReviewedAuthorGroups(groups []dedup.AuthorDedupGroup) []d
 
 func (s *Server) listSeriesDuplicates(c *gin.Context) {
 	if cached, ok := s.dedupCache.Get("series-duplicates"); ok {
-		c.JSON(http.StatusOK, cached)
+		RespondWithOK(c, cached)
 		return
 	}
 
 	// No cache — return empty with needs_refresh flag so frontend triggers async scan
-	c.JSON(http.StatusOK, gin.H{"groups": []any{}, "count": 0, "total_series": 0, "needs_refresh": true})
+	RespondWithOK(c, gin.H{"groups": []any{}, "count": 0, "total_series": 0, "needs_refresh": true})
 }
 
 func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -675,7 +674,7 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 // validateDedupEntry searches metadata sources (OpenLibrary, Audible, etc.) to validate
@@ -686,7 +685,7 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 		Type  string `json:"type"` // "series", "author", "book"
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "query is required"})
+		RespondWithBadRequest(c, "query is required")
 		return
 	}
 	if req.Type == "" {
@@ -695,7 +694,7 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 
 	chain := s.metadataFetchService.BuildSourceChain()
 	if len(chain) == 0 {
-		c.JSON(http.StatusOK, gin.H{"results": []interface{}{}, "message": "no metadata sources configured"})
+		RespondWithOK(c, gin.H{"results": []interface{}{}, "message": "no metadata sources configured"})
 		return
 	}
 
@@ -741,17 +740,17 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 	if results == nil {
 		results = []validationResult{}
 	}
-	c.JSON(http.StatusOK, gin.H{"results": results, "query": req.Query, "type": req.Type})
+	RespondWithOK(c, gin.H{"results": results, "query": req.Query, "type": req.Type})
 }
 
 func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -851,13 +850,13 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) seriesPrunePreview(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -867,17 +866,17 @@ func (s *Server) seriesPrunePreview(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, preview)
+	RespondWithOK(c, preview)
 }
 
 func (s *Server) seriesPrune(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -898,7 +897,7 @@ func (s *Server) seriesPrune(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }
 
 // executeSeriesPrune performs the actual series prune logic (used by both HTTP handler and scheduler).
@@ -1077,24 +1076,24 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 		CustomName string `json:"custom_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if len(req.MergeIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "merge_ids must not be empty"})
+		RespondWithBadRequest(c, "merge_ids must not be empty")
 		return
 	}
 
 	store := s.Store()
 	keepSeries, err := store.GetSeriesByID(req.KeepID)
 	if err != nil || keepSeries == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "keep series not found"})
+		RespondWithNotFound(c, "series", "")
 		return
 	}
 
 	if s.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -1259,5 +1258,5 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	RespondWithSuccess(c, 202, op)
 }

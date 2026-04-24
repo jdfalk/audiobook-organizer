@@ -35,8 +35,11 @@ func TestRestoreBackup_Success(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var info backup.BackupInfo
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
+	var wrapper struct {
+		Data backup.BackupInfo `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	info := wrapper.Data
 	require.NotEmpty(t, info.Filename)
 
 	// Restore into a new target directory.
@@ -75,8 +78,11 @@ func TestDeleteBackup_Success(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var info backup.BackupInfo
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &info))
+	var wrapper struct {
+		Data backup.BackupInfo `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	info := wrapper.Data
 	require.NotEmpty(t, info.Filename)
 
 	// Backup dir is resolved relative to DatabasePath directory

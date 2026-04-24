@@ -1,5 +1,5 @@
 // file: internal/server/user_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 2d0e1f8a-3b9c-4a70-b8c5-3d7e0f1b9a99
 //
 // User management admin endpoints (spec 3.7 task 7). All routes

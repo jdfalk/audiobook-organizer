@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 1.77.0
+// version: 1.78.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -682,7 +682,8 @@ export async function getSoftDeletedBooks(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch soft-deleted books');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return {
     items: data.items || [],
     count: data.total ?? data.count ?? (data.items ? data.items.length : 0),
@@ -713,7 +714,8 @@ export async function purgeSoftDeletedBooks(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to purge soft-deleted books');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function quarantineBook(bookId: string, reason?: string): Promise<void> {
@@ -929,7 +931,8 @@ export async function getAuthorDuplicates(): Promise<{ groups: AuthorDedupGroup[
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch author duplicates');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data;
   return { groups: data.groups || [], needs_refresh: data.needs_refresh };
 }
 
@@ -938,7 +941,8 @@ export async function refreshAuthorDuplicates(): Promise<Operation> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start author dedup scan');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function mergeAuthors(keepId: number, mergeIds: number[]): Promise<Operation> {
@@ -1024,7 +1028,8 @@ export async function getBookDuplicates(): Promise<DuplicatesResponse> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book duplicates');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function mergeBooks(keepId: string, mergeIds: string[]): Promise<Operation> {
@@ -1059,7 +1064,8 @@ export async function getBookDedupScanResults(): Promise<BookDedupScanResponse> 
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch book dedup scan results');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function scanBookDuplicates(): Promise<Operation> {
@@ -1069,7 +1075,8 @@ export async function scanBookDuplicates(): Promise<Operation> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start book dedup scan');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function mergeBookDuplicatesAsVersions(bookIds: string[]): Promise<{ message: string; version_group_id: string; primary_id: string }> {
@@ -1081,7 +1088,8 @@ export async function mergeBookDuplicatesAsVersions(bookIds: string[]): Promise<
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge book duplicates as versions');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function dismissBookDuplicateGroup(groupKey: string): Promise<{ message: string }> {
@@ -1093,7 +1101,8 @@ export async function dismissBookDuplicateGroup(groupKey: string): Promise<{ mes
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to dismiss duplicate group');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Series
@@ -1485,7 +1494,8 @@ export async function getSystemStatus(): Promise<SystemStatus> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch system status');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getSystemStorage(): Promise<SystemStorage> {
@@ -1493,7 +1503,8 @@ export async function getSystemStorage(): Promise<SystemStorage> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch system storage');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function factoryReset(confirm: string): Promise<{ message: string }> {
@@ -1505,7 +1516,8 @@ export async function factoryReset(confirm: string): Promise<{ message: string }
   if (!response.ok) {
     throw await buildApiError(response, 'Factory reset failed');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Organize operation
@@ -1548,7 +1560,8 @@ export async function getSystemLogs(params?: {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch system logs');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Config
@@ -1582,7 +1595,8 @@ export async function getAuthStatus(): Promise<AuthStatus> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch auth status');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function setupAdmin(payload: {
@@ -1599,7 +1613,8 @@ export async function setupAdmin(payload: {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to create admin account');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function login(payload: {
@@ -1615,7 +1630,8 @@ export async function login(payload: {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to login');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function getMe(): Promise<AuthUser> {
@@ -1960,7 +1976,8 @@ export async function getSeriesDuplicates(): Promise<{ groups: SeriesDupGroup[];
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch series duplicates');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function refreshSeriesDuplicates(): Promise<Operation> {
@@ -1968,7 +1985,8 @@ export async function refreshSeriesDuplicates(): Promise<Operation> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start series dedup scan');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Dedup validation
@@ -1991,7 +2009,8 @@ export async function validateDedupEntry(query: string, type: 'series' | 'author
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to validate dedup entry');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export interface SeriesDedupResult {
@@ -2007,7 +2026,8 @@ export async function deduplicateSeries(): Promise<Operation> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to deduplicate series');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function mergeSeriesGroup(keepId: number, mergeIds: number[], customName?: string): Promise<Operation> {
@@ -2021,7 +2041,8 @@ export async function mergeSeriesGroup(keepId: number, mergeIds: number[], custo
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge series');
   }
-  return response.json();
+  const respBody = await response.json();
+  return respBody.data;
 }
 
 export interface SeriesPrunePreviewGroup {
@@ -2044,7 +2065,8 @@ export async function seriesPrunePreview(): Promise<SeriesPrunePreview> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to get series prune preview');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function seriesPrune(): Promise<Operation> {
@@ -2054,7 +2076,8 @@ export async function seriesPrune(): Promise<Operation> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to prune series');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function updateSeriesName(id: number, name: string): Promise<Series> {
@@ -2551,7 +2574,8 @@ export async function createBackup(maxBackups?: number): Promise<BackupInfo> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to create backup');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function listBackups(): Promise<BackupListResponse> {
@@ -2559,7 +2583,8 @@ export async function listBackups(): Promise<BackupListResponse> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to list backups');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function restoreBackup(
@@ -2574,7 +2599,8 @@ export async function restoreBackup(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to restore backup');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function deleteBackup(filename: string): Promise<void> {
@@ -2603,7 +2629,8 @@ export async function getBlockedHashes(): Promise<BlockedHashesResponse> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch blocked hashes');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function addBlockedHash(
@@ -2618,7 +2645,8 @@ export async function addBlockedHash(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to add blocked hash');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 export async function removeBlockedHash(
@@ -2630,7 +2658,8 @@ export async function removeBlockedHash(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to remove blocked hash');
   }
-  return response.json();
+  const body = await response.json();
+  return body.data;
 }
 
 // Metadata History
@@ -3744,7 +3773,8 @@ export async function getDedupCandidates(params?: {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch dedup candidates');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export async function getDedupStats(): Promise<{ stats: DedupStats[] }> {
@@ -3752,7 +3782,8 @@ export async function getDedupStats(): Promise<{ stats: DedupStats[] }> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch dedup stats');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export async function mergeDedupCandidate(id: number): Promise<void> {
@@ -3795,7 +3826,8 @@ export async function bulkMergeDedupCandidates(filter: {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to bulk-merge dedup candidates');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export interface ClusterMergeResult {
@@ -3825,7 +3857,8 @@ export async function mergeDedupCluster(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge dedup cluster');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export interface DedupSeriesSummary {
@@ -3841,8 +3874,8 @@ export async function listDedupCandidateSeries(): Promise<DedupSeriesSummary[]> 
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to list dedup series summary');
   }
-  const data = await response.json();
-  return data.series || [];
+  const envelope = await response.json();
+  return envelope.data.series || [];
 }
 
 export interface SeriesMergeResult {
@@ -3862,7 +3895,8 @@ export async function mergeDedupCandidateSeries(seriesId: number): Promise<Serie
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge dedup series');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export async function dismissDedupCluster(bookIds: string[]): Promise<{ status: string; dismissed: number }> {
@@ -3874,7 +3908,8 @@ export async function dismissDedupCluster(bookIds: string[]): Promise<{ status: 
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to dismiss dedup cluster');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 // Remove one or more books from a cluster by dismissing only the
@@ -3902,7 +3937,8 @@ export async function removeFromDedupCluster(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to remove book from dedup cluster');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export async function triggerDedupScan(): Promise<{ status: string }> {
@@ -3910,7 +3946,8 @@ export async function triggerDedupScan(): Promise<{ status: string }> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to trigger dedup scan');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export async function triggerDedupLLM(): Promise<{ status: string }> {
@@ -3920,7 +3957,8 @@ export async function triggerDedupLLM(): Promise<{ status: string }> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to trigger dedup LLM scan');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export async function triggerDedupAcoustID(): Promise<{ status: string }> {
@@ -3928,7 +3966,8 @@ export async function triggerDedupAcoustID(): Promise<{ status: string }> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to trigger AcoustID scan');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 export async function triggerDedupRefresh(): Promise<{ status: string }> {
@@ -3938,7 +3977,8 @@ export async function triggerDedupRefresh(): Promise<{ status: string }> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to trigger dedup refresh');
   }
-  return response.json();
+  const responseData = await response.json();
+  return responseData.data;
 }
 
 // ── API Key management ────────────────────────────────────────────────────────

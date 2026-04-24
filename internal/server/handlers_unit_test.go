@@ -61,11 +61,11 @@ func TestHandler_HealthCheck_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "ok", resp["status"])
+	assert.Equal(t, "ok", resp.Data["status"])
 
-	metrics := resp["metrics"].(map[string]any)
+	metrics := resp.Data["metrics"].(map[string]any)
 	assert.Equal(t, float64(42), metrics["books"])
 	assert.Equal(t, float64(1), metrics["authors"])
 	assert.Equal(t, float64(1), metrics["series"])
@@ -85,9 +85,9 @@ func TestHandler_HealthCheck_DBError(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Contains(t, resp, "partial_error")
+	assert.Contains(t, resp.Data, "partial_error")
 }
 
 // =============== getOperationStatus ===============
@@ -290,9 +290,9 @@ func TestHandler_ListBlockedHashes_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(1), resp["total"])
+	assert.Equal(t, float64(1), resp.Data["total"])
 }
 
 // =============== addBlockedHash ===============
@@ -390,9 +390,9 @@ func TestHandler_GetUserPreference_Found(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "theme", resp["key"])
+	assert.Equal(t, "theme", resp.Data["key"])
 }
 
 func TestHandler_GetUserPreference_NotFound(t *testing.T) {
@@ -425,10 +425,10 @@ func TestHandler_SetUserPreference_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, "theme", resp["key"])
-	assert.Equal(t, "light", resp["value"])
+	assert.Equal(t, "theme", resp.Data["key"])
+	assert.Equal(t, "light", resp.Data["value"])
 }
 
 func TestHandler_SetUserPreference_StoreError(t *testing.T) {
@@ -485,9 +485,9 @@ func TestHandler_GetDashboard_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(100), resp["totalBooks"])
+	assert.Equal(t, float64(100), resp.Data["totalBooks"])
 }
 
 func TestHandler_GetDashboard_StoreError(t *testing.T) {
@@ -672,9 +672,9 @@ func TestHandler_GetSystemActivityLog_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, float64(1), resp["count"])
+	assert.Equal(t, float64(1), resp.Data["count"])
 }
 
 func TestHandler_GetSystemActivityLog_WithSourceAndLimit(t *testing.T) {
@@ -770,9 +770,13 @@ func TestHandler_GetPosition_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.NotNil(t, resp["position"])
+	var wrapper struct {
+		Data map[string]any `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &wrapper))
+	// Data IS the UserPosition — check for expected fields.
+	assert.Equal(t, "b1", wrapper.Data["book_id"])
+	assert.Equal(t, "seg1", wrapper.Data["segment_id"])
 }
 
 func TestHandler_GetPosition_NoneRecorded(t *testing.T) {
@@ -1351,9 +1355,9 @@ func TestHandler_GetAuthStatus_Success(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, true, resp["has_users"])
+	assert.Equal(t, true, resp.Data["has_users"])
 }
 
 func TestHandler_GetAuthStatus_NoUsers(t *testing.T) {
@@ -1368,9 +1372,9 @@ func TestHandler_GetAuthStatus_NoUsers(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]any
+	var resp struct{ Data map[string]any }
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, false, resp["has_users"])
+	assert.Equal(t, false, resp.Data["has_users"])
 }
 
 func TestHandler_GetAuthStatus_StoreError(t *testing.T) {
