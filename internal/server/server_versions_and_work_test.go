@@ -1,7 +1,7 @@
 // file: internal/server/server_versions_and_work_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3a4b5c6d-7e8f-9012-a345-678901234567
-// last-edited: 2026-01-24
+// last-edited: 2026-04-23
 
 package server
 
@@ -41,9 +41,11 @@ func TestVersionEndpoints_HappyPaths(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var linkResp map[string]string
+	var linkResp struct {
+		Data map[string]string `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &linkResp))
-	groupID := linkResp["version_group_id"]
+	groupID := linkResp.Data["version_group_id"]
 	require.NotEmpty(t, groupID)
 
 	// getVersionGroup
