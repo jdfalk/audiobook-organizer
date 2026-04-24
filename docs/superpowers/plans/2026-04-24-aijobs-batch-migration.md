@@ -1770,48 +1770,21 @@ EOF
 8. Add tests mirroring `dedup_review_aijobs_test.go`.
 9. Run `go build ./...` + targeted tests, then commit.
 
-## Task 2.1 — Migrate `metadata_llm_review.go`
+## Task 2.1 — DO NOT MIGRATE `metadata_llm_review.go` (Interactive call site)
 
-**Files:**
-- Modify: `internal/ai/metadata_llm_review.go`
-- Create: `internal/ai/metadata_llm_review_aijobs_test.go`
-- Modify: `internal/ai/priority_marker_test.go`
-- Modify: caller(s) of the old function + `internal/server/server.go` sink wiring
+**Status: COMPLETED — misclassification corrected.**
 
-- [ ] **Step 1: Read current implementation**
+`ScoreMetadataCandidates` was initially flagged for migration but is **NOT** a bulk operation. Its production caller is `internal/metafetch/service.go:1463` (`mfs.llmScorer.Score(ctx, query, llmCands)`), which runs during **user-initiated interactive metadata search**. The UI awaits the response; the caller is a synchronous Gin handler waiting on the user. Batch API latency (minutes to hours) makes this path unusable.
 
-```bash
-grep -n "Chat\.Completions\.New\|func.*MetadataReview\|func.*reviewMetadata" internal/ai/metadata_llm_review.go | head -20
-```
-Record: the exported entry function, the system prompt constant, the input struct, the output struct, and the caller of the exported function.
+**Resolution:**
+- Reverted functional changes from commit `b8946847` to restore synchronous `scoreMetadataBatch` behavior.
+- Added `// PRIORITY: Interactive` marker on `scoreMetadataBatch` declaration.
+- Removed aijobs wiring (`SetAIJobsStore` field, `SetAIJobsStore()` method, server.go call, callback, payload type, cache, polling loop).
+- Deleted `internal/ai/metadata_llm_review_aijobs_test.go`.
+- Re-added `"scoreMetadataBatch"` to priority-marker test allow-list with comment: "PRIORITY: Interactive — user-waiting metadata search, stays sync".
+- Updated design doc migration mapping: row for `metadata_llm_review.go:147` changed from "Bulk | Migrate" to "Interactive | Mark + keep sync" with justification.
 
-- [ ] **Step 2: Mirror the `dedup_review.go` structure**
-
-Replace the old exported function with `SubmitMetadataReviewJob(ctx, deps, model, inputs) (jobID, error)`. Register `"metadata_review"` in `init()`. Add `MetadataReviewSink` interface + `SetMetadataReviewSink`. Use the exact same extract-content + JSON-unmarshal pattern from `dedupReviewCallback`. Copy the system prompt verbatim into a package-level const.
-
-- [ ] **Step 3: Write tests**
-
-Mirror `TestDedupReviewCallback_HappyPath`, `TestDedupReviewCallback_PerRowErrorsIsolated`, and `TestSubmit<Feature>Job_SplitsIntoSubBatches` (only if the current implementation chunks — if not, drop the chunking test).
-
-- [ ] **Step 4: Update callers + wire sink + strike allow-list entry**
-
-Same pattern as Task 1.5 Steps 4-6.
-
-- [ ] **Step 5: Build + test + commit**
-
-```bash
-go build ./...
-go test ./internal/ai/... ./internal/server/... -count=1 -short
-git commit -am "$(cat <<'EOF'
-refactor(ai/metadata_llm_review): migrate to aijobs batch API
-
-Same pattern as Task 1.5 dedup_review migration. Removes
-reviewMetadataBatch from the priority-marker allow-list.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
+No further action needed for this task.
 
 ---
 
