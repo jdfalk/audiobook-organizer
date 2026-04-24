@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.16.0 -->
+<!-- version: 2.16.1 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-23 -->
 
@@ -8,6 +8,12 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 23, 2026 — Envelope Migration: `file_ops_handlers.go`
+
+- **`internal/server/file_ops_handlers.go`**: migrated 2 c.JSON callsites to `RespondWithOK` in `handleListPendingFileOps`.
+- **`web/src/services/fileOpsApi.ts`**: updated `fetchPendingFileOps` to unwrap `response.data`.
+- **Tests updated**: `file_ops_handlers_test.go` all 3 tests now unwrap the data envelope.
 
 #### April 23, 2026 — Envelope Migration: `organize_handlers.go` + rename/organize API
 
