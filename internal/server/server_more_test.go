@@ -264,9 +264,11 @@ func TestAddImportPathAutoScan(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	var resp map[string]any
+	var resp struct {
+		Data map[string]any `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	if opID, ok := resp["scan_operation_id"].(string); ok && opID != "" {
+	if opID, ok := resp.Data["scan_operation_id"].(string); ok && opID != "" {
 		waitForOperationStatus(t, opID, 10*time.Second)
 	}
 

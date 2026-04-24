@@ -1,12 +1,11 @@
 // file: internal/server/apikey_handlers.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 
 package server
 
 import (
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,23 +32,23 @@ type createAPIKeyResponse struct {
 }
 
 type apiKeyResponse struct {
-	ID              string     `json:"id"`
-	UserID          string     `json:"user_id"`
-	Name            string     `json:"name"`
-	Description     string     `json:"description"`
-	Scopes          []string   `json:"scopes"`
-	Status          string     `json:"status"`
-	CreatedAt       time.Time  `json:"created_at"`
-	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
-	LastUsedIP      string     `json:"last_used_ip,omitempty"`
-	UseCount        int64      `json:"use_count"`
-	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
-	DeactivatedAt   *time.Time `json:"deactivated_at,omitempty"`
-	RevokedAt       *time.Time `json:"revoked_at,omitempty"`
-	Identifier      string     `json:"identifier"`
-	DaysSinceLastUse *int      `json:"days_since_last_use"`
-	NeverUsed       bool       `json:"never_used"`
-	Username        string     `json:"username,omitempty"`
+	ID               string     `json:"id"`
+	UserID           string     `json:"user_id"`
+	Name             string     `json:"name"`
+	Description      string     `json:"description"`
+	Scopes           []string   `json:"scopes"`
+	Status           string     `json:"status"`
+	CreatedAt        time.Time  `json:"created_at"`
+	LastUsedAt       *time.Time `json:"last_used_at,omitempty"`
+	LastUsedIP       string     `json:"last_used_ip,omitempty"`
+	UseCount         int64      `json:"use_count"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty"`
+	DeactivatedAt    *time.Time `json:"deactivated_at,omitempty"`
+	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
+	Identifier       string     `json:"identifier"`
+	DaysSinceLastUse *int       `json:"days_since_last_use"`
+	NeverUsed        bool       `json:"never_used"`
+	Username         string     `json:"username,omitempty"`
 }
 
 func buildAPIKeyResponse(key database.APIKey, username string) apiKeyResponse {
@@ -93,20 +92,20 @@ func isAdminUser(c *gin.Context) bool {
 func (s *Server) createAPIKey(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
 	var req createAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	targetUserID := caller.ID
 	if req.UserID != "" && req.UserID != caller.ID {
 		if !isAdminUser(c) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can create keys for other users"})
+			RespondWithForbidden(c, "only admins can create keys for other users")
 			return
 		}
 		targetUserID = req.UserID
@@ -118,12 +117,12 @@ func (s *Server) createAPIKey(c *gin.Context) {
 
 	for _, scope := range req.Scopes {
 		if !auth.IsKnown(scope) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "unknown scope: " + scope})
+			RespondWithBadRequest(c, "unknown scope: "+scope)
 			return
 		}
 		if callerPermSet != nil {
 			if _, has := callerPermSet[auth.Permission(scope)]; !has {
-				c.JSON(http.StatusForbidden, gin.H{"error": "cannot grant scope you don't have: " + scope})
+				RespondWithForbidden(c, "cannot grant scope you don't have: "+scope)
 				return
 			}
 		}
@@ -169,14 +168,14 @@ func (s *Server) createAPIKey(c *gin.Context) {
 		ExpiresAt: created.ExpiresAt,
 		CreatedAt: created.CreatedAt,
 	}
-	c.JSON(http.StatusCreated, resp)
+	RespondWithCreated(c, resp)
 }
 
 // GET /api/v1/auth/api-keys
 func (s *Server) listAPIKeys(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
@@ -215,14 +214,14 @@ func (s *Server) listAPIKeys(c *gin.Context) {
 		results = append(results, buildAPIKeyResponse(k, username))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"api_keys": results, "count": len(results)})
+	RespondWithOK(c, gin.H{"api_keys": results, "count": len(results)})
 }
 
 // GET /api/v1/auth/api-keys/:id
 func (s *Server) getAPIKey(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
@@ -233,11 +232,11 @@ func (s *Server) getAPIKey(c *gin.Context) {
 		return
 	}
 	if key == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "api key not found"})
+		RespondWithNotFound(c, "api key", id)
 		return
 	}
 	if key.UserID != caller.ID && !isAdminUser(c) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		RespondWithForbidden(c, "access denied")
 		return
 	}
 
@@ -248,14 +247,14 @@ func (s *Server) getAPIKey(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, buildAPIKeyResponse(*key, username))
+	RespondWithOK(c, buildAPIKeyResponse(*key, username))
 }
 
 // PATCH /api/v1/auth/api-keys/:id
 func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
@@ -266,11 +265,11 @@ func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 		return
 	}
 	if key == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "api key not found"})
+		RespondWithNotFound(c, "api key", id)
 		return
 	}
 	if key.UserID != caller.ID && !isAdminUser(c) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		RespondWithForbidden(c, "access denied")
 		return
 	}
 
@@ -278,15 +277,15 @@ func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 		Status string `json:"status" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if req.Status == "revoked" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "use DELETE to revoke a key"})
+		RespondWithBadRequest(c, "use DELETE to revoke a key")
 		return
 	}
 	if req.Status != "active" && req.Status != "inactive" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'active' or 'inactive'"})
+		RespondWithBadRequest(c, "status must be 'active' or 'inactive'")
 		return
 	}
 
@@ -299,17 +298,17 @@ func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 
 	updated, err := s.Store().GetAPIKey(id)
 	if err != nil || updated == nil {
-		c.JSON(http.StatusOK, gin.H{"status": req.Status})
+		RespondWithOK(c, gin.H{"status": req.Status})
 		return
 	}
-	c.JSON(http.StatusOK, buildAPIKeyResponse(*updated, ""))
+	RespondWithOK(c, buildAPIKeyResponse(*updated, ""))
 }
 
 // DELETE /api/v1/auth/api-keys/:id
 func (s *Server) revokeAPIKey(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
@@ -320,11 +319,11 @@ func (s *Server) revokeAPIKey(c *gin.Context) {
 		return
 	}
 	if key == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "api key not found"})
+		RespondWithNotFound(c, "api key", id)
 		return
 	}
 	if key.UserID != caller.ID && !isAdminUser(c) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		RespondWithForbidden(c, "access denied")
 		return
 	}
 
@@ -334,6 +333,5 @@ func (s *Server) revokeAPIKey(c *gin.Context) {
 	}
 
 	log.Printf("[APIKEY] revoked: id=%s user=%s name=%s", id, caller.ID, key.Name)
-	c.Status(http.StatusNoContent)
+	RespondWithNoContent(c)
 }
-

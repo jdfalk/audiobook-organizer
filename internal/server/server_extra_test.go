@@ -235,9 +235,11 @@ func TestImportPathEndpoints(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusCreated, w.Code)
 
-	var response map[string]interface{}
+	var response struct {
+		Data map[string]interface{} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
-	importPath := response["importPath"].(map[string]interface{})
+	importPath := response.Data["importPath"].(map[string]interface{})
 	importID := int(importPath["id"].(float64))
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/import-paths", nil)

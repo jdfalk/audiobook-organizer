@@ -91,9 +91,11 @@ func TestImportPaths_ListNilAndRemoveInvalidID(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 
-	var listResp map[string]interface{}
+	var listResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &listResp))
-	paths, ok := listResp["importPaths"].([]interface{})
+	paths, ok := listResp.Data["importPaths"].([]interface{})
 	require.True(t, ok)
 	assert.Len(t, paths, 0)
 
