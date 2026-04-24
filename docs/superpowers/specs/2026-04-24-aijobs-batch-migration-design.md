@@ -178,4 +178,8 @@ Each task is self-contained: read the sibling Build/Apply, mirror it for the tar
 
 ## Open Items (resolved during Phase 1.4)
 
-- Caller context of `openai_parser.go:544` and `openai_parser.go:678` — priority assignment.
+### Phase 1.4 audit results
+
+- `openai_parser.go:544` — function: `reviewAuthorBatch`. Callers: `internal/server/ai_handlers.go:571`, `internal/server/ai_scan_pipeline.go:409`. Decision: `Interactive`. Justification: Both call sites lead to Gin handlers (aiReviewDuplicateAuthors, startAIScan) where the user is awaiting an HTTP response.
+
+- `openai_parser.go:678` — function: `discoverAuthorBatch`. Callers: `internal/server/ai_handlers.go:635`, `internal/server/ai_scan_pipeline.go:470`, `internal/server/ai_scan_pipeline.go:680`. Decision: `Split`. Justification: Lines 635 and 470 are Interactive (via Gin handlers); line 680 is Bulk (spawned as background goroutine from runEnrichment). Will be handled in Task 2.3.
