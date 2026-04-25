@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.28.0 -->
+<!-- version: 2.29.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-25 -->
 
@@ -8,6 +8,19 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 25, 2026 — `/parallel-sweep` slash command — step 7 (Opus file-copy fallback)
+
+Seventh step of TODO 4.16. Lands the non-trivial conflict path: when a sibling rebase produces conflicts that exceed the trivial threshold (>30 markers OR >3 files), or when Sonnet returned `EXIT_REASON: uncertain`, the coordinator dispatches an Opus per-commit cherry-pick fallback.
+
+**Critical: per-commit cherry-pick, NOT squash.** This repo uses rebase/FF-only merges. The fallback replays the branch's commits one at a time onto the new main via `git cherry-pick`, dispatching Opus only for the conflicted files in each commit. The result is N commits in, N commits out, with original messages and authors preserved — same end state as a clean `git rebase --continue` would have produced.
+
+- **`scripts/fallback.py`**: `prepare_fallback` (abort + capture commit list + reset to base), `read_file_at_ref` / `list_conflict_files` (per-commit inspection), `build_fallback_prompt` (per-commit-per-file Opus prompt with both versions side-by-side), `parse_fallback_reply` (extracts merged content from fenced block or returns UNCERTAIN), `cherry_pick` / `cherry_pick_continue` / `cherry_pick_abort` (git verbs), `run_fallback` (orchestrator: replay each commit, dispatch per conflicted file, write + add + continue, stop on UNCERTAIN).
+- **`scripts/test_fallback.py`**: 11 unit tests with real local git fixtures. Coverage: prepare aborts rebase + captures commits + resets to base, commits captured in chronological order, read_file_at_ref happy + missing-file, parse-reply (success / uncertain priority / no-block-treated-as-uncertain), single-commit replay preserves message, multi-commit replay produces N commits not 1 (the squash regression test), uncertain blocks at first failure with worktree left clean.
+
+Live Opus spike on a real non-trivial conflict is deferred to step 9's full coordinator smoke — pairs naturally with the end-to-end run.
+
+Test status: 79/79 green (19 state + 12 dispatch + 14 pr_merge + 9 rebase + 14 conflict_resolver + 11 fallback). Lint clean.
 
 #### April 25, 2026 — `/parallel-sweep` slash command — step 6 (Sonnet conflict resolver)
 

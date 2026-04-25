@@ -50,8 +50,8 @@ Atomicity matters because the coordinator can be SIGKILLed at any point — ever
 | 3. PreToolUse hook spike | ✅ done (`34028e71`) | `scripts/dispatch.py` (settings render + post-hoc cross-check), spike report. Result: hook does NOT fire for sub-agents → post-hoc check is load-bearing. |
 | 4. PR + merge loop | ✅ done (`b42196db`) | `scripts/pr_merge.py` (run_local_ci, push, open_pr, poll_ci, admin_merge, merge_task). 14 unit tests with mocked subprocess. |
 | 5. Sibling rebase (clean) | ✅ done (`faa7b829`) | `scripts/rebase.py` (fetch_main, rebase_onto_main, rebase_siblings) with RebaseOutcome enum (CLEAN / UP_TO_DATE / DIRTY_TREE / FETCH_FAILED / CONFLICT). 9 unit tests. |
-| 6. Conflict-resolver subagent (Sonnet) | **in progress** | `references/conflict-resolver-prompt.md`, `scripts/conflict_resolver.py` (assess / build_prompt / parse_report / apply_success / abort), 14 unit tests, live spike confirmed end-to-end resolution. |
-| 7. File-copy cherry-pick fallback (Opus) | not started | Non-trivial conflict path |
+| 6. Conflict-resolver subagent (Sonnet) | ✅ done (`2e8a3e32`) | `references/conflict-resolver-prompt.md`, `scripts/conflict_resolver.py`, 14 unit tests, live spike confirmed end-to-end resolution. |
+| 7. File-copy cherry-pick fallback (Opus) | **in progress** | `scripts/fallback.py` — per-commit cherry-pick replay (preserves commit history, no squash). Per-conflict-file Opus dispatch with both versions side-by-side. 11 unit tests with real local conflicts. |
 | 8. Resume from last completed task | not started | `--resume <runID>` flag, worktree reset on re-dispatch |
 | 9. Polish | not started | Spec doc, CLAUDE.md pointer, TODO 4.16 marked, gitignore |
 
@@ -78,5 +78,7 @@ Atomicity matters because the coordinator can be SIGKILLed at any point — ever
         ├── rebase.py                        ← sibling rebase loop, clean case (step 5)
         ├── test_rebase.py                   ← rebase unit tests (step 5)
         ├── conflict_resolver.py             ← Sonnet trivial-conflict path (step 6)
-        └── test_conflict_resolver.py        ← conflict_resolver unit tests (step 6)
+        ├── test_conflict_resolver.py        ← conflict_resolver unit tests (step 6)
+        ├── fallback.py                      ← Opus per-commit cherry-pick fallback (step 7)
+        └── test_fallback.py                 ← fallback unit tests (step 7)
 ```
