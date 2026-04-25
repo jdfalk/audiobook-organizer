@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.22.0 -->
+<!-- version: 2.23.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-24 -->
 
@@ -8,6 +8,30 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 24, 2026 — Sidebar `In Progress` / `Finished` filters now work end-to-end
+
+`GET /api/v1/audiobooks?filters=...` previously dropped per-user fields
+(`read_status`, `progress_pct`, `last_played`) on the floor — the comment
+at `audiobook_service.go:1652` flagged this as a spec-3.6 TODO. Result: the
+sidebar links built `?search=read_status:in_progress` URLs that returned
+zero books because every book failed the unknown-field filter.
+
+- **`internal/server/audiobook_service.go`**: `ListFilters` gains
+  `PerUserFilters []FieldFilter` + `UserID string`; `GetAudiobooks` runs
+  a per-user pass after the existing global field-filter pass, calling
+  `store.GetUserBookState(userID, bookID)`. Matching mirrors
+  `playlist_evaluator.perUserFilterMatches` so smart-playlists and the
+  library list agree on `finished` / `in_progress` semantics. `audiobookStore`
+  / `audiobookUpdateStore` interfaces extended with `database.UserPositionStore`.
+- **`internal/server/audiobooks_handlers.go`**: `listAudiobooks` partitions
+  the incoming `filters` JSON into book-global vs per-user buckets via
+  `IsPerUserField`, resolves the caller via `servermiddleware.CurrentUser`,
+  and skips the response cache when per-user filters are active (cache
+  key doesn't encode userID, so a hit could leak between users).
+- Anon callers and missing `UserID` cleanly skip the per-user pass instead
+  of dropping every book. Tests in `audiobook_service_unit_test.go` cover
+  positive, negated (NOT finished), and no-user-ID cases.
 
 #### April 24, 2026 — `/parallel-sweep` slash command — step 1 (skeleton + state schema)
 

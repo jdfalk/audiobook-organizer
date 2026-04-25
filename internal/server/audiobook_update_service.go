@@ -24,6 +24,7 @@ type audiobookUpdateStore interface {
 	database.TagStore
 	database.MetadataStore
 	database.UserPreferenceStore
+	database.UserPositionStore
 }
 
 
