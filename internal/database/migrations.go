@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.31.0
+// version: 1.32.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -350,6 +350,12 @@ var migrations = []Migration{
 		Version:     52,
 		Description: "Add ai_jobs and ai_job_payloads tables for unified batch tracking",
 		Up:          migration052Up,
+		Down:        nil,
+	},
+	{
+		Version:     53,
+		Description: "Add cache_stats_history table for persistent cache observability snapshots",
+		Up:          migration053Up,
 		Down:        nil,
 	},
 }
@@ -2624,5 +2630,41 @@ func migration050Up(store Store) error {
 		}
 	}
 	log.Println("  - Added acoustid_seg0–acoustid_seg6 to book_files")
+	return nil
+}
+
+// migration053Up creates the cache_stats_history table that captures periodic
+// snapshots of cache observability counters so trends survive process restarts.
+// Live counters still come from the Prometheus default registry; this table is
+// a long-tail history store written by the snapshotter goroutine in the server
+// package every few minutes.
+func migration053Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: schema-free
+	}
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS cache_stats_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			cache_name TEXT NOT NULL,
+			ts TIMESTAMP NOT NULL,
+			hits INTEGER NOT NULL DEFAULT 0,
+			misses INTEGER NOT NULL DEFAULT 0,
+			sets INTEGER NOT NULL DEFAULT 0,
+			invalidations INTEGER NOT NULL DEFAULT 0,
+			evictions INTEGER NOT NULL DEFAULT 0,
+			size INTEGER NOT NULL DEFAULT 0,
+			get_duration_count INTEGER NOT NULL DEFAULT 0,
+			get_duration_sum REAL NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_cache_stats_history_name_ts ON cache_stats_history(cache_name, ts)`,
+		`CREATE INDEX IF NOT EXISTS idx_cache_stats_history_ts ON cache_stats_history(ts)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 53: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Created cache_stats_history")
 	return nil
 }
