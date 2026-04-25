@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.17.0 -->
+<!-- version: 5.18.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-24 -->
 
@@ -101,7 +101,7 @@ since it was last edited on 2026-04-11).
 - [ ] **4.13** Comprehensive iTunes test suite (**L**) — after 4.12 extraction, add exhaustive unit tests: mock store tests for every service method, error path coverage, edge cases (empty library, corrupt XML, concurrent sync), position sync, writeback batcher, path reconciliation, track provisioning; target 80%+ coverage on the extracted package
 - [~] **4.14** Plugin system framework (**XL**) — V1: Plugin/EventBus/Registry/Router framework + Deluge migration; V2 (future): RPC subprocess plugins + webhook event delivery
 - [x] **4.15** HTTP response envelope migration (**L**) — **complete** (PRs #425–#438, 10 PRs across 5 waves + pilot, Apr 23–24 2026). All handler files now use `RespondWith*` helpers from `internal/server/error_handler.go`. Success responses enveloped as `{"data": {...}}`; errors as `{"error","code","status"}`. `.data` unwrap lives in `web/src/services/*.ts` adapter layer — components never see the shape change. Parallel Haiku sub-agent dispatch proven effective: Waves 1-5 migrated ~800+ callsites across 24 handler files in ~1 session. Plan doc: [`docs/superpowers/plans/2026-04-23-envelope-migration-parallel.md`](superpowers/plans/2026-04-23-envelope-migration-parallel.md). Reusable pattern captured as the `parallel-refactor-sweep` user-global skill.
-- [~] **4.16** `/parallel-sweep` slash command (**L**) — successor to `parallel-refactor-sweep`. Project-scope command + skill that drives the full sweep autonomously: worktree isolation hooks, parallel child dispatch, PR + admin-merge with local-`make ci` gate, sibling-rebase loop with Sonnet/Opus conflict resolvers, resume across usage limits via persisted state file. Plan: [`docs/superpowers/plans/2026-04-24-parallel-sweep-slash-command.md`](docs/superpowers/plans/2026-04-24-parallel-sweep-slash-command.md) (9-step build). Step 1 (skeleton + state schema) **complete** Apr 24 2026. Future work: extract universal version to `~/.claude/commands/` after ~3 real sweeps.
+- [~] **4.16** `/parallel-sweep` slash command (**L**) — successor to `parallel-refactor-sweep`. Project-scope command + skill that drives the full sweep autonomously: worktree isolation hooks, parallel child dispatch, PR + admin-merge with local-`make ci` gate, sibling-rebase loop with Sonnet/Opus conflict resolvers, resume across usage limits via persisted state file. Plan: [`docs/superpowers/plans/2026-04-24-parallel-sweep-slash-command.md`](docs/superpowers/plans/2026-04-24-parallel-sweep-slash-command.md) (9-step build). Steps 1 (skeleton + state schema) and 2 (coordinator + child prompts) **complete** Apr 24 2026. Future work: extract universal version to `~/.claude/commands/` after ~3 real sweeps.
 
 > **Architecture cleanup notes for future work:**
 > When touching these areas, narrow `database.Store` params to ISP sub-interfaces and extract remaining services as opportunities arise:

@@ -45,8 +45,8 @@ Atomicity matters because the coordinator can be SIGKILLed at any point — ever
 
 | Step | Status | Adds |
 |---|---|---|
-| 1. Skeleton + state schema | **in progress** | `state.py`, `state-schema.md`, this SKILL.md stub, unit tests for state.py |
-| 2. Coordinator + child prompts | not started | `references/coordinator-prompt.md`, `references/child-prompt.md`, slash command wired to a 1-task synthetic input |
+| 1. Skeleton + state schema | ✅ done (`b16cb0ec`) | `state.py`, `state-schema.md`, SKILL.md stub, 19 unit tests |
+| 2. Coordinator + child prompts | **in progress** | `references/coordinator-prompt.md`, `references/child-prompt.md`, `.claude/commands/parallel-sweep.md` |
 | 3. PreToolUse hook spike | not started | Verify hook actually blocks out-of-tree edits when sub-agent runs there |
 | 4. PR + merge loop | not started | Coordinator opens PR, polls CI, admin-merges on green-AND-local-`make ci` |
 | 5. Sibling rebase (clean) | not started | 2-task end-to-end with clean rebase |
@@ -58,14 +58,17 @@ Atomicity matters because the coordinator can be SIGKILLed at any point — ever
 ## Files
 
 ```
-parallel-sweep-impl/
-├── SKILL.md                                 ← this file (procedural overview + roadmap)
-├── references/
-│   ├── state-schema.md                      ← state file schema + lifecycle (step 1)
-│   ├── coordinator-prompt.md                ← (step 2)
-│   ├── child-prompt.md                      ← (step 2)
-│   └── conflict-resolver-prompt.md          ← (step 6)
-└── scripts/
-    ├── state.py                             ← state CRUD (step 1)
-    └── test_state.py                        ← unit tests (step 1)
+.claude/
+├── commands/
+│   └── parallel-sweep.md                    ← slash command (thin trigger; step 2)
+└── skills/parallel-sweep-impl/
+    ├── SKILL.md                             ← this file (procedural overview + roadmap)
+    ├── references/
+    │   ├── state-schema.md                  ← state file schema + lifecycle (step 1)
+    │   ├── coordinator-prompt.md            ← coordinator role + workflow phases (step 2)
+    │   ├── child-prompt.md                  ← child role + hard rules (step 2)
+    │   └── conflict-resolver-prompt.md      ← (step 6)
+    └── scripts/
+        ├── state.py                         ← state CRUD (step 1)
+        └── test_state.py                    ← unit tests (step 1)
 ```
