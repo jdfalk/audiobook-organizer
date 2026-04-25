@@ -1,5 +1,5 @@
 // file: internal/cache/cache_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package cache
@@ -82,5 +82,68 @@ func TestKeys(t *testing.T) {
 	keys = c.Keys()
 	if len(keys) != 2 || keys[0] != "alpha" || keys[1] != "zebra" {
 		t.Fatalf("expected [alpha zebra] after delete, got %v", keys)
+	}
+}
+
+func TestLRUCapacityEviction(t *testing.T) {
+	c := NewWithLimit[string]("test_lru", time.Minute, 3)
+	c.Set("a", "1")
+	c.Set("b", "2")
+	c.Set("c", "3")
+	if got := c.Len(); got != 3 {
+		t.Fatalf("expected size 3, got %d", got)
+	}
+	// Touch "a" so it becomes most-recent; "b" is now least-recent.
+	if _, ok := c.Get("a"); !ok {
+		t.Fatal("expected a to be present")
+	}
+	c.Set("d", "4") // pushes "b" out
+	if _, ok := c.Get("b"); ok {
+		t.Fatal("expected b to be evicted")
+	}
+	for _, k := range []string{"a", "c", "d"} {
+		if _, ok := c.Get(k); !ok {
+			t.Fatalf("expected %s to remain after capacity eviction", k)
+		}
+	}
+}
+
+func TestLRUUpdateInPlaceDoesNotEvict(t *testing.T) {
+	c := NewWithLimit[int]("test_lru_update", time.Minute, 2)
+	c.Set("a", 1)
+	c.Set("b", 2)
+	c.Set("a", 99) // overwrite, not new entry — no eviction expected
+	if c.Len() != 2 {
+		t.Fatalf("size grew unexpectedly: %d", c.Len())
+	}
+	v, _ := c.Get("a")
+	if v != 99 {
+		t.Fatalf("expected updated value 99, got %d", v)
+	}
+}
+
+func TestLazyExpiredOnGet(t *testing.T) {
+	c := New[int]("test_lazy", time.Millisecond)
+	c.Set("k", 7)
+	if c.Len() != 1 {
+		t.Fatalf("expected 1 entry, got %d", c.Len())
+	}
+	time.Sleep(5 * time.Millisecond)
+	if _, ok := c.Get("k"); ok {
+		t.Fatal("expected miss")
+	}
+	// Lazy reap means the entry should have been evicted by Get.
+	if c.Len() != 0 {
+		t.Fatalf("expected 0 entries after lazy reap, got %d", c.Len())
+	}
+}
+
+func TestUnboundedAcceptsMany(t *testing.T) {
+	c := New[int]("test_unbounded", time.Minute)
+	for i := 0; i < 100; i++ {
+		c.SetWithTTL(string(rune('a'+i%26))+string(rune('a'+i/26)), i, time.Minute)
+	}
+	if c.Len() == 0 {
+		t.Fatal("expected entries to be retained when unbounded")
 	}
 }
