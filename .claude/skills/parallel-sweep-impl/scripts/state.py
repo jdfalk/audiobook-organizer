@@ -210,7 +210,14 @@ class State:
 
     def _validate(self) -> None:
         d = self.data
-        for required in ("runID", "createdAt", "lastCheckpointAt", "status", "userPrompt", "tasks"):
+        for required in (
+            "runID",
+            "createdAt",
+            "lastCheckpointAt",
+            "status",
+            "userPrompt",
+            "tasks",
+        ):
             if required not in d:
                 raise ValueError(f"state missing required field {required!r}")
         if d["status"] not in TOP_STATUSES:
