@@ -39,23 +39,26 @@ const formatDuration = (stats: api.CacheStatsEntry): string => {
 };
 
 const formatMisses = (misses: api.CacheMisses): string => {
-  const parts: string[] = [];
-  if (misses.not_found > 0) parts.push(`not_found: ${misses.not_found}`);
-  if (misses.expired > 0) parts.push(`expired: ${misses.expired}`);
+  if (!misses) return '—';
+  const parts = Object.entries(misses)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `${k}: ${v}`);
   return parts.length > 0 ? parts.join(' / ') : '—';
 };
 
 const formatInvalidations = (inv: api.CacheInvalidations): string => {
-  const parts: string[] = [];
-  if (inv.key > 0) parts.push(`key: ${inv.key}`);
-  if (inv.all > 0) parts.push(`all: ${inv.all}`);
+  if (!inv) return '—';
+  const parts = Object.entries(inv)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `${k}: ${v}`);
   return parts.length > 0 ? parts.join(' / ') : '—';
 };
 
 const formatEvictions = (evict: api.CacheEvictions): string => {
-  const parts: string[] = [];
-  if (evict.expired > 0) parts.push(`expired: ${evict.expired}`);
-  if (evict.capacity > 0) parts.push(`capacity: ${evict.capacity}`);
+  if (!evict) return '—';
+  const parts = Object.entries(evict)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `${k}: ${v}`);
   return parts.length > 0 ? parts.join(' / ') : '—';
 };
 
@@ -129,7 +132,7 @@ export function CacheStatsPanel() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {!stats || stats.caches.length === 0 ? (
+            {!stats || !stats.caches?.length ? (
               <TableRow>
                 <TableCell colSpan={9}>
                   <Typography variant="body2" color="text.secondary">

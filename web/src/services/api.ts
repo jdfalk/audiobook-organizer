@@ -4179,20 +4179,10 @@ export interface CacheStatsDuration {
   sum: number;
 }
 
-export interface CacheMisses {
-  not_found: number;
-  expired: number;
-}
-
-export interface CacheInvalidations {
-  key: number;
-  all: number;
-}
-
-export interface CacheEvictions {
-  expired: number;
-  capacity: number;
-}
+// Go nil maps serialize as JSON null; use Record | null to match the server shape.
+export type CacheMisses = Record<string, number> | null;
+export type CacheInvalidations = Record<string, number> | null;
+export type CacheEvictions = Record<string, number> | null;
 
 export interface CacheStatsEntry {
   name: string;
