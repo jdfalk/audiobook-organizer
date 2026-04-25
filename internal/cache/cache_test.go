@@ -1,5 +1,5 @@
 // file: internal/cache/cache_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package cache
@@ -58,5 +58,29 @@ func TestName(t *testing.T) {
 	c := New[int]("named", time.Minute)
 	if got := c.Name(); got != "named" {
 		t.Fatalf("expected name=named, got %q", got)
+	}
+}
+
+func TestKeys(t *testing.T) {
+	c := New[string]("test_keys", time.Minute)
+	c.Set("zebra", "z")
+	c.Set("alpha", "a")
+	c.Set("beta", "b")
+
+	keys := c.Keys()
+	if len(keys) != 3 {
+		t.Fatalf("expected 3 keys, got %d", len(keys))
+	}
+
+	// Check sorted order
+	if keys[0] != "alpha" || keys[1] != "beta" || keys[2] != "zebra" {
+		t.Fatalf("expected sorted [alpha beta zebra], got %v", keys)
+	}
+
+	// Invalidate one and check again
+	c.Invalidate("beta")
+	keys = c.Keys()
+	if len(keys) != 2 || keys[0] != "alpha" || keys[1] != "zebra" {
+		t.Fatalf("expected [alpha zebra] after delete, got %v", keys)
 	}
 }

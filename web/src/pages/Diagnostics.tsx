@@ -1,9 +1,10 @@
 // file: web/src/pages/Diagnostics.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: f2323fc4-b3e7-4298-9ec5-759447cbd643
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { AIJobsPanel } from '../components/AIJobsPanel';
+import { CacheStatsPanel } from '../components/CacheStatsPanel';
 import {
   Alert,
   Accordion,
@@ -549,6 +550,9 @@ export function Diagnostics() {
 
       {/* AI Jobs Panel */}
       <AIJobsPanel />
+
+      {/* Cache Stats Panel */}
+      <CacheStatsPanel />
     </Box>
   );
 }
