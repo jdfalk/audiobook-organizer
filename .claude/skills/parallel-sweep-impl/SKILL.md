@@ -47,8 +47,8 @@ Atomicity matters because the coordinator can be SIGKILLed at any point — ever
 |---|---|---|
 | 1. Skeleton + state schema | ✅ done (`b16cb0ec`) | `state.py`, `state-schema.md`, SKILL.md stub, 19 unit tests |
 | 2. Coordinator + child prompts | ✅ done (`a04feb47`) | `references/coordinator-prompt.md`, `references/child-prompt.md`, `.claude/commands/parallel-sweep.md` |
-| 3. PreToolUse hook spike | **in progress** | `scripts/dispatch.py` (settings render + post-hoc cross-check), spike report. Result: hook does NOT fire for sub-agents → post-hoc check is load-bearing. |
-| 4. PR + merge loop | not started | Coordinator opens PR, polls CI, admin-merges on green-AND-local-`make ci` |
+| 3. PreToolUse hook spike | ✅ done (`34028e71`) | `scripts/dispatch.py` (settings render + post-hoc cross-check), spike report. Result: hook does NOT fire for sub-agents → post-hoc check is load-bearing. |
+| 4. PR + merge loop | **in progress** | `scripts/pr_merge.py` (run_local_ci, push, open_pr, poll_ci, admin_merge, merge_task). 14 unit tests with mocked subprocess. Live coordinator smoke deferred to step 5. |
 | 5. Sibling rebase (clean) | not started | 2-task end-to-end with clean rebase |
 | 6. Conflict-resolver subagent (Sonnet) | not started | `references/conflict-resolver-prompt.md`, trivial-conflict path |
 | 7. File-copy cherry-pick fallback (Opus) | not started | Non-trivial conflict path |
@@ -72,5 +72,7 @@ Atomicity matters because the coordinator can be SIGKILLed at any point — ever
         ├── state.py                         ← state CRUD (step 1)
         ├── test_state.py                    ← state unit tests (step 1)
         ├── dispatch.py                      ← settings render + post-hoc isolation check (step 3)
-        └── test_dispatch.py                 ← dispatch unit tests (step 3)
+        ├── test_dispatch.py                 ← dispatch unit tests (step 3)
+        ├── pr_merge.py                      ← per-task PR + 2-gate merge pipeline (step 4)
+        └── test_pr_merge.py                 ← pr_merge unit tests (step 4)
 ```
