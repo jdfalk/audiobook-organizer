@@ -1,16 +1,28 @@
 // file: internal/database/cache_stats_history_store_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: c1d2e3f4-a5b6-9788-7766-554433221101
 
 package database
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
 
+func newTestMetricsStore(t *testing.T) *MetricsStore {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "metrics.db")
+	store, err := NewMetricsStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewMetricsStore: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	return store
+}
+
 func TestCacheStatsHistoryRoundTrip(t *testing.T) {
-	store := setupTestSQLiteStore(t)
+	store := newTestMetricsStore(t)
 
 	now := time.Now().UTC().Truncate(time.Second)
 	snaps := []CacheStatsSnapshot{
@@ -37,7 +49,6 @@ func TestCacheStatsHistoryRoundTrip(t *testing.T) {
 	if len(gotDashboard) != 2 {
 		t.Fatalf("expected 2 dashboard rows, got %d", len(gotDashboard))
 	}
-	// Ordered oldest-first.
 	if gotDashboard[0].Hits != 100 || gotDashboard[1].Hits != 150 {
 		t.Fatalf("unexpected order: %+v", gotDashboard)
 	}
@@ -50,7 +61,6 @@ func TestCacheStatsHistoryRoundTrip(t *testing.T) {
 		t.Fatalf("limit broke: %+v", limited)
 	}
 
-	// Prune everything older than 30s — the two oldest rows go.
 	deleted, err := store.PruneCacheStatsHistory(now.Add(-30 * time.Second))
 	if err != nil {
 		t.Fatalf("prune: %v", err)
@@ -61,7 +71,7 @@ func TestCacheStatsHistoryRoundTrip(t *testing.T) {
 }
 
 func TestCacheStatsHistoryEmptyInsert(t *testing.T) {
-	store := setupTestSQLiteStore(t)
+	store := newTestMetricsStore(t)
 	if err := store.RecordCacheStatsSnapshots(nil); err != nil {
 		t.Fatalf("nil insert should be no-op: %v", err)
 	}

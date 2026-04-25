@@ -48,7 +48,7 @@ End-to-end cache stats so cache bugs become legible. Every cache (in-memory `int
 - **`internal/cache/registry.go`**: every `cache.New()` self-registers so handlers can introspect caches by name.
 - **`internal/database/metadata_fetch_cache.go`** + **`embedding_store.go`**: instrumented at the lookup/store boundaries with `metrics.*` helpers.
 - **`internal/server/cache_handlers.go`**: three new endpoints — `GET /api/v1/cache/stats` (public; aggregates Prometheus into JSON with hit-rate), `GET /api/v1/cache/stats/keys?cache=<name>` (admin-gated; returns key names only for in-memory caches), `GET /api/v1/cache/stats/history?cache=<name>&since=<RFC3339>&limit=<int>` (persisted snapshots).
-- **Migration 53**: `cache_stats_history` table + indexes. Background snapshotter goroutine (`runCacheStatsSnapshotter` in server.go) writes per-cache snapshots every 5 min and prunes anything older than 30 days. SQLite-only; PebbleDB deployments skip persistence.
+- **Metrics sidecar DB** (`<DataDir>/metrics.db`, opened by `database.NewMetricsStore`): a dedicated SQLite file independent of the primary store, so cache history works on PebbleDB and SQLite deployments alike. Owns its own `cache_stats_history` schema (no main-store migration). Background snapshotter goroutine writes per-cache snapshots every 5 min and prunes anything older than 30 days.
 - **Web Diagnostics page**: new `CacheStatsPanel` polls `/api/v1/cache/stats` every 5s and renders per-cache hits/misses/hit-rate (colored badge) / sets / invalidations / evictions / avg-get-µs.
 
 OTel deferred to a future PR (Prometheus stack already covers the metrics use case; OTel's win is tracing).
