@@ -1669,7 +1669,36 @@ export async function getMe(): Promise<AuthUser> {
     throw await buildApiError(response, 'Failed to fetch current user');
   }
   const data = await response.json();
-  return data.user;
+  return data.data?.user ?? data.user;
+}
+
+export async function updateMe(payload: { email: string }): Promise<AuthUser> {
+  const response = await fetch(`${API_BASE}/auth/me`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to update profile');
+  }
+  const body = await response.json();
+  return body.data?.user ?? body.user;
+}
+
+export async function changePassword(payload: {
+  current_password: string;
+  new_password: string;
+}): Promise<void> {
+  const response = await fetch(`${API_BASE}/auth/me/password`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to change password');
+  }
 }
 
 export async function logout(): Promise<void> {
