@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.29.0 -->
+<!-- version: 2.30.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-25 -->
 
@@ -8,6 +8,17 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 25, 2026 — `/parallel-sweep` slash command — step 8 (resume from last completed task)
+
+Eighth step of TODO 4.16. Lands `--resume <runID>` support: when a sweep is killed mid-flight (SIGTERM, usage limit, crash), the user re-invokes with `--resume` and the coordinator picks up where the previous one left off.
+
+Per locked decision Q3 (granularity = last completed task): any in-flight task gets `git reset --hard origin/main` and is marked back to `pending` for re-dispatch. The agent's narrative work is lost; the worktree state is reset. One code path, no special cases for "the agent was halfway through editing." Reset uses CURRENT main (not the original base SHA) since sibling tasks may have merged in the original sweep — the resumed task should land on current main rather than re-doing a rebase later.
+
+- **`scripts/resume.py`**: `load_for_resume` (loads + classifies tasks, refuses on status=running unless force=True), `reset_in_flight` (per-task reset with rebase/cherry-pick abort first; per-task failures recorded but don't block other resets), `mark_resumed` (flips state.status back to running). The status=running guard prevents two coordinators fighting over the same state file — escape hatch is `force=True` after the user verifies no other coordinator process is alive.
+- **`scripts/test_resume.py`**: 8 unit tests with real local git fixtures simulating worktrees that committed before being killed. Coverage: status classification (in_flight / pending / completed / rebase_blocked), refusal on status=running, force override, reset advances HEAD to main and clears agentID + prNumber, no-worktree task handled cleanly, failed reset records error and continues with siblings, mid-rebase abort before reset.
+
+Test status: 87/87 green (19 state + 12 dispatch + 14 pr_merge + 9 rebase + 14 conflict_resolver + 11 fallback + 8 resume). Lint clean.
 
 #### April 25, 2026 — `/parallel-sweep` slash command — step 7 (Opus file-copy fallback)
 
