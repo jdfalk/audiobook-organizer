@@ -77,8 +77,8 @@ func (svc *AudiobookService) SetSearchIndex(idx *search.BleveIndex) {
 func NewAudiobookService(store audiobookStore) *AudiobookService {
 	return &AudiobookService{
 		store:     store,
-		bookCache: cache.New[*database.Book](30 * time.Second),
-		listCache: cache.New[[]database.Book](10 * time.Second),
+		bookCache: cache.New[*database.Book]("book", 30*time.Second),
+		listCache: cache.New[[]database.Book]("audiobook_list", 10*time.Second),
 	}
 }
 
