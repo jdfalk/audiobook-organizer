@@ -1,10 +1,11 @@
 // file: internal/cache/cache.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package cache
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -31,11 +32,13 @@ type Cache[T any] struct {
 // New creates a cache with the given name and default TTL. The name is used
 // as the {cache} label on emitted Prometheus metrics.
 func New[T any](name string, defaultTTL time.Duration) *Cache[T] {
-	return &Cache[T]{
+	c := &Cache[T]{
 		name:       name,
 		items:      make(map[string]entry[T]),
 		defaultTTL: defaultTTL,
 	}
+	register(c)
+	return c
 }
 
 // Name returns the cache instance name.
@@ -102,4 +105,16 @@ func (c *Cache[T]) Len() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.items)
+}
+
+// Keys returns a sorted snapshot of all current keys in the cache.
+func (c *Cache[T]) Keys() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	keys := make([]string, 0, len(c.items))
+	for k := range c.items {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

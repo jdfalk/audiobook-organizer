@@ -1,5 +1,5 @@
 // file: internal/database/metadata_fetch_cache.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9e8d7c6b-5a4f-3e2d-1c0b-9a8b7c6d5e4f
 
 package database
@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 )
 
 // MetadataFetchCache caches external metadata API responses
@@ -65,11 +67,15 @@ func GetCachedMetadataFetch(store Store, bookID, source string) (*CachedMetadata
 	if bookID == "" || source == "" {
 		return nil, nil
 	}
+	start := time.Now()
+	defer func() { metrics.ObserveCacheGetDuration("metadata_fetch", time.Since(start)) }()
+
 	blob, err := store.GetRaw(metadataFetchCacheKey(bookID, source))
 	if err != nil {
 		return nil, fmt.Errorf("cache get: %w", err)
 	}
 	if blob == nil {
+		metrics.RecordCacheMiss("metadata_fetch", "not_found")
 		return nil, nil
 	}
 	var entry CachedMetadataEntry
@@ -77,8 +83,10 @@ func GetCachedMetadataFetch(store Store, bookID, source string) (*CachedMetadata
 		// Corrupt entry — treat as a miss and delete it so
 		// the next call writes a fresh row.
 		_ = store.DeleteRaw(metadataFetchCacheKey(bookID, source))
+		metrics.RecordCacheMiss("metadata_fetch", "stale")
 		return nil, nil
 	}
+	metrics.RecordCacheHit("metadata_fetch")
 	return &entry, nil
 }
 
@@ -105,7 +113,11 @@ func PutCachedMetadataFetch(store Store, bookID, source string, results json.Raw
 	if err != nil {
 		return fmt.Errorf("cache marshal: %w", err)
 	}
-	return store.SetRaw(metadataFetchCacheKey(bookID, source), blob)
+	if err := store.SetRaw(metadataFetchCacheKey(bookID, source), blob); err != nil {
+		return err
+	}
+	metrics.RecordCacheSet("metadata_fetch")
+	return nil
 }
 
 // InvalidateCachedMetadataFetch removes the cache entry for
@@ -115,7 +127,11 @@ func InvalidateCachedMetadataFetch(store Store, bookID, source string) error {
 	if bookID == "" || source == "" {
 		return nil
 	}
-	return store.DeleteRaw(metadataFetchCacheKey(bookID, source))
+	if err := store.DeleteRaw(metadataFetchCacheKey(bookID, source)); err != nil {
+		return err
+	}
+	metrics.RecordCacheInvalidation("metadata_fetch", "key")
+	return nil
 }
 
 // InvalidateAllCachedMetadataFetchesForBook wipes every source's
@@ -135,6 +151,9 @@ func InvalidateAllCachedMetadataFetchesForBook(store Store, bookID string) error
 		if err := store.DeleteRaw(kv.Key); err != nil {
 			return fmt.Errorf("cache delete %s: %w", kv.Key, err)
 		}
+	}
+	if len(pairs) > 0 {
+		metrics.RecordCacheInvalidation("metadata_fetch", "book")
 	}
 	return nil
 }
