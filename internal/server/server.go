@@ -1786,6 +1786,15 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}()
 
+	// Persist cache observability snapshots to SQLite every 5 minutes so
+	// hit/miss trends survive restarts. PebbleDB-backed deployments skip
+	// persistence inside runCacheStatsSnapshotter.
+	backgroundWG.Add(1)
+	go func() {
+		defer backgroundWG.Done()
+		s.runCacheStatsSnapshotter(shutdown)
+	}()
+
 	// Start auto-scan file watchers if enabled. ONE watcher per enabled
 	// import path — previously only the first enabled path was watched,
 	// so users with multiple import locations had silent blind spots on
@@ -2154,6 +2163,7 @@ func (s *Server) setupRoutes() {
 
 		// Public cache stats endpoint (no auth required)
 		api.GET("/cache/stats", s.handleCacheStats)
+		api.GET("/cache/stats/history", s.handleCacheStatsHistory)
 
 		protected := api.Group("")
 		protected.Use(authMiddleware)

@@ -1,16 +1,19 @@
 // file: internal/server/cache_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 package server
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_model/go"
 )
@@ -314,5 +317,118 @@ func (resp CacheStatsResponse) MarshalJSON() ([]byte, error) {
 	}{
 		Caches:      resp.Caches,
 		GeneratedAt: resp.GeneratedAt,
+	})
+}
+
+// gatherCacheSnapshots reads the current Prometheus default registry and
+// returns one CacheStatsSnapshot per cache name. Reasons/scopes are flattened
+// into single sums per row — Prometheus retains the per-reason breakdown.
+func gatherCacheSnapshots(now time.Time) []database.CacheStatsSnapshot {
+	mfs, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		return nil
+	}
+	stats := aggregateCacheMetrics(mfs)
+	out := make([]database.CacheStatsSnapshot, 0, len(stats))
+	for _, st := range stats {
+		out = append(out, database.CacheStatsSnapshot{
+			CacheName:        st.Name,
+			Timestamp:        now,
+			Hits:             st.Hits,
+			Misses:           sumMap(st.Misses),
+			Sets:             st.Sets,
+			Invalidations:    sumMap(st.Invalidations),
+			Evictions:        sumMap(st.Evictions),
+			Size:             st.Size,
+			GetDurationCount: st.GetDurationMetric.Count,
+			GetDurationSum:   st.GetDurationMetric.Sum,
+		})
+	}
+	return out
+}
+
+func sumMap(m map[string]int64) int64 {
+	var n int64
+	for _, v := range m {
+		n += v
+	}
+	return n
+}
+
+// runCacheStatsSnapshotter periodically captures the live Prometheus cache
+// counters into the SQLite cache_stats_history table so trends survive
+// restart. PebbleDB-backed deployments skip persistence (no-op).
+//
+// Pruning: any snapshot older than retention is deleted on each tick. Default
+// retention is 30 days; tune by changing the constant if the table grows
+// faster than expected.
+func (s *Server) runCacheStatsSnapshotter(shutdown <-chan struct{}) {
+	const (
+		snapshotInterval = 5 * time.Minute
+		retention        = 30 * 24 * time.Hour
+	)
+	sqliteStore, ok := s.Store().(*database.SQLiteStore)
+	if !ok {
+		return
+	}
+	ticker := time.NewTicker(snapshotInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-shutdown:
+			return
+		case now := <-ticker.C:
+			snaps := gatherCacheSnapshots(now)
+			if len(snaps) == 0 {
+				continue
+			}
+			if err := sqliteStore.RecordCacheStatsSnapshots(snaps); err != nil {
+				log.Printf("cache snapshotter: record failed: %v", err)
+			}
+			if _, err := sqliteStore.PruneCacheStatsHistory(now.Add(-retention)); err != nil {
+				log.Printf("cache snapshotter: prune failed: %v", err)
+			}
+		}
+	}
+}
+
+// handleCacheStatsHistory returns persisted snapshots for one or all caches.
+// GET /api/v1/cache/stats/history?cache=<name>&since=<RFC3339>&limit=<int>
+//
+// `since` defaults to 24h ago; `limit` defaults to 0 (no cap).
+func (s *Server) handleCacheStatsHistory(c *gin.Context) {
+	sqliteStore, ok := s.Store().(*database.SQLiteStore)
+	if !ok {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "history not available on this store backend"})
+		return
+	}
+	cacheName := c.Query("cache")
+	since := time.Now().Add(-24 * time.Hour)
+	if raw := c.Query("since"); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "since must be RFC3339"})
+			return
+		}
+		since = t
+	}
+	limit := 0
+	if raw := c.Query("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a non-negative integer"})
+			return
+		}
+		limit = n
+	}
+	snaps, err := sqliteStore.GetCacheStatsHistory(cacheName, since, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"cache":     cacheName,
+		"since":     since.UTC().Format(time.RFC3339),
+		"snapshots": snaps,
 	})
 }
