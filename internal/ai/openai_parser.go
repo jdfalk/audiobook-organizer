@@ -63,7 +63,7 @@ func NewOpenAIParser(apiKey string, enabled bool) *OpenAIParser {
 		model:         "gpt-5-mini", // Primary model for all AI operations
 		maxRetries:    2,
 		enabled:       true,
-		responseCache: cache.New[*ParsedMetadata](aiResponseCacheTTL),
+		responseCache: cache.New[*ParsedMetadata]("ai_response", aiResponseCacheTTL),
 	}
 }
 

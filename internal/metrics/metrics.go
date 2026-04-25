@@ -1,5 +1,5 @@
 // file: internal/metrics/metrics.go
-// version: 1.0.2
+// version: 1.1.0
 // guid: 9f8e7d6c-5b4a-3210-9fed-cba876543210
 
 package metrics
@@ -61,13 +61,54 @@ var (
 		Name:      "process_goroutines",
 		Help:      "Number of currently running goroutines",
 	})
+
+	// Cache metrics. The {cache} label is a small enum of cache instance names
+	// (dashboard, dedup, list, book, ai_response, metadata_fetch, embedding, ...).
+	// Never label by cache key — that would explode cardinality.
+	cacheHits = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "audiobook_organizer",
+		Name:      "cache_hits_total",
+		Help:      "Total cache hits per cache instance",
+	}, []string{"cache"})
+	cacheMisses = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "audiobook_organizer",
+		Name:      "cache_misses_total",
+		Help:      "Total cache misses per cache instance, partitioned by reason (not_found|expired)",
+	}, []string{"cache", "reason"})
+	cacheSets = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "audiobook_organizer",
+		Name:      "cache_sets_total",
+		Help:      "Total cache writes per cache instance",
+	}, []string{"cache"})
+	cacheInvalidations = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "audiobook_organizer",
+		Name:      "cache_invalidations_total",
+		Help:      "Total explicit cache invalidations per cache instance, partitioned by scope (key|all)",
+	}, []string{"cache", "scope"})
+	cacheEvictions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "audiobook_organizer",
+		Name:      "cache_evictions_total",
+		Help:      "Total cache evictions per cache instance, partitioned by reason (expired|capacity)",
+	}, []string{"cache", "reason"})
+	cacheSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "audiobook_organizer",
+		Name:      "cache_size",
+		Help:      "Current number of entries per cache instance (includes expired-but-not-yet-evicted)",
+	}, []string{"cache"})
+	cacheGetDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "audiobook_organizer",
+		Name:      "cache_get_duration_seconds",
+		Help:      "Histogram of cache Get latencies in seconds per cache instance",
+		Buckets:   prometheus.ExponentialBuckets(0.0000005, 4, 10), // 500ns up to ~130ms
+	}, []string{"cache"})
 )
 
 // Register initializes metrics with the global Prometheus registry (idempotent)
 func Register() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(operationStarted, operationCompleted, operationFailed, operationCanceled, operationDuration,
-			booksGauge, foldersGauge, memoryAllocGauge, goroutinesGauge)
+			booksGauge, foldersGauge, memoryAllocGauge, goroutinesGauge,
+			cacheHits, cacheMisses, cacheSets, cacheInvalidations, cacheEvictions, cacheSize, cacheGetDuration)
 	})
 }
 
@@ -85,3 +126,14 @@ func SetBooks(n int)          { booksGauge.Set(float64(n)) }
 func SetFolders(n int)        { foldersGauge.Set(float64(n)) }
 func SetMemoryAlloc(b uint64) { memoryAllocGauge.Set(float64(b)) }
 func SetGoroutines(n int)     { goroutinesGauge.Set(float64(n)) }
+
+// Cache helpers
+func RecordCacheHit(cache string)                    { cacheHits.WithLabelValues(cache).Inc() }
+func RecordCacheMiss(cache, reason string)           { cacheMisses.WithLabelValues(cache, reason).Inc() }
+func RecordCacheSet(cache string)                    { cacheSets.WithLabelValues(cache).Inc() }
+func RecordCacheInvalidation(cache, scope string)    { cacheInvalidations.WithLabelValues(cache, scope).Inc() }
+func RecordCacheEviction(cache, reason string)       { cacheEvictions.WithLabelValues(cache, reason).Inc() }
+func SetCacheSize(cache string, n int)               { cacheSize.WithLabelValues(cache).Set(float64(n)) }
+func ObserveCacheGetDuration(cache string, d time.Duration) {
+	cacheGetDuration.WithLabelValues(cache).Observe(d.Seconds())
+}
