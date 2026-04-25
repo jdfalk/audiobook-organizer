@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.36.0
+// version: 1.37.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -50,6 +50,8 @@ type MockStore struct {
 	DeleteBookFunc                  func(id string) error
 	SearchBooksFunc                 func(query string, limit, offset int) ([]Book, error)
 	CountBooksFunc                  func() (int, error)
+	GetDistinctGenresFunc           func() ([]string, error)
+	GetDistinctLanguagesFunc        func() ([]string, error)
 	CountFilesFunc                  func() (int, error)
 	CountAuthorsFunc                func() (int, error)
 	CountSeriesFunc                 func() (int, error)
@@ -723,6 +725,20 @@ func (m *MockStore) CountBooks() (int, error) {
 		return m.CountBooksFunc()
 	}
 	return 0, nil
+}
+
+func (m *MockStore) GetDistinctGenres() ([]string, error) {
+	if m.GetDistinctGenresFunc != nil {
+		return m.GetDistinctGenresFunc()
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetDistinctLanguages() ([]string, error) {
+	if m.GetDistinctLanguagesFunc != nil {
+		return m.GetDistinctLanguagesFunc()
+	}
+	return nil, nil
 }
 
 func (m *MockStore) CountFiles() (int, error) {

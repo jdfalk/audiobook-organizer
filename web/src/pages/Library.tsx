@@ -202,7 +202,8 @@ export const Library = () => {
   };
 
   const [audiobooks, setAudiobooks] = useState<Audiobook[]>([]);
-  const allBooksRef = useRef<Audiobook[]>([]); // Full filtered list (all pages) for "Select All Items"
+  const [totalCount, setTotalCount] = useState(0); // Total matching books (server-reported, all pages)
+  const [selectingAll, setSelectingAll] = useState(false); // Loading state for "select all" cross-page fetch
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -648,131 +649,105 @@ export const Library = () => {
     setSelectedAudiobooks([]);
   };
 
-  const handleSelectAllItems = () => {
-    setSelectedAudiobooks(allBooksRef.current);
-  };
+  const buildFieldFilters = useCallback(() => {
+    const fieldFilters: Array<{ field: string; value: string; negated: boolean }> = [];
+    if (filters.author) fieldFilters.push({ field: 'author', value: filters.author, negated: false });
+    if (filters.series) fieldFilters.push({ field: 'series', value: filters.series, negated: false });
+    if (filters.genre) fieldFilters.push({ field: 'genre', value: filters.genre, negated: false });
+    if (filters.language) fieldFilters.push({ field: 'language', value: filters.language, negated: false });
+    if (parsedSearch) {
+      for (const ff of parsedSearch.fieldFilters) {
+        if (ff.field !== 'tag') fieldFilters.push({ field: ff.field, value: ff.value, negated: ff.negated });
+      }
+    }
+    return fieldFilters;
+  }, [filters, parsedSearch]);
+
+  // Fetch all matching books on demand for cross-page "select all"
+  const handleSelectAllItems = useCallback(async () => {
+    const fieldFilters = buildFieldFilters();
+    const searchText = parsedSearch ? parsedSearch.freeText : debouncedSearch;
+    const tagFilter =
+      selectedTags?.[0] ||
+      parsedSearch?.fieldFilters.find((f) => f.field === 'tag' && !f.negated)?.value;
+    const libraryState = filters.libraryState === 'deleted' ? undefined : filters.libraryState;
+
+    setSelectingAll(true);
+    try {
+      const page_ = searchText
+        ? await api.searchBooksPage(searchText, totalCount || 10000, 0, filters.showFailed)
+        : await api.getBooks(totalCount || 10000, 0, {
+            sortBy,
+            sortOrder,
+            tag: tagFilter,
+            libraryState,
+            filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
+            showFailed: filters.showFailed,
+          });
+      let all = page_.items.map(convertApiBook);
+      if (filters.libraryState === 'deleted') {
+        all = all.filter((b) => b.marked_for_deletion);
+      }
+      setSelectedAudiobooks(all);
+    } catch (e) {
+      console.error('Failed to select all items', e);
+    } finally {
+      setSelectingAll(false);
+    }
+  }, [buildFieldFilters, debouncedSearch, filters, parsedSearch, selectedTags, sortBy, sortOrder, totalCount]);
 
   // True when all items on the current page are selected but not all items globally
-  const allItemsTotal = allBooksRef.current.length;
   const showSelectAllBanner =
-    allOnPageSelected && selectedAudiobooks.length < allItemsTotal && allItemsTotal > audiobooks.length;
-
-  // convertApiBook is defined above the component as a pure function
+    allOnPageSelected && selectedAudiobooks.length < totalCount && totalCount > audiobooks.length;
 
   const loadAudiobooks = useCallback(async () => {
     setLoading(true);
     try {
       const offset = (page - 1) * itemsPerPage;
-
-      // Build field filters from sidebar filters + parsed search
-      const fieldFilters: Array<{ field: string; value: string; negated: boolean }> = [];
-
-      if (filters.author) fieldFilters.push({ field: 'author', value: filters.author, negated: false });
-      if (filters.series) fieldFilters.push({ field: 'series', value: filters.series, negated: false });
-      if (filters.genre) fieldFilters.push({ field: 'genre', value: filters.genre, negated: false });
-      if (filters.language) fieldFilters.push({ field: 'language', value: filters.language, negated: false });
-
-      // Add parsed search field filters (excluding tag, which is a separate param)
-      if (parsedSearch) {
-        for (const ff of parsedSearch.fieldFilters) {
-          if (ff.field !== 'tag') {
-            fieldFilters.push({ field: ff.field, value: ff.value, negated: ff.negated });
-          }
-        }
-      }
-
-      // Use parsed free text — field filters are handled separately via the filters param
+      const fieldFilters = buildFieldFilters();
       const searchText = parsedSearch ? parsedSearch.freeText : debouncedSearch;
-
-      // Get tag filter from sidebar tags or parsed search
       const tagFilter =
         selectedTags?.[0] ||
         parsedSearch?.fieldFilters.find((f) => f.field === 'tag' && !f.negated)?.value;
 
-      // Determine library state for server filter
-      const libraryState =
-        filters.libraryState === 'deleted' ? undefined : filters.libraryState;
+      // 'deleted' is a client-side concept (marked_for_deletion flag); send no library_state to server
+      const libraryState = filters.libraryState === 'deleted' ? undefined : filters.libraryState;
 
-      const [bookCount, folders] = await Promise.all([api.countBooks(), api.getImportPaths()]);
+      const [page_, folders] = await Promise.all([
+        searchText
+          ? api.searchBooksPage(searchText, itemsPerPage, offset, filters.showFailed)
+          : api.getBooks(itemsPerPage, offset, {
+              sortBy,
+              sortOrder,
+              tag: tagFilter,
+              libraryState,
+              filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
+              showFailed: filters.showFailed,
+            }),
+        api.getImportPaths(),
+      ]);
 
-      const fetchLimit = Math.max(bookCount, itemsPerPage);
+      const items = page_.items;
+      const serverCount = page_.count;
 
-      let books: api.Book[];
-      if (searchText) {
-        // Search endpoint — server handles text matching
-        books = await api.searchBooks(searchText, fetchLimit);
-      } else {
-        // Standard listing with server-side sort, filter, and tag filtering
-        books = await api.getBooks(fetchLimit, 0, {
-          sortBy: sortBy,
-          sortOrder: sortOrder,
-          tag: tagFilter,
-          libraryState: libraryState,
-          filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
-          showFailed: filters.showFailed,
-        });
-      }
+      let convertedBooks: Audiobook[] = items.map(convertApiBook);
 
-      // Convert API books to Audiobook type
-      const convertedBooks: Audiobook[] = books.map(convertApiBook);
-
-      // Extract unique values for filter sidebar dropdowns
-      const uniqueAuthors = Array.from(
-        new Set(
-          convertedBooks
-            .map((book) => book.author)
-            .filter((author): author is string => Boolean(author))
-        )
-      ).sort();
-      const uniqueSeries = Array.from(
-        new Set(
-          convertedBooks
-            .map((book) => book.series)
-            .filter((series): series is string => Boolean(series))
-        )
-      ).sort();
-      const uniqueGenres = Array.from(
-        new Set(
-          convertedBooks
-            .map((book) => book.genre)
-            .filter((genre): genre is string => Boolean(genre))
-        )
-      ).sort();
-      const uniqueLanguages = Array.from(
-        new Set(
-          convertedBooks
-            .map((book) => book.language)
-            .filter((language): language is string => Boolean(language))
-        )
-      ).sort();
-
-      setAvailableAuthors(uniqueAuthors);
-      setAvailableSeries(uniqueSeries);
-      setAvailableGenres(uniqueGenres);
-      setAvailableLanguages(uniqueLanguages);
-
-      // Client-side filter for deleted state (server doesn't have a 'deleted' library_state)
-      let filteredBooks = convertedBooks;
+      // Client-side filter for deleted state (marked_for_deletion flag, no server equivalent)
       if (filters.libraryState === 'deleted') {
-        filteredBooks = convertedBooks.filter((book) => book.marked_for_deletion);
+        convertedBooks = convertedBooks.filter((book) => book.marked_for_deletion);
       }
 
-      // Client-side pagination (server returns full filtered/sorted set)
-      const total = filteredBooks.length;
-      const paginatedBooks = filteredBooks.slice(offset, offset + itemsPerPage);
-
-      allBooksRef.current = filteredBooks;
-      setAudiobooks(paginatedBooks);
+      const total = serverCount ?? convertedBooks.length;
+      setAudiobooks(convertedBooks);
+      setTotalCount(total);
       setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
 
-      // Load import paths
-      const convertedPaths: ImportPath[] = folders.map((folder) => ({
+      setImportPaths(folders.map((folder) => ({
         id: folder.id,
         path: folder.path,
-        status: 'idle',
+        status: 'idle' as const,
         book_count: folder.book_count,
-      }));
-      setImportPaths(convertedPaths);
+      })));
     } catch (error) {
       if (error instanceof api.ApiError && error.status === 401) {
         navigate('/login');
@@ -791,7 +766,7 @@ export const Library = () => {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, filters, itemsPerPage, page, parsedSearch, selectedTags, sortBy, sortOrder, navigate, toast]);
+  }, [buildFieldFilters, debouncedSearch, filters, itemsPerPage, page, parsedSearch, selectedTags, sortBy, sortOrder, navigate, toast]);
 
   // Reload books when scan/organize completes
   useEffect(() => {
@@ -887,6 +862,25 @@ export const Library = () => {
       setImportFileInProgress(false);
     }
   };
+
+  // Load facets (genres, languages) + author/series names once on mount for filter sidebar.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [facets, authors, series] = await Promise.all([
+          api.getBookFacets(),
+          api.getAuthors(),
+          api.getSeries(),
+        ]);
+        setAvailableGenres(facets.genres);
+        setAvailableLanguages(facets.languages);
+        setAvailableAuthors(authors.map((a) => a.name).filter(Boolean).sort());
+        setAvailableSeries(series.map((s) => s.name).filter(Boolean).sort());
+      } catch (e) {
+        console.error('Failed to load filter facets', e);
+      }
+    })();
+  }, []);
 
   // Load audiobooks when filters change
   useEffect(() => {
@@ -2005,15 +1999,16 @@ export const Library = () => {
                   size="small"
                   variant="text"
                   sx={{ textTransform: 'none', fontWeight: 'bold' }}
-                  onClick={handleSelectAllItems}
+                  onClick={() => { void handleSelectAllItems(); }}
+                  disabled={selectingAll}
                 >
-                  Select all {allItemsTotal.toLocaleString()} items
+                  {selectingAll ? 'Loading…' : `Select all ${totalCount.toLocaleString()} items`}
                 </Button>
               </Box>
             )}
 
             {/* Banner when all items are selected */}
-            {selectedAudiobooks.length === allItemsTotal && allItemsTotal > audiobooks.length && (
+            {selectedAudiobooks.length >= totalCount && totalCount > audiobooks.length && (
               <Box
                 sx={{
                   py: 0.75,
@@ -2025,7 +2020,7 @@ export const Library = () => {
                 }}
               >
                 <Typography variant="body2" component="span">
-                  All {allItemsTotal.toLocaleString()} items are selected.{' '}
+                  All {totalCount.toLocaleString()} items are selected.{' '}
                 </Typography>
                 <Button
                   size="small"

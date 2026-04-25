@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.60.0
+// version: 1.61.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1763,6 +1763,40 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 		books = append(books, book)
 	}
 	return books, rows.Err()
+}
+
+func (s *SQLiteStore) GetDistinctGenres() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT genre FROM books WHERE genre IS NOT NULL AND genre != '' AND COALESCE(marked_for_deletion,0)=0 ORDER BY genre`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var g string
+		if err := rows.Scan(&g); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLiteStore) GetDistinctLanguages() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT language FROM books WHERE language IS NOT NULL AND language != '' AND COALESCE(marked_for_deletion,0)=0 ORDER BY language`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }
 
 func (s *SQLiteStore) GetBookByID(id string) (*Book, error) {

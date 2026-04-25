@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -224,6 +224,32 @@ func (s *Server) countAudiobooks(c *gin.Context) {
 	}
 
 	RespondWithOK(c, gin.H{"count": count})
+}
+
+// audiobookFacets handles GET /api/v1/audiobooks/facets.
+// Returns lightweight lists of distinct genres and languages for filter dropdowns.
+func (s *Server) audiobookFacets(c *gin.Context) {
+	if s.Store() == nil {
+		RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	genres, err := s.Store().GetDistinctGenres()
+	if err != nil {
+		internalError(c, "failed to fetch genres", err)
+		return
+	}
+	languages, err := s.Store().GetDistinctLanguages()
+	if err != nil {
+		internalError(c, "failed to fetch languages", err)
+		return
+	}
+	if genres == nil {
+		genres = []string{}
+	}
+	if languages == nil {
+		languages = []string{}
+	}
+	RespondWithOK(c, gin.H{"genres": genres, "languages": languages})
 }
 
 func (s *Server) serveAudiobookCover(c *gin.Context) {

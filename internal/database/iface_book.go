@@ -1,5 +1,5 @@
 // file: internal/database/iface_book.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
 
 package database
@@ -25,6 +25,8 @@ type BookReader interface {
 	GetBooksByVersionGroup(groupID string) ([]Book, error)
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
+	GetDistinctGenres() ([]string, error)
+	GetDistinctLanguages() ([]string, error)
 	ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error)
 	GetBookSnapshots(id string, limit int) ([]BookSnapshot, error)
 	GetBookAtVersion(id string, ts time.Time) (*Book, error)

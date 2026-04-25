@@ -587,6 +587,11 @@ export interface AuthSession {
 // API functions
 
 // Books
+export interface BooksPage {
+  items: Book[];
+  count: number;
+}
+
 export async function getBooks(
   limit = 100,
   offset = 0,
@@ -598,15 +603,14 @@ export async function getBooks(
     filters?: string;
     showFailed?: boolean;
   }
-): Promise<Book[]> {
+): Promise<BooksPage> {
   const params = new URLSearchParams();
   params.set('limit', String(limit));
   params.set('offset', String(offset));
   if (options?.sortBy) params.set('sort_by', options.sortBy);
   if (options?.sortOrder) params.set('sort_order', options.sortOrder);
   if (options?.tag) params.set('tag', options.tag);
-  if (options?.libraryState)
-    params.set('library_state', options.libraryState);
+  if (options?.libraryState) params.set('library_state', options.libraryState);
   if (options?.filters) params.set('filters', options.filters);
   if (options?.showFailed) params.set('show_quarantined', 'true');
   params.set('is_primary_version', 'true');
@@ -615,8 +619,29 @@ export async function getBooks(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch books');
   }
-  const data = await response.json();
-  return data.items || [];
+  const body = await response.json();
+  const data = body.data ?? body;
+  return { items: data.items ?? [], count: data.count ?? 0 };
+}
+
+export interface BookFacets {
+  genres: string[];
+  languages: string[];
+}
+
+export async function getBookFacets(): Promise<BookFacets> {
+  const response = await fetch(`${API_BASE}/audiobooks/facets`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch facets');
+  }
+  const body = await response.json();
+  const data = body.data ?? body;
+  return {
+    genres: data.genres ?? [],
+    languages: data.languages ?? [],
+  };
 }
 
 export async function getBook(id: string): Promise<Book> {
@@ -641,6 +666,28 @@ export async function searchBooks(
   }
   const data = await response.json();
   return data.items || [];
+}
+
+export async function searchBooksPage(
+  query: string,
+  limit = 50,
+  offset = 0,
+  showFailed = false
+): Promise<BooksPage> {
+  const params = new URLSearchParams({
+    search: query,
+    limit: String(limit),
+    offset: String(offset),
+    is_primary_version: 'true',
+  });
+  if (showFailed) params.set('show_quarantined', 'true');
+  const response = await fetch(`${API_BASE}/audiobooks?${params}`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to search books');
+  }
+  const body = await response.json();
+  const data = body.data ?? body;
+  return { items: data.items ?? [], count: data.count ?? 0 };
 }
 
 export async function countBooks(): Promise<number> {
