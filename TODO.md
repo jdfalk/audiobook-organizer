@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
 <!-- version: 5.22.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-04-24 -->
+<!-- last-edited: 2026-04-25 -->
 
 # Project TODO
 
@@ -260,6 +260,19 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 ---
 
 ## ✅ Recently Completed
+
+### Session 23 (2026-04-25) — cache observability
+
+- Cache metrics: every `internal/cache.Cache` instance + the DB-backed metadata_fetch / embedding caches now emit Prometheus counters/gauge/histogram (`audiobook_organizer_cache_*`).
+- New endpoints: `GET /api/v1/cache/stats` (JSON aggregate), `GET /api/v1/cache/stats/keys?cache=<name>` (admin, key names only), `GET /api/v1/cache/stats/history` (persisted snapshots).
+- Migration 53 + snapshotter goroutine writes `cache_stats_history` every 5 min; pruned at 30 days.
+- Cache reworked to LRU + lazy expired-on-Get; `NewWithLimit` opts into capacity bound.
+- Diagnostics page gains a Cache Stats panel (5s polling).
+
+Follow-ups left open:
+- Tune per-cache `maxEntries` defaults once we have a few days of history data.
+- Add metadata_fetch TTL enforcement (entry.CachedAt vs configurable max-age) — file already has a comment to this effect; we can wire it to `RecordCacheMiss(reason="expired")` then.
+- OTel migration (separate larger PR, when tracing becomes desirable).
 
 ### Sessions 21-22 (2026-04-16) — feature foundations + v0.209.0/v0.210.0
 

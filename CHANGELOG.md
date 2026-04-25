@@ -39,6 +39,20 @@ The plan's "two tasks; merge first; rebase second cleanly; merge second" is veri
 
 Test status: 54/54 green (19 state + 12 dispatch + 14 pr_merge + 9 rebase). Lint clean.
 
+#### April 25, 2026 — Cache observability (Prometheus + persistent history + LRU)
+
+End-to-end cache stats so cache bugs become legible. Every cache (in-memory `internal/cache.Cache` instances `dashboard`, `dedup`, `list`, `book`, `audiobook_list`, `ai_response`, plus DB-backed `metadata_fetch` and `embedding`) emits `audiobook_organizer_cache_*` metrics on `/metrics`: hits, misses (with `reason`), sets, invalidations (with `scope`), evictions (with `reason`), size gauge, and a get-duration histogram. Cardinality is bounded — `{cache}` is a small enum, no per-key labels.
+
+- **`internal/metrics/metrics.go`**: cache primitive counters/gauge/histogram + helpers (`RecordCacheHit/Miss/Set/Invalidation/Eviction`, `SetCacheSize`, `ObserveCacheGetDuration`).
+- **`internal/cache/cache.go`**: takes a `name` parameter, instruments every Get/Set/Invalidate path. Reworked to a `container/list` LRU + map index; lazy-reaps expired entries on Get (counted as `evictions{reason="expired"}`). New `NewWithLimit(name, ttl, maxEntries)` enforces capacity (counted as `evictions{reason="capacity"}`); existing `New()` callers stay unbounded.
+- **`internal/cache/registry.go`**: every `cache.New()` self-registers so handlers can introspect caches by name.
+- **`internal/database/metadata_fetch_cache.go`** + **`embedding_store.go`**: instrumented at the lookup/store boundaries with `metrics.*` helpers.
+- **`internal/server/cache_handlers.go`**: three new endpoints — `GET /api/v1/cache/stats` (public; aggregates Prometheus into JSON with hit-rate), `GET /api/v1/cache/stats/keys?cache=<name>` (admin-gated; returns key names only for in-memory caches), `GET /api/v1/cache/stats/history?cache=<name>&since=<RFC3339>&limit=<int>` (persisted snapshots).
+- **Migration 53**: `cache_stats_history` table + indexes. Background snapshotter goroutine (`runCacheStatsSnapshotter` in server.go) writes per-cache snapshots every 5 min and prunes anything older than 30 days. SQLite-only; PebbleDB deployments skip persistence.
+- **Web Diagnostics page**: new `CacheStatsPanel` polls `/api/v1/cache/stats` every 5s and renders per-cache hits/misses/hit-rate (colored badge) / sets / invalidations / evictions / avg-get-µs.
+
+OTel deferred to a future PR (Prometheus stack already covers the metrics use case; OTel's win is tracing).
+
 #### April 25, 2026 — `/parallel-sweep` slash command — step 4 (PR + merge pipeline)
 
 Fourth step of TODO 4.16. Lands the per-task post-completion pipeline that the coordinator runs once a child reports `completed`: isolation check → local `make ci` → push → open PR → poll GitHub CI → two-gate admin-merge.
