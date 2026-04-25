@@ -333,7 +333,7 @@ export const Library = () => {
 
   // Fetch all available tags on mount
   useEffect(() => {
-    api.listAllUserTags().then(setAvailableTags).catch((_err) => {
+    api.listAllUserTags().then((tags) => setAvailableTags(tags ?? [])).catch((_err) => {
       console.error('Failed to load tags:', _err);
     });
   }, []);
@@ -344,7 +344,7 @@ export const Library = () => {
   }, []);
 
   const refreshTags = useCallback(() => {
-    api.listAllUserTags().then(setAvailableTags).catch((_err) => {
+    api.listAllUserTags().then((tags) => setAvailableTags(tags ?? [])).catch((_err) => {
       console.error('Failed to refresh tags:', _err);
     });
   }, []);
