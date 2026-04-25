@@ -2187,6 +2187,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks", s.perm(auth.PermLibraryView), s.listAudiobooks)
 			// /audiobooks/search removed — use GET /audiobooks?search= instead
 			protected.GET("/audiobooks/count", s.perm(auth.PermLibraryView), s.countAudiobooks)
+			protected.GET("/audiobooks/facets", s.perm(auth.PermLibraryView), s.audiobookFacets)
 			protected.GET("/audiobooks/duplicates", s.perm(auth.PermLibraryView), s.listDuplicateAudiobooks)
 			protected.GET("/audiobooks/duplicates/scan-results", s.perm(auth.PermLibraryView), s.listBookDuplicateScanResults)
 			protected.POST("/audiobooks/duplicates/scan", s.perm(auth.PermLibraryEditMetadata), s.scanBookDuplicates)

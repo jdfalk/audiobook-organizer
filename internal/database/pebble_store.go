@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.51.0
+// version: 1.52.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -2024,6 +2024,46 @@ func (p *PebbleStore) CountBooks() (int, error) {
 	}
 
 	return count, nil
+}
+
+// GetDistinctGenres returns sorted distinct non-empty genre values across all primary books.
+func (p *PebbleStore) GetDistinctGenres() ([]string, error) {
+	books, err := p.GetAllBooks(0, 0)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, b := range books {
+		if b.Genre != nil && *b.Genre != "" {
+			if !seen[*b.Genre] {
+				seen[*b.Genre] = true
+				out = append(out, *b.Genre)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// GetDistinctLanguages returns sorted distinct non-empty language values across all primary books.
+func (p *PebbleStore) GetDistinctLanguages() ([]string, error) {
+	books, err := p.GetAllBooks(0, 0)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, b := range books {
+		if b.Language != nil && *b.Language != "" {
+			if !seen[*b.Language] {
+				seen[*b.Language] = true
+				out = append(out, *b.Language)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // CountFiles returns the total number of audio files across all books.
