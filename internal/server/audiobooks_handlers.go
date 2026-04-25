@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -28,16 +28,10 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
+	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 )
 
 func (s *Server) listAudiobooks(c *gin.Context) {
-	// Build cache key from the full query string
-	cacheKey := "list:" + c.Request.URL.RawQuery
-	if cached, ok := s.listCache.Get(cacheKey); ok {
-		RespondWithOK(c, cached)
-		return
-	}
-
 	// Parse pagination parameters
 	params := ParsePaginationParams(c)
 	authorID := ParseQueryIntPtr(c, "author_id")
@@ -56,14 +50,42 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		SortOrder:        sortOrder,
 	}
 
-	// Parse field filters from JSON query param
+	// Parse field filters from JSON query param. Per-user filters
+	// (read_status / progress_pct / last_played) are split off so the
+	// service can apply them via UserBookState lookups; book-global
+	// filters stay on the original FieldFilters slice.
 	if filtersJSON := c.Query("filters"); filtersJSON != "" {
 		var fieldFilters []FieldFilter
 		if err := json.Unmarshal([]byte(filtersJSON), &fieldFilters); err != nil {
 			RespondWithBadRequest(c, "invalid filters parameter: "+err.Error())
 			return
 		}
-		filters.FieldFilters = fieldFilters
+		for _, ff := range fieldFilters {
+			if IsPerUserField(ff.Field) {
+				filters.PerUserFilters = append(filters.PerUserFilters, ff)
+			} else {
+				filters.FieldFilters = append(filters.FieldFilters, ff)
+			}
+		}
+	}
+
+	// Resolve caller for per-user filters; anon callers just don't
+	// get per-user filtering applied (filters.UserID stays "" and
+	// the service skips that pass).
+	if caller, ok := servermiddleware.CurrentUser(c); ok && caller != nil {
+		filters.UserID = caller.ID
+	}
+
+	// Cache key from the full query string. Skip the cache when
+	// per-user filters are active because the cache key doesn't
+	// encode userID — a hit could leak User A's filtered list
+	// to User B.
+	cacheKey := "list:" + c.Request.URL.RawQuery
+	if len(filters.PerUserFilters) == 0 {
+		if cached, ok := s.listCache.Get(cacheKey); ok {
+			RespondWithOK(c, cached)
+			return
+		}
 	}
 
 	// Call service
@@ -104,7 +126,9 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	}
 
 	resp := gin.H{"items": enriched, "count": totalCount, "limit": params.Limit, "offset": params.Offset}
-	s.listCache.Set(cacheKey, resp)
+	if len(filters.PerUserFilters) == 0 {
+		s.listCache.Set(cacheKey, resp)
+	}
 	RespondWithOK(c, resp)
 }
 

@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service_unit_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -515,4 +515,83 @@ func TestAudiobookService_InvalidateBookCaches_ClearsCache(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, books3, 1)
 	assert.Equal(t, "fresh", books3[0].ID)
+}
+
+// --- Per-user filters (read_status / progress_pct / last_played) ---
+
+// TestAudiobookService_GetAudiobooks_PerUserReadStatus verifies that
+// `read_status:in_progress` queries the per-user state for the caller
+// and only returns books matching that user's status — not other users'.
+func TestAudiobookService_GetAudiobooks_PerUserReadStatus(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	books := []database.Book{
+		{ID: "b1", Title: "Reading"},
+		{ID: "b2", Title: "Finished"},
+		{ID: "b3", Title: "Untouched"},
+	}
+	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+
+	// Alice: b1 in-progress, b2 finished, b3 no state.
+	mockStore.EXPECT().GetUserBookState("alice", "b1").
+		Return(&database.UserBookState{UserID: "alice", BookID: "b1", Status: database.UserBookStatusInProgress}, nil)
+	mockStore.EXPECT().GetUserBookState("alice", "b2").
+		Return(&database.UserBookState{UserID: "alice", BookID: "b2", Status: database.UserBookStatusFinished}, nil)
+	mockStore.EXPECT().GetUserBookState("alice", "b3").Return(nil, nil)
+
+	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
+		UserID: "alice",
+		PerUserFilters: []FieldFilter{
+			{Field: "read_status", Value: "in_progress"},
+		},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "b1", got[0].ID)
+}
+
+// TestAudiobookService_GetAudiobooks_PerUserNegated verifies that the
+// negated form (e.g. `-read_status:finished`) excludes finished books
+// while keeping unstarted ones (nil state treated as zero-value).
+func TestAudiobookService_GetAudiobooks_PerUserNegated(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	books := []database.Book{
+		{ID: "b1", Title: "Finished"},
+		{ID: "b2", Title: "Unstarted"},
+	}
+	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+
+	mockStore.EXPECT().GetUserBookState("alice", "b1").
+		Return(&database.UserBookState{Status: database.UserBookStatusFinished}, nil)
+	mockStore.EXPECT().GetUserBookState("alice", "b2").Return(nil, nil)
+
+	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
+		UserID: "alice",
+		PerUserFilters: []FieldFilter{
+			{Field: "read_status", Value: "finished", Negated: true},
+		},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "b2", got[0].ID)
+}
+
+// TestAudiobookService_GetAudiobooks_PerUserNoUserID verifies that
+// without a UserID (anon caller) the per-user filter pass is skipped
+// rather than dropping every book.
+func TestAudiobookService_GetAudiobooks_PerUserNoUserID(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	books := []database.Book{{ID: "b1"}, {ID: "b2"}}
+	mockStore.EXPECT().GetAllBooks(50, 0).Return(books, nil)
+
+	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
+		PerUserFilters: []FieldFilter{{Field: "read_status", Value: "finished"}},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, got, 2, "no user → per-user filter skipped, all books returned")
 }
