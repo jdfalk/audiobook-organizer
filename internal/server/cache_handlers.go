@@ -1,5 +1,5 @@
 // file: internal/server/cache_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 package server
@@ -356,19 +356,17 @@ func sumMap(m map[string]int64) int64 {
 }
 
 // runCacheStatsSnapshotter periodically captures the live Prometheus cache
-// counters into the SQLite cache_stats_history table so trends survive
-// restart. PebbleDB-backed deployments skip persistence (no-op).
+// counters into the metrics sidecar store (always SQLite, independent of the
+// primary store backend) so trends survive restart on every deployment.
 //
 // Pruning: any snapshot older than retention is deleted on each tick. Default
-// retention is 30 days; tune by changing the constant if the table grows
-// faster than expected.
+// retention is 30 days.
 func (s *Server) runCacheStatsSnapshotter(shutdown <-chan struct{}) {
 	const (
 		snapshotInterval = 5 * time.Minute
 		retention        = 30 * 24 * time.Hour
 	)
-	sqliteStore, ok := s.Store().(*database.SQLiteStore)
-	if !ok {
+	if s.metricsStore == nil {
 		return
 	}
 	ticker := time.NewTicker(snapshotInterval)
@@ -382,10 +380,10 @@ func (s *Server) runCacheStatsSnapshotter(shutdown <-chan struct{}) {
 			if len(snaps) == 0 {
 				continue
 			}
-			if err := sqliteStore.RecordCacheStatsSnapshots(snaps); err != nil {
+			if err := s.metricsStore.RecordCacheStatsSnapshots(snaps); err != nil {
 				log.Printf("cache snapshotter: record failed: %v", err)
 			}
-			if _, err := sqliteStore.PruneCacheStatsHistory(now.Add(-retention)); err != nil {
+			if _, err := s.metricsStore.PruneCacheStatsHistory(now.Add(-retention)); err != nil {
 				log.Printf("cache snapshotter: prune failed: %v", err)
 			}
 		}
@@ -397,9 +395,8 @@ func (s *Server) runCacheStatsSnapshotter(shutdown <-chan struct{}) {
 //
 // `since` defaults to 24h ago; `limit` defaults to 0 (no cap).
 func (s *Server) handleCacheStatsHistory(c *gin.Context) {
-	sqliteStore, ok := s.Store().(*database.SQLiteStore)
-	if !ok {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "history not available on this store backend"})
+	if s.metricsStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "metrics store not initialized"})
 		return
 	}
 	cacheName := c.Query("cache")
@@ -421,7 +418,7 @@ func (s *Server) handleCacheStatsHistory(c *gin.Context) {
 		}
 		limit = n
 	}
-	snaps, err := sqliteStore.GetCacheStatsHistory(cacheName, since, limit)
+	snaps, err := s.metricsStore.GetCacheStatsHistory(cacheName, since, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
