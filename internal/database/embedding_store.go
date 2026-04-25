@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
 package database
@@ -14,6 +14,8 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 )
 
 // Embedding holds a vector embedding for a single entity.
@@ -202,15 +204,19 @@ func (s *EmbeddingStore) GetCachedEmbedding(textHash, model string) ([]float32, 
 		return nil, nil
 	}
 	id := compositeKey("cache", cacheEntityID(textHash, model))
+	start := time.Now()
 	row := s.db.QueryRow(`SELECT vector FROM embeddings WHERE id = ?`, id)
 	var vectorBlob []byte
 	err := row.Scan(&vectorBlob)
+	metrics.ObserveCacheGetDuration("embedding", time.Since(start))
 	if err == sql.ErrNoRows {
+		metrics.RecordCacheMiss("embedding", "not_found")
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get cached embedding: %w", err)
 	}
+	metrics.RecordCacheHit("embedding")
 	return decodeVector(vectorBlob), nil
 }
 
@@ -228,13 +234,17 @@ func (s *EmbeddingStore) PutCachedEmbedding(textHash, model string, vector []flo
 	if textHash == "" || model == "" || len(vector) == 0 {
 		return nil
 	}
-	return s.Upsert(Embedding{
+	if err := s.Upsert(Embedding{
 		EntityType: "cache",
 		EntityID:   cacheEntityID(textHash, model),
 		TextHash:   textHash,
 		Vector:     vector,
 		Model:      model,
-	})
+	}); err != nil {
+		return err
+	}
+	metrics.RecordCacheSet("embedding")
+	return nil
 }
 
 // Get retrieves an embedding by entity type and ID. Returns nil, nil when not found.

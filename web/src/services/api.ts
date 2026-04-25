@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.1.0
+// version: 2.2.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -4171,4 +4171,51 @@ export async function revokeAPIKey(id: string): Promise<void> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to revoke API key');
   }
+}
+
+// Cache stats types and functions
+export interface CacheStatsDuration {
+  count: number;
+  sum: number;
+}
+
+export interface CacheMisses {
+  not_found: number;
+  expired: number;
+}
+
+export interface CacheInvalidations {
+  key: number;
+  all: number;
+}
+
+export interface CacheEvictions {
+  expired: number;
+  capacity: number;
+}
+
+export interface CacheStatsEntry {
+  name: string;
+  hits: number;
+  misses: CacheMisses;
+  sets: number;
+  invalidations: CacheInvalidations;
+  evictions: CacheEvictions;
+  size: number;
+  hit_rate?: number; // null when no misses
+  get_duration_seconds: CacheStatsDuration;
+}
+
+export interface CacheStatsResponse {
+  caches: CacheStatsEntry[];
+  generated_at: string;
+}
+
+export async function getCacheStats(): Promise<CacheStatsResponse> {
+  const response = await fetch(`${API_BASE}/cache/stats`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch cache stats');
+  }
+  const body_data = await response.json();
+  return body_data.data ?? body_data;
 }
