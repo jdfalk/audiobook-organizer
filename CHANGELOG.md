@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.26.0 -->
+<!-- version: 2.27.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-25 -->
 
@@ -8,6 +8,24 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 25, 2026 — `/parallel-sweep` slash command — step 5 (sibling rebase loop, clean case)
+
+Fifth step of TODO 4.16. Lands the sibling rebase loop (clean outcomes only — conflict-handling paths are steps 6/7). After every successful merge, the coordinator now has a tested helper to fetch main and rebase every still-unmerged sibling worktree.
+
+- **`scripts/rebase.py`**: `fetch_main`, `rebase_onto_main`, `rebase_siblings`, with a `RebaseOutcome` enum that distinguishes the cases the coordinator must respond to differently:
+  - `CLEAN` — rebase succeeded, sibling ready for its own merge gate
+  - `UP_TO_DATE` — symmetric difference is zero, no-op (skip the rebase entirely; saves time and avoids spurious "rewriting same commits" output)
+  - `DIRTY_TREE` — refused with uncommitted changes (child contract violation; coordinator marks task failed)
+  - `FETCH_FAILED` — git fetch failed (network/auth); coordinator can retry
+  - `CONFLICT` — placeholder; the trivial vs. non-trivial split happens in steps 6/7
+  Includes mid-rebase detection via `.git/rebase-merge` / `.git/rebase-apply` so a conflicted worktree is left for the resolver to inspect.
+- **`scripts/test_rebase.py`**: 9 unit tests with real local git fixtures (same pattern as `test_dispatch.py`). Coverage: clean rebase advances HEAD, up-to-date no-op, dirty-tree refusal (tracked + untracked), fetch-failed propagation, batch-of-2-siblings happy path, one-failure-doesn't-block-others.
+- **`SKILL.md`**: step 4 marked done with sha (`b42196db`), step 5 in progress, file layout updated.
+
+The plan's "two tasks; merge first; rebase second cleanly; merge second" is verified by `RebaseSiblingsTests.test_processes_all_siblings_with_clean_outcome` — it sets up two siblings, advances main, and asserts both rebase cleanly. Doing this with two real PRs into main would have been disruptive without adding test value beyond what the local fixture proves; the full coordinator-driven smoke is reserved for step 9 (polish) when the slash-command-driven coordinator can drive it on a real refactor.
+
+Test status: 54/54 green (19 state + 12 dispatch + 14 pr_merge + 9 rebase). Lint clean.
 
 #### April 25, 2026 — `/parallel-sweep` slash command — step 4 (PR + merge pipeline)
 
