@@ -48,8 +48,8 @@ Atomicity matters because the coordinator can be SIGKILLed at any point — ever
 | 1. Skeleton + state schema | ✅ done (`b16cb0ec`) | `state.py`, `state-schema.md`, SKILL.md stub, 19 unit tests |
 | 2. Coordinator + child prompts | ✅ done (`a04feb47`) | `references/coordinator-prompt.md`, `references/child-prompt.md`, `.claude/commands/parallel-sweep.md` |
 | 3. PreToolUse hook spike | ✅ done (`34028e71`) | `scripts/dispatch.py` (settings render + post-hoc cross-check), spike report. Result: hook does NOT fire for sub-agents → post-hoc check is load-bearing. |
-| 4. PR + merge loop | **in progress** | `scripts/pr_merge.py` (run_local_ci, push, open_pr, poll_ci, admin_merge, merge_task). 14 unit tests with mocked subprocess. Live coordinator smoke deferred to step 5. |
-| 5. Sibling rebase (clean) | not started | 2-task end-to-end with clean rebase |
+| 4. PR + merge loop | ✅ done (`b42196db`) | `scripts/pr_merge.py` (run_local_ci, push, open_pr, poll_ci, admin_merge, merge_task). 14 unit tests with mocked subprocess. |
+| 5. Sibling rebase (clean) | **in progress** | `scripts/rebase.py` (fetch_main, rebase_onto_main, rebase_siblings) with RebaseOutcome enum (CLEAN / UP_TO_DATE / DIRTY_TREE / FETCH_FAILED / CONFLICT). 9 unit tests with real local git fixtures. CONFLICT outcome is the placeholder — its handling is steps 6/7. |
 | 6. Conflict-resolver subagent (Sonnet) | not started | `references/conflict-resolver-prompt.md`, trivial-conflict path |
 | 7. File-copy cherry-pick fallback (Opus) | not started | Non-trivial conflict path |
 | 8. Resume from last completed task | not started | `--resume <runID>` flag, worktree reset on re-dispatch |
@@ -74,5 +74,7 @@ Atomicity matters because the coordinator can be SIGKILLed at any point — ever
         ├── dispatch.py                      ← settings render + post-hoc isolation check (step 3)
         ├── test_dispatch.py                 ← dispatch unit tests (step 3)
         ├── pr_merge.py                      ← per-task PR + 2-gate merge pipeline (step 4)
-        └── test_pr_merge.py                 ← pr_merge unit tests (step 4)
+        ├── test_pr_merge.py                 ← pr_merge unit tests (step 4)
+        ├── rebase.py                        ← sibling rebase loop, clean case (step 5)
+        └── test_rebase.py                   ← rebase unit tests (step 5)
 ```
