@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.25.0 -->
+<!-- version: 2.26.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-25 -->
 
@@ -8,6 +8,18 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 25, 2026 — `/parallel-sweep` slash command — step 4 (PR + merge pipeline)
+
+Fourth step of TODO 4.16. Lands the per-task post-completion pipeline that the coordinator runs once a child reports `completed`: isolation check → local `make ci` → push → open PR → poll GitHub CI → two-gate admin-merge.
+
+- **`.claude/skills/parallel-sweep-impl/scripts/pr_merge.py`**: 7 functions + 1 dataclass + the `merge_task` orchestrator. Each step is a separate function so the coordinator can call them piecewise (e.g. on resume, just re-poll CI for an already-open PR). Two-gate merge enforced: `merge_task` returns `failed` if either local `make ci` or GitHub CI fails, `pr_opened` if the merge itself fails (likely transient — main moved), `merged` only on full happy path.
+- **`scripts/test_pr_merge.py`**: 14 unit tests with mocked subprocess. Coverage: local-CI exit code handling, PR-number parsing from gh URL output, CI poll loop (green / red / skipped-counts-as-success / polls-until-complete / timeout), full merge_task happy path, and the four failure paths (isolation violation / local CI red / GitHub CI red / admin-merge transient failure).
+- **`SKILL.md`**: step 3 marked done (`34028e71`), step 4 in progress, file layout includes pr_merge.py.
+
+The live coordinator smoke (real worktree → real child agent → real PR through the full pipeline) is **deferred to step 5**, which already requires two tasks end-to-end and naturally subsumes single-task verification. Unit-test-only ship for this step keeps each PR small and the smoke amortizes across two tasks.
+
+Test status: 45/45 green (19 state + 12 dispatch + 14 pr_merge). Lint clean.
 
 #### April 25, 2026 — `/parallel-sweep` slash command — step 3 (dispatch helpers + hook spike)
 
