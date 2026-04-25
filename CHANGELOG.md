@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.23.0 -->
+<!-- version: 2.24.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-24 -->
 
@@ -8,6 +8,15 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 24, 2026 — `/parallel-sweep` slash command — step 2 (coordinator + child prompts)
+
+Second step of TODO 4.16. Adds the slash command itself and the two role-defining prompt files. No live dispatch verified yet — the actual smoke test ("coordinator creates a worktree, drops settings.local.json, dispatches a child Haiku, child reports back") is deferred to step 3 where it pairs naturally with the PreToolUse hook spike.
+
+- **`.claude/commands/parallel-sweep.md`**: thin trigger that points at the skill. Frontmatter declares the trigger context, allowed tools (Bash/Read/Write/Edit/Task/Glob/Grep), and `argument-hint`. Body is a 4-step orienting prompt: read the skill, parse arguments, confirm scope with the user, execute per the coordinator prompt.
+- **`references/coordinator-prompt.md`**: the heavyweight prompt the coordinator reads on every invocation. Defines the 7 workflow phases (init / fan-out / watch / per-task verification / merge gate / sibling rebase / completion), the 6 hard constraints (own all git+gh, write the state file, worktree path discipline, mandatory hook drop, mandatory post-hoc isolation check, two-gate merge), and explicit logging format. Calls out one deliberate change vs `parallel-refactor-sweep`: one PR per task instead of one PR per wave (because the coordinator now owns merge automation).
+- **`references/child-prompt.md`**: the narrower template the coordinator fills per dispatch. Five hard rules: only work in the worktree, never run git push/gh, never touch state file, never edit CHANGELOG/TODO (coordinator owns those), conventional commit format. Documents what the child does NOT need to do (run `make ci`, open PRs, rebase) and explains the *why* behind each constraint with reference to the predecessor sweep's failure modes.
+- **SKILL.md**: updated implementation-status table (step 1 done with commit sha, step 2 in progress) and refreshed file layout to include `.claude/commands/`.
 
 #### April 24, 2026 — Sidebar `In Progress` / `Finished` filters now work end-to-end
 
