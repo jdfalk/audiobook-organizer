@@ -1,13 +1,26 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.24.0 -->
+<!-- version: 2.25.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-24 -->
+<!-- last-edited: 2026-04-25 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 25, 2026 — `/parallel-sweep` slash command — step 3 (dispatch helpers + hook spike)
+
+Third step of TODO 4.16. Lands the dispatch helpers (settings render + post-hoc isolation check) and answers the empirical question that's been sitting open since the plan was written: **does the per-worktree PreToolUse hook actually fire for sub-agent tool calls?** Result: **no** — sub-agents inherit the parent session's hook config and don't pick up project-scope hooks from their working directory. The post-hoc `git status` cross-check is the load-bearing barrier. The hook is kept anyway as cheap forward-compatible decoration (~200 bytes per worktree).
+
+- **`.claude/skills/parallel-sweep-impl/scripts/dispatch.py`**: two helpers + a CLI. `render_worktree_settings` / `write_worktree_settings` produce the per-worktree `.claude/settings.local.json` with the absolute-path-templated PreToolUse hook. `cross_check_isolation` runs `git status --porcelain` in every sibling repo path the coordinator knows about and flags any change that landed outside the child's own worktree. CLI subcommands `render` / `write` / `check` for ad-hoc invocation.
+- **`scripts/test_dispatch.py`**: 12 unit tests. Render tests cover absolute-path embedding and paths with spaces. Cross-check tests cover the clean case, sibling violation, main-checkout violation (the most common defect), self-path-in-siblings (no false positive), staged-but-uncommitted writes, and non-repo paths. CLI tests verify exit codes.
+- **`docs/superpowers/notes/2026-04-25-parallel-sweep-hook-spike.md`**: spike report. Method, result, interpretation, decision, implications for the rest of the build. The TL;DR: the post-hoc check (`dispatch.cross_check_isolation`) is structurally the only worktree-isolation guarantee — the coordinator MUST call it before opening any PR.
+- **`SKILL.md`**: step 2 marked done, step 3 in progress, file layout includes the new dispatch.py.
+
+Spike specifics: created `/tmp/parallel-sweep-spike` worktree, dropped the settings file via `dispatch.py write`, dispatched a `general-purpose` sub-agent with a deliberate two-step prompt (edit one file inside the worktree, edit one file in main checkout), observed: both writes succeeded silently with no `BLOCKED:` message. The post-hoc check correctly flagged the main-checkout violation (exit 1). Total cost: ~29k tokens, ~5s wall.
+
+Test status: 31/31 unit tests green (19 state + 12 dispatch). Lint clean.
 
 #### April 24, 2026 — `/parallel-sweep` slash command — step 2 (coordinator + child prompts)
 
