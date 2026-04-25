@@ -1,5 +1,5 @@
 // file: internal/database/cache_stats_history_store.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: f1e2d3c4-b5a6-9788-7766-554433221100
 
 package database
@@ -8,15 +8,40 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
-// CacheStatsSnapshot is one row in cache_stats_history.
-//
-// Misses, Invalidations, and Evictions are stored as flattened sums (across all
-// reasons/scopes) because the live per-reason breakdown still lives in
-// Prometheus; the history table answers "how did this cache trend over time"
-// not "why did it miss." If reason-level history becomes useful later, add
-// extra columns rather than denormalizing into JSON.
+// MetricsStore owns a dedicated SQLite sidecar database used for operational
+// telemetry that should be queryable regardless of the primary store backend
+// (PebbleDB or SQLite). Today it persists cache observability snapshots; future
+// metrics belong here too rather than polluting the main store.
+type MetricsStore struct {
+	db *sql.DB
+}
+
+const metricsSchema = `
+CREATE TABLE IF NOT EXISTS cache_stats_history (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	cache_name TEXT NOT NULL,
+	ts TIMESTAMP NOT NULL,
+	hits INTEGER NOT NULL DEFAULT 0,
+	misses INTEGER NOT NULL DEFAULT 0,
+	sets INTEGER NOT NULL DEFAULT 0,
+	invalidations INTEGER NOT NULL DEFAULT 0,
+	evictions INTEGER NOT NULL DEFAULT 0,
+	size INTEGER NOT NULL DEFAULT 0,
+	get_duration_count INTEGER NOT NULL DEFAULT 0,
+	get_duration_sum REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_cache_stats_history_name_ts ON cache_stats_history(cache_name, ts);
+CREATE INDEX IF NOT EXISTS idx_cache_stats_history_ts ON cache_stats_history(ts);
+`
+
+// CacheStatsSnapshot is one row in cache_stats_history. Misses, Invalidations,
+// and Evictions are flattened sums across reasons/scopes — the per-reason
+// breakdown still lives in Prometheus; this table answers "how did this cache
+// trend over time" not "why did it miss."
 type CacheStatsSnapshot struct {
 	CacheName        string    `json:"cache_name"`
 	Timestamp        time.Time `json:"ts"`
@@ -30,9 +55,31 @@ type CacheStatsSnapshot struct {
 	GetDurationSum   float64   `json:"get_duration_sum"`
 }
 
+// NewMetricsStore opens (or creates) the metrics sidecar SQLite at dbPath
+// and ensures the schema is current. WAL + 5s busy timeout for concurrent
+// reads alongside the snapshotter writer.
+func NewMetricsStore(dbPath string) (*MetricsStore, error) {
+	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=off", dbPath)
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("metrics_store: open %q: %w", dbPath, err)
+	}
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("metrics_store: ping %q: %w", dbPath, err)
+	}
+	if _, err := db.Exec(metricsSchema); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("metrics_store: schema: %w", err)
+	}
+	return &MetricsStore{db: db}, nil
+}
+
+// Close shuts down the underlying database connection.
+func (s *MetricsStore) Close() error { return s.db.Close() }
+
 // RecordCacheStatsSnapshots inserts a batch of snapshots in a single transaction.
-// PebbleDB stores ignore the call (no-op) since this table is SQLite-only.
-func (s *SQLiteStore) RecordCacheStatsSnapshots(snapshots []CacheStatsSnapshot) error {
+func (s *MetricsStore) RecordCacheStatsSnapshots(snapshots []CacheStatsSnapshot) error {
 	if len(snapshots) == 0 {
 		return nil
 	}
@@ -65,7 +112,7 @@ func (s *SQLiteStore) RecordCacheStatsSnapshots(snapshots []CacheStatsSnapshot) 
 // GetCacheStatsHistory returns snapshots for a cache name (or all if empty)
 // since the given timestamp, ordered oldest-first. limit caps row count
 // (0 means no limit).
-func (s *SQLiteStore) GetCacheStatsHistory(cacheName string, since time.Time, limit int) ([]CacheStatsSnapshot, error) {
+func (s *MetricsStore) GetCacheStatsHistory(cacheName string, since time.Time, limit int) ([]CacheStatsSnapshot, error) {
 	var (
 		rows *sql.Rows
 		err  error
@@ -104,10 +151,9 @@ func (s *SQLiteStore) GetCacheStatsHistory(cacheName string, since time.Time, li
 	return out, rows.Err()
 }
 
-// PruneCacheStatsHistory deletes snapshots older than the cutoff. Used by
-// background maintenance to keep the table from growing unboundedly. Returns
+// PruneCacheStatsHistory deletes snapshots older than the cutoff. Returns
 // the number of rows deleted.
-func (s *SQLiteStore) PruneCacheStatsHistory(olderThan time.Time) (int64, error) {
+func (s *MetricsStore) PruneCacheStatsHistory(olderThan time.Time) (int64, error) {
 	res, err := s.db.Exec(`DELETE FROM cache_stats_history WHERE ts < ?`, olderThan)
 	if err != nil {
 		return 0, fmt.Errorf("prune: %w", err)

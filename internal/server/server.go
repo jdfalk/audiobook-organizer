@@ -718,6 +718,7 @@ type Server struct {
 	changelogService       *activity.ChangelogService
 	activityService        *activity.Service
 	embeddingStore         *database.EmbeddingStore
+	metricsStore           *database.MetricsStore
 	dedupEngine            *dedup.Engine
 	activityWriter         *activity.Writer
 	itunesActivityFn       func(entry database.ActivityEntry)
@@ -929,6 +930,19 @@ func NewServer(store database.Store) *Server {
 			log.Printf("[WARN] Failed to open activity log store: %v", err)
 		} else {
 			server.activityService = activity.NewService(activityStore)
+		}
+	}
+
+	// Open metrics sidecar store for cache stats history. Always SQLite,
+	// independent of the primary store backend (PebbleDB or SQLite), so
+	// /api/v1/cache/stats/history works everywhere.
+	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
+		metricsDBPath := filepath.Join(filepath.Dir(dbPath), "metrics.db")
+		metricsStore, err := database.NewMetricsStore(metricsDBPath)
+		if err != nil {
+			log.Printf("[WARN] Failed to open metrics store: %v", err)
+		} else {
+			server.metricsStore = metricsStore
 		}
 	}
 
