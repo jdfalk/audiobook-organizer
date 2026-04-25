@@ -14,7 +14,6 @@ Or via the full path:
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -58,7 +57,10 @@ class StateTests(unittest.TestCase):
     def test_create_rejects_invalid_model(self) -> None:
         with self.assertRaises(ValueError):
             state.State.create(
-                self.state_dir, self.run_id, "x", [{"slug": "t", "description": "d", "model": "gpt-4"}]
+                self.state_dir,
+                self.run_id,
+                "x",
+                [{"slug": "t", "description": "d", "model": "gpt-4"}],
             )
 
     def test_load_round_trips(self) -> None:
@@ -83,7 +85,9 @@ class StateTests(unittest.TestCase):
     def test_set_status_validates(self) -> None:
         s = state.State.create(self.state_dir, self.run_id, "x", SAMPLE_TASKS)
         s.set_status("paused")
-        self.assertEqual(state.State.load(self.state_dir, self.run_id).data["status"], "paused")
+        self.assertEqual(
+            state.State.load(self.state_dir, self.run_id).data["status"], "paused"
+        )
         with self.assertRaises(ValueError):
             s.set_status("bogus")
 
@@ -183,7 +187,9 @@ class StateTests(unittest.TestCase):
 
     def test_normalize_requires_slug_and_description(self) -> None:
         with self.assertRaises(ValueError):
-            state.State.create(self.state_dir, self.run_id, "x", [{"slug": "only-slug"}])
+            state.State.create(
+                self.state_dir, self.run_id, "x", [{"slug": "only-slug"}]
+            )
 
     def test_normalize_default_branch(self) -> None:
         s = state.State.create(
