@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.30.0 -->
+<!-- version: 2.31.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-25 -->
 
@@ -8,6 +8,30 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 25, 2026 — `/parallel-sweep` slash command — step 9 (polish, all 9 steps complete)
+
+Final step of TODO 4.16. The 9-step build is complete: `/parallel-sweep` is now a fully-wired project-scope slash command with a coordinator skill, child/coordinator/conflict-resolver prompts, state-file CRUD, dispatch + isolation helpers, PR + merge pipeline, sibling-rebase loop with Sonnet trivial / Opus fallback paths, and resume support across usage limits. **TODO 4.16 marked complete.**
+
+- **`docs/superpowers/specs/parallel-sweep.md`**: user-facing spec — when to use, how to invoke, the 7-phase coordinator workflow as ASCII art, hard guarantees, state file location, structured logging format, cost/time per task, manual end-to-end smoke procedure, future-work pointers.
+- **`CLAUDE.md`**: Workflow Discipline section now points at `/parallel-sweep` for ≥3 mechanically-similar refactor tasks.
+- **`.claude/skills/parallel-sweep-impl/SKILL.md`**: implementation status table now shows all 9 steps ✅ done with commit SHAs; final test count (87/87 green) noted.
+- **`TODO.md`**: 4.16 marked `[x]` complete.
+
+The full coordinator-driven smoke (slash command → real refactor → real merges) is **reserved for the first real use** and documented as a procedure in the spec doc. The unit tests (87/87 green) and per-step empirical spikes (PreToolUse hook scoping confirmed; Sonnet resolver verified end-to-end) provide strong evidence each piece works; the integration-level smoke is the natural first-real-use validation.
+
+What ships:
+
+- `.claude/commands/parallel-sweep.md` — slash command trigger
+- `.claude/skills/parallel-sweep-impl/SKILL.md` + 4 reference docs + 7 scripts (state, dispatch, pr_merge, rebase, conflict_resolver, fallback, resume) + 7 test files
+- `docs/superpowers/plans/2026-04-24-parallel-sweep-slash-command.md` — design rationale + locked decisions
+- `docs/superpowers/specs/parallel-sweep.md` — user spec
+- `docs/superpowers/notes/2026-04-25-parallel-sweep-hook-spike.md` — hook scoping spike
+- `docs/superpowers/notes/2026-04-25-parallel-sweep-conflict-resolver-spike.md` — Sonnet resolver spike
+
+Future work tracked in plan §15: extract universal version to `~/.claude/commands/` after ~3 real sweeps; CHANGELOG-conflict avoidance.
+
+Test status: 87/87 green (19 state + 12 dispatch + 14 pr_merge + 9 rebase + 14 conflict_resolver + 11 fallback + 8 resume). Lint clean.
 
 #### April 25, 2026 — `/parallel-sweep` slash command — step 8 (resume from last completed task)
 

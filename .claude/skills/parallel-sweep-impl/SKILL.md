@@ -41,19 +41,21 @@ The single source of truth for everything: which tasks are pending, dispatched, 
 
 Atomicity matters because the coordinator can be SIGKILLed at any point — every mutation goes through `State.checkpoint()` which writes to a tmp file, fsyncs, and `os.replace`s atomically into place.
 
-## Implementation status (built incrementally per the plan)
+## Implementation status — all 9 steps complete (2026-04-25)
 
 | Step | Status | Adds |
 |---|---|---|
 | 1. Skeleton + state schema | ✅ done (`b16cb0ec`) | `state.py`, `state-schema.md`, SKILL.md stub, 19 unit tests |
 | 2. Coordinator + child prompts | ✅ done (`a04feb47`) | `references/coordinator-prompt.md`, `references/child-prompt.md`, `.claude/commands/parallel-sweep.md` |
-| 3. PreToolUse hook spike | ✅ done (`34028e71`) | `scripts/dispatch.py` (settings render + post-hoc cross-check), spike report. Result: hook does NOT fire for sub-agents → post-hoc check is load-bearing. |
-| 4. PR + merge loop | ✅ done (`b42196db`) | `scripts/pr_merge.py` (run_local_ci, push, open_pr, poll_ci, admin_merge, merge_task). 14 unit tests with mocked subprocess. |
-| 5. Sibling rebase (clean) | ✅ done (`faa7b829`) | `scripts/rebase.py` (fetch_main, rebase_onto_main, rebase_siblings) with RebaseOutcome enum (CLEAN / UP_TO_DATE / DIRTY_TREE / FETCH_FAILED / CONFLICT). 9 unit tests. |
-| 6. Conflict-resolver subagent (Sonnet) | ✅ done (`2e8a3e32`) | `references/conflict-resolver-prompt.md`, `scripts/conflict_resolver.py`, 14 unit tests, live spike confirmed end-to-end resolution. |
-| 7. File-copy cherry-pick fallback (Opus) | ✅ done | `scripts/fallback.py` — per-commit cherry-pick replay (preserves commit history, no squash). Per-conflict-file Opus dispatch. 11 unit tests. |
-| 8. Resume from last completed task | **in progress** | `scripts/resume.py` — load_for_resume / reset_in_flight / mark_resumed. Refuses on status=running unless force=True. Reset uses `git reset --hard origin/main` (not stale base). 8 unit tests with real worktree fixtures. |
-| 9. Polish | not started | Spec doc, CLAUDE.md pointer, TODO 4.16 marked, gitignore |
+| 3. PreToolUse hook spike | ✅ done (`34028e71`) | `scripts/dispatch.py`, spike report. Result: hook does NOT fire for sub-agents → post-hoc check is load-bearing. |
+| 4. PR + merge loop | ✅ done (`b42196db`) | `scripts/pr_merge.py` (run_local_ci, push, open_pr, poll_ci, admin_merge, merge_task). 14 unit tests. |
+| 5. Sibling rebase (clean) | ✅ done (`faa7b829`) | `scripts/rebase.py` with RebaseOutcome enum (CLEAN / UP_TO_DATE / DIRTY_TREE / FETCH_FAILED / CONFLICT). 9 unit tests. |
+| 6. Conflict-resolver subagent (Sonnet) | ✅ done (`2e8a3e32`) | `references/conflict-resolver-prompt.md`, `scripts/conflict_resolver.py`, 14 unit tests, live spike. |
+| 7. File-copy cherry-pick fallback (Opus) | ✅ done | `scripts/fallback.py` — per-commit cherry-pick replay (no squash). 11 unit tests. |
+| 8. Resume from last completed task | ✅ done (`688b19a3`) | `scripts/resume.py` — load_for_resume / reset_in_flight / mark_resumed. 8 unit tests. |
+| 9. Polish | **in progress** | Spec doc at `docs/superpowers/specs/parallel-sweep.md`, CLAUDE.md pointer, TODO 4.16 marked complete. |
+
+**Test status:** 87/87 green. Lint clean. Coordinator-driven smoke (slash command → real refactor → real merges) deferred to first real use; the procedure is documented in the spec doc.
 
 ## Files
 
