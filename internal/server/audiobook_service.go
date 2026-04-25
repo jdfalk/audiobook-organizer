@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,9 @@ type audiobookStore interface {
 	// asExternalIDStore for tombstone cleanup.
 	database.MetadataStore
 	database.UserPreferenceStore
+	// Per-user filter pass on the listing endpoint reads UserBookState
+	// to evaluate read_status / progress_pct / last_played.
+	database.UserPositionStore
 }
 
 // AudiobookService handles all audiobook business logic
@@ -162,7 +166,25 @@ type ListFilters struct {
 	Tag              string
 	SortBy           string        // column sort key
 	SortOrder        string        // "asc" or "desc"
-	FieldFilters     []FieldFilter // advanced field-specific filters
+	FieldFilters     []FieldFilter // advanced field-specific filters (book-global)
+	PerUserFilters   []FieldFilter // per-user filters (read_status, progress_pct, last_played)
+	UserID           string        // caller's user ID; required for PerUserFilters
+}
+
+// PerUserFieldNames is the set of search fields whose values come from
+// per-user state (database.UserBookState) rather than book columns.
+// Handlers use this to split incoming FieldFilters between the global
+// pass (matchesFieldFilters) and the per-user pass.
+var PerUserFieldNames = map[string]struct{}{
+	"read_status":  {},
+	"progress_pct": {},
+	"last_played":  {},
+}
+
+// IsPerUserField reports whether f targets per-user state.
+func IsPerUserField(field string) bool {
+	_, ok := PerUserFieldNames[field]
+	return ok
 }
 
 // derefStr safely dereferences a *string, returning "" for nil.
@@ -340,6 +362,52 @@ func applySorting(books []database.Book, f ListFilters) {
 	})
 }
 
+// matchesPerUserFilter evaluates one per-user FieldFilter against a
+// UserBookState. A nil state is treated as zero-value (Status="",
+// ProgressPct=0, no last activity) so that e.g. `-read_status:finished`
+// correctly matches books the user has never opened. Mirrors the
+// semantics of playlist_evaluator.perUserFilterMatches so smart
+// playlists and the library list agree on what "finished" means.
+func matchesPerUserFilter(state *database.UserBookState, f FieldFilter) bool {
+	if state == nil {
+		state = &database.UserBookState{}
+	}
+	switch f.Field {
+	case "read_status":
+		return strings.EqualFold(state.Status, f.Value)
+	case "progress_pct":
+		// Listing-side FieldFilters carry no operator (parser strips
+		// them at this layer), so equality is the only sensible match.
+		want, err := strconv.Atoi(f.Value)
+		if err != nil {
+			return false
+		}
+		return state.ProgressPct == want
+	case "last_played":
+		// Without an operator we can only test presence — value is
+		// ignored. Useful as `-last_played:` (never played).
+		return !state.LastActivityAt.IsZero()
+	default:
+		return false
+	}
+}
+
+// matchesAllPerUserFilters returns true iff every per-user filter
+// matches (with negation applied), i.e. the book belongs in the
+// filtered set for this user.
+func matchesAllPerUserFilters(state *database.UserBookState, filters []FieldFilter) bool {
+	for _, f := range filters {
+		ok := matchesPerUserFilter(state, f)
+		if f.Negated {
+			ok = !ok
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // matchesFieldFilters returns true if a book matches all the given field filters.
 // All filters are ANDed: every filter must match for the book to be included.
 func matchesFieldFilters(book database.Book, filters []FieldFilter) bool {
@@ -447,7 +515,8 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 		f = filters[0]
 	}
 	hasSorting := f.SortBy != ""
-	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.FieldFilters) > 0 || hasSorting
+	hasPerUser := len(f.PerUserFilters) > 0 && f.UserID != ""
+	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.FieldFilters) > 0 || hasPerUser || hasSorting
 
 	// When post-filters are active, fetch all and filter in memory
 	// (PebbleStore doesn't support query-level boolean/string filtering)
@@ -544,6 +613,20 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 				}
 			}
 			filtered = fieldFiltered
+		}
+
+		// Apply per-user filters (read_status / progress_pct / last_played).
+		// Requires a caller user ID; without one we skip rather than
+		// silently dropping every book.
+		if hasPerUser {
+			perUserFiltered := make([]database.Book, 0, len(filtered))
+			for _, b := range filtered {
+				state, _ := svc.store.GetUserBookState(f.UserID, b.ID)
+				if matchesAllPerUserFilters(state, f.PerUserFilters) {
+					perUserFiltered = append(perUserFiltered, b)
+				}
+			}
+			filtered = perUserFiltered
 		}
 
 		// Apply pagination after filtering
