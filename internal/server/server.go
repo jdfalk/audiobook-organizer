@@ -705,6 +705,7 @@ type Server struct {
 	olService              *metafetch.OpenLibraryService
 	dedupCache             *cache.Cache[gin.H]
 	listCache              *cache.Cache[gin.H]
+	facetsCache            *cache.Cache[gin.H]
 	libraryWatcher         *itunes.LibraryWatcher
 	itunesSvc              *itunesservice.Service
 	updater                *updater.Updater
@@ -839,6 +840,7 @@ func NewServer(store database.Store) *Server {
 		dashboardCache:         cache.New[gin.H]("dashboard", 30*time.Second),
 		dedupCache:             cache.New[gin.H]("dedup", 5*time.Minute),
 		listCache:              cache.New[gin.H]("list", 30*time.Second),
+		facetsCache:            cache.New[gin.H]("facets", 5*time.Minute),
 		olService:              metafetch.NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
 		mergeService:           merge.NewService(resolvedStore),
@@ -1501,6 +1503,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 	if err := s.itunesSvc.Start(s.bgCtx); err != nil {
 		return fmt.Errorf("itunes service start: %w", err)
 	}
+
+	// Pre-warm the facets cache in the background so the first Library page
+	// load doesn't block on a full PebbleDB scan.
+	go s.warmFacetsCache()
+
 	s.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
 		Handler:           s.router,

@@ -226,13 +226,49 @@ func (s *Server) countAudiobooks(c *gin.Context) {
 	RespondWithOK(c, gin.H{"count": count})
 }
 
+const facetsCacheKey = "all"
+
+// warmFacetsCache pre-computes genres and languages at startup.
+// Called as a goroutine from Server.Start so the first Library page load
+// hits the cache instead of triggering a full PebbleDB scan.
+func (s *Server) warmFacetsCache() {
+	if s.Store() == nil {
+		return
+	}
+	log.Println("[facets] pre-warming genres/languages cache")
+	genres, err := s.Store().GetDistinctGenres()
+	if err != nil {
+		log.Printf("[facets] genre warm-up failed: %v", err)
+		return
+	}
+	languages, err := s.Store().GetDistinctLanguages()
+	if err != nil {
+		log.Printf("[facets] language warm-up failed: %v", err)
+		return
+	}
+	if genres == nil {
+		genres = []string{}
+	}
+	if languages == nil {
+		languages = []string{}
+	}
+	s.facetsCache.Set(facetsCacheKey, gin.H{"genres": genres, "languages": languages})
+	log.Printf("[facets] cache warm: %d genres, %d languages", len(genres), len(languages))
+}
+
 // audiobookFacets handles GET /api/v1/audiobooks/facets.
 // Returns lightweight lists of distinct genres and languages for filter dropdowns.
+// Results are cached for 5 minutes and pre-warmed at startup.
 func (s *Server) audiobookFacets(c *gin.Context) {
 	if s.Store() == nil {
 		RespondWithInternalError(c, "database not initialized")
 		return
 	}
+	if cached, ok := s.facetsCache.Get(facetsCacheKey); ok {
+		RespondWithOK(c, cached)
+		return
+	}
+	// Cache miss (e.g. first request before warm-up goroutine completes, or after TTL expiry).
 	genres, err := s.Store().GetDistinctGenres()
 	if err != nil {
 		internalError(c, "failed to fetch genres", err)
@@ -249,7 +285,9 @@ func (s *Server) audiobookFacets(c *gin.Context) {
 	if languages == nil {
 		languages = []string{}
 	}
-	RespondWithOK(c, gin.H{"genres": genres, "languages": languages})
+	result := gin.H{"genres": genres, "languages": languages}
+	s.facetsCache.Set(facetsCacheKey, result)
+	RespondWithOK(c, result)
 }
 
 func (s *Server) serveAudiobookCover(c *gin.Context) {
