@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.27.0 -->
+<!-- version: 2.28.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-25 -->
 
@@ -8,6 +8,18 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 25, 2026 — `/parallel-sweep` slash command — step 6 (Sonnet conflict resolver)
+
+Sixth step of TODO 4.16. Lands the trivial-conflict resolution path: when a sibling rebase produces ≤30 markers across ≤3 files, the coordinator now dispatches a Sonnet subagent that resolves the markers, the coordinator runs `git add -u && git rebase --continue`, and the rebase proceeds. Larger conflicts skip Sonnet entirely and go to the Opus file-copy fallback (step 7).
+
+- **`scripts/conflict_resolver.py`**: `assess_conflict` (returns trivial vs. fallback decision + counts), `build_resolver_prompt` (fills the template), `parse_resolver_report` (permissive parser for the structured reply), `apply_resolver_success` (runs git add + rebase --continue, with a content-marker check that catches resolver-claimed-success-but-markers-remain), `abort_rebase` (cleanup before fallback). Empirical thresholds (`TRIVIAL_MARKER_THRESHOLD=30`, `TRIVIAL_FILE_THRESHOLD=3`) hard-coded as constants for easy tuning after real sweeps.
+- **`references/conflict-resolver-prompt.md`**: tight role prompt — text-only edits, no git, only listed files, EXIT 1 on uncertainty (especially data-loss risk). Calls out *why* each constraint exists with reference to the resolver-doing-too-much failure mode.
+- **`scripts/test_conflict_resolver.py`**: 14 unit tests using real local rebase conflicts (handcrafted two-branches-touch-same-line). Coverage: list / count, trivial vs. exceeds-threshold assessment, prompt placeholder substitution + nested-fence regression, success/uncertain report parsing, missing-EXIT_REASON treated as uncertain (conservative default), apply_resolver_success happy path + refuses-when-markers-remain, abort_rebase happy path + no-op-when-no-rebase.
+- **`docs/superpowers/notes/2026-04-25-parallel-sweep-conflict-resolver-spike.md`**: live spike report. Built a deliberate Add→Sum-vs-overflow-check conflict, dispatched a real Sonnet sub-agent, observed correct merged resolution (kept main's rename + branch's overflow logic), apply_resolver_success ran cleanly, rebase completed. ~31k tokens, ~15s, 3 tool uses. Includes the prompt-extractor bug found and fixed during the spike (`text.find` → `text.rfind` for the closing fence — without it every resolver prompt was being silently truncated mid-section).
+- **SKILL.md**: step 5 marked done with sha (`faa7b829`), step 6 in progress, file layout updated.
+
+Test status: 68/68 green (19 state + 12 dispatch + 14 pr_merge + 9 rebase + 14 conflict_resolver). Lint clean.
 
 #### April 25, 2026 — `/parallel-sweep` slash command — step 5 (sibling rebase loop, clean case)
 
