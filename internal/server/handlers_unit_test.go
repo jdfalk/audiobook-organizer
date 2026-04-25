@@ -36,9 +36,9 @@ func setupHandlerTest(t *testing.T) (*Server, *mocks.MockStore, *gin.Engine) {
 	mockStore := mocks.NewMockStore(t)
 	srv := &Server{
 		store:          mockStore,
-		dashboardCache: cache.New[gin.H](30 * time.Second),
-		dedupCache:     cache.New[gin.H](5 * time.Minute),
-		listCache:      cache.New[gin.H](30 * time.Second),
+		dashboardCache: cache.New[gin.H]("dashboard", 30*time.Second),
+		dedupCache:     cache.New[gin.H]("dedup", 5*time.Minute),
+		listCache:      cache.New[gin.H]("list", 30*time.Second),
 	}
 	router := gin.New()
 	return srv, mockStore, router
