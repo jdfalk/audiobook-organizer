@@ -3767,7 +3767,7 @@ export async function listAllUserTags(): Promise<
     throw await buildApiError(response, 'Failed to list tags');
   }
   const data = await response.json();
-  return data.tags;
+  return data.data?.tags ?? data.tags ?? [];
 }
 
 // --- Column config preferences ---
