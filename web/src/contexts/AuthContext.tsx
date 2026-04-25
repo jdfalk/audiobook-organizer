@@ -1,5 +1,5 @@
 // file: web/src/contexts/AuthContext.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2b3c4d5e-6f70-4819-a2b3-c4d5e6f70819
 
 import {
@@ -42,29 +42,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    try {
-      const status = await api.getAuthStatus();
-      setRequiresAuth(status.requires_auth);
-      setBootstrapReady(status.bootstrap_ready);
 
-      if (!status.requires_auth) {
-        setUser(null);
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 1_000;
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+        }
+        const status = await api.getAuthStatus();
+        setRequiresAuth(status.requires_auth);
+        setBootstrapReady(status.bootstrap_ready);
+
+        if (!status.requires_auth) {
+          setUser(null);
+          setInitialized(true);
+          setLoading(false);
+          return;
+        }
+
+        const me = await api.getMe();
+        setUser(me);
+        setInitialized(true);
+        setLoading(false);
         return;
+      } catch (error) {
+        // 401 = definitively unauthenticated; don't retry.
+        if (error instanceof ApiError && error.status === 401) {
+          setUser(null);
+          setInitialized(true);
+          setLoading(false);
+          return;
+        }
+        // Transient error (503, network failure during startup); retry.
+        lastError = error;
       }
-
-      const me = await api.getMe();
-      setUser(me);
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        setUser(null);
-      } else {
-        // Treat auth endpoint failures as unauthenticated until next retry.
-        setUser(null);
-      }
-    } finally {
-      setInitialized(true);
-      setLoading(false);
     }
+
+    // All retries exhausted — server is unreachable; preserve existing user
+    // state rather than flashing the login screen for a healthy session.
+    console.warn('Auth check failed after retries:', lastError);
+    setInitialized(true);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
