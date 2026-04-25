@@ -2162,6 +2162,7 @@ func (s *Server) setupRoutes() {
 		authProtected.Use(authMiddleware)
 		{
 			authProtected.GET("/me", s.me)
+			authProtected.PATCH("/me", s.updateMe)
 			authProtected.POST("/logout", s.logout)
 			authProtected.GET("/sessions", s.listMySessions)
 			authProtected.DELETE("/sessions/:id", s.revokeMySession)

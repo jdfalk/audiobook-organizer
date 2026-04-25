@@ -1,5 +1,5 @@
 // file: internal/server/auth_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 1457df2f-af76-46cb-a2f4-c9f6f275f93a
 
 package server
@@ -259,6 +259,42 @@ func (s *Server) me(c *gin.Context) {
 		RespondWithUnauthorized(c, "not authenticated")
 		return
 	}
+	RespondWithOK(c, gin.H{"user": buildAuthUserResponse(user)})
+}
+
+// updateMe handles PATCH /api/v1/auth/me.
+// Allows the current user to update their own email address.
+func (s *Server) updateMe(c *gin.Context) {
+	if s.Store() == nil {
+		RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	user, ok := servermiddleware.CurrentUser(c)
+	if !ok {
+		RespondWithUnauthorized(c, "not authenticated")
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondWithBadRequest(c, err.Error())
+		return
+	}
+
+	email := strings.TrimSpace(req.Email)
+	if email == "" {
+		RespondWithBadRequest(c, "email is required")
+		return
+	}
+
+	user.Email = email
+	if err := s.Store().UpdateUser(user); err != nil {
+		RespondWithInternalError(c, "failed to update profile")
+		return
+	}
+
 	RespondWithOK(c, gin.H{"user": buildAuthUserResponse(user)})
 }
 

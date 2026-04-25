@@ -1,5 +1,5 @@
 // file: web/src/components/layout/TopBar.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useEffect, useRef, useState } from 'react';
@@ -7,23 +7,22 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AppBar,
   Box,
-  InputBase,
-  Toolbar,
-  IconButton,
-  Typography,
   Chip,
+  InputBase,
+  IconButton,
+  Toolbar,
   Tooltip,
+  Typography,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu.js';
 import Brightness4Icon from '@mui/icons-material/Brightness4.js';
 import Brightness7Icon from '@mui/icons-material/Brightness7.js';
 import SearchIcon from '@mui/icons-material/Search.js';
-import LogoutIcon from '@mui/icons-material/Logout.js';
 import SettingsIcon from '@mui/icons-material/Settings.js';
 import { eventSourceManager } from '../../services/eventSourceManager';
 import { useAppStore } from '../../stores/useAppStore';
-import { useAuth } from '../../contexts/AuthContext';
 import { OperationsIndicator } from './OperationsIndicator';
+import { UserMenu } from './UserMenu';
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -33,7 +32,6 @@ interface TopBarProps {
 export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const auth = useAuth();
   const [connectionState, setConnectionState] = useState<
     'open' | 'reconnecting' | 'closed' | 'error'
   >('open');
@@ -87,14 +85,6 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
       pathname: '/library',
       search: params.toString() ? `?${params.toString()}` : '',
     });
-  };
-
-  const handleLogout = async () => {
-    try {
-      await auth.logout();
-    } finally {
-      navigate('/login');
-    }
   };
 
   return (
@@ -196,19 +186,7 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
             )}
           </IconButton>
         </Tooltip>
-        {auth.requiresAuth && (
-          <Tooltip title="Logout">
-            <IconButton
-              color="inherit"
-              aria-label="logout"
-              onClick={() => {
-                void handleLogout();
-              }}
-            >
-              <LogoutIcon />
-            </IconButton>
-          </Tooltip>
-        )}
+        <UserMenu />
       </Toolbar>
     </AppBar>
   );
