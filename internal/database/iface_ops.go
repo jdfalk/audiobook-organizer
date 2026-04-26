@@ -1,5 +1,5 @@
 // file: internal/database/iface_ops.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b93b0da0-8afb-46fb-983e-c43f238ea67c
 
 package database
@@ -44,6 +44,9 @@ type OperationStore interface {
 	// Per-book result rows
 	CreateOperationResult(result *OperationResult) error
 	GetOperationResults(operationID string) ([]OperationResult, error)
+	// GetOperationResultsPage returns one page of results plus the total count for the operation.
+	// limit=0 means no cap (returns everything from offset onward).
+	GetOperationResultsPage(operationID string, limit, offset int) ([]OperationResult, int, error)
 	GetRecentCompletedOperations(limit int) ([]Operation, error)
 
 	// Retention

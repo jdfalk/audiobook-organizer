@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.37.0
+// version: 1.38.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -1876,6 +1876,9 @@ func (m *MockStore) CountPrefix(prefix string) (int64, error)   { return 0, nil 
 func (m *MockStore) CreateOperationResult(result *OperationResult) error       { return nil }
 func (m *MockStore) GetOperationResults(operationID string) ([]OperationResult, error) {
 	return nil, nil
+}
+func (m *MockStore) GetOperationResultsPage(operationID string, limit, offset int) ([]OperationResult, int, error) {
+	return nil, 0, nil
 }
 func (m *MockStore) GetRecentCompletedOperations(limit int) ([]Operation, error) {
 	return nil, nil

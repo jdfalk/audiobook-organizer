@@ -3345,6 +3345,116 @@ func (_c *MockBookReader_GetBooksByVersionGroup_Call) RunAndReturn(run func(grou
 	return _c
 }
 
+// GetDistinctGenres provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) GetDistinctGenres() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDistinctGenres")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookReader_GetDistinctGenres_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDistinctGenres'
+type MockBookReader_GetDistinctGenres_Call struct {
+	*mock.Call
+}
+
+// GetDistinctGenres is a helper method to define mock.On call
+func (_e *MockBookReader_Expecter) GetDistinctGenres() *MockBookReader_GetDistinctGenres_Call {
+	return &MockBookReader_GetDistinctGenres_Call{Call: _e.mock.On("GetDistinctGenres")}
+}
+
+func (_c *MockBookReader_GetDistinctGenres_Call) Run(run func()) *MockBookReader_GetDistinctGenres_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockBookReader_GetDistinctGenres_Call) Return(strings []string, err error) *MockBookReader_GetDistinctGenres_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockBookReader_GetDistinctGenres_Call) RunAndReturn(run func() ([]string, error)) *MockBookReader_GetDistinctGenres_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDistinctLanguages provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) GetDistinctLanguages() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDistinctLanguages")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookReader_GetDistinctLanguages_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDistinctLanguages'
+type MockBookReader_GetDistinctLanguages_Call struct {
+	*mock.Call
+}
+
+// GetDistinctLanguages is a helper method to define mock.On call
+func (_e *MockBookReader_Expecter) GetDistinctLanguages() *MockBookReader_GetDistinctLanguages_Call {
+	return &MockBookReader_GetDistinctLanguages_Call{Call: _e.mock.On("GetDistinctLanguages")}
+}
+
+func (_c *MockBookReader_GetDistinctLanguages_Call) Run(run func()) *MockBookReader_GetDistinctLanguages_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockBookReader_GetDistinctLanguages_Call) Return(strings []string, err error) *MockBookReader_GetDistinctLanguages_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockBookReader_GetDistinctLanguages_Call) RunAndReturn(run func() ([]string, error)) *MockBookReader_GetDistinctLanguages_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetDuplicateBooks provides a mock function for the type MockBookReader
 func (_mock *MockBookReader) GetDuplicateBooks() ([][]database.Book, error) {
 	ret := _mock.Called()
@@ -5873,6 +5983,116 @@ func (_c *MockBookStore_GetBooksByVersionGroup_Call) Return(books []database.Boo
 }
 
 func (_c *MockBookStore_GetBooksByVersionGroup_Call) RunAndReturn(run func(groupID string) ([]database.Book, error)) *MockBookStore_GetBooksByVersionGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDistinctGenres provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) GetDistinctGenres() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDistinctGenres")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookStore_GetDistinctGenres_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDistinctGenres'
+type MockBookStore_GetDistinctGenres_Call struct {
+	*mock.Call
+}
+
+// GetDistinctGenres is a helper method to define mock.On call
+func (_e *MockBookStore_Expecter) GetDistinctGenres() *MockBookStore_GetDistinctGenres_Call {
+	return &MockBookStore_GetDistinctGenres_Call{Call: _e.mock.On("GetDistinctGenres")}
+}
+
+func (_c *MockBookStore_GetDistinctGenres_Call) Run(run func()) *MockBookStore_GetDistinctGenres_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockBookStore_GetDistinctGenres_Call) Return(strings []string, err error) *MockBookStore_GetDistinctGenres_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockBookStore_GetDistinctGenres_Call) RunAndReturn(run func() ([]string, error)) *MockBookStore_GetDistinctGenres_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDistinctLanguages provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) GetDistinctLanguages() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDistinctLanguages")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookStore_GetDistinctLanguages_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDistinctLanguages'
+type MockBookStore_GetDistinctLanguages_Call struct {
+	*mock.Call
+}
+
+// GetDistinctLanguages is a helper method to define mock.On call
+func (_e *MockBookStore_Expecter) GetDistinctLanguages() *MockBookStore_GetDistinctLanguages_Call {
+	return &MockBookStore_GetDistinctLanguages_Call{Call: _e.mock.On("GetDistinctLanguages")}
+}
+
+func (_c *MockBookStore_GetDistinctLanguages_Call) Run(run func()) *MockBookStore_GetDistinctLanguages_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockBookStore_GetDistinctLanguages_Call) Return(strings []string, err error) *MockBookStore_GetDistinctLanguages_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockBookStore_GetDistinctLanguages_Call) RunAndReturn(run func() ([]string, error)) *MockBookStore_GetDistinctLanguages_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -15419,6 +15639,66 @@ func (_m *MockRawKVStore) EXPECT() *MockRawKVStore_Expecter {
 	return &MockRawKVStore_Expecter{mock: &_m.Mock}
 }
 
+// CountPrefix provides a mock function for the type MockRawKVStore
+func (_mock *MockRawKVStore) CountPrefix(prefix string) (int64, error) {
+	ret := _mock.Called(prefix)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountPrefix")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int64, error)); ok {
+		return returnFunc(prefix)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int64); ok {
+		r0 = returnFunc(prefix)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(prefix)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRawKVStore_CountPrefix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountPrefix'
+type MockRawKVStore_CountPrefix_Call struct {
+	*mock.Call
+}
+
+// CountPrefix is a helper method to define mock.On call
+//   - prefix string
+func (_e *MockRawKVStore_Expecter) CountPrefix(prefix interface{}) *MockRawKVStore_CountPrefix_Call {
+	return &MockRawKVStore_CountPrefix_Call{Call: _e.mock.On("CountPrefix", prefix)}
+}
+
+func (_c *MockRawKVStore_CountPrefix_Call) Run(run func(prefix string)) *MockRawKVStore_CountPrefix_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRawKVStore_CountPrefix_Call) Return(n int64, err error) *MockRawKVStore_CountPrefix_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockRawKVStore_CountPrefix_Call) RunAndReturn(run func(prefix string) (int64, error)) *MockRawKVStore_CountPrefix_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteRaw provides a mock function for the type MockRawKVStore
 func (_mock *MockRawKVStore) DeleteRaw(key string) error {
 	ret := _mock.Called(key)
@@ -15590,64 +15870,6 @@ func (_c *MockRawKVStore_ScanPrefix_Call) Return(kVPairs []database.KVPair, err 
 }
 
 func (_c *MockRawKVStore_ScanPrefix_Call) RunAndReturn(run func(prefix string) ([]database.KVPair, error)) *MockRawKVStore_ScanPrefix_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// CountPrefix provides a mock function for the type MockRawKVStore
-func (_mock *MockRawKVStore) CountPrefix(prefix string) (int64, error) {
-	ret := _mock.Called(prefix)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CountPrefix")
-	}
-
-	var r0 int64
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (int64, error)); ok {
-		return returnFunc(prefix)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string) int64); ok {
-		r0 = returnFunc(prefix)
-	} else {
-		r0 = ret.Get(0).(int64)
-	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(prefix)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockRawKVStore_CountPrefix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountPrefix'
-type MockRawKVStore_CountPrefix_Call struct {
-	*mock.Call
-}
-
-// CountPrefix is a helper method to define mock.On call
-//   - prefix string
-func (_e *MockRawKVStore_Expecter) CountPrefix(prefix interface{}) *MockRawKVStore_CountPrefix_Call {
-	return &MockRawKVStore_CountPrefix_Call{Call: _e.mock.On("CountPrefix", prefix)}
-}
-
-func (_c *MockRawKVStore_CountPrefix_Call) Run(run func(prefix string)) *MockRawKVStore_CountPrefix_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(arg0)
-	})
-	return _c
-}
-
-func (_c *MockRawKVStore_CountPrefix_Call) Return(count int64, err error) *MockRawKVStore_CountPrefix_Call {
-	_c.Call.Return(count, err)
-	return _c
-}
-
-func (_c *MockRawKVStore_CountPrefix_Call) RunAndReturn(run func(string) (int64, error)) *MockRawKVStore_CountPrefix_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -18174,6 +18396,86 @@ func (_c *MockOperationStore_GetOperationResults_Call) Return(operationResults [
 }
 
 func (_c *MockOperationStore_GetOperationResults_Call) RunAndReturn(run func(operationID string) ([]database.OperationResult, error)) *MockOperationStore_GetOperationResults_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOperationResultsPage provides a mock function for the type MockOperationStore
+func (_mock *MockOperationStore) GetOperationResultsPage(operationID string, limit int, offset int) ([]database.OperationResult, int, error) {
+	ret := _mock.Called(operationID, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOperationResultsPage")
+	}
+
+	var r0 []database.OperationResult
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) ([]database.OperationResult, int, error)); ok {
+		return returnFunc(operationID, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) []database.OperationResult); ok {
+		r0 = returnFunc(operationID, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.OperationResult)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, int, int) int); ok {
+		r1 = returnFunc(operationID, limit, offset)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, int, int) error); ok {
+		r2 = returnFunc(operationID, limit, offset)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockOperationStore_GetOperationResultsPage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOperationResultsPage'
+type MockOperationStore_GetOperationResultsPage_Call struct {
+	*mock.Call
+}
+
+// GetOperationResultsPage is a helper method to define mock.On call
+//   - operationID string
+//   - limit int
+//   - offset int
+func (_e *MockOperationStore_Expecter) GetOperationResultsPage(operationID interface{}, limit interface{}, offset interface{}) *MockOperationStore_GetOperationResultsPage_Call {
+	return &MockOperationStore_GetOperationResultsPage_Call{Call: _e.mock.On("GetOperationResultsPage", operationID, limit, offset)}
+}
+
+func (_c *MockOperationStore_GetOperationResultsPage_Call) Run(run func(operationID string, limit int, offset int)) *MockOperationStore_GetOperationResultsPage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockOperationStore_GetOperationResultsPage_Call) Return(operationResults []database.OperationResult, n int, err error) *MockOperationStore_GetOperationResultsPage_Call {
+	_c.Call.Return(operationResults, n, err)
+	return _c
+}
+
+func (_c *MockOperationStore_GetOperationResultsPage_Call) RunAndReturn(run func(operationID string, limit int, offset int) ([]database.OperationResult, int, error)) *MockOperationStore_GetOperationResultsPage_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -24220,6 +24522,66 @@ func (_c *MockStore_CountFiles_Call) Return(n int, err error) *MockStore_CountFi
 }
 
 func (_c *MockStore_CountFiles_Call) RunAndReturn(run func() (int, error)) *MockStore_CountFiles_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CountPrefix provides a mock function for the type MockStore
+func (_mock *MockStore) CountPrefix(prefix string) (int64, error) {
+	ret := _mock.Called(prefix)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountPrefix")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int64, error)); ok {
+		return returnFunc(prefix)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int64); ok {
+		r0 = returnFunc(prefix)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(prefix)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CountPrefix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountPrefix'
+type MockStore_CountPrefix_Call struct {
+	*mock.Call
+}
+
+// CountPrefix is a helper method to define mock.On call
+//   - prefix string
+func (_e *MockStore_Expecter) CountPrefix(prefix interface{}) *MockStore_CountPrefix_Call {
+	return &MockStore_CountPrefix_Call{Call: _e.mock.On("CountPrefix", prefix)}
+}
+
+func (_c *MockStore_CountPrefix_Call) Run(run func(prefix string)) *MockStore_CountPrefix_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CountPrefix_Call) Return(n int64, err error) *MockStore_CountPrefix_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_CountPrefix_Call) RunAndReturn(run func(prefix string) (int64, error)) *MockStore_CountPrefix_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -31089,6 +31451,116 @@ func (_c *MockStore_GetDirtyBookFolders_Call) RunAndReturn(run func() ([]string,
 	return _c
 }
 
+// GetDistinctGenres provides a mock function for the type MockStore
+func (_mock *MockStore) GetDistinctGenres() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDistinctGenres")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetDistinctGenres_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDistinctGenres'
+type MockStore_GetDistinctGenres_Call struct {
+	*mock.Call
+}
+
+// GetDistinctGenres is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetDistinctGenres() *MockStore_GetDistinctGenres_Call {
+	return &MockStore_GetDistinctGenres_Call{Call: _e.mock.On("GetDistinctGenres")}
+}
+
+func (_c *MockStore_GetDistinctGenres_Call) Run(run func()) *MockStore_GetDistinctGenres_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetDistinctGenres_Call) Return(strings []string, err error) *MockStore_GetDistinctGenres_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockStore_GetDistinctGenres_Call) RunAndReturn(run func() ([]string, error)) *MockStore_GetDistinctGenres_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDistinctLanguages provides a mock function for the type MockStore
+func (_mock *MockStore) GetDistinctLanguages() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDistinctLanguages")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetDistinctLanguages_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDistinctLanguages'
+type MockStore_GetDistinctLanguages_Call struct {
+	*mock.Call
+}
+
+// GetDistinctLanguages is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetDistinctLanguages() *MockStore_GetDistinctLanguages_Call {
+	return &MockStore_GetDistinctLanguages_Call{Call: _e.mock.On("GetDistinctLanguages")}
+}
+
+func (_c *MockStore_GetDistinctLanguages_Call) Run(run func()) *MockStore_GetDistinctLanguages_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetDistinctLanguages_Call) Return(strings []string, err error) *MockStore_GetDistinctLanguages_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockStore_GetDistinctLanguages_Call) RunAndReturn(run func() ([]string, error)) *MockStore_GetDistinctLanguages_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetDuplicateBooks provides a mock function for the type MockStore
 func (_mock *MockStore) GetDuplicateBooks() ([][]database.Book, error) {
 	ret := _mock.Called()
@@ -32302,6 +32774,86 @@ func (_c *MockStore_GetOperationResults_Call) Return(operationResults []database
 }
 
 func (_c *MockStore_GetOperationResults_Call) RunAndReturn(run func(operationID string) ([]database.OperationResult, error)) *MockStore_GetOperationResults_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOperationResultsPage provides a mock function for the type MockStore
+func (_mock *MockStore) GetOperationResultsPage(operationID string, limit int, offset int) ([]database.OperationResult, int, error) {
+	ret := _mock.Called(operationID, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOperationResultsPage")
+	}
+
+	var r0 []database.OperationResult
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) ([]database.OperationResult, int, error)); ok {
+		return returnFunc(operationID, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) []database.OperationResult); ok {
+		r0 = returnFunc(operationID, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.OperationResult)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, int, int) int); ok {
+		r1 = returnFunc(operationID, limit, offset)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, int, int) error); ok {
+		r2 = returnFunc(operationID, limit, offset)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockStore_GetOperationResultsPage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOperationResultsPage'
+type MockStore_GetOperationResultsPage_Call struct {
+	*mock.Call
+}
+
+// GetOperationResultsPage is a helper method to define mock.On call
+//   - operationID string
+//   - limit int
+//   - offset int
+func (_e *MockStore_Expecter) GetOperationResultsPage(operationID interface{}, limit interface{}, offset interface{}) *MockStore_GetOperationResultsPage_Call {
+	return &MockStore_GetOperationResultsPage_Call{Call: _e.mock.On("GetOperationResultsPage", operationID, limit, offset)}
+}
+
+func (_c *MockStore_GetOperationResultsPage_Call) Run(run func(operationID string, limit int, offset int)) *MockStore_GetOperationResultsPage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetOperationResultsPage_Call) Return(operationResults []database.OperationResult, n int, err error) *MockStore_GetOperationResultsPage_Call {
+	_c.Call.Return(operationResults, n, err)
+	return _c
+}
+
+func (_c *MockStore_GetOperationResultsPage_Call) RunAndReturn(run func(operationID string, limit int, offset int) ([]database.OperationResult, int, error)) *MockStore_GetOperationResultsPage_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -38340,64 +38892,6 @@ func (_c *MockStore_ScanPrefix_Call) Return(kVPairs []database.KVPair, err error
 }
 
 func (_c *MockStore_ScanPrefix_Call) RunAndReturn(run func(prefix string) ([]database.KVPair, error)) *MockStore_ScanPrefix_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// CountPrefix provides a mock function for the type MockStore
-func (_mock *MockStore) CountPrefix(prefix string) (int64, error) {
-	ret := _mock.Called(prefix)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CountPrefix")
-	}
-
-	var r0 int64
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (int64, error)); ok {
-		return returnFunc(prefix)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string) int64); ok {
-		r0 = returnFunc(prefix)
-	} else {
-		r0 = ret.Get(0).(int64)
-	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(prefix)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockStore_CountPrefix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountPrefix'
-type MockStore_CountPrefix_Call struct {
-	*mock.Call
-}
-
-// CountPrefix is a helper method to define mock.On call
-//   - prefix string
-func (_e *MockStore_Expecter) CountPrefix(prefix interface{}) *MockStore_CountPrefix_Call {
-	return &MockStore_CountPrefix_Call{Call: _e.mock.On("CountPrefix", prefix)}
-}
-
-func (_c *MockStore_CountPrefix_Call) Run(run func(prefix string)) *MockStore_CountPrefix_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(arg0)
-	})
-	return _c
-}
-
-func (_c *MockStore_CountPrefix_Call) Return(count int64, err error) *MockStore_CountPrefix_Call {
-	_c.Call.Return(count, err)
-	return _c
-}
-
-func (_c *MockStore_CountPrefix_Call) RunAndReturn(run func(string) (int64, error)) *MockStore_CountPrefix_Call {
 	_c.Call.Return(run)
 	return _c
 }
