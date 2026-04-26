@@ -25,6 +25,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -45,6 +46,7 @@ type pathRepairerStore interface {
 	database.BookFileStore
 	database.OperationStore
 	database.ExternalIDStore
+	database.PathHistoryStore
 }
 
 // PathRepairer is the operation worker.
@@ -244,6 +246,11 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 		// Tier A: bookID → DB-known on-disk path
 		if newPath, ok := resolveTierA(r.store, track.PersistentID, bookID, pathExists); ok {
 			result.AutoResolved++
+			if !dryRun {
+				if err := r.applyResolution(track.PersistentID, bookID, decoded, newPath, &result); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("apply tier=A pid=%s: %v", track.PersistentID, err))
+				}
+			}
 			_ = progress.Log("info",
 				fmt.Sprintf("repair pid=%s old=%s new=%s tier=A action=%s",
 					track.PersistentID, decoded, newPath, applyAction(dryRun)), nil)
@@ -253,6 +260,11 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 		// Tier B: embedded AUDIOBOOK_ORGANIZER_ID tag scan
 		if newPath, ok := resolveTierB(getTierB(), bookID, pathExists); ok {
 			result.AutoResolved++
+			if !dryRun {
+				if err := r.applyResolution(track.PersistentID, bookID, decoded, newPath, &result); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("apply tier=B pid=%s: %v", track.PersistentID, err))
+				}
+			}
 			_ = progress.Log("info",
 				fmt.Sprintf("repair pid=%s old=%s new=%s tier=B action=%s",
 					track.PersistentID, decoded, newPath, applyAction(dryRun)), nil)
@@ -293,6 +305,81 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 	_ = progress.Log("info", summary, nil)
 	_ = progress.UpdateProgress(scanned, scanned, summary)
 	return result, nil
+}
+
+// applyResolution writes the discovered new path back into the DB
+// (BookFile.FilePath/ITunesPath preferred; falls back to Book), records
+// a path-history entry, and enqueues the book through the
+// WriteBackBatcher so the existing flush loop pushes the corrected
+// location to the .itl on its normal cadence.
+func (r *PathRepairer) applyResolution(pid, bookID, oldPath, newPath string, result *iTunesPathRepairResult) error {
+	wantITunesPath := metafetch.ComputeITunesPath(newPath)
+
+	// Prefer the matching BookFile when one exists.
+	updated := false
+	if files, err := r.store.GetBookFiles(bookID); err == nil {
+		for _, bf := range files {
+			if bf.ITunesPersistentID != pid {
+				continue
+			}
+			if bf.FilePath == newPath && bf.ITunesPath == wantITunesPath {
+				updated = true
+				break
+			}
+			bf.FilePath = newPath
+			if wantITunesPath != "" {
+				bf.ITunesPath = wantITunesPath
+			}
+			if err := r.store.UpdateBookFile(bf.ID, &bf); err != nil {
+				return fmt.Errorf("update book_file %s: %w", bf.ID, err)
+			}
+			updated = true
+			break
+		}
+	}
+
+	// Fall back to book-level fields when no matching BookFile.
+	if !updated {
+		book, err := r.store.GetBookByID(bookID)
+		if err != nil || book == nil {
+			return fmt.Errorf("get book %s: %w", bookID, err)
+		}
+		changed := false
+		if book.FilePath != newPath {
+			book.FilePath = newPath
+			changed = true
+		}
+		if wantITunesPath != "" {
+			cur := ""
+			if book.ITunesPath != nil {
+				cur = *book.ITunesPath
+			}
+			if cur != wantITunesPath {
+				book.ITunesPath = &wantITunesPath
+				changed = true
+			}
+		}
+		if changed {
+			if _, err := r.store.UpdateBook(bookID, book); err != nil {
+				return fmt.Errorf("update book %s: %w", bookID, err)
+			}
+		}
+	}
+
+	if err := r.store.RecordPathChange(&database.BookPathChange{
+		BookID:     bookID,
+		OldPath:    oldPath,
+		NewPath:    newPath,
+		ChangeType: "itunes_path_repair",
+	}); err != nil {
+		return fmt.Errorf("record path change: %w", err)
+	}
+
+	if r.enqueuer != nil {
+		r.enqueuer.Enqueue(bookID)
+		result.Enqueued++
+	}
+	return nil
 }
 
 // pathExists is the production existsFn for the resolver. Test code

@@ -34,4 +34,5 @@ type Store interface {
 	database.MetadataStore
 	database.TagStore
 	database.RawKVStore
+	database.PathHistoryStore
 }

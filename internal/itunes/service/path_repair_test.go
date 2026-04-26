@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dbmocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	queuemocks "github.com/jdfalk/audiobook-organizer/internal/operations/mocks"
@@ -20,6 +21,17 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+// withITunesPathMapping installs a mapping covering dir → "Z:/" for
+// ComputeITunesPath, restoring the previous mappings on cleanup.
+func withITunesPathMapping(t *testing.T, dir string) {
+	t.Helper()
+	prev := config.AppConfig.ITunesPathMappings
+	config.AppConfig.ITunesPathMappings = []config.ITunesPathMap{
+		{From: "Z:/", To: dir + "/"},
+	}
+	t.Cleanup(func() { config.AppConfig.ITunesPathMappings = prev })
+}
 
 // noopProgressRepair mirrors the reconciler test helper.
 type noopProgressRepair struct{}
@@ -320,6 +332,48 @@ func TestRepair_TierC_EmitsReviewCandidates(t *testing.T) {
 	assert.Equal(t, "Track B", res.NeedsReviewItems[0].Title)
 	assert.NotEmpty(t, res.NeedsReviewItems[0].Candidates)
 	assert.Equal(t, candidate, res.NeedsReviewItems[0].Candidates[0].Path)
+}
+
+// ---------------------------------------------------------------------------
+// Repair — apply mode: tier A success → DB updated + Enqueuer called
+// ---------------------------------------------------------------------------
+
+func TestRepair_ApplyMode_TierA_UpdatesAndEnqueues(t *testing.T) {
+	dir := t.TempDir()
+	withITunesPathMapping(t, dir)
+	locA := filepath.Join(dir, "alive.m4b")
+	require.NoError(t, os.WriteFile(locA, []byte("a"), 0o644))
+	locB := filepath.Join(dir, "vanished.m4b") // gone
+	newPath := filepath.Join(dir, "moved.m4b")
+	require.NoError(t, os.WriteFile(newPath, []byte("b"), 0o644))
+	xmlPath := writeFixtureXML(t, dir, locA, locB)
+
+	m := dbmocks.NewMockStore(t)
+	m.EXPECT().GetBookByExternalID("itunes", "PID_B").Return("book-b", nil).Once()
+	bf := database.BookFile{ID: "f1", BookID: "book-b", FilePath: newPath, ITunesPersistentID: "PID_B"}
+	m.EXPECT().GetBookFiles("book-b").Return([]database.BookFile{bf}, nil).Once()
+	// Tier A returns the bf path; apply path then re-fetches files to do the update.
+	m.EXPECT().GetBookFiles("book-b").Return([]database.BookFile{bf}, nil).Once()
+	m.EXPECT().UpdateBookFile("f1", mock.MatchedBy(func(updated *database.BookFile) bool {
+		// FilePath stays the same (it was already correct); ITunesPath is recomputed.
+		return updated.FilePath == newPath && updated.ITunesPath != ""
+	})).Return(nil).Once()
+	m.EXPECT().RecordPathChange(mock.MatchedBy(func(c *database.BookPathChange) bool {
+		return c.BookID == "book-b" && c.NewPath == newPath && c.ChangeType == "itunes_path_repair"
+	})).Return(nil).Once()
+	m.EXPECT().DeleteOperationState("op-apply").Return(nil).Once()
+	m.EXPECT().UpdateOperationResultData("op-apply", mock.Anything).Return(nil).Once()
+
+	enq := &mockEnqueuer{}
+	r := newPathRepairer(m, enq, nil, PathRepairConfig{XMLPath: xmlPath})
+	res, err := r.repairWithResult(context.Background(), "op-apply", false, noopProgressRepair{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, res.AutoResolved)
+	assert.Equal(t, 1, res.Enqueued)
+	assert.False(t, res.DryRun)
+	require.Len(t, enq.enqueues, 1)
+	assert.Equal(t, "book-b", enq.enqueues[0])
 }
 
 // ---------------------------------------------------------------------------
