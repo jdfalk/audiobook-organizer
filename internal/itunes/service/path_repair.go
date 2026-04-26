@@ -18,6 +18,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -85,16 +86,33 @@ func extractBookOrganizerID(audioFilePath string) (string, error) {
 // logs and the operation result. Field names mirror the dry-run JSON
 // payload that callers consume.
 type iTunesPathRepairResult struct {
-	XMLTracks    int      `json:"xml_tracks"`
-	Missing      int      `json:"missing"`
-	AutoResolved int      `json:"auto_resolved"`
-	NeedsReview  int      `json:"needs_review"`
-	Unresolved   int      `json:"unresolved"`
-	Enqueued     int      `json:"enqueued"`
-	DryRun       bool     `json:"dry_run"`
-	ReportPath   string   `json:"report_path,omitempty"`
-	Errors       []string `json:"errors,omitempty"`
+	XMLTracks        int                `json:"xml_tracks"`
+	Missing          int                `json:"missing"`
+	AutoResolved     int                `json:"auto_resolved"`
+	NeedsReview      int                `json:"needs_review"`
+	Unresolved       int                `json:"unresolved"`
+	Enqueued         int                `json:"enqueued"`
+	DryRun           bool               `json:"dry_run"`
+	ReportPath       string             `json:"report_path,omitempty"`
+	NeedsReviewItems []needsReviewItem  `json:"needs_review_items,omitempty"`
+	Errors           []string           `json:"errors,omitempty"`
 }
+
+// needsReviewItem is one fuzzy-resolved missing track requiring human
+// confirmation. Emitted by tier C; never auto-applied.
+type needsReviewItem struct {
+	PID        string           `json:"pid"`
+	OldPath    string           `json:"old_path"`
+	Title      string           `json:"title,omitempty"`
+	Candidates []tierCCandidate `json:"candidates"`
+}
+
+// Tier C tuning constants. Threshold matches the user-confirmed 0.85
+// Jaro-Winkler equivalent on the matcher 0–100 scale.
+const (
+	tierCThreshold = 85
+	tierCTopN      = 3
+)
 
 // parseDryRun reads the apply= query parameter and returns whether the
 // run should stay in dry-run mode. Any value not equal to "true" or
@@ -241,10 +259,26 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 			continue
 		}
 
-		// Tier C lands in the next commit.
+		// Tier C: fuzzy candidates for human review. Never auto-applied.
+		info := trackInfo{Title: track.Name, OldBasename: filepath.Base(decoded)}
+		candidates := resolveTierC(getTierB().allPaths(), info, tierCThreshold, tierCTopN)
+		if len(candidates) > 0 {
+			result.NeedsReview++
+			result.NeedsReviewItems = append(result.NeedsReviewItems, needsReviewItem{
+				PID:        track.PersistentID,
+				OldPath:    decoded,
+				Title:      track.Name,
+				Candidates: candidates,
+			})
+			_ = progress.Log("info",
+				fmt.Sprintf("repair pid=%s old=%s tier=C candidates=%d action=review",
+					track.PersistentID, decoded, len(candidates)), nil)
+			continue
+		}
+
 		result.Unresolved++
 		_ = progress.Log("debug",
-			fmt.Sprintf("missing pid=%s old=%s tier=AB unresolved", track.PersistentID, decoded), nil)
+			fmt.Sprintf("missing pid=%s old=%s tier=ABC unresolved", track.PersistentID, decoded), nil)
 	}
 
 	if err := persistRepairResult(r.store, opID, result); err != nil {
