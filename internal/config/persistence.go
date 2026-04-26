@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -422,6 +422,8 @@ func applySetting(key, value, typ string) error {
 		if i, err := strconv.Atoi(value); err == nil {
 			AppConfig.CacheSize = i
 		}
+	case "cache_invalidate_on_book_update":
+		AppConfig.CacheInvalidateOnBookUpdate = value == "true"
 	case "memory_limit_percent":
 		if i, err := strconv.Atoi(value); err == nil {
 			AppConfig.MemoryLimitPercent = i
@@ -736,8 +738,9 @@ func SaveConfigToDatabase(store database.SettingsStore) error {
 		"auto_scan_debounce_seconds":   {strconv.Itoa(AppConfig.AutoScanDebounceSeconds), "int", false},
 
 		// Memory management
-		"memory_limit_type":    {AppConfig.MemoryLimitType, "string", false},
-		"cache_size":           {strconv.Itoa(AppConfig.CacheSize), "int", false},
+		"memory_limit_type":              {AppConfig.MemoryLimitType, "string", false},
+		"cache_size":                     {strconv.Itoa(AppConfig.CacheSize), "int", false},
+		"cache_invalidate_on_book_update": {strconv.FormatBool(AppConfig.CacheInvalidateOnBookUpdate), "bool", false},
 		"memory_limit_percent": {strconv.Itoa(AppConfig.MemoryLimitPercent), "int", false},
 		"memory_limit_mb":      {strconv.Itoa(AppConfig.MemoryLimitMB), "int", false},
 
