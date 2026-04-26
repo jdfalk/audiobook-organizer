@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.1.0
+// version: 3.2.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useEffect, useState } from 'react';
@@ -46,6 +46,8 @@ function formatOperationType(type: string): string {
       return 'Organize';
     case 'metadata_fetch':
       return 'Metadata Fetch';
+    case 'metadata_candidate_fetch':
+      return 'Metadata Fetch (Batch)';
     case 'ol_dump_import':
       return 'Open Library Import';
     default:

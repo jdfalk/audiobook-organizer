@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.49.0
+// version: 1.50.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -71,6 +71,7 @@ import {
   type EventSourceStatus,
 } from '../services/eventSourceManager';
 import { pollOperation } from '../utils/operationPolling';
+import { useOperationsStore } from '../stores/useOperationsStore';
 import AddToPlaylistDialog from '../components/audiobooks/AddToPlaylistDialog';
 
 interface ImportPath {
@@ -171,6 +172,7 @@ export const Library = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const startOperationPolling = useOperationsStore((state) => state.startPolling);
   const initialSearch = searchParams.get('search') ?? '';
   const initialViewMode = (searchParams.get('view') as ViewMode) || ('grid' as ViewMode);
   const initialSortBy = ((): SortField => {
@@ -899,6 +901,20 @@ export const Library = () => {
   useEffect(() => {
     loadSoftDeleted();
   }, [loadSoftDeleted]);
+
+  // Watch the operations store: open the review dialog when a metadata fetch op completes.
+  const activeOperations = useOperationsStore((state) => state.activeOperations);
+  useEffect(() => {
+    if (!metadataReviewOpId) return;
+    const op = activeOperations.find((o) => o.id === metadataReviewOpId);
+    if (!op) return;
+    if (op.status === 'completed') {
+      setMetadataReviewOpen(true);
+      toast('Metadata fetch complete — review results.', 'success');
+    } else if (op.status === 'failed') {
+      toast('Metadata fetch failed.', 'error');
+    }
+  }, [activeOperations, metadataReviewOpId, toast]);
 
   const handleEdit = useCallback((audiobook: Audiobook) => {
     setEditingAudiobook(audiobook);
@@ -1741,20 +1757,18 @@ export const Library = () => {
               color="primary"
               onClick={async () => {
                 try {
-                  const { operation_id } = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
-                  toast(`Fetching metadata for ${selectedAudiobooks.length} books — check operations for progress.`, 'info');
-                  setMetadataReviewOpId(operation_id);
-                  const poll = setInterval(async () => {
-                    try {
-                      const ops = await api.getActiveOperations();
-                      const op = ops.find((o: { id: string }) => o.id === operation_id);
-                      if (!op || op.status === 'completed' || op.status === 'failed') {
-                        clearInterval(poll);
-                        if (!op || op.status === 'completed') { setMetadataReviewOpen(true); toast('Metadata fetch complete — review results', 'success'); }
-                        else { toast('Metadata fetch failed', 'error'); }
-                      }
-                    } catch { /* ignore */ }
-                  }, 2000);
+                  const resp = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
+                  const opId = resp.operation_id;
+                  if (!opId) {
+                    toast('All selected books are already being fetched.', 'info');
+                    return;
+                  }
+                  setMetadataReviewOpId(opId);
+                  startOperationPolling(opId, 'metadata_candidate_fetch');
+                  toast(
+                    `Metadata fetch started for ${selectedAudiobooks.length} book${selectedAudiobooks.length !== 1 ? 's' : ''} — watch the bell for progress.`,
+                    'info',
+                  );
                 } catch { toast('Failed to start metadata fetch', 'error'); }
               }}
               disabled={selectedAudiobooks.length < 2}
@@ -2189,40 +2203,20 @@ export const Library = () => {
                         color="primary"
                         onClick={async () => {
                           try {
-                            const { operation_id } = await api.batchFetchCandidates(
+                            const resp = await api.batchFetchCandidates(
                               selectedAudiobooks.map((b) => b.id)
                             );
+                            const opId = resp.operation_id;
+                            if (!opId) {
+                              toast('All selected books are already being fetched.', 'info');
+                              return;
+                            }
+                            setMetadataReviewOpId(opId);
+                            startOperationPolling(opId, 'metadata_candidate_fetch');
                             toast(
-                              'Fetching metadata for ' + selectedAudiobooks.length + ' books...',
-                              'info'
+                              `Metadata fetch started for ${selectedAudiobooks.length} book${selectedAudiobooks.length !== 1 ? 's' : ''} — watch the bell for progress.`,
+                              'info',
                             );
-                            setMetadataReviewOpId(operation_id);
-                            const poll = setInterval(async () => {
-                              try {
-                                const ops = await api.getActiveOperations();
-                                const op = ops.find(
-                                  (o: { id: string }) => o.id === operation_id
-                                );
-                                if (
-                                  !op ||
-                                  op.status === 'completed' ||
-                                  op.status === 'failed'
-                                ) {
-                                  clearInterval(poll);
-                                  if (!op || op.status === 'completed') {
-                                    setMetadataReviewOpen(true);
-                                    toast(
-                                      'Metadata fetch complete — review results',
-                                      'success'
-                                    );
-                                  } else {
-                                    toast('Metadata fetch failed', 'error');
-                                  }
-                                }
-                              } catch {
-                                /* ignore poll errors */
-                              }
-                            }, 2000);
                           } catch {
                             toast('Failed to start metadata fetch', 'error');
                           }
