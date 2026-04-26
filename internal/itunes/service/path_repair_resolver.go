@@ -11,10 +11,12 @@ package itunesservice
 import (
 	"io/fs"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/matcher"
 )
 
 // audioExt is the set of file extensions tier B inspects. Anything
@@ -35,14 +37,17 @@ type bookIDExtractor func(audioFilePath string) (string, error)
 type noopTagScanner struct{}
 
 func (noopTagScanner) bookIDToPaths(string) []string { return nil }
+func (noopTagScanner) allPaths() []string            { return nil }
 
 // fsTagScanner walks the audiobook root once, lazily, the first time
-// bookIDToPaths is called. Subsequent calls hit the in-memory index.
+// bookIDToPaths or allPaths is called. Subsequent calls hit the
+// in-memory state.
 type fsTagScanner struct {
 	root    string
 	extract bookIDExtractor
 	once    sync.Once
 	index   map[string][]string
+	all     []string
 }
 
 func newFSTagScanner(root string, extract bookIDExtractor) *fsTagScanner {
@@ -54,9 +59,14 @@ func (s *fsTagScanner) bookIDToPaths(bookID string) []string {
 	return s.index[bookID]
 }
 
+func (s *fsTagScanner) allPaths() []string {
+	s.once.Do(s.scan)
+	return s.all
+}
+
 func (s *fsTagScanner) scan() {
 	s.index = make(map[string][]string)
-	if s.root == "" || s.extract == nil {
+	if s.root == "" {
 		return
 	}
 	_ = filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
@@ -67,11 +77,12 @@ func (s *fsTagScanner) scan() {
 		if _, ok := audioExt[ext]; !ok {
 			return nil
 		}
-		bookID, err := s.extract(path)
-		if err != nil || bookID == "" {
-			return nil
+		s.all = append(s.all, path)
+		if s.extract != nil {
+			if bookID, err := s.extract(path); err == nil && bookID != "" {
+				s.index[bookID] = append(s.index[bookID], path)
+			}
 		}
-		s.index[bookID] = append(s.index[bookID], path)
 		return nil
 	})
 }
@@ -103,11 +114,12 @@ func lookupBookID(s pidLookup, pid string) string {
 
 // tagScanner exposes a lazy, cached lookup from
 // AUDIOBOOK_ORGANIZER_ID tag value (the audiobook-organizer book ID)
-// to the on-disk paths whose audio files carry that tag. The
-// production implementation walks the audiobook root once and indexes
-// every file's BookOrganizerID; tests inject a fake.
+// to the on-disk paths whose audio files carry that tag, plus the
+// flat list of every audio file the walk found (for tier C scoring).
+// Tests inject a fake; production walks the audiobook root.
 type tagScanner interface {
 	bookIDToPaths(bookID string) []string
+	allPaths() []string
 }
 
 // resolveTierB resolves a missing PID via the embedded
@@ -127,6 +139,58 @@ func resolveTierB(scanner tagScanner, bookID string, existsFn func(string) bool)
 		return "", false
 	}
 	return paths[0], true
+}
+
+// trackInfo carries the iTunes-side hints tier C scores against.
+type trackInfo struct {
+	Title       string
+	OldBasename string
+}
+
+// tierCCandidate is one ranked match emitted to the needs_review list.
+type tierCCandidate struct {
+	Path  string `json:"path"`
+	Score int    `json:"score"`
+}
+
+// resolveTierC scores every candidate path against the iTunes track
+// title and the old basename, then returns the top-N candidates whose
+// score meets the threshold. Never auto-applies — caller emits to the
+// needs_review list for human confirmation.
+//
+// We score against both the title and the old basename and take the
+// max so e.g. a file renamed to use the title still scores well, and
+// a file whose basename was preserved across a directory move also
+// scores well.
+func resolveTierC(candidates []string, info trackInfo, threshold, topN int) []tierCCandidate {
+	if len(candidates) == 0 || (info.Title == "" && info.OldBasename == "") {
+		return nil
+	}
+	scored := make([]tierCCandidate, 0, len(candidates))
+	for _, p := range candidates {
+		base := strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
+		var s int
+		if info.Title != "" {
+			if v := matcher.ScoreMatch(info.Title, base); v > s {
+				s = v
+			}
+		}
+		if info.OldBasename != "" {
+			oldBase := strings.TrimSuffix(info.OldBasename, filepath.Ext(info.OldBasename))
+			if v := matcher.ScoreMatch(oldBase, base); v > s {
+				s = v
+			}
+		}
+		if s < threshold {
+			continue
+		}
+		scored = append(scored, tierCCandidate{Path: p, Score: s})
+	}
+	sort.SliceStable(scored, func(i, j int) bool { return scored[i].Score > scored[j].Score })
+	if topN > 0 && len(scored) > topN {
+		scored = scored[:topN]
+	}
+	return scored
 }
 
 // resolveTierA returns the on-disk path the DB thinks the file is at
