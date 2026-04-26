@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.3.0
+// version: 2.4.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -2861,6 +2861,9 @@ export interface BatchFetchResponse {
   no_match: number;
   errors: number;
   total: number;
+  total_count: number;
+  limit: number;
+  offset: number;
 }
 
 export async function batchFetchCandidates(bookIds: string[]): Promise<{ operation_id: string }> {
@@ -2873,8 +2876,13 @@ export async function batchFetchCandidates(bookIds: string[]): Promise<{ operati
   return response.json();
 }
 
-export async function getOperationResults(operationId: string): Promise<BatchFetchResponse> {
-  const response = await fetch(`${API_BASE}/operations/${operationId}/results`);
+export async function getOperationResults(
+  operationId: string,
+  limit = 100,
+  offset = 0,
+): Promise<BatchFetchResponse> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  const response = await fetch(`${API_BASE}/operations/${operationId}/results?${params}`);
   if (!response.ok) throw await buildApiError(response, 'Failed to get operation results');
   return response.json();
 }

@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -150,6 +150,7 @@ export function MetadataReviewDialog({
 }: MetadataReviewDialogProps) {
   const [results, setResults] = useState<CandidateResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [rowStates, setRowStates] = useState<
     Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>
@@ -168,71 +169,49 @@ export function MetadataReviewDialog({
   const [hideNoMatch, setHideNoMatch] = useState(true);
   const [matchLanguage, setMatchLanguage] = useState<boolean>(loadLanguageFilter);
 
+  // Fetch the current page from the server. Re-runs when the dialog opens,
+  // the operation changes, or the user navigates to a different page.
+  // The per-book getBook() waterfall is intentionally absent: the result
+  // snapshot already has cover_url and title, and N sequential getBook()
+  // calls for a 5,000-book fetch would stall the dialog for minutes.
   useEffect(() => {
     if (!open || !operationId) return;
     setLoading(true);
+    const offset = (reviewPage - 1) * reviewPageSize;
     api
-      .getOperationResults(operationId)
-      .then(async (data) => {
-        const results = data.results || [];
+      .getOperationResults(operationId, reviewPageSize, offset)
+      .then((data) => {
+        const pageResults = data.results || [];
 
-        // Detect already-applied and rejected books from stored results + current book state
-        const initialStates = new Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>();
-        for (const r of results) {
+        const pageStates = new Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>();
+        for (const r of pageResults) {
           if (r.status === 'rejected') {
-            initialStates.set(r.book.id, 'rejected');
+            pageStates.set(r.book.id, 'rejected');
           }
         }
+        setRowStates((prev) => {
+          const merged = new Map(prev);
+          pageStates.forEach((v, k) => { if (!merged.has(k)) merged.set(k, v); });
+          return merged;
+        });
 
-        // Check current book state for applied metadata (batch fetch current data)
-        try {
-          const bookIds = results.filter((r) => r.status === 'matched').map((r) => r.book.id);
-          for (const id of bookIds) {
-            if (initialStates.has(id)) continue;
-            try {
-              const book = await api.getBook(id);
-              if (book.metadata_review_status === 'matched') {
-                initialStates.set(id, 'applied');
-              }
-              // Update book info with current data (cover, title, etc.)
-              const result = results.find((r) => r.book.id === id);
-              if (result && book) {
-                result.book.cover_url = book.cover_url || result.book.cover_url;
-                result.book.title = book.title || result.book.title;
-              }
-            } catch {
-              // Book may have been deleted
-            }
-          }
-        } catch {
-          // Ignore batch fetch errors
-        }
-
-        setRowStates(initialStates);
-        setResults([...results]);
+        setResults(pageResults);
+        const tc = data.total_count ?? data.total ?? pageResults.length;
+        setTotalCount(tc);
         setSummary({
-          matched:
-            data.matched ??
-            results.filter((r: api.CandidateResult) => r.status === 'matched').length,
-          no_match:
-            data.no_match ??
-            results.filter((r: api.CandidateResult) => r.status === 'no_match').length,
-          errors:
-            data.errors ?? results.filter((r: api.CandidateResult) => r.status === 'error').length,
-          total: data.total ?? results.length,
+          matched: data.matched ?? pageResults.filter((r) => r.status === 'matched').length,
+          no_match: data.no_match ?? pageResults.filter((r) => r.status === 'no_match').length,
+          errors: data.errors ?? pageResults.filter((r) => r.status === 'error').length,
+          total: tc,
         });
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [open, operationId]);
+  }, [open, operationId, reviewPage, reviewPageSize]);
 
   // Poll for new results while the operation is still running.
-  // The fetch writes results to operation_results incrementally,
-  // so partial results are available before the operation
-  // finishes. Polling every 5s gives a responsive "results
-  // streaming in" experience without hammering the backend.
-  // Stops automatically when the data says the operation is done
-  // (total count stabilizes) or when the dialog is closed.
+  // Fetches only limit=1 to get the updated total_count without
+  // downloading the full page again.
   const [operationDone, setOperationDone] = useState(false);
   const prevTotalRef = useRef(0);
 
@@ -240,41 +219,31 @@ export function MetadataReviewDialog({
     if (!open || !operationId || loading || operationDone) return;
     const interval = setInterval(async () => {
       try {
-        const data = await api.getOperationResults(operationId);
-        const newResults = data.results || [];
-        const newTotal = data.total ?? newResults.length;
+        const data = await api.getOperationResults(operationId, 1, 0);
+        const newTotal = data.total_count ?? data.total ?? 0;
 
-        // If the count hasn't changed in two consecutive polls,
-        // the operation is likely done. Stop polling to save
-        // bandwidth. The user can always close and reopen the
-        // dialog to get the final state.
         if (newTotal > 0 && newTotal === prevTotalRef.current) {
           setOperationDone(true);
           return;
         }
         prevTotalRef.current = newTotal;
 
-        // Only update if we got more results than we currently have.
-        if (newTotal > results.length) {
-          setResults([...newResults]);
-          setSummary({
-            matched: data.matched ?? newResults.filter((r: api.CandidateResult) => r.status === 'matched').length,
-            no_match: data.no_match ?? newResults.filter((r: api.CandidateResult) => r.status === 'no_match').length,
-            errors: data.errors ?? newResults.filter((r: api.CandidateResult) => r.status === 'error').length,
-            total: newTotal,
-          });
+        if (newTotal > totalCount) {
+          setTotalCount(newTotal);
+          setSummary((prev) => ({ ...prev, total: newTotal }));
         }
       } catch {
         // Silent — polling failure is not fatal
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [open, operationId, loading, operationDone, results.length]);
+  }, [open, operationId, loading, operationDone, totalCount]);
 
   // Reset polling state when the operation changes.
   useEffect(() => {
     setOperationDone(false);
     prevTotalRef.current = 0;
+    setReviewPage(1);
   }, [operationId]);
 
   // Compute unique sources with counts
@@ -435,11 +404,9 @@ export function MetadataReviewDialog({
     }
   };
 
-  // Current page slice — buttons should only act on what's visible on screen
-  const pageResults = filteredResults.slice(
-    (reviewPage - 1) * reviewPageSize,
-    reviewPage * reviewPageSize
-  );
+  // results is already the server-side page; filteredResults applies client-side
+  // filters (source, confidence, hide*) within the current page only.
+  const pageResults = filteredResults;
 
   const highConfidenceIds = pageResults
     .filter(
@@ -1125,7 +1092,7 @@ export function MetadataReviewDialog({
               </Stack>
 
               {/* Results list (paginated) */}
-              {filteredResults.length > 0 && (
+              {(filteredResults.length > 0 || totalCount > 0) && (
                 <Stack
                   direction="row"
                   justifyContent="space-between"
@@ -1134,13 +1101,13 @@ export function MetadataReviewDialog({
                 >
                   <Typography variant="caption" color="text.secondary">
                     Showing{' '}
-                    {Math.min((reviewPage - 1) * reviewPageSize + 1, filteredResults.length)}-
-                    {Math.min(reviewPage * reviewPageSize, filteredResults.length)} of{' '}
-                    {filteredResults.length}
+                    {totalCount > 0
+                      ? `${(reviewPage - 1) * reviewPageSize + 1}–${Math.min(reviewPage * reviewPageSize, totalCount)} of ${totalCount}`
+                      : '0'}
                   </Typography>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Pagination
-                      count={Math.ceil(filteredResults.length / reviewPageSize)}
+                      count={Math.max(1, Math.ceil(totalCount / reviewPageSize))}
                       page={reviewPage}
                       onChange={(_, p) => setReviewPage(p)}
                       size="small"

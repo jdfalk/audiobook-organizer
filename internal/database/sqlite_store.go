@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.61.0
+// version: 1.62.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -3526,6 +3526,41 @@ func (s *SQLiteStore) GetOperationResults(operationID string) ([]OperationResult
 		results = append(results, r)
 	}
 	return results, rows.Err()
+}
+
+func (s *SQLiteStore) GetOperationResultsPage(operationID string, limit, offset int) ([]OperationResult, int, error) {
+	var total int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM operation_results WHERE operation_id = ?`, operationID,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := `SELECT id, operation_id, book_id, result_json, status, created_at FROM operation_results WHERE operation_id = ? ORDER BY id`
+	args := []any{operationID}
+	if limit > 0 {
+		query += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	} else if offset > 0 {
+		query += ` LIMIT -1 OFFSET ?`
+		args = append(args, offset)
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, total, err
+	}
+	defer rows.Close()
+
+	var results []OperationResult
+	for rows.Next() {
+		var r OperationResult
+		if err := rows.Scan(&r.ID, &r.OperationID, &r.BookID, &r.ResultJSON, &r.Status, &r.CreatedAt); err != nil {
+			return nil, total, err
+		}
+		results = append(results, r)
+	}
+	return results, total, rows.Err()
 }
 
 func (s *SQLiteStore) GetRecentCompletedOperations(limit int) ([]Operation, error) {
