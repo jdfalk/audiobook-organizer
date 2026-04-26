@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 5.26.0 -->
+<!-- version: 5.27.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-04-25 -->
+<!-- last-edited: 2026-04-26 -->
 
 # Project TODO
 
@@ -261,6 +261,13 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 ---
 
 ## ✅ Recently Completed
+
+### Session 24 (2026-04-26) — iTunes path repair
+
+- New operation `POST /operations/itunes-path-repair` (PermScanTrigger gated). Three-tier resolution: tier A (PID → DB lookup), tier B (lazy embedded `AUDIOBOOK_ORGANIZER_ID` tag scan, single-pass `fsTagScanner`), tier C (fuzzy ranking via existing `matcher.ScoreMatch`, threshold 85, top-3 per missing track, never auto-applied).
+- Apply mode (`?apply=true`) updates `BookFile.FilePath`/`ITunesPath` (or `Book.*` fallback), records `book_path_history` rows with `change_type="itunes_path_repair"`, and enqueues through the existing `WriteBackBatcher` so corrected locations ship in normal batched .itl writes.
+- Each run drops a JSON report to `<RootDir>/reports/itunes-repair-<opID>.json` plus the same payload inline via `UpdateOperationResultData`.
+- 18 new tests; safe-by-default (dry-run on first invocation and on resume).
 
 ### Session 23 (2026-04-25) — cache observability
 

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/assert"
@@ -492,6 +493,13 @@ func TestAudiobookService_EnrichAudiobooksWithNames_WithAuthorAndSeries(t *testi
 // --- InvalidateBookCaches ---
 
 func TestAudiobookService_InvalidateBookCaches_ClearsCache(t *testing.T) {
+	// Default behavior (commit 95b0f70d) keeps the list cache warm on
+	// book mutation. Opt the test back into full invalidation so it
+	// exercises the cleared-list path.
+	prev := config.AppConfig.CacheInvalidateOnBookUpdate
+	config.AppConfig.CacheInvalidateOnBookUpdate = true
+	t.Cleanup(func() { config.AppConfig.CacheInvalidateOnBookUpdate = prev })
+
 	mockStore := mocks.NewMockStore(t)
 	svc := NewAudiobookService(mockStore)
 
