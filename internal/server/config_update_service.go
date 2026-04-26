@@ -1,10 +1,11 @@
 // file: internal/server/config_update_service.go
-// version: 2.5.0
+// version: 3.0.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,18 +13,19 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/util"
 )
 
+// ConfigUpdateService handles applying and persisting config changes.
 type ConfigUpdateService struct {
 	db database.Store
 }
 
+// NewConfigUpdateService creates a new ConfigUpdateService.
 func NewConfigUpdateService(db database.Store) *ConfigUpdateService {
 	return &ConfigUpdateService{db: db}
 }
 
-// ValidateUpdate checks if the update payload has required fields
+// ValidateUpdate checks that the payload is non-empty.
 func (cus *ConfigUpdateService) ValidateUpdate(payload map[string]any) error {
 	if len(payload) == 0 {
 		return fmt.Errorf("no configuration updates provided")
@@ -31,26 +33,17 @@ func (cus *ConfigUpdateService) ValidateUpdate(payload map[string]any) error {
 	return nil
 }
 
-// extractStringSlice extracts a []string from a payload field containing []any.
-func extractStringSlice(payload map[string]any, key string) ([]string, bool) {
-	raw, ok := payload[key].([]any)
-	if !ok {
-		return nil, false
-	}
-	out := make([]string, 0, len(raw))
-	for _, item := range raw {
-		if s, ok := item.(string); ok {
-			out = append(out, s)
-		}
-	}
-	return out, true
-}
-
-// MaskSecrets removes sensitive fields from config for response
+// MaskSecrets returns a copy of cfg with all secret fields masked for API responses.
 func (cus *ConfigUpdateService) MaskSecrets(cfg config.Config) config.Config {
 	masked := cfg
 	if masked.OpenAIAPIKey != "" {
 		masked.OpenAIAPIKey = database.MaskSecret(masked.OpenAIAPIKey)
+	}
+	if masked.GoogleBooksAPIKey != "" {
+		masked.GoogleBooksAPIKey = database.MaskSecret(masked.GoogleBooksAPIKey)
+	}
+	if masked.HardcoverAPIToken != "" {
+		masked.HardcoverAPIToken = database.MaskSecret(masked.HardcoverAPIToken)
 	}
 	if masked.BasicAuthPassword != "" {
 		masked.BasicAuthPassword = database.MaskSecret(masked.BasicAuthPassword)
@@ -58,10 +51,24 @@ func (cus *ConfigUpdateService) MaskSecrets(cfg config.Config) config.Config {
 	return masked
 }
 
-// UpdateConfig is the single unified method for applying config updates from any
-// caller (wizard, settings page, etc.). It validates the payload, applies all
-// fields to AppConfig, derives setup_complete from root_dir, persists to the
-// database, and returns an HTTP-style status code plus response map.
+// secretFieldKeys are extracted and applied explicitly, then removed before the
+// JSON round-trip so they are never stored in plaintext in the config blob.
+var secretFieldKeys = []string{
+	"openai_api_key",
+	"google_books_api_key",
+	"hardcover_api_token",
+	"basic_auth_password",
+}
+
+// immutableFieldKeys cannot be changed at runtime and are rejected if present.
+var immutableFieldKeys = []string{"database_type", "enable_sqlite"}
+
+// UpdateConfig applies a config update payload to AppConfig and persists it.
+//
+// Architecture: non-secret fields are applied via JSON round-trip onto AppConfig.
+// json.Unmarshal only overwrites keys present in the JSON, so absent keys leave
+// AppConfig unchanged. This means any new field added to config.Config is
+// automatically handled here with no registration required.
 func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[string]any) {
 	if cus.db == nil {
 		return http.StatusInternalServerError, map[string]any{"error": "database not initialized"}
@@ -70,208 +77,79 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 		return http.StatusBadRequest, map[string]any{"error": "configuration payload is required"}
 	}
 
-	// Reject immutable fields early
-	if _, ok := payload["database_type"]; ok {
-		return http.StatusBadRequest, map[string]any{"error": "database_type cannot be changed at runtime"}
-	}
-	if _, ok := payload["enable_sqlite"]; ok {
-		return http.StatusBadRequest, map[string]any{"error": "enable_sqlite cannot be changed at runtime"}
-	}
-
-	updated := []string{}
-
-	// --- String fields ---
-	stringFields := map[string]*string{
-		"database_path":                &config.AppConfig.DatabasePath,
-		"playlist_dir":                 &config.AppConfig.PlaylistDir,
-		"organization_strategy":        &config.AppConfig.OrganizationStrategy,
-		"folder_naming_pattern":        &config.AppConfig.FolderNamingPattern,
-		"file_naming_pattern":          &config.AppConfig.FileNamingPattern,
-		"language":                     &config.AppConfig.Language,
-		"metadata_review_default_view": &config.AppConfig.MetadataReviewDefaultView,
-		"log_level":                    &config.AppConfig.LogLevel,
-		"openlibrary_dump_dir":         &config.AppConfig.OpenLibraryDumpDir,
-		"hardcover_api_token":          &config.AppConfig.HardcoverAPIToken,
-		"google_books_api_key":         &config.AppConfig.GoogleBooksAPIKey,
-		"memory_limit_type":            &config.AppConfig.MemoryLimitType,
-		"basic_auth_username":          &config.AppConfig.BasicAuthUsername,
-		"basic_auth_password":          &config.AppConfig.BasicAuthPassword,
-		"auto_update_channel":          &config.AppConfig.AutoUpdateChannel,
-		"itunes_library_write_path":    &config.AppConfig.ITunesLibraryWritePath,
-		"itunes_library_read_path":     &config.AppConfig.ITunesLibraryReadPath,
-	}
-	for key, ptr := range stringFields {
-		if val, ok := util.ExtractStringField(payload, key); ok {
-			*ptr = val
-			updated = append(updated, key)
+	// Reject immutable fields
+	for _, field := range immutableFieldKeys {
+		if _, ok := payload[field]; ok {
+			return http.StatusBadRequest, map[string]any{"error": field + " cannot be changed at runtime"}
 		}
 	}
 
-	// root_dir has special handling: derives setup_complete
-	if val, ok := util.ExtractStringField(payload, "root_dir"); ok {
-		trimmed := strings.TrimSpace(val)
-		config.AppConfig.RootDir = trimmed
-		updated = append(updated, "root_dir")
-		config.AppConfig.SetupComplete = trimmed != ""
-		updated = append(updated, "setup_complete")
-	}
-
-	// openai_api_key: secret field with debug logging
-	if val, ok := util.ExtractStringField(payload, "openai_api_key"); ok {
-		log.Printf("[DEBUG] UpdateConfig: Updating OpenAI API key (length: %d, last 4: ***%s)", len(val), func() string {
-			if len(val) > 4 {
-				return val[len(val)-4:]
-			}
-			return val
-		}())
+	// Apply secrets explicitly — they need masking/debug logging and must not
+	// flow through the JSON round-trip to avoid plaintext exposure.
+	if val, ok := payloadString(payload, "openai_api_key"); ok {
+		log.Printf("[DEBUG] UpdateConfig: updating OpenAI API key (len=%d)", len(val))
 		config.AppConfig.OpenAIAPIKey = val
-		updated = append(updated, "openai_api_key")
+	}
+	if val, ok := payloadString(payload, "google_books_api_key"); ok {
+		config.AppConfig.GoogleBooksAPIKey = val
+	}
+	if val, ok := payloadString(payload, "hardcover_api_token"); ok {
+		config.AppConfig.HardcoverAPIToken = val
+	}
+	if val, ok := payloadString(payload, "basic_auth_password"); ok {
+		config.AppConfig.BasicAuthPassword = val
 	}
 
-	// --- Bool fields ---
-	boolFields := map[string]*bool{
-		"setup_complete":           &config.AppConfig.SetupComplete,
-		"scan_on_startup":          &config.AppConfig.ScanOnStartup,
-		"auto_organize":            &config.AppConfig.AutoOrganize,
-		"auto_scan_enabled":        &config.AppConfig.AutoScanEnabled,
-		"create_backups":           &config.AppConfig.CreateBackups,
-		"enable_disk_quota":        &config.AppConfig.EnableDiskQuota,
-		"enable_user_quotas":       &config.AppConfig.EnableUserQuotas,
-		"enable_ai_parsing":        &config.AppConfig.EnableAIParsing,
-		"enable_auth":              &config.AppConfig.EnableAuth,
-		"basic_auth_enabled":       &config.AppConfig.BasicAuthEnabled,
-		"auto_fetch_metadata":      &config.AppConfig.AutoFetchMetadata,
-		"write_back_metadata":      &config.AppConfig.WriteBackMetadata,
-		"openlibrary_dump_enabled": &config.AppConfig.OpenLibraryDumpEnabled,
-		"auto_update_enabled":      &config.AppConfig.AutoUpdateEnabled,
-		"itunes_sync_enabled":      &config.AppConfig.ITunesSyncEnabled,
-		"itl_write_back_enabled":   &config.AppConfig.ITLWriteBackEnabled,
-		"itunes_auto_write_back":   &config.AppConfig.ITunesAutoWriteBack,
+	// Build filtered payload without secrets (already applied above)
+	filtered := make(map[string]any, len(payload))
+	for k, v := range payload {
+		filtered[k] = v
 	}
-	for key, ptr := range boolFields {
-		if val, ok := util.ExtractBoolField(payload, key); ok {
-			*ptr = val
-			updated = append(updated, key)
-		}
+	for _, k := range secretFieldKeys {
+		delete(filtered, k)
 	}
 
-	// --- Int fields ---
-	intFields := map[string]*int{
-		"concurrent_scans":           &config.AppConfig.ConcurrentScans,
-		"auto_scan_debounce_seconds": &config.AppConfig.AutoScanDebounceSeconds,
-		"operation_timeout_minutes":  &config.AppConfig.OperationTimeoutMinutes,
-		"api_rate_limit_per_minute":  &config.AppConfig.APIRateLimitPerMinute,
-		"auth_rate_limit_per_minute": &config.AppConfig.AuthRateLimitPerMinute,
-		"json_body_limit_mb":         &config.AppConfig.JSONBodyLimitMB,
-		"upload_body_limit_mb":       &config.AppConfig.UploadBodyLimitMB,
-		"disk_quota_percent":         &config.AppConfig.DiskQuotaPercent,
-		"default_user_quota_gb":      &config.AppConfig.DefaultUserQuotaGB,
-		"cache_size":                 &config.AppConfig.CacheSize,
-		"memory_limit_percent":       &config.AppConfig.MemoryLimitPercent,
-		"memory_limit_mb":            &config.AppConfig.MemoryLimitMB,
-		"auto_update_check_minutes":  &config.AppConfig.AutoUpdateCheckMinutes,
-		"auto_update_window_start":   &config.AppConfig.AutoUpdateWindowStart,
-		"auto_update_window_end":     &config.AppConfig.AutoUpdateWindowEnd,
-		"itunes_sync_interval":       &config.AppConfig.ITunesSyncInterval,
+	// Apply all remaining fields via JSON round-trip.
+	// Any field in config.Config with a matching json tag is set automatically.
+	payloadJSON, err := json.Marshal(filtered)
+	if err != nil {
+		return http.StatusBadRequest, map[string]any{"error": "failed to encode payload: " + err.Error()}
 	}
-	for key, ptr := range intFields {
-		if val, ok := util.ExtractIntField(payload, key); ok {
-			*ptr = val
-			updated = append(updated, key)
-		}
+	if err := json.Unmarshal(payloadJSON, &config.AppConfig); err != nil {
+		return http.StatusBadRequest, map[string]any{"error": "failed to apply config: " + err.Error()}
 	}
 
-	// --- Slice fields ---
-	if exts, ok := extractStringSlice(payload, "supported_extensions"); ok {
-		config.AppConfig.SupportedExtensions = exts
-		updated = append(updated, "supported_extensions")
-	}
-	if patterns, ok := extractStringSlice(payload, "exclude_patterns"); ok {
-		config.AppConfig.ExcludePatterns = patterns
-		updated = append(updated, "exclude_patterns")
-	}
+	// Post-process: trim root_dir whitespace, derive setup_complete
+	config.AppConfig.RootDir = strings.TrimSpace(config.AppConfig.RootDir)
+	config.AppConfig.SetupComplete = config.AppConfig.RootDir != ""
 
-	// Metadata sources (enabled state, priority, credentials)
-	if raw, ok := payload["metadata_sources"]; ok {
-		if sourcesSlice, ok2 := raw.([]any); ok2 {
-			var sources []config.MetadataSource
-			for _, item := range sourcesSlice {
-				if m, ok3 := item.(map[string]any); ok3 {
-					id, _ := m["id"].(string)
-					name, _ := m["name"].(string)
-					if id == "" {
-						continue
-					}
-					src := config.MetadataSource{
-						ID:   id,
-						Name: name,
-					}
-					if enabled, ok4 := m["enabled"].(bool); ok4 {
-						src.Enabled = enabled
-					}
-					if priority, ok4 := m["priority"].(float64); ok4 {
-						src.Priority = int(priority)
-					}
-					if creds, ok4 := m["credentials"].(map[string]any); ok4 {
-						src.Credentials = make(map[string]string)
-						for k, v := range creds {
-							if s, ok5 := v.(string); ok5 {
-								src.Credentials[k] = s
-							}
-						}
-					}
-					if reqAuth, ok4 := m["requires_auth"].(bool); ok4 {
-						src.RequiresAuth = reqAuth
-					}
-					sources = append(sources, src)
-				}
-			}
-			if len(sources) > 0 {
-				config.AppConfig.MetadataSources = sources
-				updated = append(updated, "metadata_sources")
-			}
-		}
-	}
-
-	// iTunes path mappings
-	if raw, ok := payload["itunes_path_mappings"]; ok {
-		if mappingsSlice, ok2 := raw.([]any); ok2 {
-			var mappings []config.ITunesPathMap
-			for _, item := range mappingsSlice {
-				if m, ok3 := item.(map[string]any); ok3 {
-					from, _ := m["from"].(string)
-					to, _ := m["to"].(string)
-					if from != "" && to != "" {
-						mappings = append(mappings, config.ITunesPathMap{From: from, To: to})
-					}
-				}
-			}
-			config.AppConfig.ITunesPathMappings = mappings
-			updated = append(updated, "itunes_path_mappings")
-		}
-	}
-
-	// Persist to database
 	if err := config.SaveConfigToDatabase(cus.db); err != nil {
-		log.Printf("ERROR: Failed to persist config to database: %v", err)
+		log.Printf("ERROR: failed to persist config: %v", err)
 		return http.StatusInternalServerError, map[string]any{
 			"error":   "failed to save configuration",
 			"details": err.Error(),
 		}
 	}
 
-	log.Printf("Configuration saved successfully. Updated fields: %v", updated)
+	log.Printf("Configuration saved successfully")
 
-	maskedConfig := cus.MaskSecrets(config.AppConfig)
 	return http.StatusOK, map[string]any{
 		"message": "configuration updated and saved to database",
-		"updated": updated,
-		"config":  maskedConfig,
+		"config":  cus.MaskSecrets(config.AppConfig),
 	}
 }
 
-// ApplyUpdates applies config updates and persists them. This is a convenience
-// wrapper around UpdateConfig for callers that prefer an error return.
+// payloadString extracts a string value from the payload if present and non-empty.
+func payloadString(payload map[string]any, key string) (string, bool) {
+	v, ok := payload[key]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok
+}
+
+// ApplyUpdates applies config updates and persists them.
 // Deprecated: prefer UpdateConfig directly.
 func (cus *ConfigUpdateService) ApplyUpdates(payload map[string]any) error {
 	status, resp := cus.UpdateConfig(payload)

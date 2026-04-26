@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -139,8 +139,14 @@ func SaveConfigToFile() error {
 	return nil
 }
 
-// LoadConfigFromDatabase loads settings from database and applies them to AppConfig
-// This is called after database initialization to override defaults with persisted values
+// LoadConfigFromDatabase loads settings from database and applies them to AppConfig.
+//
+// Load order (blob-first):
+//  1. If "config_blob" exists: unmarshal the full non-secret Config JSON directly onto
+//     AppConfig — every field is restored automatically, no registration needed.
+//  2. Always load individual secret rows (they are NOT included in the blob).
+//  3. If no blob is found (existing install): fall back to individual applySetting keys
+//     so existing data is preserved.
 func LoadConfigFromDatabase(store database.SettingsStore) error {
 	if store == nil {
 		return fmt.Errorf("store is nil")
@@ -148,53 +154,80 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 
 	log.Println("Loading configuration from database...")
 
-	// Get all settings
 	settings, err := store.GetAllSettings()
 	if err != nil {
-		// If table doesn't exist yet or is empty, that's OK
 		log.Printf("Note: Could not load settings from database: %v", err)
 		return nil
 	}
 
-	// Apply each setting, track secrets that failed to decrypt
-	applied := 0
-	var corruptSecrets []string
-	for _, setting := range settings {
-		value := setting.Value
-
-		if setting.Key == "openai_api_key" || setting.Key == "enable_ai_parsing" {
-			log.Printf("[DEBUG] LoadConfigFromDatabase: found setting %s (isSecret=%v, valueLen=%d)",
-				setting.Key, setting.IsSecret, len(setting.Value))
-		}
-
-		// Decrypt if secret
-		if setting.IsSecret {
-			decrypted, err := database.DecryptValue(value)
-			if err != nil {
-				log.Printf("WARNING: Failed to decrypt setting %q — will try config file fallback. (error: %v)",
-					setting.Key, err)
-				corruptSecrets = append(corruptSecrets, setting.Key)
-				continue
-			}
-			value = decrypted
-		}
-
-		// Apply to AppConfig based on key
-		if err := applySetting(setting.Key, value, setting.Type); err != nil {
-			log.Printf("Warning: Failed to apply setting %s: %v", setting.Key, err)
-			continue
-		}
-		applied++
+	// Index settings for O(1) lookup
+	settingsMap := make(map[string]*database.Setting, len(settings))
+	for i := range settings {
+		settingsMap[settings[i].Key] = &settings[i]
 	}
 
-	log.Printf("Applied %d settings from database", applied)
+	var corruptSecrets []string
 
-	// Fall back to config file for anything the DB didn't provide (e.g. corrupted secrets)
+	// --- Blob path (new installs and post-first-save upgrades) ---
+	blobFound := false
+	if blob, ok := settingsMap["config_blob"]; ok && blob.Value != "" {
+		// Preserve immutable fields — they must come from the runtime environment,
+		// not from a stored blob that could have been created under different flags.
+		savedDBType := AppConfig.DatabaseType
+
+		var loaded Config
+		if err := json.Unmarshal([]byte(blob.Value), &loaded); err == nil {
+			AppConfig = loaded
+			AppConfig.DatabaseType = savedDBType
+			blobFound = true
+			log.Printf("[INFO] Loaded config from blob (%d bytes)", len(blob.Value))
+		} else {
+			log.Printf("[WARN] Failed to parse config_blob: %v — falling back to individual keys", err)
+		}
+	}
+
+	// --- Secret loading (always, blob or legacy) ---
+	// Secrets are never stored in the blob; they live as individually encrypted rows.
+	for _, setting := range settings {
+		if !setting.IsSecret {
+			continue
+		}
+		decrypted, err := database.DecryptValue(setting.Value)
+		if err != nil {
+			log.Printf("WARNING: Failed to decrypt setting %q — will try config file fallback. (error: %v)",
+				setting.Key, err)
+			corruptSecrets = append(corruptSecrets, setting.Key)
+			continue
+		}
+		if err := applySetting(setting.Key, decrypted, setting.Type); err != nil {
+			log.Printf("Warning: Failed to apply secret setting %s: %v", setting.Key, err)
+		}
+		log.Printf("[DEBUG] LoadConfigFromDatabase: found setting %s (isSecret=true, valueLen=%d)",
+			setting.Key, len(decrypted))
+	}
+
+	// --- Legacy path (existing installs without a blob) ---
+	if !blobFound {
+		applied := 0
+		for _, setting := range settings {
+			if setting.Key == "config_blob" || setting.IsSecret {
+				continue // blob already handled; secrets handled above
+			}
+			if err := applySetting(setting.Key, setting.Value, setting.Type); err != nil {
+				log.Printf("Warning: Failed to apply setting %s: %v", setting.Key, err)
+				continue
+			}
+			applied++
+		}
+		log.Printf("Applied %d settings from database (legacy individual keys)", applied)
+	}
+
+	// Fall back to config file for anything not yet loaded (e.g. corrupted secrets)
 	if err := LoadConfigFromFile(); err != nil {
 		log.Printf("Warning: Config file fallback failed: %v", err)
 	}
 
-	// Re-encrypt any secrets that failed to decrypt but were recovered from config file
+	// Re-encrypt secrets that failed to decrypt but were recovered from the config file
 	if len(corruptSecrets) > 0 {
 		log.Printf("[INFO] Re-encrypting %d corrupt secret(s) recovered from config file...", len(corruptSecrets))
 		for _, key := range corruptSecrets {
@@ -216,12 +249,10 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 					log.Printf("[INFO] Re-encrypted setting %q successfully", key)
 				}
 			} else {
-				// Config file also has no value — clear the corrupt DB entry so the
-				// user can re-enter it via the UI and have it save cleanly.
 				if err := store.DeleteSetting(key); err != nil {
 					log.Printf("[WARN] Could not clear corrupt secret %q from DB: %v", key, err)
 				} else {
-					log.Printf("[INFO] Cleared corrupt secret %q from DB — re-enter the value via Settings", key)
+					log.Printf("[INFO] Cleared corrupt secret %q — re-enter via Settings", key)
 				}
 			}
 		}
@@ -656,13 +687,83 @@ func applySetting(key, value, typ string) error {
 }
 
 // SaveConfigToDatabase persists current AppConfig to database AND config file.
-// This should be called whenever config is modified via API.
+//
+// Storage format (v2, blob-based):
+//   - "config_blob": full Config JSON with secrets zeroed — automatically includes
+//     every field in config.Config with no manual registration.
+//   - Individual encrypted rows for each secret (openai_api_key, etc.).
+//
+// Existing installs that have never saved under v2 still load correctly via the
+// legacy applySetting fallback in LoadConfigFromDatabase.
 func SaveConfigToDatabase(store database.SettingsStore) error {
 	if store == nil {
 		return fmt.Errorf("store is nil")
 	}
 
 	log.Println("Saving configuration to database...")
+
+	// Build a safe copy with secrets zeroed — they are saved separately (encrypted).
+	safeConfig := AppConfig
+	safeConfig.OpenAIAPIKey = ""
+	safeConfig.GoogleBooksAPIKey = ""
+	safeConfig.HardcoverAPIToken = ""
+	safeConfig.BasicAuthPassword = ""
+
+	blobJSON, err := json.Marshal(safeConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config blob: %w", err)
+	}
+	if err := store.SetSetting("config_blob", string(blobJSON), "json", false); err != nil {
+		return fmt.Errorf("failed to save config blob: %w", err)
+	}
+
+	// Persist secrets individually (encrypted).
+	// If the current AppConfig value is empty, preserve the existing DB entry
+	// so a page-load that clears the field doesn't wipe a previously saved key.
+	type secretEntry struct {
+		key   string
+		value string
+	}
+	secrets := []secretEntry{
+		{"openai_api_key", AppConfig.OpenAIAPIKey},
+		{"google_books_api_key", AppConfig.GoogleBooksAPIKey},
+		{"hardcover_api_token", AppConfig.HardcoverAPIToken},
+		{"basic_auth_password", AppConfig.BasicAuthPassword},
+	}
+	for _, s := range secrets {
+		if s.value == "" {
+			existing, err := store.GetSetting(s.key)
+			if err == nil && existing != nil && existing.Value != "" {
+				log.Printf("[DEBUG] Preserving existing secret %s (current value empty)", s.key)
+				continue
+			}
+		}
+		if err := store.SetSetting(s.key, s.value, "string", true); err != nil {
+			log.Printf("Warning: Failed to save secret %s: %v", s.key, err)
+		}
+	}
+
+	log.Printf("Configuration saved to database (blob + %d secrets)", len(secrets))
+
+	// Also save to config file as a reliable fallback
+	if err := SaveConfigToFile(); err != nil {
+		log.Printf("Warning: Failed to save config file: %v", err)
+	}
+
+	return nil
+}
+
+// legacySaveConfigToDatabase_REMOVED was the pre-v1.16.0 implementation that
+// manually registered every config field in a large settings map. It is retained
+// as dead code so that the individual key↔field mappings are documented for
+// the legacy applySetting fallback path used by existing installs on first upgrade.
+// nolint:deadcode,unused
+func legacySaveConfigToDatabase_REMOVED(store database.SettingsStore) error { //nolint:all
+	if store == nil {
+		return fmt.Errorf("store is nil")
+	}
+
+	log.Println("Saving configuration to database (legacy)...")
 
 	pathMappingsJSON, err := json.Marshal(AppConfig.ITunesPathMappings)
 	if err != nil {

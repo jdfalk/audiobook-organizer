@@ -1,10 +1,11 @@
 // file: internal/config/persistence_test.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -485,10 +486,12 @@ func TestSaveConfigToDatabase(t *testing.T) {
 	t.Run("saves all config values", func(t *testing.T) {
 		store := mocks.NewMockStore(t)
 		seen := map[string]struct{}{}
+		savedValues := map[string]string{}
 		store.EXPECT().GetSetting(mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
 		store.EXPECT().SetSetting(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 			Run(func(key string, value string, typ string, isSecret bool) {
 				seen[key] = struct{}{}
+				savedValues[key] = value
 			}).
 			Return(nil)
 
@@ -524,11 +527,22 @@ func TestSaveConfigToDatabase(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		for _, key := range []string{"root_dir", "database_path", "organization_strategy", "concurrent_scans"} {
-			if _, ok := seen[key]; !ok {
-				t.Fatalf("expected %q to be saved", key)
-			}
+		// Non-secret fields are stored as a single config_blob JSON entry
+		if _, ok := seen["config_blob"]; !ok {
+			t.Fatalf("expected config_blob to be saved")
 		}
+		// Parse blob and verify a sample of fields were captured
+		var loaded Config
+		if err := json.Unmarshal([]byte(savedValues["config_blob"]), &loaded); err != nil {
+			t.Fatalf("failed to parse config_blob: %v", err)
+		}
+		if loaded.RootDir != "/test/audiobooks" {
+			t.Errorf("expected RootDir /test/audiobooks, got %q", loaded.RootDir)
+		}
+		if loaded.ConcurrentScans != 8 {
+			t.Errorf("expected ConcurrentScans 8, got %d", loaded.ConcurrentScans)
+		}
+		// Secrets are stored as separate encrypted entries
 		for _, secretKey := range []string{"openai_api_key"} {
 			if _, ok := seen[secretKey]; !ok {
 				t.Fatalf("expected secret %q to be saved when non-empty", secretKey)
@@ -568,8 +582,9 @@ func TestSaveConfigToDatabase(t *testing.T) {
 		if _, ok := seen["openai_api_key"]; ok {
 			t.Fatalf("did not expect openai_api_key to be saved (should preserve existing DB value)")
 		}
-		if _, ok := seen["root_dir"]; !ok {
-			t.Fatalf("expected root_dir to be saved")
+		// Non-secret fields are stored in the config_blob
+		if _, ok := seen["config_blob"]; !ok {
+			t.Fatalf("expected config_blob to be saved")
 		}
 	})
 
