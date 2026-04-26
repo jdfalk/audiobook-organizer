@@ -23,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -51,12 +52,33 @@ type PathRepairer struct {
 	enqueuer Enqueuer
 	queue    operations.Queue
 	cfg      PathRepairConfig
+	// bookIDExtractor pulls AUDIOBOOK_ORGANIZER_ID from one audio
+	// file. Production wires this to metadata.ExtractMetadata.
+	// Tests inject deterministic fakes.
+	bookIDExtractor bookIDExtractor
 }
 
 // newPathRepairer wires a PathRepairer. nil enqueuer skips the
 // write-back enqueue step (used by dry-run-only tests).
 func newPathRepairer(store pathRepairerStore, enqueuer Enqueuer, queue operations.Queue, cfg PathRepairConfig) *PathRepairer {
-	return &PathRepairer{store: store, enqueuer: enqueuer, queue: queue, cfg: cfg}
+	return &PathRepairer{
+		store:           store,
+		enqueuer:        enqueuer,
+		queue:           queue,
+		cfg:             cfg,
+		bookIDExtractor: extractBookOrganizerID,
+	}
+}
+
+// extractBookOrganizerID is the production extractor used by the
+// fsTagScanner. Reads embedded metadata and returns the
+// AUDIOBOOK_ORGANIZER_ID tag value (book-organizer book ID).
+func extractBookOrganizerID(audioFilePath string) (string, error) {
+	md, err := metadata.ExtractMetadata(audioFilePath, nil)
+	if err != nil {
+		return "", err
+	}
+	return md.BookOrganizerID, nil
 }
 
 // iTunesPathRepairResult is the per-run tally returned in progress
@@ -160,6 +182,24 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 	result := iTunesPathRepairResult{XMLTracks: len(lib.Tracks), DryRun: dryRun}
 	_ = progress.UpdateProgress(0, len(lib.Tracks), "scanning iTunes locations")
 
+	// Tier B is built lazily — only constructed if tier A leaves
+	// residue. Walking the audiobook root is the expensive step and
+	// we don't want to pay it on libraries where every iTunes path
+	// resolves cleanly via the DB.
+	var tierB tagScanner
+	getTierB := func() tagScanner {
+		if tierB == nil {
+			if r.cfg.AudiobookRoot == "" || r.bookIDExtractor == nil {
+				tierB = noopTagScanner{}
+			} else {
+				_ = progress.Log("info",
+					fmt.Sprintf("tier B: scanning audiobook root for embedded book IDs root=%s", r.cfg.AudiobookRoot), nil)
+				tierB = newFSTagScanner(r.cfg.AudiobookRoot, r.bookIDExtractor)
+			}
+		}
+		return tierB
+	}
+
 	scanned := 0
 	for _, track := range lib.Tracks {
 		select {
@@ -180,8 +220,11 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 		}
 		result.Missing++
 
-		// Tier A: PID → DB → on-disk path
-		if newPath, ok := resolveTierA(r.store, track.PersistentID, pathExists); ok {
+		// Single PID → bookID lookup shared by tier A and tier B.
+		bookID := lookupBookID(r.store, track.PersistentID)
+
+		// Tier A: bookID → DB-known on-disk path
+		if newPath, ok := resolveTierA(r.store, track.PersistentID, bookID, pathExists); ok {
 			result.AutoResolved++
 			_ = progress.Log("info",
 				fmt.Sprintf("repair pid=%s old=%s new=%s tier=A action=%s",
@@ -189,10 +232,19 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 			continue
 		}
 
-		// Tier B/C land in subsequent commits.
+		// Tier B: embedded AUDIOBOOK_ORGANIZER_ID tag scan
+		if newPath, ok := resolveTierB(getTierB(), bookID, pathExists); ok {
+			result.AutoResolved++
+			_ = progress.Log("info",
+				fmt.Sprintf("repair pid=%s old=%s new=%s tier=B action=%s",
+					track.PersistentID, decoded, newPath, applyAction(dryRun)), nil)
+			continue
+		}
+
+		// Tier C lands in the next commit.
 		result.Unresolved++
 		_ = progress.Log("debug",
-			fmt.Sprintf("missing pid=%s old=%s tier=A unresolved", track.PersistentID, decoded), nil)
+			fmt.Sprintf("missing pid=%s old=%s tier=AB unresolved", track.PersistentID, decoded), nil)
 	}
 
 	if err := persistRepairResult(r.store, opID, result); err != nil {
