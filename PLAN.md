@@ -1,62 +1,152 @@
-# Cache Metrics — Plan
+# iTunes Path Repair
 
-Branch: `feat/cache-metrics` · Worktree: `audiobook-organizer-cache-metrics`
+Branch: `feat/itunes-path-repair` · Worktree: `.worktrees/itunes-path-repair`
 
 ## Goal
-Add per-cache observability (hits, misses, sets, invalidations, evictions, size, latency) for every cache in the system. Expose via existing Prometheus `/metrics`, a JSON endpoint for the Diagnostics UI, a per-key debug endpoint, and a persistent history table for restart-surviving trends.
 
-OTel deferred to a separate future PR.
+After organize/rename, iTunes still references stale paths for hundreds of
+files that no longer exist on disk. Add an operation that **dumps the iTunes
+XML, finds every track whose `Location` doesn't exist, re-discovers the
+correct file via a three-tier strategy (PID → embedded tag → fuzzy match),
+and enqueues path corrections through the existing `WriteBackBatcher`** so
+they ship in normal batched .itl writes.
 
-## Files to change
+## Affected files
 
-### Wave 0 — foundation (coordinator, sequential)
-- `internal/metrics/metrics.go` — add cache counter/gauge/histogram primitives + helper funcs
-- `internal/cache/cache.go` — add `name` field, `New(name, ttl)`, instrument Get/Set/Invalidate(All)
-- `internal/cache/cache_test.go` — update tests for new signature, add metric-emission test
-- All 6 callsites of `cache.New[...]` (mechanical name addition):
-  - `internal/server/server.go:838-840` (dashboardCache, dedupCache, listCache)
-  - `internal/server/audiobook_service.go:80-81` (bookCache, listCache)
-  - `internal/ai/openai_parser.go:66` (responseCache)
+### New
+- `internal/itunes/service/path_repair.go` — `PathRepairer` operation;
+  mirrors `path_reconcile.go` (small store interface, `Start` HTTP handler
+  that registers a queued operation, `Repair(ctx, opID, progress)` worker).
+- `internal/itunes/service/path_repair_resolver.go` — pure-function
+  resolver implementing tiers A/B/C (no store deps, easy to unit-test).
+- `internal/itunes/service/path_repair_test.go` — operation-level integration
+  test using fixture XML + tmpdir tree.
+- `internal/itunes/service/path_repair_resolver_test.go` — per-tier unit
+  tests.
 
-### Wave 1 — parallel children
-- **T1 (Sonnet)**: `internal/database/metadata_fetch_cache.go` — wire counters at read/write boundaries
-- **T2 (Sonnet)**: `internal/database/embedding_store.go` — wire counters at cache lookup paths
-- **T3 (Haiku)**: `web/src/pages/Diagnostics.tsx` (or equivalent) — add Cache Stats panel
-- **T4 (Haiku)**: `internal/server/system_handlers.go` — add `GET /api/v1/cache/stats` JSON handler + `GET /api/v1/cache/stats/keys?cache=X` (admin-gated, key names only)
+### Modified
+- `internal/itunes/service/service.go` — wire `PathRepairer` into the
+  service struct + constructor (same pattern as `PathReconciler`).
+- `internal/server/server.go` — register
+  `POST /operations/itunes-path-repair` next to the existing reconcile
+  route (around line 2365).
+- `TODO.md` / `CHANGELOG.md` — entry for the new operation.
 
-### Wave 2 — persistence (coordinator, sequential)
-- New migration N+1: `cache_stats_history` table (cache_name, ts, hits, misses, sets, invalidations, evictions, size)
-- `internal/server/server.go` — background snapshotter goroutine (every 5 min)
-- `internal/server/system_handlers.go` — `GET /api/v1/cache/stats/history?cache=X&since=Y`
-- Tests + CHANGELOG.md + TODO.md
+### Reused (read-only dependencies)
+- `itunes.ParseLibrary` (parser.go) — XML dump
+- `metafetch.ComputeITunesPath` — recompute iTunes-format paths
+- `store.GetBookByExternalID("itunes", pid)` — tier A lookup
+- `store.GetBookPathHistory` / `store.RecordPathChange` — audit trail
+- `store.UpdateBook` — write corrected `FilePath` back to DB
+- `Enqueuer.Enqueue(bookID)` — hand off to `WriteBackBatcher`; existing
+  `SafeWriteITL` provides backups + atomic rename
+- audio-tag reader (whichever package `metafetch.ExtractMetadata` uses)
+  for tier B PID extraction
 
-### Wave 3 — LRU eviction (coordinator, sequential)
-- `internal/cache/cache.go` — add optional `maxEntries int` (0 = unbounded, current behavior). When set, maintain an access-ordered list (`container/list` doubly-linked list + map index) and evict the LRU entry on `Set` once `len(items) > maxEntries`. Each eviction calls `metrics.RecordCacheEviction(name)`.
-- New constructor: `NewWithLimit[T](name string, ttl time.Duration, maxEntries int) *Cache[T]` — keeps the existing `New` signature stable for callers that want unbounded.
-- Also evict expired entries lazily on `Get` (currently they linger): on a miss-due-to-expiry path, delete the stale entry and record an eviction with `reason="expired"`. This gives `cache_evictions_total{cache,reason}` real signal without forcing every cache to opt into LRU.
-- Pick sensible default limits per cache once we have a wave or two of production stats showing actual sizes — don't guess up front.
-- Tests: cover capacity-eviction ordering, expired-on-Get eviction, and that LRU access updates recency.
+## Design
 
-## Ordered steps
-1. **Wave 0a**: extend `internal/metrics/metrics.go` (new counter/gauge/histogram + helpers + register).
-2. **Wave 0b**: add `name` to `Cache[T]`, instrument operations, update 6 callsites in one commit. `make test` green.
-3. **Wave 1**: dispatch T1–T4 in parallel as subagents (worktree-isolated). Each opens its own PR or returns a patch the coordinator commits to this branch.
-4. **Wave 2**: write migration, snapshotter, history endpoint. Add tests.
-5. Run full `make ci`, update CHANGELOG/TODO, open PR.
+### Resolution tiers (applied in order)
+
+1. **(A) PID → DB lookup.** Each XML track has a `Persistent ID`. Call
+   `GetBookByExternalID("itunes", pid)`. If a book is found, take
+   `Book.FilePath` (or the matching `BookFile.FilePath` for multi-segment
+   books). If that path exists on disk, that's the correct location.
+   Cheap, exact, handles the common case.
+2. **(B) Embedded tag scan.** When (A) leaves residue, walk the audiobook
+   root once, extract `AUDIOBOOK_ORGANIZER_PERSISTENT_ID` from each audio
+   file's tags, build an in-memory `pid → on-disk-path` map. Re-resolve
+   unmatched tracks against this map. Recovers when `external_id_map` is
+   stale or never populated.
+3. **(C) Fuzzy match.** For still-unresolved tracks, score candidates by
+   filename + title similarity. **Never auto-apply.** Emit ranked
+   candidates to a `needs_review` list in the operation result for human
+   confirmation.
+
+### Source-of-truth ordering
+
+Filesystem > DB > iTunes XML. When (A) or (B) finds a real path that
+differs from `Book.FilePath`, the repairer:
+
+1. `RecordPathChange(book_id, old_path, new_path, "repair")`.
+2. `UpdateBook` with the new `FilePath`.
+3. Recompute `Book.ITunesPath` via `ComputeITunesPath(new_path)`.
+4. `Enqueuer.Enqueue(bookID)` — the batcher writes through
+   `UpdateITLLocations` on its normal schedule.
+
+This deliberately reuses the same path the reconciler already drives, so we
+inherit existing backup/atomic-rename safety.
+
+### Dry-run by default
+
+Operation defaults to dry-run: result lists `auto_resolved`, `needs_review`,
+`unresolved` with counts and book IDs but writes nothing. `?apply=true`
+flips it to write mode (matches the convention in `path_reconcile.go:69`).
+
+### Concurrency / scale
+
+Hundreds of books × thousands of files. Tiers A is cheap (DB lookup +
+`os.Stat`); parallelize with a worker pool sized to `runtime.NumCPU()`.
+Tier B runs only on the residue and is the expensive step (tag read per
+file) — same worker-pool pattern. Tier C is small and sequential.
+
+### Logging (per `feedback_logging.md`)
+
+- Start: `iTunes path repair started: tracks=N`
+- Per-tier rollup: `tier=A resolved=X unresolved=Y`
+- Per resolution: `repair pid=… old=… new=… tier=A|B|C action=enqueue|skip`
+- Skip: `tier=A skipped reason=path_exists`
+- Complete: `iTunes path repair complete: missing=N auto=X review=Y unresolved=Z duration=…`
+
+## Ordered steps (one commit each, conventional commits)
+
+1. **Scaffold** — `path_repair.go` + service wiring + route + dry-run
+   response shape with empty results. `make build-api` green.
+2. **Tier A** — XML parse, stat each `Location`, resolve missing via
+   `GetBookByExternalID`. Unit + small integration test with fixture XML.
+3. **Tier B** — pure resolver function backed by a tag reader; lazy
+   invocation; tests for PID match, multi-segment, no PID tag.
+4. **Tier C** — fuzzy filename + title scoring; emit to `needs_review`,
+   never auto-apply. Tests for ranking + threshold.
+5. **Apply mode** — `?apply=true` triggers `RecordPathChange` +
+   `UpdateBook` + `Enqueuer.Enqueue`. Test that the batcher receives the
+   right book IDs (mock enqueuer).
+6. **End-to-end** — fixture XML with one OK / one A-resolvable /
+   one B-resolvable track + tmpdir tree; assert dry-run report and
+   apply-mode side effects.
+7. **Docs** — TODO.md, CHANGELOG.md.
 
 ## Test strategy
-- Unit: `cache_test.go` asserts that Get hit/miss/expired paths emit the right counter.
-- Integration: hit `/api/v1/cache/stats` after seeding a cache, verify shape.
-- Metrics: scrape `/metrics`, assert `cache_hits_total{cache="dashboard"}` exists.
-- DB: history table populated after a forced snapshot tick.
+
+- `go test ./internal/itunes/service/... -run TestPathRepair -v`
+- `go test ./internal/itunes/... -run "TestPath|TestParseLibrary"` —
+  no regression in path mapping / parser
+- `make test` — full Go suite stays green
+- `make ci` before opening the PR
+- **Manual dry-run smoke against prod XML** (read-only) before any
+  `?apply=true` discussion: hit the endpoint with a dev DB pointed at the
+  prod XML and confirm `missing` count is plausible and most resolutions
+  land in tier A.
+
+Success: `make ci` green; dry-run smoke returns sane counts with the
+majority resolved by tier A.
 
 ## Rollback
-Single branch, single PR (or PR-per-wave). Revert merge commit. No schema destructive changes — the new table is additive; cache name parameter is required but defaults are easy to add if needed.
 
-## Cardinality safety
-Labels are bounded: `{cache}` ∈ {dashboard, dedup, list, book, ai_response, metadata_fetch, embedding, ...} — single digits. `{reason}` ∈ {not_found, expired}. No per-key labels — that's what the per-key debug endpoint is for, and it returns *names only*.
+- All iTunes writes go through existing `Enqueuer` → `WriteBackBatcher` →
+  `SafeWriteITL`, which keeps timestamped .itl backups. Restore from
+  backup if a bad apply lands.
+- DB-side: every `Book.FilePath` change is recorded in `book_path_history`
+  with `change_type=repair`; revert by replaying the most recent `repair`
+  row per book in reverse.
+- Code-side: revert the feature branch — operation is purely additive, no
+  schema changes, no behavior change to existing endpoints.
 
-## Out of scope
-- OTel migration (separate future PR)
-- Per-key value inspection (returns names only)
-- Tuning per-cache `maxEntries` defaults (Wave 3 ships the mechanism unbounded; tuning is a follow-up once we have history data)
+## Open questions / clarifications wanted
+
+- Is dry-run-default acceptable, or should the first run be apply-on?
+  (Default: dry-run.)
+- For tier C, what's the desired similarity threshold? Suggest start at
+  `0.85` Jaro-Winkler on basename and require title containment.
+- Should the operation persist its report (e.g. `docs/reports/itunes-repair-<ts>.json`)
+  or just return it in the HTTP response? Suggest both — return inline
+  for small results, write to disk if `>1000` items.

@@ -48,6 +48,7 @@ type Service struct {
 	Batcher     *WriteBackBatcher
 	Positions   *PositionSync
 	Paths       *PathReconciler
+	Repair      *PathRepairer
 	Playlists   *PlaylistSync
 	Provisioner *TrackProvisioner
 	Transfer    *TransferService
@@ -92,6 +93,16 @@ func New(deps Deps) (*Service, error) {
 	// M1 step 5: PathReconciler. Backfill operation that fixes up
 	// iTunes paths after library reorganizations.
 	svc.Paths = newPathReconciler(deps.Store, svc.Batcher, deps.OpQueue)
+
+	// PathRepairer. Recovers cases where iTunes still references a
+	// stale on-disk path after organize: dumps the iTunes XML, finds
+	// missing locations, and re-discovers them via PID lookup,
+	// embedded tag scan, or fuzzy match. Apply mode enqueues fixes
+	// through the same Batcher.
+	svc.Repair = newPathRepairer(deps.Store, svc.Batcher, deps.OpQueue, PathRepairConfig{
+		XMLPath: deps.Config.LibraryReadPath,
+		// AudiobookRoot is plumbed via Deps in the tier-B/C steps.
+	})
 
 	// M1 step 6: TransferService. ITL download/upload/backup/restore
 	// handlers. No deps — keyed off config.AppConfig.
