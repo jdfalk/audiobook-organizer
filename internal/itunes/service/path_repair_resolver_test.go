@@ -5,12 +5,15 @@
 package itunesservice
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dbmocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // fileSet is a tiny fake filesystem for resolver tests — paths in the
@@ -25,8 +28,6 @@ func (fs fileSet) exists(p string) bool { return fs[p] }
 
 func TestResolveTierA_FileLevelPID(t *testing.T) {
 	m := dbmocks.NewMockStore(t)
-	m.EXPECT().GetBookByExternalID("itunes", "PID_FOO").
-		Return("book-1", nil).Once()
 	m.EXPECT().GetBookFiles("book-1").
 		Return([]database.BookFile{
 			{ID: "f1", FilePath: "/disk/old.m4b", ITunesPersistentID: "PID_OTHER"},
@@ -34,7 +35,7 @@ func TestResolveTierA_FileLevelPID(t *testing.T) {
 		}, nil).Once()
 
 	fs := fileSet{"/disk/new.m4b": true}
-	got, ok := resolveTierA(m, "PID_FOO", fs.exists)
+	got, ok := resolveTierA(m, "PID_FOO", "book-1", fs.exists)
 	assert.True(t, ok)
 	assert.Equal(t, "/disk/new.m4b", got)
 }
@@ -45,8 +46,6 @@ func TestResolveTierA_FileLevelPID(t *testing.T) {
 
 func TestResolveTierA_FallbackToBookFilePath(t *testing.T) {
 	m := dbmocks.NewMockStore(t)
-	m.EXPECT().GetBookByExternalID("itunes", "PID_BAR").
-		Return("book-2", nil).Once()
 	m.EXPECT().GetBookFiles("book-2").
 		Return([]database.BookFile{
 			{ID: "f1", FilePath: "/disk/seg1.mp3", ITunesPersistentID: ""},
@@ -55,7 +54,7 @@ func TestResolveTierA_FallbackToBookFilePath(t *testing.T) {
 		Return(&database.Book{ID: "book-2", FilePath: "/disk/book2-folder/book.m4b"}, nil).Once()
 
 	fs := fileSet{"/disk/book2-folder/book.m4b": true}
-	got, ok := resolveTierA(m, "PID_BAR", fs.exists)
+	got, ok := resolveTierA(m, "PID_BAR", "book-2", fs.exists)
 	assert.True(t, ok)
 	assert.Equal(t, "/disk/book2-folder/book.m4b", got)
 }
@@ -66,8 +65,6 @@ func TestResolveTierA_FallbackToBookFilePath(t *testing.T) {
 
 func TestResolveTierA_DBPathAlsoMissing(t *testing.T) {
 	m := dbmocks.NewMockStore(t)
-	m.EXPECT().GetBookByExternalID("itunes", "PID_BAZ").
-		Return("book-3", nil).Once()
 	m.EXPECT().GetBookFiles("book-3").
 		Return([]database.BookFile{
 			{ID: "f1", FilePath: "/disk/also-gone.m4b", ITunesPersistentID: "PID_BAZ"},
@@ -76,7 +73,7 @@ func TestResolveTierA_DBPathAlsoMissing(t *testing.T) {
 		Return(&database.Book{ID: "book-3", FilePath: "/disk/also-gone-book.m4b"}, nil).Once()
 
 	fs := fileSet{} // nothing exists
-	got, ok := resolveTierA(m, "PID_BAZ", fs.exists)
+	got, ok := resolveTierA(m, "PID_BAZ", "book-3", fs.exists)
 	assert.False(t, ok)
 	assert.Empty(t, got)
 }
@@ -85,26 +82,133 @@ func TestResolveTierA_DBPathAlsoMissing(t *testing.T) {
 // resolveTierA — PID has no DB mapping → unresolved (cheap path)
 // ---------------------------------------------------------------------------
 
-func TestResolveTierA_NoMapping(t *testing.T) {
+func TestResolveTierA_EmptyBookID(t *testing.T) {
 	m := dbmocks.NewMockStore(t)
-	m.EXPECT().GetBookByExternalID("itunes", "PID_UNKNOWN").
-		Return("", nil).Once()
-
-	got, ok := resolveTierA(m, "PID_UNKNOWN", func(string) bool { return true })
+	got, ok := resolveTierA(m, "PID_UNKNOWN", "", func(string) bool { return true })
 	assert.False(t, ok)
 	assert.Empty(t, got)
 }
 
 // ---------------------------------------------------------------------------
-// resolveTierA — store error treated as unresolved (degrades gracefully)
+// lookupBookID — store error treated as empty (graceful degradation)
 // ---------------------------------------------------------------------------
 
-func TestResolveTierA_StoreError(t *testing.T) {
+func TestLookupBookID_StoreErrorReturnsEmpty(t *testing.T) {
 	m := dbmocks.NewMockStore(t)
 	m.EXPECT().GetBookByExternalID("itunes", mock.Anything).
 		Return("", assert.AnError).Once()
 
-	got, ok := resolveTierA(m, "PID_X", func(string) bool { return true })
+	got := lookupBookID(m, "PID_X")
+	assert.Empty(t, got)
+}
+
+// ---------------------------------------------------------------------------
+// lookupBookID — successful mapping returns the book ID
+// ---------------------------------------------------------------------------
+
+func TestLookupBookID_HappyPath(t *testing.T) {
+	m := dbmocks.NewMockStore(t)
+	m.EXPECT().GetBookByExternalID("itunes", "PID_HAPPY").
+		Return("book-happy", nil).Once()
+
+	got := lookupBookID(m, "PID_HAPPY")
+	assert.Equal(t, "book-happy", got)
+}
+
+// fakeTagScanner is a deterministic tag scanner for tier B tests.
+type fakeTagScanner struct {
+	index map[string][]string
+}
+
+func (f *fakeTagScanner) bookIDToPaths(bookID string) []string { return f.index[bookID] }
+
+// ---------------------------------------------------------------------------
+// fsTagScanner — production scanner walks a tmpdir and indexes via the
+// injected bookIDExtractor, then resolves on demand.
+// ---------------------------------------------------------------------------
+
+func TestFSTagScanner_IndexesAudioFiles(t *testing.T) {
+	root := t.TempDir()
+	// Create three audio files and one ignored .txt sidecar.
+	mustWrite(t, filepath.Join(root, "author/title-A.m4b"), "audio")
+	mustWrite(t, filepath.Join(root, "author/title-B.mp3"), "audio")
+	mustWrite(t, filepath.Join(root, "author/title-C.m4b"), "audio")
+	mustWrite(t, filepath.Join(root, "author/title-A.txt"), "ignored")
+
+	extractor := func(p string) (string, error) {
+		switch filepath.Base(p) {
+		case "title-A.m4b":
+			return "book-1", nil
+		case "title-B.mp3":
+			return "book-2", nil
+		case "title-C.m4b":
+			return "book-1", nil // shares bookID — multi-segment
+		}
+		return "", nil
+	}
+
+	scan := newFSTagScanner(root, extractor)
+	one := scan.bookIDToPaths("book-1")
+	assert.Len(t, one, 2)
+	two := scan.bookIDToPaths("book-2")
+	assert.Len(t, two, 1)
+	none := scan.bookIDToPaths("book-9999")
+	assert.Empty(t, none)
+}
+
+// mustWrite is a tiny helper for fixture trees.
+func mustWrite(t *testing.T, p, content string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+	require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+}
+
+// ---------------------------------------------------------------------------
+// resolveTierB — single on-disk file matches the bookID → resolved
+// ---------------------------------------------------------------------------
+
+func TestResolveTierB_UniqueMatch(t *testing.T) {
+	scan := &fakeTagScanner{index: map[string][]string{
+		"book-x": {"/disk/relocated.m4b"},
+	}}
+	fs := fileSet{"/disk/relocated.m4b": true}
+
+	got, ok := resolveTierB(scan, "book-x", fs.exists)
+	assert.True(t, ok)
+	assert.Equal(t, "/disk/relocated.m4b", got)
+}
+
+// ---------------------------------------------------------------------------
+// resolveTierB — multi-segment book → ambiguous, defer to tier C
+// ---------------------------------------------------------------------------
+
+func TestResolveTierB_AmbiguousMultiSegment(t *testing.T) {
+	scan := &fakeTagScanner{index: map[string][]string{
+		"book-m": {"/disk/seg1.mp3", "/disk/seg2.mp3"},
+	}}
+	got, ok := resolveTierB(scan, "book-m", func(string) bool { return true })
+	assert.False(t, ok)
+	assert.Empty(t, got)
+}
+
+// ---------------------------------------------------------------------------
+// resolveTierB — bookID has no on-disk match → unresolved
+// ---------------------------------------------------------------------------
+
+func TestResolveTierB_NoOnDiskMatch(t *testing.T) {
+	scan := &fakeTagScanner{index: map[string][]string{}}
+	got, ok := resolveTierB(scan, "book-y", func(string) bool { return true })
+	assert.False(t, ok)
+	assert.Empty(t, got)
+}
+
+// ---------------------------------------------------------------------------
+// resolveTierB — empty bookID short-circuits (no scan)
+// ---------------------------------------------------------------------------
+
+func TestResolveTierB_EmptyBookID(t *testing.T) {
+	scan := &fakeTagScanner{index: map[string][]string{}}
+	got, ok := resolveTierB(scan, "", func(string) bool { return true })
 	assert.False(t, ok)
 	assert.Empty(t, got)
 }

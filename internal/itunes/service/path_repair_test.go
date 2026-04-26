@@ -187,7 +187,8 @@ func TestRepair_TierA_AutoResolvesMissingTrack(t *testing.T) {
 	xmlPath := writeFixtureXML(t, dir, locA, locB)
 
 	m := dbmocks.NewMockStore(t)
-	// Tier A is invoked only for missing tracks (PID_B).
+	// Single PID → bookID lookup at the worker level; tier A then
+	// reads the matching BookFile and finds the new path on disk.
 	m.EXPECT().GetBookByExternalID("itunes", "PID_B").
 		Return("book-b", nil).Once()
 	m.EXPECT().GetBookFiles("book-b").
@@ -234,6 +235,53 @@ func TestRepair_TierA_NoMappingFallsThrough(t *testing.T) {
 	assert.Equal(t, 1, res.Missing)
 	assert.Equal(t, 0, res.AutoResolved)
 	assert.Equal(t, 1, res.Unresolved)
+}
+
+// ---------------------------------------------------------------------------
+// Repair — tier B: tier A fails (no DB path), tier B finds via tag scan
+// ---------------------------------------------------------------------------
+
+func TestRepair_TierB_RecoversFromStaleDBPath(t *testing.T) {
+	dir := t.TempDir()
+	locA := filepath.Join(dir, "alive.m4b")
+	require.NoError(t, os.WriteFile(locA, []byte("a"), 0o644))
+	locB := filepath.Join(dir, "vanished.m4b") // gone in iTunes XML
+	xmlPath := writeFixtureXML(t, dir, locA, locB)
+
+	// The DB has stale paths for book-b — tier A returns false.
+	// Disk has a moved file under audiobook root that carries the
+	// AUDIOBOOK_ORGANIZER_ID tag for book-b.
+	root := filepath.Join(dir, "library")
+	movedFile := filepath.Join(root, "author/book-b/segment.m4b")
+	require.NoError(t, os.MkdirAll(filepath.Dir(movedFile), 0o755))
+	require.NoError(t, os.WriteFile(movedFile, []byte("b"), 0o644))
+
+	m := dbmocks.NewMockStore(t)
+	// Tier A path: external_id_map → bookID → BookFiles → none on disk;
+	// tier A's GetBookByID also lands on a missing file → tier A returns false.
+	m.EXPECT().GetBookByExternalID("itunes", "PID_B").Return("book-b", nil).Once()
+	m.EXPECT().GetBookFiles("book-b").
+		Return([]database.BookFile{{ID: "f1", FilePath: "/disk/STALE.m4b", ITunesPersistentID: "PID_B"}}, nil).Once()
+	m.EXPECT().GetBookByID("book-b").
+		Return(&database.Book{ID: "book-b", FilePath: "/disk/STALE.m4b"}, nil).Once()
+	m.EXPECT().DeleteOperationState("op-tierB").Return(nil).Once()
+	m.EXPECT().UpdateOperationResultData("op-tierB", mock.Anything).Return(nil).Once()
+
+	r := newPathRepairer(m, nil, nil, PathRepairConfig{XMLPath: xmlPath, AudiobookRoot: root})
+	// Inject deterministic extractor that maps movedFile → book-b.
+	r.bookIDExtractor = func(p string) (string, error) {
+		if p == movedFile {
+			return "book-b", nil
+		}
+		return "", nil
+	}
+
+	res, err := r.repairWithResult(context.Background(), "op-tierB", true, noopProgressRepair{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, res.Missing)
+	assert.Equal(t, 1, res.AutoResolved, "should be resolved by tier B")
+	assert.Equal(t, 0, res.Unresolved)
 }
 
 // ---------------------------------------------------------------------------
