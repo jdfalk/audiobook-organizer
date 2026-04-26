@@ -24,6 +24,13 @@ type Deps struct {
 	Realtime         *realtime.EventHub // may be nil; means no SSE push
 	Config           Config
 	Logger           logger.Logger
+	// AudiobookRoot is the on-disk audiobook tree the path-repair
+	// operation walks for tier B (embedded tag scan) and tier C
+	// (fuzzy match). Empty disables those tiers.
+	AudiobookRoot string
+	// ReportDir is where the path-repair operation drops its JSON
+	// report file. Empty means inline-only (no file).
+	ReportDir string
 	// OnBookCreated fires after CreateBook so the dedup engine can check
 	// new iTunes imports against the organized library. May be nil.
 	OnBookCreated    func(bookID string)
@@ -100,8 +107,9 @@ func New(deps Deps) (*Service, error) {
 	// embedded tag scan, or fuzzy match. Apply mode enqueues fixes
 	// through the same Batcher.
 	svc.Repair = newPathRepairer(deps.Store, svc.Batcher, deps.OpQueue, PathRepairConfig{
-		XMLPath: deps.Config.LibraryReadPath,
-		// AudiobookRoot is plumbed via Deps in the tier-B/C steps.
+		XMLPath:       deps.Config.LibraryReadPath,
+		AudiobookRoot: deps.AudiobookRoot,
+		ReportDir:     deps.ReportDir,
 	})
 
 	// M1 step 6: TransferService. ITL download/upload/backup/restore
