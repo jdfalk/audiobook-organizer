@@ -1258,7 +1258,7 @@ func (ts *TaskScheduler) ListTasks() []TaskInfo {
 	ts.mu.RLock()
 	defer ts.mu.RUnlock()
 
-	var result []TaskInfo
+	result := make([]TaskInfo, 0, len(ts.order))
 	for _, name := range ts.order {
 		task := ts.tasks[name]
 		info := TaskInfo{
