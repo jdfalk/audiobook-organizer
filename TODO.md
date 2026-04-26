@@ -27,6 +27,11 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
+## 🛠️ Slash commands
+
+- **`/parallel-sweep`** (project-scoped, [`.claude/commands/parallel-sweep.md`](.claude/commands/parallel-sweep.md)) — coordinated multi-task refactor sweep (≥3 mechanical tasks). Spec in [`docs/superpowers/specs/parallel-sweep.md`](docs/superpowers/specs/parallel-sweep.md).
+- **`/ship`** (global, `~/.claude/commands/ship.md`) — push current branch, open PR, admin-merge with rebase/FF, pull the default branch, run `make deploy` if present. Standard ship-it pipeline; works in any repo.
+
 ## 🔧 CI / Release Infrastructure — Complete
 
 - [x] Revert corrupted `release-go-action/action.yml`
