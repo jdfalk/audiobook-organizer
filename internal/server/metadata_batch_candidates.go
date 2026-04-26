@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-04-05
 
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -315,12 +316,28 @@ func buildCandidateBookInfo(book *database.Book) CandidateBookInfo {
 	return info
 }
 
-// handleGetOperationResults returns the structured candidate results for an operation.
+// handleGetOperationResults returns a paginated page of candidate results for an operation.
+// Query params: limit (default 100, 0=all), offset (default 0).
+// Response includes total_count so the frontend can render correct pagination controls
+// without loading all results.
 func (s *Server) handleGetOperationResults(c *gin.Context) {
 	opID := c.Param("id")
 	if opID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "operation id is required"})
 		return
+	}
+
+	limit := 100
+	if raw := c.Query("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+			limit = n
+		}
+	}
+	offset := 0
+	if raw := c.Query("offset"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+			offset = n
+		}
 	}
 
 	store := s.Store()
@@ -331,14 +348,14 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 		return
 	}
 
-	results, err := store.GetOperationResults(opID)
+	rawResults, totalCount, err := store.GetOperationResultsPage(opID, limit, offset)
 	if err != nil {
 		internalError(c, "failed to get operation results", err)
 		return
 	}
 
-	var candidateResults []CandidateResult
-	for _, r := range results {
+	candidateResults := make([]CandidateResult, 0, len(rawResults))
+	for _, r := range rawResults {
 		var cr CandidateResult
 		if err := json.Unmarshal([]byte(r.ResultJSON), &cr); err != nil {
 			log.Printf("[WARN] failed to unmarshal result for book %s in op %s: %v", r.BookID, opID, err)
@@ -348,12 +365,15 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"operation":    op,
-		"results":      candidateResults,
-		"total":        len(candidateResults),
-		"matched":      countByStatus(candidateResults, "matched"),
-		"no_match":     countByStatus(candidateResults, "no_match"),
-		"errors":       countByStatus(candidateResults, "error"),
+		"operation":   op,
+		"results":     candidateResults,
+		"total":       totalCount,
+		"total_count": totalCount,
+		"matched":     countByStatus(candidateResults, "matched"),
+		"no_match":    countByStatus(candidateResults, "no_match"),
+		"errors":      countByStatus(candidateResults, "error"),
+		"limit":       limit,
+		"offset":      offset,
 	})
 }
 
