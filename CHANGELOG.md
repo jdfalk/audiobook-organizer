@@ -1,13 +1,25 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.31.0 -->
+<!-- version: 2.32.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-25 -->
+<!-- last-edited: 2026-04-26 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 26, 2026 — Metadata review dialog: server-side pagination (PR #466)
+
+Fixed "spins forever showing 0 books" when opening the metadata review dialog for large fetches.
+
+- **Root cause**: `handleGetOperationResults` returned all N results in one response; the frontend then made N sequential `getBook()` API calls to check `metadata_review_status` — for a 5,000-book fetch that was 5,000+ HTTP round-trips before the first render.
+- **`GetOperationResultsPage(id, limit, offset)`** added to `OperationStore` interface — SQL `LIMIT/OFFSET` in SQLite, load+slice in PebbleDB.
+- **`handleGetOperationResults`** now accepts `?limit=&offset=` params (default 100/0) and returns `total_count` for frontend pagination controls.
+- **`MetadataReviewDialog`**: server-side pagination replaces client-side slice; per-book `getBook()` waterfall removed entirely; polling uses `limit=1` to cheaply check total count.
+- Regenerated mocks via `make mocks` (also fixes pre-existing `GetDistinctGenres` mock compile errors).
+
+
 
 #### April 25, 2026 — `/parallel-sweep` slash command — step 9 (polish, all 9 steps complete)
 
