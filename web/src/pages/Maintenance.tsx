@@ -1,5 +1,5 @@
 // file: web/src/pages/Maintenance.tsx
-// version: 1.2.0
+// version: 1.2.1
 // guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
 
 import { useEffect, useState } from 'react';
@@ -41,7 +41,7 @@ export function Maintenance() {
   const fetchTasks = async () => {
     try {
       const data = await api.getRegisteredTasks();
-      setTasks(data);
+      setTasks(Array.isArray(data) ? data : []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load tasks');
