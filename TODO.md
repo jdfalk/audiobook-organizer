@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.27.0 -->
+<!-- version: 5.28.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-26 -->
 
@@ -24,6 +24,12 @@ future agent) can scan the entire workspace in one page.
 **Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
 **Latest shipped release:** v0.210.0 (2026-04-16)
 **In flight:** Backend foundations for 6 major features (see below)
+
+---
+
+## ✅ Recently Shipped — April 26, 2026
+
+- [x] **Config persistence rewrite (PR #472)** — JSON round-trip replaces per-field registration; Google Books API key, AI options, and all settings now persist correctly
 
 ---
 

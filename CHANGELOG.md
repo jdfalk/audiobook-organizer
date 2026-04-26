@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.32.0 -->
+<!-- version: 2.33.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-26 -->
 
@@ -8,6 +8,14 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 26, 2026 — Config persistence: JSON round-trip (PR #472)
+
+Permanently fixes settings (Google Books API key, AI options, and all other fields) not persisting across restarts. Root cause: every new `config.Config` field required manual registration in 3 separate places, and any miss caused silent loss.
+
+- `SaveConfigToDatabase` now stores the full non-secret `Config` as a single `config_blob` JSON entry; secrets still encrypted individually.
+- `UpdateConfig` applies all non-secret fields via `json.Unmarshal` partial merge — any new field with a `json` tag is handled automatically with zero additional code.
+- `LoadConfigFromDatabase` reads blob-first (new installs), falls back to legacy key-value for existing installs, writes blob on first save transparently.
 
 #### April 26, 2026 — Metadata review dialog: server-side pagination (PR #466)
 
