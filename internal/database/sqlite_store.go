@@ -3492,6 +3492,13 @@ func (s *SQLiteStore) ScanPrefix(prefix string) ([]KVPair, error) {
 	return pairs, nil
 }
 
+func (s *SQLiteStore) CountPrefix(prefix string) (int64, error) {
+	s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`)
+	var n int64
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM kv_store WHERE key LIKE ?`, prefix+"%").Scan(&n)
+	return n, err
+}
+
 func (s *SQLiteStore) CreateOperationResult(result *OperationResult) error {
 	_, err := s.db.Exec(
 		`INSERT INTO operation_results (operation_id, book_id, result_json, status) VALUES (?, ?, ?, ?)`,

@@ -1872,6 +1872,7 @@ func (m *MockStore) SetRaw(key string, value []byte) error      { return nil }
 func (m *MockStore) GetRaw(key string) ([]byte, error)          { return nil, nil }
 func (m *MockStore) DeleteRaw(key string) error                 { return nil }
 func (m *MockStore) ScanPrefix(prefix string) ([]KVPair, error) { return nil, nil }
+func (m *MockStore) CountPrefix(prefix string) (int64, error)   { return 0, nil }
 func (m *MockStore) CreateOperationResult(result *OperationResult) error       { return nil }
 func (m *MockStore) GetOperationResults(operationID string) ([]OperationResult, error) {
 	return nil, nil

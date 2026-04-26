@@ -5585,6 +5585,26 @@ func (p *PebbleStore) ScanPrefix(prefix string) ([]KVPair, error) {
 	return pairs, nil
 }
 
+func (p *PebbleStore) CountPrefix(prefix string) (int64, error) {
+	prefixBytes := []byte(prefix)
+	upperBound := make([]byte, len(prefixBytes))
+	copy(upperBound, prefixBytes)
+	upperBound[len(upperBound)-1]++
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefixBytes,
+		UpperBound: upperBound,
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+	var n int64
+	for iter.First(); iter.Valid(); iter.Next() {
+		n++
+	}
+	return n, nil
+}
+
 func (p *PebbleStore) CreateOperationResult(result *OperationResult) error {
 	result.CreatedAt = time.Now()
 	data, err := json.Marshal(result)

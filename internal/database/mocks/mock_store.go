@@ -15594,6 +15594,64 @@ func (_c *MockRawKVStore_ScanPrefix_Call) RunAndReturn(run func(prefix string) (
 	return _c
 }
 
+// CountPrefix provides a mock function for the type MockRawKVStore
+func (_mock *MockRawKVStore) CountPrefix(prefix string) (int64, error) {
+	ret := _mock.Called(prefix)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountPrefix")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int64, error)); ok {
+		return returnFunc(prefix)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int64); ok {
+		r0 = returnFunc(prefix)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(prefix)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRawKVStore_CountPrefix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountPrefix'
+type MockRawKVStore_CountPrefix_Call struct {
+	*mock.Call
+}
+
+// CountPrefix is a helper method to define mock.On call
+//   - prefix string
+func (_e *MockRawKVStore_Expecter) CountPrefix(prefix interface{}) *MockRawKVStore_CountPrefix_Call {
+	return &MockRawKVStore_CountPrefix_Call{Call: _e.mock.On("CountPrefix", prefix)}
+}
+
+func (_c *MockRawKVStore_CountPrefix_Call) Run(run func(prefix string)) *MockRawKVStore_CountPrefix_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockRawKVStore_CountPrefix_Call) Return(count int64, err error) *MockRawKVStore_CountPrefix_Call {
+	_c.Call.Return(count, err)
+	return _c
+}
+
+func (_c *MockRawKVStore_CountPrefix_Call) RunAndReturn(run func(string) (int64, error)) *MockRawKVStore_CountPrefix_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetRaw provides a mock function for the type MockRawKVStore
 func (_mock *MockRawKVStore) SetRaw(key string, value []byte) error {
 	ret := _mock.Called(key, value)
@@ -38282,6 +38340,64 @@ func (_c *MockStore_ScanPrefix_Call) Return(kVPairs []database.KVPair, err error
 }
 
 func (_c *MockStore_ScanPrefix_Call) RunAndReturn(run func(prefix string) ([]database.KVPair, error)) *MockStore_ScanPrefix_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CountPrefix provides a mock function for the type MockStore
+func (_mock *MockStore) CountPrefix(prefix string) (int64, error) {
+	ret := _mock.Called(prefix)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountPrefix")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int64, error)); ok {
+		return returnFunc(prefix)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int64); ok {
+		r0 = returnFunc(prefix)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(prefix)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CountPrefix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountPrefix'
+type MockStore_CountPrefix_Call struct {
+	*mock.Call
+}
+
+// CountPrefix is a helper method to define mock.On call
+//   - prefix string
+func (_e *MockStore_Expecter) CountPrefix(prefix interface{}) *MockStore_CountPrefix_Call {
+	return &MockStore_CountPrefix_Call{Call: _e.mock.On("CountPrefix", prefix)}
+}
+
+func (_c *MockStore_CountPrefix_Call) Run(run func(prefix string)) *MockStore_CountPrefix_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockStore_CountPrefix_Call) Return(count int64, err error) *MockStore_CountPrefix_Call {
+	_c.Call.Return(count, err)
+	return _c
+}
+
+func (_c *MockStore_CountPrefix_Call) RunAndReturn(run func(string) (int64, error)) *MockStore_CountPrefix_Call {
 	_c.Call.Return(run)
 	return _c
 }
