@@ -118,9 +118,11 @@ func TestLookupBookID_HappyPath(t *testing.T) {
 // fakeTagScanner is a deterministic tag scanner for tier B tests.
 type fakeTagScanner struct {
 	index map[string][]string
+	all   []string
 }
 
 func (f *fakeTagScanner) bookIDToPaths(bookID string) []string { return f.index[bookID] }
+func (f *fakeTagScanner) allPaths() []string                   { return f.all }
 
 // ---------------------------------------------------------------------------
 // fsTagScanner — production scanner walks a tmpdir and indexes via the
@@ -161,6 +163,62 @@ func mustWrite(t *testing.T, p, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
 	require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+}
+
+// ---------------------------------------------------------------------------
+// resolveTierC — fuzzy candidates ranked by score, threshold-gated
+// ---------------------------------------------------------------------------
+
+func TestResolveTierC_RanksByScore(t *testing.T) {
+	candidates := []string{
+		"/disk/dune.m4b",
+		"/disk/dune-messiah.m4b",
+		"/disk/totally-different.m4b",
+	}
+	info := trackInfo{Title: "Dune", OldBasename: "dune.mp3"}
+
+	got := resolveTierC(candidates, info, 50, 3)
+	require.Len(t, got, 2, "totally-different should score below 50 and be excluded")
+	assert.Equal(t, "/disk/dune.m4b", got[0].Path, "exact basename match wins")
+	assert.GreaterOrEqual(t, got[0].Score, got[1].Score, "results sorted desc by score")
+}
+
+// ---------------------------------------------------------------------------
+// resolveTierC — threshold filters out weak matches
+// ---------------------------------------------------------------------------
+
+func TestResolveTierC_ThresholdRespected(t *testing.T) {
+	candidates := []string{"/disk/zzzzz.m4b"}
+	info := trackInfo{Title: "The Hobbit", OldBasename: "hobbit.m4b"}
+
+	got := resolveTierC(candidates, info, 85, 5)
+	assert.Empty(t, got, "weak match filtered by high threshold")
+}
+
+// ---------------------------------------------------------------------------
+// resolveTierC — topN cap respected
+// ---------------------------------------------------------------------------
+
+func TestResolveTierC_TopNCap(t *testing.T) {
+	candidates := []string{
+		"/disk/foo-1.m4b",
+		"/disk/foo-2.m4b",
+		"/disk/foo-3.m4b",
+		"/disk/foo-4.m4b",
+		"/disk/foo-5.m4b",
+	}
+	info := trackInfo{Title: "Foo", OldBasename: "foo.m4b"}
+	got := resolveTierC(candidates, info, 0, 2)
+	assert.Len(t, got, 2)
+}
+
+// ---------------------------------------------------------------------------
+// resolveTierC — empty inputs return empty
+// ---------------------------------------------------------------------------
+
+func TestResolveTierC_EmptyInputs(t *testing.T) {
+	assert.Empty(t, resolveTierC(nil, trackInfo{Title: "x"}, 50, 3))
+	assert.Empty(t, resolveTierC([]string{"/x.m4b"}, trackInfo{}, 50, 3))
 }
 
 // ---------------------------------------------------------------------------

@@ -285,6 +285,44 @@ func TestRepair_TierB_RecoversFromStaleDBPath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Repair — tier C: tiers A/B both fail, fuzzy match emits review items
+// ---------------------------------------------------------------------------
+
+func TestRepair_TierC_EmitsReviewCandidates(t *testing.T) {
+	dir := t.TempDir()
+	locA := filepath.Join(dir, "alive.m4b")
+	require.NoError(t, os.WriteFile(locA, []byte("a"), 0o644))
+	locB := filepath.Join(dir, "Track-B.mp3") // gone in iTunes XML
+	xmlPath := writeFixtureXML(t, dir, locA, locB)
+
+	root := filepath.Join(dir, "library")
+	// Disk has a candidate file with a similar basename, no embedded tag.
+	candidate := filepath.Join(root, "author/Track-B-relocated.mp3")
+	require.NoError(t, os.MkdirAll(filepath.Dir(candidate), 0o755))
+	require.NoError(t, os.WriteFile(candidate, []byte("b"), 0o644))
+
+	m := dbmocks.NewMockStore(t)
+	m.EXPECT().GetBookByExternalID("itunes", "PID_B").Return("", nil).Once()
+	m.EXPECT().DeleteOperationState("op-tierC").Return(nil).Once()
+	m.EXPECT().UpdateOperationResultData("op-tierC", mock.Anything).Return(nil).Once()
+
+	r := newPathRepairer(m, nil, nil, PathRepairConfig{XMLPath: xmlPath, AudiobookRoot: root})
+	r.bookIDExtractor = func(string) (string, error) { return "", nil }
+
+	res, err := r.repairWithResult(context.Background(), "op-tierC", true, noopProgressRepair{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, res.Missing)
+	assert.Equal(t, 0, res.AutoResolved)
+	assert.Equal(t, 1, res.NeedsReview)
+	require.Len(t, res.NeedsReviewItems, 1)
+	assert.Equal(t, "PID_B", res.NeedsReviewItems[0].PID)
+	assert.Equal(t, "Track B", res.NeedsReviewItems[0].Title)
+	assert.NotEmpty(t, res.NeedsReviewItems[0].Candidates)
+	assert.Equal(t, candidate, res.NeedsReviewItems[0].Candidates[0].Path)
+}
+
+// ---------------------------------------------------------------------------
 // Repair — XML parse error returns the error
 // ---------------------------------------------------------------------------
 
