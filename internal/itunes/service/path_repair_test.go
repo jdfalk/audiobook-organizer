@@ -5,8 +5,11 @@
 package itunesservice
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +20,51 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+// noopProgressRepair mirrors the reconciler test helper.
+type noopProgressRepair struct{}
+
+func (noopProgressRepair) UpdateProgress(_, _ int, _ string) error { return nil }
+func (noopProgressRepair) Log(_, _ string, _ *string) error        { return nil }
+func (noopProgressRepair) IsCanceled() bool                        { return false }
+
+// writeFixtureXML writes a minimal iTunes XML with two audiobook
+// tracks at the given locations and returns the file path.
+func writeFixtureXML(t *testing.T, dir, locA, locB string) string {
+	t.Helper()
+	xml := `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Major Version</key><integer>1</integer>
+	<key>Minor Version</key><integer>1</integer>
+	<key>Tracks</key>
+	<dict>
+		<key>1</key>
+		<dict>
+			<key>Track ID</key><integer>1</integer>
+			<key>Persistent ID</key><string>PID_A</string>
+			<key>Name</key><string>Track A</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Location</key><string>file://localhost` + locA + `</string>
+		</dict>
+		<key>2</key>
+		<dict>
+			<key>Track ID</key><integer>2</integer>
+			<key>Persistent ID</key><string>PID_B</string>
+			<key>Name</key><string>Track B</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Location</key><string>file://localhost` + locB + `</string>
+		</dict>
+	</dict>
+	<key>Playlists</key><array/>
+</dict>
+</plist>
+`
+	p := filepath.Join(dir, "iTunes Library.xml")
+	require.NoError(t, os.WriteFile(p, []byte(xml), 0o644))
+	return p
+}
 
 // ---------------------------------------------------------------------------
 // newPathRepairer constructor
@@ -120,6 +168,83 @@ func TestPathRepairerStart_HappyPath(t *testing.T) {
 
 	assert.Equal(t, http.StatusAccepted, w.Code)
 	assert.Contains(t, w.Body.String(), "test-op-id")
+}
+
+// ---------------------------------------------------------------------------
+// Repair — tier A: missing track resolved via DB → on-disk path
+// ---------------------------------------------------------------------------
+
+func TestRepair_TierA_AutoResolvesMissingTrack(t *testing.T) {
+	dir := t.TempDir()
+	// locA exists on disk; locB does not — but tier A finds the new
+	// path via DB and that new path also exists on disk.
+	locA := filepath.Join(dir, "alive.m4b")
+	require.NoError(t, os.WriteFile(locA, []byte("a"), 0o644))
+	locB := filepath.Join(dir, "vanished.m4b") // never created
+	newPath := filepath.Join(dir, "moved.m4b")
+	require.NoError(t, os.WriteFile(newPath, []byte("b"), 0o644))
+
+	xmlPath := writeFixtureXML(t, dir, locA, locB)
+
+	m := dbmocks.NewMockStore(t)
+	// Tier A is invoked only for missing tracks (PID_B).
+	m.EXPECT().GetBookByExternalID("itunes", "PID_B").
+		Return("book-b", nil).Once()
+	m.EXPECT().GetBookFiles("book-b").
+		Return([]database.BookFile{
+			{ID: "f1", FilePath: newPath, ITunesPersistentID: "PID_B"},
+		}, nil).Once()
+	m.EXPECT().DeleteOperationState("op-tierA").Return(nil).Once()
+	m.EXPECT().UpdateOperationResultData("op-tierA", mock.Anything).Return(nil).Once()
+
+	r := newPathRepairer(m, nil, nil, PathRepairConfig{XMLPath: xmlPath})
+	res, err := r.repairWithResult(context.Background(), "op-tierA", true, noopProgressRepair{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, res.XMLTracks)
+	assert.Equal(t, 1, res.Missing)
+	assert.Equal(t, 1, res.AutoResolved)
+	assert.Equal(t, 0, res.NeedsReview)
+	assert.Equal(t, 0, res.Unresolved)
+	assert.True(t, res.DryRun)
+	assert.Equal(t, 0, res.Enqueued, "dry-run must not enqueue")
+}
+
+// ---------------------------------------------------------------------------
+// Repair — tier A: missing track with no DB mapping → unresolved
+// ---------------------------------------------------------------------------
+
+func TestRepair_TierA_NoMappingFallsThrough(t *testing.T) {
+	dir := t.TempDir()
+	locA := filepath.Join(dir, "alive.m4b")
+	require.NoError(t, os.WriteFile(locA, []byte("a"), 0o644))
+	locB := filepath.Join(dir, "vanished.m4b")
+	xmlPath := writeFixtureXML(t, dir, locA, locB)
+
+	m := dbmocks.NewMockStore(t)
+	m.EXPECT().GetBookByExternalID("itunes", "PID_B").
+		Return("", nil).Once()
+	m.EXPECT().DeleteOperationState("op-noMap").Return(nil).Once()
+	m.EXPECT().UpdateOperationResultData("op-noMap", mock.Anything).Return(nil).Once()
+
+	r := newPathRepairer(m, nil, nil, PathRepairConfig{XMLPath: xmlPath})
+	res, err := r.repairWithResult(context.Background(), "op-noMap", true, noopProgressRepair{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, res.Missing)
+	assert.Equal(t, 0, res.AutoResolved)
+	assert.Equal(t, 1, res.Unresolved)
+}
+
+// ---------------------------------------------------------------------------
+// Repair — XML parse error returns the error
+// ---------------------------------------------------------------------------
+
+func TestRepair_XMLParseError(t *testing.T) {
+	m := dbmocks.NewMockStore(t)
+	r := newPathRepairer(m, nil, nil, PathRepairConfig{XMLPath: "/nonexistent/itunes.xml"})
+	_, err := r.repairWithResult(context.Background(), "op-bad", true, noopProgressRepair{})
+	require.Error(t, err)
 }
 
 // ---------------------------------------------------------------------------
