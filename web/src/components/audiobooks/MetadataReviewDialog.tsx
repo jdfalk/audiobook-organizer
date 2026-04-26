@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -53,7 +53,7 @@ const SOURCE_COLORS: Record<string, 'primary' | 'secondary' | 'success' | 'warni
 
 // Matches ActivityLog's selector so users see the same options
 // across pagination controls.
-const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500];
 
 // Language filter: when enabled (default), candidates whose
 // language disagrees with the book's are hidden. Preference
@@ -168,19 +168,27 @@ export function MetadataReviewDialog({
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
   const [matchLanguage, setMatchLanguage] = useState<boolean>(loadLanguageFilter);
+  // fetchSeq increments to force a server re-fetch without changing page/size.
+  // Used after bulk apply/reject so the page refills with fresh data.
+  const [fetchSeq, setFetchSeq] = useState(0);
+  const triggerRefetch = useCallback(() => setFetchSeq((s) => s + 1), []);
+
+  // fetchIdRef prevents stale responses from overwriting newer ones when the
+  // user changes page size or page quickly (race: 25-item request finishes
+  // after 250-item request, overwriting the larger result set).
+  const fetchIdRef = useRef(0);
 
   // Fetch the current page from the server. Re-runs when the dialog opens,
-  // the operation changes, or the user navigates to a different page.
-  // The per-book getBook() waterfall is intentionally absent: the result
-  // snapshot already has cover_url and title, and N sequential getBook()
-  // calls for a 5,000-book fetch would stall the dialog for minutes.
+  // the operation changes, page/size changes, or triggerRefetch() is called.
   useEffect(() => {
     if (!open || !operationId) return;
     setLoading(true);
+    const fetchId = ++fetchIdRef.current;
     const offset = (reviewPage - 1) * reviewPageSize;
     api
       .getOperationResults(operationId, reviewPageSize, offset)
       .then((data) => {
+        if (fetchId !== fetchIdRef.current) return; // stale — a newer fetch is in flight
         const pageResults = data.results || [];
 
         const pageStates = new Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>();
@@ -206,8 +214,11 @@ export function MetadataReviewDialog({
         });
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [open, operationId, reviewPage, reviewPageSize]);
+      .catch(() => {
+        if (fetchId !== fetchIdRef.current) return;
+        setLoading(false);
+      });
+  }, [open, operationId, reviewPage, reviewPageSize, fetchSeq]);
 
   // Poll for new results while the operation is still running.
   // Fetches only limit=1 to get the updated total_count without
@@ -239,7 +250,7 @@ export function MetadataReviewDialog({
     return () => clearInterval(interval);
   }, [open, operationId, loading, operationDone, totalCount]);
 
-  // Reset polling state when the operation changes.
+  // Reset polling state and page when the operation changes.
   useEffect(() => {
     setOperationDone(false);
     prevTotalRef.current = 0;
@@ -310,8 +321,12 @@ export function MetadataReviewDialog({
             return next;
           });
           toast(`Undid ${ids.length} apply(s)`, 'info');
+          triggerRefetch();
         },
       });
+      // Re-fetch the current page so applied items disappear (hideApplied=true)
+      // and are replaced by new items from the next offset.
+      triggerRefetch();
     } catch {
       // Revert optimistic updates
       setRowStates((prev) => {
@@ -321,7 +336,7 @@ export function MetadataReviewDialog({
       });
       toast('Failed to apply', 'error');
     }
-  }, [operationId, toast]);
+  }, [operationId, toast, triggerRefetch]);
 
   const handleApplyOne = (bookId: string) => {
     // Optimistic UI update
@@ -355,9 +370,12 @@ export function MetadataReviewDialog({
           bookIds.forEach((id) => revertStates.set(id, 'pending'));
           setRowStates(revertStates);
           toast(`Undid ${bookIds.length} applies`, 'info');
+          triggerRefetch();
         },
       });
       onComplete();
+      // Re-fetch so the page refills after applied items are hidden.
+      triggerRefetch();
     } catch {
       toast('Failed to apply', 'error');
     } finally {
@@ -384,11 +402,13 @@ export function MetadataReviewDialog({
             await api.batchUnrejectCandidates(operationId, [bookId]);
             setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
             toast('Rejection undone', 'success');
+            triggerRefetch();
           } catch {
             toast('Failed to undo rejection', 'error');
           }
         },
       });
+      triggerRefetch();
     } catch {
       toast('Failed to reject', 'error');
     }
@@ -399,6 +419,7 @@ export function MetadataReviewDialog({
       await api.batchUnrejectCandidates(operationId, [bookId]);
       setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
       toast('Rejection undone', 'success');
+      triggerRefetch();
     } catch {
       toast('Failed to undo rejection', 'error');
     }

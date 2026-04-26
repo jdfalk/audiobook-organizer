@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-04-05
 
@@ -327,7 +327,7 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 		return
 	}
 
-	limit := 100
+	limit := 250
 	if raw := c.Query("limit"); raw != "" {
 		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
 			limit = n
