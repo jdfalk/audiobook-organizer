@@ -1,5 +1,5 @@
 // file: internal/server/cache_handlers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 package server
@@ -53,6 +53,18 @@ func (s *Server) handleCacheStats(c *gin.Context) {
 	}
 
 	stats := aggregateCacheMetrics(metrics)
+
+	// Patch DB-backed caches that have no in-memory size gauge.
+	// metadata_fetch lives in PebbleDB; count its keys via prefix scan.
+	if n, err := database.CountCachedMetadataFetches(s.Store()); err == nil {
+		for i := range stats {
+			if stats[i].Name == "metadata_fetch" {
+				stats[i].Size = n
+				break
+			}
+		}
+	}
+
 	resp := CacheStatsResponse{
 		Caches:      stats,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),

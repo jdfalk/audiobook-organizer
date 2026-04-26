@@ -134,6 +134,13 @@ func InvalidateCachedMetadataFetch(store Store, bookID, source string) error {
 	return nil
 }
 
+// CountCachedMetadataFetches returns the number of entries currently
+// stored in the DB-backed metadata fetch cache. Used by the cache stats
+// handler to populate the Size field for this non-in-memory cache.
+func CountCachedMetadataFetches(store Store) (int64, error) {
+	return store.CountPrefix("metadata_fetch_cache:")
+}
+
 // InvalidateAllCachedMetadataFetchesForBook wipes every source's
 // cache entry for a single book. Called when the book's title
 // or author changes — any cached candidate is now stale because

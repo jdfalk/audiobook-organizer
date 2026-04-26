@@ -196,6 +196,7 @@ type RawKVStore interface {
 	GetRaw(key string) ([]byte, error)
 	DeleteRaw(key string) error
 	ScanPrefix(prefix string) ([]KVPair, error)
+	CountPrefix(prefix string) (int64, error)
 }
 
 // PlaybackStore covers playback events, progress, and stats.
