@@ -19,7 +19,28 @@ Fixed "spins forever showing 0 books" when opening the metadata review dialog fo
 - **`MetadataReviewDialog`**: server-side pagination replaces client-side slice; per-book `getBook()` waterfall removed entirely; polling uses `limit=1` to cheaply check total count.
 - Regenerated mocks via `make mocks` (also fixes pre-existing `GetDistinctGenres` mock compile errors).
 
+#### April 26, 2026 — iTunes path repair operation (`POST /operations/itunes-path-repair`)
 
+Recovers cases where iTunes still references stale on-disk paths after organize/rename — common when many files have been moved out from under iTunes and the existing path reconciler can't help because `Book.FilePath` itself is also stale. Three-tier resolution per missing track:
+
+- **Tier A — PID → DB lookup.** Uses `external_id_map` to resolve the iTunes Persistent ID to a book ID, then prefers a matching `BookFile.FilePath` (multi-segment safe) before falling back to `Book.FilePath`. Only resolves when the DB-known path also exists on disk.
+- **Tier B — embedded `AUDIOBOOK_ORGANIZER_ID` tag scan.** Lazy: only fires after tier A leaves residue. Walks the audiobook root once, indexes book ID → on-disk paths, resolves missing tracks whose book ID has a unique disk match. Multi-segment ambiguity falls through to tier C.
+- **Tier C — fuzzy ranking.** Scores each walked audio file against the iTunes track title + original basename (existing `matcher.ScoreMatch`, threshold 85, equivalent to Jaro-Winkler 0.85). Top 3 candidates emit to `needs_review_items` for human confirmation. Never auto-applied.
+
+**Apply mode:** `?apply=true` flips dry-run off. Auto-resolved tracks update the matching `BookFile` (or `Book`) with the discovered `FilePath` and recomputed `ITunesPath` via `metafetch.ComputeITunesPath`, record a `book_path_history` row with `change_type="itunes_path_repair"`, and hand the book ID to `Enqueuer.Enqueue` so the existing `WriteBackBatcher` pushes the corrected location to the .itl on its normal cadence.
+
+**Reports:** every run drops a pretty-printed JSON at `<RootDir>/reports/itunes-repair-<opID>.json` and persists the same payload inline via `UpdateOperationResultData`.
+
+**Safety:** dry-run by default. Resume after interruption also defaults to dry-run; the operator must explicitly re-trigger with `?apply=true` once they confirm the report. iTunes-side writes go through `SafeWriteITL` (timestamped backups + atomic rename). DB-side updates are reversible via `book_path_history`.
+
+What ships:
+
+- `internal/itunes/service/path_repair.go` — `PathRepairer` operation (worker, apply-mode helper, report writer)
+- `internal/itunes/service/path_repair_resolver.go` — pure-function tier A/B/C resolvers + `fsTagScanner`
+- `POST /operations/itunes-path-repair` (PermScanTrigger gated)
+- `Deps.AudiobookRoot` + `Deps.ReportDir` plumbed at the service construction site
+- `pathRepairerStore` and `itunesservice.Store` now also embed `database.PathHistoryStore`
+- 18 new tests covering all three tiers, the fsTagScanner, lookupBookID, apply mode, end-to-end across all four track outcomes (OK / A / B / C), and scaffolding (`Start` / `parseDryRun`)
 
 #### April 25, 2026 — `/parallel-sweep` slash command — step 9 (polish, all 9 steps complete)
 
