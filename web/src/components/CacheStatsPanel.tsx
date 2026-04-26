@@ -1,5 +1,5 @@
 // file: web/src/components/CacheStatsPanel.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: b5c8d9ea-1f2g-3h4i-5j6k-7l8m9n0o1p2q
 
 import { useEffect, useState } from 'react';
@@ -52,6 +52,13 @@ const formatInvalidations = (inv: api.CacheInvalidations): string => {
     .filter(([, v]) => v > 0)
     .map(([k, v]) => `${k}: ${v}`);
   return parts.length > 0 ? parts.join(' / ') : '—';
+};
+
+const totalRequests = (cache: api.CacheStatsEntry): number => {
+  const misses = cache.misses
+    ? Object.values(cache.misses).reduce((a, b) => a + b, 0)
+    : 0;
+  return cache.hits + misses;
 };
 
 const formatEvictions = (evict: api.CacheEvictions): string => {
@@ -122,6 +129,7 @@ export function CacheStatsPanel() {
             <TableRow>
               <TableCell>Cache</TableCell>
               <TableCell align="right">Size</TableCell>
+              <TableCell align="right">Total</TableCell>
               <TableCell align="right">Hits</TableCell>
               <TableCell>Misses</TableCell>
               <TableCell align="center">Hit Rate</TableCell>
@@ -134,7 +142,7 @@ export function CacheStatsPanel() {
           <TableBody>
             {!stats || !stats.caches?.length ? (
               <TableRow>
-                <TableCell colSpan={9}>
+                <TableCell colSpan={10}>
                   <Typography variant="body2" color="text.secondary">
                     No cache stats available.
                   </Typography>
@@ -145,6 +153,7 @@ export function CacheStatsPanel() {
                 <TableRow key={cache.name}>
                   <TableCell>{cache.name}</TableCell>
                   <TableCell align="right">{cache.size}</TableCell>
+                  <TableCell align="right">{totalRequests(cache)}</TableCell>
                   <TableCell align="right">{cache.hits}</TableCell>
                   <TableCell>{formatMisses(cache.misses)}</TableCell>
                   <TableCell align="center">
