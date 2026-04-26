@@ -1,5 +1,5 @@
 // file: internal/server/settings_persistence_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -82,7 +82,7 @@ func TestAPIKeyPersistenceRoundtrip(t *testing.T) {
 		t.Logf("  setting: key=%q isSecret=%v valueLen=%d", s.Key, s.IsSecret, len(s.Value))
 	}
 
-	var foundKey, foundAI bool
+	var foundKey, foundBlob bool
 	for _, s := range settings {
 		if s.Key == "openai_api_key" {
 			foundKey = true
@@ -104,13 +104,18 @@ func TestAPIKeyPersistenceRoundtrip(t *testing.T) {
 			assert.Equal(t, "sk-test-1234567890abcdef", decrypted,
 				"Decrypted key should match original")
 		}
-		if s.Key == "enable_ai_parsing" {
-			foundAI = true
-			assert.Equal(t, "true", s.Value)
+		// Non-secret fields are stored together in the config_blob, not as individual rows
+		if s.Key == "config_blob" {
+			foundBlob = true
+			var blobCfg map[string]any
+			if assert.NoError(t, json.Unmarshal([]byte(s.Value), &blobCfg), "config_blob should be valid JSON") {
+				enableAI, _ := blobCfg["enable_ai_parsing"].(bool)
+				assert.True(t, enableAI, "enable_ai_parsing should be true inside config_blob")
+			}
 		}
 	}
 	assert.True(t, foundKey, "openai_api_key should be in GetAllSettings() results")
-	assert.True(t, foundAI, "enable_ai_parsing should be in GetAllSettings() results")
+	assert.True(t, foundBlob, "config_blob should be in GetAllSettings() results")
 
 	// Step 4: Simulate restart — clear in-memory config
 	config.AppConfig.OpenAIAPIKey = ""

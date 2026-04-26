@@ -1,5 +1,5 @@
 // file: internal/config/config_unit_test.go
-// version: 1.2.0
+// version: 1.3.0
 
 package config
 
@@ -986,7 +986,14 @@ func TestSaveConfigToDatabaseUnit(t *testing.T) {
 		err := SaveConfigToDatabase(store)
 		assert.NoError(t, err)
 		assert.Greater(t, len(store.settings), 0)
-		assert.Equal(t, "/media", store.settings["root_dir"].Value)
+		blobSetting, ok := store.settings["config_blob"]
+		if assert.True(t, ok, "config_blob should be saved") {
+			var loaded Config
+			if assert.NoError(t, json.Unmarshal([]byte(blobSetting.Value), &loaded)) {
+				assert.Equal(t, "/media", loaded.RootDir)
+				assert.Equal(t, 4, loaded.ConcurrentScans)
+			}
+		}
 	})
 
 	t.Run("preserves empty secrets from DB", func(t *testing.T) {
@@ -1007,7 +1014,7 @@ func TestSaveConfigToDatabaseUnit(t *testing.T) {
 		assert.Equal(t, "sk-existing", store.settings["openai_api_key"].Value)
 	})
 
-	t.Run("set error is logged but not fatal", func(t *testing.T) {
+	t.Run("blob save error is returned", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		AppConfig = Config{
 			DatabasePath: filepath.Join(tmpDir, "test.db"),
@@ -1016,7 +1023,7 @@ func TestSaveConfigToDatabaseUnit(t *testing.T) {
 		store.setErr = fmt.Errorf("write failed")
 
 		err := SaveConfigToDatabase(store)
-		assert.NoError(t, err) // errors are logged, not returned
+		assert.Error(t, err) // blob save failure propagates
 	})
 }
 
