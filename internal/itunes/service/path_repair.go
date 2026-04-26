@@ -13,13 +13,16 @@ package itunesservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -118,17 +121,119 @@ func (r *PathRepairer) Start(c *gin.Context) {
 	c.JSON(http.StatusAccepted, op)
 }
 
-// Repair is the operation body. Step 1 scaffolds the worker shape;
-// tier A/B/C resolution lands in subsequent commits.
+// Repair is the operation body. Wraps repairWithResult so the
+// queue-side closure has the (ctx, id, progress) → error signature
+// the operations.Queue expects.
 func (r *PathRepairer) Repair(ctx context.Context, opID string, dryRun bool, progress operations.ProgressReporter) error {
+	_, err := r.repairWithResult(ctx, opID, dryRun, progress)
+	return err
+}
+
+// resolvedTrack records one resolution decision. Used inside the
+// operation worker for logging + report assembly.
+type resolvedTrack struct {
+	PID     string `json:"pid"`
+	OldPath string `json:"old_path"`
+	NewPath string `json:"new_path"`
+	Tier    string `json:"tier"`
+	BookID  string `json:"book_id,omitempty"`
+}
+
+// repairWithResult is the operation body. Returns the result struct so
+// tests can assert on counts; the JSON-encoded form is also persisted
+// to the operation row via UpdateOperationResultData.
+func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun bool, progress operations.ProgressReporter) (iTunesPathRepairResult, error) {
 	if r.store == nil {
-		return fmt.Errorf("database not initialized")
+		return iTunesPathRepairResult{}, fmt.Errorf("database not initialized")
 	}
-	_ = progress.Log("info", "iTunes path repair started", nil)
-	result := iTunesPathRepairResult{DryRun: dryRun}
+	if r.cfg.XMLPath == "" {
+		return iTunesPathRepairResult{}, fmt.Errorf("iTunes XMLPath not configured")
+	}
+
+	_ = progress.Log("info", fmt.Sprintf("iTunes path repair started: xml=%s dry_run=%t", r.cfg.XMLPath, dryRun), nil)
+
+	lib, err := itunes.ParseLibrary(r.cfg.XMLPath)
+	if err != nil {
+		return iTunesPathRepairResult{}, fmt.Errorf("parse iTunes library: %w", err)
+	}
+
+	result := iTunesPathRepairResult{XMLTracks: len(lib.Tracks), DryRun: dryRun}
+	_ = progress.UpdateProgress(0, len(lib.Tracks), "scanning iTunes locations")
+
+	scanned := 0
+	for _, track := range lib.Tracks {
+		select {
+		case <-ctx.Done():
+			return result, ctx.Err()
+		default:
+		}
+		scanned++
+		if !itunes.IsAudiobook(track) {
+			continue
+		}
+		decoded, derr := itunes.DecodeLocation(track.Location)
+		if derr != nil || decoded == "" {
+			continue
+		}
+		if pathExists(decoded) {
+			continue
+		}
+		result.Missing++
+
+		// Tier A: PID → DB → on-disk path
+		if newPath, ok := resolveTierA(r.store, track.PersistentID, pathExists); ok {
+			result.AutoResolved++
+			_ = progress.Log("info",
+				fmt.Sprintf("repair pid=%s old=%s new=%s tier=A action=%s",
+					track.PersistentID, decoded, newPath, applyAction(dryRun)), nil)
+			continue
+		}
+
+		// Tier B/C land in subsequent commits.
+		result.Unresolved++
+		_ = progress.Log("debug",
+			fmt.Sprintf("missing pid=%s old=%s tier=A unresolved", track.PersistentID, decoded), nil)
+	}
+
+	if err := persistRepairResult(r.store, opID, result); err != nil {
+		log.Printf("[WARN] persist repair result: %v", err)
+	}
 	_ = operations.ClearState(r.store, opID)
-	_ = progress.Log("info", "iTunes path repair complete (scaffold; resolution tiers pending)", nil)
-	_ = progress.UpdateProgress(0, 0, "scaffold")
-	_ = result // populated in step 2+
-	return nil
+
+	summary := fmt.Sprintf(
+		"iTunes path repair complete: tracks=%d missing=%d auto=%d review=%d unresolved=%d enqueued=%d dry_run=%t",
+		result.XMLTracks, result.Missing, result.AutoResolved, result.NeedsReview, result.Unresolved, result.Enqueued, result.DryRun,
+	)
+	_ = progress.Log("info", summary, nil)
+	_ = progress.UpdateProgress(scanned, scanned, summary)
+	return result, nil
+}
+
+// pathExists is the production existsFn for the resolver. Test code
+// may inject a fake.
+func pathExists(p string) bool {
+	if p == "" {
+		return false
+	}
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+// applyAction returns the human-readable action label for a single
+// repair, distinguishing dry-run reports from real writes.
+func applyAction(dryRun bool) string {
+	if dryRun {
+		return "report"
+	}
+	return "enqueue"
+}
+
+// persistRepairResult JSON-encodes the result and stores it on the
+// operation row so the API can fetch the report after the run.
+func persistRepairResult(store database.OperationStore, opID string, result iTunesPathRepairResult) error {
+	b, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	return store.UpdateOperationResultData(opID, string(b))
 }
