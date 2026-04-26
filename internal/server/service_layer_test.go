@@ -1,5 +1,5 @@
 // file: internal/server/service_layer_test.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 // last-edited: 2026-02-14
 
@@ -990,17 +990,13 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 			"playlist_dir": "/new/playlist/path",
 		})
 		if status != 200 {
-			t.Errorf("expected 200, got %d", status)
+			t.Errorf("expected 200, got %d: %v", status, resp)
 		}
 		if config.AppConfig.PlaylistDir != "/new/playlist/path" {
 			t.Errorf("expected playlist_dir '/new/playlist/path', got %q", config.AppConfig.PlaylistDir)
 		}
-		updated, ok := resp["updated"].([]string)
-		if !ok {
-			t.Error("expected updated to be []string")
-		}
-		if !contains(updated[0], "playlist_dir") {
-			t.Errorf("expected updated to contain 'playlist_dir', got %v", updated)
+		if _, ok := resp["message"]; !ok {
+			t.Error("expected message in response")
 		}
 	})
 
@@ -1014,41 +1010,36 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 			"database_path": "/new/db/path.db",
 		})
 		if status != 200 {
-			t.Errorf("expected 200, got %d", status)
+			t.Errorf("expected 200, got %d: %v", status, resp)
 		}
 		if config.AppConfig.DatabasePath != "/new/db/path.db" {
 			t.Errorf("expected database_path '/new/db/path.db', got %q", config.AppConfig.DatabasePath)
 		}
-		updated, ok := resp["updated"].([]string)
-		if !ok {
-			t.Error("expected updated to be []string")
-		}
-		if !contains(updated[0], "database_path") {
-			t.Errorf("expected updated to contain 'database_path', got %v", updated)
+		if _, ok := resp["message"]; !ok {
+			t.Error("expected message in response")
 		}
 	})
 
-	t.Run("update setup_complete directly", func(t *testing.T) {
+	t.Run("setup_complete is derived from root_dir not set directly", func(t *testing.T) {
 		mockStore3 := mocks.NewMockStore(t)
 		mockStore3.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore3.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 		svc3 := NewConfigUpdateService(mockStore3)
 
+		// setup_complete payload is ignored; actual value is derived from root_dir
+		config.AppConfig.RootDir = ""
 		status, resp := svc3.UpdateConfig(map[string]any{
 			"setup_complete": true,
 		})
 		if status != 200 {
-			t.Errorf("expected 200, got %d", status)
+			t.Errorf("expected 200, got %d: %v", status, resp)
 		}
-		if !config.AppConfig.SetupComplete {
-			t.Error("expected setup_complete to be true")
+		// empty root_dir → setup_complete stays false regardless of payload
+		if config.AppConfig.SetupComplete {
+			t.Error("setup_complete must be derived from root_dir, not set directly")
 		}
-		updated, ok := resp["updated"].([]string)
-		if !ok {
-			t.Error("expected updated to be []string")
-		}
-		if !contains(updated[0], "setup_complete") {
-			t.Errorf("expected updated to contain 'setup_complete', got %v", updated)
+		if _, ok := resp["message"]; !ok {
+			t.Error("expected message in response")
 		}
 	})
 
@@ -1063,26 +1054,13 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 			"root_dir": "   ",
 		})
 		if status != 200 {
-			t.Errorf("expected 200, got %d", status)
+			t.Errorf("expected 200, got %d: %v", status, resp)
 		}
 		if config.AppConfig.SetupComplete {
 			t.Error("expected setup_complete to be false when root_dir is empty")
 		}
 		if config.AppConfig.RootDir != "" {
 			t.Errorf("expected empty root_dir, got %q", config.AppConfig.RootDir)
-		}
-		updated, ok := resp["updated"].([]string)
-		if !ok {
-			t.Error("expected updated to be []string")
-		}
-		hasSetupComplete := false
-		for _, u := range updated {
-			if u == "setup_complete" {
-				hasSetupComplete = true
-			}
-		}
-		if !hasSetupComplete {
-			t.Errorf("expected updated to contain 'setup_complete', got %v", updated)
 		}
 	})
 
@@ -1097,26 +1075,13 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 			"root_dir": "/valid/path",
 		})
 		if status != 200 {
-			t.Errorf("expected 200, got %d", status)
+			t.Errorf("expected 200, got %d: %v", status, resp)
 		}
 		if !config.AppConfig.SetupComplete {
 			t.Error("expected setup_complete to be true when root_dir is set")
 		}
 		if config.AppConfig.RootDir != "/valid/path" {
 			t.Errorf("expected root_dir '/valid/path', got %q", config.AppConfig.RootDir)
-		}
-		updated, ok := resp["updated"].([]string)
-		if !ok {
-			t.Error("expected updated to be []string")
-		}
-		hasSetupComplete := false
-		for _, u := range updated {
-			if u == "setup_complete" {
-				hasSetupComplete = true
-			}
-		}
-		if !hasSetupComplete {
-			t.Errorf("expected updated to contain 'setup_complete', got %v", updated)
 		}
 	})
 }
@@ -1207,34 +1172,12 @@ func TestConfigUpdateService_UpdateConfig_AllFields(t *testing.T) {
 		t.Errorf("expected concurrent_scans 5, got %d", config.AppConfig.ConcurrentScans)
 	}
 
-	updated, ok := resp["updated"].([]string)
-	if !ok {
-		t.Fatal("expected updated to be []string")
+	// Response contains message and masked config — no "updated" field in new arch
+	if _, ok := resp["message"]; !ok {
+		t.Error("expected message in response")
 	}
-	expectedUpdates := []string{
-		"organization_strategy",
-		"scan_on_startup",
-		"auto_organize",
-		"folder_naming_pattern",
-		"file_naming_pattern",
-		"create_backups",
-		"language",
-		"log_level",
-		"openai_api_key",
-		"enable_ai_parsing",
-		"concurrent_scans",
-	}
-	for _, expected := range expectedUpdates {
-		found := false
-		for _, u := range updated {
-			if u == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected updated to contain %q, got %v", expected, updated)
-		}
+	if _, ok := resp["config"]; !ok {
+		t.Error("expected config in response")
 	}
 }
 
