@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -77,8 +77,8 @@ func (svc *AudiobookService) SetSearchIndex(idx *search.BleveIndex) {
 func NewAudiobookService(store audiobookStore) *AudiobookService {
 	return &AudiobookService{
 		store:     store,
-		bookCache: cache.New[*database.Book]("book", 30*time.Second),
-		listCache: cache.New[[]database.Book]("audiobook_list", 10*time.Second),
+		bookCache: cache.New[*database.Book]("book", 24*time.Hour),
+		listCache: cache.New[[]database.Book]("audiobook_list", 24*time.Hour),
 	}
 }
 
