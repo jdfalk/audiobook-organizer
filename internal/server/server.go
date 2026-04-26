@@ -1475,6 +1475,13 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.itunesSvc.Paths.Reconcile(ctx, reconcileOpID, progress)
 			}
+		case "itunes_path_repair":
+			repairOpID := opID
+			// Resume always defaults to dry-run for safety — operator
+			// can re-trigger with apply=true once they confirm the report.
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.itunesSvc.Repair.Repair(ctx, repairOpID, true, progress)
+			}
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
@@ -2344,6 +2351,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/reconcile/scan", s.perm(auth.PermScanTrigger), s.startReconcileScan)
 			protected.GET("/operations/reconcile/scan/latest", s.perm(auth.PermLibraryView), s.latestReconcileScan)
 			protected.POST("/operations/itunes-path-reconcile", s.perm(auth.PermScanTrigger), s.itunesSvcGuard(func(c *gin.Context) { s.itunesSvc.Paths.Start(c) }))
+			protected.POST("/operations/itunes-path-repair", s.perm(auth.PermScanTrigger), s.itunesSvcGuard(func(c *gin.Context) { s.itunesSvc.Repair.Start(c) }))
 			protected.POST("/operations/cleanup-version-groups", s.perm(auth.PermSettingsManage), s.cleanupDuplicateVersionGroupsHandler)
 			protected.POST("/operations/mark-broken-segments", s.perm(auth.PermSettingsManage), s.markBrokenSegmentBooksHandler)
 			protected.POST("/operations/merge-novg-duplicates", s.perm(auth.PermSettingsManage), s.mergeNoVGDuplicatesHandler)
