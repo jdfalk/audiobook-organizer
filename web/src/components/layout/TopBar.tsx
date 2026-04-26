@@ -93,6 +93,11 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
       sx={{
         width: { sm: `calc(100% - ${drawerWidth}px)` },
         ml: { sm: `${drawerWidth}px` },
+        transition: (theme) =>
+          theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
       }}
     >
       <Toolbar>
