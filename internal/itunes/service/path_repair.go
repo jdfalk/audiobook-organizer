@@ -31,11 +31,15 @@ import (
 )
 
 // PathRepairConfig holds the immutable inputs the repairer needs:
-// where to read the iTunes XML, and where the audiobook tree lives
-// for tier-B/C disk scanning.
+// where to read the iTunes XML, where the audiobook tree lives for
+// tier-B/C disk scanning, and where to drop the JSON report file.
 type PathRepairConfig struct {
 	XMLPath       string
 	AudiobookRoot string
+	// ReportDir is the directory where each run drops its JSON
+	// report. Empty means no file is written; the result still flows
+	// inline via UpdateOperationResultData.
+	ReportDir string
 }
 
 // pathRepairerStore is the narrow slice of the service Store that
@@ -293,6 +297,13 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 			fmt.Sprintf("missing pid=%s old=%s tier=ABC unresolved", track.PersistentID, decoded), nil)
 	}
 
+	if r.cfg.ReportDir != "" {
+		if reportPath, err := writeReportFile(r.cfg.ReportDir, opID, result); err != nil {
+			log.Printf("[WARN] write repair report: %v", err)
+		} else {
+			result.ReportPath = reportPath
+		}
+	}
 	if err := persistRepairResult(r.store, opID, result); err != nil {
 		log.Printf("[WARN] persist repair result: %v", err)
 	}
@@ -409,4 +420,22 @@ func persistRepairResult(store database.OperationStore, opID string, result iTun
 		return err
 	}
 	return store.UpdateOperationResultData(opID, string(b))
+}
+
+// writeReportFile persists the result to <reportDir>/itunes-repair-<opID>.json.
+// Returns the absolute path of the written file.
+func writeReportFile(reportDir, opID string, result iTunesPathRepairResult) (string, error) {
+	if err := os.MkdirAll(reportDir, 0o755); err != nil {
+		return "", fmt.Errorf("mkdir %s: %w", reportDir, err)
+	}
+	b, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	name := fmt.Sprintf("itunes-repair-%s.json", opID)
+	out := filepath.Join(reportDir, name)
+	if err := os.WriteFile(out, b, 0o644); err != nil {
+		return "", err
+	}
+	return out, nil
 }

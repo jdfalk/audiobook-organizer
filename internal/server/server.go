@@ -865,8 +865,10 @@ func NewServer(store database.Store) *Server {
 		ITLWriteBackEnabled: config.AppConfig.ITLWriteBackEnabled,
 	}
 	itunesSvc, err := itunesservice.New(itunesservice.Deps{
-		Store:  resolvedStore,
-		Config: itunesCfg,
+		Store:         resolvedStore,
+		Config:        itunesCfg,
+		AudiobookRoot: config.AppConfig.RootDir,
+		ReportDir:     filepath.Join(config.AppConfig.RootDir, "reports"),
 		OnBookCreated: func(bookID string) {
 			// Resolved lazily via closure so server.fireDedupOnImport is available.
 			server.fireDedupOnImport(bookID)

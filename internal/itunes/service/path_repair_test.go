@@ -6,10 +6,13 @@ package itunesservice
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -39,6 +42,41 @@ type noopProgressRepair struct{}
 func (noopProgressRepair) UpdateProgress(_, _ int, _ string) error { return nil }
 func (noopProgressRepair) Log(_, _ string, _ *string) error        { return nil }
 func (noopProgressRepair) IsCanceled() bool                        { return false }
+
+// writeFixtureXMLN writes a minimal iTunes XML with N audiobook
+// tracks. Each entry is (pid, name, location).
+func writeFixtureXMLN(t *testing.T, dir string, tracks []struct{ PID, Name, Location string }) string {
+	t.Helper()
+	var sb strings.Builder
+	sb.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Major Version</key><integer>1</integer>
+	<key>Minor Version</key><integer>1</integer>
+	<key>Tracks</key>
+	<dict>
+`)
+	for i, tr := range tracks {
+		fmt.Fprintf(&sb, `		<key>%d</key>
+		<dict>
+			<key>Track ID</key><integer>%d</integer>
+			<key>Persistent ID</key><string>%s</string>
+			<key>Name</key><string>%s</string>
+			<key>Kind</key><string>Audiobook</string>
+			<key>Location</key><string>file://localhost%s</string>
+		</dict>
+`, i+1, i+1, tr.PID, tr.Name, tr.Location)
+	}
+	sb.WriteString(`	</dict>
+	<key>Playlists</key><array/>
+</dict>
+</plist>
+`)
+	p := filepath.Join(dir, "iTunes Library.xml")
+	require.NoError(t, os.WriteFile(p, []byte(sb.String()), 0o644))
+	return p
+}
 
 // writeFixtureXML writes a minimal iTunes XML with two audiobook
 // tracks at the given locations and returns the file path.
@@ -374,6 +412,96 @@ func TestRepair_ApplyMode_TierA_UpdatesAndEnqueues(t *testing.T) {
 	assert.False(t, res.DryRun)
 	require.Len(t, enq.enqueues, 1)
 	assert.Equal(t, "book-b", enq.enqueues[0])
+}
+
+// ---------------------------------------------------------------------------
+// Repair — end-to-end: one OK / one tier A / one tier B / one tier C in
+// a single dry-run, plus the JSON report file lands on disk
+// ---------------------------------------------------------------------------
+
+func TestRepair_EndToEnd_AllTiers(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "library")
+	require.NoError(t, os.MkdirAll(root, 0o755))
+
+	// Track-OK: location exists, no work needed.
+	okPath := filepath.Join(dir, "ok.m4b")
+	require.NoError(t, os.WriteFile(okPath, []byte("ok"), 0o644))
+
+	// Track-A: location missing; tier A finds the new path via DB.
+	missingA := filepath.Join(dir, "missing-A.m4b")
+	tierAPath := filepath.Join(root, "tier-a/file.m4b")
+	require.NoError(t, os.MkdirAll(filepath.Dir(tierAPath), 0o755))
+	require.NoError(t, os.WriteFile(tierAPath, []byte("a"), 0o644))
+
+	// Track-B: location missing, DB also stale; tier B finds via tag scan.
+	missingB := filepath.Join(dir, "missing-B.m4b")
+	tierBPath := filepath.Join(root, "tier-b/file.m4b")
+	require.NoError(t, os.MkdirAll(filepath.Dir(tierBPath), 0o755))
+	require.NoError(t, os.WriteFile(tierBPath, []byte("b"), 0o644))
+
+	// Track-C: location missing, no DB mapping; tier C emits a fuzzy candidate.
+	missingC := filepath.Join(dir, "Unique-Title-C.m4b")
+	tierCCandidate := filepath.Join(root, "Unique-Title-C-relocated.m4b")
+	require.NoError(t, os.WriteFile(tierCCandidate, []byte("c"), 0o644))
+
+	xmlPath := writeFixtureXMLN(t, dir, []struct{ PID, Name, Location string }{
+		{"PID_OK", "Track OK", okPath},
+		{"PID_A", "Track A", missingA},
+		{"PID_B", "Track B", missingB},
+		{"PID_C", "Unique Title C", missingC},
+	})
+
+	m := dbmocks.NewMockStore(t)
+	// Tier A flow
+	m.EXPECT().GetBookByExternalID("itunes", "PID_A").Return("book-a", nil).Once()
+	m.EXPECT().GetBookFiles("book-a").Return([]database.BookFile{
+		{ID: "fa", FilePath: tierAPath, ITunesPersistentID: "PID_A"},
+	}, nil).Once()
+	// Tier B flow: PID lookup succeeds, tier A's BookFiles + book are stale.
+	m.EXPECT().GetBookByExternalID("itunes", "PID_B").Return("book-b", nil).Once()
+	m.EXPECT().GetBookFiles("book-b").Return([]database.BookFile{
+		{ID: "fb", FilePath: "/disk/STALE.m4b", ITunesPersistentID: "PID_B"},
+	}, nil).Once()
+	m.EXPECT().GetBookByID("book-b").Return(&database.Book{ID: "book-b", FilePath: "/disk/STALE.m4b"}, nil).Once()
+	// Tier C: no DB mapping
+	m.EXPECT().GetBookByExternalID("itunes", "PID_C").Return("", nil).Once()
+
+	reportDir := filepath.Join(dir, "reports")
+	m.EXPECT().DeleteOperationState("op-e2e").Return(nil).Once()
+	m.EXPECT().UpdateOperationResultData("op-e2e", mock.Anything).Return(nil).Once()
+
+	r := newPathRepairer(m, nil, nil, PathRepairConfig{
+		XMLPath:       xmlPath,
+		AudiobookRoot: root,
+		ReportDir:     reportDir,
+	})
+	r.bookIDExtractor = func(p string) (string, error) {
+		if p == tierBPath {
+			return "book-b", nil
+		}
+		return "", nil
+	}
+
+	res, err := r.repairWithResult(context.Background(), "op-e2e", true, noopProgressRepair{})
+	require.NoError(t, err)
+
+	assert.Equal(t, 4, res.XMLTracks)
+	assert.Equal(t, 3, res.Missing, "OK track skipped; the other 3 are missing")
+	assert.Equal(t, 2, res.AutoResolved, "tier A and tier B succeed")
+	assert.Equal(t, 1, res.NeedsReview, "tier C emits one")
+	assert.Equal(t, 0, res.Unresolved)
+	require.Len(t, res.NeedsReviewItems, 1)
+	assert.Equal(t, "PID_C", res.NeedsReviewItems[0].PID)
+
+	// Report file written and parses back to the same shape.
+	require.NotEmpty(t, res.ReportPath)
+	bytesOnDisk, err := os.ReadFile(res.ReportPath)
+	require.NoError(t, err)
+	var roundtrip iTunesPathRepairResult
+	require.NoError(t, json.Unmarshal(bytesOnDisk, &roundtrip))
+	assert.Equal(t, res.XMLTracks, roundtrip.XMLTracks)
+	assert.Equal(t, res.NeedsReview, roundtrip.NeedsReview)
 }
 
 // ---------------------------------------------------------------------------
