@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.54.0
+// version: 4.55.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -314,11 +314,18 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 		// fetch or a prior search dialog populates it, so a subsequent single-
 		// book fetch can return immediately without another network round-trip.
 		if cached, cerr := database.GetCachedMetadataFetch(mfs.db, id, src.Name()); cerr == nil && cached != nil {
-			var cachedResults []metadata.BookMetadata
-			if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
-				results = cachedResults
-				log.Printf("[DEBUG] metadata-fetch: cache HIT for (%s, %s) — %d results, age=%s",
-					id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+			ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+			expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
+			if expired {
+				log.Printf("[DEBUG] metadata-fetch: cache EXPIRED for (%s, %s) — age=%s",
+					id, src.Name(), time.Since(cached.CachedAt).Round(time.Hour))
+			} else {
+				var cachedResults []metadata.BookMetadata
+				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+					results = cachedResults
+					log.Printf("[DEBUG] metadata-fetch: cache HIT for (%s, %s) — %d results, age=%s",
+						id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+				}
 			}
 		}
 
@@ -2080,12 +2087,16 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 		// 8000 times even for books we'd already matched with
 		// high confidence.
 		if cached, cerr := database.GetCachedMetadataFetch(mfs.db, id, src.Name()); cerr == nil && cached != nil {
-			var cachedResults []metadata.BookMetadata
-			if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil {
-				allResults = cachedResults
-				cacheHit = true
-				log.Printf("[DEBUG] metadata-search: cache HIT for (%s, %s) — %d results, age=%s",
-					id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+			ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+			expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
+			if !expired {
+				var cachedResults []metadata.BookMetadata
+				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil {
+					allResults = cachedResults
+					cacheHit = true
+					log.Printf("[DEBUG] metadata-search: cache HIT for (%s, %s) — %d results, age=%s",
+						id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+				}
 			}
 		}
 
@@ -2494,14 +2505,10 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 	// UpdateBook so a failed update never leaves stale tags behind.
 	mfs.ApplyMetadataSystemTags(id, candidate.Source, meta.Language)
 
-	// Invalidate the metadata fetch cache for this book. After a
-	// successful apply the book's title/author may have changed,
-	// which means any cached candidates from the per-source cache
-	// were queried against stale search terms and should be
-	// re-fetched next time the user asks.
-	if cerr := database.InvalidateAllCachedMetadataFetchesForBook(mfs.db, id); cerr != nil {
-		log.Printf("[WARN] metadata apply: failed to invalidate fetch cache for %s: %v", id, cerr)
-	}
+	// Intentionally keep the metadata fetch cache after apply. The cached
+	// API results are still valid — the TTL (MetadataFetchCacheTTLDays)
+	// governs when re-fetches happen. Wiping here would force every
+	// subsequent scan to hit the external API again.
 
 	return &FetchMetadataResponse{
 		Message: "metadata candidate applied",

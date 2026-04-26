@@ -516,6 +516,7 @@ export interface Config {
   memory_limit_type: string;
   cache_size: number;
   cache_invalidate_on_book_update: boolean;
+  metadata_fetch_cache_ttl_days: number;
   memory_limit_percent: number;
   memory_limit_mb: number;
 

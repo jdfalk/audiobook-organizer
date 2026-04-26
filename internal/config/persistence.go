@@ -424,6 +424,10 @@ func applySetting(key, value, typ string) error {
 		}
 	case "cache_invalidate_on_book_update":
 		AppConfig.CacheInvalidateOnBookUpdate = value == "true"
+	case "metadata_fetch_cache_ttl_days":
+		if i, err := strconv.Atoi(value); err == nil {
+			AppConfig.MetadataFetchCacheTTLDays = i
+		}
 	case "memory_limit_percent":
 		if i, err := strconv.Atoi(value); err == nil {
 			AppConfig.MemoryLimitPercent = i
@@ -740,7 +744,8 @@ func SaveConfigToDatabase(store database.SettingsStore) error {
 		// Memory management
 		"memory_limit_type":              {AppConfig.MemoryLimitType, "string", false},
 		"cache_size":                     {strconv.Itoa(AppConfig.CacheSize), "int", false},
-		"cache_invalidate_on_book_update": {strconv.FormatBool(AppConfig.CacheInvalidateOnBookUpdate), "bool", false},
+		"cache_invalidate_on_book_update":  {strconv.FormatBool(AppConfig.CacheInvalidateOnBookUpdate), "bool", false},
+		"metadata_fetch_cache_ttl_days":    {strconv.Itoa(AppConfig.MetadataFetchCacheTTLDays), "int", false},
 		"memory_limit_percent": {strconv.Itoa(AppConfig.MemoryLimitPercent), "int", false},
 		"memory_limit_mb":      {strconv.Itoa(AppConfig.MemoryLimitMB), "int", false},
 
