@@ -191,7 +191,10 @@ type resolvedTrack struct {
 // repairWithResult is the operation body. Returns the result struct so
 // tests can assert on counts; the JSON-encoded form is also persisted
 // to the operation row via UpdateOperationResultData.
-func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun bool, progress operations.ProgressReporter) (iTunesPathRepairResult, error) {
+//
+// Named return so the persist+report defer can mutate result.ReportPath
+// after the loop's return statement runs.
+func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun bool, progress operations.ProgressReporter) (result iTunesPathRepairResult, err error) {
 	if r.store == nil {
 		return iTunesPathRepairResult{}, fmt.Errorf("database not initialized")
 	}
@@ -201,12 +204,12 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 
 	_ = progress.Log("info", fmt.Sprintf("iTunes path repair started: xml=%s dry_run=%t", r.cfg.XMLPath, dryRun), nil)
 
-	lib, err := itunes.ParseLibrary(r.cfg.XMLPath)
-	if err != nil {
-		return iTunesPathRepairResult{}, fmt.Errorf("parse iTunes library: %w", err)
+	lib, parseErr := itunes.ParseLibrary(r.cfg.XMLPath)
+	if parseErr != nil {
+		return iTunesPathRepairResult{}, fmt.Errorf("parse iTunes library: %w", parseErr)
 	}
 
-	result := iTunesPathRepairResult{XMLTracks: len(lib.Tracks), DryRun: dryRun}
+	result = iTunesPathRepairResult{XMLTracks: len(lib.Tracks), DryRun: dryRun}
 	_ = progress.UpdateProgress(0, len(lib.Tracks), "scanning iTunes locations")
 
 	// Tier B is built lazily — only constructed if tier A leaves
@@ -240,8 +243,22 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 		return tierB
 	}
 
-	const progressEvery = 500     // emit UpdateProgress every N tracks
-	const detailLogEvery = 1000   // emit a sample resolution log every N
+	const progressEvery = 500   // emit UpdateProgress every N tracks
+	const persistEvery = 2000   // persist partial result every N tracks
+	const detailLogEvery = 1000 // emit a sample resolution log every N
+
+	// Defer-persist so even on context cancel / timeout we get a
+	// useful partial report. The end-of-function path also persists,
+	// but the defer is the safety net for early returns.
+	defer func() {
+		if r.cfg.ReportDir != "" {
+			if reportPath, err := writeReportFile(r.cfg.ReportDir, opID, result); err == nil {
+				result.ReportPath = reportPath
+			}
+		}
+		_ = persistRepairResult(r.store, opID, result)
+	}()
+
 	scanned := 0
 	for _, track := range lib.Tracks {
 		select {
@@ -254,6 +271,16 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 			_ = progress.UpdateProgress(scanned, len(lib.Tracks),
 				fmt.Sprintf("scanning iTunes locations: %d/%d missing=%d auto=%d review=%d unresolved=%d",
 					scanned, len(lib.Tracks), result.Missing, result.AutoResolved, result.NeedsReview, result.Unresolved))
+		}
+		if scanned%persistEvery == 0 {
+			// Snapshot the partial result so an interrupted run still
+			// leaves something the operator can review.
+			if r.cfg.ReportDir != "" {
+				if reportPath, err := writeReportFile(r.cfg.ReportDir, opID, result); err == nil {
+					result.ReportPath = reportPath
+				}
+			}
+			_ = persistRepairResult(r.store, opID, result)
 		}
 		if !itunes.IsAudiobook(track) {
 			continue
@@ -326,16 +353,9 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 		result.UnresolvedPIDs = append(result.UnresolvedPIDs, track.PersistentID)
 	}
 
-	if r.cfg.ReportDir != "" {
-		if reportPath, err := writeReportFile(r.cfg.ReportDir, opID, result); err != nil {
-			log.Printf("[WARN] write repair report: %v", err)
-		} else {
-			result.ReportPath = reportPath
-		}
-	}
-	if err := persistRepairResult(r.store, opID, result); err != nil {
-		log.Printf("[WARN] persist repair result: %v", err)
-	}
+	// The defer at the top of this function handles the final
+	// persistRepairResult + writeReportFile call. Just clear the
+	// operation state checkpoint here.
 	_ = operations.ClearState(r.store, opID)
 
 	summary := fmt.Sprintf(
