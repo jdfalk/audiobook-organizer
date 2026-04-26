@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -92,16 +93,18 @@ func extractBookOrganizerID(audioFilePath string) (string, error) {
 // logs and the operation result. Field names mirror the dry-run JSON
 // payload that callers consume.
 type iTunesPathRepairResult struct {
-	XMLTracks        int                `json:"xml_tracks"`
-	Missing          int                `json:"missing"`
-	AutoResolved     int                `json:"auto_resolved"`
-	NeedsReview      int                `json:"needs_review"`
-	Unresolved       int                `json:"unresolved"`
-	Enqueued         int                `json:"enqueued"`
-	DryRun           bool               `json:"dry_run"`
-	ReportPath       string             `json:"report_path,omitempty"`
-	NeedsReviewItems []needsReviewItem  `json:"needs_review_items,omitempty"`
-	Errors           []string           `json:"errors,omitempty"`
+	XMLTracks        int               `json:"xml_tracks"`
+	Missing          int               `json:"missing"`
+	AutoResolved     int               `json:"auto_resolved"`
+	NeedsReview      int               `json:"needs_review"`
+	Unresolved       int               `json:"unresolved"`
+	Enqueued         int               `json:"enqueued"`
+	DryRun           bool              `json:"dry_run"`
+	ReportPath       string            `json:"report_path,omitempty"`
+	Resolutions      []resolvedTrack   `json:"resolutions,omitempty"`
+	NeedsReviewItems []needsReviewItem `json:"needs_review_items,omitempty"`
+	UnresolvedPIDs   []string          `json:"unresolved_pids,omitempty"`
+	Errors           []string          `json:"errors,omitempty"`
 }
 
 // needsReviewItem is one fuzzy-resolved missing track requiring human
@@ -207,23 +210,38 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 	_ = progress.UpdateProgress(0, len(lib.Tracks), "scanning iTunes locations")
 
 	// Tier B is built lazily — only constructed if tier A leaves
-	// residue. Walking the audiobook root is the expensive step and
-	// we don't want to pay it on libraries where every iTunes path
-	// resolves cleanly via the DB.
+	// residue. Walking the audiobook root is the expensive step; we
+	// don't want to pay it on libraries where every iTunes path
+	// resolves cleanly via the DB. When we DO build it, fan out the
+	// tag extraction across runtime.NumCPU()*4 workers and report
+	// progress every 250 files so the operator sees the long step
+	// is actually moving.
 	var tierB tagScanner
+	tierBBuiltLogged := false
 	getTierB := func() tagScanner {
 		if tierB == nil {
 			if r.cfg.AudiobookRoot == "" || r.bookIDExtractor == nil {
 				tierB = noopTagScanner{}
 			} else {
 				_ = progress.Log("info",
-					fmt.Sprintf("tier B: scanning audiobook root for embedded book IDs root=%s", r.cfg.AudiobookRoot), nil)
-				tierB = newFSTagScanner(r.cfg.AudiobookRoot, r.bookIDExtractor)
+					fmt.Sprintf("tier B: scanning audiobook root in parallel root=%s workers=%d",
+						r.cfg.AudiobookRoot, runtime.NumCPU()*4), nil)
+				scanner := newFSTagScanner(r.cfg.AudiobookRoot, r.bookIDExtractor).
+					withProgress(func(done, total int) {
+						_ = progress.Log("info",
+							fmt.Sprintf("tier B: tag scan progress %d/%d", done, total), nil)
+					}, 500)
+				tierB = scanner
 			}
+		}
+		if !tierBBuiltLogged {
+			tierBBuiltLogged = true
 		}
 		return tierB
 	}
 
+	const progressEvery = 500     // emit UpdateProgress every N tracks
+	const detailLogEvery = 1000   // emit a sample resolution log every N
 	scanned := 0
 	for _, track := range lib.Tracks {
 		select {
@@ -232,6 +250,11 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 		default:
 		}
 		scanned++
+		if scanned%progressEvery == 0 {
+			_ = progress.UpdateProgress(scanned, len(lib.Tracks),
+				fmt.Sprintf("scanning iTunes locations: %d/%d missing=%d auto=%d review=%d unresolved=%d",
+					scanned, len(lib.Tracks), result.Missing, result.AutoResolved, result.NeedsReview, result.Unresolved))
+		}
 		if !itunes.IsAudiobook(track) {
 			continue
 		}
@@ -250,28 +273,38 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 		// Tier A: bookID → DB-known on-disk path
 		if newPath, ok := resolveTierA(r.store, track.PersistentID, bookID, pathExists); ok {
 			result.AutoResolved++
+			result.Resolutions = append(result.Resolutions, resolvedTrack{
+				PID: track.PersistentID, OldPath: decoded, NewPath: newPath, Tier: "A", BookID: bookID,
+			})
 			if !dryRun {
 				if err := r.applyResolution(track.PersistentID, bookID, decoded, newPath, &result); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("apply tier=A pid=%s: %v", track.PersistentID, err))
 				}
 			}
-			_ = progress.Log("info",
-				fmt.Sprintf("repair pid=%s old=%s new=%s tier=A action=%s",
-					track.PersistentID, decoded, newPath, applyAction(dryRun)), nil)
+			if result.AutoResolved%detailLogEvery == 1 {
+				_ = progress.Log("info",
+					fmt.Sprintf("sample tier=A pid=%s old=%s new=%s action=%s",
+						track.PersistentID, decoded, newPath, applyAction(dryRun)), nil)
+			}
 			continue
 		}
 
 		// Tier B: embedded AUDIOBOOK_ORGANIZER_ID tag scan
 		if newPath, ok := resolveTierB(getTierB(), bookID, pathExists); ok {
 			result.AutoResolved++
+			result.Resolutions = append(result.Resolutions, resolvedTrack{
+				PID: track.PersistentID, OldPath: decoded, NewPath: newPath, Tier: "B", BookID: bookID,
+			})
 			if !dryRun {
 				if err := r.applyResolution(track.PersistentID, bookID, decoded, newPath, &result); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("apply tier=B pid=%s: %v", track.PersistentID, err))
 				}
 			}
-			_ = progress.Log("info",
-				fmt.Sprintf("repair pid=%s old=%s new=%s tier=B action=%s",
-					track.PersistentID, decoded, newPath, applyAction(dryRun)), nil)
+			if result.AutoResolved%detailLogEvery == 1 {
+				_ = progress.Log("info",
+					fmt.Sprintf("sample tier=B pid=%s old=%s new=%s action=%s",
+						track.PersistentID, decoded, newPath, applyAction(dryRun)), nil)
+			}
 			continue
 		}
 
@@ -286,15 +319,11 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 				Title:      track.Name,
 				Candidates: candidates,
 			})
-			_ = progress.Log("info",
-				fmt.Sprintf("repair pid=%s old=%s tier=C candidates=%d action=review",
-					track.PersistentID, decoded, len(candidates)), nil)
 			continue
 		}
 
 		result.Unresolved++
-		_ = progress.Log("debug",
-			fmt.Sprintf("missing pid=%s old=%s tier=ABC unresolved", track.PersistentID, decoded), nil)
+		result.UnresolvedPIDs = append(result.UnresolvedPIDs, track.PersistentID)
 	}
 
 	if r.cfg.ReportDir != "" {

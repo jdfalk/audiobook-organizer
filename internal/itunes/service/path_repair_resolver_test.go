@@ -5,8 +5,10 @@
 package itunesservice
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -163,6 +165,37 @@ func mustWrite(t *testing.T, p, content string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
 	require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+}
+
+// ---------------------------------------------------------------------------
+// fsTagScanner — parallel extraction matches sequential, progress fires
+// ---------------------------------------------------------------------------
+
+func TestFSTagScanner_ParallelMatchesSequential(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 50; i++ {
+		mustWrite(t, filepath.Join(root, fmt.Sprintf("a%02d.m4b", i)), "x")
+	}
+	extractor := func(p string) (string, error) {
+		base := filepath.Base(p)
+		// Group into 5 books so the index has multi-path entries too.
+		return "book-" + string(base[1]), nil
+	}
+
+	seq := newFSTagScanner(root, extractor).withWorkers(1)
+	seqAll := append([]string(nil), seq.allPaths()...)
+	seqOne := append([]string(nil), seq.bookIDToPaths("book-0")...)
+
+	var progressCalls atomic.Int32
+	par := newFSTagScanner(root, extractor).
+		withWorkers(8).
+		withProgress(func(done, total int) { progressCalls.Add(1) }, 10)
+	parAll := append([]string(nil), par.allPaths()...)
+	parOne := append([]string(nil), par.bookIDToPaths("book-0")...)
+
+	assert.ElementsMatch(t, seqAll, parAll, "every audio file is found regardless of worker count")
+	assert.ElementsMatch(t, seqOne, parOne, "bookID index is identical")
+	assert.Greater(t, int(progressCalls.Load()), 0, "progress callback fires during scan")
 }
 
 // ---------------------------------------------------------------------------

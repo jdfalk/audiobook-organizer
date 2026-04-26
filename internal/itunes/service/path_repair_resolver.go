@@ -11,9 +11,11 @@ package itunesservice
 import (
 	"io/fs"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/matcher"
@@ -39,19 +41,48 @@ type noopTagScanner struct{}
 func (noopTagScanner) bookIDToPaths(string) []string { return nil }
 func (noopTagScanner) allPaths() []string            { return nil }
 
+// scanProgressFn is invoked periodically while the audiobook tree is
+// being scanned. (done, total) where total is the count of audio files
+// discovered in phase 1; done counts how many have been tag-extracted
+// in phase 2. Implementations should be cheap — the scanner calls this
+// off the hot path but still in the same process.
+type scanProgressFn func(done, total int)
+
 // fsTagScanner walks the audiobook root once, lazily, the first time
-// bookIDToPaths or allPaths is called. Subsequent calls hit the
-// in-memory state.
+// bookIDToPaths or allPaths is called. The walk runs in two phases:
+// phase 1 enumerates audio files (cheap, single goroutine, just
+// directory I/O), phase 2 extracts the AUDIOBOOK_ORGANIZER_ID tag
+// from each file in parallel via a worker pool. Subsequent calls hit
+// the in-memory state.
 type fsTagScanner struct {
-	root    string
-	extract bookIDExtractor
-	once    sync.Once
-	index   map[string][]string
-	all     []string
+	root       string
+	extract    bookIDExtractor
+	workers    int            // 0 → runtime.NumCPU() * 4 (tag reads are I/O-bound)
+	progress   scanProgressFn // optional; nil means silent
+	progressEv int            // emit progress every N files; 0 → 250
+
+	once  sync.Once
+	index map[string][]string
+	all   []string
 }
 
 func newFSTagScanner(root string, extract bookIDExtractor) *fsTagScanner {
 	return &fsTagScanner{root: root, extract: extract}
+}
+
+// withWorkers overrides the default worker count. Useful for tests
+// that want a deterministic single-threaded scan.
+func (s *fsTagScanner) withWorkers(n int) *fsTagScanner {
+	s.workers = n
+	return s
+}
+
+// withProgress installs a callback fired every N processed files
+// during phase 2. Pass everyN=0 for the default cadence.
+func (s *fsTagScanner) withProgress(fn scanProgressFn, everyN int) *fsTagScanner {
+	s.progress = fn
+	s.progressEv = everyN
+	return s
 }
 
 func (s *fsTagScanner) bookIDToPaths(bookID string) []string {
@@ -69,6 +100,10 @@ func (s *fsTagScanner) scan() {
 	if s.root == "" {
 		return
 	}
+
+	// Phase 1: enumerate every audio file. Cheap (no tag I/O); must
+	// be sequential because filepath.WalkDir doesn't parallelize.
+	var paths []string
 	_ = filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d == nil || d.IsDir() {
 			return nil
@@ -77,14 +112,73 @@ func (s *fsTagScanner) scan() {
 		if _, ok := audioExt[ext]; !ok {
 			return nil
 		}
-		s.all = append(s.all, path)
-		if s.extract != nil {
-			if bookID, err := s.extract(path); err == nil && bookID != "" {
-				s.index[bookID] = append(s.index[bookID], path)
-			}
-		}
+		paths = append(paths, path)
 		return nil
 	})
+	s.all = paths
+
+	if s.extract == nil || len(paths) == 0 {
+		return
+	}
+
+	// Phase 2: parallel tag extraction. Tag reads are dominated by
+	// taglib + disk seek; oversubscribing relative to NumCPU keeps
+	// spinning disks busy.
+	workers := s.workers
+	if workers <= 0 {
+		workers = runtime.NumCPU() * 4
+	}
+	if workers > len(paths) {
+		workers = len(paths)
+	}
+	everyN := s.progressEv
+	if everyN <= 0 {
+		everyN = 250
+	}
+
+	type result struct {
+		path   string
+		bookID string
+	}
+	jobs := make(chan string, workers*2)
+	results := make(chan result, workers*2)
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			for p := range jobs {
+				bookID, err := s.extract(p)
+				if err != nil || bookID == "" {
+					results <- result{path: p}
+					continue
+				}
+				results <- result{path: p, bookID: bookID}
+			}
+		}()
+	}
+	go func() {
+		for _, p := range paths {
+			jobs <- p
+		}
+		close(jobs)
+	}()
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var done int64
+	total := len(paths)
+	for r := range results {
+		if r.bookID != "" {
+			s.index[r.bookID] = append(s.index[r.bookID], r.path)
+		}
+		n := atomic.AddInt64(&done, 1)
+		if s.progress != nil && (n%int64(everyN) == 0 || n == int64(total)) {
+			s.progress(int(n), total)
+		}
+	}
 }
 
 // tierAStore is the slice tier A needs after the bookID has been
