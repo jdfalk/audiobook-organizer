@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -545,18 +545,23 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		// for better match quality. Author is used as a filter, not as the primary query.
 		var metaResults []metadata.BookMetadata
 		var sourceName string
+		ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
 		for _, src := range sourceChain {
 			// Check the persistent fetch cache before hitting the external API.
-			// Populated by FetchMetadataForBook and SearchMetadata — so a prior
-			// full-library fetch or search-dialog open makes this instant.
 			if cached, cerr := database.GetCachedMetadataFetch(s.Store(), bookID, src.Name()); cerr == nil && cached != nil {
-				var cachedResults []metadata.BookMetadata
-				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
-					metaResults = cachedResults
-					sourceName = src.Name()
-					log.Printf("[DEBUG] bulkFetchMetadata: cache HIT for (%s, %s) — %d results, age=%s",
-						bookID, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
-					break
+				expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
+				if expired {
+					log.Printf("[DEBUG] bulkFetchMetadata: cache EXPIRED for (%s, %s) — age=%s",
+						bookID, src.Name(), time.Since(cached.CachedAt).Round(time.Hour))
+				} else {
+					var cachedResults []metadata.BookMetadata
+					if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+						metaResults = cachedResults
+						sourceName = src.Name()
+						log.Printf("[DEBUG] bulkFetchMetadata: cache HIT for (%s, %s) — %d results, age=%s",
+							bookID, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+						break
+					}
 				}
 			}
 
@@ -590,13 +595,13 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 				}
 			}
 			log.Printf("[DEBUG] bulkFetchMetadata: source %s returned no results for %q, trying next", src.Name(), searchTitle)
+		}
 
-			// Write results to cache for future calls (fetch or search dialog).
-			if len(metaResults) > 0 {
-				if blob, merr := json.Marshal(metaResults); merr == nil {
-					if perr := database.PutCachedMetadataFetch(s.Store(), bookID, src.Name(), blob, 0); perr != nil {
-						log.Printf("[WARN] bulkFetchMetadata: cache put failed for (%s, %s): %v", bookID, src.Name(), perr)
-					}
+		// Write to cache after the loop so all break paths are covered.
+		if len(metaResults) > 0 && sourceName != "" {
+			if blob, merr := json.Marshal(metaResults); merr == nil {
+				if perr := database.PutCachedMetadataFetch(s.Store(), bookID, sourceName, blob, 0); perr != nil {
+					log.Printf("[WARN] bulkFetchMetadata: cache put failed for (%s, %s): %v", bookID, sourceName, perr)
 				}
 			}
 		}
