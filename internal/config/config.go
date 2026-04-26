@@ -208,6 +208,10 @@ type Config struct {
 	// invalidates the list/facets caches. Defaults to false so caches stay
 	// warm across metadata fetches and write-back operations.
 	CacheInvalidateOnBookUpdate bool `json:"cache_invalidate_on_book_update"`
+	// MetadataFetchCacheTTLDays is how long (in days) the DB-backed metadata
+	// fetch cache (Audible/Audnexus/etc. API results) is considered fresh.
+	// 0 means never expire. Default 7.
+	MetadataFetchCacheTTLDays int `json:"metadata_fetch_cache_ttl_days"`
 	MemoryLimitPercent int    `json:"memory_limit_percent"` // % of system memory
 	MemoryLimitMB      int    `json:"memory_limit_mb"`      // absolute MB
 
@@ -380,6 +384,7 @@ func InitConfig() {
 	// Set memory management defaults
 	viper.SetDefault("memory_limit_type", "items")
 	viper.SetDefault("cache_size", 1000)
+	viper.SetDefault("metadata_fetch_cache_ttl_days", 7)
 	viper.SetDefault("memory_limit_percent", 25)
 	viper.SetDefault("memory_limit_mb", 512)
 
@@ -537,10 +542,11 @@ func InitConfig() {
 		BasicAuthPassword:       viper.GetString("basic_auth_password"),
 
 		// Memory management
-		MemoryLimitType:    viper.GetString("memory_limit_type"),
-		CacheSize:          viper.GetInt("cache_size"),
-		MemoryLimitPercent: viper.GetInt("memory_limit_percent"),
-		MemoryLimitMB:      viper.GetInt("memory_limit_mb"),
+		MemoryLimitType:           viper.GetString("memory_limit_type"),
+		CacheSize:                 viper.GetInt("cache_size"),
+		MetadataFetchCacheTTLDays: viper.GetInt("metadata_fetch_cache_ttl_days"),
+		MemoryLimitPercent:        viper.GetInt("memory_limit_percent"),
+		MemoryLimitMB:             viper.GetInt("memory_limit_mb"),
 
 		// Lifecycle / retention
 		PurgeSoftDeletedAfterDays:   viper.GetInt("purge_soft_deleted_after_days"),

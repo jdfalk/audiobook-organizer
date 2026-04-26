@@ -838,6 +838,7 @@ interface SettingsState {
   memoryLimitType: string;
   cacheSize: number;
   cacheInvalidateOnBookUpdate: boolean;
+  metadataFetchCacheTTLDays: number;
   memoryLimitPercent: number;
   memoryLimitMB: number;
   logLevel: string;
@@ -1000,6 +1001,7 @@ export function Settings() {
     memoryLimitType: 'items',
     cacheSize: 1000, // items
     cacheInvalidateOnBookUpdate: false,
+    metadataFetchCacheTTLDays: 7,
     memoryLimitPercent: 25, // % of system memory
     memoryLimitMB: 512, // MB
 
@@ -1195,6 +1197,7 @@ export function Settings() {
         memoryLimitType: config.memory_limit_type || 'items',
         cacheSize: config.cache_size || 1000,
         cacheInvalidateOnBookUpdate: config.cache_invalidate_on_book_update ?? false,
+        metadataFetchCacheTTLDays: config.metadata_fetch_cache_ttl_days ?? 7,
         memoryLimitPercent: config.memory_limit_percent || 25,
         memoryLimitMB: config.memory_limit_mb || 512,
 
@@ -1797,6 +1800,7 @@ export function Settings() {
         memory_limit_type: settings.memoryLimitType,
         cache_size: settings.cacheSize,
         cache_invalidate_on_book_update: settings.cacheInvalidateOnBookUpdate,
+        metadata_fetch_cache_ttl_days: settings.metadataFetchCacheTTLDays,
         memory_limit_percent: settings.memoryLimitPercent,
         memory_limit_mb: settings.memoryLimitMB,
 
@@ -3392,6 +3396,20 @@ export function Settings() {
                 />
               </Grid>
             )}
+
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Metadata fetch cache TTL (days)"
+                value={settings.metadataFetchCacheTTLDays}
+                onChange={(e) =>
+                  handleChange('metadataFetchCacheTTLDays', parseInt(e.target.value) || 0)
+                }
+                inputProps={{ min: 0, max: 365 }}
+                helperText="How long to keep Audible/Audnexus API results before re-fetching. 0 = never expire."
+              />
+            </Grid>
 
             <Grid item xs={12}>
               <FormControlLabel
