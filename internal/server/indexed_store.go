@@ -1,5 +1,5 @@
 // file: internal/server/indexed_store.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5d2e4f3a-7b5a-4a70-b8c5-3d7e0f1b9a79
 //
 // indexedStore decorates a database.Store so that every successful
@@ -48,6 +48,12 @@ func (s *indexedStore) UpdateBook(id string, b *database.Book) (*database.Book, 
 		s.server.enqueueIndex(id, false)
 	}
 	return updated, err
+}
+
+// Unwrap returns the inner store so decorator-aware helpers (e.g.
+// unwrapAIJobsStore) can peel layers and reach concrete sub-interfaces.
+func (s *indexedStore) Unwrap() database.Store {
+	return s.Store
 }
 
 // DeleteBook removes the row and schedules a Bleve delete on success.
