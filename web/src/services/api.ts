@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.2.0
+// version: 2.3.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -515,6 +515,7 @@ export interface Config {
   // Memory management
   memory_limit_type: string;
   cache_size: number;
+  cache_invalidate_on_book_update: boolean;
   memory_limit_percent: number;
   memory_limit_mb: number;
 

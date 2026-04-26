@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.36.0
+// version: 1.37.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -204,6 +204,10 @@ type Config struct {
 	// Memory management
 	MemoryLimitType    string `json:"memory_limit_type"`    // 'items', 'percent', 'absolute'
 	CacheSize          int    `json:"cache_size"`           // number of items
+	// CacheInvalidateOnBookUpdate controls whether updating a book's metadata
+	// invalidates the list/facets caches. Defaults to false so caches stay
+	// warm across metadata fetches and write-back operations.
+	CacheInvalidateOnBookUpdate bool `json:"cache_invalidate_on_book_update"`
 	MemoryLimitPercent int    `json:"memory_limit_percent"` // % of system memory
 	MemoryLimitMB      int    `json:"memory_limit_mb"`      // absolute MB
 

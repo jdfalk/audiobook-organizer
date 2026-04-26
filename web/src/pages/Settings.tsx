@@ -837,6 +837,7 @@ interface SettingsState {
   concurrentScans: number;
   memoryLimitType: string;
   cacheSize: number;
+  cacheInvalidateOnBookUpdate: boolean;
   memoryLimitPercent: number;
   memoryLimitMB: number;
   logLevel: string;
@@ -998,6 +999,7 @@ export function Settings() {
     // 'items', 'percent', 'absolute'
     memoryLimitType: 'items',
     cacheSize: 1000, // items
+    cacheInvalidateOnBookUpdate: false,
     memoryLimitPercent: 25, // % of system memory
     memoryLimitMB: 512, // MB
 
@@ -1192,6 +1194,7 @@ export function Settings() {
         // Memory management
         memoryLimitType: config.memory_limit_type || 'items',
         cacheSize: config.cache_size || 1000,
+        cacheInvalidateOnBookUpdate: config.cache_invalidate_on_book_update ?? false,
         memoryLimitPercent: config.memory_limit_percent || 25,
         memoryLimitMB: config.memory_limit_mb || 512,
 
@@ -1793,6 +1796,7 @@ export function Settings() {
         // Memory management
         memory_limit_type: settings.memoryLimitType,
         cache_size: settings.cacheSize,
+        cache_invalidate_on_book_update: settings.cacheInvalidateOnBookUpdate,
         memory_limit_percent: settings.memoryLimitPercent,
         memory_limit_mb: settings.memoryLimitMB,
 
@@ -3388,6 +3392,25 @@ export function Settings() {
                 />
               </Grid>
             )}
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.cacheInvalidateOnBookUpdate}
+                    onChange={(e) =>
+                      handleChange('cacheInvalidateOnBookUpdate', e.target.checked)
+                    }
+                  />
+                }
+                label="Invalidate list cache on book update"
+              />
+              <Typography variant="caption" color="text.secondary" display="block">
+                When off (default), metadata fetches and write-back operations keep the library
+                list cache warm. Turn on only if you need the library page to reflect every
+                individual book update immediately.
+              </Typography>
+            </Grid>
 
             {settings.memoryLimitType === 'percent' && (
               <Grid item xs={12} sm={6}>

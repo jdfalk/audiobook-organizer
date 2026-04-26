@@ -91,9 +91,15 @@ func NewAudiobookService(store audiobookStore) *AudiobookService {
 // book entries that haven't been invalidated yet. By clearing individual books
 // first, any concurrent reader that re-fetches the list will also get fresh
 // individual books on subsequent lookups.
+//
+// When config.CacheInvalidateOnBookUpdate is false (the default), only the
+// per-book cache is cleared; the list/facets caches are left warm so metadata
+// fetches and write-back operations do not reset library page performance.
 func (svc *AudiobookService) InvalidateBookCaches() {
 	svc.bookCache.InvalidateAll()
-	svc.listCache.InvalidateAll()
+	if config.AppConfig.CacheInvalidateOnBookUpdate {
+		svc.listCache.InvalidateAll()
+	}
 }
 
 // AudiobooksListResponse represents the response for listing audiobooks
