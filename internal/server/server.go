@@ -864,9 +864,18 @@ func NewServer(store database.Store) *Server {
 		AutoWriteBack:       config.AppConfig.ITunesAutoWriteBack,
 		ITLWriteBackEnabled: config.AppConfig.ITLWriteBackEnabled,
 	}
+	// Build the operation queue before constructing the iTunes service
+	// so PathReconciler / PathRepairer get a real handle. The duplicate
+	// later in this function (kept for the GlobalQueue back-compat) is
+	// a no-op once this assignment lands.
+	if server.queue == nil {
+		server.queue = operations.NewOperationQueue(resolvedStore, 2, nil, server.hub)
+		operations.GlobalQueue = server.queue
+	}
 	itunesSvc, err := itunesservice.New(itunesservice.Deps{
 		Store:         resolvedStore,
 		Config:        itunesCfg,
+		OpQueue:       server.queue,
 		AudiobookRoot: config.AppConfig.RootDir,
 		ReportDir:     filepath.Join(config.AppConfig.RootDir, "reports"),
 		OnBookCreated: func(bookID string) {
@@ -1075,9 +1084,10 @@ func NewServer(store database.Store) *Server {
 	// Also set the global for backward compatibility during migration
 	realtime.SetGlobalHub(server.hub)
 
-	server.queue = operations.NewOperationQueue(resolvedStore, 2, nil, server.hub)
-	// Also set the global for backward compatibility during migration
-	operations.GlobalQueue = server.queue
+	if server.queue == nil {
+		server.queue = operations.NewOperationQueue(resolvedStore, 2, nil, server.hub)
+		operations.GlobalQueue = server.queue
+	}
 
 	// The batcher moved under itunesservice.Service in Phase 2 M1 step 2.
 	// Server still keeps a typed field for back-compat with the many call
