@@ -21,13 +21,13 @@ type Writer struct {
 	stdout   io.Writer
 	ch       chan database.ActivityEntry
 	store    *database.ActivityStore
+	batcher  *ActivityBatcher
 	done     chan struct{}
 	stopOnce sync.Once
 	wg       sync.WaitGroup
 	mu       sync.Mutex
 	partial  string // incomplete line buffer
 	closed   atomic.Bool
-	batcher  *ActivityBatcher
 }
 
 // NewWriter creates a new Writer backed by store.

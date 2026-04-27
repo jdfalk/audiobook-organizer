@@ -1,0 +1,154 @@
+// file: internal/activity/api_test.go
+// version: 1.0.0
+// guid: b2e7f4a1-6c9d-4e3b-8f0a-1d5c7e2b9f4a
+
+package activity
+
+import (
+	"testing"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+)
+
+// newTestWriter builds a Writer that writes to an in-memory channel only
+// (no real ActivityStore needed). The batcher drains into the same channel.
+func newTestWriter(chanSize int) *Writer {
+	ch := make(chan database.ActivityEntry, chanSize)
+	return &Writer{
+		ch:      ch,
+		batcher: NewActivityBatcher(ch),
+		// stdout and store intentionally nil for unit tests — no I/O needed.
+	}
+}
+
+// TestLogBatch_NilWriter verifies that passing a nil Writer does not panic.
+func TestLogBatch_NilWriter(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("LogBatch(nil, ...) panicked: %v", r)
+		}
+	}()
+	LogBatch(nil, "op1", "tag-scan", "scanner", BatchItem{Name: "book.m4b", Count: 1})
+}
+
+// TestLogBatch_EmptyOperationID verifies that an empty operationID causes the
+// item to fall through to a plain debug ActivityEntry on the channel (not batched).
+func TestLogBatch_EmptyOperationID(t *testing.T) {
+	w := newTestWriter(16)
+
+	LogBatch(w, "", "tag-scan", "scanner", BatchItem{Name: "book.m4b", Count: 1})
+
+	select {
+	case e := <-w.ch:
+		// Should be a plain debug entry, NOT a batch entry — Details must be nil.
+		if e.Details != nil {
+			t.Errorf("expected nil Details for plain fallback entry, got %v", e.Details)
+		}
+		if e.Tier != "debug" {
+			t.Errorf("expected Tier=debug, got %q", e.Tier)
+		}
+		if e.Summary != "book.m4b" {
+			t.Errorf("expected Summary=book.m4b, got %q", e.Summary)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected a plain debug entry on the channel, got none")
+	}
+}
+
+// TestLogBatch_UnregisteredType verifies that an unregistered batch type also
+// falls through to a plain debug ActivityEntry on the channel.
+func TestLogBatch_UnregisteredType(t *testing.T) {
+	w := newTestWriter(16)
+
+	LogBatch(w, "op1", "unknown-type", "scanner", BatchItem{Name: "book.m4b", Count: 1})
+
+	select {
+	case e := <-w.ch:
+		if e.Details != nil {
+			t.Errorf("expected nil Details for plain fallback entry, got %v", e.Details)
+		}
+		if e.Type != "unknown-type" {
+			t.Errorf("expected Type=unknown-type, got %q", e.Type)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected a plain debug entry on the channel, got none")
+	}
+}
+
+// TestLogBatch_ValidBatch verifies that a valid operationID + registered type
+// routes through the batcher and produces a batched entry with Details["batched"]==true.
+func TestLogBatch_ValidBatch(t *testing.T) {
+	w := newTestWriter(16)
+
+	LogBatch(w, "op-valid", "tag-scan", "scanner", BatchItem{Name: "book.m4b", Count: 1})
+
+	// After Submit the item should be pending, not yet on the channel.
+	w.batcher.mu.Lock()
+	key := BatchKey{Type: "tag-scan", Source: "scanner", OperationID: "op-valid"}
+	_, ok := w.batcher.pending[key]
+	w.batcher.mu.Unlock()
+	if !ok {
+		t.Fatal("expected 1 pending batch entry after LogBatch, found none")
+	}
+
+	// FlushAll should send the merged entry to the channel.
+	w.batcher.FlushAll()
+
+	select {
+	case e := <-w.ch:
+		if e.Details == nil {
+			t.Fatal("expected non-nil Details after flush")
+		}
+		batched, ok := e.Details["batched"]
+		if !ok {
+			t.Fatal("expected 'batched' key in Details")
+		}
+		if batched != true {
+			t.Errorf("expected batched=true, got %v", batched)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected a batched entry on the channel after FlushAll, got none")
+	}
+}
+
+// TestFlushOperation_NilWriter verifies that passing a nil Writer does not panic.
+func TestFlushOperation_NilWriter(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("FlushOperation(nil, ...) panicked: %v", r)
+		}
+	}()
+	FlushOperation(nil, "op1")
+}
+
+// TestFlushOperation_OnlyFlushesMatchingOp verifies that FlushOperation only
+// flushes batches whose OperationID matches, leaving other ops pending.
+func TestFlushOperation_OnlyFlushesMatchingOp(t *testing.T) {
+	w := newTestWriter(16)
+
+	// Submit one item for op1 and one for op2.
+	LogBatch(w, "op1", "tag-scan", "scanner", BatchItem{Name: "book-a.m4b", Count: 1})
+	LogBatch(w, "op2", "tag-scan", "scanner", BatchItem{Name: "book-b.m4b", Count: 1})
+
+	// Flush only op1.
+	FlushOperation(w, "op1")
+
+	// Channel should have exactly 1 entry (for op1).
+	entries := drainAll(w.ch, 5, 100*time.Millisecond)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry after FlushOperation(op1), got %d", len(entries))
+	}
+	if entries[0].OperationID != "op1" {
+		t.Errorf("expected flushed entry OperationID=op1, got %q", entries[0].OperationID)
+	}
+
+	// op2 should still be pending.
+	w.batcher.mu.Lock()
+	key2 := BatchKey{Type: "tag-scan", Source: "scanner", OperationID: "op2"}
+	_, stillPending := w.batcher.pending[key2]
+	w.batcher.mu.Unlock()
+	if !stillPending {
+		t.Error("expected op2 to remain pending after FlushOperation(op1)")
+	}
+}
