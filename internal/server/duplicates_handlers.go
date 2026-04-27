@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -21,6 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -1380,4 +1381,121 @@ func (s *Server) seriesNormalizePreview(c *gin.Context) {
 		TotalBooksAffected:  totalBooks,
 		FlaggedForReview:    flagged,
 	})
+}
+
+// executeSeriesNormalizeCore renames and merges contaminated series, enqueues
+// write-back for affected books, and returns the affected book IDs for the
+// caller to run organize on.
+func executeSeriesNormalizeCore(
+	store maintenanceStore,
+	enqueueWriteBack func(bookID string),
+) (affectedBookIDs []string, err error) {
+	actions := computeSeriesNormalizeActions(store)
+
+	// Collect affected book IDs BEFORE renaming/merging.
+	seen := make(map[string]bool)
+	for _, a := range actions {
+		if a.Action == "flag" {
+			continue
+		}
+		books, bErr := store.GetBooksBySeriesID(a.SeriesID)
+		if bErr != nil {
+			continue
+		}
+		for _, b := range books {
+			if !seen[b.ID] {
+				seen[b.ID] = true
+				affectedBookIDs = append(affectedBookIDs, b.ID)
+			}
+		}
+	}
+
+	// First pass: rename.
+	for _, a := range actions {
+		if a.Action != "rename" {
+			continue
+		}
+		if rErr := store.UpdateSeriesName(a.SeriesID, a.NewName); rErr != nil {
+			return nil, fmt.Errorf("UpdateSeriesName(%d, %q): %w", a.SeriesID, a.NewName, rErr)
+		}
+	}
+
+	// Second pass: merge.
+	for _, a := range actions {
+		if a.Action != "merge_into" || a.MergeTargetID == nil {
+			continue
+		}
+		if mErr := mergeSeriesGroup(store, *a.MergeTargetID, []int{a.SeriesID}); mErr != nil {
+			return nil, fmt.Errorf("mergeSeriesGroup(keep=%d, merge=%d): %w", *a.MergeTargetID, a.SeriesID, mErr)
+		}
+	}
+
+	for _, id := range affectedBookIDs {
+		enqueueWriteBack(id)
+	}
+
+	return affectedBookIDs, nil
+}
+
+// seriesNormalize enqueues an async operation that renames/merges contaminated
+// series and re-organizes affected books in place.
+func (s *Server) seriesNormalize(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	if s.queue == nil {
+		RespondWithInternalError(c, "operation queue not initialized")
+		return
+	}
+
+	opID := ulid.Make().String()
+	detail := "series-normalize"
+	op, err := store.CreateOperation(opID, "series-normalize", &detail)
+	if err != nil {
+		internalError(c, "failed to create operation", err)
+		return
+	}
+
+	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		_ = progress.Log("info", "Starting series name normalization...", nil)
+
+		enqueueWB := func(bookID string) {
+			if s.writeBackBatcher != nil {
+				s.writeBackBatcher.Enqueue(bookID)
+			}
+		}
+
+		affectedBookIDs, opErr := executeSeriesNormalizeCore(store, enqueueWB)
+		if opErr != nil {
+			return opErr
+		}
+
+		_ = progress.Log("info", fmt.Sprintf("Renamed/merged series; organizing %d affected books...", len(affectedBookIDs)), nil)
+
+		log2 := logger.NewWithActivityLog("series-normalize", store)
+		for _, bookID := range affectedBookIDs {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			book, bErr := store.GetBookByID(bookID)
+			if bErr != nil || book == nil {
+				continue
+			}
+			if _, oErr := s.organizeService.ReOrganizeInPlace(book, log2); oErr != nil {
+				_ = progress.Log("warn", fmt.Sprintf("organize failed for book %s: %v", bookID, oErr), nil)
+			}
+		}
+
+		_ = progress.Log("info", "Series normalization complete.", nil)
+		return nil
+	}
+
+	if err := s.queue.Enqueue(op.ID, "series-normalize", operations.PriorityNormal, operationFunc); err != nil {
+		internalError(c, "failed to enqueue operation", err)
+		return
+	}
+
+	RespondWithSuccess(c, 202, op)
 }

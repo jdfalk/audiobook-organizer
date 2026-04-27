@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9c1e2f3a-4b5d-6e7f-8a9b-0c1d2e3f4a5b
 
 package server
@@ -82,5 +82,53 @@ func TestComputeSeriesNormalizeActions_FlaggedCase(t *testing.T) {
 	actions := computeSeriesNormalizeActions(store)
 	if len(actions) != 0 {
 		t.Errorf("expected 0 actions for clean series, got %d: %+v", len(actions), actions)
+	}
+}
+
+func TestExecuteSeriesNormalizeCore_RenamesAndEnqueues(t *testing.T) {
+	authorID := 1
+	store := &database.MockStore{}
+	store.GetAllSeriesFunc = func() ([]database.Series, error) {
+		return []database.Series{
+			{ID: 1, Name: "The Long Earth One", AuthorID: &authorID},
+			{ID: 2, Name: "The Long Earth Two", AuthorID: &authorID},
+		}, nil
+	}
+	store.GetBooksBySeriesIDFunc = func(id int) ([]database.Book, error) {
+		switch id {
+		case 1:
+			return []database.Book{{ID: "book-1"}}, nil
+		case 2:
+			return []database.Book{{ID: "book-2"}}, nil
+		}
+		return nil, nil
+	}
+	renamed := map[int]string{}
+	store.UpdateSeriesNameFunc = func(id int, name string) error {
+		renamed[id] = name
+		return nil
+	}
+	store.GetBookByIDFunc = func(id string) (*database.Book, error) {
+		sid := 1
+		return &database.Book{ID: id, SeriesID: &sid}, nil
+	}
+	store.UpdateBookFunc = func(id string, b *database.Book) (*database.Book, error) { return b, nil }
+	store.DeleteSeriesFunc = func(id int) error { return nil }
+
+	var enqueuedBooks []string
+	enqueueWB := func(id string) { enqueuedBooks = append(enqueuedBooks, id) }
+
+	affected, err := executeSeriesNormalizeCore(store, enqueueWB)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if renamed[1] != "The Long Earth" {
+		t.Errorf("expected series 1 renamed to 'The Long Earth', got %q", renamed[1])
+	}
+	if len(enqueuedBooks) == 0 {
+		t.Errorf("expected write-back enqueues for affected books")
+	}
+	if len(affected) == 0 {
+		t.Errorf("expected affected book IDs returned")
 	}
 }
