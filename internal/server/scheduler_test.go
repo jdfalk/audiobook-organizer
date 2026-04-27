@@ -1,5 +1,5 @@
 // file: internal/server/scheduler_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f3a7c2d1-8b4e-4f09-a5c6-1d2e3f4a5b6c
 
 package server
@@ -53,4 +53,20 @@ func TestHasRunToday(t *testing.T) {
 
 	ts.lastMaintenanceRun = time.Now().AddDate(0, 0, -1)
 	assert.False(t, ts.hasRunToday(), "yesterday should not count as today")
+}
+
+func TestGetLastMaintenanceRunDate_Zero(t *testing.T) {
+	ts := &TaskScheduler{lastMaintenanceRun: time.Time{}}
+	assert.Equal(t, "", ts.GetLastMaintenanceRunDate(), "zero time should return empty string")
+}
+
+func TestGetLastMaintenanceRunDate_Set(t *testing.T) {
+	fixed := time.Date(2026, 4, 27, 3, 0, 0, 0, time.UTC)
+	ts := &TaskScheduler{lastMaintenanceRun: fixed}
+	assert.Equal(t, "2026-04-27", ts.GetLastMaintenanceRunDate())
+}
+
+func TestIsMaintenanceRunning_NilStore(t *testing.T) {
+	ts := &TaskScheduler{server: &Server{}}
+	assert.False(t, ts.IsMaintenanceRunning(), "nil store should return false")
 }

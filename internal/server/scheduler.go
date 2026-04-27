@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -48,6 +48,7 @@ type TaskInfo struct {
 	RunOnStartup           bool    `json:"run_on_startup"`
 	RunInMaintenanceWindow bool    `json:"run_in_maintenance_window"`
 	LastRun                *string `json:"last_run,omitempty"`
+	IsRunning              bool    `json:"is_running"`
 }
 
 // TaskScheduler manages all registered tasks, their schedules, and manual triggers.
@@ -1276,6 +1277,7 @@ func (ts *TaskScheduler) ListTasks() []TaskInfo {
 			s := t.Format(time.RFC3339)
 			info.LastRun = &s
 		}
+		info.IsRunning = ts.isTaskRunning(info.Name)
 		result = append(result, info)
 	}
 	return result
@@ -1343,6 +1345,32 @@ func (ts *TaskScheduler) saveLastMaintenanceRun() {
 	today := time.Now().Format("2006-01-02")
 	_ = store.SetSetting("maintenance_window_last_run", today, "string", false)
 	ts.lastMaintenanceRun = time.Now()
+}
+
+// GetLastMaintenanceRunDate returns the last-run date as "2006-01-02", or "" if never run.
+func (ts *TaskScheduler) GetLastMaintenanceRunDate() string {
+	if ts.lastMaintenanceRun.IsZero() {
+		return ""
+	}
+	return ts.lastMaintenanceRun.Format("2006-01-02")
+}
+
+// IsMaintenanceRunning returns true if a maintenance-window operation is active.
+func (ts *TaskScheduler) IsMaintenanceRunning() bool {
+	store := ts.server.Store()
+	if store == nil {
+		return false
+	}
+	ops, _, err := store.ListOperations(20, 0)
+	if err != nil {
+		return false
+	}
+	for _, op := range ops {
+		if op.Type == "maintenance-window" && (op.Status == "running" || op.Status == "pending") {
+			return true
+		}
+	}
+	return false
 }
 
 // hasRunToday checks if the maintenance window has already run today.
