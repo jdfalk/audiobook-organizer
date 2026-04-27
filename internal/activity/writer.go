@@ -1,5 +1,5 @@
 // file: internal/activity/writer.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
 
 package activity
@@ -27,17 +27,20 @@ type Writer struct {
 	mu       sync.Mutex
 	partial  string // incomplete line buffer
 	closed   atomic.Bool
+	batcher  *ActivityBatcher
 }
 
 // NewWriter creates a new Writer backed by store.
 // chanSize controls the depth of the internal entry buffer.
 func NewWriter(store *database.ActivityStore, chanSize int) *Writer {
-	return &Writer{
+	w := &Writer{
 		stdout: os.Stdout,
 		ch:     make(chan database.ActivityEntry, chanSize),
 		store:  store,
 		done:   make(chan struct{}),
 	}
+	w.batcher = NewActivityBatcher(w.ch)
+	return w
 }
 
 // Start launches the background drain goroutine. Call once before writing.
@@ -72,6 +75,21 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
+// isBatchable returns true if e should be routed through the ActivityBatcher
+// rather than written directly to the channel. Entries are batchable only when
+// they come from a structured LogBatch call (operationID non-empty) AND their
+// type is registered as a high-volume batch type.
+func isBatchable(e database.ActivityEntry) bool {
+	if e.OperationID == "" || e.Tier != "debug" {
+		return false
+	}
+	switch e.Type {
+	case "embedded-tag-load", "tag-scan", "metadata-apply", "path-repair", "isbn-enrich":
+		return true
+	}
+	return false
+}
+
 // sendEntry parses a single log line and enqueues an ActivityEntry.
 // Debug entries are silently dropped when the channel is full.
 // Non-debug entries emit a warning to stdout when dropped.
@@ -86,6 +104,14 @@ func (w *Writer) sendEntry(line string) {
 		Level:   level,
 		Source:  source,
 		Summary: message,
+	}
+	if isBatchable(entry) {
+		w.batcher.Submit(BatchKey{
+			Type:        entry.Type,
+			Source:      entry.Source,
+			OperationID: entry.OperationID,
+		}, BatchItem{Name: entry.Summary})
+		return
 	}
 	select {
 	case w.ch <- entry:
@@ -146,6 +172,7 @@ func (w *Writer) writeBatch(entries []database.ActivityEntry) {
 // Flush synchronously drains any entries currently in the channel without
 // stopping the background goroutine.
 func (w *Writer) Flush() {
+	w.batcher.FlushAll()
 	for {
 		select {
 		case e := <-w.ch:
@@ -159,6 +186,7 @@ func (w *Writer) Flush() {
 // Stop marks the writer as closed, signals the drain goroutine to finish,
 // and waits for it to flush all remaining entries. Safe to call multiple times.
 func (w *Writer) Stop() {
+	w.batcher.Close()
 	w.closed.Store(true)
 	w.stopOnce.Do(func() { close(w.done) })
 	w.wg.Wait()
