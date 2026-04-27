@@ -1,10 +1,11 @@
 // file: internal/server/duplicates_handlers_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9c1e2f3a-4b5d-6e7f-8a9b-0c1d2e3f4a5b
 
 package server
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -118,7 +119,7 @@ func TestExecuteSeriesNormalizeCore_RenamesAndEnqueues(t *testing.T) {
 	var enqueuedBooks []string
 	enqueueWB := func(id string) { enqueuedBooks = append(enqueuedBooks, id) }
 
-	affected, err := executeSeriesNormalizeCore(store, enqueueWB)
+	affected, err := executeSeriesNormalizeCore(context.Background(), store, enqueueWB)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
