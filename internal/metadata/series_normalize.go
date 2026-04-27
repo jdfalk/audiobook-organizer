@@ -1,5 +1,5 @@
 // file: internal/metadata/series_normalize.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 package metadata
@@ -10,11 +10,8 @@ import (
 )
 
 var (
-	// "Series Name - 1 - Title" — position and title embedded in the series field
 	reDashPositionTitle = regexp.MustCompile(`^(.+?)\s+-\s+(\d+)\s+-\s+.+$`)
-	// "Series Name 2" or "Series Name - 2" — trailing 1-2 digit number
-	reTrailingDigit = regexp.MustCompile(`^(.+?)(?:\s+-|\s)+(\d{1,2})$`)
-	// "Series Name One" — trailing ordinal word, one through twenty only
+	reTrailingDigit = regexp.MustCompile(`^(.+?)\s+-\s+(\d{1,2})$`)
 	reTrailingOrdinal = regexp.MustCompile(`(?i)^(.+?)\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)$`)
 )
 
