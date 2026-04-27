@@ -1,5 +1,5 @@
 // file: internal/itunes/service/path_repair.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 01ad6c79-5f3f-4ee1-a07a-1f4b3a8c0d12
 //
 // PathRepairer dumps the iTunes XML, finds tracks whose Location no
@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
@@ -64,6 +65,13 @@ type PathRepairer struct {
 	// file. Production wires this to metadata.ExtractMetadata.
 	// Tests inject deterministic fakes.
 	bookIDExtractor bookIDExtractor
+	activityWriter  *activity.Writer
+}
+
+// SetActivityWriter wires an activity Writer so repairWithResult can emit
+// batched per-track resolution events.
+func (r *PathRepairer) SetActivityWriter(w *activity.Writer) {
+	r.activityWriter = w
 }
 
 // newPathRepairer wires a PathRepairer. nil enqueuer skips the
@@ -303,6 +311,10 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 			result.Resolutions = append(result.Resolutions, resolvedTrack{
 				PID: track.PersistentID, OldPath: decoded, NewPath: newPath, Tier: "A", BookID: bookID,
 			})
+			if r.activityWriter != nil {
+				activity.LogBatch(r.activityWriter, opID, "path-repair", "path-repairer",
+					activity.BatchItem{Name: filepath.Base(decoded), Detail: "tier-A"})
+			}
 			if !dryRun {
 				if err := r.applyResolution(track.PersistentID, bookID, decoded, newPath, &result); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("apply tier=A pid=%s: %v", track.PersistentID, err))
@@ -322,6 +334,10 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 			result.Resolutions = append(result.Resolutions, resolvedTrack{
 				PID: track.PersistentID, OldPath: decoded, NewPath: newPath, Tier: "B", BookID: bookID,
 			})
+			if r.activityWriter != nil {
+				activity.LogBatch(r.activityWriter, opID, "path-repair", "path-repairer",
+					activity.BatchItem{Name: filepath.Base(decoded), Detail: "tier-B"})
+			}
 			if !dryRun {
 				if err := r.applyResolution(track.PersistentID, bookID, decoded, newPath, &result); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("apply tier=B pid=%s: %v", track.PersistentID, err))
@@ -356,6 +372,9 @@ func (r *PathRepairer) repairWithResult(ctx context.Context, opID string, dryRun
 	// The defer at the top of this function handles the final
 	// persistRepairResult + writeReportFile call. Just clear the
 	// operation state checkpoint here.
+	if r.activityWriter != nil {
+		activity.FlushOperation(r.activityWriter, opID)
+	}
 	_ = operations.ClearState(r.store, opID)
 
 	summary := fmt.Sprintf(
