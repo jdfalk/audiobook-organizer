@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.3.0
+// version: 2.4.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -150,11 +150,12 @@ export default function ActivityLog() {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(false);
 
   // Auto-refresh
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Compact
   const [compactAnchor, setCompactAnchor] = useState<null | HTMLElement>(null);
@@ -259,6 +260,7 @@ export default function ActivityLog() {
       setTotal(0);
     } finally {
       setLoading(false);
+      setLastUpdated(new Date());
     }
   }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers]);
 
@@ -560,6 +562,11 @@ export default function ActivityLog() {
         <IconButton onClick={handleRefresh} title="Refresh">
           <RefreshIcon />
         </IconButton>
+        {lastUpdated && (
+          <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1, alignSelf: 'center' }}>
+            Updated {formatTimestamp(lastUpdated.toISOString())}
+          </Typography>
+        )}
       </Stack>
 
       {/* In-flight background file operations */}
@@ -983,6 +990,22 @@ export default function ActivityLog() {
           </Stack>
         )}
       </Paper>
+
+      {/* Large-log warning banner */}
+      {total > 1000 && (
+        <Typography
+          variant="body2"
+          sx={{
+            mb: 1,
+            p: 1,
+            bgcolor: 'warning.light',
+            borderRadius: 1,
+            color: 'warning.contrastText',
+          }}
+        >
+          Showing most recent {pageSize} of {total.toLocaleString()} entries. Use filters or compact old entries to reduce log size.
+        </Typography>
+      )}
 
       {/* Activity Feed */}
       <Paper>
