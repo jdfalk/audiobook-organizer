@@ -1,5 +1,5 @@
 // file: internal/activity/writer.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
 
 package activity
@@ -18,29 +18,44 @@ import (
 // Writer is an io.Writer that tees log output to stdout AND sends
 // parsed entries through a buffered channel to an ActivityStore.
 type Writer struct {
-	stdout   io.Writer
-	ch       chan database.ActivityEntry
-	store    *database.ActivityStore
-	batcher  *ActivityBatcher
-	done     chan struct{}
-	stopOnce sync.Once
-	wg       sync.WaitGroup
-	mu       sync.Mutex
-	partial  string // incomplete line buffer
-	closed   atomic.Bool
+	stdout      io.Writer
+	ch          chan database.ActivityEntry
+	store       *database.ActivityStore
+	batcher     *ActivityBatcher
+	done        chan struct{}
+	stopOnce    sync.Once
+	wg          sync.WaitGroup
+	mu          sync.Mutex
+	partial     string // incomplete line buffer
+	closed      atomic.Bool
+	skipSources map[string]struct{}
 }
 
 // NewWriter creates a new Writer backed by store.
 // chanSize controls the depth of the internal entry buffer.
+// By default the "gin" source is skipped — HTTP request logs are not
+// useful as persistent activity entries and would flood the database.
 func NewWriter(store *database.ActivityStore, chanSize int) *Writer {
 	w := &Writer{
-		stdout: os.Stdout,
-		ch:     make(chan database.ActivityEntry, chanSize),
-		store:  store,
-		done:   make(chan struct{}),
+		stdout:      os.Stdout,
+		ch:          make(chan database.ActivityEntry, chanSize),
+		store:       store,
+		done:        make(chan struct{}),
+		skipSources: map[string]struct{}{"gin": {}},
 	}
 	w.batcher = NewActivityBatcher(w.ch)
 	return w
+}
+
+// SetSkipSources replaces the set of log sources that are dropped before
+// being written to the activity store. Entries are still printed to stdout.
+// Call before Start(). Pass no arguments to disable all skipping.
+func (w *Writer) SetSkipSources(sources ...string) {
+	m := make(map[string]struct{}, len(sources))
+	for _, s := range sources {
+		m[s] = struct{}{}
+	}
+	w.skipSources = m
 }
 
 // Start launches the background drain goroutine. Call once before writing.
@@ -98,6 +113,9 @@ func (w *Writer) sendEntry(line string) {
 		return
 	}
 	level, source, message := ParseLogLine(line)
+	if _, skip := w.skipSources[source]; skip {
+		return
+	}
 	entry := database.ActivityEntry{
 		Tier:    "debug",
 		Type:    "system",
