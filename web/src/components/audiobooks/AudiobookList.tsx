@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.0.0
+// version: 2.1.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 import React, { useCallback, useEffect, useRef } from 'react';
@@ -297,7 +297,7 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
               key={audiobook.id}
               hover
               onClick={() => handleRowClick(audiobook)}
-              sx={{ cursor: onClick ? 'pointer' : 'default' }}
+              sx={{ cursor: onClick ? 'pointer' : 'default', contentVisibility: 'auto', containIntrinsicSize: '1px 52px' }}
             >
               {/* Checkbox cell */}
               {hasSelection && (
