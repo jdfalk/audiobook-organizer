@@ -437,6 +437,8 @@ export interface SystemStatus {
   operations: {
     recent: Operation[];
   };
+  app_uptime_seconds?: number;
+  system_uptime_seconds?: number;
 }
 
 export interface SystemStorage {
