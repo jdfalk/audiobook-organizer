@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -1362,7 +1362,8 @@ func (s *Server) seriesNormalizePreview(c *gin.Context) {
 
 	actions := computeSeriesNormalizeActions(store)
 
-	var flagged, normal []seriesNormalizeAction
+	flagged := make([]seriesNormalizeAction, 0)
+	normal := make([]seriesNormalizeAction, 0)
 	totalBooks := 0
 	for _, a := range actions {
 		if a.Action == "flag" {
