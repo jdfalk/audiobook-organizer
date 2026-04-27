@@ -1,5 +1,5 @@
 // file: internal/config/config_unit_test.go
-// version: 1.3.0
+// version: 1.3.1
 
 package config
 
@@ -1167,8 +1167,8 @@ func TestSyncConfigFromEnvUnit(t *testing.T) {
 func TestMinBookSizeBytesDefault(t *testing.T) {
 	c := &Config{MinBookSizeBytes: 0}
 	_ = c.Validate()
-	assert.Equal(t, int64(10*1024*1024), c.MinBookSizeBytes,
-		"zero value should be coerced to 10 MB default")
+	assert.Equal(t, int64(5*1024*1024), c.MinBookSizeBytes,
+		"zero value should be coerced to 5 MB default")
 }
 
 func TestMinBookSizeBytesDisable(t *testing.T) {
