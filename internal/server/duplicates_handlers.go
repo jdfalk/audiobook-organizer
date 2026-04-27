@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -1498,6 +1498,13 @@ func (s *Server) seriesNormalize(c *gin.Context) {
 			}
 			if _, oErr := s.organizeService.ReOrganizeInPlace(book, log2); oErr != nil {
 				_ = progress.Log("warn", fmt.Sprintf("organize failed for book %s: %v", bookID, oErr), nil)
+			}
+		}
+
+		if len(affectedBookIDs) > 0 {
+			_ = progress.Log("info", fmt.Sprintf("Writing tags for %d affected books...", len(affectedBookIDs)), nil)
+			if wbErr := s.runBulkWriteBack(ctx, op.ID, affectedBookIDs, false, 0, progress); wbErr != nil {
+				_ = progress.Log("warn", fmt.Sprintf("tag write-back incomplete: %v", wbErr), nil)
 			}
 		}
 
