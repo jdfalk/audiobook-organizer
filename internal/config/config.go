@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.37.0
+// version: 1.37.1
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -135,6 +135,9 @@ type Config struct {
 	ConcurrentScans int `json:"concurrent_scans"`
 	// Background operation timeout in minutes (0 disables timeout)
 	OperationTimeoutMinutes int `json:"operation_timeout_minutes"`
+	// MinBookSizeBytes: single-file books below this size are flagged as suspicious and
+	// skipped for heavy processing. Set to -1 to disable. Defaults to 10485760 (10 MB).
+	MinBookSizeBytes int64 `json:"min_book_size_bytes"`
 	// Log retention in days (0 = keep forever)
 	LogRetentionDays int `json:"log_retention_days"`
 	// Activity log retention (separate from operation log retention)
@@ -532,6 +535,7 @@ func InitConfig() {
 		// Performance
 		ConcurrentScans:         viper.GetInt("concurrent_scans"),
 		OperationTimeoutMinutes: viper.GetInt("operation_timeout_minutes"),
+		MinBookSizeBytes:        viper.GetInt64("min_book_size_bytes"),
 		APIRateLimitPerMinute:   viper.GetInt("api_rate_limit_per_minute"),
 		AuthRateLimitPerMinute:  viper.GetInt("auth_rate_limit_per_minute"),
 		JSONBodyLimitMB:         viper.GetInt("json_body_limit_mb"),
@@ -812,6 +816,9 @@ func (c *Config) Validate() error {
 	if c.ConcurrentScans < 0 {
 		errs = append(errs, "concurrent_scans must be >= 0")
 	}
+	if c.MinBookSizeBytes == 0 {
+		c.MinBookSizeBytes = 10 * 1024 * 1024
+	}
 	if c.AutoScanDebounceSeconds < 0 {
 		errs = append(errs, "auto_scan_debounce_seconds must be >= 0")
 	}
@@ -913,6 +920,7 @@ func ResetToDefaults() {
 		// Performance
 		ConcurrentScans:         max(runtime.NumCPU(), 4),
 		OperationTimeoutMinutes: 30,
+		MinBookSizeBytes:        10 * 1024 * 1024,
 		APIRateLimitPerMinute:   100,
 		AuthRateLimitPerMinute:  10,
 		JSONBodyLimitMB:         1,

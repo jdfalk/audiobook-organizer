@@ -1163,3 +1163,24 @@ func TestSyncConfigFromEnvUnit(t *testing.T) {
 		assert.Equal(t, "sk-keep", AppConfig.OpenAIAPIKey)
 	})
 }
+
+func TestMinBookSizeBytesDefault(t *testing.T) {
+	c := &Config{MinBookSizeBytes: 0}
+	_ = c.Validate()
+	assert.Equal(t, int64(10*1024*1024), c.MinBookSizeBytes,
+		"zero value should be coerced to 10 MB default")
+}
+
+func TestMinBookSizeBytesDisable(t *testing.T) {
+	c := &Config{MinBookSizeBytes: -1}
+	_ = c.Validate()
+	assert.Equal(t, int64(-1), c.MinBookSizeBytes,
+		"-1 sentinel should not be coerced")
+}
+
+func TestMinBookSizeBytesCustom(t *testing.T) {
+	c := &Config{MinBookSizeBytes: 5 * 1024 * 1024}
+	_ = c.Validate()
+	assert.Equal(t, int64(5*1024*1024), c.MinBookSizeBytes,
+		"explicit value should be preserved")
+}
