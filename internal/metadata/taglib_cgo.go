@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_cgo.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 //
 // Native CGO bindings to TagLib C API for high-performance tag writing.
@@ -20,7 +20,6 @@ import "C"
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"unsafe"
 
@@ -29,26 +28,17 @@ import (
 
 var taglibAvailable = true
 
-func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
-	backupPath := filePath + ".backup"
-	if err := fileops.SafeCopy(filePath, backupPath, config); err != nil {
-		return fmt.Errorf("taglib backup failed: %w", err)
+func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _ fileops.OperationConfig) error {
+	abs, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("taglib abs path: %w", err)
 	}
-	defer func() {
-		if !config.PreserveOriginal {
-			_ = os.Remove(backupPath)
-		}
-	}()
 
-	abs, _ := filepath.Abs(filePath)
-
-	// Build tag map identical to the WASM version
 	tags := buildWriteTagMap(metadata)
 	if len(tags) == 0 {
 		return fmt.Errorf("no writable metadata supplied")
 	}
 
-	// Open file with TagLib
 	cPath := C.CString(abs)
 	defer C.free(unsafe.Pointer(cPath))
 
@@ -58,25 +48,18 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	}
 	defer C.taglib_file_free(file)
 
-	// taglib_file_new can return non-nil for unrecognised formats but
-	// the internal File* is null, causing a SIGSEGV in property calls.
 	if C.taglib_file_is_valid(file) == 0 {
 		return fmt.Errorf("taglib: file not valid/supported: %s", abs)
 	}
 
-	// Write each property via the C property API
 	for key, values := range tags {
 		cKey := C.CString(key)
 		if len(values) == 0 || (len(values) == 1 && values[0] == "") {
-			// Clear this property
 			C.taglib_property_set(file, cKey, nil)
 		} else {
-			// Set first value (replaces existing)
 			cVal := C.CString(values[0])
 			C.taglib_property_set(file, cKey, cVal)
 			C.free(unsafe.Pointer(cVal))
-
-			// Append additional values
 			for _, v := range values[1:] {
 				cVal = C.CString(v)
 				C.taglib_property_set_append(file, cKey, cVal)
@@ -87,16 +70,7 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	}
 
 	if C.taglib_file_save(file) == 0 {
-		if restoreErr := fileops.SafeCopy(backupPath, filePath, config); restoreErr != nil {
-			return fmt.Errorf("taglib save failed and restore failed: restore=%v", restoreErr)
-		}
-		return fmt.Errorf("taglib: save failed for %s (restored)", abs)
-	}
-
-	// Force fsync for ZFS/COW filesystems
-	if f, err := os.OpenFile(abs, os.O_RDWR, 0); err == nil {
-		_ = f.Sync()
-		f.Close()
+		return fmt.Errorf("taglib: save failed for %s", abs)
 	}
 
 	return nil
