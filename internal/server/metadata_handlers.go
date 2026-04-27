@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -26,6 +26,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	ulid "github.com/oklog/ulid/v2"
@@ -976,8 +977,9 @@ func (s *Server) runBulkWriteBack(
 			_ = progress.Log("warn", fmt.Sprintf("book %s: write-back failed: %v", bookID, writeErr), nil)
 		} else {
 			written++
-			if count > 0 {
-				_ = progress.Log("debug", fmt.Sprintf("book %s: wrote %d file(s)", bookID, count), nil)
+			if count > 0 && s.activityWriter != nil {
+				activity.LogBatch(s.activityWriter, opID, "metadata-apply", "write-back",
+					activity.BatchItem{Name: book.Title, Count: count})
 			}
 		}
 
@@ -991,6 +993,9 @@ func (s *Server) runBulkWriteBack(
 	_ = operations.ClearState(store, opID)
 	summary := fmt.Sprintf("bulk write-back complete: %d written, %d failed out of %d", written, failed, total)
 	_ = progress.Log("info", summary, nil)
+	if s.activityWriter != nil {
+		activity.FlushOperation(s.activityWriter, opID)
+	}
 	return nil
 }
 
