@@ -156,6 +156,14 @@ iOS/Android app, WebDAV, RSS, notification system, federation, voice control, au
 
 - [x] **GFO-1** through **GFO-5** — see prior history in this file (Session 20 / 24).
 
+### Series Name Normalization — shipped
+
+- [x] **SNR-1** `StripSeriesContamination` pure function — strips dash-embedded title/position and trailing ordinal words from series names (`internal/metadata/series_normalize.go`)
+- [x] **SNR-2** Ingest gates — `NormalizeMetaSeries`, `resolveSeriesID`, `ensureSeriesID` all call `StripSeriesContamination` before any store write
+- [x] **SNR-3** `GET /api/v1/series/normalize/preview` — dry-run preview of rename/merge actions
+- [x] **SNR-4** `POST /api/v1/series/normalize` — async remediation: rename → merge → write-back → organize
+- [x] **SNR-5** `series_normalize` maintenance task registered in scheduler (manual-only)
+
 ### Bulk Metadata Review — Audible series format bug
 
 - [x] **BMR-1** — `normalizeMetaSeries` now runs in `ApplyMetadataCandidate` (#271)

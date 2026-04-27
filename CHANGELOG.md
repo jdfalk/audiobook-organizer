@@ -1,13 +1,25 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.33.0 -->
+<!-- version: 2.34.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-26 -->
+<!-- last-edited: 2026-04-27 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 27, 2026 — Series name normalization (feat/series-name-normalization)
+
+Fixes two data quality issues with series names in PebbleDB:
+1. **Embedded title/position** — series fields containing the full `"Series - N - Title"` string produced duplicate nested folder paths exceeding Windows MAX\_PATH.
+2. **Ordinal fragmentation** — the same series appearing as `"Long Earth One"`, `"Long Earth Two"`, `"Long Earth 1"`, etc. created separate series rows in PebbleDB.
+
+- **`StripSeriesContamination(name, title string)`** — new pure function in `internal/metadata/series_normalize.go`. Applies four rules in order: dash-embedded position+title strip, trailing 1–2 digit number strip, trailing ordinal word (One–Twenty) strip, series==title flag. Ordinal matching is conservative — only standalone trailing tokens, guarding against `"Someone"`, `"Fahrenheit 451"`, etc.
+- **Ingest gates** — `NormalizeMetaSeries` (metafetch), `resolveSeriesID` (scanner), and `ensureSeriesID` (iTunes importer) now call `StripSeriesContamination` before any store write, blocking contaminated names from entering PebbleDB from any code path.
+- **`GET /api/v1/series/normalize/preview`** — dry-run: returns actions (rename/merge\_into/flag) for all contaminated series with book counts and merge target IDs.
+- **`POST /api/v1/series/normalize`** — async remediation: renames bad rows, merges duplicates (grouped by normalized name + author\_id), enqueues write-back for affected books, then runs organize in-place for each affected book so paths physically move to corrected directories.
+- **`series_normalize` maintenance task** — registered in scheduler (manual-only, `GetInterval=0`, `RunOnStart=false`) so the operation is available from the Maintenance tab.
 
 #### April 26, 2026 — Config persistence: JSON round-trip (PR #472)
 
