@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.55.0
+// version: 4.56.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -2460,9 +2460,11 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 
 	mfs.ApplyMetadataToBook(book, meta)
 
-	// Set review status to matched
+	// Set review status and record which provider supplied the metadata
 	matched := "matched"
 	book.MetadataReviewStatus = &matched
+	src := candidate.Source
+	book.MetadataSource = &src
 
 	updatedBook, updateErr := mfs.db.UpdateBook(id, book)
 	if updateErr != nil {

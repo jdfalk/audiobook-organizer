@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.59.0
+// version: 2.60.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -186,6 +186,10 @@ type Book struct {
 	LastOrganizedAt *time.Time `json:"last_organized_at,omitempty"`
 	// MetadataReviewStatus tracks manual metadata matching: null, "no_match", "matched".
 	MetadataReviewStatus *string `json:"metadata_review_status,omitempty"`
+	// MetadataSource records which provider supplied the last applied metadata
+	// (e.g. "audible", "google_books", "openlibrary"). Used to selectively
+	// re-fetch from a specific source in the future.
+	MetadataSource *string `json:"metadata_source,omitempty"`
 	// ITunesSyncStatus tracks whether this book's metadata is in sync with the iTunes library.
 	// Values: "synced" (up-to-date in ITL), "dirty" (changed since last write-back),
 	// "unlinked" (no iTunes presence), "pending" (new, needs adding to iTunes),
