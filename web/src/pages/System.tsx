@@ -1,5 +1,5 @@
 // file: web/src/pages/System.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 
 import { useState } from 'react';
@@ -8,6 +8,7 @@ import { LogsTab } from '../components/system/LogsTab';
 import { StorageTab } from '../components/system/StorageTab';
 import { SystemInfoTab } from '../components/system/SystemInfoTab';
 import { QuotaTab } from '../components/system/QuotaTab';
+import { MaintenanceTab } from '../components/system/MaintenanceTab';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -49,6 +50,7 @@ export function System() {
           <Tab label="System Info" />
           <Tab label="Storage" />
           <Tab label="Quota" />
+          <Tab label="Maintenance" />
           <Tab label="Logs" />
         </Tabs>
 
@@ -65,6 +67,10 @@ export function System() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
+          <MaintenanceTab />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={4}>
           <LogsTab />
         </TabPanel>
       </Paper>
