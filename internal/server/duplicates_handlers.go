@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -22,6 +22,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -1259,4 +1260,123 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 	}
 
 	RespondWithSuccess(c, 202, op)
+}
+
+// seriesNormalizeAction describes a single action the normalize pass would take.
+type seriesNormalizeAction struct {
+	SeriesID      int    `json:"series_id"`
+	OldName       string `json:"old_name"`
+	NewName       string `json:"new_name"`
+	NewPosition   string `json:"new_position,omitempty"`
+	Action        string `json:"action"` // "rename", "merge_into", "flag"
+	MergeTargetID *int   `json:"merge_target_id,omitempty"`
+	BookCount     int    `json:"book_count"`
+}
+
+// seriesNormalizePreviewResult is the response body for the dry-run preview endpoint.
+type seriesNormalizePreviewResult struct {
+	Actions             []seriesNormalizeAction `json:"actions"`
+	TotalSeriesAffected int                     `json:"total_series_affected"`
+	TotalBooksAffected  int                     `json:"total_books_affected"`
+	FlaggedForReview    []seriesNormalizeAction `json:"flagged_for_review"`
+}
+
+// computeSeriesNormalizeActions iterates all series, strips contamination from
+// each name, and returns the list of rename / merge_into / flag actions that
+// would be taken by a full normalize run. No writes are performed.
+func computeSeriesNormalizeActions(store interface {
+	database.SeriesStore
+	database.BookStore
+}) []seriesNormalizeAction {
+	allSeries, err := store.GetAllSeries()
+	if err != nil {
+		return nil
+	}
+
+	type groupKey struct {
+		name     string
+		authorID int
+	}
+	canonical := make(map[groupKey]int)
+	var actions []seriesNormalizeAction
+
+	for _, s := range allSeries {
+		cleaned, pos, flagged := metadata.StripSeriesContamination(s.Name, "")
+
+		if flagged {
+			books, _ := store.GetBooksBySeriesID(s.ID)
+			actions = append(actions, seriesNormalizeAction{
+				SeriesID:  s.ID,
+				OldName:   s.Name,
+				NewName:   s.Name,
+				Action:    "flag",
+				BookCount: len(books),
+			})
+			continue
+		}
+
+		if cleaned == s.Name && pos == "" {
+			continue
+		}
+
+		aid := 0
+		if s.AuthorID != nil {
+			aid = *s.AuthorID
+		}
+		key := groupKey{name: strings.ToLower(cleaned), authorID: aid}
+		books, _ := store.GetBooksBySeriesID(s.ID)
+
+		if existingID, ok := canonical[key]; ok {
+			actions = append(actions, seriesNormalizeAction{
+				SeriesID:      s.ID,
+				OldName:       s.Name,
+				NewName:       cleaned,
+				NewPosition:   pos,
+				Action:        "merge_into",
+				MergeTargetID: &existingID,
+				BookCount:     len(books),
+			})
+		} else {
+			canonical[key] = s.ID
+			actions = append(actions, seriesNormalizeAction{
+				SeriesID:    s.ID,
+				OldName:     s.Name,
+				NewName:     cleaned,
+				NewPosition: pos,
+				Action:      "rename",
+				BookCount:   len(books),
+			})
+		}
+	}
+	return actions
+}
+
+// seriesNormalizePreview returns a dry-run preview of what the series
+// name-normalization pass would do, with no database writes.
+func (s *Server) seriesNormalizePreview(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		RespondWithInternalError(c, "database not initialized")
+		return
+	}
+
+	actions := computeSeriesNormalizeActions(store)
+
+	var flagged, normal []seriesNormalizeAction
+	totalBooks := 0
+	for _, a := range actions {
+		if a.Action == "flag" {
+			flagged = append(flagged, a)
+		} else {
+			normal = append(normal, a)
+			totalBooks += a.BookCount
+		}
+	}
+
+	RespondWithOK(c, seriesNormalizePreviewResult{
+		Actions:             normal,
+		TotalSeriesAffected: len(normal),
+		TotalBooksAffected:  totalBooks,
+		FlaggedForReview:    flagged,
+	})
 }
