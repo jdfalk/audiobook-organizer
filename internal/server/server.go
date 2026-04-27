@@ -1159,6 +1159,7 @@ func NewServer(store database.Store) *Server {
 		aw := activity.NewWriter(server.activityService.Store(), 10000)
 		aw.Start()
 		server.activityWriter = aw
+		server.scanService.SetActivityWriter(aw)
 		log.SetOutput(aw)
 		if server.itunesSvc != nil && server.itunesSvc.Enabled() {
 			server.itunesSvc.Repair.SetActivityWriter(aw)

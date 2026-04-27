@@ -1,5 +1,5 @@
 // file: internal/server/scan_service.go
-// version: 1.4.0
+// version: 1.4.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
@@ -31,12 +32,18 @@ type scanServiceStore interface {
 
 
 type ScanService struct {
-	db         scanServiceStore
-	PostScanFn func() // optional hook called after each full scan completes
+	db             scanServiceStore
+	PostScanFn     func() // optional hook called after each full scan completes
+	activityWriter *activity.Writer
 }
 
 func NewScanService(db scanServiceStore) *ScanService {
 	return &ScanService{db: db}
+}
+
+// SetActivityWriter sets the activity writer used to batch per-book scan events.
+func (ss *ScanService) SetActivityWriter(w *activity.Writer) {
+	ss.activityWriter = w
 }
 
 type ScanRequest struct {
@@ -58,7 +65,7 @@ func (ss *ScanService) PerformScanWithID(ctx context.Context, opID string, req *
 		FolderPath:  req.FolderPath,
 		ForceUpdate: req.ForceUpdate != nil && *req.ForceUpdate,
 	})
-	err := ss.PerformScan(ctx, req, log)
+	err := ss.performScanInternal(ctx, opID, req, log)
 	_ = operations.ClearState(ss.db, opID)
 	return err
 }
@@ -66,6 +73,12 @@ func (ss *ScanService) PerformScanWithID(ctx context.Context, opID string, req *
 // PerformScan executes the multi-folder scan operation.
 // Accepts a logger.Logger for unified logging, progress, and change tracking.
 func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, log logger.Logger) error {
+	return ss.performScanInternal(ctx, "", req, log)
+}
+
+// performScanInternal is the shared implementation used by PerformScan and PerformScanWithID.
+// opID may be empty when called without a tracked operation (activity batching is skipped).
+func (ss *ScanService) performScanInternal(ctx context.Context, opID string, req *ScanRequest, log logger.Logger) error {
 	if log == nil {
 		log = logger.New("scan")
 	}
@@ -143,7 +156,7 @@ func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, log lo
 			return fmt.Errorf("scan canceled")
 		}
 
-		err := ss.scanFolder(ctx, folderIdx, folderPath, foldersToScan, totalFilesAcrossFolders, &processedFiles, stats, log)
+		err := ss.scanFolder(ctx, folderIdx, folderPath, foldersToScan, totalFilesAcrossFolders, &processedFiles, stats, opID, log)
 		if err != nil {
 			log.Error("Error scanning folder %s: %v", folderPath, err)
 			continue
@@ -220,7 +233,7 @@ func (ss *ScanService) countFilesAcrossFolders(foldersToScan []string, log logge
 	return totalFilesAcrossFolders
 }
 
-func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath string, foldersToScan []string, totalFilesAcrossFolders int, processedFiles *atomic.Int32, stats *ScanStats, log logger.Logger) error {
+func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath string, foldersToScan []string, totalFilesAcrossFolders int, processedFiles *atomic.Int32, stats *ScanStats, opID string, log logger.Logger) error {
 	currentProcessed := int(processedFiles.Load())
 	displayTotal := totalFilesAcrossFolders
 	if currentProcessed > displayTotal {
@@ -269,6 +282,10 @@ func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath
 			message = fmt.Sprintf("Processed: %d/%d books (%s)", current, displayTotal, filepath.Base(bookPath))
 		}
 		log.UpdateProgress(int(current), displayTotal, message)
+		if ss.activityWriter != nil && opID != "" {
+			activity.LogBatch(ss.activityWriter, opID, "tag-scan", "scan-service",
+				activity.BatchItem{Name: filepath.Base(bookPath)})
+		}
 	}
 
 	// Process the books to extract metadata (parallel)
