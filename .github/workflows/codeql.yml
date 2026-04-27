@@ -3,7 +3,7 @@
 # guid: 4e7a1b2c-3d5f-6e8a-9b0c-1d2e3f4a5b6c
 #
 # Overrides GitHub's dynamic default CodeQL workflow so GOEXPERIMENT is set.
-# go.yaml.in/yaml/v2 requires GOEXPERIMENT=yamlv2; jsonv2 is also needed for
+# GOEXPERIMENT=jsonv2 is required by the project's JSON handling (go.yaml.in indirect deps
 # the project's JSON handling.
 
 name: CodeQL
@@ -49,7 +49,7 @@ jobs:
       - name: Build for CodeQL
         run: go build ./...
         env:
-          GOEXPERIMENT: jsonv2,yamlv2
+          GOEXPERIMENT: jsonv2
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@fca7ace96b7d713c7035871441bd52efbe39e27e # v3.28.19
