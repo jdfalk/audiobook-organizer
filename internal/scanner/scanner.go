@@ -123,6 +123,7 @@ type Book struct {
 	SegmentFiles    []string // For multi-file books grouped by album in mixed directories
 	GoogleBooksID   string
 	FileHash        string // Pre-computed hash from ProcessFile (avoids double-read)
+	LibraryState    string // If set, overrides the default "imported" state in saveBookToDatabase
 }
 
 // ScanDirectory scans the given directory for audiobook files.
@@ -1421,6 +1422,10 @@ func saveBookToDatabase(book *Book) error {
 			duration = &book.Duration
 		}
 
+		ls := "imported"
+		if book.LibraryState != "" {
+			ls = book.LibraryState
+		}
 		dbBook := &database.Book{
 			Title:             book.Title,
 			AuthorID:          authorID,
@@ -1441,7 +1446,7 @@ func saveBookToDatabase(book *Book) error {
 			FileSize:          fileSize,
 			OriginalFileHash:  originalFileHash,
 			OrganizedFileHash: organizedFileHash,
-			LibraryState:      stringPtr("imported"),
+			LibraryState:      stringPtr(ls),
 			Quantity:          intPtr(1),
 		}
 

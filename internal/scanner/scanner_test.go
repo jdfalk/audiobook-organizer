@@ -446,3 +446,28 @@ func TestProcessBooks(t *testing.T) {
 		t.Errorf("ProcessBooks error: %v", err)
 	}
 }
+
+func TestBookLibraryStateField(t *testing.T) {
+	var capturedState string
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(b *Book) error {
+		capturedState = b.LibraryState
+		return nil
+	}
+
+	books := withTempBooks(t, []string{"test.mp3"})
+	books[0].LibraryState = "suspicious"
+
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() { config.AppConfig.SupportedExtensions = oldExts })
+	config.AppConfig.SupportedExtensions = []string{".mp3"}
+
+	err := saveBook(&books[0])
+	if err != nil {
+		t.Fatalf("saveBook returned error: %v", err)
+	}
+	if capturedState != "suspicious" {
+		t.Errorf("expected LibraryState=suspicious, got %q", capturedState)
+	}
+}
