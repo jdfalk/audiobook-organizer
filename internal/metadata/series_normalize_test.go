@@ -1,5 +1,5 @@
 // file: internal/metadata/series_normalize_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package metadata
@@ -32,10 +32,9 @@ func TestStripSeriesContamination(t *testing.T) {
 		},
 		// Rule 2: trailing digit
 		{
-			name:         "trailing digit with space",
-			input:        "The Long Earth 2",
-			wantSeries:   "The Long Earth",
-			wantPosition: "2",
+			name:       "trailing digit with bare space not matched",
+			input:      "The Long Earth 2",
+			wantSeries: "The Long Earth 2",
 		},
 		{
 			name:         "trailing digit with dash-space",
@@ -71,6 +70,13 @@ func TestStripSeriesContamination(t *testing.T) {
 			wantPosition:   "",
 			wantFlagReview: true,
 		},
+		{
+			name:           "series==title with whitespace on title triggers flag",
+			input:          "Just A Title",
+			title:          "  Just A Title  ",
+			wantSeries:     "Just A Title",
+			wantFlagReview: true,
+		},
 		// No-op cases
 		{
 			name:       "clean series name unchanged",
@@ -81,6 +87,21 @@ func TestStripSeriesContamination(t *testing.T) {
 			name:       "Discworld unchanged",
 			input:      "Discworld",
 			wantSeries: "Discworld",
+		},
+		{
+			name:       "Babylon 5 not stripped",
+			input:      "Babylon 5",
+			wantSeries: "Babylon 5",
+		},
+		{
+			name:       "World War 2 not stripped",
+			input:      "World War 2",
+			wantSeries: "World War 2",
+		},
+		{
+			name:       "Section 31 not stripped",
+			input:      "Section 31",
+			wantSeries: "Section 31",
 		},
 		// Edge cases
 		{
@@ -99,8 +120,8 @@ func TestStripSeriesContamination(t *testing.T) {
 			wantSeries: "",
 		},
 		{
-			name:         "trailing digit 99 matched",
-			input:        "Big Series 99",
+			name:         "trailing digit 99 with dash-space matched",
+			input:        "Big Series - 99",
 			wantSeries:   "Big Series",
 			wantPosition: "99",
 		},
