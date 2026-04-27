@@ -41,6 +41,7 @@ import CancelIcon from '@mui/icons-material/Cancel.js';
 import FilterListIcon from '@mui/icons-material/FilterList.js';
 import { fetchActivity, fetchActivitySources, compactActivityLog } from '../services/activityApi';
 import type { ActivityEntry, SourceCount } from '../services/activityApi';
+import { BatchActivityEntry } from '../components/BatchActivityEntry';
 import * as api from '../services/api';
 import { PendingFileOpsBanner } from '../components/PendingFileOpsBanner';
 import { usePendingFileOps } from '../hooks/usePendingFileOps';
@@ -1038,6 +1039,16 @@ export default function ActivityLog() {
             </TableHead>
             <TableBody>
               {entries.map((entry) => {
+                // Batched entries: collapsed/expanded list view
+                if ((entry.details as any)?.batched === true) {
+                  return (
+                    <BatchActivityEntry
+                      key={entry.id}
+                      entry={entry}
+                      tierColor={TIER_COLORS[entry.tier] ?? '#757575'}
+                    />
+                  );
+                }
                 if (entry.tier === 'digest') {
                   const isExpanded = expandedDigests.has(Number(entry.id));
                   const details = entry.details as {
