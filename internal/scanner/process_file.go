@@ -1,5 +1,5 @@
 // file: internal/scanner/process_file.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 // Package scanner provides file scanning and processing utilities for the
@@ -48,7 +48,6 @@ func ProcessFile(filePath string) (*metadata.Metadata, *mediainfo.MediaInfo, str
 
 	// Directories: fall back to metadata-only extraction (no mediainfo, no hash)
 	if fi.IsDir() {
-		log.Printf("[DEBUG] scanner.ProcessFile: %s is a directory, extracting path metadata only", filePath)
 		meta, err := metadata.ExtractMetadata(filePath, nil)
 		if err != nil {
 			return nil, nil, "", fmt.Errorf("ProcessFile: directory metadata for %q: %w", filePath, err)
@@ -95,7 +94,6 @@ func ProcessFile(filePath string) (*metadata.Metadata, *mediainfo.MediaInfo, str
 		return &meta, mi, "", fmt.Errorf("ProcessFile: hash %q: %w", filePath, err)
 	}
 
-	log.Printf("[DEBUG] scanner.ProcessFile: done %s (title=%q author=%q hash=%s...)", filePath, meta.Title, meta.Artist, hash[:8])
 	return &meta, mi, hash, nil
 }
 
