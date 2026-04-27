@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -167,6 +167,7 @@ export function MetadataReviewDialog({
   const [hideApplied, setHideApplied] = useState(true);
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
+  const [hideSkipped, setHideSkipped] = useState(false);
   const [matchLanguage, setMatchLanguage] = useState<boolean>(loadLanguageFilter);
   // Calls onComplete (to refresh the library) only when changes were made,
   // then closes the dialog. Avoids mid-review library refreshes that reset
@@ -284,6 +285,7 @@ export function MetadataReviewDialog({
     )
     .filter((r) => !hideApplied || rowStates.get(r.book.id) !== 'applied')
     .filter((r) => !hideRejected || rowStates.get(r.book.id) !== 'rejected')
+    .filter((r) => !hideSkipped || rowStates.get(r.book.id) !== 'skipped')
     .filter((r) => !hideNoMatch || (r.status !== 'no_match' && r.status !== 'error'))
     .filter((r) => {
       // Language filter: hide candidates whose language
@@ -303,7 +305,7 @@ export function MetadataReviewDialog({
   // Reset page when filters change
   useEffect(() => {
     setReviewPage(1);
-  }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideNoMatch, matchLanguage]);
+  }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideSkipped, hideNoMatch, matchLanguage]);
 
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
@@ -1043,6 +1045,16 @@ export function MetadataReviewDialog({
                   control={
                     <Switch
                       size="small"
+                      checked={hideSkipped}
+                      onChange={(e) => setHideSkipped(e.target.checked)}
+                    />
+                  }
+                  label={<Typography variant="body2">Hide Skipped</Typography>}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
                       checked={hideNoMatch}
                       onChange={(e) => setHideNoMatch(e.target.checked)}
                     />
@@ -1122,10 +1134,11 @@ export function MetadataReviewDialog({
                   sx={{ mb: 1 }}
                 >
                   <Typography variant="caption" color="text.secondary">
-                    Showing{' '}
-                    {totalCount > 0
-                      ? `${(reviewPage - 1) * reviewPageSize + 1}–${Math.min(reviewPage * reviewPageSize, totalCount)} of ${totalCount}`
-                      : '0'}
+                    {filteredResults.length < results.length
+                      ? `${filteredResults.length} visible of ${results.length} loaded · ${totalCount} total`
+                      : totalCount > 0
+                        ? `Showing ${(reviewPage - 1) * reviewPageSize + 1}–${Math.min(reviewPage * reviewPageSize, totalCount)} of ${totalCount}`
+                        : '0'}
                   </Typography>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Pagination
