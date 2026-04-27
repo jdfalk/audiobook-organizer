@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -1386,7 +1386,9 @@ func (s *Server) seriesNormalizePreview(c *gin.Context) {
 // executeSeriesNormalizeCore renames and merges contaminated series, enqueues
 // write-back for affected books, and returns the affected book IDs for the
 // caller to run organize on.
+// maintenanceStore is used because mergeSeriesGroup requires it.
 func executeSeriesNormalizeCore(
+	ctx context.Context,
 	store maintenanceStore,
 	enqueueWriteBack func(bookID string),
 ) (affectedBookIDs []string, err error) {
@@ -1410,13 +1412,18 @@ func executeSeriesNormalizeCore(
 		}
 	}
 
+	var errs []string
+
 	// First pass: rename.
 	for _, a := range actions {
 		if a.Action != "rename" {
 			continue
 		}
+		if ctx.Err() != nil {
+			return affectedBookIDs, ctx.Err()
+		}
 		if rErr := store.UpdateSeriesName(a.SeriesID, a.NewName); rErr != nil {
-			return nil, fmt.Errorf("UpdateSeriesName(%d, %q): %w", a.SeriesID, a.NewName, rErr)
+			errs = append(errs, fmt.Sprintf("UpdateSeriesName(%d, %q): %v", a.SeriesID, a.NewName, rErr))
 		}
 	}
 
@@ -1425,8 +1432,11 @@ func executeSeriesNormalizeCore(
 		if a.Action != "merge_into" || a.MergeTargetID == nil {
 			continue
 		}
+		if ctx.Err() != nil {
+			return affectedBookIDs, ctx.Err()
+		}
 		if mErr := mergeSeriesGroup(store, *a.MergeTargetID, []int{a.SeriesID}); mErr != nil {
-			return nil, fmt.Errorf("mergeSeriesGroup(keep=%d, merge=%d): %w", *a.MergeTargetID, a.SeriesID, mErr)
+			errs = append(errs, fmt.Sprintf("mergeSeriesGroup(keep=%d, merge=%d): %v", *a.MergeTargetID, a.SeriesID, mErr))
 		}
 	}
 
@@ -1434,6 +1444,9 @@ func executeSeriesNormalizeCore(
 		enqueueWriteBack(id)
 	}
 
+	if len(errs) > 0 {
+		return affectedBookIDs, fmt.Errorf("series normalize errors: %s", strings.Join(errs, "; "))
+	}
 	return affectedBookIDs, nil
 }
 
@@ -1467,7 +1480,7 @@ func (s *Server) seriesNormalize(c *gin.Context) {
 			}
 		}
 
-		affectedBookIDs, opErr := executeSeriesNormalizeCore(store, enqueueWB)
+		affectedBookIDs, opErr := executeSeriesNormalizeCore(ctx, store, enqueueWB)
 		if opErr != nil {
 			return opErr
 		}
