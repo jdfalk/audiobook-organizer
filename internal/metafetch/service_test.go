@@ -267,6 +267,16 @@ func TestNormalizeMetaSeries(t *testing.T) {
 			metadata.BookMetadata{Title: "Elantris", Series: "Cosmere"},
 			"", "", "Elantris", // no match in ParseSeriesFromTitle for plain "Cosmere"
 		},
+		{
+			"dash_embedded_series_cleaned",
+			metadata.BookMetadata{Title: "The Long Earth", Series: "The Long Earth - 1 - The Long Earth"},
+			"The Long Earth", "1", "The Long Earth",
+		},
+		{
+			"trailing_ordinal_cleaned",
+			metadata.BookMetadata{Title: "", Series: "The Long Earth One"},
+			"The Long Earth", "1", "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
