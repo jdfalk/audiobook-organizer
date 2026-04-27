@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.34.0
+// version: 1.34.1
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -1782,6 +1782,12 @@ func resolveSeriesID(seriesName string, authorID *int) (*int, error) {
 	trimmed := strings.TrimSpace(seriesName)
 	if trimmed == "" {
 		return nil, nil
+	}
+
+	// Strip any embedded title/position contamination from the series name.
+	// Position info is discarded here; the scanner does not set SeriesSequence.
+	if cleaned, _, flagged := metadata.StripSeriesContamination(trimmed, ""); !flagged && cleaned != "" {
+		trimmed = cleaned
 	}
 
 	series, err := database.GetGlobalStore().GetSeriesByName(trimmed, authorID)
