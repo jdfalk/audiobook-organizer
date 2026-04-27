@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.1.1
+// version: 2.2.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -17,6 +17,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -913,10 +915,10 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	})
 }
 
-// runBulkWriteBack iterates the provided bookIDs starting at startIdx, writing
-// tags (and optionally renaming first) for each. Used by both the fresh-launch
-// path and the resume path. Checkpoints progress every 10 books so a restart
-// can pick up near where it left off.
+// runBulkWriteBack writes tags (and optionally renames) for each book in bookIDs,
+// starting at startIdx. Uses a parallel worker pool — cover embedding and tag
+// writes both go through TagLib so there is no ffmpeg ordering constraint.
+// Checkpoints every 10 completions so a restart can resume near where it left off.
 func (s *Server) runBulkWriteBack(
 	ctx context.Context,
 	opID string,
@@ -925,73 +927,99 @@ func (s *Server) runBulkWriteBack(
 	startIdx int,
 	progress operations.ProgressReporter,
 ) error {
+	const workers = 8
+
 	store := s.Store()
 	mfs := s.metadataFetchService
 	total := len(bookIDs)
-	written := 0
-	failed := 0
 
 	if startIdx > 0 {
 		_ = progress.Log("info", fmt.Sprintf("resuming bulk write-back from index %d/%d", startIdx, total), nil)
 	}
 
+	type job struct {
+		id   string
+		book *database.Book
+	}
+
+	jobCh := make(chan job, workers*2)
+	var wg sync.WaitGroup
+	var written, failed atomic.Int64
+	var mu sync.Mutex
+
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range jobCh {
+				if ctx.Err() != nil {
+					return
+				}
+				count, writeErr := mfs.WriteBackMetadataForBook(j.id)
+				if writeErr != nil {
+					failed.Add(1)
+					mu.Lock()
+					_ = progress.Log("warn", fmt.Sprintf("book %s: write-back failed: %v", j.id, writeErr), nil)
+					mu.Unlock()
+				} else {
+					written.Add(1)
+					if count > 0 && s.activityWriter != nil {
+						activity.LogBatch(s.activityWriter, opID, "metadata-apply", "write-back",
+							activity.BatchItem{Name: j.book.Title, Count: count})
+					}
+				}
+				done := written.Load() + failed.Load()
+				mu.Lock()
+				_ = progress.UpdateProgress(int(done), total, fmt.Sprintf("processing %d/%d (%d written, %d failed)", done, total, written.Load(), failed.Load()))
+				if done%10 == 0 {
+					_ = operations.SaveCheckpoint(store, opID, "bulk_write_back", "writing", int(done), total)
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+
 	for i := startIdx; i < total; i++ {
+		if ctx.Err() != nil || progress.IsCanceled() {
+			mu.Lock()
+			_ = progress.Log("info", fmt.Sprintf("canceled after feeding %d/%d books", i-startIdx, total-startIdx), nil)
+			mu.Unlock()
+			break
+		}
+
 		bookID := bookIDs[i]
-		if progress.IsCanceled() {
-			msg := fmt.Sprintf("canceled after %d/%d books (%d written, %d failed)", i, total, written, failed)
-			_ = progress.Log("info", msg, nil)
-			return nil
+		book, err := store.GetBookByID(bookID)
+		if err != nil || book == nil {
+			failed.Add(1)
+			mu.Lock()
+			_ = progress.Log("warn", fmt.Sprintf("book %s: not found", bookID), nil)
+			mu.Unlock()
+			continue
+		}
+		if isProtectedPath(book.FilePath) {
+			mu.Lock()
+			_ = progress.Log("info", fmt.Sprintf("book %s: skipping protected path", bookID), nil)
+			mu.Unlock()
+			continue
+		}
+		if doRename {
+			if renameErr := mfs.RunApplyPipelineRenameOnly(bookID, book); renameErr != nil {
+				mu.Lock()
+				_ = progress.Log("warn", fmt.Sprintf("book %s: rename failed: %v", bookID, renameErr), nil)
+				mu.Unlock()
+			}
 		}
 
 		select {
+		case jobCh <- job{id: bookID, book: book}:
 		case <-ctx.Done():
-			msg := fmt.Sprintf("context canceled after %d/%d books (%d written, %d failed)", i, total, written, failed)
-			_ = progress.Log("info", msg, nil)
-			return ctx.Err()
-		default:
-		}
-
-		book, err := store.GetBookByID(bookID)
-		if err != nil || book == nil {
-			failed++
-			_ = progress.Log("warn", fmt.Sprintf("book %s: not found", bookID), nil)
-			_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (skipped: not found)", i+1, total))
-			continue
-		}
-
-		if isProtectedPath(book.FilePath) {
-			_ = progress.Log("info", fmt.Sprintf("book %s: skipping protected path %s", bookID, book.FilePath), nil)
-			_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (skipped: protected)", i+1, total))
-			continue
-		}
-
-		if doRename {
-			if renameErr := mfs.RunApplyPipelineRenameOnly(bookID, book); renameErr != nil {
-				_ = progress.Log("warn", fmt.Sprintf("book %s: rename failed: %v", bookID, renameErr), nil)
-			}
-		}
-
-		count, writeErr := mfs.WriteBackMetadataForBook(bookID)
-		if writeErr != nil {
-			failed++
-			_ = progress.Log("warn", fmt.Sprintf("book %s: write-back failed: %v", bookID, writeErr), nil)
-		} else {
-			written++
-			if count > 0 && s.activityWriter != nil {
-				activity.LogBatch(s.activityWriter, opID, "metadata-apply", "write-back",
-					activity.BatchItem{Name: book.Title, Count: count})
-			}
-		}
-
-		_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("processing %d/%d (%d written, %d failed)", i+1, total, written, failed))
-
-		if (i+1)%10 == 0 {
-			_ = operations.SaveCheckpoint(store, opID, "bulk_write_back", "writing", i+1, total)
 		}
 	}
+	close(jobCh)
+	wg.Wait()
 
 	_ = operations.ClearState(store, opID)
-	summary := fmt.Sprintf("bulk write-back complete: %d written, %d failed out of %d", written, failed, total)
+	summary := fmt.Sprintf("bulk write-back complete: %d written, %d failed out of %d", written.Load(), failed.Load(), total)
 	_ = progress.Log("info", summary, nil)
 	if s.activityWriter != nil {
 		activity.FlushOperation(s.activityWriter, opID)
