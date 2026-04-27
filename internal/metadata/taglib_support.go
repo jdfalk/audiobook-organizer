@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_support.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 //
 // TagLib WASM writer (default, no CGO required).
@@ -11,7 +11,6 @@ package metadata
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
@@ -22,18 +21,14 @@ import (
 var taglibAvailable = true
 
 // writeMetadataWithTaglib performs metadata writing using TagLib via WASM.
-func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, config fileops.OperationConfig) error {
-	backupPath := filePath + ".backup"
-	if err := fileops.SafeCopy(filePath, backupPath, config); err != nil {
-		return fmt.Errorf("taglib backup failed: %w", err)
+// TagLib edits tag atoms in place and does not corrupt audio data on failure —
+// no pre-write file copy is needed. The optional WriteBackupBeforeTagWrite
+// config flag handles backups at the call-site layer (backupFileBeforeWrite).
+func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _ fileops.OperationConfig) error {
+	abs, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("taglib abs path: %w", err)
 	}
-	defer func() {
-		if !config.PreserveOriginal {
-			_ = os.Remove(backupPath)
-		}
-	}()
-
-	abs, _ := filepath.Abs(filePath)
 
 	tags := buildWriteTagMap(metadata)
 	if len(tags) == 0 {
@@ -41,16 +36,7 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, c
 	}
 
 	if err := taglib.WriteTags(abs, tags, 0); err != nil {
-		if restoreErr := fileops.SafeCopy(backupPath, filePath, config); restoreErr != nil {
-			return fmt.Errorf("taglib write failed and restore failed: write=%w restore=%v", err, restoreErr)
-		}
-		return fmt.Errorf("taglib write failed (restored): %w", err)
-	}
-
-	// Force fsync to ensure ZFS/COW filesystems flush all data.
-	if f, err := os.OpenFile(abs, os.O_RDWR, 0); err == nil {
-		_ = f.Sync()
-		f.Close()
+		return fmt.Errorf("taglib write: %w", err)
 	}
 
 	return nil
