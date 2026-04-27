@@ -1,0 +1,433 @@
+{
+  "operation_id": "01KQ58E7QXDZM523Y6JKDR4700",
+  "note": "PARTIAL dry-run report \u2014 first 54 tier-A resolutions captured before the run was cancelled. The full run was stuck in tier B (synchronous filepath.WalkDir + metadata.ExtractMetadata) which needs optimization before a complete dry-run is feasible.",
+  "started_at": "2026-04-26T12:02:28Z",
+  "cancelled_at": "2026-04-26T16:23:05.291234+00:00",
+  "tier_a_resolved": 53,
+  "sample_resolutions": [
+    {
+      "pid": "7DE05BD0A77084AA",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Evie Green/01 The New One - Part 01.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Evie Green/The New One/The New One/The New One - Evie Green - read by narrator.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.23180069-04:00"
+    },
+    {
+      "pid": "0335F22E2A5C781F",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Gregory Benford/35 Pt35 In the Ocean of Night.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Gregory Benford/Galactic Center 1 - In the Ocean of Night/In the Ocean of Night - 35/49.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.250145553-04:00"
+    },
+    {
+      "pid": "519254AD3A7B7E09",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Brandon Sanderson/11 Skin Deep 11-22.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Brandon Sanderson/Legion - 2 - Skin Deep - Legion - Skin Deep/Legion - Skin Deep - 11/22.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.262375275-04:00"
+    },
+    {
+      "pid": "0E0F5BDF3AD09C9F",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Joshua Dalzelle/07 Savage Homecoming 07-18.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Joshua Dalzelle/Omega Force 3/Omega Force 3 - Savage Homecoming/07 Savage Homecoming 07-18.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.273703868-04:00"
+    },
+    {
+      "pid": "24980E06E3EC0C2C",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Andrew Moriarty/Imperial Mercenary.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Andrew Moriarty/Decline and Fall of the Galactic Empire 3 - Imperial Mercenary/Imperial Mercenary.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.28183029-04:00"
+    },
+    {
+      "pid": "56399373BD0311D0",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Logan Jacobs/18 Chapter 16.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Logan Jacobs/Alex in Haremland 2/Alex in Haremland 2/18 Chapter 16.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.290060968-04:00"
+    },
+    {
+      "pid": "C7B2B24B14BAE27D",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Orson Scott Card/1-09 Track 9 2.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Orson Scott Card/Ender03/Ender03 - Xenocide/1-09 Track 9 2.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.328026995-04:00"
+    },
+    {
+      "pid": "3621630487D47F08",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/A. G. Riddle/The Lost Colony.1 03.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/A. G. Riddle/The Long WInter Trilogy Book 3/The Long WInter Trilogy Book 3 -The Lost Colony/The Lost Colony.1 03.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.347359649-04:00"
+    },
+    {
+      "pid": "53296139A9EEE162",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Jason Anspach, JN Chaney/10 86-Neon_ An Epic Lit RPG Adventur.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/J. N. Chaney, Jason Anspach/86-Neon_ An Epic Lit RPG Adventure (King's League/King's League_ An Epic LitRPG Adventure",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.360467807-04:00"
+    },
+    {
+      "pid": "D89D63FE028EC50E",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Stephen King/Cujo 6.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Stephen King/Cujo (older version)/Cujo (older version)/Cujo 6.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.368721979-04:00"
+    },
+    {
+      "pid": "C16C54A5AF62FEE6",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/S. M. Stirling/17 017-132 EV02 The Protectors War 1.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/S. M. Stirling/EV02 The Protectors War/EV02 The Protectors War/17 017-132 EV02 The Protectors War 1.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.395454712-04:00"
+    },
+    {
+      "pid": "C64FB7C8AB9B1014",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Chris Wraight/22 Stormcaller.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Chris Wraight/Space Wolves/Space Wolves, Book 2 - Stormcaller/22 Stormcaller.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.406084289-04:00"
+    },
+    {
+      "pid": "2E91639C4200F5E2",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Blaine L. Pardoe/19 Splashdown_ Land & Sea, Book 1.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Blaine L. Pardoe/Land & Sea 1 - Splashdown/Splashdown - 19/41.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.421363588-04:00"
+    },
+    {
+      "pid": "8C3E95A1E2A94BD5",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Logan Jacobs/17 Chapter 16 18.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Logan Jacobs/Scholomance 8/Scholomance 8_ The Devil's Academy/17 Chapter 16 18.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.432149187-04:00"
+    },
+    {
+      "pid": "EF9E538E7FE89AED",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Rick Riordan/25 The Tyrant's Tomb - Chapter 25.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Rick Riordan/The Trials of Apollo 4 - The Tyrant's Tomb/The Tyrant's Tomb - 25/44.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.441096527-04:00"
+    },
+    {
+      "pid": "EE4AD105F9BA5E3F",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Guy Haley/29 Avenging Son_ Dawn of Fire, Book.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Guy Haley/Avenging Son_ Dawn of Fire, Book 1_ Warhammer 40,000/Avenging Son_ Dawn of Fire, Book 1_ Warhammer 40,000/29 Avenging Son_ Dawn of Fire, Book.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.449849651-04:00"
+    },
+    {
+      "pid": "928AE029D6B4ACC7",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Tony DiTerlizzi, Holly Black/06 6 - The Field Guide_ Chapter 6.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Tony DiTerlizzi/The Field Guide/The Field Guide/06 6 - The Field Guide_ Chapter 6.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.459213584-04:00"
+    },
+    {
+      "pid": "E7CB441108C80F94",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Brandon Sanderson/49 Warbreaker 49-66.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Brandon Sanderson/Warbreaker - 1 - Warbreaker - Warbreaker/Warbreaker - 49/66.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.47376967-04:00"
+    },
+    {
+      "pid": "CD857781CF38F50A",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Stephen King/3 - Riddles - Chapter 4 - Topeka.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Stephen King/Wizard and Glass - Wizard and Glass/Wizard and Glass - 6/34.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.488787181-04:00"
+    },
+    {
+      "pid": "31EDC47E382AB240",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/GraphicAudio [Brandon Sanderson]/2-03 The Stormlight Archive [02] Wor 3.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/GraphicAudio Brandon Sanderson/The Stormlight Archive 02 Words Of Radiance 05/The Stormlight Archive 02 Words Of Radiance 05/2-03 The Stormlight Archive [02] Wor 3.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.498562141-04:00"
+    },
+    {
+      "pid": "53B5D2866B24D703",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Petr Zhgulyov, Sofia Gutkin - translator/23 City of Goblins-In the System, Bo.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Petr Zhgulyov, Sofia Gutkin - translator/In the System 1 - City of Goblins/City of Goblins - 23/23.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.506271661-04:00"
+    },
+    {
+      "pid": "BE615F0D0615C063",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Heather Sunseri/Emerge - 01 - Emerge.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Heather Sunseri/Emerge - 01 - Emerge/Emerge - 01 - Emerge/Emerge - 01 - Emerge - Heather Sunseri - read by narrator.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.515829875-04:00"
+    },
+    {
+      "pid": "6DE4613DF0311F0D",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Daniel Arenson/07 Alien Sky 07-32.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Daniel Arenson/Alien Sky - Alien Sky/Alien Sky - 7/32.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.5247233-04:00"
+    },
+    {
+      "pid": "13EFF1812658252F",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Tao Wong/01 The Guild's Demands_ Adventures o.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Tao Wong/Adventures on Brad 7 - The Guild's Demands/The Guild's Demands.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.533464468-04:00"
+    },
+    {
+      "pid": "7D390F7862F9F390",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/J.R. Mathews/Portal to Nova Roma Chapter 19.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/J. R. Mathews/Portal to Nova Roma/Portal to Nova Roma/Portal to Nova Roma Chapter 19.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.540739095-04:00"
+    },
+    {
+      "pid": "CF18E69D3A9159E2",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Michael-Scott Earle/04 Chapter 2.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Michael-Scott Earle/Book 10 - Tamer/Book 10 - Tamer_ King of Dinosaurs 10 - Tamer King of DInosaurs Series/04 Chapter 2.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.552408595-04:00"
+    },
+    {
+      "pid": "FF098772C767ED5E",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Larry Niven/27 26_ Beneath the Waters.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Larry Niven/The Ringworld Engineers/The Ringworld Engineers/27 26_ Beneath the Waters.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.595330634-04:00"
+    },
+    {
+      "pid": "AEF5DC258DAE3F22",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Fonda Lee/Jade City_ The Green Bone Saga, Book.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Fonda Lee/The Green Bone Saga 1 - Jade City/Jade City.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.60686478-04:00"
+    },
+    {
+      "pid": "5AFF33004A051029",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Edward W. Robertson/19 The Breakers Series - Book 2.0 -.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Edward W. Robertson/The Breakers Series (Unabridged)/The Breakers Series (Unabridged)/19 The Breakers Series - Book 2.0 -.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.631906489-04:00"
+    },
+    {
+      "pid": "C78BED630C08264A",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Justine Larbalestier/35 35 - How to Ditch Your Fairy_ Cha.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Justine Larbalestier/How to Ditch Your Fairy - How to Ditch Your Fairy/How to Ditch Your Fairy - 35/45.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.653063927-04:00"
+    },
+    {
+      "pid": "031B886DFB100C4D",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Brent Weeks/71 The Burning White_ Book Five of L.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Brent Weeks/Lightbringer Saga 5 - The Burning White/The Burning White - 71/155.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.677351251-04:00"
+    },
+    {
+      "pid": "CDDCB8CA0729BA99",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/James Marsters/15 Peace Talks_ The Dresden Files, B.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Jim Butcher/The Dresden Files 16 - Peace Talks/Peace Talks - 15/38.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.684456607-04:00"
+    },
+    {
+      "pid": "F931E783C099205C",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/J. N. Chaney, Terry Maggert/12 Song of Darkness, Book 12.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/J. N. Chaney/Backyard Starship/Backyard Starship/12 Song of Darkness, Book 12.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.693107312-04:00"
+    },
+    {
+      "pid": "0A7F046D92D24C8E",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Piers Platt/Return to Oz 16.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Piers Platt/Series_ The Falken Chronicles/Series_ The Falken Chronicles, Book 3/Return to Oz 16.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.708956452-04:00"
+    },
+    {
+      "pid": "3CF9ADCF56DA591F",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/SpaizZzer/109 Tree of Aeons_ A Reincarnation L.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/SpaizZzer/Tree of Aeons_ A Reincarnation LitRPG Series (Tree of Aeons/Tree of Aeons_ A Reincarnation LitRPG Series (Tree of Aeons, Book 1)/109 Tree of Aeons_ A Reincarnation L.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.739133316-04:00"
+    },
+    {
+      "pid": "445F21140ED80BEC",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Robert A Heinlein/80 The Moon is a Harsh Mistress - 80.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Robert A. Heinlein/The Moon is a Harsh Mistress - The Moon Is a Harsh Mistress/The Moon Is a Harsh Mistress - 80/87.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.761927152-04:00"
+    },
+    {
+      "pid": "FC91F46F4C1292FC",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/L. E. Thomas/17 Scorpions_ Star Runners, Book 4 1.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/L. E. Thomas/Star Runners - 4 - Scorpions/Star Runners - 4 - Scorpions/17 Scorpions_ Star Runners, Book 4 1.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.776812205-04:00"
+    },
+    {
+      "pid": "F5F96CC75E361585",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Gene Wolfe/52 52_ To Pouk.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Gene Wolfe/The Knight/The Knight/52 52_ To Pouk.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.824309942-04:00"
+    },
+    {
+      "pid": "9B89E137BF44BB6C",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Piers Platt/17 Rath's Reckoning 17-29.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Piers Platt/The Janus Group 3 - Rath's Reckoning/Rath's Reckoning - 17/29.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.834038367-04:00"
+    },
+    {
+      "pid": "AC055E211C9F5047",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Karen Marie Moning/07 Part I - Chapter 5.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Karen Marie Moning/Burned/Burned/07 Part I - Chapter 5.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.852340111-04:00"
+    },
+    {
+      "pid": "546C06B93013A485",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Naomi Novik/54 Tongues of Serpents 54-65.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Naomi Novik/Temeraire - 6 - Tongues of Serpents/Temeraire - 6 - Tongues of Serpents/54 Tongues of Serpents 54-65.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.871799226-04:00"
+    },
+    {
+      "pid": "0A571380E7AC8019",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Kalynn Bayron/My Dear Henry A Jekyll & Hyde Remix.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Kalynn Bayron/Remixed Classics 06/Remixed Classics 06 - My Dear Henry (A Jekyll & Hyde Remix)/My Dear Henry A Jekyll & Hyde Remix.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.879005689-04:00"
+    },
+    {
+      "pid": "D60CB497DC1E3C41",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/L. E. Modesitt Jr. (Kirby Heyborne)/35 Natural Ordermage - Chapter 035.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/L. E. Modesitt Jr./The Saga of Recluce - 14 - Natural Ordermage/The Saga of Recluce - 14 - Natural Ordermage/35 Natural Ordermage - Chapter 035.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.903326025-04:00"
+    },
+    {
+      "pid": "42CB1AA1EA31C762",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Scott Westerfeld/159 [Track 159] 4.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Scott Westerfeld/Extras Unabridged/Extras Unabridged/159 [Track 159] 4.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.937713295-04:00"
+    },
+    {
+      "pid": "EC37BAF1600F4E46",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Logan Jacobs/17 Chapter 16 13.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Logan Jacobs/Scholomance 10/Scholomance 10_ The Devil's Academy/17 Chapter 16 13.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.946019745-04:00"
+    },
+    {
+      "pid": "6A3606586AE08653",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/S. M. Stirling/01 01-45 EV01 Dies the Fire 1.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/S. M. Stirling/EV01 Dies the Fire/EV01 Dies the Fire/01 01-45 EV01 Dies the Fire 1.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.957133469-04:00"
+    },
+    {
+      "pid": "8A99F1BCA5411A0C",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/L. E. Modesitt Jr. (Kirby Heyborne)/56 Wellspring of Chaos - Chapter 56.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/L. E. Modesitt Jr./The Saga of Recluce - 12 - Wellspring of Chaos/The Saga of Recluce - 12 - Wellspring of Chaos/56 Wellspring of Chaos - Chapter 56.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.976799827-04:00"
+    },
+    {
+      "pid": "C30F900D113A713D",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/C. T. Phipps/33 Esoterrorism From the Secret File.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/C. T. Phipps/From the Secret Files of the Red Room 1 - Esoterrorism From the Secret Files of the Red Room - 1/Esoterrorism From the Secret Files of the Red Room - 1 - 33/47.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:44.986745585-04:00"
+    },
+    {
+      "pid": "2C7D8B9D9E1D4C46",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/John Grisham/20 The Confession - 020.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/John Grisham/The Confession/The Confession/20 The Confession - 020.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:45.001851755-04:00"
+    },
+    {
+      "pid": "F9D016F290959FEE",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Marvin Knight/19 Paladin of the Sword.m4b",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Marvin Knight/Paladin of the Sigil 1 - Paladin of the Sword/Paladin of the Sword - 19/49.m4b",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:45.017843603-04:00"
+    },
+    {
+      "pid": "7027657BC3E31EF4",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Adam Ladner_Alex Knox/Restart Again, Volume 2 - Part 08.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Adam Ladner/Restart Again, Volume 2/Restart Again, Volume 2 - Restart Again Series, Book 2/Restart Again, Volume 2 - Part 08.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:45.029814288-04:00"
+    },
+    {
+      "pid": "5D06F56C0A5E16E2",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Karen Marie Moning/22 Part I - Chapter 19.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Karen Marie Moning/Fever 11 - Kingdom of Shadow and Light/Kingdom of Shadow and Light - 22/65.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:45.056945945-04:00"
+    },
+    {
+      "pid": "620303375506CCC4",
+      "old_path": "/W:/itunes/iTunes Media/Audiobooks/Django Wexler/23 Chapter 23.mp3",
+      "new_path": "/mnt/bigdata/books/audiobook-organizer/Django Wexler/Ship of Smoke and Steel_ The Wells of Sorcery/Ship of Smoke and Steel_ The Wells of Sorcery, Book 1/23 Chapter 23.mp3",
+      "tier": "A",
+      "action": "report",
+      "logged_at": "2026-04-26T12:02:45.066961431-04:00"
+    }
+  ]
+}
