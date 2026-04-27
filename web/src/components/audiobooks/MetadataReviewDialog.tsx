@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -168,18 +168,28 @@ export function MetadataReviewDialog({
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
   const [matchLanguage, setMatchLanguage] = useState<boolean>(loadLanguageFilter);
-  // fetchSeq increments to force a server re-fetch without changing page/size.
-  // Used after bulk apply/reject so the page refills with fresh data.
-  const [fetchSeq, setFetchSeq] = useState(0);
-  const triggerRefetch = useCallback(() => setFetchSeq((s) => s + 1), []);
+  // Calls onComplete (to refresh the library) only when changes were made,
+  // then closes the dialog. Avoids mid-review library refreshes that reset
+  // the user's scroll position and show a disorienting loading spinner.
+  const handleClose = useCallback(() => {
+    if (hasChangesRef.current) {
+      onComplete();
+      hasChangesRef.current = false;
+    }
+    onClose();
+  }, [onComplete, onClose]);
 
   // fetchIdRef prevents stale responses from overwriting newer ones when the
   // user changes page size or page quickly (race: 25-item request finishes
   // after 250-item request, overwriting the larger result set).
   const fetchIdRef = useRef(0);
 
+  // Tracks whether any apply actions occurred so the library is refreshed
+  // exactly once when the dialog closes, rather than on every individual apply.
+  const hasChangesRef = useRef(false);
+
   // Fetch the current page from the server. Re-runs when the dialog opens,
-  // the operation changes, page/size changes, or triggerRefetch() is called.
+  // the operation changes, or page/size changes.
   useEffect(() => {
     if (!open || !operationId) return;
     setLoading(true);
@@ -218,7 +228,7 @@ export function MetadataReviewDialog({
         if (fetchId !== fetchIdRef.current) return;
         setLoading(false);
       });
-  }, [open, operationId, reviewPage, reviewPageSize, fetchSeq]);
+  }, [open, operationId, reviewPage, reviewPageSize]);
 
   // Poll for new results while the operation is still running.
   // Fetches only limit=1 to get the updated total_count without
@@ -305,6 +315,7 @@ export function MetadataReviewDialog({
     if (ids.length === 0) return;
     try {
       await api.batchApplyCandidates(operationId, ids);
+      hasChangesRef.current = true;
       toast(`Applied metadata to ${ids.length} book${ids.length > 1 ? 's' : ''}`, 'success', {
         label: 'Undo',
         onClick: async () => {
@@ -321,12 +332,8 @@ export function MetadataReviewDialog({
             return next;
           });
           toast(`Undid ${ids.length} apply(s)`, 'info');
-          triggerRefetch();
         },
       });
-      // Re-fetch the current page so applied items disappear (hideApplied=true)
-      // and are replaced by new items from the next offset.
-      triggerRefetch();
     } catch {
       // Revert optimistic updates
       setRowStates((prev) => {
@@ -336,7 +343,7 @@ export function MetadataReviewDialog({
       });
       toast('Failed to apply', 'error');
     }
-  }, [operationId, toast, triggerRefetch]);
+  }, [operationId, toast]);
 
   const handleApplyOne = (bookId: string) => {
     // Optimistic UI update
@@ -356,6 +363,7 @@ export function MetadataReviewDialog({
       bookIds.forEach((id) => newStates.set(id, 'applied'));
       setRowStates(newStates);
       setSelectedIds(new Set());
+      hasChangesRef.current = true;
       toast(`Applied metadata to ${applied} books`, 'success', {
         label: 'Undo All',
         onClick: async () => {
@@ -370,12 +378,8 @@ export function MetadataReviewDialog({
           bookIds.forEach((id) => revertStates.set(id, 'pending'));
           setRowStates(revertStates);
           toast(`Undid ${bookIds.length} applies`, 'info');
-          triggerRefetch();
         },
       });
-      onComplete();
-      // Re-fetch so the page refills after applied items are hidden.
-      triggerRefetch();
     } catch {
       toast('Failed to apply', 'error');
     } finally {
@@ -402,13 +406,11 @@ export function MetadataReviewDialog({
             await api.batchUnrejectCandidates(operationId, [bookId]);
             setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
             toast('Rejection undone', 'success');
-            triggerRefetch();
           } catch {
             toast('Failed to undo rejection', 'error');
           }
         },
       });
-      triggerRefetch();
     } catch {
       toast('Failed to reject', 'error');
     }
@@ -419,7 +421,6 @@ export function MetadataReviewDialog({
       await api.batchUnrejectCandidates(operationId, [bookId]);
       setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
       toast('Rejection undone', 'success');
-      triggerRefetch();
     } catch {
       toast('Failed to undo rejection', 'error');
     }
@@ -942,7 +943,7 @@ export function MetadataReviewDialog({
         // accident should not blow away their session.
         onClose={(_event, reason) => {
           if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
-          onClose();
+          handleClose();
         }}
         disableEscapeKeyDown
         maxWidth="xl"
@@ -951,7 +952,7 @@ export function MetadataReviewDialog({
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Review Metadata Matches &mdash; {summary.total} books</span>
           <IconButton
-            onClick={onClose}
+            onClick={handleClose}
             size="small"
             aria-label="close review dialog"
             sx={{ ml: 2 }}
@@ -1175,7 +1176,7 @@ export function MetadataReviewDialog({
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>Close</Button>
+          <Button onClick={handleClose}>Close</Button>
           <Button
             variant="contained"
             disabled={selectedIds.size === 0 || applying}

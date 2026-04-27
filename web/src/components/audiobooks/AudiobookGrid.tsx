@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookGrid.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e
 
 import React from 'react';
@@ -68,7 +68,12 @@ export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
   return (
     <Grid container spacing={3}>
       {audiobooks.map((audiobook) => (
-        <Grid item key={audiobook.id} xs={12} sm={6} md={4} lg={3} xl={2}>
+        <Grid
+          item
+          key={audiobook.id}
+          xs={12} sm={6} md={4} lg={3} xl={2}
+          sx={{ contentVisibility: 'auto', containIntrinsicSize: '1px 420px' }}
+        >
           <AudiobookCard
             audiobook={audiobook}
             onEdit={onEdit}
