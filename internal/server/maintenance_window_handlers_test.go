@@ -1,0 +1,175 @@
+// file: internal/server/maintenance_window_handlers_test.go
+// version: 1.0.0
+// guid: d5e6f7a8-b9c0-1234-efab-456789012345
+
+package server
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// setupMaintenanceTestServer creates a minimal Server with a real PebbleStore
+// and a wired TaskScheduler, then returns it ready for HTTP testing.
+func setupMaintenanceTestServer(t *testing.T) *Server {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+
+	pebblePath := filepath.Join(t.TempDir(), "pebble")
+	store, err := database.NewPebbleStore(pebblePath)
+	require.NoError(t, err, "open pebble store")
+
+	origStore := database.GetGlobalStore()
+	database.SetGlobalStore(store)
+	t.Cleanup(func() {
+		database.SetGlobalStore(origStore)
+		store.Close()
+	})
+
+	srv := NewServer(nil)
+	srv.scheduler = NewTaskScheduler(srv)
+	return srv
+}
+
+func TestListTasksHasIsRunning(t *testing.T) {
+	srv := setupMaintenanceTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/tasks", nil)
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "expected 200 OK")
+
+	var resp struct {
+		Data []struct {
+			Name      string `json:"name"`
+			IsRunning bool   `json:"is_running"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp.Data, "expected at least one task")
+
+	for _, task := range resp.Data {
+		// is_running should be present (false for all tasks in a fresh test server)
+		assert.False(t, task.IsRunning, "task %q should not be running", task.Name)
+	}
+}
+
+func TestGetMaintenanceWindowStatus(t *testing.T) {
+	// Set up known config values.
+	orig := config.AppConfig
+	defer func() { config.AppConfig = orig }()
+
+	config.AppConfig.MaintenanceWindowEnabled = true
+	config.AppConfig.MaintenanceWindowStart = 2
+	config.AppConfig.MaintenanceWindowEnd = 5
+
+	srv := setupMaintenanceTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/maintenance-window/status", nil)
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "expected 200 OK")
+
+	var resp struct {
+		Data struct {
+			Enabled          bool   `json:"enabled"`
+			WindowStart      int    `json:"window_start"`
+			WindowEnd        int    `json:"window_end"`
+			LastRunDate      string `json:"last_run_date"`
+			NextRunEstimate  string `json:"next_run_estimate"`
+			CurrentlyRunning bool   `json:"currently_running"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	assert.True(t, resp.Data.Enabled, "enabled should be true")
+	assert.Equal(t, 2, resp.Data.WindowStart)
+	assert.Equal(t, 5, resp.Data.WindowEnd)
+	assert.NotEmpty(t, resp.Data.NextRunEstimate, "next_run_estimate should be non-empty")
+	assert.False(t, resp.Data.CurrentlyRunning, "no maintenance should be running")
+}
+
+func TestUpdateMaintenanceWindowConfig_Valid(t *testing.T) {
+	orig := config.AppConfig
+	defer func() { config.AppConfig = orig }()
+
+	srv := setupMaintenanceTestServer(t)
+
+	body, err := json.Marshal(map[string]interface{}{
+		"enabled":      true,
+		"window_start": 3,
+		"window_end":   5,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/maintenance-window/config", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, "expected 200 OK: %s", w.Body.String())
+
+	// Verify config was updated.
+	assert.True(t, config.AppConfig.MaintenanceWindowEnabled)
+	assert.Equal(t, 3, config.AppConfig.MaintenanceWindowStart)
+	assert.Equal(t, 5, config.AppConfig.MaintenanceWindowEnd)
+
+	// GET status and confirm round-trip.
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/maintenance-window/status", nil)
+	w2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+
+	var resp struct {
+		Data struct {
+			Enabled     bool `json:"enabled"`
+			WindowStart int  `json:"window_start"`
+			WindowEnd   int  `json:"window_end"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &resp))
+	assert.True(t, resp.Data.Enabled)
+	assert.Equal(t, 3, resp.Data.WindowStart)
+	assert.Equal(t, 5, resp.Data.WindowEnd)
+}
+
+func TestUpdateMaintenanceWindowConfig_InvalidHour(t *testing.T) {
+	srv := setupMaintenanceTestServer(t)
+
+	body, err := json.Marshal(map[string]interface{}{
+		"enabled":      true,
+		"window_start": 24,
+		"window_end":   5,
+	})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/maintenance-window/config", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code, "hour 24 should return 400")
+}
+
+func TestCalculateNextWindowRun(t *testing.T) {
+	// The result must be a valid RFC3339 time in the future.
+	result := calculateNextWindowRun(3)
+	parsed, err := time.Parse(time.RFC3339, result)
+	require.NoError(t, err, "should return valid RFC3339 time")
+	assert.True(t, parsed.After(time.Now().Add(-time.Minute)), "next run must be after now (with 1-min slack)")
+	assert.Equal(t, 3, parsed.Hour(), "result hour should match start hour")
+}
