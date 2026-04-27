@@ -1,5 +1,5 @@
 // file: internal/itunes/service/importer.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2b8e5f1a-4c7d-4e9f-b3a0-6d8c2e7a4f1b
 
 package itunesservice
@@ -1261,6 +1261,11 @@ func (imp *Importer) ensureAuthorIDs(name string) ([]int, error) {
 }
 
 func (imp *Importer) ensureSeriesID(name string, authorID *int) (*int, error) {
+	// Strip any embedded title/position contamination from the series name.
+	if cleaned, _, flagged := metadata.StripSeriesContamination(strings.TrimSpace(name), ""); !flagged && cleaned != "" {
+		name = cleaned
+	}
+
 	series, err := imp.store.GetSeriesByName(name, authorID)
 	if err != nil {
 		return nil, err
