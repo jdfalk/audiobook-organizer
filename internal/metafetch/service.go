@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.56.0
+// version: 4.56.1
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -822,6 +822,18 @@ func jsonEncodeString(s string) string {
 // Safe to call multiple times: a no-match leaves meta untouched, and an
 // already-split series field will not match Pattern 3.
 func NormalizeMetaSeries(meta *metadata.BookMetadata) {
+	// Strip contamination (embedded title/position) from the series field first.
+	if meta.Series != "" {
+		cleaned, pos, flagged := metadata.StripSeriesContamination(meta.Series, meta.Title)
+		if !flagged && cleaned != meta.Series {
+			meta.Series = cleaned
+			if pos != "" && meta.SeriesPosition == "" {
+				meta.SeriesPosition = pos
+			}
+		}
+	}
+
+	// Existing logic: parse series info embedded in the title field.
 	parsedSeries, parsedPosition, parsedTitle := ParseSeriesFromTitle(meta.Title)
 	if parsedSeries == "" && meta.Series != "" {
 		parsedSeries, parsedPosition, parsedTitle = ParseSeriesFromTitle(meta.Series)
