@@ -35,7 +35,7 @@ jobs:
       - name: Build CLI Binary
         run: go build -o audiobook-organizer .
         env:
-          GOEXPERIMENT: jsonv2
+          GOEXPERIMENT: jsonv2,yamlv2
 
       - name: Verify CLI Help Output
         run: |
