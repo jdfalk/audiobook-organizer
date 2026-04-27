@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/SearchBar.tsx
-// version: 2.1.0
+// version: 2.1.1
 // guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -97,6 +97,7 @@ const SEARCH_HELP = [
   { example: 'review:no_match', desc: 'Marked as no match' },
   { example: 'library_state:organized', desc: 'Organized books' },
   { example: 'library_state:imported', desc: 'Imported but not organized' },
+  { example: 'library_state:suspicious', desc: 'Suspicious / incomplete files' },
   { example: 'language:en', desc: 'Filter by language' },
   { example: 'year:2024', desc: 'Published in a year' },
   { example: 'NOT author:Unknown', desc: 'Exclude a field value' },
