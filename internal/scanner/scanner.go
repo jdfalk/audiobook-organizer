@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.34.1
+// version: 1.34.2
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 package scanner
@@ -369,6 +369,27 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			// hierarchy combined with first-file tags for richer metadata.
 			fallbackUsed := false
 			filePath := books[idx].FilePath
+
+			// Suspicious-file guard: single files below MinBookSizeBytes skip heavy processing.
+			if threshold := config.AppConfig.MinBookSizeBytes; threshold > 0 {
+				if fi, statErr := os.Stat(filePath); statErr == nil && !fi.IsDir() && fi.Size() < threshold {
+					extractInfoFromPath(&books[idx])
+					books[idx].LibraryState = "suspicious"
+					if saveErr := saveBook(&books[idx]); saveErr != nil {
+						scanLog.Warn("failed to save suspicious book %s: %v", filePath, saveErr)
+					}
+					scanLog.Warn("suspicious file (%d bytes, threshold %d): %s", fi.Size(), threshold, filePath)
+					func() {
+						defer func() { recover() }()
+						if store := database.GetGlobalStore(); store != nil {
+							if dbBook, dbErr := store.GetBookByFilePath(filePath); dbErr == nil && dbBook != nil {
+								_ = store.UpdateScanCache(dbBook.ID, fi.ModTime().Unix(), fi.Size())
+							}
+						}
+					}()
+					return
+				}
+			}
 
 			// Handle directory-based books (multi-file books grouped by album tag)
 			if info, statErr := os.Stat(filePath); statErr == nil && info.IsDir() {
