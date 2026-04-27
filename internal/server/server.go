@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.193.1
+// version: 1.193.2
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1506,7 +1506,7 @@ func (s *Server) resumeInterruptedOperations() {
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
-			"author-dedup-scan", "author-split-scan", "series-prune",
+			"author-dedup-scan", "author-split-scan", "series-prune", "series-normalize",
 			"db-optimize", "cleanup-old-backups", "batch_poller",
 			"itunes_sync":
 			// These are not resumable — mark as failed silently
@@ -2308,6 +2308,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/series/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeSeriesGroup)
 			protected.GET("/series/prune/preview", s.perm(auth.PermLibraryView), s.seriesPrunePreview)
 			protected.POST("/series/prune", s.perm(auth.PermLibraryEditMetadata), s.seriesPrune)
+			protected.GET("/series/normalize/preview", s.perm(auth.PermLibraryView), s.seriesNormalizePreview)
+			protected.POST("/series/normalize", s.perm(auth.PermLibraryEditMetadata), s.seriesNormalize)
 			protected.PATCH("/series/:id", s.perm(auth.PermLibraryEditMetadata), s.updateSeriesName)
 			protected.GET("/series/:id/books", s.perm(auth.PermLibraryView), s.getSeriesBooks)
 			protected.PUT("/series/:id/name", s.perm(auth.PermLibraryEditMetadata), s.renameSeriesHandler)
