@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 5c1a2b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
 
 package scanner
@@ -458,5 +458,80 @@ func TestBookLibraryStateField(t *testing.T) {
 	b2 := Book{}
 	if b2.LibraryState != "" {
 		t.Errorf("zero-value LibraryState should be empty string, got %q", b2.LibraryState)
+	}
+}
+
+func TestSuspiciousFileSkipped(t *testing.T) {
+	oldThreshold := config.AppConfig.MinBookSizeBytes
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() {
+		config.AppConfig.MinBookSizeBytes = oldThreshold
+		config.AppConfig.SupportedExtensions = oldExts
+	})
+	config.AppConfig.MinBookSizeBytes = 1024 * 1024 // 1 MB threshold
+	config.AppConfig.SupportedExtensions = []string{".mp3"}
+
+	dir := t.TempDir()
+	smallFile := filepath.Join(dir, "tiny.mp3")
+	// Write 100 bytes — well under the 1 MB threshold.
+	if err := os.WriteFile(smallFile, make([]byte, 100), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	books := []Book{{FilePath: smallFile, Format: ".mp3"}}
+
+	var savedBook *Book
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(b *Book) error {
+		saved := *b
+		savedBook = &saved
+		return nil
+	}
+
+	err := ProcessBooksParallel(context.Background(), books, 1, nil, nil)
+	if err != nil {
+		t.Fatalf("ProcessBooksParallel: %v", err)
+	}
+	if savedBook == nil {
+		t.Fatal("expected saveBook to be called for suspicious file")
+	}
+	if savedBook.LibraryState != "suspicious" {
+		t.Errorf("expected LibraryState=suspicious, got %q", savedBook.LibraryState)
+	}
+}
+
+func TestSuspiciousFileSkipDisabledWhenNegativeOne(t *testing.T) {
+	oldThreshold := config.AppConfig.MinBookSizeBytes
+	oldExts := config.AppConfig.SupportedExtensions
+	t.Cleanup(func() {
+		config.AppConfig.MinBookSizeBytes = oldThreshold
+		config.AppConfig.SupportedExtensions = oldExts
+	})
+	config.AppConfig.MinBookSizeBytes = -1 // disabled
+	config.AppConfig.SupportedExtensions = []string{".mp3"}
+
+	dir := t.TempDir()
+	smallFile := filepath.Join(dir, "tiny.mp3")
+	if err := os.WriteFile(smallFile, make([]byte, 100), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	books := []Book{{FilePath: smallFile, Format: ".mp3"}}
+
+	var savedState string
+	oldSaver := saveBook
+	t.Cleanup(func() { saveBook = oldSaver })
+	saveBook = func(b *Book) error {
+		savedState = b.LibraryState
+		return nil
+	}
+
+	err := ProcessBooksParallel(context.Background(), books, 1, nil, nil)
+	if err != nil {
+		t.Fatalf("ProcessBooksParallel: %v", err)
+	}
+	if savedState == "suspicious" {
+		t.Error("threshold=-1 should disable suspicious detection, but book was flagged")
 	}
 }
