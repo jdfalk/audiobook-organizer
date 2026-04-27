@@ -1,5 +1,5 @@
 // file: web/src/components/system/SystemInfoTab.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 import { useState, useEffect } from 'react';
@@ -21,6 +21,7 @@ import {
   Storage as StorageIcon,
   Code as CodeIcon,
   Refresh as RefreshIcon,
+  Timer as TimerIcon,
 } from '@mui/icons-material';
 import * as api from '../../services/api';
 
@@ -49,6 +50,10 @@ interface SystemInfo {
     size: number;
     books: number;
     folderCount: number;
+  };
+  uptime: {
+    appSeconds: number;
+    systemSeconds: number;
   };
 }
 
@@ -99,6 +104,10 @@ export function SystemInfoTab() {
           books: libraryBooks,
           folderCount,
         },
+        uptime: {
+          appSeconds: status.app_uptime_seconds ?? 0,
+          systemSeconds: status.system_uptime_seconds ?? 0,
+        },
       });
     } catch (err) {
       console.error('Failed to fetch system info:', err);
@@ -115,6 +124,20 @@ export function SystemInfoTab() {
     if (bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
+  const formatUptime = (totalSeconds: number): string => {
+    if (totalSeconds <= 0) return 'unknown';
+    const d = Math.floor(totalSeconds / 86400);
+    const h = Math.floor((totalSeconds % 86400) / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = Math.floor(totalSeconds % 60);
+    const parts: string[] = [];
+    if (d > 0) parts.push(`${d}d`);
+    if (h > 0) parts.push(`${h}h`);
+    if (m > 0) parts.push(`${m}m`);
+    parts.push(`${s}s`);
+    return parts.join(' ');
   };
 
   const getOSIcon = () => {
@@ -277,6 +300,37 @@ export function SystemInfoTab() {
                     Available Cores
                   </Typography>
                   <Typography variant="body1">{info.cpu.cores}</Typography>
+                </Box>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Uptime */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+                <TimerIcon color="primary" />
+                <Typography variant="h6">Uptime</Typography>
+              </Stack>
+              <Stack spacing={1.5}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    Application
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatUptime(info.uptime.appSeconds)}
+                  </Typography>
+                </Box>
+                <Divider />
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    System
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatUptime(info.uptime.systemSeconds)}
+                  </Typography>
                 </Box>
               </Stack>
             </CardContent>

@@ -1,5 +1,5 @@
 // file: internal/server/system_service.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
 
 package server
@@ -24,11 +24,12 @@ type systemServiceStore interface {
 
 
 type SystemService struct {
-	db systemServiceStore
+	db        systemServiceStore
+	startTime time.Time
 }
 
 func NewSystemService(db systemServiceStore) *SystemService {
-	return &SystemService{db: db}
+	return &SystemService{db: db, startTime: time.Now()}
 }
 
 type SystemStatus struct {
@@ -50,6 +51,8 @@ type SystemStatus struct {
 	Runtime          SystemRuntimeStatus  `json:"runtime"`
 	Operations       SystemOperationsInfo `json:"operations"`
 	PluginHealth     map[string]string    `json:"plugin_health,omitempty"`
+	AppUptimeSeconds    float64              `json:"app_uptime_seconds"`
+	SystemUptimeSeconds float64              `json:"system_uptime_seconds"`
 }
 
 type SystemLibraryStatus struct {
@@ -178,6 +181,8 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 		Operations: SystemOperationsInfo{
 			Recent: recentOps,
 		},
+		AppUptimeSeconds:    time.Since(ss.startTime).Seconds(),
+		SystemUptimeSeconds: sysinfo.GetSystemUptimeSeconds(),
 	}
 
 	return status, nil
