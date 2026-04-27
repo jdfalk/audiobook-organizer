@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.56.1
+// version: 4.57.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -2779,8 +2779,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 	writtenCount := 0
 	skippedProtected := 0
 
-	// Embed cover art BEFORE writing tags — ffmpeg's cover embed (-map_metadata 0)
-	// does not preserve freeform iTunes atoms, so we embed first and write tags last.
+	// Embed cover art via TagLib (independent of tag writes — no ordering constraint).
 	if config.AppConfig.RootDir != "" {
 		mfs.embedCoverInBookFiles(book, metadata.CoverPathForBook(config.AppConfig.RootDir, book.ID))
 	}
@@ -2924,9 +2923,6 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 			Summary: fmt.Sprintf("Wrote tags to %d file(s) for %s", writtenCount, book.Title),
 		})
 	}
-
-	// Cover art already embedded above (before tag write) to prevent
-	// ffmpeg's -map_metadata from clobbering freeform iTunes atoms.
 
 	// Stamp last_written_at
 	if writtenCount > 0 {
