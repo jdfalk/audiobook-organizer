@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.193.0
+// version: 1.193.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1159,6 +1159,7 @@ func NewServer(store database.Store) *Server {
 		aw := activity.NewWriter(server.activityService.Store(), 10000)
 		aw.Start()
 		server.activityWriter = aw
+		server.scanService.SetActivityWriter(aw)
 		log.SetOutput(aw)
 
 		// Task 15: iTunes sync → activity log
