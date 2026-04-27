@@ -927,7 +927,7 @@ func (s *Server) runBulkWriteBack(
 	startIdx int,
 	progress operations.ProgressReporter,
 ) error {
-	const workers = 8
+	const workers = 2
 
 	store := s.Store()
 	mfs := s.metadataFetchService
