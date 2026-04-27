@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -859,4 +859,60 @@ func (s *Server) runMaintenanceWindowNow(c *gin.Context) {
 		return
 	}
 	RespondWithSuccess(c, 202, gin.H{"message": "maintenance window triggered"})
+}
+
+// getMaintenanceWindowStatus returns current schedule config and live running status.
+func (s *Server) getMaintenanceWindowStatus(c *gin.Context) {
+	if s.scheduler == nil {
+		RespondWithInternalError(c, "scheduler not initialized")
+		return
+	}
+	cfg := config.AppConfig
+	RespondWithOK(c, gin.H{
+		"enabled":           cfg.MaintenanceWindowEnabled,
+		"window_start":      cfg.MaintenanceWindowStart,
+		"window_end":        cfg.MaintenanceWindowEnd,
+		"last_run_date":     s.scheduler.GetLastMaintenanceRunDate(),
+		"next_run_estimate": calculateNextWindowRun(cfg.MaintenanceWindowStart),
+		"currently_running": s.scheduler.IsMaintenanceRunning(),
+	})
+}
+
+// calculateNextWindowRun returns the next RFC3339 timestamp when startHour occurs locally.
+func calculateNextWindowRun(startHour int) string {
+	now := time.Now()
+	next := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, now.Location())
+	if !next.After(now) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next.Format(time.RFC3339)
+}
+
+type maintenanceWindowConfigReq struct {
+	Enabled     bool `json:"enabled"`
+	WindowStart int  `json:"window_start"`
+	WindowEnd   int  `json:"window_end"`
+}
+
+// updateMaintenanceWindowConfig persists maintenance window schedule settings.
+func (s *Server) updateMaintenanceWindowConfig(c *gin.Context) {
+	var req maintenanceWindowConfigReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondWithBadRequest(c, err.Error())
+		return
+	}
+	if req.WindowStart < 0 || req.WindowStart > 23 || req.WindowEnd < 0 || req.WindowEnd > 23 {
+		RespondWithBadRequest(c, "window_start and window_end must be 0-23")
+		return
+	}
+	config.AppConfig.MaintenanceWindowEnabled = req.Enabled
+	config.AppConfig.MaintenanceWindowStart = req.WindowStart
+	config.AppConfig.MaintenanceWindowEnd = req.WindowEnd
+	if s.Store() != nil {
+		if err := config.SaveConfigToDatabase(s.Store()); err != nil {
+			internalError(c, "failed to save maintenance window config", err)
+			return
+		}
+	}
+	RespondWithOK(c, gin.H{"ok": true})
 }

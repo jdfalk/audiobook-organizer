@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.192.0
+// version: 1.193.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2420,6 +2420,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/tasks/:name/run", s.perm(auth.PermSettingsManage), s.runTask)
 			protected.PUT("/tasks/:name", s.perm(auth.PermSettingsManage), s.updateTaskConfig)
 			protected.POST("/maintenance-window/run", s.perm(auth.PermSettingsManage), s.runMaintenanceWindowNow)
+			protected.GET("/maintenance-window/status", s.perm(auth.PermSettingsManage), s.getMaintenanceWindowStatus)
+			protected.PUT("/maintenance-window/config", s.perm(auth.PermSettingsManage), s.updateMaintenanceWindowConfig)
 			protected.POST("/maintenance/fix-read-by-narrator", s.perm(auth.PermSettingsManage), s.handleFixReadByNarrator)
 			protected.POST("/maintenance/cleanup-series", s.perm(auth.PermSettingsManage), s.handleCleanupSeries)
 			protected.POST("/maintenance/backfill-book-files", s.perm(auth.PermSettingsManage), s.handleBackfillBookFiles)
