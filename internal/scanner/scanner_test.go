@@ -448,26 +448,15 @@ func TestProcessBooks(t *testing.T) {
 }
 
 func TestBookLibraryStateField(t *testing.T) {
-	// Verify the field exists and is accessible on Book.
-	// The threading of LibraryState into the saved DB record is exercised by
-	// TestSuspiciousFileSkipped which calls ProcessBooksParallel end-to-end.
+	// Compile-check: Book.LibraryState field exists and is assignable.
+	// The threading through saveBookToDatabase into the DB record is exercised
+	// by TestSuspiciousFileSkipped (added in the next task).
 	b := Book{LibraryState: "suspicious"}
 	if b.LibraryState != "suspicious" {
 		t.Errorf("expected LibraryState=suspicious, got %q", b.LibraryState)
 	}
-
-	// Verify the default fallback logic: empty LibraryState → "imported".
-	derive := func(libraryState string) string {
-		ls := "imported"
-		if libraryState != "" {
-			ls = libraryState
-		}
-		return ls
-	}
-	if got := derive(""); got != "imported" {
-		t.Errorf("empty LibraryState: expected 'imported', got %q", got)
-	}
-	if got := derive("suspicious"); got != "suspicious" {
-		t.Errorf("non-empty LibraryState: expected 'suspicious', got %q", got)
+	b2 := Book{}
+	if b2.LibraryState != "" {
+		t.Errorf("zero-value LibraryState should be empty string, got %q", b2.LibraryState)
 	}
 }
