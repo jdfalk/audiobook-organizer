@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.17.0
+// version: 1.17.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -281,6 +281,31 @@ func (ts *TaskScheduler) registerAllTasks() {
 		},
 		RunOnStart:             func() bool { return config.AppConfig.ScheduledSeriesPruneOnStartup },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowSeriesPrune },
+	})
+
+	ts.registerTask(TaskDefinition{
+		Name:        "series_normalize",
+		Description: "Strip title/position contamination from series names and run write-back + organize for affected books",
+		Category:    "maintenance",
+		TriggerFn: func() (*database.Operation, error) {
+			return ts.triggerOperation("series-normalize", func(ctx context.Context, progress operations.ProgressReporter) error {
+				store := ts.server.Store()
+				if store == nil {
+					return fmt.Errorf("database not initialized")
+				}
+				enqueueWB := func(bookID string) {
+					if ts.server.writeBackBatcher != nil {
+						ts.server.writeBackBatcher.Enqueue(bookID)
+					}
+				}
+				_, err := executeSeriesNormalizeCore(ctx, store, enqueueWB)
+				return err
+			})
+		},
+		IsEnabled:              func() bool { return true },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return false },
 	})
 
 	ts.registerTask(TaskDefinition{
