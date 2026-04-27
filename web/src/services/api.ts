@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.4.0
+// version: 2.5.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3222,6 +3222,7 @@ export interface TaskInfo {
   run_on_startup: boolean;
   run_in_maintenance_window: boolean;
   last_run?: string;
+  is_running: boolean;
 }
 
 export async function getRegisteredTasks(): Promise<TaskInfo[]> {
@@ -3229,7 +3230,8 @@ export async function getRegisteredTasks(): Promise<TaskInfo[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch tasks');
   }
-  return response.json();
+  const body = await response.json();
+  return Array.isArray(body) ? body : (body?.data ?? []);
 }
 
 export async function runTask(name: string): Promise<Operation | { message: string }> {
@@ -3259,6 +3261,36 @@ export async function updateTaskConfig(
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to update task config');
   }
+}
+
+export interface MaintenanceWindowStatus {
+  enabled: boolean;
+  window_start: number;
+  window_end: number;
+  last_run_date: string;
+  next_run_estimate: string;
+  currently_running: boolean;
+}
+
+export interface MaintenanceWindowConfig {
+  enabled: boolean;
+  window_start: number;
+  window_end: number;
+}
+
+export async function getMaintenanceWindowStatus(): Promise<MaintenanceWindowStatus> {
+  const response = await fetch(`${API_BASE}/maintenance-window/status`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to fetch maintenance window status');
+  return response.json();
+}
+
+export async function updateMaintenanceWindowConfig(cfg: MaintenanceWindowConfig): Promise<void> {
+  const response = await fetch(`${API_BASE}/maintenance-window/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to update maintenance window config');
 }
 
 // AI Author Review

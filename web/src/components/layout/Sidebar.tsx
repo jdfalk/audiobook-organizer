@@ -1,5 +1,5 @@
 // file: web/src/components/layout/Sidebar.tsx
-// version: 1.11.0
+// version: 1.12.0
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
 import { useState } from 'react';
@@ -28,7 +28,6 @@ import MonitorIcon from '@mui/icons-material/Monitor.js';
 import SettingsIcon from '@mui/icons-material/Settings.js';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
 import MergeTypeIcon from '@mui/icons-material/MergeType.js';
-import BuildIcon from '@mui/icons-material/Build.js';
 import BugReportIcon from '@mui/icons-material/BugReport.js';
 import CollectionsBookmarkIcon from '@mui/icons-material/CollectionsBookmark.js';
 import PeopleIcon from '@mui/icons-material/People.js';
@@ -58,7 +57,6 @@ const menuItems = [
   { text: 'Works', icon: <MenuBookIcon />, path: '/works' },
   { text: 'Playlists', icon: <MenuBookIcon />, path: '/playlists' },
   { text: 'Activity', icon: <TimelineIcon />, path: '/activity' },
-  { text: 'Maintenance', icon: <BuildIcon />, path: '/maintenance' },
   { text: 'Dedup', icon: <MergeTypeIcon />, path: '/dedup' },
   { text: 'Diagnostics', icon: <BugReportIcon />, path: '/diagnostics' },
   { text: 'System', icon: <MonitorIcon />, path: '/system' },

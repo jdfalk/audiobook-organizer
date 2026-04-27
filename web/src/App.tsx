@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.17.0
+// version: 1.18.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
@@ -40,10 +40,6 @@ const Settings = lazy(() =>
 );
 const FileBrowser = lazy(() =>
   import('./pages/FileBrowser').then((m) => ({ default: m.FileBrowser }))
-);
-// Operations page removed — redirects to /activity
-const Maintenance = lazy(() =>
-  import('./pages/Maintenance').then((m) => ({ default: m.Maintenance }))
 );
 const BookDedup = lazy(() =>
   import('./pages/BookDedup').then((m) => ({ default: m.BookDedup }))
@@ -207,7 +203,7 @@ function App() {
               <Route path="/login" element={<Navigate to="/dashboard" replace />} />
               <Route path="/files" element={<FileBrowser />} />
               <Route path="/operations" element={<Navigate to="/activity" replace />} />
-              <Route path="/maintenance" element={<Maintenance />} />
+              <Route path="/maintenance" element={<Navigate to="/system" replace />} />
               <Route path="/authors/dedup" element={<Navigate to="/dedup" replace />} />
               <Route path="/books/dedup" element={<Navigate to="/dedup" replace />} />
               <Route path="/dedup" element={<BookDedup />} />
