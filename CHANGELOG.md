@@ -1,13 +1,20 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.34.0 -->
+<!-- version: 2.35.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-27 -->
+<!-- last-edited: 2026-04-28 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 28, 2026 — Operation lifecycle toast notifications (feat/op-notifications)
+
+- **`useOperationsStore.startPolling`** now accepts a `resumed?: boolean` parameter. Shows a bottom-left toast (`info`) when an operation starts or resumes, and a `success`/`error`/`info` toast when it completes/fails/cancels.
+- **`OperationsIndicator.checkActiveOps`** passes `resumed=true` when picking up operations already running on the server (resumed from a restart). Those show "X resumed" rather than "X started."
+- **`formatOpLabel`** — shared label map moved into the store (previously only in `OperationsIndicator`), covering all known operation types.
+- **Design spec written** for backend async conversion (13+ maintenance handlers → operation queue with progress, cancel, resume on restart). Spec: `docs/superpowers/specs/2026-04-28-async-operations-design.md`. TODO items ASYNC-1..3 added (spec-pending, no bot-task yet).
 
 #### April 27, 2026 — Series name normalization (feat/series-name-normalization)
 
