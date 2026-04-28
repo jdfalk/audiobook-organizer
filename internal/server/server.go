@@ -1503,6 +1503,17 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.itunesSvc.Repair.Repair(ctx, repairOpID, true, progress)
 			}
+		case "composer_tag_scan":
+			params, _ := operations.LoadParams[operations.ComposerScanParams](store, opID)
+			if params == nil {
+				log.Printf("[WARN] No params found for interrupted composer_tag_scan %s, marking failed", opID)
+				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
+				continue
+			}
+			capturedParams := *params
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.runComposerTagScan(ctx, opID, capturedParams, store, progress)
+			}
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
@@ -2444,6 +2455,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/recompute-itunes-paths", s.perm(auth.PermSettingsManage), s.handleRecomputeITunesPaths)
 			protected.POST("/maintenance/generate-itl-tests", s.perm(auth.PermSettingsManage), s.handleGenerateITLTests)
 			protected.POST("/maintenance/scan-composer-tags", s.perm(auth.PermSettingsManage), s.handleScanComposerTags)
+			protected.GET("/maintenance/scan-composer-tags/:id", s.perm(auth.PermSettingsManage), s.handleGetComposerScanResults)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")
