@@ -4207,9 +4207,21 @@ func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
 		}
 
 		// Book path is under organizer root and doesn't exist — candidate.
-		authorName := ""
-		if book.Author != nil {
-			authorName = book.Author.Name
+		// Derive author name from the organizer path (first component after root)
+		// so we don't need a DB join. Fall back to DB author lookup if path is
+		// ambiguous (e.g. file directly in root).
+		rel := strings.TrimPrefix(fp, organizerRoot)
+		rel = strings.TrimPrefix(rel, string(os.PathSeparator))
+		authorName := strings.SplitN(rel, string(os.PathSeparator), 2)[0]
+		if authorName == "" || authorName == filepath.Base(fp) {
+			// path is too flat — try DB author
+			if book.Author != nil {
+				authorName = book.Author.Name
+			} else if book.AuthorID != nil {
+				if a, err := store.GetAuthorByID(*book.AuthorID); err == nil && a != nil {
+					authorName = a.Name
+				}
+			}
 		}
 		if authorName == "" {
 			results = append(results, relinkMissingResult{
@@ -4217,7 +4229,7 @@ func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
 				Title:   book.Title,
 				OldPath: fp,
 				Action:  "unresolved",
-				Error:   "no author name in DB",
+				Error:   "no author name",
 			})
 			unresolved++
 			continue
