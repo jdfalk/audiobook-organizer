@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.35.0 -->
+<!-- version: 2.36.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-28 -->
 
@@ -8,6 +8,16 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 28, 2026 — iTunes relink endpoint for broken organizer-root books (fix/broken-book-paths, PR #507)
+
+- **`POST /api/v1/maintenance/relink-missing-to-itunes`** — finds books whose `file_path` is under the organizer root but no longer exists on disk, then searches the iTunes media folder and relinks DB records.
+  - `findInITunes` groups by album directory so a 10-track book yields 1 match instead of 10.
+  - `disambiguate()` scoring: exact/truncated-filename title match, trailing-number penalty (avoids sequel files), no-track-number bonus (album files preferred over tracks), author dir similarity, same-stem tiebreaker (picks lowest track for multi-part books).
+  - Author name derived from organizer path components (not DB join — `GetAllBooks` doesn't populate Author).
+- **Config**: `itunes_path_trim_enabled` (default OFF), `itunes_windows_root_path`, `itunes_media_root` added.
+- **`handleFixBookFilePaths`** extended to repair truncated filenames: scans parent dir for files whose stem starts with the truncated stem.
+- **Production result**: 59/72 broken organizer-root books relinked (0 ambiguous, 13 genuinely missing from iTunes).
 
 #### April 28, 2026 — Operation lifecycle toast notifications (feat/op-notifications)
 
