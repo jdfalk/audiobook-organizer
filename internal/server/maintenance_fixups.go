@@ -4298,11 +4298,515 @@ func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"dry_run":   dryRun,
-		"relinked":  relinked,
-		"ambiguous": ambiguous,
+		"dry_run":    dryRun,
+		"relinked":   relinked,
+		"ambiguous":  ambiguous,
 		"unresolved": unresolved,
-		"skipped":   skipped,
-		"results":   results,
+		"skipped":    skipped,
+		"results":    results,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Async resumable missing-file path repair
+// ---------------------------------------------------------------------------
+
+// bookFileMeta is a lightweight holder used by runMissingFileRepair to pass
+// title and author to the per-file worker without keeping all Book fields alive.
+type bookFileMeta struct {
+	title  string
+	author string
+}
+
+type missingFileRepairResult struct {
+	FileID  string `json:"file_id"`
+	BookID  string `json:"book_id"`
+	Title   string `json:"book_title"`
+	OldPath string `json:"old_path"`
+	NewPath string `json:"new_path,omitempty"`
+	// Method values: "pid", "filename", "truncation", "author_title",
+	// "skipped", "unresolved", "ambiguous"
+	Method  string `json:"method"`
+	Matches int    `json:"matches,omitempty"`
+	Applied bool   `json:"applied"`
+	Error   string `json:"error,omitempty"`
+}
+
+// handleRepairMissingFiles starts an async, resumable missing-file path-repair
+// operation. For each book_file row whose stored path doesn't exist on disk it
+// tries four escalating strategies — PID lookup, exact filename, stem
+// truncation, author+title walk — and on a confident single match updates only
+// the file_path field of the existing record.
+//
+// Never creates new Book or BookFile rows, so the dedup pipeline is never
+// triggered.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without writing
+//   - dry_run=false — actually update book_file rows
+//
+// Poll progress: GET /api/v1/operations/{id}
+// View results:  GET /api/v1/maintenance/repair-missing-files/{id}
+func (s *Server) handleRepairMissingFiles(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	roots := []string{config.AppConfig.ITunesMediaRoot, config.AppConfig.RootDir}
+	var searchRoots []string
+	for _, r := range roots {
+		if r != "" {
+			searchRoots = append(searchRoots, r)
+		}
+	}
+
+	opID := ulid.Make().String()
+	if _, err := store.CreateOperation(opID, "missing_file_repair", nil); err != nil {
+		internalError(c, "failed to create operation", err)
+		return
+	}
+
+	params := operations.MissingFileRepairParams{DryRun: dryRun, SearchRoots: searchRoots}
+	if err := operations.SaveParams(store, opID, params); err != nil {
+		log.Printf("[WARN] repair-missing-files: failed to save params for %s: %v", opID, err)
+	}
+
+	capturedOpID := opID
+	capturedParams := params
+	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return s.runMissingFileRepair(ctx, capturedOpID, capturedParams, store, progress)
+	}
+	if err := s.queue.Enqueue(opID, "missing_file_repair", operations.PriorityNormal, opFunc); err != nil {
+		internalError(c, "failed to enqueue operation", err)
+		return
+	}
+
+	log.Printf("[INFO] repair-missing-files: queued %s dry_run=%v roots=%v", opID, dryRun, searchRoots)
+	c.JSON(http.StatusAccepted, gin.H{
+		"operation_id": opID,
+		"message":      "missing file repair started — poll GET /api/v1/operations/" + opID,
+		"dry_run":      dryRun,
+		"search_roots": searchRoots,
+	})
+}
+
+// runMissingFileRepair is the resumable core. Idempotent: files already
+// processed in a prior run are detected via existing OperationResult rows
+// (keyed by book_file ID) and skipped.
+func (s *Server) runMissingFileRepair(
+	ctx context.Context,
+	opID string,
+	params operations.MissingFileRepairParams,
+	store database.Store,
+	progress operations.ProgressReporter,
+) error {
+	_ = progress.UpdateProgress(0, 0, "loading library data")
+
+	allFiles, err := store.GetAllBookFiles()
+	if err != nil {
+		return fmt.Errorf("GetAllBookFiles: %w", err)
+	}
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		return fmt.Errorf("GetAllBooks: %w", err)
+	}
+	allAuthors, err := store.GetAllAuthors()
+	if err != nil {
+		return fmt.Errorf("GetAllAuthors: %w", err)
+	}
+	authorByID := make(map[int]string, len(allAuthors))
+	for _, a := range allAuthors {
+		authorByID[a.ID] = a.Name
+	}
+	metaByBook := make(map[string]bookFileMeta, len(allBooks))
+	for i := range allBooks {
+		b := &allBooks[i]
+		author := ""
+		if b.AuthorID != nil {
+			author = authorByID[*b.AuthorID]
+		}
+		metaByBook[b.ID] = bookFileMeta{title: b.Title, author: author}
+	}
+
+	// Collect candidates: files the DB thinks exist but os.Stat disagrees.
+	var candidates []database.BookFile
+	for i := range allFiles {
+		f := &allFiles[i]
+		if f.FilePath == "" || f.Missing {
+			continue
+		}
+		if _, statErr := os.Stat(f.FilePath); statErr == nil {
+			continue
+		}
+		candidates = append(candidates, *f)
+	}
+
+	// Skip files already processed in a prior run.
+	existingResults, _ := store.GetOperationResults(opID)
+	done := make(map[string]bool, len(existingResults))
+	for _, r := range existingResults {
+		done[r.BookID] = true // BookID stores file_id for this operation
+	}
+	var work []database.BookFile
+	for _, f := range candidates {
+		if !done[f.ID] {
+			work = append(work, f)
+		}
+	}
+
+	totalFiles := len(existingResults) + len(work)
+	alreadyDone := len(existingResults)
+	log.Printf("[INFO] repair-missing-files %s: %d candidates, %d already done, %d to process",
+		opID, totalFiles, alreadyDone, len(work))
+	_ = progress.UpdateProgress(alreadyDone, totalFiles,
+		fmt.Sprintf("resuming: %d/%d already processed", alreadyDone, totalFiles))
+
+	if len(work) == 0 {
+		_ = progress.UpdateProgress(totalFiles, totalFiles, "all files already processed")
+		return nil
+	}
+
+	// Parse iTunes XML once for PID-based lookups.
+	pidToLocation := make(map[string]string)
+	if xmlPath := config.AppConfig.ITunesLibraryReadPath; xmlPath != "" {
+		if lib, parseErr := itunes.ParseLibrary(xmlPath); parseErr != nil {
+			log.Printf("[WARN] repair-missing-files %s: iTunes XML parse error: %v", opID, parseErr)
+		} else {
+			for _, track := range lib.Tracks {
+				if track.PersistentID != "" && track.Location != "" {
+					pidToLocation[track.PersistentID] = track.Location
+				}
+			}
+			log.Printf("[INFO] repair-missing-files %s: loaded %d PID→location entries", opID, len(pidToLocation))
+		}
+	}
+
+	itunesOpts := itunes.ImportOptions{PathMappings: make([]itunes.PathMapping, len(config.AppConfig.ITunesPathMappings))}
+	for i, m := range config.AppConfig.ITunesPathMappings {
+		itunesOpts.PathMappings[i] = itunes.PathMapping{From: m.From, To: m.To}
+	}
+
+	audioExts := map[string]bool{".m4b": true, ".m4a": true, ".mp3": true, ".flac": true, ".ogg": true, ".opus": true}
+
+	// Build a basename→paths filename index across all search roots (once, lazily).
+	var filenameIdx map[string][]string
+	var idxOnce sync.Once
+	buildIdx := func() {
+		idxOnce.Do(func() {
+			_ = progress.UpdateProgress(alreadyDone, totalFiles, "building filename index…")
+			idx := make(map[string][]string, 200000)
+			for _, root := range params.SearchRoots {
+				_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+					if walkErr != nil || d.IsDir() {
+						return nil
+					}
+					if audioExts[strings.ToLower(filepath.Ext(path))] {
+						base := filepath.Base(path)
+						idx[base] = append(idx[base], path)
+					}
+					return nil
+				})
+			}
+			filenameIdx = idx
+			log.Printf("[INFO] repair-missing-files %s: filename index built (%d unique names)", opID, len(idx))
+		})
+	}
+
+	var completed int64 = int64(alreadyDone)
+	var mu sync.Mutex
+
+	workCh := make(chan database.BookFile, len(work))
+	for _, f := range work {
+		workCh <- f
+	}
+	close(workCh)
+
+	var wg sync.WaitGroup
+	const workers = 4
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for f := range workCh {
+				if ctx.Err() != nil {
+					return
+				}
+				res := s.repairOneMissingFile(f, metaByBook, pidToLocation, itunesOpts,
+					params, audioExts, buildIdx, func() map[string][]string {
+						mu.Lock()
+						defer mu.Unlock()
+						return filenameIdx
+					}, store, opID)
+
+				resultJSON, _ := json.Marshal(res)
+				_ = store.CreateOperationResult(&database.OperationResult{
+					OperationID: opID,
+					BookID:      f.ID,
+					ResultJSON:  string(resultJSON),
+					Status:      res.Method,
+				})
+				n := atomic.AddInt64(&completed, 1)
+				mu.Lock()
+				_ = progress.UpdateProgress(int(n), totalFiles, fmt.Sprintf("processed %d/%d", n, totalFiles))
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+
+	finalCount := atomic.LoadInt64(&completed)
+	_ = progress.UpdateProgress(int(finalCount), totalFiles, "repair complete")
+	log.Printf("[INFO] repair-missing-files %s: finished %d/%d files", opID, finalCount, totalFiles)
+	return nil
+}
+
+// repairOneMissingFile tries four strategies in order and returns a result.
+// It only calls UpdateBookFile — never CreateBook or CreateBookFile.
+func (s *Server) repairOneMissingFile(
+	f database.BookFile,
+	metaByBook map[string]bookFileMeta,
+	pidToLocation map[string]string,
+	itunesOpts itunes.ImportOptions,
+	params operations.MissingFileRepairParams,
+	audioExts map[string]bool,
+	buildIdx func(),
+	getIdx func() map[string][]string,
+	store database.Store,
+	opID string,
+) missingFileRepairResult {
+	bm := metaByBook[f.BookID]
+	res := missingFileRepairResult{
+		FileID:  f.ID,
+		BookID:  f.BookID,
+		Title:   bm.title,
+		OldPath: f.FilePath,
+	}
+
+	// Re-check: another goroutine or prior session may have fixed it.
+	if _, statErr := os.Stat(f.FilePath); statErr == nil {
+		res.Method = "skipped"
+		return res
+	}
+
+	candidate, method := "", ""
+
+	// Tier 1: iTunes PID → XML Location → RemapPath
+	if candidate == "" && f.ITunesPersistentID != "" {
+		if loc, ok := pidToLocation[f.ITunesPersistentID]; ok {
+			remapped := itunesOpts.RemapPath(loc)
+			if remapped != "" && remapped != loc {
+				if _, statErr := os.Stat(remapped); statErr == nil {
+					candidate, method = remapped, "pid"
+				}
+			}
+		}
+	}
+
+	// Tier 2: exact basename search across filename index
+	if candidate == "" {
+		buildIdx()
+		base := filepath.Base(f.FilePath)
+		idx := getIdx()
+		paths := idx[base]
+		switch len(paths) {
+		case 1:
+			candidate, method = paths[0], "filename"
+			res.Matches = 1
+		case 0:
+			// no match
+		default:
+			// Multiple — narrow by parent dir name
+			parentDir := filepath.Base(filepath.Dir(f.FilePath))
+			var narrowed []string
+			for _, p := range paths {
+				if strings.EqualFold(filepath.Base(filepath.Dir(p)), parentDir) {
+					narrowed = append(narrowed, p)
+				}
+			}
+			if len(narrowed) == 1 {
+				candidate, method = narrowed[0], "filename"
+				res.Matches = 1
+			} else {
+				res.Method = "ambiguous"
+				res.Matches = len(paths)
+				return res
+			}
+		}
+	}
+
+	// Tier 3: stem-prefix match in the same directory (truncated filename)
+	if candidate == "" {
+		dir := filepath.Dir(f.FilePath)
+		base := filepath.Base(f.FilePath)
+		ext := filepath.Ext(base)
+		stem := strings.TrimSuffix(base, ext)
+		if entries, readErr := os.ReadDir(dir); readErr == nil {
+			for _, de := range entries {
+				if de.IsDir() {
+					continue
+				}
+				name := de.Name()
+				nameExt := filepath.Ext(name)
+				nameStem := strings.TrimSuffix(name, nameExt)
+				if strings.EqualFold(nameExt, ext) &&
+					strings.HasPrefix(nameStem, stem) &&
+					name != base &&
+					len(nameStem) > len(stem) &&
+					nameStem[len(stem)] != ' ' {
+					candidate, method = filepath.Join(dir, name), "truncation"
+					break
+				}
+			}
+		}
+	}
+
+	// Tier 4: author+title walk under search roots
+	if candidate == "" && bm.author != "" && bm.title != "" {
+		authorWord := bm.author
+		if idx := strings.Index(bm.author, " "); idx > 0 {
+			authorWord = bm.author[:idx]
+		}
+		titlePrefix := bm.title
+		if len(titlePrefix) > 25 {
+			titlePrefix = titlePrefix[:25]
+		}
+		var matches []string
+		for _, root := range params.SearchRoots {
+			entries, rerr := os.ReadDir(root)
+			if rerr != nil {
+				continue
+			}
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				if !strings.Contains(strings.ToLower(entry.Name()), strings.ToLower(authorWord)) {
+					continue
+				}
+				_ = filepath.WalkDir(filepath.Join(root, entry.Name()), func(path string, d os.DirEntry, walkErr error) error {
+					if walkErr != nil || d.IsDir() {
+						return nil
+					}
+					if audioExts[strings.ToLower(filepath.Ext(path))] &&
+						strings.Contains(strings.ToLower(filepath.Base(path)), strings.ToLower(titlePrefix)) {
+						matches = append(matches, path)
+					}
+					return nil
+				})
+			}
+		}
+		switch len(matches) {
+		case 1:
+			candidate, method = matches[0], "author_title"
+			res.Matches = 1
+		case 0:
+			// no match
+		default:
+			res.Method = "ambiguous"
+			res.Matches = len(matches)
+			return res
+		}
+	}
+
+	if candidate == "" {
+		res.Method = "unresolved"
+		return res
+	}
+
+	res.NewPath = candidate
+	res.Method = method
+	res.Matches = 1
+
+	if params.DryRun {
+		return res
+	}
+
+	fi, _ := os.Stat(candidate)
+	f.FilePath = candidate
+	f.OriginalFilename = filepath.Base(candidate)
+	f.Missing = false
+	if fi != nil {
+		f.FileSize = fi.Size()
+	}
+	if ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(candidate), ".")); ext != "" {
+		f.Format = ext
+	}
+	if upErr := store.UpdateBookFile(f.ID, &f); upErr != nil {
+		res.Error = upErr.Error()
+		log.Printf("[WARN] repair-missing-files %s: UpdateBookFile %s: %v", opID, f.ID, upErr)
+	} else {
+		res.Applied = true
+		log.Printf("[INFO] repair-missing-files %s: repaired via %s: %q → %q", opID, method, res.OldPath, candidate)
+	}
+	return res
+}
+
+// handleGetMissingFileRepairResults returns aggregated results for a
+// missing_file_repair operation (in-progress or completed).
+func (s *Server) handleGetMissingFileRepairResults(c *gin.Context) {
+	opID := c.Param("id")
+	if opID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "operation id required"})
+		return
+	}
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	op, err := store.GetOperationByID(opID)
+	if err != nil || op == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		return
+	}
+	if op.Type != "missing_file_repair" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "not a missing_file_repair operation"})
+		return
+	}
+	rawResults, err := store.GetOperationResults(opID)
+	if err != nil {
+		internalError(c, "failed to load results", err)
+		return
+	}
+
+	byMethod := map[string]int{}
+	var problems []missingFileRepairResult
+	repaired, unresolved, ambiguous, skipped := 0, 0, 0, 0
+	for _, raw := range rawResults {
+		var r missingFileRepairResult
+		if jsonErr := json.Unmarshal([]byte(raw.ResultJSON), &r); jsonErr != nil {
+			continue
+		}
+		byMethod[r.Method]++
+		switch r.Method {
+		case "unresolved":
+			unresolved++
+			problems = append(problems, r)
+		case "ambiguous":
+			ambiguous++
+			problems = append(problems, r)
+		case "skipped":
+			skipped++
+		default:
+			repaired++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"operation_id": opID,
+		"status":       op.Status,
+		"progress":     op.Progress,
+		"total":        op.Total,
+		"by_method":    byMethod,
+		"repaired":     repaired,
+		"unresolved":   unresolved,
+		"ambiguous":    ambiguous,
+		"skipped":      skipped,
+		"problems":     problems,
 	})
 }
