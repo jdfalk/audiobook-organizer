@@ -186,8 +186,17 @@ Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/
 
 ### Async Operations — Unified Maintenance System
 
-> 🔍 **AWAITING OPUS REVIEW** — All bot-task files written; pending devil's advocate + code review
-> before burndown bot pickup. Design: [`docs/superpowers/specs/2026-04-28-unified-maintenance-system.md`](docs/superpowers/specs/2026-04-28-unified-maintenance-system.md)
+> 🛑 **BLOCKED ON SPEC REVISION — DO NOT BURNDOWN.** Opus review (2026-04-28) found
+> BLOCKERs in CORE-2 (unverified `s.Store()` / `s.queue.Enqueue` / `EnqueueResume`
+> signatures, body-bind into `json.RawMessage`, `default:` insertion assuming a
+> switch), placeholder business logic in W1-3 / W1-4 / W2-4 / W3-2 (will land
+> no-op PRs with green CI on destructive paths), `**` glob bug in W3-3, missing
+> `itunes_path_trim_enabled` handling in W3-5, and CLEAN-1 gating that only
+> checks PR labels (not registry presence). All bot-task entries below are
+> intentionally left unchecked but **must not be picked up by the burndown bot
+> until the spec is revised.** Tracked as ASYNC-REVISE.
+>
+> Design: [`docs/superpowers/specs/2026-04-28-unified-maintenance-system.md`](docs/superpowers/specs/2026-04-28-unified-maintenance-system.md)
 > Dependency system: [`docs/superpowers/specs/2026-04-28-pr-label-dependencies.md`](docs/superpowers/specs/2026-04-28-pr-label-dependencies.md)
 > Opus brief: [`docs/superpowers/specs/2026-04-28-opus-review-brief.md`](docs/superpowers/specs/2026-04-28-opus-review-brief.md)
 
