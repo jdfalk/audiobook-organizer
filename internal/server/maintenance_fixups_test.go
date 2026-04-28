@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e
 
 package server
@@ -294,5 +294,66 @@ func TestCountErrors(t *testing.T) {
 	}
 	if got := countErrors(results); got != 2 {
 		t.Errorf("countErrors = %d, want 2", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// categorizeComposer tests
+// ---------------------------------------------------------------------------
+
+func TestCategorizeComposer_SetNarratorMode(t *testing.T) {
+	cases := []struct {
+		name      string
+		composer  string
+		author    string
+		narrator  string
+		wantCat   string
+		wantWrite string
+	}{
+		{"ok_empty_no_narrator", "", "", "", "ok", ""},
+		{"ok_narrator_matches", "Nick Podehl", "", "Nick Podehl", "ok", "Nick Podehl"},
+		{"missing_narrator", "", "Brandon Sanderson", "Nick Podehl", "missing_narrator", "Nick Podehl"},
+		{"composer_equals_author", "Brandon Sanderson", "Brandon Sanderson", "Nick Podehl", "composer_equals_author", "Nick Podehl"},
+		{"composer_mismatch", "Some Random String", "Brandon Sanderson", "Nick Podehl", "composer_mismatch", "Nick Podehl"},
+		{"case_insensitive_author", "brandon sanderson", "Brandon Sanderson", "", "composer_equals_author", ""},
+		{"case_insensitive_narrator", "nick podehl", "", "Nick Podehl", "ok", "Nick Podehl"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cat, write := categorizeComposer(tc.composer, tc.author, tc.narrator, "set_narrator")
+			if cat != tc.wantCat {
+				t.Errorf("category = %q, want %q", cat, tc.wantCat)
+			}
+			if write != tc.wantWrite {
+				t.Errorf("willWrite = %q, want %q", write, tc.wantWrite)
+			}
+		})
+	}
+}
+
+func TestCategorizeComposer_ClearMode(t *testing.T) {
+	cases := []struct {
+		name      string
+		composer  string
+		author    string
+		narrator  string
+		wantCat   string
+		wantWrite string
+	}{
+		{"empty_ok", "", "Author", "Narrator", "ok", ""},
+		{"narrator_in_composer_flagged", "Nick Podehl", "", "Nick Podehl", "composer_equals_narrator", ""},
+		{"author_in_composer_flagged", "Brandon Sanderson", "Brandon Sanderson", "", "composer_equals_author", ""},
+		{"mismatch_flagged", "Garbage Text", "Author", "Narrator", "composer_mismatch", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cat, write := categorizeComposer(tc.composer, tc.author, tc.narrator, "clear")
+			if cat != tc.wantCat {
+				t.Errorf("category = %q, want %q", cat, tc.wantCat)
+			}
+			if write != tc.wantWrite {
+				t.Errorf("willWrite = %q, want %q", write, tc.wantWrite)
+			}
+		})
 	}
 }
