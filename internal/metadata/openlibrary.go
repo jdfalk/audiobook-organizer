@@ -1,5 +1,5 @@
 // file: internal/metadata/openlibrary.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata
@@ -116,6 +116,7 @@ type BookMetadata struct {
 	Genre          string
 	Series         string
 	SeriesPosition string
+	DurationSec    int // audio runtime in seconds (Audible: runtime_length_min × 60)
 }
 
 // SearchByTitle searches for books by title. Checks local dump store first if available.

@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -663,6 +663,8 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 				return book.ISBN10 != nil && strings.TrimSpace(*book.ISBN10) != ""
 			case "isbn13":
 				return book.ISBN13 != nil && strings.TrimSpace(*book.ISBN13) != ""
+			case "duration":
+				return book.Duration != nil && *book.Duration > 0
 			default:
 				return false
 			}
@@ -747,6 +749,16 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 					appliedFields = append(appliedFields, "isbn13")
 					didUpdate = true
 				}
+			}
+		}
+
+		if meta.DurationSec > 0 {
+			addFetched("duration", meta.DurationSec)
+			if shouldApply("duration", hasBookValue("duration")) {
+				dur := meta.DurationSec
+				book.Duration = &dur
+				appliedFields = append(appliedFields, "duration")
+				didUpdate = true
 			}
 		}
 
