@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_support.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 //
 // TagLib WASM writer (default, no CGO required).
@@ -40,6 +40,16 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _
 	}
 
 	return nil
+}
+
+// writeSingleTagWithTaglib writes one tag property without touching others.
+// Pass value="" to clear the property from the file.
+func writeSingleTagWithTaglib(filePath, tagName, value string) error {
+	abs, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("taglib abs: %w", err)
+	}
+	return taglib.WriteTags(abs, map[string][]string{tagName: {value}}, 0)
 }
 
 // readTagsWithTaglib reads tags from a file via the TagLib WASM runtime.

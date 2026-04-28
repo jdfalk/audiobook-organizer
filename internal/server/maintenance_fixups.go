@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -3653,6 +3653,193 @@ func (s *Server) handleCleanupBackups(c *gin.Context) {
 		"bytes_freed":   result.BytesFreed,
 		"human_freed":   humanizeBytes(result.BytesFreed),
 		"errors":        result.Errors,
+	})
+}
+
+// composerTagResult describes the COMPOSER field state for one audio file.
+type composerTagResult struct {
+	BookID    string `json:"book_id"`
+	BookTitle string `json:"book_title"`
+	FilePath  string `json:"file_path"`
+	// Category is one of: "ok", "composer_equals_author", "composer_equals_narrator",
+	// "composer_mismatch", "missing_narrator", "read_error".
+	Category  string `json:"category"`
+	Composer  string `json:"composer_on_disk"`
+	Author    string `json:"author,omitempty"`
+	Narrator  string `json:"narrator,omitempty"`
+	WillWrite string `json:"will_write,omitempty"`
+	Applied   bool   `json:"applied,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+// categorizeComposer returns the problem category and the value that should
+// be written in the given fix_mode ("set_narrator" or "clear").
+func categorizeComposer(composer, author, narrator, fixMode string) (category, willWrite string) {
+	composerLower := strings.ToLower(strings.TrimSpace(composer))
+	authorLower := strings.ToLower(strings.TrimSpace(author))
+	narratorLower := strings.ToLower(strings.TrimSpace(narrator))
+
+	if fixMode == "set_narrator" {
+		willWrite = strings.TrimSpace(narrator)
+	} else {
+		willWrite = ""
+	}
+
+	if strings.TrimSpace(composer) == "" {
+		if fixMode == "set_narrator" && strings.TrimSpace(narrator) != "" {
+			return "missing_narrator", strings.TrimSpace(narrator)
+		}
+		return "ok", ""
+	}
+
+	if author != "" && composerLower == authorLower {
+		// Old wrong mapping: author ended up in COMPOSER.
+		return "composer_equals_author", willWrite
+	}
+	if narrator != "" && composerLower == narratorLower {
+		if fixMode == "set_narrator" {
+			return "ok", strings.TrimSpace(narrator) // already correct
+		}
+		return "composer_equals_narrator", ""
+	}
+	// Non-empty COMPOSER that matches neither author nor narrator.
+	return "composer_mismatch", willWrite
+}
+
+// handleScanComposerTags reads the COMPOSER tag off every audio file on disk
+// and reports (or fixes) cases that cause Apple/iPhone sync problems.
+//
+// Common bad states:
+//   - composer = author name (old wrong mapping before narrator→composer convention)
+//   - composer has stale/contaminated text (series names, "read by", etc.)
+//   - composer is empty when a narrator exists and fix_mode=set_narrator
+//
+// Query params:
+//   - dry_run=true (default) — report without writing
+//   - dry_run=false — apply the fix
+//   - fix_mode=set_narrator (default) — write COMPOSER=narrator; use "clear" to always empty it
+func (s *Server) handleScanComposerTags(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+	fixMode := c.DefaultQuery("fix_mode", "set_narrator")
+	if fixMode != "set_narrator" && fixMode != "clear" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "fix_mode must be 'set_narrator' or 'clear'"})
+		return
+	}
+
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	log.Printf("[INFO] scan-composer-tags: start dry_run=%v fix_mode=%s", dryRun, fixMode)
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	counts := map[string]int{}
+	var problems []composerTagResult
+	totalFiles := 0
+	applied := 0
+	errors := 0
+
+	for i := range allBooks {
+		book := &allBooks[i]
+
+		authorName := ""
+		if book.AuthorID != nil {
+			if author, aErr := store.GetAuthorByID(*book.AuthorID); aErr == nil && author != nil {
+				authorName = author.Name
+			}
+		}
+		narratorName := ""
+		if book.Narrator != nil {
+			narratorName = *book.Narrator
+		}
+
+		files, fErr := store.GetBookFiles(book.ID)
+		if fErr != nil {
+			log.Printf("[WARN] scan-composer-tags: GetBookFiles book %s: %v", book.ID, fErr)
+			continue
+		}
+
+		for j := range files {
+			f := &files[j]
+			if f.FilePath == "" || f.Missing {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(f.FilePath))
+			if ext != ".m4b" && ext != ".m4a" && ext != ".mp3" && ext != ".flac" && ext != ".ogg" {
+				continue
+			}
+			if _, statErr := os.Stat(f.FilePath); statErr != nil {
+				continue
+			}
+
+			totalFiles++
+
+			tags, readErr := metadata.ReadRawTags(f.FilePath)
+			if readErr != nil {
+				r := composerTagResult{
+					BookID: book.ID, BookTitle: book.Title, FilePath: f.FilePath,
+					Category: "read_error", Error: readErr.Error(),
+				}
+				problems = append(problems, r)
+				counts["read_error"]++
+				errors++
+				continue
+			}
+
+			composer := ""
+			if vs, ok := tags["COMPOSER"]; ok && len(vs) > 0 {
+				composer = strings.TrimSpace(vs[0])
+			}
+
+			category, willWrite := categorizeComposer(composer, authorName, narratorName, fixMode)
+			counts[category]++
+
+			if category == "ok" {
+				continue
+			}
+
+			r := composerTagResult{
+				BookID: book.ID, BookTitle: book.Title, FilePath: f.FilePath,
+				Category: category, Composer: composer,
+				Author: authorName, Narrator: narratorName, WillWrite: willWrite,
+			}
+
+			if !dryRun && willWrite != composer {
+				if writeErr := metadata.WriteSingleTag(f.FilePath, "COMPOSER", willWrite); writeErr != nil {
+					r.Error = writeErr.Error()
+					log.Printf("[WARN] scan-composer-tags: write failed %s: %v", f.FilePath, writeErr)
+					errors++
+				} else {
+					r.Applied = true
+					applied++
+					log.Printf("[INFO] scan-composer-tags: COMPOSER %q→%q book=%s file=%s",
+						composer, willWrite, book.ID, f.FilePath)
+				}
+			}
+
+			problems = append(problems, r)
+		}
+	}
+
+	log.Printf("[INFO] scan-composer-tags: done dry_run=%v fix_mode=%s total_files=%d problems=%d applied=%d errors=%d counts=%v",
+		dryRun, fixMode, totalFiles, len(problems), applied, errors, counts)
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":     dryRun,
+		"fix_mode":    fixMode,
+		"total_files": totalFiles,
+		"problems":    len(problems),
+		"applied":     applied,
+		"errors":      errors,
+		"by_category": counts,
+		"details":     problems,
 	})
 }
 
