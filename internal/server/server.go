@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.194.0
+// version: 1.195.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2451,6 +2451,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/enrich-book-files", s.perm(auth.PermSettingsManage), s.handleEnrichBookFiles)
 			protected.POST("/maintenance/dedup-books", s.perm(auth.PermSettingsManage), s.handleDedupBooks)
 			protected.POST("/maintenance/fix-book-file-paths", s.perm(auth.PermSettingsManage), s.handleFixBookFilePaths)
+			protected.POST("/maintenance/relink-missing-to-itunes", s.perm(auth.PermSettingsManage), s.handleRelinkMissingToiTunes)
 			protected.POST("/maintenance/refetch-missing-authors", s.perm(auth.PermSettingsManage), s.handleRefetchMissingAuthors)
 			protected.POST("/maintenance/recompute-itunes-paths", s.perm(auth.PermSettingsManage), s.handleRecomputeITunesPaths)
 			protected.POST("/maintenance/generate-itl-tests", s.perm(auth.PermSettingsManage), s.handleGenerateITLTests)
