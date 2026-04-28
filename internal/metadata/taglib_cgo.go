@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_cgo.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 //
 // Native CGO bindings to TagLib C API for high-performance tag writing.
@@ -73,6 +73,42 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _
 		return fmt.Errorf("taglib: save failed for %s", abs)
 	}
 
+	return nil
+}
+
+// writeSingleTagWithTaglib writes one tag property without touching others.
+// Pass value="" to clear the property.
+func writeSingleTagWithTaglib(filePath, tagName, value string) error {
+	abs, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("taglib abs: %w", err)
+	}
+	cPath := C.CString(abs)
+	defer C.free(unsafe.Pointer(cPath))
+
+	file := C.taglib_file_new(cPath)
+	if file == nil {
+		return fmt.Errorf("taglib: failed to open %s", abs)
+	}
+	defer C.taglib_file_free(file)
+
+	if C.taglib_file_is_valid(file) == 0 {
+		return fmt.Errorf("taglib: file not valid: %s", abs)
+	}
+
+	cKey := C.CString(tagName)
+	defer C.free(unsafe.Pointer(cKey))
+	if value == "" {
+		C.taglib_property_set(file, cKey, nil)
+	} else {
+		cVal := C.CString(value)
+		C.taglib_property_set(file, cKey, cVal)
+		C.free(unsafe.Pointer(cVal))
+	}
+
+	if C.taglib_file_save(file) == 0 {
+		return fmt.Errorf("taglib: save failed for %s", abs)
+	}
 	return nil
 }
 
