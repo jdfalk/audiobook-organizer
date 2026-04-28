@@ -1514,6 +1514,17 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.runComposerTagScan(ctx, opID, capturedParams, store, progress)
 			}
+		case "missing_file_repair":
+			params, _ := operations.LoadParams[operations.MissingFileRepairParams](store, opID)
+			if params == nil {
+				log.Printf("[WARN] No params found for interrupted missing_file_repair %s, marking failed", opID)
+				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
+				continue
+			}
+			capturedParams2 := *params
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.runMissingFileRepair(ctx, opID, capturedParams2, store, progress)
+			}
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
@@ -2457,6 +2468,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/generate-itl-tests", s.perm(auth.PermSettingsManage), s.handleGenerateITLTests)
 			protected.POST("/maintenance/scan-composer-tags", s.perm(auth.PermSettingsManage), s.handleScanComposerTags)
 			protected.GET("/maintenance/scan-composer-tags/:id", s.perm(auth.PermSettingsManage), s.handleGetComposerScanResults)
+			protected.POST("/maintenance/repair-missing-files", s.perm(auth.PermSettingsManage), s.handleRepairMissingFiles)
+			protected.GET("/maintenance/repair-missing-files/:id", s.perm(auth.PermSettingsManage), s.handleGetMissingFileRepairResults)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")
