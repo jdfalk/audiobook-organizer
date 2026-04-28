@@ -5147,3 +5147,183 @@ func (s *Server) handleGetMissingFileRepairResults(c *gin.Context) {
 		"problems":     problems,
 	})
 }
+
+// handleRevertMetadataFetch rolls back all DB changes made by one or more
+// bulk_metadata_fetch operations. It reads the OperationResult rows to find
+// which books were updated, then restores PreviousValue for every
+// ChangeType=fetched MetadataChangeRecord recorded after the operation started.
+//
+// POST /api/v1/maintenance/revert-metadata-fetch
+// Body: {"operation_ids": ["01K...", "01K..."]}
+func (s *Server) handleRevertMetadataFetch(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	var req struct {
+		OperationIDs []string `json:"operation_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.OperationIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "operation_ids required"})
+		return
+	}
+
+	// Collect the earliest start time across all operations so we only revert
+	// changes that were made by this run (not older fetched records).
+	var revertAfter time.Time
+	bookIDSet := map[string]bool{}
+
+	for _, opID := range req.OperationIDs {
+		op, err := store.GetOperationByID(opID)
+		if err != nil || op == nil {
+			continue
+		}
+		if op.Type != "bulk_metadata_fetch" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "operation " + opID + " is not a bulk_metadata_fetch"})
+			return
+		}
+		ts := op.CreatedAt
+		if op.StartedAt != nil {
+			ts = *op.StartedAt
+		}
+		if revertAfter.IsZero() || ts.Before(revertAfter) {
+			revertAfter = ts
+		}
+
+		results, err := store.GetOperationResults(opID)
+		if err != nil {
+			internalError(c, "failed to load results for "+opID, err)
+			return
+		}
+		for _, r := range results {
+			if r.Status == "updated" {
+				bookIDSet[r.BookID] = true
+			}
+		}
+	}
+
+	log.Printf("[INFO] revert-metadata-fetch: reverting %d books, changes after %s",
+		len(bookIDSet), revertAfter.Format(time.RFC3339))
+
+	reverted := 0
+	skipped := 0
+	errors := 0
+
+	for bookID := range bookIDSet {
+		book, err := store.GetBookByID(bookID)
+		if err != nil || book == nil {
+			errors++
+			continue
+		}
+
+		history, err := store.GetBookChangeHistory(bookID, 50)
+		if err != nil {
+			errors++
+			continue
+		}
+
+		// Gather the most recent fetched change per field after revertAfter.
+		// We want the PreviousValue (what the field was before the fetch ran).
+		type revertEntry struct {
+			field string
+			prev  string // empty string means "was empty before"
+		}
+		// Use a map so we only take the LAST change per field (most recent op).
+		byField := map[string]revertEntry{}
+		for _, h := range history {
+			if h.ChangeType != "fetched" {
+				continue
+			}
+			if h.ChangedAt.Before(revertAfter) {
+				continue
+			}
+			prev := ""
+			if h.PreviousValue != nil {
+				// PreviousValue is JSON-encoded string: "\"foo\"" → foo
+				if err := json.Unmarshal([]byte(*h.PreviousValue), &prev); err != nil {
+					prev = *h.PreviousValue
+				}
+			}
+			byField[h.Field] = revertEntry{field: h.Field, prev: prev}
+		}
+
+		if len(byField) == 0 {
+			skipped++
+			continue
+		}
+
+		didChange := false
+		for _, e := range byField {
+			switch e.field {
+			case "title":
+				book.Title = e.prev
+				didChange = true
+			case "author_name":
+				if e.prev == "" {
+					book.AuthorID = nil
+				} else {
+					if author, aerr := store.GetAuthorByName(e.prev); aerr == nil && author != nil {
+						book.AuthorID = &author.ID
+						didChange = true
+					}
+				}
+			case "publisher":
+				if e.prev == "" {
+					book.Publisher = nil
+				} else {
+					book.Publisher = &e.prev
+				}
+				didChange = true
+			case "language":
+				if e.prev == "" {
+					book.Language = nil
+				} else {
+					book.Language = &e.prev
+				}
+				didChange = true
+			case "audiobook_release_year":
+				if e.prev == "" {
+					book.AudiobookReleaseYear = nil
+				} else if yr, yerr := strconv.Atoi(e.prev); yerr == nil {
+					book.AudiobookReleaseYear = &yr
+				}
+				didChange = true
+			case "isbn10":
+				if e.prev == "" {
+					book.ISBN10 = nil
+				} else {
+					book.ISBN10 = &e.prev
+				}
+				didChange = true
+			case "isbn13":
+				if e.prev == "" {
+					book.ISBN13 = nil
+				} else {
+					book.ISBN13 = &e.prev
+				}
+				didChange = true
+			}
+		}
+
+		if didChange {
+			if _, uerr := store.UpdateBook(bookID, book); uerr != nil {
+				log.Printf("[WARN] revert-metadata-fetch: UpdateBook %s: %v", bookID, uerr)
+				errors++
+			} else {
+				reverted++
+			}
+		} else {
+			skipped++
+		}
+	}
+
+	log.Printf("[INFO] revert-metadata-fetch: done — reverted:%d skipped:%d errors:%d", reverted, skipped, errors)
+	c.JSON(http.StatusOK, gin.H{
+		"reverted": reverted,
+		"skipped":  skipped,
+		"errors":   errors,
+		"total":    len(bookIDSet),
+	})
+}
