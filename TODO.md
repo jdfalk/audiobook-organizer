@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 5.7.0 -->
+<!-- version: 5.8.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-04-18 -->
+<!-- last-edited: 2026-04-28 -->
 
 # Project TODO
 
@@ -184,6 +184,17 @@ Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/
 
 - [x] **BMR-1** Audible "Series, Book N" baked into series field — `normalizeMetaSeries` now runs in `ApplyMetadataCandidate` too, not just the auto-fetch paths (#271)
 
+### Async Operations — Maintenance Handler Conversion
+
+> ⚠️ **SPEC PENDING — do not auto-execute.** Design spec lives at
+> [`docs/superpowers/specs/2026-04-28-async-operations-design.md`](docs/superpowers/specs/2026-04-28-async-operations-design.md).
+> No bot-task file exists yet. Needs human review before burndown bot pickup.
+
+- [ ] **ASYNC-1** Convert 13+ synchronous maintenance handlers to async (queue, progress, cancel) — see spec
+- [ ] **ASYNC-2** Add `IsCanceled()` checks to all long-running operation loops
+- [ ] **ASYNC-3** Make all converted maintenance ops resumable on restart (check-then-apply pattern)
+- [x] **ASYNC-0** Frontend: toast notifications for operation lifecycle (started / resumed / completed / failed / canceled) — PR this session
+
 ### Design Spec Already Written (but not yet planned)
 
 - [x] **DES-1** Bleve library search — complete 6/7 (#298, #301-#302, #311-#312, #321)
@@ -243,6 +254,7 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 - [2026-04-10 Metadata candidate scoring](docs/superpowers/specs/2026-04-10-metadata-candidate-scoring-design.md)
 - [2026-04-11 Bleve library search](docs/superpowers/specs/2026-04-11-bleve-library-search.md) — design only, no plan yet
 - [2026-04-11 chromem-go embedding store](docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md) — design only, no plan yet
+- [2026-04-28 Async operations — maintenance handler conversion](docs/superpowers/specs/2026-04-28-async-operations-design.md) — spec only, no bot-task yet (ASYNC-1..3)
 
 ---
 
