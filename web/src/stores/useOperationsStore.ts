@@ -1,9 +1,10 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
 import * as api from '../services/api';
+import { useAppStore } from './useAppStore';
 
 export interface ActiveOperation {
   id: string;
@@ -13,30 +14,58 @@ export interface ActiveOperation {
   total: number;
   message: string;
   startedAt?: number; // timestamp ms
+  resumed?: boolean;
 }
 
 interface OperationsState {
   activeOperations: ActiveOperation[];
   polling: boolean;
 
-  startPolling: (operationId: string, type: string) => void;
+  startPolling: (operationId: string, type: string, resumed?: boolean) => void;
   removeOperation: (operationId: string) => void;
   updateOperation: (op: ActiveOperation) => void;
+}
+
+function formatOpLabel(type: string): string {
+  const labels: Record<string, string> = {
+    itunes_import: 'iTunes Import',
+    itunes_sync: 'iTunes Sync',
+    scan: 'Library Scan',
+    organize: 'Organize',
+    metadata_fetch: 'Metadata Fetch',
+    metadata_candidate_fetch: 'Metadata Fetch (Batch)',
+    bulk_write_back: 'Tag Write-back',
+    composer_tag_scan: 'Composer Tag Scan',
+    isbn_enrichment: 'ISBN Enrichment',
+    metadata_refresh: 'Metadata Refresh',
+    reconcile_scan: 'Reconcile Scan',
+    itunes_path_repair: 'iTunes Path Repair',
+    series_normalize: 'Series Normalize',
+    transcode: 'Transcode',
+    ol_dump_import: 'Open Library Import',
+  };
+  return labels[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export const useOperationsStore = create<OperationsState>()((set, get) => ({
   activeOperations: [],
   polling: false,
 
-  startPolling: (operationId: string, type: string) => {
+  startPolling: (operationId: string, type: string, resumed = false) => {
+    const label = formatOpLabel(type);
+    const notify = useAppStore.getState().addNotification;
+
+    notify(resumed ? `${label} resumed` : `${label} started`, 'info');
+
     const op: ActiveOperation = {
       id: operationId,
       type,
       status: 'queued',
       progress: 0,
       total: 0,
-      message: 'Starting...',
+      message: resumed ? 'Resuming...' : 'Starting...',
       startedAt: Date.now(),
+      resumed,
     };
 
     set((state) => ({
@@ -54,12 +83,20 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
           progress: status.progress,
           total: status.total,
           message: status.message,
+          resumed,
         };
 
         get().updateOperation(updated);
 
         if (['completed', 'failed', 'canceled'].includes(status.status)) {
-          // Keep completed ops visible for 10 seconds, then remove
+          const n = useAppStore.getState().addNotification;
+          if (status.status === 'completed') {
+            n(`${label} completed`, 'success');
+          } else if (status.status === 'failed') {
+            n(`${label} failed`, 'error');
+          } else {
+            n(`${label} canceled`, 'info');
+          }
           setTimeout(() => get().removeOperation(operationId), 10000);
           return;
         }
