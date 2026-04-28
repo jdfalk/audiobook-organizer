@@ -748,7 +748,7 @@ func TestRunAutoPurgeSoftDeleted(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	server.runAutoPurgeSoftDeleted()
+	server.runAutoPurgeSoftDeleted("")
 
 	if got, err := database.GetGlobalStore().GetBookByID(book.ID); err == nil && got != nil {
 		t.Fatal("expected book to be purged")

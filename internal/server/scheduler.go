@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.17.1
+// version: 1.17.2
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -313,7 +314,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Enrich missing ISBN identifiers from external metadata sources",
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("isbn-enrichment", s.runIsbnEnrichment)
+			return ts.triggerOperationWithID("isbn-enrichment", s.runIsbnEnrichment)
 		},
 		IsEnabled:              func() bool { return s.metadataFetchService != nil && s.metadataFetchService.ISBNEnrichment() != nil },
 		GetInterval:            func() time.Duration { return 0 },
@@ -343,8 +344,9 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Remove orphaned *.tmp.m4b / *.tmp.m4a files left by crashed ffmpeg operations",
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("temp-file-cleanup", func(_ context.Context, progress operations.ProgressReporter) error {
-				removed := cleanupOrphanedTempFiles(config.AppConfig.RootDir)
+			return ts.triggerOperationWithID("temp-file-cleanup", func(_ context.Context, progress operations.ProgressReporter, opID string) error {
+				removed := cleanupOrphanedTempFiles(config.AppConfig.RootDir, ts.server.activityWriter, opID)
+				activity.FlushOperation(ts.server.activityWriter, opID)
 				_ = progress.Log("info", fmt.Sprintf("Temp file cleanup: removed %d orphaned temp files", removed), nil)
 				return nil
 			})
@@ -695,10 +697,11 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Purge soft-deleted books past retention",
 		Category:    "maintenance",
 		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("purge-deleted", func(ctx context.Context, progress operations.ProgressReporter) error {
+			return ts.triggerOperationWithID("purge-deleted", func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
 				_ = progress.Log("info", "Starting purge of soft-deleted books", nil)
 				_ = progress.UpdateProgress(0, 100, "Purging soft-deleted books...")
-				s.runAutoPurgeSoftDeleted()
+				s.runAutoPurgeSoftDeleted(opID)
+				activity.FlushOperation(ts.server.activityWriter, opID)
 				_ = progress.Log("info", "Purge complete", nil)
 				_ = progress.UpdateProgress(100, 100, "Purge complete")
 				return nil

@@ -1,5 +1,5 @@
 // file: internal/activity/api.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
@@ -14,6 +14,9 @@ var batchableTypes = map[string]bool{
 	"metadata-apply":    true,
 	"path-repair":       true,
 	"isbn-enrich":       true,
+	"temp-file-cleanup": true,
+	"missing-file-repair": true,
+	"purge-deleted":     true,
 }
 
 // LogBatch submits a single BatchItem to the batcher inside w for the given
