@@ -1649,7 +1649,7 @@ export async function getConfig(): Promise<Config> {
     throw await buildApiError(response, 'Failed to fetch config');
   }
   const data = await response.json();
-  return data.config;
+  return data.data?.config ?? data.config;
 }
 
 export async function updateConfig(updates: Partial<Config>): Promise<Config> {
@@ -1662,7 +1662,7 @@ export async function updateConfig(updates: Partial<Config>): Promise<Config> {
     throw await buildApiError(response, 'Failed to update config');
   }
   const data = await response.json();
-  return data.config;
+  return data.data?.config ?? data.config;
 }
 
 // Auth
