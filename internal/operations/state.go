@@ -63,6 +63,12 @@ type MetadataRefreshParams struct {
 	Source  string   `json:"source,omitempty"`
 }
 
+// ComposerScanParams stores the immutable parameters for a composer-tag scan operation.
+type ComposerScanParams struct {
+	DryRun  bool   `json:"dry_run"`
+	FixMode string `json:"fix_mode"` // "set_narrator" or "clear"
+}
+
 // SaveCheckpoint persists an operation's progress checkpoint.
 func SaveCheckpoint(store database.OperationStore, opID, opType, phase string, index, total int) error {
 	state := OperationState{

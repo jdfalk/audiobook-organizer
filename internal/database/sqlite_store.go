@@ -5503,6 +5503,29 @@ func (s *SQLiteStore) GetBookFiles(bookID string) ([]BookFile, error) {
 	return files, rows.Err()
 }
 
+// GetAllBookFiles returns every book_file row in the database. Used by bulk
+// maintenance scans that would otherwise make one GetBookFiles call per book.
+func (s *SQLiteStore) GetAllBookFiles() ([]BookFile, error) {
+	rows, err := s.db.Query(
+		`SELECT ` + bookFileCols + `
+		 FROM book_files
+		 ORDER BY book_id ASC, disc_number ASC, track_number ASC, file_path ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllBookFiles: %w", err)
+	}
+	defer rows.Close()
+	var files []BookFile
+	for rows.Next() {
+		f, err := bookFileScan(rows)
+		if err != nil {
+			return nil, fmt.Errorf("GetAllBookFiles scan: %w", err)
+		}
+		files = append(files, f)
+	}
+	return files, rows.Err()
+}
+
 // GetBookFileByPID returns the book_file with the given iTunes persistent ID, or
 // nil if not found.
 func (s *SQLiteStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {

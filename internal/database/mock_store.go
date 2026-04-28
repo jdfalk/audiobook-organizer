@@ -2138,6 +2138,7 @@ func (m *MockStore) GetBookFiles(bookID string) ([]BookFile, error) {
 	}
 	return nil, nil
 }
+func (m *MockStore) GetAllBookFiles() ([]BookFile, error) { return nil, nil }
 func (m *MockStore) GetBookFileByID(bookID, fileID string) (*BookFile, error) {
 	if m.GetBookFileByIDFunc != nil {
 		return m.GetBookFileByIDFunc(bookID, fileID)
