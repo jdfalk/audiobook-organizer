@@ -1483,7 +1483,10 @@ func (s *Server) resumeInterruptedOperations() {
 				return s.runBulkWriteBack(ctx, opID, bookIDs, doRename, startIdx, progress)
 			}
 		case "isbn-enrichment":
-			resumeFn = s.runIsbnEnrichment
+			isbnOpID := opID
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.runIsbnEnrichment(ctx, progress, isbnOpID)
+			}
 		case "metadata-refresh":
 			resumeFn = s.runMetadataRefreshScan
 		case "reconcile_scan":

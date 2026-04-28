@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -1392,16 +1392,17 @@ func (s *Server) runBulkWriteBack(
 // runIsbnEnrichment enriches missing ISBN identifiers from external sources.
 // Idempotent — books that already have an ISBN are skipped, so a restart
 // safely re-runs from scratch (no checkpoint needed).
-func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.ProgressReporter) error {
+func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.ProgressReporter, opID string) error {
 	if s.metadataFetchService == nil || s.metadataFetchService.ISBNEnrichment() == nil {
 		_ = progress.Log("info", "ISBN enrichment service is not configured, skipping", nil)
 		return nil
 	}
 	_ = progress.Log("info", "Scanning for books missing ISBN identifiers", nil)
-	checked, updated, err := s.metadataFetchService.ISBNEnrichment().EnrichMissingISBNs(ctx, 100)
+	checked, updated, err := s.metadataFetchService.ISBNEnrichment().EnrichMissingISBNs(ctx, 100, s.activityWriter, opID)
 	if err != nil {
 		return err
 	}
+	activity.FlushOperation(s.activityWriter, opID)
 	msg := fmt.Sprintf("ISBN enrichment complete: checked %d candidate book(s), updated %d", checked, updated)
 	_ = progress.Log("info", msg, nil)
 	_ = progress.UpdateProgress(100, 100, msg)

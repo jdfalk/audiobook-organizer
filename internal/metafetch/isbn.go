@@ -1,5 +1,5 @@
 // file: internal/metafetch/isbn.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 34290bd0-745e-4509-ad2d-e237785bb7ef
 
 package metafetch
@@ -9,6 +9,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
@@ -95,7 +96,9 @@ func (s *ISBNService) EnrichBookISBN(bookID string) (bool, error) {
 
 // EnrichMissingISBNs scans books missing ISBN data and enriches up to limit of them.
 // It returns the number of candidate books checked and the number updated.
-func (s *ISBNService) EnrichMissingISBNs(ctx context.Context, limit int) (int, int, error) {
+// w and opID are optional — if provided, each enriched book is submitted to the
+// activity batcher instead of emitting a per-book log line.
+func (s *ISBNService) EnrichMissingISBNs(ctx context.Context, limit int, w *activity.Writer, opID string) (int, int, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -131,6 +134,8 @@ func (s *ISBNService) EnrichMissingISBNs(ctx context.Context, limit int) (int, i
 				log.Printf("[WARN] ISBN enrichment failed for %s during batch scan: %v", books[i].ID, err)
 			} else if found {
 				updated++
+				activity.LogBatch(w, opID, "isbn-enrich", "isbn-enrichment",
+					activity.BatchItem{Name: books[i].Title, Detail: books[i].ID})
 			}
 			if checked >= limit {
 				break

@@ -1,5 +1,5 @@
 // file: internal/server/temp_file_cleanup.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e4f5a6b7-c8d9-0e1f-2a3b-4c5d6e7f8a9b
 
 package server
@@ -10,12 +10,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 )
 
 // cleanupOrphanedTempFiles removes *.tmp.m4b, *.tmp.m4a, *.tmp.mp3, and
 // *.remux.tmp files left behind by ffmpeg operations that were interrupted
 // by a crash or server restart. Returns the number of files removed.
-func cleanupOrphanedTempFiles(root string) int {
+// w and opID are optional — if provided, each removal is submitted to the
+// activity batcher instead of emitting a per-file log line.
+func cleanupOrphanedTempFiles(root string, w *activity.Writer, opID string) int {
 	if root == "" {
 		return 0
 	}
@@ -30,8 +34,9 @@ func cleanupOrphanedTempFiles(root string) int {
 			if rmErr := os.Remove(path); rmErr != nil {
 				log.Printf("[WARN] temp file cleanup: could not remove %s: %v", path, rmErr)
 			} else {
-				log.Printf("[INFO] temp file cleanup: removed %s", path)
 				removed++
+				activity.LogBatch(w, opID, "temp-file-cleanup", "temp-file-cleanup",
+					activity.BatchItem{Name: name, Detail: path})
 			}
 		}
 		return nil

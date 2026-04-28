@@ -68,7 +68,7 @@ func TestRunAutoPurgeSoftDeleted_DeletesOldEntries(t *testing.T) {
 	_, err = database.GetGlobalStore().UpdateBook(book.ID, book)
 	require.NoError(t, err)
 
-	server.runAutoPurgeSoftDeleted()
+	server.runAutoPurgeSoftDeleted("")
 
 	// Book removed.
 	fetched, err := database.GetGlobalStore().GetBookByID(book.ID)

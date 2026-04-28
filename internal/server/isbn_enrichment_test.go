@@ -236,7 +236,7 @@ func TestEnrichMissingISBNs_RespectsLimit(t *testing.T) {
 	}
 	svc := metafetch.NewISBNService(mock, []metadata.MetadataSource{src})
 
-	checked, updated, err := svc.EnrichMissingISBNs(context.Background(), 2)
+	checked, updated, err := svc.EnrichMissingISBNs(context.Background(), 2, nil, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
