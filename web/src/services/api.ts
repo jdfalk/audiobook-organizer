@@ -2866,6 +2866,9 @@ export interface BatchFetchResponse {
   total_count: number;
   limit: number;
   offset: number;
+  total_matched?: number;
+  total_no_match?: number;
+  total_errors?: number;
 }
 
 export async function batchFetchCandidates(bookIds: string[]): Promise<{ operation_id: string }> {

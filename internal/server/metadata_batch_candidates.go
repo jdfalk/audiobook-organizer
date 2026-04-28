@@ -1,7 +1,7 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
-// last-edited: 2026-04-05
+// last-edited: 2026-04-28
 
 package server
 
@@ -348,14 +348,38 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 		return
 	}
 
-	rawResults, totalCount, err := store.GetOperationResultsPage(opID, limit, offset)
+	allRaw, err := store.GetOperationResults(opID)
 	if err != nil {
 		internalError(c, "failed to get operation results", err)
 		return
 	}
+	totalCount := len(allRaw)
 
-	candidateResults := make([]CandidateResult, 0, len(rawResults))
-	for _, r := range rawResults {
+	// Global counts by Status field — no JSON unmarshal needed.
+	var totalMatched, totalNoMatch, totalErrors int
+	for _, r := range allRaw {
+		switch r.Status {
+		case "matched":
+			totalMatched++
+		case "no_match":
+			totalNoMatch++
+		case "error":
+			totalErrors++
+		}
+	}
+
+	// Slice for the requested page.
+	end := totalCount
+	if limit > 0 && offset+limit < totalCount {
+		end = offset + limit
+	}
+	var pageRaw []database.OperationResult
+	if offset < totalCount {
+		pageRaw = allRaw[offset:end]
+	}
+
+	candidateResults := make([]CandidateResult, 0, len(pageRaw))
+	for _, r := range pageRaw {
 		var cr CandidateResult
 		if err := json.Unmarshal([]byte(r.ResultJSON), &cr); err != nil {
 			log.Printf("[WARN] failed to unmarshal result for book %s in op %s: %v", r.BookID, opID, err)
@@ -365,15 +389,18 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"operation":   op,
-		"results":     candidateResults,
-		"total":       totalCount,
-		"total_count": totalCount,
-		"matched":     countByStatus(candidateResults, "matched"),
-		"no_match":    countByStatus(candidateResults, "no_match"),
-		"errors":      countByStatus(candidateResults, "error"),
-		"limit":       limit,
-		"offset":      offset,
+		"operation":     op,
+		"results":       candidateResults,
+		"total":         totalCount,
+		"total_count":   totalCount,
+		"matched":       countByStatus(candidateResults, "matched"),
+		"no_match":      countByStatus(candidateResults, "no_match"),
+		"errors":        countByStatus(candidateResults, "error"),
+		"total_matched": totalMatched,
+		"total_no_match": totalNoMatch,
+		"total_errors":  totalErrors,
+		"limit":         limit,
+		"offset":        offset,
 	})
 }
 
