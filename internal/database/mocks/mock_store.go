@@ -30023,6 +30023,33 @@ func (_c *MockStore_GetBookFiles_Call) RunAndReturn(run func(bookID string) ([]d
 	return _c
 }
 
+// MockStore_GetAllBookFiles_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAllBookFiles'
+type MockStore_GetAllBookFiles_Call struct {
+	*mock.Call
+}
+
+// GetAllBookFiles is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetAllBookFiles() *MockStore_GetAllBookFiles_Call {
+	return &MockStore_GetAllBookFiles_Call{Call: _e.mock.On("GetAllBookFiles")}
+}
+
+func (_c *MockStore_GetAllBookFiles_Call) Run(run func()) *MockStore_GetAllBookFiles_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetAllBookFiles_Call) Return(bookFiles []database.BookFile, err error) *MockStore_GetAllBookFiles_Call {
+	_c.Call.Return(bookFiles, err)
+	return _c
+}
+
+func (_c *MockStore_GetAllBookFiles_Call) RunAndReturn(run func() ([]database.BookFile, error)) *MockStore_GetAllBookFiles_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAllBookFiles provides a mock function for the type MockStore
 func (_mock *MockStore) GetAllBookFiles() ([]database.BookFile, error) {
 	ret := _mock.Called()
