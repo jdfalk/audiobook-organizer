@@ -1966,10 +1966,20 @@ func (s *Server) handleFixBookFilePaths(c *gin.Context) {
 						nameExt := filepath.Ext(name)
 						nameStem := strings.TrimSuffix(name, nameExt)
 						// Match: same extension and full name starts with truncated stem
-						if strings.EqualFold(nameExt, ext) && strings.HasPrefix(nameStem, stem) && name != base {
-							match = filepath.Join(dir, name)
-							break
-						}
+						// Only accept if the real file's name starts with the truncated
+					// stem AND the extra characters don't begin with a space.
+					// A genuine truncation cuts mid-word, so the suffix should
+					// start with a non-space character (e.g. "Unabri" → "Unabridged").
+					// A space prefix means we found a different longer variant
+					// (e.g. "Book" → "Book 2"), which is not a truncation.
+					if strings.EqualFold(nameExt, ext) &&
+						strings.HasPrefix(nameStem, stem) &&
+						name != base &&
+						len(nameStem) > len(stem) &&
+						nameStem[len(stem)] != ' ' {
+						match = filepath.Join(dir, name)
+						break
+					}
 					}
 				}
 				if match == "" {
