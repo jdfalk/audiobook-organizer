@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -161,6 +161,7 @@ export function MetadataReviewDialog({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
+  const [totalSummary, setTotalSummary] = useState<{ matched: number; no_match: number; errors: number } | null>(null);
   const [previewCover, setPreviewCover] = useState<string | null>(null);
   const [reviewPage, setReviewPage] = useState(1);
   const [reviewPageSize, setReviewPageSize] = useState<number>(loadReviewPageSize);
@@ -223,6 +224,13 @@ export function MetadataReviewDialog({
           errors: data.errors ?? pageResults.filter((r) => r.status === 'error').length,
           total: tc,
         });
+        if (data.total_matched !== undefined) {
+          setTotalSummary({
+            matched: data.total_matched,
+            no_match: data.total_no_match ?? 0,
+            errors: data.total_errors ?? 0,
+          });
+        }
         setLoading(false);
       })
       .catch(() => {
@@ -970,10 +978,24 @@ export function MetadataReviewDialog({
           ) : (
             <>
               {/* Stats chips */}
-              <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                <Chip label={`${summary.matched} matched`} color="success" size="small" />
-                <Chip label={`${summary.no_match} no match`} size="small" />
-                <Chip label={`${summary.errors} errors`} color="error" size="small" />
+              <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2, rowGap: 1 }}>
+                {totalSummary ? (
+                  <>
+                    <Chip label={`${totalSummary.matched} matched (total)`} color="success" size="small" />
+                    <Chip label={`${totalSummary.no_match} no match (total)`} size="small" />
+                    {totalSummary.errors > 0 && (
+                      <Chip label={`${totalSummary.errors} errors (total)`} color="error" size="small" />
+                    )}
+                    <Chip label={`${summary.matched} matched (page)`} color="success" variant="outlined" size="small" />
+                    <Chip label={`${summary.no_match} no match (page)`} variant="outlined" size="small" />
+                  </>
+                ) : (
+                  <>
+                    <Chip label={`${summary.matched} matched`} color="success" size="small" />
+                    <Chip label={`${summary.no_match} no match`} size="small" />
+                    <Chip label={`${summary.errors} errors`} color="error" size="small" />
+                  </>
+                )}
               </Stack>
 
               {/* Confidence slider */}
