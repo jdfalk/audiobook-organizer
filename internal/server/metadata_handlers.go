@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -796,6 +796,10 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 // reviews and applies per-book through the normal UI. Already-processed books are
 // skipped on resume so it is safe to restart.
 //
+// Query params:
+//   - prefer_audible=true — move Audible to the front of the source chain
+//   - skip_cached=true    — skip books that already have a valid cache entry
+//
 // Poll progress via GET /api/v1/operations/{id}.
 func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
 	if s.Store() == nil {
@@ -807,29 +811,37 @@ func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
 		return
 	}
 
+	params := operations.BulkMetadataFetchParams{
+		PreferAudible: c.DefaultQuery("prefer_audible", "false") == "true",
+		SkipCached:    c.DefaultQuery("skip_cached", "false") == "true",
+	}
+
 	store := s.Store()
 	opID := ulid.Make().String()
 	if _, err := store.CreateOperation(opID, "bulk_metadata_fetch", nil); err != nil {
 		internalError(c, "failed to create operation", err)
 		return
 	}
-	params := operations.BulkMetadataFetchParams{}
 	if err := operations.SaveParams(store, opID, params); err != nil {
 		log.Printf("[WARN] bulk-metadata-fetch: failed to save params for %s: %v", opID, err)
 	}
 
+	capturedParams := params
 	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.runBulkMetadataFetchAll(ctx, opID, params, store, progress)
+		return s.runBulkMetadataFetchAll(ctx, opID, capturedParams, store, progress)
 	}
 	if err := s.queue.Enqueue(opID, "bulk_metadata_fetch", operations.PriorityNormal, opFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	log.Printf("[INFO] bulk-metadata-fetch: queued operation %s", opID)
+	log.Printf("[INFO] bulk-metadata-fetch: queued %s prefer_audible=%v skip_cached=%v",
+		opID, params.PreferAudible, params.SkipCached)
 	c.JSON(http.StatusAccepted, gin.H{
-		"operation_id": opID,
-		"message":      "bulk metadata fetch started — poll GET /api/v1/operations/" + opID + " for progress",
+		"operation_id":  opID,
+		"message":       "bulk metadata fetch started — poll GET /api/v1/operations/" + opID + " for progress",
+		"prefer_audible": params.PreferAudible,
+		"skip_cached":   params.SkipCached,
 	})
 }
 
@@ -851,6 +863,8 @@ func (s *Server) runBulkMetadataFetchAll(
 	if err != nil {
 		return fmt.Errorf("GetAllBooks: %w", err)
 	}
+
+	ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
 
 	existingResults, _ := store.GetOperationResults(opID)
 	done := make(map[string]bool, len(existingResults))
@@ -877,6 +891,23 @@ func (s *Server) runBulkMetadataFetchAll(
 		if done[b.ID] || strings.TrimSpace(b.Title) == "" {
 			continue
 		}
+		// skip_cached: skip books that already have a valid (non-expired) cache entry
+		// from any source so we only hit the API for books with no cached data.
+		if params.SkipCached {
+			hasFreshCache := false
+			for _, src := range s.metadataFetchService.BuildSourceChain() {
+				if cached, cerr := database.GetCachedMetadataFetch(store, b.ID, src.Name()); cerr == nil && cached != nil {
+					expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
+					if !expired {
+						hasFreshCache = true
+						break
+					}
+				}
+			}
+			if hasFreshCache {
+				continue
+			}
+		}
 		author := ""
 		if b.AuthorID != nil {
 			author = authorByID[*b.AuthorID]
@@ -900,7 +931,17 @@ func (s *Server) runBulkMetadataFetchAll(
 	if len(sourceChain) == 0 {
 		sourceChain = []metadata.MetadataSource{metadata.NewAudibleClient()}
 	}
-	ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+	// Move Audible to front of chain when preferred.
+	if params.PreferAudible {
+		audible := metadata.NewAudibleClient()
+		var rest []metadata.MetadataSource
+		for _, src := range sourceChain {
+			if src.Name() != audible.Name() {
+				rest = append(rest, src)
+			}
+		}
+		sourceChain = append([]metadata.MetadataSource{audible}, rest...)
+	}
 
 	completed := int64(alreadyDone)
 	found := 0
