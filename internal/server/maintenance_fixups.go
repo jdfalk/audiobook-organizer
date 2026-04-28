@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -4571,7 +4571,7 @@ func (s *Server) handleRepairMissingFiles(c *gin.Context) {
 	}
 
 	opID := ulid.Make().String()
-	if _, err := store.CreateOperation(opID, "missing_file_repair", nil); err != nil {
+	if _, err := store.CreateOperation(opID, "missing-file-repair", nil); err != nil {
 		internalError(c, "failed to create operation", err)
 		return
 	}
@@ -4586,7 +4586,7 @@ func (s *Server) handleRepairMissingFiles(c *gin.Context) {
 	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
 		return s.runMissingFileRepair(ctx, capturedOpID, capturedParams, store, progress)
 	}
-	if err := s.queue.Enqueue(opID, "missing_file_repair", operations.PriorityNormal, opFunc); err != nil {
+	if err := s.queue.Enqueue(opID, "missing-file-repair", operations.PriorityNormal, opFunc); err != nil {
 		internalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -4766,6 +4766,7 @@ func (s *Server) runMissingFileRepair(
 	wg.Wait()
 
 	finalCount := atomic.LoadInt64(&completed)
+	activity.FlushOperation(s.activityWriter, opID)
 	_ = progress.UpdateProgress(int(finalCount), totalFiles, "repair complete")
 	log.Printf("[INFO] repair-missing-files %s: finished %d/%d files", opID, finalCount, totalFiles)
 	return nil
@@ -5076,7 +5077,8 @@ func (s *Server) repairOneMissingFile(
 		log.Printf("[WARN] repair-missing-files %s: UpdateBookFile %s: %v", opID, f.ID, upErr)
 	} else {
 		res.Applied = true
-		log.Printf("[INFO] repair-missing-files %s: repaired via %s: %q → %q", opID, method, res.OldPath, candidate)
+		activity.LogBatch(s.activityWriter, opID, "missing-file-repair", "repair-missing-files",
+			activity.BatchItem{Name: filepath.Base(res.OldPath), Detail: method + ": " + candidate})
 	}
 	return res
 }
@@ -5099,8 +5101,8 @@ func (s *Server) handleGetMissingFileRepairResults(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
 		return
 	}
-	if op.Type != "missing_file_repair" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "not a missing_file_repair operation"})
+	if op.Type != "missing-file-repair" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "not a missing-file-repair operation"})
 		return
 	}
 	rawResults, err := store.GetOperationResults(opID)

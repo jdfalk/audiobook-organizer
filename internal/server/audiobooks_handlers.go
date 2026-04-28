@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -175,7 +175,7 @@ func (s *Server) purgeSoftDeletedAudiobooks(c *gin.Context) {
 	RespondWithOK(c, result)
 }
 
-func (s *Server) runAutoPurgeSoftDeleted() {
+func (s *Server) runAutoPurgeSoftDeleted(opID string) {
 	if config.AppConfig.PurgeSoftDeletedAfterDays <= 0 {
 		return
 	}
@@ -194,10 +194,9 @@ func (s *Server) runAutoPurgeSoftDeleted() {
 	if result.Attempted > 0 {
 		log.Printf("[INFO] Auto-purge soft-deleted books: attempted=%d purged=%d files_deleted=%d errors=%d",
 			result.Attempted, result.Purged, result.FilesDeleted, len(result.Errors))
-		if len(result.Errors) > 0 {
-			for _, e := range result.Errors {
-				log.Printf("[WARN] Auto-purge error: %s", e)
-			}
+		for _, e := range result.Errors {
+			activity.LogBatch(s.activityWriter, opID, "purge-deleted", "purge-deleted",
+				activity.BatchItem{Name: e, Detail: "error"})
 		}
 	}
 }
