@@ -5,6 +5,8 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +16,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -25,6 +29,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -3778,18 +3783,30 @@ func categorizeComposer(composer, author, narrator, fixMode string) (category, w
 	return "composer_mismatch", willWrite
 }
 
-// handleScanComposerTags reads the COMPOSER tag off every audio file on disk
-// and reports (or fixes) cases that cause Apple/iPhone sync problems.
+// composerScanWork is one unit of work dispatched to the parallel reader pool.
+type composerScanWork struct {
+	bookID    string
+	bookTitle string
+	filePath  string
+	author    string
+	narrator  string
+}
+
+// handleScanComposerTags starts an async, resumable COMPOSER-tag scan as a
+// queued operation and returns the operation ID immediately (HTTP 202).
 //
-// Common bad states:
-//   - composer = author name (old wrong mapping before narrator→composer convention)
-//   - composer has stale/contaminated text (series names, "read by", etc.)
-//   - composer is empty when a narrator exists and fix_mode=set_narrator
+// The operation bulk-loads all books/authors/files, fans out tag reads across
+// 8 goroutines, persists per-file results to the OperationResult table, and
+// survives server restarts — on startup resumeInterruptedOperations() picks up
+// any interrupted composer_tag_scan and re-enqueues from where it left off.
 //
 // Query params:
-//   - dry_run=true (default) — report without writing
-//   - dry_run=false — apply the fix
-//   - fix_mode=set_narrator (default) — write COMPOSER=narrator; use "clear" to always empty it
+//   - dry_run=true (default) — scan and report without writing
+//   - dry_run=false — apply the fix to problematic files
+//   - fix_mode=set_narrator (default) — write COMPOSER=narrator; "clear" to always empty it
+//
+// Poll progress via GET /api/v1/operations/{id}.
+// View results via GET /api/v1/maintenance/scan-composer-tags/{id}.
 func (s *Server) handleScanComposerTags(c *gin.Context) {
 	dryRun := c.DefaultQuery("dry_run", "true") != "false"
 	fixMode := c.DefaultQuery("fix_mode", "set_narrator")
@@ -3804,114 +3821,264 @@ func (s *Server) handleScanComposerTags(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] scan-composer-tags: start dry_run=%v fix_mode=%s", dryRun, fixMode)
+	opID := ulid.Make().String()
+	if _, err := store.CreateOperation(opID, "composer_tag_scan", nil); err != nil {
+		internalError(c, "failed to create operation", err)
+		return
+	}
 
+	params := operations.ComposerScanParams{DryRun: dryRun, FixMode: fixMode}
+	if err := operations.SaveParams(store, opID, params); err != nil {
+		log.Printf("[WARN] scan-composer-tags: failed to save params for %s: %v", opID, err)
+	}
+
+	capturedOpID := opID
+	capturedParams := params
+	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return s.runComposerTagScan(ctx, capturedOpID, capturedParams, store, progress)
+	}
+
+	if err := s.queue.Enqueue(opID, "composer_tag_scan", operations.PriorityNormal, opFunc); err != nil {
+		internalError(c, "failed to enqueue operation", err)
+		return
+	}
+
+	log.Printf("[INFO] scan-composer-tags: queued operation %s dry_run=%v fix_mode=%s", opID, dryRun, fixMode)
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"operation_id": opID,
+		"message":      "composer tag scan started — poll GET /api/v1/operations/" + opID + " for progress",
+		"dry_run":      dryRun,
+		"fix_mode":     fixMode,
+	})
+}
+
+// runComposerTagScan is the resumable core of the composer-tag scan. It is
+// called both on first run (from handleScanComposerTags) and on resume (from
+// resumeInterruptedOperations). Already-processed files are skipped by
+// checking existing OperationResult rows, making the function idempotent.
+func (s *Server) runComposerTagScan(
+	ctx context.Context,
+	opID string,
+	params operations.ComposerScanParams,
+	store database.Store,
+	progress operations.ProgressReporter,
+) error {
+	_ = progress.UpdateProgress(0, 0, "loading library data")
+
+	// --- Bulk load (eliminates N+1 DB queries) ---
 	allBooks, err := store.GetAllBooks(0, 0)
 	if err != nil {
-		internalError(c, "failed to list books", err)
+		return fmt.Errorf("GetAllBooks: %w", err)
+	}
+	allAuthors, err := store.GetAllAuthors()
+	if err != nil {
+		return fmt.Errorf("GetAllAuthors: %w", err)
+	}
+	authorByID := make(map[int]string, len(allAuthors))
+	for _, a := range allAuthors {
+		authorByID[a.ID] = a.Name
+	}
+	allFiles, err := store.GetAllBookFiles()
+	if err != nil {
+		return fmt.Errorf("GetAllBookFiles: %w", err)
+	}
+	filesByBook := make(map[string][]database.BookFile, len(allFiles))
+	for i := range allFiles {
+		f := &allFiles[i]
+		filesByBook[f.BookID] = append(filesByBook[f.BookID], *f)
+	}
+
+	// Load already-processed file paths from a previous (interrupted) run.
+	existingResults, _ := store.GetOperationResults(opID)
+	done := make(map[string]bool, len(existingResults))
+	for _, r := range existingResults {
+		done[r.BookID] = true // BookID field stores the file path for this operation
+	}
+
+	// Build work queue, skipping already-processed files.
+	audioExts := map[string]bool{".m4b": true, ".m4a": true, ".mp3": true, ".flac": true, ".ogg": true}
+	var workItems []composerScanWork
+	for i := range allBooks {
+		b := &allBooks[i]
+		author := ""
+		if b.AuthorID != nil {
+			author = authorByID[*b.AuthorID]
+		}
+		narrator := ""
+		if b.Narrator != nil {
+			narrator = *b.Narrator
+		}
+		for _, f := range filesByBook[b.ID] {
+			if f.FilePath == "" || f.Missing {
+				continue
+			}
+			if !audioExts[strings.ToLower(filepath.Ext(f.FilePath))] {
+				continue
+			}
+			if done[f.FilePath] {
+				continue // already processed in a previous run
+			}
+			workItems = append(workItems, composerScanWork{
+				bookID:    b.ID,
+				bookTitle: b.Title,
+				filePath:  f.FilePath,
+				author:    author,
+				narrator:  narrator,
+			})
+		}
+	}
+
+	totalFiles := len(existingResults) + len(workItems)
+	alreadyDone := len(existingResults)
+	log.Printf("[INFO] scan-composer-tags %s: %d files total, %d already done, %d to process",
+		opID, totalFiles, alreadyDone, len(workItems))
+	_ = progress.UpdateProgress(alreadyDone, totalFiles,
+		fmt.Sprintf("resuming: %d/%d already processed", alreadyDone, totalFiles))
+
+	if len(workItems) == 0 {
+		_ = progress.UpdateProgress(totalFiles, totalFiles, "all files already processed")
+		return nil
+	}
+
+	// --- Parallel NAS reads ---
+	const workers = 8
+	workCh := make(chan composerScanWork, len(workItems))
+	for _, w := range workItems {
+		workCh <- w
+	}
+	close(workCh)
+
+	var completed int64 = int64(alreadyDone)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for w := range workCh {
+				if ctx.Err() != nil {
+					return
+				}
+				if _, statErr := os.Stat(w.filePath); statErr != nil {
+					// File missing on disk — record as skipped so it's not retried
+					_ = store.CreateOperationResult(&database.OperationResult{
+						OperationID: opID,
+						BookID:      w.filePath,
+						ResultJSON:  `{"category":"missing"}`,
+						Status:      "missing",
+					})
+					atomic.AddInt64(&completed, 1)
+					continue
+				}
+
+				tags, readErr := metadata.ReadRawTags(w.filePath)
+				var r composerTagResult
+				if readErr != nil {
+					r = composerTagResult{
+						BookID: w.bookID, BookTitle: w.bookTitle, FilePath: w.filePath,
+						Category: "read_error", Error: readErr.Error(),
+					}
+				} else {
+					composer := ""
+					if vs, ok := tags["COMPOSER"]; ok && len(vs) > 0 {
+						composer = strings.TrimSpace(vs[0])
+					}
+					category, willWrite := categorizeComposer(composer, w.author, w.narrator, params.FixMode)
+					r = composerTagResult{
+						BookID: w.bookID, BookTitle: w.bookTitle, FilePath: w.filePath,
+						Category: category, Composer: composer,
+						Author: w.author, Narrator: w.narrator, WillWrite: willWrite,
+					}
+					if !params.DryRun && category != "ok" && willWrite != composer {
+						if writeErr := metadata.WriteSingleTag(w.filePath, "COMPOSER", willWrite); writeErr != nil {
+							r.Error = writeErr.Error()
+							log.Printf("[WARN] scan-composer-tags %s: write failed %s: %v", opID, w.filePath, writeErr)
+						} else {
+							r.Applied = true
+							log.Printf("[INFO] scan-composer-tags %s: COMPOSER %q→%q %s", opID, composer, willWrite, w.filePath)
+						}
+					}
+				}
+
+				resultJSON, _ := json.Marshal(r)
+				_ = store.CreateOperationResult(&database.OperationResult{
+					OperationID: opID,
+					BookID:      w.filePath, // file path as unique key per file
+					ResultJSON:  string(resultJSON),
+					Status:      r.Category,
+				})
+
+				n := atomic.AddInt64(&completed, 1)
+				mu.Lock()
+				_ = progress.UpdateProgress(int(n), totalFiles,
+					fmt.Sprintf("scanned %d/%d files", n, totalFiles))
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	finalCount := atomic.LoadInt64(&completed)
+	_ = progress.UpdateProgress(int(finalCount), totalFiles, "scan complete")
+	log.Printf("[INFO] scan-composer-tags %s: finished %d/%d files", opID, finalCount, totalFiles)
+	return nil
+}
+
+// handleGetComposerScanResults returns the aggregated results for a completed
+// (or in-progress) composer_tag_scan operation.
+func (s *Server) handleGetComposerScanResults(c *gin.Context) {
+	opID := c.Param("id")
+	if opID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "operation id required"})
+		return
+	}
+
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	op, err := store.GetOperationByID(opID)
+	if err != nil || op == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		return
+	}
+	if op.Type != "composer_tag_scan" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "not a composer_tag_scan operation"})
+		return
+	}
+
+	rawResults, err := store.GetOperationResults(opID)
+	if err != nil {
+		internalError(c, "failed to load results", err)
 		return
 	}
 
 	counts := map[string]int{}
 	var problems []composerTagResult
-	totalFiles := 0
-	applied := 0
-	errors := 0
-
-	for i := range allBooks {
-		book := &allBooks[i]
-
-		authorName := ""
-		if book.AuthorID != nil {
-			if author, aErr := store.GetAuthorByID(*book.AuthorID); aErr == nil && author != nil {
-				authorName = author.Name
-			}
-		}
-		narratorName := ""
-		if book.Narrator != nil {
-			narratorName = *book.Narrator
-		}
-
-		files, fErr := store.GetBookFiles(book.ID)
-		if fErr != nil {
-			log.Printf("[WARN] scan-composer-tags: GetBookFiles book %s: %v", book.ID, fErr)
+	for _, raw := range rawResults {
+		var r composerTagResult
+		if err := json.Unmarshal([]byte(raw.ResultJSON), &r); err != nil {
 			continue
 		}
-
-		for j := range files {
-			f := &files[j]
-			if f.FilePath == "" || f.Missing {
-				continue
-			}
-			ext := strings.ToLower(filepath.Ext(f.FilePath))
-			if ext != ".m4b" && ext != ".m4a" && ext != ".mp3" && ext != ".flac" && ext != ".ogg" {
-				continue
-			}
-			if _, statErr := os.Stat(f.FilePath); statErr != nil {
-				continue
-			}
-
-			totalFiles++
-
-			tags, readErr := metadata.ReadRawTags(f.FilePath)
-			if readErr != nil {
-				r := composerTagResult{
-					BookID: book.ID, BookTitle: book.Title, FilePath: f.FilePath,
-					Category: "read_error", Error: readErr.Error(),
-				}
-				problems = append(problems, r)
-				counts["read_error"]++
-				errors++
-				continue
-			}
-
-			composer := ""
-			if vs, ok := tags["COMPOSER"]; ok && len(vs) > 0 {
-				composer = strings.TrimSpace(vs[0])
-			}
-
-			category, willWrite := categorizeComposer(composer, authorName, narratorName, fixMode)
-			counts[category]++
-
-			if category == "ok" {
-				continue
-			}
-
-			r := composerTagResult{
-				BookID: book.ID, BookTitle: book.Title, FilePath: f.FilePath,
-				Category: category, Composer: composer,
-				Author: authorName, Narrator: narratorName, WillWrite: willWrite,
-			}
-
-			if !dryRun && willWrite != composer {
-				if writeErr := metadata.WriteSingleTag(f.FilePath, "COMPOSER", willWrite); writeErr != nil {
-					r.Error = writeErr.Error()
-					log.Printf("[WARN] scan-composer-tags: write failed %s: %v", f.FilePath, writeErr)
-					errors++
-				} else {
-					r.Applied = true
-					applied++
-					log.Printf("[INFO] scan-composer-tags: COMPOSER %q→%q book=%s file=%s",
-						composer, willWrite, book.ID, f.FilePath)
-				}
-			}
-
+		counts[r.Category]++
+		if r.Category != "ok" && r.Category != "missing" {
 			problems = append(problems, r)
 		}
 	}
 
-	log.Printf("[INFO] scan-composer-tags: done dry_run=%v fix_mode=%s total_files=%d problems=%d applied=%d errors=%d counts=%v",
-		dryRun, fixMode, totalFiles, len(problems), applied, errors, counts)
-
 	c.JSON(http.StatusOK, gin.H{
-		"dry_run":     dryRun,
-		"fix_mode":    fixMode,
-		"total_files": totalFiles,
-		"problems":    len(problems),
-		"applied":     applied,
-		"errors":      errors,
-		"by_category": counts,
-		"details":     problems,
+		"operation_id": opID,
+		"status":       op.Status,
+		"progress":     op.Progress,
+		"total":        op.Total,
+		"by_category":  counts,
+		"problems":     len(problems),
+		"details":      problems,
 	})
 }
 

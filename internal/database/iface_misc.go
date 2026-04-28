@@ -1,5 +1,5 @@
 // file: internal/database/iface_misc.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
 
 package database
@@ -112,6 +112,7 @@ type BookFileStore interface {
 	CreateBookFile(file *BookFile) error
 	UpdateBookFile(id string, file *BookFile) error
 	GetBookFiles(bookID string) ([]BookFile, error)
+	GetAllBookFiles() ([]BookFile, error)
 	GetBookFileByID(bookID, fileID string) (*BookFile, error)
 	GetBookFileByPID(itunesPID string) (*BookFile, error)
 	GetBookFileByPath(filePath string) (*BookFile, error)

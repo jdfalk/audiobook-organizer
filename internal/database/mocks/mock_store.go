@@ -30023,6 +30023,27 @@ func (_c *MockStore_GetBookFiles_Call) RunAndReturn(run func(bookID string) ([]d
 	return _c
 }
 
+// GetAllBookFiles provides a mock function for the type MockStore
+func (_mock *MockStore) GetAllBookFiles() ([]database.BookFile, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for GetAllBookFiles")
+	}
+	var r0 []database.BookFile
+	if rf, ok := ret.Get(0).(func() []database.BookFile); ok {
+		r0 = rf()
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.BookFile)
+	}
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
 // GetBookNarrators provides a mock function for the type MockStore
 func (_mock *MockStore) GetBookNarrators(bookID string) ([]database.BookNarrator, error) {
 	ret := _mock.Called(bookID)

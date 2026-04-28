@@ -7190,6 +7190,42 @@ func (s *PebbleStore) GetBookFiles(bookID string) ([]BookFile, error) {
 	return files, nil
 }
 
+// GetAllBookFiles returns every BookFile in the database by iterating the
+// book_file: prefix space. Used by bulk-scan operations that would otherwise
+// make one GetBookFiles call per book (N+1 problem).
+func (s *PebbleStore) GetAllBookFiles() ([]BookFile, error) {
+	prefix := []byte("book_file:")
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: []byte("book_file;"), // ';' is one past ':' in ASCII
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var files []BookFile
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		// Skip secondary index entries (book_file_pid:, book_file_path:, book_file_acoustid:).
+		if !strings.HasPrefix(key, "book_file:") {
+			continue
+		}
+		// Primary keys look like book_file:<bookID>:<fileID> — must have exactly 2 colons
+		// after the prefix, meaning the full key has 3 colon-separated segments.
+		parts := strings.SplitN(key, ":", 4)
+		if len(parts) != 3 {
+			continue
+		}
+		var f BookFile
+		if err := json.Unmarshal(iter.Value(), &f); err != nil {
+			return nil, err
+		}
+		files = append(files, f)
+	}
+	return files, nil
+}
+
 // GetBookFileByPID looks up a BookFile by iTunes persistent ID using the
 // book_file_pid:<pid> secondary index.
 func (s *PebbleStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {
