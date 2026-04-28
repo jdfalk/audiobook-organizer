@@ -1,5 +1,5 @@
 // file: internal/config/persistence.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
@@ -529,6 +529,12 @@ func applySetting(key, value, typ string) error {
 		if b, err := strconv.ParseBool(value); err == nil {
 			AppConfig.ITunesAutoWriteBack = b
 		}
+	case "itunes_path_trim_enabled":
+		if b, err := strconv.ParseBool(value); err == nil {
+			AppConfig.ITunesPathTrimEnabled = b
+		}
+	case "itunes_windows_root_path":
+		AppConfig.ITunesWindowsRootPath = value
 	case "itunes_path_mappings":
 		var mappings []ITunesPathMap
 		if err := json.Unmarshal([]byte(value), &mappings); err == nil {
@@ -874,6 +880,8 @@ func legacySaveConfigToDatabase_REMOVED(store database.SettingsStore) error { //
 		"itunes_library_write_path": {AppConfig.ITunesLibraryWritePath, "string", false},
 		"itunes_library_read_path":  {AppConfig.ITunesLibraryReadPath, "string", false},
 		"itunes_auto_write_back":    {strconv.FormatBool(AppConfig.ITunesAutoWriteBack), "bool", false},
+		"itunes_path_trim_enabled":  {strconv.FormatBool(AppConfig.ITunesPathTrimEnabled), "bool", false},
+		"itunes_windows_root_path":  {AppConfig.ITunesWindowsRootPath, "string", false},
 		"itunes_path_mappings":      {string(pathMappingsJSON), "json", false},
 
 		"basic_auth_enabled":  {strconv.FormatBool(AppConfig.BasicAuthEnabled), "bool", false},

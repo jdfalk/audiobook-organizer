@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -1894,12 +1894,16 @@ type fixBookFilePathsResult struct {
 
 // handleFixBookFilePaths iterates every book_files row and:
 //
-//  1. If file_path is a directory, globs for audio files inside it:
+//  1. If file_path doesn't exist but a file with the same stem prefix exists in
+//     the same directory, updates the row to the real filename (repairs truncated
+//     filenames left by old path-length limiting logic).
+//
+//  2. If file_path is a directory, globs for audio files inside it:
 //     - 1 file found  → update the row's file_path to that file
 //     - N>1 files     → create new book_file rows (one per file), delete the directory row
 //     - 0 files found → mark the row missing=true
 //
-//  2. If file_path is a real file and file_size < 100 bytes (likely measured
+//  3. If file_path is a real file and file_size < 100 bytes (likely measured
 //     from a directory inode), re-reads the size with os.Stat.
 //
 // For new/updated rows the handler also populates file_size, format, and
@@ -1942,7 +1946,65 @@ func (s *Server) handleFixBookFilePaths(c *gin.Context) {
 
 			info, statErr := os.Stat(f.FilePath)
 			if statErr != nil {
-				// File doesn't exist — leave to other fixup routines.
+				// File doesn't exist on disk. Try to find the real file by
+				// prefix-matching the truncated stem against siblings in the
+				// same directory (handles filenames truncated by old organizer
+				// runs that used the wrong path-length calculation).
+				dir := filepath.Dir(f.FilePath)
+				base := filepath.Base(f.FilePath)
+				ext := filepath.Ext(base)
+				stem := strings.TrimSuffix(base, ext)
+
+				dirEntries, readErr := os.ReadDir(dir)
+				var match string
+				if readErr == nil {
+					for _, de := range dirEntries {
+						if de.IsDir() {
+							continue
+						}
+						name := de.Name()
+						nameExt := filepath.Ext(name)
+						nameStem := strings.TrimSuffix(name, nameExt)
+						// Match: same extension and full name starts with truncated stem
+						if strings.EqualFold(nameExt, ext) && strings.HasPrefix(nameStem, stem) && name != base {
+							match = filepath.Join(dir, name)
+							break
+						}
+					}
+				}
+				if match == "" {
+					continue
+				}
+
+				fi, statErr2 := os.Stat(match)
+				res := fixBookFilePathsResult{
+					FileID:      f.ID,
+					BookID:      f.BookID,
+					OldPath:     f.FilePath,
+					NewPath:     match,
+					Action:      "truncated_name_repaired",
+					FileSizeOld: f.FileSize,
+				}
+				if statErr2 == nil {
+					res.FileSizeNew = fi.Size()
+				}
+				totalChanged++
+				if !dryRun {
+					f.FilePath = match
+					f.OriginalFilename = filepath.Base(match)
+					if statErr2 == nil {
+						f.FileSize = fi.Size()
+					}
+					f.Missing = false
+					if upErr := store.UpdateBookFile(f.ID, f); upErr != nil {
+						res.Error = upErr.Error()
+						totalErrors++
+					} else {
+						res.Applied = true
+						totalApplied++
+					}
+				}
+				results = append(results, res)
 				continue
 			}
 

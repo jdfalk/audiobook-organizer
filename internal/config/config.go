@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.37.2
+// version: 1.38.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -235,6 +235,8 @@ type Config struct {
 	ITunesLibraryReadPath  string          `json:"itunes_library_read_path"`  // path used for sync (XML or ITL)
 	ITunesPathMappings     []ITunesPathMap `json:"itunes_path_mappings"`      // Stored path mappings for write-back
 	ITunesAutoWriteBack    bool            `json:"itunes_auto_write_back"`    // Auto write-back on every edit (batched)
+	ITunesPathTrimEnabled  bool            `json:"itunes_path_trim_enabled"`   // Trim filenames to fit Windows MAX_PATH for iTunes compatibility
+	ITunesWindowsRootPath  string          `json:"itunes_windows_root_path"`   // Windows equivalent of RootDir, e.g. "W:\audiobook-organizer" (no trailing slash)
 
 	// Deluge integration
 	DelugeWebURL              string `json:"deluge_web_url"`               // e.g. "http://172.16.2.30:8112"
@@ -425,6 +427,8 @@ func InitConfig() {
 	viper.SetDefault("itunes_library_write_path", "")
 	viper.SetDefault("itunes_library_read_path", "")
 	viper.SetDefault("itunes_auto_write_back", false)
+	viper.SetDefault("itunes_path_trim_enabled", false)
+	viper.SetDefault("itunes_windows_root_path", "")
 
 	// Auto-update defaults
 	viper.SetDefault("auto_update_enabled", false)
@@ -591,6 +595,8 @@ func InitConfig() {
 		ITunesLibraryWritePath: viper.GetString("itunes_library_write_path"),
 		ITunesLibraryReadPath:  viper.GetString("itunes_library_read_path"),
 		ITunesAutoWriteBack:    viper.GetBool("itunes_auto_write_back"),
+		ITunesPathTrimEnabled:  viper.GetBool("itunes_path_trim_enabled"),
+		ITunesWindowsRootPath:  viper.GetString("itunes_windows_root_path"),
 
 		// Download client integration
 		DownloadClient: DownloadClientConfig{
