@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -785,6 +786,367 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		"total_count":   len(req.BookIDs),
 		"results":       results,
 	})
+}
+
+// handleBulkMetadataFetchAll starts an async, resumable full-library metadata
+// fetch as a queued operation and returns the operation ID immediately (HTTP 202).
+//
+// It fetches from the full source chain (Audible, OpenLibrary, etc.) for every
+// book in the library. Already-processed books (with an OperationResult row from
+// a prior interrupted run) are skipped so the operation is safe to restart.
+//
+// Query params:
+//   - only_missing=true (default false) — skip books that already have all fields
+//
+// Poll progress via GET /api/v1/operations/{id}.
+func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
+	if s.Store() == nil {
+		RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	if s.queue == nil {
+		RespondWithInternalError(c, "operation queue not initialized")
+		return
+	}
+
+	onlyMissing := c.DefaultQuery("only_missing", "false") == "true"
+
+	store := s.Store()
+	opID := ulid.Make().String()
+	if _, err := store.CreateOperation(opID, "bulk_metadata_fetch", nil); err != nil {
+		internalError(c, "failed to create operation", err)
+		return
+	}
+	params := operations.BulkMetadataFetchParams{OnlyMissing: onlyMissing}
+	if err := operations.SaveParams(store, opID, params); err != nil {
+		log.Printf("[WARN] bulk-metadata-fetch: failed to save params for %s: %v", opID, err)
+	}
+
+	capturedParams := params
+	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return s.runBulkMetadataFetchAll(ctx, opID, capturedParams, store, progress)
+	}
+	if err := s.queue.Enqueue(opID, "bulk_metadata_fetch", operations.PriorityNormal, opFunc); err != nil {
+		internalError(c, "failed to enqueue operation", err)
+		return
+	}
+
+	log.Printf("[INFO] bulk-metadata-fetch: queued operation %s only_missing=%v", opID, onlyMissing)
+	c.JSON(http.StatusAccepted, gin.H{
+		"operation_id": opID,
+		"message":      "bulk metadata fetch started — poll GET /api/v1/operations/" + opID + " for progress",
+		"only_missing": onlyMissing,
+	})
+}
+
+// runBulkMetadataFetchAll is the resumable core of the full-library metadata
+// fetch. It is idempotent: books already in OperationResult (by book ID) are
+// skipped so restarts continue from where the last run left off.
+func (s *Server) runBulkMetadataFetchAll(
+	ctx context.Context,
+	opID string,
+	params operations.BulkMetadataFetchParams,
+	store database.Store,
+	progress operations.ProgressReporter,
+) error {
+	_ = progress.UpdateProgress(0, 0, "loading books")
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		return fmt.Errorf("GetAllBooks: %w", err)
+	}
+
+	// Load already-processed book IDs from a previous interrupted run.
+	existingResults, _ := store.GetOperationResults(opID)
+	done := make(map[string]bool, len(existingResults))
+	for _, r := range existingResults {
+		done[r.BookID] = true
+	}
+
+	// Resolve author names in bulk (avoid per-book GetAuthorByID calls).
+	allAuthors, err := store.GetAllAuthors()
+	if err != nil {
+		return fmt.Errorf("GetAllAuthors: %w", err)
+	}
+	authorByID := make(map[int]string, len(allAuthors))
+	for _, a := range allAuthors {
+		authorByID[a.ID] = a.Name
+	}
+
+	// Build work list, skipping already-done books.
+	type bookWork struct {
+		book       database.Book
+		authorName string
+	}
+	var work []bookWork
+	for i := range allBooks {
+		b := &allBooks[i]
+		if done[b.ID] {
+			continue
+		}
+		if strings.TrimSpace(b.Title) == "" {
+			continue
+		}
+		author := ""
+		if b.AuthorID != nil {
+			author = authorByID[*b.AuthorID]
+		}
+		work = append(work, bookWork{book: *b, authorName: author})
+	}
+
+	totalBooks := len(existingResults) + len(work)
+	alreadyDone := len(existingResults)
+	log.Printf("[INFO] bulk-metadata-fetch %s: %d books total, %d already done, %d to process",
+		opID, totalBooks, alreadyDone, len(work))
+	_ = progress.UpdateProgress(alreadyDone, totalBooks,
+		fmt.Sprintf("resuming: %d/%d already processed", alreadyDone, totalBooks))
+
+	if len(work) == 0 {
+		_ = progress.UpdateProgress(totalBooks, totalBooks, "all books already processed")
+		return nil
+	}
+
+	sourceChain := s.metadataFetchService.BuildSourceChain()
+	if len(sourceChain) == 0 {
+		sourceChain = []metadata.MetadataSource{metadata.NewAudibleClient()}
+	}
+	ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+
+	completed := int64(alreadyDone)
+	updated := 0
+	notFound := 0
+	errors := 0
+
+	for i, w := range work {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		book := w.book
+		bookID := book.ID
+		currentAuthor := w.authorName
+
+		state, _ := loadMetadataState(bookID)
+		if state == nil {
+			state = map[string]metadataFieldState{}
+		}
+
+		onlyMissing := params.OnlyMissing
+		shouldApply := func(field string, hasValue bool) bool {
+			entry := state[field]
+			if entry.OverrideLocked || entry.OverrideValue != nil {
+				return false
+			}
+			if onlyMissing && hasValue {
+				return false
+			}
+			return true
+		}
+		hasBookValue := func(field string) bool {
+			switch field {
+			case "title":
+				return strings.TrimSpace(book.Title) != ""
+			case "author_name":
+				return book.AuthorID != nil
+			case "publisher":
+				return book.Publisher != nil && strings.TrimSpace(*book.Publisher) != ""
+			case "language":
+				return book.Language != nil && strings.TrimSpace(*book.Language) != ""
+			case "audiobook_release_year":
+				return book.AudiobookReleaseYear != nil && *book.AudiobookReleaseYear != 0
+			case "isbn10":
+				return book.ISBN10 != nil && strings.TrimSpace(*book.ISBN10) != ""
+			case "isbn13":
+				return book.ISBN13 != nil && strings.TrimSpace(*book.ISBN13) != ""
+			default:
+				return false
+			}
+		}
+
+		searchTitle := stripChapterFromTitle(book.Title)
+
+		var metaResults []metadata.BookMetadata
+		var sourceName string
+		var fetchErr error
+		for _, src := range sourceChain {
+			if cached, cerr := database.GetCachedMetadataFetch(store, bookID, src.Name()); cerr == nil && cached != nil {
+				expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
+				if !expired {
+					var cachedResults []metadata.BookMetadata
+					if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+						metaResults = cachedResults
+						sourceName = src.Name()
+						break
+					}
+				}
+			}
+			if currentAuthor != "" {
+				metaResults, fetchErr = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
+				if fetchErr == nil && len(metaResults) > 0 {
+					sourceName = src.Name()
+					break
+				}
+			}
+			metaResults, fetchErr = src.SearchByTitle(searchTitle)
+			if fetchErr == nil && len(metaResults) > 0 {
+				sourceName = src.Name()
+				break
+			}
+			if searchTitle != book.Title {
+				if currentAuthor != "" {
+					metaResults, fetchErr = src.SearchByTitleAndAuthor(book.Title, currentAuthor)
+					if fetchErr == nil && len(metaResults) > 0 {
+						sourceName = src.Name()
+						break
+					}
+				}
+				metaResults, fetchErr = src.SearchByTitle(book.Title)
+				if fetchErr == nil && len(metaResults) > 0 {
+					sourceName = src.Name()
+					break
+				}
+			}
+		}
+
+		resultStatus := "not_found"
+		if len(metaResults) > 0 && sourceName != "" {
+			if blob, merr := json.Marshal(metaResults); merr == nil {
+				_ = database.PutCachedMetadataFetch(store, bookID, sourceName, blob, 0)
+			}
+
+			meta := metaResults[0]
+			if currentAuthor != "" && len(metaResults) > 1 {
+				lowerAuthor := strings.ToLower(currentAuthor)
+				for _, r := range metaResults {
+					if strings.EqualFold(r.Author, currentAuthor) || strings.Contains(strings.ToLower(r.Author), lowerAuthor) {
+						meta = r
+						break
+					}
+				}
+			}
+
+			fetchedValues := map[string]any{}
+			appliedFields := []string{}
+			didUpdate := false
+
+			applyStr := func(field string, val string, hasVal bool, setter func()) {
+				if val == "" || metafetch.IsGarbageValue(val) {
+					return
+				}
+				fetchedValues[field] = val
+				if shouldApply(field, hasVal) {
+					setter()
+					appliedFields = append(appliedFields, field)
+					didUpdate = true
+				}
+			}
+
+			applyStr("publisher", meta.Publisher, hasBookValue("publisher"), func() { book.Publisher = stringPtr(meta.Publisher) })
+			applyStr("language", meta.Language, hasBookValue("language"), func() { book.Language = stringPtr(meta.Language) })
+			if meta.Title != "" && !metafetch.IsGarbageValue(meta.Title) {
+				fetchedValues["title"] = meta.Title
+				if shouldApply("title", hasBookValue("title")) {
+					book.Title = meta.Title
+					appliedFields = append(appliedFields, "title")
+					didUpdate = true
+				}
+			}
+			if meta.Author != "" && !metafetch.IsGarbageValue(meta.Author) {
+				fetchedValues["author_name"] = meta.Author
+				if shouldApply("author_name", hasBookValue("author_name")) {
+					author, aerr := store.GetAuthorByName(meta.Author)
+					if aerr == nil && author == nil {
+						author, aerr = store.CreateAuthor(meta.Author)
+					}
+					if aerr == nil && author != nil {
+						book.AuthorID = &author.ID
+						appliedFields = append(appliedFields, "author_name")
+						didUpdate = true
+					}
+				}
+			}
+			if meta.PublishYear != 0 {
+				fetchedValues["audiobook_release_year"] = meta.PublishYear
+				if shouldApply("audiobook_release_year", hasBookValue("audiobook_release_year")) {
+					yr := meta.PublishYear
+					book.AudiobookReleaseYear = &yr
+					appliedFields = append(appliedFields, "audiobook_release_year")
+					didUpdate = true
+				}
+			}
+			if meta.ISBN != "" {
+				if len(meta.ISBN) == 10 {
+					fetchedValues["isbn10"] = meta.ISBN
+					if shouldApply("isbn10", hasBookValue("isbn10")) {
+						book.ISBN10 = stringPtr(meta.ISBN)
+						appliedFields = append(appliedFields, "isbn10")
+						didUpdate = true
+					}
+				} else {
+					fetchedValues["isbn13"] = meta.ISBN
+					if shouldApply("isbn13", hasBookValue("isbn13")) {
+						book.ISBN13 = stringPtr(meta.ISBN)
+						appliedFields = append(appliedFields, "isbn13")
+						didUpdate = true
+					}
+				}
+			}
+
+			if len(fetchedValues) > 0 {
+				_ = updateFetchedMetadataState(bookID, fetchedValues)
+			}
+
+			if didUpdate {
+				s.metadataFetchService.RecordChangeHistory(&book, meta, sourceName)
+				if _, uerr := store.UpdateBook(bookID, &book); uerr != nil {
+					log.Printf("[WARN] bulk-metadata-fetch %s: UpdateBook %s: %v", opID, bookID, uerr)
+					errors++
+					resultStatus = "error"
+				} else {
+					s.metadataFetchService.ApplyMetadataSystemTags(bookID, sourceName, meta.Language)
+					updated++
+					resultStatus = "updated"
+				}
+			} else if len(fetchedValues) > 0 {
+				resultStatus = "fetched"
+			} else {
+				resultStatus = "skipped"
+			}
+		} else {
+			notFound++
+		}
+
+		_ = store.CreateOperationResult(&database.OperationResult{
+			OperationID: opID,
+			BookID:      bookID,
+			ResultJSON:  fmt.Sprintf(`{"status":%q,"source":%q}`, resultStatus, sourceName),
+			Status:      resultStatus,
+		})
+
+		n := atomic.AddInt64(&completed, 1)
+		if i%50 == 0 || int(n) == totalBooks {
+			_ = progress.UpdateProgress(int(n), totalBooks,
+				fmt.Sprintf("fetched %d/%d — updated:%d not_found:%d err:%d",
+					n, totalBooks, updated, notFound, errors))
+		}
+
+		// Rate-limit: ~200ms between external API calls (cached hits are instant).
+		// Ensures we don't get rate-banned by Audible/OpenLibrary over 12K requests.
+		if sourceName != "" && i < len(work)-1 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+	}
+
+	finalCount := atomic.LoadInt64(&completed)
+	_ = progress.UpdateProgress(int(finalCount), totalBooks,
+		fmt.Sprintf("complete — updated:%d not_found:%d errors:%d", updated, notFound, errors))
+	log.Printf("[INFO] bulk-metadata-fetch %s: done %d books — updated:%d not_found:%d errors:%d",
+		opID, finalCount, updated, notFound, errors)
+	return nil
 }
 
 // handleBulkWriteBack handles POST /api/v1/audiobooks/bulk-write-back.

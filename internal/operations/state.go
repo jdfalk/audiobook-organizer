@@ -69,6 +69,12 @@ type ComposerScanParams struct {
 	FixMode string `json:"fix_mode"` // "set_narrator" or "clear"
 }
 
+// BulkMetadataFetchParams stores the immutable parameters for a bulk metadata fetch operation.
+// OnlyMissing=true skips books that already have all metadata fields populated.
+type BulkMetadataFetchParams struct {
+	OnlyMissing bool `json:"only_missing"`
+}
+
 // MissingFileRepairParams stores the immutable parameters for a missing-file path-repair operation.
 // DryRun=true reports what would be fixed without writing. SearchRoots is the ordered list of
 // directory trees to search when the PID lookup fails.
