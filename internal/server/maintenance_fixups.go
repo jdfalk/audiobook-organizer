@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -4101,14 +4101,15 @@ func humanizeBytes(n int64) string {
 // ---------------------------------------------------------------------------
 
 type relinkMissingResult struct {
-	BookID   string `json:"book_id"`
-	Title    string `json:"title"`
-	OldPath  string `json:"old_path"`
-	NewPath  string `json:"new_path,omitempty"`
-	Action   string `json:"action"` // "relinked", "unresolved", "ambiguous"
-	Matches  int    `json:"matches,omitempty"`
-	Applied  bool   `json:"applied"`
-	Error    string `json:"error,omitempty"`
+	BookID     string   `json:"book_id"`
+	Title      string   `json:"title"`
+	OldPath    string   `json:"old_path"`
+	NewPath    string   `json:"new_path,omitempty"`
+	Action     string   `json:"action"` // "relinked", "unresolved", "ambiguous"
+	Matches    int      `json:"matches,omitempty"`
+	MatchPaths []string `json:"match_paths,omitempty"`
+	Applied    bool     `json:"applied"`
+	Error      string   `json:"error,omitempty"`
 }
 
 // handleRelinkMissingToiTunes finds books whose file_path is under the organizer
@@ -4147,16 +4148,28 @@ func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
 
 	audioExts := map[string]bool{".mp3": true, ".m4b": true, ".m4a": true, ".flac": true, ".opus": true, ".ogg": true}
 
-	// findInITunes searches iTunesRoot for audio files matching the given
-	// author directory name and title prefix. Returns all matches found.
+	// findInITunes searches iTunesRoot for iTunes album directories (or single
+	// audio files) matching the given author + title. Results are deduplicated
+	// by album directory so a 10-track book returns exactly one match, not 10.
 	findInITunes := func(authorName, title string) []string {
-		var matches []string
+		// 25-char prefix keeps enough specificity while accommodating iTunes
+		// filename truncation (many files are cut off before 40 chars).
 		titlePrefix := title
 		if len(titlePrefix) > 25 {
 			titlePrefix = titlePrefix[:25]
 		}
+		titlePrefixLower := strings.ToLower(titlePrefix)
 
-		// Walk every entry under iTunesRoot to handle co-author dir variants.
+		// First significant word of author for loose directory matching.
+		authorWord := authorName
+		if idx := strings.Index(authorName, " "); idx > 0 {
+			authorWord = authorName[:idx]
+		}
+		authorWordLower := strings.ToLower(authorWord)
+
+		// dirMatches collects unique iTunes album dirs (or single files).
+		dirMatches := map[string]struct{}{}
+
 		entries, err := os.ReadDir(iTunesRoot)
 		if err != nil {
 			return nil
@@ -4165,30 +4178,180 @@ func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
 			if !entry.IsDir() {
 				continue
 			}
-			// Require the dir name to contain the author's first significant word.
-			authorWord := authorName
-			if idx := strings.Index(authorName, " "); idx > 0 {
-				authorWord = authorName[:idx]
-			}
-			if !strings.Contains(strings.ToLower(entry.Name()), strings.ToLower(authorWord)) {
+			if !strings.Contains(strings.ToLower(entry.Name()), authorWordLower) {
 				continue
 			}
 			authorDir := filepath.Join(iTunesRoot, entry.Name())
-			_ = filepath.WalkDir(authorDir, func(path string, d os.DirEntry, err error) error {
-				if err != nil || d.IsDir() {
-					return nil
+
+			albumEntries, err := os.ReadDir(authorDir)
+			if err != nil {
+				continue
+			}
+			for _, album := range albumEntries {
+				albumPath := filepath.Join(authorDir, album.Name())
+				if album.IsDir() {
+					// Match on album dir name first (fast path).
+					if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+						dirMatches[albumPath] = struct{}{}
+						continue
+					}
+					// Fall back: scan files inside the album dir.
+					_ = filepath.WalkDir(albumPath, func(path string, d os.DirEntry, err error) error {
+						if err != nil || d.IsDir() {
+							return nil
+						}
+						if !audioExts[strings.ToLower(filepath.Ext(path))] {
+							return nil
+						}
+						if strings.Contains(strings.ToLower(filepath.Base(path)), titlePrefixLower) {
+							dirMatches[albumPath] = struct{}{}
+							return filepath.SkipDir
+						}
+						return nil
+					})
+				} else {
+					// Single audio file directly under the author dir.
+					if !audioExts[strings.ToLower(filepath.Ext(albumPath))] {
+						continue
+					}
+					if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+						dirMatches[albumPath] = struct{}{}
+					}
 				}
-				if !audioExts[strings.ToLower(filepath.Ext(path))] {
-					return nil
-				}
-				name := strings.ToLower(filepath.Base(path))
-				if strings.Contains(name, strings.ToLower(titlePrefix)) {
-					matches = append(matches, path)
-				}
-				return nil
-			})
+			}
 		}
-		return matches
+
+		result := make([]string, 0, len(dirMatches))
+		for d := range dirMatches {
+			result = append(result, d)
+		}
+		sort.Strings(result)
+		return result
+	}
+
+	// leadingNumRE strips leading track numbers like "01 ", "01 - ", "12 " from
+	// iTunes filenames before comparing them to the book title.
+	leadingNumRE := regexp.MustCompile(`^\d+\s*[-.]?\s*`)
+
+	trailingNumRE := regexp.MustCompile(`\s+\d+$`)
+
+	// disambiguate narrows multiple iTunes matches to a single best match using
+	// a scoring heuristic. Returns "" if still ambiguous after scoring.
+	disambiguate := func(matches []string, authorName, title string) string {
+		titleLower := strings.ToLower(title)
+
+		type candidate struct {
+			path  string
+			score int
+		}
+		cands := make([]candidate, 0, len(matches))
+
+		for _, p := range matches {
+			base := filepath.Base(p)
+			ext := filepath.Ext(base)
+			stemRaw := strings.TrimSuffix(base, ext)
+			leadingNum := leadingNumRE.FindString(stemRaw)
+			stemNoNum := leadingNumRE.ReplaceAllString(stemRaw, "")
+			stemLower := strings.ToLower(stemNoNum)
+			// Normalize underscores/colons for comparison.
+			stemNorm := strings.ReplaceAll(strings.ReplaceAll(stemLower, "_", " "), ":", " ")
+
+			sc := 0
+
+			switch {
+			case stemNorm == titleLower:
+				// Perfect stem match.
+				sc += 100
+
+			case strings.HasPrefix(stemNorm, titleLower):
+				// Title is a prefix of the stem — check the trailing rest.
+				rest := stemNorm[len(titleLower):] // intentionally NOT TrimSpace
+				switch {
+				case regexp.MustCompile(`^\s+book\s+\d`).MatchString(rest),
+					regexp.MustCompile(`^\s+\d+$`).MatchString(rest):
+					// Trailing "book N" or bare " 2" → likely a sequel.
+					sc += 20
+				default:
+					// Subtitle / series tag after the title — acceptable.
+					sc += 60
+				}
+
+			case strings.HasPrefix(titleLower, stemNorm) && len(stemNorm) >= 10:
+				// The stem is a prefix of the title: iTunes truncated the filename
+				// mid-word. Only credit this if the match is long enough (≥10 chars)
+				// to avoid false positives.
+				sc += 80
+
+			case strings.Contains(stemNorm, titleLower):
+				sc += 10
+			}
+
+			// Penalize stems that end with a plain number: likely "part 1" / "part 2".
+			if trailingNumRE.MatchString(stemNorm) {
+				sc -= 30
+			}
+
+			// Prefer files without a leading track number — they are usually the
+			// "album" file, not an individual track.
+			if leadingNum == "" {
+				sc += 20
+			} else {
+				// Among tracked files, lower track numbers are preferred.
+				// Use integer value so "01" beats "12" by a small margin.
+				if n, err := strconv.Atoi(strings.TrimSpace(
+					strings.TrimRight(strings.TrimRight(leadingNum, " "), "-."))); err == nil {
+					sc -= n * 2
+				}
+			}
+
+			// Prefer the author dir that best matches the book's stored author.
+			authorDir := filepath.Base(filepath.Dir(p))
+			if strings.EqualFold(authorDir, authorName) {
+				sc += 40 // exact author dir match
+			} else if strings.Contains(strings.ToLower(authorDir), strings.ToLower(authorName)) {
+				sc += 20 // author name is substring of dir
+			}
+
+			// Shorter filenames are less likely to carry extra series/subtitle info.
+			sc -= len(base) / 8
+
+			cands = append(cands, candidate{path: p, score: sc})
+		}
+
+		sort.Slice(cands, func(i, j int) bool { return cands[i].score > cands[j].score })
+
+		// If every candidate has the same normalized stem (all are tracks of the
+		// same audiobook), pick the one with the lowest track number, which ends
+		// up at the top after sorting by score.
+		if len(cands) > 1 {
+			stemOf := func(p string) string {
+				b := filepath.Base(p)
+				s := strings.TrimSuffix(b, filepath.Ext(b))
+				s = strings.ToLower(leadingNumRE.ReplaceAllString(s, ""))
+				s = strings.ReplaceAll(strings.ReplaceAll(s, "_", " "), ":", " ")
+				return s
+			}
+			first := stemOf(cands[0].path)
+			allSame := true
+			for _, c := range cands[1:] {
+				if stemOf(c.path) != first {
+					allSame = false
+					break
+				}
+			}
+			if allSame {
+				return cands[0].path
+			}
+		}
+
+		// Require a gap of ≥15 before committing to one candidate.
+		if len(cands) >= 2 && cands[0].score-cands[1].score >= 15 {
+			return cands[0].path
+		}
+		if len(cands) == 1 {
+			return cands[0].path
+		}
+		return ""
 	}
 
 	var results []relinkMissingResult
@@ -4267,6 +4430,7 @@ func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
 				}
 
 				// Update all book_files that pointed to the old organizer path.
+				// newFP may be a directory (multi-file book) or a single audio file.
 				bookFiles, bfErr := store.GetBookFiles(book.ID)
 				if bfErr == nil {
 					for j := range bookFiles {
@@ -4277,12 +4441,12 @@ func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
 						bf.FilePath = newFP
 						bf.OriginalFilename = filepath.Base(newFP)
 						bf.Missing = false
-						if fi != nil {
+						if fi != nil && !fi.IsDir() {
 							bf.FileSize = fi.Size()
-						}
-						ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(newFP), "."))
-						if ext != "" {
-							bf.Format = ext
+							ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(newFP), "."))
+							if ext != "" {
+								bf.Format = ext
+							}
 						}
 						_ = store.UpdateBookFile(bf.ID, bf)
 					}
@@ -4290,8 +4454,50 @@ func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
 				res.Applied = true
 			}
 		default:
-			res.Action = "ambiguous"
-			ambiguous++
+			if best := disambiguate(matches, authorName, book.Title); best != "" {
+				// Disambiguation picked a winner — treat as single match.
+				res.Action = "relinked"
+				res.NewPath = best
+				res.MatchPaths = matches // keep all matches for auditing
+				relinked++
+				if !dryRun {
+					newFP := best
+					fi, _ := os.Stat(newFP)
+					book.FilePath = newFP
+					if _, upErr := store.UpdateBook(book.ID, book); upErr != nil {
+						res.Error = "UpdateBook: " + upErr.Error()
+						res.Action = "unresolved"
+						unresolved++
+						relinked--
+						break
+					}
+					bookFiles, bfErr := store.GetBookFiles(book.ID)
+					if bfErr == nil {
+						for j := range bookFiles {
+							bf := &bookFiles[j]
+							if !strings.HasPrefix(bf.FilePath, organizerRoot) {
+								continue
+							}
+							bf.FilePath = newFP
+							bf.OriginalFilename = filepath.Base(newFP)
+							bf.Missing = false
+							if fi != nil && !fi.IsDir() {
+								bf.FileSize = fi.Size()
+								ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(newFP), "."))
+								if ext != "" {
+									bf.Format = ext
+								}
+							}
+							_ = store.UpdateBookFile(bf.ID, bf)
+						}
+					}
+					res.Applied = true
+				}
+			} else {
+				res.Action = "ambiguous"
+				res.MatchPaths = matches
+				ambiguous++
+			}
 		}
 
 		results = append(results, res)
