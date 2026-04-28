@@ -70,9 +70,11 @@ type ComposerScanParams struct {
 }
 
 // BulkMetadataFetchParams stores the immutable parameters for a bulk metadata fetch operation.
-// OnlyMissing=true skips books that already have all metadata fields populated.
+// PreferAudible=true moves Audible to the front of the source chain.
+// SkipCached=true skips books that already have a valid (non-expired) cache entry.
 type BulkMetadataFetchParams struct {
-	OnlyMissing bool `json:"only_missing"`
+	PreferAudible bool `json:"prefer_audible"`
+	SkipCached    bool `json:"skip_cached"`
 }
 
 // MissingFileRepairParams stores the immutable parameters for a missing-file path-repair operation.
