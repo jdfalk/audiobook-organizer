@@ -69,6 +69,14 @@ type ComposerScanParams struct {
 	FixMode string `json:"fix_mode"` // "set_narrator" or "clear"
 }
 
+// MissingFileRepairParams stores the immutable parameters for a missing-file path-repair operation.
+// DryRun=true reports what would be fixed without writing. SearchRoots is the ordered list of
+// directory trees to search when the PID lookup fails.
+type MissingFileRepairParams struct {
+	DryRun      bool     `json:"dry_run"`
+	SearchRoots []string `json:"search_roots,omitempty"`
+}
+
 // SaveCheckpoint persists an operation's progress checkpoint.
 func SaveCheckpoint(store database.OperationStore, opID, opType, phase string, index, total int) error {
 	state := OperationState{
