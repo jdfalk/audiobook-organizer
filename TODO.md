@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.8.0 -->
+<!-- version: 5.9.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-28 -->
 
@@ -184,16 +184,32 @@ Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/
 
 - [x] **BMR-1** Audible "Series, Book N" baked into series field — `normalizeMetaSeries` now runs in `ApplyMetadataCandidate` too, not just the auto-fetch paths (#271)
 
-### Async Operations — Maintenance Handler Conversion
+### Async Operations — Unified Maintenance System
 
-> ⚠️ **SPEC PENDING — do not auto-execute.** Design spec lives at
-> [`docs/superpowers/specs/2026-04-28-async-operations-design.md`](docs/superpowers/specs/2026-04-28-async-operations-design.md).
-> No bot-task file exists yet. Needs human review before burndown bot pickup.
+> 🔍 **AWAITING OPUS REVIEW** — All bot-task files written; pending devil's advocate + code review
+> before burndown bot pickup. Design: [`docs/superpowers/specs/2026-04-28-unified-maintenance-system.md`](docs/superpowers/specs/2026-04-28-unified-maintenance-system.md)
+> Dependency system: [`docs/superpowers/specs/2026-04-28-pr-label-dependencies.md`](docs/superpowers/specs/2026-04-28-pr-label-dependencies.md)
+> Opus brief: [`docs/superpowers/specs/2026-04-28-opus-review-brief.md`](docs/superpowers/specs/2026-04-28-opus-review-brief.md)
 
-- [ ] **ASYNC-1** Convert 13+ synchronous maintenance handlers to async (queue, progress, cancel) — see spec
-- [ ] **ASYNC-2** Add `IsCanceled()` checks to all long-running operation loops
-- [ ] **ASYNC-3** Make all converted maintenance ops resumable on restart (check-then-apply pattern)
-- [x] **ASYNC-0** Frontend: toast notifications for operation lifecycle (started / resumed / completed / failed / canceled) — PR this session
+- [x] **ASYNC-0** Frontend: toast notifications for operation lifecycle — PR #499
+- [ ] **ASYNC-CORE-1** `MaintenanceJob` interface + registry package — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-core-1-interface.md)
+- [ ] **ASYNC-CORE-2** Dispatcher `POST /maintenance/jobs/:id` + resume catch-all — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-core-2-dispatcher.md)
+- [ ] **ASYNC-CORE-3** Frontend API client (`listMaintenanceJobs`, `runMaintenanceJob`) — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-core-3-discovery.md)
+- [ ] **ASYNC-CORE-4** Dynamic "Manual Fixes" section in MaintenanceTab — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-core-4-frontend.md)
+- [ ] **ASYNC-W1-1** Convert `fix-read-by-narrator` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w1-1-fix-read-by-narrator.md)
+- [ ] **ASYNC-W1-2** Convert `cleanup-series` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w1-2-cleanup-series.md)
+- [ ] **ASYNC-W1-3** Convert `fix-author-narrator-swap` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w1-3-fix-author-narrator-swap.md)
+- [ ] **ASYNC-W1-4** Convert `fix-version-groups` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w1-4-fix-version-groups.md)
+- [ ] **ASYNC-W2-1** Convert `backfill-book-files` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w2-1-backfill-book-files.md)
+- [ ] **ASYNC-W2-2** Convert `cleanup-empty-folders` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w2-2-cleanup-empty-folders.md)
+- [ ] **ASYNC-W2-3** Convert `cleanup-organize-mess` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w2-3-cleanup-organize-mess.md)
+- [ ] **ASYNC-W2-4** Convert `fix-library-states` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w2-4-fix-library-states.md)
+- [ ] **ASYNC-W3-1** Convert `enrich-book-files` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w3-1-enrich-book-files.md)
+- [ ] **ASYNC-W3-2** Convert `dedup-books` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w3-2-dedup-books.md)
+- [ ] **ASYNC-W3-3** Convert `fix-book-file-paths` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w3-3-fix-book-file-paths.md)
+- [ ] **ASYNC-W3-4** Convert `refetch-missing-authors` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w3-4-refetch-missing-authors.md)
+- [ ] **ASYNC-W3-5** Convert `recompute-itunes-paths` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w3-5-recompute-itunes-paths.md)
+- [ ] **ASYNC-CLEAN-1** Remove 13 old synchronous routes (last, after all waves) — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-clean-1-remove-old-routes.md)
 
 ### Design Spec Already Written (but not yet planned)
 
@@ -254,7 +270,8 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 - [2026-04-10 Metadata candidate scoring](docs/superpowers/specs/2026-04-10-metadata-candidate-scoring-design.md)
 - [2026-04-11 Bleve library search](docs/superpowers/specs/2026-04-11-bleve-library-search.md) — design only, no plan yet
 - [2026-04-11 chromem-go embedding store](docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md) — design only, no plan yet
-- [2026-04-28 Async operations — maintenance handler conversion](docs/superpowers/specs/2026-04-28-async-operations-design.md) — spec only, no bot-task yet (ASYNC-1..3)
+- [2026-04-28 Unified maintenance system](docs/superpowers/specs/2026-04-28-unified-maintenance-system.md) — MaintenanceJob interface + registry + dispatcher (ASYNC-CORE + W1-W3 + CLEAN-1; awaiting Opus review)
+- [2026-04-28 PR label dependency system](docs/superpowers/specs/2026-04-28-pr-label-dependencies.md) — GitHub label-based prerequisite tracking for multi-wave burndown bot work
 
 ---
 
