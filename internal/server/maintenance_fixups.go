@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -4094,4 +4094,203 @@ func humanizeBytes(n int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.2f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// ---------------------------------------------------------------------------
+// Relink missing organizer books to iTunes source files
+// ---------------------------------------------------------------------------
+
+type relinkMissingResult struct {
+	BookID   string `json:"book_id"`
+	Title    string `json:"title"`
+	OldPath  string `json:"old_path"`
+	NewPath  string `json:"new_path,omitempty"`
+	Action   string `json:"action"` // "relinked", "unresolved", "ambiguous"
+	Matches  int    `json:"matches,omitempty"`
+	Applied  bool   `json:"applied"`
+	Error    string `json:"error,omitempty"`
+}
+
+// handleRelinkMissingToiTunes finds books whose file_path is under the organizer
+// root but no longer exists on disk, then searches the iTunes media folder for
+// the original source file by author+title and relinks the DB records to it.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without writing
+//   - dry_run=false — actually update book and book_files rows
+//   - itunes_root   — override config.ITunesMediaRoot for this call
+func (s *Server) handleRelinkMissingToiTunes(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+	iTunesRoot := c.DefaultQuery("itunes_root", config.AppConfig.ITunesMediaRoot)
+	organizerRoot := config.AppConfig.RootDir
+
+	if iTunesRoot == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "itunes_media_root not configured; pass ?itunes_root=<path> or set itunes_media_root in settings"})
+		return
+	}
+	if organizerRoot == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "root_dir not configured"})
+		return
+	}
+
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	audioExts := map[string]bool{".mp3": true, ".m4b": true, ".m4a": true, ".flac": true, ".opus": true, ".ogg": true}
+
+	// findInITunes searches iTunesRoot for audio files matching the given
+	// author directory name and title prefix. Returns all matches found.
+	findInITunes := func(authorName, title string) []string {
+		var matches []string
+		titlePrefix := title
+		if len(titlePrefix) > 25 {
+			titlePrefix = titlePrefix[:25]
+		}
+
+		// Walk every entry under iTunesRoot to handle co-author dir variants.
+		entries, err := os.ReadDir(iTunesRoot)
+		if err != nil {
+			return nil
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			// Require the dir name to contain the author's first significant word.
+			authorWord := authorName
+			if idx := strings.Index(authorName, " "); idx > 0 {
+				authorWord = authorName[:idx]
+			}
+			if !strings.Contains(strings.ToLower(entry.Name()), strings.ToLower(authorWord)) {
+				continue
+			}
+			authorDir := filepath.Join(iTunesRoot, entry.Name())
+			_ = filepath.WalkDir(authorDir, func(path string, d os.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return nil
+				}
+				if !audioExts[strings.ToLower(filepath.Ext(path))] {
+					return nil
+				}
+				name := strings.ToLower(filepath.Base(path))
+				if strings.Contains(name, strings.ToLower(titlePrefix)) {
+					matches = append(matches, path)
+				}
+				return nil
+			})
+		}
+		return matches
+	}
+
+	var results []relinkMissingResult
+	relinked, unresolved, ambiguous, skipped := 0, 0, 0, 0
+
+	for i := range allBooks {
+		book := &allBooks[i]
+		fp := book.FilePath
+		if !strings.HasPrefix(fp, organizerRoot) {
+			skipped++
+			continue
+		}
+		if _, err := os.Stat(fp); err == nil {
+			skipped++
+			continue
+		}
+
+		// Book path is under organizer root and doesn't exist — candidate.
+		authorName := ""
+		if book.Author != nil {
+			authorName = book.Author.Name
+		}
+		if authorName == "" {
+			results = append(results, relinkMissingResult{
+				BookID:  book.ID,
+				Title:   book.Title,
+				OldPath: fp,
+				Action:  "unresolved",
+				Error:   "no author name in DB",
+			})
+			unresolved++
+			continue
+		}
+
+		matches := findInITunes(authorName, book.Title)
+
+		res := relinkMissingResult{
+			BookID:  book.ID,
+			Title:   book.Title,
+			OldPath: fp,
+			Matches: len(matches),
+		}
+
+		switch len(matches) {
+		case 0:
+			res.Action = "unresolved"
+			unresolved++
+		case 1:
+			res.Action = "relinked"
+			res.NewPath = matches[0]
+			relinked++
+			if !dryRun {
+				newFP := matches[0]
+				fi, _ := os.Stat(newFP)
+
+				// Update book.file_path
+				book.FilePath = newFP
+				if _, upErr := store.UpdateBook(book.ID, book); upErr != nil {
+					res.Error = "UpdateBook: " + upErr.Error()
+					res.Action = "unresolved"
+					unresolved++
+					relinked--
+					break
+				}
+
+				// Update all book_files that pointed to the old organizer path.
+				bookFiles, bfErr := store.GetBookFiles(book.ID)
+				if bfErr == nil {
+					for j := range bookFiles {
+						bf := &bookFiles[j]
+						if !strings.HasPrefix(bf.FilePath, organizerRoot) {
+							continue
+						}
+						bf.FilePath = newFP
+						bf.OriginalFilename = filepath.Base(newFP)
+						bf.Missing = false
+						if fi != nil {
+							bf.FileSize = fi.Size()
+						}
+						ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(newFP), "."))
+						if ext != "" {
+							bf.Format = ext
+						}
+						_ = store.UpdateBookFile(bf.ID, bf)
+					}
+				}
+				res.Applied = true
+			}
+		default:
+			res.Action = "ambiguous"
+			ambiguous++
+		}
+
+		results = append(results, res)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run":   dryRun,
+		"relinked":  relinked,
+		"ambiguous": ambiguous,
+		"unresolved": unresolved,
+		"skipped":   skipped,
+		"results":   results,
+	})
 }
