@@ -4620,7 +4620,7 @@ func (s *Server) repairOneMissingFile(
 		case 0:
 			// no match
 		default:
-			// Multiple — narrow by parent dir name
+			// Multiple — narrow by parent dir name (album folder)
 			parentDir := filepath.Base(filepath.Dir(f.FilePath))
 			var narrowed []string
 			for _, p := range paths {
@@ -4628,12 +4628,31 @@ func (s *Server) repairOneMissingFile(
 					narrowed = append(narrowed, p)
 				}
 			}
-			if len(narrowed) == 1 {
+			// If still multiple, narrow by grandparent dir containing author's last name.
+			// iTunes multi-author dirs ("Amy DuBoff, Michael Anderle") contain the stored
+			// author ("Michael Anderle") as a substring; this resolves those cases.
+			if len(narrowed) > 1 && bm.author != "" {
+				lastName := strings.ToLower(bm.author)
+				if i := strings.LastIndex(lastName, " "); i > 0 {
+					lastName = lastName[i+1:]
+				}
+				var n2 []string
+				for _, p := range narrowed {
+					if strings.Contains(strings.ToLower(filepath.Base(filepath.Dir(filepath.Dir(p)))), lastName) {
+						n2 = append(n2, p)
+					}
+				}
+				if len(n2) >= 1 {
+					narrowed = n2
+				}
+			}
+			switch len(narrowed) {
+			case 1:
 				candidate, method = narrowed[0], "filename"
 				res.Matches = 1
-			} else {
+			default:
 				res.Method = "ambiguous"
-				res.Matches = len(paths)
+				res.Matches = len(narrowed)
 				return res
 			}
 		}
@@ -4665,16 +4684,21 @@ func (s *Server) repairOneMissingFile(
 		}
 	}
 
-	// Tier 4: author+title walk under search roots
+	// Tier 4: author last-name + title-prefixed album dir, then stored basename.
+	// Uses the author's last name so it matches both "Michael Anderle" and
+	// "Amy DuBoff, Michael Anderle" directories. Matches album dirs whose name
+	// starts with the title prefix, then looks for the stored filename within
+	// that album dir (avoids false ambiguity from multiple tracks per album).
 	if candidate == "" && bm.author != "" && bm.title != "" {
-		authorWord := bm.author
-		if idx := strings.Index(bm.author, " "); idx > 0 {
-			authorWord = bm.author[:idx]
+		lastName := bm.author
+		if i := strings.LastIndex(bm.author, " "); i > 0 {
+			lastName = bm.author[i+1:]
 		}
 		titlePrefix := bm.title
-		if len(titlePrefix) > 25 {
-			titlePrefix = titlePrefix[:25]
+		if len(titlePrefix) > 30 {
+			titlePrefix = titlePrefix[:30]
 		}
+		storedBase := filepath.Base(f.FilePath)
 		var matches []string
 		for _, root := range params.SearchRoots {
 			entries, rerr := os.ReadDir(root)
@@ -4685,19 +4709,39 @@ func (s *Server) repairOneMissingFile(
 				if !entry.IsDir() {
 					continue
 				}
-				if !strings.Contains(strings.ToLower(entry.Name()), strings.ToLower(authorWord)) {
+				if !strings.Contains(strings.ToLower(entry.Name()), strings.ToLower(lastName)) {
 					continue
 				}
-				_ = filepath.WalkDir(filepath.Join(root, entry.Name()), func(path string, d os.DirEntry, walkErr error) error {
-					if walkErr != nil || d.IsDir() {
-						return nil
+				authorDir := filepath.Join(root, entry.Name())
+				albumEntries, aErr := os.ReadDir(authorDir)
+				if aErr != nil {
+					continue
+				}
+				for _, album := range albumEntries {
+					if !album.IsDir() {
+						continue
 					}
-					if audioExts[strings.ToLower(filepath.Ext(path))] &&
-						strings.Contains(strings.ToLower(filepath.Base(path)), strings.ToLower(titlePrefix)) {
-						matches = append(matches, path)
+					if !strings.HasPrefix(strings.ToLower(album.Name()), strings.ToLower(titlePrefix)) {
+						continue
 					}
-					return nil
-				})
+					// Prefer the exact stored basename within this album dir.
+					exact := filepath.Join(authorDir, album.Name(), storedBase)
+					if _, statErr := os.Stat(exact); statErr == nil {
+						matches = append(matches, exact)
+						continue
+					}
+					// Fall back: any audio file in the album dir (single-track books).
+					albumFiles, _ := os.ReadDir(filepath.Join(authorDir, album.Name()))
+					var audioInAlbum []string
+					for _, af := range albumFiles {
+						if !af.IsDir() && audioExts[strings.ToLower(filepath.Ext(af.Name()))] {
+							audioInAlbum = append(audioInAlbum, filepath.Join(authorDir, album.Name(), af.Name()))
+						}
+					}
+					if len(audioInAlbum) == 1 {
+						matches = append(matches, audioInAlbum[0])
+					}
+				}
 			}
 		}
 		switch len(matches) {
