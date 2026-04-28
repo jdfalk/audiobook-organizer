@@ -1,5 +1,5 @@
 // file: internal/metadata/audible.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
 
 package metadata
@@ -7,6 +7,7 @@ package metadata
 import (
 	json "encoding/json/v2"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -154,12 +155,16 @@ func (c *AudibleClient) searchCatalog(searchURL string) ([]BookMetadata, error) 
 		return nil, fmt.Errorf("Audible API returned status %d", resp.StatusCode)
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Audible response: %w", err)
+	}
 	var catalog audibleCatalogResponse
-	if err := json.UnmarshalRead(resp.Body, &catalog, json.DiscardUnknownMembers(true)); err != nil {
+	if err := json.Unmarshal(body, &catalog, json.DiscardUnknownMembers(true)); err != nil {
 		return nil, fmt.Errorf("failed to decode Audible response: %w", err)
 	}
 
-	log.Printf("[DEBUG] Audible API returned %d products", len(catalog.Products))
+	log.Printf("[INFO] Audible API returned %d products", len(catalog.Products))
 
 	results := make([]BookMetadata, 0, len(catalog.Products))
 	for _, p := range catalog.Products {
@@ -231,6 +236,11 @@ func (c *AudibleClient) productToMetadata(p *audibleProduct) BookMetadata {
 	if len(p.Series) > 0 {
 		meta.Series = p.Series[0].Title
 		meta.SeriesPosition = p.Series[0].Sequence
+	}
+
+	// Runtime: Audible returns minutes; BookMetadata stores seconds.
+	if p.RuntimeLengthMin != nil && *p.RuntimeLengthMin > 0 {
+		meta.DurationSec = *p.RuntimeLengthMin * 60
 	}
 
 	return meta
