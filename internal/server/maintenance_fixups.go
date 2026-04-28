@@ -4650,6 +4650,9 @@ func (s *Server) repairOneMissingFile(
 			case 1:
 				candidate, method = narrowed[0], "filename"
 				res.Matches = 1
+			case 0:
+				// Parent-dir narrowing eliminated all candidates — file likely moved to a
+				// different parent dir. Fall through to Tier 3/4 for broader search.
 			default:
 				res.Method = "ambiguous"
 				res.Matches = len(narrowed)
@@ -4747,6 +4750,88 @@ func (s *Server) repairOneMissingFile(
 		switch len(matches) {
 		case 1:
 			candidate, method = matches[0], "author_title"
+			res.Matches = 1
+		case 0:
+			// no match
+		default:
+			res.Method = "ambiguous"
+			res.Matches = len(matches)
+			return res
+		}
+	}
+
+	// Tier 4b: flat iTunes library — M4B files directly in the author dir (no album subdir).
+	// iTunes sometimes consolidates individual MP3 tracks into a single M4B per book, stored
+	// flat under the author dir. The stored basename looks like "01 Defending the Lost.mp3";
+	// after stripping the leading track number we get "Defending the Lost", which we match
+	// against stems of audio files directly under any co-author dir containing the last name.
+	if candidate == "" && bm.author != "" {
+		lastName := bm.author
+		if i := strings.LastIndex(bm.author, " "); i > 0 {
+			lastName = bm.author[i+1:]
+		}
+		storedBase := filepath.Base(f.FilePath)
+		storedStem := strings.TrimSuffix(storedBase, filepath.Ext(storedBase))
+		// Strip leading "NN " or "NN. " track-number prefix.
+		titleFromFile := storedStem
+		if i := strings.IndexByte(storedStem, ' '); i > 0 {
+			prefix := storedStem[:i]
+			isNum := true
+			for _, r := range prefix {
+				if r < '0' || r > '9' {
+					isNum = false
+					break
+				}
+			}
+			if isNum {
+				titleFromFile = strings.TrimSpace(storedStem[i+1:])
+			}
+		}
+
+		var matches []string
+		for _, root := range params.SearchRoots {
+			entries, rerr := os.ReadDir(root)
+			if rerr != nil {
+				continue
+			}
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				if !strings.Contains(strings.ToLower(entry.Name()), strings.ToLower(lastName)) {
+					continue
+				}
+				authorDir := filepath.Join(root, entry.Name())
+				dirFiles, _ := os.ReadDir(authorDir)
+				for _, df := range dirFiles {
+					if df.IsDir() || !audioExts[strings.ToLower(filepath.Ext(df.Name()))] {
+						continue
+					}
+					fileStem := strings.TrimSuffix(df.Name(), filepath.Ext(df.Name()))
+					if strings.EqualFold(fileStem, titleFromFile) {
+						matches = append(matches, filepath.Join(authorDir, df.Name()))
+					}
+				}
+			}
+		}
+		// Among multiple matches, prefer dirs whose name starts with the stored author
+		// (i.e. "Michael Anderle, Justin Sloan" over "Amy DuBoff, Michael Anderle").
+		if len(matches) > 1 {
+			authorLower := strings.ToLower(bm.author)
+			var preferred []string
+			for _, m := range matches {
+				dirName := strings.ToLower(filepath.Base(filepath.Dir(m)))
+				if strings.HasPrefix(dirName, authorLower) {
+					preferred = append(preferred, m)
+				}
+			}
+			if len(preferred) == 1 {
+				matches = preferred
+			}
+		}
+		switch len(matches) {
+		case 1:
+			candidate, method = matches[0], "flat_stem"
 			res.Matches = 1
 		case 0:
 			// no match
