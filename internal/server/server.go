@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.195.0
+// version: 1.196.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -1525,6 +1525,17 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.runMissingFileRepair(ctx, opID, capturedParams2, store, progress)
 			}
+		case "bulk_metadata_fetch":
+			params, _ := operations.LoadParams[operations.BulkMetadataFetchParams](store, opID)
+			if params == nil {
+				log.Printf("[WARN] No params found for interrupted bulk_metadata_fetch %s, marking failed", opID)
+				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
+				continue
+			}
+			capturedParams3 := *params
+			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+				return s.runBulkMetadataFetchAll(ctx, opID, capturedParams3, store, progress)
+			}
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
@@ -2470,6 +2481,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/maintenance/scan-composer-tags/:id", s.perm(auth.PermSettingsManage), s.handleGetComposerScanResults)
 			protected.POST("/maintenance/repair-missing-files", s.perm(auth.PermSettingsManage), s.handleRepairMissingFiles)
 			protected.GET("/maintenance/repair-missing-files/:id", s.perm(auth.PermSettingsManage), s.handleGetMissingFileRepairResults)
+			protected.POST("/maintenance/bulk-fetch-metadata", s.perm(auth.PermLibraryEditMetadata), s.handleBulkMetadataFetchAll)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")
