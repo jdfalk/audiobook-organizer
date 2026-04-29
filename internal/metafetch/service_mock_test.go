@@ -1,5 +1,5 @@
 // file: internal/metafetch/service_mock_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-9012-cdef-012345678901
 
 package metafetch
@@ -1131,7 +1131,7 @@ func TestPickBestMatchFromScored(t *testing.T) {
 		scores := []float64{0.9, 0.5}
 		words := SignificantWords("Mistborn")
 
-		matched := pickBestMatchFromScored(results, scores, "f1", words, "", "")
+		matched := pickBestMatchFromScored(results, scores, "f1", words, "", "", 0)
 		require.NotEmpty(t, matched)
 		assert.Equal(t, "Mistborn", matched[0].Title)
 	})
@@ -1143,7 +1143,7 @@ func TestPickBestMatchFromScored(t *testing.T) {
 		scores := []float64{0.1}
 		words := SignificantWords("Something")
 
-		matched := pickBestMatchFromScored(results, scores, "f1", words, "", "")
+		matched := pickBestMatchFromScored(results, scores, "f1", words, "", "", 0)
 		assert.Nil(t, matched, "score below threshold should return nil")
 	})
 
@@ -1155,7 +1155,7 @@ func TestPickBestMatchFromScored(t *testing.T) {
 		scores := []float64{0.8, 0.7}
 		words := SignificantWords("Mistborn")
 
-		matched := pickBestMatchFromScored(results, scores, "f1", words, "Brandon Sanderson", "")
+		matched := pickBestMatchFromScored(results, scores, "f1", words, "Brandon Sanderson", "", 0)
 		require.NotEmpty(t, matched)
 		assert.Equal(t, "Brandon Sanderson", matched[0].Author, "author match should boost score")
 	})
@@ -1168,13 +1168,13 @@ func TestPickBestMatchFromScored(t *testing.T) {
 		scores := []float64{0.7, 0.65}
 		words := SignificantWords("Mistborn")
 
-		matched := pickBestMatchFromScored(results, scores, "f1", words, "Brandon Sanderson", "Michael Kramer")
+		matched := pickBestMatchFromScored(results, scores, "f1", words, "Brandon Sanderson", "Michael Kramer", 0)
 		require.NotEmpty(t, matched)
 		assert.Equal(t, "Michael Kramer", matched[0].Narrator, "narrator match should boost score")
 	})
 
 	t.Run("empty_results", func(t *testing.T) {
-		matched := pickBestMatchFromScored(nil, nil, "f1", map[string]bool{}, "", "")
+		matched := pickBestMatchFromScored(nil, nil, "f1", map[string]bool{}, "", "", 0)
 		assert.Nil(t, matched)
 	})
 
@@ -1185,9 +1185,73 @@ func TestPickBestMatchFromScored(t *testing.T) {
 		scores := []float64{0.0}
 		words := SignificantWords("Mistborn")
 
-		matched := pickBestMatchFromScored(results, scores, "f1", words, "", "")
+		matched := pickBestMatchFromScored(results, scores, "f1", words, "", "", 0)
 		assert.Nil(t, matched, "zero base score in F1 tier should be skipped even with rich metadata")
 	})
+}
+
+// ---------------------------------------------------------------------------
+// durationScoreMultiplier
+// ---------------------------------------------------------------------------
+
+func TestDurationScoreMultiplier(t *testing.T) {
+	cases := []struct {
+		bookSec, candSec int
+		wantMul          float64
+		desc             string
+	}{
+		{0, 36000, 1.0, "unknown book duration → no adjustment"},
+		{36000, 0, 1.0, "unknown candidate duration → no adjustment"},
+		{36000, 36000, 1.30, "exact match → huge bonus"},
+		{36000, 36030, 1.30, "30s delta → huge bonus"},
+		{36000, 36300, 1.20, "5 min delta → strong bonus"},
+		{36000, 36600, 1.10, "10 min delta → good bonus"},
+		{36000, 37200, 1.05, "20 min delta → small bonus"},
+		{36000, 37800, 1.00, "30 min delta → no adjustment"},
+		{36000, 39600, 0.90, "60 min delta → minor penalty"},
+		{36000, 43200, 0.75, "120 min delta → significant penalty"},
+		{36000, 50400, 0.50, ">120 min delta → strong penalty (wrong edition)"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			got := durationScoreMultiplier(tc.bookSec, tc.candSec)
+			assert.Equal(t, tc.wantMul, got, tc.desc)
+		})
+	}
+}
+
+func TestPickBestMatchFromScored_DurationBreaksTie(t *testing.T) {
+	// Two Mistborn candidates with identical base score. One has a runtime matching
+	// the book's duration; the other is 3 hours off. Duration should tip the winner.
+	bookDuration := 36000 // 10 hours
+	results := []metadata.BookMetadata{
+		{Title: "Mistborn", Author: "Brandon Sanderson", DurationSec: 36000},  // exact match
+		{Title: "Mistborn", Author: "Brandon Sanderson", DurationSec: 25200},  // 3 h off
+	}
+	scores := []float64{0.8, 0.8}
+	words := SignificantWords("Mistborn")
+
+	matched := pickBestMatchFromScored(results, scores, "f1", words, "Brandon Sanderson", "", bookDuration)
+	require.NotEmpty(t, matched)
+	assert.Equal(t, 36000, matched[0].DurationSec, "candidate with matching duration should win the tie")
+}
+
+func TestPickBestMatchFromScored_WrongEditionRejected(t *testing.T) {
+	// One candidate is 3 hours shorter (abridged). Its score should be penalised
+	// enough that the slightly-lower-base full version wins.
+	bookDuration := 36000
+	results := []metadata.BookMetadata{
+		{Title: "Mistborn Abridged", Author: "Brandon Sanderson", DurationSec: 14400}, // 4h, δ=6h
+		{Title: "Mistborn", Author: "Brandon Sanderson", DurationSec: 35700},          // 5min off
+	}
+	// Abridged result has marginally higher base score
+	scores := []float64{0.82, 0.80}
+	words := SignificantWords("Mistborn")
+
+	matched := pickBestMatchFromScored(results, scores, "f1", words, "Brandon Sanderson", "", bookDuration)
+	require.NotEmpty(t, matched)
+	assert.Equal(t, 35700, matched[0].DurationSec, "full edition should win despite lower base score")
 }
 
 // ---------------------------------------------------------------------------
