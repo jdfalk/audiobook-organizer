@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -46,6 +46,7 @@ type ActivityFilter struct {
 	Source         string   // show only this source
 	ExcludeSources []string // hide these sources
 	ExcludeTiers   []string // hide these tiers
+	ExcludeTags    []string // hide entries that carry any of these tags
 }
 
 // CompactResult holds the outcome of a CompactByDay operation.
@@ -465,6 +466,17 @@ func buildActivityWhere(f ActivityFilter) (string, []any) {
 	for _, tier := range f.ExcludeTiers {
 		clauses = append(clauses, "tier != ?")
 		args = append(args, tier)
+	}
+	for _, tag := range f.ExcludeTags {
+		t := tag
+		clause := "(tags IS NULL OR (tags != ? AND tags NOT LIKE ? AND tags NOT LIKE ? AND tags NOT LIKE ?))"
+		clauses = append(clauses, clause)
+		args = append(args,
+			t,           // exact: "no-op"
+			t+",%",      // prefix: "no-op,..."
+			"%,"+t+",%", // middle: "...,no-op,..."
+			"%,"+t,      // suffix: "...,no-op"
+		)
 	}
 
 	if len(clauses) == 0 {

@@ -194,7 +194,8 @@ func (s *Server) runAutoPurgeSoftDeleted(opID string) {
 	msg := fmt.Sprintf("Purged %d/%d soft-deleted books (%d files deleted, %d errors)",
 		result.Purged, result.Attempted, result.FilesDeleted, len(result.Errors))
 	log.Printf("[INFO] Auto-purge: %s", msg)
-	activity.EmitInfo(s.activityWriter, opID, "purge-deleted", "purge-deleted", msg)
+	activity.EmitInfo(s.activityWriter, opID, "purge-deleted", "purge-deleted", msg,
+		activity.TagsIf(result.Purged == 0, activity.NoOpTag)...)
 	for _, e := range result.Errors {
 		activity.LogBatch(s.activityWriter, opID, "purge-deleted", "purge-deleted",
 			activity.BatchItem{Name: e, Detail: "error"})
