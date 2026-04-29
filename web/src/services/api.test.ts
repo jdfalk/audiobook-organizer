@@ -1,5 +1,5 @@
 // file: src/services/api.test.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -28,16 +28,18 @@ describe('api import paths', () => {
     mockFetch.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          importPaths: [
-            {
-              id: 1,
-              path: '/tmp',
-              name: 'Tmp',
-              enabled: true,
-              created_at: 'now',
-              book_count: 0,
-            },
-          ],
+          data: {
+            importPaths: [
+              {
+                id: 1,
+                path: '/tmp',
+                name: 'Tmp',
+                enabled: true,
+                created_at: 'now',
+                book_count: 0,
+              },
+            ],
+          },
         }),
         {
           status: 200,
@@ -64,13 +66,15 @@ describe('api import paths', () => {
     mockFetch.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          importPath: {
-            id: 2,
-            path: '/new',
-            name: 'New',
-            enabled: true,
-            created_at: 'now',
-            book_count: 0,
+          data: {
+            importPath: {
+              id: 2,
+              path: '/new',
+              name: 'New',
+              enabled: true,
+              created_at: 'now',
+              book_count: 0,
+            },
           },
         }),
         {
@@ -92,15 +96,17 @@ describe('api import paths', () => {
     mockFetch.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          importPath: {
-            id: 3,
-            path: '/detailed',
-            name: 'Detailed',
-            enabled: true,
-            created_at: 'now',
-            book_count: 0,
+          data: {
+            importPath: {
+              id: 3,
+              path: '/detailed',
+              name: 'Detailed',
+              enabled: true,
+              created_at: 'now',
+              book_count: 0,
+            },
+            scan_operation_id: 'op-1',
           },
-          scan_operation_id: 'op-1',
         }),
         {
           status: 200,
@@ -127,17 +133,19 @@ describe('api import paths', () => {
     mockFetch.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          updated_count: 1,
-          total_count: 2,
-          results: [
-            {
-              book_id: 'id-1',
-              status: 'updated',
-              applied_fields: ['publisher'],
-              fetched_fields: ['publisher'],
-            },
-          ],
-          source: 'Open Library',
+          data: {
+            updated_count: 1,
+            total_count: 2,
+            results: [
+              {
+                book_id: 'id-1',
+                status: 'updated',
+                applied_fields: ['publisher'],
+                fetched_fields: ['publisher'],
+              },
+            ],
+            source: 'Open Library',
+          },
         }),
         {
           status: 200,
@@ -160,11 +168,13 @@ describe('api import paths', () => {
     mockFetch.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          written: 2,
-          written_files: 3,
-          renamed: 1,
-          failed: 0,
-          errors: [],
+          data: {
+            written: 2,
+            written_files: 3,
+            renamed: 1,
+            failed: 0,
+            errors: [],
+          },
         }),
         {
           status: 200,
