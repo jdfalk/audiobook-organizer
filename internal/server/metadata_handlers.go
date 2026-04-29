@@ -1348,9 +1348,10 @@ func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.Prog
 		return err
 	}
 	activity.FlushOperation(s.activityWriter, opID)
-	msg := fmt.Sprintf("ISBN enrichment complete: checked %d candidate book(s), updated %d", checked, updated)
+	msg := fmt.Sprintf("ISBN enrichment complete: checked %d, updated %d", checked, updated)
 	_ = progress.Log("info", msg, nil)
 	_ = progress.UpdateProgress(100, 100, msg)
+	activity.EmitInfo(s.activityWriter, opID, "isbn-enrich", "isbn-enrichment", msg)
 	return nil
 }
 

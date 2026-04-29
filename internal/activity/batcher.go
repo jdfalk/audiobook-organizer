@@ -1,5 +1,5 @@
 // file: internal/activity/batcher.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7f3c1a2e-8b4d-4e9f-a5c6-2d0e3b7f9a1c
 
 package activity
@@ -210,6 +210,12 @@ func batchNoun(batchType string) string {
 		return "path repairs"
 	case "isbn-enrich":
 		return "ISBN enrichments"
+	case "temp-file-cleanup":
+		return "orphaned temp files removed"
+	case "missing-file-repair":
+		return "missing files repaired"
+	case "purge-deleted":
+		return "purge errors"
 	default:
 		return batchType + " operations"
 	}
