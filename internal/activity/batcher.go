@@ -209,7 +209,7 @@ func batchNoun(batchType string) string {
 	case "path-repair":
 		return "path repairs"
 	case "isbn-enrich":
-		return "ISBN enrichments"
+		return "books enriched with ISBN"
 	case "temp-file-cleanup":
 		return "orphaned temp files removed"
 	case "missing-file-repair":
