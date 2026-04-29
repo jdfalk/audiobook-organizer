@@ -205,6 +205,13 @@ type Book struct {
 	// Google Books rating (1–5 scale).
 	GoogleRatingAverage *float64 `json:"google_rating_average,omitempty"`
 	GoogleRatingCount   *int     `json:"google_rating_count,omitempty"`
+	// User personal ratings (1–5 scale, independent of community ratings).
+	// UI/API for setting these is TODO — columns are reserved so data can be
+	// populated once the rating UI is built.
+	UserRatingOverall     *float64 `json:"user_rating_overall,omitempty"`
+	UserRatingStory       *float64 `json:"user_rating_story,omitempty"`
+	UserRatingPerformance *float64 `json:"user_rating_performance,omitempty"`
+	UserRatingNotes       *string  `json:"user_rating_notes,omitempty"`
 	// Cover art
 	CoverURL *string `json:"cover_url,omitempty"`
 	// Narrators as JSON array

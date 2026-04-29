@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 5.9.0 -->
+<!-- version: 6.0.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-28 -->
 
@@ -40,6 +40,18 @@ future agent) can scan the entire workspace in one page.
 - [x] `gha-release-go` — passes token through
 - [x] `ghcommon/reusable-release.yml` — `create-github-app-token` wired
 - [x] v0.207.0 through v0.213.0 all released successfully
+
+---
+
+## ⭐ User Ratings UI — DB columns reserved, API + UI pending
+
+DB columns `user_rating_overall`, `user_rating_story`, `user_rating_performance`,
+`user_rating_notes` exist on `books` table. Still needed:
+
+- [ ] `PATCH /api/v1/audiobooks/:id/rating` — accepts `{overall, story, performance, notes}`
+- [ ] Book detail UI: star rating widget with three dimensions (overall / story / performance)
+- [ ] Library search/filter: "my overall > 4", "my performance < 3", etc.
+- [ ] Bulk rating view / quick-rate from list
 
 ---
 
