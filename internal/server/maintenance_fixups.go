@@ -4767,8 +4767,10 @@ func (s *Server) runMissingFileRepair(
 
 	finalCount := atomic.LoadInt64(&completed)
 	activity.FlushOperation(s.activityWriter, opID)
-	_ = progress.UpdateProgress(int(finalCount), totalFiles, "repair complete")
+	msg := fmt.Sprintf("Repaired %d of %d missing files", finalCount, totalFiles)
+	_ = progress.UpdateProgress(int(finalCount), totalFiles, msg)
 	log.Printf("[INFO] repair-missing-files %s: finished %d/%d files", opID, finalCount, totalFiles)
+	activity.EmitInfo(s.activityWriter, opID, "missing-file-repair", "repair-missing-files", msg)
 	return nil
 }
 
