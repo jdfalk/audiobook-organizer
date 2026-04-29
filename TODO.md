@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 6.0.0 -->
+<!-- version: 6.1.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-28 -->
 
@@ -52,6 +52,20 @@ DB columns `user_rating_overall`, `user_rating_story`, `user_rating_performance`
 - [ ] Book detail UI: star rating widget with three dimensions (overall / story / performance)
 - [ ] Library search/filter: "my overall > 4", "my performance < 3", etc.
 - [ ] Bulk rating view / quick-rate from list
+
+---
+
+## 🏷️ Audible Category Ladders → Book Tags
+
+Audible's `category_ladders` response group returns a full hierarchy per book,
+e.g. `Audible Books > Science Fiction > Space Opera`. Each layer should be
+applied as a user tag on the book so browsing by genre is hierarchical, not flat.
+
+- [ ] Add `category_ladders` to `audibleResponseGroups` in `internal/metadata/audible.go`
+- [ ] Parse ladder entries into `BookMetadata.CategoryTags []string` (all layers, e.g. `["Science Fiction", "Space Opera"]`)
+- [ ] In the apply pipeline, write each tag via `AddBookUserTag` (idempotent) with source `"audible_category"`
+- [ ] UI: show Audible-sourced category tags separately from user tags in the book detail panel
+- [ ] Search/filter: "has tag Science Fiction" or browsable tag cloud on library page
 
 ---
 
