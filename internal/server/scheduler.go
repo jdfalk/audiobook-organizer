@@ -347,7 +347,9 @@ func (ts *TaskScheduler) registerAllTasks() {
 			return ts.triggerOperationWithID("temp-file-cleanup", func(_ context.Context, progress operations.ProgressReporter, opID string) error {
 				removed := cleanupOrphanedTempFiles(config.AppConfig.RootDir, ts.server.activityWriter, opID)
 				activity.FlushOperation(ts.server.activityWriter, opID)
-				_ = progress.Log("info", fmt.Sprintf("Temp file cleanup: removed %d orphaned temp files", removed), nil)
+				msg := fmt.Sprintf("Removed %d orphaned temp files", removed)
+				_ = progress.Log("info", msg, nil)
+				activity.EmitInfo(ts.server.activityWriter, opID, "temp-file-cleanup", "temp-file-cleanup", msg)
 				return nil
 			})
 		},

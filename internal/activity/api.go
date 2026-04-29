@@ -1,5 +1,5 @@
 // file: internal/activity/api.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
@@ -49,6 +49,27 @@ func LogBatch(w *Writer, operationID, batchType, source string, item BatchItem) 
 		Source:      source,
 		OperationID: operationID,
 	}, item)
+}
+
+// EmitInfo writes a single info-tier ActivityEntry directly to the activity log
+// for the given operation. Use this for operation summary messages that should
+// appear in the main activity feed regardless of whether any items were batched.
+// Safe to call from multiple goroutines. w may be nil — call is a no-op.
+func EmitInfo(w *Writer, operationID, entryType, source, summary string) {
+	if w == nil {
+		return
+	}
+	select {
+	case w.ch <- database.ActivityEntry{
+		Tier:        "info",
+		Type:        entryType,
+		Level:       "info",
+		Source:      source,
+		OperationID: operationID,
+		Summary:     summary,
+	}:
+	default:
+	}
 }
 
 // FlushOperation immediately flushes all pending batches whose OperationID
