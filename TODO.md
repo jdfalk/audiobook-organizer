@@ -140,6 +140,25 @@ applied as a user tag on the book so browsing by genre is hierarchical, not flat
 
 ---
 
+## 🤖 OpenAI Responses API Migration
+
+Chat Completions is in maintenance; new models (gpt-5.4, codex-mini, the
+o-series at full effort) ship on `/v1/responses` first or only. Plus
+`PreviousResponseID` keeps history server-side, which collapses the
+prompt-token cost for our multi-turn flows. Six phases sequenced
+lowest-risk first; each phase ships independently and soaks before the
+next picks up. Full plan in
+[`docs/superpowers/specs/2026-04-29-responses-api-migration-design.md`](docs/superpowers/specs/2026-04-29-responses-api-migration-design.md).
+
+- [ ] **AI-RESP-A** [hold] Migrate `metadata_llm_review.go` (single call) — design spec linked above
+- [ ] **AI-RESP-B** [hold] Migrate `openai_parser.go` single-shot calls (6 sites) — depends on A clean
+- [ ] **AI-RESP-C** [hold] **DO NOT MIGRATE EMBEDDINGS** — `/v1/embeddings` stays as-is. This entry is here only to make the bot aware not to touch `embedding_client.go`.
+- [ ] **AI-RESP-D** [hold] Migrate Batches API (`openai_batch.go`) once OpenAI supports `/v1/responses` URLs in batch lines — verify endpoint allowlist before pickup
+- [ ] **AI-RESP-E** [hold] Migrate `aijobs/aijobs.go` multi-turn flows — adds `last_response_id` to job state; biggest token win
+- [ ] **AI-RESP-F** [hold] Cleanup: delete remaining Chat Completions call sites in `internal/ai/`
+
+---
+
 ## 📋 Backlog — [full file](docs/backlog-2026-04-10.md)
 
 Statuses below reflect the current state including v0.206.0's shipped
