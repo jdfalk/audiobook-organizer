@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 6.2.0 -->
+<!-- version: 6.3.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-28 -->
 
@@ -67,6 +67,25 @@ Audible product was matched or the file is an abridged version.
 - [ ] Surface in `MetadataReviewDialog`: show a yellow warning chip on the candidate row when `audible_runtime_min` and book `duration` differ by > 10 min, e.g. "⚠ runtime differs by 45 min"
 - [ ] Book detail panel: show Audible runtime alongside local duration so mismatches are obvious
 - [ ] Threshold configurable via query param `?max_delta_min=10`
+
+---
+
+## 🔒 Deluge Protected Paths — Reflink Import Workflow
+
+**Spec:** [`docs/superpowers/specs/2026-04-29-deluge-protected-paths-design.md`](docs/superpowers/specs/2026-04-29-deluge-protected-paths-design.md)
+
+Core rule: never edit files outside `RootDir`. Deluge files are reflinked into the library before any tag write, then `core.move_storage` keeps Deluge seeding from the new location.
+
+Implementation steps (in order):
+
+- [ ] **DB migration**: add `deluge_hash`, `deluge_original_path`, `imported_from_deluge_at` to `book_files`
+- [ ] **`protectedPathCache`**: fetch Deluge `save_path` values at startup + 5 min TTL; merge with `config.ProtectedPaths`
+- [ ] **`importToLibrary`**: reflink `src → library_path`, update DB, call `core.move_storage` if enabled (best-effort)
+- [ ] **`WriteTagsSafe`**: pre-flight guard wrapping all tag-write call sites; falls back to `os.Copy` on non-reflink FS
+- [ ] **Migrate all call sites** to `WriteTagsSafe` (bulk write-back, single-file write, cover embed)
+- [ ] **Discovery → Import UI**: "Import" button on discovered torrent calls the import flow
+- [ ] **UI**: "Imported from Deluge" badge on book detail; original path shown in Files tab audit row
+- [ ] **Config**: add `protected_paths []string` field; expose in Settings UI
 
 ---
 
