@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -665,6 +665,10 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 				return book.ISBN13 != nil && strings.TrimSpace(*book.ISBN13) != ""
 			case "duration":
 				return book.Duration != nil && *book.Duration > 0
+			case "audible_rating_overall":
+				return book.AudibleRatingOverall != nil && *book.AudibleRatingOverall > 0
+			case "google_rating_average":
+				return book.GoogleRatingAverage != nil && *book.GoogleRatingAverage > 0
 			default:
 				return false
 			}
@@ -758,6 +762,38 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 				dur := meta.DurationSec
 				book.Duration = &dur
 				appliedFields = append(appliedFields, "duration")
+				didUpdate = true
+			}
+		}
+
+		// Audible ratings — always overwrite (ratings update over time; newer > older).
+		if meta.AudibleRatingOverall > 0 {
+			addFetched("audible_rating_overall", meta.AudibleRatingOverall)
+			if shouldApply("audible_rating_overall", hasBookValue("audible_rating_overall")) {
+				v := meta.AudibleRatingOverall
+				book.AudibleRatingOverall = &v
+				v2 := meta.AudibleRatingPerformance
+				book.AudibleRatingPerformance = &v2
+				v3 := meta.AudibleRatingStory
+				book.AudibleRatingStory = &v3
+				c := meta.AudibleRatingCount
+				book.AudibleRatingCount = &c
+				r := meta.AudibleNumReviews
+				book.AudibleNumReviews = &r
+				appliedFields = append(appliedFields, "audible_ratings")
+				didUpdate = true
+			}
+		}
+
+		// Google Books rating.
+		if meta.GoogleRatingAverage > 0 {
+			addFetched("google_rating_average", meta.GoogleRatingAverage)
+			if shouldApply("google_rating_average", hasBookValue("google_rating_average")) {
+				v := meta.GoogleRatingAverage
+				book.GoogleRatingAverage = &v
+				c := meta.GoogleRatingCount
+				book.GoogleRatingCount = &c
+				appliedFields = append(appliedFields, "google_rating")
 				didUpdate = true
 			}
 		}

@@ -1,5 +1,5 @@
 // file: internal/metadata/audible.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
 
 package metadata
@@ -75,6 +75,19 @@ type audibleProduct struct {
 	Series               []audibleSeries   `json:"series"`
 	ContentDeliveryType  string            `json:"content_delivery_type"`
 	RuntimeLengthMin     *int              `json:"runtime_length_min"` // nullable in API
+	Rating               *audibleRating    `json:"rating"`
+}
+
+type audibleRating struct {
+	NumReviews          int                      `json:"num_reviews"`
+	OverallDistribution audibleRatingDistribution `json:"overall_distribution"`
+	PerformanceDistribution audibleRatingDistribution `json:"performance_distribution"`
+	StoryDistribution   audibleRatingDistribution `json:"story_distribution"`
+}
+
+type audibleRatingDistribution struct {
+	DisplayAverageRating float64 `json:"display_average_rating"`
+	NumRatings           int     `json:"num_ratings"`
 }
 
 type audiblePerson struct {
@@ -88,7 +101,7 @@ type audibleSeries struct {
 	Sequence string `json:"sequence"`
 }
 
-const audibleResponseGroups = "product_desc,contributors,media,product_attrs,series"
+const audibleResponseGroups = "product_desc,contributors,media,product_attrs,series,rating"
 
 // SearchByTitle searches Audible's catalog by title.
 func (c *AudibleClient) SearchByTitle(title string) ([]BookMetadata, error) {
@@ -241,6 +254,15 @@ func (c *AudibleClient) productToMetadata(p *audibleProduct) BookMetadata {
 	// Runtime: Audible returns minutes; BookMetadata stores seconds.
 	if p.RuntimeLengthMin != nil && *p.RuntimeLengthMin > 0 {
 		meta.DurationSec = *p.RuntimeLengthMin * 60
+	}
+
+	// Ratings: overall, narrator performance, story quality.
+	if p.Rating != nil {
+		meta.AudibleRatingOverall = p.Rating.OverallDistribution.DisplayAverageRating
+		meta.AudibleRatingPerformance = p.Rating.PerformanceDistribution.DisplayAverageRating
+		meta.AudibleRatingStory = p.Rating.StoryDistribution.DisplayAverageRating
+		meta.AudibleRatingCount = p.Rating.OverallDistribution.NumRatings
+		meta.AudibleNumReviews = p.Rating.NumReviews
 	}
 
 	return meta

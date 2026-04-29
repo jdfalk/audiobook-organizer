@@ -195,6 +195,16 @@ type Book struct {
 	// "unlinked" (no iTunes presence), "pending" (new, needs adding to iTunes),
 	// "purge_pending" (quarantined, delete from iTunes on next sync).
 	ITunesSyncStatus *string `json:"itunes_sync_status,omitempty"`
+	// Audible ratings (1–5 scale). Performance and Story are audiobook-specific
+	// dimensions absent from other providers.
+	AudibleRatingOverall     *float64 `json:"audible_rating_overall,omitempty"`
+	AudibleRatingPerformance *float64 `json:"audible_rating_performance,omitempty"` // narrator/production
+	AudibleRatingStory       *float64 `json:"audible_rating_story,omitempty"`       // story/content
+	AudibleRatingCount       *int     `json:"audible_rating_count,omitempty"`
+	AudibleNumReviews        *int     `json:"audible_num_reviews,omitempty"`
+	// Google Books rating (1–5 scale).
+	GoogleRatingAverage *float64 `json:"google_rating_average,omitempty"`
+	GoogleRatingCount   *int     `json:"google_rating_count,omitempty"`
 	// Cover art
 	CoverURL *string `json:"cover_url,omitempty"`
 	// Narrators as JSON array
