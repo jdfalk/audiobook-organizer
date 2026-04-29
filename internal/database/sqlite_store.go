@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.63.0
+// version: 1.64.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -39,7 +39,8 @@ const bookSelectColumns = `
 	quarantine_reason, quarantined_at,
 	audible_rating_overall, audible_rating_performance, audible_rating_story,
 	audible_rating_count, audible_num_reviews,
-	google_rating_average, google_rating_count
+	google_rating_average, google_rating_count,
+	user_rating_overall, user_rating_story, user_rating_performance, user_rating_notes
 `
 
 // bookSelectColumnsQualified prefixes all columns with "books." for use in JOINs.
@@ -60,7 +61,8 @@ const bookSelectColumnsQualified = `
 	books.quarantine_reason, books.quarantined_at,
 	books.audible_rating_overall, books.audible_rating_performance, books.audible_rating_story,
 	books.audible_rating_count, books.audible_num_reviews,
-	books.google_rating_average, books.google_rating_count
+	books.google_rating_average, books.google_rating_count,
+	books.user_rating_overall, books.user_rating_story, books.user_rating_performance, books.user_rating_notes
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -93,6 +95,8 @@ func scanBook(scanner rowScanner, book *Book) error {
 		audibleRatingCount, audibleNumReviews                                sql.NullInt64
 		googleRatingAverage                                                  sql.NullFloat64
 		googleRatingCount                                                    sql.NullInt64
+		userRatingOverall, userRatingStory, userRatingPerformance            sql.NullFloat64
+		userRatingNotes                                                      sql.NullString
 	)
 
 	if err := scanner.Scan(
@@ -113,6 +117,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&audibleRatingOverall, &audibleRatingPerformance, &audibleRatingStory,
 		&audibleRatingCount, &audibleNumReviews,
 		&googleRatingAverage, &googleRatingCount,
+		&userRatingOverall, &userRatingStory, &userRatingPerformance, &userRatingNotes,
 	); err != nil {
 		return err
 	}
@@ -214,6 +219,10 @@ func scanBook(scanner rowScanner, book *Book) error {
 	book.AudibleNumReviews = nullableInt(audibleNumReviews)
 	book.GoogleRatingAverage = nullableFloat(googleRatingAverage)
 	book.GoogleRatingCount = nullableInt(googleRatingCount)
+	book.UserRatingOverall = nullableFloat(userRatingOverall)
+	book.UserRatingStory = nullableFloat(userRatingStory)
+	book.UserRatingPerformance = nullableFloat(userRatingPerformance)
+	book.UserRatingNotes = nullableString(userRatingNotes)
 	return nil
 }
 
@@ -731,6 +740,10 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"audible_num_reviews":          "INTEGER",
 		"google_rating_average":        "REAL",
 		"google_rating_count":          "INTEGER",
+		"user_rating_overall":          "REAL",
+		"user_rating_story":            "REAL",
+		"user_rating_performance":      "REAL",
+		"user_rating_notes":            "TEXT",
 	}
 
 	// Fetch existing columns
@@ -2713,7 +2726,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		last_organize_operation_id = ?, last_organized_at = ?, itunes_sync_status = ?,
 		audible_rating_overall = ?, audible_rating_performance = ?, audible_rating_story = ?,
 		audible_rating_count = ?, audible_num_reviews = ?,
-		google_rating_average = ?, google_rating_count = ?
+		google_rating_average = ?, google_rating_count = ?,
+		user_rating_overall = ?, user_rating_story = ?, user_rating_performance = ?, user_rating_notes = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -2733,7 +2747,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.LastOrganizeOperationID, book.LastOrganizedAt, book.ITunesSyncStatus,
 		book.AudibleRatingOverall, book.AudibleRatingPerformance, book.AudibleRatingStory,
 		book.AudibleRatingCount, book.AudibleNumReviews,
-		book.GoogleRatingAverage, book.GoogleRatingCount, id,
+		book.GoogleRatingAverage, book.GoogleRatingCount,
+		book.UserRatingOverall, book.UserRatingStory, book.UserRatingPerformance, book.UserRatingNotes, id,
 	)
 	if err != nil {
 		return nil, err
