@@ -1,5 +1,5 @@
 // file: web/src/services/activityApi.ts
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
@@ -39,6 +39,7 @@ export interface ActivityFilter {
   source?: string;
   exclude_sources?: string;
   exclude_tiers?: string;
+  exclude_tags?: string;
 }
 
 export interface SourceCount {
@@ -67,6 +68,7 @@ export async function fetchActivity(filter?: ActivityFilter): Promise<ActivityRe
     if (filter.source) params.set('source', filter.source);
     if (filter.exclude_sources) params.set('exclude_sources', filter.exclude_sources);
     if (filter.exclude_tiers) params.set('exclude_tiers', filter.exclude_tiers);
+    if (filter.exclude_tags) params.set('exclude_tags', filter.exclude_tags);
   }
   const query = params.toString();
   const response = await fetch(`${API_BASE}/activity${query ? `?${query}` : ''}`);

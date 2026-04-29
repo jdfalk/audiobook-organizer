@@ -4770,7 +4770,8 @@ func (s *Server) runMissingFileRepair(
 	msg := fmt.Sprintf("Repaired %d of %d missing files", finalCount, totalFiles)
 	_ = progress.UpdateProgress(int(finalCount), totalFiles, msg)
 	log.Printf("[INFO] repair-missing-files %s: finished %d/%d files", opID, finalCount, totalFiles)
-	activity.EmitInfo(s.activityWriter, opID, "missing-file-repair", "repair-missing-files", msg)
+	activity.EmitInfo(s.activityWriter, opID, "missing-file-repair", "repair-missing-files", msg,
+		activity.TagsIf(finalCount == 0, activity.NoOpTag)...)
 	return nil
 }
 
