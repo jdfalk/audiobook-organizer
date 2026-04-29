@@ -1,5 +1,5 @@
 // file: internal/metadata/openlibrary.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata
@@ -116,7 +116,19 @@ type BookMetadata struct {
 	Genre          string
 	Series         string
 	SeriesPosition string
-	DurationSec    int // audio runtime in seconds (Audible: runtime_length_min × 60)
+	DurationSec int // audio runtime in seconds (Audible: runtime_length_min × 60)
+
+	// Audible-specific ratings (1–5 scale). Performance and Story are
+	// audiobook-specific dimensions not available from other sources.
+	AudibleRatingOverall     float64
+	AudibleRatingPerformance float64 // narrator/production quality
+	AudibleRatingStory       float64 // story/content quality
+	AudibleRatingCount       int     // number of star ratings
+	AudibleNumReviews        int     // number of written reviews
+
+	// Google Books rating (1–5 scale).
+	GoogleRatingAverage float64
+	GoogleRatingCount   int
 }
 
 // SearchByTitle searches for books by title. Checks local dump store first if available.
