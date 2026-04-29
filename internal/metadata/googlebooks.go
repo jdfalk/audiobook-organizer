@@ -1,5 +1,5 @@
 // file: internal/metadata/googlebooks.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-f2a3b4c5d6e7
 
 package metadata
@@ -7,6 +7,7 @@ package metadata
 import (
 	json "encoding/json/v2"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -58,14 +59,16 @@ type googleBooksVol struct {
 }
 
 type googleBooksVolumeInfo struct {
-	Title               string                       `json:"title"`
-	Authors             []string                     `json:"authors"`
-	Publisher           string                       `json:"publisher"`
-	PublishedDate       string                       `json:"publishedDate"`
-	Description         string                       `json:"description"`
-	IndustryIdentifiers []googleBooksIndustryID      `json:"industryIdentifiers"`
-	ImageLinks          *googleBooksImageLinks       `json:"imageLinks"`
-	Language            string                       `json:"language"`
+	Title               string                  `json:"title"`
+	Authors             []string                `json:"authors"`
+	Publisher           string                  `json:"publisher"`
+	PublishedDate       string                  `json:"publishedDate"`
+	Description         string                  `json:"description"`
+	IndustryIdentifiers []googleBooksIndustryID `json:"industryIdentifiers"`
+	ImageLinks          *googleBooksImageLinks  `json:"imageLinks"`
+	Language            string                  `json:"language"`
+	AverageRating       float64                 `json:"averageRating"`
+	RatingsCount        int                     `json:"ratingsCount"`
 }
 
 type googleBooksIndustryID struct {
@@ -106,8 +109,12 @@ func (c *GoogleBooksClient) search(escapedQuery string) ([]BookMetadata, error) 
 		return nil, fmt.Errorf("Google Books API returned status %d", resp.StatusCode)
 	}
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Google Books response: %w", err)
+	}
 	var gbResp googleBooksResponse
-	if err := json.UnmarshalRead(resp.Body, &gbResp); err != nil {
+	if err := json.Unmarshal(body, &gbResp, json.DiscardUnknownMembers(true)); err != nil {
 		return nil, fmt.Errorf("failed to decode Google Books response: %w", err)
 	}
 
@@ -135,6 +142,10 @@ func (c *GoogleBooksClient) search(escapedQuery string) ([]BookMetadata, error) 
 		}
 		if vi.ImageLinks != nil && vi.ImageLinks.Thumbnail != "" {
 			meta.CoverURL = vi.ImageLinks.Thumbnail
+		}
+		if vi.AverageRating > 0 {
+			meta.GoogleRatingAverage = vi.AverageRating
+			meta.GoogleRatingCount = vi.RatingsCount
 		}
 		results = append(results, meta)
 	}

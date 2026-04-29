@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.62.0
+// version: 1.63.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -36,7 +36,10 @@ const bookSelectColumns = `
 	marked_for_deletion, marked_for_deletion_at, created_at, updated_at,
 	metadata_updated_at, last_written_at, metadata_review_status, cover_url, narrators_json,
 	last_organize_operation_id, last_organized_at, itunes_sync_status,
-	quarantine_reason, quarantined_at
+	quarantine_reason, quarantined_at,
+	audible_rating_overall, audible_rating_performance, audible_rating_story,
+	audible_rating_count, audible_num_reviews,
+	google_rating_average, google_rating_count
 `
 
 // bookSelectColumnsQualified prefixes all columns with "books." for use in JOINs.
@@ -54,7 +57,10 @@ const bookSelectColumnsQualified = `
 	books.marked_for_deletion, books.marked_for_deletion_at, books.created_at, books.updated_at,
 	books.metadata_updated_at, books.last_written_at, books.metadata_review_status, books.cover_url, books.narrators_json,
 	books.last_organize_operation_id, books.last_organized_at, books.itunes_sync_status,
-	books.quarantine_reason, books.quarantined_at
+	books.quarantine_reason, books.quarantined_at,
+	books.audible_rating_overall, books.audible_rating_performance, books.audible_rating_story,
+	books.audible_rating_count, books.audible_num_reviews,
+	books.google_rating_average, books.google_rating_count
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -83,6 +89,10 @@ func scanBook(scanner rowScanner, book *Book) error {
 		itunesSyncStatus                                                     sql.NullString
 		quarantineReason                                                     sql.NullString
 		quarantinedAt                                                        sql.NullTime
+		audibleRatingOverall, audibleRatingPerformance, audibleRatingStory   sql.NullFloat64
+		audibleRatingCount, audibleNumReviews                                sql.NullInt64
+		googleRatingAverage                                                  sql.NullFloat64
+		googleRatingCount                                                    sql.NullInt64
 	)
 
 	if err := scanner.Scan(
@@ -100,6 +110,9 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&metadataUpdatedAt, &lastWrittenAt, &metadataReviewStatus, &coverURL, &narratorsJSON,
 		&lastOrganizeOperationID, &lastOrganizedAt, &itunesSyncStatus,
 		&quarantineReason, &quarantinedAt,
+		&audibleRatingOverall, &audibleRatingPerformance, &audibleRatingStory,
+		&audibleRatingCount, &audibleNumReviews,
+		&googleRatingAverage, &googleRatingCount,
 	); err != nil {
 		return err
 	}
@@ -194,6 +207,13 @@ func scanBook(scanner rowScanner, book *Book) error {
 	if quarantinedAt.Valid {
 		book.QuarantinedAt = &quarantinedAt.Time
 	}
+	book.AudibleRatingOverall = nullableFloat(audibleRatingOverall)
+	book.AudibleRatingPerformance = nullableFloat(audibleRatingPerformance)
+	book.AudibleRatingStory = nullableFloat(audibleRatingStory)
+	book.AudibleRatingCount = nullableInt(audibleRatingCount)
+	book.AudibleNumReviews = nullableInt(audibleNumReviews)
+	book.GoogleRatingAverage = nullableFloat(googleRatingAverage)
+	book.GoogleRatingCount = nullableInt(googleRatingCount)
 	return nil
 }
 
@@ -211,6 +231,13 @@ func nullableInt(ni sql.NullInt64) *int {
 	}
 	val := int(ni.Int64)
 	return &val
+}
+
+func nullableFloat(nf sql.NullFloat64) *float64 {
+	if !nf.Valid {
+		return nil
+	}
+	return &nf.Float64
 }
 
 // SQLiteStore implements the Store interface using SQLite3
@@ -695,8 +722,15 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"marked_for_deletion_at": "DATETIME",
 		"created_at":             "DATETIME DEFAULT CURRENT_TIMESTAMP",
 		"updated_at":             "DATETIME",
-		"cover_url":              "TEXT",
-		"narrators_json":         "TEXT",
+		"cover_url":                    "TEXT",
+		"narrators_json":               "TEXT",
+		"audible_rating_overall":       "REAL",
+		"audible_rating_performance":   "REAL",
+		"audible_rating_story":         "REAL",
+		"audible_rating_count":         "INTEGER",
+		"audible_num_reviews":          "INTEGER",
+		"google_rating_average":        "REAL",
+		"google_rating_count":          "INTEGER",
 	}
 
 	// Fetch existing columns
@@ -2676,7 +2710,10 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		quarantine_reason = ?, quarantined_at = ?,
 		updated_at = ?, metadata_updated_at = ?, last_written_at = ?,
 		metadata_review_status = ?, cover_url = ?, narrators_json = ?,
-		last_organize_operation_id = ?, last_organized_at = ?, itunes_sync_status = ?
+		last_organize_operation_id = ?, last_organized_at = ?, itunes_sync_status = ?,
+		audible_rating_overall = ?, audible_rating_performance = ?, audible_rating_story = ?,
+		audible_rating_count = ?, audible_num_reviews = ?,
+		google_rating_average = ?, google_rating_count = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -2693,7 +2730,10 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.QuarantineReason, book.QuarantinedAt,
 		book.UpdatedAt, book.MetadataUpdatedAt, book.LastWrittenAt,
 		book.MetadataReviewStatus, book.CoverURL, book.NarratorsJSON,
-		book.LastOrganizeOperationID, book.LastOrganizedAt, book.ITunesSyncStatus, id,
+		book.LastOrganizeOperationID, book.LastOrganizedAt, book.ITunesSyncStatus,
+		book.AudibleRatingOverall, book.AudibleRatingPerformance, book.AudibleRatingStory,
+		book.AudibleRatingCount, book.AudibleNumReviews,
+		book.GoogleRatingAverage, book.GoogleRatingCount, id,
 	)
 	if err != nil {
 		return nil, err
