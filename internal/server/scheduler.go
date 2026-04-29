@@ -349,7 +349,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 				activity.FlushOperation(ts.server.activityWriter, opID)
 				msg := fmt.Sprintf("Removed %d orphaned temp files", removed)
 				_ = progress.Log("info", msg, nil)
-				activity.EmitInfo(ts.server.activityWriter, opID, "temp-file-cleanup", "temp-file-cleanup", msg)
+				activity.EmitInfo(ts.server.activityWriter, opID, "temp-file-cleanup", "temp-file-cleanup", msg,
+					activity.TagsIf(removed == 0, activity.NoOpTag)...)
 				return nil
 			})
 		},

@@ -1,5 +1,5 @@
 // file: internal/server/activity_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
 
 package server
@@ -104,6 +104,14 @@ func (s *Server) listActivity(c *gin.Context) {
 			tier = strings.TrimSpace(tier)
 			if tier != "" {
 				filter.ExcludeTiers = append(filter.ExcludeTiers, tier)
+			}
+		}
+	}
+	if v := c.Query("exclude_tags"); v != "" {
+		for _, tag := range strings.Split(v, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				filter.ExcludeTags = append(filter.ExcludeTags, tag)
 			}
 		}
 	}

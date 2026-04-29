@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.4.0
+// version: 2.5.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -128,6 +128,7 @@ export default function ActivityLog() {
     const saved = localStorage.getItem('activity-source-prefs');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
+  const [hideNoOp, setHideNoOp] = useState(true);
 
   // Mobile filter collapse
   const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -251,6 +252,7 @@ export default function ActivityLog() {
         search: search.trim() || undefined,
         exclude_sources: excludeStr,
         exclude_tiers: excludeTiersStr,
+        exclude_tags: hideNoOp ? 'no-op' : undefined,
       });
 
       setEntries(result.entries || []);
@@ -263,7 +265,7 @@ export default function ActivityLog() {
       setLoading(false);
       setLastUpdated(new Date());
     }
-  }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers]);
+  }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp]);
 
   // Initial load + polling for active ops (3s)
   useEffect(() => {
@@ -279,7 +281,7 @@ export default function ActivityLog() {
     setPage(1);
     loadFeed(1);
     loadSources();
-  }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, loadFeed, loadSources]);
+  }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp, loadFeed, loadSources]);
 
   // Load feed on page or pageSize change
   useEffect(() => {
@@ -395,7 +397,8 @@ export default function ActivityLog() {
     operationId !== '' ||
     sinceFilter !== '' ||
     untilFilter !== '' ||
-    excludedSources.size > 0;
+    excludedSources.size > 0 ||
+    !hideNoOp;
 
   // Count active non-search filters (for mobile badge)
   const activeFilterCount = [
@@ -406,6 +409,7 @@ export default function ActivityLog() {
     sinceFilter !== '',
     untilFilter !== '',
     excludedSources.size > 0,
+    !hideNoOp,
   ].filter(Boolean).length;
 
   const clearFilters = () => {
@@ -417,6 +421,7 @@ export default function ActivityLog() {
     setSinceFilter('');
     setUntilFilter('');
     setExcludedSources(new Set());
+    setHideNoOp(true);
   };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -440,6 +445,16 @@ export default function ActivityLog() {
           }}
         />
       ))}
+      <Chip
+        label={hideNoOp ? '\u2713 hide no-op' : 'show no-op'}
+        onClick={() => setHideNoOp((v) => !v)}
+        variant={hideNoOp ? 'filled' : 'outlined'}
+        sx={{
+          borderWidth: hideNoOp ? 2 : 1,
+          cursor: 'pointer',
+          opacity: hideNoOp ? 1 : 0.6,
+        }}
+      />
     </Stack>
   );
 
