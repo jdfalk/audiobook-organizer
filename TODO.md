@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 6.3.0 -->
+<!-- version: 6.4.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-04-28 -->
+<!-- last-edited: 2026-04-29 -->
 
 # Project TODO
 
@@ -18,12 +18,12 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🎯 Current Status — April 16, 2026
+## 🎯 Current Status — April 29, 2026
 
 **Library:** 10,891 books / 2,970 authors / 8,507 series (cleaned)
 **Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
-**Latest shipped release:** v0.210.0 (2026-04-16)
-**In flight:** Backend foundations for 6 major features (see below)
+**Latest shipped release:** v0.221.0 (2026-04-29) — PRs #507–#521
+**In flight:** User Ratings UI, ASYNC spec revision, iTunes relink unresolved cases (6,719 files)
 
 ---
 
@@ -43,13 +43,20 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## ⭐ User Ratings UI — DB columns reserved, API + UI pending
+## ⭐ User Ratings UI — DB + schema done, API + UI pending
 
-DB columns `user_rating_overall`, `user_rating_story`, `user_rating_performance`,
-`user_rating_notes` exist on `books` table. Still needed:
+PR #516 added full Audible rating dimensions (5 dims + count + reviews) and Google Books
+(rating + count) to DB and metadata pipeline. PR #517 reserved `user_rating_overall`,
+`user_rating_story`, `user_rating_performance`, `user_rating_notes` on `books` table.
+PR #520 wires Audible `runtime_length_min` into candidate scoring. Still needed:
 
+- [x] Audible ratings ingested (overall/story/performance/concept/delivery + count + reviews) — PR #516
+- [x] Google Books ratings ingested (rating + count) — PR #516
+- [x] User rating columns reserved on `books` table — PR #517
+- [x] Duration scoring for candidates from Audible runtime — PR #520
 - [ ] `PATCH /api/v1/audiobooks/:id/rating` — accepts `{overall, story, performance, notes}`
 - [ ] Book detail UI: star rating widget with three dimensions (overall / story / performance)
+- [ ] Show Audible/Google ratings in MetadataReviewDialog candidate cards
 - [ ] Library search/filter: "my overall > 4", "my performance < 3", etc.
 - [ ] Bulk rating view / quick-rate from list
 
@@ -86,6 +93,36 @@ Implementation steps (in order):
 - [ ] **Discovery → Import UI**: "Import" button on discovered torrent calls the import flow
 - [ ] **UI**: "Imported from Deluge" badge on book detail; original path shown in Files tab audit row
 - [ ] **Config**: add `protected_paths []string` field; expose in Settings UI
+
+---
+
+## 🔗 iTunes Relink — Unresolved Cases
+
+PR #507 shipped the iTunes relink endpoint (3-tier path resolver: same-dir M4B → flat iTunes
+search → disambiguation). It resolved **94.7%** of broken organizer-root books. Three groups
+of cases remain:
+
+**13 manually-identified unresolved books** — documented in [`docs/reports/unresolved-relinks-2026-04-28.md`](docs/reports/unresolved-relinks-2026-04-28.md). Root causes: co-author directory mismatch (organizer uses plain author, iTunes uses `Author, Co-Author`), title prefix collision after colon→underscore substitution, and zero-match disambiguation edge cases.
+
+**~6,719 missing-file-repair unresolved** — books whose organizer-root paths cannot be found
+anywhere (not in iTunes, not as flat M4B). Many are likely Deluge-only files not yet imported.
+
+- [ ] **RELINK-1** Apply 13 manual path fixes from the report — bot-task spec: [`docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md`](docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md)
+- [ ] **RELINK-2** Co-author dir matching: when first-word search returns no M4B, try all dirs where author's surname appears (not just first match) — fix in `internal/server/maintenance_fixups.go` `findInITunes`
+- [ ] **RELINK-3** Title prefix colon→underscore normalization: normalize both stored title and filename candidate before prefix comparison
+- [ ] **RELINK-4** `GET /api/v1/maintenance/relink-report` — endpoint that re-runs the dry-run and returns unresolved cases with their `why_unresolved` annotations (feeds a UI modal)
+- [ ] **RELINK-5** Bulk-import Deluge files into library for the ~6,719 that are Deluge-only — depends on Deluge Protected Paths (see below)
+
+---
+
+## 📡 Activity Feed — Follow-up Gaps
+
+PRs #509, #518, #521 wired batch logging + EmitInfo summaries + no-op tag filtering for
+the four scheduler-driven maintenance ops. A few gaps remain:
+
+- [ ] **ACT-1** Other scheduler ops (series-normalize, dedup-scan, bleve-index-rebuild) don't call `EmitInfo` — audit all `triggerOperation` call sites for missing summary lines
+- [ ] **ACT-2** `info`-tier entries not shown by default in the tier filter (currently only audit/change/digest are on by default) — confirm `info` tier entries from EmitInfo actually appear; add `info` to default-on tiers if not
+- [ ] **ACT-3** Batch noun for `isbn-enrich` in `batcher.go` is missing — `batchNoun` returns `"isbn-enrich entries"` (fallthrough); add a case `"isbn-enrich": return "books enriched with ISBN"` for nicer batch row labels
 
 ---
 
@@ -341,10 +378,36 @@ Every plan in chronological order. ✅ = implemented, ⏳ = design done, plan wr
 - [2026-04-11 chromem-go embedding store](docs/superpowers/specs/2026-04-11-chromem-go-embedding-store.md) — design only, no plan yet
 - [2026-04-28 Unified maintenance system](docs/superpowers/specs/2026-04-28-unified-maintenance-system.md) — MaintenanceJob interface + registry + dispatcher (ASYNC-CORE + W1-W3 + CLEAN-1; awaiting Opus review)
 - [2026-04-28 PR label dependency system](docs/superpowers/specs/2026-04-28-pr-label-dependencies.md) — GitHub label-based prerequisite tracking for multi-wave burndown bot work
+- [2026-04-29 iTunes relink manual fixes](docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md) — bot-task spec for applying 13 known manual path corrections (RELINK-1)
 
 ---
 
 ## ✅ Recently Completed
+
+### Session 23 (2026-04-29) — metadata pipeline + activity feed + ratings (#507–#521)
+
+**15 PRs merged** across one session:
+
+- **#507** `feat(relink)`: iTunes relink endpoint — 3-tier path resolver (same-dir M4B → flat iTunes search → disambiguation), dir-grouping, 94.7% success on ~8K broken paths. 13 unresolved cases documented in `docs/reports/unresolved-relinks-2026-04-28.md`.
+- **#508** `feat(metadata)`: async resumable bulk-fetch-metadata for full library
+- **#509** `fix(activity)`: wire `LogBatch` into purge-deleted, isbn-enrichment, temp-file-cleanup, missing-file-repair; rename `missing_file_repair` → `missing-file-repair` (dash consistency)
+- **#510** `fix(mocks)`: add missing `GetAllBookFiles` typed expecter to `MockStore` (unblocked `TestMockStore_Coverage`)
+- **#511** `fix(maintenance)`: `revert-metadata-fetch` endpoint
+- **#512** `fix(metadata)`: bulk-fetch-metadata no longer auto-applies
+- **#513** `feat(metadata)`: `prefer_audible` and `skip_cached` options for bulk-fetch
+- **#514** `fix(audible)`: json/v2 compat — `DiscardUnknownMembers` + nullable `RuntimeLengthMin`
+- **#515** `feat(audible)`: map `runtime_length_min` → `DurationSec` → `Book.Duration`
+- **#516** `feat(ratings)`: full Audible (5 dims + count + reviews) + Google Books (rating + count) rating dimensions ingested and stored
+- **#517** `feat(db)`: reserve user rating columns (`user_rating_overall/story/performance/notes`) on `books` table
+- **#518** `fix(activity)`: emit EmitInfo summary entries so maintenance ops show content in activity log (not just start/complete)
+- **#519** `fix(ui)`: MetadataReviewDialog refresh, regex filter, correct pagination + Deluge timeout fix
+- **#520** `feat(scoring)`: duration-based candidate ranking from Audible runtime
+- **#521** `feat(activity)`: no-op tag filtering — `EmitInfo` variadic tags, `NoOpTag`/`TagsIf` helpers, `ExcludeTags` SQL + HTTP param, frontend "hide no-op" chip (default on)
+
+Missing-file-repair scan results: **9,034 fixed**, 36 ambiguous, **6,719 unresolved** (see RELINK-5).
+CI: disabled Docker in prerelease workflow (was exhausting 14GB GitHub runner disk).
+
+---
 
 ### Sessions 21-22 (2026-04-16) — feature foundations + v0.209.0/v0.210.0
 
