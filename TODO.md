@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 6.1.0 -->
+<!-- version: 6.2.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-28 -->
 
@@ -52,6 +52,21 @@ DB columns `user_rating_overall`, `user_rating_story`, `user_rating_performance`
 - [ ] Book detail UI: star rating widget with three dimensions (overall / story / performance)
 - [ ] Library search/filter: "my overall > 4", "my performance < 3", etc.
 - [ ] Bulk rating view / quick-rate from list
+
+---
+
+## ⏱️ Audible Runtime vs Book Duration Mismatch Detection
+
+Audible returns `runtime_length_min` for every product. We now store `Duration`
+on the `books` table (set during metadata apply). These two numbers should be
+within ~10 minutes of each other — large gaps (> 10 min) suggest the wrong
+Audible product was matched or the file is an abridged version.
+
+- [ ] During metadata fetch/apply: compare `runtime_length_min * 60` vs stored `book.Duration`; if delta > 600 s, log a `[WARN]` and set a `duration_mismatch` flag on the candidate result
+- [ ] `GET /api/v1/maintenance/scan-duration-mismatch` — bulk scan, returns books where Audible runtime diverges from file duration by more than a configurable threshold (default 10 min)
+- [ ] Surface in `MetadataReviewDialog`: show a yellow warning chip on the candidate row when `audible_runtime_min` and book `duration` differ by > 10 min, e.g. "⚠ runtime differs by 45 min"
+- [ ] Book detail panel: show Audible runtime alongside local duration so mismatches are obvious
+- [ ] Threshold configurable via query param `?max_delta_min=10`
 
 ---
 

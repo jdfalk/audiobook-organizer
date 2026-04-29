@@ -1,5 +1,5 @@
 // file: internal/deluge/client.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9a7b8c6d-0e1f-4a70-b8c5-3d7e0f1b9a99
 //
 // Deluge Web JSON-RPC client (backlog 6.1).
@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Client talks to a Deluge Web UI instance via JSON-RPC.
@@ -77,7 +78,7 @@ func New(baseURL, password string) (*Client, error) {
 	return &Client{
 		baseURL:  baseURL,
 		password: password,
-		client:   &http.Client{Jar: jar},
+		client:   &http.Client{Jar: jar, Timeout: 5 * time.Minute},
 	}, nil
 }
 
