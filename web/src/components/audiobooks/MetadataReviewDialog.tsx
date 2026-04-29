@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.7.0
+// version: 1.8.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -601,6 +601,14 @@ export function MetadataReviewDialog({
                 color={SOURCE_COLORS[r.candidate.source] || 'default'}
                 variant="outlined"
               />
+              {Math.abs(r.candidate?.duration_delta_sec ?? 0) > 600 && (
+                <Chip
+                  label={`⚠ runtime differs by ${formatDuration(Math.abs(r.candidate.duration_delta_sec!))}`}
+                  color="warning"
+                  size="small"
+                  sx={{ fontWeight: 500 }}
+                />
+              )}
             </>
           )}
           {isRowActionable(bookId) && r.candidate && (
@@ -891,6 +899,11 @@ export function MetadataReviewDialog({
                   {r.candidate.publisher && (
                     <Typography variant="caption" display="block">
                       {r.candidate.publisher}
+                    </Typography>
+                  )}
+                  {(r.candidate.duration_sec ?? 0) > 0 && (
+                    <Typography variant="caption" display="block">
+                      Duration: {formatDuration(r.candidate.duration_sec!)}
                     </Typography>
                   )}
                   <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
