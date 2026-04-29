@@ -2233,6 +2233,8 @@ export interface MetadataCandidate {
   asin?: string;
   cover_url?: string;
   description?: string;
+  duration_sec?: number;
+  duration_delta_sec?: number;
   language?: string;
   source: string;
   score: number;
