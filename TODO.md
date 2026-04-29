@@ -54,11 +54,11 @@ PR #520 wires Audible `runtime_length_min` into candidate scoring. Still needed:
 - [x] Google Books ratings ingested (rating + count) — PR #516
 - [x] User rating columns reserved on `books` table — PR #517
 - [x] Duration scoring for candidates from Audible runtime — PR #520
-- [ ] `PATCH /api/v1/audiobooks/:id/rating` — accepts `{overall, story, performance, notes}`
-- [ ] Book detail UI: star rating widget with three dimensions (overall / story / performance)
-- [ ] Show Audible/Google ratings in MetadataReviewDialog candidate cards
-- [ ] Library search/filter: "my overall > 4", "my performance < 3", etc.
-- [ ] Bulk rating view / quick-rate from list
+- [ ] **RATE-1** `PATCH /api/v1/audiobooks/:id/rating` — accepts `{overall, story, performance, notes}` — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-user-ratings-api.md`](docs/superpowers/bot-tasks/2026-04-29-user-ratings-api.md)
+- [ ] **RATE-2** Book detail UI: star rating widget with three dimensions (overall / story / performance)
+- [ ] **RATE-3** Show Audible/Google ratings in MetadataReviewDialog candidate cards
+- [ ] **RATE-4** Library search/filter: "my overall > 4", "my performance < 3", etc.
+- [ ] **RATE-5** Bulk rating view / quick-rate from list
 
 ---
 
@@ -71,7 +71,7 @@ Audible product was matched or the file is an abridged version.
 
 - [ ] During metadata fetch/apply: compare `runtime_length_min * 60` vs stored `book.Duration`; if delta > 600 s, log a `[WARN]` and set a `duration_mismatch` flag on the candidate result
 - [ ] `GET /api/v1/maintenance/scan-duration-mismatch` — bulk scan, returns books where Audible runtime diverges from file duration by more than a configurable threshold (default 10 min)
-- [ ] Surface in `MetadataReviewDialog`: show a yellow warning chip on the candidate row when `audible_runtime_min` and book `duration` differ by > 10 min, e.g. "⚠ runtime differs by 45 min"
+- [ ] **DUR-1** Surface in `MetadataReviewDialog`: show a yellow warning chip on the candidate row when `audible_runtime_min` and book `duration` differ by > 10 min, e.g. "⚠ runtime differs by 45 min" — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-duration-mismatch-chip.md`](docs/superpowers/bot-tasks/2026-04-29-duration-mismatch-chip.md)
 - [ ] Book detail panel: show Audible runtime alongside local duration so mismatches are obvious
 - [ ] Threshold configurable via query param `?max_delta_min=10`
 
@@ -85,9 +85,9 @@ Core rule: never edit files outside `RootDir`. Deluge files are reflinked into t
 
 Implementation steps (in order):
 
-- [ ] **DB migration**: add `deluge_hash`, `deluge_original_path`, `imported_from_deluge_at` to `book_files`
-- [ ] **`protectedPathCache`**: fetch Deluge `save_path` values at startup + 5 min TTL; merge with `config.ProtectedPaths`
-- [ ] **`importToLibrary`**: reflink `src → library_path`, update DB, call `core.move_storage` if enabled (best-effort)
+- [ ] **DELUGE-1** DB migration: add `deluge_hash`, `deluge_original_path`, `imported_from_deluge_at` to `book_files` — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-deluge-1-db-migration.md`](docs/superpowers/bot-tasks/2026-04-29-deluge-1-db-migration.md)
+- [ ] **DELUGE-2** `protectedPathCache`: fetch Deluge `save_path` values at startup + 5 min TTL; merge with `config.ProtectedPaths` — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-deluge-2-protected-path-cache.md`](docs/superpowers/bot-tasks/2026-04-29-deluge-2-protected-path-cache.md)
+- [ ] **DELUGE-3** `importToLibrary`: reflink `src → library_path`, update DB, call `core.move_storage` if enabled (best-effort) — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-deluge-3-import-to-library.md`](docs/superpowers/bot-tasks/2026-04-29-deluge-3-import-to-library.md)
 - [ ] **`WriteTagsSafe`**: pre-flight guard wrapping all tag-write call sites; falls back to `os.Copy` on non-reflink FS
 - [ ] **Migrate all call sites** to `WriteTagsSafe` (bulk write-back, single-file write, cover embed)
 - [ ] **Discovery → Import UI**: "Import" button on discovered torrent calls the import flow
@@ -108,8 +108,8 @@ of cases remain:
 anywhere (not in iTunes, not as flat M4B). Many are likely Deluge-only files not yet imported.
 
 - [ ] **RELINK-1** Apply 13 manual path fixes from the report — bot-task spec: [`docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md`](docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md)
-- [ ] **RELINK-2** Co-author dir matching: when first-word search returns no M4B, try all dirs where author's surname appears (not just first match) — fix in `internal/server/maintenance_fixups.go` `findInITunes`
-- [ ] **RELINK-3** Title prefix colon→underscore normalization: normalize both stored title and filename candidate before prefix comparison
+- [ ] **RELINK-2** Co-author dir matching: when first-word search returns no M4B, try all dirs where author's surname appears (not just first match) — fix in `internal/server/maintenance_fixups.go` `findInITunes` — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-relink-2-coauthor-dir.md`](docs/superpowers/bot-tasks/2026-04-29-relink-2-coauthor-dir.md)
+- [ ] **RELINK-3** Title prefix colon→underscore normalization: normalize both stored title and filename candidate before prefix comparison — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-relink-3-title-normalization.md`](docs/superpowers/bot-tasks/2026-04-29-relink-3-title-normalization.md)
 - [ ] **RELINK-4** `GET /api/v1/maintenance/relink-report` — endpoint that re-runs the dry-run and returns unresolved cases with their `why_unresolved` annotations (feeds a UI modal)
 - [ ] **RELINK-5** Bulk-import Deluge files into library for the ~6,719 that are Deluge-only — depends on Deluge Protected Paths (see below)
 
@@ -120,9 +120,9 @@ anywhere (not in iTunes, not as flat M4B). Many are likely Deluge-only files not
 PRs #509, #518, #521 wired batch logging + EmitInfo summaries + no-op tag filtering for
 the four scheduler-driven maintenance ops. A few gaps remain:
 
-- [ ] **ACT-1** Other scheduler ops (series-normalize, dedup-scan, bleve-index-rebuild) don't call `EmitInfo` — audit all `triggerOperation` call sites for missing summary lines
+- [ ] **ACT-1** Other scheduler ops (series-normalize, dedup-scan) don't call `EmitInfo` — audit all `triggerOperation` call sites for missing summary lines — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-activity-act1-emit-info.md`](docs/superpowers/bot-tasks/2026-04-29-activity-act1-emit-info.md)
 - [ ] **ACT-2** `info`-tier entries not shown by default in the tier filter (currently only audit/change/digest are on by default) — confirm `info` tier entries from EmitInfo actually appear; add `info` to default-on tiers if not
-- [ ] **ACT-3** Batch noun for `isbn-enrich` in `batcher.go` is missing — `batchNoun` returns `"isbn-enrich entries"` (fallthrough); add a case `"isbn-enrich": return "books enriched with ISBN"` for nicer batch row labels
+- [ ] **ACT-3** Batch noun for `isbn-enrich` in `batcher.go` is missing — `batchNoun` returns `"isbn-enrich entries"` (fallthrough); add a case `"isbn-enrich": return "books enriched with ISBN"` for nicer batch row labels — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-activity-act3-isbn-batch-noun.md`](docs/superpowers/bot-tasks/2026-04-29-activity-act3-isbn-batch-noun.md)
 
 ---
 
@@ -132,7 +132,7 @@ Audible's `category_ladders` response group returns a full hierarchy per book,
 e.g. `Audible Books > Science Fiction > Space Opera`. Each layer should be
 applied as a user tag on the book so browsing by genre is hierarchical, not flat.
 
-- [ ] Add `category_ladders` to `audibleResponseGroups` in `internal/metadata/audible.go`
+- [ ] **CAT-1** Add `category_ladders` to `audibleResponseGroups`, parse into `CategoryTags`, apply via `AddBookUserTag` — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-audible-category-ladders.md`](docs/superpowers/bot-tasks/2026-04-29-audible-category-ladders.md)
 - [ ] Parse ladder entries into `BookMetadata.CategoryTags []string` (all layers, e.g. `["Science Fiction", "Space Opera"]`)
 - [ ] In the apply pipeline, write each tag via `AddBookUserTag` (idempotent) with source `"audible_category"`
 - [ ] UI: show Audible-sourced category tags separately from user tags in the book detail panel
