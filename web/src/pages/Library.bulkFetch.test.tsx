@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.bulkFetch.test.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 5b7b0d6f-5c2b-4d57-9b6c-8dbb7a9e9e2c
 
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -9,54 +9,74 @@ import userEvent from '@testing-library/user-event';
 import { Library } from './Library';
 import * as api from '../services/api';
 
-vi.mock('../services/api', () => ({
-  getActiveOperations: vi.fn().mockResolvedValue([]),
-  getOperationLogsTail: vi.fn().mockResolvedValue([]),
-  getBooks: vi.fn().mockResolvedValue([
-    {
-      id: 'id-1',
-      title: 'Test Book',
-      file_path: '/tmp/book.m4b',
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-      author_name: 'Author',
-    },
-    {
-      id: 'id-2',
-      title: 'Second Book',
-      file_path: '/tmp/book2.m4b',
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-      author_name: 'Author',
-    },
-  ]),
-  searchBooks: vi.fn().mockResolvedValue([]),
-  getImportPaths: vi.fn().mockResolvedValue([]),
-  countBooks: vi.fn().mockResolvedValue(2),
-  getSystemStatus: vi.fn().mockResolvedValue({
-    status: 'ok',
-    library: { path: '/tmp', book_count: 2, total_size: 0 },
-    import_paths: { book_count: 0, folder_count: 0, total_size: 0 },
-    memory: {},
-    runtime: {},
-    operations: { recent: [] },
-  }),
-  getHomeDirectory: vi.fn().mockResolvedValue('/tmp'),
-  getSoftDeletedBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
-  getUserColumnConfig: vi.fn().mockResolvedValue(null),
-  saveUserColumnConfig: vi.fn().mockResolvedValue(undefined),
-  listAllUserTags: vi.fn().mockResolvedValue([]),
-  batchFetchCandidates: vi.fn().mockResolvedValue({
-    operation_id: 'op-1',
-  }),
-  batchWriteBackMetadata: vi.fn().mockResolvedValue({
-    written: 1,
-    written_files: 1,
-    renamed: 1,
-    failed: 0,
-    errors: [],
-  }),
-}));
+vi.mock('../services/api', () => {
+  class ApiError extends Error {
+    status: number;
+    data?: unknown;
+    constructor(message: string, status: number, data?: unknown) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+      this.data = data;
+    }
+  }
+  return {
+    ApiError,
+    getActiveOperations: vi.fn().mockResolvedValue([]),
+    getOperationLogsTail: vi.fn().mockResolvedValue([]),
+    getBooks: vi.fn().mockResolvedValue({
+      items: [
+        {
+          id: 'id-1',
+          title: 'Test Book',
+          file_path: '/tmp/book.m4b',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          author_name: 'Author',
+        },
+        {
+          id: 'id-2',
+          title: 'Second Book',
+          file_path: '/tmp/book2.m4b',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          author_name: 'Author',
+        },
+      ],
+      count: 2,
+    }),
+    searchBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+    searchBooksPage: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+    getImportPaths: vi.fn().mockResolvedValue([]),
+    countBooks: vi.fn().mockResolvedValue(2),
+    getBookFacets: vi.fn().mockResolvedValue({ genres: [], languages: [] }),
+    getAuthors: vi.fn().mockResolvedValue([]),
+    getSeries: vi.fn().mockResolvedValue([]),
+    getSystemStatus: vi.fn().mockResolvedValue({
+      status: 'ok',
+      library: { path: '/tmp', book_count: 2, total_size: 0 },
+      import_paths: { book_count: 0, folder_count: 0, total_size: 0 },
+      memory: {},
+      runtime: {},
+      operations: { recent: [] },
+    }),
+    getHomeDirectory: vi.fn().mockResolvedValue('/tmp'),
+    getSoftDeletedBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+    getUserColumnConfig: vi.fn().mockResolvedValue(null),
+    saveUserColumnConfig: vi.fn().mockResolvedValue(undefined),
+    listAllUserTags: vi.fn().mockResolvedValue([]),
+    batchFetchCandidates: vi.fn().mockResolvedValue({
+      operation_id: 'op-1',
+    }),
+    batchWriteBackMetadata: vi.fn().mockResolvedValue({
+      written: 1,
+      written_files: 1,
+      renamed: 1,
+      failed: 0,
+      errors: [],
+    }),
+  };
+});
 
 describe('Library bulk metadata fetch', () => {
   it('triggers bulk fetch when confirmed', async () => {
