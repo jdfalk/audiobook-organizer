@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.57.0
+// version: 4.58.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -149,6 +149,13 @@ type MetadataCandidate struct {
 	Language       string  `json:"language,omitempty"`
 	Source         string  `json:"source"`
 	Score          float64 `json:"score"`
+	// DurationSec is the runtime from the metadata source (Audible: runtime_length_min × 60).
+	// Zero means the source did not provide a duration.
+	DurationSec int `json:"duration_sec,omitempty"`
+	// DurationDeltaSec is abs(candidate_duration - book_duration) in seconds.
+	// Zero means either side had no duration, or they matched exactly.
+	// Non-zero lets the review UI flag candidates whose runtime diverges significantly.
+	DurationDeltaSec int `json:"duration_delta_sec,omitempty"`
 }
 
 // SearchMetadataResponse is returned by SearchMetadataForBook.
@@ -1231,6 +1238,52 @@ func ApplyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWor
 	return score + bonus
 }
 
+// durationScoreMultiplier returns a score multiplier based on how closely the
+// candidate's runtime matches the book's known duration.
+//
+// Both values are in seconds. If either is zero (unknown), the multiplier is
+// 1.0 (no adjustment). The multiplier is symmetric — only the absolute delta
+// matters, not the direction (candidate longer vs shorter).
+//
+// Scale (chosen so a near-identical runtime is a meaningful tiebreaker but
+// a huge mismatch is a strong rejection signal):
+//
+//	Δ ≤  1 min  → ×1.30  (essentially identical — almost certainly the same edition)
+//	Δ ≤  5 min  → ×1.20  (very close — same edition, minor encoding difference)
+//	Δ ≤ 10 min  → ×1.10  (close — probably correct)
+//	Δ ≤ 20 min  → ×1.05  (within margin)
+//	Δ ≤ 30 min  → ×1.00  (no adjustment — acceptable range)
+//	Δ ≤ 60 min  → ×0.90  (possible different edition or trim)
+//	Δ ≤ 120 min → ×0.75  (likely different edition, apply cautiously)
+//	Δ > 120 min → ×0.50  (almost certainly wrong edition or different book)
+func durationScoreMultiplier(bookDurationSec, candidateDurationSec int) float64 {
+	if bookDurationSec <= 0 || candidateDurationSec <= 0 {
+		return 1.0
+	}
+	delta := bookDurationSec - candidateDurationSec
+	if delta < 0 {
+		delta = -delta
+	}
+	switch {
+	case delta <= 60:
+		return 1.30
+	case delta <= 300:
+		return 1.20
+	case delta <= 600:
+		return 1.10
+	case delta <= 1200:
+		return 1.05
+	case delta <= 1800:
+		return 1.00
+	case delta <= 3600:
+		return 0.90
+	case delta <= 7200:
+		return 0.75
+	default:
+		return 0.50
+	}
+}
+
 // pickBestMatchFromScored takes pre-computed base scores from any tier and
 // returns the single best-matching result above the tier-appropriate
 // threshold, applying the full stack of author/narrator/audiobook bonus
@@ -1245,6 +1298,9 @@ func ApplyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWor
 // use MetadataEmbeddingBestMatchMin (default 0.70) and disable the length
 // penalty since their base scores have no token-overlap ratio.
 //
+// bookDurationSec is the book's known file duration in seconds (0 = unknown,
+// disables the duration adjustment).
+//
 // For the F1 tier we preserve the historical "skip bonuses when base==0"
 // behavior of scoreOneResult: a result whose F1 base is zero contributes a
 // final score of zero, so it can never win regardless of rich-metadata
@@ -1257,6 +1313,7 @@ func pickBestMatchFromScored(
 	baseTier string,
 	searchWords map[string]bool,
 	bookAuthor, bookNarrator string,
+	bookDurationSec int,
 ) []metadata.BookMetadata {
 	const f1MinScore = 0.35
 
@@ -1315,6 +1372,11 @@ func pickBestMatchFromScored(
 		} else {
 			score *= 0.85
 		}
+
+		// Duration-based scoring: compare candidate runtime against the book's
+		// known file duration. Strong bonus when they match closely; penalty when
+		// they diverge significantly (wrong edition, abridged vs. unabridged, etc.).
+		score *= durationScoreMultiplier(bookDurationSec, r.DurationSec)
 
 		if score > bestScore {
 			bestScore = score
@@ -1427,7 +1489,11 @@ func (mfs *Service) bestTitleMatchForBook(
 	}
 
 	baseScores, baseTier := mfs.ScoreBaseCandidates(context.Background(), book, results, searchWords)
-	return pickBestMatchFromScored(results, baseScores, baseTier, searchWords, bookAuthor, bookNarrator)
+	bookDurationSec := 0
+	if book.Duration != nil {
+		bookDurationSec = *book.Duration
+	}
+	return pickBestMatchFromScored(results, baseScores, baseTier, searchWords, bookAuthor, bookNarrator, bookDurationSec)
 }
 
 // rerankTopK asks the LLM scorer to re-judge the ambiguous top candidates
@@ -1578,7 +1644,7 @@ func BestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 		baseScores[i] = computeF1Base(r, searchWords)
 	}
 
-	return pickBestMatchFromScored(results, baseScores, "f1", searchWords, bookAuthor, bookNarrator)
+	return pickBestMatchFromScored(results, baseScores, "f1", searchWords, bookAuthor, bookNarrator, 0)
 }
 
 // syncMetadataToLibraryCopy copies metadata fields from the original book to
@@ -2075,6 +2141,13 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 		}
 	}
 
+	// Duration of the local audiobook files (seconds). Used to score candidates
+	// by how closely their Audible runtime matches our files. Zero = unknown.
+	bookDurationSec := 0
+	if book.Duration != nil {
+		bookDurationSec = *book.Duration
+	}
+
 	// Dedupe by lowercase title+author
 	seen := map[string]bool{}
 	var candidates []MetadataCandidate
@@ -2246,21 +2319,34 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				score *= 0.85 // Penalize results without narrator info (likely non-audiobook sources)
 			}
 
+			// Duration-based scoring: compare candidate runtime vs. local file duration.
+			score *= durationScoreMultiplier(bookDurationSec, r.DurationSec)
+
+			durationDelta := 0
+			if bookDurationSec > 0 && r.DurationSec > 0 {
+				durationDelta = bookDurationSec - r.DurationSec
+				if durationDelta < 0 {
+					durationDelta = -durationDelta
+				}
+			}
+
 			candidates = append(candidates, MetadataCandidate{
-				Title:          r.Title,
-				Author:         r.Author,
-				Narrator:       r.Narrator,
-				Series:         r.Series,
-				SeriesPosition: r.SeriesPosition,
-				Year:           r.PublishYear,
-				Publisher:      r.Publisher,
-				ISBN:           r.ISBN,
-				ASIN:           r.ASIN,
-				CoverURL:       r.CoverURL,
-				Description:    r.Description,
-				Language:       r.Language,
-				Source:         src.Name(),
-				Score:          score,
+				Title:            r.Title,
+				Author:           r.Author,
+				Narrator:         r.Narrator,
+				Series:           r.Series,
+				SeriesPosition:   r.SeriesPosition,
+				Year:             r.PublishYear,
+				Publisher:        r.Publisher,
+				ISBN:             r.ISBN,
+				ASIN:             r.ASIN,
+				CoverURL:         r.CoverURL,
+				Description:      r.Description,
+				Language:         r.Language,
+				Source:           src.Name(),
+				Score:            score,
+				DurationSec:      r.DurationSec,
+				DurationDeltaSec: durationDelta,
 			})
 		}
 	}
@@ -2288,21 +2374,31 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				if score <= 0 {
 					score = 1.0 // Direct ASIN match always scores high
 				}
+				asinDurationDelta := 0
+				if bookDurationSec > 0 && result.DurationSec > 0 {
+					asinDurationDelta = bookDurationSec - result.DurationSec
+					if asinDurationDelta < 0 {
+						asinDurationDelta = -asinDurationDelta
+					}
+				}
+				score *= durationScoreMultiplier(bookDurationSec, result.DurationSec)
 				candidates = append(candidates, MetadataCandidate{
-					Title:          result.Title,
-					Author:         result.Author,
-					Narrator:       result.Narrator,
-					Series:         result.Series,
-					SeriesPosition: result.SeriesPosition,
-					Year:           result.PublishYear,
-					Publisher:      result.Publisher,
-					ISBN:           result.ISBN,
-					ASIN:           result.ASIN,
-					CoverURL:       result.CoverURL,
-					Description:    result.Description,
-					Language:       result.Language,
-					Source:         "Audnexus (Audible)",
-					Score:          score,
+					Title:            result.Title,
+					Author:           result.Author,
+					Narrator:         result.Narrator,
+					Series:           result.Series,
+					SeriesPosition:   result.SeriesPosition,
+					Year:             result.PublishYear,
+					Publisher:        result.Publisher,
+					ISBN:             result.ISBN,
+					ASIN:             result.ASIN,
+					CoverURL:         result.CoverURL,
+					Description:      result.Description,
+					Language:         result.Language,
+					Source:           "Audnexus (Audible)",
+					Score:            score,
+					DurationSec:      result.DurationSec,
+					DurationDeltaSec: asinDurationDelta,
 				})
 			}
 		} else {
