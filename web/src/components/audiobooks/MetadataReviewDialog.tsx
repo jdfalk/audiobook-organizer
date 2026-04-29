@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.6.0
+// version: 1.7.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -28,6 +28,7 @@ import {
   Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import type { CandidateResult } from '../../services/api';
 import * as api from '../../services/api';
 
@@ -163,13 +164,20 @@ export function MetadataReviewDialog({
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
   const [totalSummary, setTotalSummary] = useState<{ matched: number; no_match: number; errors: number } | null>(null);
   const [previewCover, setPreviewCover] = useState<string | null>(null);
-  const [reviewPage, setReviewPage] = useState(1);
+  // serverPage/serverBatch: controls which chunk we fetch from the API.
+  // displayPage: client-side pagination over filteredResults — this is
+  // what the page-size toggle actually controls. Decoupled so filters don't
+  // create "pages that are mostly empty" when hiding applied/rejected entries.
+  const [serverPage, setServerPage] = useState(1);
   const [reviewPageSize, setReviewPageSize] = useState<number>(loadReviewPageSize);
+  const [displayPage, setDisplayPage] = useState(1);
   const [hideApplied, setHideApplied] = useState(true);
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
   const [hideSkipped, setHideSkipped] = useState(false);
   const [matchLanguage, setMatchLanguage] = useState<boolean>(loadLanguageFilter);
+  const [titleFilter, setTitleFilter] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
   // Calls onComplete (to refresh the library) only when changes were made,
   // then closes the dialog. Avoids mid-review library refreshes that reset
   // the user's scroll position and show a disorienting loading spinner.
@@ -190,15 +198,20 @@ export function MetadataReviewDialog({
   // exactly once when the dialog closes, rather than on every individual apply.
   const hasChangesRef = useRef(false);
 
-  // Fetch the current page from the server. Re-runs when the dialog opens,
-  // the operation changes, or page/size changes.
+  // Server batch size: always fetch at least 3× the display page size so
+  // that client-side filters (hide applied, title regex, etc.) still leave
+  // enough visible items to fill the requested display page size.
+  const serverBatchSize = Math.min(Math.max(reviewPageSize * 3, 300), 2000);
+
+  // Fetch the current server chunk. Re-runs when the dialog opens,
+  // the operation changes, or server page/batch size changes.
   useEffect(() => {
     if (!open || !operationId) return;
     setLoading(true);
     const fetchId = ++fetchIdRef.current;
-    const offset = (reviewPage - 1) * reviewPageSize;
+    const offset = (serverPage - 1) * serverBatchSize;
     api
-      .getOperationResults(operationId, reviewPageSize, offset)
+      .getOperationResults(operationId, serverBatchSize, offset)
       .then((data) => {
         if (fetchId !== fetchIdRef.current) return; // stale — a newer fetch is in flight
         const pageResults = data.results || [];
@@ -237,7 +250,7 @@ export function MetadataReviewDialog({
         if (fetchId !== fetchIdRef.current) return;
         setLoading(false);
       });
-  }, [open, operationId, reviewPage, reviewPageSize]);
+  }, [open, operationId, serverPage, serverBatchSize, refreshKey]);
 
   // Poll for new results while the operation is still running.
   // Fetches only limit=1 to get the updated total_count without
@@ -269,11 +282,12 @@ export function MetadataReviewDialog({
     return () => clearInterval(interval);
   }, [open, operationId, loading, operationDone, totalCount]);
 
-  // Reset polling state and page when the operation changes.
+  // Reset polling state and pages when the operation changes.
   useEffect(() => {
     setOperationDone(false);
     prevTotalRef.current = 0;
-    setReviewPage(1);
+    setServerPage(1);
+    setDisplayPage(1);
   }, [operationId]);
 
   // Compute unique sources with counts
@@ -284,7 +298,13 @@ export function MetadataReviewDialog({
     return acc;
   }, {});
 
+  const titleRegex = (() => {
+    if (!titleFilter) return null;
+    try { return new RegExp(titleFilter, 'i'); } catch { return null; }
+  })();
+
   const filteredResults = results
+    .filter((r) => !titleRegex || titleRegex.test(r.book.title || ''))
     .filter((r) => !sourceFilter || r.candidate?.source === sourceFilter)
     .filter(
       (r) =>
@@ -310,10 +330,10 @@ export function MetadataReviewDialog({
       return bookLang === candLang;
     });
 
-  // Reset page when filters change
+  // Reset display page when filters change so the user sees the first filtered result.
   useEffect(() => {
-    setReviewPage(1);
-  }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideSkipped, hideNoMatch, matchLanguage]);
+    setDisplayPage(1);
+  }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideSkipped, hideNoMatch, matchLanguage, titleFilter]);
 
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
@@ -436,9 +456,26 @@ export function MetadataReviewDialog({
     }
   };
 
-  // results is already the server-side page; filteredResults applies client-side
-  // filters (source, confidence, hide*) within the current page only.
-  const pageResults = filteredResults;
+  // pageResults: the reviewPageSize slice of filteredResults for the current
+  // display page. This decouples "how many server results we fetched" from
+  // "how many the user wants to see per page" — so filter toggles don't create
+  // mostly-empty pages.
+  const displayPageCount = Math.max(1, Math.ceil(filteredResults.length / reviewPageSize));
+  const clampedDisplayPage = Math.min(displayPage, displayPageCount);
+  const pageResults = filteredResults.slice(
+    (clampedDisplayPage - 1) * reviewPageSize,
+    clampedDisplayPage * reviewPageSize
+  );
+
+  const titleFilteredPendingIds = filteredResults
+    .filter(
+      (r) =>
+        titleRegex &&
+        r.status === 'matched' &&
+        r.candidate &&
+        !['applied', 'skipped', 'rejected'].includes(rowStates.get(r.book.id) || '')
+    )
+    .map((r) => r.book.id);
 
   const highConfidenceIds = pageResults
     .filter(
@@ -961,14 +998,25 @@ export function MetadataReviewDialog({
       >
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Review Metadata Matches &mdash; {summary.total} books</span>
-          <IconButton
-            onClick={handleClose}
-            size="small"
-            aria-label="close review dialog"
-            sx={{ ml: 2 }}
-          >
-            <CloseIcon />
-          </IconButton>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <Tooltip title="Reload current page from server">
+              <IconButton
+                onClick={() => setRefreshKey((k) => k + 1)}
+                size="small"
+                aria-label="refresh results"
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <IconButton
+              onClick={handleClose}
+              size="small"
+              aria-label="close review dialog"
+              sx={{ ml: 1 }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Stack>
         </DialogTitle>
         <DialogContent>
           {loading ? (
@@ -1030,6 +1078,38 @@ export function MetadataReviewDialog({
                     onClick={() => setSourceFilter(sourceFilter === source ? null : source)}
                   />
                 ))}
+              </Stack>
+
+              {/* Title regex filter */}
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                <TextField
+                  size="small"
+                  placeholder="Filter by title regex (e.g. Boxcar Children)"
+                  value={titleFilter}
+                  onChange={(e) => setTitleFilter(e.target.value)}
+                  error={titleFilter !== '' && titleRegex === null}
+                  helperText={titleFilter !== '' && titleRegex === null ? 'Invalid regex' : ''}
+                  sx={{ flex: 1, maxWidth: 500 }}
+                  inputProps={{ 'aria-label': 'filter by title regex' }}
+                />
+                {titleRegex && titleFilteredPendingIds.length > 0 && (
+                  <Tooltip title={`Apply all ${titleFilteredPendingIds.length} pending matched results visible through this filter`}>
+                    <span>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        disabled={applying}
+                        onClick={() => handleBulkApply(titleFilteredPendingIds)}
+                      >
+                        Apply Matching ({titleFilteredPendingIds.length})
+                      </Button>
+                    </span>
+                  </Tooltip>
+                )}
+                {titleFilter && (
+                  <Button size="small" onClick={() => setTitleFilter('')}>Clear</Button>
+                )}
               </Stack>
 
               {/* View toggle + hide filters */}
@@ -1147,49 +1227,63 @@ export function MetadataReviewDialog({
                 </Button>
               </Stack>
 
-              {/* Results list (paginated) */}
+              {/* Results list: two-level pagination.
+                  Outer (server): fetches batches of serverBatchSize from the API.
+                  Inner (display): shows reviewPageSize filtered results per display page.
+                  This ensures the page-size toggle controls VISIBLE items, not fetch size. */}
               {(filteredResults.length > 0 || totalCount > 0) && (
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mb: 1 }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    {filteredResults.length < results.length
-                      ? `${filteredResults.length} visible of ${results.length} loaded · ${totalCount} total`
-                      : totalCount > 0
-                        ? `Showing ${(reviewPage - 1) * reviewPageSize + 1}–${Math.min(reviewPage * reviewPageSize, totalCount)} of ${totalCount}`
-                        : '0'}
-                  </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Pagination
-                      count={Math.max(1, Math.ceil(totalCount / reviewPageSize))}
-                      page={reviewPage}
-                      onChange={(_, p) => setReviewPage(p)}
-                      size="small"
-                    />
-                    <TextField
-                      select
-                      size="small"
-                      value={reviewPageSize}
-                      onChange={(e) => {
-                        const next = Number(e.target.value);
-                        setReviewPageSize(next);
-                        setReviewPage(1);
-                        if (typeof window !== 'undefined') {
-                          window.localStorage.setItem(REVIEW_PAGE_SIZE_KEY, String(next));
-                        }
-                      }}
-                      sx={{ minWidth: 100 }}
-                    >
-                      {PAGE_SIZE_OPTIONS.map((n) => (
-                        <MenuItem key={n} value={n}>
-                          {n} / page
-                        </MenuItem>
-                      ))}
-                    </TextField>
+                <Stack spacing={0.5} sx={{ mb: 1 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="caption" color="text.secondary">
+                      {filteredResults.length < results.length
+                        ? `${filteredResults.length} visible of ${results.length} in batch · ${totalCount} total`
+                        : totalCount > 0
+                          ? `${filteredResults.length} results · ${totalCount} total (batch ${serverPage})`
+                          : '0'}
+                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      {/* Display-page pagination — over filteredResults */}
+                      <Pagination
+                        count={displayPageCount}
+                        page={clampedDisplayPage}
+                        onChange={(_, p) => setDisplayPage(p)}
+                        size="small"
+                      />
+                      <TextField
+                        select
+                        size="small"
+                        value={reviewPageSize}
+                        onChange={(e) => {
+                          const next = Number(e.target.value);
+                          setReviewPageSize(next);
+                          setDisplayPage(1);
+                          if (typeof window !== 'undefined') {
+                            window.localStorage.setItem(REVIEW_PAGE_SIZE_KEY, String(next));
+                          }
+                        }}
+                        sx={{ minWidth: 100 }}
+                      >
+                        {PAGE_SIZE_OPTIONS.map((n) => (
+                          <MenuItem key={n} value={n}>
+                            {n} / page
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Stack>
                   </Stack>
+                  {/* Server-batch navigation — only shown when there are multiple batches */}
+                  {totalCount > serverBatchSize && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="caption" color="text.secondary">Server batch:</Typography>
+                      <Pagination
+                        count={Math.max(1, Math.ceil(totalCount / serverBatchSize))}
+                        page={serverPage}
+                        onChange={(_, p) => { setServerPage(p); setDisplayPage(1); }}
+                        size="small"
+                        siblingCount={1}
+                      />
+                    </Stack>
+                  )}
                 </Stack>
               )}
               <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
