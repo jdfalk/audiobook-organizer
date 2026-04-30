@@ -1,6 +1,7 @@
 // file: internal/metafetch/service.go
-// version: 4.60.0
+// version: 4.61.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
+// last-edited: 2026-04-30
 
 package metafetch
 
@@ -173,6 +174,14 @@ type MetadataCandidate struct {
 	// The review UI already renders a warning chip when duration_delta_sec > 600;
 	// this flag makes the threshold decision explicit in the API response.
 	DurationMismatch bool `json:"duration_mismatch,omitempty"`
+	// DurationScore is the additive score component from the duration signal.
+	// Positive when the candidate runtime closely matches the local file duration;
+	// negative when the runtimes diverge significantly (wrong edition / abridged).
+	// Zero when either side lacks duration data.
+	// Scoring bands (delta ratio = |candidate_dur - book_dur| / book_dur):
+	//   < 5%  → +20,  < 10% → +15,  < 20% → +10,
+	//   > 50% → -10,  > 100% → -20.
+	DurationScore float64 `json:"duration_score,omitempty"`
 	// AudibleRatingOverall is the Audible overall star rating (1–5 scale).
 	// Zero means the source did not provide a rating.
 	AudibleRatingOverall float64 `json:"audible_rating_overall,omitempty"`
@@ -1318,6 +1327,46 @@ func durationScoreMultiplier(bookDurationSec, candidateDurationSec int) float64 
 	}
 }
 
+// computeDurationScore returns an additive score component (in points) based on
+// how closely a candidate's runtime matches the book's known duration. Unlike
+// durationScoreMultiplier (which scales the overall score multiplicatively),
+// this function produces a human-readable breakdown value that surfaces in the
+// MetadataCandidate.DurationScore field.
+//
+// Both values are in seconds. If either is zero (unknown), the result is 0.
+// The delta ratio = |candidate_dur - book_dur| / book_dur:
+//
+//	ratio < 0.05  → +20  (within 5% — essentially the same edition)
+//	ratio < 0.10  → +15  (within 10%)
+//	ratio < 0.20  → +10  (within 20%)
+//	ratio > 1.00  → -20  (more than 2× off — almost certainly wrong book)
+//	ratio > 0.50  → -10  (more than 50% off — likely wrong edition)
+//	otherwise      →   0  (neutral)
+func computeDurationScore(bookDurationSec, candidateDurationSec int) float64 {
+	if bookDurationSec <= 0 || candidateDurationSec <= 0 {
+		return 0
+	}
+	delta := bookDurationSec - candidateDurationSec
+	if delta < 0 {
+		delta = -delta
+	}
+	ratio := float64(delta) / float64(bookDurationSec)
+	switch {
+	case ratio < 0.05:
+		return 20
+	case ratio < 0.10:
+		return 15
+	case ratio < 0.20:
+		return 10
+	case ratio > 1.00:
+		return -20
+	case ratio > 0.50:
+		return -10
+	default:
+		return 0
+	}
+}
+
 // pickBestMatchFromScored takes pre-computed base scores from any tier and
 // returns the single best-matching result above the tier-appropriate
 // threshold, applying the full stack of author/narrator/audiobook bonus
@@ -2383,6 +2432,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				Score:                score,
 				DurationSec:          r.DurationSec,
 				DurationDeltaSec:     durationDelta,
+				DurationScore:        computeDurationScore(bookDurationSec, r.DurationSec),
 				CategoryTags:         r.CategoryTags,
 				DurationMismatch:     durationDelta > 600,
 				AudibleRatingOverall: r.AudibleRatingOverall,
@@ -2441,6 +2491,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 					Score:                score,
 					DurationSec:          result.DurationSec,
 					DurationDeltaSec:     asinDurationDelta,
+					DurationScore:        computeDurationScore(bookDurationSec, result.DurationSec),
 					CategoryTags:         result.CategoryTags,
 					DurationMismatch:     asinDurationDelta > 600,
 					AudibleRatingOverall: result.AudibleRatingOverall,

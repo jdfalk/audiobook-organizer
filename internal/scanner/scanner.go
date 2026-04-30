@@ -1,6 +1,7 @@
 // file: internal/scanner/scanner.go
-// version: 1.34.2
+// version: 1.35.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
+// last-edited: 2026-04-30
 
 package scanner
 
@@ -1338,12 +1339,10 @@ func groupFilesIntoBooks(files []string) []Book {
 			})
 		}
 	}
-	for _, f := range noAlbum {
-		books = append(books, Book{
-			FilePath: f,
-			Format:   strings.ToLower(filepath.Ext(f)),
-		})
-	}
+	// Apply chapter consolidation to files with no album tag and no playlist
+	// claim. Groups of ≥ 3 files sharing a numbered base title that are
+	// individually short are merged into one multi-file book.
+	books = append(books, consolidateChapterGroups(noAlbum)...)
 	return books
 }
 
