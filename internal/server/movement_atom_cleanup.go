@@ -1,16 +1,18 @@
 // file: internal/server/movement_atom_cleanup.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c2d3e4f5-a6b7-8c9d-0e1f-2a3b4c5d6e7f
 
 package server
 
 import (
+	"context"
 	"io/fs"
 	"log"
 	"path/filepath"
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 	taglib "go.senan.xyz/taglib"
 )
 
@@ -41,6 +43,9 @@ func (s *Server) stripMovementAtoms() {
 		return
 	}
 
+	// Build safe-write deps from server state so protected paths are guarded.
+	deps := s.safeWriteDeps()
+
 	log.Printf("[INFO] Starting movement atom cleanup under %s …", root)
 	stripped, clean, failed := 0, 0, 0
 
@@ -53,7 +58,7 @@ func (s *Server) stripMovementAtoms() {
 			return nil
 		}
 
-		changed, err := removeMovementAtomsFromFile(path)
+		changed, err := removeMovementAtomsFromFile(path, deps)
 		switch {
 		case err != nil:
 			log.Printf("[WARN] movement atom cleanup: %s: %v", path, err)
@@ -75,7 +80,10 @@ func (s *Server) stripMovementAtoms() {
 // replaces the full tag set, preserving all other tags and cover art).
 // Returns (true, nil) if the file was modified, (false, nil) if it was
 // already clean, or (false, err) on failure.
-func removeMovementAtomsFromFile(path string) (bool, error) {
+//
+// deps provides the pre-flight protection guard: if the path is protected
+// it is imported to the library before the write proceeds.
+func removeMovementAtomsFromFile(path string, deps tagger.SafeWriteDeps) (bool, error) {
 	tags, err := taglib.ReadTags(path)
 	if err != nil {
 		return false, err
@@ -92,7 +100,7 @@ func removeMovementAtomsFromFile(path string) (bool, error) {
 		return false, nil
 	}
 
-	if err := taglib.WriteTags(path, tags, taglib.Clear); err != nil {
+	if err := tagger.WriteTagsSafe(context.Background(), path, tags, taglib.Clear, deps); err != nil {
 		return false, err
 	}
 	return true, nil

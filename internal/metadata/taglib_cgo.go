@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_cgo.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 //
 // Native CGO bindings to TagLib C API for high-performance tag writing.
@@ -19,15 +19,21 @@ package metadata
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"unsafe"
 
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 )
 
 var taglibAvailable = true
 
+// writeMetadataWithTaglib performs metadata writing using native TagLib (CGO).
+//
+// If packageSafeWriteDeps is configured, protected (Deluge-managed) paths are
+// imported into the library before the write proceeds.
 func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _ fileops.OperationConfig) error {
 	abs, err := filepath.Abs(filePath)
 	if err != nil {
@@ -39,17 +45,25 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _
 		return fmt.Errorf("no writable metadata supplied")
 	}
 
-	cPath := C.CString(abs)
+	// Run the pre-flight protection check. If the path is protected and the
+	// importer is wired, this returns the library copy path; otherwise it
+	// returns abs unchanged.
+	effectivePath, err := resolvePathForWrite(abs)
+	if err != nil {
+		return fmt.Errorf("taglib write resolve: %w", err)
+	}
+
+	cPath := C.CString(effectivePath)
 	defer C.free(unsafe.Pointer(cPath))
 
 	file := C.taglib_file_new(cPath)
 	if file == nil {
-		return fmt.Errorf("taglib: failed to open %s", abs)
+		return fmt.Errorf("taglib: failed to open %s", effectivePath)
 	}
 	defer C.taglib_file_free(file)
 
 	if C.taglib_file_is_valid(file) == 0 {
-		return fmt.Errorf("taglib: file not valid/supported: %s", abs)
+		return fmt.Errorf("taglib: file not valid/supported: %s", effectivePath)
 	}
 
 	for key, values := range tags {
@@ -70,7 +84,7 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _
 	}
 
 	if C.taglib_file_save(file) == 0 {
-		return fmt.Errorf("taglib: save failed for %s", abs)
+		return fmt.Errorf("taglib: save failed for %s", effectivePath)
 	}
 
 	return nil
@@ -78,22 +92,31 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _
 
 // writeSingleTagWithTaglib writes one tag property without touching others.
 // Pass value="" to clear the property.
+//
+// If packageSafeWriteDeps is configured, protected (Deluge-managed) paths are
+// imported into the library before the write proceeds.
 func writeSingleTagWithTaglib(filePath, tagName, value string) error {
 	abs, err := filepath.Abs(filePath)
 	if err != nil {
 		return fmt.Errorf("taglib abs: %w", err)
 	}
-	cPath := C.CString(abs)
+
+	effectivePath, err := resolvePathForWrite(abs)
+	if err != nil {
+		return fmt.Errorf("taglib single-tag resolve: %w", err)
+	}
+
+	cPath := C.CString(effectivePath)
 	defer C.free(unsafe.Pointer(cPath))
 
 	file := C.taglib_file_new(cPath)
 	if file == nil {
-		return fmt.Errorf("taglib: failed to open %s", abs)
+		return fmt.Errorf("taglib: failed to open %s", effectivePath)
 	}
 	defer C.taglib_file_free(file)
 
 	if C.taglib_file_is_valid(file) == 0 {
-		return fmt.Errorf("taglib: file not valid: %s", abs)
+		return fmt.Errorf("taglib: file not valid: %s", effectivePath)
 	}
 
 	cKey := C.CString(tagName)
@@ -107,9 +130,15 @@ func writeSingleTagWithTaglib(filePath, tagName, value string) error {
 	}
 
 	if C.taglib_file_save(file) == 0 {
-		return fmt.Errorf("taglib: save failed for %s", abs)
+		return fmt.Errorf("taglib: save failed for %s", effectivePath)
 	}
 	return nil
+}
+
+// resolvePathForWrite runs the pre-flight protection check using the
+// package-level safe-write deps. Returns the effective path to write to.
+func resolvePathForWrite(abs string) (string, error) {
+	return tagger.ResolvePathForWrite(context.Background(), abs, packageSafeWriteDeps)
 }
 
 // readTagsWithTaglib reads tags from a file via native TagLib (CGO).

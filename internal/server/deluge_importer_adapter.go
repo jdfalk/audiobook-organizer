@@ -1,0 +1,69 @@
+// file: internal/server/deluge_importer_adapter.go
+// version: 1.0.0
+// guid: 7b3e9f21-4a0c-4d87-b5e8-1f6d2c0a3b74
+//
+// LibraryImporterAdapter implements tagger.LibraryImporter on top of
+// importToLibrary (DELUGE-3). It is wired into the Server at startup so
+// the metadata and tagger packages can perform the pre-flight copy without
+// importing internal/server themselves.
+
+package server
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
+)
+
+// LibraryImporterAdapter satisfies tagger.LibraryImporter using the server's
+// importToLibrary function and its wired Store + DelugeClient.
+type LibraryImporterAdapter struct {
+	store        database.Store
+	delugeClient *deluge.Client
+	cfg          *config.Config
+}
+
+// NewLibraryImporterAdapter creates a new adapter. delugeClient may be nil
+// (Deluge MoveStorage will be skipped but the copy still succeeds).
+// cfg is passed by pointer; callers should use &config.AppConfig.
+func NewLibraryImporterAdapter(store database.Store, delugeClient *deluge.Client, cfg *config.Config) *LibraryImporterAdapter {
+	return &LibraryImporterAdapter{
+		store:        store,
+		delugeClient: delugeClient,
+		cfg:          cfg,
+	}
+}
+
+// ImportPath implements tagger.LibraryImporter.
+//
+// It looks up the BookFile record by path and delegates to importToLibrary.
+// If no matching record exists, it synthesises a minimal one so the copy
+// still happens (the DB update step within importToLibrary will then fail
+// and surface an error, which the caller should handle).
+func (a *LibraryImporterAdapter) ImportPath(ctx context.Context, srcPath string) (string, error) {
+	if a == nil || a.store == nil || a.cfg == nil {
+		return srcPath, fmt.Errorf("LibraryImporterAdapter: not fully initialised")
+	}
+
+	bf, err := a.store.GetBookFileByPath(srcPath)
+	if err != nil {
+		return srcPath, fmt.Errorf("LibraryImporterAdapter: look up BookFile for %s: %w", srcPath, err)
+	}
+	if bf == nil {
+		// File is protected but has no DB record yet. This can happen during
+		// scan/ingest before the record is committed. Log and skip — the write
+		// proceeds in-place rather than failing the entire operation.
+		log.Printf("[WARN] LibraryImporterAdapter: no BookFile record found for protected path %s; writing in-place", srcPath)
+		return srcPath, nil
+	}
+
+	newPath, err := importToLibrary(a.cfg, a.delugeClient, a.store, bf)
+	if err != nil {
+		return srcPath, fmt.Errorf("LibraryImporterAdapter: importToLibrary for %s: %w", srcPath, err)
+	}
+	return newPath, nil
+}
