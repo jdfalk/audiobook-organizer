@@ -1,5 +1,5 @@
 // file: internal/server/system_service.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
 
 package server
@@ -110,15 +110,12 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 	}
 
 	rootDir := config.AppConfig.RootDir
-	libraryBookCount, importBookCount, err := ss.db.GetBookCountsByLocation(rootDir)
-	if err != nil {
-		libraryBookCount = 0
-		importBookCount = 0
-	}
 
-	fileCount, _ := ss.db.CountFiles()
-	authorCount, _ := ss.db.CountAuthors()
-	seriesCount, _ := ss.db.CountSeries()
+	// One cached call covers books, files, authors, series, and size splits.
+	dbStats, _ := ss.db.GetDashboardStats()
+	if dbStats == nil {
+		dbStats = &database.LibraryStats{}
+	}
 
 	recentOps, err := ss.db.GetRecentOperations(5)
 	if err != nil {
@@ -131,34 +128,32 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 	librarySize, importSize := calculateLibrarySizes(rootDir, importFolders)
 	// Fall back to DB file sizes when filesystem walk returns 0 (e.g. paths don't exist on this host)
 	if librarySize+importSize == 0 {
-		if dbLib, dbImp, err := ss.db.GetBookSizesByLocation(rootDir); err == nil {
-			librarySize = dbLib
-			importSize = dbImp
-		}
+		librarySize = dbStats.OrganizedSize
+		importSize = dbStats.UnorganizedSize
 	}
 	totalSize := librarySize + importSize
 
 	status := &SystemStatus{
 		Status:           "running",
 		Version:          appVersion,
-		LibraryBookCount: libraryBookCount,
-		ImportBookCount:  importBookCount,
-		TotalBookCount:   libraryBookCount + importBookCount,
-		TotalFileCount:   fileCount,
-		AuthorCount:      authorCount,
-		SeriesCount:      seriesCount,
+		LibraryBookCount: dbStats.OrganizedBooks,
+		ImportBookCount:  dbStats.UnorganizedBooks,
+		TotalBookCount:   dbStats.TotalBooks,
+		TotalFileCount:   dbStats.TotalFiles,
+		AuthorCount:      dbStats.TotalAuthors,
+		SeriesCount:      dbStats.TotalSeries,
 		LibrarySizeBytes: librarySize,
 		ImportSizeBytes:  importSize,
 		TotalSizeBytes:   totalSize,
 		RootDirectory:    rootDir,
 		Library: SystemLibraryStatus{
-			BookCount:   libraryBookCount,
+			BookCount:   dbStats.OrganizedBooks,
 			FolderCount: 1,
 			TotalSize:   librarySize,
 			Path:        rootDir,
 		},
 		ImportPaths: SystemImportStatus{
-			BookCount:   importBookCount,
+			BookCount:   dbStats.UnorganizedBooks,
 			FolderCount: len(importFolders),
 			TotalSize:   importSize,
 		},
