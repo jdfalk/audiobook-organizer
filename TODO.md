@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 6.5.0 -->
+<!-- version: 6.6.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-30 -->
 
@@ -22,7 +22,7 @@ future agent) can scan the entire workspace in one page.
 
 **Library:** 10,891 books / 2,970 authors / 8,507 series (cleaned)
 **Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
-**Latest shipped release:** v0.221.0 (2026-04-29) — PRs #507–#521; PRs #561–#563 merged 2026-04-30
+**Latest shipped release:** v0.221.0 (2026-04-29) — PRs #507–#521; PRs #561–#563 merged 2026-04-30; PRs #570–#573 merged 2026-04-30
 **In flight:** User Ratings UI, ASYNC spec revision, iTunes relink unresolved cases (6,719 files)
 
 ---
@@ -163,38 +163,40 @@ next picks up. Full plan in
 
 ## 🩺 Diagnostics & Visibility
 
-- [ ] **DIAG-1** Fix `ApiError: store does not implement AIJobsStore` on Diagnostics page — `AIJobsStore` interface (`iface_misc.go:255-265`) has no methods implemented in `sqlite_store.go` or `pebble_store.go`; crash occurs when `batch_poller` asserts `s.Store().(database.AIJobsStore)`
-- [ ] **DIAG-2** Expand Diagnostics to surface DB health — SQLite table row counts, PebbleDB key counts, embeddings DB stats, `ai_scans.db` stats, recently-rejected metadata with reasons, `metadata_fetch` cache hit/miss/age
-- [ ] **DIAG-3** Surface `ai_scans.db` and `embeddings.db` stats in Diagnostics — both are opened in `server.go:934-1004` but never shown on the diagnostics or system-info pages
-- [ ] **DIAG-4** Increase `MetadataFetchCacheTTLDays` default — metadata_fetch cache TTL (configured via `config.AppConfig.MetadataFetchCacheTTLDays`) is expiring too fast; audit and increase default to 30+ days
+- [x] **DIAG-1** Fix `ApiError: store does not implement AIJobsStore` on Diagnostics page — `AIJobsStore` interface (`iface_misc.go:255-265`) has no methods implemented in `sqlite_store.go` or `pebble_store.go`; crash occurs when `batch_poller` asserts `s.Store().(database.AIJobsStore)` — PR #570
+- [x] **DIAG-2** Expand Diagnostics to surface DB health — SQLite table row counts, PebbleDB key counts, embeddings DB stats, `ai_scans.db` stats, recently-rejected metadata with reasons, `metadata_fetch` cache hit/miss/age — PR #570
+- [x] **DIAG-3** Surface `ai_scans.db` and `embeddings.db` stats in Diagnostics — both are opened in `server.go:934-1004` but never shown on the diagnostics or system-info pages — PR #570
+- [x] **DIAG-4** Increase `MetadataFetchCacheTTLDays` default — metadata_fetch cache TTL (configured via `config.AppConfig.MetadataFetchCacheTTLDays`) is expiring too fast; increased default to 30 days — PR #570
+- [ ] **DIAG-5** Add path-prefix diagnostic to Storage page UI — `GET /api/v1/diagnostics/db-health` now returns `book_path_prefixes`; surface this in StorageTab so mismatches between configured import paths and actual stored paths are visible without a separate API call
 
 ---
 
 ## 🖥️ System Page Cleanup
 
 - [ ] **SYS-1** Remove duplicate log viewer from System page — System page uses `/system/logs` (a different endpoint and data model from Activity); replace with a navigation link to the Activity page
-- [ ] **SYS-2** Fix Storage page showing 0 books for `/mnt/bigdata/books/newbooks` — storage handler uses `file_path LIKE rootDir || '%'` prefix matching; investigate whether `newbooks` mount is configured as `RootDir` or import path
+- [x] **SYS-2** Fix Storage page showing 0 books for `/mnt/bigdata/books/newbooks` — removed `is_primary_version` filter from `GetAllImportPaths` live subquery; added `GetBookPathPrefixes` diagnostic — PR #572
 
 ---
 
 ## 🔍 Data Quality & Matching Improvements
 
-- [ ] **MATCH-1** Deduplicate books by metadata URL/response hash — when importing or applying metadata, compute a hash of the source URL or response body; if two books share the same hash they should be merged into one book with multiple versions (`BookVersion`)
+- [x] **MATCH-1** Deduplicate books by metadata URL/response hash — `metadata_source_hash` column added to `books` (migration 055); `sha256("{source}:{canonical_id}")` populated on metadata apply; duplicate count surfaced in BookDetail — PR #573
 - [ ] **MATCH-2** Consolidate multi-file chapter books by duration — files with sequential naming (`01 - Book`, `02 - Book`, etc.) that are individually very short (< 10 min each) should be pre-consolidated into a single book entry using cumulative duration rather than treated as separate books
 - [ ] **MATCH-3** Use duration as metadata scoring signal — boost metadata candidates whose Audible `runtime_length_min` roughly matches local file total duration; combine with existing title/author/series scoring for much higher confidence matches
+- [ ] **MATCH-4** Deduplicate on same-metadata-hash at import time — when a new book is scanned and its computed `metadata_source_hash` matches an existing book, automatically flag/merge instead of creating a new record
 
 ---
 
 ## 🔐 File Identity & SHA Tracking
 
-- [ ] **FILE-SHA-1** Pre-metadata-write SHA capture — ensure `original_sha` / `OriginalFileHash` on `book_files` is recorded **before** any metadata tag write (scanner already computes it but confirm all write-back paths check); add `post_metadata_sha` field for after-write hash to detect transform drift
-- [ ] **FILE-SHA-2** Cross-folder duplicate detection via SHA — use `original_sha` to identify identical files across different library paths (e.g. same file in iTunes + Deluge + organized); surface as consolidation candidates in the dedup UI
+- [x] **FILE-SHA-1** Pre-metadata-write SHA capture — `original_file_hash` recorded before any tag write; `post_metadata_hash` column added to `book_files` (migration 053); `UpdateBookFileHashes()` wired around all write-back paths — PR #571
+- [ ] **FILE-SHA-2** Cross-folder duplicate detection via SHA — use `original_file_hash` to identify identical files across different library paths (e.g. same file in iTunes + Deluge + organized); surface as consolidation candidates in the dedup UI
 
 ---
 
 ## 🗃️ Rejected Metadata Store
 
-- [ ] **META-REJ-1** Rejected metadata tracking — add a store/table for metadata candidates that were explicitly skipped or rejected, recording: `book_file_id`, source (Audible/OpenLibrary), candidate title/author/ASIN, rejection reason, timestamp; surface on book detail page and diagnostics
+- [x] **META-REJ-1** Rejected metadata tracking — `metadata_rejections` table (migration 054); `RejectedMetadataStore` interface; SQLiteStore + PebbleStore implementations; `GET /api/v1/audiobooks/:id/metadata-rejections` endpoint; rejection history collapsible section in BookDetail UI — PR #571
 
 ---
 
