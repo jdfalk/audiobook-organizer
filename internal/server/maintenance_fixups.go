@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.24.0
+// version: 1.25.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -26,12 +26,16 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/oklog/ulid/v2"
 )
+
+// Ensure deluge import is only done via the package-level accessor
+// getDelugeClient() defined in deluge_integration.go — no direct import needed.
 
 // maintenanceStore is the narrow slice of database.Store that
 // maintenance-fixup helpers share. Every free function in this file
@@ -5758,4 +5762,136 @@ func (s *Server) handleRelinkReport(c *gin.Context) {
 		"offset":            offset,
 		"limit":             limit,
 	})
+}
+
+// handleBulkDelugeImport queues a resumable async operation that calls
+// importToLibrary for every book_file that has a deluge_hash but has not
+// yet been imported (imported_from_deluge_at IS NULL).
+//
+// Query params:
+//   - dry_run=true (default) — report what would be imported without writing
+//   - dry_run=false           — actually copy files
+//   - max_books=N             — cap the number of files imported per run (0 = unlimited)
+//
+// POST /api/v1/maintenance/bulk-deluge-import
+func (s *Server) handleBulkDelugeImport(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "true") != "false"
+	maxBooks := 0
+	if v := c.Query("max_books"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxBooks = n
+		}
+	}
+
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	client := getDelugeClient()
+
+	opID := ulid.Make().String()
+	if _, err := store.CreateOperation(opID, "bulk-deluge-import", nil); err != nil {
+		internalError(c, "failed to create operation", err)
+		return
+	}
+
+	params := operations.BulkImportDelugeParams{DryRun: dryRun, MaxBooks: maxBooks}
+	if err := operations.SaveParams(store, opID, params); err != nil {
+		log.Printf("[WARN] bulk-deluge-import: failed to save params for %s: %v", opID, err)
+	}
+
+	capturedOpID := opID
+	capturedParams := params
+	capturedClient := client
+	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return s.runBulkDelugeImport(ctx, capturedOpID, capturedParams, capturedClient, store, progress)
+	}
+	if err := s.queue.Enqueue(opID, "bulk-deluge-import", operations.PriorityNormal, opFunc); err != nil {
+		internalError(c, "failed to enqueue operation", err)
+		return
+	}
+
+	log.Printf("[INFO] bulk-deluge-import: queued %s dry_run=%v max_books=%d", opID, dryRun, maxBooks)
+	c.JSON(http.StatusAccepted, gin.H{
+		"operation_id": opID,
+		"message":      "bulk deluge import started — poll GET /api/v1/operations/" + opID,
+		"dry_run":      dryRun,
+		"max_books":    maxBooks,
+	})
+}
+
+// runBulkDelugeImport is the resumable core. Files already imported in a
+// prior run (imported_from_deluge_at IS NOT NULL) are filtered out by the
+// DB query so the operation is inherently idempotent.
+func (s *Server) runBulkDelugeImport(
+	ctx context.Context,
+	opID string,
+	params operations.BulkImportDelugeParams,
+	client *deluge.Client,
+	store database.Store,
+	progress operations.ProgressReporter,
+) error {
+	_ = progress.UpdateProgress(0, 0, "loading pending files")
+
+	pending, err := store.GetBookFilesNeedingDelugeImport()
+	if err != nil {
+		return fmt.Errorf("GetBookFilesNeedingDelugeImport: %w", err)
+	}
+	if params.MaxBooks > 0 && len(pending) > params.MaxBooks {
+		pending = pending[:params.MaxBooks]
+	}
+
+	total := len(pending)
+	log.Printf("[INFO] bulk-deluge-import %s: %d files pending (dry_run=%v)", opID, total, params.DryRun)
+	_ = progress.UpdateProgress(0, total, fmt.Sprintf("found %d files to import", total))
+
+	imported, failed := 0, 0
+	for i := range pending {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		f := &pending[i]
+		if params.DryRun {
+			resultJSON, _ := json.Marshal(map[string]any{"path": f.FilePath, "action": "dry_run"})
+			_ = store.CreateOperationResult(&database.OperationResult{
+				OperationID: opID,
+				BookID:      f.ID,
+				ResultJSON:  string(resultJSON),
+				Status:      "dry_run",
+			})
+			imported++
+		} else {
+			newPath, importErr := importToLibrary(&config.AppConfig, client, store, f)
+			if importErr != nil {
+				log.Printf("[WARN] bulk-deluge-import %s: %s: %v", opID, f.FilePath, importErr)
+				resultJSON, _ := json.Marshal(map[string]any{"path": f.FilePath, "error": importErr.Error()})
+				_ = store.CreateOperationResult(&database.OperationResult{
+					OperationID: opID,
+					BookID:      f.ID,
+					ResultJSON:  string(resultJSON),
+					Status:      "error",
+				})
+				failed++
+			} else {
+				resultJSON, _ := json.Marshal(map[string]any{"path": f.FilePath, "new_path": newPath})
+				_ = store.CreateOperationResult(&database.OperationResult{
+					OperationID: opID,
+					BookID:      f.ID,
+					ResultJSON:  string(resultJSON),
+					Status:      "imported",
+				})
+				imported++
+			}
+		}
+		if (i+1)%100 == 0 || i+1 == total {
+			_ = progress.UpdateProgress(i+1, total,
+				fmt.Sprintf("imported %d/%d (failed: %d)", imported, total, failed))
+		}
+	}
+	log.Printf("[INFO] bulk-deluge-import %s: done. imported=%d failed=%d", opID, imported, failed)
+	return nil
 }
