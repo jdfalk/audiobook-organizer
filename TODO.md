@@ -71,7 +71,7 @@ Audible product was matched or the file is an abridged version.
 
 - [ ] During metadata fetch/apply: compare `runtime_length_min * 60` vs stored `book.Duration`; if delta > 600 s, log a `[WARN]` and set a `duration_mismatch` flag on the candidate result
 - [ ] `GET /api/v1/maintenance/scan-duration-mismatch` — bulk scan, returns books where Audible runtime diverges from file duration by more than a configurable threshold (default 10 min)
-- [ ] **DUR-1** Surface in `MetadataReviewDialog`: show a yellow warning chip on the candidate row when `audible_runtime_min` and book `duration` differ by > 10 min, e.g. "⚠ runtime differs by 45 min" — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-duration-mismatch-chip.md`](docs/superpowers/bot-tasks/2026-04-29-duration-mismatch-chip.md)
+- [x] **DUR-1** Surface in `MetadataReviewDialog`: show a yellow warning chip on the candidate row when `audible_runtime_min` and book `duration` differ by > 10 min, e.g. "⚠ runtime differs by 45 min" — chip implemented at `MetadataReviewDialog.tsx:604`
 - [ ] Book detail panel: show Audible runtime alongside local duration so mismatches are obvious
 - [ ] Threshold configurable via query param `?max_delta_min=10`
 
@@ -108,8 +108,8 @@ of cases remain:
 anywhere (not in iTunes, not as flat M4B). Many are likely Deluge-only files not yet imported.
 
 - [ ] **RELINK-1** Apply 13 manual path fixes from the report — bot-task spec: [`docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md`](docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md)
-- [ ] **RELINK-2** Co-author dir matching: when first-word search returns no M4B, try all dirs where author's surname appears (not just first match) — fix in `internal/server/maintenance_fixups.go` `findInITunes` — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-relink-2-coauthor-dir.md`](docs/superpowers/bot-tasks/2026-04-29-relink-2-coauthor-dir.md)
-- [ ] **RELINK-3** Title prefix colon→underscore normalization: normalize both stored title and filename candidate before prefix comparison — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-relink-3-title-normalization.md`](docs/superpowers/bot-tasks/2026-04-29-relink-3-title-normalization.md)
+- [x] **RELINK-2** Co-author dir matching: tries all dirs where author's surname appears — implemented at `maintenance_fixups.go:4154`
+- [x] **RELINK-3** Title prefix colon→underscore normalization — implemented at `maintenance_fixups.go:4257`
 - [ ] **RELINK-4** `GET /api/v1/maintenance/relink-report` — endpoint that re-runs the dry-run and returns unresolved cases with their `why_unresolved` annotations (feeds a UI modal)
 - [ ] **RELINK-5** Bulk-import Deluge files into library for the ~6,719 that are Deluge-only — depends on Deluge Protected Paths (see below)
 
@@ -122,7 +122,7 @@ the four scheduler-driven maintenance ops. A few gaps remain:
 
 - [ ] **ACT-1** Other scheduler ops (series-normalize, dedup-scan) don't call `EmitInfo` — audit all `triggerOperation` call sites for missing summary lines — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-activity-act1-emit-info.md`](docs/superpowers/bot-tasks/2026-04-29-activity-act1-emit-info.md)
 - [ ] **ACT-2** `info`-tier entries not shown by default in the tier filter (currently only audit/change/digest are on by default) — confirm `info` tier entries from EmitInfo actually appear; add `info` to default-on tiers if not
-- [ ] **ACT-3** Batch noun for `isbn-enrich` in `batcher.go` is missing — `batchNoun` returns `"isbn-enrich entries"` (fallthrough); add a case `"isbn-enrich": return "books enriched with ISBN"` for nicer batch row labels — bot-task: [`docs/superpowers/bot-tasks/2026-04-29-activity-act3-isbn-batch-noun.md`](docs/superpowers/bot-tasks/2026-04-29-activity-act3-isbn-batch-noun.md)
+- [x] **ACT-3** Batch noun for `isbn-enrich` — implemented at `batcher.go:211`
 
 ---
 
