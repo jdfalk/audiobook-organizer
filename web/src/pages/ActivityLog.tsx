@@ -118,7 +118,7 @@ export default function ActivityLog() {
 
   // Filters
   const [search, setSearch] = useState('');
-  const [tiers, setTiers] = useState<Set<string>>(new Set(['audit', 'change', 'digest']));
+  const [tiers, setTiers] = useState<Set<string>>(new Set(['audit', 'change', 'digest', 'info']));
   const [typeFilter, setTypeFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState('');
   const [operationId, setOperationId] = useState('');
