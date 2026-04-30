@@ -1,6 +1,7 @@
 // file: web/src/components/system/StorageTab.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9e0f1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b
+// last-edited: 2026-04-30
 
 import { useState, useEffect } from 'react';
 import {
@@ -13,11 +14,15 @@ import {
   Divider,
   Button,
   CircularProgress,
+  Chip,
+  Tooltip,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
   LibraryBooks as LibraryIcon,
   Refresh as RefreshIcon,
+  Storage as StorageIcon,
+  InfoOutlined as InfoIcon,
 } from '@mui/icons-material';
 import * as api from '../../services/api';
 
@@ -34,6 +39,7 @@ interface StorageInfo {
   bookCount: number;
   folderCount: number;
   folders: ImportPath[];
+  pathPrefixes: Array<{ prefix: string; book_count: number }>;
 }
 
 export function StorageTab() {
@@ -49,9 +55,10 @@ export function StorageTab() {
     setLoading(true);
     setError(null);
     try {
-      const [statusData, foldersData] = await Promise.all([
+      const [statusData, foldersData, dbHealth] = await Promise.all([
         api.getSystemStatus(),
         api.getImportPaths(),
+        api.getDBHealthStats().catch(() => null),
       ]);
       const librarySize =
         statusData.library_size_bytes ?? statusData.library.total_size;
@@ -63,6 +70,7 @@ export function StorageTab() {
         bookCount: libraryBookCount,
         folderCount: statusData.import_paths?.folder_count || 0,
         folders: foldersData,
+        pathPrefixes: dbHealth?.book_path_prefixes ?? [],
       });
     } catch (err) {
       console.error('Failed to fetch storage info:', err);
@@ -246,6 +254,53 @@ export function StorageTab() {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* DB Path Distribution */}
+        {storage.pathPrefixes.length > 0 && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={2} alignItems="center" mb={2}>
+                  <StorageIcon color="primary" />
+                  <Typography variant="h6">DB Path Distribution</Typography>
+                  <Tooltip title="Shows where books are actually stored in the database. If a path here doesn't match your import folders, those books may have been auto-organized or moved.">
+                    <InfoIcon fontSize="small" color="action" />
+                  </Tooltip>
+                </Stack>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  Top path prefixes in the database vs your configured import folders.
+                  Mismatches indicate books that were organized away or are stored under a different root.
+                </Typography>
+                <Stack spacing={1}>
+                  {storage.pathPrefixes.map((p, i) => {
+                    const isConfigured = storage.folders.some(f =>
+                      f.path.startsWith(p.prefix) || p.prefix.startsWith(f.path)
+                    );
+                    return (
+                      <Stack key={i} direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', flex: 1, mr: 1 }} noWrap>
+                          {p.prefix}
+                        </Typography>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip
+                            label={`${p.book_count.toLocaleString()} books`}
+                            size="small"
+                            variant="outlined"
+                          />
+                          {isConfigured ? (
+                            <Chip label="configured" size="small" color="success" variant="outlined" />
+                          ) : (
+                            <Chip label="not in import paths" size="small" color="warning" variant="outlined" />
+                          )}
+                        </Stack>
+                      </Stack>
+                    );
+                  })}
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
       </Grid>
     </Box>
   );
