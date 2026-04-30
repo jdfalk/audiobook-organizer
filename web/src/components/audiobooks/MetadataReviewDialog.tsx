@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.8.0
+// version: 1.9.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -164,13 +164,10 @@ export function MetadataReviewDialog({
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
   const [totalSummary, setTotalSummary] = useState<{ matched: number; no_match: number; errors: number } | null>(null);
   const [previewCover, setPreviewCover] = useState<string | null>(null);
-  // serverPage/serverBatch: controls which chunk we fetch from the API.
-  // displayPage: client-side pagination over filteredResults — this is
-  // what the page-size toggle actually controls. Decoupled so filters don't
-  // create "pages that are mostly empty" when hiding applied/rejected entries.
+  // serverPage: which page to fetch from the API. Unified with the display page —
+  // one paginator, one concept of "page".
   const [serverPage, setServerPage] = useState(1);
   const [reviewPageSize, setReviewPageSize] = useState<number>(loadReviewPageSize);
-  const [displayPage, setDisplayPage] = useState(1);
   const [hideApplied, setHideApplied] = useState(true);
   const [hideRejected, setHideRejected] = useState(true);
   const [hideNoMatch, setHideNoMatch] = useState(true);
@@ -190,28 +187,23 @@ export function MetadataReviewDialog({
   }, [onComplete, onClose]);
 
   // fetchIdRef prevents stale responses from overwriting newer ones when the
-  // user changes page size or page quickly (race: 25-item request finishes
-  // after 250-item request, overwriting the larger result set).
+  // user changes page or page size quickly.
   const fetchIdRef = useRef(0);
 
   // Tracks whether any apply actions occurred so the library is refreshed
   // exactly once when the dialog closes, rather than on every individual apply.
   const hasChangesRef = useRef(false);
 
-  // Server batch size: always fetch at least 3× the display page size so
-  // that client-side filters (hide applied, title regex, etc.) still leave
-  // enough visible items to fill the requested display page size.
-  const serverBatchSize = Math.min(Math.max(reviewPageSize * 3, 300), 2000);
-
-  // Fetch the current server chunk. Re-runs when the dialog opens,
-  // the operation changes, or server page/batch size changes.
+  // Fetch the current page from the server. Each page fetches exactly
+  // reviewPageSize items; all that pass client filters are rendered (no
+  // second level of pagination). One paginator, one concept of "page".
   useEffect(() => {
     if (!open || !operationId) return;
     setLoading(true);
     const fetchId = ++fetchIdRef.current;
-    const offset = (serverPage - 1) * serverBatchSize;
+    const offset = (serverPage - 1) * reviewPageSize;
     api
-      .getOperationResults(operationId, serverBatchSize, offset)
+      .getOperationResults(operationId, reviewPageSize, offset)
       .then((data) => {
         if (fetchId !== fetchIdRef.current) return; // stale — a newer fetch is in flight
         const pageResults = data.results || [];
@@ -250,7 +242,7 @@ export function MetadataReviewDialog({
         if (fetchId !== fetchIdRef.current) return;
         setLoading(false);
       });
-  }, [open, operationId, serverPage, serverBatchSize, refreshKey]);
+  }, [open, operationId, serverPage, reviewPageSize, refreshKey]);
 
   // Poll for new results while the operation is still running.
   // Fetches only limit=1 to get the updated total_count without
@@ -282,12 +274,11 @@ export function MetadataReviewDialog({
     return () => clearInterval(interval);
   }, [open, operationId, loading, operationDone, totalCount]);
 
-  // Reset polling state and pages when the operation changes.
+  // Reset polling state and page when the operation changes.
   useEffect(() => {
     setOperationDone(false);
     prevTotalRef.current = 0;
     setServerPage(1);
-    setDisplayPage(1);
   }, [operationId]);
 
   // Compute unique sources with counts
@@ -330,15 +321,14 @@ export function MetadataReviewDialog({
       return bookLang === candLang;
     });
 
-  // Reset display page when filters change so the user sees the first filtered result.
+  // Reset to page 1 when filters change so the user sees the first filtered result.
   useEffect(() => {
-    setDisplayPage(1);
+    setServerPage(1);
   }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideSkipped, hideNoMatch, matchLanguage, titleFilter]);
 
-  // Go back to page 1 on manual refresh so the user sees results from the top,
-  // not from whatever page they were on before the re-fetch.
+  // Go back to page 1 on manual refresh.
   useEffect(() => {
-    setDisplayPage(1);
+    setServerPage(1);
   }, [refreshKey]);
 
   // Coalesce rapid Apply clicks into one batched API call
@@ -462,24 +452,18 @@ export function MetadataReviewDialog({
     }
   };
 
-  // pageResults: the reviewPageSize slice of filteredResults for the current
-  // display page. This decouples "how many server results we fetched" from
-  // "how many the user wants to see per page" — so filter toggles don't create
-  // mostly-empty pages.
-  const displayPageCount = Math.max(1, Math.ceil(filteredResults.length / reviewPageSize));
-  const clampedDisplayPage = Math.min(displayPage, displayPageCount);
-  const pageResults = filteredResults.slice(
-    (clampedDisplayPage - 1) * reviewPageSize,
-    clampedDisplayPage * reviewPageSize
-  );
+  // All filtered items from the current server page are rendered directly —
+  // no second display-page layer. The single paginator navigates server pages.
+  const pageResults = filteredResults;
+  const totalPages = Math.max(1, Math.ceil(totalCount / reviewPageSize));
 
-  // If applied/hidden items shrink the list so the current page no longer exists,
-  // snap back to page 1 instead of showing an empty page.
-  // Must live after displayPageCount is declared.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Auto-advance: if every item on this page is filtered out (all applied/hidden)
+  // and there are more pages, silently move to the next one so the list stays full.
   useEffect(() => {
-    if (displayPage > displayPageCount) setDisplayPage(1);
-  }, [displayPageCount, displayPage]);
+    if (!loading && filteredResults.length === 0 && results.length > 0 && serverPage < totalPages) {
+      setServerPage((p) => p + 1);
+    }
+  }, [filteredResults.length, results.length, loading, serverPage, totalPages]);
 
   const titleFilteredPendingIds = filteredResults
     .filter(
@@ -1254,63 +1238,43 @@ export function MetadataReviewDialog({
                 </Button>
               </Stack>
 
-              {/* Results list: two-level pagination.
-                  Outer (server): fetches batches of serverBatchSize from the API.
-                  Inner (display): shows reviewPageSize filtered results per display page.
-                  This ensures the page-size toggle controls VISIBLE items, not fetch size. */}
+              {/* Single unified paginator — one page concept, one control. */}
               {(filteredResults.length > 0 || totalCount > 0) && (
-                <Stack spacing={0.5} sx={{ mb: 1 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Typography variant="caption" color="text.secondary">
-                      {filteredResults.length < results.length
-                        ? `${filteredResults.length} visible of ${results.length} in batch · ${totalCount} total`
-                        : totalCount > 0
-                          ? `${filteredResults.length} results · ${totalCount} total (batch ${serverPage})`
-                          : '0'}
-                    </Typography>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      {/* Display-page pagination — over filteredResults */}
-                      <Pagination
-                        count={displayPageCount}
-                        page={clampedDisplayPage}
-                        onChange={(_, p) => setDisplayPage(p)}
-                        size="small"
-                      />
-                      <TextField
-                        select
-                        size="small"
-                        value={reviewPageSize}
-                        onChange={(e) => {
-                          const next = Number(e.target.value);
-                          setReviewPageSize(next);
-                          setDisplayPage(1);
-                          if (typeof window !== 'undefined') {
-                            window.localStorage.setItem(REVIEW_PAGE_SIZE_KEY, String(next));
-                          }
-                        }}
-                        sx={{ minWidth: 100 }}
-                      >
-                        {PAGE_SIZE_OPTIONS.map((n) => (
-                          <MenuItem key={n} value={n}>
-                            {n} / page
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    </Stack>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {filteredResults.length < results.length
+                      ? `${filteredResults.length} visible of ${results.length} on page ${serverPage} · ${totalCount} total`
+                      : `${filteredResults.length} on page ${serverPage} · ${totalCount} total`}
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Pagination
+                      count={totalPages}
+                      page={serverPage}
+                      onChange={(_, p) => setServerPage(p)}
+                      size="small"
+                      siblingCount={2}
+                    />
+                    <TextField
+                      select
+                      size="small"
+                      value={reviewPageSize}
+                      onChange={(e) => {
+                        const next = Number(e.target.value);
+                        setReviewPageSize(next);
+                        setServerPage(1);
+                        if (typeof window !== 'undefined') {
+                          window.localStorage.setItem(REVIEW_PAGE_SIZE_KEY, String(next));
+                        }
+                      }}
+                      sx={{ minWidth: 100 }}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((n) => (
+                        <MenuItem key={n} value={n}>
+                          {n} / page
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </Stack>
-                  {/* Server-batch navigation — only shown when there are multiple batches */}
-                  {totalCount > serverBatchSize && (
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="caption" color="text.secondary">Server batch:</Typography>
-                      <Pagination
-                        count={Math.max(1, Math.ceil(totalCount / serverBatchSize))}
-                        page={serverPage}
-                        onChange={(_, p) => { setServerPage(p); setDisplayPage(1); }}
-                        size="small"
-                        siblingCount={1}
-                      />
-                    </Stack>
-                  )}
                 </Stack>
               )}
               <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
