@@ -1,10 +1,11 @@
 // file: internal/server/metadata_normalize_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 4f7c2b8d-3a91-4e5f-b6c0-1d8e7a9f3c45
 
 package server
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
@@ -93,7 +94,7 @@ func TestNormalizeMetaSeries_Idempotent(t *testing.T) {
 	metafetch.NormalizeMetaSeries(&meta)
 	first := meta
 	metafetch.NormalizeMetaSeries(&meta)
-	if meta != first {
+	if !reflect.DeepEqual(meta, first) {
 		t.Errorf("second call mutated meta; before=%+v after=%+v", first, meta)
 	}
 }
