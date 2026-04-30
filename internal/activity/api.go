@@ -1,5 +1,5 @@
 // file: internal/activity/api.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
@@ -75,9 +75,19 @@ func EmitInfo(w *Writer, operationID, entryType, source, summary string, tags ..
 	}
 }
 
-// NoOpTag is the tag applied to EmitInfo summaries where an operation did nothing,
-// so the frontend can hide them by default.
+// NoOpTag marks entries where an operation did nothing; the frontend hides these by default.
 const NoOpTag = "no-op"
+
+// AlwaysShow marks entries from manually-triggered operations; the frontend always
+// displays them regardless of active filter presets.
+const AlwaysShow = "always-show"
+
+// Scheduled marks entries emitted by the background scheduler or maintenance window;
+// the frontend may suppress them unless the user opts into verbose view.
+const Scheduled = "scheduled"
+
+// MaintenanceWindow is the type string for per-window summary entries.
+const MaintenanceWindow = "maintenance-window"
 
 // TagsIf returns []string{tag} when cond is true, otherwise nil.
 // Convenience helper for EmitInfo call sites that want to tag a no-op result:
@@ -88,6 +98,14 @@ func TagsIf(cond bool, tag string) []string {
 		return []string{tag}
 	}
 	return nil
+}
+
+// WithTags merges base tags with extra tags and returns the combined slice.
+// Useful when you need a fixed set of tags plus a conditional one.
+func WithTags(base []string, extra ...string) []string {
+	out := make([]string, len(base), len(base)+len(extra))
+	copy(out, base)
+	return append(out, extra...)
 }
 
 // FlushOperation immediately flushes all pending batches whose OperationID
