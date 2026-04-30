@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.40.0 -->
+<!-- version: 2.42.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-30 -->
 
@@ -8,6 +8,34 @@
 ## [Unreleased]
 
 ### Added / Changed
+
+#### April 30, 2026 — Import path book count fix, metadata cache TTL extended (#582, config)
+
+- **PR #582** `fix(database,scanner)`: store import path book count after scan, not on every read
+  - `CountBooksByPathPrefix(prefix)` added to `ImportPathStore` interface and both store implementations
+  - `updateImportPathBookCount` in `scan_service.go` now queries the real DB total (not the incremental scan batch size) and stores it via `UpdateImportPath`
+  - `PebbleStore.GetAllImportPaths` reverted to a pure stored-JSON read (no more live-count loop)
+
+- **`config`**: `metadata_fetch_cache_ttl_days` default raised 30 → 180 days
+  - Previous default caused metadata to expire too quickly on large libraries, forcing unnecessary re-fetches
+
+#### April 30, 2026 — SHA scan crash fix, AIJobsStore graceful degradation, newbooks live count, MATCH-4 metadata hash dedup, WriteTagsSafe (#579–#581)
+
+- **PR #579** `fix(database,web)`: SHA scan null crash, AIJobsStore 500, and newbooks=0
+  - `SHADuplicateCard`: null-safe `result.groups?.length ?? 0` guard; `scanDuplicateFiles()` normalises `groups` to `[]` so clicking "Scan for SHA Duplicates" no longer crashes
+  - `PebbleStore.ListAIJobs` stub now returns `[]AIJob{}, nil` — Diagnostics AI Jobs panel shows "No AI jobs recorded yet" instead of `ApiError: store does not implement AIJobsStore`
+  - `PebbleStore.GetAllImportPaths`: live-count books per import path by iterating all book keys and matching `FilePath` prefixes — Storage page now shows correct book count for `/mnt/bigdata/books/newbooks` (was always 0 because stored `BookCount` was never updated)
+
+- **PR #580** `feat(database,server,web)`: auto-flag metadata hash duplicates at import/apply time (MATCH-4)
+  - `FlagMetadataHashDuplicate(primaryID, duplicateID)` added to `BookWriter` interface; SQLite implementation sets `merged_into_book_id` + `is_primary_version=0`; PebbleStore stub via `UpdateBook`
+  - `metafetch/service.go`: `checkMetadataSourceHashDuplicates` upgraded from log-only to full merge — picks primary by max file count, flags all siblings
+  - `GET /api/v1/maintenance/metadata-hash-duplicates` endpoint + `MetadataHashDuplicateCard` in MaintenanceTab
+
+- **PR #581** `feat(fileops,database)`: WriteTagsSafe — pre-flight hash + atomic tag write
+  - `internal/fileops/write_tags_safe.go`: `WriteTagsSafe(path, writeFn, opts)` — SHA-256 hashes original, writes to temp sibling, atomically renames, hashes result, persists both hashes to DB via `BookFileHashUpdater`
+  - `internal/database/iface_misc.go`: `BookFileHashUpdater` narrow interface
+  - All tag-write call sites in `tagger/safe_write.go`, `tagger/embed_cover.go`, `metafetch/service.go` migrated to `fileops.WriteTagsSafe`
+  - 6 unit tests in `write_tags_safe_test.go`
 
 #### April 30, 2026 — Chapter consolidation, SHA dedup, Storage diagnostics (#575–#577)
 
