@@ -1,5 +1,5 @@
 // file: internal/server/scan_service.go
-// version: 1.4.1
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -349,11 +349,20 @@ func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scann
 	}
 }
 
-func (ss *ScanService) updateImportPathBookCount(folderPath string, bookCount int, log logger.Logger) {
+// updateImportPathBookCount stores the accurate total book count for an import
+// path after a scan. It queries the DB for the real total (not just what was
+// found in this incremental batch) so the stored count stays correct across
+// both full and incremental scans.
+func (ss *ScanService) updateImportPathBookCount(folderPath string, _ int, log logger.Logger) {
+	total, err := ss.db.CountBooksByPathPrefix(folderPath)
+	if err != nil {
+		log.Warn("Failed to count books for folder %s: %v", folderPath, err)
+		return
+	}
 	folders, _ := ss.db.GetAllImportPaths()
 	for _, folder := range folders {
 		if folder.Path == folderPath {
-			folder.BookCount = bookCount
+			folder.BookCount = total
 			if err := ss.db.UpdateImportPath(folder.ID, &folder); err != nil {
 				log.Warn("Failed to update book count for folder %s: %v", folderPath, err)
 			}

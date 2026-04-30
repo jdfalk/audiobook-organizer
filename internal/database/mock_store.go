@@ -918,6 +918,10 @@ func (m *MockStore) DeleteImportPath(id int) error {
 	return nil
 }
 
+func (m *MockStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	return 0, nil
+}
+
 func (m *MockStore) CreateOperation(id, opType string, folderPath *string) (*Operation, error) {
 	if m.CreateOperationFunc != nil {
 		return m.CreateOperationFunc(id, opType, folderPath)
