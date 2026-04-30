@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/SearchBar.tsx
-// version: 2.1.1
+// version: 2.2.0
 // guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -91,6 +91,7 @@ const SEARCH_HELP = [
   { example: 'has_cover:no', desc: 'Books missing cover art' },
   { example: 'has_written:yes', desc: 'Tags written to files' },
   { example: 'has_written:no', desc: 'Tags not yet written' },
+  { example: 'needs_writeback:yes', desc: 'DB metadata updated after last file write' },
   { example: 'has_organized:yes', desc: 'Files organized into library' },
   { example: 'has_organized:no', desc: 'Files not yet organized' },
   { example: 'review:matched', desc: 'Manually applied metadata' },

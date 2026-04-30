@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.10.0
+// version: 1.11.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -238,6 +238,13 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
           {audiobook.quarantined_at && (
             <Tooltip title={audiobook.quarantine_reason || 'Quarantined'}>
               <Chip label="Failed" size="small" color="error" />
+            </Tooltip>
+          )}
+          {audiobook.metadata_updated_at &&
+            (!audiobook.last_written_at ||
+              new Date(audiobook.last_written_at) < new Date(audiobook.metadata_updated_at)) && (
+            <Tooltip title="Metadata saved to DB but not yet written to file tags">
+              <Chip label="Write pending" size="small" color="warning" variant="outlined" />
             </Tooltip>
           )}
           {audiobook.version_group_id && (
