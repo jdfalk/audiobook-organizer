@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 1.206.0
+// version: 1.207.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package server
 
@@ -2563,6 +2563,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/maintenance/chapter-groups", s.perm(auth.PermSettingsManage), s.handleScanChapterGroups)
 			protected.POST("/maintenance/merge-chapter-groups", s.perm(auth.PermSettingsManage), s.handleMergeChapterGroups)
 			protected.GET("/maintenance/duplicate-files", s.perm(auth.PermSettingsManage), s.handleScanDuplicateFiles)
+			protected.GET("/maintenance/metadata-hash-duplicates", s.perm(auth.PermSettingsManage), s.handleScanMetadataHashDuplicates)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")

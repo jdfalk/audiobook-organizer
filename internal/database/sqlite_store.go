@@ -1,6 +1,6 @@
 // file: internal/database/sqlite_store.go
-// version: 1.74.0
-// last-edited: 2026-04-30
+// version: 1.75.0
+// last-edited: 2026-05-01
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1992,11 +1992,11 @@ func (s *SQLiteStore) GetBookByOrganizedHash(hash string) (*Book, error) {
 	return &book, nil
 }
 
-// GetBooksByMetadataSourceHash returns all books whose metadata_source_hash
+// GetBooksByMetadataSourceHash returns all non-merged books whose metadata_source_hash
 // matches the given value. Typically returns 0 or 1 books; 2+ means duplicates
 // were applied from the exact same external record.
 func (s *SQLiteStore) GetBooksByMetadataSourceHash(hash string) ([]Book, error) {
-	query := fmt.Sprintf(`SELECT %s FROM books WHERE metadata_source_hash = ? ORDER BY created_at`, bookSelectColumns)
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE metadata_source_hash = ? AND merged_into_book_id IS NULL ORDER BY created_at`, bookSelectColumns)
 	rows, err := s.db.Query(query, hash)
 	if err != nil {
 		return nil, err
@@ -6240,6 +6240,16 @@ func (s *SQLiteStore) MergeChapterBooks(primaryID string, srcIDs []string, commo
 	}
 
 	return tx.Commit()
+}
+
+// FlagMetadataHashDuplicate marks duplicateID as absorbed into primaryID.
+// Sets merged_into_book_id=primaryID and is_primary_version=0 on the duplicate.
+func (s *SQLiteStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) error {
+	_, err := s.db.Exec(
+		`UPDATE books SET merged_into_book_id = ?, is_primary_version = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		primaryID, duplicateID,
+	)
+	return err
 }
 
 // SQLiteTableStat holds a row count for a single table.

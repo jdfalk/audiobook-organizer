@@ -1,7 +1,7 @@
 // file: internal/metafetch/service.go
-// version: 4.62.0
+// version: 4.63.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package metafetch
 
@@ -2781,20 +2781,62 @@ func metadataCanonicalID(c MetadataCandidate) string {
 	return ""
 }
 
-// checkMetadataSourceHashDuplicates logs a warning if other books share the
-// same metadata_source_hash. Full dedup candidate creation is handled by
-// the dedup engine's checkExactMetadataSourceHash pass which runs after apply.
+// checkMetadataSourceHashDuplicates auto-flags any existing non-merged book
+// that shares the same metadata_source_hash as bookID (MATCH-4). The book
+// with the most book_files is kept as primary; all others get
+// merged_into_book_id set to point at it.
 func (mfs *Service) checkMetadataSourceHashDuplicates(bookID, hash string) {
 	matches, err := mfs.db.GetBooksByMetadataSourceHash(hash)
 	if err != nil {
-		log.Printf("[WARN] metadata-source-hash dedup query failed for book %s: %v", bookID, err)
+		log.Printf("[WARN] MATCH-4: metadata-source-hash dedup query failed for book %s: %v", bookID, err)
 		return
 	}
-	for _, other := range matches {
-		if other.ID == bookID {
+
+	// Build the full set of non-merged books sharing this hash; ensure bookID is included.
+	allMap := make(map[string]database.Book, len(matches)+1)
+	for _, b := range matches {
+		allMap[b.ID] = b
+	}
+	if _, ok := allMap[bookID]; !ok {
+		if self, err := mfs.db.GetBookByID(bookID); err == nil && self != nil {
+			allMap[bookID] = *self
+		}
+	}
+
+	if len(allMap) < 2 {
+		return // no duplicates
+	}
+
+	// Pick primary: book with the most book_files. On tie, prefer earlier created_at.
+	primaryID := bookID
+	maxFiles := -1
+	for id, b := range allMap {
+		files, err := mfs.db.GetBookFiles(id)
+		n := 0
+		if err == nil {
+			n = len(files)
+		}
+		isBetter := n > maxFiles
+		if n == maxFiles && b.CreatedAt != nil {
+			if cur, ok := allMap[primaryID]; ok && cur.CreatedAt != nil && b.CreatedAt.Before(*cur.CreatedAt) {
+				isBetter = true
+			}
+		}
+		if isBetter {
+			maxFiles = n
+			primaryID = id
+		}
+	}
+
+	for id := range allMap {
+		if id == primaryID {
 			continue
 		}
-		log.Printf("[INFO] MATCH-1: book %s and %s share metadata_source_hash %s — possible duplicate, dedup engine will create candidate", bookID, other.ID, hash)
+		if err := mfs.db.FlagMetadataHashDuplicate(primaryID, id); err != nil {
+			log.Printf("[WARN] MATCH-4: failed to flag book %s as duplicate of %s: %v", id, primaryID, err)
+		} else {
+			log.Printf("[INFO] MATCH-4: auto-flagged book %s as merged into primary %s (hash %s)", id, primaryID, hash)
+		}
 	}
 }
 
