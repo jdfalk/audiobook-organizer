@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.43.0
+// version: 1.44.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-04-30
 
@@ -1740,6 +1740,9 @@ func (m *MockStore) CountQuarantinedBooks() (int, error)                   { ret
 func (m *MockStore) GetScanFailCount(pathHash string) (int, error)         { return 0, nil }
 func (m *MockStore) IncrScanFailCount(pathHash string) (int, error)        { return 1, nil }
 func (m *MockStore) ResetScanFailCount(pathHash string) error              { return nil }
+func (m *MockStore) MergeChapterBooks(_ string, _ []string, _ string, _ float64) error {
+	return nil
+}
 
 func (m *MockStore) Optimize() error {
 	return nil

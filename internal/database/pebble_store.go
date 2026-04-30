@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.60.0
+// version: 1.61.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-04-30
 
@@ -7861,6 +7861,11 @@ func (p *PebbleStore) IncrScanFailCount(pathHash string) (int, error) {
 func (p *PebbleStore) ResetScanFailCount(pathHash string) error {
 	key := []byte("scan_fail:" + pathHash)
 	return p.db.Delete(key, pebble.Sync)
+}
+
+// MergeChapterBooks is not supported on PebbleStore (schema-free, no SQL transactions).
+func (p *PebbleStore) MergeChapterBooks(_ string, _ []string, _ string, _ float64) error {
+	return nil
 }
 
 // --- AIJobsStore stubs (not supported on PebbleStore; SQLite only) ---

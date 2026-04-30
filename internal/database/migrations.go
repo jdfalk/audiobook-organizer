@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.34.0
+// version: 1.35.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 // last-edited: 2026-04-30
 
@@ -369,6 +369,12 @@ var migrations = []Migration{
 		Version:     55,
 		Description: "Add metadata_source_hash column to books for metadata-based deduplication (MATCH-1)",
 		Up:          migration055Up,
+		Down:        nil,
+	},
+	{
+		Version:     56,
+		Description: "Add merged_into_book_id column to books for chapter consolidation (MATCH-2)",
+		Up:          migration056Up,
 		Down:        nil,
 	},
 }
@@ -2729,4 +2735,26 @@ func migration055Up(store Store) error {
 	}
 	log.Println("  - Added metadata_source_hash to books, created index idx_books_metadata_source_hash")
 	return nil
+}
+
+// migration056Up adds merged_into_book_id to books for chapter consolidation (MATCH-2).
+// When MergeChapterBooks() absorbs a chapter file into a consolidated book, the
+// source book row has is_primary_version set to 0 and merged_into_book_id set to
+// the primary book's ID so the merge is auditable.
+func migration056Up(store Store) error {
+sqliteStore, ok := store.(*SQLiteStore)
+if !ok {
+return nil // PebbleDB: schema-free, field lives on struct
+}
+stmts := []string{
+`ALTER TABLE books ADD COLUMN merged_into_book_id TEXT`,
+`CREATE INDEX IF NOT EXISTS idx_books_merged_into ON books(merged_into_book_id) WHERE merged_into_book_id IS NOT NULL`,
+}
+for _, stmt := range stmts {
+if _, err := sqliteStore.db.Exec(stmt); err != nil {
+log.Printf("  - [WARN] migration 056: %v (continuing)", err)
+}
+}
+log.Println("  - Added merged_into_book_id to books, created index idx_books_merged_into")
+return nil
 }
