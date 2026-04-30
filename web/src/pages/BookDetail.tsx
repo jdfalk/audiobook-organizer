@@ -1,8 +1,8 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.45.0
+// version: 1.46.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Avatar,
@@ -33,6 +33,7 @@ import {
   Tooltip,
   Collapse,
   IconButton,
+  Rating,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack.js';
 import DeleteIcon from '@mui/icons-material/Delete.js';
@@ -160,6 +161,13 @@ export const BookDetail = () => {
   // versionFileTagsLoading removed — TagComparison handles its own loading
   const [, setVersionFileTagsLoading] = useState<Set<string>>(new Set());
 
+  // Rating widget state (RATE-2)
+  const [ratingOverall, setRatingOverall] = useState<number | null>(null);
+  const [ratingStory, setRatingStory] = useState<number | null>(null);
+  const [ratingPerformance, setRatingPerformance] = useState<number | null>(null);
+  const [ratingNotes, setRatingNotes] = useState<string>('');
+  const ratingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Derived multi-select state
   const isSingleSelect = selectedSegmentIds.size === 1;
   const singleSelectedId = isSingleSelect ? Array.from(selectedSegmentIds)[0] : null;
@@ -168,6 +176,15 @@ export const BookDetail = () => {
   useEffect(() => {
     setCoverError(false);
   }, [book?.cover_url]);
+
+  // Sync rating local state when book is (re)loaded (RATE-2)
+  useEffect(() => {
+    if (!book) return;
+    setRatingOverall(book.user_rating_overall ?? null);
+    setRatingStory(book.user_rating_story ?? null);
+    setRatingPerformance(book.user_rating_performance ?? null);
+    setRatingNotes(book.user_rating_notes ?? '');
+  }, [book?.id]); // intentionally on id only — don't overwrite in-progress edits on silent refresh
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -259,6 +276,42 @@ export const BookDetail = () => {
     } catch {
       toast('Failed to link version', 'error');
     }
+  };
+
+  // Debounced rating save (RATE-2): fires 500 ms after the last change.
+  const saveRating = useCallback(
+    (patch: api.RatingPatchBody) => {
+      if (!id) return;
+      if (ratingDebounceRef.current) clearTimeout(ratingDebounceRef.current);
+      ratingDebounceRef.current = setTimeout(async () => {
+        try {
+          await api.patchAudiobookRating(id, patch);
+          toast('Rating saved', 'success');
+        } catch {
+          toast('Failed to save rating', 'error');
+        }
+      }, 500);
+    },
+    [id, toast]
+  );
+
+  const handleRatingOverallChange = (_: unknown, value: number | null) => {
+    setRatingOverall(value);
+    saveRating({ overall: value, story: ratingStory, performance: ratingPerformance, notes: ratingNotes || null });
+  };
+
+  const handleRatingStoryChange = (_: unknown, value: number | null) => {
+    setRatingStory(value);
+    saveRating({ overall: ratingOverall, story: value, performance: ratingPerformance, notes: ratingNotes || null });
+  };
+
+  const handleRatingPerformanceChange = (_: unknown, value: number | null) => {
+    setRatingPerformance(value);
+    saveRating({ overall: ratingOverall, story: ratingStory, performance: value, notes: ratingNotes || null });
+  };
+
+  const handleRatingNotesBlur = () => {
+    saveRating({ overall: ratingOverall, story: ratingStory, performance: ratingPerformance, notes: ratingNotes || null });
   };
 
   // Load book files from the canonical book_files endpoint.
@@ -1500,6 +1553,57 @@ export const BookDetail = () => {
               </Grid>
             </>
           )}
+        </Paper>
+      )}
+
+      {/* Star rating widget — RATE-2 */}
+      {activeTab === 'info' && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+            Your Rating
+          </Typography>
+          <Stack spacing={2}>
+            {(
+              [
+                { label: 'Overall', value: ratingOverall, onChange: handleRatingOverallChange },
+                { label: 'Story', value: ratingStory, onChange: handleRatingStoryChange },
+                { label: 'Performance', value: ratingPerformance, onChange: handleRatingPerformanceChange },
+              ] as const
+            ).map(({ label, value, onChange }) => (
+              <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="body2" sx={{ width: 110, flexShrink: 0 }}>
+                  {label}
+                </Typography>
+                <Rating
+                  value={value}
+                  onChange={onChange}
+                  precision={0.5}
+                  max={5}
+                />
+                {value != null && (
+                  <Typography variant="caption" color="text.secondary">
+                    {value.toFixed(1)} / 5
+                  </Typography>
+                )}
+              </Box>
+            ))}
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5 }}>
+                Notes
+              </Typography>
+              <TextField
+                multiline
+                minRows={2}
+                maxRows={6}
+                fullWidth
+                placeholder="Your thoughts on this audiobook…"
+                value={ratingNotes}
+                onChange={(e) => setRatingNotes(e.target.value)}
+                onBlur={handleRatingNotesBlur}
+                size="small"
+              />
+            </Box>
+          </Stack>
         </Paper>
       )}
 
