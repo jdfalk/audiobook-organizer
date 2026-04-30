@@ -509,6 +509,7 @@ Pebble        *dbHealthPebble        `json:"pebble,omitempty"`
 Embeddings    dbHealthEmbeddings     `json:"embeddings"`
 AiScans       dbHealthAiScans        `json:"ai_scans"`
 MetadataCache dbHealthMetadataCache  `json:"metadata_cache"`
+BookPathPrefixes []database.BookPathPrefix `json:"book_path_prefixes,omitempty"`
 }
 
 type dbHealthSQLite struct {
@@ -559,6 +560,12 @@ log.Printf("[WARN] db-health: sqlite table counts: %v", err)
 resp.SQLite = &dbHealthSQLite{
 Tables:    tables,
 SizeBytes: st.SQLitePageSizeBytes(),
+}
+prefixes, pErr := st.GetBookPathPrefixes(20)
+if pErr != nil {
+log.Printf("[WARN] db-health: book path prefixes: %v", pErr)
+} else {
+resp.BookPathPrefixes = prefixes
 }
 case *database.PebbleStore:
 keyCount, sizeBytes, err := st.KeyCount()

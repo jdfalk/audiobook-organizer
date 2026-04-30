@@ -3368,6 +3368,9 @@ func (s *SQLiteStore) GetAllImportPaths() ([]ImportPath, error) {
 	// The prefix pattern uses RTRIM to normalise any trailing slash on the
 	// stored path before appending '/%', preventing false matches against
 	// sibling folders that share the same prefix (e.g. /books vs /books2).
+	// Note: we intentionally do NOT filter by is_primary_version here — the
+	// storage page should reflect every book physically located in the folder,
+	// including non-primary (duplicate) copies.
 	query := `SELECT ip.id, ip.path, ip.name, ip.enabled, ip.created_at, ip.last_scan,
 			  COALESCE((
 			    SELECT COUNT(*)
@@ -3375,7 +3378,6 @@ func (s *SQLiteStore) GetAllImportPaths() ([]ImportPath, error) {
 			    WHERE (b.file_path LIKE RTRIM(ip.path, '/') || '/%'
 			           OR b.file_path = RTRIM(ip.path, '/'))
 			      AND COALESCE(b.marked_for_deletion, 0) = 0
-			      AND COALESCE(b.is_primary_version, 1) = 1
 			  ), 0) AS book_count
 			  FROM import_paths ip ORDER BY ip.name`
 	rows, err := s.db.Query(query)
@@ -6271,4 +6273,53 @@ func (s *SQLiteStore) DeleteMetadataRejections(bookID string) error {
 		return fmt.Errorf("DeleteMetadataRejections: %w", err)
 	}
 	return nil
+}
+
+// BookPathPrefix is one row of the GetBookPathPrefixes diagnostic query.
+type BookPathPrefix struct {
+	Prefix    string `json:"prefix"`
+	BookCount int64  `json:"book_count"`
+}
+
+// GetBookPathPrefixes returns the top-N root path prefixes (depth-2 from /)
+// found in books.file_path, ordered by descending count. This helps diagnose
+// mismatches between configured import paths and the actual stored paths.
+func (s *SQLiteStore) GetBookPathPrefixes(limit int) ([]BookPathPrefix, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	// Extract up to 3 path segments so e.g. "/mnt/bigdata/books" is the prefix
+	// for "/mnt/bigdata/books/newbooks/Author/Title".
+	rows, err := s.db.Query(`
+		SELECT
+		  RTRIM(
+		    SUBSTR(file_path, 1,
+		      CASE
+		        WHEN INSTR(SUBSTR(file_path,
+		               INSTR(SUBSTR(file_path, 2), '/') + 2), '/') > 0
+		        THEN INSTR(SUBSTR(file_path,
+		               INSTR(SUBSTR(file_path, 2), '/') + 2), '/') +
+		             INSTR(SUBSTR(file_path, 2), '/') + 1
+		        ELSE LENGTH(file_path)
+		      END
+		    ), '/') AS prefix,
+		  COUNT(*) AS cnt
+		FROM books
+		WHERE file_path != '' AND COALESCE(marked_for_deletion, 0) = 0
+		GROUP BY prefix
+		ORDER BY cnt DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []BookPathPrefix
+	for rows.Next() {
+		var p BookPathPrefix
+		if err := rows.Scan(&p.Prefix, &p.BookCount); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
