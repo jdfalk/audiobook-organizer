@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.8.0
+// version: 2.9.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-04-30
 
@@ -4424,6 +4424,65 @@ export async function getCacheStats(): Promise<CacheStatsResponse> {
   const response = await fetch(`${API_BASE}/cache/stats`);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch cache stats');
+  }
+  const body_data = await response.json();
+  return body_data.data ?? body_data;
+}
+
+// ─── Chapter Consolidation (MATCH-2) ─────────────────────────────────────────
+
+export interface ChapterGroup {
+  primary_book_id: string;
+  book_ids: string[];
+  common_title: string;
+  total_duration: number;
+  file_count: number;
+}
+
+export interface ChapterGroupsResult {
+  groups: ChapterGroup[];
+  total_books_affected: number;
+}
+
+export interface ChapterMergeResult {
+  dry_run: boolean;
+  groups_found: number;
+  books_merged: number;
+  books_skipped: number;
+  groups: ChapterGroup[];
+}
+
+export async function scanChapterGroups(params?: {
+  min_files?: number;
+  max_per_file_duration?: number;
+  path_prefix?: string;
+}): Promise<ChapterGroupsResult> {
+  const q = new URLSearchParams();
+  if (params?.min_files != null) q.set('min_files', String(params.min_files));
+  if (params?.max_per_file_duration != null) q.set('max_per_file_duration', String(params.max_per_file_duration));
+  if (params?.path_prefix) q.set('path_prefix', params.path_prefix);
+  const url = `${API_BASE}/maintenance/chapter-groups${q.toString() ? `?${q}` : ''}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to scan chapter groups');
+  }
+  const body_data = await response.json();
+  return body_data.data ?? body_data;
+}
+
+export async function mergeChapterGroups(params?: {
+  dry_run?: boolean;
+  min_files?: number;
+  max_per_file_duration?: number;
+}): Promise<ChapterMergeResult> {
+  const q = new URLSearchParams();
+  if (params?.dry_run != null) q.set('dry_run', String(params.dry_run));
+  if (params?.min_files != null) q.set('min_files', String(params.min_files));
+  if (params?.max_per_file_duration != null) q.set('max_per_file_duration', String(params.max_per_file_duration));
+  const url = `${API_BASE}/maintenance/merge-chapter-groups${q.toString() ? `?${q}` : ''}`;
+  const response = await fetch(url, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge chapter groups');
   }
   const body_data = await response.json();
   return body_data.data ?? body_data;

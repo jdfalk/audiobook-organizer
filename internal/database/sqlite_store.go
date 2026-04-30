@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.72.0
+// version: 1.73.0
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -42,7 +42,8 @@ const bookSelectColumns = `
 	audible_rating_count, audible_num_reviews,
 	google_rating_average, google_rating_count,
 	user_rating_overall, user_rating_story, user_rating_performance, user_rating_notes,
-	metadata_source_hash
+	metadata_source_hash,
+	merged_into_book_id
 `
 
 // bookSelectColumnsQualified prefixes all columns with "books." for use in JOINs.
@@ -65,7 +66,8 @@ const bookSelectColumnsQualified = `
 	books.audible_rating_count, books.audible_num_reviews,
 	books.google_rating_average, books.google_rating_count,
 	books.user_rating_overall, books.user_rating_story, books.user_rating_performance, books.user_rating_notes,
-	books.metadata_source_hash
+	books.metadata_source_hash,
+	books.merged_into_book_id
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -101,6 +103,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		userRatingOverall, userRatingStory, userRatingPerformance            sql.NullFloat64
 		userRatingNotes                                                      sql.NullString
 		metadataSourceHash                                                   sql.NullString
+		mergedIntoBookID                                                     sql.NullString
 	)
 
 	if err := scanner.Scan(
@@ -123,6 +126,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&googleRatingAverage, &googleRatingCount,
 		&userRatingOverall, &userRatingStory, &userRatingPerformance, &userRatingNotes,
 		&metadataSourceHash,
+		&mergedIntoBookID,
 	); err != nil {
 		return err
 	}
@@ -229,6 +233,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	book.UserRatingPerformance = nullableFloat(userRatingPerformance)
 	book.UserRatingNotes = nullableString(userRatingNotes)
 	book.MetadataSourceHash = nullableString(metadataSourceHash)
+	book.MergedIntoBookID = nullableString(mergedIntoBookID)
 	return nil
 }
 
@@ -6184,6 +6189,57 @@ func (s *SQLiteStore) IncrScanFailCount(pathHash string) (int, error) {
 func (s *SQLiteStore) ResetScanFailCount(pathHash string) error {
 	key := "scan_fail:" + pathHash
 	return s.SetSetting(key, "0", "int", false)
+}
+
+// MergeChapterBooks absorbs srcIDs into primaryID in a single transaction:
+//  1. Moves all book_files rows to primaryID.
+//  2. Sets source books as non-primary (is_primary_version=0) and records
+//     the consolidated target via merged_into_book_id=primaryID.
+//  3. Updates the primary book's duration (rounded to nearest second) and title.
+func (s *SQLiteStore) MergeChapterBooks(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error {
+	if len(srcIDs) == 0 {
+		return nil
+	}
+
+	placeholders := make([]string, len(srcIDs))
+	idArgs := make([]interface{}, len(srcIDs))
+	for i, id := range srcIDs {
+		placeholders[i] = "?"
+		idArgs[i] = id
+	}
+	ph := strings.Join(placeholders, ", ")
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("MergeChapterBooks: begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	moveArgs := append([]interface{}{primaryID}, idArgs...)
+	if _, err := tx.Exec(
+		fmt.Sprintf("UPDATE book_files SET book_id = ? WHERE book_id IN (%s)", ph),
+		moveArgs...,
+	); err != nil {
+		return fmt.Errorf("MergeChapterBooks: move book_files: %w", err)
+	}
+
+	markArgs := append([]interface{}{primaryID}, idArgs...)
+	if _, err := tx.Exec(
+		fmt.Sprintf("UPDATE books SET is_primary_version = 0, merged_into_book_id = ? WHERE id IN (%s)", ph),
+		markArgs...,
+	); err != nil {
+		return fmt.Errorf("MergeChapterBooks: mark source books: %w", err)
+	}
+
+	durInt := int(totalDuration + 0.5) // round to nearest second
+	if _, err := tx.Exec(
+		"UPDATE books SET duration = ?, title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		durInt, commonTitle, primaryID,
+	); err != nil {
+		return fmt.Errorf("MergeChapterBooks: update primary book: %w", err)
+	}
+
+	return tx.Commit()
 }
 
 // SQLiteTableStat holds a row count for a single table.

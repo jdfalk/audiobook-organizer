@@ -1,6 +1,7 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
+// last-edited: 2026-04-30
 
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -12,7 +13,11 @@ import {
   CardHeader,
   Chip,
   CircularProgress,
+  Collapse,
   FormControlLabel,
+  List,
+  ListItem,
+  ListItemText,
   Stack,
   Switch,
   TextField,
@@ -156,6 +161,132 @@ const categoryLabels: Record<string, string> = {
 };
 const categoryOrder = ['library', 'sync', 'maintenance'];
 
+// ─── ChapterConsolidationCard ────────────────────────────────────────────────
+
+function ChapterConsolidationCard() {
+  const [scanning, setScanning] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [dryRun, setDryRun] = useState(true);
+  const [scanResult, setScanResult] = useState<api.ChapterGroupsResult | null>(null);
+  const [mergeResult, setMergeResult] = useState<api.ChapterMergeResult | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleScan = useCallback(async () => {
+    setScanning(true);
+    setError(null);
+    setScanResult(null);
+    setMergeResult(null);
+    try {
+      const result = await api.scanChapterGroups();
+      setScanResult(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  }, []);
+
+  const handleMerge = useCallback(async () => {
+    setMerging(true);
+    setError(null);
+    setMergeResult(null);
+    try {
+      const result = await api.mergeChapterGroups({ dry_run: dryRun });
+      setMergeResult(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Merge failed');
+    } finally {
+      setMerging(false);
+    }
+  }, [dryRun]);
+
+  const groups = mergeResult?.groups ?? scanResult?.groups ?? [];
+
+  return (
+    <Card variant="outlined" sx={{ mb: 2 }}>
+      <CardHeader
+        title="Chapter Consolidation"
+        subheader="Detect and merge sequential chapter files (01 - Title.mp3, 02 - Title.mp3 …) into a single book record"
+      />
+      <CardContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mb: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={scanning ? <CircularProgress size={14} /> : undefined}
+            disabled={scanning}
+            onClick={handleScan}
+          >
+            {scanning ? 'Scanning…' : 'Scan for Chapter Groups'}
+          </Button>
+
+          <FormControlLabel
+            control={<Switch checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} size="small" />}
+            label="Dry Run"
+          />
+
+          <Button
+            variant="contained"
+            color={dryRun ? 'info' : 'warning'}
+            startIcon={merging ? <CircularProgress size={14} color="inherit" /> : undefined}
+            disabled={merging}
+            onClick={handleMerge}
+          >
+            {merging ? 'Merging…' : dryRun ? 'Preview Merge' : 'Merge Chapter Groups'}
+          </Button>
+        </Stack>
+
+        {scanResult && !mergeResult && (
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Found <strong>{scanResult.groups.length}</strong> group(s) affecting{' '}
+            <strong>{scanResult.total_books_affected}</strong> book record(s).
+          </Typography>
+        )}
+
+        {mergeResult && (
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            {mergeResult.dry_run ? '[Dry run] Would merge' : 'Merged'}{' '}
+            <strong>{mergeResult.books_merged}</strong> book record(s) across{' '}
+            <strong>{mergeResult.groups_found}</strong> group(s).
+            {mergeResult.books_skipped > 0 && (
+              <> Skipped <strong>{mergeResult.books_skipped}</strong>.</>
+            )}
+          </Typography>
+        )}
+
+        {groups.length > 0 && (
+          <>
+            <Button size="small" onClick={() => setExpanded((v) => !v)} sx={{ mb: 1 }}>
+              {expanded ? 'Hide groups' : `Show ${groups.length} group(s)`}
+            </Button>
+            <Collapse in={expanded}>
+              <List dense disablePadding>
+                {groups.map((g) => (
+                  <ListItem key={g.primary_book_id} disableGutters>
+                    <ListItemText
+                      primary={g.common_title || '(unknown title)'}
+                      secondary={`${g.file_count} files · ${Math.round(g.total_duration / 60)} min total`}
+                    />
+                    <Chip size="small" label={`${g.file_count} files`} sx={{ ml: 1 }} />
+                  </ListItem>
+                ))}
+              </List>
+            </Collapse>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── MaintenanceTab ───────────────────────────────────────────────────────────
+
 export function MaintenanceTab() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -249,6 +380,8 @@ export function MaintenanceTab() {
       </Typography>
 
       <MaintenanceWindowCard />
+
+      <ChapterConsolidationCard />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>

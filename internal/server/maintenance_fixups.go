@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 // last-edited: 2026-04-30
 
@@ -33,6 +33,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -6030,4 +6031,150 @@ if book.ISBN10 != nil && *book.ISBN10 != "" {
 return "openlibrary", *book.ISBN10
 }
 return "", ""
+}
+
+// chapterGroupResult describes one detected chapter group returned by the
+// scan and (optionally) merge endpoints.
+type chapterGroupResult struct {
+PrimaryBookID string   `json:"primary_book_id"` // first book ID in the group
+BookIDs       []string `json:"book_ids"`
+CommonTitle   string   `json:"common_title"`
+TotalDuration float64  `json:"total_duration"`
+FileCount     int      `json:"file_count"`
+}
+
+// handleScanChapterGroups detects sequential-chapter book groups without
+// making any changes to the database.
+//
+// GET /api/v1/maintenance/chapter-groups
+//
+// Query params:
+//   - min_files=3            minimum file count for a group to be reported
+//   - max_per_file_duration=600  max per-file seconds for the short-file heuristic
+//   - path_prefix=...        optional: only consider books whose path starts with this value
+func (s *Server) handleScanChapterGroups(c *gin.Context) {
+minFiles, _ := strconv.Atoi(c.DefaultQuery("min_files", "3"))
+maxDur, _ := strconv.Atoi(c.DefaultQuery("max_per_file_duration", "600"))
+pathPrefix := c.Query("path_prefix")
+
+store := s.Store()
+if store == nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+return
+}
+
+allBooks, err := store.GetAllBooks(0, 0)
+if err != nil {
+internalError(c, "failed to list books", err)
+return
+}
+
+filtered := allBooks
+if pathPrefix != "" {
+filtered = filtered[:0]
+for _, b := range allBooks {
+if strings.HasPrefix(b.FilePath, pathPrefix) {
+filtered = append(filtered, b)
+}
+}
+}
+
+groups := scanner.DetectChapterGroups(filtered, minFiles, maxDur)
+
+results := make([]chapterGroupResult, 0, len(groups))
+totalAffected := 0
+for _, g := range groups {
+if g.FileCount < minFiles {
+continue
+}
+primaryID := ""
+if len(g.BookIDs) > 0 {
+primaryID = g.BookIDs[0]
+}
+results = append(results, chapterGroupResult{
+PrimaryBookID: primaryID,
+BookIDs:       g.BookIDs,
+CommonTitle:   g.CommonTitle,
+TotalDuration: g.TotalDuration,
+FileCount:     g.FileCount,
+})
+totalAffected += g.FileCount
+}
+
+c.JSON(http.StatusOK, gin.H{
+"groups":               results,
+"total_books_affected": totalAffected,
+})
+}
+
+// handleMergeChapterGroups detects and optionally merges sequential-chapter
+// book groups.
+//
+// POST /api/v1/maintenance/merge-chapter-groups
+//
+// Query params:
+//   - dry_run=true/false       (default false) — report without writing
+//   - min_files=3
+//   - max_per_file_duration=600
+func (s *Server) handleMergeChapterGroups(c *gin.Context) {
+dryRun := c.DefaultQuery("dry_run", "false") != "false"
+minFiles, _ := strconv.Atoi(c.DefaultQuery("min_files", "3"))
+maxDur, _ := strconv.Atoi(c.DefaultQuery("max_per_file_duration", "600"))
+
+store := s.Store()
+if store == nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+return
+}
+
+allBooks, err := store.GetAllBooks(0, 0)
+if err != nil {
+internalError(c, "failed to list books", err)
+return
+}
+
+groups := scanner.DetectChapterGroups(allBooks, minFiles, maxDur)
+
+groupsFound := 0
+booksMerged := 0
+booksSkipped := 0
+results := make([]chapterGroupResult, 0, len(groups))
+
+for _, g := range groups {
+if g.FileCount < minFiles {
+booksSkipped += g.FileCount
+continue
+}
+primaryID := g.BookIDs[0]
+srcIDs := g.BookIDs[1:]
+
+groupsFound++
+result := chapterGroupResult{
+PrimaryBookID: primaryID,
+BookIDs:       g.BookIDs,
+CommonTitle:   g.CommonTitle,
+TotalDuration: g.TotalDuration,
+FileCount:     g.FileCount,
+}
+results = append(results, result)
+
+if !dryRun && len(srcIDs) > 0 {
+if mergeErr := store.MergeChapterBooks(primaryID, srcIDs, g.CommonTitle, g.TotalDuration); mergeErr != nil {
+log.Printf("[WARN] merge-chapter-groups: group %q (primary %s): %v", g.CommonTitle, primaryID, mergeErr)
+booksSkipped += g.FileCount
+continue
+}
+booksMerged += g.FileCount
+} else {
+booksMerged += g.FileCount // dry-run: count as would-merge
+}
+}
+
+c.JSON(http.StatusOK, gin.H{
+"dry_run":       dryRun,
+"groups_found":  groupsFound,
+"books_merged":  booksMerged,
+"books_skipped": booksSkipped,
+"groups":        results,
+})
 }

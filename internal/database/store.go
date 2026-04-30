@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.66.0
+// version: 2.67.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 // last-edited: 2026-04-30
 
@@ -209,6 +209,10 @@ type Book struct {
 	// or ISBN-13 will have the same hash and are almost certainly the same
 	// title. Format: sha256("audible:B0XXXXXXXX"), sha256("openlibrary:/works/OL123W"), etc.
 	MetadataSourceHash *string `json:"metadata_source_hash,omitempty"`
+	// MergedIntoBookID is set when this book has been absorbed into a consolidated
+	// book by the chapter-consolidation maintenance operation (MATCH-2).
+	// The primary book's ID is stored here so the merge is auditable.
+	MergedIntoBookID *string `json:"merged_into_book_id,omitempty"`
 	// Audible ratings (1–5 scale). Performance and Story are audiobook-specific
 	// dimensions absent from other providers.
 	AudibleRatingOverall     *float64 `json:"audible_rating_overall,omitempty"`
