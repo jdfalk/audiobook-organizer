@@ -1342,7 +1342,11 @@ func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.Prog
 		_ = progress.Log("info", "ISBN enrichment service is not configured, skipping", nil)
 		return nil
 	}
-	_ = progress.Log("info", "Scanning for books missing ISBN identifiers", nil)
+	startMsg := "Scanning for books missing ISBN identifiers"
+	_ = progress.Log("info", startMsg, nil)
+	if operations.IsManual(ctx) {
+		activity.EmitInfo(s.activityWriter, opID, "isbn-enrich", "isbn-enrichment", startMsg, activity.AlwaysShow)
+	}
 	checked, updated, err := s.metadataFetchService.ISBNEnrichment().EnrichMissingISBNs(ctx, 100, s.activityWriter, opID)
 	if err != nil {
 		return err
@@ -1351,8 +1355,11 @@ func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.Prog
 	msg := fmt.Sprintf("ISBN enrichment complete: checked %d, updated %d", checked, updated)
 	_ = progress.Log("info", msg, nil)
 	_ = progress.UpdateProgress(100, 100, msg)
-	activity.EmitInfo(s.activityWriter, opID, "isbn-enrich", "isbn-enrichment", msg,
-		activity.TagsIf(updated == 0, activity.NoOpTag)...)
+	tags := activity.TagsIf(updated == 0, activity.NoOpTag)
+	if operations.IsManual(ctx) {
+		tags = append(tags, activity.AlwaysShow)
+	}
+	activity.EmitInfo(s.activityWriter, opID, "isbn-enrich", "isbn-enrichment", msg, tags...)
 	return nil
 }
 

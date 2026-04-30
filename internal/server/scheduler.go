@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.17.2
+// version: 1.19.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -31,7 +31,7 @@ type TaskDefinition struct {
 	Description string // human-readable
 	Category    string // "maintenance", "library", "sync"
 	// TriggerFn creates and enqueues an operation, returning it.
-	TriggerFn func() (*database.Operation, error)
+	TriggerFn func(source string) (*database.Operation, error)
 	// Config accessors (read from AppConfig at runtime)
 	IsEnabled              func() bool
 	GetInterval            func() time.Duration // 0 = manual only
@@ -104,8 +104,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "library_scan",
 		Description: "Scan library for new/changed audiobooks (incremental by default, use force_update for full rescan)",
 		Category:    "library",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("scan", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("scan", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				if s.scanService == nil {
 					return fmt.Errorf("scan service not initialized")
 				}
@@ -122,8 +122,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "library_organize",
 		Description: "Organize audiobooks into folder structure",
 		Category:    "library",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("organize", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("organize", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				if s.organizeService == nil {
 					return fmt.Errorf("organize service not initialized")
 				}
@@ -140,8 +140,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "transcode",
 		Description: "Transcode audiobooks to target format",
 		Category:    "library",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("transcode", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("transcode", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				return fmt.Errorf("transcode requires parameters — use the operations API directly")
 			})
 		},
@@ -157,7 +157,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "itunes_sync",
 		Description: "Sync with iTunes/Music library",
 		Category:    "sync",
-		TriggerFn: func() (*database.Operation, error) {
+		TriggerFn: func(source string) (*database.Operation, error) {
 			s.triggerITunesSync()
 			return nil, nil // iTunes sync creates its own operation internally
 		},
@@ -177,7 +177,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "itunes_import",
 		Description: "Import from iTunes library",
 		Category:    "sync",
-		TriggerFn: func() (*database.Operation, error) {
+		TriggerFn: func(source string) (*database.Operation, error) {
 			return nil, fmt.Errorf("iTunes import requires parameters — use the iTunes API directly")
 		},
 		IsEnabled:              func() bool { return true },
@@ -192,23 +192,36 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "dedup_refresh",
 		Description: "Refresh author & series dedup cache",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("author-dedup-scan", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperationWithID("author-dedup-scan", source, func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
 				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
 				}
-				_ = progress.Log("info", "Starting author dedup scan", nil)
+				startMsg := fmt.Sprintf("Starting author dedup scan")
+				_ = progress.Log("info", startMsg, nil)
 				_ = progress.UpdateProgress(0, 100, "Fetching authors...")
+				if operations.IsManual(ctx) {
+					activity.EmitInfo(ts.server.activityWriter, opID, "author-dedup-scan", "dedup-refresh", startMsg, activity.AlwaysShow)
+				}
 				authors, err := store.GetAllAuthors()
 				if err != nil {
 					return fmt.Errorf("failed to get authors: %w", err)
 				}
-				msg := fmt.Sprintf("Fetched %d authors, running duplicate comparison...", len(authors))
-				_ = progress.Log("info", msg, nil)
-				_ = progress.UpdateProgress(25, 100, msg)
 
 				bookCounts, _ := store.GetAllAuthorBookCounts()
+				booksWithCounts := 0
+				for _, cnt := range bookCounts {
+					if cnt > 0 {
+						booksWithCounts++
+					}
+				}
+				msg := fmt.Sprintf("Fetched %d authors (%d with book counts), running duplicate comparison...", len(authors), booksWithCounts)
+				_ = progress.Log("info", msg, nil)
+				_ = progress.UpdateProgress(25, 100, msg)
+				if operations.IsManual(ctx) {
+					activity.EmitInfo(ts.server.activityWriter, opID, "author-dedup-scan", "dedup-refresh", msg, activity.AlwaysShow)
+				}
 
 				total := len(authors)
 				groups := dedup.FindDuplicateAuthors(authors, 0.85, func(id int) int { return bookCounts[id] },
@@ -224,6 +237,11 @@ func (ts *TaskScheduler) registerAllTasks() {
 				resultMsg := fmt.Sprintf("Dedup scan complete: %d duplicate groups found across %d authors", len(groups), total)
 				_ = progress.Log("info", resultMsg, nil)
 				_ = progress.UpdateProgress(100, 100, resultMsg)
+				tags := activity.TagsIf(len(groups) == 0, activity.NoOpTag)
+				if operations.IsManual(ctx) {
+					tags = append(tags, activity.AlwaysShow)
+				}
+				activity.EmitInfo(ts.server.activityWriter, opID, "author-dedup-scan", "dedup-refresh", resultMsg, tags...)
 				return nil
 			})
 		},
@@ -243,8 +261,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "dedup_llm_review",
 		Description: "Run LLM review on ambiguous dedup candidates",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("dedup-llm-review", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("dedup-llm-review", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				if ts.server.dedupEngine == nil {
 					_ = progress.Log("info", "Dedup engine not initialized, skipping LLM review", nil)
 					return nil
@@ -263,8 +281,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "series_prune",
 		Description: "Merge duplicate series and delete orphans",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperationWithID("series-prune", func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperationWithID("series-prune", source, func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
 				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
@@ -288,8 +306,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "series_normalize",
 		Description: "Strip title/position contamination from series names and run write-back + organize for affected books",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("series-normalize", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("series-normalize", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
@@ -313,8 +331,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "isbn_enrichment",
 		Description: "Enrich missing ISBN identifiers from external metadata sources",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperationWithID("isbn-enrichment", s.runIsbnEnrichment)
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperationWithID("isbn-enrichment", source, s.runIsbnEnrichment)
 		},
 		IsEnabled:              func() bool { return s.metadataFetchService != nil && s.metadataFetchService.ISBNEnrichment() != nil },
 		GetInterval:            func() time.Duration { return 0 },
@@ -326,8 +344,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "itunes_position_sync",
 		Description: "Sync reading positions between iTunes bookmarks and the app",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("itunes-position-sync", func(_ context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("itunes-position-sync", source, func(_ context.Context, progress operations.ProgressReporter) error {
 				pulled, pushed := ts.server.itunesSvc.Positions.Sync()
 				_ = progress.Log("info", fmt.Sprintf("iTunes position sync: pulled %d, pushed %d", pulled, pushed), nil)
 				return nil
@@ -343,8 +361,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "temp_file_cleanup",
 		Description: "Remove orphaned *.tmp.m4b / *.tmp.m4a files left by crashed ffmpeg operations",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperationWithID("temp-file-cleanup", func(_ context.Context, progress operations.ProgressReporter, opID string) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperationWithID("temp-file-cleanup", source, func(_ context.Context, progress operations.ProgressReporter, opID string) error {
 				removed := cleanupOrphanedTempFiles(config.AppConfig.RootDir, ts.server.activityWriter, opID)
 				activity.FlushOperation(ts.server.activityWriter, opID)
 				msg := fmt.Sprintf("Removed %d orphaned temp files", removed)
@@ -364,8 +382,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "trash_cleanup",
 		Description: "Purge trashed book versions past their 14-day TTL",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("trash-cleanup", func(_ context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("trash-cleanup", source, func(_ context.Context, progress operations.ProgressReporter) error {
 				purged := CleanupTrashedVersions(s.Store())
 				_ = progress.Log("info", fmt.Sprintf("Trash cleanup: purged %d versions", purged), nil)
 				return nil
@@ -381,8 +399,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "archive_sweep",
 		Description: "Remove soft-deleted books past the 30-day retention window",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("archive-sweep", func(_ context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("archive-sweep", source, func(_ context.Context, progress operations.ProgressReporter) error {
 				cleaned := SweepArchivedBooks(s.Store())
 				_ = progress.Log("info", fmt.Sprintf("Archive sweep: cleaned %d books", cleaned), nil)
 				return nil
@@ -398,8 +416,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "metadata_upgrade",
 		Description: "Upgrade metadata from lower-quality sources (Google Books, Wikipedia) to richer ones (Hardcover, Audible) when a high-confidence match is available",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("metadata-upgrade", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("metadata-upgrade", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				if s.metadataFetchService == nil {
 					return fmt.Errorf("metadata fetch service not initialized")
 				}
@@ -426,8 +444,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "author_split_scan",
 		Description: "Find & split composite author names",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("author-split-scan", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("author-split-scan", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
@@ -579,8 +597,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "db_optimize",
 		Description: "Optimize database (VACUUM/compact)",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("db-optimize", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("db-optimize", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
@@ -650,8 +668,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "cleanup_old_backups",
 		Description: "Remove old .bak-* backup files past retention",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("cleanup-old-backups", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("cleanup-old-backups", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				rootDir := config.AppConfig.RootDir
 				if rootDir == "" {
 					_ = progress.Log("info", "No root directory configured, skipping backup cleanup", nil)
@@ -699,8 +717,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "purge_deleted",
 		Description: "Purge soft-deleted books past retention",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperationWithID("purge-deleted", func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperationWithID("purge-deleted", source, func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
 				_ = progress.Log("info", "Starting purge of soft-deleted books", nil)
 				_ = progress.UpdateProgress(0, 100, "Purging soft-deleted books...")
 				s.runAutoPurgeSoftDeleted(opID)
@@ -725,8 +743,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "tombstone_cleanup",
 		Description: "Resolve author tombstone chains (A→B→C becomes A→C)",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("tombstone-cleanup", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("tombstone-cleanup", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
@@ -753,8 +771,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "resolve_production_authors",
 		Description: "Resolve real authors for production company entries",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("resolve-production-authors", func(ctx context.Context, progress operations.ProgressReporter) error {
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("resolve-production-authors", source, func(ctx context.Context, progress operations.ProgressReporter) error {
 				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
@@ -824,8 +842,8 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "metadata_refresh",
 		Description: "Re-fetch metadata for incomplete books",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
-			return ts.triggerOperation("metadata-refresh", s.runMetadataRefreshScan)
+		TriggerFn: func(source string) (*database.Operation, error) {
+			return ts.triggerOperation("metadata-refresh", source, s.runMetadataRefreshScan)
 		},
 		IsEnabled: func() bool { return config.AppConfig.ScheduledMetadataRefreshEnabled },
 		GetInterval: func() time.Duration {
@@ -844,7 +862,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "reconcile_scan",
 		Description: "Find books with missing files and match to untracked files on disk",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
+		TriggerFn: func(source string) (*database.Operation, error) {
 			store := ts.server.Store()
 			if store == nil {
 				return nil, fmt.Errorf("database not initialized")
@@ -895,7 +913,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "ai_dedup_batch",
 		Description: "Run AI author dedup via Batch API (50% cheaper, up to 24h)",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
+		TriggerFn: func(source string) (*database.Operation, error) {
 			store := ts.server.Store()
 			if store == nil {
 				return nil, fmt.Errorf("database not initialized")
@@ -1028,7 +1046,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "batch_poller",
 		Description: "Poll OpenAI for completed batch jobs",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
+		TriggerFn: func(source string) (*database.Operation, error) {
 			if s.batchPoller == nil {
 				return nil, nil
 			}
@@ -1056,7 +1074,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "purge_old_logs",
 		Description: "Prune operation logs and system activity logs older than retention period",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
+		TriggerFn: func(source string) (*database.Operation, error) {
 			opID := ulid.Make().String()
 			op, err := ts.server.Store().CreateOperation(opID, "purge_old_logs", nil)
 			if err != nil {
@@ -1082,7 +1100,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Name:        "cleanup_activity_log",
 		Description: "Summarize old change entries and prune old debug entries from activity log",
 		Category:    "maintenance",
-		TriggerFn: func() (*database.Operation, error) {
+		TriggerFn: func(source string) (*database.Operation, error) {
 			opID := ulid.Make().String()
 			op, err := ts.server.Store().CreateOperation(opID, "cleanup_activity_log", nil)
 			if err != nil {
@@ -1142,7 +1160,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 }
 
 // triggerOperation is a helper that creates a DB operation and enqueues it.
-func (ts *TaskScheduler) triggerOperation(opType string, fn func(context.Context, operations.ProgressReporter) error) (*database.Operation, error) {
+func (ts *TaskScheduler) triggerOperation(opType, source string, fn func(context.Context, operations.ProgressReporter) error) (*database.Operation, error) {
 	store := ts.server.Store()
 	if store == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -1157,7 +1175,10 @@ func (ts *TaskScheduler) triggerOperation(opType string, fn func(context.Context
 		return nil, fmt.Errorf("failed to create operation: %w", err)
 	}
 
-	if err := ts.server.queue.Enqueue(op.ID, opType, operations.PriorityNormal, fn); err != nil {
+	srcFn := func(ctx context.Context, progress operations.ProgressReporter) error {
+		return fn(operations.WithTriggerSource(ctx, source), progress)
+	}
+	if err := ts.server.queue.Enqueue(op.ID, opType, operations.PriorityNormal, srcFn); err != nil {
 		return nil, fmt.Errorf("failed to enqueue operation: %w", err)
 	}
 
@@ -1165,7 +1186,7 @@ func (ts *TaskScheduler) triggerOperation(opType string, fn func(context.Context
 }
 
 // triggerOperationWithID is like triggerOperation but passes the operation ID to the function.
-func (ts *TaskScheduler) triggerOperationWithID(opType string, fn func(context.Context, operations.ProgressReporter, string) error) (*database.Operation, error) {
+func (ts *TaskScheduler) triggerOperationWithID(opType, source string, fn func(context.Context, operations.ProgressReporter, string) error) (*database.Operation, error) {
 	store := ts.server.Store()
 	if store == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -1181,7 +1202,7 @@ func (ts *TaskScheduler) triggerOperationWithID(opType string, fn func(context.C
 	}
 
 	wrappedFn := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return fn(ctx, progress, op.ID)
+		return fn(operations.WithTriggerSource(ctx, source), progress, op.ID)
 	}
 
 	if err := ts.server.queue.Enqueue(op.ID, opType, operations.PriorityNormal, wrappedFn); err != nil {
@@ -1264,8 +1285,18 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 	}
 }
 
-// RunTask triggers a task by name, returning the created operation.
+// RunTask triggers a scheduled task by name (source = TriggerScheduled).
 func (ts *TaskScheduler) RunTask(name string) (*database.Operation, error) {
+	return ts.runTask(name, operations.TriggerScheduled)
+}
+
+// RunTaskManual triggers a task as a user-initiated action (source = TriggerManual).
+// Task functions can gate AlwaysShow activity-feed entries on operations.IsManual(ctx).
+func (ts *TaskScheduler) RunTaskManual(name string) (*database.Operation, error) {
+	return ts.runTask(name, operations.TriggerManual)
+}
+
+func (ts *TaskScheduler) runTask(name, source string) (*database.Operation, error) {
 	ts.mu.RLock()
 	task, ok := ts.tasks[name]
 	ts.mu.RUnlock()
@@ -1273,7 +1304,7 @@ func (ts *TaskScheduler) RunTask(name string) (*database.Operation, error) {
 		return nil, fmt.Errorf("unknown task: %s", name)
 	}
 
-	op, err := task.TriggerFn()
+	op, err := task.TriggerFn(source)
 	if err != nil {
 		return nil, err
 	}
@@ -1535,49 +1566,111 @@ func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
 				}
 			}
 
-			_ = progress.Log("info", fmt.Sprintf("Maintenance window starting: %d tasks eligible", len(eligible)), nil)
+			mwTag := "mw:" + opID
+			taskSource := operations.TriggerScheduled
+			if ignoreWindow {
+				taskSource = operations.TriggerManual
+			}
+			windowStartTags := []string{activity.Scheduled, mwTag}
+			if ignoreWindow {
+				windowStartTags = []string{activity.AlwaysShow, mwTag}
+			}
 
-			hadErrors := false
+			_ = progress.Log("info", fmt.Sprintf("Maintenance window starting: %d tasks eligible: %s", len(eligible), strings.Join(eligible, ", ")), nil)
+			activity.EmitInfo(ts.server.activityWriter, opID, activity.MaintenanceWindow, "maintenance-window",
+				fmt.Sprintf("Maintenance window starting: %d tasks: %s", len(eligible), strings.Join(eligible, ", ")),
+				windowStartTags...)
+
+			type taskFailure struct{ name, errMsg string }
+			var failures []taskFailure
+			var skipped []string
+			ran := 0
+
 			for i, name := range eligible {
 				// Check if window is still open (skip for manual "Run Now" triggers)
 				if !ignoreWindow && !isInMaintenanceWindow() {
-					_ = progress.Log("warning", fmt.Sprintf("Maintenance window closed after task %d/%d, skipping remaining", i, len(eligible)), nil)
+					remaining := eligible[i:]
+					_ = progress.Log("warning", fmt.Sprintf("Maintenance window closed after task %d/%d, skipping: %s", i, len(eligible), strings.Join(remaining, ", ")), nil)
+					skipped = append(skipped, remaining...)
 					break
 				}
 
 				// Duplicate prevention: skip if already running from interval ticker
 				if ts.isTaskRunning(name) {
 					_ = progress.Log("info", fmt.Sprintf("Task %s already running (interval), skipping", name), nil)
+					skipped = append(skipped, name)
 					continue
 				}
 
 				_ = progress.UpdateProgress(i, len(eligible), fmt.Sprintf("Running task %d/%d: %s", i+1, len(eligible), name))
 				_ = progress.Log("info", fmt.Sprintf("Starting maintenance task: %s", name), nil)
+				ran++
 
-				taskOp, taskErr := ts.RunTask(name)
+				taskOp, taskErr := ts.runTask(name, taskSource)
 				if taskErr != nil {
-					hadErrors = true
-					_ = progress.Log("error", fmt.Sprintf("Task %s failed: %v", name, taskErr), nil)
+					errMsg := taskErr.Error()
+					failures = append(failures, taskFailure{name, errMsg})
+					_ = progress.Log("error", fmt.Sprintf("Task %s failed to start: %v", name, taskErr), nil)
+					activity.EmitInfo(ts.server.activityWriter, opID, activity.MaintenanceWindow, name,
+						fmt.Sprintf("Task %s failed to start: %s", name, errMsg),
+						activity.Scheduled, mwTag)
 				} else if taskOp != nil {
 					// Wait for the task operation to complete before starting next
 					ts.waitForOperation(innerCtx, taskOp.ID)
 					completedOp, _ := store.GetOperationByID(taskOp.ID)
 					if completedOp != nil && completedOp.Status == "failed" {
-						hadErrors = true
-						_ = progress.Log("warning", fmt.Sprintf("Task %s operation failed", name), nil)
+						errMsg := ""
+						if completedOp.ErrorMessage != nil {
+							errMsg = *completedOp.ErrorMessage
+						}
+						failures = append(failures, taskFailure{name, errMsg})
+						_ = progress.Log("warning", fmt.Sprintf("Task %s operation failed: %s", name, errMsg), nil)
+						activity.EmitInfo(ts.server.activityWriter, opID, activity.MaintenanceWindow, name,
+							fmt.Sprintf("Task %s failed: %s", name, errMsg),
+							windowStartTags...)
 					} else {
-						_ = progress.Log("info", fmt.Sprintf("Task %s completed (op: %s)", name, taskOp.ID), nil)
+						msg := completedOp.Message
+						_ = progress.Log("info", fmt.Sprintf("Task %s completed: %s (op: %s)", name, msg, taskOp.ID), nil)
+						activity.EmitInfo(ts.server.activityWriter, opID, activity.MaintenanceWindow, name,
+							fmt.Sprintf("Task %s ok: %s", name, msg),
+							windowStartTags...)
 					}
 				} else {
 					_ = progress.Log("info", fmt.Sprintf("Task %s triggered (no operation)", name), nil)
+					activity.EmitInfo(ts.server.activityWriter, opID, activity.MaintenanceWindow, name,
+						fmt.Sprintf("Task %s triggered", name),
+						windowStartTags...)
 				}
 			}
 
-			if hadErrors {
+			summaryParts := []string{fmt.Sprintf("%d/%d tasks ran", ran, len(eligible))}
+			if len(failures) > 0 {
+				failNames := make([]string, len(failures))
+				for i, f := range failures {
+					if f.errMsg != "" {
+						failNames[i] = f.name + ": " + f.errMsg
+					} else {
+						failNames[i] = f.name
+					}
+				}
+				summaryParts = append(summaryParts, fmt.Sprintf("%d failed: %s", len(failures), strings.Join(failNames, "; ")))
+			}
+			if len(skipped) > 0 {
+				summaryParts = append(summaryParts, fmt.Sprintf("%d skipped: %s", len(skipped), strings.Join(skipped, ", ")))
+			}
+			summary := strings.Join(summaryParts, ", ")
+
+			if len(failures) > 0 {
 				_ = progress.UpdateProgress(len(eligible), len(eligible), "Maintenance window completed with errors")
-				return fmt.Errorf("maintenance window completed with errors")
+				activity.EmitInfo(ts.server.activityWriter, opID, activity.MaintenanceWindow, "maintenance-window",
+					"Maintenance window done (errors): "+summary,
+					windowStartTags...)
+				return fmt.Errorf("maintenance window: %s", summary)
 			}
 			_ = progress.UpdateProgress(len(eligible), len(eligible), "Maintenance window completed successfully")
+			activity.EmitInfo(ts.server.activityWriter, opID, activity.MaintenanceWindow, "maintenance-window",
+				"Maintenance window done: "+summary,
+				windowStartTags...)
 			return nil
 		},
 	)
