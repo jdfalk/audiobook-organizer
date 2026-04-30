@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service_unit_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -602,4 +602,151 @@ func TestAudiobookService_GetAudiobooks_PerUserNoUserID(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, got, 2, "no user → per-user filter skipped, all books returned")
+}
+
+// --- numericCompare / user_rating_* field filters ---
+
+func float64Ptr(v float64) *float64 { return &v }
+
+// TestNumericCompare_Operators verifies every comparison operator against a
+// known book field value of 4.0.
+func TestNumericCompare_Operators(t *testing.T) {
+	val := float64Ptr(4.0)
+	tests := []struct {
+		expr string
+		want bool
+	}{
+		{">3", true},
+		{">4", false},
+		{">5", false},
+		{"<5", true},
+		{"<4", false},
+		{"<3", false},
+		{">=4", true},
+		{">=4.0", true},
+		{">=5", false},
+		{"<=4", true},
+		{"<=3", false},
+		{"==4", true},
+		{"==4.0", true},
+		{"==3", false},
+		{"!=4", false},
+		{"!=3", true},
+		// bare number → equality
+		{"4", true},
+		{"3", false},
+		// decimal threshold
+		{">3.5", true},
+		{"<=3.5", false},
+		{">=3.5", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.expr, func(t *testing.T) {
+			got := numericCompare(val, tc.expr)
+			assert.Equal(t, tc.want, got, "numericCompare(%v, %q)", *val, tc.expr)
+		})
+	}
+}
+
+// TestNumericCompare_NilField ensures a nil rating always returns false.
+func TestNumericCompare_NilField(t *testing.T) {
+	assert.False(t, numericCompare(nil, ">0"))
+	assert.False(t, numericCompare(nil, "==0"))
+}
+
+// TestNumericCompare_InvalidExpr ensures an unparseable expression returns false.
+func TestNumericCompare_InvalidExpr(t *testing.T) {
+	val := float64Ptr(3.0)
+	assert.False(t, numericCompare(val, ">abc"))
+	assert.False(t, numericCompare(val, ">="))
+}
+
+// TestFieldMatchesValue_UserRatingFields checks that fieldMatchesValue routes
+// user_rating_* fields through numeric comparison correctly.
+func TestFieldMatchesValue_UserRatingFields(t *testing.T) {
+	overall := float64Ptr(4.5)
+	story := float64Ptr(3.0)
+	perf := float64Ptr(5.0)
+
+	book := database.Book{
+		UserRatingOverall:     overall,
+		UserRatingStory:       story,
+		UserRatingPerformance: perf,
+	}
+
+	// overall
+	assert.True(t, fieldMatchesValue(book, "user_rating_overall", ">4"))
+	assert.False(t, fieldMatchesValue(book, "user_rating_overall", ">4.5"))
+	assert.True(t, fieldMatchesValue(book, "user_rating_overall", ">=4.5"))
+	assert.True(t, fieldMatchesValue(book, "user_rating_overall", "<=5"))
+	assert.False(t, fieldMatchesValue(book, "user_rating_overall", "<4"))
+	assert.True(t, fieldMatchesValue(book, "user_rating_overall", "==4.5"))
+	assert.False(t, fieldMatchesValue(book, "user_rating_overall", "==4"))
+	assert.True(t, fieldMatchesValue(book, "user_rating_overall", "!=4"))
+
+	// story
+	assert.True(t, fieldMatchesValue(book, "user_rating_story", "<4"))
+	assert.True(t, fieldMatchesValue(book, "user_rating_story", "==3"))
+	assert.False(t, fieldMatchesValue(book, "user_rating_story", ">3"))
+
+	// performance
+	assert.True(t, fieldMatchesValue(book, "user_rating_performance", "==5"))
+	assert.True(t, fieldMatchesValue(book, "user_rating_performance", ">=5"))
+	assert.False(t, fieldMatchesValue(book, "user_rating_performance", ">5"))
+}
+
+// TestFieldMatchesValue_UserRatingNilBook ensures nil rating fields return false.
+func TestFieldMatchesValue_UserRatingNilBook(t *testing.T) {
+	book := database.Book{} // all rating fields nil
+	assert.False(t, fieldMatchesValue(book, "user_rating_overall", ">0"))
+	assert.False(t, fieldMatchesValue(book, "user_rating_story", ">=0"))
+	assert.False(t, fieldMatchesValue(book, "user_rating_performance", "==0"))
+}
+
+// TestGetAudiobooks_UserRatingFilter is an integration-style test through
+// GetAudiobooks that ensures user_rating_overall FieldFilter works end-to-end.
+func TestGetAudiobooks_UserRatingFilter(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	hi := float64Ptr(4.5)
+	lo := float64Ptr(2.0)
+	books := []database.Book{
+		{ID: "high", Title: "High Rated", UserRatingOverall: hi},
+		{ID: "low", Title: "Low Rated", UserRatingOverall: lo},
+		{ID: "none", Title: "Not Rated"}, // nil
+	}
+	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+
+	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
+		FieldFilters: []FieldFilter{
+			{Field: "user_rating_overall", Value: ">4"},
+		},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "high", got[0].ID)
+}
+
+// TestGetAudiobooks_UserRatingFilter_LessThan verifies the < operator returns
+// only books whose rating is strictly below the threshold.
+func TestGetAudiobooks_UserRatingFilter_LessThan(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	books := []database.Book{
+		{ID: "b1", UserRatingOverall: float64Ptr(1.0)},
+		{ID: "b2", UserRatingOverall: float64Ptr(3.0)},
+		{ID: "b3", UserRatingOverall: float64Ptr(5.0)},
+	}
+	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+
+	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
+		FieldFilters: []FieldFilter{
+			{Field: "user_rating_overall", Value: "<3"},
+		},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "b1", got[0].ID)
 }
