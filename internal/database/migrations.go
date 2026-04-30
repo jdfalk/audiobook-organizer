@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.31.0
+// version: 1.31.1
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 
 package database
@@ -400,6 +400,15 @@ func RunMigrations(store Store) error {
 	}
 
 	log.Printf("All migrations completed. Current version: %d", pendingMigrations[len(pendingMigrations)-1].Version)
+
+	// After all migrations run, ensure optional extended columns exist on book_files.
+	// This is a no-op for fresh databases (columns already in CREATE TABLE) and adds
+	// missing columns to older databases via PRAGMA table_info + ALTER TABLE.
+	if sqliteStore, ok := store.(*SQLiteStore); ok {
+		if err := sqliteStore.ensureExtendedBookFileColumns(); err != nil {
+			return fmt.Errorf("ensureExtendedBookFileColumns: %w", err)
+		}
+	}
 	return nil
 }
 

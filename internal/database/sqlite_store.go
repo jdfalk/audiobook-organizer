@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.65.0
+// version: 1.65.1
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -639,7 +639,10 @@ func (s *SQLiteStore) createTables() error {
 	}
 
 	// Non-destructive migration for existing databases: add missing columns
-	return s.ensureExtendedBookColumns()
+	if err := s.ensureExtendedBookColumns(); err != nil {
+		return err
+	}
+	return s.ensureExtendedBookFileColumns()
 }
 
 // deduplicateSeries merges duplicate series records that share the same (name, author_id).
@@ -793,6 +796,55 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 	for _, stmt := range indexStatements {
 		if _, err := s.db.Exec(stmt); err != nil {
 			return fmt.Errorf("failed creating index with statement %s: %w", stmt, err)
+		}
+	}
+	return nil
+}
+
+// ensureExtendedBookFileColumns adds newly introduced optional columns to the
+// book_files table for existing databases created before these columns existed.
+// SQLite lacks IF NOT EXISTS for ADD COLUMN, so we inspect PRAGMA table_info
+// and conditionally ALTER TABLE.
+func (s *SQLiteStore) ensureExtendedBookFileColumns() error {
+	columns := map[string]string{
+		"deluge_hash":             "TEXT",
+		"deluge_original_path":    "TEXT",
+		"imported_from_deluge_at": "TIMESTAMP",
+	}
+
+	rows, err := s.db.Query("PRAGMA table_info(book_files)")
+	if err != nil {
+		return fmt.Errorf("failed to inspect book_files schema: %w", err)
+	}
+	defer rows.Close()
+
+	existing := make(map[string]struct{})
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dfltValue interface{}
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("failed to scan book_files table_info: %w", err)
+		}
+		existing[name] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating book_files table_info: %w", err)
+	}
+
+	// If the table does not exist yet (created by a later migration), skip.
+	if len(existing) == 0 {
+		return nil
+	}
+
+	for name, colType := range columns {
+		if _, ok := existing[name]; ok {
+			continue
+		}
+		alter := fmt.Sprintf("ALTER TABLE book_files ADD COLUMN %s %s", name, colType)
+		if _, err := s.db.Exec(alter); err != nil {
+			return fmt.Errorf("failed adding column %s to book_files: %w", name, err)
 		}
 	}
 	return nil
@@ -5339,7 +5391,8 @@ const bookFileCols = `id, book_id, file_path, original_filename, itunes_path, it
 	track_number, track_count, disc_number, disc_count, title, format, codec, duration,
 	file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
 	acoustid_seg0, acoustid_seg1, acoustid_seg2, acoustid_seg3, acoustid_seg4, acoustid_seg5, acoustid_seg6,
-	missing, created_at, updated_at`
+	missing, created_at, updated_at,
+	deluge_hash, deluge_original_path, imported_from_deluge_at`
 
 // bookFileScan scans a single row into a BookFile.
 // Use with queries that SELECT bookFileCols in the same order.
@@ -5349,6 +5402,8 @@ func bookFileScan(row interface {
 	var f BookFile
 	var originalFilename, itunesPath, itunesPID sql.NullString
 	var trackNumber, trackCount, discNumber, discCount sql.NullInt64
+	var delugeHash, delugeOriginalPath sql.NullString
+	var importedFromDelugeAt sql.NullTime
 	var title, format, codec sql.NullString
 	var duration, fileSize, bitrateKbps, sampleRateHz, channels, bitDepth sql.NullInt64
 	var fileHash, originalFileHash sql.NullString
@@ -5363,6 +5418,7 @@ func bookFileScan(row interface {
 		&fileHash, &originalFileHash,
 		&acoustidSeg0, &acoustidSeg1, &acoustidSeg2, &acoustidSeg3, &acoustidSeg4, &acoustidSeg5, &acoustidSeg6,
 		&missing, &f.CreatedAt, &f.UpdatedAt,
+		&delugeHash, &delugeOriginalPath, &importedFromDelugeAt,
 	)
 	if err != nil {
 		return f, err
@@ -5443,6 +5499,16 @@ func bookFileScan(row interface {
 		f.AcoustIDSeg6 = acoustidSeg6.String
 	}
 	f.Missing = missing != 0
+	if delugeHash.Valid {
+		f.DelugeHash = delugeHash.String
+	}
+	if delugeOriginalPath.Valid {
+		f.DelugeOriginalPath = delugeOriginalPath.String
+	}
+	if importedFromDelugeAt.Valid {
+		t := importedFromDelugeAt.Time
+		f.ImportedFromDelugeAt = &t
+	}
 	return f, nil
 }
 
@@ -5470,6 +5536,14 @@ func nullableInt64Val(n int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: n, Valid: true}
 }
 
+// nullableTimeVal converts a *time.Time to sql.NullTime (nil pointer = NULL).
+func nullableTimeVal(t *time.Time) sql.NullTime {
+	if t == nil {
+		return sql.NullTime{}
+	}
+	return sql.NullTime{Time: *t, Valid: true}
+}
+
 // CreateBookFile inserts a new book_files row.
 // Generates a ULID if file.ID is empty, and sets CreatedAt/UpdatedAt to now.
 func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
@@ -5489,8 +5563,9 @@ func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
 			track_number, track_count, disc_number, disc_count, title, format, codec, duration,
 			file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
 			acoustid_seg0, acoustid_seg1, acoustid_seg2, acoustid_seg3, acoustid_seg4, acoustid_seg5, acoustid_seg6,
-			missing, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			missing, created_at, updated_at,
+			deluge_hash, deluge_original_path, imported_from_deluge_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		file.ID, file.BookID, file.FilePath,
 		nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
 		nullableIntVal(file.TrackNumber), nullableIntVal(file.TrackCount),
@@ -5505,6 +5580,8 @@ func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
 		nullableStringVal(file.AcoustIDSeg4), nullableStringVal(file.AcoustIDSeg5),
 		nullableStringVal(file.AcoustIDSeg6),
 		missingInt, file.CreatedAt, file.UpdatedAt,
+		nullableStringVal(file.DelugeHash), nullableStringVal(file.DelugeOriginalPath),
+		nullableTimeVal(file.ImportedFromDelugeAt),
 	)
 	if err != nil {
 		return fmt.Errorf("CreateBookFile: %w", err)
@@ -5528,7 +5605,8 @@ func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
 			file_hash=?, original_file_hash=?,
 			acoustid_seg0=?, acoustid_seg1=?, acoustid_seg2=?, acoustid_seg3=?,
 			acoustid_seg4=?, acoustid_seg5=?, acoustid_seg6=?,
-			missing=?, updated_at=?
+			missing=?, updated_at=?,
+			deluge_hash=?, deluge_original_path=?, imported_from_deluge_at=?
 		WHERE id=?`,
 		file.BookID, file.FilePath,
 		nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
@@ -5544,6 +5622,8 @@ func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
 		nullableStringVal(file.AcoustIDSeg4), nullableStringVal(file.AcoustIDSeg5),
 		nullableStringVal(file.AcoustIDSeg6),
 		missingInt, file.UpdatedAt,
+		nullableStringVal(file.DelugeHash), nullableStringVal(file.DelugeOriginalPath),
+		nullableTimeVal(file.ImportedFromDelugeAt),
 		id,
 	)
 	if err != nil {
