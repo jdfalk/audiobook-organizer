@@ -163,6 +163,16 @@ type MetadataCandidate struct {
 	// The review UI already renders a warning chip when duration_delta_sec > 600;
 	// this flag makes the threshold decision explicit in the API response.
 	DurationMismatch bool `json:"duration_mismatch,omitempty"`
+	// AudibleRatingOverall is the Audible overall star rating (1–5 scale).
+	// Zero means the source did not provide a rating.
+	AudibleRatingOverall float64 `json:"audible_rating_overall,omitempty"`
+	// AudibleRatingCount is the number of Audible star ratings.
+	AudibleRatingCount int `json:"audible_rating_count,omitempty"`
+	// GoogleRatingAverage is the Google Books average rating (1–5 scale).
+	// Zero means the source did not provide a rating.
+	GoogleRatingAverage float64 `json:"google_rating_average,omitempty"`
+	// GoogleRatingCount is the number of Google Books ratings.
+	GoogleRatingCount int `json:"google_rating_count,omitempty"`
 }
 
 // SearchMetadataResponse is returned by SearchMetadataForBook.
@@ -2345,24 +2355,28 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 			}
 
 			candidates = append(candidates, MetadataCandidate{
-				Title:            r.Title,
-				Author:           r.Author,
-				Narrator:         r.Narrator,
-				Series:           r.Series,
-				SeriesPosition:   r.SeriesPosition,
-				Year:             r.PublishYear,
-				Publisher:        r.Publisher,
-				ISBN:             r.ISBN,
-				ASIN:             r.ASIN,
-				CoverURL:         r.CoverURL,
-				Description:      r.Description,
-				Language:         r.Language,
-				Source:           src.Name(),
-				Score:            score,
-				DurationSec:      r.DurationSec,
-				DurationDeltaSec: durationDelta,
-				CategoryTags:     r.CategoryTags,
-				DurationMismatch: durationDelta > 600,
+				Title:                r.Title,
+				Author:               r.Author,
+				Narrator:             r.Narrator,
+				Series:               r.Series,
+				SeriesPosition:       r.SeriesPosition,
+				Year:                 r.PublishYear,
+				Publisher:            r.Publisher,
+				ISBN:                 r.ISBN,
+				ASIN:                 r.ASIN,
+				CoverURL:             r.CoverURL,
+				Description:          r.Description,
+				Language:             r.Language,
+				Source:               src.Name(),
+				Score:                score,
+				DurationSec:          r.DurationSec,
+				DurationDeltaSec:     durationDelta,
+				CategoryTags:         r.CategoryTags,
+				DurationMismatch:     durationDelta > 600,
+				AudibleRatingOverall: r.AudibleRatingOverall,
+				AudibleRatingCount:   r.AudibleRatingCount,
+				GoogleRatingAverage:  r.GoogleRatingAverage,
+				GoogleRatingCount:    r.GoogleRatingCount,
 			})
 		}
 	}
@@ -2411,12 +2425,16 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 					CoverURL:         result.CoverURL,
 					Description:      result.Description,
 					Language:         result.Language,
-					Source:           "Audnexus (Audible)",
-					Score:            score,
-					DurationSec:      result.DurationSec,
-					DurationDeltaSec: asinDurationDelta,
-					CategoryTags:     result.CategoryTags,
-					DurationMismatch: asinDurationDelta > 600,
+					Source:               "Audnexus (Audible)",
+					Score:                score,
+					DurationSec:          result.DurationSec,
+					DurationDeltaSec:     asinDurationDelta,
+					CategoryTags:         result.CategoryTags,
+					DurationMismatch:     asinDurationDelta > 600,
+					AudibleRatingOverall: result.AudibleRatingOverall,
+					AudibleRatingCount:   result.AudibleRatingCount,
+					GoogleRatingAverage:  result.GoogleRatingAverage,
+					GoogleRatingCount:    result.GoogleRatingCount,
 				})
 			}
 		} else {
