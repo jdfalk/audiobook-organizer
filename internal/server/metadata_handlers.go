@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -12,8 +12,10 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -1605,4 +1607,124 @@ func (s *Server) getMetadataFields(c *gin.Context) {
 	RespondWithOK(c, gin.H{
 		"fields": fields,
 	})
+}
+
+// ratingPatchRequest is the JSON body for PATCH /api/v1/audiobooks/:id/rating.
+// Each field is a json.RawMessage so the handler can distinguish null (clear)
+// from absent (don't touch) from a numeric value.
+type ratingPatchRequest struct {
+	Overall     json.RawMessage `json:"overall"`
+	Story       json.RawMessage `json:"story"`
+	Performance json.RawMessage `json:"performance"`
+	Notes       json.RawMessage `json:"notes"`
+}
+
+// parseOptionalRating decodes a json.RawMessage into a *float64 and a clear flag.
+// Returns (nil, false, nil) if raw is empty (field omitted).
+// Returns (nil, true, nil) if raw is JSON null (clear).
+// Returns (&v, false, nil) if raw is a valid number in [0,5] step 0.5.
+// Returns (nil, false, err) on invalid value.
+func parseOptionalRating(raw json.RawMessage, fieldName string) (*float64, bool, error) {
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	if string(raw) == "null" {
+		return nil, true, nil
+	}
+	var v float64
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, false, fmt.Errorf("%s: must be a number", fieldName)
+	}
+	if v < 0 || v > 5 {
+		return nil, false, fmt.Errorf("%s: must be between 0 and 5", fieldName)
+	}
+	// check 0.5 step: v*2 must be an integer
+	if math.Round(v*2) != v*2 {
+		return nil, false, fmt.Errorf("%s: must be a multiple of 0.5", fieldName)
+	}
+	return &v, false, nil
+}
+
+// handleUpdateBookRating handles PATCH /api/v1/audiobooks/:id/rating.
+func (s *Server) handleUpdateBookRating(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing book id"})
+		return
+	}
+
+	var body ratingPatchRequest
+	// Allow empty body (no changes)
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	req := database.UpdateBookRatingRequest{}
+
+	if overall, clear, err := parseOptionalRating(body.Overall, "overall"); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	} else {
+		req.Overall = overall
+		req.ClearOverall = clear
+	}
+
+	if story, clear, err := parseOptionalRating(body.Story, "story"); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	} else {
+		req.Story = story
+		req.ClearStory = clear
+	}
+
+	if perf, clear, err := parseOptionalRating(body.Performance, "performance"); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	} else {
+		req.Performance = perf
+		req.ClearPerf = clear
+	}
+
+	// Notes: null clears, string sets, absent leaves alone
+	if len(body.Notes) > 0 {
+		if string(body.Notes) == "null" {
+			req.ClearNotes = true
+		} else {
+			var notes string
+			if err := json.Unmarshal(body.Notes, &notes); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "notes: must be a string or null"})
+				return
+			}
+			req.Notes = &notes
+		}
+	}
+
+	store := s.Store()
+	if store == nil {
+		RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	if err := store.UpdateBookRating(id, req); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+			return
+		}
+		internalError(c, "UpdateBookRating failed", err)
+		return
+	}
+
+	// Return the updated book
+	book, err := store.GetBookByID(id)
+	if err != nil || book == nil {
+		if errors.Is(err, nil) && book == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+			return
+		}
+		internalError(c, "GetBook after rating update failed", err)
+		return
+	}
+	c.JSON(http.StatusOK, book)
 }

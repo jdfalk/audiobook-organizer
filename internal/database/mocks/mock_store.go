@@ -4747,6 +4747,60 @@ func (_c *MockBookWriter_UpdateBook_Call) RunAndReturn(run func(id string, book 
 	return _c
 }
 
+// UpdateBookRating provides a mock function for the type MockBookWriter
+func (_mock *MockBookWriter) UpdateBookRating(id string, req database.UpdateBookRatingRequest) error {
+	ret := _mock.Called(id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateBookRating")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, database.UpdateBookRatingRequest) error); ok {
+		r0 = returnFunc(id, req)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookWriter_UpdateBookRating_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateBookRating'
+type MockBookWriter_UpdateBookRating_Call struct {
+	*mock.Call
+}
+
+// UpdateBookRating is a helper method to define mock.On call
+//   - id string
+//   - req database.UpdateBookRatingRequest
+func (_e *MockBookWriter_Expecter) UpdateBookRating(id interface{}, req interface{}) *MockBookWriter_UpdateBookRating_Call {
+	return &MockBookWriter_UpdateBookRating_Call{Call: _e.mock.On("UpdateBookRating", id, req)}
+}
+
+func (_c *MockBookWriter_UpdateBookRating_Call) Run(run func(id string, req database.UpdateBookRatingRequest)) *MockBookWriter_UpdateBookRating_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 database.UpdateBookRatingRequest
+		if args[1] != nil {
+			arg1 = args[1].(database.UpdateBookRatingRequest)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockBookWriter_UpdateBookRating_Call) Return(err error) *MockBookWriter_UpdateBookRating_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookWriter_UpdateBookRating_Call) RunAndReturn(run func(id string, req database.UpdateBookRatingRequest) error) *MockBookWriter_UpdateBookRating_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockBookStore creates a new instance of MockBookStore. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockBookStore(t interface {
@@ -7143,6 +7197,60 @@ func (_c *MockBookStore_UpdateBook_Call) Return(book1 *database.Book, err error)
 }
 
 func (_c *MockBookStore_UpdateBook_Call) RunAndReturn(run func(id string, book *database.Book) (*database.Book, error)) *MockBookStore_UpdateBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateBookRating provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) UpdateBookRating(id string, req database.UpdateBookRatingRequest) error {
+	ret := _mock.Called(id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateBookRating")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, database.UpdateBookRatingRequest) error); ok {
+		r0 = returnFunc(id, req)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookStore_UpdateBookRating_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateBookRating'
+type MockBookStore_UpdateBookRating_Call struct {
+	*mock.Call
+}
+
+// UpdateBookRating is a helper method to define mock.On call
+//   - id string
+//   - req database.UpdateBookRatingRequest
+func (_e *MockBookStore_Expecter) UpdateBookRating(id interface{}, req interface{}) *MockBookStore_UpdateBookRating_Call {
+	return &MockBookStore_UpdateBookRating_Call{Call: _e.mock.On("UpdateBookRating", id, req)}
+}
+
+func (_c *MockBookStore_UpdateBookRating_Call) Run(run func(id string, req database.UpdateBookRatingRequest)) *MockBookStore_UpdateBookRating_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 database.UpdateBookRatingRequest
+		if args[1] != nil {
+			arg1 = args[1].(database.UpdateBookRatingRequest)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockBookStore_UpdateBookRating_Call) Return(err error) *MockBookStore_UpdateBookRating_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookStore_UpdateBookRating_Call) RunAndReturn(run func(id string, req database.UpdateBookRatingRequest) error) *MockBookStore_UpdateBookRating_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -40253,6 +40361,60 @@ func (_c *MockStore_UpdateBook_Call) Return(book1 *database.Book, err error) *Mo
 }
 
 func (_c *MockStore_UpdateBook_Call) RunAndReturn(run func(id string, book *database.Book) (*database.Book, error)) *MockStore_UpdateBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateBookRating provides a mock function for the type MockStore
+func (_mock *MockStore) UpdateBookRating(id string, req database.UpdateBookRatingRequest) error {
+	ret := _mock.Called(id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateBookRating")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, database.UpdateBookRatingRequest) error); ok {
+		r0 = returnFunc(id, req)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_UpdateBookRating_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateBookRating'
+type MockStore_UpdateBookRating_Call struct {
+	*mock.Call
+}
+
+// UpdateBookRating is a helper method to define mock.On call
+//   - id string
+//   - req database.UpdateBookRatingRequest
+func (_e *MockStore_Expecter) UpdateBookRating(id interface{}, req interface{}) *MockStore_UpdateBookRating_Call {
+	return &MockStore_UpdateBookRating_Call{Call: _e.mock.On("UpdateBookRating", id, req)}
+}
+
+func (_c *MockStore_UpdateBookRating_Call) Run(run func(id string, req database.UpdateBookRatingRequest)) *MockStore_UpdateBookRating_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 database.UpdateBookRatingRequest
+		if args[1] != nil {
+			arg1 = args[1].(database.UpdateBookRatingRequest)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStore_UpdateBookRating_Call) Return(err error) *MockStore_UpdateBookRating_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_UpdateBookRating_Call) RunAndReturn(run func(id string, req database.UpdateBookRatingRequest) error) *MockStore_UpdateBookRating_Call {
 	_c.Call.Return(run)
 	return _c
 }

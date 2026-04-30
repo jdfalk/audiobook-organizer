@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.65.1
+// version: 1.66.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -2818,6 +2818,62 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 	}
 	book.ID = id
 	return book, nil
+}
+
+// UpdateBookRating updates only the user rating fields for the given book ID.
+// Fields are applied selectively: nil pointer = no change, Clear* = set to NULL,
+// non-nil pointer = set to the value.
+func (s *SQLiteStore) UpdateBookRating(id string, req UpdateBookRatingRequest) error {
+	setClauses := []string{}
+	args := []interface{}{}
+
+	if req.ClearOverall {
+		setClauses = append(setClauses, "user_rating_overall = NULL")
+	} else if req.Overall != nil {
+		setClauses = append(setClauses, "user_rating_overall = ?")
+		args = append(args, *req.Overall)
+	}
+
+	if req.ClearStory {
+		setClauses = append(setClauses, "user_rating_story = NULL")
+	} else if req.Story != nil {
+		setClauses = append(setClauses, "user_rating_story = ?")
+		args = append(args, *req.Story)
+	}
+
+	if req.ClearPerf {
+		setClauses = append(setClauses, "user_rating_performance = NULL")
+	} else if req.Performance != nil {
+		setClauses = append(setClauses, "user_rating_performance = ?")
+		args = append(args, *req.Performance)
+	}
+
+	if req.ClearNotes {
+		setClauses = append(setClauses, "user_rating_notes = NULL")
+	} else if req.Notes != nil {
+		setClauses = append(setClauses, "user_rating_notes = ?")
+		args = append(args, *req.Notes)
+	}
+
+	if len(setClauses) == 0 {
+		return nil // nothing to do
+	}
+
+	query := "UPDATE books SET " + strings.Join(setClauses, ", ") + " WHERE id = ?"
+	args = append(args, id)
+
+	result, err := s.db.Exec(query, args...)
+	if err != nil {
+		return fmt.Errorf("UpdateBookRating: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("UpdateBookRating rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("book not found")
+	}
+	return nil
 }
 
 // SetLastWrittenAt stamps the last_written_at timestamp for book id.
