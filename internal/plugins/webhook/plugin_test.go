@@ -1,6 +1,7 @@
 // file: internal/plugins/webhook/plugin_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c4d5e6f7-a8b9-0c1d-2e3f-4a5b6c7d8e9f
+// last-edited: 2026-04-30
 
 package webhook
 
@@ -131,9 +132,10 @@ func TestShutdown(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDeliver_PostsEventToURL(t *testing.T) {
-	var received []byte
+	received := make(chan []byte, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		received, _ = io.ReadAll(r.Body)
+		body, _ := io.ReadAll(r.Body)
+		received <- body
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -148,19 +150,22 @@ func TestDeliver_PostsEventToURL(t *testing.T) {
 	evt := plugin.NewEvent(plugin.EventBookImported, "book-1", map[string]any{"title": "Dune"})
 	bus.Publish(context.Background(), evt)
 
-	// Give the async goroutine a moment to deliver.
-	time.Sleep(50 * time.Millisecond)
-
-	var got plugin.Event
-	require.NoError(t, json.Unmarshal(received, &got))
-	assert.Equal(t, plugin.EventBookImported, got.Type)
-	assert.Equal(t, "book-1", got.BookID)
+	// Wait for the async goroutine to deliver (with timeout).
+	select {
+	case body := <-received:
+		var got plugin.Event
+		require.NoError(t, json.Unmarshal(body, &got))
+		assert.Equal(t, plugin.EventBookImported, got.Type)
+		assert.Equal(t, "book-1", got.BookID)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for HTTP delivery")
+	}
 }
 
 func TestDeliver_HMAC_SignaturePresent(t *testing.T) {
-	var sigHeader string
+	sigHeader := make(chan string, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sigHeader = r.Header.Get("X-Audiobook-Signature-256")
+		sigHeader <- r.Header.Get("X-Audiobook-Signature-256")
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -173,16 +178,20 @@ func TestDeliver_HMAC_SignaturePresent(t *testing.T) {
 	}))
 
 	bus.Publish(context.Background(), plugin.NewEvent(plugin.EventBookImported, "b1", nil))
-	time.Sleep(50 * time.Millisecond)
 
-	assert.True(t, len(sigHeader) > 0, "expected HMAC header")
-	assert.Contains(t, sigHeader, "sha256=")
+	select {
+	case sig := <-sigHeader:
+		assert.True(t, len(sig) > 0, "expected HMAC header")
+		assert.Contains(t, sig, "sha256=")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for HTTP delivery")
+	}
 }
 
 func TestDeliver_NoSignatureWhenNoSecret(t *testing.T) {
-	var sigHeader string
+	sigHeader := make(chan string, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sigHeader = r.Header.Get("X-Audiobook-Signature-256")
+		sigHeader <- r.Header.Get("X-Audiobook-Signature-256")
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -195,9 +204,13 @@ func TestDeliver_NoSignatureWhenNoSecret(t *testing.T) {
 	}))
 
 	bus.Publish(context.Background(), plugin.NewEvent(plugin.EventScanCompleted, "", nil))
-	time.Sleep(50 * time.Millisecond)
 
-	assert.Empty(t, sigHeader)
+	select {
+	case sig := <-sigHeader:
+		assert.Empty(t, sig)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for HTTP delivery")
+	}
 }
 
 func TestDeliver_MultipleURLs(t *testing.T) {

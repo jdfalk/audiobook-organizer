@@ -1,5 +1,5 @@
 // file: internal/server/playlist_evaluator.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 9c2d5f1e-6b4a-4a70-b8c5-3d7e0f1b9a68
 //
 // Smart playlist query evaluator (spec 3.4 task 2).
@@ -249,19 +249,32 @@ func timeFieldMatches(got time.Time, node *search.FieldNode) bool {
 }
 
 // sortBookIDs reorders ids per the playlist's SortJSON directives.
-// Empty or invalid SortJSON leaves ids in the order Bleve returned
-// them (relevance order). Unknown fields are skipped with no error
-// so a partly-broken sort spec still produces a stable result.
+// When SortJSON is empty or invalid, ids are sorted by ID string for
+// deterministic output (ULIDs sort in insertion order). Unknown fields
+// are skipped so a partly-broken sort spec still produces a stable result.
 func sortBookIDs(store database.BookReader, ids []string, sortJSON string) ([]string, error) {
-	if strings.TrimSpace(sortJSON) == "" || len(ids) < 2 {
+	if len(ids) < 2 {
 		return ids, nil
+	}
+	if strings.TrimSpace(sortJSON) == "" {
+		out := make([]string, len(ids))
+		copy(out, ids)
+		sort.Strings(out)
+		return out, nil
 	}
 	var directives []PlaylistSort
 	if err := json.Unmarshal([]byte(sortJSON), &directives); err != nil {
-		return ids, fmt.Errorf("parse sort_json: %w", err)
+		// Fallback to deterministic ID sort on parse error.
+		out := make([]string, len(ids))
+		copy(out, ids)
+		sort.Strings(out)
+		return out, fmt.Errorf("parse sort_json: %w", err)
 	}
 	if len(directives) == 0 {
-		return ids, nil
+		out := make([]string, len(ids))
+		copy(out, ids)
+		sort.Strings(out)
+		return out, nil
 	}
 
 	type loaded struct {
@@ -285,7 +298,8 @@ func sortBookIDs(store database.BookReader, ids []string, sortJSON string) ([]st
 			}
 			return c < 0
 		}
-		return false
+		// Tiebreaker: sort by ID for deterministic output.
+		return rows[i].id < rows[j].id
 	})
 
 	out := make([]string, len(rows))

@@ -1,7 +1,7 @@
 // file: internal/server/server_import_paths_and_blocklist_test.go
-// version: 1.1.2
+// version: 1.1.3
 // guid: 2f4a6b8c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
-// last-edited: 2026-02-03
+// last-edited: 2026-04-30
 
 package server
 
@@ -35,6 +35,7 @@ func (noopProgress) IsCanceled() bool                                        { r
 
 func TestListAuthorsAndSeries_ReturnsEmptyArrayWhenNil(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
+	store.EXPECT().SetRootDir(mock.Anything).Return()
 	// Authors endpoint: GetAllAuthors + GetAllAuthorBookCounts + GetAllAuthorAliases
 	store.EXPECT().GetAllAuthors().Return(([]database.Author)(nil), nil).Maybe()
 	store.EXPECT().GetAllAuthorBookCounts().Return(map[int]int{}, nil).Maybe()
@@ -117,6 +118,7 @@ func TestAddImportPath_EnqueuesAndExecutesOperationFunc(t *testing.T) {
 	config.AppConfig.RootDir = ""
 
 	store := dbmocks.NewMockStore(t)
+	store.EXPECT().SetRootDir(mock.Anything).Return()
 	origStore := database.GetGlobalStore()
 	server, cleanup := setupTestServerWithStore(t, store)
 	defer cleanup()

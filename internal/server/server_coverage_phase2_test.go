@@ -1,3 +1,8 @@
+// file: internal/server/server_coverage_phase2_test.go
+// version: 1.1.0
+// guid: d5e6f7a8-b9c0-1d2e-3f4a-5b6c7d8e9f0a
+// last-edited: 2026-04-30
+
 package server
 
 import (
@@ -11,6 +16,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 // TestGetAudiobookTagsErrors tests error scenarios for getAudiobookTags (59.3% → target 70%+)
@@ -25,6 +31,7 @@ func TestGetAudiobookTagsErrors(t *testing.T) {
 			name:   "database error",
 			bookID: "01HQWKV1234567890ABCDEFGHJK",
 			mockSetup: func(m *mocks.MockStore) {
+				m.EXPECT().SetRootDir(mock.Anything).Return()
 				m.EXPECT().GetBookByID("01HQWKV1234567890ABCDEFGHJK").Return(nil, errors.New("database connection error")).Once()
 			},
 			statusCode: http.StatusInternalServerError,
@@ -33,6 +40,7 @@ func TestGetAudiobookTagsErrors(t *testing.T) {
 			name:   "book not found",
 			bookID: "01HQWKV9999999999999999999",
 			mockSetup: func(m *mocks.MockStore) {
+				m.EXPECT().SetRootDir(mock.Anything).Return()
 				m.EXPECT().GetBookByID("01HQWKV9999999999999999999").Return(nil, nil).Once()
 			},
 			statusCode: http.StatusNotFound,
@@ -99,6 +107,7 @@ func TestAddBlockedHashErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			mockStore := mocks.NewMockStore(t)
+			mockStore.EXPECT().SetRootDir(mock.Anything).Return()
 
 			oldStore := database.GetGlobalStore()
 			database.SetGlobalStore(mockStore)
@@ -126,6 +135,7 @@ func TestAddBlockedHashDatabaseError(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 
 	validHash := "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	mockStore.EXPECT().SetRootDir(mock.Anything).Return()
 	mockStore.EXPECT().
 		AddBlockedHash(validHash, "duplicate file").
 		Return(errors.New("database error: constraint violation")).
@@ -159,6 +169,7 @@ func TestDeleteWorkErrors(t *testing.T) {
 			name:   "database error",
 			workID: "01HQWKV1234567890ABCDEFGHJK",
 			mockSetup: func(m *mocks.MockStore) {
+				m.EXPECT().SetRootDir(mock.Anything).Return()
 				m.EXPECT().DeleteWork("01HQWKV1234567890ABCDEFGHJK").Return(errors.New("database connection error")).Once()
 			},
 			statusCode: http.StatusInternalServerError,
@@ -167,6 +178,7 @@ func TestDeleteWorkErrors(t *testing.T) {
 			name:   "work not found",
 			workID: "01HQWKV9999999999999999999",
 			mockSetup: func(m *mocks.MockStore) {
+				m.EXPECT().SetRootDir(mock.Anything).Return()
 				m.EXPECT().DeleteWork("01HQWKV9999999999999999999").Return(errors.New("work not found")).Once()
 			},
 			statusCode: http.StatusNotFound,

@@ -1,6 +1,7 @@
 // file: internal/server/activity_integration_test.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: f8a3b2c1-d4e5-6f7a-8b9c-0d1e2f3a4b5c
+// last-edited: 2026-04-30
 
 package server
 
@@ -148,6 +149,9 @@ func TestActivity_Integration_TeeWriterCapture(t *testing.T) {
 	defer store.Close()
 
 	w := activity.NewWriter(store, 1000)
+	// Disable the default gin source skip so all 3 lines (including [GIN]) are stored
+	// and source-filtering assertions work correctly.
+	w.SetSkipSources()
 	w.Start()
 
 	fmt.Fprintln(w, "2026/03/25 17:35:08 logger.go:103: [info] scheduler: iTunes sync started")

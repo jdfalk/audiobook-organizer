@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.8.0
+// version: 2.8.1
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -290,6 +290,15 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	// Kick off slow file I/O (cover embed, tags, rename) in background.
 	// Cover download is already done inline so the response has the URL.
 	shouldWriteBack := body.WriteBack == nil || *body.WriteBack
+
+	// Enqueue in the write-back batcher immediately (before pool submission)
+	// so the batcher picks up the metadata change even if the background
+	// file-IO job panics on a malformed audio file. The DB metadata is
+	// already updated at this point, so early enqueueing is correct.
+	if shouldWriteBack && s.writeBackBatcher != nil {
+		s.writeBackBatcher.Enqueue(id)
+	}
+
 	if pool := s.fileIOPool; pool != nil {
 		bookID := id
 		mfs := s.metadataFetchService
@@ -298,9 +307,6 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 			if shouldWriteBack {
 				if _, wbErr := mfs.WriteBackMetadataForBook(bookID); wbErr != nil {
 					log.Printf("[WARN] background write-back for %s: %v", bookID, wbErr)
-				}
-				if s.writeBackBatcher != nil {
-					s.writeBackBatcher.Enqueue(bookID)
 				}
 			}
 		})

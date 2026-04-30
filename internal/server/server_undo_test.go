@@ -1,5 +1,5 @@
 // file: internal/server/server_undo_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -369,6 +369,11 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 	batcher := itunesservice.NewWriteBackBatcher(1*time.Hour, itunesservice.WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil) // long delay so it won't flush
 	server.writeBackBatcher = batcher
 	defer func() {
+		// Stop the server's fileIOPool before restoring globals to avoid races
+		// with in-flight workers reading config.AppConfig.
+		if server.fileIOPool != nil {
+			server.fileIOPool.Stop()
+		}
 		// Stop pool workers before restoring globals to avoid races
 		if p := GetGlobalFileIOPool(); p != nil {
 			p.Stop()
@@ -414,6 +419,11 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 	batcher := itunesservice.NewWriteBackBatcher(1*time.Hour, itunesservice.WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
 	server.writeBackBatcher = batcher
 	defer func() {
+		// Stop the server's fileIOPool before restoring globals to avoid races
+		// with in-flight workers reading config.AppConfig.
+		if server.fileIOPool != nil {
+			server.fileIOPool.Stop()
+		}
 		// Stop pool workers before restoring globals to avoid races
 		if p := GetGlobalFileIOPool(); p != nil {
 			p.Stop()
@@ -475,6 +485,11 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 	batcher := itunesservice.NewWriteBackBatcher(1*time.Hour, itunesservice.WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
 	server.writeBackBatcher = batcher
 	defer func() {
+		// Stop the server's fileIOPool before restoring globals to avoid races
+		// with in-flight workers reading config.AppConfig.
+		if server.fileIOPool != nil {
+			server.fileIOPool.Stop()
+		}
 		// Stop pool workers before restoring globals to avoid races
 		if p := GetGlobalFileIOPool(); p != nil {
 			p.Stop()
@@ -535,6 +550,11 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 	batcher := itunesservice.NewWriteBackBatcher(1*time.Hour, itunesservice.WriteBackBatcherConfig{AutoWriteBack: true, ITLWriteBackEnabled: true, LibraryWritePath: "/tmp/test.itl"}, nil)
 	server.writeBackBatcher = batcher
 	defer func() {
+		// Stop the server's fileIOPool before restoring globals to avoid races
+		// with in-flight workers reading config.AppConfig.
+		if server.fileIOPool != nil {
+			server.fileIOPool.Stop()
+		}
 		// Stop pool workers before restoring globals to avoid races
 		if p := GetGlobalFileIOPool(); p != nil {
 			p.Stop()
