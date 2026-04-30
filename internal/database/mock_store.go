@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.41.0
+// version: 1.42.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -145,6 +145,16 @@ type MockStore struct {
 	PruneOperationLogsFunc      func(olderThan time.Time) (int, error)
 	PruneOperationChangesFunc   func(olderThan time.Time) (int, error)
 	PruneSystemActivityLogsFunc func(olderThan time.Time) (int, error)
+
+	// AI jobs
+	CreateAIJobFunc          func(job AIJob, payloadJSON []byte) error
+	GetAIJobFunc             func(id string) (AIJob, error)
+	GetAIJobByBatchIDFunc    func(batchID string) (AIJob, error)
+	GetAIJobPayloadFunc      func(id string) ([]byte, error)
+	MarkAIJobSubmittedFunc   func(id, batchID string) error
+	MarkAIJobCompletedFunc   func(id, status string, successCount, errorCount int, rowErrors []AIJobRowError) error
+	MarkAIJobFailedFunc      func(id, errMsg string) error
+	ListAIJobsFunc           func(typeFilter, statusFilter string, limit, offset int) ([]AIJob, error)
 
 	// User Preferences
 	GetUserPreferenceFunc     func(key string) (*UserPreference, error)
@@ -2220,4 +2230,60 @@ func (m *MockStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBo
 		return m.MoveBookFilesToBookFunc(fileIDs, sourceBookID, targetBookID)
 	}
 	return nil
+}
+
+func (m *MockStore) CreateAIJob(job AIJob, payloadJSON []byte) error {
+	if m.CreateAIJobFunc != nil {
+		return m.CreateAIJobFunc(job, payloadJSON)
+	}
+	return nil
+}
+
+func (m *MockStore) GetAIJob(id string) (AIJob, error) {
+	if m.GetAIJobFunc != nil {
+		return m.GetAIJobFunc(id)
+	}
+	return AIJob{}, nil
+}
+
+func (m *MockStore) GetAIJobByBatchID(batchID string) (AIJob, error) {
+	if m.GetAIJobByBatchIDFunc != nil {
+		return m.GetAIJobByBatchIDFunc(batchID)
+	}
+	return AIJob{}, nil
+}
+
+func (m *MockStore) GetAIJobPayload(id string) ([]byte, error) {
+	if m.GetAIJobPayloadFunc != nil {
+		return m.GetAIJobPayloadFunc(id)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) MarkAIJobSubmitted(id, batchID string) error {
+	if m.MarkAIJobSubmittedFunc != nil {
+		return m.MarkAIJobSubmittedFunc(id, batchID)
+	}
+	return nil
+}
+
+func (m *MockStore) MarkAIJobCompleted(id, status string, successCount, errorCount int, rowErrors []AIJobRowError) error {
+	if m.MarkAIJobCompletedFunc != nil {
+		return m.MarkAIJobCompletedFunc(id, status, successCount, errorCount, rowErrors)
+	}
+	return nil
+}
+
+func (m *MockStore) MarkAIJobFailed(id, errMsg string) error {
+	if m.MarkAIJobFailedFunc != nil {
+		return m.MarkAIJobFailedFunc(id, errMsg)
+	}
+	return nil
+}
+
+func (m *MockStore) ListAIJobs(typeFilter, statusFilter string, limit, offset int) ([]AIJob, error) {
+	if m.ListAIJobsFunc != nil {
+		return m.ListAIJobsFunc(typeFilter, statusFilter, limit, offset)
+	}
+	return nil, nil
 }

@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.56.0
+// version: 1.57.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -7824,4 +7824,46 @@ func (p *PebbleStore) IncrScanFailCount(pathHash string) (int, error) {
 func (p *PebbleStore) ResetScanFailCount(pathHash string) error {
 	key := []byte("scan_fail:" + pathHash)
 	return p.db.Delete(key, pebble.Sync)
+}
+
+// --- AIJobsStore stubs (not supported on PebbleStore; SQLite only) ---
+
+// CreateAIJob is not supported on PebbleStore.
+func (p *PebbleStore) CreateAIJob(_ AIJob, _ []byte) error {
+	return fmt.Errorf("AIJobsStore.CreateAIJob: not supported by PebbleStore")
+}
+
+// GetAIJob is not supported on PebbleStore.
+func (p *PebbleStore) GetAIJob(_ string) (AIJob, error) {
+	return AIJob{}, fmt.Errorf("AIJobsStore.GetAIJob: not supported by PebbleStore")
+}
+
+// GetAIJobByBatchID is not supported on PebbleStore.
+func (p *PebbleStore) GetAIJobByBatchID(_ string) (AIJob, error) {
+	return AIJob{}, fmt.Errorf("AIJobsStore.GetAIJobByBatchID: not supported by PebbleStore")
+}
+
+// GetAIJobPayload is not supported on PebbleStore.
+func (p *PebbleStore) GetAIJobPayload(_ string) ([]byte, error) {
+	return nil, fmt.Errorf("AIJobsStore.GetAIJobPayload: not supported by PebbleStore")
+}
+
+// MarkAIJobSubmitted is not supported on PebbleStore.
+func (p *PebbleStore) MarkAIJobSubmitted(_, _ string) error {
+	return fmt.Errorf("AIJobsStore.MarkAIJobSubmitted: not supported by PebbleStore")
+}
+
+// MarkAIJobCompleted is not supported on PebbleStore.
+func (p *PebbleStore) MarkAIJobCompleted(_ string, _ string, _, _ int, _ []AIJobRowError) error {
+	return fmt.Errorf("AIJobsStore.MarkAIJobCompleted: not supported by PebbleStore")
+}
+
+// MarkAIJobFailed is not supported on PebbleStore.
+func (p *PebbleStore) MarkAIJobFailed(_, _ string) error {
+	return fmt.Errorf("AIJobsStore.MarkAIJobFailed: not supported by PebbleStore")
+}
+
+// ListAIJobs is not supported on PebbleStore.
+func (p *PebbleStore) ListAIJobs(_, _ string, _, _ int) ([]AIJob, error) {
+	return nil, fmt.Errorf("AIJobsStore.ListAIJobs: not supported by PebbleStore")
 }
