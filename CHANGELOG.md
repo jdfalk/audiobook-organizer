@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.39.0 -->
+<!-- version: 2.40.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-30 -->
 
@@ -9,7 +9,28 @@
 
 ### Added / Changed
 
-#### April 30, 2026 — Diagnostics DB health, metadata SHA tracking, metadata dedup, import path fix (#570–#573)
+#### April 30, 2026 — Chapter consolidation, SHA dedup, Storage diagnostics (#575–#577)
+
+- **PR #575** `chore(web)`: remove orphaned `LogsTab` and `Logs` page (SYS-1)
+  - Both components were dead code — never imported or routed after prior cleanup
+  - System page already had a "View Activity Log" button navigating to `/activity`
+
+- **PR #576** `feat(scanner,maintenance)`: sequential chapter file consolidation (MATCH-2) + confirmed duration scoring (MATCH-3)
+  - **`internal/scanner/chapter_consolidator.go`** (new): `DetectChapterGroups()` — detects books with sequential numeric-prefix filenames (`01 - Title`, `02 - Title`) sharing ≥80% title similarity; groups by parent directory
+  - **Migration 056**: `merged_into_book_id TEXT` column + index on `books`
+  - **`MergeChapterBooks()`**: SQLiteStore transaction — moves `book_files`, marks merged books non-primary, updates primary duration + title
+  - **`GET /api/v1/maintenance/chapter-groups`**: dry-scan endpoint
+  - **`POST /api/v1/maintenance/merge-chapter-groups`**: executes merge with `dry_run` flag
+  - **Chapter Consolidation card** in MaintenanceTab: scan → preview → merge workflow
+  - MATCH-3 (duration as scoring signal) confirmed already fully implemented via prior `durationScoreMultiplier` + `computeDurationScore`
+
+- **PR #577** `feat(database,maintenance,web)`: cross-folder SHA duplicate detection + Storage path prefix diagnostic (FILE-SHA-2, DIAG-5)
+  - **`GetDuplicateFilesByHash(limit)`**: CTE-based SQL finds `book_files` sharing `original_file_hash` across ≥2 locations; builds `DuplicateFileGroup` results with wasted-bytes total
+  - **`GET /api/v1/maintenance/duplicate-files`** endpoint
+  - **SHA Duplicate Detection card** in MaintenanceTab: expandable per-group file list
+  - **StorageTab**: new "DB Path Distribution" card fetches `book_path_prefixes` from `GET /api/v1/diagnostics/db-health`; shows each prefix with book count + `configured`/`not in import paths` chip
+
+
 
 - **PR #570** `feat(diagnostics)`: DB health endpoint + metadata cache TTL fix
   - `GET /api/v1/diagnostics/db-health`: returns SQLite table row counts, page size, WAL size, PebbleDB key counts, AI scans DB stats, embeddings DB stats — surfaces as "Database Health" accordion on Diagnostics page
