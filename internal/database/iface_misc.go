@@ -1,5 +1,5 @@
 // file: internal/database/iface_misc.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
 // last-edited: 2026-04-30
 
@@ -130,6 +130,10 @@ type BookFileStore interface {
 	// UpdateBookFileHashes is a surgical update that records pre-write and post-write
 	// SHA-256 hashes without touching any other BookFile fields.
 	UpdateBookFileHashes(id, originalHash, postMetadataHash string) error
+	// GetDuplicateFilesByHash returns groups of book_files that share the same
+	// original_file_hash (non-empty). Each group has ≥2 entries and represents
+	// the same physical audio file in multiple locations.
+	GetDuplicateFilesByHash(limit int) ([]DuplicateFileGroup, error)
 }
 
 // BookSegmentStore covers the deprecated segment surface, kept until

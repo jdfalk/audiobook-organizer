@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.9.0
+// version: 2.10.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-04-30
 
@@ -4484,6 +4484,43 @@ export async function mergeChapterGroups(params?: {
   const response = await fetch(url, { method: 'POST' });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge chapter groups');
+  }
+  const body_data = await response.json();
+  return body_data.data ?? body_data;
+}
+
+// ─── SHA Duplicate File Detection (FILE-SHA-2) ───────────────────────────────
+
+export interface DuplicateFileInfo {
+  book_file_id: string;
+  book_id: string;
+  book_title: string;
+  file_path: string;
+  book_path: string;
+  file_size_bytes: number;
+}
+
+export interface DuplicateFileGroup {
+  hash: string;
+  file_count: number;
+  book_count: number;
+  total_size_bytes: number;
+  files: DuplicateFileInfo[];
+}
+
+export interface DuplicateFilesResult {
+  groups: DuplicateFileGroup[];
+  total_wasted_bytes: number;
+  total_groups: number;
+}
+
+export async function scanDuplicateFiles(limit?: number): Promise<DuplicateFilesResult> {
+  const q = new URLSearchParams();
+  if (limit != null) q.set('limit', String(limit));
+  const url = `${API_BASE}/maintenance/duplicate-files${q.toString() ? `?${q}` : ''}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to scan duplicate files');
   }
   const body_data = await response.json();
   return body_data.data ?? body_data;

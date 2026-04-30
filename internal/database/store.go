@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.67.0
+// version: 2.68.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 // last-edited: 2026-04-30
 
@@ -861,6 +861,26 @@ type MetadataRejection struct {
 	RejectionReason  string    `json:"rejection_reason"`            // "user_rejected", "below_threshold", "duration_mismatch", "wrong_language", "skipped"
 	Score            float64   `json:"score,omitempty"`
 	RejectedAt       time.Time `json:"rejected_at"`
+}
+
+// DuplicateFileGroup is a set of book_file records that all share the same
+// original_file_hash — i.e. the same physical audio content at different paths.
+type DuplicateFileGroup struct {
+	Hash      string              `json:"hash"`
+	FileCount int                 `json:"file_count"`
+	BookCount int                 `json:"book_count"`       // distinct book IDs
+	TotalSize int64               `json:"total_size_bytes"` // sum of file sizes
+	Files     []DuplicateFileInfo `json:"files"`
+}
+
+// DuplicateFileInfo is one entry within a DuplicateFileGroup.
+type DuplicateFileInfo struct {
+	BookFileID string `json:"book_file_id"`
+	BookID     string `json:"book_id"`
+	BookTitle  string `json:"book_title"`
+	FilePath   string `json:"file_path"`  // book_files.file_path
+	BookPath   string `json:"book_path"`  // books.file_path (directory)
+	FileSize   int64  `json:"file_size_bytes"`
 }
 
 // Global store instance — use GetGlobalStore/SetGlobalStore for concurrent access.
