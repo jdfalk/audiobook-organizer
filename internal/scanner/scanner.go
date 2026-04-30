@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.35.0
+// version: 1.36.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-04-30
 
@@ -1060,6 +1060,11 @@ func createBookFilesForBook(bookFilePath string, segmentFiles []string, scanLog 
 			Format:           strings.TrimPrefix(ext, "."),
 			FileSize:         sizeBytes,
 			TrackNumber:      trackNum,
+		}
+
+		if h, herr := ComputeFileHash(filePath); herr == nil {
+			bf.FileHash = h
+			bf.OriginalFileHash = h
 		}
 
 		if serr := database.GetGlobalStore().UpsertBookFile(bf); serr != nil {

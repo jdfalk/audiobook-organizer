@@ -1,6 +1,7 @@
 // file: internal/database/migrations.go
-// version: 1.31.1
+// version: 1.33.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
+// last-edited: 2026-04-30
 
 package database
 
@@ -350,6 +351,18 @@ var migrations = []Migration{
 		Version:     52,
 		Description: "Add ai_jobs and ai_job_payloads tables for unified batch tracking",
 		Up:          migration052Up,
+		Down:        nil,
+	},
+	{
+		Version:     53,
+		Description: "Add post_metadata_hash column to book_files for post-write SHA tracking",
+		Up:          migration053Up,
+		Down:        nil,
+	},
+	{
+		Version:     54,
+		Description: "Add metadata_rejections table for auditing rejected metadata candidates",
+		Up:          migration054Up,
 		Down:        nil,
 	},
 }
@@ -2633,5 +2646,59 @@ func migration050Up(store Store) error {
 		}
 	}
 	log.Println("  - Added acoustid_seg0–acoustid_seg6 to book_files")
+	return nil
+}
+
+// migration053Up adds post_metadata_hash to book_files for recording the SHA-256
+// of the file after a metadata tag write. This allows the pre-write identity
+// (original_file_hash) to always be recoverable even after tags are modified.
+func migration053Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: schema-free, struct carries the new field
+	}
+	stmts := []string{
+		`ALTER TABLE book_files ADD COLUMN post_metadata_hash TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_post_metadata_hash ON book_files(post_metadata_hash) WHERE post_metadata_hash IS NOT NULL`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 53: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Added post_metadata_hash to book_files")
+	return nil
+}
+
+// migration054Up creates the metadata_rejections table for auditing every
+// candidate that was rejected for a book (user action, below-threshold score,
+// duration mismatch, wrong language, or skipped in the UI).
+func migration054Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: no schema change needed
+	}
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS metadata_rejections (
+			id TEXT PRIMARY KEY,
+			book_id TEXT NOT NULL,
+			source TEXT NOT NULL,
+			candidate_asin TEXT,
+			candidate_isbn TEXT,
+			candidate_title TEXT,
+			candidate_author TEXT,
+			rejection_reason TEXT NOT NULL,
+			score REAL,
+			rejected_at DATETIME NOT NULL DEFAULT (datetime('now')),
+			FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_metadata_rejections_book_id ON metadata_rejections(book_id)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 54: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Created metadata_rejections table")
 	return nil
 }

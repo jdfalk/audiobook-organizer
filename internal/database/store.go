@@ -1,6 +1,7 @@
 // file: internal/database/store.go
-// version: 2.63.0
+// version: 2.65.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
+// last-edited: 2026-04-30
 
 package database
 
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 )
+
 
 // Store defines the full database surface. Most services should depend
 // on a narrower sub-interface defined in iface_*.go; Store itself is
@@ -49,6 +51,7 @@ type Store interface {
 	MaintenanceStore
 	SystemActivityStore
 	AIJobsStore
+	RejectedMetadataStore
 }
 
 // BookAlternativeTitle represents a variant name for a book — romaji
@@ -603,6 +606,10 @@ type BookFile struct {
 	BitDepth           int       `json:"bit_depth,omitempty"`
 	FileHash              string    `json:"file_hash,omitempty"`
 	OriginalFileHash      string    `json:"original_file_hash,omitempty"`
+	// PostMetadataHash is the SHA-256 of the file immediately after a metadata
+	// tag write. It differs from OriginalFileHash because tag writes add/change
+	// bytes in the header. Store it so pre-write identity is always recoverable.
+	PostMetadataHash      string    `json:"post_metadata_hash,omitempty"`
 	// 7 acoustic fingerprint segments. [0]=intro, [1-5]=body, [6]=outro.
 	AcoustIDSeg0 string `json:"acoustid_seg0,omitempty"`
 	AcoustIDSeg1 string `json:"acoustid_seg1,omitempty"`
@@ -830,6 +837,22 @@ type LibraryStats struct {
 
 // DashboardStats is an alias kept for callers that haven't migrated to LibraryStats yet.
 type DashboardStats = LibraryStats
+
+// MetadataRejection records a metadata candidate that was rejected for a book,
+// either by the user explicitly or automatically (below threshold, duration
+// mismatch, wrong language, etc.).
+type MetadataRejection struct {
+	ID               string    `json:"id"`
+	BookID           string    `json:"book_id"`
+	Source           string    `json:"source"`                      // "audible", "openlibrary", "googlebooks", etc.
+	CandidateASIN    string    `json:"candidate_asin,omitempty"`
+	CandidateISBN    string    `json:"candidate_isbn,omitempty"`
+	CandidateTitle   string    `json:"candidate_title,omitempty"`
+	CandidateAuthor  string    `json:"candidate_author,omitempty"`
+	RejectionReason  string    `json:"rejection_reason"`            // "user_rejected", "below_threshold", "duration_mismatch", "wrong_language", "skipped"
+	Score            float64   `json:"score,omitempty"`
+	RejectedAt       time.Time `json:"rejected_at"`
+}
 
 // Global store instance — use GetGlobalStore/SetGlobalStore for concurrent access.
 // Direct assignment is allowed in single-goroutine contexts (init, main).
