@@ -701,7 +701,7 @@ func (s *Server) runTask(c *gin.Context) {
 		return
 	}
 	name := c.Param("name")
-	op, err := s.scheduler.RunTask(name)
+	op, err := s.scheduler.RunTaskManual(name)
 	if err != nil {
 		RespondWithBadRequest(c, err.Error())
 		return
