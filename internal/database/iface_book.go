@@ -1,5 +1,5 @@
 // file: internal/database/iface_book.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
 // last-edited: 2026-04-30
 
@@ -72,6 +72,11 @@ type BookWriter interface {
 	GetScanFailCount(pathHash string) (int, error)
 	IncrScanFailCount(pathHash string) (int, error)
 	ResetScanFailCount(pathHash string) error
+	// MergeChapterBooks absorbs srcIDs into primaryID: moves all book_files to
+	// primaryID, marks source books as non-primary (is_primary_version=0,
+	// merged_into_book_id=primaryID), and updates the primary book's duration
+	// (rounded to nearest second) and title. Runs in a single transaction.
+	MergeChapterBooks(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error
 }
 
 // BookStore combines BookReader and BookWriter for callers that need both.
