@@ -1,5 +1,6 @@
 // file: internal/database/pebble_store.go
-// version: 1.57.0
+// version: 1.58.0
+// last-edited: 2026-04-30
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -7866,4 +7867,19 @@ func (p *PebbleStore) MarkAIJobFailed(_, _ string) error {
 // ListAIJobs is not supported on PebbleStore.
 func (p *PebbleStore) ListAIJobs(_, _ string, _, _ int) ([]AIJob, error) {
 	return nil, fmt.Errorf("AIJobsStore.ListAIJobs: not supported by PebbleStore")
+}
+
+// KeyCount returns the total number of keys stored in the PebbleDB instance
+// and the estimated on-disk byte size. Used by the DB health diagnostics endpoint.
+func (p *PebbleStore) KeyCount() (count int64, sizeBytes uint64, err error) {
+iter, iterErr := p.db.NewIter(nil)
+if iterErr != nil {
+return 0, 0, fmt.Errorf("pebble key count iterator: %w", iterErr)
+}
+defer iter.Close()
+for iter.First(); iter.Valid(); iter.Next() {
+count++
+}
+sizeBytes = p.db.Metrics().DiskSpaceUsage()
+return count, sizeBytes, nil
 }

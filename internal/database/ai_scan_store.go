@@ -1,5 +1,6 @@
 // file: internal/database/ai_scan_store.go
-// version: 1.2.0
+// version: 1.3.0
+// last-edited: 2026-04-30
 // guid: a7b3c9d1-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 
 package database
@@ -522,4 +523,31 @@ func (s *AIScanStore) GetAllAppliedResults() ([]ScanResult, error) {
 		}
 	}
 	return results, nil
+}
+
+// AIScanHealthStats contains diagnostic counts for the AI scan PebbleDB store.
+type AIScanHealthStats struct {
+JobCount    int   `json:"job_count"`
+PendingCount int  `json:"pending_count"`
+SizeBytes   uint64 `json:"size_bytes"`
+}
+
+// HealthStats returns diagnostic counts and disk usage for the AI scan store.
+func (s *AIScanStore) HealthStats() (AIScanHealthStats, error) {
+scans, err := s.ListScans()
+if err != nil {
+return AIScanHealthStats{}, err
+}
+var pending int
+for _, sc := range scans {
+if sc.Status == "pending" || sc.Status == "scanning" || sc.Status == "enriching" || sc.Status == "cross_validating" {
+pending++
+}
+}
+sizeBytes := s.db.Metrics().DiskSpaceUsage()
+return AIScanHealthStats{
+JobCount:    len(scans),
+PendingCount: pending,
+SizeBytes:   sizeBytes,
+}, nil
 }
