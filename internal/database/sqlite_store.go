@@ -1,5 +1,6 @@
 // file: internal/database/sqlite_store.go
-// version: 1.67.0
+// version: 1.68.0
+// last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -3143,11 +3144,14 @@ func (s *SQLiteStore) GetBookCountsByLocation(rootDir string) (library, import_ 
 		err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0" + primaryFilter).Scan(&import_)
 		return 0, import_, err
 	}
-	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path LIKE ?" + primaryFilter, rootDir+"%").Scan(&library)
+	// Normalise: strip trailing slash so LIKE '/path/%' works regardless of
+	// how the caller stored the root dir.
+	dir := strings.TrimRight(rootDir, "/")
+	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND (file_path LIKE ? OR file_path = ?)"+primaryFilter, dir+"/%", dir).Scan(&library)
 	if err != nil {
 		return
 	}
-	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path NOT LIKE ?" + primaryFilter, rootDir+"%").Scan(&import_)
+	err = s.db.QueryRow("SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path NOT LIKE ? AND file_path != ?"+primaryFilter, dir+"/%", dir).Scan(&import_)
 	return
 }
 
@@ -3156,11 +3160,12 @@ func (s *SQLiteStore) GetBookSizesByLocation(rootDir string) (librarySize, impor
 		err = s.db.QueryRow("SELECT COALESCE(SUM(file_size), 0) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0").Scan(&importSize)
 		return 0, importSize, err
 	}
-	err = s.db.QueryRow("SELECT COALESCE(SUM(file_size), 0) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path LIKE ?", rootDir+"%").Scan(&librarySize)
+	dir := strings.TrimRight(rootDir, "/")
+	err = s.db.QueryRow("SELECT COALESCE(SUM(file_size), 0) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND (file_path LIKE ? OR file_path = ?)", dir+"/%", dir).Scan(&librarySize)
 	if err != nil {
 		return
 	}
-	err = s.db.QueryRow("SELECT COALESCE(SUM(file_size), 0) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path NOT LIKE ?", rootDir+"%").Scan(&importSize)
+	err = s.db.QueryRow("SELECT COALESCE(SUM(file_size), 0) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 AND file_path NOT LIKE ? AND file_path != ?", dir+"/%", dir).Scan(&importSize)
 	return
 }
 
@@ -3228,12 +3233,13 @@ func (s *SQLiteStore) GetDashboardStats() (*DashboardStats, error) {
 
 	// Organized vs unorganized (primary, non-deleted)
 	if s.rootDir != "" {
+		dir := strings.TrimRight(s.rootDir, "/")
 		s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(file_size),0) FROM books
-			WHERE COALESCE(marked_for_deletion,0)=0`+primaryFilter+` AND file_path LIKE ?`,
-			s.rootDir+"%").Scan(&stats.OrganizedBooks, &stats.OrganizedSize)
+			WHERE COALESCE(marked_for_deletion,0)=0`+primaryFilter+` AND (file_path LIKE ? OR file_path = ?)`,
+			dir+"/%", dir).Scan(&stats.OrganizedBooks, &stats.OrganizedSize)
 		s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(file_size),0) FROM books
-			WHERE COALESCE(marked_for_deletion,0)=0`+primaryFilter+` AND file_path NOT LIKE ?`,
-			s.rootDir+"%").Scan(&stats.UnorganizedBooks, &stats.UnorganizedSize)
+			WHERE COALESCE(marked_for_deletion,0)=0`+primaryFilter+` AND file_path NOT LIKE ? AND file_path != ?`,
+			dir+"/%", dir).Scan(&stats.UnorganizedBooks, &stats.UnorganizedSize)
 	} else {
 		s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(file_size),0) FROM books
 			WHERE COALESCE(marked_for_deletion,0)=0`+primaryFilter).Scan(
@@ -3357,8 +3363,21 @@ func (s *SQLiteStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 // Import path operations
 
 func (s *SQLiteStore) GetAllImportPaths() ([]ImportPath, error) {
-	query := `SELECT id, path, name, enabled, created_at, last_scan, book_count
-			  FROM import_paths ORDER BY name`
+	// Use a live subquery for book_count so the value is always accurate,
+	// even when a scan has never been run for a newly-added import path.
+	// The prefix pattern uses RTRIM to normalise any trailing slash on the
+	// stored path before appending '/%', preventing false matches against
+	// sibling folders that share the same prefix (e.g. /books vs /books2).
+	query := `SELECT ip.id, ip.path, ip.name, ip.enabled, ip.created_at, ip.last_scan,
+			  COALESCE((
+			    SELECT COUNT(*)
+			    FROM books b
+			    WHERE (b.file_path LIKE RTRIM(ip.path, '/') || '/%'
+			           OR b.file_path = RTRIM(ip.path, '/'))
+			      AND COALESCE(b.marked_for_deletion, 0) = 0
+			      AND COALESCE(b.is_primary_version, 1) = 1
+			  ), 0) AS book_count
+			  FROM import_paths ip ORDER BY ip.name`
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
