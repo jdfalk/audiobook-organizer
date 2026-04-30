@@ -1,5 +1,5 @@
 // file: internal/metadata/audible.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
 
 package metadata
@@ -74,8 +74,9 @@ type audibleProduct struct {
 	ProductImages        map[string]string `json:"product_images"`
 	Series               []audibleSeries   `json:"series"`
 	ContentDeliveryType  string            `json:"content_delivery_type"`
-	RuntimeLengthMin     *int              `json:"runtime_length_min"` // nullable in API
-	Rating               *audibleRating    `json:"rating"`
+	RuntimeLengthMin     *int                    `json:"runtime_length_min"` // nullable in API
+	Rating               *audibleRating          `json:"rating"`
+	CategoryLadders      []audibleCategoryLadder `json:"category_ladders"`
 }
 
 type audibleRating struct {
@@ -101,7 +102,17 @@ type audibleSeries struct {
 	Sequence string `json:"sequence"`
 }
 
-const audibleResponseGroups = "product_desc,contributors,media,product_attrs,series,rating"
+type audibleCategoryNode struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type audibleCategoryLadder struct {
+	Ladder []audibleCategoryNode `json:"ladder"`
+	Root   string                `json:"root"`
+}
+
+const audibleResponseGroups = "product_desc,contributors,media,product_attrs,series,rating,category_ladders"
 
 // SearchByTitle searches Audible's catalog by title.
 func (c *AudibleClient) SearchByTitle(title string) ([]BookMetadata, error) {
@@ -263,6 +274,29 @@ func (c *AudibleClient) productToMetadata(p *audibleProduct) BookMetadata {
 		meta.AudibleRatingStory = p.Rating.StoryDistribution.DisplayAverageRating
 		meta.AudibleRatingCount = p.Rating.OverallDistribution.NumRatings
 		meta.AudibleNumReviews = p.Rating.NumReviews
+	}
+
+	// Category ladders: collect all node names from all ladders, deduplicate.
+	// Each ladder is a path from broad to specific (e.g. "Science Fiction" →
+	// "Space Opera"). The Root field is a navigation bucket, not a genre — skip it.
+	if len(p.CategoryLadders) > 0 {
+		seen := map[string]struct{}{}
+		tags := make([]string, 0)
+		for _, ladder := range p.CategoryLadders {
+			for _, node := range ladder.Ladder {
+				name := strings.TrimSpace(node.Name)
+				if name == "" {
+					continue
+				}
+				if _, ok := seen[name]; !ok {
+					seen[name] = struct{}{}
+					tags = append(tags, name)
+				}
+			}
+		}
+		if len(tags) > 0 {
+			meta.CategoryTags = tags
+		}
 	}
 
 	return meta
