@@ -569,6 +569,9 @@ export interface Config {
   itunes_auto_write_back?: boolean;
   itunes_sync_enabled?: boolean;
 
+  // Deluge integration
+  protected_paths?: string[];
+
   // Legacy fields (Goodreads deprecated Dec 2020, removed)
   api_keys: Record<string, never>;
 }

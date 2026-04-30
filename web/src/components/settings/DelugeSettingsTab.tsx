@@ -1,5 +1,5 @@
 // file: web/src/components/settings/DelugeSettingsTab.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4f2a3b1c-5d6e-4a70-b8c5-3d7e0f1b9a99
 
 import { useCallback, useEffect, useState } from 'react';
@@ -42,6 +42,8 @@ export default function DelugeSettingsTab() {
   const [testing, setTesting] = useState(false);
   const [torrents, setTorrents] = useState<Record<string, TorrentInfo>>({});
   const [showTorrents, setShowTorrents] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ total: number; imported: number; failed: number } | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/deluge/status`)
@@ -72,6 +74,24 @@ export default function DelugeSettingsTab() {
       setShowTorrents(true);
     } catch {
       setTorrents({});
+    }
+  }, []);
+
+  const handleBulkImport = useCallback(async () => {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const resp = await fetch(`${API_BASE}/discovery/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dry_run: false }),
+      });
+      const data = await resp.json();
+      setImportResult({ total: data.total, imported: data.imported, failed: data.failed });
+    } catch {
+      setImportResult(null);
+    } finally {
+      setImporting(false);
     }
   }, []);
 
@@ -179,6 +199,29 @@ export default function DelugeSettingsTab() {
           </TableContainer>
         </Box>
       )}
+
+      <Box sx={{ mt: 3 }}>
+        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+          Bulk Import
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Import all pending Deluge files (those with a torrent hash but not yet copied to the
+          library).
+        </Typography>
+        <Button
+          variant="outlined"
+          onClick={handleBulkImport}
+          disabled={importing}
+        >
+          {importing ? 'Importing…' : 'Import Unimported'}
+        </Button>
+        {importResult && (
+          <Alert severity={importResult.failed > 0 ? 'warning' : 'success'} sx={{ mt: 2 }}>
+            Total: {importResult.total} — Imported: {importResult.imported} — Failed:{' '}
+            {importResult.failed}
+          </Alert>
+        )}
+      </Box>
     </Box>
   );
 }
