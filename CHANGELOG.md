@@ -1,7 +1,7 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.37.0 -->
+<!-- version: 2.38.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-29 -->
+<!-- last-edited: 2026-04-30 -->
 
 # Changelog
 
@@ -18,6 +18,24 @@
   confirmed absent from iTunes — documented for human review.
 
 ### Added / Changed
+
+#### April 30, 2026 — Book detail polish, Deluge settings UI, RELINK-5 bulk import (#561–#563)
+
+- **PR #561** `feat(ui)`: BookDetail enhancements
+  - Audible category chips split by source: system-sourced tags (Audible category ladders) shown as outlined chips with `LabelIcon`; user-applied labels shown as plain chips
+  - Duration-delta warning chip: if `|duration_delta_sec| > 300s`, shows a `color="warning"` chip (`±Xh Ym off from Audible`) with tooltip
+  - Origin column in Files tab: "Deluge" outlined chip with tooltip showing original path for reflinked files; `—` otherwise
+
+- **PR #562** `feat(settings)`: ProtectedPaths field + bulk Deluge import
+  - `Settings.tsx`: Protected Paths multiline `TextField` added to Deluge settings tab (index 7); saved as `protected_paths` string array in config
+  - `POST /api/v1/discovery/import` (new endpoint): bulk-imports all `BookFile` records where `deluge_hash != ""` and `imported_from_deluge_at IS NULL`; registered with `settings.manage` permission
+  - `DelugeSettingsTab`: "Import Unimported" button with loading state and success/warning `Alert` showing total/imported/failed counts
+
+- **PR #563** `feat(maintenance)`: RELINK-5 bulk-deluge-import async operation
+  - `GetBookFilesNeedingDelugeImport()` added to `BookFileStore` interface + implemented in SQLiteStore (`deluge_hash != '' AND imported_from_deluge_at IS NULL`) and PebbleStore (in-memory filter)
+  - Both mock stores updated with stubs
+  - `handleBulkDelugeImport` + `runBulkDelugeImport` in `maintenance_fixups.go`: idempotent batch with `dry_run`/`max_books` params, per-book progress updates, `OperationResult` rows
+  - `POST /api/v1/maintenance/bulk-deluge-import` route registered
 
 #### April 28, 2026 — iTunes relink endpoint for broken organizer-root books (fix/broken-book-paths, PR #507)
 
