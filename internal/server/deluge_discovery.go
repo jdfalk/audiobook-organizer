@@ -1,5 +1,5 @@
 // file: internal/server/deluge_discovery.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: e6f7a8b9-c0d1-2e3f-4a5b-6c7d8e9f0a1b
 //
 // Deluge label-based audiobook discovery.
@@ -38,6 +38,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 )
@@ -419,5 +420,83 @@ func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"book":         resp,
 		"torrent_hash": req.TorrentHash,
+	})
+}
+
+// handleDiscoveryImport triggers importToLibrary for all book_files that
+// have a deluge_hash but have not yet been imported (imported_from_deluge_at IS NULL).
+// This is the bulk-import trigger called from the Settings UI.
+// POST /api/v1/discovery/import
+// Optional body: { "dry_run": true, "max_books": 100 }
+func (s *Server) handleDiscoveryImport(c *gin.Context) {
+	var req struct {
+		DryRun   bool `json:"dry_run"`
+		MaxBooks int  `json:"max_books"`
+	}
+	_ = c.ShouldBindJSON(&req) // optional body
+
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	client := getDelugeClient()
+	if client == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "deluge not configured"})
+		return
+	}
+
+	files, err := store.GetAllBookFiles()
+	if err != nil {
+		internalError(c, "failed to load book files", err)
+		return
+	}
+
+	var pending []database.BookFile
+	for i := range files {
+		f := &files[i]
+		if f.DelugeHash != "" && f.ImportedFromDelugeAt == nil {
+			pending = append(pending, *f)
+		}
+	}
+
+	if req.MaxBooks > 0 && len(pending) > req.MaxBooks {
+		pending = pending[:req.MaxBooks]
+	}
+
+	type result struct {
+		FileID  string `json:"file_id"`
+		Path    string `json:"path"`
+		NewPath string `json:"new_path,omitempty"`
+		Error   string `json:"error,omitempty"`
+	}
+
+	var results []result
+	imported, skipped, failed := 0, 0, 0
+
+	for i := range pending {
+		f := &pending[i]
+		if req.DryRun {
+			results = append(results, result{FileID: f.ID, Path: f.FilePath})
+			skipped++
+			continue
+		}
+		newPath, importErr := importToLibrary(&config.AppConfig, client, store, f)
+		if importErr != nil {
+			results = append(results, result{FileID: f.ID, Path: f.FilePath, Error: importErr.Error()})
+			failed++
+		} else {
+			results = append(results, result{FileID: f.ID, Path: f.FilePath, NewPath: newPath})
+			imported++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total":    len(pending),
+		"imported": imported,
+		"skipped":  skipped,
+		"failed":   failed,
+		"dry_run":  req.DryRun,
+		"results":  results,
 	})
 }
