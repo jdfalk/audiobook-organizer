@@ -1,0 +1,159 @@
+// file: internal/server/deluge_import.go
+// version: 1.0.0
+// guid: f3e7a9c1-2b4d-5086-d9f2-4e1c7b0a3e58
+
+package server
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
+)
+
+// importToLibrary copies a file from a Deluge-managed path into the library root,
+// updates the BookFile record in the database, and optionally tells Deluge to move
+// the torrent storage to the new directory.
+//
+// Parameters:
+//   - cfg: app config (used for RootDir and DelugeMoveEnabled)
+//   - delugeClient: Deluge JSON-RPC client (may be nil; if nil, MoveStorage is skipped)
+//   - store: database store (used to call UpdateBookFile)
+//   - bookFile: the BookFile to import; its FilePath must point to the source file.
+//     After a successful return, bookFile.FilePath is updated to the new path.
+//
+// Returns the new absolute file path and nil on success.
+// Returns an error if the source file cannot be read or the destination cannot be written.
+// A MoveStorage failure is NOT returned as an error — it is logged only.
+//
+// Idempotent: if bookFile.ImportedFromDelugeAt is already set, returns the current
+// FilePath immediately without repeating the copy or DB update.
+func importToLibrary(
+	cfg *config.Config,
+	delugeClient *deluge.Client,
+	store database.Store,
+	bookFile *database.BookFile,
+) (newPath string, err error) {
+	if bookFile == nil {
+		return "", fmt.Errorf("importToLibrary: bookFile is nil")
+	}
+
+	// Idempotency guard: already imported.
+	if bookFile.ImportedFromDelugeAt != nil {
+		log.Printf("[INFO] importToLibrary: %s already imported at %s, skipping",
+			bookFile.FilePath, bookFile.ImportedFromDelugeAt.Format(time.RFC3339))
+		return bookFile.FilePath, nil
+	}
+
+	src := bookFile.FilePath
+	if src == "" {
+		return "", fmt.Errorf("importToLibrary: bookFile.FilePath is empty")
+	}
+
+	// Determine destination directory inside RootDir.
+	// If the source is already under RootDir, preserve relative structure.
+	// If it is outside, place it directly under RootDir using just the filename.
+	var destDir string
+	rel, relErr := filepath.Rel(cfg.RootDir, filepath.Dir(src))
+	if relErr == nil && !filepath.IsAbs(rel) && !isParentTraversal(rel) {
+		// Source is under RootDir (or a sub-path of it) — preserve structure.
+		destDir = filepath.Join(cfg.RootDir, rel)
+	} else {
+		// Source is outside RootDir — place directly under RootDir.
+		destDir = cfg.RootDir
+	}
+
+	dest := filepath.Join(destDir, filepath.Base(src))
+
+	// Do not copy if source and destination are the same path.
+	if src == dest {
+		log.Printf("[INFO] importToLibrary: source and dest are the same (%s), skipping copy", src)
+		return src, nil
+	}
+
+	// Create destination directory if it does not exist.
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return "", fmt.Errorf("importToLibrary: create dest dir %s: %w", destDir, err)
+	}
+
+	// Attempt reflink copy (Linux: ioctl FICLONE; macOS: clonefile).
+	// Falls back to io.Copy on any error.
+	copyErr := reflinkCopy(src, dest)
+	if copyErr != nil {
+		log.Printf("[DEBUG] importToLibrary: reflink failed (%v), falling back to io.Copy", copyErr)
+		if err := ioCopy(src, dest); err != nil {
+			return "", fmt.Errorf("importToLibrary: copy %s -> %s: %w", src, dest, err)
+		}
+	}
+
+	// Update the BookFile record.
+	now := time.Now()
+	bookFile.DelugeOriginalPath = src
+	bookFile.FilePath = dest
+	bookFile.ImportedFromDelugeAt = &now
+
+	if err := store.UpdateBookFile(bookFile.ID, bookFile); err != nil {
+		// The file has been copied but the DB update failed. Log it — the
+		// caller is responsible for retry or rollback.
+		return dest, fmt.Errorf("importToLibrary: UpdateBookFile %s: %w", bookFile.ID, err)
+	}
+
+	log.Printf("[INFO] importToLibrary: copied %s -> %s", src, dest)
+
+	// Best-effort: tell Deluge to move the torrent storage.
+	if cfg.DelugeMoveEnabled && bookFile.DelugeHash != "" && delugeClient != nil {
+		moveErr := delugeClient.MoveStorage([]string{bookFile.DelugeHash}, filepath.Dir(dest))
+		if moveErr != nil {
+			log.Printf("[WARN] importToLibrary: MoveStorage for hash %s failed (non-fatal): %v",
+				bookFile.DelugeHash, moveErr)
+			// Do NOT return this error. MoveStorage is best-effort.
+		} else {
+			log.Printf("[INFO] importToLibrary: MoveStorage for hash %s -> %s succeeded",
+				bookFile.DelugeHash, filepath.Dir(dest))
+		}
+	}
+
+	return dest, nil
+}
+
+// isParentTraversal returns true if the rel path starts with ".." (escapes root).
+func isParentTraversal(rel string) bool {
+	return len(rel) >= 2 && rel[:2] == ".."
+}
+
+// reflinkCopy attempts a copy-on-write clone of src to dest using OS-specific
+// syscalls. Returns an error if the reflink is not supported or fails.
+func reflinkCopy(src, dest string) error {
+	return reflinkCopyOS(src, dest)
+}
+
+// ioCopy copies src to dest using standard io.Copy (read all bytes, write all bytes).
+func ioCopy(src, dest string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open src: %w", err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("create dest: %w", err)
+	}
+	defer func() {
+		cerr := out.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+
+	if _, err = io.Copy(out, in); err != nil {
+		return fmt.Errorf("io.Copy: %w", err)
+	}
+	return nil
+}
