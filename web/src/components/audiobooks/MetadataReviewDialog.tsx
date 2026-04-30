@@ -783,6 +783,22 @@ export function MetadataReviewDialog({
                 color={SOURCE_COLORS[r.candidate.source] || 'default'}
                 variant="outlined"
               />
+              {(r.candidate.audible_rating_overall ?? 0) > 0 && (
+                <Chip
+                  label={`★ ${r.candidate.audible_rating_overall!.toFixed(1)}${(r.candidate.audible_rating_count ?? 0) > 0 ? ` (${r.candidate.audible_rating_count!.toLocaleString()})` : ''}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontWeight: 500 }}
+                />
+              )}
+              {(r.candidate.google_rating_average ?? 0) > 0 && (
+                <Chip
+                  label={`G★ ${r.candidate.google_rating_average!.toFixed(1)}${(r.candidate.google_rating_count ?? 0) > 0 ? ` (${r.candidate.google_rating_count!.toLocaleString()})` : ''}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontWeight: 500 }}
+                />
+              )}
               {Math.abs(r.candidate?.duration_delta_sec ?? 0) > 600 && (
                 <Chip
                   label={`⚠ runtime differs by ${formatDuration(Math.abs(r.candidate.duration_delta_sec!))}`}
@@ -967,8 +983,24 @@ export function MetadataReviewDialog({
                     size="small"
                     color={SOURCE_COLORS[r.candidate.source] || 'default'}
                     variant="outlined"
-                    sx={{ mt: 0.5 }}
+                    sx={{ mt: 0.5, mr: 0.5 }}
                   />
+                  {(r.candidate.audible_rating_overall ?? 0) > 0 && (
+                    <Chip
+                      label={`★ ${r.candidate.audible_rating_overall!.toFixed(1)}${(r.candidate.audible_rating_count ?? 0) > 0 ? ` (${r.candidate.audible_rating_count!.toLocaleString()})` : ''}`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ mt: 0.5, mr: 0.5, fontWeight: 500 }}
+                    />
+                  )}
+                  {(r.candidate.google_rating_average ?? 0) > 0 && (
+                    <Chip
+                      label={`G★ ${r.candidate.google_rating_average!.toFixed(1)}${(r.candidate.google_rating_count ?? 0) > 0 ? ` (${r.candidate.google_rating_count!.toLocaleString()})` : ''}`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ mt: 0.5, fontWeight: 500 }}
+                    />
+                  )}
                 </Box>
               </Stack>
             </Box>
@@ -1088,7 +1120,7 @@ export function MetadataReviewDialog({
                       Duration: {formatDuration(r.candidate.duration_sec!)}
                     </Typography>
                   )}
-                  <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
                     <Chip
                       label={`${Math.round(r.candidate.score * 100)}%`}
                       size="small"
@@ -1106,6 +1138,22 @@ export function MetadataReviewDialog({
                       color={SOURCE_COLORS[r.candidate.source] || 'default'}
                       variant="outlined"
                     />
+                    {(r.candidate.audible_rating_overall ?? 0) > 0 && (
+                      <Chip
+                        label={`★ ${r.candidate.audible_rating_overall!.toFixed(1)}${(r.candidate.audible_rating_count ?? 0) > 0 ? ` (${r.candidate.audible_rating_count!.toLocaleString()})` : ''}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontWeight: 500 }}
+                      />
+                    )}
+                    {(r.candidate.google_rating_average ?? 0) > 0 && (
+                      <Chip
+                        label={`G★ ${r.candidate.google_rating_average!.toFixed(1)}${(r.candidate.google_rating_count ?? 0) > 0 ? ` (${r.candidate.google_rating_count!.toLocaleString()})` : ''}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontWeight: 500 }}
+                      />
+                    )}
                   </Stack>
                   {isRowActionable(bookId) && (
                     <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
