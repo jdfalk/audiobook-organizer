@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -5328,5 +5328,101 @@ func (s *Server) handleRevertMetadataFetch(c *gin.Context) {
 		"skipped":  skipped,
 		"errors":   errors,
 		"total":    len(bookIDSet),
+	})
+}
+
+// durationMismatchResult describes one book whose Audible runtime diverges
+// significantly from the local file duration.
+type durationMismatchResult struct {
+	BookID            string `json:"book_id"`
+	Title             string `json:"title"`
+	ASIN              string `json:"asin,omitempty"`
+	FileDurationSec   int    `json:"file_duration_sec"`
+	AudibleRuntimeMin int    `json:"audible_runtime_min"`
+	AudibleRuntimeSec int    `json:"audible_runtime_sec"`
+	DeltaSec          int    `json:"delta_sec"`
+}
+
+// handleScanDurationMismatch scans all books that have both a local file
+// duration and a stored Audible runtime, and returns those whose delta
+// exceeds the configured threshold.
+//
+// Query params:
+//   - max_delta_min=10  (integer, default 10) — threshold in minutes
+//
+// GET /api/v1/maintenance/scan-duration-mismatch
+func (s *Server) handleScanDurationMismatch(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	// Parse threshold (minutes → seconds). Default = 10 min.
+	thresholdMin := 10
+	if raw := c.Query("max_delta_min"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			thresholdMin = v
+		}
+	}
+	thresholdSec := thresholdMin * 60
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	var mismatches []durationMismatchResult
+	scanned := 0
+
+	for i := range allBooks {
+		book := &allBooks[i]
+		if book.Duration == nil || *book.Duration <= 0 {
+			continue
+		}
+		if book.AudibleRuntimeMin == nil || *book.AudibleRuntimeMin <= 0 {
+			continue
+		}
+		scanned++
+
+		fileDurSec := *book.Duration
+		audibleSec := *book.AudibleRuntimeMin * 60
+		delta := fileDurSec - audibleSec
+		if delta < 0 {
+			delta = -delta
+		}
+		if delta <= thresholdSec {
+			continue
+		}
+
+		asin := ""
+		if book.ASIN != nil {
+			asin = *book.ASIN
+		}
+		mismatches = append(mismatches, durationMismatchResult{
+			BookID:            book.ID,
+			Title:             book.Title,
+			ASIN:              asin,
+			FileDurationSec:   fileDurSec,
+			AudibleRuntimeMin: *book.AudibleRuntimeMin,
+			AudibleRuntimeSec: audibleSec,
+			DeltaSec:          delta,
+		})
+	}
+
+	// Sort by largest delta first so the worst mismatches appear at the top.
+	sort.Slice(mismatches, func(i, j int) bool {
+		return mismatches[i].DeltaSec > mismatches[j].DeltaSec
+	})
+
+	log.Printf("[INFO] scan-duration-mismatch: scanned=%d threshold=%dmin mismatches=%d",
+		scanned, thresholdMin, len(mismatches))
+
+	c.JSON(http.StatusOK, gin.H{
+		"threshold_min": thresholdMin,
+		"scanned":       scanned,
+		"mismatch_count": len(mismatches),
+		"mismatches":    mismatches,
 	})
 }
