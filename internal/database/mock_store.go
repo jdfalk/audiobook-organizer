@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.39.0
+// version: 1.40.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -47,6 +47,7 @@ type MockStore struct {
 	GetDuplicateBooksFunc           func() ([][]Book, error)
 	CreateBookFunc                  func(book *Book) (*Book, error)
 	UpdateBookFunc                  func(id string, book *Book) (*Book, error)
+	UpdateBookRatingError           error
 	DeleteBookFunc                  func(id string) error
 	SearchBooksFunc                 func(query string, limit, offset int) ([]Book, error)
 	CountBooksFunc                  func() (int, error)
@@ -710,6 +711,10 @@ func (m *MockStore) UpdateBook(id string, book *Book) (*Book, error) {
 		return m.UpdateBookFunc(id, book)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) UpdateBookRating(id string, req UpdateBookRatingRequest) error {
+	return m.UpdateBookRatingError
 }
 
 func (m *MockStore) DeleteBook(id string) error {

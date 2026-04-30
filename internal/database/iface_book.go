@@ -1,10 +1,25 @@
 // file: internal/database/iface_book.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
 
 package database
 
 import "time"
+
+// UpdateBookRatingRequest carries partial-update fields for user ratings.
+// Each field uses a pointer so the caller can distinguish "omitted" (nil)
+// from "set to zero/empty" (non-nil pointing to zero value).
+// To clear a rating to NULL, set ClearOverall = true (etc.).
+type UpdateBookRatingRequest struct {
+	Overall      *float64
+	ClearOverall bool
+	Story        *float64
+	ClearStory   bool
+	Performance  *float64
+	ClearPerf    bool
+	Notes        *string
+	ClearNotes   bool
+}
 
 // BookReader is the read-only slice of Store for callers that only
 // read books. See spec 2026-04-17-store-interface-segregation-design.md.
@@ -43,6 +58,7 @@ type BookReader interface {
 type BookWriter interface {
 	CreateBook(book *Book) (*Book, error)
 	UpdateBook(id string, book *Book) (*Book, error)
+	UpdateBookRating(id string, req UpdateBookRatingRequest) error
 	DeleteBook(id string) error
 	SetLastWrittenAt(id string, t time.Time) error
 	MarkITunesSynced(bookIDs []string) (int64, error)

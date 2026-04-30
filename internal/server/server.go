@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.198.0
+// version: 1.199.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2274,6 +2274,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id", s.perm(auth.PermLibraryView), s.getAudiobook)
 			protected.GET("/audiobooks/:id/tags", s.perm(auth.PermLibraryView), s.getAudiobookTags)
 			protected.PUT("/audiobooks/:id", s.perm(auth.PermLibraryEditMetadata), s.updateAudiobook)
+			protected.PATCH("/audiobooks/:id/rating", s.perm(auth.PermLibraryEditMetadata), s.handleUpdateBookRating)
 			protected.DELETE("/audiobooks/:id", s.perm(auth.PermLibraryDelete), s.deleteAudiobook)
 			protected.GET("/audiobooks/:id/cover", s.perm(auth.PermLibraryView), s.serveAudiobookCover)
 			protected.GET("/audiobooks/:id/sample", s.perm(auth.PermLibraryView), s.handleAudioSample)
