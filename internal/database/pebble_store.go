@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.54.0
+// version: 1.55.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -1746,6 +1746,45 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 	}
 
 	return book, nil
+}
+
+// UpdateBookRating updates only the user rating fields for the given book.
+// Fields are applied selectively: nil pointer = no change, Clear* = set to nil.
+func (p *PebbleStore) UpdateBookRating(id string, req UpdateBookRatingRequest) error {
+	book, err := p.GetBookByID(id)
+	if err != nil {
+		return err
+	}
+	if book == nil {
+		return fmt.Errorf("book not found")
+	}
+
+	if req.ClearOverall {
+		book.UserRatingOverall = nil
+	} else if req.Overall != nil {
+		book.UserRatingOverall = req.Overall
+	}
+
+	if req.ClearStory {
+		book.UserRatingStory = nil
+	} else if req.Story != nil {
+		book.UserRatingStory = req.Story
+	}
+
+	if req.ClearPerf {
+		book.UserRatingPerformance = nil
+	} else if req.Performance != nil {
+		book.UserRatingPerformance = req.Performance
+	}
+
+	if req.ClearNotes {
+		book.UserRatingNotes = nil
+	} else if req.Notes != nil {
+		book.UserRatingNotes = req.Notes
+	}
+
+	_, err = p.UpdateBook(id, book)
+	return err
 }
 
 // SetLastWrittenAt stamps the last_written_at timestamp for book id.
