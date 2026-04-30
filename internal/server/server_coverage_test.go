@@ -1,5 +1,5 @@
 // file: internal/server/server_coverage_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package server
@@ -508,8 +508,8 @@ func TestCoverageDashboardStats(t *testing.T) {
 		createTestBook(t, "Dashboard Book 1")
 		createTestBookFmt(t, "Dashboard Book 2", "mp3")
 
-		// Invalidate the dashboard cache so new books are counted
-		server.dashboardCache.InvalidateAll()
+		// Invalidate the library stats cache so new books are counted
+		server.Store().InvalidateLibraryStats()
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/dashboard", nil)
 		w := httptest.NewRecorder()

@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.197.0
+// version: 1.198.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -701,7 +701,6 @@ type Server struct {
 	systemService          *SystemService
 	metadataStateService   *MetadataStateService
 	dashboardService       *DashboardService
-	dashboardCache         *cache.Cache[gin.H]
 	olService              *metafetch.OpenLibraryService
 	dedupCache             *cache.Cache[gin.H]
 	listCache              *cache.Cache[gin.H]
@@ -837,7 +836,6 @@ func NewServer(store database.Store) *Server {
 		systemService:          NewSystemService(resolvedStore),
 		metadataStateService:   NewMetadataStateService(resolvedStore),
 		dashboardService:       NewDashboardService(resolvedStore),
-		dashboardCache:         cache.New[gin.H]("dashboard", 5*time.Minute),
 		dedupCache:             cache.New[gin.H]("dedup", 24*time.Hour),
 		listCache:              cache.New[gin.H]("list", 24*time.Hour),
 		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
@@ -847,6 +845,9 @@ func NewServer(store database.Store) *Server {
 		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
+
+	// Propagate rootDir into the store so LibraryStats can split organized vs unorganized.
+	resolvedStore.SetRootDir(config.AppConfig.RootDir)
 
 	// Initialize plugin event bus and registry
 	server.eventBus = plugin.NewEventBus()

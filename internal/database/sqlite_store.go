@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.64.0
+// version: 1.65.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -251,8 +251,12 @@ func nullableFloat(nf sql.NullFloat64) *float64 {
 
 // SQLiteStore implements the Store interface using SQLite3
 type SQLiteStore struct {
-	db *sql.DB
+	db      *sql.DB
+	rootDir string
 }
+
+func (s *SQLiteStore) SetRootDir(rootDir string) { s.rootDir = rootDir }
+func (s *SQLiteStore) InvalidateLibraryStats()   {} // SQLite uses SQL aggregation; no persistent cache to clear
 
 // NewSQLiteStore creates a new SQLite store
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
@@ -3088,30 +3092,44 @@ func (s *SQLiteStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Ti
 // GetDashboardStats returns aggregated dashboard statistics using SQL aggregation
 // instead of loading all books into memory.
 func (s *SQLiteStore) GetDashboardStats() (*DashboardStats, error) {
+	const primaryFilter = " AND COALESCE(is_primary_version, 1) = 1"
 	stats := &DashboardStats{
 		StateDistribution:  make(map[string]int),
 		FormatDistribution: make(map[string]int),
+		BooksByImportPath:  make(map[int]int),
+		SizeByImportPath:   make(map[int]int64),
+		ComputedAt:         time.Now(),
 	}
 
 	// Aggregate counts and totals
-	err := s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0)
+	if err := s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(duration), 0), COALESCE(SUM(file_size), 0)
 		FROM books WHERE COALESCE(marked_for_deletion, 0) = 0`).Scan(
-		&stats.TotalBooks, &stats.TotalDuration, &stats.TotalSize)
-	if err != nil {
+		&stats.TotalBooks, &stats.TotalDuration, &stats.TotalSize); err != nil {
 		return nil, fmt.Errorf("failed to get book aggregates: %w", err)
 	}
 
-	// File count
 	if fc, err := s.CountFiles(); err == nil {
 		stats.TotalFiles = fc
 	}
-
-	// Author and series counts
 	if ac, err := s.CountAuthors(); err == nil {
 		stats.TotalAuthors = ac
 	}
 	if sc, err := s.CountSeries(); err == nil {
 		stats.TotalSeries = sc
+	}
+
+	// Organized vs unorganized (primary, non-deleted)
+	if s.rootDir != "" {
+		s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(file_size),0) FROM books
+			WHERE COALESCE(marked_for_deletion,0)=0`+primaryFilter+` AND file_path LIKE ?`,
+			s.rootDir+"%").Scan(&stats.OrganizedBooks, &stats.OrganizedSize)
+		s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(file_size),0) FROM books
+			WHERE COALESCE(marked_for_deletion,0)=0`+primaryFilter+` AND file_path NOT LIKE ?`,
+			s.rootDir+"%").Scan(&stats.UnorganizedBooks, &stats.UnorganizedSize)
+	} else {
+		s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(file_size),0) FROM books
+			WHERE COALESCE(marked_for_deletion,0)=0`+primaryFilter).Scan(
+			&stats.UnorganizedBooks, &stats.UnorganizedSize)
 	}
 
 	// State distribution

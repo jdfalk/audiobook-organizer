@@ -1,32 +1,36 @@
 // file: internal/server/dashboard_service_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a0b1c2d3-e4f5-6a7b-8c9d-0e1f2a3b4c5d
 
 package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
+func statsFor(books, files, authors, series, organized, unorganized int) *database.LibraryStats {
+	return &database.LibraryStats{
+		TotalBooks:       books,
+		TotalFiles:       files,
+		TotalAuthors:     authors,
+		TotalSeries:      series,
+		OrganizedBooks:   organized,
+		UnorganizedBooks: unorganized,
+		StateDistribution:  map[string]int{},
+		FormatDistribution: map[string]int{},
+		BooksByImportPath:  map[int]int{},
+		SizeByImportPath:   map[int]int64{},
+		ComputedAt:         time.Now(),
+	}
+}
+
 func TestDashboardService_CollectDashboardMetrics_Success(t *testing.T) {
 	mockDB := &database.MockStore{
-		CountBooksFunc: func() (int, error) {
-			return 42, nil
-		},
-		GetAllAuthorsFunc: func() ([]database.Author, error) {
-			return []database.Author{
-				{ID: 1, Name: "Author 1"},
-				{ID: 2, Name: "Author 2"},
-			}, nil
-		},
-		GetAllSeriesFunc: func() ([]database.Series, error) {
-			return []database.Series{
-				{ID: 1, Name: "Series 1"},
-				{ID: 2, Name: "Series 2"},
-				{ID: 3, Name: "Series 3"},
-			}, nil
+		GetDashboardStatsFunc: func() (*database.DashboardStats, error) {
+			return statsFor(42, 10, 2, 3, 0, 0), nil
 		},
 	}
 
@@ -49,14 +53,8 @@ func TestDashboardService_CollectDashboardMetrics_Success(t *testing.T) {
 
 func TestDashboardService_CollectDashboardMetrics_ZeroValues(t *testing.T) {
 	mockDB := &database.MockStore{
-		CountBooksFunc: func() (int, error) {
-			return 0, nil
-		},
-		GetAllAuthorsFunc: func() ([]database.Author, error) {
-			return []database.Author{}, nil
-		},
-		GetAllSeriesFunc: func() ([]database.Series, error) {
-			return []database.Series{}, nil
+		GetDashboardStatsFunc: func() (*database.DashboardStats, error) {
+			return statsFor(0, 0, 0, 0, 0, 0), nil
 		},
 	}
 
@@ -76,14 +74,8 @@ func TestDashboardService_CollectDashboardMetrics_ZeroValues(t *testing.T) {
 
 func TestDashboardService_GetHealthCheckResponse_Success(t *testing.T) {
 	mockDB := &database.MockStore{
-		CountBooksFunc: func() (int, error) {
-			return 10, nil
-		},
-		GetAllAuthorsFunc: func() ([]database.Author, error) {
-			return []database.Author{}, nil
-		},
-		GetAllSeriesFunc: func() ([]database.Series, error) {
-			return []database.Series{}, nil
+		GetDashboardStatsFunc: func() (*database.DashboardStats, error) {
+			return statsFor(10, 5, 0, 0, 0, 0), nil
 		},
 	}
 
@@ -105,24 +97,9 @@ func TestDashboardService_GetHealthCheckResponse_Success(t *testing.T) {
 }
 
 func TestDashboardService_CollectLibraryStats_Success(t *testing.T) {
-	organized := "organized"
-	imported := "imported"
-
 	mockDB := &database.MockStore{
-		CountBooksFunc: func() (int, error) {
-			return 100, nil
-		},
-		GetAllAuthorsFunc: func() ([]database.Author, error) {
-			return []database.Author{{ID: 1, Name: "Author"}}, nil
-		},
-		GetAllSeriesFunc: func() ([]database.Series, error) {
-			return []database.Series{{ID: 1, Name: "Series"}}, nil
-		},
-		GetAllBooksFunc: func(limit, offset int) ([]database.Book, error) {
-			return []database.Book{
-				{ID: "1", LibraryState: &organized},
-				{ID: "2", LibraryState: &imported},
-			}, nil
+		GetDashboardStatsFunc: func() (*database.DashboardStats, error) {
+			return statsFor(100, 0, 1, 1, 1, 1), nil
 		},
 	}
 
@@ -145,18 +122,8 @@ func TestDashboardService_CollectLibraryStats_Success(t *testing.T) {
 
 func TestDashboardService_CollectQuickMetrics_Success(t *testing.T) {
 	mockDB := &database.MockStore{
-		CountBooksFunc: func() (int, error) {
-			return 50, nil
-		},
-		GetAllAuthorsFunc: func() ([]database.Author, error) {
-			return []database.Author{
-				{ID: 1, Name: "A"},
-				{ID: 2, Name: "B"},
-				{ID: 3, Name: "C"},
-			}, nil
-		},
-		GetAllSeriesFunc: func() ([]database.Series, error) {
-			return []database.Series{}, nil
+		GetDashboardStatsFunc: func() (*database.DashboardStats, error) {
+			return statsFor(50, 0, 3, 0, 0, 0), nil
 		},
 	}
 

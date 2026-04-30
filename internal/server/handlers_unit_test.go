@@ -1,5 +1,5 @@
 // file: internal/server/handlers_unit_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f8a2d1c3-4b5e-6789-abcd-ef0123456789
 //
 // Unit tests for HTTP handlers using MockStore + httptest.
@@ -35,10 +35,9 @@ func setupHandlerTest(t *testing.T) (*Server, *mocks.MockStore, *gin.Engine) {
 	gin.SetMode(gin.TestMode)
 	mockStore := mocks.NewMockStore(t)
 	srv := &Server{
-		store:          mockStore,
-		dashboardCache: cache.New[gin.H]("dashboard", 30*time.Second),
-		dedupCache:     cache.New[gin.H]("dedup", 5*time.Minute),
-		listCache:      cache.New[gin.H]("list", 30*time.Second),
+		store:      mockStore,
+		dedupCache: cache.New[gin.H]("dedup", 5*time.Minute),
+		listCache:  cache.New[gin.H]("list", 30*time.Second),
 	}
 	router := gin.New()
 	return srv, mockStore, router
@@ -705,6 +704,7 @@ func TestHandler_ResetSystem_Success(t *testing.T) {
 	srv, mockStore, router := setupHandlerTest(t)
 
 	mockStore.EXPECT().Reset().Return(nil)
+	mockStore.EXPECT().InvalidateLibraryStats().Return()
 
 	router.POST("/system/reset", srv.resetSystem)
 

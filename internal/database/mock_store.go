@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.38.0
+// version: 1.39.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -57,6 +57,8 @@ type MockStore struct {
 	CountSeriesFunc                 func() (int, error)
 	GetBookCountsByLocationFunc     func(rootDir string) (int, int, error)
 	GetDashboardStatsFunc           func() (*DashboardStats, error)
+	SetRootDirFunc                  func(string)
+	InvalidateLibraryStatsFunc      func()
 	ListSoftDeletedBooksFunc        func(limit, offset int, olderThan *time.Time) ([]Book, error)
 
 	// Work methods
@@ -784,7 +786,21 @@ func (m *MockStore) GetDashboardStats() (*DashboardStats, error) {
 	return &DashboardStats{
 		StateDistribution:  map[string]int{},
 		FormatDistribution: map[string]int{},
+		BooksByImportPath:  map[int]int{},
+		SizeByImportPath:   map[int]int64{},
 	}, nil
+}
+
+func (m *MockStore) SetRootDir(rootDir string) {
+	if m.SetRootDirFunc != nil {
+		m.SetRootDirFunc(rootDir)
+	}
+}
+
+func (m *MockStore) InvalidateLibraryStats() {
+	if m.InvalidateLibraryStatsFunc != nil {
+		m.InvalidateLibraryStatsFunc()
+	}
 }
 
 func (m *MockStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {
