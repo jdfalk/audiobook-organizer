@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -429,9 +429,22 @@ func matchesFieldFilters(book database.Book, filters []FieldFilter) bool {
 	return true
 }
 
-// fieldMatchesValue checks whether a book's field value contains the search value
-// (case-insensitive). Unknown fields return false.
+// fieldMatchesValue checks whether a book's field value matches the search
+// value. For user_rating_* fields the value may be a numeric comparison
+// expression such as ">4", "<=3.5", ">=4", "<3", "==5", "!=2"; any other
+// value is treated as an equality check.  All other fields use
+// case-insensitive substring matching.  Unknown fields return false.
 func fieldMatchesValue(book database.Book, field, value string) bool {
+	// Numeric rating fields — delegate to numericCompare.
+	switch field {
+	case "user_rating_overall":
+		return numericCompare(book.UserRatingOverall, value)
+	case "user_rating_story":
+		return numericCompare(book.UserRatingStory, value)
+	case "user_rating_performance":
+		return numericCompare(book.UserRatingPerformance, value)
+	}
+
 	var bookValue string
 	switch field {
 	case "title":
@@ -508,6 +521,57 @@ func fieldMatchesValue(book database.Book, field, value string) bool {
 		return false // unknown field
 	}
 	return strings.Contains(strings.ToLower(bookValue), strings.ToLower(value))
+}
+
+// numericCompare evaluates a filter value expression against a nullable
+// float64 book field.  The expression may start with one of the operators
+// >=, <=, !=, ==, >, <.  A bare number (no operator prefix) is treated as
+// == equality.  If the book field is nil (unset) the function always returns
+// false.
+func numericCompare(fieldVal *float64, expr string) bool {
+	if fieldVal == nil {
+		return false
+	}
+	bookNum := *fieldVal
+
+	var op string
+	var numStr string
+	switch {
+	case strings.HasPrefix(expr, ">="):
+		op, numStr = ">=", expr[2:]
+	case strings.HasPrefix(expr, "<="):
+		op, numStr = "<=", expr[2:]
+	case strings.HasPrefix(expr, "!="):
+		op, numStr = "!=", expr[2:]
+	case strings.HasPrefix(expr, "=="):
+		op, numStr = "==", expr[2:]
+	case strings.HasPrefix(expr, ">"):
+		op, numStr = ">", expr[1:]
+	case strings.HasPrefix(expr, "<"):
+		op, numStr = "<", expr[1:]
+	default:
+		op, numStr = "==", expr
+	}
+
+	threshold, err := strconv.ParseFloat(strings.TrimSpace(numStr), 64)
+	if err != nil {
+		return false // unparseable — treat as no match
+	}
+
+	switch op {
+	case ">":
+		return bookNum > threshold
+	case "<":
+		return bookNum < threshold
+	case ">=":
+		return bookNum >= threshold
+	case "<=":
+		return bookNum <= threshold
+	case "!=":
+		return bookNum != threshold
+	default: // "=="
+		return bookNum == threshold
+	}
 }
 
 // GetAudiobooks retrieves audiobooks with optional filtering.
