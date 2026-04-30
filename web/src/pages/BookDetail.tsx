@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.48.0
+// version: 1.48.1
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -2138,9 +2138,9 @@ export const BookDetail = () => {
                                           <Tooltip title={seg.file_path}><span>{seg.file_path}</span></Tooltip>
                                         </TableCell>
                                         <TableCell>
-                                          {(seg as api.BookFile).deluge_original_path
+                                          {(seg as unknown as api.BookFile).deluge_original_path
                                             ? (
-                                              <Tooltip title={(seg as api.BookFile).deluge_original_path!}>
+                                              <Tooltip title={(seg as unknown as api.BookFile).deluge_original_path!}>
                                                 <Chip label="Deluge" size="small" variant="outlined" color="secondary" />
                                               </Tooltip>
                                             )
