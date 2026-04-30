@@ -291,7 +291,8 @@ type MockStore struct {
 	ListBookTombstonesFunc  func(limit int) ([]Book, error)
 
 	// Version Management
-	GetBooksByVersionGroupFunc func(groupID string) ([]Book, error)
+	GetBooksByVersionGroupFunc          func(groupID string) ([]Book, error)
+	GetBooksByMetadataSourceHashFunc    func(hash string) ([]Book, error)
 
 	// iTunes Library Fingerprints
 	SaveLibraryFingerprintFunc func(path string, size int64, modTime time.Time, crc32 uint32) error
@@ -863,6 +864,13 @@ func (m *MockStore) ListBookTombstones(limit int) ([]Book, error) {
 func (m *MockStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 	if m.GetBooksByVersionGroupFunc != nil {
 		return m.GetBooksByVersionGroupFunc(groupID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetBooksByMetadataSourceHash(hash string) ([]Book, error) {
+	if m.GetBooksByMetadataSourceHashFunc != nil {
+		return m.GetBooksByMetadataSourceHashFunc(hash)
 	}
 	return nil, nil
 }

@@ -1,6 +1,7 @@
 // file: web/src/services/api.ts
 // version: 2.8.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
+// last-edited: 2026-04-30
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -128,6 +129,9 @@ export interface Book {
   // Audible runtime fields (DUR PR #549)
   audible_runtime_min?: number | null;
   duration_delta_sec?: number | null;
+  // MATCH-1: metadata-source deduplication
+  metadata_source_hash?: string | null;
+  metadata_source_hash_duplicate_count?: number | null;
 }
 
 export interface Author {

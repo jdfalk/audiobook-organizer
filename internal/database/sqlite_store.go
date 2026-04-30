@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.71.0
+// version: 1.72.0
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -41,7 +41,8 @@ const bookSelectColumns = `
 	audible_rating_overall, audible_rating_performance, audible_rating_story,
 	audible_rating_count, audible_num_reviews,
 	google_rating_average, google_rating_count,
-	user_rating_overall, user_rating_story, user_rating_performance, user_rating_notes
+	user_rating_overall, user_rating_story, user_rating_performance, user_rating_notes,
+	metadata_source_hash
 `
 
 // bookSelectColumnsQualified prefixes all columns with "books." for use in JOINs.
@@ -63,7 +64,8 @@ const bookSelectColumnsQualified = `
 	books.audible_rating_overall, books.audible_rating_performance, books.audible_rating_story,
 	books.audible_rating_count, books.audible_num_reviews,
 	books.google_rating_average, books.google_rating_count,
-	books.user_rating_overall, books.user_rating_story, books.user_rating_performance, books.user_rating_notes
+	books.user_rating_overall, books.user_rating_story, books.user_rating_performance, books.user_rating_notes,
+	books.metadata_source_hash
 `
 
 func scanBook(scanner rowScanner, book *Book) error {
@@ -98,6 +100,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		googleRatingCount                                                    sql.NullInt64
 		userRatingOverall, userRatingStory, userRatingPerformance            sql.NullFloat64
 		userRatingNotes                                                      sql.NullString
+		metadataSourceHash                                                   sql.NullString
 	)
 
 	if err := scanner.Scan(
@@ -119,6 +122,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 		&audibleRatingCount, &audibleNumReviews,
 		&googleRatingAverage, &googleRatingCount,
 		&userRatingOverall, &userRatingStory, &userRatingPerformance, &userRatingNotes,
+		&metadataSourceHash,
 	); err != nil {
 		return err
 	}
@@ -224,6 +228,7 @@ func scanBook(scanner rowScanner, book *Book) error {
 	book.UserRatingStory = nullableFloat(userRatingStory)
 	book.UserRatingPerformance = nullableFloat(userRatingPerformance)
 	book.UserRatingNotes = nullableString(userRatingNotes)
+	book.MetadataSourceHash = nullableString(metadataSourceHash)
 	return nil
 }
 
@@ -752,6 +757,7 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"user_rating_story":            "REAL",
 		"user_rating_performance":      "REAL",
 		"user_rating_notes":            "TEXT",
+		"metadata_source_hash":         "TEXT",
 	}
 
 	// Fetch existing columns
@@ -1981,6 +1987,27 @@ func (s *SQLiteStore) GetBookByOrganizedHash(hash string) (*Book, error) {
 	return &book, nil
 }
 
+// GetBooksByMetadataSourceHash returns all books whose metadata_source_hash
+// matches the given value. Typically returns 0 or 1 books; 2+ means duplicates
+// were applied from the exact same external record.
+func (s *SQLiteStore) GetBooksByMetadataSourceHash(hash string) ([]Book, error) {
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE metadata_source_hash = ? ORDER BY created_at`, bookSelectColumns)
+	rows, err := s.db.Query(query, hash)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var books []Book
+	for rows.Next() {
+		var b Book
+		if err := scanBook(rows, &b); err != nil {
+			return nil, err
+		}
+		books = append(books, b)
+	}
+	return books, rows.Err()
+}
+
 // GetDuplicateBooks returns groups of books with identical file hashes
 // Only returns groups with 2+ books (actual duplicates)
 func (s *SQLiteStore) GetDuplicateBooks() ([][]Book, error) {
@@ -2784,7 +2811,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		audible_rating_overall = ?, audible_rating_performance = ?, audible_rating_story = ?,
 		audible_rating_count = ?, audible_num_reviews = ?,
 		google_rating_average = ?, google_rating_count = ?,
-		user_rating_overall = ?, user_rating_story = ?, user_rating_performance = ?, user_rating_notes = ?
+		user_rating_overall = ?, user_rating_story = ?, user_rating_performance = ?, user_rating_notes = ?,
+		metadata_source_hash = ?
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -2805,7 +2833,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.AudibleRatingOverall, book.AudibleRatingPerformance, book.AudibleRatingStory,
 		book.AudibleRatingCount, book.AudibleNumReviews,
 		book.GoogleRatingAverage, book.GoogleRatingCount,
-		book.UserRatingOverall, book.UserRatingStory, book.UserRatingPerformance, book.UserRatingNotes, id,
+		book.UserRatingOverall, book.UserRatingStory, book.UserRatingPerformance, book.UserRatingNotes,
+		book.MetadataSourceHash, id,
 	)
 	if err != nil {
 		return nil, err

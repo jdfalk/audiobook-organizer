@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.33.0
+// version: 1.34.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 // last-edited: 2026-04-30
 
@@ -363,6 +363,12 @@ var migrations = []Migration{
 		Version:     54,
 		Description: "Add metadata_rejections table for auditing rejected metadata candidates",
 		Up:          migration054Up,
+		Down:        nil,
+	},
+	{
+		Version:     55,
+		Description: "Add metadata_source_hash column to books for metadata-based deduplication (MATCH-1)",
+		Up:          migration055Up,
 		Down:        nil,
 	},
 }
@@ -2700,5 +2706,27 @@ func migration054Up(store Store) error {
 		}
 	}
 	log.Println("  - Created metadata_rejections table")
+	return nil
+}
+
+// migration055Up adds metadata_source_hash to books for metadata-based dedup (MATCH-1).
+// The value is sha256("{source}:{canonical_id}"), e.g. sha256("audible:B0XXXXXXXX").
+// Identical hashes mean two book records were applied from the exact same external record
+// and are almost certainly duplicates.
+func migration055Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: schema-free, field lives on struct
+	}
+	stmts := []string{
+		`ALTER TABLE books ADD COLUMN metadata_source_hash TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_books_metadata_source_hash ON books(metadata_source_hash) WHERE metadata_source_hash IS NOT NULL`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 055: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Added metadata_source_hash to books, created index idx_books_metadata_source_hash")
 	return nil
 }

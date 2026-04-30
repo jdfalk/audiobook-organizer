@@ -1275,6 +1275,17 @@ export const BookDetail = () => {
         </Alert>
       )}
 
+      {book.metadata_source_hash && (book.metadata_source_hash_duplicate_count ?? 0) > 0 && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          ⚠ This book shares its metadata source with{' '}
+          <strong>{book.metadata_source_hash_duplicate_count}</strong>{' '}
+          other book{(book.metadata_source_hash_duplicate_count ?? 0) === 1 ? '' : 's'} — possible duplicate.{' '}
+          <a href="/dedup/candidates" style={{ color: 'inherit', fontWeight: 'bold' }}>
+            View duplicates
+          </a>
+        </Alert>
+      )}
+
       <Paper sx={{ p: 2, mb: 3 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
