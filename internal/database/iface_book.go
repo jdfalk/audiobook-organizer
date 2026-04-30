@@ -1,7 +1,7 @@
 // file: internal/database/iface_book.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package database
 
@@ -77,6 +77,10 @@ type BookWriter interface {
 	// merged_into_book_id=primaryID), and updates the primary book's duration
 	// (rounded to nearest second) and title. Runs in a single transaction.
 	MergeChapterBooks(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error
+	// FlagMetadataHashDuplicate marks duplicateID as absorbed into primaryID by
+	// setting merged_into_book_id=primaryID and is_primary_version=0 on the
+	// duplicate. Used by MATCH-4 auto-dedup at metadata-apply time.
+	FlagMetadataHashDuplicate(primaryID, duplicateID string) error
 }
 
 // BookStore combines BookReader and BookWriter for callers that need both.

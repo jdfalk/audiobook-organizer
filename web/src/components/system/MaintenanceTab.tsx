@@ -1,7 +1,7 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -381,6 +381,96 @@ function SHADuplicateCard() {
   );
 }
 
+// ─── MetadataHashDuplicateCard ────────────────────────────────────────────────
+
+function MetadataHashDuplicateCard() {
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<api.MetadataHashDuplicatesResult | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleScan = useCallback(async () => {
+    setScanning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const r = await api.findMetadataHashDuplicates();
+      setResult(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  }, []);
+
+  return (
+    <Card variant="outlined" sx={{ mb: 2 }}>
+      <CardHeader
+        title="Metadata Hash Duplicates"
+        subheader="Books that share the same metadata source hash (same ASIN/ISBN from the same provider)."
+        action={
+          result != null && result.total_duplicate_books > 0 ? (
+            <Chip color="warning" label={`${result.total_duplicate_books} duplicates`} size="small" />
+          ) : result != null ? (
+            <Chip color="success" label="No duplicates" size="small" />
+          ) : null
+        }
+      />
+      <CardContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={scanning ? <CircularProgress size={14} /> : undefined}
+            disabled={scanning}
+            onClick={handleScan}
+          >
+            {scanning ? 'Scanning…' : 'Scan for Metadata Hash Duplicates'}
+          </Button>
+        </Stack>
+
+        {result && result.groups.length > 0 && (
+          <List dense disablePadding>
+            {result.groups.map((g) => (
+              <Box key={g.hash} sx={{ mb: 1 }}>
+                <ListItem
+                  disableGutters
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => setExpanded(expanded === g.hash ? null : g.hash)}
+                >
+                  <ListItemText
+                    primary={`${g.books[0]?.title || '(unknown)'} — ${g.books.length} copies`}
+                    secondary={`hash: ${g.hash.slice(0, 16)}…`}
+                  />
+                  <Chip size="small" label={`${g.books.length} books`} sx={{ ml: 1 }} />
+                </ListItem>
+                <Collapse in={expanded === g.hash}>
+                  <List dense disablePadding sx={{ pl: 2 }}>
+                    {g.books.map((b) => (
+                      <ListItem key={b.id} disableGutters>
+                        <ListItemText
+                          primary={b.title}
+                          secondary={`ID: ${b.id}`}
+                        />
+                        <Chip size="small" label={`${b.file_count} files`} variant="outlined" sx={{ ml: 1 }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Collapse>
+              </Box>
+            ))}
+          </List>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── MaintenanceTab ───────────────────────────────────────────────────────────
 
 export function MaintenanceTab() {
@@ -480,6 +570,8 @@ export function MaintenanceTab() {
       <ChapterConsolidationCard />
 
       <SHADuplicateCard />
+
+      <MetadataHashDuplicateCard />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>

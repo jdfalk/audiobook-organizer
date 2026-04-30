@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.28.0
+// version: 1.29.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package server
 
@@ -6220,5 +6220,85 @@ c.JSON(http.StatusOK, gin.H{
 "total_wasted_bytes": totalWasted,
 "total_groups":       len(groups),
 },
+})
+}
+
+// ── MATCH-4: metadata-hash duplicate scan ─────────────────────────────────────
+
+// metadataHashDupBook is the per-book entry returned in a metadata-hash duplicate group.
+type metadataHashDupBook struct {
+ID        string `json:"id"`
+Title     string `json:"title"`
+FileCount int    `json:"file_count"`
+}
+
+// metadataHashDupGroup is one group of books that share a metadata_source_hash.
+type metadataHashDupGroup struct {
+Hash  string                `json:"hash"`
+Books []metadataHashDupBook `json:"books"`
+}
+
+// handleScanMetadataHashDuplicates scans all books, groups them by
+// metadata_source_hash, and returns groups where count > 1.
+//
+// GET /api/v1/maintenance/metadata-hash-duplicates
+//
+// Response: { "groups": [...], "total_duplicate_books": N }
+func (s *Server) handleScanMetadataHashDuplicates(c *gin.Context) {
+store := s.Store()
+if store == nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+return
+}
+
+all, err := store.GetAllBooks(0, 0)
+if err != nil {
+internalError(c, "failed to list books", err)
+return
+}
+
+grouped := make(map[string][]database.Book)
+for _, b := range all {
+if b.MetadataSourceHash == nil || *b.MetadataSourceHash == "" {
+continue
+}
+if b.MergedIntoBookID != nil {
+continue
+}
+grouped[*b.MetadataSourceHash] = append(grouped[*b.MetadataSourceHash], b)
+}
+
+fileCountMap := make(map[string]int)
+for hash, books := range grouped {
+if len(books) < 2 {
+delete(grouped, hash)
+continue
+}
+for _, b := range books {
+files, fErr := store.GetBookFiles(b.ID)
+if fErr == nil {
+fileCountMap[b.ID] = len(files)
+}
+}
+}
+
+result := make([]metadataHashDupGroup, 0, len(grouped))
+totalDup := 0
+for hash, books := range grouped {
+entry := metadataHashDupGroup{Hash: hash}
+for _, b := range books {
+entry.Books = append(entry.Books, metadataHashDupBook{
+ID:        b.ID,
+Title:     b.Title,
+FileCount: fileCountMap[b.ID],
+})
+}
+result = append(result, entry)
+totalDup += len(books)
+}
+
+c.JSON(http.StatusOK, gin.H{
+"groups":               result,
+"total_duplicate_books": totalDup,
 })
 }
