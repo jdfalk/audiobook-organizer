@@ -1,11 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.36.0 -->
+<!-- version: 2.37.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-28 -->
+<!-- last-edited: 2026-04-29 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixed
+
+#### April 29, 2026 — Manual iTunes path fixes for 9 unresolved relinks (RELINK-1)
+
+- Applied manual iTunes path fixes for 9 books unresolved by the auto-relink
+  endpoint (co-author dir mismatch, colon/underscore title prefix mismatch,
+  series-prefix filenames). Results: `docs/reports/relink-manual-fixes-result-2026-04-29.md`
+- 4 books (Night Angel Nemesis, Ninth House, Promises Kept, Portal Wars - 2)
+  confirmed absent from iTunes — documented for human review.
 
 ### Added / Changed
 
