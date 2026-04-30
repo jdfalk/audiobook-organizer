@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.6.0
+// version: 2.7.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -125,6 +125,9 @@ export interface Book {
   user_rating_story?: number | null;
   user_rating_performance?: number | null;
   user_rating_notes?: string | null;
+  // Audible runtime fields (DUR PR #549)
+  audible_runtime_min?: number | null;
+  duration_delta_sec?: number | null;
 }
 
 export interface Author {
@@ -231,6 +234,10 @@ export interface BookFile {
   file_hash?: string;
   missing: boolean;
   file_exists?: boolean;
+  // Deluge import fields (DELUGE-1, PR #540)
+  deluge_hash?: string | null;
+  deluge_original_path?: string | null;
+  imported_from_deluge_at?: string | null;
   created_at: string;
   updated_at: string;
 }
