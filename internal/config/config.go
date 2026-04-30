@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.42.0
+// version: 1.43.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 // last-edited: 2026-04-30
 
@@ -402,7 +402,7 @@ func InitConfig() {
 	// Set memory management defaults
 	viper.SetDefault("memory_limit_type", "items")
 	viper.SetDefault("cache_size", 1000)
-	viper.SetDefault("metadata_fetch_cache_ttl_days", 30)
+	viper.SetDefault("metadata_fetch_cache_ttl_days", 180)
 	viper.SetDefault("memory_limit_percent", 25)
 	viper.SetDefault("memory_limit_mb", 512)
 
