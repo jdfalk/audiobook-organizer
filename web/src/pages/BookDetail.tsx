@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.46.0
+// version: 1.48.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -161,6 +161,9 @@ export const BookDetail = () => {
   // versionFileTagsLoading removed — TagComparison handles its own loading
   const [, setVersionFileTagsLoading] = useState<Set<string>>(new Set());
 
+  // Detailed tags with source attribution (CAT-1, PR #548)
+  const [detailedTags, setDetailedTags] = useState<api.DetailedBookTag[]>([]);
+
   // Rating widget state (RATE-2)
   const [ratingOverall, setRatingOverall] = useState<number | null>(null);
   const [ratingStory, setRatingStory] = useState<number | null>(null);
@@ -185,6 +188,14 @@ export const BookDetail = () => {
     setRatingPerformance(book.user_rating_performance ?? null);
     setRatingNotes(book.user_rating_notes ?? '');
   }, [book?.id]); // intentionally on id only — don't overwrite in-progress edits on silent refresh
+
+  // Load detailed tags for source attribution (CAT-1 / PR #548)
+  useEffect(() => {
+    if (!id) return;
+    api.getBookTagsDetailed(id)
+      .then(setDetailedTags)
+      .catch(() => setDetailedTags([]));
+  }, [id, filesRefreshKey]);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -1112,6 +1123,11 @@ export const BookDetail = () => {
               {book.is_primary_version && (
                 <Chip label="Primary Version" color="primary" />
               )}
+              {bookFiles.some((f) => f.imported_from_deluge_at) && (
+                <Tooltip title="At least one file was imported via Deluge">
+                  <Chip label="Imported from Deluge" color="secondary" size="small" variant="outlined" />
+                </Tooltip>
+              )}
               <ReadStatusChip bookId={book.id} />
             </Box>
             <Typography variant="subtitle1" color="text.secondary">
@@ -1520,6 +1536,12 @@ export const BookDetail = () => {
                     { label: 'Codec', value: book.codec },
                     { label: 'Bitrate', value: book.bitrate ? `${book.bitrate} kbps` : undefined },
                     { label: 'Duration', value: book.duration ? formatDuration(book.duration) : undefined },
+                    { label: 'Audible Runtime', value: (() => {
+                      if (!book.audible_runtime_min) return undefined;
+                      const h = Math.floor(book.audible_runtime_min / 60);
+                      const m = book.audible_runtime_min % 60;
+                      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+                    })() },
                     { label: 'Edition', value: book.edition && book.edition !== '0' && book.edition.length <= 50 ? book.edition : undefined },
                     { label: 'Description', value: book.description || (book.edition && book.edition.length > 50 ? book.edition : undefined) },
                     { label: 'Work ID', value: book.work_id },
@@ -1549,6 +1571,24 @@ export const BookDetail = () => {
                       </Box>
                     </Grid>
                   ));
+                })()}
+                {/* Duration delta warning chip — shown when actual audio differs from Audible runtime by >5 min */}
+                {book.duration_delta_sec != null && Math.abs(book.duration_delta_sec) > 300 && (() => {
+                  const absDelta = Math.abs(book.duration_delta_sec!);
+                  const sign = book.duration_delta_sec! > 0 ? '+' : '-';
+                  const totalMin = Math.floor(absDelta / 60);
+                  const h = Math.floor(totalMin / 60);
+                  const m = totalMin % 60;
+                  const deltaLabel = absDelta >= 60
+                    ? (h > 0 ? `${sign}${h}h ${m}m off from Audible` : `${sign}${m}m off from Audible`)
+                    : `${sign}${absDelta}s off from Audible`;
+                  return (
+                    <Grid item xs={12}>
+                      <Tooltip title="Difference between actual audio duration and Audible's listed runtime">
+                        <Chip color="warning" label={deltaLabel} size="small" />
+                      </Tooltip>
+                    </Grid>
+                  );
                 })()}
               </Grid>
             </>
@@ -1604,6 +1644,39 @@ export const BookDetail = () => {
               />
             </Box>
           </Stack>
+        </Paper>
+      )}
+
+      {/* Tags section — Audible Categories + Your Labels (CAT-1 / PR #548) */}
+      {activeTab === 'info' && detailedTags.length > 0 && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+            Tags
+          </Typography>
+          {detailedTags.filter((t) => t.source !== 'user').length > 0 && (
+            <>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Audible Categories
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: detailedTags.some((t) => t.source === 'user') ? 2 : 0 }}>
+                {detailedTags.filter((t) => t.source !== 'user').map((t) => (
+                  <Chip key={t.tag} label={t.tag} size="small" variant="outlined" icon={<LabelIcon />} />
+                ))}
+              </Box>
+            </>
+          )}
+          {detailedTags.filter((t) => t.source === 'user').length > 0 && (
+            <>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Your Labels
+              </Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {detailedTags.filter((t) => t.source === 'user').map((t) => (
+                  <Chip key={t.tag} label={t.tag} size="small" />
+                ))}
+              </Box>
+            </>
+          )}
         </Paper>
       )}
 
@@ -2023,6 +2096,7 @@ export const BookDetail = () => {
                                     )}
                                     <TableCell>#</TableCell>
                                     <TableCell>File</TableCell>
+                                    <TableCell>Origin</TableCell>
                                     <TableCell>Duration</TableCell>
                                     <TableCell align="right">Size</TableCell>
                                   </TableRow>
@@ -2062,6 +2136,15 @@ export const BookDetail = () => {
                                         </TableCell>
                                         <TableCell sx={{ wordBreak: 'break-all', fontSize: '0.8rem', ...(isMissing && { color: 'error.main' }) }}>
                                           <Tooltip title={seg.file_path}><span>{seg.file_path}</span></Tooltip>
+                                        </TableCell>
+                                        <TableCell>
+                                          {(seg as api.BookFile).deluge_original_path
+                                            ? (
+                                              <Tooltip title={(seg as api.BookFile).deluge_original_path!}>
+                                                <Chip label="Deluge" size="small" variant="outlined" color="secondary" />
+                                              </Tooltip>
+                                            )
+                                            : '\u2014'}
                                         </TableCell>
                                         <TableCell>{formatDuration(seg.duration_seconds)}</TableCell>
                                         <TableCell align="right">
