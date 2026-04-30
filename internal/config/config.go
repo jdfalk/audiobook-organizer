@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.39.0
+// version: 1.40.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 
 package config
@@ -245,6 +245,10 @@ type Config struct {
 	DelugeDiscoveryLabel      string `json:"deluge_discovery_label"`       // label to filter for discovery (e.g. "audiobooks")
 	DelugeDiscoveryEnabled    bool   `json:"deluge_discovery_enabled"`     // enable /discover endpoint (identify unimported torrents)
 	DelugeMoveEnabled         bool   `json:"deluge_move_enabled"`          // enable MoveStorage calls when books are reorganized
+	// ProtectedPaths is an explicit list of filesystem path prefixes that must
+	// never be edited in-place (tag writes, renames, deletes). These are merged
+	// with the Deluge save_path set at runtime. iTunes media paths belong here.
+	ProtectedPaths []string `json:"protected_paths"` // default: empty
 
 	// Auto-update
 	AutoUpdateEnabled      bool   `json:"auto_update_enabled"`
