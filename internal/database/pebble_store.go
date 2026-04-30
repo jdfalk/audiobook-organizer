@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.63.0
+// version: 1.64.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-01
 
@@ -2592,38 +2592,35 @@ func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
 		importPaths = append(importPaths, importPath)
 	}
 
-	if len(importPaths) == 0 {
-		return importPaths, nil
-	}
+	return importPaths, nil
+}
 
-	// Live-count books per import path by iterating all books.
-	// The stored BookCount is stale (set only at creation time), so we
-	// recompute it here to keep the storage page accurate.
-	counts := make(map[int]int, len(importPaths))
-	bookIter, berr := p.db.NewIter(&pebble.IterOptions{
+// CountBooksByPathPrefix returns the number of books whose FilePath starts
+// with prefix. Called by updateImportPathBookCount after each scan to persist
+// an accurate BookCount without live-counting on every read.
+func (p *PebbleStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	if prefix == "" {
+		return 0, nil
+	}
+	count := 0
+	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
 		UpperBound: []byte("book:;"),
 	})
-	if berr == nil {
-		defer bookIter.Close()
-		for bookIter.First(); bookIter.Valid(); bookIter.Next() {
-			var b Book
-			if json.Unmarshal(bookIter.Value(), &b) != nil {
-				continue
-			}
-			for _, ip := range importPaths {
-				if ip.Path != "" && strings.HasPrefix(b.FilePath, ip.Path) {
-					counts[ip.ID]++
-					break
-				}
-			}
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		var b Book
+		if json.Unmarshal(iter.Value(), &b) != nil {
+			continue
 		}
-		for i := range importPaths {
-			importPaths[i].BookCount = counts[importPaths[i].ID]
+		if strings.HasPrefix(b.FilePath, prefix) {
+			count++
 		}
 	}
-
-	return importPaths, nil
+	return count, nil
 }
 
 func (p *PebbleStore) GetImportPathByID(id int) (*ImportPath, error) {

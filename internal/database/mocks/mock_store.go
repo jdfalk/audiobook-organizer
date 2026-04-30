@@ -14824,6 +14824,12 @@ func (_c *MockImportPathStore_DeleteImportPath_Call) RunAndReturn(run func(id in
 	return _c
 }
 
+// CountBooksByPathPrefix provides a mock function for the type MockImportPathStore
+func (_mock *MockImportPathStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	ret := _mock.Called(prefix)
+	return ret.Int(0), ret.Error(1)
+}
+
 // GetAllImportPaths provides a mock function for the type MockImportPathStore
 func (_mock *MockImportPathStore) GetAllImportPaths() ([]database.ImportPath, error) {
 	ret := _mock.Called()
@@ -27575,6 +27581,12 @@ func (_c *MockStore_DeleteImportPath_Call) Return(err error) *MockStore_DeleteIm
 func (_c *MockStore_DeleteImportPath_Call) RunAndReturn(run func(id int) error) *MockStore_DeleteImportPath_Call {
 	_c.Call.Return(run)
 	return _c
+}
+
+// CountBooksByPathPrefix provides a mock function for the type MockStore
+func (_mock *MockStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	ret := _mock.Called(prefix)
+	return ret.Int(0), ret.Error(1)
 }
 
 // DeleteInvite provides a mock function for the type MockStore

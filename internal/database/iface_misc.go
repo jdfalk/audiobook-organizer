@@ -1,5 +1,5 @@
 // file: internal/database/iface_misc.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
 // last-edited: 2026-05-01
 
@@ -187,6 +187,10 @@ type ImportPathStore interface {
 	CreateImportPath(path, name string) (*ImportPath, error)
 	UpdateImportPath(id int, importPath *ImportPath) error
 	DeleteImportPath(id int) error
+	// CountBooksByPathPrefix returns the total number of books whose FilePath
+	// starts with the given prefix. Used to persist accurate BookCount on
+	// ImportPath after a scan without doing a live count on every read.
+	CountBooksByPathPrefix(prefix string) (int, error)
 }
 
 // MetadataStore covers MetadataFieldState, change history, and

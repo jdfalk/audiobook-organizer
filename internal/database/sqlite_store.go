@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.75.0
+// version: 1.76.0
 // last-edited: 2026-05-01
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -3493,7 +3493,18 @@ func (s *SQLiteStore) DeleteImportPath(id int) error {
 	return err
 }
 
-// Operation operations
+// CountBooksByPathPrefix returns the total number of books whose file_path
+// starts with prefix. Used to persist accurate BookCount on ImportPath after
+// a scan without live-counting on every read.
+func (s *SQLiteStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	var count int
+	err := s.db.QueryRow(
+		"SELECT COUNT(*) FROM books WHERE file_path LIKE ? || '%'", prefix,
+	).Scan(&count)
+	return count, err
+}
+
+
 
 func (s *SQLiteStore) CreateOperation(id, opType string, folderPath *string) (*Operation, error) {
 	now := time.Now()
