@@ -3802,6 +3802,7 @@ export interface DBHealthStats {
     ttl_days: number;
     expired_entries: number;
   };
+  book_path_prefixes?: Array<{ prefix: string; book_count: number }>;
 }
 
 export async function getDBHealthStats(): Promise<DBHealthStats> {
