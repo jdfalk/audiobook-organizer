@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.7.0
+// version: 2.8.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -3766,6 +3766,43 @@ export async function applyDiagnosticsSuggestions(
     body: JSON.stringify({ operation_id: operationId, approved_suggestion_ids: approvedIds }),
   });
   if (!response.ok) throw await buildApiError(response, 'Failed to apply suggestions');
+  const body = await response.json();
+  return body.data;
+}
+
+export interface DBHealthTableStat {
+  name: string;
+  row_count: number;
+}
+
+export interface DBHealthStats {
+  sqlite?: {
+    tables: DBHealthTableStat[];
+    size_bytes: number;
+  };
+  pebble?: {
+    key_count: number;
+    size_bytes: number;
+  };
+  embeddings: {
+    vector_count: number;
+    size_bytes: number;
+  };
+  ai_scans: {
+    job_count: number;
+    pending_count: number;
+    size_bytes: number;
+  };
+  metadata_cache: {
+    total_entries: number;
+    ttl_days: number;
+    expired_entries: number;
+  };
+}
+
+export async function getDBHealthStats(): Promise<DBHealthStats> {
+  const response = await fetch(`${API_BASE}/diagnostics/db-health`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to fetch DB health stats');
   const body = await response.json();
   return body.data;
 }

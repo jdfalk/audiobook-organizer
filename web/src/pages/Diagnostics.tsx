@@ -1,5 +1,6 @@
 // file: web/src/pages/Diagnostics.tsx
-// version: 1.2.0
+// version: 1.3.0
+// last-edited: 2026-04-30
 // guid: f2323fc4-b3e7-4298-9ec5-759447cbd643
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -17,6 +18,7 @@ import {
   CardContent,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -25,8 +27,14 @@ import {
   FormControlLabel,
   Grid,
   LinearProgress,
+  Paper,
   Stack,
   Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from '@mui/material';
@@ -99,6 +107,24 @@ export function Diagnostics() {
   const [showRaw, setShowRaw] = useState(false);
   const [applyDialogOpen, setApplyDialogOpen] = useState(false);
   const [applying, setApplying] = useState(false);
+
+  // DB health stats
+  const [dbHealth, setDbHealth] = useState<api.DBHealthStats | null>(null);
+  const [dbHealthLoading, setDbHealthLoading] = useState(false);
+  const [dbHealthError, setDbHealthError] = useState<string | null>(null);
+
+  const fetchDBHealth = useCallback(async () => {
+    setDbHealthLoading(true);
+    setDbHealthError(null);
+    try {
+      const stats = await api.getDBHealthStats();
+      setDbHealth(stats);
+    } catch (e) {
+      setDbHealthError(e instanceof Error ? e.message : 'Failed to load DB health');
+    } finally {
+      setDbHealthLoading(false);
+    }
+  }, []);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -550,6 +576,106 @@ export function Diagnostics() {
 
       {/* AI Jobs Panel */}
       <AIJobsPanel />
+
+      {/* DB Health Section */}
+      <Accordion>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />} onClick={() => { if (!dbHealth && !dbHealthLoading) fetchDBHealth(); }}>
+          <Typography variant="h6" fontWeight="bold">Database Health</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Stack spacing={2}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button size="small" variant="outlined" onClick={fetchDBHealth} disabled={dbHealthLoading}>
+                {dbHealthLoading ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+                Refresh
+              </Button>
+            </Box>
+
+            {dbHealthError && <Alert severity="error">{dbHealthError}</Alert>}
+
+            {dbHealth && (
+              <Stack spacing={2}>
+                {/* SQLite main store tables */}
+                {dbHealth.sqlite && (
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      SQLite — Main Store ({(dbHealth.sqlite.size_bytes / 1024 / 1024).toFixed(1)} MB)
+                    </Typography>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Table</TableCell>
+                          <TableCell align="right">Row Count</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {dbHealth.sqlite.tables.map((t) => (
+                          <TableRow key={t.name}>
+                            <TableCell>{t.name}</TableCell>
+                            <TableCell align="right">{t.row_count.toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Paper>
+                )}
+
+                {/* PebbleDB main store */}
+                {dbHealth.pebble && (
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      PebbleDB — Main Store
+                    </Typography>
+                    <Stack direction="row" spacing={4}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Keys</Typography>
+                        <Typography>{dbHealth.pebble.key_count.toLocaleString()}</Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">Size</Typography>
+                        <Typography>{(dbHealth.pebble.size_bytes / 1024 / 1024).toFixed(1)} MB</Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                )}
+
+                {/* Embeddings + AI Scans + Metadata cache as grid */}
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={4}>
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                      <Typography variant="subtitle2" fontWeight="bold" gutterBottom>Embeddings DB</Typography>
+                      <Stack spacing={0.5}>
+                        <Box><Typography variant="caption" color="text.secondary">Vectors</Typography><Typography>{dbHealth.embeddings.vector_count.toLocaleString()}</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">Size</Typography><Typography>{(dbHealth.embeddings.size_bytes / 1024 / 1024).toFixed(1)} MB</Typography></Box>
+                      </Stack>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                      <Typography variant="subtitle2" fontWeight="bold" gutterBottom>AI Scans DB</Typography>
+                      <Stack spacing={0.5}>
+                        <Box><Typography variant="caption" color="text.secondary">Jobs</Typography><Typography>{dbHealth.ai_scans.job_count.toLocaleString()}</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">Pending</Typography><Typography>{dbHealth.ai_scans.pending_count.toLocaleString()}</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">Size</Typography><Typography>{(dbHealth.ai_scans.size_bytes / 1024 / 1024).toFixed(1)} MB</Typography></Box>
+                      </Stack>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Paper variant="outlined" sx={{ p: 2 }}>
+                      <Typography variant="subtitle2" fontWeight="bold" gutterBottom>Metadata Cache</Typography>
+                      <Stack spacing={0.5}>
+                        <Box><Typography variant="caption" color="text.secondary">Total entries</Typography><Typography>{dbHealth.metadata_cache.total_entries.toLocaleString()}</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">TTL</Typography><Typography>{dbHealth.metadata_cache.ttl_days} days</Typography></Box>
+                        <Box><Typography variant="caption" color="text.secondary">Expired</Typography><Typography>{dbHealth.metadata_cache.expired_entries.toLocaleString()}</Typography></Box>
+                      </Stack>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Stack>
+            )}
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
 
       {/* Cache Stats Panel */}
       <CacheStatsPanel />

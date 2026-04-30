@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.41.0
+// version: 1.42.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -1004,7 +1004,7 @@ export function Settings() {
     memoryLimitType: 'items',
     cacheSize: 1000, // items
     cacheInvalidateOnBookUpdate: false,
-    metadataFetchCacheTTLDays: 7,
+    metadataFetchCacheTTLDays: 30,
     memoryLimitPercent: 25, // % of system memory
     memoryLimitMB: 512, // MB
 
@@ -1203,7 +1203,7 @@ export function Settings() {
         memoryLimitType: config.memory_limit_type || 'items',
         cacheSize: config.cache_size || 1000,
         cacheInvalidateOnBookUpdate: config.cache_invalidate_on_book_update ?? false,
-        metadataFetchCacheTTLDays: config.metadata_fetch_cache_ttl_days ?? 7,
+        metadataFetchCacheTTLDays: config.metadata_fetch_cache_ttl_days ?? 30,
         memoryLimitPercent: config.memory_limit_percent || 25,
         memoryLimitMB: config.memory_limit_mb || 512,
 
