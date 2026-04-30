@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.58.0
+// version: 4.59.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -156,6 +156,9 @@ type MetadataCandidate struct {
 	// Zero means either side had no duration, or they matched exactly.
 	// Non-zero lets the review UI flag candidates whose runtime diverges significantly.
 	DurationDeltaSec int `json:"duration_delta_sec,omitempty"`
+	// CategoryTags holds Audible category ladder node names (e.g. "Science Fiction").
+	// Only populated for Audible-sourced candidates. Applied as book_tags on apply.
+	CategoryTags []string `json:"category_tags,omitempty"`
 }
 
 // SearchMetadataResponse is returned by SearchMetadataForBook.
@@ -2347,6 +2350,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				Score:            score,
 				DurationSec:      r.DurationSec,
 				DurationDeltaSec: durationDelta,
+				CategoryTags:     r.CategoryTags,
 			})
 		}
 	}
@@ -2399,6 +2403,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 					Score:            score,
 					DurationSec:      result.DurationSec,
 					DurationDeltaSec: asinDurationDelta,
+					CategoryTags:     result.CategoryTags,
 				})
 			}
 		} else {
@@ -2614,6 +2619,15 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 	// a true no-op at the tag layer (no wasted writes). Done after
 	// UpdateBook so a failed update never leaves stale tags behind.
 	mfs.ApplyMetadataSystemTags(id, candidate.Source, meta.Language)
+
+	// Apply Audible category ladder tags. These are additive enrichment — they
+	// are not controlled by the fields allowlist and do not fail the apply if
+	// a tag write errors.
+	for _, tag := range candidate.CategoryTags {
+		if err := mfs.db.AddBookTagWithSource(id, tag, "audible_category"); err != nil {
+			log.Printf("[WARN] failed to apply category tag %q to book %s: %v", tag, id, err)
+		}
+	}
 
 	// Intentionally keep the metadata fetch cache after apply. The cached
 	// API results are still valid — the TTL (MetadataFetchCacheTTLDays)

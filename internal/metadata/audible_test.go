@@ -1,5 +1,5 @@
 // file: internal/metadata/audible_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b8c7d6e5-f4a3-2b1c-0d9e-8f7a6b5c4d3e
 
 package metadata
@@ -155,3 +155,57 @@ func TestAudibleClient_HTMLStripping(t *testing.T) {
 }
 
 var _ MetadataSource = (*AudibleClient)(nil)
+
+func TestProductToMetadata_CategoryLadders(t *testing.T) {
+	client := NewAudibleClientWithBaseURL("http://unused")
+
+	p := &audibleProduct{
+		ASIN:  "B08G9PRS1K",
+		Title: "Test Book",
+		CategoryLadders: []audibleCategoryLadder{
+			{
+				Root: "Audible Books & Originals",
+				Ladder: []audibleCategoryNode{
+					{ID: "18685580011", Name: "Science Fiction & Fantasy"},
+					{ID: "18685589011", Name: "Science Fiction"},
+					{ID: "18685594011", Name: "Space Opera"},
+				},
+			},
+			{
+				Root: "Audible Books & Originals",
+				Ladder: []audibleCategoryNode{
+					{ID: "18685580011", Name: "Science Fiction & Fantasy"},
+					{ID: "18685589011", Name: "Science Fiction"},
+				},
+			},
+		},
+	}
+
+	meta := client.productToMetadata(p)
+
+	// Expect 3 unique tags (deduplication across overlapping ladders)
+	want := []string{"Science Fiction & Fantasy", "Science Fiction", "Space Opera"}
+	if len(meta.CategoryTags) != len(want) {
+		t.Fatalf("CategoryTags: got %d tags, want %d: %v", len(meta.CategoryTags), len(want), meta.CategoryTags)
+	}
+	for i, w := range want {
+		if meta.CategoryTags[i] != w {
+			t.Errorf("CategoryTags[%d]: got %q, want %q", i, meta.CategoryTags[i], w)
+		}
+	}
+}
+
+func TestProductToMetadata_NoCategoryLadders(t *testing.T) {
+	client := NewAudibleClientWithBaseURL("http://unused")
+
+	p := &audibleProduct{
+		ASIN:  "B000001",
+		Title: "No Genres",
+	}
+
+	meta := client.productToMetadata(p)
+
+	if meta.CategoryTags != nil {
+		t.Errorf("expected nil CategoryTags when no ladders, got: %v", meta.CategoryTags)
+	}
+}
