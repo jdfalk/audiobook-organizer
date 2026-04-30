@@ -60,6 +60,12 @@ export interface Audiobook {
   metadata_updated_at?: string;
   last_written_at?: string;
 
+  // User ratings (RATE-1/RATE-2)
+  user_rating_overall?: number | null;
+  user_rating_story?: number | null;
+  user_rating_performance?: number | null;
+  user_rating_notes?: string | null;
+
   created_at: string;
   updated_at: string;
   work_id?: string;
