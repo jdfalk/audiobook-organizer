@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.44.0
+// version: 1.45.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-04-30
 
@@ -328,6 +328,7 @@ type MockStore struct {
 	UpsertBookFileFunc          func(file *BookFile) error
 	BatchUpsertBookFilesFunc    func(files []*BookFile) error
 	MoveBookFilesToBookFunc     func(fileIDs []string, sourceBookID, targetBookID string) error
+	GetDuplicateFilesByHashFunc func(limit int) ([]DuplicateFileGroup, error)
 
 	// Path history
 	RecordPathChangeFunc   func(change *BookPathChange) error
@@ -2248,6 +2249,13 @@ func (m *MockStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBo
 		return m.MoveBookFilesToBookFunc(fileIDs, sourceBookID, targetBookID)
 	}
 	return nil
+}
+
+func (m *MockStore) GetDuplicateFilesByHash(limit int) ([]DuplicateFileGroup, error) {
+	if m.GetDuplicateFilesByHashFunc != nil {
+		return m.GetDuplicateFilesByHashFunc(limit)
+	}
+	return nil, nil
 }
 
 func (m *MockStore) CreateAIJob(job AIJob, payloadJSON []byte) error {

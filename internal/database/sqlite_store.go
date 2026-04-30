@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.73.0
+// version: 1.74.0
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -6295,6 +6295,84 @@ func (s *SQLiteStore) UpdateBookFileHashes(id, originalHash, postMetadataHash st
 		return fmt.Errorf("UpdateBookFileHashes %s: %w", id, err)
 	}
 	return nil
+}
+
+// GetDuplicateFilesByHash returns groups of book_files that share the same
+// original_file_hash, indicating identical audio content at multiple paths.
+func (s *SQLiteStore) GetDuplicateFilesByHash(limit int) ([]DuplicateFileGroup, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	const q = `
+WITH dup_hashes AS (
+  SELECT original_file_hash,
+         COUNT(*)                       AS cnt,
+         COUNT(DISTINCT book_id)        AS bcnt,
+         SUM(COALESCE(file_size, 0))    AS tsz
+  FROM book_files
+  WHERE original_file_hash IS NOT NULL AND original_file_hash != ''
+  GROUP BY original_file_hash
+  HAVING COUNT(*) >= 2
+  ORDER BY cnt DESC, tsz DESC
+  LIMIT ?
+)
+SELECT dh.original_file_hash, dh.cnt, dh.bcnt, dh.tsz,
+       bf.id, bf.book_id,
+       COALESCE(b.title, ''),
+       COALESCE(bf.file_path, ''),
+       COALESCE(b.file_path, ''),
+       COALESCE(bf.file_size, 0)
+FROM dup_hashes dh
+JOIN book_files bf ON bf.original_file_hash = dh.original_file_hash
+JOIN books b ON b.id = bf.book_id AND COALESCE(b.marked_for_deletion, 0) = 0
+ORDER BY dh.cnt DESC, dh.tsz DESC, bf.book_id`
+
+	rows, err := s.db.Query(q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("GetDuplicateFilesByHash query: %w", err)
+	}
+	defer rows.Close()
+
+	groupMap := make(map[string]*DuplicateFileGroup)
+	var order []string
+
+	for rows.Next() {
+		var (
+			hash, fileID, bookID, bookTitle, filePath, bookPath string
+			cnt, bcnt                                           int
+			tsz, fileSize                                       int64
+		)
+		if err := rows.Scan(&hash, &cnt, &bcnt, &tsz,
+			&fileID, &bookID, &bookTitle, &filePath, &bookPath, &fileSize); err != nil {
+			return nil, fmt.Errorf("GetDuplicateFilesByHash scan: %w", err)
+		}
+		if _, seen := groupMap[hash]; !seen {
+			groupMap[hash] = &DuplicateFileGroup{
+				Hash:      hash,
+				FileCount: cnt,
+				BookCount: bcnt,
+				TotalSize: tsz,
+			}
+			order = append(order, hash)
+		}
+		groupMap[hash].Files = append(groupMap[hash].Files, DuplicateFileInfo{
+			BookFileID: fileID,
+			BookID:     bookID,
+			BookTitle:  bookTitle,
+			FilePath:   filePath,
+			BookPath:   bookPath,
+			FileSize:   fileSize,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetDuplicateFilesByHash rows: %w", err)
+	}
+
+	groups := make([]DuplicateFileGroup, 0, len(order))
+	for _, h := range order {
+		groups = append(groups, *groupMap[h])
+	}
+	return groups, nil
 }
 
 // AddMetadataRejection records a rejected metadata candidate for a book.
