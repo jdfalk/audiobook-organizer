@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.10.0
+// version: 2.11.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-04-30
 
@@ -4523,5 +4523,8 @@ export async function scanDuplicateFiles(limit?: number): Promise<DuplicateFiles
     throw await buildApiError(response, 'Failed to scan duplicate files');
   }
   const body_data = await response.json();
-  return body_data.data ?? body_data;
+  const result = body_data.data ?? body_data;
+  // Ensure groups is always an array even if the server returns null.
+  result.groups = result.groups ?? [];
+  return result;
 }

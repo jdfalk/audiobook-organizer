@@ -1,5 +1,5 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
 // last-edited: 2026-04-30
 
@@ -344,9 +344,9 @@ function SHADuplicateCard() {
           </Typography>
         )}
 
-        {result && result.groups.length > 0 && (
+        {result && (result.groups?.length ?? 0) > 0 && (
           <List dense disablePadding>
-            {result.groups.map((g) => (
+            {(result.groups ?? []).map((g) => (
               <Box key={g.hash} sx={{ mb: 1 }}>
                 <ListItem
                   disableGutters

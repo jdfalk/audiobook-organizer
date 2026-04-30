@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.62.0
+// version: 1.63.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-04-30
 
@@ -2571,6 +2571,37 @@ func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
 			return nil, err
 		}
 		importPaths = append(importPaths, importPath)
+	}
+
+	if len(importPaths) == 0 {
+		return importPaths, nil
+	}
+
+	// Live-count books per import path by iterating all books.
+	// The stored BookCount is stale (set only at creation time), so we
+	// recompute it here to keep the storage page accurate.
+	counts := make(map[int]int, len(importPaths))
+	bookIter, berr := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if berr == nil {
+		defer bookIter.Close()
+		for bookIter.First(); bookIter.Valid(); bookIter.Next() {
+			var b Book
+			if json.Unmarshal(bookIter.Value(), &b) != nil {
+				continue
+			}
+			for _, ip := range importPaths {
+				if ip.Path != "" && strings.HasPrefix(b.FilePath, ip.Path) {
+					counts[ip.ID]++
+					break
+				}
+			}
+		}
+		for i := range importPaths {
+			importPaths[i].BookCount = counts[importPaths[i].ID]
+		}
 	}
 
 	return importPaths, nil
@@ -7905,9 +7936,10 @@ func (p *PebbleStore) MarkAIJobFailed(_, _ string) error {
 	return fmt.Errorf("AIJobsStore.MarkAIJobFailed: not supported by PebbleStore")
 }
 
-// ListAIJobs is not supported on PebbleStore.
+// ListAIJobs is not supported on PebbleStore; returns an empty list so diagnostics
+// pages degrade gracefully instead of showing an error.
 func (p *PebbleStore) ListAIJobs(_, _ string, _, _ int) ([]AIJob, error) {
-	return nil, fmt.Errorf("AIJobsStore.ListAIJobs: not supported by PebbleStore")
+	return []AIJob{}, nil
 }
 
 // KeyCount returns the total number of keys stored in the PebbleDB instance
