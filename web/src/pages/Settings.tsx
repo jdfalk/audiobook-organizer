@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.39.0
+// version: 1.41.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -859,6 +859,9 @@ interface SettingsState {
   autoRenameOnApply: boolean;
   autoWriteTagsOnApply: boolean;
   verifyAfterWrite: boolean;
+
+  // Deluge integration
+  protectedPaths: string;
 }
 
 export function Settings() {
@@ -1032,6 +1035,9 @@ export function Settings() {
     autoRenameOnApply: true,
     autoWriteTagsOnApply: true,
     verifyAfterWrite: true,
+
+    // Deluge integration
+    protectedPaths: '',
   };
 
   const [settings, setSettings] = useState<SettingsState>(initialSettings);
@@ -1229,6 +1235,9 @@ export function Settings() {
         autoRenameOnApply: config.auto_rename_on_apply ?? true,
         autoWriteTagsOnApply: config.auto_write_tags_on_apply ?? true,
         verifyAfterWrite: config.verify_after_write ?? true,
+
+        // Deluge integration
+        protectedPaths: (config.protected_paths || []).join('\n'),
       };
       setSettings(nextSettings);
       setSavedSnapshot(JSON.stringify(nextSettings));
@@ -1831,6 +1840,10 @@ export function Settings() {
         auto_rename_on_apply: settings.autoRenameOnApply,
         auto_write_tags_on_apply: settings.autoWriteTagsOnApply,
         verify_after_write: settings.verifyAfterWrite,
+        protected_paths: settings.protectedPaths
+          .split('\n')
+          .map((p) => p.trim())
+          .filter(Boolean),
       };
 
       console.log(
@@ -3609,6 +3622,27 @@ export function Settings() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={7}>
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+              Protected Paths
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Paths that the organizer will never move or delete files from. One path per line.
+              These are typically your Deluge download directories.
+            </Typography>
+            <TextField
+              multiline
+              minRows={3}
+              maxRows={10}
+              fullWidth
+              placeholder={'/mnt/downloads/audiobooks\n/mnt/media/deluge'}
+              value={settings.protectedPaths}
+              onChange={(e) => setSettings((prev) => ({ ...prev, protectedPaths: e.target.value }))}
+              size="small"
+              label="Protected Paths"
+              helperText="Changes are saved with the main Save button."
+            />
+          </Paper>
           <DelugeSettingsTab />
         </TabPanel>
 

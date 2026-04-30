@@ -1,5 +1,5 @@
 // file: internal/server/deluge_integration.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 1c9d0e8f-2a3b-4a70-b8c5-3d7e0f1b9a99
 //
 // Deluge integration for library centralization (backlog 6.1).
@@ -183,6 +183,9 @@ func (s *Server) registerDelugeRoutes(protected *gin.RouterGroup) {
 		dg.GET("/discover", s.perm("integrations.manage"), s.handleDelugeDiscover)
 		dg.POST("/discover/import", s.perm("integrations.manage"), s.handleDelugeDiscoverImport)
 	}
+
+	// Bulk-import pending Deluge files (settings.manage permission).
+	protected.POST("/discovery/import", s.perm("settings.manage"), s.handleDiscoveryImport)
 }
 
 // NotifyDelugeAfterUndo checks whether the reverted operation moved
