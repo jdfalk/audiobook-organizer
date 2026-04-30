@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.61.0
+// version: 2.61.1
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -609,6 +609,13 @@ type BookFile struct {
 	Missing            bool      `json:"missing"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
+	// Deluge integration fields (spec: deluge-protected-paths-design).
+	// DelugeHash is the torrent info-hash (40-char hex string).
+	// DelugeOriginalPath is the file path before copy-into-library.
+	// ImportedFromDelugeAt is when the copy completed.
+	DelugeHash           string     `json:"deluge_hash,omitempty"`
+	DelugeOriginalPath   string     `json:"deluge_original_path,omitempty"`
+	ImportedFromDelugeAt *time.Time `json:"imported_from_deluge_at,omitempty"`
 }
 
 // UserPosition is one user's resume point for one segment of one
