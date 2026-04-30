@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
 // System-level HTTP handlers split out of server.go: health, status,
@@ -227,7 +227,7 @@ func (s *Server) resetSystem(c *gin.Context) {
 
 	// Reset caches
 	resetLibrarySizeCache()
-	s.dashboardCache.InvalidateAll()
+	s.Store().InvalidateLibraryStats()
 
 	RespondWithOK(c, gin.H{"message": "System reset successfully"})
 }
@@ -295,7 +295,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 
 	// Reset caches
 	resetLibrarySizeCache()
-	s.dashboardCache.InvalidateAll()
+	s.Store().InvalidateLibraryStats()
 
 	log.Printf("[INFO] Factory reset complete")
 	RespondWithOK(c, gin.H{"message": "factory reset complete"})
@@ -467,45 +467,35 @@ func (s *Server) deleteBackup(c *gin.Context) {
 	RespondWithOK(c, gin.H{"message": "backup deleted successfully"})
 }
 
-// getDashboard returns dashboard statistics with size and format distributions
+// getDashboard returns dashboard statistics. The store handles caching internally
+// (PebbleDB: stats:library key with 10-min TTL; SQLite: SQL aggregation directly).
 func (s *Server) getDashboard(c *gin.Context) {
 	if s.Store() == nil {
 		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
-	// Check cache first
-	if cached, ok := s.dashboardCache.Get("dashboard"); ok {
-		LogServiceCacheHit("Dashboard", "dashboard")
-		RespondWithOK(c, cached)
-		return
-	}
-	LogServiceCacheMiss("Dashboard", "dashboard")
-
-	// Use SQL aggregation instead of loading all books
 	stats, err := s.Store().GetDashboardStats()
 	if err != nil {
 		RespondWithInternalError(c, "failed to retrieve dashboard stats")
 		return
 	}
 
-	// Get recent operations
 	recentOps, err := s.Store().GetRecentOperations(5)
 	if err != nil {
 		recentOps = []database.Operation{}
 	}
 
-	result := gin.H{
+	RespondWithOK(c, gin.H{
 		"formatDistribution": stats.FormatDistribution,
 		"stateDistribution":  stats.StateDistribution,
 		"recentOperations":   recentOps,
 		"totalSize":          stats.TotalSize,
 		"totalBooks":         stats.TotalBooks,
 		"totalDuration":      stats.TotalDuration,
-	}
-
-	s.dashboardCache.Set("dashboard", result)
-	RespondWithOK(c, result)
+		"organizedBooks":     stats.OrganizedBooks,
+		"unorganizedBooks":   stats.UnorganizedBooks,
+	})
 }
 
 // listBlockedHashes returns all blocked hashes

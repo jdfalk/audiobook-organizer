@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.53.0
+// version: 1.54.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -68,8 +68,51 @@ func prefixEnd(prefix []byte) []byte {
 // - author_tombstone:<old_id>        -> canonical_id (merged author redirect)
 
 type PebbleStore struct {
-	db      *pebble.DB
+	db        *pebble.DB
 	counterMu sync.Mutex // protects nextID read-modify-write
+	rootDir   string     // organized library root; set via SetRootDir after config load
+}
+
+const statsLibraryKey = "stats:library"
+const statsLibraryTTL = 10 * time.Minute
+
+// SetRootDir updates the organized-library root used when computing LibraryStats
+// and invalidates the cache so the next GetDashboardStats recomputes with the new path.
+func (p *PebbleStore) SetRootDir(rootDir string) {
+	if p.rootDir != rootDir {
+		p.rootDir = rootDir
+		p.InvalidateLibraryStats()
+	}
+}
+
+// InvalidateLibraryStats drops the cached stats:library key so the next
+// GetDashboardStats call triggers a fresh full recompute.
+func (p *PebbleStore) InvalidateLibraryStats() {
+	_ = p.db.Delete([]byte(statsLibraryKey), pebble.Sync)
+}
+
+func (p *PebbleStore) readCachedLibraryStats() *LibraryStats {
+	val, closer, err := p.db.Get([]byte(statsLibraryKey))
+	if err != nil {
+		return nil
+	}
+	defer closer.Close()
+	var s LibraryStats
+	if err := json.Unmarshal(val, &s); err != nil {
+		return nil
+	}
+	if time.Since(s.ComputedAt) > statsLibraryTTL {
+		return nil
+	}
+	return &s
+}
+
+func (p *PebbleStore) writeCachedLibraryStats(s *LibraryStats) {
+	data, err := json.Marshal(s)
+	if err != nil {
+		return
+	}
+	_ = p.db.Set([]byte(statsLibraryKey), data, pebble.Sync)
 }
 
 // NewPebbleStore creates a new PebbleDB store
@@ -2068,27 +2111,25 @@ func (p *PebbleStore) GetDistinctLanguages() ([]string, error) {
 
 // CountFiles returns the total number of audio files across all books.
 // Books with active segments count their segments; books without segments count as 1 file each.
+// Uses two range scans instead of per-book GetBookFiles calls to avoid N+1 queries.
 func (p *PebbleStore) CountFiles() (int, error) {
-	// Collect IDs of all primary, non-deleted books
-	var bookIDs []string
-
-	iter, err := p.db.NewIter(&pebble.IterOptions{
+	// Pass 1: collect IDs of all primary, non-deleted books (key scan + JSON decode)
+	primaryBookIDs := make(map[string]struct{})
+	bookIter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
 		UpperBound: []byte("book:;"),
 	})
 	if err != nil {
 		return 0, err
 	}
-	defer iter.Close()
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		key := string(iter.Key())
+	for bookIter.First(); bookIter.Valid(); bookIter.Next() {
+		key := string(bookIter.Key())
 		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
 			strings.Contains(key, ":author:") {
 			continue
 		}
 		var book Book
-		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+		if err := json.Unmarshal(bookIter.Value(), &book); err != nil {
 			return 0, err
 		}
 		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
@@ -2097,30 +2138,51 @@ func (p *PebbleStore) CountFiles() (int, error) {
 		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
 			continue
 		}
-		bookIDs = append(bookIDs, book.ID)
+		primaryBookIDs[book.ID] = struct{}{}
 	}
+	bookIter.Close()
 
-	totalFiles := 0
-	for _, id := range bookIDs {
-		files, err := p.GetBookFiles(id)
-		if err != nil || len(files) == 0 {
-			totalFiles++ // No files means single file
+	// Pass 2: single range scan over book_file: space — count active files per book
+	fileIter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book_file:"),
+		UpperBound: []byte("book_file;"),
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer fileIter.Close()
+
+	bookActiveFiles := make(map[string]int, len(primaryBookIDs))
+	for fileIter.First(); fileIter.Valid(); fileIter.Next() {
+		// Primary keys are book_file:<bookID>:<fileID> (3 colon-delimited segments).
+		// The upper bound book_file; already excludes secondary indexes (book_file_pid:, etc.)
+		// but SplitN guards against any edge cases.
+		parts := strings.SplitN(string(fileIter.Key()), ":", 4)
+		if len(parts) != 3 {
 			continue
 		}
-		activeCount := 0
-		for _, f := range files {
-			if !f.Missing {
-				activeCount++
-			}
+		bookID := parts[1]
+		if _, ok := primaryBookIDs[bookID]; !ok {
+			continue
 		}
-		if activeCount > 0 {
-			totalFiles += activeCount
-		} else {
-			totalFiles++ // No active files, treat as single file
+		var f BookFile
+		if err := json.Unmarshal(fileIter.Value(), &f); err != nil {
+			continue
+		}
+		if !f.Missing {
+			bookActiveFiles[bookID]++
 		}
 	}
 
-	return totalFiles, nil
+	total := 0
+	for id := range primaryBookIDs {
+		if n := bookActiveFiles[id]; n > 0 {
+			total += n
+		} else {
+			total++ // no file records or all missing → count as 1
+		}
+	}
+	return total, nil
 }
 
 func (p *PebbleStore) CountAuthors() (int, error) {
@@ -2162,107 +2224,81 @@ func (p *PebbleStore) CountSeries() (int, error) {
 }
 
 func (p *PebbleStore) GetBookCountsByLocation(rootDir string) (library, import_ int, err error) {
-	iter, err := p.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte("book:0"),
-		UpperBound: []byte("book:;"),
-	})
+	stats, err := p.GetDashboardStats()
 	if err != nil {
 		return 0, 0, err
 	}
-	defer iter.Close()
-	for iter.First(); iter.Valid(); iter.Next() {
-		key := string(iter.Key())
-		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
-			strings.Contains(key, ":author:") {
-			continue
-		}
-		var book Book
-		if err := json.Unmarshal(iter.Value(), &book); err != nil {
-			continue
-		}
-		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
-			continue
-		}
-		// Skip non-primary versions so organized originals don't inflate import count
-		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
-			continue
-		}
-		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
-			library++
-		} else {
-			import_++
-		}
-	}
-	return
+	return stats.OrganizedBooks, stats.UnorganizedBooks, nil
 }
 
 func (p *PebbleStore) GetBookSizesByLocation(rootDir string) (librarySize, importSize int64, err error) {
-	iter, err := p.db.NewIter(&pebble.IterOptions{
+	stats, err := p.GetDashboardStats()
+	if err != nil {
+		return 0, 0, err
+	}
+	return stats.OrganizedSize, stats.UnorganizedSize, nil
+}
+
+// GetDashboardStats returns LibraryStats, serving from the PebbleDB cache when fresh.
+// Cache miss (first call, TTL expiry, or explicit InvalidateLibraryStats) triggers
+// computeLibraryStats which does two range scans and writes the result back.
+func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
+	if cached := p.readCachedLibraryStats(); cached != nil {
+		return cached, nil
+	}
+	stats, err := p.computeLibraryStats()
+	if err != nil {
+		return nil, err
+	}
+	p.writeCachedLibraryStats(stats)
+	return stats, nil
+}
+
+// computeLibraryStats builds a fresh LibraryStats in two sequential range scans.
+// Pass 1 (book:): counts/sums all fields, splits organized vs unorganized, per-import-path counts.
+// Pass 2 (book_file:): counts active files without any per-book point lookups.
+func (p *PebbleStore) computeLibraryStats() (*LibraryStats, error) {
+	stats := &LibraryStats{
+		StateDistribution:  make(map[string]int),
+		FormatDistribution: make(map[string]int),
+		BooksByImportPath:  make(map[int]int),
+		SizeByImportPath:   make(map[int]int64),
+		ComputedAt:         time.Now(),
+	}
+
+	// Load import paths upfront (typically just a handful, not worth a separate scan).
+	importPaths, _ := p.GetAllImportPaths()
+
+	// Pass 1: book: range
+	primaryBookIDs := make(map[string]struct{}, 12000)
+	bookIter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
 		UpperBound: []byte("book:;"),
 	})
 	if err != nil {
-		return 0, 0, err
+		return nil, err
 	}
-	defer iter.Close()
-	for iter.First(); iter.Valid(); iter.Next() {
-		key := string(iter.Key())
+	for bookIter.First(); bookIter.Valid(); bookIter.Next() {
+		key := string(bookIter.Key())
 		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
 			strings.Contains(key, ":author:") {
 			continue
 		}
-		var book Book
-		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+		var b Book
+		if err := json.Unmarshal(bookIter.Value(), &b); err != nil {
 			continue
 		}
-		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
 			continue
 		}
-		// Skip non-primary versions (consistent with count logic)
-		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
-			continue
-		}
-		size := int64(0)
-		if book.FileSize != nil {
-			size = *book.FileSize
-		}
-		if rootDir != "" && strings.HasPrefix(book.FilePath, rootDir) {
-			librarySize += size
-		} else {
-			importSize += size
-		}
-	}
-	return
-}
-
-// GetDashboardStats iterates all books and computes aggregate stats.
-// PebbleDB has no SQL, so this scans the full key range.
-func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
-	stats := &DashboardStats{
-		StateDistribution:  make(map[string]int),
-		FormatDistribution: make(map[string]int),
-	}
-	if fc, err := p.CountFiles(); err == nil {
-		stats.TotalFiles = fc
-	}
-	if ac, err := p.CountAuthors(); err == nil {
-		stats.TotalAuthors = ac
-	}
-	if sc, err := p.CountSeries(); err == nil {
-		stats.TotalSeries = sc
-	}
-
-	books, err := p.GetAllBooks(1_000_000, 0)
-	if err != nil {
-		return nil, err
-	}
-	for _, b := range books {
 		stats.TotalBooks++
 		if b.Duration != nil {
 			stats.TotalDuration += int64(*b.Duration)
 		}
+		size := int64(0)
 		if b.FileSize != nil {
-			stats.TotalSize += *b.FileSize
+			size = *b.FileSize
+			stats.TotalSize += size
 		}
 		state := "imported"
 		if b.LibraryState != nil {
@@ -2274,7 +2310,70 @@ func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
 			codec = *b.Codec
 		}
 		stats.FormatDistribution[codec]++
+
+		// Organized vs unorganized + per-import-path (primary versions only)
+		if b.IsPrimaryVersion == nil || *b.IsPrimaryVersion {
+			primaryBookIDs[b.ID] = struct{}{}
+			if p.rootDir != "" && strings.HasPrefix(b.FilePath, p.rootDir) {
+				stats.OrganizedBooks++
+				stats.OrganizedSize += size
+			} else {
+				stats.UnorganizedBooks++
+				stats.UnorganizedSize += size
+				for _, ip := range importPaths {
+					if strings.HasPrefix(b.FilePath, ip.Path) {
+						stats.BooksByImportPath[ip.ID]++
+						stats.SizeByImportPath[ip.ID] += size
+						break
+					}
+				}
+			}
+		}
 	}
+	bookIter.Close()
+
+	// Pass 2: book_file: range — active file count per primary book
+	fileIter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book_file:"),
+		UpperBound: []byte("book_file;"),
+	})
+	if err == nil {
+		bookActiveFiles := make(map[string]int, len(primaryBookIDs))
+		for fileIter.First(); fileIter.Valid(); fileIter.Next() {
+			parts := strings.SplitN(string(fileIter.Key()), ":", 4)
+			if len(parts) != 3 {
+				continue
+			}
+			bookID := parts[1]
+			if _, ok := primaryBookIDs[bookID]; !ok {
+				continue
+			}
+			var f BookFile
+			if err := json.Unmarshal(fileIter.Value(), &f); err != nil {
+				continue
+			}
+			if !f.Missing {
+				bookActiveFiles[bookID]++
+			}
+		}
+		fileIter.Close()
+		for id := range primaryBookIDs {
+			if n := bookActiveFiles[id]; n > 0 {
+				stats.TotalFiles += n
+			} else {
+				stats.TotalFiles++ // no file records or all missing → count as 1
+			}
+		}
+	}
+
+	// Key-only scans — no JSON deserialization
+	if ac, err := p.CountAuthors(); err == nil {
+		stats.TotalAuthors = ac
+	}
+	if sc, err := p.CountSeries(); err == nil {
+		stats.TotalSeries = sc
+	}
+
 	return stats, nil
 }
 

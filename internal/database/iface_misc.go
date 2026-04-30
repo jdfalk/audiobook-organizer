@@ -1,5 +1,5 @@
 // file: internal/database/iface_misc.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
 
 package database
@@ -228,6 +228,12 @@ type StatsStore interface {
 	GetBookCountsByLocation(rootDir string) (library, import_ int, err error)
 	GetBookSizesByLocation(rootDir string) (librarySize, importSize int64, err error)
 	GetDashboardStats() (*DashboardStats, error)
+	// SetRootDir tells the store which directory is the organized library root,
+	// used to split OrganizedBooks vs UnorganizedBooks in LibraryStats.
+	SetRootDir(rootDir string)
+	// InvalidateLibraryStats drops the cached LibraryStats so the next call
+	// to GetDashboardStats triggers a fresh recompute.
+	InvalidateLibraryStats()
 }
 
 // MaintenanceStore covers database maintenance and scan-cache.

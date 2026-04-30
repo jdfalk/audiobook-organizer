@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.60.0
+// version: 2.61.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -794,17 +794,29 @@ type ScanCacheEntry struct {
 	NeedsRescan bool
 }
 
-// DashboardStats holds aggregated statistics computed via SQL rather than loading all books.
-type DashboardStats struct {
+// LibraryStats holds all aggregated library statistics. On PebbleDB it is persisted
+// under the key "stats:library" and recomputed on TTL expiry or explicit invalidation.
+// Computed in two range scans (book: then book_file:) — no per-book point lookups.
+type LibraryStats struct {
 	TotalBooks         int            `json:"total_books"`
 	TotalFiles         int            `json:"total_files"`
 	TotalAuthors       int            `json:"total_authors"`
 	TotalSeries        int            `json:"total_series"`
 	TotalDuration      int64          `json:"total_duration"`
 	TotalSize          int64          `json:"total_size"`
+	OrganizedBooks     int            `json:"organized_books"`
+	UnorganizedBooks   int            `json:"unorganized_books"`
+	OrganizedSize      int64          `json:"organized_size"`
+	UnorganizedSize    int64          `json:"unorganized_size"`
+	BooksByImportPath  map[int]int    `json:"books_by_import_path"`
+	SizeByImportPath   map[int]int64  `json:"size_by_import_path"`
 	StateDistribution  map[string]int `json:"state_distribution"`
 	FormatDistribution map[string]int `json:"format_distribution"`
+	ComputedAt         time.Time      `json:"computed_at"`
 }
+
+// DashboardStats is an alias kept for callers that haven't migrated to LibraryStats yet.
+type DashboardStats = LibraryStats
 
 // Global store instance — use GetGlobalStore/SetGlobalStore for concurrent access.
 // Direct assignment is allowed in single-goroutine contexts (init, main).

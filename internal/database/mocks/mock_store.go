@@ -17077,6 +17077,52 @@ func (_c *MockStatsStore_GetDashboardStats_Call) RunAndReturn(run func() (*datab
 	return _c
 }
 
+// SetRootDir provides a mock function for the type MockStatsStore
+func (_mock *MockStatsStore) SetRootDir(rootDir string) {
+	_mock.Called(rootDir)
+}
+
+type MockStatsStore_SetRootDir_Call struct{ *mock.Call }
+
+func (_e *MockStatsStore_Expecter) SetRootDir(rootDir interface{}) *MockStatsStore_SetRootDir_Call {
+	return &MockStatsStore_SetRootDir_Call{Call: _e.mock.On("SetRootDir", rootDir)}
+}
+func (_c *MockStatsStore_SetRootDir_Call) Run(run func(rootDir string)) *MockStatsStore_SetRootDir_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStatsStore_SetRootDir_Call) Return() *MockStatsStore_SetRootDir_Call {
+	_c.Call.Return()
+	return _c
+}
+func (_c *MockStatsStore_SetRootDir_Call) RunAndReturn(run func(string)) *MockStatsStore_SetRootDir_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// InvalidateLibraryStats provides a mock function for the type MockStatsStore
+func (_mock *MockStatsStore) InvalidateLibraryStats() {
+	_mock.Called()
+}
+
+type MockStatsStore_InvalidateLibraryStats_Call struct{ *mock.Call }
+
+func (_e *MockStatsStore_Expecter) InvalidateLibraryStats() *MockStatsStore_InvalidateLibraryStats_Call {
+	return &MockStatsStore_InvalidateLibraryStats_Call{Call: _e.mock.On("InvalidateLibraryStats")}
+}
+func (_c *MockStatsStore_InvalidateLibraryStats_Call) Run(run func()) *MockStatsStore_InvalidateLibraryStats_Call {
+	_c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+func (_c *MockStatsStore_InvalidateLibraryStats_Call) Return() *MockStatsStore_InvalidateLibraryStats_Call {
+	_c.Call.Return()
+	return _c
+}
+func (_c *MockStatsStore_InvalidateLibraryStats_Call) RunAndReturn(run func()) *MockStatsStore_InvalidateLibraryStats_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockMaintenanceStore creates a new instance of MockMaintenanceStore. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockMaintenanceStore(t interface {
@@ -41106,6 +41152,52 @@ func (_c *MockStore_UpsertMetadataFieldState_Call) Return(err error) *MockStore_
 }
 
 func (_c *MockStore_UpsertMetadataFieldState_Call) RunAndReturn(run func(state *database.MetadataFieldState) error) *MockStore_UpsertMetadataFieldState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetRootDir provides a mock function for the type MockStore
+func (_mock *MockStore) SetRootDir(rootDir string) {
+	_mock.Called(rootDir)
+}
+
+type MockStore_SetRootDir_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) SetRootDir(rootDir interface{}) *MockStore_SetRootDir_Call {
+	return &MockStore_SetRootDir_Call{Call: _e.mock.On("SetRootDir", rootDir)}
+}
+func (_c *MockStore_SetRootDir_Call) Run(run func(rootDir string)) *MockStore_SetRootDir_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string)) })
+	return _c
+}
+func (_c *MockStore_SetRootDir_Call) Return() *MockStore_SetRootDir_Call {
+	_c.Call.Return()
+	return _c
+}
+func (_c *MockStore_SetRootDir_Call) RunAndReturn(run func(string)) *MockStore_SetRootDir_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// InvalidateLibraryStats provides a mock function for the type MockStore
+func (_mock *MockStore) InvalidateLibraryStats() {
+	_mock.Called()
+}
+
+type MockStore_InvalidateLibraryStats_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) InvalidateLibraryStats() *MockStore_InvalidateLibraryStats_Call {
+	return &MockStore_InvalidateLibraryStats_Call{Call: _e.mock.On("InvalidateLibraryStats")}
+}
+func (_c *MockStore_InvalidateLibraryStats_Call) Run(run func()) *MockStore_InvalidateLibraryStats_Call {
+	_c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+func (_c *MockStore_InvalidateLibraryStats_Call) Return() *MockStore_InvalidateLibraryStats_Call {
+	_c.Call.Return()
+	return _c
+}
+func (_c *MockStore_InvalidateLibraryStats_Call) RunAndReturn(run func()) *MockStore_InvalidateLibraryStats_Call {
 	_c.Call.Return(run)
 	return _c
 }

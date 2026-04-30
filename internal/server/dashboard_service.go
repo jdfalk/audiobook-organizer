@@ -1,5 +1,5 @@
 // file: internal/server/dashboard_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f
 
 package server
@@ -14,13 +14,9 @@ import (
 
 // dashboardStore is the narrow slice of database.Store this service uses.
 type dashboardStore interface {
-	database.AuthorReader
-	database.BookReader
 	database.PlaylistStore
-	database.SeriesReader
 	database.StatsStore
 }
-
 
 // DashboardService handles dashboard statistics and metrics collection
 type DashboardService struct {
@@ -52,41 +48,26 @@ type HealthCheckResponse struct {
 	PartialError string           `json:"partial_error,omitempty"`
 }
 
-// CollectDashboardMetrics gathers all dashboard metrics
+// CollectDashboardMetrics gathers all dashboard metrics from the cached LibraryStats.
 func (ds *DashboardService) CollectDashboardMetrics() (*DashboardMetrics, error) {
-	metrics := &DashboardMetrics{
-		Timestamp: time.Now().Unix(),
-	}
+	metrics := &DashboardMetrics{Timestamp: time.Now().Unix()}
 
 	if ds.db == nil {
 		return metrics, fmt.Errorf("database not initialized")
 	}
 
-	// Collect book count
-	if bc, err := ds.db.CountBooks(); err == nil {
-		metrics.Books = bc
+	stats, err := ds.db.GetDashboardStats()
+	if err != nil {
+		return metrics, err
 	}
+	metrics.Books = stats.TotalBooks
+	metrics.Files = stats.TotalFiles
+	metrics.Authors = stats.TotalAuthors
+	metrics.Series = stats.TotalSeries
 
-	// Collect file count
-	if fc, err := ds.db.CountFiles(); err == nil {
-		metrics.Files = fc
-	}
-
-	// Collect author count
-	if authors, err := ds.db.GetAllAuthors(); err == nil {
-		metrics.Authors = len(authors)
-	}
-
-	// Collect series count
-	if series, err := ds.db.GetAllSeries(); err == nil {
-		metrics.Series = len(series)
-	}
-
-	// Collect playlist count (legacy, placeholder for now)
 	if playlists, err := ds.db.GetPlaylistBySeriesID(0); err == nil && playlists != nil {
 		metrics.Playlists = 1
 	}
-
 	return metrics, nil
 }
 
@@ -94,9 +75,7 @@ func (ds *DashboardService) CollectDashboardMetrics() (*DashboardMetrics, error)
 func (ds *DashboardService) GetHealthCheckResponse(version string) *HealthCheckResponse {
 	metrics, dbErr := ds.CollectDashboardMetrics()
 	if metrics == nil {
-		metrics = &DashboardMetrics{
-			Timestamp: time.Now().Unix(),
-		}
+		metrics = &DashboardMetrics{Timestamp: time.Now().Unix()}
 	}
 
 	response := &HealthCheckResponse{
@@ -115,62 +94,15 @@ func (ds *DashboardService) GetHealthCheckResponse(version string) *HealthCheckR
 	return response
 }
 
-// GetLibraryStats returns library statistics for the dashboard
-type LibraryStats struct {
-	TotalBooks       int `json:"total_books"`
-	TotalFiles       int `json:"total_files"`
-	TotalAuthors     int `json:"total_authors"`
-	TotalSeries      int `json:"total_series"`
-	OrganizedBooks   int `json:"organized_books"`
-	UnorganizedBooks int `json:"unorganized_books"`
-}
-
-// CollectLibraryStats gathers detailed library statistics
-func (ds *DashboardService) CollectLibraryStats() (*LibraryStats, error) {
+// CollectLibraryStats returns the full cached LibraryStats.
+func (ds *DashboardService) CollectLibraryStats() (*database.LibraryStats, error) {
 	if ds.db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-
-	stats := &LibraryStats{}
-
-	// Count total books
-	if bc, err := ds.db.CountBooks(); err == nil {
-		stats.TotalBooks = bc
-	}
-
-	// Count total files
-	if fc, err := ds.db.CountFiles(); err == nil {
-		stats.TotalFiles = fc
-	}
-
-	// Count authors
-	if authors, err := ds.db.GetAllAuthors(); err == nil {
-		stats.TotalAuthors = len(authors)
-	}
-
-	// Count series
-	if series, err := ds.db.GetAllSeries(); err == nil {
-		stats.TotalSeries = len(series)
-	}
-
-	// Count organized vs unorganized books (fetch in batches)
-	limit := 1000
-	offset := 0
-	if books, err := ds.db.GetAllBooks(limit, offset); err == nil {
-		for _, book := range books {
-			// Assuming a book is organized if it has a library_state = "organized"
-			if book.LibraryState != nil && *book.LibraryState == "organized" {
-				stats.OrganizedBooks++
-			} else {
-				stats.UnorganizedBooks++
-			}
-		}
-	}
-
-	return stats, nil
+	return ds.db.GetDashboardStats()
 }
 
-// GetQuickMetrics returns a quick set of metrics for display
+// QuickMetrics returns a quick set of metrics for display
 type QuickMetrics struct {
 	BookCount   int `json:"book_count"`
 	FileCount   int `json:"file_count"`
@@ -178,29 +110,19 @@ type QuickMetrics struct {
 	SeriesCount int `json:"series_count"`
 }
 
-// CollectQuickMetrics gathers metrics for quick display
+// CollectQuickMetrics gathers metrics for quick display from the cached LibraryStats.
 func (ds *DashboardService) CollectQuickMetrics() *QuickMetrics {
 	metrics := &QuickMetrics{}
-
 	if ds.db == nil {
 		return metrics
 	}
-
-	if bc, err := ds.db.CountBooks(); err == nil {
-		metrics.BookCount = bc
+	stats, err := ds.db.GetDashboardStats()
+	if err != nil {
+		return metrics
 	}
-
-	if fc, err := ds.db.CountFiles(); err == nil {
-		metrics.FileCount = fc
-	}
-
-	if authors, err := ds.db.GetAllAuthors(); err == nil {
-		metrics.AuthorCount = len(authors)
-	}
-
-	if series, err := ds.db.GetAllSeries(); err == nil {
-		metrics.SeriesCount = len(series)
-	}
-
+	metrics.BookCount = stats.TotalBooks
+	metrics.FileCount = stats.TotalFiles
+	metrics.AuthorCount = stats.TotalAuthors
+	metrics.SeriesCount = stats.TotalSeries
 	return metrics
 }
