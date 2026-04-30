@@ -1,5 +1,5 @@
 // file: internal/metadata/openlibrary.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata
@@ -129,6 +129,11 @@ type BookMetadata struct {
 	// Google Books rating (1–5 scale).
 	GoogleRatingAverage float64
 	GoogleRatingCount   int
+
+	// CategoryTags contains genre/subject tags from Audible's category_ladders
+	// response group. Each element is a ladder node name (e.g. "Science Fiction",
+	// "Space Opera"). Applied as book_tags with source="audible_category".
+	CategoryTags []string
 }
 
 // SearchByTitle searches for books by title. Checks local dump store first if available.
