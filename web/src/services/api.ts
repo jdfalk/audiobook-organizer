@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.5.0
+// version: 2.6.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -120,6 +120,11 @@ export interface Book {
   metadata_review_status?: string;
   last_written_at?: string;
   file_exists?: boolean;
+  // User ratings (RATE-1/RATE-2)
+  user_rating_overall?: number | null;
+  user_rating_story?: number | null;
+  user_rating_performance?: number | null;
+  user_rating_notes?: string | null;
 }
 
 export interface Author {
@@ -842,6 +847,32 @@ export async function updateBook(
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to update audiobook');
+  }
+  return response.json();
+}
+
+// RatingPatchBody is the partial-update payload for PATCH /api/v1/audiobooks/:id/rating.
+// Omit a field to leave it unchanged. Pass null to clear it.
+export interface RatingPatchBody {
+  overall?: number | null;
+  story?: number | null;
+  performance?: number | null;
+  notes?: string | null;
+}
+
+// patchAudiobookRating sends a partial rating update for a single book.
+// Only fields present in body are touched; omitted fields are unchanged.
+export async function patchAudiobookRating(
+  bookId: string,
+  body: RatingPatchBody
+): Promise<Book> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/rating`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to update rating');
   }
   return response.json();
 }
