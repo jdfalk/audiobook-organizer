@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.58.0
-// last-edited: 2026-04-30
+// version: 1.59.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
+// last-edited: 2026-04-30
 
 package database
 
@@ -7882,4 +7882,56 @@ count++
 }
 sizeBytes = p.db.Metrics().DiskSpaceUsage()
 return count, sizeBytes, nil
+}
+
+// UpdateBookFileHashes updates the original_file_hash and post_metadata_hash
+// fields on a BookFile record stored in PebbleDB.
+func (s *PebbleStore) UpdateBookFileHashes(id, originalHash, postMetadataHash string) error {
+	// Find the file across all books via the secondary id index.
+	val, closer, err := s.db.Get([]byte("book_file_id:" + id))
+	if err != nil {
+		return fmt.Errorf("UpdateBookFileHashes: lookup id index: %w", err)
+	}
+	bookFileKey := string(val)
+	closer.Close()
+
+	val2, closer2, err := s.db.Get([]byte(bookFileKey))
+	if err != nil {
+		return fmt.Errorf("UpdateBookFileHashes: get file: %w", err)
+	}
+	var bf BookFile
+	if err := json.Unmarshal(val2, &bf); err != nil {
+		closer2.Close()
+		return fmt.Errorf("UpdateBookFileHashes: unmarshal: %w", err)
+	}
+	closer2.Close()
+
+	if bf.OriginalFileHash == "" && originalHash != "" {
+		bf.OriginalFileHash = originalHash
+	}
+	if postMetadataHash != "" {
+		bf.PostMetadataHash = postMetadataHash
+	}
+	bf.UpdatedAt = time.Now()
+
+	data, err := json.Marshal(&bf)
+	if err != nil {
+		return fmt.Errorf("UpdateBookFileHashes: marshal: %w", err)
+	}
+	return s.db.Set([]byte(bookFileKey), data, pebble.Sync)
+}
+
+// AddMetadataRejection is not supported on PebbleStore.
+func (p *PebbleStore) AddMetadataRejection(_ MetadataRejection) error {
+	return fmt.Errorf("RejectedMetadataStore.AddMetadataRejection: not supported by PebbleStore")
+}
+
+// GetMetadataRejections is not supported on PebbleStore.
+func (p *PebbleStore) GetMetadataRejections(_ string) ([]MetadataRejection, error) {
+	return nil, fmt.Errorf("RejectedMetadataStore.GetMetadataRejections: not supported by PebbleStore")
+}
+
+// DeleteMetadataRejections is not supported on PebbleStore.
+func (p *PebbleStore) DeleteMetadataRejections(_ string) error {
+	return fmt.Errorf("RejectedMetadataStore.DeleteMetadataRejections: not supported by PebbleStore")
 }

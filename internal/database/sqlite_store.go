@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.69.0
+// version: 1.71.0
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -5465,6 +5465,7 @@ func scanOperationChanges(rows *sql.Rows) ([]*OperationChange, error) {
 const bookFileCols = `id, book_id, file_path, original_filename, itunes_path, itunes_persistent_id,
 	track_number, track_count, disc_number, disc_count, title, format, codec, duration,
 	file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
+	post_metadata_hash,
 	acoustid_seg0, acoustid_seg1, acoustid_seg2, acoustid_seg3, acoustid_seg4, acoustid_seg5, acoustid_seg6,
 	missing, created_at, updated_at,
 	deluge_hash, deluge_original_path, imported_from_deluge_at`
@@ -5481,7 +5482,7 @@ func bookFileScan(row interface {
 	var importedFromDelugeAt sql.NullTime
 	var title, format, codec sql.NullString
 	var duration, fileSize, bitrateKbps, sampleRateHz, channels, bitDepth sql.NullInt64
-	var fileHash, originalFileHash sql.NullString
+	var fileHash, originalFileHash, postMetadataHash sql.NullString
 	var acoustidSeg0, acoustidSeg1, acoustidSeg2, acoustidSeg3, acoustidSeg4, acoustidSeg5, acoustidSeg6 sql.NullString
 	var missing int
 	err := row.Scan(
@@ -5491,6 +5492,7 @@ func bookFileScan(row interface {
 		&title, &format, &codec,
 		&duration, &fileSize, &bitrateKbps, &sampleRateHz, &channels, &bitDepth,
 		&fileHash, &originalFileHash,
+		&postMetadataHash,
 		&acoustidSeg0, &acoustidSeg1, &acoustidSeg2, &acoustidSeg3, &acoustidSeg4, &acoustidSeg5, &acoustidSeg6,
 		&missing, &f.CreatedAt, &f.UpdatedAt,
 		&delugeHash, &delugeOriginalPath, &importedFromDelugeAt,
@@ -5551,6 +5553,9 @@ func bookFileScan(row interface {
 	}
 	if originalFileHash.Valid {
 		f.OriginalFileHash = originalFileHash.String
+	}
+	if postMetadataHash.Valid {
+		f.PostMetadataHash = postMetadataHash.String
 	}
 	if acoustidSeg0.Valid {
 		f.AcoustIDSeg0 = acoustidSeg0.String
@@ -5637,10 +5642,11 @@ func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
 			id, book_id, file_path, original_filename, itunes_path, itunes_persistent_id,
 			track_number, track_count, disc_number, disc_count, title, format, codec, duration,
 			file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,
+			post_metadata_hash,
 			acoustid_seg0, acoustid_seg1, acoustid_seg2, acoustid_seg3, acoustid_seg4, acoustid_seg5, acoustid_seg6,
 			missing, created_at, updated_at,
 			deluge_hash, deluge_original_path, imported_from_deluge_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		file.ID, file.BookID, file.FilePath,
 		nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
 		nullableIntVal(file.TrackNumber), nullableIntVal(file.TrackCount),
@@ -5650,6 +5656,7 @@ func (s *SQLiteStore) CreateBookFile(file *BookFile) error {
 		nullableIntVal(file.BitrateKbps), nullableIntVal(file.SampleRateHz),
 		nullableIntVal(file.Channels), nullableIntVal(file.BitDepth),
 		nullableStringVal(file.FileHash), nullableStringVal(file.OriginalFileHash),
+		nullableStringVal(file.PostMetadataHash),
 		nullableStringVal(file.AcoustIDSeg0), nullableStringVal(file.AcoustIDSeg1),
 		nullableStringVal(file.AcoustIDSeg2), nullableStringVal(file.AcoustIDSeg3),
 		nullableStringVal(file.AcoustIDSeg4), nullableStringVal(file.AcoustIDSeg5),
@@ -5677,7 +5684,7 @@ func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
 			track_number=?, track_count=?, disc_number=?, disc_count=?,
 			title=?, format=?, codec=?, duration=?,
 			file_size=?, bitrate_kbps=?, sample_rate_hz=?, channels=?, bit_depth=?,
-			file_hash=?, original_file_hash=?,
+			file_hash=?, original_file_hash=?, post_metadata_hash=?,
 			acoustid_seg0=?, acoustid_seg1=?, acoustid_seg2=?, acoustid_seg3=?,
 			acoustid_seg4=?, acoustid_seg5=?, acoustid_seg6=?,
 			missing=?, updated_at=?,
@@ -5692,6 +5699,7 @@ func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
 		nullableIntVal(file.BitrateKbps), nullableIntVal(file.SampleRateHz),
 		nullableIntVal(file.Channels), nullableIntVal(file.BitDepth),
 		nullableStringVal(file.FileHash), nullableStringVal(file.OriginalFileHash),
+		nullableStringVal(file.PostMetadataHash),
 		nullableStringVal(file.AcoustIDSeg0), nullableStringVal(file.AcoustIDSeg1),
 		nullableStringVal(file.AcoustIDSeg2), nullableStringVal(file.AcoustIDSeg3),
 		nullableStringVal(file.AcoustIDSeg4), nullableStringVal(file.AcoustIDSeg5),
@@ -6179,4 +6187,88 @@ var pageCount, pageSize int64
 _ = s.db.QueryRow(`PRAGMA page_count`).Scan(&pageCount)
 _ = s.db.QueryRow(`PRAGMA page_size`).Scan(&pageSize)
 return pageCount * pageSize
+}
+
+// UpdateBookFileHashes updates only the original_file_hash and post_metadata_hash
+// columns for the given book file ID. This is a surgical update used to record
+// hashes before/after a metadata tag write without touching other fields.
+func (s *SQLiteStore) UpdateBookFileHashes(id, originalHash, postMetadataHash string) error {
+	_, err := s.db.Exec(
+		`UPDATE book_files SET
+			original_file_hash = CASE WHEN original_file_hash IS NULL OR original_file_hash = '' THEN ? ELSE original_file_hash END,
+			post_metadata_hash = ?,
+			updated_at = ?
+		WHERE id = ?`,
+		nullableStringVal(originalHash),
+		nullableStringVal(postMetadataHash),
+		time.Now(),
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("UpdateBookFileHashes %s: %w", id, err)
+	}
+	return nil
+}
+
+// AddMetadataRejection records a rejected metadata candidate for a book.
+func (s *SQLiteStore) AddMetadataRejection(r MetadataRejection) error {
+	if r.ID == "" {
+		r.ID = ulid.Make().String()
+	}
+	if r.RejectedAt.IsZero() {
+		r.RejectedAt = time.Now()
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO metadata_rejections
+			(id, book_id, source, candidate_asin, candidate_isbn, candidate_title, candidate_author,
+			 rejection_reason, score, rejected_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.ID, r.BookID, r.Source,
+		nullableStringVal(r.CandidateASIN), nullableStringVal(r.CandidateISBN),
+		nullableStringVal(r.CandidateTitle), nullableStringVal(r.CandidateAuthor),
+		r.RejectionReason, r.Score, r.RejectedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("AddMetadataRejection: %w", err)
+	}
+	return nil
+}
+
+// GetMetadataRejections returns all rejection records for a book, newest first.
+func (s *SQLiteStore) GetMetadataRejections(bookID string) ([]MetadataRejection, error) {
+	rows, err := s.db.Query(
+		`SELECT id, book_id, source,
+			COALESCE(candidate_asin,''), COALESCE(candidate_isbn,''),
+			COALESCE(candidate_title,''), COALESCE(candidate_author,''),
+			rejection_reason, COALESCE(score,0), rejected_at
+		FROM metadata_rejections WHERE book_id = ? ORDER BY rejected_at DESC`,
+		bookID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetMetadataRejections: %w", err)
+	}
+	defer rows.Close()
+	var out []MetadataRejection
+	for rows.Next() {
+		var r MetadataRejection
+		if err := rows.Scan(
+			&r.ID, &r.BookID, &r.Source,
+			&r.CandidateASIN, &r.CandidateISBN,
+			&r.CandidateTitle, &r.CandidateAuthor,
+			&r.RejectionReason, &r.Score, &r.RejectedAt,
+		); err != nil {
+			return nil, fmt.Errorf("GetMetadataRejections scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// DeleteMetadataRejections removes all rejection records for a book.
+func (s *SQLiteStore) DeleteMetadataRejections(bookID string) error {
+	_, err := s.db.Exec(`DELETE FROM metadata_rejections WHERE book_id = ?`, bookID)
+	if err != nil {
+		return fmt.Errorf("DeleteMetadataRejections: %w", err)
+	}
+	return nil
 }

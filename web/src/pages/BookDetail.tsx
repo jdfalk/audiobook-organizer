@@ -1,6 +1,7 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.48.1
+// version: 1.49.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
+// last-edited: 2026-04-30
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -171,6 +172,22 @@ export const BookDetail = () => {
   const [ratingNotes, setRatingNotes] = useState<string>('');
   const ratingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Rejection history state (META-REJ-1)
+  type MetadataRejection = {
+    id: string;
+    book_id: string;
+    source: string;
+    candidate_asin?: string;
+    candidate_isbn?: string;
+    candidate_title?: string;
+    candidate_author?: string;
+    rejection_reason: string;
+    score?: number;
+    rejected_at: string;
+  };
+  const [rejections, setRejections] = useState<MetadataRejection[]>([]);
+  const [rejHistoryOpen, setRejHistoryOpen] = useState(false);
+
   // Derived multi-select state
   const isSingleSelect = selectedSegmentIds.size === 1;
   const singleSelectedId = isSingleSelect ? Array.from(selectedSegmentIds)[0] : null;
@@ -253,6 +270,11 @@ export const BookDetail = () => {
       setItunesPidCount(data.total);
       setItunesExternalIDs(data.external_ids.filter((e) => e.source === 'itunes' && !e.tombstoned));
     }).catch(() => {});
+    // Load rejection history (META-REJ-1)
+    fetch(`/api/v1/audiobooks/${id}/metadata-rejections`, { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : Promise.reject(r))
+      .then((data) => setRejections(data.rejections ?? []))
+      .catch(() => {});
   }, [id, loadBook, loadVersions]);
 
   // Inline version link search
@@ -2682,6 +2704,50 @@ export const BookDetail = () => {
       {book && (
         <Box sx={{ mt: 3 }}>
           <VersionsPanel bookId={book.id} />
+        </Box>
+      )}
+      {/* Rejection History (META-REJ-1) */}
+      {rejections.length > 0 && (
+        <Box sx={{ mt: 2 }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+            onClick={() => setRejHistoryOpen((v) => !v)}
+          >
+            <IconButton size="small">
+              {rejHistoryOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+            </IconButton>
+            <Typography variant="subtitle2" sx={{ ml: 1 }}>
+              Rejection History ({rejections.length})
+            </Typography>
+          </Box>
+          <Collapse in={rejHistoryOpen}>
+            <Table size="small" sx={{ mt: 1 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Source</TableCell>
+                  <TableCell>Reason</TableCell>
+                  <TableCell>Candidate</TableCell>
+                  <TableCell>Score</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rejections.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell>{new Date(r.rejected_at).toLocaleString()}</TableCell>
+                    <TableCell>{r.source}</TableCell>
+                    <TableCell>{r.rejection_reason}</TableCell>
+                    <TableCell>
+                      {r.candidate_title
+                        ? `${r.candidate_title}${r.candidate_author ? ` — ${r.candidate_author}` : ''}`
+                        : r.candidate_asin || r.candidate_isbn || '—'}
+                    </TableCell>
+                    <TableCell>{r.score != null ? r.score.toFixed(3) : '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Collapse>
         </Box>
       )}
       {book && (

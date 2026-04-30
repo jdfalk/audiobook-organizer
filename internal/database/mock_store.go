@@ -1,6 +1,7 @@
 // file: internal/database/mock_store.go
-// version: 1.42.0
+// version: 1.43.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
+// last-edited: 2026-04-30
 
 package database
 
@@ -156,6 +157,11 @@ type MockStore struct {
 	MarkAIJobFailedFunc      func(id, errMsg string) error
 	ListAIJobsFunc           func(typeFilter, statusFilter string, limit, offset int) ([]AIJob, error)
 
+	// Metadata rejections
+	AddMetadataRejectionFunc     func(r MetadataRejection) error
+	GetMetadataRejectionsFunc    func(bookID string) ([]MetadataRejection, error)
+	DeleteMetadataRejectionsFunc func(bookID string) error
+
 	// User Preferences
 	GetUserPreferenceFunc     func(key string) (*UserPreference, error)
 	SetUserPreferenceFunc     func(key, value string) error
@@ -309,6 +315,7 @@ type MockStore struct {
 	// BookFile methods
 	CreateBookFileFunc          func(file *BookFile) error
 	UpdateBookFileFunc          func(id string, file *BookFile) error
+	UpdateBookFileHashesFunc    func(id, originalHash, postMetadataHash string) error
 	GetBookFilesFunc            func(bookID string) ([]BookFile, error)
 	GetBookFileByIDFunc         func(bookID, fileID string) (*BookFile, error)
 	GetBookFileByPIDFunc           func(itunesPID string) (*BookFile, error)
@@ -2286,4 +2293,32 @@ func (m *MockStore) ListAIJobs(typeFilter, statusFilter string, limit, offset in
 		return m.ListAIJobsFunc(typeFilter, statusFilter, limit, offset)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) UpdateBookFileHashes(id, originalHash, postMetadataHash string) error {
+	if m.UpdateBookFileHashesFunc != nil {
+		return m.UpdateBookFileHashesFunc(id, originalHash, postMetadataHash)
+	}
+	return nil
+}
+
+func (m *MockStore) AddMetadataRejection(r MetadataRejection) error {
+	if m.AddMetadataRejectionFunc != nil {
+		return m.AddMetadataRejectionFunc(r)
+	}
+	return nil
+}
+
+func (m *MockStore) GetMetadataRejections(bookID string) ([]MetadataRejection, error) {
+	if m.GetMetadataRejectionsFunc != nil {
+		return m.GetMetadataRejectionsFunc(bookID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) DeleteMetadataRejections(bookID string) error {
+	if m.DeleteMetadataRejectionsFunc != nil {
+		return m.DeleteMetadataRejectionsFunc(bookID)
+	}
+	return nil
 }
