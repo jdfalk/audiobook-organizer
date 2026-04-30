@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.61.1
+// version: 2.62.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 package database
@@ -195,6 +195,11 @@ type Book struct {
 	// "unlinked" (no iTunes presence), "pending" (new, needs adding to iTunes),
 	// "purge_pending" (quarantined, delete from iTunes on next sync).
 	ITunesSyncStatus *string `json:"itunes_sync_status,omitempty"`
+	// AudibleRuntimeMin is the runtime reported by Audible (in minutes) for
+	// the matched product. Stored during metadata apply so the maintenance
+	// scan-duration-mismatch endpoint can compare it against the local file
+	// Duration without making live API calls.
+	AudibleRuntimeMin *int `json:"audible_runtime_min,omitempty"`
 	// Audible ratings (1–5 scale). Performance and Story are audiobook-specific
 	// dimensions absent from other providers.
 	AudibleRatingOverall     *float64 `json:"audible_rating_overall,omitempty"`

@@ -159,6 +159,10 @@ type MetadataCandidate struct {
 	// CategoryTags holds Audible category ladder node names (e.g. "Science Fiction").
 	// Only populated for Audible-sourced candidates. Applied as book_tags on apply.
 	CategoryTags []string `json:"category_tags,omitempty"`
+	// DurationMismatch is true when DurationDeltaSec exceeds 600 s (10 min).
+	// The review UI already renders a warning chip when duration_delta_sec > 600;
+	// this flag makes the threshold decision explicit in the API response.
+	DurationMismatch bool `json:"duration_mismatch,omitempty"`
 }
 
 // SearchMetadataResponse is returned by SearchMetadataForBook.
@@ -663,6 +667,13 @@ func (mfs *Service) ApplyMetadataToBook(book *database.Book, meta metadata.BookM
 	}
 	if meta.Genre != "" {
 		book.Genre = stringPtr(meta.Genre)
+	}
+
+	// Persist Audible runtime so the scan-duration-mismatch endpoint can
+	// compare it offline without live API calls.
+	if meta.DurationSec > 0 {
+		runtimeMin := meta.DurationSec / 60
+		book.AudibleRuntimeMin = &runtimeMin
 	}
 
 	// Apply series info if available
@@ -2351,6 +2362,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				DurationSec:      r.DurationSec,
 				DurationDeltaSec: durationDelta,
 				CategoryTags:     r.CategoryTags,
+				DurationMismatch: durationDelta > 600,
 			})
 		}
 	}
@@ -2404,6 +2416,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 					DurationSec:      result.DurationSec,
 					DurationDeltaSec: asinDurationDelta,
 					CategoryTags:     result.CategoryTags,
+					DurationMismatch: asinDurationDelta > 600,
 				})
 			}
 		} else {
@@ -2510,6 +2523,19 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 		return nil, fmt.Errorf("audiobook not found")
 	}
 
+	// Warn when the candidate runtime diverges significantly from the local
+	// file duration — this suggests a wrong Audible match or an abridged copy.
+	const durationMismatchThresholdSec = 600
+	if candidate.DurationDeltaSec > durationMismatchThresholdSec {
+		bookDurSec := 0
+		if book.Duration != nil {
+			bookDurSec = *book.Duration
+		}
+		log.Printf("[WARN] duration-mismatch apply book=%s title=%q candidate=%q delta=%ds (book=%ds audible=%ds): wrong match or abridged version",
+			id, book.Title, candidate.Title,
+			candidate.DurationDeltaSec, bookDurSec, candidate.DurationSec)
+	}
+
 	meta := metadata.BookMetadata{
 		Title:          candidate.Title,
 		Author:         candidate.Author,
@@ -2522,6 +2548,7 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 		CoverURL:       candidate.CoverURL,
 		Description:    candidate.Description,
 		Language:       candidate.Language,
+		DurationSec:    candidate.DurationSec,
 	}
 
 	// If fields list is non-empty, zero out fields NOT in the list
