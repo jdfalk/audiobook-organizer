@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.200.0
+// version: 1.201.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -2489,6 +2489,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/bulk-fetch-metadata", s.perm(auth.PermLibraryEditMetadata), s.handleBulkMetadataFetchAll)
 			protected.POST("/maintenance/revert-metadata-fetch", s.perm(auth.PermSettingsManage), s.handleRevertMetadataFetch)
 			protected.GET("/maintenance/scan-duration-mismatch", s.perm(auth.PermSettingsManage), s.handleScanDurationMismatch)
+			protected.GET("/maintenance/relink-report", s.perm(auth.PermSettingsManage), s.handleRelinkReport)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")

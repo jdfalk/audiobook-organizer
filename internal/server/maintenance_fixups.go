@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.23.0
+// version: 1.24.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package server
@@ -5420,9 +5420,342 @@ func (s *Server) handleScanDurationMismatch(c *gin.Context) {
 		scanned, thresholdMin, len(mismatches))
 
 	c.JSON(http.StatusOK, gin.H{
-		"threshold_min": thresholdMin,
-		"scanned":       scanned,
+		"threshold_min":  thresholdMin,
+		"scanned":        scanned,
 		"mismatch_count": len(mismatches),
-		"mismatches":    mismatches,
+		"mismatches":     mismatches,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// RELINK-4: dry-run relink report (read-only triage endpoint)
+// ---------------------------------------------------------------------------
+
+// relinkReportResolved is a single successfully-resolvable book entry returned
+// by handleRelinkReport.
+type relinkReportResolved struct {
+	BookID  string `json:"book_id"`
+	Title   string `json:"title"`
+	NewPath string `json:"new_path"`
+}
+
+// relinkReportUnresolved is a single unresolvable book entry returned by
+// handleRelinkReport, annotated with the reason it could not be relinked.
+type relinkReportUnresolved struct {
+	BookID        string   `json:"book_id"`
+	Title         string   `json:"title"`
+	OldPath       string   `json:"old_path"`
+	WhyUnresolved string   `json:"why_unresolved"`
+	MatchPaths    []string `json:"match_paths,omitempty"` // present when action=="ambiguous"
+}
+
+// handleRelinkReport re-runs the relink dry-run logic over ALL books and
+// returns which ones would be successfully relinked vs. those that remain
+// unresolved (with a why_unresolved annotation for triage).
+//
+// This endpoint is purely read-only — it never modifies the database.
+//
+// Query params:
+//   - limit=N   (integer, default 0 = all)  — page size
+//   - offset=N  (integer, default 0)        — page offset (into unresolved list)
+//
+// GET /api/v1/maintenance/relink-report
+func (s *Server) handleRelinkReport(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	iTunesRoot := c.DefaultQuery("itunes_root", config.AppConfig.ITunesMediaRoot)
+	organizerRoot := config.AppConfig.RootDir
+
+	if iTunesRoot == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "itunes_media_root not configured; pass ?itunes_root=<path> or set itunes_media_root in settings"})
+		return
+	}
+	if organizerRoot == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "root_dir not configured"})
+		return
+	}
+
+	limit := 0
+	if raw := c.Query("limit"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	offset := 0
+	if raw := c.Query("offset"); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		internalError(c, "failed to list books", err)
+		return
+	}
+
+	audioExts := map[string]bool{".mp3": true, ".m4b": true, ".m4a": true, ".flac": true, ".opus": true, ".ogg": true}
+
+	// findInITunes is identical to the one in handleRelinkMissingToiTunes.
+	findInITunes := func(authorName, title string) []string {
+		titlePrefix := title
+		if len(titlePrefix) > 25 {
+			titlePrefix = titlePrefix[:25]
+		}
+		titlePrefixLower := strings.ToLower(titlePrefix)
+		authorWord := authorName
+		if idx := strings.Index(authorName, " "); idx > 0 {
+			authorWord = authorName[:idx]
+		}
+		authorWordLower := strings.ToLower(authorWord)
+
+		dirMatches := map[string]struct{}{}
+		entries, err := os.ReadDir(iTunesRoot)
+		if err != nil {
+			return nil
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			if !strings.Contains(strings.ToLower(entry.Name()), authorWordLower) {
+				continue
+			}
+			authorDir := filepath.Join(iTunesRoot, entry.Name())
+			albumEntries, err := os.ReadDir(authorDir)
+			if err != nil {
+				continue
+			}
+			for _, album := range albumEntries {
+				albumPath := filepath.Join(authorDir, album.Name())
+				if album.IsDir() {
+					if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+						dirMatches[albumPath] = struct{}{}
+						continue
+					}
+					_ = filepath.WalkDir(albumPath, func(path string, d os.DirEntry, err error) error {
+						if err != nil || d.IsDir() {
+							return nil
+						}
+						if !audioExts[strings.ToLower(filepath.Ext(path))] {
+							return nil
+						}
+						if strings.Contains(strings.ToLower(filepath.Base(path)), titlePrefixLower) {
+							dirMatches[albumPath] = struct{}{}
+							return filepath.SkipDir
+						}
+						return nil
+					})
+				} else {
+					if !audioExts[strings.ToLower(filepath.Ext(albumPath))] {
+						continue
+					}
+					if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+						dirMatches[albumPath] = struct{}{}
+					}
+				}
+			}
+		}
+
+		result := make([]string, 0, len(dirMatches))
+		for d := range dirMatches {
+			result = append(result, d)
+		}
+		sort.Strings(result)
+		return result
+	}
+
+	leadingNumRE := regexp.MustCompile(`^\d+\s*[-.]?\s*`)
+	trailingNumRE := regexp.MustCompile(`\s+\d+$`)
+
+	disambiguate := func(matches []string, authorName, title string) string {
+		titleLower := strings.ToLower(title)
+		type candidate struct {
+			path  string
+			score int
+		}
+		cands := make([]candidate, 0, len(matches))
+		for _, p := range matches {
+			base := filepath.Base(p)
+			ext := filepath.Ext(base)
+			stemRaw := strings.TrimSuffix(base, ext)
+			leadingNum := leadingNumRE.FindString(stemRaw)
+			stemNoNum := leadingNumRE.ReplaceAllString(stemRaw, "")
+			stemLower := strings.ToLower(stemNoNum)
+			stemNorm := strings.ReplaceAll(strings.ReplaceAll(stemLower, "_", " "), ":", " ")
+			sc := 0
+			switch {
+			case stemNorm == titleLower:
+				sc += 100
+			case strings.HasPrefix(stemNorm, titleLower):
+				rest := stemNorm[len(titleLower):]
+				switch {
+				case regexp.MustCompile(`^\s+book\s+\d`).MatchString(rest),
+					regexp.MustCompile(`^\s+\d+$`).MatchString(rest):
+					sc += 20
+				default:
+					sc += 60
+				}
+			case strings.HasPrefix(titleLower, stemNorm) && len(stemNorm) >= 10:
+				sc += 80
+			case strings.Contains(stemNorm, titleLower):
+				sc += 10
+			}
+			if trailingNumRE.MatchString(stemNorm) {
+				sc -= 30
+			}
+			if leadingNum == "" {
+				sc += 20
+			} else {
+				if n, err := strconv.Atoi(strings.TrimSpace(
+					strings.TrimRight(strings.TrimRight(leadingNum, " "), "-."))); err == nil {
+					sc -= n * 2
+				}
+			}
+			authorDir := filepath.Base(filepath.Dir(p))
+			if strings.EqualFold(authorDir, authorName) {
+				sc += 40
+			} else if strings.Contains(strings.ToLower(authorDir), strings.ToLower(authorName)) {
+				sc += 20
+			}
+			sc -= len(base) / 8
+			cands = append(cands, candidate{path: p, score: sc})
+		}
+		sort.Slice(cands, func(i, j int) bool { return cands[i].score > cands[j].score })
+		if len(cands) > 1 {
+			stemOf := func(p string) string {
+				b := filepath.Base(p)
+				s := strings.TrimSuffix(b, filepath.Ext(b))
+				s = strings.ToLower(leadingNumRE.ReplaceAllString(s, ""))
+				s = strings.ReplaceAll(strings.ReplaceAll(s, "_", " "), ":", " ")
+				return s
+			}
+			first := stemOf(cands[0].path)
+			allSame := true
+			for _, c := range cands[1:] {
+				if stemOf(c.path) != first {
+					allSame = false
+					break
+				}
+			}
+			if allSame {
+				return cands[0].path
+			}
+		}
+		if len(cands) >= 2 && cands[0].score-cands[1].score >= 15 {
+			return cands[0].path
+		}
+		if len(cands) == 1 {
+			return cands[0].path
+		}
+		return ""
+	}
+
+	var resolved []relinkReportResolved
+	var unresolved []relinkReportUnresolved
+	skipped := 0
+
+	for i := range allBooks {
+		book := &allBooks[i]
+		fp := book.FilePath
+
+		// Only consider books whose path is under the organizer root AND missing.
+		if !strings.HasPrefix(fp, organizerRoot) {
+			skipped++
+			continue
+		}
+		if _, statErr := os.Stat(fp); statErr == nil {
+			skipped++
+			continue
+		}
+
+		// Derive author name the same way handleRelinkMissingToiTunes does.
+		rel := strings.TrimPrefix(fp, organizerRoot)
+		rel = strings.TrimPrefix(rel, string(os.PathSeparator))
+		authorName := strings.SplitN(rel, string(os.PathSeparator), 2)[0]
+		if authorName == "" || authorName == filepath.Base(fp) {
+			if book.Author != nil {
+				authorName = book.Author.Name
+			} else if book.AuthorID != nil {
+				if a, err := store.GetAuthorByID(*book.AuthorID); err == nil && a != nil {
+					authorName = a.Name
+				}
+			}
+		}
+		if authorName == "" {
+			unresolved = append(unresolved, relinkReportUnresolved{
+				BookID:        book.ID,
+				Title:         book.Title,
+				OldPath:       fp,
+				WhyUnresolved: "no author name",
+			})
+			continue
+		}
+
+		matches := findInITunes(authorName, book.Title)
+
+		switch len(matches) {
+		case 0:
+			unresolved = append(unresolved, relinkReportUnresolved{
+				BookID:        book.ID,
+				Title:         book.Title,
+				OldPath:       fp,
+				WhyUnresolved: "no iTunes match found",
+			})
+		case 1:
+			resolved = append(resolved, relinkReportResolved{
+				BookID:  book.ID,
+				Title:   book.Title,
+				NewPath: matches[0],
+			})
+		default:
+			if best := disambiguate(matches, authorName, book.Title); best != "" {
+				resolved = append(resolved, relinkReportResolved{
+					BookID:  book.ID,
+					Title:   book.Title,
+					NewPath: best,
+				})
+			} else {
+				unresolved = append(unresolved, relinkReportUnresolved{
+					BookID:        book.ID,
+					Title:         book.Title,
+					OldPath:       fp,
+					WhyUnresolved: fmt.Sprintf("ambiguous: %d iTunes matches, none dominant", len(matches)),
+					MatchPaths:    matches,
+				})
+			}
+		}
+	}
+
+	// Apply pagination to the unresolved list only (resolved list is typically
+	// smaller and always useful in full; callers can use offset/limit to page
+	// through the unresolved triage queue).
+	totalUnresolved := len(unresolved)
+	if offset > 0 {
+		if offset >= len(unresolved) {
+			unresolved = nil
+		} else {
+			unresolved = unresolved[offset:]
+		}
+	}
+	if limit > 0 && len(unresolved) > limit {
+		unresolved = unresolved[:limit]
+	}
+
+	log.Printf("[INFO] relink-report: total=%d resolved=%d unresolved=%d skipped=%d (page offset=%d limit=%d)",
+		len(allBooks), len(resolved), totalUnresolved, skipped, offset, limit)
+
+	c.JSON(http.StatusOK, gin.H{
+		"resolved":          resolved,
+		"unresolved":        unresolved,
+		"resolved_count":    len(resolved),
+		"unresolved_count":  totalUnresolved,
+		"skipped":           skipped,
+		"offset":            offset,
+		"limit":             limit,
 	})
 }
