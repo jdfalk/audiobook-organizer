@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.19.0
+// version: 1.19.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -307,7 +307,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Strip title/position contamination from series names and run write-back + organize for affected books",
 		Category:    "maintenance",
 		TriggerFn: func(source string) (*database.Operation, error) {
-			return ts.triggerOperation("series-normalize", source, func(ctx context.Context, progress operations.ProgressReporter) error {
+			return ts.triggerOperationWithID("series-normalize", source, func(ctx context.Context, progress operations.ProgressReporter, opID string) error {
 				store := ts.server.Store()
 				if store == nil {
 					return fmt.Errorf("database not initialized")
@@ -317,7 +317,15 @@ func (ts *TaskScheduler) registerAllTasks() {
 						ts.server.writeBackBatcher.Enqueue(bookID)
 					}
 				}
-				_, err := executeSeriesNormalizeCore(ctx, store, enqueueWB)
+				affected, err := executeSeriesNormalizeCore(ctx, store, enqueueWB)
+				msg := fmt.Sprintf("Series normalize complete: %d series affected, %d books enqueued for write-back",
+					len(affected), len(affected))
+				_ = progress.Log("info", msg, nil)
+				tags := activity.TagsIf(len(affected) == 0, activity.NoOpTag)
+				if operations.IsManual(ctx) {
+					tags = append(tags, activity.AlwaysShow)
+				}
+				activity.EmitInfo(ts.server.activityWriter, opID, "series-normalize", "series-normalize", msg, tags...)
 				return err
 			})
 		},
