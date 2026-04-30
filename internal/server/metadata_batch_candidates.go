@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-04-28
 
@@ -425,7 +425,11 @@ func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
 	store := s.Store()
 	// Scan more than maxOps from recent history because the filter
 	// (type + completed + non-empty results) can reject many rows.
-	ops, err := store.GetRecentOperations(200)
+	// Use a large limit: GetRecentOperations loads all ops into memory anyway
+	// (PebbleDB scans all keys, sorts, then slices), so increasing the cap is
+	// free. Without a high limit, background maintenance/organize/scan ops
+	// quickly push older metadata-fetch operations out of the top 200.
+	ops, err := store.GetRecentOperations(5000)
 	if err != nil {
 		internalError(c, "failed to list recent operations", err)
 		return
