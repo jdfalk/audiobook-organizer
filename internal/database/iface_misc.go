@@ -1,6 +1,7 @@
 // file: internal/database/iface_misc.go
-// version: 1.5.0
+// version: 1.7.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
+// last-edited: 2026-04-30
 
 package database
 
@@ -126,6 +127,9 @@ type BookFileStore interface {
 	UpsertBookFile(file *BookFile) error
 	BatchUpsertBookFiles(files []*BookFile) error
 	MoveBookFilesToBook(fileIDs []string, sourceBookID, targetBookID string) error
+	// UpdateBookFileHashes is a surgical update that records pre-write and post-write
+	// SHA-256 hashes without touching any other BookFile fields.
+	UpdateBookFileHashes(id, originalHash, postMetadataHash string) error
 }
 
 // BookSegmentStore covers the deprecated segment surface, kept until
@@ -265,4 +269,12 @@ type AIJobsStore interface {
 	MarkAIJobCompleted(id, status string, successCount, errorCount int, rowErrors []AIJobRowError) error
 	MarkAIJobFailed(id, errMsg string) error
 	ListAIJobs(typeFilter, statusFilter string, limit, offset int) ([]AIJob, error)
+}
+
+// RejectedMetadataStore records candidates that were rejected (user action,
+// below-threshold, duration mismatch, wrong language) so auditing is possible.
+type RejectedMetadataStore interface {
+	AddMetadataRejection(r MetadataRejection) error
+	GetMetadataRejections(bookID string) ([]MetadataRejection, error)
+	DeleteMetadataRejections(bookID string) error
 }

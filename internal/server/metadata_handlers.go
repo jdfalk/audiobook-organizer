@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.8.1
+// version: 2.9.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -340,7 +340,35 @@ func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 		internalError(c, "failed to mark no match", err)
 		return
 	}
+	rejection := database.MetadataRejection{
+		ID:              ulid.Make().String(),
+		BookID:          id,
+		Source:          "user",
+		RejectionReason: "user_rejected",
+		RejectedAt:      time.Now(),
+	}
+	if rerr := s.Store().AddMetadataRejection(rejection); rerr != nil {
+		log.Printf("[WARN] markAudiobookNoMatch: could not record rejection for %s: %v", id, rerr)
+	}
 	RespondWithOK(c, gin.H{"message": "Book marked as no match"})
+}
+
+// handleGetMetadataRejections handles GET /api/v1/audiobooks/:id/metadata-rejections.
+func (s *Server) handleGetMetadataRejections(c *gin.Context) {
+	id := c.Param("id")
+	if s.Store() == nil {
+		RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	rejections, err := s.Store().GetMetadataRejections(id)
+	if err != nil {
+		internalError(c, "failed to get metadata rejections", err)
+		return
+	}
+	if rejections == nil {
+		rejections = []database.MetadataRejection{}
+	}
+	RespondWithOK(c, gin.H{"rejections": rejections})
 }
 
 // revertAudiobookMetadata handles POST /api/v1/audiobooks/:id/revert-metadata.

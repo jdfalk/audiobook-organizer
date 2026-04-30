@@ -58,6 +58,7 @@ packages:
       SettingsStore:
       StatsStore:
       MaintenanceStore:
+      RejectedMetadataStore:
       SystemActivityStore:
   github.com/jdfalk/audiobook-organizer/internal/operations:
     config:
