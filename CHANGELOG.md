@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.38.0 -->
+<!-- version: 2.39.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-04-30 -->
 
@@ -7,7 +7,29 @@
 
 ## [Unreleased]
 
-### Fixed
+### Added / Changed
+
+#### April 30, 2026 — Diagnostics DB health, metadata SHA tracking, metadata dedup, import path fix (#570–#573)
+
+- **PR #570** `feat(diagnostics)`: DB health endpoint + metadata cache TTL fix
+  - `GET /api/v1/diagnostics/db-health`: returns SQLite table row counts, page size, WAL size, PebbleDB key counts, AI scans DB stats, embeddings DB stats — surfaces as "Database Health" accordion on Diagnostics page
+  - `MetadataFetchCacheTTLDays` default increased from 7 → 30 days to prevent excessive re-fetching
+
+- **PR #571** `feat(database,server,web)`: pre-write SHA tracking + rejected metadata store
+  - **FILE-SHA-1**: `post_metadata_hash` column on `book_files` (migration 053); scanner records `original_file_hash` on first scan; `UpdateBookFileHashes()` captures pre/post hash around every metadata tag write
+  - **META-REJ-1**: `metadata_rejections` table (migration 054) with `RejectedMetadataStore` interface; `AddMetadataRejection` / `GetMetadataRejections` / `DeleteMetadataRejections` on SQLiteStore + PebbleStore stubs; `GET /api/v1/audiobooks/:id/metadata-rejections` endpoint; rejection history collapsible section in BookDetail UI
+
+- **PR #572** `fix(database,diagnostics)`: drop `is_primary_version` filter from import path count + path prefix diagnostic
+  - `GetAllImportPaths` live subquery no longer filters `is_primary_version = 1` — non-primary duplicate books in a staging folder now count toward the displayed total; fixes Settings → Library showing 0 books for paths with large libraries
+  - `GetBookPathPrefixes(limit int)` new diagnostic method: returns top-N depth-3 path prefixes from `books.file_path`, wired into `GET /api/v1/diagnostics/db-health` response as `book_path_prefixes`
+
+- **PR #573** `feat(dedup,metadata)`: deduplicate books by metadata source hash (MATCH-1)
+  - `metadata_source_hash` column on `books` (migration 055): `sha256("{source}:{canonical_id}")` e.g. `sha256("audible:B0XXXXXXXX")`; identical hashes → same external metadata record → duplication candidates
+  - `GetBooksByMetadataSourceHash()` on SQLiteStore + PebbleStore (full-scan); wired into `enrichedBookResponse` as `MetadataSourceHashDuplicateCount`
+  - Mock stores updated (hand-rolled + mockery-generated)
+  - `metadata_source_hash` populated on metadata apply; BookDetail shows duplicate count badge
+
+
 
 #### April 29, 2026 — Manual iTunes path fixes for 9 unresolved relinks (RELINK-1)
 
