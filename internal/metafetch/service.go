@@ -2689,9 +2689,23 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 	src := candidate.Source
 	book.MetadataSource = &src
 
+	// Compute metadata_source_hash = sha256("{source}:{canonical_id}") so the
+	// dedup engine can later detect books sharing the exact same external record.
+	canonicalID := metadataCanonicalID(candidate)
+	if canonicalID != "" {
+		h := fmt.Sprintf("%x", sha256.Sum256([]byte(src+":"+canonicalID)))
+		book.MetadataSourceHash = &h
+	}
+
 	updatedBook, updateErr := mfs.db.UpdateBook(id, book)
 	if updateErr != nil {
 		return nil, fmt.Errorf("failed to update book: %w", updateErr)
+	}
+
+	// Check whether any other book already carries the same hash — if so,
+	// emit a dedup candidate so the user can review the potential duplicate.
+	if book.MetadataSourceHash != nil {
+		mfs.checkMetadataSourceHashDuplicates(id, *book.MetadataSourceHash)
 	}
 
 	// Persist fetched values for provenance tracking
@@ -2749,6 +2763,39 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 		Book:    updatedBook,
 		Source:  candidate.Source,
 	}, nil
+}
+
+// metadataCanonicalID extracts the canonical external identifier from a
+// MetadataCandidate for use in the metadata_source_hash computation.
+// Priority: ASIN > ISBN-13 > ISBN-10 > ISBN. Returns "" if none present.
+func metadataCanonicalID(c MetadataCandidate) string {
+	if c.ASIN != "" {
+		return c.ASIN
+	}
+	if c.ISBN != "" && len(c.ISBN) == 13 {
+		return c.ISBN
+	}
+	if c.ISBN != "" {
+		return c.ISBN
+	}
+	return ""
+}
+
+// checkMetadataSourceHashDuplicates logs a warning if other books share the
+// same metadata_source_hash. Full dedup candidate creation is handled by
+// the dedup engine's checkExactMetadataSourceHash pass which runs after apply.
+func (mfs *Service) checkMetadataSourceHashDuplicates(bookID, hash string) {
+	matches, err := mfs.db.GetBooksByMetadataSourceHash(hash)
+	if err != nil {
+		log.Printf("[WARN] metadata-source-hash dedup query failed for book %s: %v", bookID, err)
+		return
+	}
+	for _, other := range matches {
+		if other.ID == bookID {
+			continue
+		}
+		log.Printf("[INFO] MATCH-1: book %s and %s share metadata_source_hash %s — possible duplicate, dedup engine will create candidate", bookID, other.ID, hash)
+	}
 }
 
 // ApplyMetadataSystemTags writes the metadata:source:* and

@@ -1,11 +1,13 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.25.0
+// version: 1.26.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+// last-edited: 2026-04-30
 
 package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -5894,4 +5896,138 @@ func (s *Server) runBulkDelugeImport(
 	}
 	log.Printf("[INFO] bulk-deluge-import %s: done. imported=%d failed=%d", opID, imported, failed)
 	return nil
+}
+
+// ── MATCH-1: backfill metadata_source_hash ───────────────────────────────────
+
+// metadataHashBackfillResult is one entry in the backfill response.
+type metadataHashBackfillResult struct {
+BookID    string `json:"book_id"`
+BookTitle string `json:"book_title"`
+Hash      string `json:"hash,omitempty"`
+Source    string `json:"source,omitempty"`
+Skipped   bool   `json:"skipped,omitempty"`
+SkipReason string `json:"skip_reason,omitempty"`
+Applied   bool   `json:"applied,omitempty"`
+Error     string `json:"error,omitempty"`
+}
+
+// handleBackfillMetadataSourceHash handles
+// POST /api/v1/maintenance/backfill-metadata-source-hash
+//
+// Iterates all books that already have a known ASIN or ISBN-13 (or ISBN-10),
+// computes sha256("{source}:{id}"), and stores it in metadata_source_hash.
+// Books that already have a hash are skipped unless ?force=true is set.
+//
+// Query params:
+//   - dry_run=true  (default) — report what would change without modifying DB
+//   - dry_run=false — actually write the hash
+//   - force=true    — overwrite existing hashes
+func (s *Server) handleBackfillMetadataSourceHash(c *gin.Context) {
+dryRun := c.DefaultQuery("dry_run", "true") == "true"
+force := c.Query("force") == "true"
+
+store := s.Store()
+if store == nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+return
+}
+
+allBooks, err := store.GetAllBooks(0, 0)
+if err != nil {
+internalError(c, "failed to list books", err)
+return
+}
+
+var results []metadataHashBackfillResult
+applied := 0
+skipped := 0
+errors := 0
+
+for i := range allBooks {
+book := &allBooks[i]
+
+// Skip if already has hash and force not requested.
+if book.MetadataSourceHash != nil && *book.MetadataSourceHash != "" && !force {
+results = append(results, metadataHashBackfillResult{
+BookID:     book.ID,
+BookTitle:  book.Title,
+Hash:       *book.MetadataSourceHash,
+Skipped:    true,
+SkipReason: "already has metadata_source_hash",
+})
+skipped++
+continue
+}
+
+// Derive source and canonical ID.
+source, canonicalID := bookMetadataSourceAndID(book)
+if canonicalID == "" {
+results = append(results, metadataHashBackfillResult{
+BookID:     book.ID,
+BookTitle:  book.Title,
+Skipped:    true,
+SkipReason: "no ASIN, ISBN-13, or ISBN-10 available",
+})
+skipped++
+continue
+}
+
+hash := fmt.Sprintf("%x", sha256.Sum256([]byte(source+":"+canonicalID)))
+result := metadataHashBackfillResult{
+BookID:    book.ID,
+BookTitle: book.Title,
+Hash:      hash,
+Source:    source,
+}
+
+if !dryRun {
+current, getErr := store.GetBookByID(book.ID)
+if getErr != nil || current == nil {
+result.Error = fmt.Sprintf("GetBookByID: %v", getErr)
+errors++
+results = append(results, result)
+continue
+}
+current.MetadataSourceHash = &hash
+if _, updateErr := store.UpdateBook(book.ID, current); updateErr != nil {
+result.Error = updateErr.Error()
+log.Printf("[WARN] backfill-metadata-source-hash: book %s (%q): %v", book.ID, book.Title, updateErr)
+errors++
+results = append(results, result)
+continue
+}
+result.Applied = true
+applied++
+} else {
+applied++ // dry-run: count as "would apply"
+}
+
+results = append(results, result)
+}
+
+c.JSON(http.StatusOK, gin.H{
+"dry_run":  dryRun,
+"total":    len(allBooks),
+"applied":  applied,
+"skipped":  skipped,
+"errors":   errors,
+"results":  results,
+})
+}
+
+// bookMetadataSourceAndID returns the best (source, canonical_id) pair for a
+// book, in priority order: ASIN → ISBN-13 → ISBN-10. Returns ("", "") if none
+// available.
+func bookMetadataSourceAndID(book *database.Book) (source, id string) {
+if book.ASIN != nil && *book.ASIN != "" {
+return "audible", *book.ASIN
+}
+if book.ISBN13 != nil && *book.ISBN13 != "" {
+return "openlibrary", *book.ISBN13
+}
+if book.ISBN10 != nil && *book.ISBN10 != "" {
+return "openlibrary", *book.ISBN10
+}
+return "", ""
 }

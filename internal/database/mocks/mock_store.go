@@ -42587,3 +42587,189 @@ func (_c *MockStore_UpsertMetadataFieldState_Call) RunAndReturn(run func(state *
 	_c.Call.Return(run)
 	return _c
 }
+
+// GetBooksByMetadataSourceHash provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
+ret := _mock.Called(hash)
+
+if len(ret) == 0 {
+panic("no return value specified for GetBooksByMetadataSourceHash")
+}
+
+var r0 []database.Book
+var r1 error
+if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
+return returnFunc(hash)
+}
+if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
+r0 = returnFunc(hash)
+} else {
+if ret.Get(0) != nil {
+r0 = ret.Get(0).([]database.Book)
+}
+}
+if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+r1 = returnFunc(hash)
+} else {
+r1 = ret.Error(1)
+}
+return r0, r1
+}
+
+// MockBookReader_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
+type MockBookReader_GetBooksByMetadataSourceHash_Call struct {
+*mock.Call
+}
+
+// GetBooksByMetadataSourceHash is a helper method to define mock.On call
+//   - hash string
+func (_e *MockBookReader_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockBookReader_GetBooksByMetadataSourceHash_Call {
+return &MockBookReader_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
+}
+
+func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockBookReader_GetBooksByMetadataSourceHash_Call {
+_c.Call.Run(func(args mock.Arguments) {
+var arg0 string
+if args[0] != nil {
+arg0 = args[0].(string)
+}
+run(
+arg0,
+)
+})
+return _c
+}
+
+func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockBookReader_GetBooksByMetadataSourceHash_Call {
+_c.Call.Return(books, err)
+return _c
+}
+
+func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockBookReader_GetBooksByMetadataSourceHash_Call {
+_c.Call.Return(run)
+return _c
+}
+
+// GetBooksByMetadataSourceHash provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
+ret := _mock.Called(hash)
+
+if len(ret) == 0 {
+panic("no return value specified for GetBooksByMetadataSourceHash")
+}
+
+var r0 []database.Book
+var r1 error
+if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
+return returnFunc(hash)
+}
+if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
+r0 = returnFunc(hash)
+} else {
+if ret.Get(0) != nil {
+r0 = ret.Get(0).([]database.Book)
+}
+}
+if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+r1 = returnFunc(hash)
+} else {
+r1 = ret.Error(1)
+}
+return r0, r1
+}
+
+// MockBookStore_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
+type MockBookStore_GetBooksByMetadataSourceHash_Call struct {
+*mock.Call
+}
+
+// GetBooksByMetadataSourceHash is a helper method to define mock.On call
+//   - hash string
+func (_e *MockBookStore_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockBookStore_GetBooksByMetadataSourceHash_Call {
+return &MockBookStore_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
+}
+
+func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockBookStore_GetBooksByMetadataSourceHash_Call {
+_c.Call.Run(func(args mock.Arguments) {
+var arg0 string
+if args[0] != nil {
+arg0 = args[0].(string)
+}
+run(
+arg0,
+)
+})
+return _c
+}
+
+func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockBookStore_GetBooksByMetadataSourceHash_Call {
+_c.Call.Return(books, err)
+return _c
+}
+
+func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockBookStore_GetBooksByMetadataSourceHash_Call {
+_c.Call.Return(run)
+return _c
+}
+
+// GetBooksByMetadataSourceHash provides a mock function for the type MockStore
+func (_mock *MockStore) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
+ret := _mock.Called(hash)
+
+if len(ret) == 0 {
+panic("no return value specified for GetBooksByMetadataSourceHash")
+}
+
+var r0 []database.Book
+var r1 error
+if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
+return returnFunc(hash)
+}
+if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
+r0 = returnFunc(hash)
+} else {
+if ret.Get(0) != nil {
+r0 = ret.Get(0).([]database.Book)
+}
+}
+if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+r1 = returnFunc(hash)
+} else {
+r1 = ret.Error(1)
+}
+return r0, r1
+}
+
+// MockStore_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
+type MockStore_GetBooksByMetadataSourceHash_Call struct {
+*mock.Call
+}
+
+// GetBooksByMetadataSourceHash is a helper method to define mock.On call
+//   - hash string
+func (_e *MockStore_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockStore_GetBooksByMetadataSourceHash_Call {
+return &MockStore_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
+}
+
+func (_c *MockStore_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockStore_GetBooksByMetadataSourceHash_Call {
+_c.Call.Run(func(args mock.Arguments) {
+var arg0 string
+if args[0] != nil {
+arg0 = args[0].(string)
+}
+run(
+arg0,
+)
+})
+return _c
+}
+
+func (_c *MockStore_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockStore_GetBooksByMetadataSourceHash_Call {
+_c.Call.Return(books, err)
+return _c
+}
+
+func (_c *MockStore_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockStore_GetBooksByMetadataSourceHash_Call {
+_c.Call.Return(run)
+return _c
+}

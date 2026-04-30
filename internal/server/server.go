@@ -307,11 +307,12 @@ func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
 // enrichedBookResponse wraps a Book with resolved names for JSON responses.
 type enrichedBookResponse struct {
 	*database.Book
-	AuthorName *string         `json:"author_name,omitempty"`
-	SeriesName *string         `json:"series_name,omitempty"`
-	Authors    []authorEntry   `json:"authors,omitempty"`
-	Narrators  []narratorEntry `json:"narrators,omitempty"`
-	FileExists *bool           `json:"file_exists,omitempty"`
+	AuthorName                       *string         `json:"author_name,omitempty"`
+	SeriesName                       *string         `json:"series_name,omitempty"`
+	Authors                          []authorEntry   `json:"authors,omitempty"`
+	Narrators                        []narratorEntry `json:"narrators,omitempty"`
+	FileExists                       *bool           `json:"file_exists,omitempty"`
+	MetadataSourceHashDuplicateCount *int            `json:"metadata_source_hash_duplicate_count,omitempty"`
 }
 
 type authorEntry struct {
@@ -381,6 +382,23 @@ func enrichBookForResponse(book *database.Book) enrichedBookResponse {
 				}
 				combined := strings.Join(names, " & ")
 				book.Narrator = &combined
+			}
+		}
+	}
+
+	// Populate metadata_source_hash_duplicate_count if this book has a hash.
+	// This lets the BookDetail UI warn about possible duplicates without an
+	// extra round-trip.
+	if book.MetadataSourceHash != nil && *book.MetadataSourceHash != "" && database.GetGlobalStore() != nil {
+		if matches, err := database.GetGlobalStore().GetBooksByMetadataSourceHash(*book.MetadataSourceHash); err == nil {
+			count := 0
+			for _, m := range matches {
+				if m.ID != book.ID {
+					count++
+				}
+			}
+			if count > 0 {
+				resp.MetadataSourceHashDuplicateCount = &count
 			}
 		}
 	}
@@ -2519,6 +2537,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/fix-read-by-narrator", s.perm(auth.PermSettingsManage), s.handleFixReadByNarrator)
 			protected.POST("/maintenance/cleanup-series", s.perm(auth.PermSettingsManage), s.handleCleanupSeries)
 			protected.POST("/maintenance/backfill-book-files", s.perm(auth.PermSettingsManage), s.handleBackfillBookFiles)
+			protected.POST("/maintenance/backfill-metadata-source-hash", s.perm(auth.PermSettingsManage), s.handleBackfillMetadataSourceHash)
 			protected.POST("/maintenance/cleanup-empty-folders", s.perm(auth.PermSettingsManage), s.handleCleanupEmptyFolders)
 			protected.POST("/maintenance/cleanup-backups", s.perm(auth.PermSettingsManage), s.handleCleanupBackups)
 			protected.POST("/maintenance/cleanup-organize-mess", s.perm(auth.PermSettingsManage), s.handleCleanupOrganizeMess)

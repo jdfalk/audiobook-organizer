@@ -1,6 +1,7 @@
 // file: internal/database/iface_book.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
+// last-edited: 2026-04-30
 
 package database
 
@@ -38,6 +39,7 @@ type BookReader interface {
 	GetBooksBySeriesID(seriesID int) ([]Book, error)
 	GetBooksByAuthorID(authorID int) ([]Book, error)
 	GetBooksByVersionGroup(groupID string) ([]Book, error)
+	GetBooksByMetadataSourceHash(hash string) ([]Book, error)
 	SearchBooks(query string, limit, offset int) ([]Book, error)
 	CountBooks() (int, error)
 	GetDistinctGenres() ([]string, error)
