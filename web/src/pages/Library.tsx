@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.50.0
+// version: 1.51.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -59,6 +59,7 @@ import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
 import { BulkMetadataSearchDialog } from '../components/audiobooks/BulkMetadataSearchDialog';
 import { BulkTagDialog } from '../components/audiobooks/BulkTagDialog';
+import { BulkRatingDialog } from '../components/audiobooks/BulkRatingDialog';
 import { MetadataReviewDialog } from '../components/audiobooks/MetadataReviewDialog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook, FilterOptions } from '../types';
@@ -232,6 +233,7 @@ export const Library = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [parsedSearch, setParsedSearch] = useState<ParsedSearch>(() => parseSearch(initialSearch));
   const [bulkTagDialogOpen, setBulkTagDialogOpen] = useState(false);
+  const [bulkRatingDialogOpen, setBulkRatingDialogOpen] = useState(false);
 
   // Column config
   const {
@@ -1805,6 +1807,7 @@ export const Library = () => {
             <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24 }} />
             <Button size="small" variant="outlined" color="primary" onClick={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }} disabled={selectedAudiobooks.length < 2}>Merge as Versions</Button>
             <Button size="small" variant="outlined" onClick={() => setBulkTagDialogOpen(true)} disabled={!hasSelection}>Tag</Button>
+            <Button size="small" variant="outlined" onClick={() => setBulkRatingDialogOpen(true)} disabled={!hasSelection}>Rate</Button>
             <Box sx={{ flex: 1 }} />
             <Button size="small" variant="outlined" color="secondary" onClick={() => setBatchDeleteDialogOpen(true)} disabled={!selectedHasActive}>Delete Selected</Button>
             <Button size="small" variant="outlined" color="success" onClick={handleBatchRestore} disabled={!selectedHasDeleted || batchRestoreInProgress}>{batchRestoreInProgress ? 'Restoring...' : 'Restore Selected'}</Button>
@@ -2085,6 +2088,21 @@ export const Library = () => {
                         disabled={!hasSelection}
                       >
                         Tag
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={!hasSelection ? 'Select books first' : ''}
+                    disableHoverListener={hasSelection}
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setBulkRatingDialogOpen(true)}
+                        disabled={!hasSelection}
+                      >
+                        Rate
                       </Button>
                     </span>
                   </Tooltip>
@@ -2534,6 +2552,13 @@ export const Library = () => {
             refreshTags();
             loadAudiobooks();
           }}
+        />
+
+        <BulkRatingDialog
+          open={bulkRatingDialogOpen}
+          onClose={() => setBulkRatingDialogOpen(false)}
+          bookIds={selectedAudiobooks.map((b) => b.id)}
+          onComplete={() => loadAudiobooks()}
         />
 
         <Dialog open={mergeDialogOpen} onClose={() => setMergeDialogOpen(false)} maxWidth="sm" fullWidth>
