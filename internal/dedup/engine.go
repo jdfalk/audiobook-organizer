@@ -1,6 +1,7 @@
 // file: internal/dedup/engine.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
+// last-edited: 2026-04-30
 
 package dedup
 
@@ -145,6 +146,10 @@ func (de *Engine) CheckBook(ctx context.Context, bookID string) (bool, error) {
 
 	if err := de.checkExactISBN(book); err != nil {
 		log.Printf("dedup: ISBN check error for %s: %v", bookID, err)
+	}
+
+	if err := de.checkExactMetadataSourceHash(book); err != nil {
+		log.Printf("dedup: metadata-source-hash check error for %s: %v", bookID, err)
 	}
 
 	if err := de.checkExactTitle(book, authorName); err != nil {
@@ -298,6 +303,38 @@ func (de *Engine) checkExactISBN(book *database.Book) error {
 			break
 		}
 		offset += batchSize
+	}
+	return nil
+}
+
+// checkExactMetadataSourceHash is the MATCH-1 fast pre-pass: if two books
+// share the same metadata_source_hash (sha256 of source:canonical_id) they
+// were applied from the exact same external record and are almost certainly
+// duplicates. Creates a dedup candidate with similarity 0.99.
+func (de *Engine) checkExactMetadataSourceHash(book *database.Book) error {
+	if book.MetadataSourceHash == nil || *book.MetadataSourceHash == "" {
+		return nil
+	}
+	others, err := de.bookStore.GetBooksByMetadataSourceHash(*book.MetadataSourceHash)
+	if err != nil {
+		return fmt.Errorf("get books by metadata source hash: %w", err)
+	}
+	for i := range others {
+		other := &others[i]
+		if other.ID == book.ID {
+			continue
+		}
+		sim := 0.99
+		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
+			EntityType: "book",
+			EntityAID:  book.ID,
+			EntityBID:  other.ID,
+			Layer:      "metadata_hash",
+			Similarity: &sim,
+			Status:     "pending",
+		}); err != nil {
+			log.Printf("dedup: upsert metadata-hash candidate error (book %s ↔ %s): %v", book.ID, other.ID, err)
+		}
 	}
 	return nil
 }

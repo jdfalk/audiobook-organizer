@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.59.0
+// version: 1.60.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-04-30
 
@@ -2507,6 +2507,42 @@ func (p *PebbleStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 		}
 		return books[i].Title < books[j].Title
 	})
+
+	return books, nil
+}
+
+// GetBooksByMetadataSourceHash returns all books with the given metadata source hash.
+func (p *PebbleStore) GetBooksByMetadataSourceHash(hash string) ([]Book, error) {
+	var books []Book
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") || strings.Contains(key, ":version:") {
+			continue
+		}
+
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+
+		if book.MetadataSourceHash != nil && *book.MetadataSourceHash == hash {
+			books = append(books, book)
+		}
+	}
 
 	return books, nil
 }
