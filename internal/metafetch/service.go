@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.59.0
+// version: 4.60.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package metafetch
@@ -48,6 +48,9 @@ type Service struct {
 	metadataScorer   ai.MetadataCandidateScorer // optional; nil = fallback to F1
 	llmScorer        ai.MetadataCandidateScorer // optional; nil = no LLM rerank tier
 	writeBackBatcher WriteBackEnqueuer
+	// safeWriteDeps guards tag/cover writes against Deluge-protected paths.
+	// Zero-value = no guard (writes proceed in-place). Set via SetSafeWriteDeps.
+	safeWriteDeps tagger.SafeWriteDeps
 }
 
 // SetOverrideSources overrides the metadata source chain for testing.
@@ -63,6 +66,13 @@ func (mfs *Service) SetActivityService(svc *activity.Service) {
 // SetWriteBackBatcher sets the iTunes write-back batcher.
 func (mfs *Service) SetWriteBackBatcher(b WriteBackEnqueuer) {
 	mfs.writeBackBatcher = b
+}
+
+// SetSafeWriteDeps installs the Deluge pre-flight guard for cover-art writes.
+// Must be called before any cover embedding occurs. Both fields of deps should
+// be non-nil for the guard to be fully effective.
+func (mfs *Service) SetSafeWriteDeps(deps tagger.SafeWriteDeps) {
+	mfs.safeWriteDeps = deps
 }
 
 func NewService(db database.Store) *Service {
@@ -1935,10 +1945,12 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 	// Archive the old cover from the first file before overwriting
 	mfs.archiveExistingCover(book.ID, files[0])
 
-	// Embed new cover into all files
+	// Embed new cover into all files.
+	// EmbedCoverArtSafe imports the file from a Deluge-protected path before
+	// writing if the pre-flight guard is wired (mfs.safeWriteDeps).
 	embedded := 0
 	for _, f := range files {
-		if err := tagger.EmbedCoverArt(f, coverPath); err != nil {
+		if err := tagger.EmbedCoverArtSafe(context.Background(), f, coverPath, mfs.safeWriteDeps); err != nil {
 			log.Printf("[WARN] cover art embedding failed for %s: %v", f, err)
 		} else {
 			embedded++

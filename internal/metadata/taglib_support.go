@@ -1,5 +1,5 @@
 // file: internal/metadata/taglib_support.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 //
 // TagLib WASM writer (default, no CGO required).
@@ -10,10 +10,12 @@
 package metadata
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 	taglib "go.senan.xyz/taglib"
 )
 
@@ -24,6 +26,9 @@ var taglibAvailable = true
 // TagLib edits tag atoms in place and does not corrupt audio data on failure —
 // no pre-write file copy is needed. The optional WriteBackupBeforeTagWrite
 // config flag handles backups at the call-site layer (backupFileBeforeWrite).
+//
+// If packageSafeWriteDeps is configured, protected (Deluge-managed) paths are
+// imported into the library before the write proceeds.
 func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _ fileops.OperationConfig) error {
 	abs, err := filepath.Abs(filePath)
 	if err != nil {
@@ -35,7 +40,7 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _
 		return fmt.Errorf("no writable metadata supplied")
 	}
 
-	if err := taglib.WriteTags(abs, tags, 0); err != nil {
+	if err := tagger.WriteTagsSafe(context.Background(), abs, tags, 0, packageSafeWriteDeps); err != nil {
 		return fmt.Errorf("taglib write: %w", err)
 	}
 
@@ -44,12 +49,15 @@ func writeMetadataWithTaglib(filePath string, metadata map[string]interface{}, _
 
 // writeSingleTagWithTaglib writes one tag property without touching others.
 // Pass value="" to clear the property from the file.
+//
+// If packageSafeWriteDeps is configured, protected (Deluge-managed) paths are
+// imported into the library before the write proceeds.
 func writeSingleTagWithTaglib(filePath, tagName, value string) error {
 	abs, err := filepath.Abs(filePath)
 	if err != nil {
 		return fmt.Errorf("taglib abs: %w", err)
 	}
-	return taglib.WriteTags(abs, map[string][]string{tagName: {value}}, 0)
+	return tagger.WriteTagsSafe(context.Background(), abs, map[string][]string{tagName: {value}}, 0, packageSafeWriteDeps)
 }
 
 // readTagsWithTaglib reads tags from a file via the TagLib WASM runtime.
