@@ -29,6 +29,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
@@ -741,6 +742,11 @@ type Server struct {
 	writeBackBatcher *itunesservice.WriteBackBatcher
 	fileIOPool       *FileIOPool
 
+	// protectedPathCache holds the union of Deluge save_paths and
+	// config.ProtectedPaths. Consulted before any in-place tag write.
+	// Nil when Deluge is not configured (extra paths only, or no Deluge URL).
+	protectedPathCache *deluge.ProtectedPathCache
+
 	// Shutdown coordination. bgCtx is canceled when Shutdown() runs, and
 	// bgWG tracks every fire-and-forget background goroutine (embedding
 	// backfill, async dedup scans, etc.) so Shutdown can wait for them to
@@ -1194,6 +1200,16 @@ func NewServer(store database.Store) *Server {
 	// Note: the search index is opened in Start(), not here, so
 	// tests that construct a Server without calling Start don't
 	// leak Bleve file handles.
+
+	// Initialize the protected-path cache. The cache merges Deluge save_paths
+	// (fetched lazily on first IsProtected call) with any static prefixes from
+	// config.ProtectedPaths. If Deluge is not configured, the cache still works
+	// for the static paths (e.g. iTunes library root).
+	{
+		dc := getDelugeClient()
+		server.protectedPathCache = deluge.NewProtectedPathCache(dc, config.AppConfig.ProtectedPaths)
+		log.Printf("[INFO] ProtectedPathCache initialized (%d static extra paths)", len(config.AppConfig.ProtectedPaths))
+	}
 
 	server.setupRoutes()
 
