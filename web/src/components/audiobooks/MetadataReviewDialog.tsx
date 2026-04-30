@@ -341,12 +341,6 @@ export function MetadataReviewDialog({
     setDisplayPage(1);
   }, [refreshKey]);
 
-  // If applied/hidden items shrink the list so the current page no longer exists,
-  // snap back to page 1 instead of showing an empty page.
-  useEffect(() => {
-    if (displayPage > displayPageCount) setDisplayPage(1);
-  }, [displayPageCount, displayPage]);
-
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
   const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -478,6 +472,14 @@ export function MetadataReviewDialog({
     (clampedDisplayPage - 1) * reviewPageSize,
     clampedDisplayPage * reviewPageSize
   );
+
+  // If applied/hidden items shrink the list so the current page no longer exists,
+  // snap back to page 1 instead of showing an empty page.
+  // Must live after displayPageCount is declared.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (displayPage > displayPageCount) setDisplayPage(1);
+  }, [displayPageCount, displayPage]);
 
   const titleFilteredPendingIds = filteredResults
     .filter(
