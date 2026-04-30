@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.27.0
+// version: 1.28.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 // last-edited: 2026-04-30
 
@@ -6176,5 +6176,49 @@ c.JSON(http.StatusOK, gin.H{
 "books_merged":  booksMerged,
 "books_skipped": booksSkipped,
 "groups":        results,
+})
+}
+
+// handleScanDuplicateFiles returns groups of book_files that share the same
+// original_file_hash, indicating identical audio content at multiple paths.
+//
+// GET /api/v1/maintenance/duplicate-files
+//
+// Query params:
+//   - limit=50  (max groups returned; default 50)
+//
+// Response: { data: { groups: [...], total_wasted_bytes: N, total_groups: N } }
+func (s *Server) handleScanDuplicateFiles(c *gin.Context) {
+limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+if limit <= 0 {
+limit = 50
+}
+
+store := s.Store()
+if store == nil {
+c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+return
+}
+
+groups, err := store.GetDuplicateFilesByHash(limit)
+if err != nil {
+internalError(c, "failed to scan duplicate files", err)
+return
+}
+
+var totalWasted int64
+for _, g := range groups {
+if g.FileCount > 1 {
+perFile := g.TotalSize / int64(g.FileCount)
+totalWasted += perFile * int64(g.FileCount-1)
+}
+}
+
+c.JSON(http.StatusOK, gin.H{
+"data": gin.H{
+"groups":             groups,
+"total_wasted_bytes": totalWasted,
+"total_groups":       len(groups),
+},
 })
 }

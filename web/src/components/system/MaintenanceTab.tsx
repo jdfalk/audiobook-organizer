@@ -1,5 +1,5 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
 // last-edited: 2026-04-30
 
@@ -285,6 +285,102 @@ function ChapterConsolidationCard() {
   );
 }
 
+// ─── SHADuplicateCard ─────────────────────────────────────────────────────────
+
+function SHADuplicateCard() {
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<api.DuplicateFilesResult | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleScan = useCallback(async () => {
+    setScanning(true);
+    setError(null);
+    setResult(null);
+    try {
+      const r = await api.scanDuplicateFiles(50);
+      setResult(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  }, []);
+
+  const fmt = (bytes: number) => {
+    if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
+    if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  };
+
+  return (
+    <Card variant="outlined" sx={{ mb: 2 }}>
+      <CardHeader
+        title="SHA Duplicate Detection"
+        subheader="These files have identical content (same SHA-256). Consider consolidating."
+      />
+      <CardContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+
+        <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={scanning ? <CircularProgress size={14} /> : undefined}
+            disabled={scanning}
+            onClick={handleScan}
+          >
+            {scanning ? 'Scanning…' : 'Scan for SHA Duplicates'}
+          </Button>
+        </Stack>
+
+        {result && (
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Found <strong>{result.total_groups}</strong> duplicate group(s) —{' '}
+            <strong>{fmt(result.total_wasted_bytes)}</strong> wasted space.
+          </Typography>
+        )}
+
+        {result && result.groups.length > 0 && (
+          <List dense disablePadding>
+            {result.groups.map((g) => (
+              <Box key={g.hash} sx={{ mb: 1 }}>
+                <ListItem
+                  disableGutters
+                  sx={{ cursor: 'pointer' }}
+                  onClick={() => setExpanded(expanded === g.hash ? null : g.hash)}
+                >
+                  <ListItemText
+                    primary={`${g.files[0]?.book_title || '(unknown)'} — ${g.file_count} copies`}
+                    secondary={`${fmt(g.total_size_bytes)} total · hash: ${g.hash.slice(0, 12)}…`}
+                  />
+                  <Chip size="small" label={`${g.file_count} files`} sx={{ ml: 1 }} />
+                </ListItem>
+                <Collapse in={expanded === g.hash}>
+                  <List dense disablePadding sx={{ pl: 2 }}>
+                    {g.files.map((f) => (
+                      <ListItem key={f.book_file_id} disableGutters>
+                        <ListItemText
+                          primary={f.file_path || f.book_path}
+                          secondary={f.book_title}
+                        />
+                        <Chip size="small" label={fmt(f.file_size_bytes)} variant="outlined" sx={{ ml: 1 }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Collapse>
+              </Box>
+            ))}
+          </List>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── MaintenanceTab ───────────────────────────────────────────────────────────
 
 export function MaintenanceTab() {
@@ -382,6 +478,8 @@ export function MaintenanceTab() {
       <MaintenanceWindowCard />
 
       <ChapterConsolidationCard />
+
+      <SHADuplicateCard />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
