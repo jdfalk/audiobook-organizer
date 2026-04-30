@@ -4206,6 +4206,60 @@ func (_c *MockBookWriter_DeleteBook_Call) RunAndReturn(run func(id string) error
 	return _c
 }
 
+// FlagMetadataHashDuplicate provides a mock function for the type MockBookWriter
+func (_mock *MockBookWriter) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
+	ret := _mock.Called(primaryID, duplicateID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FlagMetadataHashDuplicate")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(primaryID, duplicateID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookWriter_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
+type MockBookWriter_FlagMetadataHashDuplicate_Call struct {
+	*mock.Call
+}
+
+// FlagMetadataHashDuplicate is a helper method to define mock.On call
+//   - primaryID string
+//   - duplicateID string
+func (_e *MockBookWriter_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockBookWriter_FlagMetadataHashDuplicate_Call {
+	return &MockBookWriter_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
+}
+
+func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockBookWriter_FlagMetadataHashDuplicate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) Return(err error) *MockBookWriter_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(string, string) error) *MockBookWriter_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteBookTombstone provides a mock function for the type MockBookWriter
 func (_mock *MockBookWriter) DeleteBookTombstone(id string) error {
 	ret := _mock.Called(id)
@@ -5097,6 +5151,60 @@ func (_c *MockBookStore_DeleteBook_Call) Return(err error) *MockBookStore_Delete
 }
 
 func (_c *MockBookStore_DeleteBook_Call) RunAndReturn(run func(id string) error) *MockBookStore_DeleteBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FlagMetadataHashDuplicate provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
+	ret := _mock.Called(primaryID, duplicateID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FlagMetadataHashDuplicate")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(primaryID, duplicateID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookStore_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
+type MockBookStore_FlagMetadataHashDuplicate_Call struct {
+	*mock.Call
+}
+
+// FlagMetadataHashDuplicate is a helper method to define mock.On call
+//   - primaryID string
+//   - duplicateID string
+func (_e *MockBookStore_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockBookStore_FlagMetadataHashDuplicate_Call {
+	return &MockBookStore_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
+}
+
+func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockBookStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) Return(err error) *MockBookStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(string, string) error) *MockBookStore_FlagMetadataHashDuplicate_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -27096,6 +27204,60 @@ func (_c *MockStore_DeleteBook_Call) Return(err error) *MockStore_DeleteBook_Cal
 }
 
 func (_c *MockStore_DeleteBook_Call) RunAndReturn(run func(id string) error) *MockStore_DeleteBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FlagMetadataHashDuplicate provides a mock function for the type MockStore
+func (_mock *MockStore) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
+	ret := _mock.Called(primaryID, duplicateID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FlagMetadataHashDuplicate")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(primaryID, duplicateID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
+type MockStore_FlagMetadataHashDuplicate_Call struct {
+	*mock.Call
+}
+
+// FlagMetadataHashDuplicate is a helper method to define mock.On call
+//   - primaryID string
+//   - duplicateID string
+func (_e *MockStore_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockStore_FlagMetadataHashDuplicate_Call {
+	return &MockStore_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
+}
+
+func (_c *MockStore_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockStore_FlagMetadataHashDuplicate_Call) Return(err error) *MockStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(string, string) error) *MockStore_FlagMetadataHashDuplicate_Call {
 	_c.Call.Return(run)
 	return _c
 }

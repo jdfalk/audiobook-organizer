@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
 // version: 1.63.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package database
 
@@ -2540,11 +2540,30 @@ func (p *PebbleStore) GetBooksByMetadataSourceHash(hash string) ([]Book, error) 
 		}
 
 		if book.MetadataSourceHash != nil && *book.MetadataSourceHash == hash {
-			books = append(books, book)
+			if book.MergedIntoBookID == nil {
+				books = append(books, book)
+			}
 		}
 	}
 
 	return books, nil
+}
+
+// FlagMetadataHashDuplicate marks duplicateID as absorbed into primaryID.
+// PebbleStore stub — metadata dedup is only performed by SQLiteStore in production.
+func (p *PebbleStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) error {
+	book, err := p.GetBookByID(duplicateID)
+	if err != nil {
+		return err
+	}
+	if book == nil {
+		return nil
+	}
+	f := false
+	book.MergedIntoBookID = &primaryID
+	book.IsPrimaryVersion = &f
+	_, err = p.UpdateBook(duplicateID, book)
+	return err
 }
 
 // Import path operations

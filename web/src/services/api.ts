@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
 // version: 2.11.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -4527,4 +4527,30 @@ export async function scanDuplicateFiles(limit?: number): Promise<DuplicateFiles
   // Ensure groups is always an array even if the server returns null.
   result.groups = result.groups ?? [];
   return result;
+}
+
+// ── MATCH-4: metadata-hash duplicate scan ─────────────────────────────────────
+
+export interface MetadataHashDupBook {
+  id: string;
+  title: string;
+  file_count: number;
+}
+
+export interface MetadataHashDupGroup {
+  hash: string;
+  books: MetadataHashDupBook[];
+}
+
+export interface MetadataHashDuplicatesResult {
+  groups: MetadataHashDupGroup[];
+  total_duplicate_books: number;
+}
+
+export async function findMetadataHashDuplicates(): Promise<MetadataHashDuplicatesResult> {
+  const response = await fetch(`${API_BASE}/maintenance/metadata-hash-duplicates`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to scan metadata-hash duplicates');
+  }
+  return response.json();
 }
