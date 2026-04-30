@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.40.0
+// version: 1.41.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package database
@@ -2160,6 +2160,7 @@ func (m *MockStore) GetBookFiles(bookID string) ([]BookFile, error) {
 	return nil, nil
 }
 func (m *MockStore) GetAllBookFiles() ([]BookFile, error) { return nil, nil }
+func (m *MockStore) GetBookFilesNeedingDelugeImport() ([]BookFile, error) { return nil, nil }
 func (m *MockStore) GetBookFileByID(bookID, fileID string) (*BookFile, error) {
 	if m.GetBookFileByIDFunc != nil {
 		return m.GetBookFileByIDFunc(bookID, fileID)

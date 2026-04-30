@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.55.0
+// version: 1.56.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
 package database
@@ -7362,6 +7362,24 @@ func (s *PebbleStore) GetAllBookFiles() ([]BookFile, error) {
 		files = append(files, f)
 	}
 	return files, nil
+}
+
+// GetBookFilesNeedingDelugeImport returns book_files that have a non-empty
+// deluge_hash but have not yet been imported (imported_from_deluge_at IS NULL).
+// PebbleStore is not the primary backend for deluge operations, so this returns
+// results by filtering GetAllBookFiles in memory.
+func (s *PebbleStore) GetBookFilesNeedingDelugeImport() ([]BookFile, error) {
+	all, err := s.GetAllBookFiles()
+	if err != nil {
+		return nil, err
+	}
+	var out []BookFile
+	for _, f := range all {
+		if f.DelugeHash != "" && f.ImportedFromDelugeAt == nil {
+			out = append(out, f)
+		}
+	}
+	return out, nil
 }
 
 // GetBookFileByPID looks up a BookFile by iTunes persistent ID using the

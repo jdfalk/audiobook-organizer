@@ -1,5 +1,5 @@
 // file: internal/database/iface_misc.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
 
 package database
@@ -113,6 +113,9 @@ type BookFileStore interface {
 	UpdateBookFile(id string, file *BookFile) error
 	GetBookFiles(bookID string) ([]BookFile, error)
 	GetAllBookFiles() ([]BookFile, error)
+	// GetBookFilesNeedingDelugeImport returns book_files that have a deluge_hash
+	// but have not yet been copied into the library (imported_from_deluge_at IS NULL).
+	GetBookFilesNeedingDelugeImport() ([]BookFile, error)
 	GetBookFileByID(bookID, fileID string) (*BookFile, error)
 	GetBookFileByPID(itunesPID string) (*BookFile, error)
 	GetBookFileByPath(filePath string) (*BookFile, error)

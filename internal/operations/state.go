@@ -1,5 +1,5 @@
 // file: internal/operations/state.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package operations
@@ -83,6 +83,14 @@ type BulkMetadataFetchParams struct {
 type MissingFileRepairParams struct {
 	DryRun      bool     `json:"dry_run"`
 	SearchRoots []string `json:"search_roots,omitempty"`
+}
+
+// BulkImportDelugeParams stores the immutable parameters for a bulk-import-deluge operation.
+// DryRun=true reports what would be imported without making any changes.
+// MaxBooks limits the number of books imported in one run (0 = unlimited).
+type BulkImportDelugeParams struct {
+	DryRun   bool `json:"dry_run"`
+	MaxBooks int  `json:"max_books,omitempty"`
 }
 
 // SaveCheckpoint persists an operation's progress checkpoint.

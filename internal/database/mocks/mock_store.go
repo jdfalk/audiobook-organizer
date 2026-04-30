@@ -30225,6 +30225,52 @@ func (_mock *MockStore) GetAllBookFiles() ([]database.BookFile, error) {
 	return r0, r1
 }
 
+// MockStore_GetBookFilesNeedingDelugeImport_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookFilesNeedingDelugeImport'
+type MockStore_GetBookFilesNeedingDelugeImport_Call struct {
+	*mock.Call
+}
+
+// GetBookFilesNeedingDelugeImport is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetBookFilesNeedingDelugeImport() *MockStore_GetBookFilesNeedingDelugeImport_Call {
+	return &MockStore_GetBookFilesNeedingDelugeImport_Call{Call: _e.mock.On("GetBookFilesNeedingDelugeImport")}
+}
+
+func (_c *MockStore_GetBookFilesNeedingDelugeImport_Call) Run(run func()) *MockStore_GetBookFilesNeedingDelugeImport_Call {
+	_c.Call.Run(func(args mock.Arguments) { run() })
+	return _c
+}
+
+func (_c *MockStore_GetBookFilesNeedingDelugeImport_Call) Return(bookFiles []database.BookFile, err error) *MockStore_GetBookFilesNeedingDelugeImport_Call {
+	_c.Call.Return(bookFiles, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookFilesNeedingDelugeImport_Call) RunAndReturn(run func() ([]database.BookFile, error)) *MockStore_GetBookFilesNeedingDelugeImport_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetBookFilesNeedingDelugeImport provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookFilesNeedingDelugeImport() ([]database.BookFile, error) {
+	ret := _mock.Called()
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookFilesNeedingDelugeImport")
+	}
+	var r0 []database.BookFile
+	if rf, ok := ret.Get(0).(func() []database.BookFile); ok {
+		r0 = rf()
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]database.BookFile)
+	}
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
 // GetBookNarrators provides a mock function for the type MockStore
 func (_mock *MockStore) GetBookNarrators(bookID string) ([]database.BookNarrator, error) {
 	ret := _mock.Called(bookID)

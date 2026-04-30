@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.66.0
+// version: 1.67.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -5729,6 +5729,31 @@ func (s *SQLiteStore) GetAllBookFiles() ([]BookFile, error) {
 		f, err := bookFileScan(rows)
 		if err != nil {
 			return nil, fmt.Errorf("GetAllBookFiles scan: %w", err)
+		}
+		files = append(files, f)
+	}
+	return files, rows.Err()
+}
+
+// GetBookFilesNeedingDelugeImport returns book_files that have a non-empty
+// deluge_hash but have not yet been imported (imported_from_deluge_at IS NULL).
+func (s *SQLiteStore) GetBookFilesNeedingDelugeImport() ([]BookFile, error) {
+	rows, err := s.db.Query(
+		`SELECT ` + bookFileCols + `
+		 FROM book_files
+		 WHERE deluge_hash IS NOT NULL AND deluge_hash != ''
+		   AND imported_from_deluge_at IS NULL
+		 ORDER BY book_id ASC, file_path ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetBookFilesNeedingDelugeImport: %w", err)
+	}
+	defer rows.Close()
+	var files []BookFile
+	for rows.Next() {
+		f, err := bookFileScan(rows)
+		if err != nil {
+			return nil, fmt.Errorf("GetBookFilesNeedingDelugeImport scan: %w", err)
 		}
 		files = append(files, f)
 	}
