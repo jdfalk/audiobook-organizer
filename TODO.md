@@ -107,7 +107,7 @@ of cases remain:
 **~6,719 missing-file-repair unresolved** — books whose organizer-root paths cannot be found
 anywhere (not in iTunes, not as flat M4B). Many are likely Deluge-only files not yet imported.
 
-- [ ] **RELINK-1** Apply 13 manual path fixes from the report — bot-task spec: [`docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md`](docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md)
+- [x] **RELINK-1** Apply 13 manual path fixes from the report — bot-task spec: [`docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md`](docs/superpowers/bot-tasks/2026-04-29-relink-manual-fixes.md) — 9 fixed via API, 4 absent from iTunes (results: `docs/reports/relink-manual-fixes-result-2026-04-29.md`)
 - [x] **RELINK-2** Co-author dir matching: tries all dirs where author's surname appears — implemented at `maintenance_fixups.go:4154`
 - [x] **RELINK-3** Title prefix colon→underscore normalization — implemented at `maintenance_fixups.go:4257`
 - [ ] **RELINK-4** `GET /api/v1/maintenance/relink-report` — endpoint that re-runs the dry-run and returns unresolved cases with their `why_unresolved` annotations (feeds a UI modal)
