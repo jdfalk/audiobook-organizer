@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.5.0
+// version: 2.6.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 
 // API service layer for audiobook-organizer backend
@@ -2365,12 +2365,15 @@ export interface BatchWriteBackError {
 }
 
 export interface BatchWriteBackResponse {
-  written: number;
-  written_files: number;
-  renamed: number;
-  organized: number;
-  failed: number;
-  errors: BatchWriteBackError[];
+  operation_id: string;
+  message?: string;
+  book_count?: number;
+  written?: number;
+  written_files?: number;
+  renamed?: number;
+  organized?: number;
+  failed?: number;
+  errors?: BatchWriteBackError[];
 }
 
 export async function writeBackMetadata(
@@ -2407,7 +2410,8 @@ export async function batchWriteBackMetadata(
     throw await buildApiError(response, 'Failed to write metadata to files');
   }
   const body = await response.json();
-  return body.data;
+  // Server returns operation_id at top level; data key carries legacy fields.
+  return { ...body.data, operation_id: body.data?.operation_id ?? body.operation_id };
 }
 
 // Bulk write-back (async operation for all/filtered books)

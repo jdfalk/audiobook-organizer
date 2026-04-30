@@ -144,6 +144,8 @@ const convertApiBook = (book: api.Book): Audiobook => ({
   updated_at: book.updated_at,
   library_state: book.library_state,
   metadata_review_status: book.metadata_review_status,
+  metadata_updated_at: book.metadata_updated_at,
+  last_written_at: book.last_written_at,
   marked_for_deletion: book.marked_for_deletion,
   marked_for_deletion_at: book.marked_for_deletion_at,
   original_file_hash: book.original_file_hash,
@@ -1241,12 +1243,15 @@ export const Library = () => {
 
     setBulkWriteBackInProgress(true);
     try {
-      await api.batchWriteBackMetadata(
+      const result = await api.batchWriteBackMetadata(
         activeBooks.map((book) => book.id),
         bulkWriteBackRename,
         bulkWriteBackForce
       );
-      toast(`Saving ${activeBooks.length} books to files — check operations for progress.`, 'success');
+      if (result.operation_id) {
+        startOperationPolling(result.operation_id, 'batch_save_to_files');
+      }
+      toast(`Saving ${activeBooks.length} books to files…`, 'success');
       setBulkWriteBackDialogOpen(false);
       setSelectedAudiobooks([]);
     } catch (error) {
@@ -2681,20 +2686,20 @@ export const Library = () => {
             {bulkWriteBackResult && (
               <Box sx={{ mt: 2 }}>
                 <Alert
-                  severity={bulkWriteBackResult.failed > 0 ? 'warning' : 'success'}
+                  severity={(bulkWriteBackResult.failed ?? 0) > 0 ? 'warning' : 'success'}
                   sx={{ mb: 2 }}
                 >
-                  Wrote {bulkWriteBackResult.written} books to files, updated{' '}
-                  {bulkWriteBackResult.written_files} file
-                  {bulkWriteBackResult.written_files === 1 ? '' : 's'}
-                  {bulkWriteBackResult.renamed > 0
+                  Wrote {bulkWriteBackResult.written ?? 0} books to files, updated{' '}
+                  {bulkWriteBackResult.written_files ?? 0} file
+                  {(bulkWriteBackResult.written_files ?? 0) === 1 ? '' : 's'}
+                  {(bulkWriteBackResult.renamed ?? 0) > 0
                     ? `, renamed ${bulkWriteBackResult.renamed}`
                     : ''}
-                  {bulkWriteBackResult.failed > 0 ? `, ${bulkWriteBackResult.failed} failed` : ''}.
+                  {(bulkWriteBackResult.failed ?? 0) > 0 ? `, ${bulkWriteBackResult.failed} failed` : ''}.
                 </Alert>
-                {bulkWriteBackResult.errors.length > 0 && (
+                {(bulkWriteBackResult.errors ?? []).length > 0 && (
                   <List dense>
-                    {bulkWriteBackResult.errors.map((error) => (
+                    {(bulkWriteBackResult.errors ?? []).map((error) => (
                       <ListItem key={`${error.book_id}-${error.error}`}>
                         <ListItemText primary={error.book_id} secondary={error.error} />
                       </ListItem>

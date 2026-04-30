@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -474,6 +474,15 @@ func fieldMatchesValue(book database.Book, field, value string) bool {
 		}
 	case "has_written":
 		if book.LastWrittenAt != nil {
+			bookValue = "yes"
+		} else {
+			bookValue = "no"
+		}
+	case "needs_writeback":
+		// True when metadata was updated after the last file write (or never written).
+		needsWrite := book.MetadataUpdatedAt != nil &&
+			(book.LastWrittenAt == nil || book.LastWrittenAt.Before(*book.MetadataUpdatedAt))
+		if needsWrite {
 			bookValue = "yes"
 		} else {
 			bookValue = "no"

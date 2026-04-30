@@ -1,5 +1,5 @@
 // file: web/src/utils/searchParser.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: ADC8CF65-5107-463A-891C-CABE8C1D74CF
 
 /**
@@ -53,6 +53,7 @@ export const SEARCH_FIELDS: readonly string[] = [
   'review',
   'has_cover',
   'has_written',
+  'needs_writeback',
   'has_organized',
   'itunes_sync_status',
   'read_status',
