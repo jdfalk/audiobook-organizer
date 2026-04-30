@@ -8,10 +8,8 @@ package metafetch
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/url"
 	"os"
@@ -1036,7 +1034,9 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 				continue
 			}
 			backupFileBeforeWrite(bf.FilePath)
-			if err := metadata.WriteMetadataToFile(bf.FilePath, tagMap, opConfig); err != nil {
+			if _, _, err := fileops.WriteTagsSafe(bf.FilePath, func(tmpPath string) error {
+				return metadata.WriteMetadataToFile(tmpPath, tagMap, opConfig)
+			}, fileops.WriteTagsSafeOptions{BookFileID: bf.ID, Store: mfs.db}); err != nil {
 				log.Printf("[WARN] write-back failed for file %s: %v", bf.FilePath, err)
 			}
 		}
@@ -1062,7 +1062,9 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 					continue
 				}
 				backupFileBeforeWrite(f)
-				if err := metadata.WriteMetadataToFile(f, fm, opConfig); err != nil {
+				if _, _, err := fileops.WriteTagsSafe(f, func(tmpPath string) error {
+					return metadata.WriteMetadataToFile(tmpPath, fm, opConfig)
+				}, fileops.WriteTagsSafeOptions{}); err != nil {
 					log.Printf("[WARN] write-back failed for %s: %v", f, err)
 				} else {
 					log.Printf("[INFO] wrote metadata back to %s", f)
@@ -1083,7 +1085,13 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 				return
 			}
 			backupFileBeforeWrite(book.FilePath)
-			if err := metadata.WriteMetadataToFile(book.FilePath, tagMap, opConfig); err != nil {
+			var wtsOptsPath fileops.WriteTagsSafeOptions
+			if bff, bfferr := mfs.db.GetBookFileByPath(book.FilePath); bfferr == nil && bff != nil {
+				wtsOptsPath = fileops.WriteTagsSafeOptions{BookFileID: bff.ID, Store: mfs.db}
+			}
+			if _, _, err := fileops.WriteTagsSafe(book.FilePath, func(tmpPath string) error {
+				return metadata.WriteMetadataToFile(tmpPath, tagMap, opConfig)
+			}, wtsOptsPath); err != nil {
 				log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 			} else {
 				log.Printf("[INFO] wrote metadata back to %s", book.FilePath)
@@ -3115,18 +3123,12 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 				continue
 			}
 			backupFileBeforeWrite(bf.FilePath)
-			preHash := bf.OriginalFileHash
-			if preHash == "" {
-				preHash = computeFileSHA256(bf.FilePath)
-			}
-			if err := metadata.WriteMetadataToFile(bf.FilePath, tagMap, opConfig); err != nil {
+			if _, _, err := fileops.WriteTagsSafe(bf.FilePath, func(tmpPath string) error {
+				return metadata.WriteMetadataToFile(tmpPath, tagMap, opConfig)
+			}, fileops.WriteTagsSafeOptions{BookFileID: bf.ID, Store: mfs.db}); err != nil {
 				log.Printf("[WARN] write-back failed for file %s: %v", bf.FilePath, err)
 			} else {
 				writtenCount++
-				postHash := computeFileSHA256(bf.FilePath)
-				if uerr := mfs.db.UpdateBookFileHashes(bf.ID, preHash, postHash); uerr != nil {
-					log.Printf("[WARN] UpdateBookFileHashes %s: %v", bf.ID, uerr)
-				}
 			}
 		}
 	} else {
@@ -3161,22 +3163,17 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 						continue
 					}
 					backupFileBeforeWrite(f)
-					preHash := computeFileSHA256(f)
-					if err := metadata.WriteMetadataToFile(f, fm, opConfig); err != nil {
+					var wtsOpts fileops.WriteTagsSafeOptions
+					if bff, bfferr := mfs.db.GetBookFileByPath(f); bfferr == nil && bff != nil {
+						wtsOpts = fileops.WriteTagsSafeOptions{BookFileID: bff.ID, Store: mfs.db}
+					}
+					if _, _, err := fileops.WriteTagsSafe(f, func(tmpPath string) error {
+						return metadata.WriteMetadataToFile(tmpPath, fm, opConfig)
+					}, wtsOpts); err != nil {
 						log.Printf("[WARN] write-back failed for %s: %v", f, err)
 					} else {
 						log.Printf("[INFO] wrote metadata back to %s", f)
 						writtenCount++
-						postHash := computeFileSHA256(f)
-						if bff, bfferr := mfs.db.GetBookFileByPath(f); bfferr == nil && bff != nil {
-							origHash := bff.OriginalFileHash
-							if origHash == "" {
-								origHash = preHash
-							}
-							if uerr := mfs.db.UpdateBookFileHashes(bff.ID, origHash, postHash); uerr != nil {
-								log.Printf("[WARN] UpdateBookFileHashes %s: %v", bff.ID, uerr)
-							}
-						}
 					}
 				}
 			} else {
@@ -3185,20 +3182,16 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 					log.Printf("[DEBUG] write-back: all tags match, skipping %s", book.FilePath)
 				} else {
 					backupFileBeforeWrite(book.FilePath)
-					if err := metadata.WriteMetadataToFile(book.FilePath, fm, opConfig); err != nil {
+					var wtsOpts fileops.WriteTagsSafeOptions
+					if bff, bfferr := mfs.db.GetBookFileByPath(book.FilePath); bfferr == nil && bff != nil {
+						wtsOpts = fileops.WriteTagsSafeOptions{BookFileID: bff.ID, Store: mfs.db}
+					}
+					if _, _, err := fileops.WriteTagsSafe(book.FilePath, func(tmpPath string) error {
+						return metadata.WriteMetadataToFile(tmpPath, fm, opConfig)
+					}, wtsOpts); err != nil {
 						log.Printf("[WARN] write-back failed for %s: %v", book.FilePath, err)
 					} else {
 						writtenCount++
-						postHash := computeFileSHA256(book.FilePath)
-						if bff, bfferr := mfs.db.GetBookFileByPath(book.FilePath); bfferr == nil && bff != nil {
-							origHash := bff.OriginalFileHash
-							if origHash == "" {
-								origHash = computeFileSHA256(book.FilePath)
-							}
-							if uerr := mfs.db.UpdateBookFileHashes(bff.ID, origHash, postHash); uerr != nil {
-								log.Printf("[WARN] UpdateBookFileHashes %s: %v", bff.ID, uerr)
-							}
-						}
 					}
 				}
 			}
@@ -3225,7 +3218,9 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 					continue // tags already match, nothing to write
 				}
 				backupFileBeforeWrite(sib.FilePath)
-				if err := metadata.WriteMetadataToFile(sib.FilePath, tagMap, opConfig); err != nil {
+				if _, _, err := fileops.WriteTagsSafe(sib.FilePath, func(tmpPath string) error {
+					return metadata.WriteMetadataToFile(tmpPath, tagMap, opConfig)
+				}, fileops.WriteTagsSafeOptions{}); err != nil {
 					log.Printf("[WARN] write-back failed for version-linked %s: %v", sib.FilePath, err)
 				} else {
 					writtenCount++
@@ -3337,21 +3332,6 @@ func backupFileBeforeWrite(filePath string) {
 		}
 	}
 	log.Printf("[DEBUG] backup before tag write: %s", backupPath)
-}
-
-// computeFileSHA256 returns the hex-encoded SHA-256 digest of filePath's
-// current contents, or an empty string if the file cannot be read.
-func computeFileSHA256(filePath string) string {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return ""
-	}
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 // buildTagMap constructs the tag map shared by all write-back paths.

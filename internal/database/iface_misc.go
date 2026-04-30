@@ -1,11 +1,22 @@
 // file: internal/database/iface_misc.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package database
 
 import "time"
+
+// BookFileHashUpdater is the narrow interface required by fileops.WriteTagsSafe
+// to record pre- and post-write file hashes without needing the full Store.
+// SQLiteStore satisfies this automatically via its UpdateBookFileHashes method.
+type BookFileHashUpdater interface {
+	// UpdateBookFileHashes records the SHA-256 fingerprints taken before and
+	// after a tag write. original_file_hash is written only if the row has
+	// no existing value (first-write semantics); post_metadata_hash is always
+	// overwritten with the latest post-write fingerprint.
+	UpdateBookFileHashes(fileID, originalHash, postHash string) error
+}
 
 // LifecycleStore covers store startup/teardown.
 type LifecycleStore interface {

@@ -1,5 +1,5 @@
 // file: internal/tagger/embed_cover.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package tagger
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"go.senan.xyz/taglib"
 )
 
@@ -28,7 +29,10 @@ func EmbedCoverArt(audioPath string, coverPath string) error {
 	if err != nil {
 		return fmt.Errorf("cover file not found: %w", err)
 	}
-	if err := taglib.WriteImage(audioPath, data); err != nil {
+	_, _, err = fileops.WriteTagsSafe(audioPath, func(tmpPath string) error {
+		return taglib.WriteImage(tmpPath, data)
+	}, fileops.WriteTagsSafeOptions{})
+	if err != nil {
 		return fmt.Errorf("embed cover art in %s: %w", audioPath, err)
 	}
 	return nil
