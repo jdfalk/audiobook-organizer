@@ -335,6 +335,18 @@ export function MetadataReviewDialog({
     setDisplayPage(1);
   }, [sourceFilter, confidenceThreshold, hideApplied, hideRejected, hideSkipped, hideNoMatch, matchLanguage, titleFilter]);
 
+  // Go back to page 1 on manual refresh so the user sees results from the top,
+  // not from whatever page they were on before the re-fetch.
+  useEffect(() => {
+    setDisplayPage(1);
+  }, [refreshKey]);
+
+  // If applied/hidden items shrink the list so the current page no longer exists,
+  // snap back to page 1 instead of showing an empty page.
+  useEffect(() => {
+    if (displayPage > displayPageCount) setDisplayPage(1);
+  }, [displayPageCount, displayPage]);
+
   // Coalesce rapid Apply clicks into one batched API call
   const applyQueueRef = useRef<string[]>([]);
   const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
