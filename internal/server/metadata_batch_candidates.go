@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-04-28
 
@@ -567,6 +567,18 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 		}
 
 		applied++
+
+		// Persist "applied" status so re-opens of the dialog don't show
+		// this book as still needing review. Mirrors the reject handler.
+		cr.Status = "applied"
+		if updatedJSON, err := json.Marshal(cr); err == nil {
+			_ = store.CreateOperationResult(&database.OperationResult{
+				OperationID: req.OperationID,
+				BookID:      bookID,
+				ResultJSON:  string(updatedJSON),
+				Status:      "applied",
+			})
+		}
 
 		// Queue file I/O through the worker pool (bounded concurrency).
 		if pool := s.fileIOPool; pool != nil {
