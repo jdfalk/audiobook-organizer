@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.201.0
+// version: 1.202.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -40,6 +40,7 @@ import (
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
@@ -1209,6 +1210,22 @@ func NewServer(store database.Store) *Server {
 		dc := getDelugeClient()
 		server.protectedPathCache = deluge.NewProtectedPathCache(dc, config.AppConfig.ProtectedPaths)
 		log.Printf("[INFO] ProtectedPathCache initialized (%d static extra paths)", len(config.AppConfig.ProtectedPaths))
+
+		// Wire the pre-flight safe-write guard into the metadata package so that
+		// all taglib writes (metadata apply, single-tag patch) check for Deluge-
+		// protected paths before writing. This uses the same ProtectedPathCache
+		// and a LibraryImporterAdapter backed by the server's store.
+		importer := NewLibraryImporterAdapter(resolvedStore, dc, &config.AppConfig)
+		deps := tagger.SafeWriteDeps{
+			ProtectedCache: server.protectedPathCache,
+			Importer:       importer,
+		}
+		metadata.SetSafeWriteDeps(deps)
+		log.Printf("[INFO] metadata.SetSafeWriteDeps wired (Deluge pre-flight guard active)")
+
+		// Also wire into the metafetch service so cover-art embeds use the guard.
+		server.metadataFetchService.SetSafeWriteDeps(deps)
+		log.Printf("[INFO] metafetch.Service.SetSafeWriteDeps wired (cover embed guard active)")
 	}
 
 	server.setupRoutes()
@@ -1225,6 +1242,22 @@ func NewServer(store database.Store) *Server {
 // through Bleve or fall back to the legacy SearchBooks path.
 func (s *Server) SearchIndex() *search.BleveIndex {
 	return s.searchIndex
+}
+
+// safeWriteDeps builds a tagger.SafeWriteDeps from the server's wired
+// dependencies. Used by movement_atom_cleanup and any other server-package
+// code that calls tag-writing functions directly (outside the metadata
+// package path that has its own package-level deps).
+func (s *Server) safeWriteDeps() tagger.SafeWriteDeps {
+	if s.protectedPathCache == nil {
+		return tagger.SafeWriteDeps{}
+	}
+	store := s.Store()
+	importer := NewLibraryImporterAdapter(store, getDelugeClient(), &config.AppConfig)
+	return tagger.SafeWriteDeps{
+		ProtectedCache: s.protectedPathCache,
+		Importer:       importer,
+	}
 }
 
 // buildSearchIndexIfEmpty runs a full reindex of the library when
