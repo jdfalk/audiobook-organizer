@@ -1,6 +1,7 @@
 // file: internal/config/config.go
-// version: 1.40.0
+// version: 1.41.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
+// last-edited: 2026-04-30
 
 package config
 
@@ -133,6 +134,12 @@ type Config struct {
 
 	// Performance
 	ConcurrentScans int `json:"concurrent_scans"`
+	// ChapterConsolidationThresholdMin is the per-file duration threshold (minutes)
+	// used during scanning to detect chapter-named files. If a group of ≥ 3 files
+	// sharing the same base title (e.g. "01 - My Book", "02 - My Book") each
+	// averages below this duration, they are consolidated into one book record.
+	// Default 10. Set to 0 to disable consolidation.
+	ChapterConsolidationThresholdMin int `json:"chapter_consolidation_threshold_min"`
 	// Background operation timeout in minutes (0 disables timeout)
 	OperationTimeoutMinutes int `json:"operation_timeout_minutes"`
 	// MinBookSizeBytes: single-file books below this size are flagged as suspicious and
@@ -378,6 +385,7 @@ func InitConfig() {
 		defaultWorkers = 4
 	}
 	viper.SetDefault("concurrent_scans", defaultWorkers)
+	viper.SetDefault("chapter_consolidation_threshold_min", 10)
 	viper.SetDefault("operation_timeout_minutes", 30)
 	viper.SetDefault("log_retention_days", 90)
 
@@ -543,8 +551,9 @@ func InitConfig() {
 		OpenAIAPIKey:    viper.GetString("openai_api_key"),
 
 		// Performance
-		ConcurrentScans:         viper.GetInt("concurrent_scans"),
-		OperationTimeoutMinutes: viper.GetInt("operation_timeout_minutes"),
+		ConcurrentScans:                  viper.GetInt("concurrent_scans"),
+		ChapterConsolidationThresholdMin: viper.GetInt("chapter_consolidation_threshold_min"),
+		OperationTimeoutMinutes:          viper.GetInt("operation_timeout_minutes"),
 		MinBookSizeBytes:        viper.GetInt64("min_book_size_bytes"),
 		APIRateLimitPerMinute:   viper.GetInt("api_rate_limit_per_minute"),
 		AuthRateLimitPerMinute:  viper.GetInt("auth_rate_limit_per_minute"),
