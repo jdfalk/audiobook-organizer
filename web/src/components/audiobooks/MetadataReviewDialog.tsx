@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.9.0
+// version: 1.10.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -29,7 +29,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import type { CandidateResult } from '../../services/api';
+import type { CandidateResult, MetadataCandidate } from '../../services/api';
 import * as api from '../../services/api';
 
 interface MetadataReviewDialogProps {
@@ -175,6 +175,9 @@ export function MetadataReviewDialog({
   const [matchLanguage, setMatchLanguage] = useState<boolean>(loadLanguageFilter);
   const [titleFilter, setTitleFilter] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  // Books in this set have been manually split from their duplicate group and
+  // render as standalone rows. Reset when the page changes.
+  const [ungroupedIds, setUngroupedIds] = useState<Set<string>>(new Set());
   // Calls onComplete (to refresh the library) only when changes were made,
   // then closes the dialog. Avoids mid-review library refreshes that reset
   // the user's scroll position and show a disorienting loading spinner.
@@ -274,12 +277,18 @@ export function MetadataReviewDialog({
     return () => clearInterval(interval);
   }, [open, operationId, loading, operationDone, totalCount]);
 
-  // Reset polling state and page when the operation changes.
+  // Reset polling state, page, and un-groupings when the operation changes.
   useEffect(() => {
     setOperationDone(false);
     prevTotalRef.current = 0;
     setServerPage(1);
+    setUngroupedIds(new Set());
   }, [operationId]);
+
+  // Reset un-groupings when navigating to a new page (groups are per-page).
+  useEffect(() => {
+    setUngroupedIds(new Set());
+  }, [serverPage]);
 
   // Compute unique sources with counts
   const sourceCounts = results.reduce<Record<string, number>>((acc, r) => {
@@ -452,10 +461,42 @@ export function MetadataReviewDialog({
     }
   };
 
+  const handleUngroup = (bookId: string) =>
+    setUngroupedIds((prev) => new Set(prev).add(bookId));
+
   // All filtered items from the current server page are rendered directly —
   // no second display-page layer. The single paginator navigates server pages.
   const pageResults = filteredResults;
   const totalPages = Math.max(1, Math.ceil(totalCount / reviewPageSize));
+
+  // Group books that were assigned the same candidate metadata. Key priority:
+  // asin (most specific) → isbn13/isbn → source+title+author (normalized fallback).
+  function candidateKey(c: MetadataCandidate): string {
+    if (c.asin) return `asin:${c.asin}`;
+    if (c.isbn) return `isbn:${c.isbn}`;
+    return `${c.source}:${c.title.trim().toLowerCase()}:${c.author.trim().toLowerCase()}`;
+  }
+
+  interface CandidateGroup {
+    key: string;
+    candidate: MetadataCandidate;
+    results: CandidateResult[];
+  }
+
+  const groupMap = new Map<string, CandidateGroup>();
+  for (const r of pageResults) {
+    if (!r.candidate || r.status !== 'matched' || ungroupedIds.has(r.book.id)) continue;
+    const key = candidateKey(r.candidate);
+    if (!groupMap.has(key)) groupMap.set(key, { key, candidate: r.candidate, results: [] });
+    groupMap.get(key)!.results.push(r);
+  }
+  // Only multi-book groups are actual groups; singletons fall through to standalone rendering.
+  const multiGroups = new Map<string, CandidateGroup>();
+  for (const [key, g] of groupMap) {
+    if (g.results.length > 1) multiGroups.set(key, g);
+  }
+  const groupedBookIds = new Set<string>();
+  for (const g of multiGroups.values()) g.results.forEach(r => groupedBookIds.add(r.book.id));
 
   // Auto-advance: if every item on this page is filtered out (all applied/hidden)
   // and there are more pages, silently move to the next one so the list stays full.
@@ -529,6 +570,149 @@ export function MetadataReviewDialog({
   const isRowActionable = (bookId: string) => {
     const state = rowStates.get(bookId);
     return state !== 'applied' && state !== 'rejected';
+  };
+
+  const renderGroupedCard = (group: CandidateGroup) => {
+    const c = group.candidate;
+    const actionableIds = group.results.filter(r => isRowActionable(r.book.id)).map(r => r.book.id);
+    const allApplied = group.results.every(r => rowStates.get(r.book.id) === 'applied');
+    const allRejected = group.results.every(r => rowStates.get(r.book.id) === 'rejected');
+
+    const handleRejectGroup = async () => {
+      try {
+        await api.batchRejectCandidates(operationId, actionableIds);
+        setRowStates(prev => {
+          const next = new Map(prev);
+          actionableIds.forEach(id => next.set(id, 'rejected'));
+          return next;
+        });
+        toast(`Rejected ${actionableIds.length} books`, 'info');
+      } catch { toast('Failed to reject', 'error'); }
+    };
+
+    return (
+      <Box
+        key={group.key}
+        sx={{ p: 2, mb: 1, border: 2, borderColor: 'primary.dark', borderRadius: 1 }}
+      >
+        <Typography variant="caption" color="primary" sx={{ fontWeight: 700, mb: 1, display: 'block' }}>
+          {group.results.length} files matched to the same book
+        </Typography>
+        <Stack direction="row" spacing={2}>
+          {/* Left: stacked book rows, each with an X to split from group */}
+          <Box sx={{ flex: 1 }}>
+            <Stack spacing={1.5}>
+              {group.results.map(r => (
+                <Stack key={r.book.id} direction="row" spacing={1} alignItems="flex-start">
+                  <Tooltip title="Separate from group">
+                    <IconButton size="small" onClick={() => handleUngroup(r.book.id)}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Avatar
+                    src={r.book.cover_url || ''}
+                    variant="rounded"
+                    sx={{ width: 40, height: 50 }}
+                  />
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight="bold">{r.book.title}</Typography>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                      {r.book.format && <Chip label={r.book.format} size="small" />}
+                      {r.book.duration_seconds && (
+                        <Typography variant="caption">{formatDuration(r.book.duration_seconds)}</Typography>
+                      )}
+                      {r.book.file_size_bytes && (
+                        <Typography variant="caption">· {formatFileSize(r.book.file_size_bytes)}</Typography>
+                      )}
+                    </Stack>
+                    <Typography variant="caption" display="block" sx={{ wordBreak: 'break-all', color: 'text.secondary' }}>
+                      {r.book.file_path}
+                    </Typography>
+                    {r.book.itunes_path && (
+                      <Typography variant="caption" color="info.main" display="block" sx={{ wordBreak: 'break-all' }}>
+                        iTunes: {r.book.itunes_path}
+                      </Typography>
+                    )}
+                    {rowStates.get(r.book.id) === 'applied' && (
+                      <Chip label="Applied" size="small" color="success" sx={{ mt: 0.5 }} />
+                    )}
+                    {rowStates.get(r.book.id) === 'rejected' && (
+                      <Chip label="Rejected" size="small" color="error" sx={{ mt: 0.5 }} />
+                    )}
+                    {rowStates.get(r.book.id) === 'skipped' && (
+                      <Chip label="Skipped" size="small" sx={{ mt: 0.5 }} />
+                    )}
+                  </Box>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Right: shared candidate */}
+          <Box sx={{ flex: 1 }}>
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <Avatar
+                src={c.cover_url || ''}
+                variant="rounded"
+                sx={{ width: 60, height: 80, cursor: c.cover_url ? 'pointer' : 'default' }}
+                onClick={() => c.cover_url && setPreviewCover(c.cover_url)}
+              />
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="body2" fontWeight="bold">{c.title}</Typography>
+                <Typography variant="body2">{c.author}</Typography>
+                {c.narrator && (
+                  <Typography variant="body2" color="text.secondary">Narrated by {c.narrator}</Typography>
+                )}
+                {c.series && (
+                  <Typography variant="body2">
+                    Series: {c.series}{c.series_position ? ` · Book ${c.series_position}` : ''}
+                  </Typography>
+                )}
+                {c.year && <Typography variant="caption" display="block">{c.year}</Typography>}
+                {c.publisher && <Typography variant="caption" display="block">{c.publisher}</Typography>}
+                <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
+                  <Chip
+                    label={`${Math.round(c.score * 100)}%`}
+                    size="small"
+                    color={c.score >= 0.85 ? 'success' : c.score >= 0.6 ? 'warning' : 'default'}
+                  />
+                  <Chip
+                    label={c.source}
+                    size="small"
+                    color={SOURCE_COLORS[c.source] || 'default'}
+                    variant="outlined"
+                  />
+                </Stack>
+                {!allApplied && !allRejected && actionableIds.length > 0 && (
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="success"
+                      onClick={() => handleBulkApply(actionableIds)}
+                    >
+                      Apply All ({actionableIds.length})
+                    </Button>
+                    <Button size="small" variant="outlined" color="error" onClick={handleRejectGroup}>
+                      Reject All
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => group.results.forEach(r => handleSkip(r.book.id))}
+                    >
+                      Skip All
+                    </Button>
+                  </Stack>
+                )}
+                {allApplied && <Chip label="All Applied" size="small" color="success" sx={{ mt: 1 }} />}
+                {allRejected && <Chip label="All Rejected" size="small" color="error" sx={{ mt: 1 }} />}
+              </Box>
+            </Stack>
+          </Box>
+        </Stack>
+      </Box>
+    );
   };
 
   const renderCompactRow = (r: CandidateResult) => {
@@ -1286,11 +1470,25 @@ export function MetadataReviewDialog({
                   >
                     No results match current filters
                   </Typography>
-                ) : viewMode === 'compact' ? (
-                  pageResults.map(renderCompactRow)
-                ) : (
-                  pageResults.map(renderTwoColumnCard)
-                )}
+                ) : (() => {
+                  // Render in original order: grouped cards appear at first occurrence,
+                  // subsequent group members are skipped, standalones render normally.
+                  const renderedGroupKeys = new Set<string>();
+                  return pageResults.map((r) => {
+                    if (groupedBookIds.has(r.book.id)) {
+                      const key = r.candidate ? candidateKey(r.candidate) : '';
+                      const group = multiGroups.get(key);
+                      if (group && !renderedGroupKeys.has(key)) {
+                        renderedGroupKeys.add(key);
+                        return renderGroupedCard(group);
+                      }
+                      return null; // already rendered as part of group
+                    }
+                    return viewMode === 'compact'
+                      ? renderCompactRow(r)
+                      : renderTwoColumnCard(r);
+                  });
+                })()}
               </Box>
             </>
           )}
