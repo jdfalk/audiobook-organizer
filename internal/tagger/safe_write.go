@@ -1,6 +1,7 @@
 // file: internal/tagger/safe_write.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4a7e1c3b-9f02-4d85-b8e6-2f5a0d3c7b91
+// last-edited: 2026-05-01
 //
 // WriteTagsSafe / WriteImageSafe — pre-flight guard for all taglib writes.
 //
@@ -10,8 +11,10 @@
 // Deluge, preserving seeding integrity while allowing the organizer to enrich
 // metadata.
 //
-// Falls back to a plain taglib call when no deps are provided or when the
-// path is not protected.
+// Both functions delegate the actual write to fileops.WriteTagsSafe, which
+// copies the file to a sibling temp file, writes tags into the copy, and
+// atomically renames it over the original. This keeps the on-disk state
+// consistent even if the process is killed mid-write.
 
 package tagger
 
@@ -20,6 +23,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	taglib "go.senan.xyz/taglib"
 )
 
@@ -58,7 +62,7 @@ type SafeWriteDeps struct {
 //
 // opts is the taglib write option (0 = merge, taglib.Clear = replace-all).
 // deps may be zero-value; in that case this is equivalent to a plain
-// taglib.WriteTags call.
+// taglib.WriteTags call wrapped in an atomic copy+rename.
 func WriteTagsSafe(ctx context.Context, path string, tags map[string][]string, opts taglib.WriteOption, deps SafeWriteDeps) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -69,8 +73,11 @@ func WriteTagsSafe(ctx context.Context, path string, tags map[string][]string, o
 		return fmt.Errorf("WriteTagsSafe: resolve path: %w", err)
 	}
 
-	if err := taglib.WriteTags(effectivePath, tags, opts); err != nil {
-		return fmt.Errorf("WriteTagsSafe: taglib.WriteTags %s: %w", effectivePath, err)
+	_, _, err = fileops.WriteTagsSafe(effectivePath, func(tmpPath string) error {
+		return taglib.WriteTags(tmpPath, tags, opts)
+	}, fileops.WriteTagsSafeOptions{})
+	if err != nil {
+		return fmt.Errorf("WriteTagsSafe: %w", err)
 	}
 	return nil
 }
@@ -80,7 +87,7 @@ func WriteTagsSafe(ctx context.Context, path string, tags map[string][]string, o
 //
 // data is the raw image bytes (JPEG, PNG, etc.).
 // deps may be zero-value; in that case this is equivalent to a plain
-// taglib.WriteImage call.
+// taglib.WriteImage call wrapped in an atomic copy+rename.
 func WriteImageSafe(ctx context.Context, path string, data []byte, deps SafeWriteDeps) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -91,8 +98,11 @@ func WriteImageSafe(ctx context.Context, path string, data []byte, deps SafeWrit
 		return fmt.Errorf("WriteImageSafe: resolve path: %w", err)
 	}
 
-	if err := taglib.WriteImage(effectivePath, data); err != nil {
-		return fmt.Errorf("WriteImageSafe: taglib.WriteImage %s: %w", effectivePath, err)
+	_, _, err = fileops.WriteTagsSafe(effectivePath, func(tmpPath string) error {
+		return taglib.WriteImage(tmpPath, data)
+	}, fileops.WriteTagsSafeOptions{})
+	if err != nil {
+		return fmt.Errorf("WriteImageSafe: %w", err)
 	}
 	return nil
 }
