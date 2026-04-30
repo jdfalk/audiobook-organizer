@@ -1,7 +1,7 @@
 // file: internal/server/server_versions_and_work_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 3a4b5c6d-7e8f-9012-a345-678901234567
-// last-edited: 2026-04-23
+// last-edited: 2026-04-30
 
 package server
 
@@ -15,6 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dbmocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,6 +75,7 @@ func TestVersionEndpoints_HappyPaths(t *testing.T) {
 
 func TestWorkEndpoints_WithMockStore(t *testing.T) {
 	store := dbmocks.NewMockStore(t)
+	store.EXPECT().SetRootDir(mock.Anything).Return()
 	author1 := 1
 	author2 := 2
 	works := []database.Work{{ID: "w1", Title: "Work One", AuthorID: &author1}, {ID: "w2", Title: "Work Two", AuthorID: &author2}}
@@ -90,6 +92,7 @@ func TestWorkEndpoints_WithMockStore(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	store2 := dbmocks.NewMockStore(t)
+	store2.EXPECT().SetRootDir(mock.Anything).Return()
 	store2.EXPECT().GetAllWorks().Return(works, nil)
 	store2.EXPECT().GetBooksByWorkID("w1").Return([]database.Book{{ID: "b1"}, {ID: "b2"}}, nil)
 	store2.EXPECT().GetBooksByWorkID("w2").Return(nil, assert.AnError)

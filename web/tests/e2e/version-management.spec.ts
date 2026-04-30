@@ -1,7 +1,7 @@
 // file: web/tests/e2e/version-management.spec.ts
-// version: 1.3.0
+// version: 1.3.1
 // guid: 570ee522-c0f2-4d0c-ba5c-b5399cede9a9
-// last-edited: 2026-02-09
+// last-edited: 2026-04-30
 
 import { test, expect, type Page } from '@playwright/test';
 import {
@@ -23,7 +23,7 @@ const openBookDetail = async (page: Page, books: Record<string, unknown>[]) => {
 };
 
 test.describe('Version Management', () => {
-  test.beforeEach(async ({ _page }) => {
+  test.beforeEach(async () => {
     // Setup handled by openBookDetail() which calls setupMockApi()
   });
 

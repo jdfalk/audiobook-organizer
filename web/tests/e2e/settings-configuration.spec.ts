@@ -1,7 +1,7 @@
 // file: web/tests/e2e/settings-configuration.spec.ts
-// version: 1.2.0
+// version: 1.2.1
 // guid: ab83d28e-beb5-4288-821f-7bf82704f4b9
-// last-edited: 2026-03-02
+// last-edited: 2026-04-30
 
 import { test, expect, type Page } from '@playwright/test';
 import {
@@ -59,7 +59,7 @@ const openSettings = async (
 };
 
 test.describe('Settings Configuration', () => {
-  test.beforeEach(async ({ _page }) => {
+  test.beforeEach(async () => {
     // Note: beforeEach doesn't do setup here
     // Each test calls openSettings() which handles all mock setup
     // This prevents conflicts between Phase 1 (real API) and Phase 2 (mocked API)
