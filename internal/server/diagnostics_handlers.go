@@ -1,5 +1,6 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 2.0.0
+// version: 3.0.0
+// last-edited: 2026-04-30
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
@@ -11,10 +12,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -497,4 +500,130 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 		"failed":  failed,
 		"errors":  errors,
 	})
+}
+
+// dbHealthResponse is the JSON shape returned by GET /api/v1/diagnostics/db-health.
+type dbHealthResponse struct {
+SQLite        *dbHealthSQLite        `json:"sqlite,omitempty"`
+Pebble        *dbHealthPebble        `json:"pebble,omitempty"`
+Embeddings    dbHealthEmbeddings     `json:"embeddings"`
+AiScans       dbHealthAiScans        `json:"ai_scans"`
+MetadataCache dbHealthMetadataCache  `json:"metadata_cache"`
+}
+
+type dbHealthSQLite struct {
+Tables    []database.SQLiteTableStat `json:"tables"`
+SizeBytes int64                      `json:"size_bytes"`
+}
+
+type dbHealthPebble struct {
+KeyCount  int64  `json:"key_count"`
+SizeBytes uint64 `json:"size_bytes"`
+}
+
+type dbHealthEmbeddings struct {
+VectorCount int64 `json:"vector_count"`
+SizeBytes   int64 `json:"size_bytes"`
+}
+
+type dbHealthAiScans struct {
+JobCount     int    `json:"job_count"`
+PendingCount int    `json:"pending_count"`
+SizeBytes    uint64 `json:"size_bytes"`
+}
+
+type dbHealthMetadataCache struct {
+TotalEntries   int64 `json:"total_entries"`
+TTLDays        int   `json:"ttl_days"`
+ExpiredEntries int64 `json:"expired_entries"`
+}
+
+// getDBHealth returns health stats for all backing stores.
+// GET /api/v1/diagnostics/db-health
+func (s *Server) getDBHealth(c *gin.Context) {
+store := s.Store()
+if store == nil {
+RespondWithInternalError(c, "database not initialized")
+return
+}
+
+resp := dbHealthResponse{}
+
+// Main store stats — branch on concrete type.
+switch st := store.(type) {
+case *database.SQLiteStore:
+tables, err := st.TableRowCounts()
+if err != nil {
+log.Printf("[WARN] db-health: sqlite table counts: %v", err)
+}
+resp.SQLite = &dbHealthSQLite{
+Tables:    tables,
+SizeBytes: st.SQLitePageSizeBytes(),
+}
+case *database.PebbleStore:
+keyCount, sizeBytes, err := st.KeyCount()
+if err != nil {
+log.Printf("[WARN] db-health: pebble key count: %v", err)
+}
+resp.Pebble = &dbHealthPebble{
+KeyCount:  keyCount,
+SizeBytes: sizeBytes,
+}
+}
+
+// Embeddings store (always SQLite, may be nil if DB path not set yet).
+if s.embeddingStore != nil {
+estats, err := s.embeddingStore.HealthStats()
+if err != nil {
+log.Printf("[WARN] db-health: embedding stats: %v", err)
+}
+resp.Embeddings = dbHealthEmbeddings{
+VectorCount: estats.VectorCount,
+SizeBytes:   estats.SizeBytes,
+}
+}
+
+// AI scan store (always PebbleDB, may be nil).
+if s.aiScanStore != nil {
+astats, err := s.aiScanStore.HealthStats()
+if err != nil {
+log.Printf("[WARN] db-health: ai scan stats: %v", err)
+}
+resp.AiScans = dbHealthAiScans{
+JobCount:     astats.JobCount,
+PendingCount: astats.PendingCount,
+SizeBytes:    astats.SizeBytes,
+}
+}
+
+// Metadata fetch cache — works against whatever backend is active.
+totalEntries, err := database.CountCachedMetadataFetches(store)
+if err != nil {
+log.Printf("[WARN] db-health: metadata cache count: %v", err)
+}
+ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+
+var expiredEntries int64
+if ttlDays > 0 {
+cutoff := time.Now().Add(-time.Duration(ttlDays) * 24 * time.Hour)
+pairs, scanErr := store.ScanPrefix("metadata_fetch_cache:")
+if scanErr == nil {
+for _, kv := range pairs {
+var entry database.CachedMetadataEntry
+if jsonErr := json.Unmarshal(kv.Value, &entry); jsonErr == nil {
+if entry.CachedAt.Before(cutoff) {
+expiredEntries++
+}
+}
+}
+}
+}
+
+resp.MetadataCache = dbHealthMetadataCache{
+TotalEntries:   totalEntries,
+TTLDays:        ttlDays,
+ExpiredEntries: expiredEntries,
+}
+
+RespondWithOK(c, resp)
 }

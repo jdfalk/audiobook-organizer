@@ -1,5 +1,6 @@
 // file: internal/database/embedding_store.go
-// version: 1.6.0
+// version: 1.7.0
+// last-edited: 2026-04-30
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
 package database
@@ -745,4 +746,27 @@ FROM dedup_candidates WHERE id=?`, id)
 		return nil, fmt.Errorf("get candidate by id: %w", err)
 	}
 	return &c, nil
+}
+
+// EmbeddingHealthStats contains diagnostic counts for the embedding SQLite store.
+type EmbeddingHealthStats struct {
+VectorCount int64 `json:"vector_count"`
+SizeBytes   int64 `json:"size_bytes"`
+}
+
+// HealthStats returns embedding vector count and on-disk size (via SQLite PRAGMA).
+func (s *EmbeddingStore) HealthStats() (EmbeddingHealthStats, error) {
+var vectorCount int64
+if err := s.db.QueryRow(`SELECT COUNT(*) FROM embeddings`).Scan(&vectorCount); err != nil {
+vectorCount = 0
+}
+
+var pageCount, pageSize int64
+_ = s.db.QueryRow(`PRAGMA page_count`).Scan(&pageCount)
+_ = s.db.QueryRow(`PRAGMA page_size`).Scan(&pageSize)
+
+return EmbeddingHealthStats{
+VectorCount: vectorCount,
+SizeBytes:   pageCount * pageSize,
+}, nil
 }

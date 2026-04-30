@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.68.0
+// version: 1.69.0
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -6145,4 +6145,38 @@ func (s *SQLiteStore) IncrScanFailCount(pathHash string) (int, error) {
 func (s *SQLiteStore) ResetScanFailCount(pathHash string) error {
 	key := "scan_fail:" + pathHash
 	return s.SetSetting(key, "0", "int", false)
+}
+
+// SQLiteTableStat holds a row count for a single table.
+type SQLiteTableStat struct {
+Name     string `json:"name"`
+RowCount int64  `json:"row_count"`
+}
+
+// TableRowCounts returns row counts for the primary tables in the SQLite store.
+// Used by the DB health diagnostics endpoint.
+func (s *SQLiteStore) TableRowCounts() ([]SQLiteTableStat, error) {
+tables := []string{
+"books", "book_files", "authors", "series",
+"operations", "operation_logs",
+}
+stats := make([]SQLiteTableStat, 0, len(tables))
+for _, tbl := range tables {
+var count int64
+row := s.db.QueryRow(`SELECT COUNT(*) FROM ` + tbl) //nolint:gosec
+if err := row.Scan(&count); err != nil {
+count = -1
+}
+stats = append(stats, SQLiteTableStat{Name: tbl, RowCount: count})
+}
+return stats, nil
+}
+
+// SQLitePageSizeBytes returns the on-disk size of the SQLite database
+// estimated via page_count * page_size.
+func (s *SQLiteStore) SQLitePageSizeBytes() int64 {
+var pageCount, pageSize int64
+_ = s.db.QueryRow(`PRAGMA page_count`).Scan(&pageCount)
+_ = s.db.QueryRow(`PRAGMA page_size`).Scan(&pageSize)
+return pageCount * pageSize
 }
