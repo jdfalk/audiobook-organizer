@@ -2269,6 +2269,14 @@ export interface MetadataCandidate {
   language?: string;
   source: string;
   score: number;
+  /** Audible overall star rating (1–5 scale). Absent when not provided. */
+  audible_rating_overall?: number;
+  /** Number of Audible star ratings. */
+  audible_rating_count?: number;
+  /** Google Books average rating (1–5 scale). Absent when not provided. */
+  google_rating_average?: number;
+  /** Number of Google Books ratings. */
+  google_rating_count?: number;
 }
 
 export interface SearchMetadataResponse {
