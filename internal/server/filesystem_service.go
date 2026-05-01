@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_service.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
 // last-edited: 2026-04-30
 
@@ -11,9 +11,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"errors"
+
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+// ErrPathNotAllowed is returned by BrowseDirectory when the requested path
+// is outside the configured allowlist.
+var ErrPathNotAllowed = errors.New("path not in allowed directories")
 
 // defaultBrowseAllowPrefixes covers common Linux desktop/server and Docker layouts.
 var defaultBrowseAllowPrefixes = []string{
@@ -92,7 +98,7 @@ func (fs *FilesystemService) BrowseDirectory(path string) (*BrowseResult, error)
 	}
 
 	if !isAllowedPath(absPath, importPaths) {
-		return nil, fmt.Errorf("path not in allowed directories")
+		return nil, ErrPathNotAllowed
 	}
 
 	entries, err := os.ReadDir(absPath)
