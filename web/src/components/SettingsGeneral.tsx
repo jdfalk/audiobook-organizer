@@ -1,5 +1,5 @@
 // file: web/src/components/SettingsGeneral.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: 72ebd6f3-7436-4f24-8233-205c50dd05fb
 // last-edited: 2026-05-01
 
@@ -192,10 +192,7 @@ export function SettingsGeneral(props: SettingsGeneralProps) {
     };
 
     Object.entries(replacements).forEach(([key, value]) => {
-      result = result.replace(
-        new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'),
-        value
-      );
+      result = result.split(key).join(value);
     });
 
     if (isFolder) {
