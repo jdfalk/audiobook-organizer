@@ -1,7 +1,7 @@
 // file: internal/config/config.go
-// version: 1.43.0
+// version: 1.44.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package config
 
@@ -205,6 +205,7 @@ type Config struct {
 	JSONBodyLimitMB        int  `json:"json_body_limit_mb"`
 	UploadBodyLimitMB      int  `json:"upload_body_limit_mb"`
 	EnableAuth             bool `json:"enable_auth"`
+	EnableRateLimit        bool `json:"enable_rate_limit"`
 
 	// Basic HTTP auth (lightweight single-user alternative)
 	BasicAuthEnabled  bool   `json:"basic_auth_enabled"`
@@ -395,6 +396,7 @@ func InitConfig() {
 	viper.SetDefault("json_body_limit_mb", 1)
 	viper.SetDefault("upload_body_limit_mb", 10)
 	viper.SetDefault("enable_auth", true)
+	viper.SetDefault("enable_rate_limit", true)
 	viper.SetDefault("basic_auth_enabled", false)
 	viper.SetDefault("basic_auth_username", "")
 	viper.SetDefault("basic_auth_password", "")
@@ -560,6 +562,7 @@ func InitConfig() {
 		JSONBodyLimitMB:         viper.GetInt("json_body_limit_mb"),
 		UploadBodyLimitMB:       viper.GetInt("upload_body_limit_mb"),
 		EnableAuth:              viper.GetBool("enable_auth"),
+		EnableRateLimit:         viper.GetBool("enable_rate_limit"),
 		BasicAuthEnabled:        viper.GetBool("basic_auth_enabled"),
 		BasicAuthUsername:       viper.GetString("basic_auth_username"),
 		BasicAuthPassword:       viper.GetString("basic_auth_password"),
@@ -948,6 +951,7 @@ func ResetToDefaults() {
 		JSONBodyLimitMB:         1,
 		UploadBodyLimitMB:       10,
 		EnableAuth:              true,
+		EnableRateLimit:         true,
 		BasicAuthEnabled:        false,
 		BasicAuthUsername:       "",
 		BasicAuthPassword:       "",
