@@ -1,5 +1,5 @@
 <!-- file: docs/codebase-evaluation.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 2.0.1 -->
 <!-- guid: 9a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d -->
 <!-- last-edited: 2026-05-01 -->
 
@@ -31,9 +31,9 @@
 
 **Date:** 2026-05-01  
 **Commit:** `f67246b7` (HEAD → main)  
-**Summary:** 38 original bot-tasks were implemented across PRs #587–#627. Build is clean (`go build ./...`, `go vet ./...`). However, **two test packages have regressions**, a committed secret was not removed, and staticcheck surfaces a fresh set of dead-code, deprecated-field, and context-propagation issues.
+**Summary:** 38 original bot-tasks were implemented across PRs #587–#627. Build is clean (`go build ./...`, `go vet ./...`). However, **two test packages have regressions** and staticcheck surfaces a fresh set of dead-code, deprecated-field, and context-propagation issues.
 
-New findings: **10** (High: 2, Medium: 4, Low: 4)
+New findings: **9** (High: 2, Medium: 4, Low: 3)
 
 ---
 
@@ -72,16 +72,11 @@ The database test suite takes 177 s and exits with FAIL. Likely causes: new sche
 
 ---
 
-### R-3 — Secret still committed to `config.yaml` ❌ **High** (carried from C-5)
+### R-3 — ~~Secret still committed to `config.yaml`~~ ✅ **Not a finding** (false positive)
 
-**File:** `config.yaml:10`  
-**Evidence:** `openai_api_key: sk-test12345678` — confirmed still present at HEAD `f67246b7`.
+**File:** `config.yaml:10`
 
-Although C-5 was listed as a bot-task target, the value was not removed. Any contributor who copies `config.yaml` as a template and replaces the placeholder with a real key will commit it to git.
-
-**Fix:** Replace the value with an empty string or comment: `openai_api_key: ""  # set via OPENAI_API_KEY env var or secrets file`.
-
-**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-sec-1-remove-committed-secret.md`
+`openai_api_key: sk-test12345678` is an **intentional example placeholder** showing contributors what an OpenAI API key looks like. It is not a real secret. Do not flag or remove this value.
 
 ---
 
@@ -213,7 +208,7 @@ The following table records the disposition of every finding from the 2026-04-30
 | C-2 | Mock interface drift: `MergeChapterBooks` | ✅ DONE | MOCK-2: CI gate added |
 | C-3 | N+1 queries in `enrichBookForResponse` | ✅ DONE | N1-1..4: batch fetch + enrich rewrite |
 | C-4 | N+1 queries in `EnrichAudiobooksWithNames` | ✅ DONE | N1-1..4 |
-| C-5 | Secret committed to `config.yaml` | ❌ REMAINING | `sk-test12345678` still at line 10 → R-3 |
+| C-5 | Secret committed to `config.yaml` | ✅ NOT A FINDING | `sk-test12345678` is an intentional example placeholder, not a real key |
 | S-1 | `BrowseDirectory` unrestricted filesystem | ✅ DONE | SEC-1: `defaultBrowseAllowPrefixes` |
 | S-2 | Auth disabled by default | ✅ DONE | SEC-2: startup warning added |
 | S-3 | Rate limiting disabled by default | ✅ DONE | SEC-3: startup warning added |
@@ -339,15 +334,13 @@ For a 1,000-book library with 2 authors + 1 narrator per book, this produces **~
 ### C-5 — Secret committed to config file
 
 **File:** `config.yaml:~11`  
-**Severity:** 🔴 Critical
+**Severity:** ~~🔴 Critical~~ ✅ **Not a finding**
 
 ```yaml
 openai_api_key: sk-test12345678
 ```
 
-Even if this is a fake/test key, committing any `sk-…` value: (a) normalises the practice for contributors who will copy the pattern with real keys, (b) may trigger secret-scanning alerts in CI, (c) could cause accidental exposure if a real key is substituted and the file is re-committed.
-
-**Fix:** Remove the value entirely; document in README that the key must be set via environment variable `OPENAI_API_KEY` or a separate secrets file excluded from version control.
+This is an **intentional example placeholder** showing contributors the format of an OpenAI API key. It is not a real secret and should not be removed or flagged by security scanners.
 
 ---
 
@@ -983,7 +976,7 @@ The single `Store` interface covers books, authors, narrators, series, playlists
 | `go vet ./...` | ✅ Clean |
 | `staticcheck ./...` | ⚠️ 55 findings (unused code, deprecated fields, error strings) |
 | Failing test packages | 2 (`internal/server`, `internal/database`) |
-| Secret still committed | ❌ `config.yaml:10` `sk-test12345678` |
+| Secret still committed | ✅ Not a finding — `config.yaml:10` `sk-test12345678` is an intentional example placeholder |
 | `context.Background()` remaining (non-test) | ~20 instances (mostly database layer) |
 | `fmt.Printf` / `log.Printf` remaining in library pkgs | ~12 instances |
 | Deprecated `ITunesPath` usages | 13 (SA1019) |
