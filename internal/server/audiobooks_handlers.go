@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -33,20 +34,20 @@ import (
 
 func (s *Server) listAudiobooks(c *gin.Context) {
 	// Parse pagination parameters
-	params := ParsePaginationParams(c)
-	authorID := ParseQueryIntPtr(c, "author_id")
-	seriesID := ParseQueryIntPtr(c, "series_id")
+	params := httputil.ParsePaginationParams(c)
+	authorID := httputil.ParseQueryIntPtr(c, "author_id")
+	seriesID := httputil.ParseQueryIntPtr(c, "series_id")
 
 	// Parse optional filters
-	sortOrder := ParseQueryString(c, "sort_order")
+	sortOrder := httputil.ParseQueryString(c, "sort_order")
 	if sortOrder != "" && sortOrder != "asc" && sortOrder != "desc" {
 		sortOrder = "asc"
 	}
 	filters := ListFilters{
-		IsPrimaryVersion: ParseQueryBoolPtr(c, "is_primary_version"),
-		LibraryState:     ParseQueryString(c, "library_state"),
-		Tag:              ParseQueryString(c, "tag"),
-		SortBy:           ParseQueryString(c, "sort_by"),
+		IsPrimaryVersion: httputil.ParseQueryBoolPtr(c, "is_primary_version"),
+		LibraryState:     httputil.ParseQueryString(c, "library_state"),
+		Tag:              httputil.ParseQueryString(c, "tag"),
+		SortBy:           httputil.ParseQueryString(c, "sort_by"),
 		SortOrder:        sortOrder,
 	}
 
@@ -57,7 +58,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	if filtersJSON := c.Query("filters"); filtersJSON != "" {
 		var fieldFilters []FieldFilter
 		if err := json.Unmarshal([]byte(filtersJSON), &fieldFilters); err != nil {
-			RespondWithBadRequest(c, "invalid filters parameter: "+err.Error())
+			httputil.RespondWithBadRequest(c, "invalid filters parameter: "+err.Error())
 			return
 		}
 		for _, ff := range fieldFilters {
@@ -83,7 +84,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	cacheKey := "list:" + c.Request.URL.RawQuery
 	if len(filters.PerUserFilters) == 0 {
 		if cached, ok := s.listCache.Get(cacheKey); ok {
-			RespondWithOK(c, cached)
+			httputil.RespondWithOK(c, cached)
 			return
 		}
 	}
@@ -91,7 +92,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	// Call service
 	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, params.Search, authorID, seriesID, filters)
 	if err != nil {
-		internalError(c, "failed to list audiobooks", err)
+		httputil.InternalError(c, "failed to list audiobooks", err)
 		return
 	}
 
@@ -129,16 +130,16 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	if len(filters.PerUserFilters) == 0 {
 		s.listCache.Set(cacheKey, resp)
 	}
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
-	params := ParsePaginationParams(c)
-	olderThanDays := ParseQueryIntPtr(c, "older_than_days")
+	params := httputil.ParsePaginationParams(c)
+	olderThanDays := httputil.ParseQueryIntPtr(c, "older_than_days")
 
 	books, err := s.audiobookService.GetSoftDeletedBooks(c.Request.Context(), params.Limit, params.Offset, olderThanDays)
 	if err != nil {
-		internalError(c, "failed to list deleted audiobooks", err)
+		httputil.InternalError(c, "failed to list deleted audiobooks", err)
 		return
 	}
 
@@ -146,7 +147,7 @@ func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 	allBooks, _ := s.audiobookService.GetSoftDeletedBooks(c.Request.Context(), 10000, 0, olderThanDays)
 	total := len(allBooks)
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"items":  books,
 		"count":  len(books),
 		"total":  total,
@@ -168,11 +169,11 @@ func (s *Server) purgeSoftDeletedAudiobooks(c *gin.Context) {
 
 	result, err := s.audiobookService.PurgeSoftDeletedBooks(c.Request.Context(), deleteFiles, olderThanDays)
 	if err != nil {
-		internalError(c, "failed to purge deleted audiobooks", err)
+		httputil.InternalError(c, "failed to purge deleted audiobooks", err)
 		return
 	}
 
-	RespondWithOK(c, result)
+	httputil.RespondWithOK(c, result)
 }
 
 func (s *Server) runAutoPurgeSoftDeleted(opID string) {
@@ -206,11 +207,11 @@ func (s *Server) restoreAudiobook(c *gin.Context) {
 	id := c.Param("id")
 	updated, err := s.audiobookService.RestoreAudiobook(c.Request.Context(), id)
 	if err != nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message": "audiobook restored",
 		"book":    updated,
 	})
@@ -219,11 +220,11 @@ func (s *Server) restoreAudiobook(c *gin.Context) {
 func (s *Server) countAudiobooks(c *gin.Context) {
 	count, err := s.audiobookService.CountAudiobooks(c.Request.Context())
 	if err != nil {
-		internalError(c, "failed to count audiobooks", err)
+		httputil.InternalError(c, "failed to count audiobooks", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{"count": count})
+	httputil.RespondWithOK(c, gin.H{"count": count})
 }
 
 const facetsCacheKey = "all"
@@ -261,22 +262,22 @@ func (s *Server) warmFacetsCache() {
 // Results are cached for 5 minutes and pre-warmed at startup.
 func (s *Server) audiobookFacets(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if cached, ok := s.facetsCache.Get(facetsCacheKey); ok {
-		RespondWithOK(c, cached)
+		httputil.RespondWithOK(c, cached)
 		return
 	}
 	// Cache miss (e.g. first request before warm-up goroutine completes, or after TTL expiry).
 	genres, err := s.Store().GetDistinctGenres()
 	if err != nil {
-		internalError(c, "failed to fetch genres", err)
+		httputil.InternalError(c, "failed to fetch genres", err)
 		return
 	}
 	languages, err := s.Store().GetDistinctLanguages()
 	if err != nil {
-		internalError(c, "failed to fetch languages", err)
+		httputil.InternalError(c, "failed to fetch languages", err)
 		return
 	}
 	if genres == nil {
@@ -287,18 +288,18 @@ func (s *Server) audiobookFacets(c *gin.Context) {
 	}
 	result := gin.H{"genres": genres, "languages": languages}
 	s.facetsCache.Set(facetsCacheKey, result)
-	RespondWithOK(c, result)
+	httputil.RespondWithOK(c, result)
 }
 
 func (s *Server) serveAudiobookCover(c *gin.Context) {
 	id := c.Param("id")
 	if config.AppConfig.RootDir == "" {
-		RespondWithInternalError(c, "root_dir not configured")
+		httputil.RespondWithInternalError(c, "root_dir not configured")
 		return
 	}
 	coverPath := metadata.CoverPathForBook(config.AppConfig.RootDir, id)
 	if coverPath == "" {
-		RespondWithNotFound(c, "cover art", id)
+		httputil.RespondWithNotFound(c, "cover art", id)
 		return
 	}
 	c.File(coverPath)
@@ -310,14 +311,14 @@ func (s *Server) getAudiobook(c *gin.Context) {
 	book, err := s.audiobookService.GetAudiobook(c.Request.Context(), id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			RespondWithNotFound(c, "audiobook", id)
+			httputil.RespondWithNotFound(c, "audiobook", id)
 			return
 		}
-		internalError(c, "failed to get audiobook", err)
+		httputil.InternalError(c, "failed to get audiobook", err)
 		return
 	}
 
-	RespondWithOK(c, enrichBookForResponseSingle(book))
+	httputil.RespondWithOK(c, enrichBookForResponseSingle(book))
 }
 
 // listAudiobookSegments returns file segments for a multi-file audiobook.
@@ -326,19 +327,19 @@ func (s *Server) getAudiobook(c *gin.Context) {
 func (s *Server) listAudiobookSegments(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	files, err := s.Store().GetBookFiles(book.ID)
 	if err != nil {
-		internalError(c, "failed to list book files", err)
+		httputil.InternalError(c, "failed to list book files", err)
 		return
 	}
 	if files == nil {
@@ -368,19 +369,19 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 		})
 	}
 
-	RespondWithOK(c, result)
+	httputil.RespondWithOK(c, result)
 }
 
 // listBookFiles returns all book_files rows for a book with live disk-existence check.
 func (s *Server) listBookFiles(c *gin.Context) {
 	bookID := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	files, err := s.Store().GetBookFiles(bookID)
 	if err != nil {
-		internalError(c, "failed to get book files", err)
+		httputil.InternalError(c, "failed to get book files", err)
 		return
 	}
 	if files == nil {
@@ -416,26 +417,26 @@ func (s *Server) listBookFiles(c *gin.Context) {
 			"updated_at":           f.UpdatedAt,
 		})
 	}
-	RespondWithOK(c, gin.H{"files": results, "count": len(results)})
+	httputil.RespondWithOK(c, gin.H{"files": results, "count": len(results)})
 }
 
 // extractTrackInfo parses track/disk numbers from segment filenames and updates segments.
 func (s *Server) extractTrackInfo(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	files, err := s.Store().GetBookFiles(book.ID)
 	if err != nil {
-		internalError(c, "failed to list book files", err)
+		httputil.InternalError(c, "failed to list book files", err)
 		return
 	}
 
@@ -523,7 +524,7 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 		})
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"updated": updated,
 		"total":   len(files),
 		"files":   files,
@@ -534,25 +535,25 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 func (s *Server) relocateBookFiles(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	var req RelocateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, "invalid request body")
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 
 	files, err := s.Store().GetBookFiles(book.ID)
 	if err != nil {
-		internalError(c, "failed to list book files", err)
+		httputil.InternalError(c, "failed to list book files", err)
 		return
 	}
 
@@ -563,7 +564,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		for i, f := range files {
 			if f.ID == req.SegmentID {
 				if _, statErr := os.Stat(req.NewPath); os.IsNotExist(statErr) {
-					RespondWithBadRequest(c, "new path does not exist on disk")
+					httputil.RespondWithBadRequest(c, "new path does not exist on disk")
 					return
 				}
 				files[i].FilePath = req.NewPath
@@ -579,7 +580,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		// Folder mode: scan folder and match files by name
 		dirEntries, err := os.ReadDir(req.FolderPath)
 		if err != nil {
-			RespondWithBadRequest(c, fmt.Sprintf("cannot read folder: %v", err))
+			httputil.RespondWithBadRequest(c, fmt.Sprintf("cannot read folder: %v", err))
 			return
 		}
 
@@ -603,7 +604,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 			}
 		}
 	} else {
-		RespondWithBadRequest(c, "must provide segment_id+new_path or folder_path")
+		httputil.RespondWithBadRequest(c, "must provide segment_id+new_path or folder_path")
 		return
 	}
 
@@ -615,7 +616,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, result)
+	httputil.RespondWithOK(c, result)
 }
 
 // getSegmentTags returns raw metadata tags for a specific segment file.
@@ -623,23 +624,23 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 	id := c.Param("id")
 	segmentId := c.Param("segmentId")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	found, err := s.Store().GetBookFileByID(book.ID, segmentId)
 	if err != nil {
-		internalError(c, "failed to get book file", err)
+		httputil.InternalError(c, "failed to get book file", err)
 		return
 	}
 	if found == nil {
-		RespondWithNotFound(c, "segment", segmentId)
+		httputil.RespondWithNotFound(c, "segment", segmentId)
 		return
 	}
 
@@ -708,13 +709,13 @@ func (s *Server) getSegmentTags(c *gin.Context) {
 		resp["tags_read_error"] = tagsReadError
 	}
 
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 func (s *Server) getBookMetadataHistory(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	limit := 100
@@ -725,30 +726,30 @@ func (s *Server) getBookMetadataHistory(c *gin.Context) {
 	}
 	records, err := s.Store().GetBookChangeHistory(id, limit)
 	if err != nil {
-		internalError(c, "failed to get metadata history", err)
+		httputil.InternalError(c, "failed to get metadata history", err)
 		return
 	}
 	if records == nil {
 		records = []database.MetadataChangeRecord{}
 	}
-	RespondWithOK(c, gin.H{"items": records, "count": len(records)})
+	httputil.RespondWithOK(c, gin.H{"items": records, "count": len(records)})
 }
 
 func (s *Server) getAudiobookFieldStates(c *gin.Context) {
 	id := c.Param("id")
 	states, err := s.metadataStateService.LoadMetadataState(id)
 	if err != nil {
-		internalError(c, "failed to get field states", err)
+		httputil.InternalError(c, "failed to get field states", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"field_states": states})
+	httputil.RespondWithOK(c, gin.H{"field_states": states})
 }
 
 func (s *Server) getFieldMetadataHistory(c *gin.Context) {
 	id := c.Param("id")
 	field := c.Param("field")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	limit := 50
@@ -759,31 +760,31 @@ func (s *Server) getFieldMetadataHistory(c *gin.Context) {
 	}
 	records, err := s.Store().GetMetadataChangeHistory(id, field, limit)
 	if err != nil {
-		internalError(c, "failed to get field history", err)
+		httputil.InternalError(c, "failed to get field history", err)
 		return
 	}
 	if records == nil {
 		records = []database.MetadataChangeRecord{}
 	}
-	RespondWithOK(c, gin.H{"items": records, "count": len(records)})
+	httputil.RespondWithOK(c, gin.H{"items": records, "count": len(records)})
 }
 
 func (s *Server) undoMetadataChange(c *gin.Context) {
 	id := c.Param("id")
 	field := c.Param("field")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	// Get the latest change for this field
 	records, err := s.Store().GetMetadataChangeHistory(id, field, 1)
 	if err != nil {
-		internalError(c, "failed to get field history", err)
+		httputil.InternalError(c, "failed to get field history", err)
 		return
 	}
 	if len(records) == 0 {
-		RespondWithNotFound(c, "change history", field)
+		httputil.RespondWithNotFound(c, "change history", field)
 		return
 	}
 
@@ -796,7 +797,7 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 			prevValue = *latest.PreviousValue
 		}
 		if err := s.metadataStateService.SetOverride(id, field, prevValue, false); err != nil {
-			internalError(c, "failed to apply undo", err)
+			httputil.InternalError(c, "failed to apply undo", err)
 			return
 		}
 	} else {
@@ -804,7 +805,7 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 		if err := s.metadataStateService.ClearOverride(id, field); err != nil {
 			// Ignore "not found" errors when clearing
 			if !strings.Contains(err.Error(), "not found") {
-				internalError(c, "failed to clear override", err)
+				httputil.InternalError(c, "failed to clear override", err)
 				return
 			}
 		}
@@ -824,25 +825,25 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 		log.Printf("[WARN] failed to record undo change for %s/%s: %v", id, field, err)
 	}
 
-	RespondWithOK(c, gin.H{"message": "undo applied", "field": field, "reverted_to": latest.PreviousValue})
+	httputil.RespondWithOK(c, gin.H{"message": "undo applied", "field": field, "reverted_to": latest.PreviousValue})
 }
 
 // undoLastApply reverts all fields changed in the most recent metadata apply for a book.
 func (s *Server) undoLastApply(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	// Get recent history for this book (enough to find the last apply batch)
 	history, err := s.Store().GetBookChangeHistory(id, 50)
 	if err != nil {
-		internalError(c, "failed to get change history", err)
+		httputil.InternalError(c, "failed to get change history", err)
 		return
 	}
 	if len(history) == 0 {
-		RespondWithNotFound(c, "change history", id)
+		httputil.RespondWithNotFound(c, "change history", id)
 		return
 	}
 
@@ -855,7 +856,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 		}
 	}
 	if batchTime.IsZero() {
-		RespondWithNotFound(c, "changes", "none")
+		httputil.RespondWithNotFound(c, "changes", "none")
 		return
 	}
 
@@ -876,7 +877,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 	}
 
 	if len(batchRecords) == 0 {
-		RespondWithNotFound(c, "changes", "none")
+		httputil.RespondWithNotFound(c, "changes", "none")
 		return
 	}
 
@@ -922,7 +923,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 		s.writeBackBatcher.Enqueue(id)
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message":       fmt.Sprintf("Undid %d field(s)", len(undoneFields)),
 		"undone_fields": undoneFields,
 	})
@@ -932,22 +933,22 @@ func (s *Server) getBookPathHistory(c *gin.Context) {
 	id := c.Param("id")
 	history, err := s.Store().GetBookPathHistory(id)
 	if err != nil {
-		RespondWithOK(c, gin.H{"history": []any{}})
+		httputil.RespondWithOK(c, gin.H{"history": []any{}})
 		return
 	}
-	RespondWithOK(c, gin.H{"history": history})
+	httputil.RespondWithOK(c, gin.H{"history": history})
 }
 
 func (s *Server) getAudiobookExternalIDs(c *gin.Context) {
 	id := c.Param("id")
 	eidStore := asExternalIDStore(s.Store())
 	if eidStore == nil {
-		RespondWithOK(c, gin.H{"external_ids": []any{}, "itunes_linked": false})
+		httputil.RespondWithOK(c, gin.H{"external_ids": []any{}, "itunes_linked": false})
 		return
 	}
 	extIDs, err := eidStore.GetExternalIDsForBook(id)
 	if err != nil {
-		RespondWithOK(c, gin.H{"external_ids": []any{}, "itunes_linked": false})
+		httputil.RespondWithOK(c, gin.H{"external_ids": []any{}, "itunes_linked": false})
 		return
 	}
 	itunesLinked := false
@@ -957,7 +958,7 @@ func (s *Server) getAudiobookExternalIDs(c *gin.Context) {
 			break
 		}
 	}
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"external_ids":  extIDs,
 		"itunes_linked": itunesLinked,
 		"total":         len(extIDs),
@@ -970,46 +971,46 @@ func (s *Server) getAudiobookTags(c *gin.Context) {
 	snapshotTS := c.Query("snapshot_ts")
 	if snapshotTS != "" {
 		if _, err := time.Parse(time.RFC3339Nano, snapshotTS); err != nil {
-			RespondWithBadRequest(c, "invalid snapshot_ts format, use RFC3339Nano")
+			httputil.RespondWithBadRequest(c, "invalid snapshot_ts format, use RFC3339Nano")
 			return
 		}
 	}
 	resp, err := s.audiobookService.GetAudiobookTags(c.Request.Context(), id, compareID, snapshotTS)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			RespondWithNotFound(c, "audiobook", id)
+			httputil.RespondWithNotFound(c, "audiobook", id)
 			return
 		}
-		internalError(c, "failed to get tags", err)
+		httputil.InternalError(c, "failed to get tags", err)
 		return
 	}
 
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 func (s *Server) listAllUserTags(c *gin.Context) {
 	tags, err := s.audiobookService.ListAllUserTags()
 	if err != nil {
-		RespondWithInternalError(c, err.Error())
+		httputil.RespondWithInternalError(c, err.Error())
 		return
 	}
 	if tags == nil {
 		tags = []database.TagWithCount{}
 	}
-	RespondWithOK(c, gin.H{"tags": tags})
+	httputil.RespondWithOK(c, gin.H{"tags": tags})
 }
 
 func (s *Server) getBookUserTags(c *gin.Context) {
 	id := c.Param("id")
 	tags, err := s.audiobookService.GetBookUserTags(id)
 	if err != nil {
-		RespondWithInternalError(c, err.Error())
+		httputil.RespondWithInternalError(c, err.Error())
 		return
 	}
 	if tags == nil {
 		tags = []string{}
 	}
-	RespondWithOK(c, gin.H{"tags": tags})
+	httputil.RespondWithOK(c, gin.H{"tags": tags})
 }
 
 // getBookTagsDetailed returns a book's tags with their source
@@ -1025,18 +1026,18 @@ func (s *Server) getBookUserTags(c *gin.Context) {
 func (s *Server) getBookTagsDetailed(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "book id is required")
+		httputil.RespondWithBadRequest(c, "book id is required")
 		return
 	}
 	tags, err := s.Store().GetBookTagsDetailed(id)
 	if err != nil {
-		RespondWithInternalError(c, err.Error())
+		httputil.RespondWithInternalError(c, err.Error())
 		return
 	}
 	if tags == nil {
 		tags = []database.BookTag{}
 	}
-	RespondWithOK(c, gin.H{"tags": tags})
+	httputil.RespondWithOK(c, gin.H{"tags": tags})
 }
 
 // getBookAlternativeTitles handles GET /audiobooks/:id/alternative-titles.
@@ -1045,18 +1046,18 @@ func (s *Server) getBookTagsDetailed(c *gin.Context) {
 func (s *Server) getBookAlternativeTitles(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "id is required")
+		httputil.RespondWithBadRequest(c, "id is required")
 		return
 	}
 	alts, err := s.Store().GetBookAlternativeTitles(id)
 	if err != nil {
-		internalError(c, "failed to get alternative titles", err)
+		httputil.InternalError(c, "failed to get alternative titles", err)
 		return
 	}
 	if alts == nil {
 		alts = []database.BookAlternativeTitle{}
 	}
-	RespondWithOK(c, gin.H{"alternative_titles": alts})
+	httputil.RespondWithOK(c, gin.H{"alternative_titles": alts})
 }
 
 // addBookAlternativeTitle handles POST /audiobooks/:id/alternative-titles.
@@ -1065,7 +1066,7 @@ func (s *Server) getBookAlternativeTitles(c *gin.Context) {
 func (s *Server) addBookAlternativeTitle(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "id is required")
+		httputil.RespondWithBadRequest(c, "id is required")
 		return
 	}
 	var body struct {
@@ -1074,21 +1075,21 @@ func (s *Server) addBookAlternativeTitle(c *gin.Context) {
 		Language string `json:"language,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Title == "" {
-		RespondWithBadRequest(c, "title is required")
+		httputil.RespondWithBadRequest(c, "title is required")
 		return
 	}
 	// Confirm the book exists before inserting — avoids orphan alt
 	// title rows for deleted books.
 	if book, err := s.Store().GetBookByID(id); err != nil || book == nil {
-		RespondWithNotFound(c, "book", id)
+		httputil.RespondWithNotFound(c, "book", id)
 		return
 	}
 	if err := s.Store().AddBookAlternativeTitle(id, body.Title, body.Source, body.Language); err != nil {
-		internalError(c, "failed to add alternative title", err)
+		httputil.InternalError(c, "failed to add alternative title", err)
 		return
 	}
 	alts, _ := s.Store().GetBookAlternativeTitles(id)
-	RespondWithOK(c, gin.H{"alternative_titles": alts})
+	httputil.RespondWithOK(c, gin.H{"alternative_titles": alts})
 }
 
 // removeBookAlternativeTitle handles DELETE /audiobooks/:id/alternative-titles.
@@ -1098,22 +1099,22 @@ func (s *Server) addBookAlternativeTitle(c *gin.Context) {
 func (s *Server) removeBookAlternativeTitle(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "id is required")
+		httputil.RespondWithBadRequest(c, "id is required")
 		return
 	}
 	var body struct {
 		Title string `json:"title"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Title == "" {
-		RespondWithBadRequest(c, "title is required")
+		httputil.RespondWithBadRequest(c, "title is required")
 		return
 	}
 	if err := s.Store().RemoveBookAlternativeTitle(id, body.Title); err != nil {
-		internalError(c, "failed to remove alternative title", err)
+		httputil.InternalError(c, "failed to remove alternative title", err)
 		return
 	}
 	alts, _ := s.Store().GetBookAlternativeTitles(id)
-	RespondWithOK(c, gin.H{"alternative_titles": alts})
+	httputil.RespondWithOK(c, gin.H{"alternative_titles": alts})
 }
 
 func (s *Server) batchUpdateTags(c *gin.Context) {
@@ -1123,15 +1124,15 @@ func (s *Server) batchUpdateTags(c *gin.Context) {
 		RemoveTags []string `json:"remove_tags"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		RespondWithBadRequest(c, "invalid request body")
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 	if len(body.BookIDs) == 0 {
-		RespondWithBadRequest(c, "book_ids is required")
+		httputil.RespondWithBadRequest(c, "book_ids is required")
 		return
 	}
 	if len(body.AddTags) == 0 && len(body.RemoveTags) == 0 {
-		RespondWithBadRequest(c, "at least one of add_tags or remove_tags is required")
+		httputil.RespondWithBadRequest(c, "at least one of add_tags or remove_tags is required")
 		return
 	}
 	// Filter out empty strings from tag arrays
@@ -1148,23 +1149,23 @@ func (s *Server) batchUpdateTags(c *gin.Context) {
 	body.RemoveTags = filterEmpty(body.RemoveTags)
 	updated, err := s.audiobookService.BatchUpdateUserTags(body.BookIDs, body.AddTags, body.RemoveTags)
 	if err != nil {
-		RespondWithInternalError(c, err.Error())
+		httputil.RespondWithInternalError(c, err.Error())
 		return
 	}
-	RespondWithOK(c, gin.H{"updated": updated})
+	httputil.RespondWithOK(c, gin.H{"updated": updated})
 }
 
 func (s *Server) getBookChangelog(c *gin.Context) {
 	id := c.Param("id")
 	entries, err := s.changelogService.GetBookChangelog(id)
 	if err != nil {
-		internalError(c, "failed to get changelog", err)
+		httputil.InternalError(c, "failed to get changelog", err)
 		return
 	}
 	if entries == nil {
 		entries = []activity.ChangeLogEntry{}
 	}
-	RespondWithOK(c, gin.H{"entries": entries})
+	httputil.RespondWithOK(c, gin.H{"entries": entries})
 }
 
 func (s *Server) updateAudiobook(c *gin.Context) {
@@ -1172,7 +1173,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 
 	var payload map[string]any
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -1185,10 +1186,10 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(c.Request.Context(), id, payload)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			RespondWithNotFound(c, "audiobook", id)
+			httputil.RespondWithNotFound(c, "audiobook", id)
 			return
 		}
-		internalError(c, "failed to update audiobook", err)
+		httputil.InternalError(c, "failed to update audiobook", err)
 		return
 	}
 
@@ -1329,7 +1330,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		s.writeBackBatcher.Enqueue(id)
 	}
 
-	RespondWithOK(c, enrichBookForResponseSingle(updatedBook))
+	httputil.RespondWithOK(c, enrichBookForResponseSingle(updatedBook))
 }
 
 func (s *Server) deleteAudiobook(c *gin.Context) {
@@ -1345,10 +1346,10 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 	result, err := s.audiobookService.DeleteAudiobook(c.Request.Context(), id, opts)
 	if err != nil {
 		if strings.Contains(err.Error(), "already soft deleted") {
-			RespondWithConflict(c, err.Error())
+			httputil.RespondWithConflict(c, err.Error())
 			return
 		}
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
@@ -1357,13 +1358,13 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 		"block_hash":  blockHash,
 	}))
 
-	RespondWithOK(c, result)
+	httputil.RespondWithOK(c, result)
 }
 
 func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 	var req BatchUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -1378,21 +1379,21 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 func (s *Server) batchOperations(c *gin.Context) {
 	var req BatchOperationsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.Operations) == 0 {
-		RespondWithBadRequest(c, "no operations provided")
+		httputil.RespondWithBadRequest(c, "no operations provided")
 		return
 	}
 	if len(req.Operations) > 10000 {
-		RespondWithBadRequest(c, "max 10000 operations per request")
+		httputil.RespondWithBadRequest(c, "max 10000 operations per request")
 		return
 	}
 
@@ -1406,7 +1407,7 @@ func (s *Server) batchOperations(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 // getBookChanges returns change tracking records for a book.
@@ -1414,8 +1415,8 @@ func (s *Server) getBookChanges(c *gin.Context) {
 	id := c.Param("id")
 	changes, err := s.Store().GetBookChanges(id)
 	if err != nil {
-		internalError(c, "failed to get book changes", err)
+		httputil.InternalError(c, "failed to get book changes", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"changes": changes})
+	httputil.RespondWithOK(c, gin.H{"changes": changes})
 }
