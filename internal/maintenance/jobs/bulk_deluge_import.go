@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/bulk_deluge_import.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a2b8c6d7-9e0f-1a2b-3c4d-5e6f7a8b9c0d
 // last-edited: 2026-04-28
 
@@ -19,6 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 )
 
 func init() { maintenance.Register(&bulkDelugeImportJob{}) }
@@ -157,7 +158,7 @@ func bdi_importToLibrary(cfg *config.Config, delugeClient *deluge.Client, store 
 		log.Printf("[INFO] bdi_importToLibrary: %s already imported, skipping", bookFile.FilePath)
 		return bookFile.FilePath, nil
 	}
-	src := bookFile.FilePath
+	src := util.CleanPath(bookFile.FilePath)
 	if src == "" {
 		return "", fmt.Errorf("bdi_importToLibrary: bookFile.FilePath is empty")
 	}
@@ -165,12 +166,19 @@ func bdi_importToLibrary(cfg *config.Config, delugeClient *deluge.Client, store 
 	var destDir string
 	rel, relErr := filepath.Rel(cfg.RootDir, filepath.Dir(src))
 	if relErr == nil && !filepath.IsAbs(rel) && !bdi_isParentTraversal(rel) {
-		destDir = filepath.Join(cfg.RootDir, rel)
+		var joinErr error
+		destDir, joinErr = util.SafeJoin(cfg.RootDir, rel)
+		if joinErr != nil {
+			destDir = util.CleanPath(cfg.RootDir)
+		}
 	} else {
-		destDir = cfg.RootDir
+		destDir = util.CleanPath(cfg.RootDir)
 	}
 
-	dest := filepath.Join(destDir, filepath.Base(src))
+	dest, destErr := util.SafeJoin(destDir, filepath.Base(src))
+	if destErr != nil {
+		return "", fmt.Errorf("bdi_importToLibrary: unsafe dest path: %w", destErr)
+	}
 	if src == dest {
 		log.Printf("[INFO] bdi_importToLibrary: source and dest are the same (%s), skipping copy", src)
 		return src, nil

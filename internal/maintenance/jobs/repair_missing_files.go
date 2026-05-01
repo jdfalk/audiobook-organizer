@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/repair_missing_files.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1a7b5e6-8c9d-0e1f-2a3b-4c5d6e7f8a90
 // last-edited: 2026-04-28
 
@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 )
 
 func init() { maintenance.Register(&repairMissingFilesJob{}) }
@@ -497,6 +498,20 @@ func rmfr_repairOne(
 	}
 
 	if candidate == "" {
+		res.Method = "unresolved"
+		return res
+	}
+
+	candidate = util.CleanPath(candidate)
+	withinARoot := false
+	for _, root := range searchRoots {
+		if util.WithinRoot(candidate, root) {
+			withinARoot = true
+			break
+		}
+	}
+	if !withinARoot {
+		log.Printf("[WARN] repair-missing-files %s: candidate %q outside all search roots, skipping", opID, candidate)
 		res.Method = "unresolved"
 		return res
 	}
