@@ -1,6 +1,7 @@
 // file: internal/server/middleware/ratelimit.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1331705a-85cb-4158-92f5-5ce203d8a0e7
+// last-edited: 2026-05-01
 
 package middleware
 
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"golang.org/x/time/rate"
 )
 
@@ -77,9 +79,7 @@ func (r *IPRateLimiter) Middleware() gin.HandlerFunc {
 			ip = "unknown"
 		}
 		if !r.limiterForIP(ip).Allow() {
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "rate limit exceeded",
-			})
+			httputil.RespondWithError(c, http.StatusTooManyRequests, "rate limit exceeded", "TOO_MANY_REQUESTS")
 			c.Abort()
 			return
 		}

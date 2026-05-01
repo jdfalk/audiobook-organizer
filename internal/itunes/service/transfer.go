@@ -1,6 +1,7 @@
 // file: internal/itunes/service/transfer.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
+// last-edited: 2026-05-01
 //
 // ITL file transfer handlers: download, upload+validate, backup
 // list, and restore. Part of backlog 6.4.
@@ -19,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
 
@@ -38,23 +40,17 @@ func newTransferService() *TransferService { return &TransferService{} }
 func (t *TransferService) HandleDownload(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "ITunesLibraryWritePath is not configured",
-		})
+		httputil.RespondWithNotFound(c, "ITunesLibraryWritePath is not configured", "")
 		return
 	}
 
 	info, err := os.Stat(itlPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "ITL file not found at configured path",
-			})
+			httputil.RespondWithNotFound(c, "ITL file not found at configured path", "")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("cannot stat ITL file: %v", err),
-		})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("cannot stat ITL file: %v", err))
 		return
 	}
 
@@ -81,9 +77,7 @@ type ITLUploadResponse struct {
 func (t *TransferService) HandleUpload(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "ITunesLibraryWritePath is not configured",
-		})
+		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath is not configured")
 		return
 	}
 
@@ -91,9 +85,7 @@ func (t *TransferService) HandleUpload(c *gin.Context) {
 
 	file, _, err := c.Request.FormFile("library")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("missing or invalid 'library' form field: %v", err),
-		})
+		httputil.RespondWithBadRequest(c, fmt.Sprintf("missing or invalid 'library' form field: %v", err))
 		return
 	}
 	defer file.Close()
@@ -101,9 +93,7 @@ func (t *TransferService) HandleUpload(c *gin.Context) {
 	dir := filepath.Dir(itlPath)
 	tmp, err := os.CreateTemp(dir, "itl-upload-*.tmp")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("cannot create temp file: %v", err),
-		})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("cannot create temp file: %v", err))
 		return
 	}
 	tmpPath := tmp.Name()
@@ -111,16 +101,14 @@ func (t *TransferService) HandleUpload(c *gin.Context) {
 
 	if _, err := io.Copy(tmp, file); err != nil {
 		tmp.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("failed writing upload to disk: %v", err),
-		})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("failed writing upload to disk: %v", err))
 		return
 	}
 	tmp.Close()
 
 	lib, parseErr := itunes.ParseITL(tmpPath)
 	if parseErr != nil {
-		c.JSON(http.StatusBadRequest, ITLUploadResponse{
+		httputil.RespondWithSuccess(c, http.StatusBadRequest, ITLUploadResponse{
 			Valid: false,
 			Error: fmt.Sprintf("invalid ITL file: %v", parseErr),
 		})
@@ -136,26 +124,22 @@ func (t *TransferService) HandleUpload(c *gin.Context) {
 
 	install := c.Query("install") == "true"
 	if !install {
-		c.JSON(http.StatusOK, resp)
+		httputil.RespondWithOK(c, resp)
 		return
 	}
 
 	if err := backupITLFile(itlPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("failed to back up current ITL: %v", err),
-		})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("failed to back up current ITL: %v", err))
 		return
 	}
 
 	if err := os.Rename(tmpPath, itlPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("failed to install uploaded ITL: %v", err),
-		})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("failed to install uploaded ITL: %v", err))
 		return
 	}
 
 	resp.Installed = true
-	c.JSON(http.StatusOK, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 // ITLBackupEntry describes a single .bak-* ITL backup file.
@@ -172,9 +156,7 @@ type ITLBackupEntry struct {
 func (t *TransferService) HandleBackupList(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "ITunesLibraryWritePath is not configured",
-		})
+		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath is not configured")
 		return
 	}
 
@@ -183,9 +165,7 @@ func (t *TransferService) HandleBackupList(c *gin.Context) {
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("cannot read directory: %v", err),
-		})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("cannot read directory: %v", err))
 		return
 	}
 
@@ -213,7 +193,7 @@ func (t *TransferService) HandleBackupList(c *gin.Context) {
 		return backups[i].Timestamp.After(backups[j].Timestamp)
 	})
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"backups": backups,
 		"count":   len(backups),
 	})
@@ -230,24 +210,18 @@ type ITLRestoreRequest struct {
 func (t *TransferService) HandleRestore(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "ITunesLibraryWritePath is not configured",
-		})
+		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath is not configured")
 		return
 	}
 
 	var req ITLRestoreRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("invalid request: %v", err),
-		})
+		httputil.RespondWithBadRequest(c, fmt.Sprintf("invalid request: %v", err))
 		return
 	}
 
 	if filepath.Base(req.BackupName) != req.BackupName {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "backup_name must be a filename, not a path",
-		})
+		httputil.RespondWithBadRequest(c, "backup_name must be a filename, not a path")
 		return
 	}
 
@@ -256,35 +230,27 @@ func (t *TransferService) HandleRestore(c *gin.Context) {
 	backupPath := filepath.Join(dir, req.BackupName)
 
 	if !strings.HasPrefix(req.BackupName, base+".bak-") {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "not a recognized ITL backup file",
-		})
+		httputil.RespondWithBadRequest(c, "not a recognized ITL backup file")
 		return
 	}
 
 	lib, err := itunes.ParseITL(backupPath)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("backup file is invalid: %v", err),
-		})
+		httputil.RespondWithBadRequest(c, fmt.Sprintf("backup file is invalid: %v", err))
 		return
 	}
 
 	if err := backupITLFile(itlPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("failed to back up current ITL before restore: %v", err),
-		})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("failed to back up current ITL before restore: %v", err))
 		return
 	}
 
 	if err := copyFile(backupPath, itlPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": fmt.Sprintf("failed to restore backup: %v", err),
-		})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("failed to restore backup: %v", err))
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"restored":  true,
 		"tracks":    len(lib.Tracks),
 		"playlists": len(lib.Playlists),

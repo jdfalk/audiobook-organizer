@@ -1,6 +1,7 @@
 // file: internal/itunes/service/path_repair.go
-// version: 1.0.2
+// version: 1.1.0
 // guid: 01ad6c79-5f3f-4ee1-a07a-1f4b3a8c0d12
+// last-edited: 2026-05-01
 //
 // PathRepairer dumps the iTunes XML, finds tracks whose Location no
 // longer exists on disk, re-discovers the correct path via three tiers
@@ -16,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,6 +25,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
@@ -147,11 +148,11 @@ func parseDryRun(c *gin.Context) bool {
 // through the WriteBackBatcher. Defaults to dry-run.
 func (r *PathRepairer) Start(c *gin.Context) {
 	if r.store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if r.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -161,7 +162,7 @@ func (r *PathRepairer) Start(c *gin.Context) {
 	op, err := r.store.CreateOperation(id, "itunes_path_repair", nil)
 	if err != nil {
 		log.Printf("[ERROR] failed to create operation: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation"})
+		httputil.RespondWithInternalError(c, "failed to create operation")
 		return
 	}
 
@@ -171,11 +172,11 @@ func (r *PathRepairer) Start(c *gin.Context) {
 
 	if err := r.queue.Enqueue(op.ID, "itunes_path_repair", operations.PriorityNormal, operationFunc); err != nil {
 		log.Printf("[ERROR] failed to enqueue operation: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enqueue operation"})
+		httputil.RespondWithInternalError(c, "failed to enqueue operation")
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // Repair is the operation body. Wraps repairWithResult so the
