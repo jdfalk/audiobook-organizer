@@ -152,39 +152,6 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.itunesSvc.Repair.Repair(ctx, repairOpID, true, progress)
 			}
-		case "composer_tag_scan":
-			params, _ := operations.LoadParams[operations.ComposerScanParams](store, opID)
-			if params == nil {
-				log.Printf("[WARN] No params found for interrupted composer_tag_scan %s, marking failed", opID)
-				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
-				continue
-			}
-			capturedParams := *params
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.runComposerTagScan(ctx, opID, capturedParams, store, progress)
-			}
-		case "missing_file_repair":
-			params, _ := operations.LoadParams[operations.MissingFileRepairParams](store, opID)
-			if params == nil {
-				log.Printf("[WARN] No params found for interrupted missing_file_repair %s, marking failed", opID)
-				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
-				continue
-			}
-			capturedParams2 := *params
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.runMissingFileRepair(ctx, opID, capturedParams2, store, progress)
-			}
-		case "bulk_metadata_fetch":
-			params, _ := operations.LoadParams[operations.BulkMetadataFetchParams](store, opID)
-			if params == nil {
-				log.Printf("[WARN] No params found for interrupted bulk_metadata_fetch %s, marking failed", opID)
-				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
-				continue
-			}
-			capturedParams3 := *params
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.runBulkMetadataFetchAll(ctx, opID, capturedParams3, store, progress)
-			}
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
@@ -1107,39 +1074,10 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance-window/run", s.perm(auth.PermSettingsManage), s.runMaintenanceWindowNow)
 			protected.GET("/maintenance-window/status", s.perm(auth.PermSettingsManage), s.getMaintenanceWindowStatus)
 			protected.PUT("/maintenance-window/config", s.perm(auth.PermSettingsManage), s.updateMaintenanceWindowConfig)
-			protected.POST("/maintenance/fix-read-by-narrator", s.perm(auth.PermSettingsManage), s.handleFixReadByNarrator)
-			protected.POST("/maintenance/cleanup-series", s.perm(auth.PermSettingsManage), s.handleCleanupSeries)
-			protected.POST("/maintenance/backfill-book-files", s.perm(auth.PermSettingsManage), s.handleBackfillBookFiles)
-			protected.POST("/maintenance/backfill-metadata-source-hash", s.perm(auth.PermSettingsManage), s.handleBackfillMetadataSourceHash)
-			protected.POST("/maintenance/cleanup-empty-folders", s.perm(auth.PermSettingsManage), s.handleCleanupEmptyFolders)
-			protected.POST("/maintenance/cleanup-backups", s.perm(auth.PermSettingsManage), s.handleCleanupBackups)
-			protected.POST("/maintenance/cleanup-organize-mess", s.perm(auth.PermSettingsManage), s.handleCleanupOrganizeMess)
-			protected.POST("/maintenance/fix-author-narrator-swap", s.perm(auth.PermSettingsManage), s.handleFixAuthorNarratorSwap)
-			protected.POST("/maintenance/fix-version-groups", s.perm(auth.PermSettingsManage), s.handleFixVersionGroups)
-			protected.POST("/maintenance/fix-library-states", s.perm(auth.PermSettingsManage), s.handleFixLibraryStates)
-			protected.POST("/maintenance/enrich-book-files", s.perm(auth.PermSettingsManage), s.handleEnrichBookFiles)
-			protected.POST("/maintenance/dedup-books", s.perm(auth.PermSettingsManage), s.handleDedupBooks)
-			protected.POST("/maintenance/fix-book-file-paths", s.perm(auth.PermSettingsManage), s.handleFixBookFilePaths)
-			protected.POST("/maintenance/relink-missing-to-itunes", s.perm(auth.PermSettingsManage), s.handleRelinkMissingToiTunes)
-			protected.POST("/maintenance/refetch-missing-authors", s.perm(auth.PermSettingsManage), s.handleRefetchMissingAuthors)
-			protected.POST("/maintenance/recompute-itunes-paths", s.perm(auth.PermSettingsManage), s.handleRecomputeITunesPaths)
-			protected.POST("/maintenance/generate-itl-tests", s.perm(auth.PermSettingsManage), s.handleGenerateITLTests)
-			protected.POST("/maintenance/scan-composer-tags", s.perm(auth.PermSettingsManage), s.handleScanComposerTags)
+			// Result-getter GETs (not job triggers — these poll async results)
 			protected.GET("/maintenance/scan-composer-tags/:id", s.perm(auth.PermSettingsManage), s.handleGetComposerScanResults)
-			protected.POST("/maintenance/repair-missing-files", s.perm(auth.PermSettingsManage), s.handleRepairMissingFiles)
 			protected.GET("/maintenance/repair-missing-files/:id", s.perm(auth.PermSettingsManage), s.handleGetMissingFileRepairResults)
-			protected.POST("/maintenance/bulk-fetch-metadata", s.perm(auth.PermLibraryEditMetadata), s.handleBulkMetadataFetchAll)
-			protected.POST("/maintenance/revert-metadata-fetch", s.perm(auth.PermSettingsManage), s.handleRevertMetadataFetch)
-			protected.GET("/maintenance/scan-duration-mismatch", s.perm(auth.PermSettingsManage), s.handleScanDurationMismatch)
-			protected.GET("/maintenance/relink-report", s.perm(auth.PermSettingsManage), s.handleRelinkReport)
-			protected.POST("/maintenance/bulk-deluge-import", s.perm(auth.PermSettingsManage), s.handleBulkDelugeImport)
-			protected.GET("/maintenance/chapter-groups", s.perm(auth.PermSettingsManage), s.handleScanChapterGroups)
-			protected.POST("/maintenance/merge-chapter-groups", s.perm(auth.PermSettingsManage), s.handleMergeChapterGroups)
-			protected.GET("/maintenance/duplicate-files", s.perm(auth.PermSettingsManage), s.handleScanDuplicateFiles)
-			protected.GET("/maintenance/metadata-hash-duplicates", s.perm(auth.PermSettingsManage), s.handleScanMetadataHashDuplicates)
-			protected.GET("/maintenance/book-file-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookFileHashStats)
-			protected.POST("/maintenance/backfill-file-hashes", s.perm(auth.PermSettingsManage), s.handleBackfillFileHashes)
-			protected.GET("/maintenance/book-metadata-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookMetadataHashStats)
+			// Unified maintenance job dispatcher
 			protected.GET("/maintenance/jobs", s.perm(auth.PermSettingsManage), s.listMaintenanceJobs)
 			protected.POST("/maintenance/jobs/:job_id", s.runMaintenanceJob)
 
