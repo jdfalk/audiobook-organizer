@@ -1,7 +1,7 @@
 // file: internal/database/mock_store.go
-// version: 1.46.0
+// version: 1.47.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
-// last-edited: 2026-05-01
+// last-edited: 2026-04-30
 
 package database
 
@@ -330,6 +330,8 @@ type MockStore struct {
 	BatchUpsertBookFilesFunc    func(files []*BookFile) error
 	MoveBookFilesToBookFunc     func(fileIDs []string, sourceBookID, targetBookID string) error
 	GetDuplicateFilesByHashFunc func(limit int) ([]DuplicateFileGroup, error)
+	GetBookBySegmentFileHashFunc func(hash string) (*Book, error)
+	GetBookFileHashStatsFunc    func() (*BookFileHashStats, error)
 
 	// Path history
 	RecordPathChangeFunc   func(change *BookPathChange) error
@@ -2266,6 +2268,20 @@ func (m *MockStore) GetDuplicateFilesByHash(limit int) ([]DuplicateFileGroup, er
 		return m.GetDuplicateFilesByHashFunc(limit)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) GetBookBySegmentFileHash(hash string) (*Book, error) {
+	if m.GetBookBySegmentFileHashFunc != nil {
+		return m.GetBookBySegmentFileHashFunc(hash)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) GetBookFileHashStats() (*BookFileHashStats, error) {
+	if m.GetBookFileHashStatsFunc != nil {
+		return m.GetBookFileHashStatsFunc()
+	}
+	return &BookFileHashStats{}, nil
 }
 
 func (m *MockStore) CreateAIJob(job AIJob, payloadJSON []byte) error {

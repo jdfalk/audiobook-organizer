@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.68.0
+// version: 2.69.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 // last-edited: 2026-04-30
 
@@ -887,6 +887,26 @@ type DuplicateFileInfo struct {
 	FilePath   string `json:"file_path"`  // book_files.file_path
 	BookPath   string `json:"book_path"`  // books.file_path (directory)
 	FileSize   int64  `json:"file_size_bytes"`
+}
+
+// BookFileHashStats is returned by GetBookFileHashStats and shows hash-coverage
+// for the entire book_files table, broken down by library root path.
+type BookFileHashStats struct {
+	TotalBookFiles   int                      `json:"total_book_files"`
+	WithFileHash     int                      `json:"with_file_hash"`
+	MissingFileHash  int                      `json:"missing_file_hash"`
+	WithOriginalHash int                      `json:"with_original_hash"`
+	TotalBooks       int                      `json:"total_books"`
+	BooksWithNoFiles int                      `json:"books_with_no_files"`
+	ByLibrary        []BookFileHashStatsByLib  `json:"by_library"`
+}
+
+// BookFileHashStatsByLib breaks down hash coverage for one library root path.
+type BookFileHashStatsByLib struct {
+	Path        string `json:"path"`
+	TotalFiles  int    `json:"total_files"`
+	WithHash    int    `json:"with_hash"`
+	MissingHash int    `json:"missing_hash"`
 }
 
 // Global store instance — use GetGlobalStore/SetGlobalStore for concurrent access.

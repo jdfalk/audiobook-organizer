@@ -1,7 +1,7 @@
 // file: internal/database/iface_misc.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
-// last-edited: 2026-05-01
+// last-edited: 2026-04-30
 
 package database
 
@@ -145,6 +145,14 @@ type BookFileStore interface {
 	// original_file_hash (non-empty). Each group has ≥2 entries and represents
 	// the same physical audio file in multiple locations.
 	GetDuplicateFilesByHash(limit int) ([]DuplicateFileGroup, error)
+	// GetBookBySegmentFileHash looks up a BookFile by file_hash or
+	// original_file_hash and returns the parent Book. Used by the scanner's
+	// multi-file dedup tally to match individual segment files across folders
+	// without assuming that whole-directory == same book.
+	GetBookBySegmentFileHash(hash string) (*Book, error)
+	// GetBookFileHashStats returns aggregate hash-coverage statistics for all
+	// book_files in the library, including a per-library-path breakdown.
+	GetBookFileHashStats() (*BookFileHashStats, error)
 }
 
 // BookSegmentStore covers the deprecated segment surface, kept until
