@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.67.0
+// version: 1.68.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-02
 
@@ -1053,7 +1053,56 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 }
 
 func (p *PebbleStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, error) {
-	panic("GetAllBookSummaries not implemented for PebbleStore")
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	books, err := p.GetAllBooks(limit+offset, 0)
+	if err != nil {
+		return nil, err
+	}
+	if offset >= len(books) {
+		return nil, nil
+	}
+	books = books[offset:]
+	if len(books) > limit {
+		books = books[:limit]
+	}
+	summaries := make([]BookSummary, 0, len(books))
+	for _, b := range books {
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		summaries = append(summaries, BookSummary{
+			ID:                   b.ID,
+			Title:                b.Title,
+			AuthorID:             b.AuthorID,
+			SeriesID:             b.SeriesID,
+			SeriesSequence:       b.SeriesSequence,
+			FilePath:             b.FilePath,
+			Format:               b.Format,
+			Duration:             b.Duration,
+			OriginalFilename:     b.OriginalFilename,
+			FileSize:             b.FileSize,
+			FileHash:             b.FileHash,
+			OriginalFileHash:     b.OriginalFileHash,
+			OrganizedFileHash:    b.OrganizedFileHash,
+			LibraryState:         b.LibraryState,
+			QuarantinedAt:        b.QuarantinedAt,
+			QuarantineReason:     b.QuarantineReason,
+			CoverURL:             b.CoverURL,
+			Narrator:             b.Narrator,
+			CreatedAt:            b.CreatedAt,
+			UpdatedAt:            b.UpdatedAt,
+			MetadataUpdatedAt:    b.MetadataUpdatedAt,
+			IsPrimaryVersion:     b.IsPrimaryVersion,
+			VersionGroupID:       b.VersionGroupID,
+			MetadataReviewStatus: b.MetadataReviewStatus,
+		})
+	}
+	return summaries, nil
 }
 
 func (p *PebbleStore) GetBookByID(id string) (*Book, error) {
