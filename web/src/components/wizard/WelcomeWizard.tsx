@@ -1,5 +1,5 @@
 // file: web/src/components/wizard/WelcomeWizard.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 import { useState, useEffect } from 'react';
@@ -33,6 +33,7 @@ import {
 } from '@mui/icons-material';
 import { ServerFileBrowser } from '../common/ServerFileBrowser';
 import * as api from '../../services/api';
+import { STORAGE_KEYS } from '../../lib/storageKeys';
 
 interface WelcomeWizardProps {
   open: boolean;
@@ -264,7 +265,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
         // Persist iTunes settings so the Settings page can see them
         const activeMappings = pathMappings.filter((m) => m.from && m.to);
         try {
-          localStorage.setItem('itunes_import_settings', JSON.stringify({
+          localStorage.setItem(STORAGE_KEYS.ITUNES_IMPORT_SETTINGS, JSON.stringify({
             libraryPath: iTunesPath,
             importMode: iTunesImportMode,
             preserveLocation: iTunesImportMode === 'import',
@@ -291,7 +292,7 @@ export function WelcomeWizard({ open, onComplete }: WelcomeWizardProps) {
       }
 
       // Mark wizard as completed (store in localStorage for now)
-      localStorage.setItem('welcome_wizard_completed', 'true');
+      localStorage.setItem(STORAGE_KEYS.WELCOME_WIZARD_COMPLETED, 'true');
 
       onComplete();
     } catch (error) {

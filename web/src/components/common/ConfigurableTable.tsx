@@ -1,5 +1,5 @@
 // file: web/src/components/common/ConfigurableTable.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -16,6 +16,7 @@ import {
   Typography,
 } from '@mui/material';
 import ViewColumnIcon from '@mui/icons-material/ViewColumn.js';
+import { STORAGE_KEYS } from '../../lib/storageKeys';
 
 // --- Types ---
 
@@ -97,7 +98,7 @@ export function useConfigurableTable<T>({
 
   const loadState = useCallback((): ColumnState => {
     try {
-      const raw = localStorage.getItem(`table_config_${storageKey}`);
+      const raw = localStorage.getItem(`${STORAGE_KEYS.TABLE_CONFIG}_${storageKey}`);
       if (raw) {
         const parsed = JSON.parse(raw) as ColumnState;
         // Ensure all columns have widths
@@ -120,7 +121,7 @@ export function useConfigurableTable<T>({
 
   // Persist column state
   useEffect(() => {
-    localStorage.setItem(`table_config_${storageKey}`, JSON.stringify(colState));
+    localStorage.setItem(`${STORAGE_KEYS.TABLE_CONFIG}_${storageKey}`, JSON.stringify(colState));
   }, [colState, storageKey]);
 
   const visibleColumns = columns.filter((c) => colState.visible.includes(c.key));

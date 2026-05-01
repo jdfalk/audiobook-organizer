@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.5.0
+// version: 2.6.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -45,6 +45,7 @@ import { BatchActivityEntry } from '../components/BatchActivityEntry';
 import * as api from '../services/api';
 import { PendingFileOpsBanner } from '../components/PendingFileOpsBanner';
 import { usePendingFileOps } from '../hooks/usePendingFileOps';
+import { STORAGE_KEYS } from '../lib/storageKeys';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
 
@@ -125,7 +126,7 @@ export default function ActivityLog() {
   const [sinceFilter, setSinceFilter] = useState('');
   const [untilFilter, setUntilFilter] = useState('');
   const [excludedSources, setExcludedSources] = useState<Set<string>>(() => {
-    const saved = localStorage.getItem('activity-source-prefs');
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVITY_SOURCE_PREFS);
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
   const [hideNoOp, setHideNoOp] = useState(true);
@@ -138,7 +139,7 @@ export default function ActivityLog() {
 
   // Active ops
   const [activeOps, setActiveOps] = useState<api.ActiveOperationSummary[]>([]);
-  const [pinned, setPinned] = useState(() => localStorage.getItem('activity-ops-pinned') !== 'false');
+  const [pinned, setPinned] = useState(() => localStorage.getItem(STORAGE_KEYS.ACTIVITY_OPS_PINNED) !== 'false');
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [expandedOpId, setExpandedOpId] = useState<string | null>(searchParams.get('op'));
   const [opLogs, setOpLogs] = useState<string[]>([]);
@@ -176,12 +177,12 @@ export default function ActivityLog() {
 
   // Persist excluded sources
   useEffect(() => {
-    localStorage.setItem('activity-source-prefs', JSON.stringify([...excludedSources]));
+    localStorage.setItem(STORAGE_KEYS.ACTIVITY_SOURCE_PREFS, JSON.stringify([...excludedSources]));
   }, [excludedSources]);
 
   // Persist pin state
   useEffect(() => {
-    localStorage.setItem('activity-ops-pinned', String(pinned));
+    localStorage.setItem(STORAGE_KEYS.ACTIVITY_OPS_PINNED, String(pinned));
   }, [pinned]);
 
   // Load active operations
@@ -547,7 +548,7 @@ export default function ActivityLog() {
               size="small"
               onClick={() => {
                 setExcludedSources(new Set());
-                localStorage.removeItem('activity-source-prefs');
+                localStorage.removeItem(STORAGE_KEYS.ACTIVITY_SOURCE_PREFS);
               }}
             >
               Reset

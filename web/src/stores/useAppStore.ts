@@ -1,19 +1,18 @@
 // file: web/src/stores/useAppStore.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 1e2f3a4b-5c6d-7e8f-9a0b-1c2d3e4f5a6b
 
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { STORAGE_KEYS } from '../lib/storageKeys';
 
 type ThemeMode = 'dark' | 'light';
-
-const THEME_MODE_STORAGE_KEY = 'app-theme-mode';
 
 function readStoredThemeMode(): ThemeMode {
   if (typeof window === 'undefined') {
     return 'dark';
   }
-  const stored = window.localStorage.getItem(THEME_MODE_STORAGE_KEY);
+  const stored = window.localStorage.getItem(STORAGE_KEYS.APP_THEME_MODE);
   return stored === 'light' || stored === 'dark' ? stored : 'dark';
 }
 
@@ -21,7 +20,7 @@ function persistThemeMode(mode: ThemeMode): void {
   if (typeof window === 'undefined') {
     return;
   }
-  window.localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
+  window.localStorage.setItem(STORAGE_KEYS.APP_THEME_MODE, mode);
 }
 
 interface Notification {

@@ -1,11 +1,12 @@
 // file: web/src/components/AnnouncementBanner.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, AlertTitle, Box, IconButton, Collapse } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import { STORAGE_KEYS } from '../lib/storageKeys';
 
 interface Announcement {
   id: string;
@@ -14,11 +15,9 @@ interface Announcement {
   link?: string;
 }
 
-const DISMISSED_KEY = 'dismissed_announcements';
-
 function getDismissed(): Set<string> {
   try {
-    const raw = localStorage.getItem(DISMISSED_KEY);
+    const raw = localStorage.getItem(STORAGE_KEYS.DISMISSED_ANNOUNCEMENTS);
     return raw ? new Set(JSON.parse(raw)) : new Set();
   } catch {
     return new Set();
@@ -28,7 +27,7 @@ function getDismissed(): Set<string> {
 function dismissAnnouncement(id: string) {
   const dismissed = getDismissed();
   dismissed.add(id);
-  localStorage.setItem(DISMISSED_KEY, JSON.stringify([...dismissed]));
+  localStorage.setItem(STORAGE_KEYS.DISMISSED_ANNOUNCEMENTS, JSON.stringify([...dismissed]));
 }
 
 export function AnnouncementBanner() {
