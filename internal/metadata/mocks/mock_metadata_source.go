@@ -5,6 +5,8 @@
 package mocks
 
 import (
+	"context"
+
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -81,8 +83,8 @@ func (_c *MockMetadataSource_Name_Call) RunAndReturn(run func() string) *MockMet
 }
 
 // SearchByTitle provides a mock function for the type MockMetadataSource
-func (_mock *MockMetadataSource) SearchByTitle(title string) ([]metadata.BookMetadata, error) {
-	ret := _mock.Called(title)
+func (_mock *MockMetadataSource) SearchByTitle(ctx context.Context, title string) ([]metadata.BookMetadata, error) {
+	ret := _mock.Called(ctx, title)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SearchByTitle")
@@ -90,18 +92,18 @@ func (_mock *MockMetadataSource) SearchByTitle(title string) ([]metadata.BookMet
 
 	var r0 []metadata.BookMetadata
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) ([]metadata.BookMetadata, error)); ok {
-		return returnFunc(title)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]metadata.BookMetadata, error)); ok {
+		return returnFunc(ctx, title)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string) []metadata.BookMetadata); ok {
-		r0 = returnFunc(title)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []metadata.BookMetadata); ok {
+		r0 = returnFunc(ctx, title)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]metadata.BookMetadata)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(title)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, title)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -114,79 +116,17 @@ type MockMetadataSource_SearchByTitle_Call struct {
 }
 
 // SearchByTitle is a helper method to define mock.On call
+//   - ctx context.Context
 //   - title string
-func (_e *MockMetadataSource_Expecter) SearchByTitle(title interface{}) *MockMetadataSource_SearchByTitle_Call {
-	return &MockMetadataSource_SearchByTitle_Call{Call: _e.mock.On("SearchByTitle", title)}
+func (_e *MockMetadataSource_Expecter) SearchByTitle(ctx interface{}, title interface{}) *MockMetadataSource_SearchByTitle_Call {
+	return &MockMetadataSource_SearchByTitle_Call{Call: _e.mock.On("SearchByTitle", ctx, title)}
 }
 
-func (_c *MockMetadataSource_SearchByTitle_Call) Run(run func(title string)) *MockMetadataSource_SearchByTitle_Call {
+func (_c *MockMetadataSource_SearchByTitle_Call) Run(run func(ctx context.Context, title string)) *MockMetadataSource_SearchByTitle_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
-	})
-	return _c
-}
-
-func (_c *MockMetadataSource_SearchByTitle_Call) Return(bookMetadatas []metadata.BookMetadata, err error) *MockMetadataSource_SearchByTitle_Call {
-	_c.Call.Return(bookMetadatas, err)
-	return _c
-}
-
-func (_c *MockMetadataSource_SearchByTitle_Call) RunAndReturn(run func(title string) ([]metadata.BookMetadata, error)) *MockMetadataSource_SearchByTitle_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// SearchByTitleAndAuthor provides a mock function for the type MockMetadataSource
-func (_mock *MockMetadataSource) SearchByTitleAndAuthor(title string, author string) ([]metadata.BookMetadata, error) {
-	ret := _mock.Called(title, author)
-
-	if len(ret) == 0 {
-		panic("no return value specified for SearchByTitleAndAuthor")
-	}
-
-	var r0 []metadata.BookMetadata
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, string) ([]metadata.BookMetadata, error)); ok {
-		return returnFunc(title, author)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string, string) []metadata.BookMetadata); ok {
-		r0 = returnFunc(title, author)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]metadata.BookMetadata)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = returnFunc(title, author)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockMetadataSource_SearchByTitleAndAuthor_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SearchByTitleAndAuthor'
-type MockMetadataSource_SearchByTitleAndAuthor_Call struct {
-	*mock.Call
-}
-
-// SearchByTitleAndAuthor is a helper method to define mock.On call
-//   - title string
-//   - author string
-func (_e *MockMetadataSource_Expecter) SearchByTitleAndAuthor(title interface{}, author interface{}) *MockMetadataSource_SearchByTitleAndAuthor_Call {
-	return &MockMetadataSource_SearchByTitleAndAuthor_Call{Call: _e.mock.On("SearchByTitleAndAuthor", title, author)}
-}
-
-func (_c *MockMetadataSource_SearchByTitleAndAuthor_Call) Run(run func(title string, author string)) *MockMetadataSource_SearchByTitleAndAuthor_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
+			arg0 = args[0].(context.Context)
 		}
 		var arg1 string
 		if args[1] != nil {
@@ -200,12 +140,86 @@ func (_c *MockMetadataSource_SearchByTitleAndAuthor_Call) Run(run func(title str
 	return _c
 }
 
+func (_c *MockMetadataSource_SearchByTitle_Call) Return(bookMetadatas []metadata.BookMetadata, err error) *MockMetadataSource_SearchByTitle_Call {
+	_c.Call.Return(bookMetadatas, err)
+	return _c
+}
+
+func (_c *MockMetadataSource_SearchByTitle_Call) RunAndReturn(run func(ctx context.Context, title string) ([]metadata.BookMetadata, error)) *MockMetadataSource_SearchByTitle_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SearchByTitleAndAuthor provides a mock function for the type MockMetadataSource
+func (_mock *MockMetadataSource) SearchByTitleAndAuthor(ctx context.Context, title string, author string) ([]metadata.BookMetadata, error) {
+	ret := _mock.Called(ctx, title, author)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SearchByTitleAndAuthor")
+	}
+
+	var r0 []metadata.BookMetadata
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) ([]metadata.BookMetadata, error)); ok {
+		return returnFunc(ctx, title, author)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) []metadata.BookMetadata); ok {
+		r0 = returnFunc(ctx, title, author)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]metadata.BookMetadata)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, title, author)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockMetadataSource_SearchByTitleAndAuthor_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SearchByTitleAndAuthor'
+type MockMetadataSource_SearchByTitleAndAuthor_Call struct {
+	*mock.Call
+}
+
+// SearchByTitleAndAuthor is a helper method to define mock.On call
+//   - ctx context.Context
+//   - title string
+//   - author string
+func (_e *MockMetadataSource_Expecter) SearchByTitleAndAuthor(ctx interface{}, title interface{}, author interface{}) *MockMetadataSource_SearchByTitleAndAuthor_Call {
+	return &MockMetadataSource_SearchByTitleAndAuthor_Call{Call: _e.mock.On("SearchByTitleAndAuthor", ctx, title, author)}
+}
+
+func (_c *MockMetadataSource_SearchByTitleAndAuthor_Call) Run(run func(ctx context.Context, title string, author string)) *MockMetadataSource_SearchByTitleAndAuthor_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
 func (_c *MockMetadataSource_SearchByTitleAndAuthor_Call) Return(bookMetadatas []metadata.BookMetadata, err error) *MockMetadataSource_SearchByTitleAndAuthor_Call {
 	_c.Call.Return(bookMetadatas, err)
 	return _c
 }
 
-func (_c *MockMetadataSource_SearchByTitleAndAuthor_Call) RunAndReturn(run func(title string, author string) ([]metadata.BookMetadata, error)) *MockMetadataSource_SearchByTitleAndAuthor_Call {
+func (_c *MockMetadataSource_SearchByTitleAndAuthor_Call) RunAndReturn(run func(ctx context.Context, title string, author string) ([]metadata.BookMetadata, error)) *MockMetadataSource_SearchByTitleAndAuthor_Call {
 	_c.Call.Return(run)
 	return _c
 }
