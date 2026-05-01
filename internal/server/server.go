@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.207.0
+// version: 1.207.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-01
 
@@ -2282,6 +2282,8 @@ func (s *Server) setupRoutes() {
 	})
 	if config.AppConfig.EnableAuth {
 		authMiddleware = servermiddleware.RequireAuth(s.Store())
+	} else {
+		log.Printf("[WARN] authentication is disabled (enable_auth=false) — do not expose this server to untrusted networks")
 	}
 
 	// API routes (auth + rate limits + request-size limits)
