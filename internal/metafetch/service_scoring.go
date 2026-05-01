@@ -1,0 +1,607 @@
+// file: internal/metafetch/service_scoring.go
+// version: 1.0.0
+// guid: d2226468-bed1-4989-93f3-b0bc3a344424
+// last-edited: 2026-05-01
+
+package metafetch
+
+import (
+	"context"
+	"log"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+)
+
+// isGarbageValue returns true if a string value is effectively useless metadata.
+// IsGarbageValue returns true if the string looks like garbage metadata
+// (e.g. hex-only, or other patterns known to be non-meaningful).
+func IsGarbageValue(s string) bool {
+	lower := strings.ToLower(strings.TrimSpace(s))
+	garbage := []string{"unknown", "narrator", "various", "n/a", "none", "null", "undefined", "",
+		"test", "untitled", "no title", "no author", "various authors", "various artists"}
+	for _, g := range garbage {
+		if lower == g {
+			return true
+		}
+	}
+	// Reject HTML fragments or error messages that may leak from Wikipedia/API errors
+	if strings.Contains(lower, "<html") || strings.Contains(lower, "<!doctype") ||
+		strings.Contains(lower, "403 forbidden") || strings.Contains(lower, "error") {
+		return true
+	}
+	return false
+}
+// isBetterValue returns true if newVal should replace oldVal.
+// Never replaces a good value with garbage.
+func IsBetterValue(oldVal, newVal string) bool {
+	if IsGarbageValue(newVal) {
+		return false
+	}
+	if IsGarbageValue(oldVal) {
+		return true
+	}
+	// Both are real values; allow the update (fetched data may be more accurate)
+	return true
+}
+// isBetterStringPtr returns true if newVal should replace the existing *string.
+func IsBetterStringPtr(oldPtr *string, newVal string) bool {
+	if IsGarbageValue(newVal) {
+		return false
+	}
+	if oldPtr == nil || IsGarbageValue(*oldPtr) {
+		return true
+	}
+	// Both are real values; allow the update
+	return true
+}
+// computeF1Base returns just the F1 token-overlap portion of the score, with
+// no penalties or bonuses applied. It's the "base score" contribution from
+// the significantWords pathway, extracted so alternative scorers (embedding,
+// LLM, reranker) can supply their own base score and reuse the shared
+// non-base adjustment function.
+func computeF1Base(r metadata.BookMetadata, searchWords map[string]bool) float64 {
+	resultWords := SignificantWords(r.Title)
+	if len(searchWords) == 0 || len(resultWords) == 0 {
+		return 0
+	}
+
+	// Recall: how many search words appear in the result?
+	recallHits := 0
+	for w := range searchWords {
+		if resultWords[w] {
+			recallHits++
+		}
+	}
+	recall := float64(recallHits) / float64(len(searchWords))
+
+	// Precision: how many result words appear in the search?
+	precHits := 0
+	for w := range resultWords {
+		if searchWords[w] {
+			precHits++
+		}
+	}
+	precision := float64(precHits) / float64(len(resultWords))
+
+	if recall+precision == 0 {
+		return 0
+	}
+	return 2 * recall * precision / (recall + precision)
+}
+// applyNonBaseAdjustments applies the compilation penalty, length penalty,
+// and rich-metadata bonus to a base score. These adjustments are meaningful
+// regardless of which scorer tier produced the base score and are applied
+// identically on every path.
+//
+// baseWordCount is the number of significant words in the search title —
+// used for the length penalty. Pass 0 to disable the length penalty (e.g.
+// when the length ratio is meaningless for a non-token-overlap scorer).
+// ApplyNonBaseAdjustments applies bonuses/penalties to a base similarity score
+// based on metadata heuristics (series, narrator, language, etc.).
+func ApplyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWordCount int) float64 {
+	score := baseScore
+
+	// Compilation penalty
+	if isCompilation(r.Title) {
+		score *= 0.15
+	}
+
+	// Length penalty: penalise results that are much longer than the search.
+	// Only applies when baseWordCount > 0 (the F1 path).
+	if baseWordCount > 0 {
+		resultWords := SignificantWords(r.Title)
+		nSearch := float64(baseWordCount)
+		nResult := float64(len(resultWords))
+		if nResult > 1.5*nSearch {
+			score *= (1.5 * nSearch) / nResult
+		}
+	}
+
+	// Rich-metadata bonus (capped at +0.15, additive)
+	bonus := 0.0
+	if r.Description != "" {
+		bonus += 0.05
+	}
+	if r.CoverURL != "" {
+		bonus += 0.05
+	}
+	if r.Narrator != "" {
+		bonus += 0.05
+	}
+	if r.ISBN != "" {
+		bonus += 0.05
+	}
+	if bonus > 0.15 {
+		bonus = 0.15
+	}
+
+	return score + bonus
+}
+// durationScoreMultiplier returns a score multiplier based on how closely the
+// candidate's runtime matches the book's known duration.
+//
+// Both values are in seconds. If either is zero (unknown), the multiplier is
+// 1.0 (no adjustment). The multiplier is symmetric — only the absolute delta
+// matters, not the direction (candidate longer vs shorter).
+//
+// Scale (chosen so a near-identical runtime is a meaningful tiebreaker but
+// a huge mismatch is a strong rejection signal):
+//
+//	Δ ≤  1 min  → ×1.30  (essentially identical — almost certainly the same edition)
+//	Δ ≤  5 min  → ×1.20  (very close — same edition, minor encoding difference)
+//	Δ ≤ 10 min  → ×1.10  (close — probably correct)
+//	Δ ≤ 20 min  → ×1.05  (within margin)
+//	Δ ≤ 30 min  → ×1.00  (no adjustment — acceptable range)
+//	Δ ≤ 60 min  → ×0.90  (possible different edition or trim)
+//	Δ ≤ 120 min → ×0.75  (likely different edition, apply cautiously)
+//	Δ > 120 min → ×0.50  (almost certainly wrong edition or different book)
+func durationScoreMultiplier(bookDurationSec, candidateDurationSec int) float64 {
+	if bookDurationSec <= 0 || candidateDurationSec <= 0 {
+		return 1.0
+	}
+	delta := bookDurationSec - candidateDurationSec
+	if delta < 0 {
+		delta = -delta
+	}
+	switch {
+	case delta <= 60:
+		return 1.30
+	case delta <= 300:
+		return 1.20
+	case delta <= 600:
+		return 1.10
+	case delta <= 1200:
+		return 1.05
+	case delta <= 1800:
+		return 1.00
+	case delta <= 3600:
+		return 0.90
+	case delta <= 7200:
+		return 0.75
+	default:
+		return 0.50
+	}
+}
+// computeDurationScore returns an additive score component (in points) based on
+// how closely a candidate's runtime matches the book's known duration. Unlike
+// durationScoreMultiplier (which scales the overall score multiplicatively),
+// this function produces a human-readable breakdown value that surfaces in the
+// MetadataCandidate.DurationScore field.
+//
+// Both values are in seconds. If either is zero (unknown), the result is 0.
+// The delta ratio = |candidate_dur - book_dur| / book_dur:
+//
+//	ratio < 0.05  → +20  (within 5% — essentially the same edition)
+//	ratio < 0.10  → +15  (within 10%)
+//	ratio < 0.20  → +10  (within 20%)
+//	ratio > 1.00  → -20  (more than 2× off — almost certainly wrong book)
+//	ratio > 0.50  → -10  (more than 50% off — likely wrong edition)
+//	otherwise      →   0  (neutral)
+func computeDurationScore(bookDurationSec, candidateDurationSec int) float64 {
+	if bookDurationSec <= 0 || candidateDurationSec <= 0 {
+		return 0
+	}
+	delta := bookDurationSec - candidateDurationSec
+	if delta < 0 {
+		delta = -delta
+	}
+	ratio := float64(delta) / float64(bookDurationSec)
+	switch {
+	case ratio < 0.05:
+		return 20
+	case ratio < 0.10:
+		return 15
+	case ratio < 0.20:
+		return 10
+	case ratio > 1.00:
+		return -20
+	case ratio > 0.50:
+		return -10
+	default:
+		return 0
+	}
+}
+// pickBestMatchFromScored takes pre-computed base scores from any tier and
+// returns the single best-matching result above the tier-appropriate
+// threshold, applying the full stack of author/narrator/audiobook bonus
+// multipliers. It's shared between the F1-only package-level
+// bestTitleMatchWithContext and the scorer-backed bestTitleMatchForBook
+// method, so the bonus logic lives in one place.
+//
+// baseScores must be aligned to results (same length, same order).
+// baseTier drives the minimum score threshold and the length-penalty
+// behavior inside applyNonBaseAdjustments: "f1" uses the historical 0.35
+// threshold and applies the length penalty; other tiers (e.g. "embedding")
+// use MetadataEmbeddingBestMatchMin (default 0.70) and disable the length
+// penalty since their base scores have no token-overlap ratio.
+//
+// bookDurationSec is the book's known file duration in seconds (0 = unknown,
+// disables the duration adjustment).
+//
+// For the F1 tier we preserve the historical "skip bonuses when base==0"
+// behavior of scoreOneResult: a result whose F1 base is zero contributes a
+// final score of zero, so it can never win regardless of rich-metadata
+// bonuses or author/narrator multipliers. This keeps the package-level
+// bestTitleMatchWithContext bit-for-bit equivalent to its pre-refactor
+// implementation, which the existing test suite locks in.
+func pickBestMatchFromScored(
+	results []metadata.BookMetadata,
+	baseScores []float64,
+	baseTier string,
+	searchWords map[string]bool,
+	bookAuthor, bookNarrator string,
+	bookDurationSec int,
+) []metadata.BookMetadata {
+	const f1MinScore = 0.35
+
+	minScore := f1MinScore
+	if baseTier != "f1" {
+		minScore = config.AppConfig.MetadataEmbeddingBestMatchMin
+	}
+
+	bestIdx := -1
+	bestScore := 0.0
+	for i, r := range results {
+		baseScore := baseScores[i]
+
+		var score float64
+		if baseTier == "f1" {
+			// Preserve scoreOneResult's early-return-on-zero behavior so the
+			// F1 path stays bit-for-bit identical to the pre-refactor code.
+			if baseScore == 0 {
+				continue
+			}
+			score = ApplyNonBaseAdjustments(baseScore, r, len(searchWords))
+		} else {
+			// Non-F1 tiers (embedding, etc.) skip the length penalty by
+			// passing baseWordCount=0; the cosine-based base has no
+			// token-overlap ratio for the penalty to be meaningful.
+			score = ApplyNonBaseAdjustments(baseScore, r, 0)
+		}
+
+		// Author-based scoring: boost matches, penalize mismatches or missing.
+		if bookAuthor != "" {
+			if r.Author != "" {
+				rAuthorLower := strings.ToLower(r.Author)
+				bAuthorLower := strings.ToLower(bookAuthor)
+				if strings.Contains(rAuthorLower, bAuthorLower) || strings.Contains(bAuthorLower, rAuthorLower) {
+					score *= 1.5
+				} else {
+					score *= 0.7
+				}
+			} else {
+				score *= 0.75
+			}
+		}
+
+		// Narrator-based scoring: boost matches as secondary tiebreaker.
+		if bookNarrator != "" && r.Narrator != "" {
+			rNarrLower := strings.ToLower(r.Narrator)
+			bNarrLower := strings.ToLower(bookNarrator)
+			if strings.Contains(rNarrLower, bNarrLower) || strings.Contains(bNarrLower, rNarrLower) {
+				score *= 1.3
+			}
+		}
+
+		// Audiobook-specific: boost results with narrator, penalize without.
+		if r.Narrator != "" {
+			score *= 1.15
+		} else {
+			score *= 0.85
+		}
+
+		// Duration-based scoring: compare candidate runtime against the book's
+		// known file duration. Strong bonus when they match closely; penalty when
+		// they diverge significantly (wrong edition, abridged vs. unabridged, etc.).
+		score *= durationScoreMultiplier(bookDurationSec, r.DurationSec)
+
+		if score > bestScore {
+			bestScore = score
+			bestIdx = i
+		}
+	}
+
+	if bestIdx >= 0 && bestScore >= minScore {
+		return []metadata.BookMetadata{results[bestIdx]}
+	}
+	return nil
+}
+// scoreOneResult computes a quality score in [0, ~1.15] for a single result
+// against a set of search-title significant words. It preserves the
+// pre-refactor signature and behavior, composing computeF1Base and
+// applyNonBaseAdjustments. Existing callers are unchanged.
+func ScoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float64 {
+	base := computeF1Base(r, searchWords)
+	if base == 0 {
+		return 0 // preserve original early-return behavior (skips bonus)
+	}
+	return ApplyNonBaseAdjustments(base, r, len(searchWords))
+}
+// scoreBaseCandidates picks the highest-available base scorer tier and
+// returns one base score per input result, aligned to input order, along
+// with a short tier name for logs and UI badges ("embedding", "f1", ...).
+//
+// The fallback chain is:
+//  1. If MetadataEmbeddingScoringEnabled AND a scorer is injected AND the
+//     scorer succeeds → use those scores. Tier = scorer.Name().
+//  2. Otherwise, compute F1 inline. Tier = "f1".
+//
+// Any scorer error is logged and falls through to the F1 tier. The search
+// path must never fail because of a scorer problem — F1 is always reachable
+// as a last resort since it only depends on the in-memory result data.
+func (mfs *Service) ScoreBaseCandidates(
+	ctx context.Context,
+	book *database.Book,
+	results []metadata.BookMetadata,
+	searchWords map[string]bool,
+) ([]float64, string) {
+	if config.AppConfig.MetadataEmbeddingScoringEnabled && mfs.metadataScorer != nil && len(results) > 0 {
+		query := ai.Query{
+			BookID:   book.ID,
+			Title:    book.Title,
+			Narrator: derefStr(book.Narrator),
+		}
+		if book.AuthorID != nil {
+			if author, err := mfs.db.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+				query.Author = author.Name
+			}
+		}
+
+		cands := make([]ai.Candidate, len(results))
+		for i, r := range results {
+			cands[i] = ai.Candidate{
+				Title:    r.Title,
+				Author:   r.Author,
+				Narrator: r.Narrator,
+			}
+		}
+
+		scores, err := mfs.metadataScorer.Score(ctx, query, cands)
+		if err == nil && len(scores) == len(results) {
+			return scores, mfs.metadataScorer.Name()
+		}
+		if err != nil {
+			log.Printf("[WARN] metadata-scorer %s failed, falling back to F1: %v",
+				mfs.metadataScorer.Name(), err)
+		} else {
+			log.Printf("[WARN] metadata-scorer %s returned %d scores for %d results, falling back to F1",
+				mfs.metadataScorer.Name(), len(scores), len(results))
+		}
+	}
+
+	// F1 fallback tier.
+	scores := make([]float64, len(results))
+	for i, r := range results {
+		scores[i] = computeF1Base(r, searchWords)
+	}
+	return scores, "f1"
+}
+// bestTitleMatchForBook is the scorer-aware sibling of
+// bestTitleMatchWithContext. It routes through scoreBaseCandidates so
+// callers that have a *database.Book in hand (e.g. the automatic metadata
+// fetch paths) get embedding-based scoring when available, falling back
+// silently to the F1 path when the scorer is disabled or errors.
+//
+// The package-level bestTitleMatch[WithContext] functions still exist and
+// still use F1 — they're kept for the test suite and for code paths that
+// don't have a Book in scope. This method is the preferred entry point
+// for production call sites that do.
+func (mfs *Service) bestTitleMatchForBook(
+	book *database.Book,
+	results []metadata.BookMetadata,
+	bookAuthor, bookNarrator string,
+	titles ...string,
+) []metadata.BookMetadata {
+	// Union of significant words from all title variants. Needed by both
+	// the F1 fallback path (via scoreBaseCandidates) and by
+	// pickBestMatchFromScored for the length penalty.
+	searchWords := map[string]bool{}
+	for _, t := range titles {
+		for w := range SignificantWords(t) {
+			searchWords[w] = true
+		}
+	}
+
+	baseScores, baseTier := mfs.ScoreBaseCandidates(context.Background(), book, results, searchWords)
+	bookDurationSec := 0
+	if book.Duration != nil {
+		bookDurationSec = *book.Duration
+	}
+	return pickBestMatchFromScored(results, baseScores, baseTier, searchWords, bookAuthor, bookNarrator, bookDurationSec)
+}
+// rerankTopK asks the LLM scorer to re-judge the ambiguous top candidates
+// after the base scorer has produced initial rankings. "Ambiguous" means
+// candidates whose Score lands within MetadataLLMRerankEpsilon of the best
+// candidate's Score. At most MetadataLLMRerankTopK candidates are sent to
+// the LLM, even if more fall inside the epsilon window, to cap per-search
+// cost.
+//
+// On success, the returned slice is the same candidates with updated Score
+// values for the top-K slots, re-sorted descending by Score. On any failure
+// (LLM disabled, backend error, fewer than 2 ambiguous candidates to resolve)
+// the input slice is returned unchanged so the search path degrades cleanly.
+func (mfs *Service) RerankTopK(
+	ctx context.Context,
+	book *database.Book,
+	candidates []MetadataCandidate,
+) []MetadataCandidate {
+	if len(candidates) < 2 || mfs.llmScorer == nil {
+		return candidates
+	}
+
+	// Sort descending by current score so the "ambiguous top" is contiguous
+	// at index 0.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+
+	epsilon := config.AppConfig.MetadataLLMRerankEpsilon
+	topK := config.AppConfig.MetadataLLMRerankTopK
+	if topK <= 0 {
+		topK = 5
+	}
+
+	bestScore := candidates[0].Score
+	ambiguousEnd := 1
+	for ambiguousEnd < len(candidates) && ambiguousEnd < topK {
+		if bestScore-candidates[ambiguousEnd].Score > epsilon {
+			break
+		}
+		ambiguousEnd++
+	}
+	if ambiguousEnd < 2 {
+		// Only one candidate within epsilon — nothing to resolve.
+		log.Printf("[DEBUG] metadata-search: rerank skipped — only 1 candidate within %.3f of best (%.3f)",
+			epsilon, bestScore)
+		return candidates
+	}
+
+	topCands := candidates[:ambiguousEnd]
+	log.Printf("[DEBUG] metadata-search: rerank firing on top %d candidates (epsilon=%.3f, bestScore=%.3f)",
+		len(topCands), epsilon, bestScore)
+
+	// Resolve the book's author name for the query payload.
+	authorName := ""
+	if book.AuthorID != nil {
+		if author, err := mfs.db.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+			authorName = author.Name
+		}
+	}
+	query := ai.Query{
+		BookID:   book.ID,
+		Title:    book.Title,
+		Author:   authorName,
+		Narrator: derefStr(book.Narrator),
+	}
+
+	llmCands := make([]ai.Candidate, len(topCands))
+	for i, c := range topCands {
+		llmCands[i] = ai.Candidate{
+			Title:    c.Title,
+			Author:   c.Author,
+			Narrator: c.Narrator,
+		}
+	}
+
+	llmScores, err := mfs.llmScorer.Score(ctx, query, llmCands)
+	if err != nil || len(llmScores) != len(topCands) {
+		if err != nil {
+			log.Printf("[WARN] metadata-search: rerank LLM call failed, keeping base scores: %v", err)
+		} else {
+			log.Printf("[WARN] metadata-search: rerank returned %d scores for %d candidates, keeping base scores",
+				len(llmScores), len(topCands))
+		}
+		return candidates
+	}
+
+	// Replace top-K base scores with LLM scores directly — do not apply the
+	// author/narrator/series bonus multipliers again. The LLM prompt already
+	// sees those fields and judges them as part of its score; re-multiplying
+	// would double-count the same evidence and distort the top-K's position
+	// relative to the non-reranked tail.
+	for i := range topCands {
+		candidates[i].Score = llmScores[i]
+	}
+
+	// Resort the full list so the reranked top-K is in correct order against
+	// the untouched tail.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].Score > candidates[j].Score
+	})
+	return candidates
+}
+// applySeriesPositionFilter rejects the top result if it claims a different
+// series position than the book's known position. If the result has no
+// SeriesPosition or the book has no known position, results pass through.
+func ApplySeriesPositionFilter(
+	results []metadata.BookMetadata,
+	knownPosition int,
+) []metadata.BookMetadata {
+	if len(results) == 0 || knownPosition <= 0 {
+		return results
+	}
+	wantPos := strconv.Itoa(knownPosition)
+	best := results[0]
+	if best.SeriesPosition != "" && best.SeriesPosition != wantPos {
+		log.Printf("[DEBUG] scorer: rejecting result %q (series position %q != expected %q)",
+			best.Title, best.SeriesPosition, wantPos)
+		return nil
+	}
+	return results
+}
+// bestTitleMatch filters results to find the single best match for the given
+// title variants using precision+recall+penalty scoring.
+//
+// It replaces the old recall-only word-overlap function. A result must score
+// at least 0.35 to be returned; if none qualify, nil is returned so the
+// caller can fall through to the next source or report "no metadata found".
+func BestTitleMatch(results []metadata.BookMetadata, titles ...string) []metadata.BookMetadata {
+	return BestTitleMatchWithContext(results, "", "", titles...)
+}
+func BestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, bookNarrator string, titles ...string) []metadata.BookMetadata {
+	// Union of significant words from all title variants.
+	searchWords := map[string]bool{}
+	for _, t := range titles {
+		for w := range SignificantWords(t) {
+			searchWords[w] = true
+		}
+	}
+
+	// F1 base scores aligned to results — the helper applies bonuses,
+	// multipliers, and the 0.35 threshold for the "f1" tier.
+	baseScores := make([]float64, len(results))
+	for i, r := range results {
+		baseScores[i] = computeF1Base(r, searchWords)
+	}
+
+	return pickBestMatchFromScored(results, baseScores, "f1", searchWords, bookAuthor, bookNarrator, 0)
+}
+var scoreTitleStop = map[string]bool{
+	"the": true, "and": true, "for": true, "with": true, "from": true,
+	"that": true, "this": true, "are": true, "was": true, "were": true,
+	"been": true, "have": true, "has": true, "had": true, "not": true,
+	"but": true, "its": true, "our": true, "your": true, "their": true,
+	"all": true, "any": true, "can": true, "will": true, "may": true,
+	"into": true,
+}
+var compilationRe = regexp.MustCompile(`\b\d+\s+books\b`)
+var compilationPhrases = []string{
+	"box set", "boxset", "box-set",
+	"collection",
+	"complete series", "complete collection",
+	"books set", "book set",
+	"omnibus",
+	"anthology",
+	"compendium",
+	"series collection", "series set",
+}
+var trailingNumberRe = regexp.MustCompile(
+	`(?i)(?:,?\s*(?:book|volume|vol\.?|part|pt\.?|#)\s*)?(\d+(?:\.\d+)?)\s*(?:\(.*\))?\s*$`)
+
+var seriesNumRe = regexp.MustCompile(`(\d+(?:\.\d+)?)`)
