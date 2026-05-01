@@ -174,12 +174,13 @@ func needsIdentifierEnrichment(book *database.Book) bool {
 // ISBN that matches the title strictly, along with its length (10 or 13).
 func (s *ISBNService) searchSourceForISBN(src metadata.MetadataSource, title, author string) (string, int) {
 	var results []metadata.BookMetadata
+	ctx := context.Background()
 
 	if author != "" {
-		results, _ = src.SearchByTitleAndAuthor(title, author)
+		results, _ = src.SearchByTitleAndAuthor(ctx, title, author)
 	}
 	if len(results) == 0 {
-		results, _ = src.SearchByTitle(title)
+		results, _ = src.SearchByTitle(ctx, title)
 	}
 
 	for _, r := range results {
@@ -197,12 +198,13 @@ func (s *ISBNService) searchSourceForISBN(src metadata.MetadataSource, title, au
 // ASIN that matches the title strictly.
 func (s *ISBNService) searchSourceForASIN(src metadata.MetadataSource, title, author string) string {
 	var results []metadata.BookMetadata
+	ctx := context.Background()
 
 	if author != "" {
-		results, _ = src.SearchByTitleAndAuthor(title, author)
+		results, _ = src.SearchByTitleAndAuthor(ctx, title, author)
 	}
 	if len(results) == 0 {
-		results, _ = src.SearchByTitle(title)
+		results, _ = src.SearchByTitle(ctx, title)
 	}
 
 	for _, r := range results {

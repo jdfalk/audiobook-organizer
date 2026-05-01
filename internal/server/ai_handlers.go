@@ -1,5 +1,5 @@
 // file: internal/server/ai_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 5d3a6a95-4ac8-42c2-a7fe-5ff4857dd31a
 //
 // AI-related HTTP handlers split out of server.go: filename parsing,
@@ -102,11 +102,12 @@ func (s *Server) testMetadataSource(c *gin.Context) {
 	}
 
 	testQuery := "The Hobbit" // well-known book for test queries
+	ctx := c.Request.Context()
 
 	switch req.SourceID {
 	case "google-books":
 		client := metadata.NewGoogleBooksClient(req.APIKey)
-		results, err := client.SearchByTitle(testQuery)
+		results, err := client.SearchByTitle(ctx, testQuery)
 		if err != nil {
 			RespondWithOK(c, gin.H{"success": false, "error": fmt.Sprintf("Google Books API error: %v", err)})
 			return
@@ -115,7 +116,7 @@ func (s *Server) testMetadataSource(c *gin.Context) {
 
 	case "hardcover":
 		client := metadata.NewHardcoverClient(req.APIKey)
-		results, err := client.SearchByTitle(testQuery)
+		results, err := client.SearchByTitle(ctx, testQuery)
 		if err != nil {
 			RespondWithOK(c, gin.H{"success": false, "error": fmt.Sprintf("Hardcover API error: %v", err)})
 			return

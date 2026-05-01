@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.63.0
+// version: 4.64.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 // last-edited: 2026-05-01
 
@@ -392,7 +392,7 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 
 			// Try title+author search first for better match quality
 			if len(results) == 0 && currentAuthor != "" {
-				results, searchErr = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
+				results, searchErr = src.SearchByTitleAndAuthor(context.Background(), searchTitle, currentAuthor)
 				if searchErr != nil {
 					log.Printf("[WARN] %s title+author search failed for %q by %q: %v", src.Name(), searchTitle, currentAuthor, searchErr)
 				}
@@ -400,7 +400,7 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 
 			// Fall back to title-only search
 			if len(results) == 0 {
-				results, searchErr = src.SearchByTitle(searchTitle)
+				results, searchErr = src.SearchByTitle(context.Background(), searchTitle)
 				if searchErr != nil {
 					log.Printf("[WARN] %s failed for %q: %v", src.Name(), searchTitle, searchErr)
 					lastErr = searchErr
@@ -409,7 +409,7 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 
 			// Try original title if cleaned title returned nothing
 			if len(results) == 0 && searchTitle != book.Title {
-				results, searchErr = src.SearchByTitle(book.Title)
+				results, searchErr = src.SearchByTitle(context.Background(), book.Title)
 				if searchErr != nil {
 					lastErr = searchErr
 					continue
@@ -420,7 +420,7 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 			if len(results) == 0 {
 				strippedTitle := stripSubtitle(searchTitle)
 				if strippedTitle != searchTitle && strippedTitle != book.Title {
-					results, searchErr = src.SearchByTitle(strippedTitle)
+					results, searchErr = src.SearchByTitle(context.Background(), strippedTitle)
 					if searchErr != nil {
 						lastErr = searchErr
 						continue
@@ -555,13 +555,13 @@ func (mfs *Service) FetchMetadataForBookByTitle(id string) (*FetchMetadataRespon
 
 	var lastErr error
 	for _, src := range sources {
-		results, searchErr := src.SearchByTitle(searchTitle)
+		results, searchErr := src.SearchByTitle(context.Background(), searchTitle)
 		if searchErr != nil {
 			lastErr = searchErr
 			continue
 		}
 		if len(results) == 0 && searchTitle != book.Title {
-			results, searchErr = src.SearchByTitle(book.Title)
+			results, searchErr = src.SearchByTitle(context.Background(), book.Title)
 			if searchErr != nil {
 				lastErr = searchErr
 				continue
@@ -570,7 +570,7 @@ func (mfs *Service) FetchMetadataForBookByTitle(id string) (*FetchMetadataRespon
 		if len(results) == 0 {
 			strippedTitle := stripSubtitle(searchTitle)
 			if strippedTitle != searchTitle {
-				results, searchErr = src.SearchByTitle(strippedTitle)
+				results, searchErr = src.SearchByTitle(context.Background(), strippedTitle)
 				if searchErr != nil {
 					lastErr = searchErr
 					continue
@@ -2283,7 +2283,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 		if !cacheHit {
 			// If author hint provided, use title+author search for better results
 			if searchAuthor != "" {
-				if results, serr := src.SearchByTitleAndAuthor(searchTitle, searchAuthor); serr == nil {
+				if results, serr := src.SearchByTitleAndAuthor(context.Background(), searchTitle, searchAuthor); serr == nil {
 					allResults = append(allResults, results...)
 				} else {
 					lastErr = serr
@@ -2295,7 +2295,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 			// swapped in audiobook metadata. Try searching with the narrator as
 			// author to catch these cases.
 			if bookNarrator != "" && bookNarrator != searchAuthor {
-				if results, serr := src.SearchByTitleAndAuthor(searchTitle, bookNarrator); serr == nil {
+				if results, serr := src.SearchByTitleAndAuthor(context.Background(), searchTitle, bookNarrator); serr == nil {
 					allResults = append(allResults, results...)
 				} else {
 					log.Printf("[DEBUG] metadata-search: %s narrator-as-author fallback(%q, %q) error: %v", src.Name(), searchTitle, bookNarrator, serr)
@@ -2303,7 +2303,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 			}
 
 			// Always also search by title only to get broader results
-			if results, serr := src.SearchByTitle(searchTitle); serr == nil {
+			if results, serr := src.SearchByTitle(context.Background(), searchTitle); serr == nil {
 				allResults = append(allResults, results...)
 			} else {
 				lastErr = serr
@@ -2311,7 +2311,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 			}
 			// SearchByTitle with original title if different
 			if searchTitle != book.Title {
-				if results, serr := src.SearchByTitle(book.Title); serr == nil {
+				if results, serr := src.SearchByTitle(context.Background(), book.Title); serr == nil {
 					allResults = append(allResults, results...)
 				} else {
 					lastErr = serr

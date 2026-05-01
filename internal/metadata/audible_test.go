@@ -6,6 +6,7 @@ package metadata
 
 import (
 	json "encoding/json/v2"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -53,7 +54,7 @@ func TestAudibleClient_SearchByTitle(t *testing.T) {
 	defer server.Close()
 
 	client := NewAudibleClientWithBaseURL(server.URL)
-	results, err := client.SearchByTitle("Rogue Ascension")
+	results, err := client.SearchByTitle(context.Background(), "Rogue Ascension")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestAudibleClient_APIError(t *testing.T) {
 	defer server.Close()
 
 	client := NewAudibleClientWithBaseURL(server.URL)
-	_, err := client.SearchByTitle("test")
+	_, err := client.SearchByTitle(context.Background(), "test")
 	if err == nil {
 		t.Error("expected error for 500 response")
 	}
@@ -145,7 +146,7 @@ func TestAudibleClient_HTMLStripping(t *testing.T) {
 	defer server.Close()
 
 	client := NewAudibleClientWithBaseURL(server.URL)
-	results, err := client.SearchByTitle("test")
+	results, err := client.SearchByTitle(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -5,6 +5,7 @@
 package metafetch
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -1798,10 +1799,10 @@ type mockMetadataSource struct {
 }
 
 func (m *mockMetadataSource) Name() string { return m.name }
-func (m *mockMetadataSource) SearchByTitle(title string) ([]metadata.BookMetadata, error) {
+func (m *mockMetadataSource) SearchByTitle(ctx context.Context, title string) ([]metadata.BookMetadata, error) {
 	return m.results, m.err
 }
-func (m *mockMetadataSource) SearchByTitleAndAuthor(title, author string) ([]metadata.BookMetadata, error) {
+func (m *mockMetadataSource) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]metadata.BookMetadata, error) {
 	return m.results, m.err
 }
 

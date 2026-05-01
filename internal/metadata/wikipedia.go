@@ -1,11 +1,12 @@
 // file: internal/metadata/wikipedia.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package metadata
 
 import (
 	json "encoding/json/v2"
+	"context"
 	"encoding/json/jsontext"
 	"fmt"
 	"net/http"
@@ -96,22 +97,27 @@ type wikidataTimeValue struct {
 }
 
 // SearchByTitle searches Wikipedia by title, appending "audiobook OR novel" to improve results.
-func (c *WikipediaClient) SearchByTitle(title string) ([]BookMetadata, error) {
+func (c *WikipediaClient) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
 	query := title + " audiobook OR novel"
-	return c.search(query)
+	return c.search(ctx, query)
 }
 
 // SearchByTitleAndAuthor searches Wikipedia by title and author.
-func (c *WikipediaClient) SearchByTitleAndAuthor(title, author string) ([]BookMetadata, error) {
+func (c *WikipediaClient) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]BookMetadata, error) {
 	query := title + " " + author
-	return c.search(query)
+	return c.search(ctx, query)
 }
 
-func (c *WikipediaClient) search(query string) ([]BookMetadata, error) {
+func (c *WikipediaClient) search(ctx context.Context, query string) ([]BookMetadata, error) {
 	searchURL := fmt.Sprintf("%s?action=query&list=search&srsearch=%s&format=json&srlimit=5",
 		c.baseURL, url.QueryEscape(query))
 
-	resp, err := c.httpClient.Get(searchURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search Wikipedia: %w", err)
 	}
@@ -133,7 +139,7 @@ func (c *WikipediaClient) search(query string) ([]BookMetadata, error) {
 		}
 
 		// Best-effort Wikidata enrichment
-		c.enrichFromWikidata(&meta, item.Title)
+		c.enrichFromWikidata(ctx, &meta, item.Title)
 
 		results = append(results, meta)
 	}
@@ -142,12 +148,17 @@ func (c *WikipediaClient) search(query string) ([]BookMetadata, error) {
 
 // enrichFromWikidata attempts to find a Wikidata entity for the given title
 // and extract author (P50), publication date (P577), and ISBN-13 (P212).
-func (c *WikipediaClient) enrichFromWikidata(meta *BookMetadata, title string) {
+func (c *WikipediaClient) enrichFromWikidata(ctx context.Context, meta *BookMetadata, title string) {
 	// Search for entity
 	searchURL := fmt.Sprintf("%s?action=wbsearchentities&search=%s&language=en&format=json&limit=1",
 		c.wikidataURL, url.QueryEscape(title))
 
-	resp, err := c.httpClient.Get(searchURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return
 	}
@@ -168,7 +179,12 @@ func (c *WikipediaClient) enrichFromWikidata(meta *BookMetadata, title string) {
 	entityURL := fmt.Sprintf("%s?action=wbgetentities&ids=%s&props=claims&format=json",
 		c.wikidataURL, entityID)
 
-	resp2, err := c.httpClient.Get(entityURL)
+	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, entityURL, nil)
+	if err != nil {
+		return
+	}
+
+	resp2, err := c.httpClient.Do(req2)
 	if err != nil {
 		return
 	}
@@ -196,7 +212,7 @@ func (c *WikipediaClient) enrichFromWikidata(meta *BookMetadata, title string) {
 			}
 			if json.Unmarshal(claims[0].MainSnak.DataValue.Value, &val) == nil && val.ID != "" {
 				// Resolve author entity label
-				if label := c.resolveEntityLabel(val.ID); label != "" {
+				if label := c.resolveEntityLabel(ctx, val.ID); label != "" {
 					meta.Author = label
 				}
 			}
@@ -226,11 +242,16 @@ func (c *WikipediaClient) enrichFromWikidata(meta *BookMetadata, title string) {
 }
 
 // resolveEntityLabel fetches the English label for a Wikidata entity ID.
-func (c *WikipediaClient) resolveEntityLabel(entityID string) string {
+func (c *WikipediaClient) resolveEntityLabel(ctx context.Context, entityID string) string {
 	labelURL := fmt.Sprintf("%s?action=wbgetentities&ids=%s&props=labels&languages=en&format=json",
 		c.wikidataURL, entityID)
 
-	resp, err := c.httpClient.Get(labelURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, labelURL, nil)
+	if err != nil {
+		return ""
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return ""
 	}
