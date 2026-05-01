@@ -1,44 +1,282 @@
 <!-- file: docs/codebase-evaluation.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 2.0.0 -->
 <!-- guid: 9a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d -->
-<!-- last-edited: 2026-04-30 -->
+<!-- last-edited: 2026-05-01 -->
 
 # Audiobook Organizer — Codebase Evaluation
 
-**Date:** 2026-04-30  
+**Original audit:** 2026-04-30 | **Re-audit:** 2026-05-01  
 **Scope:** Full repository at commit HEAD (Go backend + React/TypeScript frontend)  
-**Tooling:** `go vet`, `go build`, `staticcheck`, source analysis
+**Tooling:** `go vet`, `go build`, `staticcheck`, source analysis, live test runs
 
 ---
 
 ## Table of Contents
 
-1. [Executive Summary](#executive-summary)
-2. [Critical Issues 🔴](#critical-issues-)
-3. [Security Issues 🔐](#security-issues-)
-4. [Major Issues 🟠](#major-issues-)
-5. [Minor Issues 🟡](#minor-issues-)
-6. [Frontend](#frontend)
-7. [Testing](#testing)
-8. [Dependencies](#dependencies)
-9. [Architecture Overview](#architecture-overview)
-10. [Appendix — Raw Metrics](#appendix--raw-metrics)
+1. [2026-05-01 Re-Audit — New Findings](#2026-05-01-re-audit--new-findings)
+2. [2026-04-30 Original Findings — Status Update](#2026-04-30-original-findings--status-update)
+3. [Critical Issues 🔴 (original)](#critical-issues-)
+4. [Security Issues 🔐 (original)](#security-issues-)
+5. [Major Issues 🟠 (original)](#major-issues-)
+6. [Minor Issues 🟡 (original)](#minor-issues-)
+7. [Frontend (original)](#frontend)
+8. [Testing (original)](#testing)
+9. [Dependencies (original)](#dependencies)
+10. [Architecture Overview (original)](#architecture-overview)
+11. [Appendix — Raw Metrics](#appendix--raw-metrics)
 
 ---
 
-## Executive Summary
+## 2026-05-01 Re-Audit — New Findings
 
-The codebase is a full-featured audiobook management system — Go backend (REST API, file ops, metadata enrichment) plus React/TypeScript frontend. It is actively developed and has extensive functionality. However, several issues impede reliability, security, and maintainability:
+**Date:** 2026-05-01  
+**Commit:** `f67246b7` (HEAD → main)  
+**Summary:** 38 original bot-tasks were implemented across PRs #587–#627. Build is clean (`go build ./...`, `go vet ./...`). However, **two test packages have regressions**, a committed secret was not removed, and staticcheck surfaces a fresh set of dead-code, deprecated-field, and context-propagation issues.
 
-- **The entire test suite is broken** — `MockStore` is missing methods added to the `Store` interface, causing compile failures across 9+ test packages.
-- **A secret is committed** to `config.yaml` (`openai_api_key: sk-test12345678`).
-- **N+1 query patterns** in the book listing path can cause thousands of round-trips for large libraries.
-- **The `internal/server` package** is a 150+-file monolith; several files exceed 3,000–8,000 lines.
-- **Global state** (`GetGlobalStore()`, `config.AppConfig`) is used extensively, hindering testability and DI.
-- **30+ `context.Background()` calls** in HTTP handler code bypass request cancellation propagation.
-- **`BrowseDirectory`** has no root restriction — authenticated users can browse the entire server filesystem.
+New findings: **10** (High: 2, Medium: 4, Low: 4)
 
-Total distinct findings: **82** across critical, security, major, minor, and improvement categories.
+---
+
+### R-1 — Unit tests failing: `GetAllBookSummaries` not mocked in server tests ❌ **High**
+
+**File:** `internal/server/audiobook_service_unit_test.go`  
+**Evidence:**
+```
+TestAudiobookService_GetAudiobooks_EmptyResult — FAIL
+TestAudiobookService_GetAudiobooks_StoreError — FAIL
+TestAudiobookService_InvalidateBookCaches_ClearsCache — FAIL
+… (11+ tests total)
+
+mock: I don't know what to return because the method call was unexpected.
+  GetAllBookSummaries(int,int)
+```
+
+`audiobook_service.go:673` now calls `store.GetAllBookSummaries(…)` (added by PROJ-1/PROJ-2), but the unit tests in `audiobook_service_unit_test.go` still set up `Mock.On("GetAllBooks")`. The implementation changed, the tests did not. `make ci` reports `FAIL github.com/jdfalk/audiobook-organizer/internal/server`.
+
+**Fix:** Update `audiobook_service_unit_test.go` to mock `GetAllBookSummaries` instead of `GetAllBooks` wherever the service now uses the summary path. Also add `Mock.On("GetUserBookState")` stubs where needed.
+
+**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-test-1-fix-audiobook-service-tests.md`
+
+---
+
+### R-2 — `TestStoreAdditionalCoverageSQLite` failing in database package ❌ **High**
+
+**File:** `internal/database/` (package-level failure)  
+**Evidence:** `177.437s FAIL github.com/jdfalk/audiobook-organizer/internal/database`
+
+The database test suite takes 177 s and exits with FAIL. Likely causes: new schema migrations not covered by test fixtures, or an assertion on a method whose signature changed. This blocks coverage reporting for the entire database layer.
+
+**Fix:** Run `go test ./internal/database/... -v -run TestStoreAdditionalCoverageSQLite` to get the full error message, then fix the fixture or assertion. Check whether any migration added since the last test run requires an updated in-memory schema.
+
+**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-test-2-fix-database-test-coverage.md`
+
+---
+
+### R-3 — Secret still committed to `config.yaml` ❌ **High** (carried from C-5)
+
+**File:** `config.yaml:10`  
+**Evidence:** `openai_api_key: sk-test12345678` — confirmed still present at HEAD `f67246b7`.
+
+Although C-5 was listed as a bot-task target, the value was not removed. Any contributor who copies `config.yaml` as a template and replaces the placeholder with a real key will commit it to git.
+
+**Fix:** Replace the value with an empty string or comment: `openai_api_key: ""  # set via OPENAI_API_KEY env var or secrets file`.
+
+**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-sec-1-remove-committed-secret.md`
+
+---
+
+### R-4 — Deprecated `ITunesPath` field used in 13+ production locations ⚠️ **Medium**
+
+**Files / Evidence (`staticcheck` SA1019):**
+- `internal/itunes/service/importer.go:582,583,784,838,841`
+- `internal/itunes/service/path_reconcile.go:148,149,152`
+- `internal/itunes/service/path_repair.go:433,434,437`
+- `internal/itunes/service/writeback_batcher.go:299,302`
+- `internal/metafetch/service.go:3667,3680`
+- `internal/metafetch/batch.go:53,54`
+
+`Book.ITunesPath` is marked `// Deprecated: use book_files.itunes_path instead`. The deprecation note exists in `internal/database/store.go:154`. All 13+ call sites need to migrate to reading/writing via `BookFile.ITunesPath` and the `book_files` table.
+
+**Fix:** Migrate each call site to use the `book_files` relation. Remove `ITunesPath` from the `Book` struct once all usages are gone.
+
+**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-dep-1-migrate-itunes-path-field.md`
+
+---
+
+### R-5 — Dead code: unused functions, vars, and consts (`staticcheck` U1000) ⚠️ **Medium**
+
+**Evidence:**
+- `internal/config/persistence.go:769` — `legacySaveConfigToDatabase_REMOVED` unused func (nolint comment does not suppress U1000)
+- `internal/database/pebble_store.go:6964` — `bookTagKeyspace` unused var
+- `internal/database/sqlite_store.go:87` — `bookSummarySelectColumnsQualified` unused const
+- `internal/itunes/service/importer.go:1065` — `linkAsVersion` unused func
+- `internal/database/pebble_store.go:236,238` — `counterValue` and `value` assigned but never used (SA4006)
+- `internal/metadata/enhanced.go:187,191` — `ok` from map lookups never used (SA4006)
+
+Dead code increases binary size, confuses reviewers, and can indicate logic gaps (e.g., `bookSummarySelectColumnsQualified` may be intended for a query that never uses it).
+
+**Fix:** Delete or use each dead symbol. For `bookSummarySelectColumnsQualified`, wire it into the query it was created for.
+
+**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-dead-1-remove-unused-code.md`
+
+---
+
+### R-6 — `activity_store.go` uses `context.Background()` in 8 transaction sites ⚠️ **Medium**
+
+**File:** `internal/database/activity_store.go`  
+**Evidence:**
+- Line 318: `s.db.BeginTx(context.Background(), nil)` inside `Summarize()`
+- Line 665: `s.db.BeginTx(context.Background(), nil)` inside `CompactByDay()`
+- Lines 328, 345, 352, 685, 737, 745, 773: `tx.ExecContext(context.Background(), …)`
+
+`Summarize` and `CompactByDay` are called from HTTP handlers and scheduled jobs. Using `context.Background()` means these long-running compaction transactions cannot be cancelled if the caller's context is done. The same fix was applied to `sqlite_store.go` (DB-2) but not to `activity_store.go`.
+
+**Fix:** Add `ctx context.Context` parameters to `Summarize` and `CompactByDay`; pass `ctx` through to all `BeginTx` / `ExecContext` calls.
+
+**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-ctx-4-activity-store.md`
+
+---
+
+### R-7 — Unbounded `GetAllBooks(0, 0)` in background jobs — OOM risk ⚠️ **Medium**
+
+**Files / Evidence:**
+- `internal/server/archive_sweep.go:27` — `GetAllBooks(0, 0)`
+- `internal/server/audiobook_service.go:783` — `GetAllBooks(0, 0)` in `EnrichAudiobooksWithNames`
+- `internal/server/writeback_outbox.go:76` — `GetAllBooks(0, 0)`
+- `internal/database/pebble_store.go:2163,2183` — `GetAllBooks(0, 0)` in search-index build
+- (20 total call sites with `0` limit or `100000`+ hard-coded cap)
+
+For libraries with 50,000+ books (the project cleaned 68K → 10.9K), loading all books in one slice can exhaust heap memory. The proper pattern is cursor-based pagination (batch size 1,000, loop until empty).
+
+**Fix:** Replace `GetAllBooks(0, 0)` calls in long-running background jobs with a paginated loop: `for offset := 0; ; offset += batchSize { books, _ = store.GetAllBooks(batchSize, offset); if len(books) == 0 { break } }`.
+
+**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-perf-1-paginate-getallbooks.md`
+
+---
+
+### R-8 — Remaining `fmt.Printf` / `log.Printf` in library packages 🟡 **Low**
+
+**Files / Evidence:**
+- `internal/database/sqlite_store.go:404` — `fmt.Printf("Warning: series deduplication failed: …")`
+- `internal/database/sqlite_store.go:807` — `fmt.Printf("Deduplicated %d series records\n", …)`
+- `internal/playlist/playlist.go:94` — `fmt.Printf("Generated playlist: %s\n", …)`
+- `internal/organizer/organizer.go:68` — `fmt.Printf("Warning: failed to clean temporary …")`
+- `internal/database/pebble_store.go:93,119,134,754,783` — bare `log.Printf` calls
+- `internal/database/migrations.go:395–433` — bare `log.Printf` / `log.Println` calls
+- `internal/database/sqlite_store.go:2813,3164` — `log.Printf` in transaction rollback paths
+- `internal/database/metadata_fetch_cache.go:88` — `log.Printf` warning
+
+LOG-1..4 bot-tasks addressed `fmt.Printf` in `tagger`, `fileops`, `backup`, and `scanner` packages. Several library packages were missed.
+
+**Fix:** Replace remaining `fmt.Printf` / bare `log.Printf` with structured logging (`log/slog` or the project's `logger.Logger` interface where available).
+
+**Bot-task spec:** `docs/superpowers/bot-tasks/2026-05-01-log-5-remaining-printf.md`
+
+---
+
+### R-9 — Stale `// TODO: Implement in N1-2` comments after implementation 🟡 **Low**
+
+**Files / Evidence:**
+- `internal/database/sqlite_store.go:6913` — `// TODO: Implement in N1-2` above `GetAuthorsByBookIDs` which IS implemented
+- `internal/database/sqlite_store.go:6946` — same above `GetNarratorsByBookIDs`
+- `internal/metadata/enhanced.go:188,192` — `// TODO: Resolve author/series name to ID` — unactioned for multiple audit cycles
+
+These stale TODOs cause reviewer confusion and obscure genuinely open work.
+
+**Fix:** Remove the two stale N1-2 comments. Create separate tickets for the metadata `enhanced.go` TODOs if they are intentional deferrals.
+
+---
+
+### R-10 — Capitalized error strings in metadata packages (`staticcheck` ST1005) 🟡 **Low**
+
+**Files / Evidence:**
+- `internal/metadata/audible.go:150,159,180`
+- `internal/metadata/audnexus.go:115,185`
+- `internal/metadata/googlebooks.go:115`
+- `internal/metadata/hardcover.go:260,275`
+- `internal/metadata/openlibrary.go:171,234,308`
+- `internal/metadata/wikipedia.go:127`
+
+Go convention (and `staticcheck` ST1005): error strings should not be capitalized or end with punctuation. This matters when errors are wrapped with `fmt.Errorf("fetch failed: %w", err)` — the result is a double-capital sentence mid-chain.
+
+**Fix:** Lowercase the first letter of each error string (e.g., `"Failed to fetch"` → `"failed to fetch"`).
+
+---
+
+## 2026-04-30 Original Findings — Status Update
+
+The following table records the disposition of every finding from the 2026-04-30 audit. Bot-tasks MOCK-1 through SCAN-2 and FE-1 through FE-10 were all implemented in PRs #587–#627.
+
+| ID | Finding | Status | Notes |
+|----|---------|--------|-------|
+| C-1 | Mock interface drift: `GetDuplicateFilesByHash` | ✅ DONE | MOCK-1: mock regenerated |
+| C-2 | Mock interface drift: `MergeChapterBooks` | ✅ DONE | MOCK-2: CI gate added |
+| C-3 | N+1 queries in `enrichBookForResponse` | ✅ DONE | N1-1..4: batch fetch + enrich rewrite |
+| C-4 | N+1 queries in `EnrichAudiobooksWithNames` | ✅ DONE | N1-1..4 |
+| C-5 | Secret committed to `config.yaml` | ❌ REMAINING | `sk-test12345678` still at line 10 → R-3 |
+| S-1 | `BrowseDirectory` unrestricted filesystem | ✅ DONE | SEC-1: `defaultBrowseAllowPrefixes` |
+| S-2 | Auth disabled by default | ✅ DONE | SEC-2: startup warning added |
+| S-3 | Rate limiting disabled by default | ✅ DONE | SEC-3: startup warning added |
+| S-4 | `books.file_hash` missing index | ✅ DONE | FS-1: unique index migration added |
+| S-5 | Rate limiter O(N) cleanup | ✅ DONE | SEC-4: lazy eviction |
+| M-1 | Global `GetGlobalStore()` anti-pattern | ⚠️ PARTIAL | DI migration still in progress; 103+ calls remain |
+| M-2 | `context.Background()` in HTTP handlers | ✅ DONE | CTX-1/2/3: context threaded through major paths |
+| M-3 | `db.Begin()` instead of `BeginTx()` | ✅ DONE | DB-2: all SQLite Begin replaced |
+| M-4 | `SavePhaseData` errors silently discarded | ✅ DONE | DB-4: pipeline error propagation |
+| M-5 | `recomputeDurationMap` failure ignored | ✅ DONE | DB-6: pebble silent errors addressed |
+| M-6 | `RecordPathChange` silently ignored | ✅ DONE | DB-6 |
+| M-7 | Monolithic `internal/server` package | ⚠️ PARTIAL | Still flat; middleware sub-package exists |
+| M-8 | `maintenance_fixups.go` 6,304 lines | ⚠️ PARTIAL | Now 6,400 lines (grew); still unsplit |
+| M-9 | `pebble_store.go` 8,031 lines | ⚠️ PARTIAL | Now 8,324 lines; still unsplit |
+| M-10 | `sqlite_store.go` 6,509 lines | ⚠️ PARTIAL | Now 6,976 lines; still unsplit |
+| M-11 | `metafetch/service.go` 3,932 lines | ⚠️ PARTIAL | Now 3,932 lines; unchanged |
+| M-12 | `fmt.Printf` in library packages | ⚠️ PARTIAL | LOG-1..4 fixed tagger/fileops/backup/scanner; 8 still remain → R-8 |
+| M-13 | `RowsAffected()` error ignored | ✅ DONE | DB-2 scope |
+| M-14 | `bookSelectColumns` selects all 50+ columns | ✅ DONE | PROJ-1/2: BookSummary projected query |
+| N-1 | `filepath.Walk` → `filepath.WalkDir` | ✅ DONE | SCAN-1 |
+| N-2 | `progressbar` in server context | ✅ DONE | SCAN-2: removed, structured log events |
+| N-3 | 24-hour cache TTL no active invalidation | ⚠️ PARTIAL | No change observed |
+| N-4 | `WriteTimeout=0` for SSE | ⚠️ PARTIAL | By design; no idle heartbeat guard added |
+| N-5 | `time.Parse` errors silently discarded | ✅ DONE | DB-5 |
+| N-6 | Rate limiter O(N) cleanup | ✅ DONE | SEC-4 (same as S-5) |
+| N-7 | `json.Marshal` errors discarded in AI pipeline | ✅ DONE | DB-4 scope |
+| N-8 | `db.Begin()` without context in `activity_store.go` | ⚠️ PARTIAL | `BeginTx` changed but `context.Background()` still used → R-6 |
+| N-9 | No gzip compression middleware | ✅ DONE | COMP-1/SRV-1: gin-contrib/gzip added |
+| N-10 | `malformed_m4b_remux.go` ignores WalkDir error | ⚠️ PARTIAL | Walk replaced but `_ =` still on return |
+| N-11 | `RevokeSession` error ignored | ⚠️ PARTIAL | Unchanged |
+| N-12 | `SetSetting` return ignored in remux | ⚠️ PARTIAL | Unchanged |
+| N-13 | Hard-coded cover source allowlist | ⚠️ PARTIAL | No change |
+| N-14 | Positional `Scan()` fragile to schema changes | ⚠️ PARTIAL | Not changed |
+| N-15 | CHANGELOG / TODO update tracking | ✅ DONE | Regular updates observed |
+| F-1 | `Library.tsx` God Component 3,372 lines | ✅ DONE | FE-1/2/3: FilterPanel + BookGrid + BatchToolbar extracted |
+| F-2 | `Settings.tsx` God Component 4,166 lines | ✅ DONE | FE-4/5/6: three tab components extracted |
+| F-3 | 17 `useEffect` in `Library.tsx` | ⚠️ PARTIAL | Component split helps; effect count not verified post-split |
+| F-4 | 108 `console.log` calls | ✅ DONE | FE-7: replaced/removed |
+| F-5 | Error boundary only at top level | ✅ DONE | FE-8: per-page error boundaries |
+| F-6 | `useCallback`/`useMemo` not systematic | ⚠️ PARTIAL | No explicit task addressed this |
+| F-7 | Inline styles mixed with MUI `sx` | ⚠️ PARTIAL | No explicit task addressed this |
+| F-8 | Frontend coverage thresholds too low (15%) | ⚠️ PARTIAL | FE-10 added thresholds but they remain at 15%/10% |
+| F-9 | SSE connection status in `console.log` | ✅ DONE | FE-7 scope |
+| F-10 | `localStorage` keys as magic strings | ✅ DONE | FE-8/9: typed constants |
+| T-1 | Broken mock | ✅ DONE | MOCK-1 |
+| T-2 | CI doesn't enforce mock freshness | ✅ DONE | MOCK-2: `check-mock-fresh` target |
+| T-3 | Frontend coverage thresholds too low | ⚠️ PARTIAL | Same as F-8 |
+| T-4 | No integration tests for N+1 | ⚠️ PARTIAL | No integration test suite added |
+| T-5 | `testdata/` binary files in git | ⚠️ PARTIAL | `.gitignore` not updated for LFS |
+| T-6 | No `staticcheck` in `make ci` | ✅ DONE | MOCK-2: `staticcheck` added to CI |
+| D-1 | `go-sqlite3` requires CGO | ⚠️ PARTIAL | No migration to pure-Go SQLite |
+| D-2 | `progressbar` CLI dep in server code | ✅ DONE | SCAN-2: dependency removed |
+| D-3 | `quic-go` possibly unused | ⚠️ PARTIAL | Still in `go.mod` |
+| D-4 | `chromem-go` in-memory only | ⚠️ PARTIAL | Still in use |
+| D-5 | `axios` and `fetch` side-by-side | ⚠️ PARTIAL | No consolidation |
+| D-6 | MUI v5 superseded by v6 | ⚠️ PARTIAL | Still on v5 |
+| D-7 | `node_modules/` in repo root | ✅ DONE | Not tracked in git (verified) |
+| D-8 | Go version mismatch `go.mod` vs docs | ⚠️ PARTIAL | `go.mod` says `1.24.0`; runtime is 1.25+ |
+| A-1 | Dual database backend burden | ⚠️ PARTIAL | Architectural; no consolidation started |
+| A-2 | `Store` interface 580+ methods | ⚠️ PARTIAL | Width unchanged; sub-interfaces not added |
+| A-3 | No pagination on some list endpoints | ⚠️ PARTIAL | Partially addressed by `GetAllBookSummaries`; several unbounded calls remain → R-7 |
+
+---
 
 ---
 
@@ -737,6 +975,24 @@ The single `Store` interface covers books, authors, narrators, series, playlists
 | Frontend inline `style=` attributes | 20+ |
 | Vite coverage thresholds | 15% statements/lines, 10% branches |
 
+### 2026-05-01 Re-Audit Metrics
+
+| Metric | Value |
+|--------|-------|
+| `go build ./...` | ✅ Clean |
+| `go vet ./...` | ✅ Clean |
+| `staticcheck ./...` | ⚠️ 55 findings (unused code, deprecated fields, error strings) |
+| Failing test packages | 2 (`internal/server`, `internal/database`) |
+| Secret still committed | ❌ `config.yaml:10` `sk-test12345678` |
+| `context.Background()` remaining (non-test) | ~20 instances (mostly database layer) |
+| `fmt.Printf` / `log.Printf` remaining in library pkgs | ~12 instances |
+| Deprecated `ITunesPath` usages | 13 (SA1019) |
+| Unused code items | 7 (U1000/SA4006) |
+| `GetAllBooks(0,0)` unbounded calls | 20+ |
+| Frontend MUI bundle size | 443 KB (uncompressed) |
+| Frontend test count | 21 test files |
+| Vite coverage thresholds | Unchanged at 15%/10% |
+
 ---
 
-*Report generated by automated + manual analysis. Each finding includes specific file paths and line numbers for reproducibility.*
+*Original report: 2026-04-30. Re-audit: 2026-05-01. Each finding includes specific file paths and line numbers for reproducibility.*
