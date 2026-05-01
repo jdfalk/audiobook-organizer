@@ -1,5 +1,5 @@
 // file: internal/realtime/events_test.go
-// version: 1.1.2
+// version: 1.2.0
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
 package realtime
@@ -652,8 +652,8 @@ func TestHandleSSE_Heartbeat(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest("GET", "/events", nil)
 
-	// Use longer timeout to allow heartbeat to fire (30s ticker + buffer)
-	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	// Use longer timeout to allow heartbeat to fire (25s ticker + buffer)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	c.Request = c.Request.WithContext(ctx)
 
@@ -664,16 +664,16 @@ func TestHandleSSE_Heartbeat(t *testing.T) {
 		done <- true
 	}()
 
-	// Wait for heartbeat (30s + buffer)
-	time.Sleep(31 * time.Second)
+	// Wait for heartbeat (25s + buffer)
+	time.Sleep(26 * time.Second)
 
 	cancel() // Cancel to stop the handler
 	<-done
 
-	// Check response body contains heartbeat
+	// Check response body contains SSE comment heartbeat (": ping")
 	body := w.Body.String()
-	if !strings.Contains(body, "heartbeat") {
-		t.Error("Expected heartbeat in response body")
+	if !strings.Contains(body, ": ping") {
+		t.Errorf("Expected SSE comment heartbeat (': ping') in response body, got: %q", body)
 	}
 }
 
