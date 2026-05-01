@@ -315,7 +315,42 @@ next picks up. Full plan in
 
 ---
 
-## 📋 Backlog — [full file](docs/backlog-2026-04-10.md)
+## 🖼️ UX Polish — Spacing & Layout
+
+- [x] **UX-FOOTER** Footer spacer on every page — `MainLayout.tsx` now renders a 56px `aria-hidden` spacer after `{children}` so content never bumps the bottom edge of the viewport
+
+---
+
+## 🔄 Async Backfill Operations — Queue, Bell, Resume
+
+All backfill handlers currently run **synchronously inside the HTTP request**. If the server
+restarts mid-run they silently stop and will not auto-resume. They also don't appear in Active
+Operations or the notification bell. These need the same treatment as `composer_tag_scan` and
+`missing-file-repair`: `s.queue.Enqueue` → `operations.SaveParams` → `SaveCheckpoint` loop →
+`activity.EmitInfo` summary on finish.
+
+- [ ] **BACKFILL-ASYNC-1** `handleBackfillFileHashes` — convert to async queued operation:
+  - `operations.BackfillFileHashesParams{DryRun bool}` struct in `state.go`
+  - Enqueue as `"backfill-file-hashes"`, return `opID` immediately
+  - Worker loop: for each `book_file` missing hash, `SaveCheckpoint` every N files
+  - On restart: `LoadCheckpoint` → skip already-processed file IDs (by index or file_id cursor)
+  - `activity.EmitInfo` summary on completion; `activity.LogBatch` for errors
+  - Poll via `GET /api/v1/operations/{id}`; UI "Backfill Missing Hashes" button uses opID
+
+- [ ] **BACKFILL-ASYNC-2** `handleBackfillMetadataSourceHash` — same async treatment:
+  - `operations.BackfillMetadataHashParams{DryRun bool, Force bool}` struct
+  - Enqueue as `"backfill-metadata-source-hash"`, return `opID`
+  - Worker: iterate all books, checkpoint every N; skip-on-resume by `PhaseIndex`
+  - `activity.EmitInfo` + `activity.LogBatch` on finish
+
+- [ ] **BACKFILL-ASYNC-3** `MetadataHashDuplicateCard` UI — add coverage stats panel + backfill button matching the SHA Duplicate Detection card style:
+  - `GET /maintenance/metadata-hash-stats` endpoint: total books, with/without `metadata_source_hash`, by-library breakdown
+  - `BookMetadataHashStats` struct in `store.go`; `GetBookMetadataHashStats` in interface + SQLite + PebbleDB + mock
+  - Auto-load stats on mount; status chip ("N missing hashes" / "✓ All hashed"); "Backfill Missing Hashes" button
+  - Make sure `metadata_source_hash` is set in every metadata-cache path (already set in `ApplyMetadataCandidate`; verify fetch-cache replay path sets it too)
+
+---
+
 
 Statuses below reflect the current state including v0.206.0's shipped
 work (many items marked "open" in the backlog file were quietly shipped
