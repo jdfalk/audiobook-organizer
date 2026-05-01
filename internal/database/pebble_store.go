@@ -8071,6 +8071,40 @@ func (s *PebbleStore) UpdateBookFileHashes(id, originalHash, postMetadataHash st
 	return s.db.Set([]byte(bookFileKey), data, pebble.Sync)
 }
 
+// SetBookFileHash sets file_hash on a BookFile record in PebbleDB, and also
+// sets original_file_hash if it is currently empty, matching scanner behaviour.
+func (s *PebbleStore) SetBookFileHash(id, hash string) error {
+	val, closer, err := s.db.Get([]byte("book_file_id:" + id))
+	if err != nil {
+		return fmt.Errorf("SetBookFileHash: lookup id index: %w", err)
+	}
+	bookFileKey := string(val)
+	closer.Close()
+
+	val2, closer2, err := s.db.Get([]byte(bookFileKey))
+	if err != nil {
+		return fmt.Errorf("SetBookFileHash: get file: %w", err)
+	}
+	var bf BookFile
+	if err := json.Unmarshal(val2, &bf); err != nil {
+		closer2.Close()
+		return fmt.Errorf("SetBookFileHash: unmarshal: %w", err)
+	}
+	closer2.Close()
+
+	bf.FileHash = hash
+	if bf.OriginalFileHash == "" {
+		bf.OriginalFileHash = hash
+	}
+	bf.UpdatedAt = time.Now()
+
+	data, err := json.Marshal(&bf)
+	if err != nil {
+		return fmt.Errorf("SetBookFileHash: marshal: %w", err)
+	}
+	return s.db.Set([]byte(bookFileKey), data, pebble.Sync)
+}
+
 // AddMetadataRejection is not supported on PebbleStore.
 func (p *PebbleStore) AddMetadataRejection(_ MetadataRejection) error {
 	return fmt.Errorf("RejectedMetadataStore.AddMetadataRejection: not supported by PebbleStore")
@@ -8153,6 +8187,61 @@ func (p *PebbleStore) GetBookFileHashStats() (*BookFileHashStats, error) {
 			row.MissingHash = row.TotalFiles - row.WithHash
 			stats.ByLibrary = append(stats.ByLibrary, *row)
 		}
+	}
+	return stats, nil
+}
+
+// GetBookMetadataHashStats returns metadata_source_hash coverage across all books.
+func (p *PebbleStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error) {
+	allBooks, err := p.GetAllBooks(0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("GetBookMetadataHashStats: %w", err)
+	}
+
+	stats := &BookMetadataHashStats{TotalBooks: len(allBooks)}
+	libMap := make(map[string]*BookMetadataHashStatsByLib)
+
+	for _, b := range allBooks {
+		hasHash := b.MetadataSourceHash != nil && *b.MetadataSourceHash != ""
+		hasID := (b.ASIN != nil && *b.ASIN != "") ||
+			(b.ISBN13 != nil && *b.ISBN13 != "") ||
+			(b.ISBN10 != nil && *b.ISBN10 != "")
+
+		if hasHash {
+			stats.WithMetadataHash++
+		} else {
+			stats.MissingMetadataHash++
+		}
+		if hasID {
+			stats.WithASINOrISBN++
+			if !hasHash {
+				stats.MissingHashHasID++
+			}
+		}
+
+		lib := ""
+		if b.SourceImportPath != nil {
+			lib = *b.SourceImportPath
+		}
+		if lib == "" {
+			continue
+		}
+		if _, ok := libMap[lib]; !ok {
+			libMap[lib] = &BookMetadataHashStatsByLib{Path: lib}
+		}
+		libMap[lib].TotalBooks++
+		if hasHash {
+			libMap[lib].WithMetadataHash++
+		} else {
+			libMap[lib].MissingMetadataHash++
+			if hasID {
+				libMap[lib].MissingHashHasID++
+			}
+		}
+	}
+
+	for _, row := range libMap {
+		stats.ByLibrary = append(stats.ByLibrary, *row)
 	}
 	return stats, nil
 }

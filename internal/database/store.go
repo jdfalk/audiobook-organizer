@@ -909,6 +909,26 @@ type BookFileHashStatsByLib struct {
 	MissingHash int    `json:"missing_hash"`
 }
 
+// BookMetadataHashStats is returned by GetBookMetadataHashStats and shows
+// metadata_source_hash coverage across all books, broken down by library.
+type BookMetadataHashStats struct {
+	TotalBooks          int                          `json:"total_books"`
+	WithMetadataHash    int                          `json:"with_metadata_hash"`
+	MissingMetadataHash int                          `json:"missing_metadata_hash"`
+	WithASINOrISBN      int                          `json:"with_asin_or_isbn"`
+	MissingHashHasID    int                          `json:"missing_hash_has_id"` // can be backfilled
+	ByLibrary           []BookMetadataHashStatsByLib `json:"by_library"`
+}
+
+// BookMetadataHashStatsByLib breaks down metadata_source_hash coverage for one library root.
+type BookMetadataHashStatsByLib struct {
+	Path                string `json:"path"`
+	TotalBooks          int    `json:"total_books"`
+	WithMetadataHash    int    `json:"with_metadata_hash"`
+	MissingMetadataHash int    `json:"missing_metadata_hash"`
+	MissingHashHasID    int    `json:"missing_hash_has_id"`
+}
+
 // Global store instance — use GetGlobalStore/SetGlobalStore for concurrent access.
 // Direct assignment is allowed in single-goroutine contexts (init, main).
 var globalStore Store

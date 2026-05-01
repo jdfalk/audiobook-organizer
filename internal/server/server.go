@@ -2566,6 +2566,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/maintenance/metadata-hash-duplicates", s.perm(auth.PermSettingsManage), s.handleScanMetadataHashDuplicates)
 			protected.GET("/maintenance/book-file-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookFileHashStats)
 			protected.POST("/maintenance/backfill-file-hashes", s.perm(auth.PermSettingsManage), s.handleBackfillFileHashes)
+			protected.GET("/maintenance/book-metadata-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookMetadataHashStats)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")

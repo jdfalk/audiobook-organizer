@@ -6364,7 +6364,7 @@ func (s *Server) handleBackfillFileHashes(c *gin.Context) {
 			continue
 		}
 		if !dryRun {
-			if uerr := store.UpdateBookFileHashes(bf.ID, h, ""); uerr != nil {
+			if uerr := store.SetBookFileHash(bf.ID, h); uerr != nil {
 				results = append(results, result{FileID: bf.ID, FilePath: bf.FilePath, Error: uerr.Error()})
 				failed++
 				continue
@@ -6381,4 +6381,20 @@ func (s *Server) handleBackfillFileHashes(c *gin.Context) {
 		"failed":  failed,
 		"results": results,
 	})
+}
+
+// handleGetBookMetadataHashStats returns metadata_source_hash coverage across all books.
+// GET /api/v1/maintenance/book-metadata-hash-stats
+func (s *Server) handleGetBookMetadataHashStats(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	stats, err := store.GetBookMetadataHashStats()
+	if err != nil {
+		internalError(c, "failed to get book metadata hash stats", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": stats})
 }
