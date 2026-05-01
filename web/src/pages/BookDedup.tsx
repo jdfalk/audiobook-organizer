@@ -1,9 +1,11 @@
 // file: web/src/pages/BookDedup.tsx
 // version: 3.18.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
+// last-edited: 2026-05-01
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useAsyncAction } from '../hooks/useAsyncAction';
 import {
   Box,
   Typography,
@@ -296,7 +298,6 @@ function PaginationControls({ total, page, rowsPerPage, onPageChange, onRowsPerP
 function BookDedupScanTab() {
   const [groups, setGroups] = useState<BookDedupGroup[]>([]);
   const [totalDuplicates, setTotalDuplicates] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeOp, setActiveOp] = useState<Operation | null>(null);
   const [mergeSuccess, setMergeSuccess] = useState<string | null>(null);
@@ -304,20 +305,15 @@ function BookDedupScanTab() {
   const [confidenceFilter, setConfidenceFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const pagination = usePagination(groups.length);
 
-  const fetchResults = useCallback(async () => {
-    setLoading(true);
+  const { loading, run: performFetch } = useAsyncAction(async () => {
     setError(null);
-    try {
-      const data = await api.getBookDedupScanResults();
-      setGroups(data.groups || []);
-      setTotalDuplicates(data.duplicate_count || 0);
-      setNeedsRefresh(data.needs_refresh || false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch scan results');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const data = await api.getBookDedupScanResults();
+    setGroups(data.groups || []);
+    setTotalDuplicates(data.duplicate_count || 0);
+    setNeedsRefresh(data.needs_refresh || false);
+  });
+
+  const fetchResults = useCallback(() => performFetch(), [performFetch]);
 
   useEffect(() => { fetchResults(); }, [fetchResults]);
 
@@ -1544,8 +1540,20 @@ function AIAuthorPipelinePage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [agreementFilter, setAgreementFilter] = useState<string>('all');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { loading, run: startScanAction } = useAsyncAction(async () => {
+    setError(null);
+    const newScan = await api.startAIScan(batchMode ? 'batch' : 'realtime');
+    const detail = await api.getAIScan(newScan.id);
+    setScan(detail);
+    // Refresh scan list
+    api.listAIScans().then(setScans).catch(() => {});
+  });
+
+  const startScan = async () => {
+    await startScanAction();
+  };
 
   // Load scan list on mount
   useEffect(() => {
@@ -1572,35 +1580,18 @@ function AIAuthorPipelinePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scan?.id, scan?.status]);
 
-  const startScan = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const newScan = await api.startAIScan(batchMode ? 'batch' : 'realtime');
-      const detail = await api.getAIScan(newScan.id);
-      setScan(detail);
-      // Refresh scan list
-      api.listAIScans().then(setScans).catch(() => {});
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to start scan');
+  const { run: loadScanAction } = useAsyncAction(async (...args: unknown[]) => {
+    const scanId = args[0] as number;
+    const detail = await api.getAIScan(scanId);
+    setScan(detail);
+    if (detail.status === 'complete') {
+      const res = await api.getAIScanResults(scanId);
+      setResults(res);
     }
-    setLoading(false);
-  };
+  });
 
   const loadScan = async (scanId: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const detail = await api.getAIScan(scanId);
-      setScan(detail);
-      if (detail.status === 'complete') {
-        const res = await api.getAIScanResults(scanId);
-        setResults(res);
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load scan');
-    }
-    setLoading(false);
+    await loadScanAction(scanId);
   };
 
   const applySelected = async () => {
