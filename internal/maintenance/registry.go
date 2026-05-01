@@ -1,7 +1,7 @@
 // file: internal/maintenance/registry.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 22222222-2222-2222-2222-222222222222
-// last-edited: 2026-05-03
+// last-edited: 2026-05-04
 
 package maintenance
 
@@ -24,6 +24,21 @@ func Register(j MaintenanceJob) {
 	}
 	registry = append(registry, j)
 	byID[j.ID()] = j
+}
+
+var enqueuer WriteBackEnqueuer
+
+// InjectEnqueuer injects the write-back enqueuer into all registered jobs
+// that implement EnqueuerInjectable.
+func InjectEnqueuer(e WriteBackEnqueuer) {
+	mu.Lock()
+	defer mu.Unlock()
+	enqueuer = e
+	for _, j := range registry {
+		if ei, ok := j.(EnqueuerInjectable); ok {
+			ei.InjectEnqueuer(e)
+		}
+	}
 }
 
 func Get(id string) (MaintenanceJob, error) {
