@@ -1077,6 +1077,9 @@ func (s *Server) setupRoutes() {
 			// Result-getter GETs (not job triggers — these poll async results)
 			protected.GET("/maintenance/scan-composer-tags/:id", s.perm(auth.PermSettingsManage), s.handleGetComposerScanResults)
 			protected.GET("/maintenance/repair-missing-files/:id", s.perm(auth.PermSettingsManage), s.handleGetMissingFileRepairResults)
+			// Hash stats endpoints
+			protected.GET("/maintenance/book-file-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookFileHashStats)
+			protected.GET("/maintenance/book-metadata-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookMetadataHashStats)
 			// Unified maintenance job dispatcher
 			protected.GET("/maintenance/jobs", s.perm(auth.PermSettingsManage), s.listMaintenanceJobs)
 			protected.POST("/maintenance/jobs/:job_id", s.runMaintenanceJob)
