@@ -1,5 +1,5 @@
 // file: internal/metadata/hardcover.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e7e02554-8931-49ba-9528-d3d51279da1d
 
 package metadata
@@ -7,6 +7,7 @@ package metadata
 import (
 	"bytes"
 	json "encoding/json/v2"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -161,23 +162,23 @@ type hardcoverImage struct {
 }
 
 // SearchByTitle searches Hardcover by title.
-func (c *HardcoverClient) SearchByTitle(title string) ([]BookMetadata, error) {
+func (c *HardcoverClient) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
 	if c.apiToken == "" {
 		log.Printf("[DEBUG] Hardcover: no API token configured, skipping")
 		return nil, nil
 	}
-	return c.search(title)
+	return c.search(ctx, title)
 }
 
 // SearchByTitleAndAuthor searches Hardcover by title (author is used for ranking but
 // the GraphQL search_books endpoint only accepts a single query string).
-func (c *HardcoverClient) SearchByTitleAndAuthor(title, author string) ([]BookMetadata, error) {
+func (c *HardcoverClient) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]BookMetadata, error) {
 	if c.apiToken == "" {
 		log.Printf("[DEBUG] Hardcover: no API token configured, skipping")
 		return nil, nil
 	}
 	query := title + " " + author
-	return c.search(query)
+	return c.search(ctx, query)
 }
 
 // hardcoverDocumentFields is the full set of fields we request from
@@ -216,18 +217,18 @@ func (c *HardcoverClient) SearchByContext(ctx *SearchContext) ([]BookMetadata, e
 	// Prefer ISBN-13 → ISBN-10 → title+author.
 	switch {
 	case ctx.ISBN13 != "":
-		return c.search(ctx.ISBN13)
+		return c.search(context.Background(), ctx.ISBN13)
 	case ctx.ISBN10 != "":
-		return c.search(ctx.ISBN10)
+		return c.search(context.Background(), ctx.ISBN10)
 	case ctx.Title != "" && ctx.Author != "":
-		return c.search(ctx.Title + " " + ctx.Author)
+		return c.search(context.Background(), ctx.Title + " " + ctx.Author)
 	case ctx.Title != "":
-		return c.search(ctx.Title)
+		return c.search(context.Background(), ctx.Title)
 	}
 	return nil, nil
 }
 
-func (c *HardcoverClient) search(query string) ([]BookMetadata, error) {
+func (c *HardcoverClient) search(ctx context.Context, query string) ([]BookMetadata, error) {
 	c.waitForRateLimit()
 
 	// Escape the query for embedding in the GraphQL string
@@ -242,7 +243,7 @@ func (c *HardcoverClient) search(query string) ([]BookMetadata, error) {
 		return nil, fmt.Errorf("failed to marshal Hardcover request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", c.baseURL, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Hardcover request: %w", err)
 	}

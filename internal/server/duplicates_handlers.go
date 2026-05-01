@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -711,8 +711,9 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 	}
 
 	var results []validationResult
+	ctx := c.Request.Context()
 	for _, src := range chain {
-		matches, err := src.SearchByTitle(req.Query)
+		matches, err := src.SearchByTitle(ctx, req.Query)
 		if err != nil {
 			continue
 		}

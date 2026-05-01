@@ -1,11 +1,12 @@
 // file: internal/metadata/audible.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
 
 package metadata
 
 import (
 	json "encoding/json/v2"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -115,17 +116,17 @@ type audibleCategoryLadder struct {
 const audibleResponseGroups = "product_desc,contributors,media,product_attrs,series,rating,category_ladders"
 
 // SearchByTitle searches Audible's catalog by title.
-func (c *AudibleClient) SearchByTitle(title string) ([]BookMetadata, error) {
+func (c *AudibleClient) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
 	searchURL := fmt.Sprintf("%s/catalog/products?title=%s&num_results=10&products_sort_by=Relevance&response_groups=%s",
 		c.baseURL, url.QueryEscape(title), audibleResponseGroups)
-	return c.searchCatalog(searchURL)
+	return c.searchCatalog(ctx, searchURL)
 }
 
 // SearchByTitleAndAuthor searches Audible's catalog by title and author.
-func (c *AudibleClient) SearchByTitleAndAuthor(title, author string) ([]BookMetadata, error) {
+func (c *AudibleClient) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]BookMetadata, error) {
 	searchURL := fmt.Sprintf("%s/catalog/products?title=%s&author=%s&num_results=10&products_sort_by=Relevance&response_groups=%s",
 		c.baseURL, url.QueryEscape(title), url.QueryEscape(author), audibleResponseGroups)
-	return c.searchCatalog(searchURL)
+	return c.searchCatalog(ctx, searchURL)
 }
 
 // LookupByASIN fetches a product directly by ASIN.
@@ -162,8 +163,8 @@ func (c *AudibleClient) LookupByASIN(asin string) (*BookMetadata, error) {
 	return &meta, nil
 }
 
-func (c *AudibleClient) searchCatalog(searchURL string) ([]BookMetadata, error) {
-	req, err := http.NewRequest("GET", searchURL, nil)
+func (c *AudibleClient) searchCatalog(ctx context.Context, searchURL string) ([]BookMetadata, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Audible request: %w", err)
 	}

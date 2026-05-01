@@ -102,11 +102,12 @@ func (s *Server) testMetadataSource(c *gin.Context) {
 	}
 
 	testQuery := "The Hobbit" // well-known book for test queries
+	ctx := c.Request.Context()
 
 	switch req.SourceID {
 	case "google-books":
 		client := metadata.NewGoogleBooksClient(req.APIKey)
-		results, err := client.SearchByTitle(testQuery)
+		results, err := client.SearchByTitle(ctx, testQuery)
 		if err != nil {
 			RespondWithOK(c, gin.H{"success": false, "error": fmt.Sprintf("Google Books API error: %v", err)})
 			return
@@ -115,7 +116,7 @@ func (s *Server) testMetadataSource(c *gin.Context) {
 
 	case "hardcover":
 		client := metadata.NewHardcoverClient(req.APIKey)
-		results, err := client.SearchByTitle(testQuery)
+		results, err := client.SearchByTitle(ctx, testQuery)
 		if err != nil {
 			RespondWithOK(c, gin.H{"success": false, "error": fmt.Sprintf("Hardcover API error: %v", err)})
 			return

@@ -5,6 +5,7 @@
 package metadata
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -73,7 +74,7 @@ func TestHardcoverClient_SearchByTitle_ParsesRichFields(t *testing.T) {
 	defer server.Close()
 
 	client := NewHardcoverClientWithBaseURL(server.URL, "test-token")
-	results, err := client.SearchByTitle("Foundation and Empire")
+	results, err := client.SearchByTitle(context.Background(), "Foundation and Empire")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -162,7 +163,7 @@ func TestHardcoverClient_SearchByContext_PrefersISBN(t *testing.T) {
 // API token is configured.
 func TestHardcoverClient_NoToken_NoOps(t *testing.T) {
 	client := NewHardcoverClient("")
-	results, err := client.SearchByTitle("anything")
+	results, err := client.SearchByTitle(context.Background(), "anything")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -5,6 +5,7 @@
 package metadata
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -50,7 +51,7 @@ func TestSearchByTitle(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	results, err := client.SearchByTitle("The Hobbit")
+	results, err := client.SearchByTitle(context.Background(), "The Hobbit")
 	if err != nil {
 		t.Fatalf("SearchByTitle failed: %v", err)
 	}
@@ -79,7 +80,7 @@ func TestSearchByTitleAndAuthor(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	results, err := client.SearchByTitleAndAuthor("The Hobbit", "Tolkien")
+	results, err := client.SearchByTitleAndAuthor(context.Background(), "The Hobbit", "Tolkien")
 	if err != nil {
 		t.Fatalf("SearchByTitleAndAuthor failed: %v", err)
 	}
@@ -114,7 +115,7 @@ func TestSearchByTitleNoResults(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	results, err := client.SearchByTitle("xyzabc123456789nonexistent")
+	results, err := client.SearchByTitle(context.Background(), "xyzabc123456789nonexistent")
 	if err != nil {
 		t.Fatalf("SearchByTitle failed: %v", err)
 	}
@@ -136,7 +137,7 @@ func TestGetBookByISBN(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	result, err := client.GetBookByISBN("9780547928227")
+	result, err := client.GetBookByISBN(context.Background(), "9780547928227")
 	if err != nil {
 		t.Fatalf("GetBookByISBN failed: %v", err)
 	}
@@ -170,7 +171,7 @@ func TestGetBookByISBNInvalid(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	_, err := client.GetBookByISBN("0000000000")
+	_, err := client.GetBookByISBN(context.Background(), "0000000000")
 	if err == nil {
 		t.Error("Expected error for invalid ISBN")
 	}
@@ -180,7 +181,7 @@ func TestSearchByTitle_NetworkError(t *testing.T) {
 	// Use invalid URL to trigger network error
 	client := NewOpenLibraryClientWithBaseURL("http://invalid.localhost:99999")
 
-	_, err := client.SearchByTitle("Test")
+	_, err := client.SearchByTitle(context.Background(), "Test")
 	if err == nil {
 		t.Error("Expected network error")
 	}
@@ -194,7 +195,7 @@ func TestSearchByTitle_NonOKStatus(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	_, err := client.SearchByTitle("Test")
+	_, err := client.SearchByTitle(context.Background(), "Test")
 	if err == nil {
 		t.Error("Expected error for non-OK status")
 	}
@@ -208,7 +209,7 @@ func TestSearchByTitle_InvalidJSON(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	_, err := client.SearchByTitle("Test")
+	_, err := client.SearchByTitle(context.Background(), "Test")
 	if err == nil {
 		t.Error("Expected error for invalid JSON")
 	}
@@ -234,7 +235,7 @@ func TestSearchByTitle_CompleteMetadata(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	results, err := client.SearchByTitle("Complete Book")
+	results, err := client.SearchByTitle(context.Background(), "Complete Book")
 	if err != nil {
 		t.Fatalf("SearchByTitle failed: %v", err)
 	}
@@ -270,7 +271,7 @@ func TestSearchByTitle_CompleteMetadata(t *testing.T) {
 func TestSearchByTitleAndAuthor_NetworkError(t *testing.T) {
 	client := NewOpenLibraryClientWithBaseURL("http://invalid.localhost:99999")
 
-	_, err := client.SearchByTitleAndAuthor("Test", "Author")
+	_, err := client.SearchByTitleAndAuthor(context.Background(), "Test", "Author")
 	if err == nil {
 		t.Error("Expected network error")
 	}
@@ -284,7 +285,7 @@ func TestSearchByTitleAndAuthor_NonOKStatus(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	_, err := client.SearchByTitleAndAuthor("Test", "Author")
+	_, err := client.SearchByTitleAndAuthor(context.Background(), "Test", "Author")
 	if err == nil {
 		t.Error("Expected error for non-OK status")
 	}
@@ -298,7 +299,7 @@ func TestSearchByTitleAndAuthor_InvalidJSON(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	_, err := client.SearchByTitleAndAuthor("Test", "Author")
+	_, err := client.SearchByTitleAndAuthor(context.Background(), "Test", "Author")
 	if err == nil {
 		t.Error("Expected error for invalid JSON")
 	}
@@ -320,7 +321,7 @@ func TestSearchByTitleAndAuthor_MultipleAuthors(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	results, err := client.SearchByTitleAndAuthor("Multi-Author Book", "First Author")
+	results, err := client.SearchByTitleAndAuthor(context.Background(), "Multi-Author Book", "First Author")
 	if err != nil {
 		t.Fatalf("SearchByTitleAndAuthor failed: %v", err)
 	}
@@ -338,7 +339,7 @@ func TestSearchByTitleAndAuthor_MultipleAuthors(t *testing.T) {
 func TestGetBookByISBN_NetworkError(t *testing.T) {
 	client := NewOpenLibraryClientWithBaseURL("http://invalid.localhost:99999")
 
-	_, err := client.GetBookByISBN("1234567890")
+	_, err := client.GetBookByISBN(context.Background(), "1234567890")
 	if err == nil {
 		t.Error("Expected network error")
 	}
@@ -352,7 +353,7 @@ func TestGetBookByISBN_NonOKNonNotFound(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	_, err := client.GetBookByISBN("1234567890")
+	_, err := client.GetBookByISBN(context.Background(), "1234567890")
 	if err == nil {
 		t.Error("Expected error for internal server error")
 	}
@@ -366,7 +367,7 @@ func TestGetBookByISBN_InvalidJSON(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	_, err := client.GetBookByISBN("1234567890")
+	_, err := client.GetBookByISBN(context.Background(), "1234567890")
 	if err == nil {
 		t.Error("Expected error for invalid JSON")
 	}
@@ -380,7 +381,7 @@ func TestGetBookByISBN_EmptyResponse(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	result, err := client.GetBookByISBN("1234567890")
+	result, err := client.GetBookByISBN(context.Background(), "1234567890")
 	if err != nil {
 		t.Fatalf("GetBookByISBN failed: %v", err)
 	}
@@ -402,7 +403,7 @@ func TestGetBookByISBN_ShortPublishDate(t *testing.T) {
 
 	client := NewOpenLibraryClientWithBaseURL(server.URL)
 
-	result, err := client.GetBookByISBN("1234567890")
+	result, err := client.GetBookByISBN(context.Background(), "1234567890")
 	if err != nil {
 		t.Fatalf("GetBookByISBN failed: %v", err)
 	}

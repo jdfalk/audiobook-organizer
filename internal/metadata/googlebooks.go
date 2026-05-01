@@ -1,11 +1,12 @@
 // file: internal/metadata/googlebooks.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-f2a3b4c5d6e7
 
 package metadata
 
 import (
 	json "encoding/json/v2"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -82,24 +83,29 @@ type googleBooksImageLinks struct {
 }
 
 // SearchByTitle searches Google Books by title.
-func (c *GoogleBooksClient) SearchByTitle(title string) ([]BookMetadata, error) {
+func (c *GoogleBooksClient) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
 	q := url.QueryEscape(fmt.Sprintf("intitle:%s", title))
-	return c.search(q)
+	return c.search(ctx, q)
 }
 
 // SearchByTitleAndAuthor searches Google Books by title and author.
-func (c *GoogleBooksClient) SearchByTitleAndAuthor(title, author string) ([]BookMetadata, error) {
+func (c *GoogleBooksClient) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]BookMetadata, error) {
 	q := url.QueryEscape(fmt.Sprintf("intitle:%s+inauthor:%s", title, author))
-	return c.search(q)
+	return c.search(ctx, q)
 }
 
-func (c *GoogleBooksClient) search(escapedQuery string) ([]BookMetadata, error) {
+func (c *GoogleBooksClient) search(ctx context.Context, escapedQuery string) ([]BookMetadata, error) {
 	searchURL := fmt.Sprintf("%s/volumes?q=%s&maxResults=5", c.baseURL, escapedQuery)
 	if c.apiKey != "" {
 		searchURL += "&key=" + url.QueryEscape(c.apiKey)
 	}
 
-	resp, err := c.httpClient.Get(searchURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search Google Books: %w", err)
 	}

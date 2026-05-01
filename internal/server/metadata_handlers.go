@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 2.9.0
+// version: 3.0.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -176,10 +176,11 @@ func (s *Server) searchMetadata(c *gin.Context) {
 	var results []metadata.BookMetadata
 	var err error
 
+	ctx := c.Request.Context()
 	if author != "" {
-		results, err = client.SearchByTitleAndAuthor(title, author)
+		results, err = client.SearchByTitleAndAuthor(ctx, title, author)
 	} else {
-		results, err = client.SearchByTitle(title)
+		results, err = client.SearchByTitle(ctx, title)
 	}
 
 	if err != nil {
@@ -607,14 +608,14 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 			// If we have an author, try title+author search first for more precise results
 			if currentAuthor != "" {
-				metaResults, err = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
+				metaResults, err = src.SearchByTitleAndAuthor(c.Request.Context(), searchTitle, currentAuthor)
 				if err == nil && len(metaResults) > 0 {
 					sourceName = src.Name()
 					break
 				}
 			}
 			// Fall back to title-only search
-			metaResults, err = src.SearchByTitle(searchTitle)
+			metaResults, err = src.SearchByTitle(c.Request.Context(), searchTitle)
 			if err == nil && len(metaResults) > 0 {
 				sourceName = src.Name()
 				break
@@ -622,13 +623,13 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			// Try original title if stripped version returned nothing
 			if searchTitle != book.Title {
 				if currentAuthor != "" {
-					metaResults, err = src.SearchByTitleAndAuthor(book.Title, currentAuthor)
+					metaResults, err = src.SearchByTitleAndAuthor(c.Request.Context(), book.Title, currentAuthor)
 					if err == nil && len(metaResults) > 0 {
 						sourceName = src.Name()
 						break
 					}
 				}
-				metaResults, err = src.SearchByTitle(book.Title)
+				metaResults, err = src.SearchByTitle(c.Request.Context(), book.Title)
 				if err == nil && len(metaResults) > 0 {
 					sourceName = src.Name()
 					break
@@ -1059,26 +1060,26 @@ func (s *Server) runBulkMetadataFetchAll(
 			}
 			var fetchErr error
 			if currentAuthor != "" {
-				metaResults, fetchErr = src.SearchByTitleAndAuthor(searchTitle, currentAuthor)
+				metaResults, fetchErr = src.SearchByTitleAndAuthor(ctx, searchTitle, currentAuthor)
 				if fetchErr == nil && len(metaResults) > 0 {
 					sourceName = src.Name()
 					break
 				}
 			}
-			metaResults, fetchErr = src.SearchByTitle(searchTitle)
+			metaResults, fetchErr = src.SearchByTitle(ctx, searchTitle)
 			if fetchErr == nil && len(metaResults) > 0 {
 				sourceName = src.Name()
 				break
 			}
 			if searchTitle != w.book.Title {
 				if currentAuthor != "" {
-					metaResults, fetchErr = src.SearchByTitleAndAuthor(w.book.Title, currentAuthor)
+					metaResults, fetchErr = src.SearchByTitleAndAuthor(ctx, w.book.Title, currentAuthor)
 					if fetchErr == nil && len(metaResults) > 0 {
 						sourceName = src.Name()
 						break
 					}
 				}
-				metaResults, fetchErr = src.SearchByTitle(w.book.Title)
+				metaResults, fetchErr = src.SearchByTitle(ctx, w.book.Title)
 				if fetchErr == nil && len(metaResults) > 0 {
 					sourceName = src.Name()
 					break

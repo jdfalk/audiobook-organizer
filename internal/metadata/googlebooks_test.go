@@ -5,6 +5,7 @@
 package metadata
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -45,7 +46,7 @@ func TestGoogleBooksClient_SearchByTitle(t *testing.T) {
 	defer server.Close()
 
 	client := NewGoogleBooksClientWithBaseURL(server.URL)
-	results, err := client.SearchByTitle("The Hobbit")
+	results, err := client.SearchByTitle(context.Background(), "The Hobbit")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestGoogleBooksClient_SearchByTitleAndAuthor(t *testing.T) {
 	defer server.Close()
 
 	client := NewGoogleBooksClientWithBaseURL(server.URL)
-	results, err := client.SearchByTitleAndAuthor("Unknown", "Nobody")
+	results, err := client.SearchByTitleAndAuthor(context.Background(), "Unknown", "Nobody")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -96,7 +97,7 @@ func TestGoogleBooksClient_APIError(t *testing.T) {
 	defer server.Close()
 
 	client := NewGoogleBooksClientWithBaseURL(server.URL)
-	_, err := client.SearchByTitle("test")
+	_, err := client.SearchByTitle(context.Background(), "test")
 	if err == nil {
 		t.Error("expected error on 500 response")
 	}
@@ -115,7 +116,7 @@ func TestGoogleBooksClient_APIKeyAppended(t *testing.T) {
 		baseURL:    server.URL,
 		apiKey:     "test-key-123",
 	}
-	_, err := client.SearchByTitle("Dune")
+	_, err := client.SearchByTitle(context.Background(), "Dune")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -133,7 +134,7 @@ func TestGoogleBooksClient_NoAPIKey(t *testing.T) {
 	defer server.Close()
 
 	client := NewGoogleBooksClientWithBaseURL(server.URL)
-	_, err := client.SearchByTitle("Dune")
+	_, err := client.SearchByTitle(context.Background(), "Dune")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
