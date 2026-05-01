@@ -1,5 +1,5 @@
 # file: .github/workflows/prerelease.yml
-# version: 2.9.0
+# version: 2.9.1
 # guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 name: Prerelease on Merge
@@ -27,7 +27,7 @@ env:
 jobs:
   prerelease:
     name: Create Prerelease Build
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@c46f978c3de2ddc839f6e8e47c4a1739d932623e # latest
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@dd8fae111732e9bdc7fed56a0f4d68cb0fd17d34 # v2.13.1
     with:
       release-type: 'auto'
       prerelease: true
