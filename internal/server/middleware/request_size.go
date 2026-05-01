@@ -1,6 +1,7 @@
 // file: internal/server/middleware/request_size.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f2129ae7-cf11-4888-bd4f-ab4b578f8f18
+// last-edited: 2026-05-01
 
 package middleware
 
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 func methodHasBody(method string) bool {
@@ -48,7 +50,7 @@ func MaxRequestBodySize(jsonLimitBytes, uploadLimitBytes int64) gin.HandlerFunc 
 
 		limit := selectBodyLimit(c.Request.URL.Path, jsonLimitBytes, uploadLimitBytes)
 		if c.Request.ContentLength > limit && c.Request.ContentLength > 0 {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request body too large"})
+			httputil.RespondWithError(c, http.StatusRequestEntityTooLarge, "request body too large", "REQUEST_TOO_LARGE")
 			c.Abort()
 			return
 		}

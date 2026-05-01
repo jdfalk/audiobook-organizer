@@ -1,6 +1,7 @@
 // file: internal/server/middleware/auth.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 83c42ecb-1df2-4baf-9890-3f91ab4db6fe
+// last-edited: 2026-05-01
 
 package middleware
 
@@ -13,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 const (
@@ -97,7 +99,7 @@ func RequireAuth(store interface {
 
 		userCount, err := store.CountUsers()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check auth state"})
+			httputil.RespondWithInternalError(c, "failed to check auth state")
 			c.Abort()
 			return
 		}
@@ -109,7 +111,7 @@ func RequireAuth(store interface {
 
 		token := SessionTokenFromRequest(c.Request)
 		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			httputil.RespondWithUnauthorized(c, "authentication required")
 			c.Abort()
 			return
 		}
@@ -121,25 +123,25 @@ func RequireAuth(store interface {
 
 		session, err := store.GetSession(token)
 		if err != nil || session == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+			httputil.RespondWithUnauthorized(c, "invalid session")
 			c.Abort()
 			return
 		}
 		if session.Revoked || time.Now().After(session.ExpiresAt) {
 			_ = store.RevokeSession(token)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "session expired"})
+			httputil.RespondWithUnauthorized(c, "session expired")
 			c.Abort()
 			return
 		}
 
 		user, err := store.GetUserByID(session.UserID)
 		if err != nil || user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session user"})
+			httputil.RespondWithUnauthorized(c, "invalid session user")
 			c.Abort()
 			return
 		}
 		if status := strings.ToLower(strings.TrimSpace(user.Status)); status != "" && status != "active" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "inactive user"})
+			httputil.RespondWithUnauthorized(c, "inactive user")
 			c.Abort()
 			return
 		}
@@ -169,39 +171,39 @@ func handleAPIKeyAuth(c *gin.Context, store interface {
 	key, err := store.GetAPIKeyByHash(hash)
 	if err != nil {
 		log.Printf("[APIKEY] lookup error: hash=%s err=%v", hash[:8], err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		httputil.RespondWithInternalError(c, "internal error")
 		c.Abort()
 		return
 	}
 	if key == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid API key"})
+		httputil.RespondWithUnauthorized(c, "invalid API key")
 		c.Abort()
 		return
 	}
 	if key.Status == "revoked" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "API key has been revoked"})
+		httputil.RespondWithUnauthorized(c, "API key has been revoked")
 		c.Abort()
 		return
 	}
 	if key.Status == "inactive" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "API key is inactive"})
+		httputil.RespondWithUnauthorized(c, "API key is inactive")
 		c.Abort()
 		return
 	}
 	if key.ExpiresAt != nil && time.Now().After(*key.ExpiresAt) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "API key has expired"})
+		httputil.RespondWithUnauthorized(c, "API key has expired")
 		c.Abort()
 		return
 	}
 
 	user, err := store.GetUserByID(key.UserID)
 	if err != nil || user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid API key owner"})
+		httputil.RespondWithUnauthorized(c, "invalid API key owner")
 		c.Abort()
 		return
 	}
 	if status := strings.ToLower(strings.TrimSpace(user.Status)); status != "" && status != "active" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "inactive user"})
+		httputil.RespondWithUnauthorized(c, "inactive user")
 		c.Abort()
 		return
 	}
@@ -300,9 +302,9 @@ func RequirePermission(store interface {
 			// (user present but missing perm) so API clients get a
 			// meaningful status code.
 			if _, ok := auth.UserFromContext(c.Request.Context()); !ok {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+				httputil.RespondWithUnauthorized(c, "authentication required")
 			} else {
-				c.JSON(http.StatusForbidden, gin.H{"error": "permission denied: " + p})
+				httputil.RespondWithForbidden(c, "permission denied: "+string(p))
 			}
 			c.Abort()
 			return
@@ -317,7 +319,7 @@ func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, ok := CurrentUser(c)
 		if !ok || user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			httputil.RespondWithUnauthorized(c, "authentication required")
 			c.Abort()
 			return
 		}
@@ -327,7 +329,7 @@ func RequireAdmin() gin.HandlerFunc {
 				return
 			}
 		}
-		c.JSON(http.StatusForbidden, gin.H{"error": "admin role required"})
+		httputil.RespondWithForbidden(c, "admin role required")
 		c.Abort()
 	}
 }

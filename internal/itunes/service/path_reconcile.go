@@ -1,6 +1,7 @@
 // file: internal/itunes/service/path_reconcile.go
-// version: 2.0.1
+// version: 2.1.0
 // guid: 9e3b7a1d-4c2f-4a60-b8d5-2f1e8c0d9a47
+// last-edited: 2026-05-01
 //
 // One-time (repeatable) backfill that walks every book with an
 // iTunes persistent ID, recomputes book_files.ITunesPath from the
@@ -15,11 +16,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -68,11 +69,11 @@ type iTunesPathReconcileResult struct {
 // via the gin context.
 func (r *PathReconciler) Start(c *gin.Context) {
 	if r.store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if r.queue == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "operation queue not initialized"})
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -80,7 +81,7 @@ func (r *PathReconciler) Start(c *gin.Context) {
 	op, err := r.store.CreateOperation(id, "itunes_path_reconcile", nil)
 	if err != nil {
 		log.Printf("[ERROR] failed to create operation: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation"})
+		httputil.RespondWithInternalError(c, "failed to create operation")
 		return
 	}
 
@@ -90,11 +91,11 @@ func (r *PathReconciler) Start(c *gin.Context) {
 
 	if err := r.queue.Enqueue(op.ID, "itunes_path_reconcile", operations.PriorityNormal, operationFunc); err != nil {
 		log.Printf("[ERROR] failed to enqueue operation: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enqueue operation"})
+		httputil.RespondWithInternalError(c, "failed to enqueue operation")
 		return
 	}
 
-	c.JSON(http.StatusAccepted, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // Reconcile is the operation body. Read-only over iTunes PIDs (PIDs
