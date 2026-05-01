@@ -1,0 +1,87 @@
+// file: internal/maintenance/jobs/backfill_metadata_source_hash.go
+// version: 1.0.0
+// guid: a1000015-0000-0000-0000-000000000015
+// last-edited: 2026-05-03
+
+package jobs
+
+import (
+	"context"
+	"crypto/sha256"
+	"fmt"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+)
+
+func init() { maintenance.Register(&backfillMetadataSourceHashJob{}) }
+
+type backfillMetadataSourceHashJob struct{}
+
+func (j *backfillMetadataSourceHashJob) ID() string          { return "backfill-metadata-source-hash" }
+func (j *backfillMetadataSourceHashJob) Description() string { return "Compute MetadataSourceHash for books that have one missing" }
+func (j *backfillMetadataSourceHashJob) CanResume() bool     { return false }
+func (j *backfillMetadataSourceHashJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
+	books, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		return err
+	}
+	reporter.SetTotal(len(books))
+	updated := 0
+	for i := range books {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		reporter.Increment()
+		book := &books[i]
+		if book.MetadataSourceHash != nil && *book.MetadataSourceHash != "" {
+			continue
+		}
+		src, id := bookMetadataSourceAndID(book)
+		if src == "" || id == "" {
+			continue
+		}
+		raw := fmt.Sprintf("%s:%s", src, id)
+		sum := sha256.Sum256([]byte(raw))
+		hash := fmt.Sprintf("%x", sum)
+		if !dryRun {
+			updBook := *book
+			updBook.MetadataSourceHash = &hash
+			if _, uerr := store.UpdateBook(book.ID, &updBook); uerr != nil {
+				msg := uerr.Error()
+				reporter.Log("error", "backfill-metadata-source-hash: UpdateBook failed", &msg)
+				continue
+			}
+		}
+		updated++
+	}
+	_ = updated
+	reporter.Log("info", "backfill-metadata-source-hash complete", nil)
+	return nil
+}
+
+func bookMetadataSourceAndID(book *database.Book) (string, string) {
+	if book.MetadataSource == nil {
+		return "", ""
+	}
+	src := *book.MetadataSource
+	switch src {
+	case "audible":
+		if book.ASIN != nil && *book.ASIN != "" {
+			return src, *book.ASIN
+		}
+	case "openlibrary":
+		if book.OpenLibraryID != nil && *book.OpenLibraryID != "" {
+			return src, *book.OpenLibraryID
+		}
+	case "google_books":
+		if book.GoogleBooksID != nil && *book.GoogleBooksID != "" {
+			return src, *book.GoogleBooksID
+		}
+	case "hardcover":
+		if book.HardcoverID != nil && *book.HardcoverID != "" {
+			return src, *book.HardcoverID
+		}
+	}
+	return "", ""
+}

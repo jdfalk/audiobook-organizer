@@ -1,0 +1,66 @@
+// file: internal/maintenance/jobs/backfill_book_files.go
+// version: 1.0.0
+// guid: a1000005-0000-0000-0000-000000000005
+// last-edited: 2026-05-03
+
+package jobs
+
+import (
+	"context"
+	"path/filepath"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	ulid "github.com/oklog/ulid/v2"
+)
+
+func init() { maintenance.Register(&backfillBookFilesJob{}) }
+
+type backfillBookFilesJob struct{}
+
+func (j *backfillBookFilesJob) ID() string          { return "backfill-book-files" }
+func (j *backfillBookFilesJob) Description() string { return "Create book_files rows for books that have none" }
+func (j *backfillBookFilesJob) CanResume() bool     { return false }
+func (j *backfillBookFilesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
+	books, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		return err
+	}
+	reporter.SetTotal(len(books))
+	created := 0
+	for i := range books {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		book := &books[i]
+		reporter.Increment()
+		files, err := store.GetBookFiles(book.ID)
+		if err != nil {
+			continue
+		}
+		if len(files) > 0 {
+			continue
+		}
+		audioFiles := metafetch.AudioFilesInDir(book.FilePath)
+		for _, fp := range audioFiles {
+			bf := &database.BookFile{
+				ID:       ulid.Make().String(),
+				BookID:   book.ID,
+				FilePath: fp,
+				Format:   filepath.Ext(fp),
+			}
+			if !dryRun {
+				if cerr := store.CreateBookFile(bf); cerr != nil {
+					msg := cerr.Error()
+					reporter.Log("error", "failed to create book file", &msg)
+					continue
+				}
+			}
+			created++
+		}
+	}
+	_ = created
+	reporter.Log("info", "backfill-book-files complete", nil)
+	return nil
+}
