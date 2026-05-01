@@ -1,5 +1,5 @@
 // file: internal/organizer/service.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package organizer
@@ -424,8 +424,6 @@ func (orgSvc *Service) ReOrganizeInPlace(book *database.Book, log logger.Logger)
 
 	// Update the book record — set path and mark as organized.
 	book.FilePath = targetPath
-	newITunesPath := orgSvc.ComputeITunesPath(targetPath)
-	book.ITunesPath = &newITunesPath
 	organizedState := "organized"
 	book.LibraryState = &organizedState
 	now := time.Now()
