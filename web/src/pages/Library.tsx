@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.53.0
+// version: 1.54.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-04-30
 
@@ -53,6 +53,7 @@ import { useColumnConfig } from '../hooks/useColumnConfig';
 import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
 import { FilterPanel } from '../components/FilterPanel';
 import { BookGrid } from '../components/BookGrid';
+import { BatchToolbar } from '../components/BatchToolbar';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
@@ -1753,63 +1754,52 @@ export const Library = () => {
       >
         {hasSelection ? (
           /* Batch actions mode */
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ width: '100%' }}>
-            <Chip label={`${selectedAudiobooks.length} selected`} size="small" color="primary" />
-            <Button size="small" variant="outlined" onClick={() => setBatchEditOpen(true)} disabled={!hasSelection}>Batch Edit</Button>
-            <Button
-              size="small"
-              variant="outlined"
-              color="primary"
-              onClick={async () => {
-                try {
-                  const resp = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
-                  const opId = resp.operation_id;
-                  if (!opId) {
-                    toast('All selected books are already being fetched.', 'info');
-                    return;
-                  }
-                  setMetadataReviewOpId(opId);
-                  startOperationPolling(opId, 'metadata_candidate_fetch');
-                  toast(
-                    `Metadata fetch started for ${selectedAudiobooks.length} book${selectedAudiobooks.length !== 1 ? 's' : ''} — watch the bell for progress.`,
-                    'info',
-                  );
-                } catch { toast('Failed to start metadata fetch', 'error'); }
-              }}
-              disabled={selectedAudiobooks.length < 2}
-            >Fetch & Review</Button>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={async () => {
-                try {
-                  const list = await api.getRecentMetadataFetches();
-                  if (list.length === 0) {
-                    toast('No recent metadata fetch with results found. Start a Fetch & Review first.', 'info');
-                    return;
-                  }
-                  setRecentFetches(list);
-                  setResumeReviewPickerOpen(true);
-                } catch {
-                  toast('Failed to load recent metadata fetches', 'error');
+          <BatchToolbar
+            selectedCount={selectedAudiobooks.length}
+            onBatchEditClick={() => setBatchEditOpen(true)}
+            onFetchReviewClick={async () => {
+              try {
+                const resp = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
+                const opId = resp.operation_id;
+                if (!opId) {
+                  toast('All selected books are already being fetched.', 'info');
+                  return;
                 }
-              }}
-              title="Pick a recent fetch operation to review — useful when multiple fetches completed without review or after a page reload"
-            >
-              Resume Review
-            </Button>
-            <Button size="small" variant="outlined" onClick={() => setBulkSearchOpen(true)} disabled={!hasSelection}>Search Metadata</Button>
-            <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24 }} />
-            <Button size="small" variant="outlined" onClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }} disabled={!selectedHasActive}>Save to Files</Button>
-            <Button size="small" variant="outlined" onClick={() => setBulkOrganizeDialogOpen(true)} disabled={!selectedHasImport}>Organize Selected</Button>
-            <Box sx={{ borderLeft: 1, borderColor: 'divider', height: 24 }} />
-            <Button size="small" variant="outlined" color="primary" onClick={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }} disabled={selectedAudiobooks.length < 2}>Merge as Versions</Button>
-            <Button size="small" variant="outlined" onClick={() => setBulkTagDialogOpen(true)} disabled={!hasSelection}>Tag</Button>
-            <Button size="small" variant="outlined" onClick={() => setBulkRatingDialogOpen(true)} disabled={!hasSelection}>Rate</Button>
-            <Box sx={{ flex: 1 }} />
-            <Button size="small" variant="outlined" color="secondary" onClick={() => setBatchDeleteDialogOpen(true)} disabled={!selectedHasActive}>Delete Selected</Button>
-            <Button size="small" variant="outlined" color="success" onClick={handleBatchRestore} disabled={!selectedHasDeleted || batchRestoreInProgress}>{batchRestoreInProgress ? 'Restoring...' : 'Restore Selected'}</Button>
-          </Stack>
+                setMetadataReviewOpId(opId);
+                startOperationPolling(opId, 'metadata_candidate_fetch');
+                toast(
+                  `Metadata fetch started for ${selectedAudiobooks.length} book${selectedAudiobooks.length !== 1 ? 's' : ''} — watch the bell for progress.`,
+                  'info',
+                );
+              } catch { toast('Failed to start metadata fetch', 'error'); }
+            }}
+            onResumeReviewClick={async () => {
+              try {
+                const list = await api.getRecentMetadataFetches();
+                if (list.length === 0) {
+                  toast('No recent metadata fetch with results found. Start a Fetch & Review first.', 'info');
+                  return;
+                }
+                setRecentFetches(list);
+                setResumeReviewPickerOpen(true);
+              } catch {
+                toast('Failed to load recent metadata fetches', 'error');
+              }
+            }}
+            onSearchMetadataClick={() => setBulkSearchOpen(true)}
+            onSaveToFilesClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }}
+            onOrganizeSelectedClick={() => setBulkOrganizeDialogOpen(true)}
+            onMergeAsVersionsClick={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }}
+            onTagClick={() => setBulkTagDialogOpen(true)}
+            onRateClick={() => setBulkRatingDialogOpen(true)}
+            onDeleteSelectedClick={() => setBatchDeleteDialogOpen(true)}
+            onRestoreSelectedClick={handleBatchRestore}
+            batchRestoreInProgress={batchRestoreInProgress}
+            selectedHasActive={selectedHasActive}
+            selectedHasDeleted={selectedHasDeleted}
+            selectedHasImport={selectedHasImport}
+            selectedAudiobooksLength={selectedAudiobooks.length}
+          />
         ) : (
           /* Library actions mode */
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
