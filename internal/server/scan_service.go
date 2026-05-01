@@ -290,6 +290,19 @@ func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath
 
 	// Process the books to extract metadata (parallel)
 	if len(books) > 0 {
+		// Tag every book with its source import path before saving to DB.
+		// This must happen before ProcessBooksParallel (which calls CreateBook)
+		// so that source_import_path is set on first insert and survives organize.
+		// Only apply when the folder being scanned is NOT the organized library root,
+		// otherwise we'd overwrite the original import path on re-scans.
+		if folderPath != config.AppConfig.RootDir {
+			for i := range books {
+				if books[i].SourceImportPath == "" {
+					books[i].SourceImportPath = folderPath
+				}
+			}
+		}
+
 		log.Info("Processing metadata for %d books using %d workers", len(books), workers)
 		if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback, log.With("scanner")); err != nil {
 			log.Error("Failed to process books: %v", err)
