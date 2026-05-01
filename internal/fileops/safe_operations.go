@@ -1,5 +1,5 @@
 // file: internal/fileops/safe_operations.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 8f7e6d5c-4b3a-2918-7f6e-5d4c3b2a1908
 
 package fileops
@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -134,14 +135,14 @@ func (op *FileOperation) Execute() error {
 		// Only remove original if it's different from target
 		if err := os.Remove(op.originalPath); err != nil {
 			// Non-fatal: log but don't fail the operation
-			fmt.Printf("Warning: failed to remove original file %s: %v\n", op.originalPath, err)
+			slog.Warn("failed to remove original file", "path", op.originalPath, "error", err)
 		}
 	}
 
 	// Step 5: Cleanup old backups if limit exceeded
 	if err := op.cleanupOldBackups(); err != nil {
 		// Non-fatal: log but don't fail the operation
-		fmt.Printf("Warning: failed to cleanup old backups: %v\n", err)
+		slog.Warn("failed to cleanup old backups", "error", err)
 	}
 
 	return nil
@@ -204,7 +205,7 @@ func (op *FileOperation) cleanupOldBackups() error {
 	toRemove := len(matches) - op.config.MaxBackups
 	for i := 0; i < toRemove; i++ {
 		if err := os.Remove(matches[i]); err != nil {
-			fmt.Printf("Warning: failed to remove old backup %s: %v\n", matches[i], err)
+			slog.Warn("failed to remove old backup", "path", matches[i], "error", err)
 		}
 	}
 
