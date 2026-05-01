@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.77.0
+// version: 1.78.0
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -4307,8 +4307,14 @@ func (s *SQLiteStore) GetLibraryFingerprint(path string) (*LibraryFingerprintRec
 	if err != nil {
 		return nil, err
 	}
-	rec.ModTime, _ = time.Parse(time.RFC3339, modTimeStr)
-	rec.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtStr)
+	rec.ModTime, err = time.Parse(time.RFC3339, modTimeStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse ModTime %q: %w", modTimeStr, err)
+	}
+	rec.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse UpdatedAt %q: %w", updatedAtStr, err)
+	}
 	return &rec, nil
 }
 
@@ -4340,7 +4346,10 @@ func (s *SQLiteStore) GetPendingDeferredITunesUpdates() ([]DeferredITunesUpdate,
 		if err := rows.Scan(&d.ID, &d.BookID, &d.PersistentID, &d.OldPath, &d.NewPath, &d.UpdateType, &createdAtStr); err != nil {
 			return nil, err
 		}
-		d.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
+		d.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse CreatedAt %q: %w", createdAtStr, err)
+		}
 		results = append(results, d)
 	}
 	return results, rows.Err()
@@ -4375,9 +4384,15 @@ func (s *SQLiteStore) GetDeferredITunesUpdatesByBookID(bookID string) ([]Deferre
 		if err := rows.Scan(&d.ID, &d.BookID, &d.PersistentID, &d.OldPath, &d.NewPath, &d.UpdateType, &createdAtStr, &appliedAtStr); err != nil {
 			return nil, err
 		}
-		d.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
+		d.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse CreatedAt %q: %w", createdAtStr, err)
+		}
 		if appliedAtStr != nil {
-			t, _ := time.Parse(time.RFC3339, *appliedAtStr)
+			t, err := time.Parse(time.RFC3339, *appliedAtStr)
+			if err != nil {
+				return nil, fmt.Errorf("parse AppliedAt %q: %w", *appliedAtStr, err)
+			}
 			d.AppliedAt = &t
 		}
 		results = append(results, d)
@@ -4441,8 +4456,14 @@ func (s *SQLiteStore) GetExternalIDsForBook(bookID string) ([]ExternalIDMapping,
 			m.FilePath = filePath.String
 		}
 		m.Tombstoned = tombstoned != 0
-		m.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
-		m.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtStr)
+		m.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse CreatedAt %q: %w", createdAtStr, err)
+		}
+		m.UpdatedAt, err = time.Parse(time.RFC3339, updatedAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse UpdatedAt %q: %w", updatedAtStr, err)
+		}
 		results = append(results, m)
 	}
 	return results, rows.Err()
@@ -5080,7 +5101,10 @@ func (s *SQLiteStore) GetBookPathHistory(bookID string) ([]BookPathChange, error
 		if err := rows.Scan(&c.ID, &c.BookID, &c.OldPath, &c.NewPath, &c.ChangeType, &createdAtStr); err != nil {
 			return nil, err
 		}
-		c.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
+		c.CreatedAt, err = time.Parse(time.RFC3339, createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse CreatedAt %q: %w", createdAtStr, err)
+		}
 		results = append(results, c)
 	}
 	return results, rows.Err()
