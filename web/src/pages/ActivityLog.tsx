@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.6.0
+// version: 2.7.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -637,7 +637,12 @@ export default function ActivityLog() {
                         <Typography variant="subtitle2" fontWeight="bold">
                           {op.type.replace(/_/g, ' ')}
                         </Typography>
-                        <Chip size="small" label={op.status} color="info" />
+                        <Chip
+                          size="small"
+                          label={op.status === 'queued' ? 'pending' : op.status}
+                          color={op.status === 'queued' ? 'default' : 'info'}
+                          icon={op.status === 'queued' ? undefined : undefined}
+                        />
                       </Stack>
                       <Button
                         size="small"
@@ -650,7 +655,11 @@ export default function ActivityLog() {
                         {cancelling.has(op.id) ? 'Cancelling...' : 'Cancel'}
                       </Button>
                     </Stack>
-                    {op.total > 0 ? (
+                    {op.status === 'queued' ? (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                        Waiting to start…
+                      </Typography>
+                    ) : op.total > 0 ? (
                       <Box>
                         <LinearProgress variant="determinate" value={pct} sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
                         <Typography variant="caption" color="text.secondary">
