@@ -1,6 +1,7 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.0.1
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-05-01
 
 package server
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	ulid "github.com/oklog/ulid/v2"
@@ -27,7 +29,7 @@ import (
 // Query params: entity_type, status, layer, min_similarity (float), limit (int, default 50), offset (int).
 func (s *Server) listDedupCandidates(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
@@ -45,22 +47,23 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 	if v := c.Query("min_similarity"); v != "" {
 		f, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			RespondWithBadRequest(c, "invalid min_similarity")
+			httputil.RespondWithBadRequest(c, "invalid min_similarity")
 			return
 		}
 		filter.MinSimilarity = &f
 	}
-	limit, offset := paginationFromQuery(c)
+	p := httputil.ParsePaginationParams(c)
+	limit, offset := p.Limit, p.Offset
 	filter.Limit = limit
 	filter.Offset = offset
 
 	candidates, total, err := s.embeddingStore.ListCandidates(filter)
 	if err != nil {
-		internalError(c, "failed to list dedup candidates", err)
+		httputil.InternalError(c, "failed to list dedup candidates", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"candidates": candidates,
 		"total":      total,
 	})
@@ -85,13 +88,13 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 // llm_verdict, llm_reason, created_at, updated_at.
 func (s *Server) exportDedupCandidates(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
 	format := c.DefaultQuery("format", "csv")
 	if format != "csv" && format != "json" {
-		RespondWithBadRequest(c, "format must be csv or json")
+		httputil.RespondWithBadRequest(c, "format must be csv or json")
 		return
 	}
 
@@ -108,7 +111,7 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 	if v := c.Query("min_similarity"); v != "" {
 		f, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			RespondWithBadRequest(c, "invalid min_similarity")
+			httputil.RespondWithBadRequest(c, "invalid min_similarity")
 			return
 		}
 		filter.MinSimilarity = &f
@@ -116,7 +119,7 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 
 	candidates, _, err := s.embeddingStore.ListCandidates(filter)
 	if err != nil {
-		internalError(c, "failed to list candidates for export", err)
+		httputil.InternalError(c, "failed to list candidates for export", err)
 		return
 	}
 
@@ -275,7 +278,7 @@ type dedupSeriesSummary struct {
 // "series-aware bulk merge" workflow.
 func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
@@ -285,7 +288,7 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 		Limit:      100000,
 	})
 	if err != nil {
-		internalError(c, "failed to list pending candidates", err)
+		httputil.InternalError(c, "failed to list pending candidates", err)
 		return
 	}
 
@@ -372,7 +375,7 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 		return summary[i].SeriesName < summary[j].SeriesName
 	})
 
-	RespondWithOK(c, gin.H{"series": summary})
+	httputil.RespondWithOK(c, gin.H{"series": summary})
 }
 
 // mergeDedupCandidateSeries handles
@@ -391,11 +394,11 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 // can use the regular Merge Filtered action.
 func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 	if s.mergeService == nil {
-		RespondWithServiceUnavailable(c, "merge service not available")
+		httputil.RespondWithServiceUnavailable(c, "merge service not available")
 		return
 	}
 
@@ -403,7 +406,7 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 		SeriesID int `json:"series_id"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.SeriesID <= 0 {
-		RespondWithBadRequest(c, "series_id must be a positive integer")
+		httputil.RespondWithBadRequest(c, "series_id must be a positive integer")
 		return
 	}
 
@@ -413,7 +416,7 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 		Limit:      100000,
 	})
 	if err != nil {
-		internalError(c, "failed to list pending candidates", err)
+		httputil.InternalError(c, "failed to list pending candidates", err)
 		return
 	}
 
@@ -507,7 +510,7 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 	log.Printf("[dedup] series merge: series=%d clusters_merged=%d books_merged=%d candidates_updated=%d failures=%d",
 		body.SeriesID, mergedClusters, mergedBooks, candidatesUpdated, len(failures))
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"series_id":          body.SeriesID,
 		"clusters_merged":    mergedClusters,
 		"books_merged":       mergedBooks,
@@ -519,17 +522,17 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 // getDedupStats handles GET /api/v1/dedup/stats.
 func (s *Server) getDedupStats(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
 	stats, err := s.embeddingStore.GetCandidateStats()
 	if err != nil {
-		internalError(c, "failed to get dedup stats", err)
+		httputil.InternalError(c, "failed to get dedup stats", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{"stats": stats})
+	httputil.RespondWithOK(c, gin.H{"stats": stats})
 }
 
 // bulkMergeDedupCandidates handles POST /api/v1/dedup/candidates/bulk-merge.
@@ -548,11 +551,11 @@ func (s *Server) getDedupStats(c *gin.Context) {
 // this is destructive and irreversible.
 func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 	if s.mergeService == nil {
-		RespondWithServiceUnavailable(c, "merge service not available")
+		httputil.RespondWithServiceUnavailable(c, "merge service not available")
 		return
 	}
 
@@ -575,7 +578,7 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 		body.EntityType = "book"
 	}
 	if body.EntityType != "book" {
-		RespondWithBadRequest(c, "bulk merge only supports entity_type=book")
+		httputil.RespondWithBadRequest(c, "bulk merge only supports entity_type=book")
 		return
 	}
 
@@ -590,7 +593,7 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 
 	candidates, total, err := s.embeddingStore.ListCandidates(filter)
 	if err != nil {
-		internalError(c, "failed to list candidates for bulk merge", err)
+		httputil.InternalError(c, "failed to list candidates for bulk merge", err)
 		return
 	}
 
@@ -620,7 +623,7 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 	log.Printf("[dedup] bulk merge complete: %d merged, %d failed out of %d matched",
 		merged, len(failures), total)
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"attempted": total,
 		"merged":    merged,
 		"failed":    len(failures),
@@ -641,11 +644,11 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 // time (which would fight the version-group state mid-way).
 func (s *Server) mergeDedupCluster(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 	if s.mergeService == nil {
-		RespondWithServiceUnavailable(c, "merge service not available")
+		httputil.RespondWithServiceUnavailable(c, "merge service not available")
 		return
 	}
 
@@ -654,11 +657,11 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 		PrimaryBookID string   `json:"primary_book_id,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		RespondWithBadRequest(c, "invalid request body")
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 	if len(body.BookIDs) < 2 {
-		RespondWithBadRequest(c, "book_ids must contain at least 2 entries")
+		httputil.RespondWithBadRequest(c, "book_ids must contain at least 2 entries")
 		return
 	}
 	// If primary_book_id is set, it must be one of the books in the
@@ -672,14 +675,14 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 			}
 		}
 		if !found {
-			RespondWithBadRequest(c, "primary_book_id must be one of book_ids")
+			httputil.RespondWithBadRequest(c, "primary_book_id must be one of book_ids")
 			return
 		}
 	}
 
 	mergeResult, err := s.mergeService.MergeBooks(body.BookIDs, body.PrimaryBookID)
 	if err != nil {
-		internalError(c, "failed to merge books in cluster", err)
+		httputil.InternalError(c, "failed to merge books in cluster", err)
 		return
 	}
 
@@ -715,7 +718,7 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 	log.Printf("[dedup] cluster merge: merged %d books, marked %d candidate row(s) as merged",
 		len(body.BookIDs), updated)
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"status":              "merged",
 		"merged_books":        len(body.BookIDs),
 		"candidates_updated":  updated,
@@ -732,7 +735,7 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 // from the pending queue.
 func (s *Server) dismissDedupCluster(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
@@ -740,11 +743,11 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 		BookIDs []string `json:"book_ids"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		RespondWithBadRequest(c, "invalid request body")
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 	if len(body.BookIDs) < 2 {
-		RespondWithBadRequest(c, "book_ids must contain at least 2 entries")
+		httputil.RespondWithBadRequest(c, "book_ids must contain at least 2 entries")
 		return
 	}
 
@@ -758,7 +761,7 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 		Limit:      100000,
 	})
 	if err != nil {
-		internalError(c, "failed to list candidates for cluster dismiss", err)
+		httputil.InternalError(c, "failed to list candidates for cluster dismiss", err)
 		return
 	}
 	dismissed := 0
@@ -777,7 +780,7 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 	log.Printf("[dedup] cluster dismiss: dismissed %d candidate row(s) across %d books",
 		dismissed, len(body.BookIDs))
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"status":    "dismissed",
 		"dismissed": dismissed,
 	})
@@ -805,7 +808,7 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 // If both are provided, they're merged into a single set.
 func (s *Server) removeFromDedupCluster(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
@@ -815,7 +818,7 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 		RemoveBookIDs  []string `json:"remove_book_ids,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		RespondWithBadRequest(c, "invalid request body")
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 
@@ -832,11 +835,11 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 		}
 	}
 	if len(removeSet) == 0 {
-		RespondWithBadRequest(c, "remove_book_id or remove_book_ids is required")
+		httputil.RespondWithBadRequest(c, "remove_book_id or remove_book_ids is required")
 		return
 	}
 	if len(body.ClusterBookIDs) < 2 {
-		RespondWithBadRequest(c, "cluster_book_ids must contain at least 2 entries")
+		httputil.RespondWithBadRequest(c, "cluster_book_ids must contain at least 2 entries")
 		return
 	}
 
@@ -850,7 +853,7 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 		remaining[id] = struct{}{}
 	}
 	if len(remaining) == 0 {
-		RespondWithBadRequest(c, "cluster must contain at least one book that is not in remove set")
+		httputil.RespondWithBadRequest(c, "cluster must contain at least one book that is not in remove set")
 		return
 	}
 
@@ -860,7 +863,7 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 		Limit:      100000,
 	})
 	if err != nil {
-		internalError(c, "failed to list candidates for cluster remove", err)
+		httputil.InternalError(c, "failed to list candidates for cluster remove", err)
 		return
 	}
 
@@ -899,7 +902,7 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 	log.Printf("[dedup] remove-from-cluster: dismissed %d edge(s), removed %d book(s) from cluster of %d",
 		dismissed, len(removeSet), len(body.ClusterBookIDs))
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"status":    "removed",
 		"dismissed": dismissed,
 		"removed":   len(removeSet),
@@ -909,24 +912,24 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 // mergeDedupCandidate handles POST /api/v1/dedup/candidates/:id/merge.
 func (s *Server) mergeDedupCandidate(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		RespondWithBadRequest(c, "invalid candidate id")
+		httputil.RespondWithBadRequest(c, "invalid candidate id")
 		return
 	}
 
 	candidate, err := s.embeddingStore.GetCandidateByID(id)
 	if err != nil {
-		internalError(c, "failed to get candidate", err)
+		httputil.InternalError(c, "failed to get candidate", err)
 		return
 	}
 	if candidate == nil {
-		RespondWithNotFound(c, "candidate", idStr)
+		httputil.RespondWithNotFound(c, "candidate", idStr)
 		return
 	}
 
@@ -934,14 +937,14 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 	if candidate.EntityType == "book" && s.mergeService != nil {
 		mergeResult, mergeErr := s.mergeService.MergeBooks([]string{candidate.EntityAID, candidate.EntityBID}, "")
 		if mergeErr != nil {
-			internalError(c, "failed to merge books", mergeErr)
+			httputil.InternalError(c, "failed to merge books", mergeErr)
 			return
 		}
 		result = mergeResult
 	}
 
 	if err := s.embeddingStore.UpdateCandidateStatus(id, "merged"); err != nil {
-		internalError(c, "failed to update candidate status", err)
+		httputil.InternalError(c, "failed to update candidate status", err)
 		return
 	}
 
@@ -951,29 +954,29 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 		"candidate_id": id,
 	}))
 
-	RespondWithOK(c, gin.H{"status": "merged", "result": result})
+	httputil.RespondWithOK(c, gin.H{"status": "merged", "result": result})
 }
 
 // dismissDedupCandidate handles POST /api/v1/dedup/candidates/:id/dismiss.
 func (s *Server) dismissDedupCandidate(c *gin.Context) {
 	if s.embeddingStore == nil {
-		RespondWithServiceUnavailable(c, "embedding store not available")
+		httputil.RespondWithServiceUnavailable(c, "embedding store not available")
 		return
 	}
 
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		RespondWithBadRequest(c, "invalid candidate id")
+		httputil.RespondWithBadRequest(c, "invalid candidate id")
 		return
 	}
 
 	if err := s.embeddingStore.UpdateCandidateStatus(id, "dismissed"); err != nil {
-		internalError(c, "failed to dismiss candidate", err)
+		httputil.InternalError(c, "failed to dismiss candidate", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{"status": "dismissed"})
+	httputil.RespondWithOK(c, gin.H{"status": "dismissed"})
 }
 
 // triggerDedupScan handles POST /api/v1/dedup/scan.
@@ -987,18 +990,18 @@ func (s *Server) dismissDedupCandidate(c *gin.Context) {
 // live progress updates and final-completion messages.
 func (s *Server) triggerDedupScan(c *gin.Context) {
 	if s.dedupEngine == nil {
-		RespondWithServiceUnavailable(c, "dedup engine not available")
+		httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
 	opID := ulid.Make().String()
 	op, err := s.Store().CreateOperation(opID, "dedup-scan", nil)
 	if err != nil {
-		internalError(c, "failed to create dedup-scan operation", err)
+		httputil.InternalError(c, "failed to create dedup-scan operation", err)
 		return
 	}
 
@@ -1045,11 +1048,11 @@ func (s *Server) triggerDedupScan(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(opID, "dedup-scan", operations.PriorityLow, opFunc); err != nil {
-		internalError(c, "failed to enqueue dedup scan", err)
+		httputil.InternalError(c, "failed to enqueue dedup scan", err)
 		return
 	}
 
-	RespondWithSuccess(c, http.StatusAccepted, op)
+	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
 }
 
 // triggerDedupLLM handles POST /api/v1/dedup/scan-llm.
@@ -1057,18 +1060,18 @@ func (s *Server) triggerDedupScan(c *gin.Context) {
 // tracked Operation so the UI can display progress and completion.
 func (s *Server) triggerDedupLLM(c *gin.Context) {
 	if s.dedupEngine == nil {
-		RespondWithServiceUnavailable(c, "dedup engine not available")
+		httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
 	opID := ulid.Make().String()
 	op, err := s.Store().CreateOperation(opID, "dedup-llm-review", nil)
 	if err != nil {
-		internalError(c, "failed to create dedup-llm-review operation", err)
+		httputil.InternalError(c, "failed to create dedup-llm-review operation", err)
 		return
 	}
 
@@ -1082,11 +1085,11 @@ func (s *Server) triggerDedupLLM(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(opID, "dedup-llm-review", operations.PriorityLow, opFunc); err != nil {
-		internalError(c, "failed to enqueue LLM review", err)
+		httputil.InternalError(c, "failed to enqueue LLM review", err)
 		return
 	}
 
-	RespondWithSuccess(c, http.StatusAccepted, op)
+	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
 }
 
 // triggerDedupRefresh handles POST /api/v1/dedup/refresh.
@@ -1102,18 +1105,18 @@ func (s *Server) triggerDedupRefresh(c *gin.Context) {
 // and emits DedupCandidate rows with layer="acoustid" for any matches.
 func (s *Server) triggerDedupAcoustID(c *gin.Context) {
 	if s.dedupEngine == nil {
-		RespondWithServiceUnavailable(c, "dedup engine not available")
+		httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
 	opID := ulid.Make().String()
 	op, err := s.Store().CreateOperation(opID, "dedup-acoustid-scan", nil)
 	if err != nil {
-		internalError(c, "failed to create dedup-acoustid-scan operation", err)
+		httputil.InternalError(c, "failed to create dedup-acoustid-scan operation", err)
 		return
 	}
 
@@ -1149,9 +1152,9 @@ func (s *Server) triggerDedupAcoustID(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(opID, "dedup-acoustid-scan", operations.PriorityLow, opFunc); err != nil {
-		internalError(c, "failed to enqueue acoustid scan", err)
+		httputil.InternalError(c, "failed to enqueue acoustid scan", err)
 		return
 	}
 
-	RespondWithSuccess(c, http.StatusAccepted, op)
+	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
 }
