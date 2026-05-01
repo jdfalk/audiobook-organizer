@@ -1,5 +1,5 @@
 // file: internal/metadata/audible.go
-// version: 1.5.0
+// version: 1.5.1
 // guid: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
 
 package metadata
@@ -147,7 +147,7 @@ func (c *AudibleClient) LookupByASIN(asin string) (*BookMetadata, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Audible API returned status %d for ASIN %s", resp.StatusCode, asin)
+		return nil, fmt.Errorf("audible API returned status %d for ASIN %s", resp.StatusCode, asin)
 	}
 
 	var result audibleProductResponse
@@ -156,7 +156,7 @@ func (c *AudibleClient) LookupByASIN(asin string) (*BookMetadata, error) {
 	}
 
 	if result.Product.Title == "" {
-		return nil, fmt.Errorf("Audible returned empty product for ASIN %s", asin)
+		return nil, fmt.Errorf("audible returned empty product for ASIN %s", asin)
 	}
 
 	meta := c.productToMetadata(&result.Product)
@@ -177,7 +177,7 @@ func (c *AudibleClient) searchCatalog(ctx context.Context, searchURL string) ([]
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Audible API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("audible API returned status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
