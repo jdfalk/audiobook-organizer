@@ -5,7 +5,6 @@
 package server
 
 import (
-	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -15,6 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
