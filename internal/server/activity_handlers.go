@@ -1,5 +1,5 @@
 // file: internal/server/activity_handlers.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
 
 package server
@@ -184,7 +184,7 @@ func (s *Server) compactActivity(c *gin.Context) {
 
 	// 0 means "compact everything up to now"
 	cutoff := time.Now().AddDate(0, 0, -req.OlderThanDays)
-	result, err := s.activityService.CompactByDay(cutoff)
+	result, err := s.activityService.CompactByDay(c.Request.Context(), cutoff)
 	if err != nil {
 		internalError(c, "activity compaction failed", err)
 		return

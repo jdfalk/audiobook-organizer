@@ -1,10 +1,11 @@
 // file: internal/database/activity_store_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: f3a1b2c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 package database
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -209,7 +210,7 @@ func TestActivityStore_Summarize(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	deleted, err := s.Summarize(cutoff, "realtime")
+	deleted, err := s.Summarize(context.Background(), cutoff, "realtime")
 	require.NoError(t, err)
 	assert.Equal(t, 5, deleted, "all 5 old originals should be deleted")
 

@@ -1,5 +1,5 @@
 // file: internal/server/scheduler.go
-// version: 1.19.1
+// version: 1.19.2
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -1126,7 +1126,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 						compactionDays = 14
 					}
 					compactionCutoff := time.Now().AddDate(0, 0, -compactionDays)
-					compacted, err := ts.server.activityService.CompactByDay(compactionCutoff)
+					compacted, err := ts.server.activityService.CompactByDay(ctx, compactionCutoff)
 					if err != nil {
 						return fmt.Errorf("compact activity: %w", err)
 					}
@@ -1137,7 +1137,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 						changeDays = 90
 					}
 					changeCutoff := time.Now().AddDate(0, 0, -changeDays)
-					summarized, err := ts.server.activityService.Summarize(changeCutoff, "change")
+					summarized, err := ts.server.activityService.Summarize(ctx, changeCutoff, "change")
 					if err != nil {
 						return fmt.Errorf("summarize activity: %w", err)
 					}

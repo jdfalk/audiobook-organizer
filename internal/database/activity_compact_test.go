@@ -1,10 +1,11 @@
 // file: internal/database/activity_compact_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -64,7 +65,7 @@ func TestCompactByDay_BasicCompaction(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	result, err := s.CompactByDay(olderThan)
+	result, err := s.CompactByDay(context.Background(), olderThan)
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.DaysCompacted)
 	assert.Equal(t, 5, result.EntriesDeleted)
@@ -121,13 +122,13 @@ func TestCompactByDay_Idempotent(t *testing.T) {
 	require.NoError(t, err)
 
 	// First compaction
-	r1, err := s.CompactByDay(olderThan)
+	r1, err := s.CompactByDay(context.Background(), olderThan)
 	require.NoError(t, err)
 	assert.Equal(t, 1, r1.DaysCompacted)
 	assert.Equal(t, 1, r1.EntriesDeleted)
 
 	// Second compaction — should be no-op
-	r2, err := s.CompactByDay(olderThan)
+	r2, err := s.CompactByDay(context.Background(), olderThan)
 	require.NoError(t, err)
 	assert.Equal(t, 0, r2.DaysCompacted)
 	assert.Equal(t, 0, r2.EntriesDeleted)
@@ -151,7 +152,7 @@ func TestCompactByDay_SkipsAuditTier(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	result, err := s.CompactByDay(olderThan)
+	result, err := s.CompactByDay(context.Background(), olderThan)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.DaysCompacted)
 	assert.Equal(t, 0, result.EntriesDeleted)
@@ -185,7 +186,7 @@ func TestCompactByDay_TruncatesLargeDays(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	result, err := s.CompactByDay(olderThan)
+	result, err := s.CompactByDay(context.Background(), olderThan)
 	require.NoError(t, err)
 	assert.Equal(t, 1, result.DaysCompacted)
 	assert.Equal(t, 600, result.EntriesDeleted)
@@ -243,7 +244,7 @@ func TestCompactByDay_MergesIntoExistingDigest(t *testing.T) {
 	}
 
 	// First compaction — 3 entries compacted into 1 digest.
-	r1, err := s.CompactByDay(initialCutoff)
+	r1, err := s.CompactByDay(context.Background(), initialCutoff)
 	require.NoError(t, err)
 	assert.Equal(t, 1, r1.DaysCompacted, "first run should create 1 digest")
 	assert.Equal(t, 3, r1.EntriesDeleted)
@@ -267,7 +268,7 @@ func TestCompactByDay_MergesIntoExistingDigest(t *testing.T) {
 
 	// Second compaction — must MERGE the 5 late entries into the
 	// existing digest, not skip them.
-	r2, err := s.CompactByDay(initialCutoff)
+	r2, err := s.CompactByDay(context.Background(), initialCutoff)
 	require.NoError(t, err)
 	assert.Equal(t, 1, r2.DaysCompacted, "second run should merge into existing digest (counted as 1 day compacted)")
 	assert.Equal(t, 5, r2.EntriesDeleted, "all 5 late entries must be deleted")

@@ -1,10 +1,11 @@
 // file: internal/activity/service.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package activity
 
 import (
+	"context"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -35,8 +36,8 @@ func (s *Service) Query(filter database.ActivityFilter) ([]database.ActivityEntr
 
 // Summarize collapses old entries in the given tier that are older than olderThan.
 // Returns the count of original rows deleted.
-func (s *Service) Summarize(olderThan time.Time, tier string) (int, error) {
-	return s.store.Summarize(olderThan, tier)
+func (s *Service) Summarize(ctx context.Context, olderThan time.Time, tier string) (int, error) {
+	return s.store.Summarize(ctx, olderThan, tier)
 }
 
 // Prune hard-deletes all entries of the given tier older than olderThan.
@@ -46,8 +47,8 @@ func (s *Service) Prune(olderThan time.Time, tier string) (int, error) {
 }
 
 // CompactByDay groups old change/debug entries by UTC day into digest rows.
-func (s *Service) CompactByDay(olderThan time.Time) (database.CompactResult, error) {
-	return s.store.CompactByDay(olderThan)
+func (s *Service) CompactByDay(ctx context.Context, olderThan time.Time) (database.CompactResult, error) {
+	return s.store.CompactByDay(ctx, olderThan)
 }
 
 // GetDistinctSources returns all unique sources with their entry counts,
