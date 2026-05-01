@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.207.1
+// version: 1.208.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-01
 
@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -827,6 +828,7 @@ func NewServer(store database.Store) *Server {
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
 	router.Use(servermiddleware.BasicAuth())
+	router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/events"})))
 
 	// Register metrics (idempotent)
 	metrics.Register()
