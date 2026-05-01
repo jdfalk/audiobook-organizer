@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -2690,6 +2691,19 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		// Books without a PID get nil status (unlinked) — set when they're added to iTunes
 	}
 
+	// Wrap in a transaction: book insert + path history write must be atomic
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("CreateBook begin tx: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				log.Printf("CreateBook rollback: %v", rbErr)
+			}
+		}
+	}()
+
 	query := `INSERT INTO books (
 		id, title, author_id, series_id, series_sequence, file_path, original_filename,
 		format, duration, work_id, narrator, edition, description, language, publisher, genre,
@@ -2704,7 +2718,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		last_organize_operation_id, last_organized_at, itunes_sync_status,
 		source_import_path
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err := s.db.Exec(query,
+	_, err = tx.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher, book.Genre,
 		book.PrintYear, book.AudiobookReleaseYear, book.ISBN10, book.ISBN13, book.ASIN,
@@ -2719,16 +2733,21 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		book.SourceImportPath,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("CreateBook insert: %w", err)
 	}
 
 	// Record the original import path so full provenance is preserved forever.
-	_ = s.RecordPathChange(&BookPathChange{
-		BookID:     book.ID,
-		OldPath:    "",
-		NewPath:    book.FilePath,
-		ChangeType: "import",
-	})
+	_, err = tx.Exec(
+		`INSERT INTO book_path_history (book_id, old_path, new_path, change_type) VALUES (?, ?, ?, ?)`,
+		book.ID, "", book.FilePath, "import",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("CreateBook record path: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, fmt.Errorf("CreateBook commit: %w", err)
+	}
 
 	return book, nil
 }
@@ -3021,20 +3040,38 @@ func (s *SQLiteStore) GetITunesDirtyBooks() ([]Book, error) {
 }
 
 func (s *SQLiteStore) DeleteBook(id string) error {
-	result, err := s.db.Exec("DELETE FROM books WHERE id = ?", id)
+	// Wrap in a transaction: book delete + metadata_states delete must be atomic
+	tx, err := s.db.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("DeleteBook begin tx: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			if rbErr := tx.Rollback(); rbErr != nil {
+				log.Printf("DeleteBook rollback: %v", rbErr)
+			}
+		}
+	}()
+
+	result, err := tx.Exec("DELETE FROM books WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("DeleteBook exec: %w", err)
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return fmt.Errorf("DeleteBook rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
 		return fmt.Errorf("book not found")
 	}
-	if _, err := s.db.Exec("DELETE FROM metadata_states WHERE book_id = ?", id); err != nil {
-		return err
+	if _, err := tx.Exec("DELETE FROM metadata_states WHERE book_id = ?", id); err != nil {
+		return fmt.Errorf("DeleteBook metadata delete: %w", err)
 	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("DeleteBook commit: %w", err)
+	}
+
 	return nil
 }
 
