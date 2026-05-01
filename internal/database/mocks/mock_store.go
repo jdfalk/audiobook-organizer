@@ -3153,6 +3153,68 @@ func (_c *MockBookReader_GetBooksByAuthorID_Call) RunAndReturn(run func(authorID
 	return _c
 }
 
+// GetBooksByMetadataSourceHash provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
+	ret := _mock.Called(hash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBooksByMetadataSourceHash")
+	}
+
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
+		return returnFunc(hash)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
+		r0 = returnFunc(hash)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(hash)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookReader_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
+type MockBookReader_GetBooksByMetadataSourceHash_Call struct {
+	*mock.Call
+}
+
+// GetBooksByMetadataSourceHash is a helper method to define mock.On call
+//   - hash string
+func (_e *MockBookReader_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockBookReader_GetBooksByMetadataSourceHash_Call {
+	return &MockBookReader_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
+}
+
+func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockBookReader_GetBooksByMetadataSourceHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockBookReader_GetBooksByMetadataSourceHash_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockBookReader_GetBooksByMetadataSourceHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBooksBySeriesID provides a mock function for the type MockBookReader
 func (_mock *MockBookReader) GetBooksBySeriesID(seriesID int) ([]database.Book, error) {
 	ret := _mock.Called(seriesID)
@@ -4206,60 +4268,6 @@ func (_c *MockBookWriter_DeleteBook_Call) RunAndReturn(run func(id string) error
 	return _c
 }
 
-// FlagMetadataHashDuplicate provides a mock function for the type MockBookWriter
-func (_mock *MockBookWriter) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
-	ret := _mock.Called(primaryID, duplicateID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for FlagMetadataHashDuplicate")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
-		r0 = returnFunc(primaryID, duplicateID)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockBookWriter_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
-type MockBookWriter_FlagMetadataHashDuplicate_Call struct {
-	*mock.Call
-}
-
-// FlagMetadataHashDuplicate is a helper method to define mock.On call
-//   - primaryID string
-//   - duplicateID string
-func (_e *MockBookWriter_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockBookWriter_FlagMetadataHashDuplicate_Call {
-	return &MockBookWriter_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
-}
-
-func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockBookWriter_FlagMetadataHashDuplicate_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(arg0, arg1)
-	})
-	return _c
-}
-
-func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) Return(err error) *MockBookWriter_FlagMetadataHashDuplicate_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(string, string) error) *MockBookWriter_FlagMetadataHashDuplicate_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // DeleteBookTombstone provides a mock function for the type MockBookWriter
 func (_mock *MockBookWriter) DeleteBookTombstone(id string) error {
 	ret := _mock.Called(id)
@@ -4307,6 +4315,63 @@ func (_c *MockBookWriter_DeleteBookTombstone_Call) Return(err error) *MockBookWr
 }
 
 func (_c *MockBookWriter_DeleteBookTombstone_Call) RunAndReturn(run func(id string) error) *MockBookWriter_DeleteBookTombstone_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FlagMetadataHashDuplicate provides a mock function for the type MockBookWriter
+func (_mock *MockBookWriter) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
+	ret := _mock.Called(primaryID, duplicateID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FlagMetadataHashDuplicate")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(primaryID, duplicateID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookWriter_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
+type MockBookWriter_FlagMetadataHashDuplicate_Call struct {
+	*mock.Call
+}
+
+// FlagMetadataHashDuplicate is a helper method to define mock.On call
+//   - primaryID string
+//   - duplicateID string
+func (_e *MockBookWriter_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockBookWriter_FlagMetadataHashDuplicate_Call {
+	return &MockBookWriter_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
+}
+
+func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockBookWriter_FlagMetadataHashDuplicate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) Return(err error) *MockBookWriter_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookWriter_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(primaryID string, duplicateID string) error) *MockBookWriter_FlagMetadataHashDuplicate_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -4487,6 +4552,75 @@ func (_c *MockBookWriter_MarkITunesSynced_Call) Return(n int64, err error) *Mock
 }
 
 func (_c *MockBookWriter_MarkITunesSynced_Call) RunAndReturn(run func(bookIDs []string) (int64, error)) *MockBookWriter_MarkITunesSynced_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MergeChapterBooks provides a mock function for the type MockBookWriter
+func (_mock *MockBookWriter) MergeChapterBooks(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error {
+	ret := _mock.Called(primaryID, srcIDs, commonTitle, totalDuration)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MergeChapterBooks")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []string, string, float64) error); ok {
+		r0 = returnFunc(primaryID, srcIDs, commonTitle, totalDuration)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookWriter_MergeChapterBooks_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MergeChapterBooks'
+type MockBookWriter_MergeChapterBooks_Call struct {
+	*mock.Call
+}
+
+// MergeChapterBooks is a helper method to define mock.On call
+//   - primaryID string
+//   - srcIDs []string
+//   - commonTitle string
+//   - totalDuration float64
+func (_e *MockBookWriter_Expecter) MergeChapterBooks(primaryID interface{}, srcIDs interface{}, commonTitle interface{}, totalDuration interface{}) *MockBookWriter_MergeChapterBooks_Call {
+	return &MockBookWriter_MergeChapterBooks_Call{Call: _e.mock.On("MergeChapterBooks", primaryID, srcIDs, commonTitle, totalDuration)}
+}
+
+func (_c *MockBookWriter_MergeChapterBooks_Call) Run(run func(primaryID string, srcIDs []string, commonTitle string, totalDuration float64)) *MockBookWriter_MergeChapterBooks_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 float64
+		if args[3] != nil {
+			arg3 = args[3].(float64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookWriter_MergeChapterBooks_Call) Return(err error) *MockBookWriter_MergeChapterBooks_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookWriter_MergeChapterBooks_Call) RunAndReturn(run func(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error) *MockBookWriter_MergeChapterBooks_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -5155,60 +5289,6 @@ func (_c *MockBookStore_DeleteBook_Call) RunAndReturn(run func(id string) error)
 	return _c
 }
 
-// FlagMetadataHashDuplicate provides a mock function for the type MockBookStore
-func (_mock *MockBookStore) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
-	ret := _mock.Called(primaryID, duplicateID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for FlagMetadataHashDuplicate")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
-		r0 = returnFunc(primaryID, duplicateID)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockBookStore_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
-type MockBookStore_FlagMetadataHashDuplicate_Call struct {
-	*mock.Call
-}
-
-// FlagMetadataHashDuplicate is a helper method to define mock.On call
-//   - primaryID string
-//   - duplicateID string
-func (_e *MockBookStore_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockBookStore_FlagMetadataHashDuplicate_Call {
-	return &MockBookStore_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
-}
-
-func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockBookStore_FlagMetadataHashDuplicate_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(arg0, arg1)
-	})
-	return _c
-}
-
-func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) Return(err error) *MockBookStore_FlagMetadataHashDuplicate_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(string, string) error) *MockBookStore_FlagMetadataHashDuplicate_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // DeleteBookTombstone provides a mock function for the type MockBookStore
 func (_mock *MockBookStore) DeleteBookTombstone(id string) error {
 	ret := _mock.Called(id)
@@ -5256,6 +5336,63 @@ func (_c *MockBookStore_DeleteBookTombstone_Call) Return(err error) *MockBookSto
 }
 
 func (_c *MockBookStore_DeleteBookTombstone_Call) RunAndReturn(run func(id string) error) *MockBookStore_DeleteBookTombstone_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FlagMetadataHashDuplicate provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
+	ret := _mock.Called(primaryID, duplicateID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FlagMetadataHashDuplicate")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(primaryID, duplicateID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookStore_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
+type MockBookStore_FlagMetadataHashDuplicate_Call struct {
+	*mock.Call
+}
+
+// FlagMetadataHashDuplicate is a helper method to define mock.On call
+//   - primaryID string
+//   - duplicateID string
+func (_e *MockBookStore_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockBookStore_FlagMetadataHashDuplicate_Call {
+	return &MockBookStore_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
+}
+
+func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockBookStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) Return(err error) *MockBookStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookStore_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(primaryID string, duplicateID string) error) *MockBookStore_FlagMetadataHashDuplicate_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -5956,6 +6093,68 @@ func (_c *MockBookStore_GetBooksByAuthorID_Call) Return(books []database.Book, e
 }
 
 func (_c *MockBookStore_GetBooksByAuthorID_Call) RunAndReturn(run func(authorID int) ([]database.Book, error)) *MockBookStore_GetBooksByAuthorID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetBooksByMetadataSourceHash provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
+	ret := _mock.Called(hash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBooksByMetadataSourceHash")
+	}
+
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
+		return returnFunc(hash)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
+		r0 = returnFunc(hash)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(hash)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookStore_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
+type MockBookStore_GetBooksByMetadataSourceHash_Call struct {
+	*mock.Call
+}
+
+// GetBooksByMetadataSourceHash is a helper method to define mock.On call
+//   - hash string
+func (_e *MockBookStore_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockBookStore_GetBooksByMetadataSourceHash_Call {
+	return &MockBookStore_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
+}
+
+func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockBookStore_GetBooksByMetadataSourceHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockBookStore_GetBooksByMetadataSourceHash_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockBookStore_GetBooksByMetadataSourceHash_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -6924,6 +7123,75 @@ func (_c *MockBookStore_MarkITunesSynced_Call) Return(n int64, err error) *MockB
 }
 
 func (_c *MockBookStore_MarkITunesSynced_Call) RunAndReturn(run func(bookIDs []string) (int64, error)) *MockBookStore_MarkITunesSynced_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MergeChapterBooks provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) MergeChapterBooks(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error {
+	ret := _mock.Called(primaryID, srcIDs, commonTitle, totalDuration)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MergeChapterBooks")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []string, string, float64) error); ok {
+		r0 = returnFunc(primaryID, srcIDs, commonTitle, totalDuration)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookStore_MergeChapterBooks_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MergeChapterBooks'
+type MockBookStore_MergeChapterBooks_Call struct {
+	*mock.Call
+}
+
+// MergeChapterBooks is a helper method to define mock.On call
+//   - primaryID string
+//   - srcIDs []string
+//   - commonTitle string
+//   - totalDuration float64
+func (_e *MockBookStore_Expecter) MergeChapterBooks(primaryID interface{}, srcIDs interface{}, commonTitle interface{}, totalDuration interface{}) *MockBookStore_MergeChapterBooks_Call {
+	return &MockBookStore_MergeChapterBooks_Call{Call: _e.mock.On("MergeChapterBooks", primaryID, srcIDs, commonTitle, totalDuration)}
+}
+
+func (_c *MockBookStore_MergeChapterBooks_Call) Run(run func(primaryID string, srcIDs []string, commonTitle string, totalDuration float64)) *MockBookStore_MergeChapterBooks_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 float64
+		if args[3] != nil {
+			arg3 = args[3].(float64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookStore_MergeChapterBooks_Call) Return(err error) *MockBookStore_MergeChapterBooks_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookStore_MergeChapterBooks_Call) RunAndReturn(run func(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error) *MockBookStore_MergeChapterBooks_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -13192,6 +13460,68 @@ func (_c *MockBookFileStore_GetBookFilesNeedingDelugeImport_Call) RunAndReturn(r
 	return _c
 }
 
+// GetDuplicateFilesByHash provides a mock function for the type MockBookFileStore
+func (_mock *MockBookFileStore) GetDuplicateFilesByHash(limit int) ([]database.DuplicateFileGroup, error) {
+	ret := _mock.Called(limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDuplicateFilesByHash")
+	}
+
+	var r0 []database.DuplicateFileGroup
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int) ([]database.DuplicateFileGroup, error)); ok {
+		return returnFunc(limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int) []database.DuplicateFileGroup); ok {
+		r0 = returnFunc(limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.DuplicateFileGroup)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int) error); ok {
+		r1 = returnFunc(limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookFileStore_GetDuplicateFilesByHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDuplicateFilesByHash'
+type MockBookFileStore_GetDuplicateFilesByHash_Call struct {
+	*mock.Call
+}
+
+// GetDuplicateFilesByHash is a helper method to define mock.On call
+//   - limit int
+func (_e *MockBookFileStore_Expecter) GetDuplicateFilesByHash(limit interface{}) *MockBookFileStore_GetDuplicateFilesByHash_Call {
+	return &MockBookFileStore_GetDuplicateFilesByHash_Call{Call: _e.mock.On("GetDuplicateFilesByHash", limit)}
+}
+
+func (_c *MockBookFileStore_GetDuplicateFilesByHash_Call) Run(run func(limit int)) *MockBookFileStore_GetDuplicateFilesByHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookFileStore_GetDuplicateFilesByHash_Call) Return(duplicateFileGroups []database.DuplicateFileGroup, err error) *MockBookFileStore_GetDuplicateFilesByHash_Call {
+	_c.Call.Return(duplicateFileGroups, err)
+	return _c
+}
+
+func (_c *MockBookFileStore_GetDuplicateFilesByHash_Call) RunAndReturn(run func(limit int) ([]database.DuplicateFileGroup, error)) *MockBookFileStore_GetDuplicateFilesByHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // MoveBookFilesToBook provides a mock function for the type MockBookFileStore
 func (_mock *MockBookFileStore) MoveBookFilesToBook(fileIDs []string, sourceBookID string, targetBookID string) error {
 	ret := _mock.Called(fileIDs, sourceBookID, targetBookID)
@@ -14705,6 +15035,66 @@ func (_m *MockImportPathStore) EXPECT() *MockImportPathStore_Expecter {
 	return &MockImportPathStore_Expecter{mock: &_m.Mock}
 }
 
+// CountBooksByPathPrefix provides a mock function for the type MockImportPathStore
+func (_mock *MockImportPathStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	ret := _mock.Called(prefix)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountBooksByPathPrefix")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int, error)); ok {
+		return returnFunc(prefix)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int); ok {
+		r0 = returnFunc(prefix)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(prefix)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockImportPathStore_CountBooksByPathPrefix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountBooksByPathPrefix'
+type MockImportPathStore_CountBooksByPathPrefix_Call struct {
+	*mock.Call
+}
+
+// CountBooksByPathPrefix is a helper method to define mock.On call
+//   - prefix string
+func (_e *MockImportPathStore_Expecter) CountBooksByPathPrefix(prefix interface{}) *MockImportPathStore_CountBooksByPathPrefix_Call {
+	return &MockImportPathStore_CountBooksByPathPrefix_Call{Call: _e.mock.On("CountBooksByPathPrefix", prefix)}
+}
+
+func (_c *MockImportPathStore_CountBooksByPathPrefix_Call) Run(run func(prefix string)) *MockImportPathStore_CountBooksByPathPrefix_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockImportPathStore_CountBooksByPathPrefix_Call) Return(n int, err error) *MockImportPathStore_CountBooksByPathPrefix_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockImportPathStore_CountBooksByPathPrefix_Call) RunAndReturn(run func(prefix string) (int, error)) *MockImportPathStore_CountBooksByPathPrefix_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateImportPath provides a mock function for the type MockImportPathStore
 func (_mock *MockImportPathStore) CreateImportPath(path string, name string) (*database.ImportPath, error) {
 	ret := _mock.Called(path, name)
@@ -14822,12 +15212,6 @@ func (_c *MockImportPathStore_DeleteImportPath_Call) Return(err error) *MockImpo
 func (_c *MockImportPathStore_DeleteImportPath_Call) RunAndReturn(run func(id int) error) *MockImportPathStore_DeleteImportPath_Call {
 	_c.Call.Return(run)
 	return _c
-}
-
-// CountBooksByPathPrefix provides a mock function for the type MockImportPathStore
-func (_mock *MockImportPathStore) CountBooksByPathPrefix(prefix string) (int, error) {
-	ret := _mock.Called(prefix)
-	return ret.Int(0), ret.Error(1)
 }
 
 // GetAllImportPaths provides a mock function for the type MockImportPathStore
@@ -25189,6 +25573,66 @@ func (_c *MockStore_CountBooks_Call) RunAndReturn(run func() (int, error)) *Mock
 	return _c
 }
 
+// CountBooksByPathPrefix provides a mock function for the type MockStore
+func (_mock *MockStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	ret := _mock.Called(prefix)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountBooksByPathPrefix")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int, error)); ok {
+		return returnFunc(prefix)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int); ok {
+		r0 = returnFunc(prefix)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(prefix)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CountBooksByPathPrefix_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountBooksByPathPrefix'
+type MockStore_CountBooksByPathPrefix_Call struct {
+	*mock.Call
+}
+
+// CountBooksByPathPrefix is a helper method to define mock.On call
+//   - prefix string
+func (_e *MockStore_Expecter) CountBooksByPathPrefix(prefix interface{}) *MockStore_CountBooksByPathPrefix_Call {
+	return &MockStore_CountBooksByPathPrefix_Call{Call: _e.mock.On("CountBooksByPathPrefix", prefix)}
+}
+
+func (_c *MockStore_CountBooksByPathPrefix_Call) Run(run func(prefix string)) *MockStore_CountBooksByPathPrefix_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CountBooksByPathPrefix_Call) Return(n int, err error) *MockStore_CountBooksByPathPrefix_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_CountBooksByPathPrefix_Call) RunAndReturn(run func(prefix string) (int, error)) *MockStore_CountBooksByPathPrefix_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CountFiles provides a mock function for the type MockStore
 func (_mock *MockStore) CountFiles() (int, error) {
 	ret := _mock.Called()
@@ -27214,60 +27658,6 @@ func (_c *MockStore_DeleteBook_Call) RunAndReturn(run func(id string) error) *Mo
 	return _c
 }
 
-// FlagMetadataHashDuplicate provides a mock function for the type MockStore
-func (_mock *MockStore) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
-	ret := _mock.Called(primaryID, duplicateID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for FlagMetadataHashDuplicate")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
-		r0 = returnFunc(primaryID, duplicateID)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockStore_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
-type MockStore_FlagMetadataHashDuplicate_Call struct {
-	*mock.Call
-}
-
-// FlagMetadataHashDuplicate is a helper method to define mock.On call
-//   - primaryID string
-//   - duplicateID string
-func (_e *MockStore_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockStore_FlagMetadataHashDuplicate_Call {
-	return &MockStore_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
-}
-
-func (_c *MockStore_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockStore_FlagMetadataHashDuplicate_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(arg0, arg1)
-	})
-	return _c
-}
-
-func (_c *MockStore_FlagMetadataHashDuplicate_Call) Return(err error) *MockStore_FlagMetadataHashDuplicate_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockStore_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(string, string) error) *MockStore_FlagMetadataHashDuplicate_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // DeleteBookFile provides a mock function for the type MockStore
 func (_mock *MockStore) DeleteBookFile(id string) error {
 	ret := _mock.Called(id)
@@ -27581,12 +27971,6 @@ func (_c *MockStore_DeleteImportPath_Call) Return(err error) *MockStore_DeleteIm
 func (_c *MockStore_DeleteImportPath_Call) RunAndReturn(run func(id int) error) *MockStore_DeleteImportPath_Call {
 	_c.Call.Return(run)
 	return _c
-}
-
-// CountBooksByPathPrefix provides a mock function for the type MockStore
-func (_mock *MockStore) CountBooksByPathPrefix(prefix string) (int, error) {
-	ret := _mock.Called(prefix)
-	return ret.Int(0), ret.Error(1)
 }
 
 // DeleteInvite provides a mock function for the type MockStore
@@ -28223,6 +28607,63 @@ func (_c *MockStore_FindAuthorByAlias_Call) Return(author *database.Author, err 
 }
 
 func (_c *MockStore_FindAuthorByAlias_Call) RunAndReturn(run func(aliasName string) (*database.Author, error)) *MockStore_FindAuthorByAlias_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FlagMetadataHashDuplicate provides a mock function for the type MockStore
+func (_mock *MockStore) FlagMetadataHashDuplicate(primaryID string, duplicateID string) error {
+	ret := _mock.Called(primaryID, duplicateID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FlagMetadataHashDuplicate")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(primaryID, duplicateID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_FlagMetadataHashDuplicate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FlagMetadataHashDuplicate'
+type MockStore_FlagMetadataHashDuplicate_Call struct {
+	*mock.Call
+}
+
+// FlagMetadataHashDuplicate is a helper method to define mock.On call
+//   - primaryID string
+//   - duplicateID string
+func (_e *MockStore_Expecter) FlagMetadataHashDuplicate(primaryID interface{}, duplicateID interface{}) *MockStore_FlagMetadataHashDuplicate_Call {
+	return &MockStore_FlagMetadataHashDuplicate_Call{Call: _e.mock.On("FlagMetadataHashDuplicate", primaryID, duplicateID)}
+}
+
+func (_c *MockStore_FlagMetadataHashDuplicate_Call) Run(run func(primaryID string, duplicateID string)) *MockStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_FlagMetadataHashDuplicate_Call) Return(err error) *MockStore_FlagMetadataHashDuplicate_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_FlagMetadataHashDuplicate_Call) RunAndReturn(run func(primaryID string, duplicateID string) error) *MockStore_FlagMetadataHashDuplicate_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -32139,6 +32580,68 @@ func (_c *MockStore_GetBooksByAuthorIDWithRole_Call) RunAndReturn(run func(autho
 	return _c
 }
 
+// GetBooksByMetadataSourceHash provides a mock function for the type MockStore
+func (_mock *MockStore) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
+	ret := _mock.Called(hash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBooksByMetadataSourceHash")
+	}
+
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
+		return returnFunc(hash)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
+		r0 = returnFunc(hash)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(hash)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
+type MockStore_GetBooksByMetadataSourceHash_Call struct {
+	*mock.Call
+}
+
+// GetBooksByMetadataSourceHash is a helper method to define mock.On call
+//   - hash string
+func (_e *MockStore_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockStore_GetBooksByMetadataSourceHash_Call {
+	return &MockStore_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
+}
+
+func (_c *MockStore_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockStore_GetBooksByMetadataSourceHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockStore_GetBooksByMetadataSourceHash_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockStore_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockStore_GetBooksByMetadataSourceHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBooksBySeriesID provides a mock function for the type MockStore
 func (_mock *MockStore) GetBooksBySeriesID(seriesID int) ([]database.Book, error) {
 	ret := _mock.Called(seriesID)
@@ -32850,6 +33353,68 @@ func (_c *MockStore_GetDuplicateBooksByMetadata_Call) Return(bookss [][]database
 }
 
 func (_c *MockStore_GetDuplicateBooksByMetadata_Call) RunAndReturn(run func(threshold float64) ([][]database.Book, error)) *MockStore_GetDuplicateBooksByMetadata_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetDuplicateFilesByHash provides a mock function for the type MockStore
+func (_mock *MockStore) GetDuplicateFilesByHash(limit int) ([]database.DuplicateFileGroup, error) {
+	ret := _mock.Called(limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetDuplicateFilesByHash")
+	}
+
+	var r0 []database.DuplicateFileGroup
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int) ([]database.DuplicateFileGroup, error)); ok {
+		return returnFunc(limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int) []database.DuplicateFileGroup); ok {
+		r0 = returnFunc(limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.DuplicateFileGroup)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int) error); ok {
+		r1 = returnFunc(limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetDuplicateFilesByHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetDuplicateFilesByHash'
+type MockStore_GetDuplicateFilesByHash_Call struct {
+	*mock.Call
+}
+
+// GetDuplicateFilesByHash is a helper method to define mock.On call
+//   - limit int
+func (_e *MockStore_Expecter) GetDuplicateFilesByHash(limit interface{}) *MockStore_GetDuplicateFilesByHash_Call {
+	return &MockStore_GetDuplicateFilesByHash_Call{Call: _e.mock.On("GetDuplicateFilesByHash", limit)}
+}
+
+func (_c *MockStore_GetDuplicateFilesByHash_Call) Run(run func(limit int)) *MockStore_GetDuplicateFilesByHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetDuplicateFilesByHash_Call) Return(duplicateFileGroups []database.DuplicateFileGroup, err error) *MockStore_GetDuplicateFilesByHash_Call {
+	_c.Call.Return(duplicateFileGroups, err)
+	return _c
+}
+
+func (_c *MockStore_GetDuplicateFilesByHash_Call) RunAndReturn(run func(limit int) ([]database.DuplicateFileGroup, error)) *MockStore_GetDuplicateFilesByHash_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -38677,6 +39242,75 @@ func (_c *MockStore_MergeBookSegments_Call) RunAndReturn(run func(bookNumericID 
 	return _c
 }
 
+// MergeChapterBooks provides a mock function for the type MockStore
+func (_mock *MockStore) MergeChapterBooks(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error {
+	ret := _mock.Called(primaryID, srcIDs, commonTitle, totalDuration)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MergeChapterBooks")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []string, string, float64) error); ok {
+		r0 = returnFunc(primaryID, srcIDs, commonTitle, totalDuration)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_MergeChapterBooks_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MergeChapterBooks'
+type MockStore_MergeChapterBooks_Call struct {
+	*mock.Call
+}
+
+// MergeChapterBooks is a helper method to define mock.On call
+//   - primaryID string
+//   - srcIDs []string
+//   - commonTitle string
+//   - totalDuration float64
+func (_e *MockStore_Expecter) MergeChapterBooks(primaryID interface{}, srcIDs interface{}, commonTitle interface{}, totalDuration interface{}) *MockStore_MergeChapterBooks_Call {
+	return &MockStore_MergeChapterBooks_Call{Call: _e.mock.On("MergeChapterBooks", primaryID, srcIDs, commonTitle, totalDuration)}
+}
+
+func (_c *MockStore_MergeChapterBooks_Call) Run(run func(primaryID string, srcIDs []string, commonTitle string, totalDuration float64)) *MockStore_MergeChapterBooks_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 float64
+		if args[3] != nil {
+			arg3 = args[3].(float64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_MergeChapterBooks_Call) Return(err error) *MockStore_MergeChapterBooks_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_MergeChapterBooks_Call) RunAndReturn(run func(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error) *MockStore_MergeChapterBooks_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // MoveBookFilesToBook provides a mock function for the type MockStore
 func (_mock *MockStore) MoveBookFilesToBook(fileIDs []string, sourceBookID string, targetBookID string) error {
 	ret := _mock.Called(fileIDs, sourceBookID, targetBookID)
@@ -42760,190 +43394,4 @@ func (_c *MockStore_UpsertMetadataFieldState_Call) Return(err error) *MockStore_
 func (_c *MockStore_UpsertMetadataFieldState_Call) RunAndReturn(run func(state *database.MetadataFieldState) error) *MockStore_UpsertMetadataFieldState_Call {
 	_c.Call.Return(run)
 	return _c
-}
-
-// GetBooksByMetadataSourceHash provides a mock function for the type MockBookReader
-func (_mock *MockBookReader) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
-ret := _mock.Called(hash)
-
-if len(ret) == 0 {
-panic("no return value specified for GetBooksByMetadataSourceHash")
-}
-
-var r0 []database.Book
-var r1 error
-if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
-return returnFunc(hash)
-}
-if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
-r0 = returnFunc(hash)
-} else {
-if ret.Get(0) != nil {
-r0 = ret.Get(0).([]database.Book)
-}
-}
-if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-r1 = returnFunc(hash)
-} else {
-r1 = ret.Error(1)
-}
-return r0, r1
-}
-
-// MockBookReader_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
-type MockBookReader_GetBooksByMetadataSourceHash_Call struct {
-*mock.Call
-}
-
-// GetBooksByMetadataSourceHash is a helper method to define mock.On call
-//   - hash string
-func (_e *MockBookReader_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockBookReader_GetBooksByMetadataSourceHash_Call {
-return &MockBookReader_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
-}
-
-func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockBookReader_GetBooksByMetadataSourceHash_Call {
-_c.Call.Run(func(args mock.Arguments) {
-var arg0 string
-if args[0] != nil {
-arg0 = args[0].(string)
-}
-run(
-arg0,
-)
-})
-return _c
-}
-
-func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockBookReader_GetBooksByMetadataSourceHash_Call {
-_c.Call.Return(books, err)
-return _c
-}
-
-func (_c *MockBookReader_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockBookReader_GetBooksByMetadataSourceHash_Call {
-_c.Call.Return(run)
-return _c
-}
-
-// GetBooksByMetadataSourceHash provides a mock function for the type MockBookStore
-func (_mock *MockBookStore) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
-ret := _mock.Called(hash)
-
-if len(ret) == 0 {
-panic("no return value specified for GetBooksByMetadataSourceHash")
-}
-
-var r0 []database.Book
-var r1 error
-if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
-return returnFunc(hash)
-}
-if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
-r0 = returnFunc(hash)
-} else {
-if ret.Get(0) != nil {
-r0 = ret.Get(0).([]database.Book)
-}
-}
-if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-r1 = returnFunc(hash)
-} else {
-r1 = ret.Error(1)
-}
-return r0, r1
-}
-
-// MockBookStore_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
-type MockBookStore_GetBooksByMetadataSourceHash_Call struct {
-*mock.Call
-}
-
-// GetBooksByMetadataSourceHash is a helper method to define mock.On call
-//   - hash string
-func (_e *MockBookStore_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockBookStore_GetBooksByMetadataSourceHash_Call {
-return &MockBookStore_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
-}
-
-func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockBookStore_GetBooksByMetadataSourceHash_Call {
-_c.Call.Run(func(args mock.Arguments) {
-var arg0 string
-if args[0] != nil {
-arg0 = args[0].(string)
-}
-run(
-arg0,
-)
-})
-return _c
-}
-
-func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockBookStore_GetBooksByMetadataSourceHash_Call {
-_c.Call.Return(books, err)
-return _c
-}
-
-func (_c *MockBookStore_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockBookStore_GetBooksByMetadataSourceHash_Call {
-_c.Call.Return(run)
-return _c
-}
-
-// GetBooksByMetadataSourceHash provides a mock function for the type MockStore
-func (_mock *MockStore) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
-ret := _mock.Called(hash)
-
-if len(ret) == 0 {
-panic("no return value specified for GetBooksByMetadataSourceHash")
-}
-
-var r0 []database.Book
-var r1 error
-if returnFunc, ok := ret.Get(0).(func(string) ([]database.Book, error)); ok {
-return returnFunc(hash)
-}
-if returnFunc, ok := ret.Get(0).(func(string) []database.Book); ok {
-r0 = returnFunc(hash)
-} else {
-if ret.Get(0) != nil {
-r0 = ret.Get(0).([]database.Book)
-}
-}
-if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-r1 = returnFunc(hash)
-} else {
-r1 = ret.Error(1)
-}
-return r0, r1
-}
-
-// MockStore_GetBooksByMetadataSourceHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBooksByMetadataSourceHash'
-type MockStore_GetBooksByMetadataSourceHash_Call struct {
-*mock.Call
-}
-
-// GetBooksByMetadataSourceHash is a helper method to define mock.On call
-//   - hash string
-func (_e *MockStore_Expecter) GetBooksByMetadataSourceHash(hash interface{}) *MockStore_GetBooksByMetadataSourceHash_Call {
-return &MockStore_GetBooksByMetadataSourceHash_Call{Call: _e.mock.On("GetBooksByMetadataSourceHash", hash)}
-}
-
-func (_c *MockStore_GetBooksByMetadataSourceHash_Call) Run(run func(hash string)) *MockStore_GetBooksByMetadataSourceHash_Call {
-_c.Call.Run(func(args mock.Arguments) {
-var arg0 string
-if args[0] != nil {
-arg0 = args[0].(string)
-}
-run(
-arg0,
-)
-})
-return _c
-}
-
-func (_c *MockStore_GetBooksByMetadataSourceHash_Call) Return(books []database.Book, err error) *MockStore_GetBooksByMetadataSourceHash_Call {
-_c.Call.Return(books, err)
-return _c
-}
-
-func (_c *MockStore_GetBooksByMetadataSourceHash_Call) RunAndReturn(run func(hash string) ([]database.Book, error)) *MockStore_GetBooksByMetadataSourceHash_Call {
-_c.Call.Return(run)
-return _c
 }

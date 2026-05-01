@@ -763,6 +763,8 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"user_rating_performance":      "REAL",
 		"user_rating_notes":            "TEXT",
 		"metadata_source_hash":         "TEXT",
+		"merged_into_book_id":          "TEXT",
+		"source_import_path":           "TEXT",
 	}
 
 	// Fetch existing columns
@@ -804,6 +806,7 @@ func (s *SQLiteStore) ensureExtendedBookColumns() error {
 		"CREATE INDEX IF NOT EXISTS idx_books_organized_hash ON books(organized_file_hash)",
 		"CREATE INDEX IF NOT EXISTS idx_books_library_state ON books(library_state)",
 		"CREATE INDEX IF NOT EXISTS idx_books_marked_for_deletion ON books(marked_for_deletion)",
+		"CREATE INDEX IF NOT EXISTS idx_books_source_import_path ON books(source_import_path)",
 	}
 	for _, stmt := range indexStatements {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -2669,8 +2672,9 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		bit_depth, quality, is_primary_version, version_group_id, version_notes,
 		original_file_hash, organized_file_hash, library_state, quantity, marked_for_deletion, marked_for_deletion_at,
 		created_at, updated_at, cover_url, narrators_json,
-		last_organize_operation_id, last_organized_at, itunes_sync_status
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		last_organize_operation_id, last_organized_at, itunes_sync_status,
+		source_import_path
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	_, err := s.db.Exec(query,
 		book.ID, book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence, book.FilePath, book.OriginalFilename,
 		book.Format, book.Duration, book.WorkID, book.Narrator, book.Edition, book.Description, book.Language, book.Publisher, book.Genre,
@@ -2683,6 +2687,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 		book.OriginalFileHash, book.OrganizedFileHash, book.LibraryState, book.Quantity, book.MarkedForDeletion, book.MarkedForDeletionAt,
 		book.CreatedAt, book.UpdatedAt, book.CoverURL, book.NarratorsJSON,
 		book.LastOrganizeOperationID, book.LastOrganizedAt, book.ITunesSyncStatus,
+		book.SourceImportPath,
 	)
 	if err != nil {
 		return nil, err
@@ -2817,7 +2822,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		audible_rating_count = ?, audible_num_reviews = ?,
 		google_rating_average = ?, google_rating_count = ?,
 		user_rating_overall = ?, user_rating_story = ?, user_rating_performance = ?, user_rating_notes = ?,
-		metadata_source_hash = ?
+		metadata_source_hash = ?,
+		source_import_path = COALESCE(source_import_path, ?)
 	WHERE id = ?`
 	result, err := s.db.Exec(query,
 		book.Title, book.AuthorID, book.SeriesID, book.SeriesSequence,
@@ -2839,7 +2845,8 @@ func (s *SQLiteStore) UpdateBook(id string, book *Book) (*Book, error) {
 		book.AudibleRatingCount, book.AudibleNumReviews,
 		book.GoogleRatingAverage, book.GoogleRatingCount,
 		book.UserRatingOverall, book.UserRatingStory, book.UserRatingPerformance, book.UserRatingNotes,
-		book.MetadataSourceHash, id,
+		book.MetadataSourceHash,
+		book.SourceImportPath, id,
 	)
 	if err != nil {
 		return nil, err
@@ -3493,13 +3500,18 @@ func (s *SQLiteStore) DeleteImportPath(id int) error {
 	return err
 }
 
-// CountBooksByPathPrefix returns the total number of books whose file_path
-// starts with prefix. Used to persist accurate BookCount on ImportPath after
-// a scan without live-counting on every read.
+// CountBooksByPathPrefix returns the total number of books that originated from
+// the given import path. It checks source_import_path first (set on books
+// discovered after this change), and falls back to file_path for older records
+// that pre-date the field. This ensures the count remains correct even after
+// auto-organize relocates books to RootDir.
 func (s *SQLiteStore) CountBooksByPathPrefix(prefix string) (int, error) {
 	var count int
 	err := s.db.QueryRow(
-		"SELECT COUNT(*) FROM books WHERE file_path LIKE ? || '%'", prefix,
+		`SELECT COUNT(*) FROM books
+		  WHERE source_import_path LIKE ? || '%'
+		     OR (source_import_path IS NULL AND file_path LIKE ? || '%')`,
+		prefix, prefix,
 	).Scan(&count)
 	return count, err
 }

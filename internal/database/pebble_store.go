@@ -2595,9 +2595,10 @@ func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
 	return importPaths, nil
 }
 
-// CountBooksByPathPrefix returns the number of books whose FilePath starts
-// with prefix. Called by updateImportPathBookCount after each scan to persist
-// an accurate BookCount without live-counting on every read.
+// CountBooksByPathPrefix returns the number of books that originated from the
+// given import path. It checks SourceImportPath first (set on books discovered
+// after the source-import-path change), then falls back to FilePath for older
+// records. This keeps counts correct after auto-organize relocates books.
 func (p *PebbleStore) CountBooksByPathPrefix(prefix string) (int, error) {
 	if prefix == "" {
 		return 0, nil
@@ -2616,7 +2617,11 @@ func (p *PebbleStore) CountBooksByPathPrefix(prefix string) (int, error) {
 		if json.Unmarshal(iter.Value(), &b) != nil {
 			continue
 		}
-		if strings.HasPrefix(b.FilePath, prefix) {
+		if b.SourceImportPath != nil && *b.SourceImportPath != "" {
+			if strings.HasPrefix(*b.SourceImportPath, prefix) {
+				count++
+			}
+		} else if strings.HasPrefix(b.FilePath, prefix) {
 			count++
 		}
 	}
