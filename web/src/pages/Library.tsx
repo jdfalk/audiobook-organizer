@@ -44,15 +44,15 @@ import {
   DeleteSweep as DeleteSweepIcon,
   ExpandMore as ExpandMoreIcon,
   Refresh as RefreshIcon,
-  Info as InfoIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { AudiobookGrid } from '../components/audiobooks/AudiobookGrid';
 import { AudiobookList } from '../components/audiobooks/AudiobookList';
 import { ColumnChooser } from '../components/audiobooks/ColumnChooser';
-import { SearchBar, ViewMode } from '../components/audiobooks/SearchBar';
+import { ViewMode } from '../components/audiobooks/SearchBar';
 import { useColumnConfig } from '../hooks/useColumnConfig';
 import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
+import { FilterPanel } from '../components/FilterPanel';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
@@ -1959,24 +1959,18 @@ export const Library = () => {
         ) : (
           <Stack spacing={1.5}>
             <Stack direction="row" spacing={1} alignItems="center">
-              <Box flex={1}>
-                <SearchBar
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  onParsedSearchChange={setParsedSearch}
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
-                  sortBy={sortBy}
-                  onSortChange={handleSortChange}
-                  sortOrder={sortOrder}
-                  onSortOrderChange={setSortOrder}
-                />
-              </Box>
-              <Tooltip title="Library info">
-                <IconButton onClick={() => setStorageDrawerOpen(true)}>
-                  <InfoIcon />
-                </IconButton>
-              </Tooltip>
+              <FilterPanel
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onParsedSearchChange={setParsedSearch}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                sortBy={sortBy}
+                onSortChange={handleSortChange}
+                sortOrder={sortOrder}
+                onSortOrderChange={setSortOrder}
+                onLibraryInfoClick={() => setStorageDrawerOpen(true)}
+              />
             </Stack>
 
             {/* Select All bar — always visible */}
