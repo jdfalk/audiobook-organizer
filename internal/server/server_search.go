@@ -1,0 +1,206 @@
+// file: internal/server/server_search.go
+// version: 1.0.0
+// guid: 12815699-f9ea-4788-9af3-2e854d710315
+// last-edited: 2026-05-01
+
+package server
+
+import (
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/search"
+	"github.com/jdfalk/audiobook-organizer/internal/tagger"
+)
+
+func (s *Server) SearchIndex() *search.BleveIndex {
+	return s.searchIndex
+}
+
+// safeWriteDeps builds a tagger.SafeWriteDeps from the server's wired
+// dependencies. Used by movement_atom_cleanup and any other server-package
+// code that calls tag-writing functions directly (outside the metadata
+// package path that has its own package-level deps).
+func (s *Server) safeWriteDeps() tagger.SafeWriteDeps {
+	if s.protectedPathCache == nil {
+		return tagger.SafeWriteDeps{}
+	}
+	store := s.Store()
+	importer := NewLibraryImporterAdapter(store, getDelugeClient(), &config.AppConfig)
+	return tagger.SafeWriteDeps{
+		ProtectedCache: s.protectedPathCache,
+		Importer:       importer,
+	}
+}
+
+// buildSearchIndexIfEmpty runs a full reindex of the library when
+// the search index has zero documents. Honors s.bgCtx so shutdown
+// stops the backfill cleanly. Page size matches the existing
+// backfill code to keep memory bounded.
+func (s *Server) buildSearchIndexIfEmpty() {
+	if s.searchIndex == nil {
+		return
+	}
+	count, err := s.searchIndex.DocCount()
+	if err != nil {
+		log.Printf("[WARN] search index DocCount: %v", err)
+		return
+	}
+	if count > 0 {
+		return
+	}
+	store := s.Store()
+	if store == nil {
+		return
+	}
+	log.Printf("[INFO] Search index empty — starting full backfill")
+	start := time.Now()
+	indexed := 0
+	const pageSize = 500
+	offset := 0
+	for {
+		select {
+		case <-s.bgCtx.Done():
+			log.Printf("[INFO] Search backfill canceled at %d books (bgCtx)", indexed)
+			return
+		default:
+		}
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil {
+			log.Printf("[WARN] search backfill GetAllBooks: %v", err)
+			return
+		}
+		if len(books) == 0 {
+			break
+		}
+		for i := range books {
+			select {
+			case <-s.bgCtx.Done():
+				log.Printf("[INFO] Search backfill canceled at %d books", indexed)
+				return
+			default:
+			}
+			doc := search.BookToDoc(store, &books[i])
+			if err := s.searchIndex.IndexBook(doc); err != nil {
+				log.Printf("[WARN] search backfill index %s: %v", books[i].ID, err)
+				continue
+			}
+			indexed++
+		}
+		offset += len(books)
+		if len(books) < pageSize {
+			break
+		}
+	}
+	log.Printf("[INFO] Search backfill complete: %d books in %s", indexed, time.Since(start))
+}
+
+// IndexBookByID reads a book (plus its related rows) and upserts
+// the flat BookDocument into the search index. Best-effort: logs
+// and returns nil if the index isn't open or the book is missing.
+// Callers: handlers that create or update a book, plus the startup
+// full-build goroutine.
+func (s *Server) IndexBookByID(bookID string) error {
+	if s.searchIndex == nil || bookID == "" {
+		return nil
+	}
+	book, err := s.Store().GetBookByID(bookID)
+	if err != nil || book == nil {
+		return err
+	}
+	return s.searchIndex.IndexBook(search.BookToDoc(s.Store(), book))
+}
+
+// DeleteIndexedBook removes a book from the search index. Called
+// after a book delete (soft or hard). Safe when the index isn't
+// open.
+func (s *Server) DeleteIndexedBook(bookID string) error {
+	if s.searchIndex == nil || bookID == "" {
+		return nil
+	}
+	return s.searchIndex.DeleteBook(bookID)
+}
+
+func (h *serverScanHooks) OnBookScanned(bookID, title string) {
+	if h.activityService != nil {
+		_ = h.activityService.Record(database.ActivityEntry{
+			Tier:    "change",
+			Type:    "scan",
+			Level:   "info",
+			Source:  "background",
+			BookID:  bookID,
+			Summary: fmt.Sprintf("Scan found: %s", title),
+		})
+	}
+}
+
+func (h *serverScanHooks) OnImportDedup(bookID string) {
+	if h.dedupFn != nil {
+		h.dedupFn(bookID)
+	}
+}
+
+func (h *serverOrganizeHooks) OnCollision(currentBookID, occupantPath string) {
+	if h.server.embeddingStore == nil || h.server.store == nil {
+		return
+	}
+	h.server.bgWG.Add(1)
+	go func() {
+		defer h.server.bgWG.Done()
+		occupant, err := h.server.store.GetBookByFilePath(occupantPath)
+		if err != nil {
+			log.Printf("[WARN] organize-collision hook: lookup %s failed: %v", occupantPath, err)
+			return
+		}
+		if occupant == nil || occupant.ID == currentBookID {
+			return
+		}
+		sim := 1.0
+		if err := h.server.embeddingStore.UpsertCandidate(database.DedupCandidate{
+			EntityType: "book",
+			EntityAID:  currentBookID,
+			EntityBID:  occupant.ID,
+			Layer:      "exact",
+			Similarity: &sim,
+			Status:     "pending",
+		}); err != nil {
+			log.Printf("[WARN] organize-collision hook: upsert candidate %s/%s failed: %v",
+				currentBookID, occupant.ID, err)
+			return
+		}
+		log.Printf("[INFO] organize-collision: created dedup candidate between %s and %s (occupant of %s)",
+			currentBookID, occupant.ID, occupantPath)
+	}()
+}
+
+// fireDedupOnImport runs the dedup engine's Layer 1 + Layer 2 checks for
+// a freshly created book, in a bgWG-tracked goroutine so it doesn't
+// block the caller and shutdown drains it before closing Pebble.
+//
+// This is the single entry point used by every CreateBook path —
+// scanner imports (via ScanHooks.OnImportDedup), iTunes sync, manual
+// book creation, etc. Having every create path fire the hook means new
+// books get exact-match hash/ISBN/title checks against the whole
+// library immediately, instead of waiting for a user-triggered Re-scan.
+//
+// In particular this catches the "iTunes sync creates a parallel row
+// for a book we already have under audiobook-organizer/" bug — the
+// Layer 1 file-hash check fires inside CheckBook, sees the match, and
+// records a pending dedup candidate that surfaces in the UI.
+//
+// Safe to call even when the dedup engine is disabled — it's a no-op.
+func (s *Server) fireDedupOnImport(bookID string) {
+	if s.dedupEngine == nil || bookID == "" {
+		return
+	}
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		if _, err := s.dedupEngine.CheckBook(s.bgCtx, bookID); err != nil {
+			log.Printf("[WARN] dedup-on-import CheckBook(%s): %v", bookID, err)
+		}
+	}()
+}
