@@ -1,7 +1,7 @@
 // file: internal/scanner/scanner.go
 // version: 1.38.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package scanner
 
@@ -30,7 +30,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/matcher"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/oklog/ulid/v2"
-	"github.com/schollz/progressbar/v3"
 )
 
 var saveBook = saveBookToDatabase
@@ -290,8 +289,8 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 
 	scanLog.Info("Processing audiobook metadata (using %d workers)...", workers)
 
-	bar := progressbar.Default(int64(len(books)))
 	total := len(books)
+	scanLog.Info("scan started: %d total files", total)
 
 	// progressCh serializes progress updates so callbacks and progress output
 	// are handled in a single goroutine.
@@ -304,11 +303,14 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 		processed := 0
 		for path := range progressCh {
 			processed++
-			_ = bar.Add(1)
 			if progressFn != nil {
 				progressFn(processed, total, path)
 			}
+			if processed%100 == 0 || processed == total {
+				scanLog.Info("scan progress: %d/%d files processed", processed, total)
+			}
 		}
+		scanLog.Info("scan complete: %d files processed", total)
 	}()
 
 	var aiParser *ai.OpenAIParser
