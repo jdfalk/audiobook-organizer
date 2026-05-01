@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/merge_chapter_groups.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1000020-0000-0000-0000-000000000020
-// last-edited: 2026-05-03
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -19,6 +19,9 @@ func init() { maintenance.Register(&mergeChapterGroupsJob{}) }
 type mergeChapterGroupsJob struct{}
 
 func (j *mergeChapterGroupsJob) ID() string          { return "merge-chapter-groups" }
+func (j *mergeChapterGroupsJob) Name() string     { return "Merge Chapter Groups" }
+func (j *mergeChapterGroupsJob) Category() string { return "files" }
+func (j *mergeChapterGroupsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *mergeChapterGroupsJob) Description() string { return "Merge multi-chapter book files into consolidated book records" }
 func (j *mergeChapterGroupsJob) CanResume() bool     { return false }
 func (j *mergeChapterGroupsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {

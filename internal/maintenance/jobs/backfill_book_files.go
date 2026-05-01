@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/backfill_book_files.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1000005-0000-0000-0000-000000000005
-// last-edited: 2026-05-03
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -20,6 +20,9 @@ func init() { maintenance.Register(&backfillBookFilesJob{}) }
 type backfillBookFilesJob struct{}
 
 func (j *backfillBookFilesJob) ID() string          { return "backfill-book-files" }
+func (j *backfillBookFilesJob) Name() string     { return "Backfill Book Files" }
+func (j *backfillBookFilesJob) Category() string { return "files" }
+func (j *backfillBookFilesJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *backfillBookFilesJob) Description() string { return "Create book_files rows for books that have none" }
 func (j *backfillBookFilesJob) CanResume() bool     { return false }
 func (j *backfillBookFilesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {

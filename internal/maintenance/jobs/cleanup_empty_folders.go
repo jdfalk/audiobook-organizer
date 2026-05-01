@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/cleanup_empty_folders.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1000006-0000-0000-0000-000000000006
-// last-edited: 2026-05-03
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -20,6 +20,9 @@ func init() { maintenance.Register(&cleanupEmptyFoldersJob{}) }
 type cleanupEmptyFoldersJob struct{}
 
 func (j *cleanupEmptyFoldersJob) ID() string          { return "cleanup-empty-folders" }
+func (j *cleanupEmptyFoldersJob) Name() string     { return "Cleanup Empty Folders" }
+func (j *cleanupEmptyFoldersJob) Category() string { return "cleanup" }
+func (j *cleanupEmptyFoldersJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *cleanupEmptyFoldersJob) Description() string { return "Remove empty directories from the library root" }
 func (j *cleanupEmptyFoldersJob) CanResume() bool     { return false }
 func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {

@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/dedup_books.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1000010-0000-0000-0000-000000000010
-// last-edited: 2026-05-04
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -28,6 +28,9 @@ enqueuer maintenance.WriteBackEnqueuer
 func (j *dedupBooksJob) InjectEnqueuer(e maintenance.WriteBackEnqueuer) { j.enqueuer = e }
 
 func (j *dedupBooksJob) ID() string          { return "dedup-books" }
+func (j *dedupBooksJob) Name() string     { return "Deduplicate Books" }
+func (j *dedupBooksJob) Category() string { return "dedup" }
+func (j *dedupBooksJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *dedupBooksJob) Description() string { return "Detect and merge duplicate books" }
 func (j *dedupBooksJob) CanResume() bool     { return false }
 

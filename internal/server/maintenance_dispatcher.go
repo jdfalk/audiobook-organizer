@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_dispatcher.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 55555555-5555-5555-5555-555555555555
-// last-edited: 2026-05-03
+// last-edited: 2026-05-01
 
 package server
 
@@ -37,16 +37,22 @@ func (a *progressAdapter) Log(level, message string, details *string) {
 func (s *Server) listMaintenanceJobs(c *gin.Context) {
 	jobs := maintenance.All()
 	type jobDef struct {
-		ID          string `json:"id"`
-		Description string `json:"description"`
-		CanResume   bool   `json:"can_resume"`
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		Description   string `json:"description"`
+		Category      string `json:"category"`
+		DefaultParams any    `json:"default_params"`
+		CanResume     bool   `json:"can_resume"`
 	}
 	out := make([]jobDef, len(jobs))
 	for i, j := range jobs {
 		out[i] = jobDef{
-			ID:          j.ID(),
-			Description: j.Description(),
-			CanResume:   j.CanResume(),
+			ID:            j.ID(),
+			Name:          j.Name(),
+			Description:   j.Description(),
+			Category:      j.Category(),
+			DefaultParams: j.DefaultParams(),
+			CanResume:     j.CanResume(),
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"jobs": out})
@@ -69,6 +75,12 @@ func (s *Server) runMaintenanceJob(c *gin.Context) {
 	opID := ulid.Make().String()
 	opType := "maintenance:" + jobID
 	store := s.Store()
+
+	// Create the operation record first so it appears in active operations / activity bell.
+	if _, err := store.CreateOperation(opID, opType, nil); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation record"})
+		return
+	}
 
 	enqueueFn := operations.OperationFunc(func(ctx context.Context, reporter operations.ProgressReporter) error {
 		ctx = maintenance.WithOperationID(ctx, opID)
