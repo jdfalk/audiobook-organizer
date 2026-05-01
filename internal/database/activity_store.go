@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -125,12 +125,22 @@ func NewActivityStore(dbPath string) (*ActivityStore, error) {
 		return nil, fmt.Errorf("activity_store: schema: %w", err)
 	}
 	// Migrate: add compacted column if missing (idempotent)
-	_, _ = db.Exec(`ALTER TABLE activity_log ADD COLUMN compacted BOOLEAN NOT NULL DEFAULT 0`)
-	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_activity_compacted ON activity_log (compacted)`)
+	// Ignore "duplicate column name" errors since this is idempotent
+	if _, err := db.Exec(`ALTER TABLE activity_log ADD COLUMN compacted BOOLEAN NOT NULL DEFAULT 0`); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		db.Close()
+		return nil, fmt.Errorf("activity_store: add compacted column: %w", err)
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_activity_compacted ON activity_log (compacted)`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("activity_store: create compacted index: %w", err)
+	}
 
 	// Fix digest timestamps from 23:59:59 to 00:00:00 (one-shot, idempotent)
-	_, _ = db.Exec(`UPDATE activity_log SET timestamp = date(timestamp) || ' 00:00:00'
-		WHERE tier = 'digest' AND type = 'daily_digest' AND time(timestamp) = '23:59:59'`)
+	if _, err := db.Exec(`UPDATE activity_log SET timestamp = date(timestamp) || ' 00:00:00'
+		WHERE tier = 'digest' AND type = 'daily_digest' AND time(timestamp) = '23:59:59'`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("activity_store: fix digest timestamps: %w", err)
+	}
 
 	return &ActivityStore{db: db}, nil
 }

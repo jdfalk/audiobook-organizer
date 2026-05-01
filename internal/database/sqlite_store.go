@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.77.0
+// version: 1.78.0
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -695,7 +695,9 @@ func (s *SQLiteStore) deduplicateSeries() error {
 				return fmt.Errorf("failed to reassign books for series %q: %w", lname, err)
 			}
 			// Also update works table
-			s.db.Exec("UPDATE works SET series_id = ? WHERE series_id IN (SELECT id FROM series WHERE LOWER(name) = LOWER(?) AND author_id IS NULL AND id != ?)", keepID, lname, keepID)
+			if _, err := s.db.Exec("UPDATE works SET series_id = ? WHERE series_id IN (SELECT id FROM series WHERE LOWER(name) = LOWER(?) AND author_id IS NULL AND id != ?)", keepID, lname, keepID); err != nil {
+				return fmt.Errorf("failed to reassign works for series %q: %w", lname, err)
+			}
 			if _, err := s.db.Exec(deleteQuery, lname, keepID); err != nil {
 				return fmt.Errorf("failed to delete duplicate series %q: %w", lname, err)
 			}
@@ -703,7 +705,9 @@ func (s *SQLiteStore) deduplicateSeries() error {
 			if _, err := s.db.Exec(updateQuery, keepID, lname, aid, keepID); err != nil {
 				return fmt.Errorf("failed to reassign books for series %q: %w", lname, err)
 			}
-			s.db.Exec("UPDATE works SET series_id = ? WHERE series_id IN (SELECT id FROM series WHERE LOWER(name) = LOWER(?) AND author_id = ? AND id != ?)", keepID, lname, aid, keepID)
+			if _, err := s.db.Exec("UPDATE works SET series_id = ? WHERE series_id IN (SELECT id FROM series WHERE LOWER(name) = LOWER(?) AND author_id = ? AND id != ?)", keepID, lname, aid, keepID); err != nil {
+				return fmt.Errorf("failed to reassign works for series %q: %w", lname, err)
+			}
 			if _, err := s.db.Exec(deleteQuery, lname, aid, keepID); err != nil {
 				return fmt.Errorf("failed to delete duplicate series %q: %w", lname, err)
 			}
@@ -3731,7 +3735,9 @@ func (s *SQLiteStore) ListOperationSummaryLogs(limit, offset int) ([]OperationSu
 // ---- Operation Results (structured per-book output) ----
 
 func (s *SQLiteStore) SetRaw(key string, value []byte) error {
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`)
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`); err != nil {
+		return fmt.Errorf("create kv_store table: %w", err)
+	}
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)`, key, value)
 	return err
 }
@@ -3740,7 +3746,9 @@ func (s *SQLiteStore) SetRaw(key string, value []byte) error {
 // callers can handle cache-style lookups with a two-valued result
 // rather than a sentinel error.
 func (s *SQLiteStore) GetRaw(key string) ([]byte, error) {
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`)
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`); err != nil {
+		return nil, fmt.Errorf("create kv_store table: %w", err)
+	}
 	var value []byte
 	err := s.db.QueryRow(`SELECT value FROM kv_store WHERE key = ?`, key).Scan(&value)
 	if err == sql.ErrNoRows {
@@ -3758,7 +3766,9 @@ func (s *SQLiteStore) DeleteRaw(key string) error {
 }
 
 func (s *SQLiteStore) ScanPrefix(prefix string) ([]KVPair, error) {
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`)
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`); err != nil {
+		return nil, fmt.Errorf("create kv_store table: %w", err)
+	}
 	rows, err := s.db.Query(`SELECT key, value FROM kv_store WHERE key LIKE ?`, prefix+"%")
 	if err != nil {
 		return nil, err
@@ -3776,7 +3786,9 @@ func (s *SQLiteStore) ScanPrefix(prefix string) ([]KVPair, error) {
 }
 
 func (s *SQLiteStore) CountPrefix(prefix string) (int64, error) {
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`)
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value BLOB)`); err != nil {
+		return 0, fmt.Errorf("create kv_store table: %w", err)
+	}
 	var n int64
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM kv_store WHERE key LIKE ?`, prefix+"%").Scan(&n)
 	return n, err
@@ -3871,24 +3883,29 @@ func (s *SQLiteStore) GetRecentCompletedOperations(limit int) ([]Operation, erro
 
 // ---- Operation State Persistence (resumable operations) ----
 
-func (s *SQLiteStore) ensureOpStateTable() {
-	s.db.Exec(`CREATE TABLE IF NOT EXISTS operation_state (
+func (s *SQLiteStore) ensureOpStateTable() error {
+	_, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS operation_state (
 		op_id TEXT NOT NULL,
 		key_suffix TEXT NOT NULL DEFAULT '',
 		data BLOB NOT NULL,
 		PRIMARY KEY (op_id, key_suffix)
 	)`)
+	return err
 }
 
 func (s *SQLiteStore) SaveOperationState(opID string, state []byte) error {
-	s.ensureOpStateTable()
+	if err := s.ensureOpStateTable(); err != nil {
+		return fmt.Errorf("ensure operation state table: %w", err)
+	}
 	_, err := s.db.Exec(`INSERT INTO operation_state (op_id, key_suffix, data) VALUES (?, '', ?)
 		ON CONFLICT(op_id, key_suffix) DO UPDATE SET data = ?`, opID, state, state)
 	return err
 }
 
 func (s *SQLiteStore) GetOperationState(opID string) ([]byte, error) {
-	s.ensureOpStateTable()
+	if err := s.ensureOpStateTable(); err != nil {
+		return nil, fmt.Errorf("ensure operation state table: %w", err)
+	}
 	var data []byte
 	err := s.db.QueryRow(`SELECT data FROM operation_state WHERE op_id = ? AND key_suffix = ''`, opID).Scan(&data)
 	if err == sql.ErrNoRows {
@@ -3898,14 +3915,18 @@ func (s *SQLiteStore) GetOperationState(opID string) ([]byte, error) {
 }
 
 func (s *SQLiteStore) SaveOperationParams(opID string, params []byte) error {
-	s.ensureOpStateTable()
+	if err := s.ensureOpStateTable(); err != nil {
+		return fmt.Errorf("ensure operation state table: %w", err)
+	}
 	_, err := s.db.Exec(`INSERT INTO operation_state (op_id, key_suffix, data) VALUES (?, 'params', ?)
 		ON CONFLICT(op_id, key_suffix) DO UPDATE SET data = ?`, opID, params, params)
 	return err
 }
 
 func (s *SQLiteStore) GetOperationParams(opID string) ([]byte, error) {
-	s.ensureOpStateTable()
+	if err := s.ensureOpStateTable(); err != nil {
+		return nil, fmt.Errorf("ensure operation state table: %w", err)
+	}
 	var data []byte
 	err := s.db.QueryRow(`SELECT data FROM operation_state WHERE op_id = ? AND key_suffix = 'params'`, opID).Scan(&data)
 	if err == sql.ErrNoRows {
@@ -3915,7 +3936,9 @@ func (s *SQLiteStore) GetOperationParams(opID string) ([]byte, error) {
 }
 
 func (s *SQLiteStore) DeleteOperationState(opID string) error {
-	s.ensureOpStateTable()
+	if err := s.ensureOpStateTable(); err != nil {
+		return fmt.Errorf("ensure operation state table: %w", err)
+	}
 	_, err := s.db.Exec(`DELETE FROM operation_state WHERE op_id = ?`, opID)
 	return err
 }
@@ -3939,7 +3962,9 @@ func (s *SQLiteStore) DeleteOperationsByStatus(statuses []string) (int, error) {
 	}
 	n, _ := result.RowsAffected()
 	// Also clean up summary logs
-	_, _ = s.db.Exec(`DELETE FROM operation_summary_logs WHERE status IN (`+placeholders+`)`, args...)
+	if _, err := s.db.Exec(`DELETE FROM operation_summary_logs WHERE status IN (`+placeholders+`)`, args...); err != nil {
+		return int(n), fmt.Errorf("delete operation summary logs: %w", err)
+	}
 	return int(n), nil
 }
 
