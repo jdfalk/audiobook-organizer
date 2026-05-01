@@ -1,10 +1,11 @@
 // file: internal/database/iface_misc.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
 // last-edited: 2026-04-30
 
 package database
 
+import "context"
 import "time"
 
 // BookFileHashUpdater is the narrow interface required by fileops.WriteTagsSafe
@@ -32,6 +33,9 @@ type NarratorStore interface {
 	ListNarrators() ([]Narrator, error)
 	GetBookNarrators(bookID string) ([]BookNarrator, error)
 	SetBookNarrators(bookID string, narrators []BookNarrator) error
+	// GetNarratorsByBookIDs returns a map from bookID → []Narrator for all given book IDs.
+	// Returns an empty map (not nil) if bookIDs is empty.
+	GetNarratorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Narrator, error)
 }
 
 // WorkStore covers Work CRUD.

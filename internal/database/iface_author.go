@@ -1,8 +1,11 @@
 // file: internal/database/iface_author.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2e3b78c0-c989-48c0-a324-b88ea52b1ccd
+// last-edited: 2026-04-30
 
 package database
+
+import "context"
 
 // AuthorReader is the read-only author slice (authors + aliases + book-author joins).
 type AuthorReader interface {
@@ -17,6 +20,9 @@ type AuthorReader interface {
 	GetAllAuthorBookCounts() (map[int]int, error)
 	GetAllAuthorFileCounts() (map[int]int, error)
 	GetAuthorTombstone(oldID int) (int, error)
+	// GetAuthorsByBookIDs returns a map from bookID → []Author for all given book IDs.
+	// Returns an empty map (not nil) if bookIDs is empty.
+	GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Author, error)
 }
 
 // AuthorWriter is the write-only author slice.

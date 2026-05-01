@@ -1,11 +1,12 @@
 // file: internal/database/mock_store.go
-// version: 1.47.0
+// version: 1.48.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-04-30
 
 package database
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -2382,4 +2383,12 @@ func (m *MockStore) DeleteMetadataRejections(bookID string) error {
 		return m.DeleteMetadataRejectionsFunc(bookID)
 	}
 	return nil
+}
+
+func (m *MockStore) GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Author, error) {
+	return make(map[string][]Author), nil
+}
+
+func (m *MockStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Narrator, error) {
+	return make(map[string][]Narrator), nil
 }
