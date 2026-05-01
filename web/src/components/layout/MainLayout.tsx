@@ -1,6 +1,7 @@
 // file: web/src/components/layout/MainLayout.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
+// last-edited: 2026-04-30
 
 import { useState, ReactNode } from 'react';
 import { Box } from '@mui/material';
@@ -58,6 +59,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         }}
       >
         {children}
+        <Box aria-hidden="true" sx={{ height: 56 }} />
       </Box>
     </Box>
   );
