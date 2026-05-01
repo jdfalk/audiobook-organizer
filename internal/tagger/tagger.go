@@ -1,5 +1,5 @@
 // file: internal/tagger/tagger.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 package tagger
@@ -7,6 +7,7 @@ package tagger
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 
@@ -26,7 +27,7 @@ func UpdateSeriesTags() error {
 	}
 	defer rows.Close()
 
-	fmt.Println("Updating audio file tags with series information...")
+	log.Printf("[INFO] tagger: updating audio file tags with series information")
 	count := 0
 
 	for rows.Next() {
@@ -45,14 +46,14 @@ func UpdateSeriesTags() error {
 
 		// Update the file tags
 		if err := updateFileTags(filePath, title, seriesTag); err != nil {
-			fmt.Printf("Warning: Could not update tags for %s: %v\n", filePath, err)
+			log.Printf("[WARN] tagger: could not update tags for %s: %v", filePath, err)
 			continue
 		}
 
 		count++
 	}
 
-	fmt.Printf("Updated tags for %d files\n", count)
+	log.Printf("[INFO] tagger: updated tags for %d files", count)
 	return nil
 }
 
@@ -90,7 +91,7 @@ func updateM4BTags(filePath, seriesTag string) error {
 	// return cmd.Run()
 
 	// Placeholder implementation
-	fmt.Printf("Would update M4B tags for %s with series: %s\n", filePath, seriesTag)
+	log.Printf("[INFO] tagger: would update M4B tags for %s with series: %s", filePath, seriesTag)
 	return nil
 }
 
@@ -101,7 +102,7 @@ func updateMP3Tags(filePath, seriesTag string) error {
 	// return cmd.Run()
 
 	// Placeholder implementation
-	fmt.Printf("Would update MP3 tags for %s with series: %s\n", filePath, seriesTag)
+	log.Printf("[INFO] tagger: would update MP3 tags for %s with series: %s", filePath, seriesTag)
 	return nil
 }
 
@@ -112,6 +113,6 @@ func updateFLACTags(filePath, seriesTag string) error {
 	// return cmd.Run()
 
 	// Placeholder implementation
-	fmt.Printf("Would update FLAC tags for %s with series: %s\n", filePath, seriesTag)
+	log.Printf("[INFO] tagger: would update FLAC tags for %s with series: %s", filePath, seriesTag)
 	return nil
 }
