@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.66.0
+// version: 1.67.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-01
+// last-edited: 2026-05-02
 
 package database
 
@@ -8268,13 +8268,53 @@ func (p *PebbleStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error)
 	return stats, nil
 }
 // GetAuthorsByBookIDs returns a map from bookID → []Author for all given book IDs.
-// TODO: Implement in N1-3
 func (p *PebbleStore) GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Author, error) {
-panic("not implemented")
+	if len(bookIDs) == 0 {
+		return map[string][]Author{}, nil
+	}
+	result := make(map[string][]Author, len(bookIDs))
+	for _, bookID := range bookIDs {
+		bookAuthors, err := p.GetBookAuthors(bookID)
+		if err != nil {
+			return nil, fmt.Errorf("GetAuthorsByBookIDs %s: %w", bookID, err)
+		}
+		var authors []Author
+		for _, ba := range bookAuthors {
+			author, err := p.GetAuthorByID(ba.AuthorID)
+			if err != nil {
+				return nil, fmt.Errorf("GetAuthorsByBookIDs author lookup %d: %w", ba.AuthorID, err)
+			}
+			if author != nil {
+				authors = append(authors, *author)
+			}
+		}
+		result[bookID] = authors
+	}
+	return result, nil
 }
 
 // GetNarratorsByBookIDs returns a map from bookID → []Narrator for all given book IDs.
-// TODO: Implement in N1-3
 func (p *PebbleStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Narrator, error) {
-panic("not implemented")
+	if len(bookIDs) == 0 {
+		return map[string][]Narrator{}, nil
+	}
+	result := make(map[string][]Narrator, len(bookIDs))
+	for _, bookID := range bookIDs {
+		bookNarrators, err := p.GetBookNarrators(bookID)
+		if err != nil {
+			return nil, fmt.Errorf("GetNarratorsByBookIDs %s: %w", bookID, err)
+		}
+		var narrators []Narrator
+		for _, bn := range bookNarrators {
+			narrator, err := p.GetNarratorByID(bn.NarratorID)
+			if err != nil {
+				return nil, fmt.Errorf("GetNarratorsByBookIDs narrator lookup %d: %w", bn.NarratorID, err)
+			}
+			if narrator != nil {
+				narrators = append(narrators, *narrator)
+			}
+		}
+		result[bookID] = narrators
+	}
+	return result, nil
 }
