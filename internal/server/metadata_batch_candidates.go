@@ -1,7 +1,7 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.8.0
+// version: 1.8.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
-// last-edited: 2026-04-28
+// last-edited: 2026-05-01
 
 package server
 
@@ -228,7 +228,7 @@ func (s *Server) fetchCandidateForBook(
 		}
 	}
 
-	bookInfo := buildCandidateBookInfo(book)
+	bookInfo := buildCandidateBookInfo(store, book)
 
 	// Wait for rate limiter before making external requests.
 	if err := limiter.Wait(ctx); err != nil {
@@ -288,7 +288,8 @@ func (s *Server) fetchCandidateForBook(
 }
 
 // buildCandidateBookInfo builds a CandidateBookInfo from a database.Book.
-func buildCandidateBookInfo(book *database.Book) CandidateBookInfo {
+// store is used to look up BookFile.ITunesPath (the authoritative field).
+func buildCandidateBookInfo(store database.BookFileStore, book *database.Book) CandidateBookInfo {
 	info := CandidateBookInfo{
 		ID:       book.ID,
 		Title:    book.Title,
@@ -298,8 +299,8 @@ func buildCandidateBookInfo(book *database.Book) CandidateBookInfo {
 	if book.Author != nil {
 		info.Author = book.Author.Name
 	}
-	if book.ITunesPath != nil {
-		info.ITunesPath = *book.ITunesPath
+	if bfs, bfErr := store.GetBookFiles(book.ID); bfErr == nil && len(bfs) > 0 {
+		info.ITunesPath = bfs[0].ITunesPath
 	}
 	if book.CoverURL != nil {
 		info.CoverURL = *book.CoverURL

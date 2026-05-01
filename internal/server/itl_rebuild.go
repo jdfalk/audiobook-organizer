@@ -1,6 +1,7 @@
 // file: internal/server/itl_rebuild.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 8f7e6d5c-4b3a-2c1d-0e9f-8a7b6c5d4e3f
+// last-edited: 2026-05-01
 //
 // iTunes library rebuild service: diffs the current DB state
 // against the current ITL file and computes the minimal set of
@@ -45,10 +46,18 @@ type ITLRebuildResult struct {
 	Error   string            `json:"error,omitempty"`
 }
 
+// itlRebuildStore is the minimal store interface needed by the ITL rebuild
+// functions: read access to books plus the ability to look up book files
+// (for sourcing ITunesPath from BookFile rather than the deprecated Book field).
+type itlRebuildStore interface {
+	database.BookReader
+	GetBookFiles(bookID string) ([]database.BookFile, error)
+}
+
 // computeITLDiff reads the current ITL and the current DB state,
 // and returns the ITLOperationSet that would synchronize them
 // plus a preview of what that set contains.
-func computeITLDiff(store database.BookReader, itlPath string) (*itunes.ITLOperationSet, *ITLRebuildPreview, error) {
+func computeITLDiff(store itlRebuildStore, itlPath string) (*itunes.ITLOperationSet, *ITLRebuildPreview, error) {
 	// Parse the current ITL to get all existing tracks.
 	lib, err := itunes.ParseITL(itlPath)
 	if err != nil {
@@ -158,8 +167,8 @@ func computeITLDiff(store database.BookReader, itlPath string) (*itunes.ITLOpera
 
 		// Location update.
 		wantLoc := ""
-		if book.ITunesPath != nil && *book.ITunesPath != "" {
-			wantLoc = *book.ITunesPath
+		if bfs, bfErr := store.GetBookFiles(book.ID); bfErr == nil && len(bfs) > 0 && bfs[0].ITunesPath != "" {
+			wantLoc = bfs[0].ITunesPath
 		}
 		if wantLoc != "" && track.Location != wantLoc {
 			ops.LocationUpdates = append(ops.LocationUpdates, itunes.ITLLocationUpdate{
@@ -180,17 +189,15 @@ func computeITLDiff(store database.BookReader, itlPath string) (*itunes.ITLOpera
 // buildNewTrackFromBook constructs an ITLNewTrack from a database
 // Book for insertion into the ITL. Fills as many fields as
 // possible from the book's metadata.
-func buildNewTrackFromBook(store database.BookReader, book *database.Book) itunes.ITLNewTrack {
+func buildNewTrackFromBook(store itlRebuildStore, book *database.Book) itunes.ITLNewTrack {
 	authorName, _ := resolveAuthorAndSeriesNames(book)
 	genre := "Audiobook"
 	if book.Genre != nil && *book.Genre != "" {
 		genre = *book.Genre
 	}
-	location := ""
-	if book.ITunesPath != nil {
-		location = *book.ITunesPath
-	} else {
-		location = book.FilePath
+	location := book.FilePath
+	if bfs, bfErr := store.GetBookFiles(book.ID); bfErr == nil && len(bfs) > 0 && bfs[0].ITunesPath != "" {
+		location = bfs[0].ITunesPath
 	}
 	totalTime := 0
 	if book.Duration != nil {
