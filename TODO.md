@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 6.7.0 -->
+<!-- version: 6.8.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-04-30 -->
 
@@ -14,6 +14,7 @@ future agent) can scan the entire workspace in one page.
 - [`docs/superpowers/plans/`](docs/superpowers/plans/) — implementation plans per feature
 - [`docs/superpowers/specs/`](docs/superpowers/specs/) — design specs per feature
 - [`docs/implementation-guide.md`](docs/implementation-guide.md) — integration guide for open items
+- [`docs/codebase-evaluation.md`](docs/codebase-evaluation.md) — 2026-04-30 codebase audit (12 issue groups, 38 bot-tasks)
 - Claude project memory at `~/.claude/projects/-Users-jdfalk-repos-github-com-jdfalk-audiobook-organizer/memory/` — items still to graduate here
 
 ---
@@ -24,6 +25,120 @@ future agent) can scan the entire workspace in one page.
 **Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
 **Latest shipped release:** v0.221.0 (2026-04-29) — PRs #507–#521; PRs #561–#563 merged 2026-04-30; PRs #570–#573 merged 2026-04-30
 **In flight:** User Ratings UI, ASYNC spec revision, iTunes relink unresolved cases (6,719 files)
+
+---
+
+## 🛠️ Codebase Audit — 2026-04-30
+
+Full evaluation of the audiobook-organizer backend and frontend. 12 issue groups,
+38 atomic bot-task PRs. Specs: `docs/superpowers/specs/2026-04-30-*.md`.
+Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
+
+### MOCK — Mock/CI Gate (2 tasks)
+
+- [ ] **MOCK-1** `fix/regenerate-mocks` — Regenerate stale mockery mocks
+  → [`2026-04-30-mock-1-regenerate.md`](docs/superpowers/bot-tasks/2026-04-30-mock-1-regenerate.md)
+- [ ] **MOCK-2** `fix/mock-ci-gate` — Add `go generate` check to CI
+  → [`2026-04-30-mock-2-ci-gate.md`](docs/superpowers/bot-tasks/2026-04-30-mock-2-ci-gate.md)
+
+### N1 — N+1 Query Elimination (4 tasks)
+
+- [ ] **N1-1** `perf/batch-fetch-interface` — Add batch-fetch methods to Store interface
+  → [`2026-04-30-n1-1-batch-fetch-interface.md`](docs/superpowers/bot-tasks/2026-04-30-n1-1-batch-fetch-interface.md)
+- [ ] **N1-2** `perf/n1-sqlite-impl` — Implement batch-fetch in SQLiteStore
+  → [`2026-04-30-n1-2-sqlite-impl.md`](docs/superpowers/bot-tasks/2026-04-30-n1-2-sqlite-impl.md)
+- [ ] **N1-3** `perf/n1-pebble-impl` — Implement batch-fetch in PebbleStore
+  → [`2026-04-30-n1-3-pebble-impl.md`](docs/superpowers/bot-tasks/2026-04-30-n1-3-pebble-impl.md)
+- [ ] **N1-4** `perf/n1-enrich-response` — Wire batch fetch into enrichBookForResponse
+  → [`2026-04-30-n1-4-enrich-response.md`](docs/superpowers/bot-tasks/2026-04-30-n1-4-enrich-response.md)
+
+### SEC — Filesystem / Security (4 tasks)
+
+- [ ] **SEC-1** `fix/browse-dir-allowlist` — Restrict BrowseDirectory to configured import paths
+  → [`2026-04-30-sec-1-browse-allowlist.md`](docs/superpowers/bot-tasks/2026-04-30-sec-1-browse-allowlist.md)
+- [ ] **SEC-2** `fix/auth-enabled-default` — Startup warning when auth is disabled
+  → [`2026-04-30-sec-2-auth-default.md`](docs/superpowers/bot-tasks/2026-04-30-sec-2-auth-default.md)
+- [ ] **SEC-3** `fix/rate-limit-default` — Startup warning when rate limiting is disabled
+  → [`2026-04-30-sec-3-rate-limit-default.md`](docs/superpowers/bot-tasks/2026-04-30-sec-3-rate-limit-default.md)
+- [ ] **SEC-4** `fix/ratelimit-o1-cleanup` — Remove duplicate o1 rate-limit middleware
+  → [`2026-04-30-sec-4-ratelimit-cleanup.md`](docs/superpowers/bot-tasks/2026-04-30-sec-4-ratelimit-cleanup.md)
+
+### DB — Database Hygiene (6 tasks)
+
+- [ ] **DB-1** `fix/db-file-hash-index` — Add unique index on (file_hash, library_id)
+  → [`2026-04-30-db-1-file-hash-index.md`](docs/superpowers/bot-tasks/2026-04-30-db-1-file-hash-index.md)
+- [ ] **DB-2** `fix/db-begin-tx-sqlite` — Wrap SaveBook pipeline in SQLite transaction
+  → [`2026-04-30-db-2-begin-tx-sqlite.md`](docs/superpowers/bot-tasks/2026-04-30-db-2-begin-tx-sqlite.md)
+- [ ] **DB-3** `fix/db-begin-tx-activity` — Wrap activity store writes in transactions
+  → [`2026-04-30-db-3-begin-tx-activity.md`](docs/superpowers/bot-tasks/2026-04-30-db-3-begin-tx-activity.md)
+- [ ] **DB-4** `fix/pipeline-save-errors` — Return errors from pipeline save steps
+  → [`2026-04-30-db-4-pipeline-errors.md`](docs/superpowers/bot-tasks/2026-04-30-db-4-pipeline-errors.md)
+- [ ] **DB-5** `fix/db-time-parse-errors` — Handle time.Parse errors in row scanners
+  → [`2026-04-30-db-5-time-parse-errors.md`](docs/superpowers/bot-tasks/2026-04-30-db-5-time-parse-errors.md)
+- [ ] **DB-6** `fix/pebble-silent-errors` — Surface silent errors in PebbleDB writes
+  → [`2026-04-30-db-6-pebble-silent-errors.md`](docs/superpowers/bot-tasks/2026-04-30-db-6-pebble-silent-errors.md)
+
+### CTX — Context Propagation (3 tasks)
+
+- [ ] **CTX-1** `fix/ctx-audiobook-update-service` — Thread context through AudiobookUpdateService
+  → [`2026-04-30-ctx-1-audiobook-update.md`](docs/superpowers/bot-tasks/2026-04-30-ctx-1-audiobook-update.md)
+- [ ] **CTX-2** `fix/ctx-openlibrary-service` — Thread context through OpenLibrary client
+  → [`2026-04-30-ctx-2-openlibrary.md`](docs/superpowers/bot-tasks/2026-04-30-ctx-2-openlibrary.md)
+- [ ] **CTX-3** `fix/ctx-filesystem-handlers` — Thread context through filesystem handlers
+  → [`2026-04-30-ctx-3-filesystem-handlers.md`](docs/superpowers/bot-tasks/2026-04-30-ctx-3-filesystem-handlers.md)
+
+### LOG — Structured Logging (4 tasks)
+
+- [ ] **LOG-1** `fix/log-tagger-structured` — Replace fmt.Printf with structured logging in tagger
+  → [`2026-04-30-log-1-tagger.md`](docs/superpowers/bot-tasks/2026-04-30-log-1-tagger.md)
+- [ ] **LOG-2** `fix/log-fileops-structured` — Replace fmt.Printf in fileops
+  → [`2026-04-30-log-2-fileops.md`](docs/superpowers/bot-tasks/2026-04-30-log-2-fileops.md)
+- [ ] **LOG-3** `fix/log-backup-structured` — Replace fmt.Printf in backup
+  → [`2026-04-30-log-3-backup.md`](docs/superpowers/bot-tasks/2026-04-30-log-3-backup.md)
+- [ ] **LOG-4** `fix/scanner-remove-progressbar` — Remove terminal progress bar from scanner
+  → [`2026-04-30-log-4-progressbar.md`](docs/superpowers/bot-tasks/2026-04-30-log-4-progressbar.md)
+
+### PROJ — Query Projection (2 tasks)
+
+- [ ] **PROJ-1** `perf/book-summary-columns` — Define BookSummary DB struct
+  → [`2026-04-30-proj-1-summary-columns.md`](docs/superpowers/bot-tasks/2026-04-30-proj-1-summary-columns.md)
+- [ ] **PROJ-2** `perf/book-list-summary-query` — Implement GetBookSummaries projected query
+  → [`2026-04-30-proj-2-list-query.md`](docs/superpowers/bot-tasks/2026-04-30-proj-2-list-query.md)
+
+### SCAN — Scanner Efficiency (1 task)
+
+- [ ] **SCAN-1** `perf/scanner-walkdir` — Replace filepath.Walk with filepath.WalkDir
+  → [`2026-04-30-scan-1-walkdir.md`](docs/superpowers/bot-tasks/2026-04-30-scan-1-walkdir.md)
+
+### SRV — Server Response Optimization (2 tasks)
+
+- [ ] **SRV-1** `feat/server-gzip-compression` — Add gzip compression middleware
+  → [`2026-04-30-srv-1-gzip.md`](docs/superpowers/bot-tasks/2026-04-30-srv-1-gzip.md)
+- [ ] **SRV-2** `fix/sse-heartbeat` — Add SSE heartbeat to prevent proxy timeouts
+  → [`2026-04-30-srv-2-sse-heartbeat.md`](docs/superpowers/bot-tasks/2026-04-30-srv-2-sse-heartbeat.md)
+
+### FE — Frontend Cleanup (10 tasks)
+
+- [ ] **FE-1** `refactor/library-filter-panel` — Extract FilterPanel from Library.tsx
+  → [`2026-04-30-fe-1-filter-panel.md`](docs/superpowers/bot-tasks/2026-04-30-fe-1-filter-panel.md)
+- [ ] **FE-2** `refactor/library-book-grid` — Extract BookGrid from Library.tsx
+  → [`2026-04-30-fe-2-book-grid.md`](docs/superpowers/bot-tasks/2026-04-30-fe-2-book-grid.md)
+- [ ] **FE-3** `refactor/library-batch-toolbar` — Extract BatchToolbar from Library.tsx
+  → [`2026-04-30-fe-3-batch-toolbar.md`](docs/superpowers/bot-tasks/2026-04-30-fe-3-batch-toolbar.md)
+- [ ] **FE-4** `refactor/settings-general-tab` — Extract GeneralSettingsTab from Settings.tsx
+  → [`2026-04-30-fe-4-settings-general.md`](docs/superpowers/bot-tasks/2026-04-30-fe-4-settings-general.md)
+- [ ] **FE-5** `refactor/settings-paths-tab` — Extract PathsSettingsTab from Settings.tsx
+  → [`2026-04-30-fe-5-settings-paths.md`](docs/superpowers/bot-tasks/2026-04-30-fe-5-settings-paths.md)
+- [ ] **FE-6** `refactor/settings-metadata-tab` — Extract MetadataSettingsTab from Settings.tsx
+  → [`2026-04-30-fe-6-settings-metadata.md`](docs/superpowers/bot-tasks/2026-04-30-fe-6-settings-metadata.md)
+- [ ] **FE-7** `fix/frontend-remove-console-logs` — Remove console.log from production code
+  → [`2026-04-30-fe-7-console-log.md`](docs/superpowers/bot-tasks/2026-04-30-fe-7-console-log.md)
+- [ ] **FE-8** `fix/frontend-error-boundaries` — Add error boundaries to page components
+  → [`2026-04-30-fe-8-error-boundaries.md`](docs/superpowers/bot-tasks/2026-04-30-fe-8-error-boundaries.md)
+- [ ] **FE-9** `fix/frontend-localstorage-keys` — Centralise localStorage keys as constants
+  → [`2026-04-30-fe-9-localstorage-keys.md`](docs/superpowers/bot-tasks/2026-04-30-fe-9-localstorage-keys.md)
+- [ ] **FE-10** `chore/frontend-coverage-thresholds` — Add Vitest coverage thresholds
+  → [`2026-04-30-fe-10-coverage.md`](docs/superpowers/bot-tasks/2026-04-30-fe-10-coverage.md)
 
 ---
 
