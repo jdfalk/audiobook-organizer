@@ -1052,6 +1052,10 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	return books, nil
 }
 
+func (p *PebbleStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, error) {
+	panic("GetAllBookSummaries not implemented for PebbleStore")
+}
+
 func (p *PebbleStore) GetBookByID(id string) (*Book, error) {
 	key := []byte(fmt.Sprintf("book:%s", id))
 	value, closer, err := p.db.Get(key)

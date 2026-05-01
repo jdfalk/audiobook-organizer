@@ -1,5 +1,5 @@
 // file: internal/database/iface_book.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 668ec5a2-f8d9-4fdb-b0d5-09937b5d83ea
 // last-edited: 2026-05-01
 
@@ -27,6 +27,7 @@ type UpdateBookRatingRequest struct {
 type BookReader interface {
 	GetBookByID(id string) (*Book, error)
 	GetAllBooks(limit, offset int) ([]Book, error)
+	GetAllBookSummaries(limit, offset int) ([]BookSummary, error)
 	GetBookByFilePath(path string) (*Book, error)
 	GetBookByITunesPersistentID(persistentID string) (*Book, error)
 	GetBookByFileHash(hash string) (*Book, error)
