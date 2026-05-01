@@ -1,5 +1,5 @@
 // file: internal/server/deluge_integration.go
-// version: 1.4.0
+// version: 1.4.1
 // guid: 1c9d0e8f-2a3b-4a70-b8c5-3d7e0f1b9a99
 //
 // Deluge integration for library centralization (backlog 6.1).
@@ -112,7 +112,7 @@ func (s *Server) handleDelugeTestConnection(c *gin.Context) {
 	}
 	client, err := deluge.New(url, pass)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		RespondWithInternalError(c, err.Error())
 		return
 	}
 	if err := client.Login(); err != nil {
@@ -164,11 +164,11 @@ func (s *Server) handleDelugeStatus(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"configured":         url != "",
-		"url":                url,
-		"discovery_enabled":  config.AppConfig.DelugeDiscoveryEnabled,
-		"move_enabled":       config.AppConfig.DelugeMoveEnabled,
-		"discovery_label":    config.AppConfig.DelugeDiscoveryLabel,
+		"configured":        url != "",
+		"url":               url,
+		"discovery_enabled": config.AppConfig.DelugeDiscoveryEnabled,
+		"move_enabled":      config.AppConfig.DelugeMoveEnabled,
+		"discovery_label":   config.AppConfig.DelugeDiscoveryLabel,
 	})
 }
 
@@ -190,7 +190,10 @@ func (s *Server) registerDelugeRoutes(protected *gin.RouterGroup) {
 
 // NotifyDelugeAfterUndo checks whether the reverted operation moved
 // Deluge-sourced files and updates the torrent storage path.
-func NotifyDelugeAfterUndo(store interface { database.BookReader; database.BookVersionStore }, bookID, oldFilePath string) {
+func NotifyDelugeAfterUndo(store interface {
+	database.BookReader
+	database.BookVersionStore
+}, bookID, oldFilePath string) {
 	book, _ := store.GetBookByID(bookID)
 	if book == nil {
 		return
@@ -205,7 +208,10 @@ func NotifyDelugeAfterUndo(store interface { database.BookReader; database.BookV
 
 // NotifyDelugeAfterVersionSwap checks whether the swapped versions
 // have torrent hashes and updates Deluge accordingly.
-func NotifyDelugeAfterVersionSwap(store interface { database.BookReader; database.BookVersionStore }, fromVer, toVer *database.BookVersion, bookFilePath string) {
+func NotifyDelugeAfterVersionSwap(store interface {
+	database.BookReader
+	database.BookVersionStore
+}, fromVer, toVer *database.BookVersion, bookFilePath string) {
 	if toVer != nil && toVer.TorrentHash != "" {
 		NotifyDelugeMoveStorage(toVer.TorrentHash, bookFilePath)
 	}

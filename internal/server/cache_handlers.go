@@ -1,5 +1,5 @@
 // file: internal/server/cache_handlers.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 package server
@@ -20,21 +20,21 @@ import (
 
 // CacheStatsResponse represents the JSON response for GET /api/v1/cache/stats
 type CacheStatsResponse struct {
-	Caches    []CacheStat `json:"caches"`
-	GeneratedAt string     `json:"generated_at"`
+	Caches      []CacheStat `json:"caches"`
+	GeneratedAt string      `json:"generated_at"`
 }
 
 // CacheStat represents metrics for a single cache
 type CacheStat struct {
-	Name              string             `json:"name"`
-	Hits              int64              `json:"hits"`
-	Misses            map[string]int64   `json:"misses"`
-	Sets              int64              `json:"sets"`
-	Invalidations     map[string]int64   `json:"invalidations"`
-	Evictions         map[string]int64   `json:"evictions"`
-	Size              int64              `json:"size"`
-	HitRate           *float64           `json:"hit_rate,omitempty"`
-	GetDurationMetric GetDurationMetric  `json:"get_duration_seconds"`
+	Name              string            `json:"name"`
+	Hits              int64             `json:"hits"`
+	Misses            map[string]int64  `json:"misses"`
+	Sets              int64             `json:"sets"`
+	Invalidations     map[string]int64  `json:"invalidations"`
+	Evictions         map[string]int64  `json:"evictions"`
+	Size              int64             `json:"size"`
+	HitRate           *float64          `json:"hit_rate,omitempty"`
+	GetDurationMetric GetDurationMetric `json:"get_duration_seconds"`
 }
 
 // GetDurationMetric represents count and sum of cache get durations
@@ -432,7 +432,7 @@ func (s *Server) handleCacheStatsHistory(c *gin.Context) {
 	}
 	snaps, err := s.metricsStore.GetCacheStatsHistory(cacheName, since, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		RespondWithInternalError(c, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

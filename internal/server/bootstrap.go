@@ -1,5 +1,5 @@
 // file: internal/server/bootstrap.go
-// version: 1.4.0
+// version: 1.4.1
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
 
 package server
@@ -29,9 +29,9 @@ import (
 )
 
 const (
-	bootstrapTokenKey    = "bootstrap_token_hash"
-	bootstrapExpiresKey  = "bootstrap_token_expires_at"
-	bootstrapTokenTTL    = 10 * time.Minute
+	bootstrapTokenKey   = "bootstrap_token_hash"
+	bootstrapExpiresKey = "bootstrap_token_expires_at"
+	bootstrapTokenTTL   = 10 * time.Minute
 )
 
 // SettingsReadWriter is the minimal store surface needed by the bootstrap subsystem.
@@ -196,7 +196,7 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 
 	var req bootstrapRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	req.Token = strings.TrimSpace(req.Token)
@@ -207,7 +207,7 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 

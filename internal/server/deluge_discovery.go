@@ -1,5 +1,5 @@
 // file: internal/server/deluge_discovery.go
-// version: 2.3.0
+// version: 2.3.1
 // guid: e6f7a8b9-c0d1-2e3f-4a5b-6c7d8e9f0a1b
 //
 // Deluge label-based audiobook discovery.
@@ -400,7 +400,7 @@ func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 		TorrentHash string `json:"torrent_hash"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if s.importService == nil {
@@ -413,7 +413,7 @@ func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 		Organize: false,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		RespondWithInternalError(c, err.Error())
 		return
 	}
 
@@ -437,7 +437,7 @@ func (s *Server) handleDiscoveryImport(c *gin.Context) {
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	client := getDelugeClient()
