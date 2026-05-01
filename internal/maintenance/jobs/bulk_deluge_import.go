@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/bulk_deluge_import.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a2b8c6d7-9e0f-1a2b-3c4d-5e6f7a8b9c0d
-// last-edited: 2026-04-28
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -158,7 +158,7 @@ func bdi_importToLibrary(cfg *config.Config, delugeClient *deluge.Client, store 
 		log.Printf("[INFO] bdi_importToLibrary: %s already imported, skipping", bookFile.FilePath)
 		return bookFile.FilePath, nil
 	}
-	src := util.CleanPath(bookFile.FilePath)
+	src := filepath.Clean(bookFile.FilePath)
 	if src == "" {
 		return "", fmt.Errorf("bdi_importToLibrary: bookFile.FilePath is empty")
 	}
@@ -169,10 +169,10 @@ func bdi_importToLibrary(cfg *config.Config, delugeClient *deluge.Client, store 
 		var joinErr error
 		destDir, joinErr = util.SafeJoin(cfg.RootDir, rel)
 		if joinErr != nil {
-			destDir = util.CleanPath(cfg.RootDir)
+			destDir = filepath.Clean(cfg.RootDir)
 		}
 	} else {
-		destDir = util.CleanPath(cfg.RootDir)
+		destDir = filepath.Clean(cfg.RootDir)
 	}
 
 	dest, destErr := util.SafeJoin(destDir, filepath.Base(src))
@@ -219,6 +219,8 @@ func bdi_isParentTraversal(rel string) bool {
 }
 
 func bdi_ioCopy(src, dest string) error {
+	src = filepath.Clean(src)
+	dest = filepath.Clean(dest)
 	in, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("open src: %w", err)

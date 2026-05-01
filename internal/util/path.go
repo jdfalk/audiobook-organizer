@@ -1,5 +1,5 @@
 // file: internal/util/path.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7a3b2c1d-4e5f-6789-abcd-ef0123456789
 // last-edited: 2026-05-01
 
@@ -23,12 +23,6 @@ func SafeJoin(root string, parts ...string) (string, error) {
 		return "", fmt.Errorf("path %q escapes root %q", cleaned, cleanRoot)
 	}
 	return cleaned, nil
-}
-
-// CleanPath returns filepath.Clean(p). Use instead of bare filepath.Clean to
-// make intent explicit and enable easy grep for path-sanitisation call sites.
-func CleanPath(p string) string {
-	return filepath.Clean(p)
 }
 
 // WithinRoot reports whether path is equal to root or is directly contained
