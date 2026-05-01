@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_handlers.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: 565db679-19ba-4518-b63e-6892663be41b
 // last-edited: 2026-04-30
 //
@@ -11,6 +11,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -44,8 +45,7 @@ func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
 	result, err := s.filesystemService.BrowseDirectory(path)
 	if err != nil {
-		// Return 403 if path is not in allowed directories, otherwise 400
-		if strings.Contains(err.Error(), "not in allowed directories") {
+		if errors.Is(err, ErrPathNotAllowed) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
