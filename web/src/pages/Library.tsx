@@ -1,6 +1,7 @@
 // file: web/src/pages/Library.tsx
-// version: 1.52.0
+// version: 1.53.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
+// last-edited: 2026-04-30
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -46,13 +47,12 @@ import {
   Refresh as RefreshIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
-import { AudiobookGrid } from '../components/audiobooks/AudiobookGrid';
-import { AudiobookList } from '../components/audiobooks/AudiobookList';
 import { ColumnChooser } from '../components/audiobooks/ColumnChooser';
 import { ViewMode } from '../components/audiobooks/SearchBar';
 import { useColumnConfig } from '../hooks/useColumnConfig';
 import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
 import { FilterPanel } from '../components/FilterPanel';
+import { BookGrid } from '../components/BookGrid';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
@@ -2312,51 +2312,30 @@ export const Library = () => {
                 </Button>
               </Paper>
             ) : (
-            <>
-            {itemsPerPage > 50 && totalPages > 1 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={(_, value) => setPage(value)}
-                  color="primary"
-                  siblingCount={3}
-                  size="small"
-                />
-              </Box>
-            )}
-            {viewMode === 'grid' ? (
-              <AudiobookGrid
-                audiobooks={audiobooks}
-                loading={loading}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onClick={handleClick}
-                onVersionManage={handleVersionManage}
-                onFetchMetadata={handleFetchMetadata}
-                onParseWithAI={handleParseWithAI}
-                selectedIds={selectedIds}
-                onToggleSelect={handleToggleSelect}
-              />
-            ) : (
-              <AudiobookList
-                audiobooks={audiobooks}
-                loading={loading}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onClick={handleClick}
-                selectedIds={selectedIds}
-                onToggleSelect={handleToggleSelect}
-                onSelectAll={handleToggleSelectAllOnPage}
-                columns={columnDefs}
-                columnWidths={columnWidths}
-                sortBy={sortBy}
-                sortOrder={sortOrder === SortOrder.Ascending ? 'asc' : 'desc'}
-                onSortChange={handleColumnSortChange}
-                onColumnResize={resizeColumn}
-              />
-            )}
-            </>
+            <BookGrid
+              audiobooks={audiobooks}
+              loading={loading}
+              viewMode={viewMode}
+              page={page}
+              totalPages={totalPages}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setPage}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onClick={handleClick}
+              onVersionManage={handleVersionManage}
+              onFetchMetadata={handleFetchMetadata}
+              onParseWithAI={handleParseWithAI}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              columns={columnDefs}
+              columnWidths={columnWidths}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSortChange={handleColumnSortChange}
+              onColumnResize={resizeColumn}
+              onSelectAll={handleToggleSelectAllOnPage}
+            />
             )}
 
             {!loading && (
