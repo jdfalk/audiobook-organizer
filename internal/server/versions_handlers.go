@@ -1,5 +1,6 @@
 // file: internal/server/versions_handlers.go
-// version: 1.2.0
+// version: 1.3.0
+// last-edited: 2026-05-01
 // guid: b2fde2ee-5301-4240-9def-503917e19a78
 //
 // Version-grouping HTTP handlers split out of server.go: list/link/
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -23,28 +25,28 @@ func (s *Server) listAudiobookVersions(c *gin.Context) {
 	id := c.Param("id")
 
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	if book.VersionGroupID == nil {
-		RespondWithOK(c, gin.H{"versions": []any{book}})
+		httputil.RespondWithOK(c, gin.H{"versions": []any{book}})
 		return
 	}
 
 	books, err := s.Store().GetBooksByVersionGroup(*book.VersionGroupID)
 	if err != nil {
-		RespondWithInternalError(c, "failed to fetch versions")
+		httputil.RespondWithInternalError(c, "failed to fetch versions")
 		return
 	}
 
-	RespondWithOK(c, gin.H{"versions": books})
+	httputil.RespondWithOK(c, gin.H{"versions": books})
 }
 
 // linkAudiobookVersion links an audiobook as another version
@@ -56,24 +58,24 @@ func (s *Server) linkAudiobookVersion(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book1, err := s.Store().GetBookByID(id)
 	if err != nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	book2, err := s.Store().GetBookByID(req.OtherID)
 	if err != nil {
-		RespondWithNotFound(c, "audiobook", req.OtherID)
+		httputil.RespondWithNotFound(c, "audiobook", req.OtherID)
 		return
 	}
 
@@ -90,16 +92,16 @@ func (s *Server) linkAudiobookVersion(c *gin.Context) {
 	book2.VersionGroupID = &versionGroupID
 
 	if _, err := s.Store().UpdateBook(id, book1); err != nil {
-		RespondWithInternalError(c, "failed to update audiobook")
+		httputil.RespondWithInternalError(c, "failed to update audiobook")
 		return
 	}
 
 	if _, err := s.Store().UpdateBook(req.OtherID, book2); err != nil {
-		RespondWithInternalError(c, "failed to update other audiobook")
+		httputil.RespondWithInternalError(c, "failed to update other audiobook")
 		return
 	}
 
-	RespondWithOK(c, gin.H{"version_group_id": versionGroupID})
+	httputil.RespondWithOK(c, gin.H{"version_group_id": versionGroupID})
 }
 
 // setAudiobookPrimary sets an audiobook as the primary version
@@ -107,13 +109,13 @@ func (s *Server) setAudiobookPrimary(c *gin.Context) {
 	id := c.Param("id")
 
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
@@ -121,16 +123,16 @@ func (s *Server) setAudiobookPrimary(c *gin.Context) {
 		primaryFlag := true
 		book.IsPrimaryVersion = &primaryFlag
 		if _, err := s.Store().UpdateBook(id, book); err != nil {
-			RespondWithInternalError(c, "failed to update audiobook")
+			httputil.RespondWithInternalError(c, "failed to update audiobook")
 			return
 		}
-		RespondWithOK(c, gin.H{"message": "audiobook set as primary"})
+		httputil.RespondWithOK(c, gin.H{"message": "audiobook set as primary"})
 		return
 	}
 
 	books, err := s.Store().GetBooksByVersionGroup(*book.VersionGroupID)
 	if err != nil {
-		RespondWithInternalError(c, "failed to fetch versions")
+		httputil.RespondWithInternalError(c, "failed to fetch versions")
 		return
 	}
 
@@ -138,12 +140,12 @@ func (s *Server) setAudiobookPrimary(c *gin.Context) {
 		primaryFlag := books[i].ID == id
 		books[i].IsPrimaryVersion = &primaryFlag
 		if _, err := s.Store().UpdateBook(books[i].ID, &books[i]); err != nil {
-			RespondWithInternalError(c, "failed to update version")
+			httputil.RespondWithInternalError(c, "failed to update version")
 			return
 		}
 	}
 
-	RespondWithOK(c, gin.H{"message": "audiobook set as primary"})
+	httputil.RespondWithOK(c, gin.H{"message": "audiobook set as primary"})
 }
 
 // getVersionGroup gets all audiobooks in a version group
@@ -151,17 +153,17 @@ func (s *Server) getVersionGroup(c *gin.Context) {
 	groupID := c.Param("id")
 
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	books, err := s.Store().GetBooksByVersionGroup(groupID)
 	if err != nil {
-		RespondWithInternalError(c, "failed to fetch version group")
+		httputil.RespondWithInternalError(c, "failed to fetch version group")
 		return
 	}
 
-	RespondWithOK(c, gin.H{"audiobooks": books})
+	httputil.RespondWithOK(c, gin.H{"audiobooks": books})
 }
 
 // splitVersion moves selected segments from a book into a new version (a new book
@@ -173,23 +175,23 @@ func (s *Server) splitVersion(c *gin.Context) {
 		SegmentIDs []string `json:"segment_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.SegmentIDs) == 0 {
-		RespondWithBadRequest(c, "segment_ids must not be empty")
+		httputil.RespondWithBadRequest(c, "segment_ids must not be empty")
 		return
 	}
 
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	// 1. Get source book
 	sourceBook, err := s.Store().GetBookByID(id)
 	if err != nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
@@ -201,7 +203,7 @@ func (s *Server) splitVersion(c *gin.Context) {
 		versionGroupID = ulid.Make().String()
 		sourceBook.VersionGroupID = &versionGroupID
 		if _, err := s.Store().UpdateBook(id, sourceBook); err != nil {
-			RespondWithInternalError(c, "failed to update source book version group")
+			httputil.RespondWithInternalError(c, "failed to update source book version group")
 			return
 		}
 	}
@@ -231,13 +233,13 @@ func (s *Server) splitVersion(c *gin.Context) {
 
 	createdBook, err := s.Store().CreateBook(newBook)
 	if err != nil {
-		internalError(c, "failed to create new version", err)
+		httputil.InternalError(c, "failed to create new version", err)
 		return
 	}
 
 	// 5. Move files to the new book (DB-only, does NOT touch files on disk)
 	if err := s.Store().MoveBookFilesToBook(req.SegmentIDs, sourceBook.ID, createdBook.ID); err != nil {
-		internalError(c, "failed to move files", err)
+		httputil.InternalError(c, "failed to move files", err)
 		return
 	}
 
@@ -265,7 +267,7 @@ func (s *Server) splitVersion(c *gin.Context) {
 		s.Store().UpdateBook(sourceBook.ID, sourceBook)
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"book":             createdBook,
 		"version_group_id": versionGroupID,
 		"segments_moved":   len(req.SegmentIDs),
@@ -282,29 +284,29 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 		SegmentIDs []string `json:"segment_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.SegmentIDs) == 0 {
-		RespondWithBadRequest(c, "segment_ids must not be empty")
+		httputil.RespondWithBadRequest(c, "segment_ids must not be empty")
 		return
 	}
 
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	sourceBook, err := s.Store().GetBookByID(id)
 	if err != nil || sourceBook == nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	// Build a lookup of file ID → BookFile
 	allFiles, err := s.Store().GetBookFiles(sourceBook.ID)
 	if err != nil {
-		RespondWithInternalError(c, "failed to list book files")
+		httputil.RespondWithInternalError(c, "failed to list book files")
 		return
 	}
 	fileMap := make(map[string]database.BookFile, len(allFiles))
@@ -380,7 +382,7 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 		s.Store().UpdateBook(sourceBook.ID, sourceBook)
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"created_books": createdBooks,
 		"count":         len(createdBooks),
 	})
@@ -395,46 +397,46 @@ func (s *Server) moveSegments(c *gin.Context) {
 		TargetBookID string   `json:"target_book_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.SegmentIDs) == 0 {
-		RespondWithBadRequest(c, "segment_ids must not be empty")
+		httputil.RespondWithBadRequest(c, "segment_ids must not be empty")
 		return
 	}
 
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	// 1. Get source and target books
 	sourceBook, err := s.Store().GetBookByID(id)
 	if err != nil {
-		RespondWithNotFound(c, "audiobook", id)
+		httputil.RespondWithNotFound(c, "audiobook", id)
 		return
 	}
 
 	targetBook, err := s.Store().GetBookByID(req.TargetBookID)
 	if err != nil {
-		RespondWithNotFound(c, "audiobook", req.TargetBookID)
+		httputil.RespondWithNotFound(c, "audiobook", req.TargetBookID)
 		return
 	}
 
 	// 2. Verify both books are in the same version group
 	if sourceBook.VersionGroupID == nil || targetBook.VersionGroupID == nil {
-		RespondWithBadRequest(c, "both books must be in a version group")
+		httputil.RespondWithBadRequest(c, "both books must be in a version group")
 		return
 	}
 	if *sourceBook.VersionGroupID != *targetBook.VersionGroupID {
-		RespondWithBadRequest(c, "books must be in the same version group")
+		httputil.RespondWithBadRequest(c, "books must be in the same version group")
 		return
 	}
 
 	// 3. Verify the files belong to the source book
 	sourceFiles, err := s.Store().GetBookFiles(id)
 	if err != nil {
-		RespondWithInternalError(c, "failed to list source book files")
+		httputil.RespondWithInternalError(c, "failed to list source book files")
 		return
 	}
 	sourceFileMap := make(map[string]bool, len(sourceFiles))
@@ -443,7 +445,7 @@ func (s *Server) moveSegments(c *gin.Context) {
 	}
 	for _, segID := range req.SegmentIDs {
 		if !sourceFileMap[segID] {
-			RespondWithBadRequest(c, fmt.Sprintf("file %s does not belong to source book", segID))
+			httputil.RespondWithBadRequest(c, fmt.Sprintf("file %s does not belong to source book", segID))
 			return
 		}
 	}
@@ -462,14 +464,14 @@ func (s *Server) moveSegments(c *gin.Context) {
 
 	// 5. Move files
 	if err := s.Store().MoveBookFilesToBook(req.SegmentIDs, id, req.TargetBookID); err != nil {
-		internalError(c, "failed to move files", err)
+		httputil.InternalError(c, "failed to move files", err)
 		return
 	}
 
 	// 6. Reassign external ID mappings (iTunes PIDs) for moved files
 	reassignExternalIDsForFiles(id, req.TargetBookID, movedFiles)
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"segments_moved": len(req.SegmentIDs),
 		"source_book_id": id,
 		"target_book_id": req.TargetBookID,

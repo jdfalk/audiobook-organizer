@@ -1,11 +1,13 @@
 // file: internal/server/plugins_handlers.go
-// version: 2.0.0
+// version: 2.1.0
+// last-edited: 2026-05-01
 // guid: b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e
 
 package server
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 )
@@ -45,7 +47,7 @@ func pluginToInfo(p plugin.Plugin, reg *plugin.Registry) pluginInfo {
 // listPlugins handles GET /api/v1/plugins
 func (s *Server) listPlugins(c *gin.Context) {
 	if s.pluginRegistry == nil {
-		RespondWithOK(c, gin.H{"plugins": []pluginInfo{}})
+		httputil.RespondWithOK(c, gin.H{"plugins": []pluginInfo{}})
 		return
 	}
 	all := s.pluginRegistry.All()
@@ -53,33 +55,33 @@ func (s *Server) listPlugins(c *gin.Context) {
 	for _, p := range all {
 		result = append(result, pluginToInfo(p, s.pluginRegistry))
 	}
-	RespondWithOK(c, gin.H{"plugins": result})
+	httputil.RespondWithOK(c, gin.H{"plugins": result})
 }
 
 // getPlugin handles GET /api/v1/plugins/:id
 func (s *Server) getPlugin(c *gin.Context) {
 	id := c.Param("id")
 	if s.pluginRegistry == nil {
-		RespondWithNotFound(c, "plugin system", "not initialized")
+		httputil.RespondWithNotFound(c, "plugin system", "not initialized")
 		return
 	}
 	p, ok := s.pluginRegistry.Get(id)
 	if !ok {
-		RespondWithNotFound(c, "plugin", id)
+		httputil.RespondWithNotFound(c, "plugin", id)
 		return
 	}
-	RespondWithOK(c, pluginToInfo(p, s.pluginRegistry))
+	httputil.RespondWithOK(c, pluginToInfo(p, s.pluginRegistry))
 }
 
 // enablePlugin handles POST /api/v1/plugins/:id/enable
 func (s *Server) enablePlugin(c *gin.Context) {
 	id := c.Param("id")
 	if s.pluginRegistry == nil {
-		RespondWithInternalError(c, "plugin system not initialized")
+		httputil.RespondWithInternalError(c, "plugin system not initialized")
 		return
 	}
 	if _, ok := s.pluginRegistry.Get(id); !ok {
-		RespondWithNotFound(c, "plugin", id)
+		httputil.RespondWithNotFound(c, "plugin", id)
 		return
 	}
 	s.pluginRegistry.Enable(id)
@@ -92,18 +94,18 @@ func (s *Server) enablePlugin(c *gin.Context) {
 	}
 	config.AppConfig.Plugins[id] = cfg
 
-	RespondWithOK(c, gin.H{"id": id, "enabled": true})
+	httputil.RespondWithOK(c, gin.H{"id": id, "enabled": true})
 }
 
 // disablePlugin handles POST /api/v1/plugins/:id/disable
 func (s *Server) disablePlugin(c *gin.Context) {
 	id := c.Param("id")
 	if s.pluginRegistry == nil {
-		RespondWithInternalError(c, "plugin system not initialized")
+		httputil.RespondWithInternalError(c, "plugin system not initialized")
 		return
 	}
 	if _, ok := s.pluginRegistry.Get(id); !ok {
-		RespondWithNotFound(c, "plugin", id)
+		httputil.RespondWithNotFound(c, "plugin", id)
 		return
 	}
 	s.pluginRegistry.Disable(id)
@@ -115,43 +117,43 @@ func (s *Server) disablePlugin(c *gin.Context) {
 	}
 	config.AppConfig.Plugins[id] = cfg
 
-	RespondWithOK(c, gin.H{"id": id, "enabled": false})
+	httputil.RespondWithOK(c, gin.H{"id": id, "enabled": false})
 }
 
 // pluginHealth handles GET /api/v1/plugins/:id/health
 func (s *Server) pluginHealth(c *gin.Context) {
 	id := c.Param("id")
 	if s.pluginRegistry == nil {
-		RespondWithSuccess(c, 503, gin.H{"id": id, "health": "plugin system not initialized"})
+		httputil.RespondWithSuccess(c, 503, gin.H{"id": id, "health": "plugin system not initialized"})
 		return
 	}
 	p, ok := s.pluginRegistry.Get(id)
 	if !ok {
-		RespondWithNotFound(c, "plugin", id)
+		httputil.RespondWithNotFound(c, "plugin", id)
 		return
 	}
 	if err := p.HealthCheck(); err != nil {
-		RespondWithOK(c, gin.H{"id": id, "health": err.Error(), "ok": false})
+		httputil.RespondWithOK(c, gin.H{"id": id, "health": err.Error(), "ok": false})
 		return
 	}
-	RespondWithOK(c, gin.H{"id": id, "health": "ok", "ok": true})
+	httputil.RespondWithOK(c, gin.H{"id": id, "health": "ok", "ok": true})
 }
 
 // updatePluginSettings handles PUT /api/v1/plugins/:id/settings
 func (s *Server) updatePluginSettings(c *gin.Context) {
 	id := c.Param("id")
 	if s.pluginRegistry == nil {
-		RespondWithInternalError(c, "plugin system not initialized")
+		httputil.RespondWithInternalError(c, "plugin system not initialized")
 		return
 	}
 	if _, ok := s.pluginRegistry.Get(id); !ok {
-		RespondWithNotFound(c, "plugin", id)
+		httputil.RespondWithNotFound(c, "plugin", id)
 		return
 	}
 
 	var settings map[string]string
 	if err := c.ShouldBindJSON(&settings); err != nil {
-		RespondWithBadRequest(c, "invalid settings: "+err.Error())
+		httputil.RespondWithBadRequest(c, "invalid settings: "+err.Error())
 		return
 	}
 
@@ -162,5 +164,5 @@ func (s *Server) updatePluginSettings(c *gin.Context) {
 	cfg.Settings = settings
 	config.AppConfig.Plugins[id] = cfg
 
-	RespondWithOK(c, gin.H{"id": id, "settings": settings})
+	httputil.RespondWithOK(c, gin.H{"id": id, "settings": settings})
 }

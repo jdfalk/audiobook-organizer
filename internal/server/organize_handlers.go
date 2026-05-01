@@ -1,5 +1,6 @@
 // file: internal/server/organize_handlers.go
-// version: 2.0.0
+// version: 2.1.0
+// last-edited: 2026-05-01
 // guid: 1522f0ec-663c-4527-a6d0-645658206a24
 //
 // Organize/rename HTTP handlers split out of server.go: preview/apply
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
@@ -27,7 +29,7 @@ import (
 func (s *Server) previewRename(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "book id is required")
+		httputil.RespondWithBadRequest(c, "book id is required")
 		return
 	}
 
@@ -35,21 +37,21 @@ func (s *Server) previewRename(c *gin.Context) {
 	preview, err := svc.PreviewRename(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			RespondWithNotFound(c, "book", id)
+			httputil.RespondWithNotFound(c, "book", id)
 			return
 		}
-		internalError(c, "failed to preview rename", err)
+		httputil.InternalError(c, "failed to preview rename", err)
 		return
 	}
 
-	RespondWithOK(c, preview)
+	httputil.RespondWithOK(c, preview)
 }
 
 // applyRename executes the rename + tag write + DB update for a book.
 func (s *Server) applyRename(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "book id is required")
+		httputil.RespondWithBadRequest(c, "book id is required")
 		return
 	}
 
@@ -58,7 +60,7 @@ func (s *Server) applyRename(c *gin.Context) {
 	op, err := s.Store().CreateOperation(opID, "rename", stringPtr(id))
 	if err != nil {
 		log.Printf("[ERROR] rename: failed to create operation: %v", err)
-		RespondWithInternalError(c, "failed to create operation record")
+		httputil.RespondWithInternalError(c, "failed to create operation record")
 		return
 	}
 
@@ -66,21 +68,21 @@ func (s *Server) applyRename(c *gin.Context) {
 	result, err := svc.ApplyRename(id, op.ID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			RespondWithNotFound(c, "book", id)
+			httputil.RespondWithNotFound(c, "book", id)
 			return
 		}
-		internalError(c, "failed to apply rename", err)
+		httputil.InternalError(c, "failed to apply rename", err)
 		return
 	}
 
-	RespondWithOK(c, result)
+	httputil.RespondWithOK(c, result)
 }
 
 // previewOrganize returns a step-by-step preview of what organizing a single book would do.
 func (s *Server) previewOrganize(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "book id is required")
+		httputil.RespondWithBadRequest(c, "book id is required")
 		return
 	}
 
@@ -88,14 +90,14 @@ func (s *Server) previewOrganize(c *gin.Context) {
 	preview, err := svc.PreviewOrganize(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			RespondWithNotFound(c, "book", id)
+			httputil.RespondWithNotFound(c, "book", id)
 			return
 		}
-		internalError(c, "failed to preview organize", err)
+		httputil.InternalError(c, "failed to preview organize", err)
 		return
 	}
 
-	RespondWithOK(c, preview)
+	httputil.RespondWithOK(c, preview)
 }
 
 // organizeBook executes the full organize pipeline for a single book.
@@ -106,7 +108,7 @@ func (s *Server) previewOrganize(c *gin.Context) {
 func (s *Server) organizeBook(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "book id is required")
+		httputil.RespondWithBadRequest(c, "book id is required")
 		return
 	}
 
@@ -115,17 +117,17 @@ func (s *Server) organizeBook(c *gin.Context) {
 	op, err := s.Store().CreateOperation(opID, "organize", stringPtr(id))
 	if err != nil {
 		log.Printf("[ERROR] organize: failed to create operation: %v", err)
-		RespondWithInternalError(c, "failed to create operation record")
+		httputil.RespondWithInternalError(c, "failed to create operation record")
 		return
 	}
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			RespondWithNotFound(c, "book", id)
+			httputil.RespondWithNotFound(c, "book", id)
 			return
 		}
-		internalError(c, "failed to fetch book", err)
+		httputil.InternalError(c, "failed to fetch book", err)
 		return
 	}
 
@@ -162,12 +164,12 @@ func (s *Server) organizeBook(c *gin.Context) {
 	}
 
 	if err != nil {
-		internalError(c, "failed to organize book", err)
+		httputil.InternalError(c, "failed to organize book", err)
 		return
 	}
 
 	if oldPath == newPath {
-		RespondWithOK(c, gin.H{
+		httputil.RespondWithOK(c, gin.H{
 			"message":      "already organized",
 			"book_id":      book.ID,
 			"old_path":     oldPath,
@@ -199,7 +201,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 			"new_path":     newPath,
 			"operation_id": op.ID,
 		}))
-		RespondWithOK(c, gin.H{
+		httputil.RespondWithOK(c, gin.H{
 			"message":      fmt.Sprintf("re-organized: %s → %s", oldPath, newPath),
 			"book_id":      book.ID,
 			"old_path":     oldPath,
@@ -212,7 +214,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 	// Version-aware organize: create a new organized book record linked to the original
 	createdBook, createErr := s.organizeService.CreateOrganizedVersion(org, book, newPath, isDir, op.ID, log2)
 	if createErr != nil {
-		internalError(c, "failed to create organized version", createErr)
+		httputil.InternalError(c, "failed to create organized version", createErr)
 		return
 	}
 
@@ -230,7 +232,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 		"operation_id":     op.ID,
 	}))
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message":          fmt.Sprintf("organized: %s → %s", oldPath, newPath),
 		"book_id":          createdBook.ID,
 		"original_book_id": book.ID,
