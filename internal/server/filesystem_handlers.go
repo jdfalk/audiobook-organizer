@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_handlers.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: 565db679-19ba-4518-b63e-6892663be41b
 //
 // Filesystem HTTP handlers split out of server.go: home directory,
@@ -199,7 +199,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 							if err != nil || dbBook == nil {
 								continue
 							}
-							if _, err := s.dedupEngine.CheckBook(context.Background(), dbBook.ID); err != nil {
+							if _, err := s.dedupEngine.CheckBook(ctx, dbBook.ID); err != nil {
 								log.Printf("[WARN] dedup check failed for scanned book %s: %v", dbBook.ID, err)
 							}
 						}
