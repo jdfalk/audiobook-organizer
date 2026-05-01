@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_service.go
-// version: 1.22.0
+// version: 1.23.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package server
@@ -574,6 +574,46 @@ func numericCompare(fieldVal *float64, expr string) bool {
 	}
 }
 
+// bookSummaryToBook converts a BookSummary to a Book struct for compatibility.
+// Only the fields present in BookSummary are populated; other fields remain zero-valued.
+func bookSummaryToBook(summary database.BookSummary) database.Book {
+	return database.Book{
+		ID:                  summary.ID,
+		Title:               summary.Title,
+		AuthorID:            summary.AuthorID,
+		SeriesID:            summary.SeriesID,
+		SeriesSequence:      summary.SeriesSequence,
+		FilePath:            summary.FilePath,
+		Format:              summary.Format,
+		Duration:            summary.Duration,
+		Narrator:            summary.Narrator,
+		OriginalFilename:    summary.OriginalFilename,
+		FileHash:            summary.FileHash,
+		FileSize:            summary.FileSize,
+		OriginalFileHash:    summary.OriginalFileHash,
+		OrganizedFileHash:   summary.OrganizedFileHash,
+		LibraryState:        summary.LibraryState,
+		QuarantinedAt:       summary.QuarantinedAt,
+		QuarantineReason:    summary.QuarantineReason,
+		CoverURL:            summary.CoverURL,
+		CreatedAt:           summary.CreatedAt,
+		UpdatedAt:           summary.UpdatedAt,
+		MetadataUpdatedAt:   summary.MetadataUpdatedAt,
+		IsPrimaryVersion:    summary.IsPrimaryVersion,
+		VersionGroupID:      summary.VersionGroupID,
+		MetadataReviewStatus: summary.MetadataReviewStatus,
+	}
+}
+
+// bookSummariesToBooks converts a slice of BookSummary to Book structs.
+func bookSummariesToBooks(summaries []database.BookSummary) []database.Book {
+	books := make([]database.Book, len(summaries))
+	for i, s := range summaries {
+		books[i] = bookSummaryToBook(s)
+	}
+	return books
+}
+
 // GetAudiobooks retrieves audiobooks with optional filtering.
 // Supports search, author_id, series_id, is_primary_version, and library_state filters.
 func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offset int, search string, authorID *int, seriesID *int, filters ...ListFilters) ([]database.Book, error) {
@@ -630,12 +670,16 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 			if cached, ok := svc.listCache.Get(cacheKey); ok {
 				return cached, nil
 			}
-			books, err = svc.store.GetAllBooks(storeLimit, storeOffset)
-			if err == nil && books != nil {
+			summaries, err := svc.store.GetAllBookSummaries(storeLimit, storeOffset)
+			if err == nil && summaries != nil {
+				books = bookSummariesToBooks(summaries)
 				svc.listCache.Set(cacheKey, books)
 			}
 		} else {
-			books, err = svc.store.GetAllBooks(storeLimit, storeOffset)
+			summaries, err := svc.store.GetAllBookSummaries(storeLimit, storeOffset)
+			if err == nil && summaries != nil {
+				books = bookSummariesToBooks(summaries)
+			}
 		}
 	}
 
