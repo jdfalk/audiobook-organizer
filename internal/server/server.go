@@ -854,7 +854,7 @@ func NewServer(store database.Store) *Server {
 		batchService:           NewBatchService(resolvedStore),
 		workService:            NewWorkService(resolvedStore),
 		authorSeriesService:    NewAuthorSeriesService(resolvedStore),
-		filesystemService:      NewFilesystemService(),
+		filesystemService:      NewFilesystemService(resolvedStore),
 		importPathService:      NewImportPathService(resolvedStore),
 		importService:          NewImportService(resolvedStore),
 		scanService:            NewScanService(resolvedStore),

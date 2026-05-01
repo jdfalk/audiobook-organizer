@@ -1,6 +1,7 @@
 // file: internal/server/filesystem_service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
+// last-edited: 2026-04-30
 
 package server
 
@@ -8,12 +9,54 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-type FilesystemService struct{}
+// defaultBrowseAllowPrefixes covers common Linux desktop/server and Docker layouts.
+var defaultBrowseAllowPrefixes = []string{
+	"/home",
+	"/media",
+	"/mnt",
+	"/audiobooks",
+	"/data",
+}
 
-func NewFilesystemService() *FilesystemService {
-	return &FilesystemService{}
+type FilesystemService struct {
+	db database.ImportPathStore
+}
+
+func NewFilesystemService(db database.ImportPathStore) *FilesystemService {
+	return &FilesystemService{db: db}
+}
+
+// isAllowedPath checks if absPath is within allowed prefixes or import paths.
+func isAllowedPath(absPath string, importPaths []database.ImportPath) bool {
+	allowed := make([]string, 0, len(defaultBrowseAllowPrefixes)+len(importPaths)+1)
+	allowed = append(allowed, defaultBrowseAllowPrefixes...)
+
+	if config.AppConfig.RootDir != "" {
+		allowed = append(allowed, config.AppConfig.RootDir)
+	}
+
+	for _, importPath := range importPaths {
+		if importPath.Path != "" {
+			allowed = append(allowed, importPath.Path)
+		}
+	}
+
+	for _, prefix := range allowed {
+		if prefix == "" {
+			continue
+		}
+		prefix = strings.TrimRight(prefix, string(os.PathSeparator))
+		if absPath == prefix || strings.HasPrefix(absPath, prefix+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
 }
 
 type FileInfo struct {
@@ -40,6 +83,16 @@ func (fs *FilesystemService) BrowseDirectory(path string) (*BrowseResult, error)
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("invalid path: %w", err)
+	}
+
+	// Security: Check if path is in allowed directories
+	importPaths, err := fs.db.GetAllImportPaths()
+	if err != nil {
+		return nil, fmt.Errorf("failed to check allowed paths: %w", err)
+	}
+
+	if !isAllowedPath(absPath, importPaths) {
+		return nil, fmt.Errorf("path not in allowed directories")
 	}
 
 	entries, err := os.ReadDir(absPath)

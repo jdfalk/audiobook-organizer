@@ -1,6 +1,7 @@
 // file: internal/server/filesystem_service_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
+// last-edited: 2026-04-30
 
 package server
 
@@ -9,10 +10,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 )
 
 func TestFilesystemService_BrowseDirectory_Empty(t *testing.T) {
-	fs := NewFilesystemService()
+	mockStore := new(mocks.MockImportPathStore)
+	mockStore.On("GetAllImportPaths").Return([]database.ImportPath{}, nil)
+	fs := NewFilesystemService(mockStore)
 
 	_, err := fs.BrowseDirectory("")
 
@@ -22,7 +28,9 @@ func TestFilesystemService_BrowseDirectory_Empty(t *testing.T) {
 }
 
 func TestFilesystemService_BrowseDirectory_InvalidPath(t *testing.T) {
-	fs := NewFilesystemService()
+	mockStore := new(mocks.MockImportPathStore)
+	mockStore.On("GetAllImportPaths").Return([]database.ImportPath{}, nil)
+	fs := NewFilesystemService(mockStore)
 
 	_, err := fs.BrowseDirectory("/nonexistent/path/that/does/not/exist")
 
@@ -32,7 +40,8 @@ func TestFilesystemService_BrowseDirectory_InvalidPath(t *testing.T) {
 }
 
 func TestFilesystemService_CreateExclusion_Success(t *testing.T) {
-	fs := NewFilesystemService()
+	mockStore := new(mocks.MockImportPathStore)
+	fs := NewFilesystemService(mockStore)
 
 	tmpDir, err := ioutil.TempDir("", "test-exclusion")
 	if err != nil {
@@ -52,7 +61,8 @@ func TestFilesystemService_CreateExclusion_Success(t *testing.T) {
 }
 
 func TestFilesystemService_RemoveExclusion_NotFound(t *testing.T) {
-	fs := NewFilesystemService()
+	mockStore := new(mocks.MockImportPathStore)
+	fs := NewFilesystemService(mockStore)
 
 	tmpDir, err := ioutil.TempDir("", "test-remove-exclusion")
 	if err != nil {
