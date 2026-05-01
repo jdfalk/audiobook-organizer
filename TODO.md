@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 6.8.0 -->
+<!-- version: 6.9.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-04-30 -->
+<!-- last-edited: 2026-05-01 -->
 
 # Project TODO
 
@@ -734,3 +734,44 @@ Activity page mobile layout, adaptive refresh, version vs snapshot UI polish, co
 - Revert buttons in ChangeLog (DB + file revert)
 
 </details>
+
+---
+
+## 2026-05-01 Re-Audit Bot Tasks
+
+Findings from the 2026-05-01 re-audit. See `docs/codebase-evaluation.md` §Re-Audit for evidence.
+
+### High Priority
+
+- **TEST-1** Fix 11+ failing unit tests in `internal/server` after PROJ-1/PROJ-2 changed `GetAllBooks` → `GetAllBookSummaries`  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-test-1-fix-audiobook-service-tests.md`
+
+- **TEST-2** Fix `TestStoreAdditionalCoverageSQLite` failure in `internal/database` package  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-test-2-fix-database-test-coverage.md`
+
+- **SEC-1** Remove committed OpenAI API key placeholder (`sk-test12345678`) from `config.yaml:10`  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-sec-1-remove-committed-secret.md`
+
+### Medium Priority
+
+- **DEP-1** Migrate 13+ deprecated `Book.ITunesPath` field usages to `BookFile.ITunesPath` (staticcheck SA1019)  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-dep-1-migrate-itunes-path-field.md`
+
+- **DEAD-1** Remove dead code: `legacySaveConfigToDatabase_REMOVED`, `bookTagKeyspace`, `bookSummarySelectColumnsQualified`, `linkAsVersion`, SA4006 unused values  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-dead-1-remove-unused-code.md`
+
+- **CTX-4** Thread `context.Context` through `ActivityStore.Summarize` and `CompactByDay` transactions  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-ctx-4-activity-store.md`
+
+- **PERF-1** Paginate 20+ unbounded `GetAllBooks(0,0)` calls in background jobs (OOM risk)  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-perf-1-paginate-getallbooks.md`
+
+### Low Priority
+
+- **LOG-5** Replace remaining `fmt.Printf`/`log.Printf` in `sqlite_store`, `pebble_store`, `migrations`, `playlist`, `organizer` with structured `slog` calls  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-log-5-remaining-printf.md`
+
+- **R-9** Remove stale `// TODO: Implement in N1-2` comments from `sqlite_store.go:6913,6946` (already implemented)
+
+- **R-10** Fix 10+ capitalized error strings in metadata packages (staticcheck ST1005):  
+  `internal/metadata/audible.go`, `audnexus.go`, `googlebooks.go`, `hardcover.go`, `openlibrary.go`, `wikipedia.go`
