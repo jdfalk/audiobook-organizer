@@ -1,5 +1,5 @@
 // file: internal/server/cover_history.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 6d4e5f3a-7b8c-4a70-b8c5-3d7e0f1b9a99
 //
 // Cover art history browsing + restore (backlog 3.5).
@@ -83,7 +83,7 @@ func (s *Server) handleRestoreCover(c *gin.Context) {
 		Filename string `json:"filename" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 

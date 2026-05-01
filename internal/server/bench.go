@@ -1,5 +1,5 @@
 // file: internal/server/bench.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 5e6f7a8b-9c0d-1234-ef01-555555555555
 
 //go:build bench
@@ -105,7 +105,7 @@ type benchSubmitRequest struct {
 func (s *Server) benchSubmit(c *gin.Context) {
 	var req benchSubmitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -325,7 +325,7 @@ func (s *Server) benchPass2(c *gin.Context) {
 		ServerURL   string `json:"server"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if req.Model == "" {
@@ -353,7 +353,7 @@ func (s *Server) benchCrossval(c *gin.Context) {
 		ServerURL string `json:"server"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 

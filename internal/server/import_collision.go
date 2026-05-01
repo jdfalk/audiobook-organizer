@@ -1,5 +1,5 @@
 // file: internal/server/import_collision.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 4b2c3d1e-5f6a-4a70-b8c5-3d7e0f1b9a99
 //
 // Import-time collision preview (backlog 1.6). Before importing a
@@ -28,7 +28,7 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 		TorrentHash string `json:"torrent_hash,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
