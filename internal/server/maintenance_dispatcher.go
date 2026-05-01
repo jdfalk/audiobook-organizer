@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_dispatcher.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 55555555-5555-5555-5555-555555555555
-// last-edited: 2026-05-01
+// last-edited: 2026-04-28
 
 package server
 
@@ -10,6 +10,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/auth"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -43,9 +45,14 @@ func (s *Server) listMaintenanceJobs(c *gin.Context) {
 		Category      string `json:"category"`
 		DefaultParams any    `json:"default_params"`
 		CanResume     bool   `json:"can_resume"`
+		Permission    string `json:"permission,omitempty"`
 	}
 	out := make([]jobDef, len(jobs))
 	for i, j := range jobs {
+		perm := string(auth.PermSettingsManage)
+		if pa, ok := j.(maintenance.PermissionAware); ok && pa.Permission() != "" {
+			perm = pa.Permission()
+		}
 		out[i] = jobDef{
 			ID:            j.ID(),
 			Name:          j.Name(),
@@ -53,6 +60,7 @@ func (s *Server) listMaintenanceJobs(c *gin.Context) {
 			Category:      j.Category(),
 			DefaultParams: j.DefaultParams(),
 			CanResume:     j.CanResume(),
+			Permission:    perm,
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"jobs": out})
@@ -65,6 +73,23 @@ func (s *Server) runMaintenanceJob(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Enforce per-job access control. Jobs that implement PermissionAware use
+	// their own permission; all others default to settings.manage.
+	if config.AppConfig.EnableAuth {
+		required := auth.Permission(auth.PermSettingsManage)
+		if pa, ok := job.(maintenance.PermissionAware); ok && pa.Permission() != "" {
+			required = auth.Permission(pa.Permission())
+		}
+		if !auth.Can(c.Request.Context(), required) {
+			if _, hasUser := auth.UserFromContext(c.Request.Context()); !hasUser {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			} else {
+				c.JSON(http.StatusForbidden, gin.H{"error": "permission denied: " + string(required)})
+			}
+			return
+		}
 	}
 
 	var req struct {

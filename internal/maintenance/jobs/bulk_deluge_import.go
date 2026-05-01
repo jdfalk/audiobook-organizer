@@ -1,0 +1,235 @@
+// file: internal/maintenance/jobs/bulk_deluge_import.go
+// version: 1.0.0
+// guid: a2b8c6d7-9e0f-1a2b-3c4d-5e6f7a8b9c0d
+// last-edited: 2026-04-28
+
+package jobs
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+)
+
+func init() { maintenance.Register(&bulkDelugeImportJob{}) }
+
+type bulkDelugeImportJob struct{}
+
+type bdi_params struct {
+	DryRun   bool `json:"dry_run"`
+	MaxBooks int  `json:"max_books,omitempty"`
+}
+
+func (j *bulkDelugeImportJob) ID() string          { return "bulk-deluge-import" }
+func (j *bulkDelugeImportJob) Name() string        { return "Bulk Deluge Import" }
+func (j *bulkDelugeImportJob) Category() string    { return "Import" }
+func (j *bulkDelugeImportJob) Description() string { return "Imports all book_files that have a deluge_hash but have not yet been copied into the library" }
+func (j *bulkDelugeImportJob) DefaultParams() any  { return &bdi_params{DryRun: true} }
+func (j *bulkDelugeImportJob) CanResume() bool     { return true }
+
+func (j *bulkDelugeImportJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
+	opID := maintenance.OperationIDFromCtx(ctx)
+
+	maxBooks := 0
+	if opID != "" {
+		if raw, err := store.GetOperationParams(opID); err == nil && len(raw) > 0 {
+			var p bdi_params
+			if jerr := json.Unmarshal(raw, &p); jerr == nil {
+				maxBooks = p.MaxBooks
+				dryRun = p.DryRun
+			}
+		}
+	}
+
+	client := bdi_buildDelugeClient()
+
+	pending, err := store.GetBookFilesNeedingDelugeImport()
+	if err != nil {
+		return fmt.Errorf("GetBookFilesNeedingDelugeImport: %w", err)
+	}
+	if maxBooks > 0 && len(pending) > maxBooks {
+		pending = pending[:maxBooks]
+	}
+
+	total := len(pending)
+	log.Printf("[INFO] bulk-deluge-import %s: %d files pending (dry_run=%v)", opID, total, dryRun)
+	reporter.SetTotal(total)
+
+	imported, failed := 0, 0
+	for i := range pending {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		f := &pending[i]
+		if dryRun {
+			resultJSON, _ := json.Marshal(map[string]any{"path": f.FilePath, "action": "dry_run"})
+			if opID != "" {
+				_ = store.CreateOperationResult(&database.OperationResult{
+					OperationID: opID,
+					BookID:      f.ID,
+					ResultJSON:  string(resultJSON),
+					Status:      "dry_run",
+				})
+			}
+			imported++
+		} else {
+			newPath, importErr := bdi_importToLibrary(&config.AppConfig, client, store, f)
+			if importErr != nil {
+				log.Printf("[WARN] bulk-deluge-import %s: %s: %v", opID, f.FilePath, importErr)
+				resultJSON, _ := json.Marshal(map[string]any{"path": f.FilePath, "error": importErr.Error()})
+				if opID != "" {
+					_ = store.CreateOperationResult(&database.OperationResult{
+						OperationID: opID,
+						BookID:      f.ID,
+						ResultJSON:  string(resultJSON),
+						Status:      "error",
+					})
+				}
+				failed++
+			} else {
+				resultJSON, _ := json.Marshal(map[string]any{"path": f.FilePath, "new_path": newPath})
+				if opID != "" {
+					_ = store.CreateOperationResult(&database.OperationResult{
+						OperationID: opID,
+						BookID:      f.ID,
+						ResultJSON:  string(resultJSON),
+						Status:      "imported",
+					})
+				}
+				imported++
+			}
+		}
+		reporter.Increment()
+	}
+
+	log.Printf("[INFO] bulk-deluge-import %s: done. imported=%d failed=%d", opID, imported, failed)
+	reporter.Log("info", fmt.Sprintf("imported=%d failed=%d total=%d", imported, failed, total), nil)
+	return nil
+}
+
+// bdi_buildDelugeClient creates a Deluge client from application config.
+func bdi_buildDelugeClient() *deluge.Client {
+	url := config.AppConfig.DelugeWebURL
+	pass := config.AppConfig.DelugeWebPassword
+	if url == "" {
+		dc := config.AppConfig.DownloadClient.Torrent.Deluge
+		if dc.Host != "" {
+			port := dc.Port
+			if port == 0 {
+				port = 8112
+			}
+			url = fmt.Sprintf("http://%s:%d", dc.Host, port)
+			pass = dc.Password
+		}
+	}
+	if url == "" {
+		return nil
+	}
+	if pass == "" {
+		pass = "deluge"
+	}
+	c, err := deluge.New(url, pass)
+	if err != nil {
+		log.Printf("[WARN] bulk-deluge-import: failed to create deluge client: %v", err)
+		return nil
+	}
+	return c
+}
+
+// bdi_importToLibrary copies a book file into the library root and updates the DB record.
+func bdi_importToLibrary(cfg *config.Config, delugeClient *deluge.Client, store database.Store, bookFile *database.BookFile) (newPath string, err error) {
+	if bookFile == nil {
+		return "", fmt.Errorf("bdi_importToLibrary: bookFile is nil")
+	}
+	if bookFile.ImportedFromDelugeAt != nil {
+		log.Printf("[INFO] bdi_importToLibrary: %s already imported, skipping", bookFile.FilePath)
+		return bookFile.FilePath, nil
+	}
+	src := bookFile.FilePath
+	if src == "" {
+		return "", fmt.Errorf("bdi_importToLibrary: bookFile.FilePath is empty")
+	}
+
+	var destDir string
+	rel, relErr := filepath.Rel(cfg.RootDir, filepath.Dir(src))
+	if relErr == nil && !filepath.IsAbs(rel) && !bdi_isParentTraversal(rel) {
+		destDir = filepath.Join(cfg.RootDir, rel)
+	} else {
+		destDir = cfg.RootDir
+	}
+
+	dest := filepath.Join(destDir, filepath.Base(src))
+	if src == dest {
+		log.Printf("[INFO] bdi_importToLibrary: source and dest are the same (%s), skipping copy", src)
+		return src, nil
+	}
+
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return "", fmt.Errorf("bdi_importToLibrary: create dest dir %s: %w", destDir, err)
+	}
+
+	if copyErr := bdi_ioCopy(src, dest); copyErr != nil {
+		return "", fmt.Errorf("bdi_importToLibrary: copy %s -> %s: %w", src, dest, copyErr)
+	}
+
+	now := time.Now()
+	bookFile.DelugeOriginalPath = src
+	bookFile.FilePath = dest
+	bookFile.ImportedFromDelugeAt = &now
+
+	if err := store.UpdateBookFile(bookFile.ID, bookFile); err != nil {
+		return dest, fmt.Errorf("bdi_importToLibrary: UpdateBookFile %s: %w", bookFile.ID, err)
+	}
+
+	log.Printf("[INFO] bdi_importToLibrary: copied %s -> %s", src, dest)
+
+	if cfg.DelugeMoveEnabled && bookFile.DelugeHash != "" && delugeClient != nil {
+		moveErr := delugeClient.MoveStorage([]string{bookFile.DelugeHash}, filepath.Dir(dest))
+		if moveErr != nil {
+			log.Printf("[WARN] bdi_importToLibrary: MoveStorage for hash %s failed (non-fatal): %v",
+				bookFile.DelugeHash, moveErr)
+		}
+	}
+
+	return dest, nil
+}
+
+func bdi_isParentTraversal(rel string) bool {
+	return len(rel) >= 2 && rel[:2] == ".."
+}
+
+func bdi_ioCopy(src, dest string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open src: %w", err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("create dest: %w", err)
+	}
+	defer func() {
+		cerr := out.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+
+	if _, err = io.Copy(out, in); err != nil {
+		return fmt.Errorf("io.Copy: %w", err)
+	}
+	return nil
+}
