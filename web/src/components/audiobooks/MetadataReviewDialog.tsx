@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.10.0
+// version: 1.11.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -31,6 +31,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import type { CandidateResult, MetadataCandidate } from '../../services/api';
 import * as api from '../../services/api';
+import { STORAGE_KEYS } from '../../lib/storageKeys';
 
 interface MetadataReviewDialogProps {
   open: boolean;
@@ -60,11 +61,10 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100, 250, 500];
 // language disagrees with the book's are hidden. Preference
 // persists in localStorage so users don't re-enable it on
 // every dialog open.
-const LANGUAGE_FILTER_KEY = 'metadata-review-language-filter';
 
 function loadLanguageFilter(): boolean {
   if (typeof window === 'undefined') return true;
-  const raw = window.localStorage.getItem(LANGUAGE_FILTER_KEY);
+  const raw = window.localStorage.getItem(STORAGE_KEYS.METADATA_REVIEW_LANGUAGE_FILTER);
   return raw === null ? true : raw === 'true';
 }
 
@@ -121,11 +121,10 @@ function normalizeLanguage(lang: string | undefined | null): string {
 // uses session-only state, but the review dialog is opened ad-hoc
 // many times per session — re-picking "250 per page" on every open
 // is annoying.
-const REVIEW_PAGE_SIZE_KEY = 'metadata-review-page-size';
 
 function loadReviewPageSize(): number {
   if (typeof window === 'undefined') return 25;
-  const raw = window.localStorage.getItem(REVIEW_PAGE_SIZE_KEY);
+  const raw = window.localStorage.getItem(STORAGE_KEYS.METADATA_REVIEW_PAGE_SIZE);
   const n = raw ? Number(raw) : 25;
   return PAGE_SIZE_OPTIONS.includes(n) ? n : 25;
 }
@@ -1417,7 +1416,7 @@ export function MetadataReviewDialog({
                           setMatchLanguage(next);
                           if (typeof window !== 'undefined') {
                             window.localStorage.setItem(
-                              LANGUAGE_FILTER_KEY,
+                              STORAGE_KEYS.METADATA_REVIEW_LANGUAGE_FILTER,
                               String(next)
                             );
                           }
@@ -1495,7 +1494,7 @@ export function MetadataReviewDialog({
                         setReviewPageSize(next);
                         setServerPage(1);
                         if (typeof window !== 'undefined') {
-                          window.localStorage.setItem(REVIEW_PAGE_SIZE_KEY, String(next));
+                          window.localStorage.setItem(STORAGE_KEYS.METADATA_REVIEW_PAGE_SIZE, String(next));
                         }
                       }}
                       sx={{ minWidth: 100 }}
