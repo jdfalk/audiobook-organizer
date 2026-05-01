@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/relink_missing_to_itunes.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e0f6a4d5-7b8c-9d0e-1f2a-3b4c5d6e7f80
 // last-edited: 2026-04-28
 
@@ -19,6 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 )
 
 func init() { maintenance.Register(&relinkMissingToITunesJob{}) }
@@ -99,7 +100,12 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		case 0:
 			unresolved++
 		case 1:
-			newFP := matches[0]
+			newFP := util.CleanPath(matches[0])
+			if !util.WithinRoot(newFP, iTunesRoot) {
+				log.Printf("[WARN] relink-missing-to-itunes: match %q outside iTunesRoot, skipping", newFP)
+				unresolved++
+				break
+			}
 			relinked++
 			if !dryRun {
 				fi, _ := os.Stat(newFP)
@@ -118,6 +124,12 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		default:
 			best := rmt_disambiguate(matches, authorName, book.Title)
 			if best != "" {
+				best = util.CleanPath(best)
+				if !util.WithinRoot(best, iTunesRoot) {
+					log.Printf("[WARN] relink-missing-to-itunes: best match %q outside iTunesRoot, skipping", best)
+					unresolved++
+					break
+				}
 				relinked++
 				if !dryRun {
 					fi, _ := os.Stat(best)
