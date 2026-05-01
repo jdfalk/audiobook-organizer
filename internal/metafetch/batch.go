@@ -1,6 +1,7 @@
 // file: internal/metafetch/batch.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
+// last-edited: 2026-05-01
 
 package metafetch
 
@@ -40,7 +41,8 @@ type CandidateResult struct {
 }
 
 // BuildCandidateBookInfo builds a CandidateBookInfo from a database.Book.
-func BuildCandidateBookInfo(book *database.Book) CandidateBookInfo {
+// store is used to look up the first BookFile for ITunesPath; pass nil to skip.
+func BuildCandidateBookInfo(book *database.Book, store database.Store) CandidateBookInfo {
 	info := CandidateBookInfo{
 		ID:       book.ID,
 		Title:    book.Title,
@@ -50,8 +52,10 @@ func BuildCandidateBookInfo(book *database.Book) CandidateBookInfo {
 	if book.Author != nil {
 		info.Author = book.Author.Name
 	}
-	if book.ITunesPath != nil {
-		info.ITunesPath = *book.ITunesPath
+	if store != nil {
+		if bfs, bfErr := store.GetBookFiles(book.ID); bfErr == nil && len(bfs) > 0 {
+			info.ITunesPath = bfs[0].ITunesPath
+		}
 	}
 	if book.CoverURL != nil {
 		info.CoverURL = *book.CoverURL
