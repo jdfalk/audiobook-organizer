@@ -1,5 +1,6 @@
 // file: internal/database/sqlite_store.go
-// version: 1.81.0
+
+// version: 1.81.1
 // last-edited: 2026-05-01
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -3175,9 +3176,11 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 		return fmt.Errorf("DeleteBook rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("book not found")
+		// Set outer err so the deferred rollback fires and releases the transaction.
+		err = fmt.Errorf("book not found")
+		return err
 	}
-	if _, err := tx.Exec("DELETE FROM metadata_states WHERE book_id = ?", id); err != nil {
+	if _, err = tx.Exec("DELETE FROM metadata_states WHERE book_id = ?", id); err != nil {
 		return fmt.Errorf("DeleteBook metadata delete: %w", err)
 	}
 
