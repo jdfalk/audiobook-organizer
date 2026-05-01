@@ -1,7 +1,7 @@
 // file: internal/server/server.go
 // version: 1.207.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-01
+// last-edited: 2026-04-30
 
 package server
 
@@ -2261,20 +2261,12 @@ func (s *Server) setupRoutes() {
 
 	// Rate limiting is opt-in. Default 0 means disabled (local/single-user server).
 	apiRateLimiter := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
-	authRateLimiter := gin.HandlerFunc(func(c *gin.Context) { c.Next() })
 	if rpm := config.AppConfig.APIRateLimitPerMinute; rpm > 0 {
 		burst := rpm / 5
 		if burst < 10 {
 			burst = 10
 		}
 		apiRateLimiter = servermiddleware.NewIPRateLimiter(rpm, burst).Middleware()
-	}
-	if rpm := config.AppConfig.AuthRateLimitPerMinute; rpm > 0 {
-		burst := rpm / 5
-		if burst < 5 {
-			burst = 5
-		}
-		authRateLimiter = servermiddleware.NewIPRateLimiter(rpm, burst).Middleware()
 	}
 	bodyLimitMiddleware := servermiddleware.MaxRequestBodySize(jsonLimitBytes, uploadLimitBytes)
 	authMiddleware := gin.HandlerFunc(func(c *gin.Context) {
@@ -2291,7 +2283,6 @@ func (s *Server) setupRoutes() {
 	api.Use(apiRateLimiter, bodyLimitMiddleware)
 	{
 		authGroup := api.Group("/auth")
-		authGroup.Use(authRateLimiter)
 		{
 			authGroup.GET("/status", s.getAuthStatus)
 			authGroup.POST("/setup", s.setupInitialAdmin)
