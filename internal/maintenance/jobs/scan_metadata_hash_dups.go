@@ -1,0 +1,50 @@
+// file: internal/maintenance/jobs/scan_metadata_hash_dups.go
+// version: 1.0.0
+// guid: a1000017-0000-0000-0000-000000000017
+// last-edited: 2026-05-03
+
+package jobs
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+)
+
+func init() { maintenance.Register(&scanMetadataHashDupsJob{}) }
+
+type scanMetadataHashDupsJob struct{}
+
+func (j *scanMetadataHashDupsJob) ID() string          { return "scan-metadata-hash-dups" }
+func (j *scanMetadataHashDupsJob) Description() string { return "Scan for books sharing the same metadata source hash" }
+func (j *scanMetadataHashDupsJob) CanResume() bool     { return false }
+func (j *scanMetadataHashDupsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, _ bool) error {
+	books, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		return err
+	}
+	reporter.SetTotal(len(books))
+	byHash := map[string][]string{}
+	for i := range books {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		reporter.Increment()
+		if books[i].MetadataSourceHash == nil || *books[i].MetadataSourceHash == "" {
+			continue
+		}
+		byHash[*books[i].MetadataSourceHash] = append(byHash[*books[i].MetadataSourceHash], books[i].ID)
+	}
+	dups := 0
+	for _, ids := range byHash {
+		if len(ids) > 1 {
+			dups++
+			detail := fmt.Sprintf("book_ids=%v", ids)
+			reporter.Log("warn", "metadata hash duplicate group", &detail)
+		}
+	}
+	reporter.Log("info", fmt.Sprintf("scan-metadata-hash-dups complete: %d duplicate groups", dups), nil)
+	return nil
+}

@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 1.210.0
+// version: 1.211.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-04-30
+// last-edited: 2026-05-03
 
 package server
 
@@ -33,6 +33,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	_ "github.com/jdfalk/audiobook-organizer/internal/maintenance/jobs"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
@@ -942,6 +944,9 @@ func NewServer(store database.Store) *Server {
 	// Propagate rootDir into the store so LibraryStats can split organized vs unorganized.
 	resolvedStore.SetRootDir(config.AppConfig.RootDir)
 
+	// Inject the store into the maintenance package so jobs can access it.
+	maintenance.InjectStore(resolvedStore)
+
 	// Initialize plugin event bus and registry
 	server.eventBus = plugin.NewEventBus()
 	server.pluginRegistry = plugin.Global()
@@ -1686,10 +1691,21 @@ func (s *Server) resumeInterruptedOperations() {
 			_ = operations.ClearState(store, opID)
 			continue
 		default:
-			// Unknown type — mark as failed without noisy logging
-			_ = store.UpdateOperationError(opID, "interrupted, cannot resume")
-			_ = operations.ClearState(store, opID)
-			continue
+			// Try to resume as a maintenance job
+			if j, jobErr := maintenance.Get(strings.TrimPrefix(opType, "maintenance:")); jobErr == nil && j.CanResume() {
+				capturedOpID := opID
+				capturedJob := j
+				capturedStore := store
+				resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
+					ctx = maintenance.WithOperationID(ctx, capturedOpID)
+					adapter := &progressAdapter{ops: progress}
+					return capturedJob.Run(ctx, capturedStore, adapter, false)
+				}
+			} else {
+				_ = store.UpdateOperationError(opID, "interrupted, cannot resume")
+				_ = operations.ClearState(store, opID)
+				continue
+			}
 		}
 
 		if err := oq.EnqueueResume(opID, opType, operations.PriorityNormal, resumeFn); err != nil {
@@ -2630,6 +2646,8 @@ func (s *Server) setupRoutes() {
 			protected.GET("/maintenance/book-file-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookFileHashStats)
 			protected.POST("/maintenance/backfill-file-hashes", s.perm(auth.PermSettingsManage), s.handleBackfillFileHashes)
 			protected.GET("/maintenance/book-metadata-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookMetadataHashStats)
+			protected.GET("/maintenance/jobs", s.perm(auth.PermSettingsManage), s.listMaintenanceJobs)
+			protected.POST("/maintenance/jobs/:job_id", s.perm(auth.PermSettingsManage), s.runMaintenanceJob)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")

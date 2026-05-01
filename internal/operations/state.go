@@ -1,6 +1,7 @@
 // file: internal/operations/state.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-05-03
 
 package operations
 
@@ -150,6 +151,21 @@ func LoadParams[T any](store database.Store, opID string) (*T, error) {
 		return nil, err
 	}
 	return &params, nil
+}
+
+// LoadRawParams loads an operation's raw JSON parameters.
+// Returns nil if no params are stored.
+func LoadRawParams(store database.OperationStore, opID string) (json.RawMessage, error) {
+	data, err := store.GetOperationParams(opID)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// SaveRawParams persists raw JSON parameters for an operation.
+func SaveRawParams(store database.OperationStore, opID string, raw json.RawMessage) error {
+	return store.SaveOperationParams(opID, raw)
 }
 
 // ClearState removes all persisted state for an operation (called on completion/failure).

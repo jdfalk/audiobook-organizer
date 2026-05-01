@@ -1,0 +1,64 @@
+// file: internal/maintenance/jobs/fix_library_states.go
+// version: 1.0.0
+// guid: a1000008-0000-0000-0000-000000000008
+// last-edited: 2026-05-03
+
+package jobs
+
+import (
+	"context"
+	"os"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+)
+
+func init() { maintenance.Register(&fixLibraryStatesJob{}) }
+
+type fixLibraryStatesJob struct{}
+
+func (j *fixLibraryStatesJob) ID() string          { return "fix-library-states" }
+func (j *fixLibraryStatesJob) Description() string { return "Reconcile library_state field based on filesystem presence" }
+func (j *fixLibraryStatesJob) CanResume() bool     { return false }
+func (j *fixLibraryStatesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
+	books, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		return err
+	}
+	reporter.SetTotal(len(books))
+	fixed := 0
+	for i := range books {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		reporter.Increment()
+		book := &books[i]
+		_, statErr := os.Stat(book.FilePath)
+		wantState := "present"
+		if os.IsNotExist(statErr) {
+			wantState = "missing"
+		}
+		cur := ""
+		if book.LibraryState != nil {
+			cur = *book.LibraryState
+		}
+		if cur == wantState {
+			continue
+		}
+		if !dryRun {
+			updated := *book
+			updated.LibraryState = &wantState
+			if _, uerr := store.UpdateBook(book.ID, &updated); uerr != nil {
+				msg := uerr.Error()
+				reporter.Log("error", "fix-library-states: UpdateBook failed", &msg)
+			} else {
+				fixed++
+			}
+		} else {
+			fixed++
+		}
+	}
+	_ = fixed
+	reporter.Log("info", "fix-library-states complete", nil)
+	return nil
+}
