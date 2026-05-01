@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 //
 // SQL-backed duplicate detection handlers split out of server.go:
@@ -1384,10 +1384,43 @@ func (s *Server) seriesNormalizePreview(c *gin.Context) {
 	})
 }
 
+// mergeSeriesGroupHelper moves all books from each series in mergeIDs to keepID,
+// then deletes the now-empty series. Named with "Helper" suffix to avoid
+// collision with the (s *Server) mergeSeriesGroup HTTP handler.
+func mergeSeriesGroupHelper(store maintenanceStore, keepID int, mergeIDs []int) error {
+	for _, fromID := range mergeIDs {
+		books, err := store.GetBooksBySeriesID(fromID)
+		if err != nil {
+			return fmt.Errorf("GetBooksBySeriesID(%d): %w", fromID, err)
+		}
+
+		for _, book := range books {
+			current, err := store.GetBookByID(book.ID)
+			if err != nil {
+				return fmt.Errorf("GetBookByID(%s): %w", book.ID, err)
+			}
+			if current == nil {
+				continue
+			}
+
+			current.SeriesID = &keepID
+			if _, err = store.UpdateBook(book.ID, current); err != nil {
+				return fmt.Errorf("UpdateBook(%s): %w", book.ID, err)
+			}
+		}
+
+		if err = store.DeleteSeries(fromID); err != nil {
+			return fmt.Errorf("DeleteSeries(%d): %w", fromID, err)
+		}
+	}
+
+	return nil
+}
+
 // executeSeriesNormalizeCore renames and merges contaminated series, enqueues
 // write-back for affected books, and returns the affected book IDs for the
 // caller to run organize on.
-// maintenanceStore is used because mergeSeriesGroup requires it.
+// maintenanceStore is used because mergeSeriesGroupHelper requires it.
 func executeSeriesNormalizeCore(
 	ctx context.Context,
 	store maintenanceStore,
@@ -1436,8 +1469,8 @@ func executeSeriesNormalizeCore(
 		if ctx.Err() != nil {
 			return affectedBookIDs, ctx.Err()
 		}
-		if mErr := mergeSeriesGroup(store, *a.MergeTargetID, []int{a.SeriesID}); mErr != nil {
-			errs = append(errs, fmt.Sprintf("mergeSeriesGroup(keep=%d, merge=%d): %v", *a.MergeTargetID, a.SeriesID, mErr))
+		if mErr := mergeSeriesGroupHelper(store, *a.MergeTargetID, []int{a.SeriesID}); mErr != nil {
+			errs = append(errs, fmt.Sprintf("mergeSeriesGroupHelper(keep=%d, merge=%d): %v", *a.MergeTargetID, a.SeriesID, mErr))
 		}
 	}
 
