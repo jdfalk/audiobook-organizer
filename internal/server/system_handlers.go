@@ -1,5 +1,6 @@
 // file: internal/server/system_handlers.go
-// version: 2.1.0
+// version: 2.2.0
+// last-edited: 2026-05-01
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
 // System-level HTTP handlers split out of server.go: health, status,
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -65,13 +67,13 @@ func (s *Server) healthCheck(c *gin.Context) {
 	if dbErr != nil {
 		resp["partial_error"] = dbErr.Error()
 	}
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 func (s *Server) getSystemStatus(c *gin.Context) {
 	status, err := s.systemService.CollectSystemStatus()
 	if err != nil {
-		internalError(c, "failed to get system status", err)
+		httputil.InternalError(c, "failed to get system status", err)
 		return
 	}
 
@@ -88,7 +90,7 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 		status.PluginHealth = pluginHealth
 	}
 
-	RespondWithOK(c, status)
+	httputil.RespondWithOK(c, status)
 }
 
 func (s *Server) getSystemAnnouncements(c *gin.Context) {
@@ -143,19 +145,19 @@ func (s *Server) getSystemAnnouncements(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, gin.H{"announcements": announcements})
+	httputil.RespondWithOK(c, gin.H{"announcements": announcements})
 }
 
 func (s *Server) getSystemStorage(c *gin.Context) {
 	rootDir := strings.TrimSpace(config.AppConfig.RootDir)
 	if rootDir == "" {
-		RespondWithBadRequest(c, "root_dir is not configured")
+		httputil.RespondWithBadRequest(c, "root_dir is not configured")
 		return
 	}
 
 	totalBytes, freeBytes, err := getDiskStats(rootDir)
 	if err != nil {
-		RespondWithInternalError(c, "failed to read filesystem stats")
+		httputil.RespondWithInternalError(c, "failed to read filesystem stats")
 		return
 	}
 
@@ -165,7 +167,7 @@ func (s *Server) getSystemStorage(c *gin.Context) {
 		percentUsed = (float64(usedBytes) / float64(totalBytes)) * 100.0
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"path":                rootDir,
 		"total_bytes":         totalBytes,
 		"used_bytes":          usedBytes,
@@ -185,15 +187,15 @@ func (s *Server) getSystemLogs(c *gin.Context) {
 	}
 
 	level := c.Query("level")
-	params := ParsePaginationParams(c)
+	params := httputil.ParsePaginationParams(c)
 
 	logs, total, err := s.systemService.CollectSystemLogs(level, params.Search, params.Limit, params.Offset)
 	if err != nil {
-		internalError(c, "failed to get system logs", err)
+		httputil.InternalError(c, "failed to get system logs", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"logs":   logs,
 		"limit":  params.Limit,
 		"offset": params.Offset,
@@ -209,16 +211,16 @@ func (s *Server) getSystemActivityLog(c *gin.Context) {
 	}
 	logs, err := s.Store().GetSystemActivityLogs(source, limit)
 	if err != nil {
-		internalError(c, "failed to get activity log", err)
+		httputil.InternalError(c, "failed to get activity log", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"items": logs, "count": len(logs)})
+	httputil.RespondWithOK(c, gin.H{"items": logs, "count": len(logs)})
 }
 
 func (s *Server) resetSystem(c *gin.Context) {
 	// Reset database
 	if err := s.Store().Reset(); err != nil {
-		internalError(c, "failed to reset database", err)
+		httputil.InternalError(c, "failed to reset database", err)
 		return
 	}
 
@@ -229,7 +231,7 @@ func (s *Server) resetSystem(c *gin.Context) {
 	resetLibrarySizeCache()
 	s.Store().InvalidateLibraryStats()
 
-	RespondWithOK(c, gin.H{"message": "System reset successfully"})
+	httputil.RespondWithOK(c, gin.H{"message": "System reset successfully"})
 }
 
 func (s *Server) factoryReset(c *gin.Context) {
@@ -237,7 +239,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 		Confirm string `json:"confirm"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Confirm != "RESET" {
-		RespondWithBadRequest(c, "request body must contain {\"confirm\": \"RESET\"}")
+		httputil.RespondWithBadRequest(c, "request body must contain {\"confirm\": \"RESET\"}")
 		return
 	}
 
@@ -246,7 +248,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 	// Reset database (books, authors, series, settings)
 	if err := s.Store().Reset(); err != nil {
 		log.Printf("[ERROR] Factory reset: database reset failed: %v", err)
-		internalError(c, "failed to reset database", err)
+		httputil.InternalError(c, "failed to reset database", err)
 		return
 	}
 	log.Printf("[INFO] Factory reset: database cleared")
@@ -298,7 +300,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 	s.Store().InvalidateLibraryStats()
 
 	log.Printf("[INFO] Factory reset complete")
-	RespondWithOK(c, gin.H{"message": "factory reset complete"})
+	httputil.RespondWithOK(c, gin.H{"message": "factory reset complete"})
 }
 
 func (s *Server) getConfig(c *gin.Context) {
@@ -307,13 +309,13 @@ func (s *Server) getConfig(c *gin.Context) {
 	if maskedConfig.OpenAIAPIKey != "" {
 		maskedConfig.OpenAIAPIKey = database.MaskSecret(maskedConfig.OpenAIAPIKey)
 	}
-	RespondWithOK(c, gin.H{"config": maskedConfig})
+	httputil.RespondWithOK(c, gin.H{"config": maskedConfig})
 }
 
 func (s *Server) updateConfig(c *gin.Context) {
 	var payload map[string]any
 	if err := c.ShouldBindJSON(&payload); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -327,7 +329,7 @@ func (s *Server) updateConfig(c *gin.Context) {
 
 	if err := config.AppConfig.Validate(); err != nil {
 		config.AppConfig = previousConfig
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -341,13 +343,13 @@ func (s *Server) updateConfig(c *gin.Context) {
 			}
 		}
 	}
-	RespondWithOK(c, response)
+	httputil.RespondWithOK(c, response)
 }
 
 // handleEvents handles Server-Sent Events (SSE) for real-time updates
 func (s *Server) handleEvents(c *gin.Context) {
 	if s.hub == nil {
-		RespondWithError(c, 503, "event hub not initialized", "SERVICE_UNAVAILABLE")
+		httputil.RespondWithError(c, 503, "event hub not initialized", "SERVICE_UNAVAILABLE")
 		return
 	}
 	s.hub.HandleSSE(c)
@@ -376,11 +378,11 @@ func (s *Server) createBackup(c *gin.Context) {
 
 	info, err := backup.CreateBackup(dbPath, dbType, backupConfig)
 	if err != nil {
-		internalError(c, "failed to create backup", err)
+		httputil.InternalError(c, "failed to create backup", err)
 		return
 	}
 
-	RespondWithOK(c, info)
+	httputil.RespondWithOK(c, info)
 }
 
 // listBackups lists all available backups
@@ -392,7 +394,7 @@ func (s *Server) listBackups(c *gin.Context) {
 
 	backups, err := backup.ListBackups(backupConfig.BackupDir)
 	if err != nil {
-		internalError(c, "failed to list backups", err)
+		httputil.InternalError(c, "failed to list backups", err)
 		return
 	}
 
@@ -401,7 +403,7 @@ func (s *Server) listBackups(c *gin.Context) {
 		backups = []backup.BackupInfo{}
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"backups": backups,
 		"count":   len(backups),
 	})
@@ -416,7 +418,7 @@ func (s *Server) restoreBackup(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -433,11 +435,11 @@ func (s *Server) restoreBackup(c *gin.Context) {
 	}
 
 	if err := backup.RestoreBackup(backupPath, targetPath, req.Verify); err != nil {
-		internalError(c, "failed to restore backup", err)
+		httputil.InternalError(c, "failed to restore backup", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message": "backup restored successfully",
 		"target":  targetPath,
 	})
@@ -447,7 +449,7 @@ func (s *Server) restoreBackup(c *gin.Context) {
 func (s *Server) deleteBackup(c *gin.Context) {
 	filename := c.Param("filename")
 	if filename == "" {
-		RespondWithBadRequest(c, "filename required")
+		httputil.RespondWithBadRequest(c, "filename required")
 		return
 	}
 
@@ -460,24 +462,24 @@ func (s *Server) deleteBackup(c *gin.Context) {
 	backupPath := filepath.Join(backupConfig.BackupDir, filename)
 
 	if err := backup.DeleteBackup(backupPath); err != nil {
-		internalError(c, "failed to delete backup", err)
+		httputil.InternalError(c, "failed to delete backup", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{"message": "backup deleted successfully"})
+	httputil.RespondWithOK(c, gin.H{"message": "backup deleted successfully"})
 }
 
 // getDashboard returns dashboard statistics. The store handles caching internally
 // (PebbleDB: stats:library key with 10-min TTL; SQLite: SQL aggregation directly).
 func (s *Server) getDashboard(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	stats, err := s.Store().GetDashboardStats()
 	if err != nil {
-		RespondWithInternalError(c, "failed to retrieve dashboard stats")
+		httputil.RespondWithInternalError(c, "failed to retrieve dashboard stats")
 		return
 	}
 
@@ -486,7 +488,7 @@ func (s *Server) getDashboard(c *gin.Context) {
 		recentOps = []database.Operation{}
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"formatDistribution": stats.FormatDistribution,
 		"stateDistribution":  stats.StateDistribution,
 		"recentOperations":   recentOps,
@@ -501,17 +503,17 @@ func (s *Server) getDashboard(c *gin.Context) {
 // listBlockedHashes returns all blocked hashes
 func (s *Server) listBlockedHashes(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	hashes, err := s.Store().GetAllBlockedHashes()
 	if err != nil {
-		internalError(c, "failed to get blocked hashes", err)
+		httputil.InternalError(c, "failed to get blocked hashes", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"items": hashes,
 		"total": len(hashes),
 	})
@@ -520,7 +522,7 @@ func (s *Server) listBlockedHashes(c *gin.Context) {
 // addBlockedHash adds a hash to the blocklist
 func (s *Server) addBlockedHash(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -530,23 +532,23 @@ func (s *Server) addBlockedHash(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	// Validate hash format (should be 64 character hex string for SHA256)
 	if len(req.Hash) != 64 {
-		RespondWithBadRequest(c, "hash must be 64 characters (SHA256)")
+		httputil.RespondWithBadRequest(c, "hash must be 64 characters (SHA256)")
 		return
 	}
 
 	err := s.Store().AddBlockedHash(req.Hash, req.Reason)
 	if err != nil {
-		internalError(c, "failed to add blocked hash", err)
+		httputil.InternalError(c, "failed to add blocked hash", err)
 		return
 	}
 
-	RespondWithCreated(c, gin.H{
+	httputil.RespondWithCreated(c, gin.H{
 		"message": "hash blocked successfully",
 		"hash":    req.Hash,
 		"reason":  req.Reason,
@@ -556,23 +558,23 @@ func (s *Server) addBlockedHash(c *gin.Context) {
 // removeBlockedHash removes a hash from the blocklist
 func (s *Server) removeBlockedHash(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	hash := c.Param("hash")
 	if hash == "" {
-		RespondWithBadRequest(c, "hash parameter required")
+		httputil.RespondWithBadRequest(c, "hash parameter required")
 		return
 	}
 
 	err := s.Store().RemoveBlockedHash(hash)
 	if err != nil {
-		internalError(c, "failed to remove blocked hash", err)
+		httputil.InternalError(c, "failed to remove blocked hash", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message": "hash unblocked successfully",
 		"hash":    hash,
 	})
@@ -582,53 +584,53 @@ func (s *Server) removeBlockedHash(c *gin.Context) {
 func (s *Server) getUserPreference(c *gin.Context) {
 	key := c.Param("key")
 	if key == "" {
-		RespondWithBadRequest(c, "key is required")
+		httputil.RespondWithBadRequest(c, "key is required")
 		return
 	}
 	pref, err := s.Store().GetUserPreference(key)
 	if err != nil {
-		RespondWithInternalError(c, "failed to get preference")
+		httputil.RespondWithInternalError(c, "failed to get preference")
 		return
 	}
 	if pref == nil {
-		RespondWithNotFound(c, "preference", key)
+		httputil.RespondWithNotFound(c, "preference", key)
 		return
 	}
-	RespondWithOK(c, gin.H{"key": pref.Key, "value": pref.Value})
+	httputil.RespondWithOK(c, gin.H{"key": pref.Key, "value": pref.Value})
 }
 
 // setUserPreference creates or updates a user preference.
 func (s *Server) setUserPreference(c *gin.Context) {
 	key := c.Param("key")
 	if key == "" {
-		RespondWithBadRequest(c, "key is required")
+		httputil.RespondWithBadRequest(c, "key is required")
 		return
 	}
 	var body struct {
 		Value string `json:"value"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		RespondWithBadRequest(c, "invalid request body")
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 	if err := s.Store().SetUserPreference(key, body.Value); err != nil {
-		RespondWithInternalError(c, "failed to save preference")
+		httputil.RespondWithInternalError(c, "failed to save preference")
 		return
 	}
-	RespondWithOK(c, gin.H{"key": key, "value": body.Value})
+	httputil.RespondWithOK(c, gin.H{"key": key, "value": body.Value})
 }
 
 // deleteUserPreference removes a user preference by setting it to empty.
 func (s *Server) deleteUserPreference(c *gin.Context) {
 	key := c.Param("key")
 	if key == "" {
-		RespondWithBadRequest(c, "key is required")
+		httputil.RespondWithBadRequest(c, "key is required")
 		return
 	}
 	// Set to empty string to "delete" (store doesn't have a delete method)
 	if err := s.Store().SetUserPreference(key, ""); err != nil {
-		RespondWithInternalError(c, "failed to delete preference")
+		httputil.RespondWithInternalError(c, "failed to delete preference")
 		return
 	}
-	RespondWithOK(c, gin.H{"message": "preference deleted"})
+	httputil.RespondWithOK(c, gin.H{"message": "preference deleted"})
 }

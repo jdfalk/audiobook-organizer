@@ -1,5 +1,6 @@
 // file: internal/server/reading_handlers.go
-// version: 1.1.1
+// version: 1.2.0
+// last-edited: 2026-05-01
 // guid: 7f2c4a1d-5b8e-4f70-a9d6-2e8c0f1b9a57
 //
 // HTTP endpoints for the per-user read/unread tracking system
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	svrmw "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
@@ -45,25 +47,25 @@ type setPositionRequest struct {
 func (s *Server) handleSetPosition(c *gin.Context) {
 	bookID := c.Param("id")
 	if bookID == "" {
-		RespondWithBadRequest(c, "book id required")
+		httputil.RespondWithBadRequest(c, "book id required")
 		return
 	}
 	var req setPositionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	userID := callingUserID(c)
 	if err := s.Store().SetUserPosition(userID, bookID, req.SegmentID, req.PositionSeconds); err != nil {
-		internalError(c, "failed to record position", err)
+		httputil.InternalError(c, "failed to record position", err)
 		return
 	}
 	state, err := readstatus.RecomputeUserBookState(s.Store(), userID, bookID)
 	if err != nil {
-		internalError(c, "failed to recompute book state", err)
+		httputil.InternalError(c, "failed to recompute book state", err)
 		return
 	}
-	RespondWithOK(c, state)
+	httputil.RespondWithOK(c, state)
 }
 
 // handleGetPosition returns the latest position for the calling user.
@@ -71,15 +73,15 @@ func (s *Server) handleSetPosition(c *gin.Context) {
 func (s *Server) handleGetPosition(c *gin.Context) {
 	bookID := c.Param("id")
 	if bookID == "" {
-		RespondWithBadRequest(c, "book id required")
+		httputil.RespondWithBadRequest(c, "book id required")
 		return
 	}
 	pos, err := s.Store().GetUserPosition(callingUserID(c), bookID)
 	if err != nil {
-		internalError(c, "failed to load position", err)
+		httputil.InternalError(c, "failed to load position", err)
 		return
 	}
-	RespondWithOK(c, pos)
+	httputil.RespondWithOK(c, pos)
 }
 
 // handleGetBookState returns the derived UserBookState — status +
@@ -88,15 +90,15 @@ func (s *Server) handleGetPosition(c *gin.Context) {
 func (s *Server) handleGetBookState(c *gin.Context) {
 	bookID := c.Param("id")
 	if bookID == "" {
-		RespondWithBadRequest(c, "book id required")
+		httputil.RespondWithBadRequest(c, "book id required")
 		return
 	}
 	state, err := s.Store().GetUserBookState(callingUserID(c), bookID)
 	if err != nil {
-		internalError(c, "failed to load state", err)
+		httputil.InternalError(c, "failed to load state", err)
 		return
 	}
-	RespondWithOK(c, state)
+	httputil.RespondWithOK(c, state)
 }
 
 type patchStatusRequest struct {
@@ -109,12 +111,12 @@ type patchStatusRequest struct {
 func (s *Server) handleSetBookStatus(c *gin.Context) {
 	bookID := c.Param("id")
 	if bookID == "" {
-		RespondWithBadRequest(c, "book id required")
+		httputil.RespondWithBadRequest(c, "book id required")
 		return
 	}
 	var req patchStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	switch req.Status {
@@ -124,15 +126,15 @@ func (s *Server) handleSetBookStatus(c *gin.Context) {
 		database.UserBookStatusAbandoned:
 		// ok
 	default:
-		RespondWithBadRequest(c, "invalid status: "+req.Status)
+		httputil.RespondWithBadRequest(c, "invalid status: "+req.Status)
 		return
 	}
 	state, err := readstatus.SetManualStatus(s.Store(), callingUserID(c), bookID, req.Status)
 	if err != nil {
-		internalError(c, "failed to set status", err)
+		httputil.InternalError(c, "failed to set status", err)
 		return
 	}
-	RespondWithOK(c, state)
+	httputil.RespondWithOK(c, state)
 }
 
 // handleClearBookStatus clears the manual override — next recompute
@@ -141,15 +143,15 @@ func (s *Server) handleSetBookStatus(c *gin.Context) {
 func (s *Server) handleClearBookStatus(c *gin.Context) {
 	bookID := c.Param("id")
 	if bookID == "" {
-		RespondWithBadRequest(c, "book id required")
+		httputil.RespondWithBadRequest(c, "book id required")
 		return
 	}
 	state, err := readstatus.SetManualStatus(s.Store(), callingUserID(c), bookID, "")
 	if err != nil {
-		internalError(c, "failed to clear status", err)
+		httputil.InternalError(c, "failed to clear status", err)
 		return
 	}
-	RespondWithOK(c, state)
+	httputil.RespondWithOK(c, state)
 }
 
 // handleListByStatus returns the calling user's books filtered by
@@ -162,16 +164,16 @@ func (s *Server) handleListByStatus(c *gin.Context) {
 		database.UserBookStatusAbandoned,
 		database.UserBookStatusUnstarted:
 	default:
-		RespondWithBadRequest(c, "invalid status")
+		httputil.RespondWithBadRequest(c, "invalid status")
 		return
 	}
-	limit, offset := paginationFromQuery(c)
-	list, err := s.Store().ListUserBookStatesByStatus(callingUserID(c), status, limit, offset)
+	p := httputil.ParsePaginationParams(c)
+	list, err := s.Store().ListUserBookStatesByStatus(callingUserID(c), status, p.Limit, p.Offset)
 	if err != nil {
-		internalError(c, "failed to list states", err)
+		httputil.InternalError(c, "failed to list states", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"states": list, "count": len(list), "limit": limit, "offset": offset})
+	httputil.RespondWithOK(c, gin.H{"states": list, "count": len(list), "limit": p.Limit, "offset": p.Offset})
 }
 
 // registerReadingRoutes wires the read/unread endpoints onto the

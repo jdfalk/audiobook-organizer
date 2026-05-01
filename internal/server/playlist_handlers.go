@@ -1,5 +1,6 @@
 // file: internal/server/playlist_handlers.go
-// version: 2.0.1
+// version: 2.1.0
+// last-edited: 2026-05-01
 // guid: 7a3d5f2e-8c4b-4a70-b8c5-3d7e0f1b9a79
 //
 // HTTP endpoints for user-created playlists (spec 3.4 task 3).
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 )
@@ -59,11 +61,11 @@ type playlistReorderReq struct {
 func (s *Server) handleCreatePlaylist(c *gin.Context) {
 	var req playlistCreateReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if err := validatePlaylistCreate(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -81,13 +83,13 @@ func (s *Server) handleCreatePlaylist(c *gin.Context) {
 	created, err := s.Store().CreateUserPlaylist(pl)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
-			RespondWithConflict(c, err.Error())
+			httputil.RespondWithConflict(c, err.Error())
 			return
 		}
-		internalError(c, "failed to create playlist", err)
+		httputil.InternalError(c, "failed to create playlist", err)
 		return
 	}
-	RespondWithCreated(c, created)
+	httputil.RespondWithCreated(c, created)
 }
 
 // handleListPlaylists — GET /api/v1/playlists?type=static|smart&limit=N&offset=M
@@ -96,16 +98,16 @@ func (s *Server) handleListPlaylists(c *gin.Context) {
 	if plType != "" &&
 		plType != database.UserPlaylistTypeStatic &&
 		plType != database.UserPlaylistTypeSmart {
-		RespondWithBadRequest(c, "type must be static, smart, or empty")
+		httputil.RespondWithBadRequest(c, "type must be static, smart, or empty")
 		return
 	}
-	limit, offset := paginationFromQuery(c)
-	lists, total, err := s.Store().ListUserPlaylists(plType, limit, offset)
+	p := httputil.ParsePaginationParams(c)
+	lists, total, err := s.Store().ListUserPlaylists(plType, p.Limit, p.Offset)
 	if err != nil {
-		internalError(c, "failed to list playlists", err)
+		httputil.InternalError(c, "failed to list playlists", err)
 		return
 	}
-	RespondWithList(c, lists, total, limit, offset)
+	httputil.RespondWithList(c, lists, total, p.Limit, p.Offset)
 }
 
 // handleGetPlaylist — GET /api/v1/playlists/:id
@@ -117,11 +119,11 @@ func (s *Server) handleGetPlaylist(c *gin.Context) {
 	id := c.Param("id")
 	pl, err := s.Store().GetUserPlaylist(id)
 	if err != nil {
-		internalError(c, "failed to load playlist", err)
+		httputil.InternalError(c, "failed to load playlist", err)
 		return
 	}
 	if pl == nil {
-		RespondWithNotFound(c, "playlist", id)
+		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
 
@@ -140,10 +142,10 @@ func (s *Server) handleGetPlaylist(c *gin.Context) {
 			// a transient condition during startup. Actual query
 			// errors are 400 (user's smart-playlist DSL is busted).
 			if evalErr == ErrSearchIndexUnavailable {
-				RespondWithError(c, 503, evalErr.Error(), "SERVICE_UNAVAILABLE")
+				httputil.RespondWithError(c, 503, evalErr.Error(), "SERVICE_UNAVAILABLE")
 				return
 			}
-			RespondWithBadRequest(c, evalErr.Error())
+			httputil.RespondWithBadRequest(c, evalErr.Error())
 			return
 		}
 		resp["book_ids"] = bookIDs
@@ -153,7 +155,7 @@ func (s *Server) handleGetPlaylist(c *gin.Context) {
 			_ = s.Store().UpdateUserPlaylist(pl)
 		}
 	}
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 // handleUpdatePlaylist — PUT /api/v1/playlists/:id
@@ -161,17 +163,17 @@ func (s *Server) handleUpdatePlaylist(c *gin.Context) {
 	id := c.Param("id")
 	pl, err := s.Store().GetUserPlaylist(id)
 	if err != nil {
-		internalError(c, "failed to load playlist", err)
+		httputil.InternalError(c, "failed to load playlist", err)
 		return
 	}
 	if pl == nil {
-		RespondWithNotFound(c, "playlist", id)
+		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
 
 	var req playlistUpdateReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if req.Name != nil {
@@ -182,18 +184,18 @@ func (s *Server) handleUpdatePlaylist(c *gin.Context) {
 	}
 	if req.BookIDs != nil {
 		if pl.Type != database.UserPlaylistTypeStatic {
-			RespondWithBadRequest(c, "book_ids only valid for static playlists")
+			httputil.RespondWithBadRequest(c, "book_ids only valid for static playlists")
 			return
 		}
 		pl.BookIDs = *req.BookIDs
 	}
 	if req.Query != nil {
 		if pl.Type != database.UserPlaylistTypeSmart {
-			RespondWithBadRequest(c, "query only valid for smart playlists")
+			httputil.RespondWithBadRequest(c, "query only valid for smart playlists")
 			return
 		}
 		if _, err := search.ParseQuery(*req.Query); err != nil {
-			RespondWithBadRequest(c, "invalid query: "+err.Error())
+			httputil.RespondWithBadRequest(c, "invalid query: "+err.Error())
 			return
 		}
 		pl.Query = *req.Query
@@ -206,20 +208,20 @@ func (s *Server) handleUpdatePlaylist(c *gin.Context) {
 	}
 	pl.Dirty = true
 	if err := s.Store().UpdateUserPlaylist(pl); err != nil {
-		internalError(c, "failed to update playlist", err)
+		httputil.InternalError(c, "failed to update playlist", err)
 		return
 	}
-	RespondWithOK(c, pl)
+	httputil.RespondWithOK(c, pl)
 }
 
 // handleDeletePlaylist — DELETE /api/v1/playlists/:id
 func (s *Server) handleDeletePlaylist(c *gin.Context) {
 	id := c.Param("id")
 	if err := s.Store().DeleteUserPlaylist(id); err != nil {
-		internalError(c, "failed to delete playlist", err)
+		httputil.InternalError(c, "failed to delete playlist", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"deleted": id})
+	httputil.RespondWithOK(c, gin.H{"deleted": id})
 }
 
 // handleAddBooksToPlaylist — POST /api/v1/playlists/:id/books
@@ -229,20 +231,20 @@ func (s *Server) handleAddBooksToPlaylist(c *gin.Context) {
 	id := c.Param("id")
 	var req playlistBooksAddReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	pl, err := s.Store().GetUserPlaylist(id)
 	if err != nil {
-		internalError(c, "failed to load playlist", err)
+		httputil.InternalError(c, "failed to load playlist", err)
 		return
 	}
 	if pl == nil {
-		RespondWithNotFound(c, "playlist", id)
+		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
 	if pl.Type != database.UserPlaylistTypeStatic {
-		RespondWithBadRequest(c, "cannot add books to smart playlist")
+		httputil.RespondWithBadRequest(c, "cannot add books to smart playlist")
 		return
 	}
 	existing := make(map[string]bool, len(pl.BookIDs))
@@ -258,10 +260,10 @@ func (s *Server) handleAddBooksToPlaylist(c *gin.Context) {
 	}
 	pl.Dirty = true
 	if err := s.Store().UpdateUserPlaylist(pl); err != nil {
-		internalError(c, "failed to add books", err)
+		httputil.InternalError(c, "failed to add books", err)
 		return
 	}
-	RespondWithOK(c, pl)
+	httputil.RespondWithOK(c, pl)
 }
 
 // handleRemoveBookFromPlaylist — DELETE /api/v1/playlists/:id/books/:bookID
@@ -270,15 +272,15 @@ func (s *Server) handleRemoveBookFromPlaylist(c *gin.Context) {
 	bookID := c.Param("bookID")
 	pl, err := s.Store().GetUserPlaylist(id)
 	if err != nil {
-		internalError(c, "failed to load playlist", err)
+		httputil.InternalError(c, "failed to load playlist", err)
 		return
 	}
 	if pl == nil {
-		RespondWithNotFound(c, "playlist", id)
+		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
 	if pl.Type != database.UserPlaylistTypeStatic {
-		RespondWithBadRequest(c, "cannot remove books from smart playlist")
+		httputil.RespondWithBadRequest(c, "cannot remove books from smart playlist")
 		return
 	}
 	filtered := pl.BookIDs[:0]
@@ -290,10 +292,10 @@ func (s *Server) handleRemoveBookFromPlaylist(c *gin.Context) {
 	pl.BookIDs = filtered
 	pl.Dirty = true
 	if err := s.Store().UpdateUserPlaylist(pl); err != nil {
-		internalError(c, "failed to remove book", err)
+		httputil.InternalError(c, "failed to remove book", err)
 		return
 	}
-	RespondWithOK(c, pl)
+	httputil.RespondWithOK(c, pl)
 }
 
 // handleReorderPlaylist — POST /api/v1/playlists/:id/reorder
@@ -303,33 +305,33 @@ func (s *Server) handleReorderPlaylist(c *gin.Context) {
 	id := c.Param("id")
 	var req playlistReorderReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	pl, err := s.Store().GetUserPlaylist(id)
 	if err != nil {
-		internalError(c, "failed to load playlist", err)
+		httputil.InternalError(c, "failed to load playlist", err)
 		return
 	}
 	if pl == nil {
-		RespondWithNotFound(c, "playlist", id)
+		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
 	if pl.Type != database.UserPlaylistTypeStatic {
-		RespondWithBadRequest(c, "cannot reorder smart playlist")
+		httputil.RespondWithBadRequest(c, "cannot reorder smart playlist")
 		return
 	}
 	if !sameBookSet(pl.BookIDs, req.BookIDs) {
-		RespondWithBadRequest(c, "reorder must keep the same book set")
+		httputil.RespondWithBadRequest(c, "reorder must keep the same book set")
 		return
 	}
 	pl.BookIDs = req.BookIDs
 	pl.Dirty = true
 	if err := s.Store().UpdateUserPlaylist(pl); err != nil {
-		internalError(c, "failed to reorder", err)
+		httputil.InternalError(c, "failed to reorder", err)
 		return
 	}
-	RespondWithOK(c, pl)
+	httputil.RespondWithOK(c, pl)
 }
 
 // handleMaterializePlaylist — POST /api/v1/playlists/:id/materialize
@@ -339,15 +341,15 @@ func (s *Server) handleMaterializePlaylist(c *gin.Context) {
 	id := c.Param("id")
 	src, err := s.Store().GetUserPlaylist(id)
 	if err != nil {
-		internalError(c, "failed to load playlist", err)
+		httputil.InternalError(c, "failed to load playlist", err)
 		return
 	}
 	if src == nil {
-		RespondWithNotFound(c, "playlist", id)
+		httputil.RespondWithNotFound(c, "playlist", id)
 		return
 	}
 	if src.Type != database.UserPlaylistTypeSmart {
-		RespondWithBadRequest(c, "only smart playlists can be materialized")
+		httputil.RespondWithBadRequest(c, "only smart playlists can be materialized")
 		return
 	}
 	bookIDs, evalErr := EvaluateSmartPlaylist(
@@ -357,10 +359,10 @@ func (s *Server) handleMaterializePlaylist(c *gin.Context) {
 	)
 	if evalErr != nil {
 		if evalErr == ErrSearchIndexUnavailable {
-			RespondWithError(c, 503, evalErr.Error(), "SERVICE_UNAVAILABLE")
+			httputil.RespondWithError(c, 503, evalErr.Error(), "SERVICE_UNAVAILABLE")
 			return
 		}
-		RespondWithBadRequest(c, evalErr.Error())
+		httputil.RespondWithBadRequest(c, evalErr.Error())
 		return
 	}
 
@@ -380,11 +382,11 @@ func (s *Server) handleMaterializePlaylist(c *gin.Context) {
 			created, err = s.Store().CreateUserPlaylist(snapshot)
 		}
 		if err != nil {
-			internalError(c, "failed to materialize", err)
+			httputil.InternalError(c, "failed to materialize", err)
 			return
 		}
 	}
-	RespondWithCreated(c, created)
+	httputil.RespondWithCreated(c, created)
 }
 
 // validatePlaylistCreate checks required fields and type-specific

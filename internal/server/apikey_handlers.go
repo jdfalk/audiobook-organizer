@@ -1,5 +1,6 @@
 // file: internal/server/apikey_handlers.go
-// version: 2.0.0
+// version: 2.1.0
+// last-edited: 2026-05-01
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 
 package server
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
@@ -92,20 +94,20 @@ func isAdminUser(c *gin.Context) bool {
 func (s *Server) createAPIKey(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		RespondWithUnauthorized(c, "authentication required")
+		httputil.RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
 	var req createAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	targetUserID := caller.ID
 	if req.UserID != "" && req.UserID != caller.ID {
 		if !isAdminUser(c) {
-			RespondWithForbidden(c, "only admins can create keys for other users")
+			httputil.RespondWithForbidden(c, "only admins can create keys for other users")
 			return
 		}
 		targetUserID = req.UserID
@@ -117,12 +119,12 @@ func (s *Server) createAPIKey(c *gin.Context) {
 
 	for _, scope := range req.Scopes {
 		if !auth.IsKnown(scope) {
-			RespondWithBadRequest(c, "unknown scope: "+scope)
+			httputil.RespondWithBadRequest(c, "unknown scope: "+scope)
 			return
 		}
 		if callerPermSet != nil {
 			if _, has := callerPermSet[auth.Permission(scope)]; !has {
-				RespondWithForbidden(c, "cannot grant scope you don't have: "+scope)
+				httputil.RespondWithForbidden(c, "cannot grant scope you don't have: "+scope)
 				return
 			}
 		}
@@ -130,7 +132,7 @@ func (s *Server) createAPIKey(c *gin.Context) {
 
 	rawToken, hash, err := database.GenerateAPIKeyToken()
 	if err != nil {
-		internalError(c, "failed to generate token", err)
+		httputil.InternalError(c, "failed to generate token", err)
 		return
 	}
 
@@ -153,7 +155,7 @@ func (s *Server) createAPIKey(c *gin.Context) {
 
 	created, err := s.Store().CreateAPIKey(key)
 	if err != nil {
-		internalError(c, "failed to create api key", err)
+		httputil.InternalError(c, "failed to create api key", err)
 		return
 	}
 
@@ -168,14 +170,14 @@ func (s *Server) createAPIKey(c *gin.Context) {
 		ExpiresAt: created.ExpiresAt,
 		CreatedAt: created.CreatedAt,
 	}
-	RespondWithCreated(c, resp)
+	httputil.RespondWithCreated(c, resp)
 }
 
 // GET /api/v1/auth/api-keys
 func (s *Server) listAPIKeys(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		RespondWithUnauthorized(c, "authentication required")
+		httputil.RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
@@ -189,7 +191,7 @@ func (s *Server) listAPIKeys(c *gin.Context) {
 		keys, err = s.Store().ListAPIKeysForUser(caller.ID)
 	}
 	if err != nil {
-		internalError(c, "failed to list api keys", err)
+		httputil.InternalError(c, "failed to list api keys", err)
 		return
 	}
 	if keys == nil {
@@ -214,29 +216,29 @@ func (s *Server) listAPIKeys(c *gin.Context) {
 		results = append(results, buildAPIKeyResponse(k, username))
 	}
 
-	RespondWithOK(c, gin.H{"api_keys": results, "count": len(results)})
+	httputil.RespondWithOK(c, gin.H{"api_keys": results, "count": len(results)})
 }
 
 // GET /api/v1/auth/api-keys/:id
 func (s *Server) getAPIKey(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		RespondWithUnauthorized(c, "authentication required")
+		httputil.RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
 	id := c.Param("id")
 	key, err := s.Store().GetAPIKey(id)
 	if err != nil {
-		internalError(c, "failed to get api key", err)
+		httputil.InternalError(c, "failed to get api key", err)
 		return
 	}
 	if key == nil {
-		RespondWithNotFound(c, "api key", id)
+		httputil.RespondWithNotFound(c, "api key", id)
 		return
 	}
 	if key.UserID != caller.ID && !isAdminUser(c) {
-		RespondWithForbidden(c, "access denied")
+		httputil.RespondWithForbidden(c, "access denied")
 		return
 	}
 
@@ -247,29 +249,29 @@ func (s *Server) getAPIKey(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, buildAPIKeyResponse(*key, username))
+	httputil.RespondWithOK(c, buildAPIKeyResponse(*key, username))
 }
 
 // PATCH /api/v1/auth/api-keys/:id
 func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		RespondWithUnauthorized(c, "authentication required")
+		httputil.RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
 	id := c.Param("id")
 	key, err := s.Store().GetAPIKey(id)
 	if err != nil {
-		internalError(c, "failed to get api key", err)
+		httputil.InternalError(c, "failed to get api key", err)
 		return
 	}
 	if key == nil {
-		RespondWithNotFound(c, "api key", id)
+		httputil.RespondWithNotFound(c, "api key", id)
 		return
 	}
 	if key.UserID != caller.ID && !isAdminUser(c) {
-		RespondWithForbidden(c, "access denied")
+		httputil.RespondWithForbidden(c, "access denied")
 		return
 	}
 
@@ -277,20 +279,20 @@ func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 		Status string `json:"status" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if req.Status == "revoked" {
-		RespondWithBadRequest(c, "use DELETE to revoke a key")
+		httputil.RespondWithBadRequest(c, "use DELETE to revoke a key")
 		return
 	}
 	if req.Status != "active" && req.Status != "inactive" {
-		RespondWithBadRequest(c, "status must be 'active' or 'inactive'")
+		httputil.RespondWithBadRequest(c, "status must be 'active' or 'inactive'")
 		return
 	}
 
 	if err := s.Store().SetAPIKeyStatus(id, req.Status, time.Now()); err != nil {
-		internalError(c, "failed to update api key status", err)
+		httputil.InternalError(c, "failed to update api key status", err)
 		return
 	}
 
@@ -298,40 +300,40 @@ func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 
 	updated, err := s.Store().GetAPIKey(id)
 	if err != nil || updated == nil {
-		RespondWithOK(c, gin.H{"status": req.Status})
+		httputil.RespondWithOK(c, gin.H{"status": req.Status})
 		return
 	}
-	RespondWithOK(c, buildAPIKeyResponse(*updated, ""))
+	httputil.RespondWithOK(c, buildAPIKeyResponse(*updated, ""))
 }
 
 // DELETE /api/v1/auth/api-keys/:id
 func (s *Server) revokeAPIKey(c *gin.Context) {
 	caller, ok := servermiddleware.CurrentUser(c)
 	if !ok || caller == nil {
-		RespondWithUnauthorized(c, "authentication required")
+		httputil.RespondWithUnauthorized(c, "authentication required")
 		return
 	}
 
 	id := c.Param("id")
 	key, err := s.Store().GetAPIKey(id)
 	if err != nil {
-		internalError(c, "failed to get api key", err)
+		httputil.InternalError(c, "failed to get api key", err)
 		return
 	}
 	if key == nil {
-		RespondWithNotFound(c, "api key", id)
+		httputil.RespondWithNotFound(c, "api key", id)
 		return
 	}
 	if key.UserID != caller.ID && !isAdminUser(c) {
-		RespondWithForbidden(c, "access denied")
+		httputil.RespondWithForbidden(c, "access denied")
 		return
 	}
 
 	if err := s.Store().RevokeAPIKey(id); err != nil {
-		internalError(c, "failed to revoke api key", err)
+		httputil.InternalError(c, "failed to revoke api key", err)
 		return
 	}
 
 	log.Printf("[APIKEY] revoked: id=%s user=%s name=%s", id, caller.ID, key.Name)
-	RespondWithNoContent(c)
+	httputil.RespondWithNoContent(c)
 }
