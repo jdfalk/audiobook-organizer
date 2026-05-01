@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -221,7 +221,7 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	}
 	RespondWithOK(c, gin.H{
 		"message": resp.Message,
-		"book":    enrichBookForResponse(enrichedBook),
+		"book":    enrichBookForResponseSingle(enrichedBook),
 		"source":  resp.Source,
 	})
 }
@@ -325,7 +325,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	}
 	RespondWithOK(c, gin.H{
 		"message": resp.Message,
-		"book":    enrichBookForResponse(enrichedBook),
+		"book":    enrichBookForResponseSingle(enrichedBook),
 		"source":  resp.Source,
 	})
 }

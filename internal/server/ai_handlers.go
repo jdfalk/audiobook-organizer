@@ -210,7 +210,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 
 	RespondWithOK(c, gin.H{
 		"message":    "audiobook updated with AI-parsed metadata",
-		"book":       enrichBookForResponse(updatedBook),
+		"book":       enrichBookForResponseSingle(updatedBook),
 		"confidence": metadata.Confidence,
 	})
 }

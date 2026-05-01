@@ -1,5 +1,5 @@
 // file: internal/server/entities_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 52cb6f75-cb3e-44e3-bf36-a8bba8a24d21
 //
 // Entity HTTP handlers split out of server.go: works, authors, series,
@@ -597,9 +597,17 @@ func (s *Server) getAuthorBooks(c *gin.Context) {
 		internalError(c, "failed to get author books", err)
 		return
 	}
+	
+	// Pre-fetch authors and narrators for all books
+	bookIDs := make([]string, len(books))
+	for i, b := range books {
+		bookIDs[i] = b.ID
+	}
+	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := batchFetchBookAuthorsAndNarrators(bookIDs)
+	
 	enriched := make([]enrichedBookResponse, len(books))
 	for i := range books {
-		enriched[i] = enrichBookForResponse(&books[i])
+		enriched[i] = enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
 	}
 	RespondWithOK(c, gin.H{"items": enriched, "count": len(enriched)})
 }
@@ -898,9 +906,17 @@ func (s *Server) getSeriesBooks(c *gin.Context) {
 		internalError(c, "failed to get series books", err)
 		return
 	}
+	
+	// Pre-fetch authors and narrators for all books
+	bookIDs := make([]string, len(books))
+	for i, b := range books {
+		bookIDs[i] = b.ID
+	}
+	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := batchFetchBookAuthorsAndNarrators(bookIDs)
+	
 	enriched := make([]enrichedBookResponse, len(books))
 	for i := range books {
-		enriched[i] = enrichBookForResponse(&books[i])
+		enriched[i] = enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
 	}
 	RespondWithOK(c, gin.H{"items": enriched, "count": len(enriched)})
 }
