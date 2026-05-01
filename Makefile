@@ -1,5 +1,5 @@
 # file: Makefile
-# version: 2.9.0
+# version: 2.9.1
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
 
 BINARY := audiobook-organizer
@@ -15,7 +15,7 @@ export GOEXPERIMENT := jsonv2
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
         test test-all test-frontend test-e2e coverage coverage-check ci \
-        vet mocks mocks-check \
+        vet mocks mocks-check check-mock-fresh staticcheck \
         docker docker-run docker-stop \
         release-dry-run release-snapshot version \
         build-mtls-bridge build-mtls-bridge-windows
@@ -181,6 +181,20 @@ mocks-check:
 	fi
 	@echo "✅ Mocks are up to date"
 
+## check-mock-fresh: Check that MockStore is up to date with the Store interface
+check-mock-fresh:
+	@echo "==> Checking mock freshness..."
+	go generate ./internal/database/...
+	git diff --exit-code internal/database/mocks/ || \
+		(echo "ERROR: MockStore is stale. Run 'make generate' and commit." && exit 1)
+	@echo "==> Mock is fresh."
+
+## staticcheck: Run staticcheck (install: go install honnef.co/go/tools/cmd/staticcheck@latest)
+staticcheck:
+	@echo "==> Running staticcheck..."
+	@command -v staticcheck >/dev/null 2>&1 && staticcheck ./... || echo "==> staticcheck not installed, skipping."
+	@echo "==> staticcheck passed."
+
 ## test-all: Run all tests (backend + frontend)
 test-all: test web-test
 
@@ -216,8 +230,8 @@ coverage-check:
 	fi; \
 	echo "✅ Coverage $$coverage% meets 30% threshold"
 
-## ci: Full CI check (vet + mocks-check + all tests + coverage)
-ci: mocks-check test-all coverage-check
+## ci: Full CI check (vet + mocks-check + mock freshness + staticcheck + all tests + coverage)
+ci: mocks-check check-mock-fresh staticcheck test-all coverage-check
 	@echo "✅ All CI checks passed!"
 
 ## build-mtls-bridge: Build the mTLS bridge binary (macOS)
