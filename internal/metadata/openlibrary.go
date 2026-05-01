@@ -1,11 +1,12 @@
 // file: internal/metadata/openlibrary.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata
 
 import (
 	json "encoding/json/v2"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -137,7 +138,7 @@ type BookMetadata struct {
 }
 
 // SearchByTitle searches for books by title. Checks local dump store first if available.
-func (c *OpenLibraryClient) SearchByTitle(title string) ([]BookMetadata, error) {
+func (c *OpenLibraryClient) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
 	if c.olStore != nil {
 		editions, err := c.olStore.SearchByTitle(title)
 		if err == nil && len(editions) > 0 {
@@ -154,8 +155,13 @@ func (c *OpenLibraryClient) SearchByTitle(title string) ([]BookMetadata, error) 
 	query := url.QueryEscape(title)
 	searchURL := fmt.Sprintf("%s/search.json?title=%s&limit=5", c.baseURL, query)
 
-	// Make HTTP request
-	resp, err := c.httpClient.Get(searchURL)
+	// Make HTTP request with context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search Open Library: %w", err)
 	}
@@ -206,14 +212,19 @@ func (c *OpenLibraryClient) SearchByTitle(title string) ([]BookMetadata, error) 
 }
 
 // SearchByTitleAndAuthor searches for books by title and author
-func (c *OpenLibraryClient) SearchByTitleAndAuthor(title, author string) ([]BookMetadata, error) {
+func (c *OpenLibraryClient) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]BookMetadata, error) {
 	// Build search query
 	titleQuery := url.QueryEscape(title)
 	authorQuery := url.QueryEscape(author)
 	searchURL := fmt.Sprintf("%s/search.json?title=%s&author=%s&limit=5", c.baseURL, titleQuery, authorQuery)
 
-	// Make HTTP request
-	resp, err := c.httpClient.Get(searchURL)
+	// Make HTTP request with context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search Open Library: %w", err)
 	}
@@ -264,7 +275,7 @@ func (c *OpenLibraryClient) SearchByTitleAndAuthor(title, author string) ([]Book
 }
 
 // GetBookByISBN fetches book details by ISBN. Checks local dump store first if available.
-func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error) {
+func (c *OpenLibraryClient) GetBookByISBN(ctx context.Context, isbn string) (*BookMetadata, error) {
 	if c.olStore != nil {
 		ed, err := c.olStore.LookupByISBN(isbn)
 		if err == nil && ed != nil {
@@ -277,8 +288,13 @@ func (c *OpenLibraryClient) GetBookByISBN(isbn string) (*BookMetadata, error) {
 	// Fall back to API
 	apiURL := fmt.Sprintf("%s/isbn/%s.json", c.baseURL, isbn)
 
-	// Make HTTP request
-	resp, err := c.httpClient.Get(apiURL)
+	// Make HTTP request with context
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch book by ISBN: %w", err)
 	}

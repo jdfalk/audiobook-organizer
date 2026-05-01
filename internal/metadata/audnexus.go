@@ -1,11 +1,12 @@
 // file: internal/metadata/audnexus.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-a3b4c5d6e7f8
 
 package metadata
 
 import (
 	json "encoding/json/v2"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -89,39 +90,22 @@ type audnexusAuthor struct {
 
 // SearchByTitle cannot search Audnexus by title alone (no such endpoint exists).
 // Returns empty results so the chain moves to the next source.
-func (c *AudnexusClient) SearchByTitle(title string) ([]BookMetadata, error) {
+func (c *AudnexusClient) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
 	log.Printf("[DEBUG] Audnexus has no title search endpoint, skipping title-only search for %q", title)
 	return nil, nil
 }
 
-// SearchByContext lets the fetch service pass richer context than
-// the title/author methods. Audnexus only has an ASIN lookup endpoint
-// (no title or ISBN search) so the only productive path here is to
-// call LookupByASIN when the context has an ASIN.
-//
-// Returns nil, nil (not an error) when there's no ASIN — that tells
-// the fetch chain to fall through to the next source without logging
-// a failure.
-func (c *AudnexusClient) SearchByContext(ctx *SearchContext) ([]BookMetadata, error) {
-	if ctx == nil || ctx.ASIN == "" {
-		return nil, nil
-	}
-	book, err := c.LookupByASIN(ctx.ASIN)
-	if err != nil {
-		return nil, err
-	}
-	if book == nil {
-		return nil, nil
-	}
-	return []BookMetadata{*book}, nil
-}
-
 // SearchByTitleAndAuthor searches for an author on Audnexus, then looks up
 // each author's books to find a title match.
-func (c *AudnexusClient) SearchByTitleAndAuthor(title, author string) ([]BookMetadata, error) {
+func (c *AudnexusClient) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]BookMetadata, error) {
 	// Step 1: Search authors by name → GET /authors?name={name}
 	authorsURL := fmt.Sprintf("%s/authors?name=%s", c.baseURL, url.QueryEscape(author))
-	resp, err := c.httpClient.Get(authorsURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, authorsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search Audnexus authors: %w", err)
 	}
@@ -146,6 +130,25 @@ func (c *AudnexusClient) SearchByTitleAndAuthor(title, author string) ([]BookMet
 	// In the future, this could be enhanced with an ASIN lookup if we have one.
 	log.Printf("[DEBUG] Audnexus found %d authors for %q, but no book title search available", len(authors), author)
 	return nil, nil
+}
+
+// SearchByContext implements ContextualSearch interface.
+// Audnexus prefers ASIN-based lookups. If an ASIN is available, we look it up.
+// Otherwise, return nil to let the chain fall through to the next source.
+func (c *AudnexusClient) SearchByContext(ctx *SearchContext) ([]BookMetadata, error) {
+	if ctx == nil || ctx.ASIN == "" {
+		return nil, nil
+	}
+
+	// Look up the book by ASIN
+	metadata, err := c.LookupByASIN(ctx.ASIN)
+	if err != nil {
+		return nil, err
+	}
+	if metadata == nil {
+		return nil, nil
+	}
+	return []BookMetadata{*metadata}, nil
 }
 
 // audnexusRegions are the regions to try when looking up a book by ASIN.

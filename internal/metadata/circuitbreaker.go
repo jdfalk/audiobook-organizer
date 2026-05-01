@@ -1,10 +1,11 @@
 // file: internal/metadata/circuitbreaker.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e2f3a4b5-c6d7-8901-ef23-456789abcdef
 
 package metadata
 
 import (
+	"context"
 	"errors"
 	"log"
 	"sync"
@@ -144,11 +145,11 @@ func (ps *ProtectedSource) Name() string {
 	return ps.source.Name()
 }
 
-func (ps *ProtectedSource) SearchByTitle(title string) ([]BookMetadata, error) {
+func (ps *ProtectedSource) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
 	if err := ps.breaker.AllowRequest(); err != nil {
 		return nil, err
 	}
-	results, err := ps.source.SearchByTitle(title)
+	results, err := ps.source.SearchByTitle(ctx, title)
 	if err != nil {
 		ps.breaker.RecordFailure()
 		return nil, err
@@ -157,11 +158,11 @@ func (ps *ProtectedSource) SearchByTitle(title string) ([]BookMetadata, error) {
 	return results, nil
 }
 
-func (ps *ProtectedSource) SearchByTitleAndAuthor(title, author string) ([]BookMetadata, error) {
+func (ps *ProtectedSource) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]BookMetadata, error) {
 	if err := ps.breaker.AllowRequest(); err != nil {
 		return nil, err
 	}
-	results, err := ps.source.SearchByTitleAndAuthor(title, author)
+	results, err := ps.source.SearchByTitleAndAuthor(ctx, title, author)
 	if err != nil {
 		ps.breaker.RecordFailure()
 		return nil, err

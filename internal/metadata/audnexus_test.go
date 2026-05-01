@@ -5,6 +5,7 @@
 package metadata
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,7 +21,7 @@ func TestAudnexusClient_Name(t *testing.T) {
 func TestAudnexusClient_SearchByTitle_ReturnsEmpty(t *testing.T) {
 	// SearchByTitle should return nil (no endpoint exists)
 	client := NewAudnexusClient()
-	results, err := client.SearchByTitle("The Hobbit")
+	results, err := client.SearchByTitle(context.Background(), "The Hobbit")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -98,7 +99,7 @@ func TestAudnexusClient_SearchByTitleAndAuthor(t *testing.T) {
 
 	client := NewAudnexusClientWithBaseURL(server.URL)
 	// Returns nil because we can't enumerate an author's books
-	results, err := client.SearchByTitleAndAuthor("The Hobbit", "Tolkien")
+	results, err := client.SearchByTitleAndAuthor(context.Background(), "The Hobbit", "Tolkien")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
