@@ -1,0 +1,348 @@
+// file: internal/metafetch/service_fetch.go
+// version: 1.0.0
+// guid: b24c7a25-2efa-4b85-adb0-2d591218eff2
+// last-edited: 2026-05-01
+
+package metafetch
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"path/filepath"
+	"strings"
+	"time"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+)
+
+// queueISBNEnrichment starts a background goroutine to enrich ISBN/ASIN for a book
+// if the book is missing those identifiers.
+func (mfs *Service) queueISBNEnrichment(id string, book *database.Book) {
+	if mfs.isbnEnrichment == nil {
+		return
+	}
+	needsISBN := (book.ISBN10 == nil || *book.ISBN10 == "") && (book.ISBN13 == nil || *book.ISBN13 == "")
+	needsASIN := book.ASIN == nil || *book.ASIN == ""
+	if !needsISBN && !needsASIN {
+		return
+	}
+	go func(bid string) {
+		found, err := mfs.isbnEnrichment.EnrichBookISBN(bid)
+		if err != nil {
+			log.Printf("[WARN] ISBN enrichment failed for %s: %v", bid, err)
+		} else if found {
+			log.Printf("[INFO] ISBN enrichment succeeded for %s", bid)
+		}
+	}(id)
+}
+// FetchMetadataForBook fetches and applies metadata for a single audiobook,
+// trying each configured source in priority order until one succeeds.
+func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, error) {
+	book, err := mfs.db.GetBookByID(id)
+	if err != nil || book == nil {
+		return nil, fmt.Errorf("audiobook not found")
+	}
+
+	if book.MetadataReviewStatus != nil && *book.MetadataReviewStatus == "no_match" {
+		return nil, fmt.Errorf("book %q is marked as no-match; use search-metadata to re-evaluate", book.Title)
+	}
+
+	var sources []metadata.MetadataSource
+	if len(mfs.overrideSources) > 0 {
+		sources = mfs.overrideSources
+	} else {
+		sources = mfs.BuildSourceChain()
+	}
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("no metadata sources enabled")
+	}
+
+	searchTitle := stripChapterFromTitle(book.Title)
+
+	// Resolve current author and narrator for search refinement and scoring
+	currentAuthor := ""
+	if book.Author != nil {
+		currentAuthor = book.Author.Name
+	} else if book.AuthorID != nil {
+		if author, aErr := mfs.db.GetAuthorByID(*book.AuthorID); aErr == nil && author != nil {
+			currentAuthor = author.Name
+		}
+	}
+	if IsGarbageValue(currentAuthor) {
+		currentAuthor = ""
+	}
+	currentNarrator := ""
+	if book.Narrator != nil && *book.Narrator != "" && !IsGarbageValue(*book.Narrator) {
+		currentNarrator = *book.Narrator
+	}
+
+	var lastErr error
+	for _, src := range sources {
+		var results []metadata.BookMetadata
+		var searchErr error
+
+		// Check the persistent fetch cache before hitting the external API.
+		// The cache is shared with the search-dialog path — a bulk library
+		// fetch or a prior search dialog populates it, so a subsequent single-
+		// book fetch can return immediately without another network round-trip.
+		if cached, cerr := database.GetCachedMetadataFetch(mfs.db, id, src.Name()); cerr == nil && cached != nil {
+			ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+			expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
+			if expired {
+				log.Printf("[DEBUG] metadata-fetch: cache EXPIRED for (%s, %s) — age=%s",
+					id, src.Name(), time.Since(cached.CachedAt).Round(time.Hour))
+			} else {
+				var cachedResults []metadata.BookMetadata
+				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+					results = cachedResults
+					log.Printf("[DEBUG] metadata-fetch: cache HIT for (%s, %s) — %d results, age=%s",
+						id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+				}
+			}
+		}
+
+		if len(results) == 0 {
+			// Try the ContextualSearch path first if the source implements
+			// it. This hands richer context (ASIN, ISBN, narrator) to
+			// sources that can use it — Audnexus uses the ASIN for a direct
+			// lookup that works when title search can't, Hardcover uses
+			// the ISBN for a more precise match than the fuzzy GraphQL
+			// search. Sources that don't implement the interface just
+			// fall through to the title/author path below.
+			if ctxSearch, ok := src.(metadata.ContextualSearch); ok {
+				ctx := buildSearchContext(book, searchTitle, currentAuthor, currentNarrator)
+				results, searchErr = ctxSearch.SearchByContext(ctx)
+				if searchErr != nil {
+					log.Printf("[WARN] %s context search failed for %q: %v", src.Name(), book.Title, searchErr)
+					// Context search failure is non-fatal — fall through
+					// to the regular title/author path in case that works.
+				}
+			}
+
+			// Try title+author search first for better match quality
+			if len(results) == 0 && currentAuthor != "" {
+				results, searchErr = src.SearchByTitleAndAuthor(context.Background(), searchTitle, currentAuthor)
+				if searchErr != nil {
+					log.Printf("[WARN] %s title+author search failed for %q by %q: %v", src.Name(), searchTitle, currentAuthor, searchErr)
+				}
+			}
+
+			// Fall back to title-only search
+			if len(results) == 0 {
+				results, searchErr = src.SearchByTitle(context.Background(), searchTitle)
+				if searchErr != nil {
+					log.Printf("[WARN] %s failed for %q: %v", src.Name(), searchTitle, searchErr)
+					lastErr = searchErr
+				}
+			}
+
+			// Try original title if cleaned title returned nothing
+			if len(results) == 0 && searchTitle != book.Title {
+				results, searchErr = src.SearchByTitle(context.Background(), book.Title)
+				if searchErr != nil {
+					lastErr = searchErr
+					continue
+				}
+			}
+
+			// Try with subtitle stripped (e.g. "Title: Subtitle" → "Title")
+			if len(results) == 0 {
+				strippedTitle := stripSubtitle(searchTitle)
+				if strippedTitle != searchTitle && strippedTitle != book.Title {
+					results, searchErr = src.SearchByTitle(context.Background(), strippedTitle)
+					if searchErr != nil {
+						lastErr = searchErr
+						continue
+					}
+				}
+			}
+
+			// Write non-empty results to cache so future fetch/search calls
+			// for this book+source can skip the external API entirely.
+			if len(results) > 0 {
+				if blob, merr := json.Marshal(results); merr == nil {
+					if perr := database.PutCachedMetadataFetch(mfs.db, id, src.Name(), blob, 0); perr != nil {
+						log.Printf("[WARN] metadata-fetch: cache put failed for (%s, %s): %v", id, src.Name(), perr)
+					}
+				}
+			}
+		}
+
+		if len(results) == 0 {
+			log.Printf("[DEBUG] %s returned 0 results for %q", src.Name(), searchTitle)
+		}
+		if len(results) > 0 {
+			// Score all results and pick the best; reject if below quality threshold.
+			scored := mfs.bestTitleMatchForBook(book, results, currentAuthor, currentNarrator, searchTitle, book.Title)
+			if len(scored) == 0 {
+				log.Printf("[DEBUG] %s: all %d results rejected by quality scorer for %q",
+					src.Name(), len(results), searchTitle)
+				continue // try next source
+			}
+			// Apply series position filter if the book's position is already known.
+			if book.SeriesSequence != nil {
+				scored = ApplySeriesPositionFilter(scored, *book.SeriesSequence)
+				if len(scored) == 0 {
+					log.Printf("[DEBUG] %s: best result rejected by series position filter for %q",
+						src.Name(), searchTitle)
+					continue
+				}
+			}
+			meta := scored[0]
+			NormalizeMetaSeries(&meta)
+
+			// Safety: never apply empty/untitled metadata
+			if meta.Title == "" || strings.ToLower(meta.Title) == "untitled" {
+				meta.Title = book.Title // keep original
+			}
+
+			// Record history before applying changes
+			mfs.RecordChangeHistory(book, meta, src.Name())
+
+			// Apply metadata with downgrade protection
+			mfs.ApplyMetadataToBook(book, meta)
+
+			updatedBook, updateErr := mfs.db.UpdateBook(id, book)
+			if updateErr != nil {
+				return nil, fmt.Errorf("failed to update book: %w", updateErr)
+			}
+
+			mfs.persistFetchedMetadata(id, meta)
+
+			// Download cover art locally if we got a cover URL
+			if meta.CoverURL != "" && config.AppConfig.RootDir != "" {
+				coverPath, coverErr := metadata.DownloadCoverArt(meta.CoverURL, config.AppConfig.RootDir, id)
+				if coverErr != nil {
+					log.Printf("[WARN] cover art download failed for %s: %v", id, coverErr)
+				} else {
+					log.Printf("[INFO] cover art saved to %s", coverPath)
+					// Update book's cover_url to the local path for serving
+					localCoverURL := "/api/v1/covers/local/" + filepath.Base(coverPath)
+					if updatedBook != nil {
+						updatedBook.CoverURL = &localCoverURL
+						// Write the full book back — UpdateBook does full column
+						// replacement, so passing only CoverURL would wipe everything.
+						mfs.db.UpdateBook(id, updatedBook)
+					}
+					// Embed cover art into all audio files for this book
+					if updatedBook != nil {
+						mfs.embedCoverInBookFiles(updatedBook, coverPath)
+					}
+				}
+			}
+
+			// Write metadata back to audio file(s) if enabled
+			if config.AppConfig.WriteBackMetadata {
+				mfs.writeBackMetadata(updatedBook, meta)
+			}
+
+			// Queue background ISBN/ASIN enrichment if identifiers are missing
+			if updatedBook != nil {
+				mfs.queueISBNEnrichment(id, updatedBook)
+			}
+
+			return &FetchMetadataResponse{
+				Message: "metadata fetched and applied",
+				Book:    updatedBook,
+				Source:  src.Name(),
+			}, nil
+		}
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("no metadata found from any source (last error: %v)", lastErr)
+	}
+	return nil, fmt.Errorf("no metadata found for '%s' from any source", book.Title)
+}
+// FetchMetadataForBookByTitle searches metadata sources using only the book's title,
+// suppressing the author name. This is useful when the current author is a production
+// company and we want to discover the real author from external sources.
+func (mfs *Service) FetchMetadataForBookByTitle(id string) (*FetchMetadataResponse, error) {
+	book, err := mfs.db.GetBookByID(id)
+	if err != nil || book == nil {
+		return nil, fmt.Errorf("audiobook not found")
+	}
+
+	var sources []metadata.MetadataSource
+	if len(mfs.overrideSources) > 0 {
+		sources = mfs.overrideSources
+	} else {
+		sources = mfs.BuildSourceChain()
+	}
+	if len(sources) == 0 {
+		return nil, fmt.Errorf("no metadata sources enabled")
+	}
+
+	searchTitle := stripChapterFromTitle(book.Title)
+
+	// Resolve narrator for scoring (author intentionally suppressed in this path)
+	titleOnlyNarrator := ""
+	if book.Narrator != nil && *book.Narrator != "" && !IsGarbageValue(*book.Narrator) {
+		titleOnlyNarrator = *book.Narrator
+	}
+
+	var lastErr error
+	for _, src := range sources {
+		results, searchErr := src.SearchByTitle(context.Background(), searchTitle)
+		if searchErr != nil {
+			lastErr = searchErr
+			continue
+		}
+		if len(results) == 0 && searchTitle != book.Title {
+			results, searchErr = src.SearchByTitle(context.Background(), book.Title)
+			if searchErr != nil {
+				lastErr = searchErr
+				continue
+			}
+		}
+		if len(results) == 0 {
+			strippedTitle := stripSubtitle(searchTitle)
+			if strippedTitle != searchTitle {
+				results, searchErr = src.SearchByTitle(context.Background(), strippedTitle)
+				if searchErr != nil {
+					lastErr = searchErr
+					continue
+				}
+			}
+		}
+		if len(results) == 0 {
+			continue
+		}
+
+		scored := mfs.bestTitleMatchForBook(book, results, "", titleOnlyNarrator, searchTitle, book.Title)
+		if len(scored) == 0 {
+			continue
+		}
+		meta := scored[0]
+		NormalizeMetaSeries(&meta)
+
+		mfs.RecordChangeHistory(book, meta, src.Name())
+		mfs.ApplyMetadataToBook(book, meta)
+
+		updatedBook, updateErr := mfs.db.UpdateBook(id, book)
+		if updateErr != nil {
+			return nil, fmt.Errorf("failed to update book: %w", updateErr)
+		}
+
+		mfs.persistFetchedMetadata(id, meta)
+
+		// Mirror of ApplyMetadataCandidate: tag the book with the
+		// source and language so downstream filters (review dialog,
+		// upgrade jobs) have provenance to key on.
+		mfs.ApplyMetadataSystemTags(id, src.Name(), meta.Language)
+
+		return &FetchMetadataResponse{
+			Message: "metadata fetched by title only",
+			Book:    updatedBook,
+			Source:  src.Name(),
+		}, nil
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("no metadata found from any source (last error: %v)", lastErr)
+	}
+	return nil, fmt.Errorf("no metadata found for '%s' from any source (title-only search)", book.Title)
+}
