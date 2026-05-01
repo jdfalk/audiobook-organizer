@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.78.0
+// version: 1.79.0
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -6762,11 +6762,65 @@ func (s *SQLiteStore) GetBookPathPrefixes(limit int) ([]BookPathPrefix, error) {
 // GetAuthorsByBookIDs returns a map from bookID → []Author for all given book IDs.
 // TODO: Implement in N1-2
 func (s *SQLiteStore) GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Author, error) {
-panic("not implemented")
+if len(bookIDs) == 0 {
+return map[string][]Author{}, nil
+}
+placeholders := strings.Repeat("?,", len(bookIDs))
+placeholders = placeholders[:len(placeholders)-1]
+query := fmt.Sprintf(
+"SELECT ba.book_id, a.id, a.name FROM book_authors ba JOIN authors a ON ba.author_id = a.id WHERE ba.book_id IN (%s) ORDER BY ba.position",
+placeholders,
+)
+args := make([]interface{}, len(bookIDs))
+for i, id := range bookIDs {
+args[i] = id
+}
+rows, err := s.db.QueryContext(ctx, query, args...)
+if err != nil {
+return nil, fmt.Errorf("GetAuthorsByBookIDs query: %w", err)
+}
+defer rows.Close()
+result := make(map[string][]Author, len(bookIDs))
+for rows.Next() {
+var bookID string
+var a Author
+if err := rows.Scan(&bookID, &a.ID, &a.Name); err != nil {
+return nil, fmt.Errorf("GetAuthorsByBookIDs scan: %w", err)
+}
+result[bookID] = append(result[bookID], a)
+}
+return result, rows.Err()
 }
 
 // GetNarratorsByBookIDs returns a map from bookID → []Narrator for all given book IDs.
 // TODO: Implement in N1-2
 func (s *SQLiteStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Narrator, error) {
-panic("not implemented")
+if len(bookIDs) == 0 {
+return map[string][]Narrator{}, nil
+}
+placeholders := strings.Repeat("?,", len(bookIDs))
+placeholders = placeholders[:len(placeholders)-1]
+query := fmt.Sprintf(
+"SELECT bn.book_id, n.id, n.name, n.created_at FROM book_narrators bn JOIN narrators n ON bn.narrator_id = n.id WHERE bn.book_id IN (%s) ORDER BY bn.position",
+placeholders,
+)
+args := make([]interface{}, len(bookIDs))
+for i, id := range bookIDs {
+args[i] = id
+}
+rows, err := s.db.QueryContext(ctx, query, args...)
+if err != nil {
+return nil, fmt.Errorf("GetNarratorsByBookIDs query: %w", err)
+}
+defer rows.Close()
+result := make(map[string][]Narrator, len(bookIDs))
+for rows.Next() {
+var bookID string
+var n Narrator
+if err := rows.Scan(&bookID, &n.ID, &n.Name, &n.CreatedAt); err != nil {
+return nil, fmt.Errorf("GetNarratorsByBookIDs scan: %w", err)
+}
+result[bookID] = append(result[bookID], n)
+}
+return result, rows.Err()
 }
