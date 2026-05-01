@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.51.0
+// version: 1.51.1
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -454,7 +454,6 @@ export const Library = () => {
           if (previousState && previousState !== 'open') {
             toast('Connection restored.', 'success');
           }
-          console.log('EventSource connection established');
         }
 
         if (status.state === 'reconnecting' && status.delayMs) {
@@ -1151,8 +1150,7 @@ export const Library = () => {
 
   const handleFetchMetadata = async (audiobook: Audiobook) => {
     try {
-      const result = await api.fetchBookMetadata(audiobook.id);
-      console.log(`Metadata fetched from ${result.source}:`, result.book);
+      await api.fetchBookMetadata(audiobook.id);
       // Reload audiobooks to show updated data
       loadAudiobooks();
     } catch (error) {
@@ -1527,8 +1525,7 @@ export const Library = () => {
 
   const handleParseWithAI = async (audiobook: Audiobook) => {
     try {
-      const result = await api.parseAudiobookWithAI(audiobook.id);
-      console.log(`AI parsing completed with ${result.confidence} confidence:`, result.book);
+      await api.parseAudiobookWithAI(audiobook.id);
       // Reload audiobooks to show updated data
       loadAudiobooks();
     } catch (error) {

@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.42.0
+// version: 1.42.1
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -1097,10 +1097,6 @@ export function Settings() {
   const loadConfig = async () => {
     try {
       const config = await api.getConfig();
-      console.log(
-        '[Settings] Loaded config, OpenAI key:',
-        config.openai_api_key
-      );
       // Store masked key if present
       if (config.openai_api_key && config.openai_api_key.includes('***')) {
         setSavedApiKeyMask(config.openai_api_key);
@@ -1846,15 +1842,7 @@ export function Settings() {
           .filter(Boolean),
       };
 
-      console.log(
-        'Saving config with OpenAI key:',
-        settings.openaiApiKey
-          ? `***${settings.openaiApiKey.slice(-4)}`
-          : '(empty)'
-      );
-      console.log('Full updates object:', updates);
       const response = await api.updateConfig(updates);
-      console.log('Save response:', response);
 
       let nextSettings = settings;
       if (settings.openaiApiKey && response.openai_api_key) {
