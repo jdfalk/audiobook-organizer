@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.14.0
+// version: 1.15.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -77,6 +77,7 @@ import {
 } from '../../services/api';
 import { useOperationsStore } from '../../stores/useOperationsStore';
 import { useToast } from '../toast/ToastProvider';
+import { STORAGE_KEYS } from '../../lib/storageKeys';
 
 interface ITunesImportSettings {
   libraryPath: string;
@@ -106,7 +107,7 @@ export function ITunesImport() {
   const { toast } = useToast();
   const [settings, setSettings] = useState<ITunesImportSettings>(() => {
     try {
-      const saved = localStorage.getItem('itunes_import_settings');
+      const saved = localStorage.getItem(STORAGE_KEYS.ITUNES_IMPORT_SETTINGS);
       if (saved) {
         return { ...defaultSettings, ...JSON.parse(saved) };
       }
@@ -118,7 +119,7 @@ export function ITunesImport() {
   // Persist settings to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('itunes_import_settings', JSON.stringify(settings));
+      localStorage.setItem(STORAGE_KEYS.ITUNES_IMPORT_SETTINGS, JSON.stringify(settings));
     } catch {
       // ignore
     }

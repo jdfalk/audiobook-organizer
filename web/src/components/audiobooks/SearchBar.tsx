@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/SearchBar.tsx
-// version: 2.2.0
+// version: 2.3.0
 // guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,15 +31,15 @@ import {
 } from '@mui/icons-material';
 import { SortField, SortOrder } from '../../types';
 import { parseSearch, SEARCH_FIELDS, type ParsedSearch } from '../../utils/searchParser';
+import { STORAGE_KEYS } from '../../lib/storageKeys';
 
 export type ViewMode = 'grid' | 'list';
 
-const RECENT_SEARCHES_KEY = 'library_recent_searches';
 const MAX_RECENT = 15;
 
 function getRecentSearches(): string[] {
   try {
-    return JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]');
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.LIBRARY_RECENT_SEARCHES) || '[]');
   } catch {
     return [];
   }
@@ -49,7 +49,7 @@ function saveRecentSearch(query: string) {
   if (!query.trim()) return;
   const recent = getRecentSearches().filter((s) => s !== query);
   recent.unshift(query);
-  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
+  localStorage.setItem(STORAGE_KEYS.LIBRARY_RECENT_SEARCHES, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
 // Build autocomplete options: field prefixes, prefix wildcard, + recent searches

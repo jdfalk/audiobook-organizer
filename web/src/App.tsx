@@ -4,6 +4,7 @@
 // Trigger CI E2E test run
 
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { STORAGE_KEYS } from './lib/storageKeys';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import {
   Box,
@@ -92,12 +93,12 @@ function App() {
         if (!cancelled) {
           setShowWizard(!setupComplete);
           if (setupComplete) {
-            localStorage.setItem('welcome_wizard_completed', 'true');
+            localStorage.setItem(STORAGE_KEYS.WELCOME_WIZARD_COMPLETED, 'true');
           }
         }
       } catch (_error) {
         const wizardCompleted = localStorage.getItem(
-          'welcome_wizard_completed'
+          STORAGE_KEYS.WELCOME_WIZARD_COMPLETED
         );
         if (!cancelled) {
           setShowWizard(!wizardCompleted);

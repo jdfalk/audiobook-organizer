@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.51.1
+// version: 1.52.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -74,6 +74,7 @@ import {
 import { pollOperation } from '../utils/operationPolling';
 import { useOperationsStore } from '../stores/useOperationsStore';
 import AddToPlaylistDialog from '../components/audiobooks/AddToPlaylistDialog';
+import { STORAGE_KEYS } from '../lib/storageKeys';
 
 interface ImportPath {
   id: number;
@@ -189,12 +190,12 @@ export const Library = () => {
     searchParams.get('order') === SortOrder.Descending ? SortOrder.Descending : SortOrder.Ascending;
   const initialPage = Math.max(
     1,
-    parseInt(searchParams.get('page') || localStorage.getItem('library_page') || '1', 10)
+    parseInt(searchParams.get('page') || localStorage.getItem(STORAGE_KEYS.LIBRARY_PAGE) || '1', 10)
   );
   const initialItemsPerPage = Math.max(
     10,
     parseInt(
-      searchParams.get('limit') || localStorage.getItem('library_items_per_page') || '20',
+      searchParams.get('limit') || localStorage.getItem(STORAGE_KEYS.LIBRARY_ITEMS_PER_PAGE) || '20',
       10
     )
   );
@@ -519,7 +520,7 @@ export const Library = () => {
       isInternalUpdate.current = false;
       return;
     }
-    const urlPage = Math.max(1, parseInt(searchParams.get('page') || localStorage.getItem('library_page') || '1', 10));
+    const urlPage = Math.max(1, parseInt(searchParams.get('page') || localStorage.getItem(STORAGE_KEYS.LIBRARY_PAGE) || '1', 10));
     const urlSearch = searchParams.get('search') ?? '';
     const urlSort = (searchParams.get('sort') as SortField) || SortField.Title;
     const urlOrder =
@@ -570,7 +571,7 @@ export const Library = () => {
     prevPageRef.current = page;
     isInternalUpdate.current = true;
     setSearchParams(params, { replace: !pageChanged });
-    localStorage.setItem('library_page', page.toString());
+    localStorage.setItem(STORAGE_KEYS.LIBRARY_PAGE, page.toString());
   }, [filters, itemsPerPage, page, searchQuery, selectedTags, setSearchParams, sortBy, sortOrder, viewMode]);
 
   const loadSoftDeleted = useCallback(async () => {
@@ -2380,7 +2381,7 @@ export const Library = () => {
                   onChange={(e) => {
                     const val = Number(e.target.value);
                     setItemsPerPage(val);
-                    localStorage.setItem('library_items_per_page', String(val));
+                    localStorage.setItem(STORAGE_KEYS.LIBRARY_ITEMS_PER_PAGE, String(val));
                   }}
                   sx={{ minWidth: 150 }}
                 >
