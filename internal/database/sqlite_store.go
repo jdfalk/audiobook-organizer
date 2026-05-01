@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.79.0
+// version: 1.79.1
 // last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -2737,13 +2737,15 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	}
 
 	// Record the original import path so full provenance is preserved forever.
+	// book_path_history is created in migration 35; skip gracefully on older schemas.
 	_, err = tx.Exec(
 		`INSERT INTO book_path_history (book_id, old_path, new_path, change_type) VALUES (?, ?, ?, ?)`,
 		book.ID, "", book.FilePath, "import",
 	)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "no such table") {
 		return nil, fmt.Errorf("CreateBook record path: %w", err)
 	}
+	err = nil // reset so defer rollback doesn't fire on a skipped path-history write
 
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("CreateBook commit: %w", err)
