@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/generate_itl_tests.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b7e3f1a2-4c5d-6e7f-8a9b-0c1d2e3f4a5b
-// last-edited: 2026-04-28
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -60,6 +61,7 @@ func (j *generateITLTestsJob) Run(ctx context.Context, store database.Store, rep
 		return nil
 	}
 
+	outputDir = filepath.Clean(outputDir)
 	if err := os.RemoveAll(outputDir); err != nil {
 		return fmt.Errorf("failed to clean output dir: %w", err)
 	}

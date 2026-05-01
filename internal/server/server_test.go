@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -441,7 +441,7 @@ func TestBrowseFilesystem(t *testing.T) {
 		{
 			name:           "browse root",
 			queryParams:    "?path=/",
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusForbidden,
 		},
 		{
 			name:           "browse without path",
