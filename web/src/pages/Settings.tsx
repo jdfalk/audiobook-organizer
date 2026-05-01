@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.43.0
+// version: 1.44.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
@@ -41,8 +41,8 @@ import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { SettingsGeneral } from '../components/SettingsGeneral';
 import BlockedHashesTab from '../components/settings/BlockedHashesTab';
-import DelugeSettingsTab from '../components/settings/DelugeSettingsTab';
 import PluginsTab from '../components/settings/PluginsTab';
+import { PathsSettingsTab } from '../components/settings/PathsSettingsTab';
 import { ITunesImport } from '../components/settings/ITunesImport';
 import { ITunesTransfer } from '../components/settings/ITunesTransfer';
 import { OpenLibraryDumps } from '../components/settings/OpenLibraryDumps';
@@ -492,7 +492,7 @@ function APIKeysTab() {
   );
 }
 
-const TAB_KEYS = ['library', 'itunes', 'metadata', 'performance', 'security', 'api-keys', 'plugins', 'system'] as const;
+const TAB_KEYS = ['library', 'itunes', 'metadata', 'paths', 'performance', 'security', 'api-keys', 'plugins', 'system'] as const;
 
 function tabFromHash(hash: string): number {
   const key = hash.replace('#', '');
@@ -2034,6 +2034,7 @@ export function Settings() {
             <Tab label="Library" />
             <Tab label="iTunes Import" />
             <Tab label="Metadata" />
+            <Tab label="Paths" />
             <Tab label="Performance" />
             <Tab label="Security" />
             <Tab label="API Keys" />
@@ -2059,13 +2060,6 @@ export function Settings() {
             excludePatternError={excludePatternError}
             handleAddExcludePattern={handleAddExcludePattern}
             handleRemoveExcludePattern={handleRemoveExcludePattern}
-            importPaths={importPaths}
-            scanStatuses={scanStatuses}
-            handleViewScanErrors={handleViewScanErrors}
-            handleRequestCancelScan={handleRequestCancelScan}
-            handleScanImportFolder={handleScanImportFolder}
-            handleRemoveImportFolder={handleRemoveImportFolder}
-            setAddFolderDialogOpen={setAddFolderDialogOpen}
             backupNotice={backupNotice}
             createBackupInProgress={createBackupInProgress}
             handleCreateBackup={handleCreateBackup}
@@ -2502,6 +2496,23 @@ export function Settings() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
+          <PathsSettingsTab
+            settings={settings}
+            setSettings={setSettings}
+            libraryPathError={libraryPathError}
+            handleChange={handleChange}
+            handleBrowseLibraryPath={handleBrowseLibraryPath}
+            importPaths={importPaths}
+            scanStatuses={scanStatuses}
+            handleViewScanErrors={handleViewScanErrors}
+            handleRequestCancelScan={handleRequestCancelScan}
+            handleScanImportFolder={handleScanImportFolder}
+            handleRemoveImportFolder={handleRemoveImportFolder}
+            setAddFolderDialogOpen={setAddFolderDialogOpen}
+          />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={4}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom>
@@ -2774,41 +2785,16 @@ export function Settings() {
           </Grid>
         </TabPanel>
 
-        <TabPanel value={tabValue} index={4}>
+        <TabPanel value={tabValue} index={5}>
           <BlockedHashesTab />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={5}>
+        <TabPanel value={tabValue} index={6}>
           <APIKeysTab />
         </TabPanel>
 
-        <TabPanel value={tabValue} index={6}>
-          <PluginsTab />
-        </TabPanel>
-
         <TabPanel value={tabValue} index={7}>
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-              Protected Paths
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Paths that the organizer will never move or delete files from. One path per line.
-              These are typically your Deluge download directories.
-            </Typography>
-            <TextField
-              multiline
-              minRows={3}
-              maxRows={10}
-              fullWidth
-              placeholder={'/mnt/downloads/audiobooks\n/mnt/media/deluge'}
-              value={settings.protectedPaths}
-              onChange={(e) => setSettings((prev) => ({ ...prev, protectedPaths: e.target.value }))}
-              size="small"
-              label="Protected Paths"
-              helperText="Changes are saved with the main Save button."
-            />
-          </Paper>
-          <DelugeSettingsTab />
+          <PluginsTab />
         </TabPanel>
 
         <TabPanel value={tabValue} index={8}>
