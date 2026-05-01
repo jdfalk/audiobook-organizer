@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -317,7 +317,7 @@ func (s *Server) getAudiobook(c *gin.Context) {
 		return
 	}
 
-	RespondWithOK(c, enrichBookForResponse(book))
+	RespondWithOK(c, enrichBookForResponseSingle(book))
 }
 
 // listAudiobookSegments returns file segments for a multi-file audiobook.
@@ -1329,7 +1329,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		s.writeBackBatcher.Enqueue(id)
 	}
 
-	RespondWithOK(c, enrichBookForResponse(updatedBook))
+	RespondWithOK(c, enrichBookForResponseSingle(updatedBook))
 }
 
 func (s *Server) deleteAudiobook(c *gin.Context) {

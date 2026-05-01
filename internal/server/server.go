@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 1.209.0
+// version: 1.210.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-04-30
 
@@ -330,9 +330,72 @@ type narratorEntry struct {
 	Position int    `json:"position"`
 }
 
+// batchFetchBookAuthorsAndNarrators pre-fetches author and narrator join table
+// entries plus their full details for all given books. Returns maps keyed by
+// book ID for join entries, plus maps keyed by author/narrator ID for details.
+// Nil maps are returned if the global store is not available.
+func batchFetchBookAuthorsAndNarrators(bookIDs []string) (map[string][]database.BookAuthor, map[int]*database.Author, map[string][]database.BookNarrator, map[int]*database.Narrator) {
+	if len(bookIDs) == 0 || database.GetGlobalStore() == nil {
+		return nil, nil, nil, nil
+	}
+
+	store := database.GetGlobalStore()
+
+	// Collect all book authors and extract author IDs
+	bookAuthorsMap := make(map[string][]database.BookAuthor)
+	authorIDs := make(map[int]bool)
+	for _, bookID := range bookIDs {
+		if bas, err := store.GetBookAuthors(bookID); err == nil {
+			bookAuthorsMap[bookID] = bas
+			for _, ba := range bas {
+				authorIDs[ba.AuthorID] = true
+			}
+		}
+	}
+
+	// Fetch all authors in bulk
+	authorsByID := make(map[int]*database.Author)
+	for authorID := range authorIDs {
+		if author, err := store.GetAuthorByID(authorID); err == nil && author != nil {
+			authorsByID[authorID] = author
+		}
+	}
+
+	// Collect all book narrators and extract narrator IDs
+	bookNarratorsMap := make(map[string][]database.BookNarrator)
+	narratorIDs := make(map[int]bool)
+	for _, bookID := range bookIDs {
+		if bns, err := store.GetBookNarrators(bookID); err == nil {
+			bookNarratorsMap[bookID] = bns
+			for _, bn := range bns {
+				narratorIDs[bn.NarratorID] = true
+			}
+		}
+	}
+
+	// Fetch all narrators in bulk
+	narratorsByID := make(map[int]*database.Narrator)
+	for narratorID := range narratorIDs {
+		if narrator, err := store.GetNarratorByID(narratorID); err == nil && narrator != nil {
+			narratorsByID[narratorID] = narrator
+		}
+	}
+
+	return bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID
+}
+
+// enrichBookForResponseSingle enriches a single book by pre-fetching its
+// author and narrator data. Convenience wrapper for single-book endpoints.
+func enrichBookForResponseSingle(book *database.Book) enrichedBookResponse {
+	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := batchFetchBookAuthorsAndNarrators([]string{book.ID})
+	return enrichBookForResponse(book, bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
+}
+
 // enrichBookForResponse resolves author, series, and narrator names from join
 // tables so the JSON response contains all the fields the frontend expects.
-func enrichBookForResponse(book *database.Book) enrichedBookResponse {
+// Pre-fetched maps of authors and narrators (by book ID) are used instead of
+// per-book DB calls to eliminate N+1 queries.
+func enrichBookForResponse(book *database.Book, bookAuthorsMap map[string][]database.BookAuthor, authorsByID map[int]*database.Author, bookNarratorsMap map[string][]database.BookNarrator, narratorsByID map[int]*database.Narrator) enrichedBookResponse {
 	authorName, seriesName := resolveAuthorAndSeriesNames(book)
 	resp := enrichedBookResponse{Book: book}
 	if authorName != "" {
@@ -349,10 +412,10 @@ func enrichBookForResponse(book *database.Book) enrichedBookResponse {
 		resp.FileExists = &exists
 	}
 
-	if database.GetGlobalStore() != nil {
-		if bookAuthors, err := database.GetGlobalStore().GetBookAuthors(book.ID); err == nil && len(bookAuthors) > 0 {
+	if bookAuthorsMap != nil && authorsByID != nil {
+		if bookAuthors, ok := bookAuthorsMap[book.ID]; ok && len(bookAuthors) > 0 {
 			for _, ba := range bookAuthors {
-				if author, err := database.GetGlobalStore().GetAuthorByID(ba.AuthorID); err == nil && author != nil {
+				if author, ok := authorsByID[ba.AuthorID]; ok && author != nil {
 					resp.Authors = append(resp.Authors, authorEntry{
 						ID: author.ID, Name: author.Name, Role: ba.Role, Position: ba.Position,
 					})
@@ -367,10 +430,12 @@ func enrichBookForResponse(book *database.Book) enrichedBookResponse {
 				resp.AuthorName = &combined
 			}
 		}
+	}
 
-		if bookNarrators, err := database.GetGlobalStore().GetBookNarrators(book.ID); err == nil && len(bookNarrators) > 0 {
+	if bookNarratorsMap != nil && narratorsByID != nil {
+		if bookNarrators, ok := bookNarratorsMap[book.ID]; ok && len(bookNarrators) > 0 {
 			for _, bn := range bookNarrators {
-				if narrator, err := database.GetGlobalStore().GetNarratorByID(bn.NarratorID); err == nil && narrator != nil {
+				if narrator, ok := narratorsByID[bn.NarratorID]; ok && narrator != nil {
 					resp.Narrators = append(resp.Narrators, narratorEntry{
 						ID: narrator.ID, Name: narrator.Name, Role: bn.Role, Position: bn.Position,
 					})
