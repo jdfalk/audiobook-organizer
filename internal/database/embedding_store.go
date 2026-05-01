@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store.go
-// version: 1.7.0
+// version: 1.8.0
 // last-edited: 2026-04-30
 // guid: 7c4a9b2e-d831-4f5c-a07e-3b8d6e1f9c42
 
@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strings"
@@ -270,10 +271,16 @@ FROM embeddings WHERE id = ?`, id)
 	}
 	e.Vector = decodeVector(vectorBlob)
 	if e.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtS); err != nil {
-		e.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAtS)
+		if e.CreatedAt, err = time.Parse("2006-01-02T15:04:05Z", createdAtS); err != nil {
+			log.Printf("WARN: parse CreatedAt %q: %v (using zero time)", createdAtS, err)
+			e.CreatedAt = time.Time{}
+		}
 	}
 	if e.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtS); err != nil {
-		e.UpdatedAt, _ = time.Parse("2006-01-02T15:04:05Z", updatedAtS)
+		if e.UpdatedAt, err = time.Parse("2006-01-02T15:04:05Z", updatedAtS); err != nil {
+			log.Printf("WARN: parse UpdatedAt %q: %v (using zero time)", updatedAtS, err)
+			e.UpdatedAt = time.Time{}
+		}
 	}
 	return &e, nil
 }
@@ -308,10 +315,16 @@ FROM embeddings WHERE entity_type = ?`, entityType)
 		}
 		e.Vector = decodeVector(vectorBlob)
 		if e.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtS); err != nil {
-			e.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAtS)
+			if e.CreatedAt, err = time.Parse("2006-01-02T15:04:05Z", createdAtS); err != nil {
+				log.Printf("WARN: scan embedding parse CreatedAt %q: %v (using zero time)", createdAtS, err)
+				e.CreatedAt = time.Time{}
+			}
 		}
 		if e.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtS); err != nil {
-			e.UpdatedAt, _ = time.Parse("2006-01-02T15:04:05Z", updatedAtS)
+			if e.UpdatedAt, err = time.Parse("2006-01-02T15:04:05Z", updatedAtS); err != nil {
+				log.Printf("WARN: scan embedding parse UpdatedAt %q: %v (using zero time)", updatedAtS, err)
+				e.UpdatedAt = time.Time{}
+			}
 		}
 		results = append(results, e)
 	}
@@ -519,10 +532,16 @@ func scanCandidate(scan func(...any) error) (DedupCandidate, error) {
 	}
 	var err error
 	if c.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtS); err != nil {
-		c.CreatedAt, _ = time.Parse("2006-01-02T15:04:05Z", createdAtS)
+		if c.CreatedAt, err = time.Parse("2006-01-02T15:04:05Z", createdAtS); err != nil {
+			log.Printf("WARN: scanCandidate parse CreatedAt %q: %v (using zero time)", createdAtS, err)
+			c.CreatedAt = time.Time{}
+		}
 	}
 	if c.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtS); err != nil {
-		c.UpdatedAt, _ = time.Parse("2006-01-02T15:04:05Z", updatedAtS)
+		if c.UpdatedAt, err = time.Parse("2006-01-02T15:04:05Z", updatedAtS); err != nil {
+			log.Printf("WARN: scanCandidate parse UpdatedAt %q: %v (using zero time)", updatedAtS, err)
+			c.UpdatedAt = time.Time{}
+		}
 	}
 	return c, nil
 }
