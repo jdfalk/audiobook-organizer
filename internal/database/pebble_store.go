@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.65.0
+// version: 1.66.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package database
 
@@ -89,7 +89,9 @@ func (p *PebbleStore) SetRootDir(rootDir string) {
 // InvalidateLibraryStats drops the cached stats:library key so the next
 // GetDashboardStats call triggers a fresh full recompute.
 func (p *PebbleStore) InvalidateLibraryStats() {
-	_ = p.db.Delete([]byte(statsLibraryKey), pebble.Sync)
+	if err := p.db.Delete([]byte(statsLibraryKey), pebble.Sync); err != nil {
+		log.Printf("ERROR: pebble Delete stats:library: %v", err)
+	}
 }
 
 func (p *PebbleStore) readCachedLibraryStats() *LibraryStats {
@@ -113,7 +115,9 @@ func (p *PebbleStore) writeCachedLibraryStats(s *LibraryStats) {
 	if err != nil {
 		return
 	}
-	_ = p.db.Set([]byte(statsLibraryKey), data, pebble.Sync)
+	if err := p.db.Set([]byte(statsLibraryKey), data, pebble.Sync); err != nil {
+		log.Printf("ERROR: pebble Set stats:library: %v", err)
+	}
 }
 
 // NewPebbleStore creates a new PebbleDB store
@@ -746,7 +750,9 @@ func (p *PebbleStore) DeleteSeries(id int) error {
 				authorIDStr = strconv.Itoa(*series.AuthorID)
 			}
 			indexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(series.Name), authorIDStr))
-			_ = p.db.Delete(indexKey, pebble.Sync)
+			if err := p.db.Delete(indexKey, pebble.Sync); err != nil {
+				log.Printf("WARNING: pebble Delete series name index %q: %v", indexKey, err)
+			}
 		}
 		closer.Close()
 	}
@@ -773,7 +779,9 @@ func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
 		oldAuthorIDStr = strconv.Itoa(*series.AuthorID)
 	}
 	oldIndexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(series.Name), oldAuthorIDStr))
-	_ = p.db.Delete(oldIndexKey, pebble.Sync)
+	if err := p.db.Delete(oldIndexKey, pebble.Sync); err != nil {
+		log.Printf("WARNING: pebble Delete old series name index %q: %v", oldIndexKey, err)
+	}
 
 	// Update name
 	series.Name = name
@@ -942,10 +950,16 @@ func (p *PebbleStore) UpdateWork(id string, work *Work) (*Work, error) {
 	newNorm := strings.ToLower(strings.TrimSpace(work.Title))
 	if oldNorm != newNorm {
 		if oldNorm != "" {
-			_ = batch.Delete([]byte(fmt.Sprintf("work:title:%s:%s", oldNorm, id)), nil)
+			if err := batch.Delete([]byte(fmt.Sprintf("work:title:%s:%s", oldNorm, id)), nil); err != nil {
+				batch.Close()
+				return nil, fmt.Errorf("pebble batch delete old work title index: %w", err)
+			}
 		}
 		if newNorm != "" {
-			_ = batch.Set([]byte(fmt.Sprintf("work:title:%s:%s", newNorm, id)), []byte(id), nil)
+			if err := batch.Set([]byte(fmt.Sprintf("work:title:%s:%s", newNorm, id)), []byte(id), nil); err != nil {
+				batch.Close()
+				return nil, fmt.Errorf("pebble batch set new work title index: %w", err)
+			}
 		}
 	}
 	if err := batch.Commit(pebble.Sync); err != nil {
@@ -970,7 +984,10 @@ func (p *PebbleStore) DeleteWork(id string) error {
 	}
 	norm := strings.ToLower(strings.TrimSpace(work.Title))
 	if norm != "" {
-		_ = batch.Delete([]byte(fmt.Sprintf("work:title:%s:%s", norm, id)), nil)
+		if err := batch.Delete([]byte(fmt.Sprintf("work:title:%s:%s", norm, id)), nil); err != nil {
+			batch.Close()
+			return fmt.Errorf("pebble batch delete work title index: %w", err)
+		}
 	}
 	return batch.Commit(pebble.Sync)
 }
@@ -5411,7 +5428,10 @@ func (p *PebbleStore) DeleteOperationsByStatus(statuses []string) (int, error) {
 			continue
 		}
 		if statusSet[op.Status] {
-			_ = batch.Delete(iter.Key(), nil)
+			if err := batch.Delete(iter.Key(), nil); err != nil {
+				batch.Close()
+				return 0, fmt.Errorf("pebble batch delete operation: %w", err)
+			}
 			deleted++
 		}
 	}
@@ -6481,7 +6501,9 @@ func (p *PebbleStore) pruneByTimestampPrefix(prefix string, olderThan time.Time)
 			continue
 		}
 		if ts.Before(olderThan) {
-			_ = batch.Delete(iter.Key(), nil)
+			if err := batch.Delete(iter.Key(), nil); err != nil {
+				return 0, fmt.Errorf("pebble batch delete %s: %w", key, err)
+			}
 			deleted++
 		}
 	}
