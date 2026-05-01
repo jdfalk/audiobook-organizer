@@ -1,5 +1,5 @@
 // file: internal/watcher/watcher.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
 
 package watcher
@@ -36,15 +36,16 @@ type Callback func(rootDir string)
 // Watcher monitors a directory tree for audio file changes and invokes a
 // callback after a debounce period.
 type Watcher struct {
-	fsWatcher     *fsnotify.Watcher
-	rootDir       string
-	debounce      time.Duration
-	callback      Callback
-	stop          chan struct{}
-	stopped       chan struct{}
-	mu            sync.Mutex
-	timer         *time.Timer
-	running       bool
+	fsWatcher *fsnotify.Watcher
+	rootDir   string
+	debounce  time.Duration
+	callback  Callback
+	stop      chan struct{}
+	stopped   chan struct{}
+	mu        sync.Mutex
+	timer     *time.Timer
+	scanGen   uint64
+	running   bool
 }
 
 // New creates a Watcher. The callback is called with rootDir after events
@@ -170,13 +171,21 @@ func (w *Watcher) scheduleScan() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	w.scanGen++
+	gen := w.scanGen
+
 	if w.timer != nil {
-		w.timer.Reset(w.debounce)
-		return
+		w.timer.Stop()
+		w.timer = nil
 	}
 
 	w.timer = time.AfterFunc(w.debounce, func() {
 		w.mu.Lock()
+		if w.scanGen != gen {
+			// A newer event superseded this timer; do nothing.
+			w.mu.Unlock()
+			return
+		}
 		w.timer = nil
 		w.mu.Unlock()
 
