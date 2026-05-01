@@ -1,5 +1,5 @@
 // file: internal/database/migrations.go
-// version: 1.35.0
+// version: 1.36.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
 // last-edited: 2026-04-30
 
@@ -375,6 +375,12 @@ var migrations = []Migration{
 		Version:     56,
 		Description: "Add merged_into_book_id column to books for chapter consolidation (MATCH-2)",
 		Up:          migration056Up,
+		Down:        nil,
+	},
+	{
+		Version:     57,
+		Description: "Add unique index on (file_hash, source_import_path) to prevent duplicate audiobook records",
+		Up:          migration057Up,
 		Down:        nil,
 	},
 }
@@ -2756,5 +2762,26 @@ log.Printf("  - [WARN] migration 056: %v (continuing)", err)
 }
 }
 log.Println("  - Added merged_into_book_id to books, created index idx_books_merged_into")
+return nil
+}
+
+// migration057Up adds a unique index on (file_hash, source_import_path) to prevent
+// duplicate audiobook records for the same physical file within each library context.
+// The index is partial (WHERE file_hash IS NOT NULL) to avoid affecting existing rows
+// with NULL or empty hashes during migration.
+func migration057Up(store Store) error {
+sqliteStore, ok := store.(*SQLiteStore)
+if !ok {
+return nil // PebbleDB: schema-free, field lives on struct
+}
+stmts := []string{
+`CREATE UNIQUE INDEX IF NOT EXISTS idx_audiobooks_file_hash_library ON books (file_hash, source_import_path) WHERE file_hash IS NOT NULL AND file_hash != ''`,
+}
+for _, stmt := range stmts {
+if _, err := sqliteStore.db.Exec(stmt); err != nil {
+log.Printf("  - [WARN] migration 057: %v (continuing)", err)
+}
+}
+log.Println("  - Added unique index on (file_hash, source_import_path)")
 return nil
 }
