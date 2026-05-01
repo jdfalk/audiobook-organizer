@@ -351,6 +351,34 @@ Operations or the notification bell. These need the same treatment as `composer_
 
 ---
 
+## 🔐 File Provenance / Hash Chain
+
+Track the full lifecycle of a file's hash so we can answer "has this file changed since download?".
+Proposed chain: **DownloadHash** (as-downloaded) → **OriginalFileHash** (after iTunes/external tagger) → **FileHash** (current, after AO).
+
+- [ ] **HASH-CHAIN-1** Add `download_hash` column to `book_files` (SQLite migration + PebbleDB field). Populate it from Deluge import data (already have `deluge_hash`) and allow manual set via API.
+- [ ] **HASH-CHAIN-2** UI: show hash chain in book file detail view so users can see when/where a file changed.
+- [ ] **HASH-CHAIN-3** Integrity alert: flag files where `file_hash != original_file_hash` and no AO tag-write is on record (possible external modification / bit-rot).
+
+*Low priority — AcoustID fingerprinting covers the identity-across-re-encode case better. Useful mainly for strict download-integrity auditing.*
+
+---
+
+## 🎵 AcoustID / Audio Fingerprinting — Stats & Trigger UI
+
+AcoustID segment fingerprints already exist in the schema (`acoustid_seg0`–`seg6`). Needs the same coverage-stats + backfill-trigger treatment as file hashes.
+
+- [ ] **ACOUSTID-STATS-1** `GetAcoustIDStats()` — count books/files with ≥1 fingerprint segment populated, by-library breakdown. Add to interface + SQLite + PebbleDB + mock.
+- [ ] **ACOUSTID-STATS-2** `GET /maintenance/acoustid-stats` handler + route.
+- [ ] **ACOUSTID-STATS-3** UI card on Maintenance tab (same tile style as SHA Duplicate Detection): shows coverage %, "Fingerprint Library" trigger button, status chip.
+- [ ] **ACOUSTID-DEDUP-1** Use fingerprint similarity to detect duplicates even when hashes differ (re-encodes, format conversions). Show in Maintenance as "Acoustic Duplicates" card.
+- [ ] **ACOUSTID-COMPARE-1** Manual comparison tool — given two book IDs or file IDs, compute/fetch their fingerprint segments and return a similarity score + per-segment breakdown. `POST /api/v1/books/{id}/compare-acoustid?other={id2}` (or file-level). UI: picker in book detail or Maintenance tab that lets you select any two books/files and shows:
+  - Both books/files displayed side-by-side (title, author, cover, duration, format)
+  - Overall similarity score (0–100%)
+  - Per-segment diff: seg0 (intro), seg1–5 (body), seg6 (outro) — each segment shown as a colored match/mismatch bar with its individual score
+  - Clear visual indication of which segments match, which differ, and by how much
+
+---
 
 Statuses below reflect the current state including v0.206.0's shipped
 work (many items marked "open" in the backlog file were quietly shipped

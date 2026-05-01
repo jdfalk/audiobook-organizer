@@ -331,7 +331,9 @@ type MockStore struct {
 	MoveBookFilesToBookFunc     func(fileIDs []string, sourceBookID, targetBookID string) error
 	GetDuplicateFilesByHashFunc func(limit int) ([]DuplicateFileGroup, error)
 	GetBookBySegmentFileHashFunc func(hash string) (*Book, error)
+	SetBookFileHashFunc         func(id, hash string) error
 	GetBookFileHashStatsFunc    func() (*BookFileHashStats, error)
+	GetBookMetadataHashStatsFunc func() (*BookMetadataHashStats, error)
 
 	// Path history
 	RecordPathChangeFunc   func(change *BookPathChange) error
@@ -2284,6 +2286,13 @@ func (m *MockStore) GetBookFileHashStats() (*BookFileHashStats, error) {
 	return &BookFileHashStats{}, nil
 }
 
+func (m *MockStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error) {
+	if m.GetBookMetadataHashStatsFunc != nil {
+		return m.GetBookMetadataHashStatsFunc()
+	}
+	return &BookMetadataHashStats{}, nil
+}
+
 func (m *MockStore) CreateAIJob(job AIJob, payloadJSON []byte) error {
 	if m.CreateAIJobFunc != nil {
 		return m.CreateAIJobFunc(job, payloadJSON)
@@ -2343,6 +2352,13 @@ func (m *MockStore) ListAIJobs(typeFilter, statusFilter string, limit, offset in
 func (m *MockStore) UpdateBookFileHashes(id, originalHash, postMetadataHash string) error {
 	if m.UpdateBookFileHashesFunc != nil {
 		return m.UpdateBookFileHashesFunc(id, originalHash, postMetadataHash)
+	}
+	return nil
+}
+
+func (m *MockStore) SetBookFileHash(id, hash string) error {
+	if m.SetBookFileHashFunc != nil {
+		return m.SetBookFileHashFunc(id, hash)
 	}
 	return nil
 }

@@ -6354,6 +6354,26 @@ func (s *SQLiteStore) UpdateBookFileHashes(id, originalHash, postMetadataHash st
 	return nil
 }
 
+// SetBookFileHash sets file_hash on a book_file row and also sets
+// original_file_hash if it is currently empty, matching scanner behaviour.
+func (s *SQLiteStore) SetBookFileHash(id, hash string) error {
+	_, err := s.db.Exec(
+		`UPDATE book_files SET
+			file_hash = ?,
+			original_file_hash = CASE WHEN original_file_hash IS NULL OR original_file_hash = '' THEN ? ELSE original_file_hash END,
+			updated_at = ?
+		WHERE id = ?`,
+		nullableStringVal(hash),
+		nullableStringVal(hash),
+		time.Now(),
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("SetBookFileHash %s: %w", id, err)
+	}
+	return nil
+}
+
 // GetDuplicateFilesByHash returns groups of book_files that share the same
 // original_file_hash, indicating identical audio content at multiple paths.
 func (s *SQLiteStore) GetDuplicateFilesByHash(limit int) ([]DuplicateFileGroup, error) {
@@ -6495,7 +6515,89 @@ func (s *SQLiteStore) GetBookFileHashStats() (*BookFileHashStats, error) {
 	return stats, nil
 }
 
-// AddMetadataRejection records a rejected metadata candidate for a book.
+// GetBookMetadataHashStats returns metadata_source_hash coverage across all books.
+func (s *SQLiteStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error) {
+	stats := &BookMetadataHashStats{}
+
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0`,
+	).Scan(&stats.TotalBooks); err != nil {
+		return nil, fmt.Errorf("GetBookMetadataHashStats total: %w", err)
+	}
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM books
+		 WHERE COALESCE(marked_for_deletion, 0) = 0
+		   AND metadata_source_hash IS NOT NULL AND metadata_source_hash != ''`,
+	).Scan(&stats.WithMetadataHash); err != nil {
+		return nil, fmt.Errorf("GetBookMetadataHashStats with_hash: %w", err)
+	}
+	stats.MissingMetadataHash = stats.TotalBooks - stats.WithMetadataHash
+
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM books
+		 WHERE COALESCE(marked_for_deletion, 0) = 0
+		   AND (
+		     (asin IS NOT NULL AND asin != '') OR
+		     (isbn13 IS NOT NULL AND isbn13 != '') OR
+		     (isbn10 IS NOT NULL AND isbn10 != '')
+		   )`,
+	).Scan(&stats.WithASINOrISBN); err != nil {
+		return nil, fmt.Errorf("GetBookMetadataHashStats with_id: %w", err)
+	}
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM books
+		 WHERE COALESCE(marked_for_deletion, 0) = 0
+		   AND (metadata_source_hash IS NULL OR metadata_source_hash = '')
+		   AND (
+		     (asin IS NOT NULL AND asin != '') OR
+		     (isbn13 IS NOT NULL AND isbn13 != '') OR
+		     (isbn10 IS NOT NULL AND isbn10 != '')
+		   )`,
+	).Scan(&stats.MissingHashHasID); err != nil {
+		return nil, fmt.Errorf("GetBookMetadataHashStats missing_hash_has_id: %w", err)
+	}
+
+	libRows, lerr := s.db.Query(`
+		SELECT DISTINCT COALESCE(source_import_path, '') AS lib
+		FROM books
+		WHERE COALESCE(marked_for_deletion, 0) = 0
+		  AND COALESCE(source_import_path, '') != ''
+		ORDER BY lib`)
+	if lerr == nil {
+		defer libRows.Close()
+		for libRows.Next() {
+			var lib string
+			if scanErr := libRows.Scan(&lib); scanErr != nil || lib == "" {
+				continue
+			}
+			prefix := strings.TrimSuffix(lib, "/") + "/"
+			var row BookMetadataHashStatsByLib
+			row.Path = lib
+			_ = s.db.QueryRow(
+				`SELECT COUNT(*) FROM books
+				 WHERE COALESCE(marked_for_deletion,0)=0 AND source_import_path = ?`, lib,
+			).Scan(&row.TotalBooks)
+			_ = s.db.QueryRow(
+				`SELECT COUNT(*) FROM books
+				 WHERE COALESCE(marked_for_deletion,0)=0 AND source_import_path = ?
+				   AND metadata_source_hash IS NOT NULL AND metadata_source_hash != ''`, lib,
+			).Scan(&row.WithMetadataHash)
+			row.MissingMetadataHash = row.TotalBooks - row.WithMetadataHash
+			_ = s.db.QueryRow(
+				`SELECT COUNT(*) FROM books
+				 WHERE COALESCE(marked_for_deletion,0)=0 AND source_import_path = ?
+				   AND (metadata_source_hash IS NULL OR metadata_source_hash = '')
+				   AND ((asin IS NOT NULL AND asin != '') OR
+				        (isbn13 IS NOT NULL AND isbn13 != '') OR
+				        (isbn10 IS NOT NULL AND isbn10 != ''))`, lib,
+			).Scan(&row.MissingHashHasID)
+			_ = prefix // used for file-hash stats; not needed here
+			stats.ByLibrary = append(stats.ByLibrary, row)
+		}
+	}
+	return stats, nil
+}
+
 func (s *SQLiteStore) AddMetadataRejection(r MetadataRejection) error {
 	if r.ID == "" {
 		r.ID = ulid.Make().String()

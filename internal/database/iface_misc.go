@@ -150,9 +150,17 @@ type BookFileStore interface {
 	// multi-file dedup tally to match individual segment files across folders
 	// without assuming that whole-directory == same book.
 	GetBookBySegmentFileHash(hash string) (*Book, error)
+	// SetBookFileHash sets file_hash on a book_file row, mirroring what the
+	// scanner does on initial import. Also sets original_file_hash if it is
+	// currently empty. Used by the backfill handler to populate hashes for
+	// files that were imported before hash tracking was added.
+	SetBookFileHash(id, hash string) error
 	// GetBookFileHashStats returns aggregate hash-coverage statistics for all
 	// book_files in the library, including a per-library-path breakdown.
 	GetBookFileHashStats() (*BookFileHashStats, error)
+	// GetBookMetadataHashStats returns aggregate metadata_source_hash coverage
+	// across all books, including a per-library-path breakdown.
+	GetBookMetadataHashStats() (*BookMetadataHashStats, error)
 }
 
 // BookSegmentStore covers the deprecated segment surface, kept until
