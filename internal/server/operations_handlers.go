@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -29,11 +30,11 @@ import (
 
 func (s *Server) startScan(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -47,7 +48,7 @@ func (s *Server) startScan(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := s.Store().CreateOperation(id, "scan", req.FolderPath)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -70,20 +71,20 @@ func (s *Server) startScan(c *gin.Context) {
 
 	// Enqueue the operation
 	if err := s.queue.Enqueue(op.ID, "scan", priority, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) startOrganize(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -99,7 +100,7 @@ func (s *Server) startOrganize(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := s.Store().CreateOperation(id, "organize", req.FolderPath)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -125,20 +126,20 @@ func (s *Server) startOrganize(c *gin.Context) {
 
 	// Enqueue the operation
 	if err := s.queue.Enqueue(op.ID, "organize", priority, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) startTranscode(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -149,20 +150,20 @@ func (s *Server) startTranscode(c *gin.Context) {
 		KeepOriginal *bool  `json:"keep_original"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.BookID == "" {
-		RespondWithBadRequest(c, "book_id is required")
+		httputil.RespondWithBadRequest(c, "book_id is required")
 		return
 	}
 
 	// Verify the book exists
 	if _, err := s.Store().GetBookByID(req.BookID); err != nil {
-		RespondWithNotFound(c, "book", req.BookID)
+		httputil.RespondWithNotFound(c, "book", req.BookID)
 		return
 	}
 
 	id := ulid.Make().String()
 	op, err := s.Store().CreateOperation(id, "transcode", nil)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -284,30 +285,30 @@ func (s *Server) startTranscode(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(op.ID, "transcode", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) getOperationStatus(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	op, err := s.Store().GetOperationByID(id)
 	if err != nil || op == nil {
-		RespondWithNotFound(c, "operation", id)
+		httputil.RespondWithNotFound(c, "operation", id)
 		return
 	}
-	RespondWithOK(c, op)
+	httputil.RespondWithOK(c, op)
 }
 
 func (s *Server) cancelOperation(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -321,7 +322,7 @@ func (s *Server) cancelOperation(c *gin.Context) {
 				if err := s.pipelineManager.CancelScan(scan.ID); err != nil {
 					log.Printf("[cancelOperation] AI scan %d cancel warning: %v", scan.ID, err)
 				}
-				RespondWithNoContent(c)
+				httputil.RespondWithNoContent(c)
 				return
 			}
 		}
@@ -330,29 +331,29 @@ func (s *Server) cancelOperation(c *gin.Context) {
 	// Try cancel via queue (for running queue operations)
 	if s.queue != nil {
 		if err := s.queue.Cancel(id); err == nil {
-			RespondWithNoContent(c)
+			httputil.RespondWithNoContent(c)
 			return
 		}
 	}
 
 	// Fallback: force-update DB status (e.g., stale after restart)
 	if dbErr := s.Store().UpdateOperationStatus(id, "canceled", 0, 0, "force canceled (stale operation)"); dbErr != nil {
-		internalError(c, "failed to cancel operation", dbErr)
+		httputil.InternalError(c, "failed to cancel operation", dbErr)
 		return
 	}
-	RespondWithNoContent(c)
+	httputil.RespondWithNoContent(c)
 }
 
 // clearStaleOperations force-marks all pending/running/queued operations as failed.
 func (s *Server) clearStaleOperations(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	ops, err := s.Store().GetRecentOperations(500)
 	if err != nil {
-		internalError(c, "failed to get operations", err)
+		httputil.InternalError(c, "failed to get operations", err)
 		return
 	}
 
@@ -364,20 +365,20 @@ func (s *Server) clearStaleOperations(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, gin.H{"cleared": cleared})
+	httputil.RespondWithOK(c, gin.H{"cleared": cleared})
 }
 
 // deleteOperationHistory deletes operations matching the given status(es).
 // Query param: ?status=completed or ?status=failed or ?status=completed,failed
 func (s *Server) deleteOperationHistory(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	statusParam := c.Query("status")
 	if statusParam == "" {
-		RespondWithBadRequest(c, "status parameter required")
+		httputil.RespondWithBadRequest(c, "status parameter required")
 		return
 	}
 
@@ -386,30 +387,30 @@ func (s *Server) deleteOperationHistory(c *gin.Context) {
 	allowed := map[string]bool{"completed": true, "failed": true, "canceled": true}
 	for _, s := range statuses {
 		if !allowed[s] {
-			RespondWithBadRequest(c, fmt.Sprintf("cannot delete operations with status %q", s))
+			httputil.RespondWithBadRequest(c, fmt.Sprintf("cannot delete operations with status %q", s))
 			return
 		}
 	}
 
 	deleted, err := s.Store().DeleteOperationsByStatus(statuses)
 	if err != nil {
-		internalError(c, "failed to delete operations", err)
+		httputil.InternalError(c, "failed to delete operations", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{"deleted": deleted})
+	httputil.RespondWithOK(c, gin.H{"deleted": deleted})
 }
 
 // optimizeDatabase splits &-delimited author/narrator strings and re-extracts empty media info.
 func (s *Server) optimizeDatabase(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	books, err := s.Store().GetAllBooks(10000, 0)
 	if err != nil {
-		internalError(c, "failed to get audiobooks", err)
+		httputil.InternalError(c, "failed to get audiobooks", err)
 		return
 	}
 
@@ -472,7 +473,7 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"books_processed": len(books),
 		"authors_split":   authorsSplit,
 		"narrators_split": narratorsSplit,
@@ -481,15 +482,15 @@ func (s *Server) optimizeDatabase(c *gin.Context) {
 
 func (s *Server) sweepTombstones(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	result, err := SweepTombstones(s.Store())
 	if err != nil {
-		internalError(c, "failed to sweep tombstones", err)
+		httputil.InternalError(c, "failed to sweep tombstones", err)
 		return
 	}
-	RespondWithOK(c, result)
+	httputil.RespondWithOK(c, result)
 }
 
 // setInternalFlag sets an arbitrary internal settings flag in PebbleDB.
@@ -500,56 +501,56 @@ func (s *Server) setInternalFlag(c *gin.Context) {
 		Value string `json:"value"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if err := s.Store().SetSetting(req.Key, req.Value, "string", false); err != nil {
-		internalError(c, "failed to set flag", err)
+		httputil.InternalError(c, "failed to set flag", err)
 		return
 	}
 	log.Printf("[INFO] setInternalFlag: %s = %q", req.Key, req.Value)
-	RespondWithOK(c, gin.H{"key": req.Key, "value": req.Value})
+	httputil.RespondWithOK(c, gin.H{"key": req.Key, "value": req.Value})
 }
 
 func (s *Server) auditFileConsistency(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	result, err := AuditFileConsistency(s.Store())
 	if err != nil {
-		internalError(c, "failed to audit file consistency", err)
+		httputil.InternalError(c, "failed to audit file consistency", err)
 		return
 	}
-	RespondWithOK(c, result)
+	httputil.RespondWithOK(c, result)
 }
 
 // listActiveOperations returns a snapshot of currently queued/running operations with basic progress
 func (s *Server) listOperations(c *gin.Context) {
-	params := ParsePaginationParams(c)
+	params := httputil.ParsePaginationParams(c)
 	store := s.Store()
 	if store == nil {
-		RespondWithOK(c, gin.H{"items": []database.Operation{}, "total": 0, "limit": params.Limit, "offset": params.Offset})
+		httputil.RespondWithOK(c, gin.H{"items": []database.Operation{}, "total": 0, "limit": params.Limit, "offset": params.Offset})
 		return
 	}
 	ops, total, err := store.ListOperations(params.Limit, params.Offset)
 	if err != nil {
-		internalError(c, "failed to list operations", err)
+		httputil.InternalError(c, "failed to list operations", err)
 		return
 	}
 	if ops == nil {
 		ops = []database.Operation{}
 	}
-	RespondWithOK(c, gin.H{"items": ops, "total": total, "limit": params.Limit, "offset": params.Offset})
+	httputil.RespondWithOK(c, gin.H{"items": ops, "total": total, "limit": params.Limit, "offset": params.Offset})
 }
 
 func (s *Server) listActiveOperations(c *gin.Context) {
 	if s.queue == nil {
-		RespondWithOK(c, gin.H{"operations": []gin.H{}})
+		httputil.RespondWithOK(c, gin.H{"operations": []gin.H{}})
 		return
 	}
 	active := s.queue.ActiveOperations()
@@ -576,7 +577,7 @@ func (s *Server) listActiveOperations(c *gin.Context) {
 			"message":  message,
 		})
 	}
-	RespondWithOK(c, gin.H{"operations": results})
+	httputil.RespondWithOK(c, gin.H{"operations": results})
 }
 
 func (s *Server) listStaleOperations(c *gin.Context) {
@@ -592,10 +593,10 @@ func (s *Server) listStaleOperations(c *gin.Context) {
 
 	stale, err := s.collectStaleOperations(time.Duration(timeoutMinutes) * time.Minute)
 	if err != nil {
-		RespondWithInternalError(c, "failed to list stale operations")
+		httputil.RespondWithInternalError(c, "failed to list stale operations")
 		return
 	}
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"timeout_minutes": timeoutMinutes,
 		"count":           len(stale),
 		"operations":      stale,
@@ -605,13 +606,13 @@ func (s *Server) listStaleOperations(c *gin.Context) {
 // getOperationLogs returns logs for a given operation
 func (s *Server) getOperationLogs(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	logs, err := s.Store().GetOperationLogs(id)
 	if err != nil {
-		internalError(c, "failed to get operation logs", err)
+		httputil.InternalError(c, "failed to get operation logs", err)
 		return
 	}
 	// Optional tail parameter for last N log lines
@@ -620,7 +621,7 @@ func (s *Server) getOperationLogs(c *gin.Context) {
 			logs = logs[len(logs)-n:]
 		}
 	}
-	RespondWithOK(c, gin.H{"items": logs, "count": len(logs)})
+	httputil.RespondWithOK(c, gin.H{"items": logs, "count": len(logs)})
 }
 
 func (s *Server) getOperationResult(c *gin.Context) {
@@ -628,27 +629,27 @@ func (s *Server) getOperationResult(c *gin.Context) {
 	store := s.Store()
 	op, err := store.GetOperationByID(id)
 	if err != nil {
-		internalError(c, "failed to get operation", err)
+		httputil.InternalError(c, "failed to get operation", err)
 		return
 	}
 	if op == nil {
-		RespondWithNotFound(c, "operation", id)
+		httputil.RespondWithNotFound(c, "operation", id)
 		return
 	}
 
 	if op.ResultData == nil {
-		RespondWithOK(c, gin.H{"result_data": nil})
+		httputil.RespondWithOK(c, gin.H{"result_data": nil})
 		return
 	}
 
 	// Parse the JSON result data to return as structured JSON
 	var resultData json.RawMessage
 	if err := json.Unmarshal([]byte(*op.ResultData), &resultData); err != nil {
-		RespondWithOK(c, gin.H{"result_data": *op.ResultData})
+		httputil.RespondWithOK(c, gin.H{"result_data": *op.ResultData})
 		return
 	}
 
-	RespondWithOK(c, gin.H{"result_data": resultData})
+	httputil.RespondWithOK(c, gin.H{"result_data": resultData})
 }
 
 // getOperationChanges returns change tracking records for an operation.
@@ -656,10 +657,10 @@ func (s *Server) getOperationChanges(c *gin.Context) {
 	id := c.Param("id")
 	changes, err := s.Store().GetOperationChanges(id)
 	if err != nil {
-		internalError(c, "failed to get operation changes", err)
+		httputil.InternalError(c, "failed to get operation changes", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"changes": changes})
+	httputil.RespondWithOK(c, gin.H{"changes": changes})
 }
 
 // undoPreflightHandler checks for conflicts before executing an undo.
@@ -668,10 +669,10 @@ func (s *Server) undoPreflightHandler(c *gin.Context) {
 	id := c.Param("id")
 	report, err := PreflightUndoConflicts(s.Store(), id)
 	if err != nil {
-		internalError(c, "failed to check conflicts", err)
+		httputil.InternalError(c, "failed to check conflicts", err)
 		return
 	}
-	RespondWithOK(c, report)
+	httputil.RespondWithOK(c, report)
 }
 
 // revertOperation undoes all changes from a given operation.
@@ -679,38 +680,38 @@ func (s *Server) revertOperation(c *gin.Context) {
 	id := c.Param("id")
 	revertSvc := NewRevertService(s.Store())
 	if err := revertSvc.RevertOperation(id); err != nil {
-		internalError(c, "failed to revert operation", err)
+		httputil.InternalError(c, "failed to revert operation", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"message": "operation reverted successfully"})
+	httputil.RespondWithOK(c, gin.H{"message": "operation reverted successfully"})
 }
 
 // listTasks returns all registered tasks with their status and schedule.
 func (s *Server) listTasks(c *gin.Context) {
 	if s.scheduler == nil {
-		RespondWithInternalError(c, "scheduler not initialized")
+		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
-	RespondWithOK(c, s.scheduler.ListTasks())
+	httputil.RespondWithOK(c, s.scheduler.ListTasks())
 }
 
 // runTask triggers a task by name.
 func (s *Server) runTask(c *gin.Context) {
 	if s.scheduler == nil {
-		RespondWithInternalError(c, "scheduler not initialized")
+		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
 	name := c.Param("name")
 	op, err := s.scheduler.RunTaskManual(name)
 	if err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if op == nil {
-		RespondWithSuccess(c, 202, gin.H{"message": "task triggered"})
+		httputil.RespondWithSuccess(c, 202, gin.H{"message": "task triggered"})
 		return
 	}
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // updateTaskConfig updates schedule config for a task.
@@ -724,7 +725,7 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		RunInMaintenanceWindow *bool `json:"run_in_maintenance_window"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -833,7 +834,7 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 			config.AppConfig.MaintenanceWindowLibraryOrganize = *req.RunInMaintenanceWindow
 		}
 	default:
-		RespondWithBadRequest(c, fmt.Sprintf("task %q config is not configurable", name))
+		httputil.RespondWithBadRequest(c, fmt.Sprintf("task %q config is not configurable", name))
 		return
 	}
 
@@ -844,31 +845,31 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, gin.H{"message": "task config updated"})
+	httputil.RespondWithOK(c, gin.H{"message": "task config updated"})
 }
 
 // runMaintenanceWindowNow triggers the full maintenance window sequence immediately.
 func (s *Server) runMaintenanceWindowNow(c *gin.Context) {
 	if s.scheduler == nil {
-		RespondWithInternalError(c, "scheduler not initialized")
+		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
 	ctx := context.WithValue(c.Request.Context(), ignoreWindowKey, true)
 	if err := s.scheduler.RunMaintenanceWindow(ctx); err != nil {
-		internalError(c, "failed to run maintenance", err)
+		httputil.InternalError(c, "failed to run maintenance", err)
 		return
 	}
-	RespondWithSuccess(c, 202, gin.H{"message": "maintenance window triggered"})
+	httputil.RespondWithSuccess(c, 202, gin.H{"message": "maintenance window triggered"})
 }
 
 // getMaintenanceWindowStatus returns current schedule config and live running status.
 func (s *Server) getMaintenanceWindowStatus(c *gin.Context) {
 	if s.scheduler == nil {
-		RespondWithInternalError(c, "scheduler not initialized")
+		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
 	cfg := config.AppConfig
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"enabled":           cfg.MaintenanceWindowEnabled,
 		"window_start":      cfg.MaintenanceWindowStart,
 		"window_end":        cfg.MaintenanceWindowEnd,
@@ -898,11 +899,11 @@ type maintenanceWindowConfigReq struct {
 func (s *Server) updateMaintenanceWindowConfig(c *gin.Context) {
 	var req maintenanceWindowConfigReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if req.WindowStart < 0 || req.WindowStart > 23 || req.WindowEnd < 0 || req.WindowEnd > 23 {
-		RespondWithBadRequest(c, "window_start and window_end must be 0-23")
+		httputil.RespondWithBadRequest(c, "window_start and window_end must be 0-23")
 		return
 	}
 	config.AppConfig.MaintenanceWindowEnabled = req.Enabled
@@ -910,9 +911,9 @@ func (s *Server) updateMaintenanceWindowConfig(c *gin.Context) {
 	config.AppConfig.MaintenanceWindowEnd = req.WindowEnd
 	if s.Store() != nil {
 		if err := config.SaveConfigToDatabase(s.Store()); err != nil {
-			internalError(c, "failed to save maintenance window config", err)
+			httputil.InternalError(c, "failed to save maintenance window config", err)
 			return
 		}
 	}
-	RespondWithOK(c, gin.H{"ok": true})
+	httputil.RespondWithOK(c, gin.H{"ok": true})
 }
