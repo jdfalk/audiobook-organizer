@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 1.211.0
+// version: 1.212.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-03
+// last-edited: 2026-05-04
 
 package server
 
@@ -946,6 +946,9 @@ func NewServer(store database.Store) *Server {
 
 	// Inject the store into the maintenance package so jobs can access it.
 	maintenance.InjectStore(resolvedStore)
+	if server.writeBackBatcher != nil {
+		maintenance.InjectEnqueuer(server.writeBackBatcher)
+	}
 
 	// Initialize plugin event bus and registry
 	server.eventBus = plugin.NewEventBus()

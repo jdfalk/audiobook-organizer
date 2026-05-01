@@ -1,15 +1,22 @@
 // file: internal/maintenance/jobs/fix_version_groups.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: a1000004-0000-0000-0000-000000000004
-// last-edited: 2026-05-03
+// last-edited: 2026-05-04
 
 package jobs
 
 import (
-	"context"
+"context"
+"fmt"
+"os"
+"path/filepath"
+"regexp"
+"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+"github.com/jdfalk/audiobook-organizer/internal/database"
+"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+"github.com/oklog/ulid/v2"
 )
 
 func init() { maintenance.Register(&fixVersionGroupsJob{}) }
@@ -19,7 +26,287 @@ type fixVersionGroupsJob struct{}
 func (j *fixVersionGroupsJob) ID() string          { return "fix-version-groups" }
 func (j *fixVersionGroupsJob) Description() string { return "Fix and normalize version groups" }
 func (j *fixVersionGroupsJob) CanResume() bool     { return false }
-func (j *fixVersionGroupsJob) Run(_ context.Context, _ database.Store, reporter maintenance.ProgressReporter, _ bool) error {
-	reporter.Log("warn", "fix-version-groups: requires server services — use legacy /api/v1/maintenance/fix-version-groups route", nil)
-	return nil
+
+func (j *fixVersionGroupsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
+allBooks, err := store.GetAllBooks(0, 0)
+if err != nil {
+return fmt.Errorf("failed to list books: %w", err)
+}
+reporter.SetTotal(len(allBooks))
+
+// Phase 1: title mismatch within version groups
+groupMap := make(map[string][]database.Book)
+for i := range allBooks {
+b := &allBooks[i]
+if b.VersionGroupID == nil || *b.VersionGroupID == "" {
+continue
+}
+groupMap[*b.VersionGroupID] = append(groupMap[*b.VersionGroupID], *b)
+}
+
+var mismatchFixed, mismatchErrors int
+for groupID, books := range groupMap {
+select {
+case <-ctx.Done():
+return ctx.Err()
+default:
+}
+
+if len(books) < 2 {
+continue
+}
+
+cores := make([]vgBookCore, len(books))
+for i, b := range books {
+cores[i] = vgBookCore{book: b, core: vgExtractCoreTitle(b.Title)}
+}
+majorityCore := vgFindMajorityCore(cores)
+
+var outliers []database.Book
+for _, bc := range cores {
+if !vgCoreTitlesMatch(bc.core, majorityCore) {
+outliers = append(outliers, bc.book)
+}
+}
+
+if len(outliers) == 0 {
+continue
+}
+
+if !dryRun {
+if applyErr := vgUnlinkOutliers(store, outliers); applyErr != nil {
+reporter.Log("error", fmt.Sprintf("Failed to unlink outliers in group %s: %v", groupID, applyErr), nil)
+mismatchErrors++
+} else {
+mismatchFixed++
+}
+} else {
+mismatchFixed++
+}
+}
+
+// Phase 2: author-directory file_path detection
+var authorDirFixed, authorDirErrors int
+for i := range allBooks {
+select {
+case <-ctx.Done():
+return ctx.Err()
+default:
+}
+
+b := &allBooks[i]
+reporter.Increment()
+
+if b.FilePath == "" {
+continue
+}
+fi, statErr := os.Stat(b.FilePath)
+if statErr != nil || !fi.IsDir() {
+continue
+}
+if !vgIsAuthorDirectory(b.FilePath) {
+continue
+}
+
+suggested := vgBestMatchSubdir(b.FilePath, b.Title)
+if !dryRun && suggested != "" {
+if fixErr := vgFixAuthorDirPath(store, b, suggested); fixErr != nil {
+reporter.Log("error", fmt.Sprintf("Failed to fix author-dir path for book %s: %v", b.ID, fixErr), nil)
+authorDirErrors++
+} else {
+authorDirFixed++
+}
+} else if suggested != "" {
+authorDirFixed++
+}
+}
+
+reporter.Log("info", fmt.Sprintf("Done: mismatch_fixed=%d mismatch_errors=%d author_dir_fixed=%d author_dir_errors=%d dryRun=%v",
+mismatchFixed, mismatchErrors, authorDirFixed, authorDirErrors, dryRun), nil)
+return nil
+}
+
+type vgBookCore struct {
+book database.Book
+core string
+}
+
+var vgParentheticalRE = regexp.MustCompile(`\s*\([^)]*\)\s*$`)
+var vgLeadingNumberRE = regexp.MustCompile(`^\d+[\s.\-–]+`)
+
+func vgExtractCoreTitle(title string) string {
+s := title
+for {
+trimmed := vgParentheticalRE.ReplaceAllString(s, "")
+if trimmed == s {
+break
+}
+s = strings.TrimSpace(trimmed)
+}
+s = vgLeadingNumberRE.ReplaceAllString(s, "")
+return strings.TrimSpace(s)
+}
+
+func vgFindMajorityCore(cores []vgBookCore) string {
+counts := make(map[string]int)
+for _, bc := range cores {
+counts[bc.core]++
+}
+best := ""
+bestCount := 0
+for core, count := range counts {
+if count > bestCount {
+bestCount = count
+best = core
+}
+}
+return best
+}
+
+func vgCoreTitlesMatch(a, b string) bool {
+aLow := strings.ToLower(a)
+bLow := strings.ToLower(b)
+if aLow == bLow {
+return true
+}
+if strings.Contains(aLow, bLow) || strings.Contains(bLow, aLow) {
+return true
+}
+aWords := vgLongWords(aLow)
+bWords := vgLongWords(bLow)
+for w := range aWords {
+if bWords[w] {
+return true
+}
+}
+return false
+}
+
+func vgLongWords(s string) map[string]bool {
+set := make(map[string]bool)
+for _, w := range strings.Fields(s) {
+w = strings.Trim(w, ".,;:!?\"'")
+if len([]rune(w)) >= 4 {
+set[w] = true
+}
+}
+return set
+}
+
+func vgUnlinkOutliers(store database.Store, outliers []database.Book) error {
+for _, ob := range outliers {
+current, err := store.GetBookByID(ob.ID)
+if err != nil {
+return fmt.Errorf("GetBookByID(%s): %w", ob.ID, err)
+}
+if current == nil {
+return fmt.Errorf("book %s not found", ob.ID)
+}
+newGroupID := ulid.Make().String()
+current.VersionGroupID = &newGroupID
+if _, err = store.UpdateBook(ob.ID, current); err != nil {
+return fmt.Errorf("UpdateBook(%s): %w", ob.ID, err)
+}
+}
+return nil
+}
+
+func vgIsAuthorDirectory(dir string) bool {
+entries, err := os.ReadDir(dir)
+if err != nil {
+return false
+}
+bookSubdirs := 0
+for _, e := range entries {
+if !e.IsDir() {
+continue
+}
+subPath := filepath.Join(dir, e.Name())
+if len(metafetch.AudioFilesInDir(subPath)) > 0 {
+bookSubdirs++
+if bookSubdirs >= 2 {
+return true
+}
+}
+}
+return false
+}
+
+func vgBestMatchSubdir(parent, title string) string {
+entries, err := os.ReadDir(parent)
+if err != nil {
+return ""
+}
+titleWords := vgLongWords(strings.ToLower(vgExtractCoreTitle(title)))
+bestPath := ""
+bestScore := 0
+for _, e := range entries {
+if !e.IsDir() {
+continue
+}
+sub := filepath.Join(parent, e.Name())
+if len(metafetch.AudioFilesInDir(sub)) == 0 {
+continue
+}
+dirWords := vgLongWords(strings.ToLower(e.Name()))
+score := 0
+for w := range titleWords {
+if dirWords[w] {
+score++
+}
+}
+if score > bestScore {
+bestScore = score
+bestPath = sub
+}
+}
+if bestScore == 0 {
+return ""
+}
+return bestPath
+}
+
+func vgFixAuthorDirPath(store database.Store, book *database.Book, subdir string) error {
+current, err := store.GetBookByID(book.ID)
+if err != nil {
+return fmt.Errorf("GetBookByID: %w", err)
+}
+if current == nil {
+return fmt.Errorf("book %s not found", book.ID)
+}
+current.FilePath = subdir
+if _, err = store.UpdateBook(book.ID, current); err != nil {
+return fmt.Errorf("UpdateBook: %w", err)
+}
+if err = store.DeleteBookFilesForBook(book.ID); err != nil {
+return fmt.Errorf("DeleteBookFilesForBook: %w", err)
+}
+newFiles := metafetch.AudioFilesInDir(subdir)
+if len(newFiles) == 0 {
+return nil
+}
+return vgCreateBookFiles(store, current, newFiles)
+}
+
+func vgCreateBookFiles(store database.Store, book *database.Book, filePaths []string) error {
+for _, fp := range filePaths {
+ext := strings.ToLower(filepath.Ext(fp))
+format := strings.TrimPrefix(ext, ".")
+var fileSize int64
+if info, err := os.Stat(fp); err == nil {
+fileSize = info.Size()
+}
+bf := &database.BookFile{
+ID:               ulid.Make().String(),
+BookID:           book.ID,
+FilePath:         fp,
+OriginalFilename: filepath.Base(fp),
+Format:           format,
+FileSize:         fileSize,
+}
+if err := store.CreateBookFile(bf); err != nil {
+return fmt.Errorf("CreateBookFile(%q): %w", fp, err)
+}
+}
+return nil
 }

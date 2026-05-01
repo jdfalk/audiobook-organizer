@@ -1,7 +1,7 @@
 // file: internal/maintenance/job.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 11111111-1111-1111-1111-111111111111
-// last-edited: 2026-05-03
+// last-edited: 2026-05-04
 
 package maintenance
 
@@ -31,6 +31,18 @@ type ProgressReporter interface {
 	SetTotal(n int)
 	Increment()
 	Log(level, message string, details *string)
+}
+
+// WriteBackEnqueuer is the narrow interface jobs use for iTunes write-back.
+// Satisfied by *itunesservice.WriteBackBatcher.
+type WriteBackEnqueuer interface {
+	Enqueue(bookID string)
+	EnqueueRemove(pid string)
+}
+
+// EnqueuerInjectable is implemented by jobs that need the write-back enqueuer.
+type EnqueuerInjectable interface {
+	InjectEnqueuer(e WriteBackEnqueuer)
 }
 
 // MaintenanceJob is the interface that every maintenance job must satisfy.
