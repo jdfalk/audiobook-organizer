@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.37.0
+// version: 1.38.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-04-30
 
@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -182,19 +183,23 @@ func ScanDirectoryParallel(rootDir string, workers int, scanLog logger.Logger) (
 		return true
 	}
 
-	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if path == rootDir {
 				return err
 			}
 			return nil
 		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
 		if info.Mode()&os.ModeSymlink != 0 {
 			_ = registerDirectory(path, info)
 			return nil
 		}
-		if info.IsDir() {
-			if info.Name() == ".failed" {
+		if d.IsDir() {
+			if d.Name() == ".failed" {
 				return filepath.SkipDir
 			}
 			if !registerDirectory(path, info) {
