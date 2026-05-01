@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/fix_author_narrator_swap.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1000003-0000-0000-0000-000000000003
-// last-edited: 2026-05-04
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -19,6 +19,9 @@ func init() { maintenance.Register(&fixAuthorNarratorSwapJob{}) }
 type fixAuthorNarratorSwapJob struct{}
 
 func (j *fixAuthorNarratorSwapJob) ID() string          { return "fix-author-narrator-swap" }
+func (j *fixAuthorNarratorSwapJob) Name() string     { return "Fix Author/Narrator Swap" }
+func (j *fixAuthorNarratorSwapJob) Category() string { return "library" }
+func (j *fixAuthorNarratorSwapJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *fixAuthorNarratorSwapJob) Description() string {
 return "Fix books where author and narrator fields are swapped"
 }

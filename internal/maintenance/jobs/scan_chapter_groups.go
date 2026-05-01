@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/scan_chapter_groups.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1000019-0000-0000-0000-000000000019
-// last-edited: 2026-05-03
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -19,6 +19,9 @@ func init() { maintenance.Register(&scanChapterGroupsJob{}) }
 type scanChapterGroupsJob struct{}
 
 func (j *scanChapterGroupsJob) ID() string          { return "scan-chapter-groups" }
+func (j *scanChapterGroupsJob) Name() string     { return "Scan Chapter Groups" }
+func (j *scanChapterGroupsJob) Category() string { return "files" }
+func (j *scanChapterGroupsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
 func (j *scanChapterGroupsJob) Description() string { return "Report books that look like multi-chapter parts of the same audiobook" }
 func (j *scanChapterGroupsJob) CanResume() bool     { return false }
 func (j *scanChapterGroupsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, _ bool) error {

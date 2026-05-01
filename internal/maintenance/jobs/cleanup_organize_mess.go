@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/cleanup_organize_mess.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1000007-0000-0000-0000-000000000007
-// last-edited: 2026-05-04
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -25,6 +25,9 @@ func init() { maintenance.Register(&cleanupOrganizeMess{}) }
 type cleanupOrganizeMess struct{}
 
 func (j *cleanupOrganizeMess) ID() string          { return "cleanup-organize-mess" }
+func (j *cleanupOrganizeMess) Name() string     { return "Cleanup Organize Mess" }
+func (j *cleanupOrganizeMess) Category() string { return "cleanup" }
+func (j *cleanupOrganizeMess) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *cleanupOrganizeMess) Description() string {
 return "Clean up leftover organize artifacts and garbage directories"
 }

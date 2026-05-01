@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/relink_report.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1000022-0000-0000-0000-000000000022
-// last-edited: 2026-05-04
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -25,6 +25,9 @@ func init() { maintenance.Register(&relinkReportJob{}) }
 type relinkReportJob struct{}
 
 func (j *relinkReportJob) ID() string          { return "relink-report" }
+func (j *relinkReportJob) Name() string     { return "Relink Report" }
+func (j *relinkReportJob) Category() string { return "itunes" }
+func (j *relinkReportJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
 func (j *relinkReportJob) Description() string { return "Report missing iTunes-linked files that may be relinkable" }
 func (j *relinkReportJob) CanResume() bool     { return false }
 
