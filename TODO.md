@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 7.0.0 -->
+<!-- version: 8.0.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-01 -->
 
@@ -139,6 +139,32 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
   → [`2026-04-30-fe-9-localstorage-keys.md`](docs/superpowers/bot-tasks/2026-04-30-fe-9-localstorage-keys.md)
 - [ ] **FE-10** `chore/frontend-coverage-thresholds` — Add Vitest coverage thresholds
   → [`2026-04-30-fe-10-coverage.md`](docs/superpowers/bot-tasks/2026-04-30-fe-10-coverage.md)
+
+### STRUCT — Structural Refactors — 2026-05-01 (10 tasks)
+
+Full audit at [`docs/audits/2026-05-01-structure-audit.md`](docs/audits/2026-05-01-structure-audit.md).
+Bot-tasks at [`docs/superpowers/bot-tasks/2026-05-01-struct-*.md`](docs/superpowers/bot-tasks/).
+
+- [ ] **STRUCT-1** `refactor/struct-1-server-response-helpers` — Adopt existing RespondWith* helpers for 61 direct c.JSON calls
+  → [`2026-05-01-struct-1-server-response-helpers.md`](docs/superpowers/bot-tasks/2026-05-01-struct-1-server-response-helpers.md)
+- [ ] **STRUCT-2** `refactor/struct-2-pagination-helper` — Consolidate 7+ duplicate pagination parsers into shared paginationFromQuery
+  → [`2026-05-01-struct-2-pagination-helper.md`](docs/superpowers/bot-tasks/2026-05-01-struct-2-pagination-helper.md)
+- [ ] **STRUCT-3** `refactor/struct-3-maintenance-fixups-split` — Split 6400-line maintenance_fixups.go into 8 domain files
+  → [`2026-05-01-struct-3-maintenance-fixups-split.md`](docs/superpowers/bot-tasks/2026-05-01-struct-3-maintenance-fixups-split.md)
+- [ ] **STRUCT-4** `refactor/struct-4-metafetch-service-split` — Split 3932-line metafetch/service.go into 8 domain files
+  → [`2026-05-01-struct-4-metafetch-service-split.md`](docs/superpowers/bot-tasks/2026-05-01-struct-4-metafetch-service-split.md)
+- [ ] **STRUCT-5** `refactor/struct-5-ai-retry-helper` — Extract shared withRetry helper from 4 identical AI retry loops
+  → [`2026-05-01-struct-5-ai-retry-helper.md`](docs/superpowers/bot-tasks/2026-05-01-struct-5-ai-retry-helper.md)
+- [ ] **STRUCT-6** `refactor/struct-6-sqlite-store-split` — Split 6976-line sqlite_store.go into 7 domain files
+  → [`2026-05-01-struct-6-sqlite-store-split.md`](docs/superpowers/bot-tasks/2026-05-01-struct-6-sqlite-store-split.md)
+- [ ] **STRUCT-7** `refactor/struct-7-server-go-split` — Split 3401-line server.go into 6 responsibility files
+  → [`2026-05-01-struct-7-server-go-split.md`](docs/superpowers/bot-tasks/2026-05-01-struct-7-server-go-split.md)
+- [ ] **STRUCT-8** `refactor/struct-8-use-async-action-hook` — Extract useAsyncAction hook from 148 setLoading patterns in frontend
+  → [`2026-05-01-struct-8-use-async-action-hook.md`](docs/superpowers/bot-tasks/2026-05-01-struct-8-use-async-action-hook.md)
+- [ ] **STRUCT-9** `refactor/struct-9-frontend-component-splits` — Split Library.tsx (2900 lines) and BookDedup.tsx (2100 lines) into sub-components
+  → [`2026-05-01-struct-9-frontend-component-splits.md`](docs/superpowers/bot-tasks/2026-05-01-struct-9-frontend-component-splits.md)
+- [ ] **STRUCT-10** `refactor/struct-10-narrow-server-interfaces` — Narrow *Server receivers with small local interfaces in 5 handler groups
+  → [`2026-05-01-struct-10-narrow-server-interfaces.md`](docs/superpowers/bot-tasks/2026-05-01-struct-10-narrow-server-interfaces.md)
 
 ---
 
