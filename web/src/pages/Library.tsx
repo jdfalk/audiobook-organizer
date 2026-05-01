@@ -1,7 +1,7 @@
 // file: web/src/pages/Library.tsx
-// version: 1.54.0
+// version: 1.55.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -55,6 +55,7 @@ import { FilterPanel } from '../components/FilterPanel';
 import { BookGrid } from '../components/BookGrid';
 import { BatchToolbar } from '../components/BatchToolbar';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
+import { LibrarySoftDeletedSection } from '../components/library/LibrarySoftDeletedSection';
 import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
 import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
 import { VersionManagement } from '../components/audiobooks/VersionManagement';
@@ -2368,110 +2369,19 @@ export const Library = () => {
           </Stack>
         )}
 
-        <Paper sx={{ p: 2, mt: 3 }}>
-          <Stack
-            direction="row"
-            alignItems="center"
-            justifyContent="space-between"
-            spacing={2}
-            sx={{ cursor: 'pointer' }}
-            onClick={() => setSoftDeletedExpanded(!softDeletedExpanded)}
-          >
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <ExpandMoreIcon
-                sx={{
-                  transform: softDeletedExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s',
-                }}
-              />
-              <Typography variant="h6">Soft-Deleted Books</Typography>
-            </Stack>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Chip
-                label={`${softDeletedCount} ${softDeletedCount === 1 ? 'item' : 'items'}`}
-                color={softDeletedCount > 0 ? 'warning' : 'default'}
-              />
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  loadSoftDeleted();
-                }}
-                disabled={softDeletedLoading}
-              >
-                {softDeletedLoading ? 'Refreshing...' : 'Refresh'}
-              </Button>
-            </Stack>
-          </Stack>
-          <Collapse in={softDeletedExpanded}>
-            {softDeletedLoading ? (
-              <Typography variant="body2" sx={{ mt: 2 }}>
-                Loading soft-deleted books...
-              </Typography>
-            ) : softDeletedBooks.length === 0 ? (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                No soft-deleted books at the moment.
-              </Alert>
-            ) : (
-              <List dense sx={{ mt: 1 }}>
-                {softDeletedBooks.map((book) => {
-                  const deletedAt =
-                    book.marked_for_deletion_at && new Date(book.marked_for_deletion_at);
-                  return (
-                    <ListItem key={book.id} alignItems="flex-start">
-                      <ListItemText
-                        primary={book.title || 'Untitled'}
-                        secondary={
-                          <Stack spacing={0.5}>
-                            <Typography variant="body2" color="text.secondary">
-                              {book.author || 'Unknown Author'}
-                            </Typography>
-                            {deletedAt && (
-                              <Typography variant="caption" color="text.secondary">
-                                Soft deleted at {deletedAt.toLocaleString()}
-                              </Typography>
-                            )}
-                            {book.file_path && (
-                              <Typography variant="caption" color="text.secondary">
-                                {book.file_path}
-                              </Typography>
-                            )}
-                          </Stack>
-                        }
-                      />
-                      <ListItemSecondaryAction>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          sx={{ mr: 1 }}
-                          onClick={() => handleRestoreOne(book)}
-                          disabled={
-                            restoringBookId === book.id ||
-                            purgeInProgress ||
-                            purgingBookId === book.id
-                          }
-                        >
-                          {restoringBookId === book.id ? 'Restoring...' : 'Restore'}
-                        </Button>
-                        <Button
-                          size="small"
-                          color="error"
-                          variant="outlined"
-                          onClick={() => handlePurgeOne(book)}
-                          disabled={purgingBookId === book.id || purgeInProgress}
-                        >
-                          {purgingBookId === book.id ? 'Purging...' : 'Purge now'}
-                        </Button>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  );
-                })}
-              </List>
-            )}
-          </Collapse>
-        </Paper>
+        <LibrarySoftDeletedSection
+          softDeletedCount={softDeletedCount}
+          softDeletedBooks={softDeletedBooks}
+          softDeletedLoading={softDeletedLoading}
+          softDeletedExpanded={softDeletedExpanded}
+          restoringBookId={restoringBookId}
+          purgeInProgress={purgeInProgress}
+          purgingBookId={purgingBookId}
+          onToggleExpanded={() => setSoftDeletedExpanded(!softDeletedExpanded)}
+          onRefresh={loadSoftDeleted}
+          onRestoreOne={handleRestoreOne}
+          onPurgeOne={handlePurgeOne}
+        />
 
         <FilterSidebar
           open={filterOpen}
