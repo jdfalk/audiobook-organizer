@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.69.0
+// version: 2.70.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 // last-edited: 2026-04-30
 
@@ -250,6 +250,38 @@ type Book struct {
 	Series               *Series                            `json:"series,omitempty" db:"-"`
 	MetadataProvenance   map[string]MetadataProvenanceEntry `json:"metadata_provenance,omitempty" db:"-"`
 	MetadataProvenanceAt *time.Time                         `json:"metadata_provenance_at,omitempty" db:"-"`
+}
+
+// BookSummary represents the subset of Book fields needed for library list views.
+// It excludes heavy fields like full descriptions, raw cover bytes, and embeddings.
+// This struct is designed for use in paginated list queries to improve performance
+// by avoiding unnecessary data transfer. Companion field to Book for read-only
+// projection use cases (PROJ-2 SQL query optimization).
+type BookSummary struct {
+	ID                  string     `json:"id"`
+	Title               string     `json:"title"`
+	AuthorID            *int       `json:"author_id,omitempty"`
+	SeriesID            *int       `json:"series_id,omitempty"`
+	SeriesSequence      *int       `json:"series_sequence,omitempty"`
+	FilePath            string     `json:"file_path"`
+	Format              string     `json:"format,omitempty"`
+	Duration            *int       `json:"duration,omitempty"`
+	OriginalFilename    *string    `json:"original_filename,omitempty"`
+	FileSize            *int64     `json:"file_size,omitempty"`
+	FileHash            *string    `json:"file_hash,omitempty"`
+	OriginalFileHash    *string    `json:"original_file_hash,omitempty"`
+	OrganizedFileHash   *string    `json:"organized_file_hash,omitempty"`
+	LibraryState        *string    `json:"library_state,omitempty"`
+	QuarantinedAt       *time.Time `json:"quarantined_at,omitempty"`
+	QuarantineReason    *string    `json:"quarantine_reason,omitempty"`
+	CoverURL            *string    `json:"cover_url,omitempty"`
+	Narrator            *string    `json:"narrator,omitempty"`
+	CreatedAt           *time.Time `json:"created_at,omitempty"`
+	UpdatedAt           *time.Time `json:"updated_at,omitempty"`
+	MetadataUpdatedAt   *time.Time `json:"metadata_updated_at,omitempty"`
+	IsPrimaryVersion    *bool      `json:"is_primary_version,omitempty"`
+	VersionGroupID      *string    `json:"version_group_id,omitempty"`
+	MetadataReviewStatus *string   `json:"metadata_review_status,omitempty"`
 }
 
 // MetadataProvenanceEntry represents the source breakdown for a metadata field.
