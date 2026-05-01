@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.65.0
+// version: 1.66.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-04-30
 
@@ -8244,4 +8244,15 @@ func (p *PebbleStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error)
 		stats.ByLibrary = append(stats.ByLibrary, *row)
 	}
 	return stats, nil
+}
+// GetAuthorsByBookIDs returns a map from bookID → []Author for all given book IDs.
+// TODO: Implement in N1-3
+func (p *PebbleStore) GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Author, error) {
+panic("not implemented")
+}
+
+// GetNarratorsByBookIDs returns a map from bookID → []Narrator for all given book IDs.
+// TODO: Implement in N1-3
+func (p *PebbleStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Narrator, error) {
+panic("not implemented")
 }

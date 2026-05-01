@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	"context"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -43852,4 +43853,22 @@ func (_c *MockStore_UpsertMetadataFieldState_Call) Return(err error) *MockStore_
 func (_c *MockStore_UpsertMetadataFieldState_Call) RunAndReturn(run func(state *database.MetadataFieldState) error) *MockStore_UpsertMetadataFieldState_Call {
 	_c.Call.Return(run)
 	return _c
+}
+
+// GetAuthorsByBookIDs provides a mock function for the type MockStore
+func (_mock *MockStore) GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]database.Author, error) {
+args := _mock.Called(ctx, bookIDs)
+if args.Get(0) == nil {
+return nil, args.Error(1)
+}
+return args.Get(0).(map[string][]database.Author), args.Error(1)
+}
+
+// GetNarratorsByBookIDs provides a mock function for the type MockStore
+func (_mock *MockStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]database.Narrator, error) {
+args := _mock.Called(ctx, bookIDs)
+if args.Get(0) == nil {
+return nil, args.Error(1)
+}
+return args.Get(0).(map[string][]database.Narrator), args.Error(1)
 }
