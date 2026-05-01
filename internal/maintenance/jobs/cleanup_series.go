@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/cleanup_series.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1000002-0000-0000-0000-000000000002
-// last-edited: 2026-05-04
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -21,6 +21,9 @@ func init() { maintenance.Register(&cleanupSeriesJob{}) }
 type cleanupSeriesJob struct{}
 
 func (j *cleanupSeriesJob) ID() string          { return "cleanup-series" }
+func (j *cleanupSeriesJob) Name() string     { return "Cleanup Series" }
+func (j *cleanupSeriesJob) Category() string { return "library" }
+func (j *cleanupSeriesJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *cleanupSeriesJob) Description() string { return "Remove 1-book series and merge duplicate series" }
 func (j *cleanupSeriesJob) CanResume() bool     { return false }
 

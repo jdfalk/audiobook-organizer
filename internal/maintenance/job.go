@@ -1,7 +1,7 @@
 // file: internal/maintenance/job.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 11111111-1111-1111-1111-111111111111
-// last-edited: 2026-05-04
+// last-edited: 2026-05-01
 
 package maintenance
 
@@ -47,9 +47,19 @@ type EnqueuerInjectable interface {
 
 // MaintenanceJob is the interface that every maintenance job must satisfy.
 type MaintenanceJob interface {
+	// ID returns the kebab-case identifier used in route paths and operation types.
 	ID() string
+	// Name returns the human-readable display name shown in the UI.
+	Name() string
+	// Description returns a one-sentence description of what the job does.
 	Description() string
+	// Category groups related jobs in the UI (e.g. "library", "files", "itunes", "dedup", "cleanup").
+	Category() string
+	// DefaultParams returns a struct with default parameter values (used by the frontend).
+	DefaultParams() any
+	// CanResume reports whether the job supports checkpoint-based resume after restart.
 	CanResume() bool
+	// Run executes the job. startFrom is the checkpoint index for resumable jobs (0 = fresh start).
 	Run(ctx context.Context, store database.Store, reporter ProgressReporter, dryRun bool) error
 }
 

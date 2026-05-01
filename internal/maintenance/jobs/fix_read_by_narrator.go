@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/fix_read_by_narrator.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1000001-0000-0000-0000-000000000001
-// last-edited: 2026-05-04
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -20,6 +20,9 @@ func init() { maintenance.Register(&fixReadByNarratorJob{}) }
 type fixReadByNarratorJob struct{}
 
 func (j *fixReadByNarratorJob) ID() string          { return "fix-read-by-narrator" }
+func (j *fixReadByNarratorJob) Name() string     { return "Fix Read-by Narrator" }
+func (j *fixReadByNarratorJob) Category() string { return "library" }
+func (j *fixReadByNarratorJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *fixReadByNarratorJob) Description() string {
 return "Fix books where title/author metadata is swapped (title starts with 'read by')"
 }

@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/scan_metadata_hash_dups.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1000017-0000-0000-0000-000000000017
-// last-edited: 2026-05-03
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -18,6 +18,9 @@ func init() { maintenance.Register(&scanMetadataHashDupsJob{}) }
 type scanMetadataHashDupsJob struct{}
 
 func (j *scanMetadataHashDupsJob) ID() string          { return "scan-metadata-hash-dups" }
+func (j *scanMetadataHashDupsJob) Name() string     { return "Scan Metadata Hash Dups" }
+func (j *scanMetadataHashDupsJob) Category() string { return "dedup" }
+func (j *scanMetadataHashDupsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
 func (j *scanMetadataHashDupsJob) Description() string { return "Scan for books sharing the same metadata source hash" }
 func (j *scanMetadataHashDupsJob) CanResume() bool     { return false }
 func (j *scanMetadataHashDupsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, _ bool) error {

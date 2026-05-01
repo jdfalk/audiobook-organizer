@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/fix_library_states.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1000008-0000-0000-0000-000000000008
-// last-edited: 2026-05-03
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -18,6 +18,9 @@ func init() { maintenance.Register(&fixLibraryStatesJob{}) }
 type fixLibraryStatesJob struct{}
 
 func (j *fixLibraryStatesJob) ID() string          { return "fix-library-states" }
+func (j *fixLibraryStatesJob) Name() string     { return "Fix Library States" }
+func (j *fixLibraryStatesJob) Category() string { return "library" }
+func (j *fixLibraryStatesJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
 func (j *fixLibraryStatesJob) Description() string { return "Reconcile library_state field based on filesystem presence" }
 func (j *fixLibraryStatesJob) CanResume() bool     { return false }
 func (j *fixLibraryStatesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {

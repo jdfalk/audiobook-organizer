@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/enrich_book_files.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1000009-0000-0000-0000-000000000009
-// last-edited: 2026-05-03
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -23,6 +23,9 @@ var trackNumRe = regexp.MustCompile(`^(\d+)[\s._\-]`)
 type enrichBookFilesJob struct{}
 
 func (j *enrichBookFilesJob) ID() string          { return "enrich-book-files" }
+func (j *enrichBookFilesJob) Name() string     { return "Enrich Book Files" }
+func (j *enrichBookFilesJob) Category() string { return "files" }
+func (j *enrichBookFilesJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
 func (j *enrichBookFilesJob) Description() string { return "Backfill track numbers for book_files from filenames" }
 func (j *enrichBookFilesJob) CanResume() bool     { return false }
 func (j *enrichBookFilesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
