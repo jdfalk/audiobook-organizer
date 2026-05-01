@@ -1,7 +1,7 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.1.1
+// version: 3.1.2
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
-//
+// last-edited: 2026-05-01
 // Metadata HTTP handlers split out of server.go: per-book fetch/
 // search/apply/revert/no-match, bulk fetch and bulk writeback, the
 // field-enumeration endpoint used by the editor, and the copy-on-
@@ -407,8 +407,8 @@ func (s *Server) listBookCOWVersions(c *gin.Context) {
 		RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	limit, _ := paginationFromQuery(c)
-	versions, err := s.Store().GetBookSnapshots(id, limit)
+	pg := ParsePaginationParams(c)
+	versions, err := s.Store().GetBookSnapshots(id, pg.Limit)
 	if err != nil {
 		internalError(c, "failed to list versions", err)
 		return

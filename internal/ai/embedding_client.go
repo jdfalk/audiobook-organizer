@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_client.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package ai
@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -176,19 +175,7 @@ func (c *EmbeddingClient) EmbedBatch(ctx context.Context, texts []string) ([][]f
 // EmbedBatch handles the cache partitioning around it. Split out
 // so the caching logic can call it with just the miss set.
 func (c *EmbeddingClient) embedBatchRaw(ctx context.Context, texts []string) ([][]float32, error) {
-	var lastErr error
-	delays := []time.Duration{1 * time.Second, 4 * time.Second}
-
-	for attempt := 0; attempt <= 2; attempt++ {
-		if attempt > 0 {
-			delay := delays[attempt-1]
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(delay):
-			}
-		}
-
+	return withRetry(ctx, 2, func() ([][]float32, error) {
 		resp, err := c.client.Embeddings.New(ctx, openai.EmbeddingNewParams{
 			Input: openai.EmbeddingNewParamsInputUnion{
 				OfArrayOfStrings: texts,
@@ -196,11 +183,8 @@ func (c *EmbeddingClient) embedBatchRaw(ctx context.Context, texts []string) ([]
 			Model: openai.EmbeddingModel(c.model),
 		})
 		if err != nil {
-			lastErr = fmt.Errorf("embedding attempt %d: %w", attempt+1, err)
-			continue
+			return nil, fmt.Errorf("embedding attempt: %w", err)
 		}
-
-		// Allocate result slice sized to number of returned embeddings
 		results := make([][]float32, len(resp.Data))
 		for _, item := range resp.Data {
 			idx := int(item.Index)
@@ -214,9 +198,7 @@ func (c *EmbeddingClient) embedBatchRaw(ctx context.Context, texts []string) ([]
 			results[idx] = f32
 		}
 		return results, nil
-	}
-
-	return nil, lastErr
+	})
 }
 
 // EmbedOne is a convenience wrapper that embeds a single text string.

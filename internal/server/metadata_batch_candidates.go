@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.8.2
+// version: 1.8.3
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-05-01
 
@@ -327,7 +327,8 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 		return
 	}
 
-	limit, offset := paginationFromQuery(c)
+	pg := ParsePaginationParams(c)
+	limit, offset := pg.Limit, pg.Offset
 
 	store := s.Store()
 

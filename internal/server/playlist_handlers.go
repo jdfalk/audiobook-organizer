@@ -1,7 +1,7 @@
 // file: internal/server/playlist_handlers.go
-// version: 2.0.1
+// version: 2.0.2
 // guid: 7a3d5f2e-8c4b-4a70-b8c5-3d7e0f1b9a79
-//
+// last-edited: 2026-05-01
 // HTTP endpoints for user-created playlists (spec 3.4 task 3).
 // Supports:
 //   - Static playlists: user-curated ordered book lists
@@ -99,13 +99,13 @@ func (s *Server) handleListPlaylists(c *gin.Context) {
 		RespondWithBadRequest(c, "type must be static, smart, or empty")
 		return
 	}
-	limit, offset := paginationFromQuery(c)
-	lists, total, err := s.Store().ListUserPlaylists(plType, limit, offset)
+	pg := ParsePaginationParams(c)
+	lists, total, err := s.Store().ListUserPlaylists(plType, pg.Limit, pg.Offset)
 	if err != nil {
 		internalError(c, "failed to list playlists", err)
 		return
 	}
-	RespondWithList(c, lists, total, limit, offset)
+	RespondWithList(c, lists, total, pg.Limit, pg.Offset)
 }
 
 // handleGetPlaylist — GET /api/v1/playlists/:id

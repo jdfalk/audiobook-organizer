@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 13.2.0
+// version: 13.2.1
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -317,45 +317,28 @@ Set confidence based on clarity of the filename structure.`
 
 	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
 
-	var lastErr error
-	for attempt := 0; attempt <= p.maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(attempt*attempt) * 2 * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(backoff):
-			}
-		}
-
+	return withRetry(ctx, p.maxRetries, func() ([]*ParsedMetadata, error) {
 		completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(userPrompt),
 			},
-			Model:          shared.ChatModel(p.model),
+			Model:               shared.ChatModel(p.model),
 			MaxCompletionTokens: param.NewOpt[int64](2000),
-			PromptCacheKey: param.NewOpt("audiobook-batch-parser-v1"),
+			PromptCacheKey:      param.NewOpt("audiobook-batch-parser-v1"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
 		})
-
 		if err != nil {
-			lastErr = fmt.Errorf("OpenAI API call failed (attempt %d): %w", attempt+1, err)
-			continue
+			return nil, fmt.Errorf("OpenAI API call failed: %w", err)
 		}
-
 		if len(completion.Choices) == 0 {
-			lastErr = fmt.Errorf("no response from OpenAI (attempt %d)", attempt+1)
-			continue
+			return nil, fmt.Errorf("no response from OpenAI")
 		}
-
 		content := completion.Choices[0].Message.Content
 		return parseBatchMetadataFromJSON(content)
-	}
-
-	return nil, lastErr
+	})
 }
 
 // ParseCoverArt uses OpenAI vision to extract metadata from audiobook cover art.
@@ -532,17 +515,7 @@ The roles object fields are all optional — only include roles that are detecte
 
 	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
 
-	var lastErr error
-	for attempt := 0; attempt <= p.maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(attempt*attempt) * 2 * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(backoff):
-			}
-		}
-
+	return withRetry(ctx, p.maxRetries, func() ([]AuthorDedupSuggestion, error) {
 		completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(systemPrompt),
@@ -555,29 +528,21 @@ The roles object fields are all optional — only include roles that are detecte
 				OfJSONObject: &jsonObjectFormat,
 			},
 		})
-
 		if err != nil {
-			lastErr = fmt.Errorf("OpenAI API call failed (attempt %d): %w", attempt+1, err)
-			continue
+			return nil, fmt.Errorf("OpenAI API call failed: %w", err)
 		}
-
 		if len(completion.Choices) == 0 {
-			lastErr = fmt.Errorf("no response from OpenAI (attempt %d)", attempt+1)
-			continue
+			return nil, fmt.Errorf("no response from OpenAI")
 		}
-
 		content := completion.Choices[0].Message.Content
 		var result struct {
 			Suggestions []AuthorDedupSuggestion `json:"suggestions"`
 		}
 		if err := json.Unmarshal([]byte(content), &result); err != nil {
-			lastErr = fmt.Errorf("failed to parse response (attempt %d): %w", attempt+1, err)
-			continue
+			return nil, fmt.Errorf("failed to parse response: %w", err)
 		}
 		return result.Suggestions, nil
-	}
-
-	return nil, lastErr
+	})
 }
 
 // AuthorDiscoveryInput represents a single author for AI-driven duplicate discovery (Full mode).
@@ -666,17 +631,7 @@ The roles object fields are all optional — only include roles that are detecte
 
 	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
 
-	var lastErr error
-	for attempt := 0; attempt <= p.maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(attempt*attempt) * 2 * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(backoff):
-			}
-		}
-
+	return withRetry(ctx, p.maxRetries, func() ([]AuthorDiscoverySuggestion, error) {
 		completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(systemPrompt),
@@ -689,29 +644,21 @@ The roles object fields are all optional — only include roles that are detecte
 				OfJSONObject: &jsonObjectFormat,
 			},
 		})
-
 		if err != nil {
-			lastErr = fmt.Errorf("OpenAI API call failed (attempt %d): %w", attempt+1, err)
-			continue
+			return nil, fmt.Errorf("OpenAI API call failed: %w", err)
 		}
-
 		if len(completion.Choices) == 0 {
-			lastErr = fmt.Errorf("no response from OpenAI (attempt %d)", attempt+1)
-			continue
+			return nil, fmt.Errorf("no response from OpenAI")
 		}
-
 		content := completion.Choices[0].Message.Content
 		var result struct {
 			Suggestions []AuthorDiscoverySuggestion `json:"suggestions"`
 		}
 		if err := json.Unmarshal([]byte(content), &result); err != nil {
-			lastErr = fmt.Errorf("failed to parse response (attempt %d): %w", attempt+1, err)
-			continue
+			return nil, fmt.Errorf("failed to parse response: %w", err)
 		}
 		return result.Suggestions, nil
-	}
-
-	return nil, lastErr
+	})
 }
 
 // parseBatchMetadataFromJSON parses batch results from JSON.

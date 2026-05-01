@@ -1,6 +1,7 @@
 // file: internal/server/activity_handlers.go
-// version: 2.1.2
+// version: 2.1.3
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
+// last-edited: 2026-05-01
 
 package server
 
@@ -37,9 +38,9 @@ func (s *Server) listActivity(c *gin.Context) {
 
 	filter := database.ActivityFilter{}
 
-	limit, offset := paginationFromQuery(c)
-	filter.Limit = limit
-	filter.Offset = offset
+	pg := ParsePaginationParams(c)
+	filter.Limit = pg.Limit
+	filter.Offset = pg.Offset
 
 	filter.Type = c.Query("type")
 	filter.Tier = c.Query("tier")

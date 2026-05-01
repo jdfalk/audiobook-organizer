@@ -1,6 +1,7 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.0.1
+// version: 2.0.2
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
+// last-edited: 2026-05-01
 
 // iTunes HTTP handlers. All business logic lives in internal/itunes/service.
 // Handlers that call s.itunesSvc.Importer.* guard with itunesEnabledOrError
@@ -530,7 +531,8 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 	}
 
 	search := c.Query("search")
-	limit, offset := paginationFromQuery(c)
+	pg := ParsePaginationParams(c)
+	limit, offset := pg.Limit, pg.Offset
 
 	var allBooks []database.Book
 	var err error

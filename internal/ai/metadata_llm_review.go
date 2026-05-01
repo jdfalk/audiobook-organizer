@@ -1,5 +1,5 @@
 // file: internal/ai/metadata_llm_review.go
-// version: 3.0.0
+// version: 3.0.1
 // guid: e4f92b17-3c8a-4d65-a1f3-9b2e07d84c61
 
 package ai
@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/param"
@@ -139,17 +138,7 @@ Include one score per input candidate, using the same index as the input.`
 
 	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
 
-	var lastErr error
-	for attempt := 0; attempt <= p.maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(attempt*attempt) * 2 * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(backoff):
-			}
-		}
-
+	return withRetry(ctx, p.maxRetries, func() ([]MetadataLLMScore, error) {
 		completion, err := p.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(systemPrompt),
@@ -162,27 +151,19 @@ Include one score per input candidate, using the same index as the input.`
 				OfJSONObject: &jsonObjectFormat,
 			},
 		})
-
 		if err != nil {
-			lastErr = fmt.Errorf("OpenAI API call failed (attempt %d): %w", attempt+1, err)
-			continue
+			return nil, fmt.Errorf("OpenAI API call failed: %w", err)
 		}
-
 		if len(completion.Choices) == 0 {
-			lastErr = fmt.Errorf("no response from OpenAI (attempt %d)", attempt+1)
-			continue
+			return nil, fmt.Errorf("no response from OpenAI")
 		}
-
 		content := completion.Choices[0].Message.Content
 		var result struct {
 			Scores []MetadataLLMScore `json:"scores"`
 		}
 		if err := json.Unmarshal([]byte(content), &result); err != nil {
-			lastErr = fmt.Errorf("parse response (attempt %d): %w", attempt+1, err)
-			continue
+			return nil, fmt.Errorf("parse response: %w", err)
 		}
 		return result.Scores, nil
-	}
-
-	return nil, lastErr
+	})
 }

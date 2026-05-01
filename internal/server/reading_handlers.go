@@ -1,7 +1,7 @@
 // file: internal/server/reading_handlers.go
-// version: 1.1.1
+// version: 1.1.2
 // guid: 7f2c4a1d-5b8e-4f70-a9d6-2e8c0f1b9a57
-//
+// last-edited: 2026-05-01
 // HTTP endpoints for the per-user read/unread tracking system
 // (spec 3.6). All endpoints scope to the calling user from
 // auth.UserFromContext — users can only read/write their own
@@ -165,13 +165,13 @@ func (s *Server) handleListByStatus(c *gin.Context) {
 		RespondWithBadRequest(c, "invalid status")
 		return
 	}
-	limit, offset := paginationFromQuery(c)
-	list, err := s.Store().ListUserBookStatesByStatus(callingUserID(c), status, limit, offset)
+	pg := ParsePaginationParams(c)
+	list, err := s.Store().ListUserBookStatesByStatus(callingUserID(c), status, pg.Limit, pg.Offset)
 	if err != nil {
 		internalError(c, "failed to list states", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"states": list, "count": len(list), "limit": limit, "offset": offset})
+	RespondWithOK(c, gin.H{"states": list, "count": len(list), "limit": pg.Limit, "offset": pg.Offset})
 }
 
 // registerReadingRoutes wires the read/unread endpoints onto the
