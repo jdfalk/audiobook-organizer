@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.3.0
+// version: 3.4.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useEffect, useState } from 'react';
@@ -22,6 +22,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
 import ErrorIcon from '@mui/icons-material/Error.js';
 import CancelIcon from '@mui/icons-material/Cancel.js';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew.js';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty.js';
 import {
   useOperationsStore,
   type ActiveOperation,
@@ -188,6 +189,8 @@ export function OperationsIndicator() {
   const inProgress = activeOperations.filter(
     (op) => !['completed', 'failed', 'canceled'].includes(op.status)
   );
+  const queued = inProgress.filter((op) => op.status === 'queued');
+  const running = inProgress.filter((op) => op.status !== 'queued');
   const terminal = activeOperations.filter((op) =>
     ['completed', 'failed', 'canceled'].includes(op.status)
   );
@@ -264,8 +267,48 @@ export function OperationsIndicator() {
             </Typography>
           )}
 
-          {/* Active operations */}
-          {inProgress.map((op: ActiveOperation) => {
+          {/* Queued (pending) operations */}
+          {queued.length > 0 && (
+            <>
+              <Box sx={{ px: 2, pt: 1, pb: 0.25 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.08em' }}>
+                  Pending ({queued.length})
+                </Typography>
+              </Box>
+              {queued.map((op: ActiveOperation) => (
+                <Box key={op.id} sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' } }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <HourglassEmptyIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                    <Box>
+                      <Typography variant="body2" fontWeight="bold">{formatOperationType(op.type)}</Typography>
+                      <Typography variant="caption" color="text.secondary">Waiting to start…</Typography>
+                    </Box>
+                  </Box>
+                  <Tooltip title="Cancel">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => handleCancel(op.id)}
+                      disabled={cancelling.has(op.id)}
+                      sx={{ p: 0.25 }}
+                    >
+                      {cancelling.has(op.id) ? <CircularProgress size={14} /> : <CancelIcon sx={{ fontSize: 18 }} />}
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              ))}
+              {running.length > 0 && (
+                <Box sx={{ px: 2, pt: 1, pb: 0.25 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.08em' }}>
+                    Running ({running.length})
+                  </Typography>
+                </Box>
+              )}
+            </>
+          )}
+
+          {/* Active (running) operations */}
+          {running.map((op: ActiveOperation) => {
             const progressPct =
               op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
             const eta = formatETA(op);

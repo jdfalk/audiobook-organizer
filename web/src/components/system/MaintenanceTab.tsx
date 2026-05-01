@@ -1,5 +1,5 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.5.0
+// version: 1.6.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
 // last-edited: 2026-05-03
 
@@ -27,6 +27,7 @@ import {
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow.js';
 import * as api from '../../services/api';
+import { useOperationsStore } from '../../stores/useOperationsStore';
 
 // ─── MaintenanceWindowCard ───────────────────────────────────────────────────
 
@@ -599,8 +600,8 @@ function ManualFixesCard() {
   const [jobs, setJobs] = useState<api.MaintenanceJobDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
-  const [opId, setOpId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const startPolling = useOperationsStore((state) => state.startPolling);
 
   useEffect(() => {
     api.listMaintenanceJobs()
@@ -612,10 +613,10 @@ function ManualFixesCard() {
   const handleRun = async (jobId: string) => {
     setRunning(jobId);
     setError(null);
-    setOpId(null);
     try {
       const result = await api.runMaintenanceJob(jobId);
-      setOpId(result.operation_id);
+      // Register with the operations store so the bell + activity page track it
+      startPolling(result.operation_id, `maintenance:${jobId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : `Failed to run ${jobId}`);
     } finally {
@@ -630,11 +631,6 @@ function ManualFixesCard() {
         {error && (
           <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setError(null)}>
             {error}
-          </Alert>
-        )}
-        {opId && (
-          <Alert severity="success" sx={{ mb: 1.5 }} onClose={() => setOpId(null)}>
-            Operation enqueued: {opId}
           </Alert>
         )}
         {loading ? (
