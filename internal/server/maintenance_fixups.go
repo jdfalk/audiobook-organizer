@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.29.0
+// version: 1.30.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
-// last-edited: 2026-05-01
+// last-edited: 2026-04-30
 
 package server
 
@@ -6301,4 +6301,84 @@ c.JSON(http.StatusOK, gin.H{
 "groups":               result,
 "total_duplicate_books": totalDup,
 })
+}
+
+// handleGetBookFileHashStats returns aggregate hash-coverage statistics for all book_files.
+// GET /api/v1/maintenance/book-file-hash-stats
+func (s *Server) handleGetBookFileHashStats(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+	stats, err := store.GetBookFileHashStats()
+	if err != nil {
+		internalError(c, "failed to get book file hash stats", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": stats})
+}
+
+// handleBackfillFileHashes hashes every book_file row that is missing a file_hash.
+// Reads the file from disk, computes SHA-256, and updates file_hash + original_file_hash.
+// POST /api/v1/maintenance/backfill-file-hashes
+func (s *Server) handleBackfillFileHashes(c *gin.Context) {
+	dryRun := c.DefaultQuery("dry_run", "false") == "true"
+	store := s.Store()
+	if store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		return
+	}
+
+	all, err := store.GetAllBookFiles()
+	if err != nil {
+		internalError(c, "failed to list book files", err)
+		return
+	}
+
+	type result struct {
+		FileID   string `json:"file_id"`
+		FilePath string `json:"file_path"`
+		Hash     string `json:"hash,omitempty"`
+		Skipped  bool   `json:"skipped,omitempty"`
+		Error    string `json:"error,omitempty"`
+	}
+
+	var results []result
+	updated, skipped, failed := 0, 0, 0
+
+	for _, bf := range all {
+		if bf.FileHash != "" {
+			skipped++
+			continue
+		}
+		if bf.FilePath == "" {
+			results = append(results, result{FileID: bf.ID, FilePath: bf.FilePath, Skipped: true})
+			skipped++
+			continue
+		}
+		h, herr := scanner.ComputeFileHash(bf.FilePath)
+		if herr != nil {
+			results = append(results, result{FileID: bf.ID, FilePath: bf.FilePath, Error: herr.Error()})
+			failed++
+			continue
+		}
+		if !dryRun {
+			if uerr := store.UpdateBookFileHashes(bf.ID, h, ""); uerr != nil {
+				results = append(results, result{FileID: bf.ID, FilePath: bf.FilePath, Error: uerr.Error()})
+				failed++
+				continue
+			}
+		}
+		results = append(results, result{FileID: bf.ID, FilePath: bf.FilePath, Hash: h})
+		updated++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"dry_run": dryRun,
+		"updated": updated,
+		"skipped": skipped,
+		"failed":  failed,
+		"results": results,
+	})
 }

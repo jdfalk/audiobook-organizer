@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.36.0
+// version: 1.37.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-04-30
 
@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1554,6 +1555,77 @@ func saveBookToDatabase(book *Book) error {
 						groupID, existing.FilePath, existing.FilePath, book.FilePath)
 					// Fall through to create the new (non-primary) record below
 					existing = nil
+				}
+			}
+		}
+
+		// 2b. Multi-file book dedup: hash every segment file individually and tally
+		// votes per parent book. This correctly handles cases where the first file
+		// was damaged/replaced (single-hash check above would miss it) and also
+		// detects partial damage (bit rot) when only some files changed.
+		if existing == nil && len(book.SegmentFiles) > 1 {
+			bookVotes := make(map[string]int)
+			bookCandidates := make(map[string]*database.Book)
+
+			for _, segFile := range book.SegmentFiles {
+				h, herr := ComputeFileHash(segFile)
+				if herr != nil || h == "" {
+					continue
+				}
+				candidate, lerr := database.GetGlobalStore().GetBookBySegmentFileHash(h)
+				if lerr != nil || candidate == nil {
+					continue
+				}
+				bookVotes[candidate.ID]++
+				bookCandidates[candidate.ID] = candidate
+			}
+
+			// Find the parent book with the most matching segment files.
+			bestID, bestCount := "", 0
+			for id, count := range bookVotes {
+				if count > bestCount {
+					bestCount, bestID = count, id
+				}
+			}
+
+			if bestID != "" {
+				threshold := int(math.Ceil(float64(len(book.SegmentFiles)) * 0.8))
+				if bestCount >= threshold {
+					matchedBook := bookCandidates[bestID]
+					if bestCount < len(book.SegmentFiles) {
+						defaultLog.Warn(
+							"Multi-file dedup: %d/%d files matched existing book %q — possible corruption or bit rot in %s",
+							bestCount, len(book.SegmentFiles), matchedBook.Title, book.FilePath)
+					} else {
+						defaultLog.Debug("Multi-file dedup: all %d files matched existing book %q", bestCount, matchedBook.Title)
+					}
+
+					// Version-link the new path to the matched book; same logic as step 2 above.
+					alreadyLinked := matchedBook.VersionGroupID != nil && *matchedBook.VersionGroupID != ""
+					if alreadyLinked {
+						defaultLog.Debug("Multi-file dedup: already version-linked (group %s), skipping: %s",
+							*matchedBook.VersionGroupID, book.FilePath)
+						return nil
+					}
+					h2 := sha256.Sum256([]byte(matchedBook.ID + "|" + book.FilePath))
+					groupID := fmt.Sprintf("vg-%x", h2[:8])
+					existingInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(matchedBook.FilePath, config.AppConfig.RootDir)
+					newInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir)
+					matchedPrimary := existingInRoot || !newInRoot
+					newPrimary := newInRoot && !existingInRoot
+					matchedBook.VersionGroupID = &groupID
+					matchedBook.IsPrimaryVersion = &matchedPrimary
+					if _, uerr := database.GetGlobalStore().UpdateBook(matchedBook.ID, matchedBook); uerr != nil {
+						defaultLog.Warn("Multi-file dedup: failed to set version group on %s: %v", matchedBook.ID, uerr)
+					}
+					dbBook.VersionGroupID = &groupID
+					dbBook.IsPrimaryVersion = &newPrimary
+					defaultLog.Info("Multi-file dedup: linked %q as version group %s (%d/%d files matched)",
+						matchedBook.Title, groupID, bestCount, len(book.SegmentFiles))
+					// Leave existing == nil so CreateBook runs below with the version fields set.
+				} else {
+					defaultLog.Debug("Multi-file dedup: best match %d/%d files (threshold %d) — treating as new book: %s",
+						bestCount, len(book.SegmentFiles), threshold, book.FilePath)
 				}
 			}
 		}

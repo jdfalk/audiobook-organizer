@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.64.0
+// version: 1.65.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-01
+// last-edited: 2026-04-30
 
 package database
 
@@ -1145,6 +1145,34 @@ func (p *PebbleStore) GetBookByOrganizedHash(hash string) (*Book, error) {
 
 	id := string(value)
 	return p.GetBookByID(id)
+}
+
+// GetBookBySegmentFileHash returns the parent Book of the first book_file whose
+// file_hash or original_file_hash matches hash. Tries the book_file_hash: and
+// book_file_orig_hash: secondary indexes in order.
+func (p *PebbleStore) GetBookBySegmentFileHash(hash string) (*Book, error) {
+	if hash == "" {
+		return nil, nil
+	}
+	for _, prefix := range []string{"book_file_hash:", "book_file_orig_hash:"} {
+		key := []byte(fmt.Sprintf("%s%s", prefix, hash))
+		value, closer, err := p.db.Get(key)
+		if err == pebble.ErrNotFound {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		ref := string(value)
+		closer.Close()
+
+		parts := strings.SplitN(ref, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		return p.GetBookByID(parts[0])
+	}
+	return nil, nil
 }
 
 // GetDuplicateBooks returns groups of books with identical file hashes
@@ -7268,6 +7296,20 @@ func writeBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 		}
 	}
 
+	if f.FileHash != "" {
+		hashKey := []byte(fmt.Sprintf("book_file_hash:%s", f.FileHash))
+		if err := batch.Set(hashKey, ref, nil); err != nil {
+			return err
+		}
+	}
+
+	if f.OriginalFileHash != "" && f.OriginalFileHash != f.FileHash {
+		origKey := []byte(fmt.Sprintf("book_file_orig_hash:%s", f.OriginalFileHash))
+		if err := batch.Set(origKey, ref, nil); err != nil {
+			return err
+		}
+	}
+
 	// Write secondary index for each non-empty fingerprint segment.
 	for _, seg := range [7]string{f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2, f.AcoustIDSeg3,
 		f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6} {
@@ -7294,6 +7336,20 @@ func deleteBookFileSecondaryIndexes(batch *pebble.Batch, f *BookFile) error {
 	if f.FilePath != "" {
 		pathKey := []byte(fmt.Sprintf("book_file_path:%s", bookFilePathCRC(f.FilePath)))
 		if err := batch.Delete(pathKey, nil); err != nil {
+			return err
+		}
+	}
+
+	if f.FileHash != "" {
+		hashKey := []byte(fmt.Sprintf("book_file_hash:%s", f.FileHash))
+		if err := batch.Delete(hashKey, nil); err != nil {
+			return err
+		}
+	}
+
+	if f.OriginalFileHash != "" && f.OriginalFileHash != f.FileHash {
+		origKey := []byte(fmt.Sprintf("book_file_orig_hash:%s", f.OriginalFileHash))
+		if err := batch.Delete(origKey, nil); err != nil {
 			return err
 		}
 	}
@@ -8033,4 +8089,70 @@ func (p *PebbleStore) DeleteMetadataRejections(_ string) error {
 // GetDuplicateFilesByHash is not supported on PebbleStore.
 func (p *PebbleStore) GetDuplicateFilesByHash(_ int) ([]DuplicateFileGroup, error) {
 	return nil, nil
+}
+
+// GetBookFileHashStats scans all book_file primary records in memory and
+// returns aggregate hash-coverage statistics, including a per-library breakdown
+// derived from each file's source_import_path on its parent book.
+func (p *PebbleStore) GetBookFileHashStats() (*BookFileHashStats, error) {
+	files, err := p.GetAllBookFiles()
+	if err != nil {
+		return nil, fmt.Errorf("GetBookFileHashStats: %w", err)
+	}
+
+	stats := &BookFileHashStats{TotalBookFiles: len(files)}
+	for _, f := range files {
+		if f.FileHash != "" {
+			stats.WithFileHash++
+		}
+		if f.OriginalFileHash != "" {
+			stats.WithOriginalHash++
+		}
+	}
+	stats.MissingFileHash = stats.TotalBookFiles - stats.WithFileHash
+
+	// Gather per-library stats by grouping files under their parent book's source_import_path.
+	// Build a bookID → source_import_path map first.
+	allBooks, berr := p.GetAllBooks(0, 0)
+	if berr == nil {
+		bookPaths := make(map[string]string, len(allBooks))
+		stats.TotalBooks = len(allBooks)
+		for _, b := range allBooks {
+			if b.SourceImportPath != nil && *b.SourceImportPath != "" {
+				bookPaths[b.ID] = *b.SourceImportPath
+			} else {
+				bookPaths[b.ID] = ""
+			}
+		}
+		// Check books without any files
+		bookHasFile := make(map[string]bool, len(allBooks))
+		for _, f := range files {
+			bookHasFile[f.BookID] = true
+		}
+		for _, b := range allBooks {
+			if !bookHasFile[b.ID] {
+				stats.BooksWithNoFiles++
+			}
+		}
+
+		libMap := make(map[string]*BookFileHashStatsByLib)
+		for _, f := range files {
+			lib := bookPaths[f.BookID]
+			if lib == "" {
+				continue
+			}
+			if _, ok := libMap[lib]; !ok {
+				libMap[lib] = &BookFileHashStatsByLib{Path: lib}
+			}
+			libMap[lib].TotalFiles++
+			if f.FileHash != "" {
+				libMap[lib].WithHash++
+			}
+		}
+		for _, row := range libMap {
+			row.MissingHash = row.TotalFiles - row.WithHash
+			stats.ByLibrary = append(stats.ByLibrary, *row)
+		}
+	}
+	return stats, nil
 }

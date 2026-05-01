@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.11.0
+// version: 2.12.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-01
+// last-edited: 2026-04-30
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -4554,3 +4554,48 @@ export async function findMetadataHashDuplicates(): Promise<MetadataHashDuplicat
   }
   return response.json();
 }
+
+// ── Hash coverage stats + backfill ────────────────────────────────────────────
+
+export interface BookFileHashStatsByLib {
+  path: string;
+  total_files: number;
+  with_hash: number;
+  missing_hash: number;
+}
+
+export interface BookFileHashStats {
+  total_book_files: number;
+  with_file_hash: number;
+  missing_file_hash: number;
+  with_original_hash: number;
+  total_books: number;
+  books_with_no_files: number;
+  by_library: BookFileHashStatsByLib[];
+}
+
+export async function getBookFileHashStats(): Promise<BookFileHashStats> {
+  const response = await fetch(`${API_BASE}/maintenance/book-file-hash-stats`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch hash stats');
+  }
+  const body = await response.json();
+  return body.data ?? body;
+}
+
+export interface BackfillHashesResult {
+  dry_run: boolean;
+  updated: number;
+  skipped: number;
+  failed: number;
+}
+
+export async function backfillFileHashes(dryRun = false): Promise<BackfillHashesResult> {
+  const url = `${API_BASE}/maintenance/backfill-file-hashes${dryRun ? '?dry_run=true' : ''}`;
+  const response = await fetch(url, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to backfill file hashes');
+  }
+  return response.json();
+}
+

@@ -2564,6 +2564,8 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/merge-chapter-groups", s.perm(auth.PermSettingsManage), s.handleMergeChapterGroups)
 			protected.GET("/maintenance/duplicate-files", s.perm(auth.PermSettingsManage), s.handleScanDuplicateFiles)
 			protected.GET("/maintenance/metadata-hash-duplicates", s.perm(auth.PermSettingsManage), s.handleScanMetadataHashDuplicates)
+			protected.GET("/maintenance/book-file-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookFileHashStats)
+			protected.POST("/maintenance/backfill-file-hashes", s.perm(auth.PermSettingsManage), s.handleBackfillFileHashes)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")

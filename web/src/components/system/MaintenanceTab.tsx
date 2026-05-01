@@ -1,7 +1,7 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
-// last-edited: 2026-05-01
+// last-edited: 2026-04-30
 
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -293,6 +293,25 @@ function SHADuplicateCard() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Hash coverage stats
+  const [stats, setStats] = useState<api.BookFileHashStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<api.BackfillHashesResult | null>(null);
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      setStats(await api.getBookFileHashStats());
+    } catch {
+      // non-fatal — stats may not be available yet
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadStats(); }, [loadStats]);
+
   const handleScan = useCallback(async () => {
     setScanning(true);
     setError(null);
@@ -307,17 +326,43 @@ function SHADuplicateCard() {
     }
   }, []);
 
+  const handleBackfill = useCallback(async () => {
+    setBackfilling(true);
+    setBackfillResult(null);
+    setError(null);
+    try {
+      const r = await api.backfillFileHashes(false);
+      setBackfillResult(r);
+      await loadStats();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Backfill failed');
+    } finally {
+      setBackfilling(false);
+    }
+  }, [loadStats]);
+
   const fmt = (bytes: number) => {
     if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
     if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
     return `${(bytes / 1024).toFixed(0)} KB`;
   };
 
+  const pct = (n: number, d: number) => (d === 0 ? '—' : `${((n / d) * 100).toFixed(1)}%`);
+
+  const statusChip = (() => {
+    if (statsLoading) return <Chip size="small" label="Loading…" />;
+    if (!stats) return null;
+    if (stats.missing_file_hash === 0)
+      return <Chip size="small" color="success" label="✓ All hashed" />;
+    return <Chip size="small" color="warning" label={`${stats.missing_file_hash} missing hashes`} />;
+  })();
+
   return (
     <Card variant="outlined" sx={{ mb: 2 }}>
       <CardHeader
         title="SHA Duplicate Detection"
-        subheader="These files have identical content (same SHA-256). Consider consolidating."
+        subheader="Files with identical SHA-256 content. Also tracks hash coverage for multi-file dedup."
+        action={statusChip}
       />
       <CardContent>
         {error && (
@@ -326,7 +371,61 @@ function SHADuplicateCard() {
           </Alert>
         )}
 
-        <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+        {/* Hash coverage stats */}
+        {stats && (
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>Hash Coverage</Typography>
+            <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Total files</Typography>
+                <Typography variant="body2" fontWeight="bold">{stats.total_book_files.toLocaleString()}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">With hash</Typography>
+                <Typography variant="body2" fontWeight="bold">
+                  {stats.with_file_hash.toLocaleString()} ({pct(stats.with_file_hash, stats.total_book_files)})
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Missing hash</Typography>
+                <Typography variant="body2" fontWeight="bold" color={stats.missing_file_hash > 0 ? 'warning.main' : 'success.main'}>
+                  {stats.missing_file_hash.toLocaleString()}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">With orig hash</Typography>
+                <Typography variant="body2" fontWeight="bold">{stats.with_original_hash.toLocaleString()}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Books (no files)</Typography>
+                <Typography variant="body2" fontWeight="bold" color={stats.books_with_no_files > 0 ? 'warning.main' : 'text.primary'}>
+                  {stats.books_with_no_files.toLocaleString()} / {stats.total_books.toLocaleString()}
+                </Typography>
+              </Box>
+            </Stack>
+
+            {(stats.by_library?.length ?? 0) > 1 && (
+              <Box sx={{ mt: 1.5 }}>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>By Library</Typography>
+                {stats.by_library.map((lib) => (
+                  <Stack key={lib.path} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ minWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lib.path}>
+                      {lib.path.split('/').pop() || lib.path}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {lib.with_hash}/{lib.total_files} hashed
+                    </Typography>
+                    {lib.missing_hash > 0 && (
+                      <Chip size="small" label={`${lib.missing_hash} missing`} color="warning" variant="outlined" />
+                    )}
+                  </Stack>
+                ))}
+              </Box>
+            )}
+          </Box>
+        )}
+
+        <Stack direction="row" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
           <Button
             variant="outlined"
             startIcon={scanning ? <CircularProgress size={14} /> : undefined}
@@ -335,7 +434,30 @@ function SHADuplicateCard() {
           >
             {scanning ? 'Scanning…' : 'Scan for SHA Duplicates'}
           </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={backfilling ? <CircularProgress size={14} /> : undefined}
+            disabled={backfilling || statsLoading}
+            onClick={handleBackfill}
+          >
+            {backfilling ? 'Backfilling…' : 'Backfill Missing Hashes'}
+          </Button>
+          <Button
+            size="small"
+            variant="text"
+            disabled={statsLoading}
+            onClick={() => void loadStats()}
+          >
+            Refresh Stats
+          </Button>
         </Stack>
+
+        {backfillResult && (
+          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setBackfillResult(null)}>
+            Backfill complete — updated: <strong>{backfillResult.updated}</strong>, skipped: {backfillResult.skipped}, failed: {backfillResult.failed}
+          </Alert>
+        )}
 
         {result && (
           <Typography variant="body2" sx={{ mb: 1 }}>

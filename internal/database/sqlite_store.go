@@ -1,6 +1,6 @@
 // file: internal/database/sqlite_store.go
-// version: 1.76.0
-// last-edited: 2026-05-01
+// version: 1.77.0
+// last-edited: 2026-04-30
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -1986,6 +1986,30 @@ func (s *SQLiteStore) GetBookByOrganizedHash(hash string) (*Book, error) {
 	var book Book
 	query := fmt.Sprintf(`SELECT %s FROM books WHERE organized_file_hash = ? LIMIT 1`, bookSelectColumns)
 	err := scanBook(s.db.QueryRow(query, hash), &book)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
+// GetBookBySegmentFileHash returns the parent Book of the first book_file whose
+// file_hash or original_file_hash matches hash. Used by the scanner multi-file
+// dedup tally so individual segment files can be matched against existing books
+// without assuming the whole containing directory is the same book.
+func (s *SQLiteStore) GetBookBySegmentFileHash(hash string) (*Book, error) {
+	if hash == "" {
+		return nil, nil
+	}
+	query := fmt.Sprintf(`
+		SELECT %s FROM books
+		JOIN book_files ON book_files.book_id = books.id
+		WHERE (book_files.file_hash = ? OR book_files.original_file_hash = ?)
+		LIMIT 1`, bookSelectColumns)
+	var book Book
+	err := scanBook(s.db.QueryRow(query, hash, hash), &book)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -6406,6 +6430,69 @@ ORDER BY dh.cnt DESC, dh.tsz DESC, bf.book_id`
 		groups = append(groups, *groupMap[h])
 	}
 	return groups, nil
+}
+
+// GetBookFileHashStats returns aggregate hash-coverage statistics for all book_files,
+// broken down by which configured library path each file belongs to.
+func (s *SQLiteStore) GetBookFileHashStats() (*BookFileHashStats, error) {
+	stats := &BookFileHashStats{}
+
+	// Overall totals
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM book_files`).Scan(&stats.TotalBookFiles)
+	if err != nil {
+		return nil, fmt.Errorf("GetBookFileHashStats total: %w", err)
+	}
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM book_files WHERE file_hash IS NOT NULL AND file_hash != ''`).Scan(&stats.WithFileHash)
+	if err != nil {
+		return nil, fmt.Errorf("GetBookFileHashStats with_hash: %w", err)
+	}
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM book_files WHERE original_file_hash IS NOT NULL AND original_file_hash != ''`).Scan(&stats.WithOriginalHash)
+	if err != nil {
+		return nil, fmt.Errorf("GetBookFileHashStats with_original_hash: %w", err)
+	}
+	stats.MissingFileHash = stats.TotalBookFiles - stats.WithFileHash
+
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM books WHERE COALESCE(marked_for_deletion, 0) = 0`).Scan(&stats.TotalBooks)
+	if err != nil {
+		return nil, fmt.Errorf("GetBookFileHashStats total_books: %w", err)
+	}
+	err = s.db.QueryRow(`
+		SELECT COUNT(*) FROM books
+		WHERE COALESCE(marked_for_deletion, 0) = 0
+		  AND NOT EXISTS (SELECT 1 FROM book_files WHERE book_id = books.id)`).Scan(&stats.BooksWithNoFiles)
+	if err != nil {
+		return nil, fmt.Errorf("GetBookFileHashStats books_no_files: %w", err)
+	}
+
+	// Per-library breakdown: derive top-level paths from books.source_import_path and books.file_path.
+	// Group by the first two path segments (e.g. /mnt/data/audiobooks) so we get one row per library root.
+	libRows, lerr := s.db.Query(`
+		SELECT DISTINCT COALESCE(source_import_path, '') AS lib
+		FROM books
+		WHERE COALESCE(marked_for_deletion, 0) = 0
+		  AND COALESCE(source_import_path, '') != ''
+		ORDER BY lib`)
+	if lerr == nil {
+		defer libRows.Close()
+		for libRows.Next() {
+			var lib string
+			if scanErr := libRows.Scan(&lib); scanErr != nil || lib == "" {
+				continue
+			}
+			prefix := strings.TrimSuffix(lib, "/") + "/"
+			var row BookFileHashStatsByLib
+			row.Path = lib
+			_ = s.db.QueryRow(
+				`SELECT COUNT(*) FROM book_files WHERE file_path LIKE ?`, prefix+"%",
+			).Scan(&row.TotalFiles)
+			_ = s.db.QueryRow(
+				`SELECT COUNT(*) FROM book_files WHERE file_path LIKE ? AND file_hash IS NOT NULL AND file_hash != ''`, prefix+"%",
+			).Scan(&row.WithHash)
+			row.MissingHash = row.TotalFiles - row.WithHash
+			stats.ByLibrary = append(stats.ByLibrary, row)
+		}
+	}
+	return stats, nil
 }
 
 // AddMetadataRejection records a rejected metadata candidate for a book.
