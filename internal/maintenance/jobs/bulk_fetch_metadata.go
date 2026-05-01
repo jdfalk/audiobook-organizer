@@ -1,0 +1,323 @@
+// file: internal/maintenance/jobs/bulk_fetch_metadata.go
+// version: 1.0.0
+// guid: b3c9d7e8-0f1a-2b3c-4d5e-6f7a8b9c0d1e
+// last-edited: 2026-04-28
+
+package jobs
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"regexp"
+	"sort"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/auth"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+)
+
+func init() { maintenance.Register(&bulkFetchMetadataJob{}) }
+
+type bulkFetchMetadataJob struct{}
+
+type bmf_params struct {
+	PreferAudible bool `json:"prefer_audible"`
+	SkipCached    bool `json:"skip_cached"`
+}
+
+func (j *bulkFetchMetadataJob) ID() string          { return "bulk-fetch-metadata" }
+func (j *bulkFetchMetadataJob) Name() string        { return "Bulk Fetch Metadata" }
+func (j *bulkFetchMetadataJob) Category() string    { return "Metadata" }
+func (j *bulkFetchMetadataJob) Description() string { return "Fetches and caches metadata from all configured sources for every book in the library" }
+func (j *bulkFetchMetadataJob) DefaultParams() any  { return &bmf_params{} }
+func (j *bulkFetchMetadataJob) CanResume() bool     { return true }
+func (j *bulkFetchMetadataJob) Permission() string  { return string(auth.PermLibraryEditMetadata) }
+
+func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
+	opID := maintenance.OperationIDFromCtx(ctx)
+
+	preferAudible := false
+	skipCached := false
+	if opID != "" {
+		if raw, err := store.GetOperationParams(opID); err == nil && len(raw) > 0 {
+			var p bmf_params
+			if jerr := json.Unmarshal(raw, &p); jerr == nil {
+				preferAudible = p.PreferAudible
+				skipCached = p.SkipCached
+			}
+		}
+	}
+
+	allBooks, err := store.GetAllBooks(0, 0)
+	if err != nil {
+		return fmt.Errorf("GetAllBooks: %w", err)
+	}
+
+	ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+
+	var existingResults []database.OperationResult
+	if opID != "" {
+		existingResults, _ = store.GetOperationResults(opID)
+	}
+	done := make(map[string]bool, len(existingResults))
+	for _, r := range existingResults {
+		done[r.BookID] = true
+	}
+
+	allAuthors, err := store.GetAllAuthors()
+	if err != nil {
+		return fmt.Errorf("GetAllAuthors: %w", err)
+	}
+	authorByID := make(map[int]string, len(allAuthors))
+	for _, a := range allAuthors {
+		authorByID[a.ID] = a.Name
+	}
+
+	sourceChain := bmf_buildSourceChain()
+	if len(sourceChain) == 0 {
+		sourceChain = []metadata.MetadataSource{metadata.NewAudibleClient()}
+	}
+	if preferAudible {
+		audible := metadata.NewAudibleClient()
+		var rest []metadata.MetadataSource
+		for _, src := range sourceChain {
+			if src.Name() != audible.Name() {
+				rest = append(rest, src)
+			}
+		}
+		sourceChain = append([]metadata.MetadataSource{audible}, rest...)
+	}
+
+	type bookWork struct {
+		book       database.Book
+		authorName string
+	}
+	var work []bookWork
+	for i := range allBooks {
+		b := &allBooks[i]
+		if done[b.ID] || strings.TrimSpace(b.Title) == "" {
+			continue
+		}
+		if skipCached {
+			hasFreshCache := false
+			for _, src := range sourceChain {
+				if cached, cerr := database.GetCachedMetadataFetch(store, b.ID, src.Name()); cerr == nil && cached != nil {
+					expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
+					if !expired {
+						hasFreshCache = true
+						break
+					}
+				}
+			}
+			if hasFreshCache {
+				continue
+			}
+		}
+		author := ""
+		if b.AuthorID != nil {
+			author = authorByID[*b.AuthorID]
+		}
+		work = append(work, bookWork{book: *b, authorName: author})
+	}
+
+	totalBooks := len(existingResults) + len(work)
+	alreadyDone := len(existingResults)
+	log.Printf("[INFO] bulk-fetch-metadata %s: %d books total, %d already cached, %d to fetch",
+		opID, totalBooks, alreadyDone, len(work))
+
+	reporter.SetTotal(totalBooks)
+	for i := 0; i < alreadyDone; i++ {
+		reporter.Increment()
+	}
+
+	if len(work) == 0 {
+		reporter.Log("info", "all books already cached", nil)
+		return nil
+	}
+
+	completed := int64(alreadyDone)
+	found := 0
+	notFound := 0
+
+	for i, w := range work {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		bookID := w.book.ID
+		currentAuthor := w.authorName
+		searchTitle := bmf_stripChapterFromTitle(w.book.Title)
+
+		var metaResults []metadata.BookMetadata
+		var sourceName string
+		cacheHit := false
+
+		for _, src := range sourceChain {
+			if cached, cerr := database.GetCachedMetadataFetch(store, bookID, src.Name()); cerr == nil && cached != nil {
+				expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
+				if !expired {
+					var cachedResults []metadata.BookMetadata
+					if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+						metaResults = cachedResults
+						sourceName = src.Name()
+						cacheHit = true
+						break
+					}
+				}
+			}
+			var fetchErr error
+			if currentAuthor != "" {
+				metaResults, fetchErr = src.SearchByTitleAndAuthor(ctx, searchTitle, currentAuthor)
+				if fetchErr == nil && len(metaResults) > 0 {
+					sourceName = src.Name()
+					break
+				}
+			}
+			metaResults, fetchErr = src.SearchByTitle(ctx, searchTitle)
+			if fetchErr == nil && len(metaResults) > 0 {
+				sourceName = src.Name()
+				break
+			}
+			if searchTitle != w.book.Title {
+				if currentAuthor != "" {
+					metaResults, fetchErr = src.SearchByTitleAndAuthor(ctx, w.book.Title, currentAuthor)
+					if fetchErr == nil && len(metaResults) > 0 {
+						sourceName = src.Name()
+						break
+					}
+				}
+				metaResults, fetchErr = src.SearchByTitle(ctx, w.book.Title)
+				if fetchErr == nil && len(metaResults) > 0 {
+					sourceName = src.Name()
+					break
+				}
+			}
+		}
+
+		resultStatus := "not_found"
+		if len(metaResults) > 0 && sourceName != "" {
+			if !cacheHit {
+				if blob, merr := json.Marshal(metaResults); merr == nil {
+					_ = database.PutCachedMetadataFetch(store, bookID, sourceName, blob, 0)
+				}
+			}
+			found++
+			resultStatus = "cached"
+		} else {
+			notFound++
+		}
+
+		if opID != "" {
+			_ = store.CreateOperationResult(&database.OperationResult{
+				OperationID: opID,
+				BookID:      bookID,
+				ResultJSON:  fmt.Sprintf(`{"status":%q,"source":%q}`, resultStatus, sourceName),
+				Status:      resultStatus,
+			})
+		}
+
+		atomic.AddInt64(&completed, 1)
+		reporter.Increment()
+
+		// Rate-limit live API calls.
+		if !cacheHit && sourceName != "" && i < len(work)-1 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+	}
+
+	finalCount := atomic.LoadInt64(&completed)
+	log.Printf("[INFO] bulk-fetch-metadata %s: done %d books — cached:%d not_found:%d",
+		opID, finalCount, found, notFound)
+	reporter.Log("info", fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound), nil)
+	return nil
+}
+
+// bmf_buildSourceChain reads config.AppConfig.MetadataSources and returns
+// ordered, circuit-breaker-wrapped metadata sources.
+func bmf_buildSourceChain() []metadata.MetadataSource {
+	sources := make([]config.MetadataSource, len(config.AppConfig.MetadataSources))
+	copy(sources, config.AppConfig.MetadataSources)
+	sort.Slice(sources, func(i, j int) bool {
+		return sources[i].Priority < sources[j].Priority
+	})
+
+	var chain []metadata.MetadataSource
+	for _, src := range sources {
+		if !src.Enabled {
+			continue
+		}
+		var rawSource metadata.MetadataSource
+		switch src.ID {
+		case "openlibrary":
+			rawSource = metadata.NewOpenLibraryClient()
+		case "google-books":
+			apiKey := config.AppConfig.GoogleBooksAPIKey
+			if apiKey == "" {
+				if k, ok := src.Credentials["apiKey"]; ok && k != "" {
+					apiKey = k
+				}
+			}
+			rawSource = metadata.NewGoogleBooksClient(apiKey)
+		case "audible":
+			rawSource = metadata.NewAudibleClient()
+		case "audnexus":
+			rawSource = metadata.NewAudnexusClient()
+		case "hardcover":
+			token := config.AppConfig.HardcoverAPIToken
+			if token == "" {
+				if apiToken, ok := src.Credentials["api_token"]; ok && apiToken != "" {
+					token = apiToken
+				} else if apiKey, ok := src.Credentials["apiKey"]; ok && apiKey != "" {
+					token = apiKey
+				}
+			}
+			if token != "" {
+				rawSource = metadata.NewHardcoverClient(token)
+			} else {
+				log.Printf("[WARN] Hardcover source enabled but no API token configured")
+			}
+		case "wikipedia":
+			rawSource = metadata.NewWikipediaClient()
+		default:
+			log.Printf("[WARN] Unknown metadata source: %s", src.ID)
+		}
+		if rawSource != nil {
+			chain = append(chain, metadata.NewProtectedSource(rawSource, 5, 30*time.Second))
+		}
+	}
+	return chain
+}
+
+// bmf_stripChapterFromTitle removes common track/chapter prefixes and suffixes from a title.
+func bmf_stripChapterFromTitle(title string) string {
+	cleaned := title
+	trackNumPrefix := regexp.MustCompile(`^\d{1,3}\s*[-–.]\s*`)
+	cleaned = trackNumPrefix.ReplaceAllString(cleaned, "")
+	bareNumPrefix := regexp.MustCompile(`^\d{1,3}\s+`)
+	if stripped := strings.TrimSpace(bareNumPrefix.ReplaceAllString(cleaned, "")); stripped != "" {
+		cleaned = stripped
+	}
+	trackWordPrefix := regexp.MustCompile(`(?i)^[Tt]rack\s*\d+\s*[-–.]\s*`)
+	cleaned = trackWordPrefix.ReplaceAllString(cleaned, "")
+	discWordPrefix := regexp.MustCompile(`(?i)^[Dd]is[ck]\s*\d+\s*[-–.]\s*`)
+	cleaned = discWordPrefix.ReplaceAllString(cleaned, "")
+	bracketPrefix := regexp.MustCompile(`^\[.*?\]\s*[-–]?\s*`)
+	cleaned = bracketPrefix.ReplaceAllString(cleaned, "")
+	bracketSuffix := regexp.MustCompile(`\s*\[.*?\]\s*$`)
+	cleaned = bracketSuffix.ReplaceAllString(cleaned, "")
+	if strings.TrimSpace(cleaned) == "" {
+		return title
+	}
+	return strings.TrimSpace(cleaned)
+}

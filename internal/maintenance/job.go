@@ -1,7 +1,7 @@
 // file: internal/maintenance/job.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 11111111-1111-1111-1111-111111111111
-// last-edited: 2026-05-01
+// last-edited: 2026-04-28
 
 package maintenance
 
@@ -43,6 +43,13 @@ type WriteBackEnqueuer interface {
 // EnqueuerInjectable is implemented by jobs that need the write-back enqueuer.
 type EnqueuerInjectable interface {
 	InjectEnqueuer(e WriteBackEnqueuer)
+}
+
+// PermissionAware is optionally implemented by jobs that require a non-default
+// permission. The dispatcher uses this to enforce per-job access control.
+// Jobs that do not implement this interface default to the settings.manage permission.
+type PermissionAware interface {
+	Permission() string
 }
 
 // MaintenanceJob is the interface that every maintenance job must satisfy.

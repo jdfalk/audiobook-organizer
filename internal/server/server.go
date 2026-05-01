@@ -2650,7 +2650,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/maintenance/backfill-file-hashes", s.perm(auth.PermSettingsManage), s.handleBackfillFileHashes)
 			protected.GET("/maintenance/book-metadata-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookMetadataHashStats)
 			protected.GET("/maintenance/jobs", s.perm(auth.PermSettingsManage), s.listMaintenanceJobs)
-			protected.POST("/maintenance/jobs/:job_id", s.perm(auth.PermSettingsManage), s.runMaintenanceJob)
+			protected.POST("/maintenance/jobs/:job_id", s.runMaintenanceJob)
 
 			// Admin-only destructive endpoints
 			adminOnly := protected.Group("")
