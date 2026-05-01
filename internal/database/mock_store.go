@@ -109,12 +109,13 @@ type MockStore struct {
 	GetBookChangeHistoryFunc     func(bookID string, limit int) ([]MetadataChangeRecord, error)
 
 	// Import Paths
-	GetAllImportPathsFunc   func() ([]ImportPath, error)
-	GetImportPathByIDFunc   func(id int) (*ImportPath, error)
-	GetImportPathByPathFunc func(path string) (*ImportPath, error)
-	CreateImportPathFunc    func(path, name string) (*ImportPath, error)
-	UpdateImportPathFunc    func(id int, importPath *ImportPath) error
-	DeleteImportPathFunc    func(id int) error
+	GetAllImportPathsFunc         func() ([]ImportPath, error)
+	GetImportPathByIDFunc         func(id int) (*ImportPath, error)
+	GetImportPathByPathFunc       func(path string) (*ImportPath, error)
+	CreateImportPathFunc          func(path, name string) (*ImportPath, error)
+	UpdateImportPathFunc          func(id int, importPath *ImportPath) error
+	DeleteImportPathFunc          func(id int) error
+	CountBooksByPathPrefixFunc    func(prefix string) (int, error)
 
 	// Operations
 	CreateOperationFunc           func(id, opType string, folderPath *string) (*Operation, error)
@@ -919,6 +920,9 @@ func (m *MockStore) DeleteImportPath(id int) error {
 }
 
 func (m *MockStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	if m.CountBooksByPathPrefixFunc != nil {
+		return m.CountBooksByPathPrefixFunc(prefix)
+	}
 	return 0, nil
 }
 

@@ -122,9 +122,10 @@ type Book struct {
 	OpenLibraryID   string
 	HardcoverID     string
 	SegmentFiles    []string // For multi-file books grouped by album in mixed directories
-	GoogleBooksID   string
-	FileHash        string // Pre-computed hash from ProcessFile (avoids double-read)
-	LibraryState    string // If set, overrides the default "imported" state in saveBookToDatabase
+	GoogleBooksID      string
+	FileHash           string // Pre-computed hash from ProcessFile (avoids double-read)
+	LibraryState       string // If set, overrides the default "imported" state in saveBookToDatabase
+	SourceImportPath   string // Top-level import path this file was discovered in; set by scan_service
 }
 
 // ScanDirectory scans the given directory for audiobook files.
@@ -1473,6 +1474,7 @@ func saveBookToDatabase(book *Book) error {
 			OrganizedFileHash: organizedFileHash,
 			LibraryState:      stringPtr(ls),
 			Quantity:          intPtr(1),
+			SourceImportPath:  nullablePtr(book.SourceImportPath),
 		}
 
 		// Re-link by embedded AUDIOBOOK_ORGANIZER_ID: if the file contains our ID tag,
@@ -1949,6 +1951,10 @@ func preserveExistingFields(scanned *database.Book, existing *database.Book) {
 	// Preserve series sequence if scan has nil/zero and existing has a value
 	if (scanned.SeriesSequence == nil || *scanned.SeriesSequence == 0) && existing.SeriesSequence != nil && *existing.SeriesSequence != 0 {
 		scanned.SeriesSequence = existing.SeriesSequence
+	}
+	// Preserve SourceImportPath — once set it must never be overwritten
+	if scanned.SourceImportPath == nil && existing.SourceImportPath != nil {
+		scanned.SourceImportPath = existing.SourceImportPath
 	}
 }
 

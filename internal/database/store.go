@@ -234,6 +234,12 @@ type Book struct {
 	CoverURL *string `json:"cover_url,omitempty"`
 	// Narrators as JSON array
 	NarratorsJSON *string `json:"narrators_json,omitempty"`
+	// SourceImportPath is the top-level import-path folder this book was FIRST
+	// discovered in (e.g. "/mnt/bigdata/books/newbooks"). Set on CreateBook only;
+	// never mutated on UpdateBook. Survives auto-organize moves so that
+	// CountBooksByPathPrefix can correctly count books even after they have been
+	// relocated to RootDir.
+	SourceImportPath *string `json:"source_import_path,omitempty"`
 	// Scan cache for incremental scanning (set by scanner, not user-facing)
 	LastScanMtime *int64 `json:"last_scan_mtime,omitempty"`
 	LastScanSize  *int64 `json:"last_scan_size,omitempty"`

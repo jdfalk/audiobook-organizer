@@ -104,6 +104,12 @@ func TestScanService_UpdateImportPathBookCount(t *testing.T) {
 	var updatedCount int
 
 	mockDB := &database.MockStore{
+		CountBooksByPathPrefixFunc: func(prefix string) (int, error) {
+			if prefix == "/path/b" {
+				return 42, nil
+			}
+			return 0, nil
+		},
 		GetAllImportPathsFunc: func() ([]database.ImportPath, error) {
 			return []database.ImportPath{
 				{ID: 1, Path: "/path/a", BookCount: 0},
