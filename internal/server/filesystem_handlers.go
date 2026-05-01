@@ -1,6 +1,7 @@
 // file: internal/server/filesystem_handlers.go
-// version: 2.0.1
+// version: 2.1.0
 // guid: 565db679-19ba-4518-b63e-6892663be41b
+// last-edited: 2026-04-30
 //
 // Filesystem HTTP handlers split out of server.go: home directory,
 // filesystem browse, exclusion add/remove, import-path CRUD, and the
@@ -12,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -42,6 +44,11 @@ func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
 	result, err := s.filesystemService.BrowseDirectory(path)
 	if err != nil {
+		// Return 403 if path is not in allowed directories, otherwise 400
+		if strings.Contains(err.Error(), "not in allowed directories") {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
 		RespondWithBadRequest(c, err.Error())
 		return
 	}
