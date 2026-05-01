@@ -1,6 +1,6 @@
 // file: internal/database/sqlite_store.go
-// version: 1.79.1
-// last-edited: 2026-04-30
+// version: 1.80.0
+// last-edited: 2026-05-01
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
 package database
@@ -71,6 +71,92 @@ const bookSelectColumnsQualified = `
 	books.metadata_source_hash,
 	books.merged_into_book_id
 `
+
+// bookSummarySelectColumns defines the minimal set of columns needed for BookSummary
+// (excludes heavy fields like description, cover image data, and embeddings)
+const bookSummarySelectColumns = `
+	id, title, author_id, series_id, series_sequence,
+	file_path, format, duration, original_filename,
+	file_hash, file_size, original_file_hash, organized_file_hash,
+	library_state, quarantined_at, quarantine_reason, cover_url, narrator,
+	created_at, updated_at, metadata_updated_at,
+	is_primary_version, version_group_id, metadata_review_status
+`
+
+// bookSummarySelectColumnsQualified prefixes all columns with "books." for use in JOINs
+const bookSummarySelectColumnsQualified = `
+	books.id, books.title, books.author_id, books.series_id, books.series_sequence,
+	books.file_path, books.format, books.duration, books.original_filename,
+	books.file_hash, books.file_size, books.original_file_hash, books.organized_file_hash,
+	books.library_state, books.quarantined_at, books.quarantine_reason, books.cover_url, books.narrator,
+	books.created_at, books.updated_at, books.metadata_updated_at,
+	books.is_primary_version, books.version_group_id, books.metadata_review_status
+`
+
+func scanBookSummary(scanner rowScanner, summary *BookSummary) error {
+	var (
+		authorID, seriesID, seriesSequence, duration sql.NullInt64
+		fileSize                                     sql.NullInt64
+		title, filePath, format                      string
+		originalFilename                             sql.NullString
+		fileHash, originalFileHash, organizedFileHash sql.NullString
+		libraryState, quarantineReason, coverURL, narrator sql.NullString
+		metadataReviewStatus, versionGroupID         sql.NullString
+		isPrimaryVersion                             sql.NullBool
+		quarantinedAt, createdAt, updatedAt, metadataUpdatedAt sql.NullTime
+	)
+
+	if err := scanner.Scan(
+		&summary.ID, &title, &authorID, &seriesID, &seriesSequence,
+		&filePath, &format, &duration, &originalFilename,
+		&fileHash, &fileSize, &originalFileHash, &organizedFileHash,
+		&libraryState, &quarantinedAt, &quarantineReason, &coverURL, &narrator,
+		&createdAt, &updatedAt, &metadataUpdatedAt,
+		&isPrimaryVersion, &versionGroupID, &metadataReviewStatus,
+	); err != nil {
+		return err
+	}
+
+	summary.Title = title
+	summary.FilePath = filePath
+	summary.Format = format
+	summary.AuthorID = nullableInt(authorID)
+	summary.SeriesID = nullableInt(seriesID)
+	summary.SeriesSequence = nullableInt(seriesSequence)
+	summary.Duration = nullableInt(duration)
+	summary.OriginalFilename = nullableString(originalFilename)
+	if fileSize.Valid {
+		size := fileSize.Int64
+		summary.FileSize = &size
+	}
+	summary.FileHash = nullableString(fileHash)
+	summary.OriginalFileHash = nullableString(originalFileHash)
+	summary.OrganizedFileHash = nullableString(organizedFileHash)
+	summary.LibraryState = nullableString(libraryState)
+	if quarantinedAt.Valid {
+		summary.QuarantinedAt = &quarantinedAt.Time
+	}
+	summary.QuarantineReason = nullableString(quarantineReason)
+	summary.CoverURL = nullableString(coverURL)
+	summary.Narrator = nullableString(narrator)
+	if createdAt.Valid {
+		summary.CreatedAt = &createdAt.Time
+	}
+	if updatedAt.Valid {
+		summary.UpdatedAt = &updatedAt.Time
+	}
+	if metadataUpdatedAt.Valid {
+		summary.MetadataUpdatedAt = &metadataUpdatedAt.Time
+	}
+	if isPrimaryVersion.Valid {
+		val := isPrimaryVersion.Bool
+		summary.IsPrimaryVersion = &val
+	}
+	summary.VersionGroupID = nullableString(versionGroupID)
+	summary.MetadataReviewStatus = nullableString(metadataReviewStatus)
+
+	return nil
+}
 
 func scanBook(scanner rowScanner, book *Book) error {
 	var (
@@ -1887,6 +1973,31 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 		books = append(books, book)
 	}
 	return books, rows.Err()
+}
+
+func (s *SQLiteStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, error) {
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE COALESCE(marked_for_deletion, 0) = 0 ORDER BY title LIMIT ? OFFSET ?`, bookSummarySelectColumns)
+	rows, err := s.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var summaries []BookSummary
+	for rows.Next() {
+		var summary BookSummary
+		if err := scanBookSummary(rows, &summary); err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries, rows.Err()
 }
 
 func (s *SQLiteStore) GetDistinctGenres() ([]string, error) {
