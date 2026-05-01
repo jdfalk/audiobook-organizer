@@ -1531,24 +1531,10 @@ func saveBookToDatabase(book *Book) error {
 					defaultLog.Debug("Already version-linked (group %s), skipping: %s", *existing.VersionGroupID, existing.FilePath)
 					return nil
 				} else {
-					// Not linked — create a version link between the two copies
-					h := sha256.Sum256([]byte(existing.FilePath + "|" + book.FilePath))
-					groupID := fmt.Sprintf("vg-%x", h[:8])
-					isNotPrimary := false
-
-					// Determine primary: prefer the one in RootDir, else the existing one
-					existingInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(existing.FilePath, config.AppConfig.RootDir)
-					existing.VersionGroupID = &groupID
-					existing.IsPrimaryVersion = &existingInRoot
-					if _, uerr := database.GetGlobalStore().UpdateBook(existing.ID, existing); uerr != nil {
-						defaultLog.Warn("Failed to set version group on existing book %s: %v", existing.ID, uerr)
-					}
-
-					dbBook.VersionGroupID = &groupID
-					dbBook.IsPrimaryVersion = &isNotPrimary
-					defaultLog.Info("Auto-linked duplicate as version group %s: %s <-> %s", groupID, existing.FilePath, book.FilePath)
-					// Fall through to create the new book record below
-					existing = nil
+					// Not yet version-grouped — skip creating a new record; the existing one is the source of truth.
+					defaultLog.Info("Hash-duplicate of %s (%s) — no new record created; content tracked under existing book %s",
+						existing.Title, book.FilePath, existing.ID)
+					return nil
 				}
 			}
 		}
