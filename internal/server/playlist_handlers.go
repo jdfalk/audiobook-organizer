@@ -1,5 +1,5 @@
 // file: internal/server/playlist_handlers.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: 7a3d5f2e-8c4b-4a70-b8c5-3d7e0f1b9a79
 //
 // HTTP endpoints for user-created playlists (spec 3.4 task 3).
@@ -17,7 +17,6 @@ package server
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -413,22 +412,6 @@ func validatePlaylistCreate(req *playlistCreateReq) error {
 		return fmt.Errorf("type must be static or smart")
 	}
 	return nil
-}
-
-// paginationFromQuery parses limit/offset with sane defaults + caps.
-func paginationFromQuery(c *gin.Context) (int, int) {
-	limit, offset := 50, 0
-	if l := c.Query("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 500 {
-			limit = n
-		}
-	}
-	if o := c.Query("offset"); o != "" {
-		if n, err := strconv.Atoi(o); err == nil && n >= 0 {
-			offset = n
-		}
-	}
-	return limit, offset
 }
 
 func stringSlicesEqual(a, b []string) bool {

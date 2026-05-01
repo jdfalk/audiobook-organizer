@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.1.0
+// version: 3.1.1
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
@@ -18,7 +18,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -408,12 +407,7 @@ func (s *Server) listBookCOWVersions(c *gin.Context) {
 		RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	limit := 50
-	if q := c.Query("limit"); q != "" {
-		if v, err := strconv.Atoi(q); err == nil && v > 0 {
-			limit = v
-		}
-	}
+	limit, _ := paginationFromQuery(c)
 	versions, err := s.Store().GetBookSnapshots(id, limit)
 	if err != nil {
 		internalError(c, "failed to list versions", err)

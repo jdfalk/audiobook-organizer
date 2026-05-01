@@ -1,5 +1,5 @@
 // file: internal/server/reading_handlers.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 7f2c4a1d-5b8e-4f70-a9d6-2e8c0f1b9a57
 //
 // HTTP endpoints for the per-user read/unread tracking system
@@ -13,7 +13,6 @@ package server
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/readstatus"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -166,18 +165,7 @@ func (s *Server) handleListByStatus(c *gin.Context) {
 		RespondWithBadRequest(c, "invalid status")
 		return
 	}
-	limit := 50
-	offset := 0
-	if l := c.Query("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 500 {
-			limit = n
-		}
-	}
-	if o := c.Query("offset"); o != "" {
-		if n, err := strconv.Atoi(o); err == nil && n >= 0 {
-			offset = n
-		}
-	}
+	limit, offset := paginationFromQuery(c)
 	list, err := s.Store().ListUserBookStatesByStatus(callingUserID(c), status, limit, offset)
 	if err != nil {
 		internalError(c, "failed to list states", err)
