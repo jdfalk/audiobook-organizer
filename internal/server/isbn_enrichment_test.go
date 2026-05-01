@@ -1,5 +1,5 @@
 // file: internal/server/isbn_enrichment_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5b7766bc-1f00-4f32-b8ca-8cb0e815c9a1
 
 package server
@@ -20,10 +20,10 @@ type stubSource struct {
 }
 
 func (s *stubSource) Name() string { return s.name }
-func (s *stubSource) SearchByTitle(_ string) ([]metadata.BookMetadata, error) {
+func (s *stubSource) SearchByTitle(_ context.Context, _ string) ([]metadata.BookMetadata, error) {
 	return s.results, nil
 }
-func (s *stubSource) SearchByTitleAndAuthor(_, _ string) ([]metadata.BookMetadata, error) {
+func (s *stubSource) SearchByTitleAndAuthor(_ context.Context, _, _ string) ([]metadata.BookMetadata, error) {
 	return s.results, nil
 }
 

@@ -1,10 +1,11 @@
 // file: internal/server/metadata_fetch_service_test.go
-// version: 4.3.0
+// version: 4.4.0
 // guid: f6a7b8c9-d0e1-f2a3-b4c5-d6e7f8a9b0c1
 
 package server
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -26,13 +27,13 @@ type mockMetadataSource struct {
 }
 
 func (m *mockMetadataSource) Name() string { return m.name }
-func (m *mockMetadataSource) SearchByTitle(title string) ([]metadata.BookMetadata, error) {
+func (m *mockMetadataSource) SearchByTitle(_ context.Context, title string) ([]metadata.BookMetadata, error) {
 	if m.searchByTitleFunc != nil {
 		return m.searchByTitleFunc(title)
 	}
 	return nil, nil
 }
-func (m *mockMetadataSource) SearchByTitleAndAuthor(title, author string) ([]metadata.BookMetadata, error) {
+func (m *mockMetadataSource) SearchByTitleAndAuthor(_ context.Context, title, author string) ([]metadata.BookMetadata, error) {
 	if m.searchByTitleAndAuthor != nil {
 		return m.searchByTitleAndAuthor(title, author)
 	}
