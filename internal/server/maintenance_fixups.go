@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 // last-edited: 2026-05-02
 
@@ -414,7 +414,9 @@ func (s *Server) handleGetComposerScanResults(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
 		return
 	}
-	if op.Type != "composer_tag_scan" {
+	// Accept both the legacy "composer_tag_scan" type (pre-ASYNC-CLEAN-1) and
+	// the new "maintenance:scan-composer-tags" type created by the job dispatcher.
+	if op.Type != "composer_tag_scan" && op.Type != "maintenance:scan-composer-tags" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "not a composer_tag_scan operation"})
 		return
 	}
@@ -479,7 +481,9 @@ func (s *Server) handleGetMissingFileRepairResults(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
 		return
 	}
-	if op.Type != "missing-file-repair" {
+	// Accept both the legacy "missing-file-repair" type (pre-ASYNC-CLEAN-1) and
+	// the new "maintenance:repair-missing-files" type created by the job dispatcher.
+	if op.Type != "missing-file-repair" && op.Type != "maintenance:repair-missing-files" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "not a missing-file-repair operation"})
 		return
 	}
