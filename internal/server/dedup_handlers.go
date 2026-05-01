@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package server
@@ -50,22 +50,9 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 		}
 		filter.MinSimilarity = &f
 	}
-	if v := c.Query("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			RespondWithBadRequest(c, "invalid limit")
-			return
-		}
-		filter.Limit = n
-	}
-	if v := c.Query("offset"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			RespondWithBadRequest(c, "invalid offset")
-			return
-		}
-		filter.Offset = n
-	}
+	limit, offset := paginationFromQuery(c)
+	filter.Limit = limit
+	filter.Offset = offset
 
 	candidates, total, err := s.embeddingStore.ListCandidates(filter)
 	if err != nil {
