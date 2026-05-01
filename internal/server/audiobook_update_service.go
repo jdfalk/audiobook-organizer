@@ -1,5 +1,5 @@
 // file: internal/server/audiobook_update_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b2c3d4e5-f6g7-h8i9-j0k1-l2m3n4o5p6q7
 
 package server
@@ -56,7 +56,7 @@ func (aus *AudiobookUpdateService) ExtractOverrides(payload map[string]any) (map
 }
 
 // UpdateAudiobook is the main business logic method
-func (aus *AudiobookUpdateService) UpdateAudiobook(id string, payload map[string]any) (*database.Book, error) {
+func (aus *AudiobookUpdateService) UpdateAudiobook(ctx context.Context, id string, payload map[string]any) (*database.Book, error) {
 	if id == "" {
 		return nil, fmt.Errorf("audiobook ID is required")
 	}
@@ -170,5 +170,5 @@ func (aus *AudiobookUpdateService) UpdateAudiobook(id string, payload map[string
 		RawPayload: rawPayload,
 	}
 
-	return aus.audiobookService.UpdateAudiobook(context.Background(), id, req)
+	return aus.audiobookService.UpdateAudiobook(ctx, id, req)
 }

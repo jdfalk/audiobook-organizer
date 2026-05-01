@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -1182,7 +1182,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		oldBook, _ = s.Store().GetBookByID(id)
 	}
 
-	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(id, payload)
+	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(c.Request.Context(), id, payload)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			RespondWithNotFound(c, "audiobook", id)

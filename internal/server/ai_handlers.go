@@ -1,5 +1,5 @@
 // file: internal/server/ai_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 5d3a6a95-4ac8-42c2-a7fe-5ff4857dd31a
 //
 // AI-related HTTP handlers split out of server.go: filename parsing,
@@ -201,7 +201,7 @@ func (s *Server) parseAudiobookWithAI(c *gin.Context) {
 	}
 
 	// Route through the service layer for proper multi-author/narrator handling
-	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(id, payload)
+	updatedBook, err := s.audiobookUpdateService.UpdateAudiobook(c.Request.Context(), id, payload)
 	if err != nil {
 		internalError(c, "failed to update audiobook", err)
 		return
