@@ -1,5 +1,5 @@
 // file: web/src/components/SettingsGeneral.tsx
-// version: 1.0.1
+// version: 1.0.2
 // guid: 72ebd6f3-7436-4f24-8233-205c50dd05fb
 // last-edited: 2026-05-01
 
@@ -105,13 +105,13 @@ interface SettingsGeneralProps {
   excludePatternError: string | null;
   handleAddExcludePattern: () => void;
   handleRemoveExcludePattern: (pattern: string) => void;
-  importPaths: api.ImportPath[];
-  scanStatuses: Record<number, ScanStatus>;
-  handleViewScanErrors: (folder: api.ImportPath, status: ScanStatus) => void;
-  handleRequestCancelScan: (folder: api.ImportPath) => void;
-  handleScanImportFolder: (folder: api.ImportPath) => void;
-  handleRemoveImportFolder: (id: number) => void;
-  setAddFolderDialogOpen: (value: boolean) => void;
+  importPaths?: api.ImportPath[];
+  scanStatuses?: Record<number, ScanStatus>;
+  handleViewScanErrors?: (folder: api.ImportPath, status: ScanStatus) => void;
+  handleRequestCancelScan?: (folder: api.ImportPath) => void;
+  handleScanImportFolder?: (folder: api.ImportPath) => void;
+  handleRemoveImportFolder?: (id: number) => void;
+  setAddFolderDialogOpen?: (value: boolean) => void;
   backupNotice: { severity: 'success' | 'error' | 'info'; message: string } | null;
   createBackupInProgress: boolean;
   handleCreateBackup: () => void;
@@ -648,22 +648,24 @@ export function SettingsGeneral(props: SettingsGeneralProps) {
       </Grid>
 
       {/* Import Paths Section */}
-      <Grid item xs={12}>
-        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-          Import Paths (Watch Locations)
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-      </Grid>
+      {props.importPaths && (
+        <>
+          <Grid item xs={12}>
+            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+              Import Paths (Watch Locations)
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+          </Grid>
 
-      <Grid item xs={12}>
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <strong>Import Paths</strong> are watched for new audiobook
-          files. Files found here are scanned and imported into the main
-          library path where they are organized.
-        </Alert>
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <strong>Import Paths</strong> are watched for new audiobook
+              files. Files found here are scanned and imported into the main
+              library path where they are organized.
+            </Alert>
 
-        <Box>
-          {props.importPaths.length === 0 ? (
+            <Box>
+              {props.importPaths.length === 0 ? (
             <Alert severity="warning" sx={{ mb: 2 }}>
               No import folders configured. Add folders to automatically
               import audiobooks from specific locations.
@@ -671,7 +673,7 @@ export function SettingsGeneral(props: SettingsGeneralProps) {
           ) : (
             <List>
               {props.importPaths.map((folder) => {
-                const scanStatus = props.scanStatuses[folder.id];
+                const scanStatus = props.scanStatuses![folder.id];
                 const errorCount = scanStatus?.errors?.length || 0;
                 const isScanning = scanStatus?.status === 'scanning';
                 let secondaryText = `${folder.book_count || 0} books`;
@@ -715,7 +717,7 @@ export function SettingsGeneral(props: SettingsGeneralProps) {
                           <Button
                             size="small"
                             onClick={() =>
-                              props.handleViewScanErrors(
+                              props.handleViewScanErrors!(
                                 folder,
                                 scanStatus
                               )
@@ -730,7 +732,7 @@ export function SettingsGeneral(props: SettingsGeneralProps) {
                             color="error"
                             variant="outlined"
                             onClick={() =>
-                              props.handleRequestCancelScan(folder)
+                              props.handleRequestCancelScan!(folder)
                             }
                           >
                             Cancel Scan
@@ -739,7 +741,7 @@ export function SettingsGeneral(props: SettingsGeneralProps) {
                         <Button
                           size="small"
                           variant="outlined"
-                          onClick={() => props.handleScanImportFolder(folder)}
+                          onClick={() => props.handleScanImportFolder!(folder)}
                           disabled={isScanning}
                         >
                           {isScanning ? 'Scanning...' : 'Scan'}
@@ -747,7 +749,7 @@ export function SettingsGeneral(props: SettingsGeneralProps) {
                         <IconButton
                           edge="end"
                           onClick={() =>
-                            props.handleRemoveImportFolder(folder.id)
+                            props.handleRemoveImportFolder!(folder.id)
                           }
                         >
                           <DeleteIcon />
@@ -771,13 +773,15 @@ export function SettingsGeneral(props: SettingsGeneralProps) {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => props.setAddFolderDialogOpen(true)}
+            onClick={() => props.setAddFolderDialogOpen!(true)}
             sx={{ mt: 2 }}
           >
             Add Import Path
           </Button>
         </Box>
       </Grid>
+        </>
+      )}
 
       <Grid item xs={12}>
         <FormControlLabel
