@@ -1,6 +1,7 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.1.1
+// version: 3.2.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
+// last-edited: 2026-05-01
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
 // search/apply/revert/no-match, bulk fetch and bulk writeback, the
@@ -27,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
@@ -39,7 +41,7 @@ import (
 // batchUpdateMetadata handles batch metadata updates with validation
 func (s *Server) batchUpdateMetadata(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -49,7 +51,7 @@ func (s *Server) batchUpdateMetadata(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -66,9 +68,9 @@ func (s *Server) batchUpdateMetadata(c *gin.Context) {
 			errorMessages[i] = err.Error()
 		}
 		response["errors"] = errorMessages
-		RespondWithSuccess(c, 206, response)
+		httputil.RespondWithSuccess(c, 206, response)
 	} else {
-		RespondWithOK(c, response)
+		httputil.RespondWithOK(c, response)
 	}
 }
 
@@ -79,7 +81,7 @@ func (s *Server) validateMetadata(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -91,9 +93,9 @@ func (s *Server) validateMetadata(c *gin.Context) {
 		for i, err := range errors {
 			errorMessages[i] = err.Error()
 		}
-		RespondWithBadRequest(c, fmt.Sprintf("validation errors: %v", errorMessages))
+		httputil.RespondWithBadRequest(c, fmt.Sprintf("validation errors: %v", errorMessages))
 	} else {
-		RespondWithOK(c, gin.H{
+		httputil.RespondWithOK(c, gin.H{
 			"valid":   true,
 			"message": "metadata is valid",
 		})
@@ -103,31 +105,31 @@ func (s *Server) validateMetadata(c *gin.Context) {
 // exportMetadata exports all audiobook metadata
 func (s *Server) exportMetadata(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	// Get all books
 	books, err := s.Store().GetAllBooks(0, 0) // No limit/offset
 	if err != nil {
-		internalError(c, "failed to get audiobooks", err)
+		httputil.InternalError(c, "failed to get audiobooks", err)
 		return
 	}
 
 	// Export metadata
 	exportData, err := metadata.ExportMetadata(books)
 	if err != nil {
-		internalError(c, "failed to export metadata", err)
+		httputil.InternalError(c, "failed to export metadata", err)
 		return
 	}
 
-	RespondWithOK(c, exportData)
+	httputil.RespondWithOK(c, exportData)
 }
 
 // importMetadata imports audiobook metadata
 func (s *Server) importMetadata(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -137,7 +139,7 @@ func (s *Server) importMetadata(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -153,9 +155,9 @@ func (s *Server) importMetadata(c *gin.Context) {
 			errorMessages[i] = err.Error()
 		}
 		response["errors"] = errorMessages
-		RespondWithSuccess(c, 206, response)
+		httputil.RespondWithSuccess(c, 206, response)
 	} else {
-		RespondWithOK(c, response)
+		httputil.RespondWithOK(c, response)
 	}
 }
 
@@ -165,7 +167,7 @@ func (s *Server) searchMetadata(c *gin.Context) {
 	author := c.Query("author")
 
 	if title == "" {
-		RespondWithBadRequest(c, "title parameter required")
+		httputil.RespondWithBadRequest(c, "title parameter required")
 		return
 	}
 
@@ -183,11 +185,11 @@ func (s *Server) searchMetadata(c *gin.Context) {
 	}
 
 	if err != nil {
-		internalError(c, "metadata search failed", err)
+		httputil.InternalError(c, "metadata search failed", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"results": results,
 		"source":  "Open Library",
 	})
@@ -198,13 +200,13 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
 
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	resp, err := s.metadataFetchService.FetchMetadataForBook(id)
 	if err != nil {
-		RespondWithError(c, 404, err.Error(), "NOT_FOUND")
+		httputil.RespondWithError(c, 404, err.Error(), "NOT_FOUND")
 		return
 	}
 
@@ -218,7 +220,7 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	if fresh, err := s.Store().GetBookByID(id); err == nil && fresh != nil {
 		enrichedBook = fresh
 	}
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message": resp.Message,
 		"book":    enrichBookForResponseSingle(enrichedBook),
 		"source":  resp.Source,
@@ -229,7 +231,7 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	var body struct {
@@ -247,7 +249,7 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 	cacheKey := fmt.Sprintf("meta_search:%s:%s:%s:%s:%s:%t",
 		id, body.Query, body.Author, body.Narrator, body.Series, body.UseRerank)
 	if cached, ok := s.listCache.Get(cacheKey); ok {
-		RespondWithOK(c, cached)
+		httputil.RespondWithOK(c, cached)
 		return
 	}
 
@@ -256,20 +258,20 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 		metafetch.SearchOptions{UseRerank: body.UseRerank},
 	)
 	if err != nil {
-		RespondWithError(c, 404, err.Error(), "NOT_FOUND")
+		httputil.RespondWithError(c, 404, err.Error(), "NOT_FOUND")
 		return
 	}
 	// Cache as gin.H wrapper
 	respH := gin.H{"results": resp.Results, "query": resp.Query, "sources_tried": resp.SourcesTried, "sources_failed": resp.SourcesFailed}
 	s.listCache.Set(cacheKey, respH)
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 // applyAudiobookMetadata handles POST /api/v1/audiobooks/:id/apply-metadata.
 func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	var body struct {
@@ -278,12 +280,12 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 		WriteBack *bool                       `json:"write_back"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		RespondWithBadRequest(c, "invalid request body")
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 	resp, err := s.metadataFetchService.ApplyMetadataCandidate(id, body.Candidate, body.Fields)
 	if err != nil {
-		internalError(c, "failed to apply metadata", err)
+		httputil.InternalError(c, "failed to apply metadata", err)
 		return
 	}
 
@@ -322,7 +324,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	if fresh, err := s.Store().GetBookByID(id); err == nil && fresh != nil {
 		enrichedBook = fresh
 	}
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message": resp.Message,
 		"book":    enrichBookForResponseSingle(enrichedBook),
 		"source":  resp.Source,
@@ -333,11 +335,11 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if err := s.metadataFetchService.MarkNoMatch(id); err != nil {
-		internalError(c, "failed to mark no match", err)
+		httputil.InternalError(c, "failed to mark no match", err)
 		return
 	}
 	rejection := database.MetadataRejection{
@@ -350,25 +352,25 @@ func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 	if rerr := s.Store().AddMetadataRejection(rejection); rerr != nil {
 		log.Printf("[WARN] markAudiobookNoMatch: could not record rejection for %s: %v", id, rerr)
 	}
-	RespondWithOK(c, gin.H{"message": "Book marked as no match"})
+	httputil.RespondWithOK(c, gin.H{"message": "Book marked as no match"})
 }
 
 // handleGetMetadataRejections handles GET /api/v1/audiobooks/:id/metadata-rejections.
 func (s *Server) handleGetMetadataRejections(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	rejections, err := s.Store().GetMetadataRejections(id)
 	if err != nil {
-		internalError(c, "failed to get metadata rejections", err)
+		httputil.InternalError(c, "failed to get metadata rejections", err)
 		return
 	}
 	if rejections == nil {
 		rejections = []database.MetadataRejection{}
 	}
-	RespondWithOK(c, gin.H{"rejections": rejections})
+	httputil.RespondWithOK(c, gin.H{"rejections": rejections})
 }
 
 // revertAudiobookMetadata handles POST /api/v1/audiobooks/:id/revert-metadata.
@@ -376,27 +378,27 @@ func (s *Server) handleGetMetadataRejections(c *gin.Context) {
 func (s *Server) revertAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	var body struct {
 		Timestamp string `json:"timestamp"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Timestamp == "" {
-		RespondWithBadRequest(c, "timestamp is required")
+		httputil.RespondWithBadRequest(c, "timestamp is required")
 		return
 	}
 	ts, err := time.Parse(time.RFC3339Nano, body.Timestamp)
 	if err != nil {
-		RespondWithBadRequest(c, "invalid timestamp format, use RFC3339Nano")
+		httputil.RespondWithBadRequest(c, "invalid timestamp format, use RFC3339Nano")
 		return
 	}
 	book, err := s.Store().RevertBookToVersion(id, ts)
 	if err != nil {
-		internalError(c, "failed to revert metadata", err)
+		httputil.InternalError(c, "failed to revert metadata", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"message": "Book reverted to version", "book": book})
+	httputil.RespondWithOK(c, gin.H{"message": "Book reverted to version", "book": book})
 }
 
 // listBookCOWVersions handles GET /api/v1/audiobooks/:id/cow-versions.
@@ -404,16 +406,17 @@ func (s *Server) revertAudiobookMetadata(c *gin.Context) {
 func (s *Server) listBookCOWVersions(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	limit, _ := paginationFromQuery(c)
+	p := httputil.ParsePaginationParams(c)
+	limit := p.Limit
 	versions, err := s.Store().GetBookSnapshots(id, limit)
 	if err != nil {
-		internalError(c, "failed to list versions", err)
+		httputil.InternalError(c, "failed to list versions", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"versions": versions})
+	httputil.RespondWithOK(c, gin.H{"versions": versions})
 }
 
 // pruneBookCOWVersions handles POST /api/v1/audiobooks/:id/cow-versions/prune.
@@ -421,22 +424,22 @@ func (s *Server) listBookCOWVersions(c *gin.Context) {
 func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	var body struct {
 		KeepCount int `json:"keep_count"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.KeepCount <= 0 {
-		RespondWithBadRequest(c, "keep_count must be a positive integer")
+		httputil.RespondWithBadRequest(c, "keep_count must be a positive integer")
 		return
 	}
 	pruned, err := s.Store().PruneBookSnapshots(id, body.KeepCount)
 	if err != nil {
-		internalError(c, "failed to prune versions", err)
+		httputil.InternalError(c, "failed to prune versions", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"pruned": pruned})
+	httputil.RespondWithOK(c, gin.H{"pruned": pruned})
 }
 
 // writeBackAudiobookMetadata handles POST /api/v1/audiobooks/:id/write-back.
@@ -444,7 +447,7 @@ func (s *Server) pruneBookCOWVersions(c *gin.Context) {
 func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		RespondWithBadRequest(c, "book id is required")
+		httputil.RespondWithBadRequest(c, "book id is required")
 		return
 	}
 
@@ -457,7 +460,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 
 	book, err := s.Store().GetBookByID(id)
 	if err != nil || book == nil {
-		RespondWithNotFound(c, "audiobook", "")
+		httputil.RespondWithNotFound(c, "audiobook", "")
 		return
 	}
 
@@ -482,7 +485,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 		writtenCount, err = s.metadataFetchService.WriteBackMetadataForBook(id)
 	}
 	if err != nil {
-		internalError(c, "failed to write back metadata", err)
+		httputil.InternalError(c, "failed to write back metadata", err)
 		return
 	}
 
@@ -494,7 +497,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 		msg += ", files renamed"
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message":       msg,
 		"written_count": writtenCount,
 		"renamed":       renamed > 0,
@@ -505,17 +508,17 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 // fields only when they are missing and not manually overridden or locked.
 func (s *Server) bulkFetchMetadata(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	var req bulkFetchMetadataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.BookIDs) == 0 {
-		RespondWithBadRequest(c, "book_ids is required")
+		httputil.RespondWithBadRequest(c, "book_ids is required")
 		return
 	}
 
@@ -860,7 +863,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		results = append(results, result)
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"updated_count": updatedCount,
 		"total_count":   len(req.BookIDs),
 		"results":       results,
@@ -882,11 +885,11 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 // Poll progress via GET /api/v1/operations/{id}.
 func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -898,7 +901,7 @@ func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
 	store := s.Store()
 	opID := ulid.Make().String()
 	if _, err := store.CreateOperation(opID, "bulk_metadata_fetch", nil); err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 	if err := operations.SaveParams(store, opID, params); err != nil {
@@ -910,13 +913,13 @@ func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
 		return s.runBulkMetadataFetchAll(ctx, opID, capturedParams, store, progress)
 	}
 	if err := s.queue.Enqueue(opID, "bulk_metadata_fetch", operations.PriorityNormal, opFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
 	log.Printf("[INFO] bulk-metadata-fetch: queued %s prefer_audible=%v skip_cached=%v",
 		opID, params.PreferAudible, params.SkipCached)
-	c.JSON(http.StatusAccepted, gin.H{
+	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{
 		"operation_id":   opID,
 		"message":        "bulk metadata fetch started — poll GET /api/v1/operations/" + opID + " for progress",
 		"prefer_audible": params.PreferAudible,
@@ -1130,11 +1133,11 @@ func (s *Server) runBulkMetadataFetchAll(
 // for all books matching the provided filters (or all organized/imported books).
 func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -1164,7 +1167,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 		books, err = store.GetAllBooks(1_000_000, 0)
 	}
 	if err != nil {
-		internalError(c, "failed to query books", err)
+		httputil.InternalError(c, "failed to query books", err)
 		return
 	}
 
@@ -1204,7 +1207,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 
 	// Dry run: just return the count
 	if req.DryRun {
-		RespondWithOK(c, gin.H{
+		httputil.RespondWithOK(c, gin.H{
 			"estimated_books": estimatedBooks,
 			"dry_run":         true,
 		})
@@ -1212,7 +1215,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	}
 
 	if estimatedBooks == 0 {
-		RespondWithOK(c, gin.H{
+		httputil.RespondWithOK(c, gin.H{
 			"estimated_books": 0,
 			"message":         "no books match the given filters",
 		})
@@ -1223,7 +1226,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "bulk_write_back", nil)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -1243,11 +1246,11 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(op.ID, "bulk_write_back", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, gin.H{
+	httputil.RespondWithSuccess(c, 202, gin.H{
 		"operation_id":    op.ID,
 		"estimated_books": estimatedBooks,
 	})
@@ -1437,11 +1440,11 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 		Force    bool     `json:"force"` // skip change detection, rewrite everything
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.BookIDs) == 0 {
-		RespondWithBadRequest(c, "book_ids is required")
+		httputil.RespondWithBadRequest(c, "book_ids is required")
 		return
 	}
 
@@ -1451,7 +1454,7 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 	// Create a supervisor operation for tracking
 	opID := ulid.Make().String()
 	if _, err := store.CreateOperation(opID, "batch_save_to_files", nil); err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -1550,11 +1553,11 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(opID, "batch_save_to_files", operations.PriorityNormal, opFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"operation_id": opID,
 		"message":      fmt.Sprintf("Save to files queued for %d books", totalBooks),
 		"book_count":   totalBooks,
@@ -1633,7 +1636,7 @@ func (s *Server) getMetadataFields(c *gin.Context) {
 		},
 	}
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"fields": fields,
 	})
 }
@@ -1678,7 +1681,7 @@ func parseOptionalRating(raw json.RawMessage, fieldName string) (*float64, bool,
 func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing book id"})
+		httputil.RespondWithBadRequest(c, "missing book id")
 		return
 	}
 
@@ -1686,7 +1689,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	// Allow empty body (no changes)
 	if c.Request.ContentLength != 0 {
 		if err := c.ShouldBindJSON(&body); err != nil {
-			RespondWithBadRequest(c, err.Error())
+			httputil.RespondWithBadRequest(c, err.Error())
 			return
 		}
 	}
@@ -1694,7 +1697,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	req := database.UpdateBookRatingRequest{}
 
 	if overall, clear, err := parseOptionalRating(body.Overall, "overall"); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	} else {
 		req.Overall = overall
@@ -1702,7 +1705,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	}
 
 	if story, clear, err := parseOptionalRating(body.Story, "story"); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	} else {
 		req.Story = story
@@ -1710,7 +1713,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	}
 
 	if perf, clear, err := parseOptionalRating(body.Performance, "performance"); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	} else {
 		req.Performance = perf
@@ -1724,7 +1727,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 		} else {
 			var notes string
 			if err := json.Unmarshal(body.Notes, &notes); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "notes: must be a string or null"})
+				httputil.RespondWithBadRequest(c, "notes: must be a string or null")
 				return
 			}
 			req.Notes = &notes
@@ -1733,15 +1736,15 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if err := store.UpdateBookRating(id, req); err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+			httputil.RespondWithError(c, http.StatusNotFound, "book not found", "NOT_FOUND")
 			return
 		}
-		internalError(c, "UpdateBookRating failed", err)
+		httputil.InternalError(c, "UpdateBookRating failed", err)
 		return
 	}
 
@@ -1749,11 +1752,11 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	book, err := store.GetBookByID(id)
 	if err != nil || book == nil {
 		if errors.Is(err, nil) && book == nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+			httputil.RespondWithError(c, http.StatusNotFound, "book not found", "NOT_FOUND")
 			return
 		}
-		internalError(c, "GetBook after rating update failed", err)
+		httputil.InternalError(c, "GetBook after rating update failed", err)
 		return
 	}
-	c.JSON(http.StatusOK, book)
+	httputil.RespondWithOK(c, book)
 }

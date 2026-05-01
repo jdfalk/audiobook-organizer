@@ -1,6 +1,7 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
+// last-edited: 2026-05-01
 //
 // SQL-backed duplicate detection handlers split out of server.go:
 // find, list, merge, skip, dismiss, pair-level actions, and series
@@ -21,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
@@ -30,13 +32,13 @@ import (
 
 func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
 	if cached, ok := s.dedupCache.Get("book-duplicates"); ok {
-		RespondWithOK(c, cached)
+		httputil.RespondWithOK(c, cached)
 		return
 	}
 
 	result, err := s.audiobookService.GetDuplicateBooks(c.Request.Context())
 	if err != nil {
-		internalError(c, "failed to list duplicate audiobooks", err)
+		httputil.InternalError(c, "failed to list duplicate audiobooks", err)
 		return
 	}
 
@@ -46,22 +48,22 @@ func (s *Server) listDuplicateAudiobooks(c *gin.Context) {
 		"duplicate_count": result.DuplicateCount,
 	}
 	s.dedupCache.Set("book-duplicates", resp)
-	RespondWithOK(c, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 // listBookDuplicateScanResults returns cached results from the last async book-dedup scan.
 func (s *Server) listBookDuplicateScanResults(c *gin.Context) {
 	if cached, ok := s.dedupCache.Get("book-dedup-scan"); ok {
-		RespondWithOK(c, cached)
+		httputil.RespondWithOK(c, cached)
 		return
 	}
-	RespondWithOK(c, gin.H{"groups": []any{}, "group_count": 0, "duplicate_count": 0, "needs_refresh": true})
+	httputil.RespondWithOK(c, gin.H{"groups": []any{}, "group_count": 0, "duplicate_count": 0, "needs_refresh": true})
 }
 
 // scanBookDuplicates triggers an async scan for book duplicates using metadata matching.
 func (s *Server) scanBookDuplicates(c *gin.Context) {
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -69,7 +71,7 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "book-dedup-scan", nil)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -168,11 +170,11 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(opID, "book-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // mergeBookDuplicatesAsVersions merges a group of duplicate books into a version group.
@@ -181,11 +183,11 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 		BookIDs []string `json:"book_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if len(req.BookIDs) < 2 {
-		RespondWithBadRequest(c, "need at least 2 book IDs")
+		httputil.RespondWithBadRequest(c, "need at least 2 book IDs")
 		return
 	}
 
@@ -197,9 +199,9 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 	result, err := ms.MergeBooks(req.BookIDs, "")
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			RespondWithNotFound(c, "book", "")
+			httputil.RespondWithNotFound(c, "book", "")
 		} else {
-			internalError(c, "failed to merge duplicate books", err)
+			httputil.InternalError(c, "failed to merge duplicate books", err)
 		}
 		return
 	}
@@ -207,7 +209,7 @@ func (s *Server) mergeBookDuplicatesAsVersions(c *gin.Context) {
 	s.dedupCache.Invalidate("book-dedup-scan")
 	s.dedupCache.Invalidate("book-duplicates")
 
-	RespondWithOK(c, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message":          fmt.Sprintf("Merged %d books into version group", result.MergedCount),
 		"version_group_id": result.VersionGroupID,
 		"primary_id":       result.PrimaryID,
@@ -220,13 +222,13 @@ func (s *Server) dismissBookDuplicateGroup(c *gin.Context) {
 		GroupKey string `json:"group_key" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -237,7 +239,7 @@ func (s *Server) dismissBookDuplicateGroup(c *gin.Context) {
 
 	s.dedupCache.Invalidate("book-dedup-scan")
 
-	RespondWithOK(c, gin.H{"message": "Group dismissed"})
+	httputil.RespondWithOK(c, gin.H{"message": "Group dismissed"})
 }
 
 func (s *Server) mergeBooks(c *gin.Context) {
@@ -246,24 +248,24 @@ func (s *Server) mergeBooks(c *gin.Context) {
 		MergeIDs []string `json:"merge_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if len(req.MergeIDs) == 0 {
-		RespondWithBadRequest(c, "merge_ids must not be empty")
+		httputil.RespondWithBadRequest(c, "merge_ids must not be empty")
 		return
 	}
 
 	store := s.Store()
 	keepBook, err := store.GetBookByID(req.KeepID)
 	if err != nil || keepBook == nil {
-		RespondWithNotFound(c, "book", req.KeepID)
+		httputil.RespondWithNotFound(c, "book", req.KeepID)
 		return
 	}
 
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -271,7 +273,7 @@ func (s *Server) mergeBooks(c *gin.Context) {
 	detail := fmt.Sprintf("merge-books:keep=%s,merge=%d", req.KeepID, len(req.MergeIDs))
 	op, err := store.CreateOperation(opID, "book-merge", &detail)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -353,26 +355,26 @@ func (s *Server) mergeBooks(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(op.ID, "book-merge", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) listDuplicateAuthors(c *gin.Context) {
 	if cached, ok := s.dedupCache.Get("author-duplicates"); ok {
-		RespondWithOK(c, cached)
+		httputil.RespondWithOK(c, cached)
 		return
 	}
 
 	// No cache — return empty with needs_refresh flag so frontend triggers async scan
-	RespondWithOK(c, gin.H{"groups": []any{}, "count": 0, "needs_refresh": true})
+	httputil.RespondWithOK(c, gin.H{"groups": []any{}, "count": 0, "needs_refresh": true})
 }
 
 func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -380,7 +382,7 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "author-dedup-scan", nil)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -419,11 +421,11 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(opID, "author-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // filterReviewedAuthorGroups removes author dedup groups where all author IDs
@@ -480,17 +482,17 @@ func (s *Server) filterReviewedAuthorGroups(groups []dedup.AuthorDedupGroup) []d
 
 func (s *Server) listSeriesDuplicates(c *gin.Context) {
 	if cached, ok := s.dedupCache.Get("series-duplicates"); ok {
-		RespondWithOK(c, cached)
+		httputil.RespondWithOK(c, cached)
 		return
 	}
 
 	// No cache — return empty with needs_refresh flag so frontend triggers async scan
-	RespondWithOK(c, gin.H{"groups": []any{}, "count": 0, "total_series": 0, "needs_refresh": true})
+	httputil.RespondWithOK(c, gin.H{"groups": []any{}, "count": 0, "total_series": 0, "needs_refresh": true})
 }
 
 func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -498,7 +500,7 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := store.CreateOperation(opID, "series-dedup-scan", nil)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -672,11 +674,11 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(opID, "series-dedup-scan", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // validateDedupEntry searches metadata sources (OpenLibrary, Audible, etc.) to validate
@@ -687,7 +689,7 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 		Type  string `json:"type"` // "series", "author", "book"
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, "query is required")
+		httputil.RespondWithBadRequest(c, "query is required")
 		return
 	}
 	if req.Type == "" {
@@ -696,7 +698,7 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 
 	chain := s.metadataFetchService.BuildSourceChain()
 	if len(chain) == 0 {
-		RespondWithOK(c, gin.H{"results": []interface{}{}, "message": "no metadata sources configured"})
+		httputil.RespondWithOK(c, gin.H{"results": []interface{}{}, "message": "no metadata sources configured"})
 		return
 	}
 
@@ -743,17 +745,17 @@ func (s *Server) validateDedupEntry(c *gin.Context) {
 	if results == nil {
 		results = []validationResult{}
 	}
-	RespondWithOK(c, gin.H{"results": results, "query": req.Query, "type": req.Type})
+	httputil.RespondWithOK(c, gin.H{"results": results, "query": req.Query, "type": req.Type})
 }
 
 func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -761,7 +763,7 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 	detail := "series-deduplicate"
 	op, err := store.CreateOperation(opID, "series-dedup", &detail)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -849,37 +851,37 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(op.ID, "series-dedup", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 func (s *Server) seriesPrunePreview(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	preview, err := computeSeriesPrunePreview(store)
 	if err != nil {
-		internalError(c, "failed to compute series prune preview", err)
+		httputil.InternalError(c, "failed to compute series prune preview", err)
 		return
 	}
 
-	RespondWithOK(c, preview)
+	httputil.RespondWithOK(c, preview)
 }
 
 func (s *Server) seriesPrune(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -887,7 +889,7 @@ func (s *Server) seriesPrune(c *gin.Context) {
 	detail := "series-prune"
 	op, err := store.CreateOperation(opID, "series-prune", &detail)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -896,11 +898,11 @@ func (s *Server) seriesPrune(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(op.ID, "series-prune", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // executeSeriesPrune performs the actual series prune logic (used by both HTTP handler and scheduler).
@@ -1079,24 +1081,24 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 		CustomName string `json:"custom_name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	if len(req.MergeIDs) == 0 {
-		RespondWithBadRequest(c, "merge_ids must not be empty")
+		httputil.RespondWithBadRequest(c, "merge_ids must not be empty")
 		return
 	}
 
 	store := s.Store()
 	keepSeries, err := store.GetSeriesByID(req.KeepID)
 	if err != nil || keepSeries == nil {
-		RespondWithNotFound(c, "series", "")
+		httputil.RespondWithNotFound(c, "series", "")
 		return
 	}
 
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -1104,7 +1106,7 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 	detail := fmt.Sprintf("merge-series:keep=%d,merge=%v", req.KeepID, req.MergeIDs)
 	op, err := store.CreateOperation(opID, "series-merge", &detail)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -1257,11 +1259,11 @@ func (s *Server) mergeSeriesGroup(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(op.ID, "series-merge", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // seriesNormalizeAction describes a single action the normalize pass would take.
@@ -1358,7 +1360,7 @@ func computeSeriesNormalizeActions(store interface {
 func (s *Server) seriesNormalizePreview(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -1376,7 +1378,7 @@ func (s *Server) seriesNormalizePreview(c *gin.Context) {
 		}
 	}
 
-	RespondWithOK(c, seriesNormalizePreviewResult{
+	httputil.RespondWithOK(c, seriesNormalizePreviewResult{
 		Actions:             normal,
 		TotalSeriesAffected: len(normal),
 		TotalBooksAffected:  totalBooks,
@@ -1489,11 +1491,11 @@ func executeSeriesNormalizeCore(
 func (s *Server) seriesNormalize(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
-		RespondWithInternalError(c, "operation queue not initialized")
+		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
 	}
 
@@ -1501,7 +1503,7 @@ func (s *Server) seriesNormalize(c *gin.Context) {
 	detail := "series-normalize"
 	op, err := store.CreateOperation(opID, "series-normalize", &detail)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -1547,9 +1549,9 @@ func (s *Server) seriesNormalize(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(op.ID, "series-normalize", operations.PriorityNormal, operationFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, op)
 }
