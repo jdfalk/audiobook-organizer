@@ -1,10 +1,10 @@
 // file: internal/itunes/service/path_reconcile.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: 9e3b7a1d-4c2f-4a60-b8d5-2f1e8c0d9a47
 //
 // One-time (repeatable) backfill that walks every book with an
-// iTunes persistent ID, recomputes book.ITunesPath and
-// book_files.ITunesPath from the current FilePath, and enqueues the
+// iTunes persistent ID, recomputes book_files.ITunesPath from the
+// current FilePath, and enqueues the
 // writeback batcher. Fixes libraries where organize ran before the
 // path-update bug was patched and iTunes now shows "missing files"
 // for books that were moved under the hood.
@@ -140,25 +140,6 @@ func (r *PathReconciler) Reconcile(ctx context.Context, opID string, progress op
 			continue
 		}
 		result.ITunesTracked++
-
-		if b.FilePath != "" {
-			wantBookITunesPath := metafetch.ComputeITunesPath(b.FilePath)
-			if wantBookITunesPath != "" {
-				current := ""
-				if b.ITunesPath != nil {
-					current = *b.ITunesPath
-				}
-				if current != wantBookITunesPath {
-					b.ITunesPath = &wantBookITunesPath
-					if _, err := r.store.UpdateBook(b.ID, b); err != nil {
-						result.Errors++
-						_ = progress.Log("warn", fmt.Sprintf("update book %s: %v", b.ID, err), nil)
-					} else {
-						result.PathsUpdated++
-					}
-				}
-			}
-		}
 
 		for _, bf := range bookFiles {
 			if bf.ITunesPersistentID == "" || bf.FilePath == "" {

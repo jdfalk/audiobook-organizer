@@ -1,5 +1,5 @@
 // file: internal/itunes/service/writeback_batcher.go
-// version: 4.0.0
+// version: 4.0.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -296,12 +296,6 @@ func (b *WriteBackBatcher) flush() {
 				})
 			}
 		} else if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
-			if book.ITunesPath != nil && *book.ITunesPath != "" {
-				locationUpdates = append(locationUpdates, itunes.ITLLocationUpdate{
-					PersistentID: *book.ITunesPersistentID,
-					NewLocation:  *book.ITunesPath,
-				})
-			}
 			metadataUpdates = append(metadataUpdates, itunes.ITLMetadataUpdate{
 				PersistentID: *book.ITunesPersistentID,
 				Name:         book.Title,

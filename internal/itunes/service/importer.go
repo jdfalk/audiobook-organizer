@@ -1,5 +1,5 @@
 // file: internal/itunes/service/importer.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 2b8e5f1a-4c7d-4e9f-b3a0-6d8c2e7a4f1b
 
 package itunesservice
@@ -577,14 +577,7 @@ func (imp *Importer) Sync(ctx context.Context, libraryPath string, pathMappings 
 				}
 			}
 
-			if firstTrack.Location != "" {
-				loc := firstTrack.Location
-				if existing.ITunesPath == nil || *existing.ITunesPath != loc {
-					existing.ITunesPath = &loc
-					changed = true
-					log.Info("Set itunes_path for %s: %s", existing.Title, loc[:min(80, len(loc))])
-				}
-			} else {
+			if firstTrack.Location == "" {
 				log.Debug("No Location for PID %s (%s)", persistentID, existing.Title)
 			}
 
@@ -780,12 +773,6 @@ func (imp *Importer) CollectITLUpdates() []itunes.ITLLocationUpdate {
 								})
 							}
 						}
-					} else if books[i].ITunesPersistentID != nil && *books[i].ITunesPersistentID != "" &&
-						books[i].ITunesPath != nil && *books[i].ITunesPath != "" {
-						local = append(local, itunes.ITLLocationUpdate{
-							PersistentID: *books[i].ITunesPersistentID,
-							NewLocation:  *books[i].ITunesPath,
-						})
 					}
 				}
 				if len(books) < pageSize {
@@ -834,13 +821,6 @@ func (imp *Importer) CollectITLUpdatesWithBookIDs() ([]itunes.ITLLocationUpdate,
 					bookIDSet[b.ID] = true
 				}
 			}
-		} else if b.ITunesPersistentID != nil && *b.ITunesPersistentID != "" &&
-			b.ITunesPath != nil && *b.ITunesPath != "" {
-			updates = append(updates, itunes.ITLLocationUpdate{
-				PersistentID: *b.ITunesPersistentID,
-				NewLocation:  *b.ITunesPath,
-			})
-			bookIDSet[b.ID] = true
 		}
 	}
 

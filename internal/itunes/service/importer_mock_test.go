@@ -1,5 +1,5 @@
 // file: internal/itunes/service/importer_mock_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: e7f1a2b3-4c5d-6e7f-8a9b-0c1d2e3f4a5b
 
 package itunesservice
@@ -137,6 +137,8 @@ func TestCollectITLUpdatesWithBookIDs_SkipsNonPrimary(t *testing.T) {
 }
 
 func TestCollectITLUpdatesWithBookIDs_BookLevel(t *testing.T) {
+	// Books without BookFiles produce no location updates now that
+	// Book.ITunesPath is deprecated; location is tracked on BookFile.
 	pid := "DEADBEEFCAFEBABE"
 	path := "/mnt/books/greatbook.m4b"
 	isPrimary := true
@@ -151,17 +153,14 @@ func TestCollectITLUpdatesWithBookIDs_BookLevel(t *testing.T) {
 
 	m := dbmocks.NewMockStore(t)
 	m.EXPECT().GetAllBooks(100000, 0).Return([]database.Book{book}, nil)
-	// No files → falls through to book-level update.
 	m.EXPECT().GetBookFiles("book-2").Return(nil, nil)
 
 	imp := newMockImporter(m)
 	updates, bookIDs := imp.CollectITLUpdatesWithBookIDs()
 
-	require.Len(t, updates, 1)
-	assert.Equal(t, pid, updates[0].PersistentID)
-	assert.Equal(t, path, updates[0].NewLocation)
-	require.Len(t, bookIDs, 1)
-	assert.Equal(t, "book-2", bookIDs[0])
+	// No BookFiles → no location updates (deprecated Book.ITunesPath not used).
+	assert.Empty(t, updates)
+	assert.Empty(t, bookIDs)
 }
 
 func TestCollectITLUpdatesWithBookIDs_FileLevel(t *testing.T) {
