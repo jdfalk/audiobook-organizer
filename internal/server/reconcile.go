@@ -1,5 +1,5 @@
 // file: internal/server/reconcile.go
-// version: 1.9.0
+// version: 1.9.1
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
@@ -84,7 +84,7 @@ type ReconcileApplyResult struct {
 func (s *Server) reconcilePreview(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -100,7 +100,7 @@ func (s *Server) reconcilePreview(c *gin.Context) {
 func (s *Server) startReconcileScan(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
@@ -153,7 +153,7 @@ func (s *Server) runReconcileScan(ctx context.Context, opID string, progress ope
 func (s *Server) latestReconcileScan(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -194,7 +194,7 @@ func (s *Server) latestReconcileScan(c *gin.Context) {
 func (s *Server) startReconcile(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	if s.queue == nil {
@@ -206,7 +206,7 @@ func (s *Server) startReconcile(c *gin.Context) {
 		Matches []ReconcileApplyItem `json:"matches"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 

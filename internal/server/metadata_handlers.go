@@ -24,15 +24,15 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -274,8 +274,8 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	}
 	var body struct {
 		Candidate metafetch.MetadataCandidate `json:"candidate"`
-		Fields    []string          `json:"fields"`
-		WriteBack *bool             `json:"write_back"`
+		Fields    []string                    `json:"fields"`
+		WriteBack *bool                       `json:"write_back"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		RespondWithBadRequest(c, "invalid request body")
@@ -917,10 +917,10 @@ func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
 	log.Printf("[INFO] bulk-metadata-fetch: queued %s prefer_audible=%v skip_cached=%v",
 		opID, params.PreferAudible, params.SkipCached)
 	c.JSON(http.StatusAccepted, gin.H{
-		"operation_id":  opID,
-		"message":       "bulk metadata fetch started — poll GET /api/v1/operations/" + opID + " for progress",
+		"operation_id":   opID,
+		"message":        "bulk metadata fetch started — poll GET /api/v1/operations/" + opID + " for progress",
 		"prefer_audible": params.PreferAudible,
-		"skip_cached":   params.SkipCached,
+		"skip_cached":    params.SkipCached,
 	})
 }
 
@@ -1686,7 +1686,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	// Allow empty body (no changes)
 	if c.Request.ContentLength != 0 {
 		if err := c.ShouldBindJSON(&body); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			RespondWithBadRequest(c, err.Error())
 			return
 		}
 	}
@@ -1694,7 +1694,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	req := database.UpdateBookRatingRequest{}
 
 	if overall, clear, err := parseOptionalRating(body.Overall, "overall"); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	} else {
 		req.Overall = overall
@@ -1702,7 +1702,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	}
 
 	if story, clear, err := parseOptionalRating(body.Story, "story"); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	} else {
 		req.Story = story
@@ -1710,7 +1710,7 @@ func (s *Server) handleUpdateBookRating(c *gin.Context) {
 	}
 
 	if perf, clear, err := parseOptionalRating(body.Performance, "performance"); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	} else {
 		req.Performance = perf

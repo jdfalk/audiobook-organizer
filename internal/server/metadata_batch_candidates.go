@@ -47,10 +47,10 @@ type CandidateBookInfo struct {
 
 // CandidateResult holds the metadata candidate search result for a single book.
 type CandidateResult struct {
-	Book      CandidateBookInfo  `json:"book"`
+	Book      CandidateBookInfo            `json:"book"`
 	Candidate *metafetch.MetadataCandidate `json:"candidate,omitempty"`
-	Status    string             `json:"status"` // "matched", "no_match", "error"
-	Error     string             `json:"error_message,omitempty"`
+	Status    string                       `json:"status"` // "matched", "no_match", "error"
+	Error     string                       `json:"error_message,omitempty"`
 }
 
 // batchFetchRequest is the JSON body for handleBatchFetchCandidates.
@@ -378,18 +378,18 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"operation":     op,
-		"results":       candidateResults,
-		"total":         totalCount,
-		"total_count":   totalCount,
-		"matched":       countByStatus(candidateResults, "matched"),
-		"no_match":      countByStatus(candidateResults, "no_match"),
-		"errors":        countByStatus(candidateResults, "error"),
-		"total_matched": totalMatched,
+		"operation":      op,
+		"results":        candidateResults,
+		"total":          totalCount,
+		"total_count":    totalCount,
+		"matched":        countByStatus(candidateResults, "matched"),
+		"no_match":       countByStatus(candidateResults, "no_match"),
+		"errors":         countByStatus(candidateResults, "error"),
+		"total_matched":  totalMatched,
 		"total_no_match": totalNoMatch,
-		"total_errors":  totalErrors,
-		"limit":         limit,
-		"offset":        offset,
+		"total_errors":   totalErrors,
+		"limit":          limit,
+		"offset":         offset,
 	})
 }
 
@@ -623,7 +623,7 @@ func (s *Server) handleRejectCandidates(c *gin.Context) {
 		BookIDs     []string `json:"book_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -681,7 +681,7 @@ func (s *Server) handleUnrejectCandidates(c *gin.Context) {
 		BookIDs     []string `json:"book_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		RespondWithBadRequest(c, err.Error())
 		return
 	}
 
