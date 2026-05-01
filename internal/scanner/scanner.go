@@ -1531,10 +1531,29 @@ func saveBookToDatabase(book *Book) error {
 					defaultLog.Debug("Already version-linked (group %s), skipping: %s", *existing.VersionGroupID, existing.FilePath)
 					return nil
 				} else {
-					// Not yet version-grouped — skip creating a new record; the existing one is the source of truth.
-					defaultLog.Info("Hash-duplicate of %s (%s) — no new record created; content tracked under existing book %s",
-						existing.Title, book.FilePath, existing.ID)
-					return nil
+					// Link both records via version_group_id. Primary = the one in RootDir.
+					h := sha256.Sum256([]byte(existing.ID + "|" + book.FilePath))
+					groupID := fmt.Sprintf("vg-%x", h[:8])
+
+					existingInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(existing.FilePath, config.AppConfig.RootDir)
+					newInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(book.FilePath, config.AppConfig.RootDir)
+
+					// Mark the one in RootDir as primary; if neither or both are in root, existing wins.
+					existingPrimary := existingInRoot || !newInRoot
+					newPrimary := newInRoot && !existingInRoot
+
+					existing.VersionGroupID = &groupID
+					existing.IsPrimaryVersion = &existingPrimary
+					if _, uerr := database.GetGlobalStore().UpdateBook(existing.ID, existing); uerr != nil {
+						defaultLog.Warn("Failed to set version group on existing book %s: %v", existing.ID, uerr)
+					}
+
+					dbBook.VersionGroupID = &groupID
+					dbBook.IsPrimaryVersion = &newPrimary
+					defaultLog.Info("Auto-linked hash-duplicate as version group %s (primary=%s): %s <-> %s",
+						groupID, existing.FilePath, existing.FilePath, book.FilePath)
+					// Fall through to create the new (non-primary) record below
+					existing = nil
 				}
 			}
 		}
