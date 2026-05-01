@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.18.0
+// version: 1.19.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
@@ -15,6 +15,7 @@ import {
 import { MainLayout } from './components/layout/MainLayout';
 import { WelcomeWizard } from './components/wizard/WelcomeWizard';
 import { KeyboardShortcutsDialog } from './components/KeyboardShortcutsDialog';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { eventSourceManager } from './services/eventSourceManager';
@@ -194,28 +195,28 @@ function App() {
           <Suspense fallback={<CircularProgress sx={{ m: 4 }} />}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/library" element={<Library />} />
-              <Route path="/library/:id" element={<BookDetail />} />
-              <Route path="/works" element={<Works />} />
-              <Route path="/system" element={<System />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+              <Route path="/library" element={<ErrorBoundary><Library /></ErrorBoundary>} />
+              <Route path="/library/:id" element={<ErrorBoundary><BookDetail /></ErrorBoundary>} />
+              <Route path="/works" element={<ErrorBoundary><Works /></ErrorBoundary>} />
+              <Route path="/system" element={<ErrorBoundary><System /></ErrorBoundary>} />
+              <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
               <Route path="/login" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/files" element={<FileBrowser />} />
+              <Route path="/files" element={<ErrorBoundary><FileBrowser /></ErrorBoundary>} />
               <Route path="/operations" element={<Navigate to="/activity" replace />} />
               <Route path="/maintenance" element={<Navigate to="/system" replace />} />
               <Route path="/authors/dedup" element={<Navigate to="/dedup" replace />} />
               <Route path="/books/dedup" element={<Navigate to="/dedup" replace />} />
-              <Route path="/dedup" element={<BookDedup />} />
-              <Route path="/series" element={<Series />} />
-              <Route path="/authors" element={<Authors />} />
-              <Route path="/diagnostics" element={<Diagnostics />} />
-              <Route path="/activity" element={<ActivityLog />} />
-              <Route path="/playlists" element={<Playlists />} />
-              <Route path="/playlists/:id" element={<PlaylistDetail />} />
-              <Route path="/setup" element={<Setup />} />
-              <Route path="/users" element={<Users />} />
-              <Route path="/versions" element={<TrashedVersions />} />
+              <Route path="/dedup" element={<ErrorBoundary><BookDedup /></ErrorBoundary>} />
+              <Route path="/series" element={<ErrorBoundary><Series /></ErrorBoundary>} />
+              <Route path="/authors" element={<ErrorBoundary><Authors /></ErrorBoundary>} />
+              <Route path="/diagnostics" element={<ErrorBoundary><Diagnostics /></ErrorBoundary>} />
+              <Route path="/activity" element={<ErrorBoundary><ActivityLog /></ErrorBoundary>} />
+              <Route path="/playlists" element={<ErrorBoundary><Playlists /></ErrorBoundary>} />
+              <Route path="/playlists/:id" element={<ErrorBoundary><PlaylistDetail /></ErrorBoundary>} />
+              <Route path="/setup" element={<ErrorBoundary><Setup /></ErrorBoundary>} />
+              <Route path="/users" element={<ErrorBoundary><Users /></ErrorBoundary>} />
+              <Route path="/versions" element={<ErrorBoundary><TrashedVersions /></ErrorBoundary>} />
             </Routes>
           </Suspense>
         </MainLayout>
