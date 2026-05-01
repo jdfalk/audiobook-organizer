@@ -1,5 +1,5 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
 
 // iTunes HTTP handlers. All business logic lives in internal/itunes/service.
@@ -530,18 +530,7 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 	}
 
 	search := c.Query("search")
-	limit := 50
-	offset := 0
-	if l := c.Query("limit"); l != "" {
-		if v, err := fmt.Sscanf(l, "%d", &limit); err != nil || v == 0 {
-			limit = 50
-		}
-	}
-	if o := c.Query("offset"); o != "" {
-		if v, err := fmt.Sscanf(o, "%d", &offset); err != nil || v == 0 {
-			offset = 0
-		}
-	}
+	limit, offset := paginationFromQuery(c)
 
 	var allBooks []database.Book
 	var err error

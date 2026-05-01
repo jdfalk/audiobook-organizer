@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_fixups.go
-// version: 1.30.0
+// version: 1.30.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
 package server
 
@@ -5486,18 +5486,7 @@ func (s *Server) handleRelinkReport(c *gin.Context) {
 		return
 	}
 
-	limit := 0
-	if raw := c.Query("limit"); raw != "" {
-		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
-			limit = v
-		}
-	}
-	offset := 0
-	if raw := c.Query("offset"); raw != "" {
-		if v, err := strconv.Atoi(raw); err == nil && v >= 0 {
-			offset = v
-		}
-	}
+	limit, offset := paginationFromQuery(c)
 
 	allBooks, err := store.GetAllBooks(0, 0)
 	if err != nil {
@@ -6189,10 +6178,7 @@ c.JSON(http.StatusOK, gin.H{
 //
 // Response: { data: { groups: [...], total_wasted_bytes: N, total_groups: N } }
 func (s *Server) handleScanDuplicateFiles(c *gin.Context) {
-limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-if limit <= 0 {
-limit = 50
-}
+limit, _ := paginationFromQuery(c)
 
 store := s.Store()
 if store == nil {

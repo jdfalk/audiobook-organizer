@@ -1,11 +1,10 @@
 // file: internal/server/activity_handlers.go
-// version: 2.1.1
+// version: 2.1.2
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
 
 package server
 
 import (
-	"strconv"
 	"strings"
 	"time"
 
@@ -38,23 +37,9 @@ func (s *Server) listActivity(c *gin.Context) {
 
 	filter := database.ActivityFilter{}
 
-	if v := c.Query("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			RespondWithBadRequest(c, "invalid limit")
-			return
-		}
-		filter.Limit = n
-	}
-
-	if v := c.Query("offset"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			RespondWithBadRequest(c, "invalid offset")
-			return
-		}
-		filter.Offset = n
-	}
+	limit, offset := paginationFromQuery(c)
+	filter.Limit = limit
+	filter.Offset = offset
 
 	filter.Type = c.Query("type")
 	filter.Tier = c.Query("tier")
