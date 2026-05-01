@@ -1,5 +1,5 @@
 // file: internal/realtime/events.go
-// version: 1.1.2
+// version: 1.2.0
 // guid: 9e8d7f6a-5c4b-3a21-0f9e-8d7c6b5a4392
 
 package realtime
@@ -249,24 +249,9 @@ func (h *EventHub) HandleSSE(c *gin.Context) {
 	}
 
 	// Keep connection alive and stream events
-	// Use 5 second heartbeat to prevent Safari from closing idle connections
-	// Safari is particularly aggressive about closing SSE connections
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	// Send initial heartbeat immediately after connection
-	initialHeartbeat := map[string]interface{}{
-		"type":      "heartbeat",
-		"timestamp": time.Now(),
-	}
-	if data, err := json.Marshal(initialHeartbeat); err == nil {
-		if _, err := c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", data))); err != nil {
-			log.Printf("Error writing initial heartbeat to client %s: %v", clientID, err)
-			return
-		}
-		c.Writer.Flush()
-		log.Printf("Sent initial heartbeat to client %s", clientID)
-	}
+	// Use 25 second heartbeat (SSE comment) to prevent proxies from closing idle connections
+	heartbeat := time.NewTicker(25 * time.Second)
+	defer heartbeat.Stop()
 
 	for {
 		select {
@@ -290,20 +275,15 @@ func (h *EventHub) HandleSSE(c *gin.Context) {
 
 			// Flush immediately
 			c.Writer.Flush()
-		case <-ticker.C:
-			// Send heartbeat to keep connection alive
-			heartbeat := map[string]interface{}{
-				"type":      "heartbeat",
-				"timestamp": time.Now(),
+		case <-heartbeat.C:
+			// Send SSE comment line to keep connection alive through proxies
+			// Comments are ignored by clients but prevent proxy timeouts
+			_, err := c.Writer.Write([]byte(": ping\n\n"))
+			if err != nil {
+				log.Printf("Error writing heartbeat to client %s: %v", clientID, err)
+				return
 			}
-			if data, err := json.Marshal(heartbeat); err == nil {
-				if _, err := c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", data))); err != nil {
-					log.Printf("Error writing heartbeat to client %s: %v", clientID, err)
-					return
-				}
-				c.Writer.Flush()
-				_ = clientID // heartbeat sent
-			}
+			c.Writer.Flush()
 		}
 	}
 }
