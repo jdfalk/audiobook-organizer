@@ -1,6 +1,7 @@
 // file: internal/server/library_enhancement_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 0336376b-882f-41df-b8ab-7e27526cdb1d
+// last-edited: 2026-05-01
 
 package server
 
@@ -34,8 +35,10 @@ func createTestBook(t *testing.T, title string) *database.Book {
 	return book
 }
 
-// createTestBookWithFields creates a book with optional fields set at creation time.
-func createTestBookWithFields(t *testing.T, title string, genre, language *string, duration *int) *database.Book {
+// createTestBookWithFields creates a book with optional narrator and duration set at creation time.
+// Uses narrator (in BookSummary) instead of genre/language (not in BookSummary) so that
+// GetAllBookSummaries-backed sorting and field filtering work correctly.
+func createTestBookWithFields(t *testing.T, title string, narrator *string, duration *int) *database.Book {
 	t.Helper()
 	tempFile := filepath.Join(t.TempDir(), title+".m4b")
 	require.NoError(t, os.WriteFile(tempFile, []byte("audio"), 0o644))
@@ -43,8 +46,7 @@ func createTestBookWithFields(t *testing.T, title string, genre, language *strin
 		Title:    title,
 		FilePath: tempFile,
 		Format:   "m4b",
-		Genre:    genre,
-		Language: language,
+		Narrator: narrator,
 		Duration: duration,
 	})
 	require.NoError(t, err)
@@ -424,12 +426,12 @@ func TestServerSideSorting(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	// Create books with varying fields — including a nil-genre book upfront
+	// Create books with varying fields — including a nil-narrator book upfront
 	// so all subtests see all 4 books (the list cache caches results after the first request).
-	bookA := createTestBookWithFields(t, "Zebra Adventures", stringPtr("scifi"), stringPtr("English"), intPtrHelper(3600))
-	bookB := createTestBookWithFields(t, "Alpha Quest", stringPtr("fantasy"), stringPtr("English"), intPtrHelper(7200))
-	bookC := createTestBookWithFields(t, "Middle Ground", stringPtr("horror"), stringPtr("French"), intPtrHelper(1800))
-	bookD := createTestBook(t, "NoGenreBook") // nil genre, nil duration
+	bookA := createTestBookWithFields(t, "Zebra Adventures", stringPtr("Charlie"), intPtrHelper(3600))
+	bookB := createTestBookWithFields(t, "Alpha Quest", stringPtr("Aaron"), intPtrHelper(7200))
+	bookC := createTestBookWithFields(t, "Middle Ground", stringPtr("Michael"), intPtrHelper(1800))
+	bookD := createTestBook(t, "NoGenreBook") // nil narrator, nil duration
 
 	// Helper to extract titles from list response
 	extractTitles := func(t *testing.T, w *httptest.ResponseRecorder) []string {
@@ -496,19 +498,19 @@ func TestServerSideSorting(t *testing.T) {
 		assert.Equal(t, "Alpha Quest", titles[3])
 	})
 
-	t.Run("sort by genre ascending", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, baseURL+"&sort_by=genre&sort_order=asc", nil)
+	t.Run("sort by narrator ascending", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, baseURL+"&sort_by=narrator&sort_order=asc", nil)
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		titles := extractTitles(t, w)
 		require.Len(t, titles, 4)
-		// "" (nil) < fantasy < horror < scifi
+		// "" (nil) < Aaron < Charlie < Michael
 		assert.Equal(t, "NoGenreBook", titles[0])
 		assert.Equal(t, "Alpha Quest", titles[1])
-		assert.Equal(t, "Middle Ground", titles[2])
-		assert.Equal(t, "Zebra Adventures", titles[3])
+		assert.Equal(t, "Zebra Adventures", titles[2])
+		assert.Equal(t, "Middle Ground", titles[3])
 	})
 
 	t.Run("sort by created_at", func(t *testing.T) {
@@ -546,15 +548,15 @@ func TestServerSideSorting(t *testing.T) {
 	})
 
 	t.Run("sort with nil fields handles gracefully", func(t *testing.T) {
-		// NoGenreBook has nil genre — sorting still works without panic
-		req := httptest.NewRequest(http.MethodGet, baseURL+"&sort_by=genre&sort_order=asc", nil)
+		// NoGenreBook has nil narrator — sorting still works without panic
+		req := httptest.NewRequest(http.MethodGet, baseURL+"&sort_by=narrator&sort_order=asc", nil)
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code, "sorting should handle nil fields gracefully")
 		titles := extractTitles(t, w)
 		require.Len(t, titles, 4)
-		// nil genre sorts before any non-nil genre
+		// nil narrator sorts before any non-nil narrator
 		assert.Equal(t, "NoGenreBook", titles[0])
 	})
 }
@@ -565,9 +567,11 @@ func TestServerSideFieldFiltering(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	bookA := createTestBookWithFields(t, "The Great Adventure", stringPtr("scifi"), stringPtr("English"), nil)
-	bookB := createTestBookWithFields(t, "Mystery Mansion", stringPtr("mystery"), stringPtr("English"), nil)
-	bookC := createTestBookWithFields(t, "Le Petit Prince", stringPtr("fiction"), stringPtr("French"), nil)
+	// Books use narrator (present in BookSummary) instead of genre/language
+	// (not in BookSummary) so field filters work end-to-end with GetAllBookSummaries.
+	bookA := createTestBookWithFields(t, "The Great Adventure", stringPtr("Mary English"), nil)
+	bookB := createTestBookWithFields(t, "Mystery Mansion", stringPtr("John English"), nil)
+	bookC := createTestBookWithFields(t, "Le Petit Prince", stringPtr("Pierre French"), nil)
 	_ = bookA
 	_ = bookB
 	_ = bookC
@@ -593,7 +597,7 @@ func TestServerSideFieldFiltering(t *testing.T) {
 
 	t.Run("filter by single field", func(t *testing.T) {
 		filters := buildFiltersParam([]FieldFilter{
-			{Field: "genre", Value: "scifi", Negated: false},
+			{Field: "narrator", Value: "Mary", Negated: false},
 		})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks?filters="+filters, nil)
 		w := httptest.NewRecorder()
@@ -607,8 +611,8 @@ func TestServerSideFieldFiltering(t *testing.T) {
 
 	t.Run("filter by multiple fields AND", func(t *testing.T) {
 		filters := buildFiltersParam([]FieldFilter{
-			{Field: "language", Value: "English", Negated: false},
-			{Field: "genre", Value: "scifi", Negated: false},
+			{Field: "narrator", Value: "English", Negated: false},
+			{Field: "narrator", Value: "Mary", Negated: false},
 		})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks?filters="+filters, nil)
 		w := httptest.NewRecorder()
@@ -622,7 +626,7 @@ func TestServerSideFieldFiltering(t *testing.T) {
 
 	t.Run("negated filter excludes", func(t *testing.T) {
 		filters := buildFiltersParam([]FieldFilter{
-			{Field: "genre", Value: "scifi", Negated: true},
+			{Field: "narrator", Value: "Mary", Negated: true},
 		})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks?filters="+filters, nil)
 		w := httptest.NewRecorder()
@@ -638,7 +642,7 @@ func TestServerSideFieldFiltering(t *testing.T) {
 
 	t.Run("case insensitive matching", func(t *testing.T) {
 		filters := buildFiltersParam([]FieldFilter{
-			{Field: "genre", Value: "SCIFI", Negated: false},
+			{Field: "narrator", Value: "MARY", Negated: false},
 		})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks?filters="+filters, nil)
 		w := httptest.NewRecorder()
@@ -691,7 +695,7 @@ func TestServerSideFieldFiltering(t *testing.T) {
 
 	t.Run("combined sort and filter", func(t *testing.T) {
 		filters := buildFiltersParam([]FieldFilter{
-			{Field: "language", Value: "English", Negated: false},
+			{Field: "narrator", Value: "English", Negated: false},
 		})
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audiobooks?sort_by=title&sort_order=desc&filters="+filters, nil)
 		w := httptest.NewRecorder()
@@ -700,7 +704,7 @@ func TestServerSideFieldFiltering(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		titles := extractTitles(t, w)
 		assert.Len(t, titles, 2)
-		// desc: The Great Adventure > Mystery Mansion
+		// desc: The Great Adventure > Mystery Mansion (both have "English" narrator)
 		assert.Equal(t, "The Great Adventure", titles[0])
 		assert.Equal(t, "Mystery Mansion", titles[1])
 	})

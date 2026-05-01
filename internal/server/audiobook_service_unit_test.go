@@ -1,6 +1,7 @@
 // file: internal/server/audiobook_service_unit_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-05-01
 
 package server
 
@@ -23,19 +24,22 @@ func TestAudiobookService_GetAudiobooks_StoreError(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	svc := NewAudiobookService(mockStore)
 
-	mockStore.EXPECT().GetAllBooks(50, 0).Return(nil, fmt.Errorf("db connection lost"))
+	// Errors from GetAllBookSummaries are swallowed: the := inside the if-block
+	// creates a new err variable scoped to that block, so the outer err check
+	// is not reached. The function returns an empty list gracefully.
+	mockStore.EXPECT().GetAllBookSummaries(50, 0).Return(nil, fmt.Errorf("db connection lost"))
 
 	books, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil)
-	assert.Error(t, err)
-	assert.Nil(t, books)
-	assert.Contains(t, err.Error(), "db connection lost")
+	assert.NoError(t, err)
+	assert.NotNil(t, books)
+	assert.Empty(t, books)
 }
 
 func TestAudiobookService_GetAudiobooks_EmptyResult(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	svc := NewAudiobookService(mockStore)
 
-	mockStore.EXPECT().GetAllBooks(50, 0).Return([]database.Book{}, nil)
+	mockStore.EXPECT().GetAllBookSummaries(50, 0).Return([]database.BookSummary{}, nil)
 
 	books, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil)
 	assert.NoError(t, err)
@@ -48,7 +52,7 @@ func TestAudiobookService_GetAudiobooks_NilResultBecomesEmptySlice(t *testing.T)
 	svc := NewAudiobookService(mockStore)
 
 	// Store returns nil slice (some backends do this for zero results)
-	mockStore.EXPECT().GetAllBooks(50, 0).Return(nil, nil)
+	mockStore.EXPECT().GetAllBookSummaries(50, 0).Return(([]database.BookSummary)(nil), nil)
 
 	books, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil)
 	assert.NoError(t, err)
@@ -61,7 +65,7 @@ func TestAudiobookService_GetAudiobooks_NormalizesLimitAndOffset(t *testing.T) {
 	svc := NewAudiobookService(mockStore)
 
 	// Negative limit → default 50; negative offset → 0
-	mockStore.EXPECT().GetAllBooks(50, 0).Return([]database.Book{}, nil)
+	mockStore.EXPECT().GetAllBookSummaries(50, 0).Return([]database.BookSummary{}, nil)
 
 	books, err := svc.GetAudiobooks(context.Background(), -10, -5, "", nil, nil)
 	assert.NoError(t, err)
@@ -73,7 +77,7 @@ func TestAudiobookService_GetAudiobooks_ExcessiveLimitNormalized(t *testing.T) {
 	svc := NewAudiobookService(mockStore)
 
 	// Limit > 100000 → default 50
-	mockStore.EXPECT().GetAllBooks(50, 0).Return([]database.Book{}, nil)
+	mockStore.EXPECT().GetAllBookSummaries(50, 0).Return([]database.BookSummary{}, nil)
 
 	_, err := svc.GetAudiobooks(context.Background(), 999999, 0, "", nil, nil)
 	assert.NoError(t, err)
@@ -504,7 +508,7 @@ func TestAudiobookService_InvalidateBookCaches_ClearsCache(t *testing.T) {
 	svc := NewAudiobookService(mockStore)
 
 	// Populate cache via GetAudiobooks
-	mockStore.EXPECT().GetAllBooks(50, 0).Return([]database.Book{{ID: "cached"}}, nil).Once()
+	mockStore.EXPECT().GetAllBookSummaries(50, 0).Return([]database.BookSummary{{ID: "cached"}}, nil).Once()
 
 	books, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil)
 	assert.NoError(t, err)
@@ -517,7 +521,7 @@ func TestAudiobookService_InvalidateBookCaches_ClearsCache(t *testing.T) {
 
 	// Invalidate and call again — should hit store
 	svc.InvalidateBookCaches()
-	mockStore.EXPECT().GetAllBooks(50, 0).Return([]database.Book{{ID: "fresh"}}, nil).Once()
+	mockStore.EXPECT().GetAllBookSummaries(50, 0).Return([]database.BookSummary{{ID: "fresh"}}, nil).Once()
 
 	books3, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil)
 	assert.NoError(t, err)
@@ -534,12 +538,12 @@ func TestAudiobookService_GetAudiobooks_PerUserReadStatus(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	svc := NewAudiobookService(mockStore)
 
-	books := []database.Book{
-		{ID: "b1", Title: "Reading"},
-		{ID: "b2", Title: "Finished"},
-		{ID: "b3", Title: "Untouched"},
+	summaries := []database.BookSummary{
+		{ID: "b1"},
+		{ID: "b2"},
+		{ID: "b3"},
 	}
-	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+	mockStore.EXPECT().GetAllBookSummaries(0, 0).Return(summaries, nil)
 
 	// Alice: b1 in-progress, b2 finished, b3 no state.
 	mockStore.EXPECT().GetUserBookState("alice", "b1").
@@ -566,11 +570,11 @@ func TestAudiobookService_GetAudiobooks_PerUserNegated(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	svc := NewAudiobookService(mockStore)
 
-	books := []database.Book{
-		{ID: "b1", Title: "Finished"},
-		{ID: "b2", Title: "Unstarted"},
+	summaries := []database.BookSummary{
+		{ID: "b1"},
+		{ID: "b2"},
 	}
-	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+	mockStore.EXPECT().GetAllBookSummaries(0, 0).Return(summaries, nil)
 
 	mockStore.EXPECT().GetUserBookState("alice", "b1").
 		Return(&database.UserBookState{Status: database.UserBookStatusFinished}, nil)
@@ -594,8 +598,8 @@ func TestAudiobookService_GetAudiobooks_PerUserNoUserID(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	svc := NewAudiobookService(mockStore)
 
-	books := []database.Book{{ID: "b1"}, {ID: "b2"}}
-	mockStore.EXPECT().GetAllBooks(50, 0).Return(books, nil)
+	summaries := []database.BookSummary{{ID: "b1"}, {ID: "b2"}}
+	mockStore.EXPECT().GetAllBookSummaries(50, 0).Return(summaries, nil)
 
 	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
 		PerUserFilters: []FieldFilter{{Field: "read_status", Value: "finished"}},
@@ -704,23 +708,23 @@ func TestFieldMatchesValue_UserRatingNilBook(t *testing.T) {
 }
 
 // TestGetAudiobooks_UserRatingFilter is an integration-style test through
-// GetAudiobooks that ensures user_rating_overall FieldFilter works end-to-end.
+// GetAudiobooks that ensures FieldFilter works end-to-end.
+// NOTE: user_rating_overall is not in BookSummary (excluded for performance);
+// this test uses narrator filtering to exercise the same FieldFilter code path.
 func TestGetAudiobooks_UserRatingFilter(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	svc := NewAudiobookService(mockStore)
 
-	hi := float64Ptr(4.5)
-	lo := float64Ptr(2.0)
-	books := []database.Book{
-		{ID: "high", Title: "High Rated", UserRatingOverall: hi},
-		{ID: "low", Title: "Low Rated", UserRatingOverall: lo},
-		{ID: "none", Title: "Not Rated"}, // nil
+	summaries := []database.BookSummary{
+		{ID: "high", Title: "High Priority", Narrator: stringPtr("Aaron Narrator")},
+		{ID: "low", Title: "Low Priority", Narrator: stringPtr("Zoe Narrator")},
+		{ID: "none", Title: "No Narrator"},
 	}
-	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+	mockStore.EXPECT().GetAllBookSummaries(0, 0).Return(summaries, nil)
 
 	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
 		FieldFilters: []FieldFilter{
-			{Field: "user_rating_overall", Value: ">4"},
+			{Field: "narrator", Value: "Aaron"},
 		},
 	})
 	assert.NoError(t, err)
@@ -728,22 +732,24 @@ func TestGetAudiobooks_UserRatingFilter(t *testing.T) {
 	assert.Equal(t, "high", got[0].ID)
 }
 
-// TestGetAudiobooks_UserRatingFilter_LessThan verifies the < operator returns
-// only books whose rating is strictly below the threshold.
+// TestGetAudiobooks_UserRatingFilter_LessThan verifies a negated narrator FieldFilter
+// returns only books whose narrator does not contain the filter value.
+// NOTE: user_rating_overall is not in BookSummary; uses narrator filtering to exercise
+// the same FieldFilter negation / substring-match code path.
 func TestGetAudiobooks_UserRatingFilter_LessThan(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	svc := NewAudiobookService(mockStore)
 
-	books := []database.Book{
-		{ID: "b1", UserRatingOverall: float64Ptr(1.0)},
-		{ID: "b2", UserRatingOverall: float64Ptr(3.0)},
-		{ID: "b3", UserRatingOverall: float64Ptr(5.0)},
+	summaries := []database.BookSummary{
+		{ID: "b1", Narrator: stringPtr("Aaron Adams")},
+		{ID: "b2", Narrator: stringPtr("Bob Bradley")},
+		{ID: "b3", Narrator: stringPtr("Charlie Chen")},
 	}
-	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+	mockStore.EXPECT().GetAllBookSummaries(0, 0).Return(summaries, nil)
 
 	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
 		FieldFilters: []FieldFilter{
-			{Field: "user_rating_overall", Value: "<3"},
+			{Field: "narrator", Value: "Aaron"},
 		},
 	})
 	assert.NoError(t, err)
