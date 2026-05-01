@@ -1,5 +1,5 @@
 // file: internal/metadata/hardcover.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: e7e02554-8931-49ba-9528-d3d51279da1d
 
 package metadata
@@ -257,7 +257,7 @@ func (c *HardcoverClient) search(ctx context.Context, query string) ([]BookMetad
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Hardcover API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("hardcover API returned status %d", resp.StatusCode)
 	}
 
 	var gqlResp hardcoverGraphQLResponse
@@ -272,7 +272,7 @@ func (c *HardcoverClient) search(ctx context.Context, query string) ([]BookMetad
 		for _, e := range gqlResp.Errors {
 			log.Printf("[WARN] Hardcover GraphQL error: %s", e.Message)
 		}
-		return nil, fmt.Errorf("Hardcover GraphQL error: %s", gqlResp.Errors[0].Message)
+		return nil, fmt.Errorf("hardcover GraphQL error: %s", gqlResp.Errors[0].Message)
 	}
 
 	if gqlResp.Data == nil || gqlResp.Data.SearchBooks == nil || gqlResp.Data.SearchBooks.Results == nil {
