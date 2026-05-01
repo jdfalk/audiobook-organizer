@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store.go
-// version: 1.80.0
+// version: 1.81.0
 // last-edited: 2026-05-01
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
@@ -6910,7 +6910,6 @@ func (s *SQLiteStore) GetBookPathPrefixes(limit int) ([]BookPathPrefix, error) {
 }
 
 // GetAuthorsByBookIDs returns a map from bookID → []Author for all given book IDs.
-// TODO: Implement in N1-2
 func (s *SQLiteStore) GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Author, error) {
 if len(bookIDs) == 0 {
 return map[string][]Author{}, nil
@@ -6943,7 +6942,6 @@ return result, rows.Err()
 }
 
 // GetNarratorsByBookIDs returns a map from bookID → []Narrator for all given book IDs.
-// TODO: Implement in N1-2
 func (s *SQLiteStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Narrator, error) {
 if len(bookIDs) == 0 {
 return map[string][]Narrator{}, nil
