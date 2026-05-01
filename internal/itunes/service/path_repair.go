@@ -1,5 +1,5 @@
 // file: internal/itunes/service/path_repair.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 01ad6c79-5f3f-4ee1-a07a-1f4b3a8c0d12
 //
 // PathRepairer dumps the iTunes XML, finds tracks whose Location no
@@ -427,16 +427,6 @@ func (r *PathRepairer) applyResolution(pid, bookID, oldPath, newPath string, res
 		if book.FilePath != newPath {
 			book.FilePath = newPath
 			changed = true
-		}
-		if wantITunesPath != "" {
-			cur := ""
-			if book.ITunesPath != nil {
-				cur = *book.ITunesPath
-			}
-			if cur != wantITunesPath {
-				book.ITunesPath = &wantITunesPath
-				changed = true
-			}
 		}
 		if changed {
 			if _, err := r.store.UpdateBook(bookID, book); err != nil {
