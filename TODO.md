@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 6.9.0 -->
+<!-- version: 7.0.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-01 -->
 
@@ -749,13 +749,24 @@ Findings from the 2026-05-01 re-audit. See `docs/codebase-evaluation.md` §Re-Au
 - **TEST-2** Fix `TestStoreAdditionalCoverageSQLite` failure in `internal/database` package  
   Spec: `docs/superpowers/bot-tasks/2026-05-01-test-2-fix-database-test-coverage.md`
 
-- **SEC-1** Remove committed OpenAI API key placeholder (`sk-test12345678`) from `config.yaml:10`  
-  Spec: `docs/superpowers/bot-tasks/2026-05-01-sec-1-remove-committed-secret.md`
-
 ### Medium Priority
 
-- **DEP-1** Migrate 13+ deprecated `Book.ITunesPath` field usages to `BookFile.ITunesPath` (staticcheck SA1019)  
-  Spec: `docs/superpowers/bot-tasks/2026-05-01-dep-1-migrate-itunes-path-field.md`
+- **DEP-1** Overview: migrate ~34 deprecated `Book.ITunesPath` usages across 4 packages to `BookFile.ITunesPath` (SA1019). See sub-tasks below.  
+  Overview: `docs/superpowers/bot-tasks/2026-05-01-dep-1-migrate-itunes-path-field.md`
+
+  - **DEP-1a** metafetch package — `batch.go` + `service.go` (~9 usages)  
+    Spec: `docs/superpowers/bot-tasks/2026-05-01-dep-1a-metafetch-itunes-path.md`
+
+  - **DEP-1b** organizer package — `service.go` (1 usage)  
+    Spec: `docs/superpowers/bot-tasks/2026-05-01-dep-1b-organizer-itunes-path.md`
+
+  - **DEP-1c** server handlers — `itl_rebuild.go` + `metadata_batch_candidates.go` (6 usages)  
+    Spec: `docs/superpowers/bot-tasks/2026-05-01-dep-1c-server-itunes-path.md`
+
+  - **DEP-1d** itunes/service package — `importer.go`, `path_reconcile.go`, `path_repair.go`, `writeback_batcher.go` (~14 usages)  
+    Spec: `docs/superpowers/bot-tasks/2026-05-01-dep-1d-itunes-service-path.md`
+
+  - **DEP-1e** (blocked on 1a–1d) DB migration to drop `books.itunes_path` column and remove sqlite_store.go usages
 
 - **DEAD-1** Remove dead code: `legacySaveConfigToDatabase_REMOVED`, `bookTagKeyspace`, `bookSummarySelectColumnsQualified`, `linkAsVersion`, SA4006 unused values  
   Spec: `docs/superpowers/bot-tasks/2026-05-01-dead-1-remove-unused-code.md`
@@ -771,7 +782,9 @@ Findings from the 2026-05-01 re-audit. See `docs/codebase-evaluation.md` §Re-Au
 - **LOG-5** Replace remaining `fmt.Printf`/`log.Printf` in `sqlite_store`, `pebble_store`, `migrations`, `playlist`, `organizer` with structured `slog` calls  
   Spec: `docs/superpowers/bot-tasks/2026-05-01-log-5-remaining-printf.md`
 
-- **R-9** Remove stale `// TODO: Implement in N1-2` comments from `sqlite_store.go:6913,6946` (already implemented)
+- **R-9** Remove stale `// TODO: Implement in N1-2` comments from `sqlite_store.go:6913,6946` (already implemented)  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-r9-remove-stale-todo-comments.md`
 
-- **R-10** Fix 10+ capitalized error strings in metadata packages (staticcheck ST1005):  
-  `internal/metadata/audible.go`, `audnexus.go`, `googlebooks.go`, `hardcover.go`, `openlibrary.go`, `wikipedia.go`
+- **R-10** Fix 12 capitalized error strings in metadata packages (staticcheck ST1005):  
+  `internal/metadata/audible.go`, `audnexus.go`, `googlebooks.go`, `hardcover.go`, `openlibrary.go`, `wikipedia.go`  
+  Spec: `docs/superpowers/bot-tasks/2026-05-01-r10-fix-capitalized-error-strings.md`
