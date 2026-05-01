@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/relink_missing_to_itunes.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e0f6a4d5-7b8c-9d0e-1f2a-3b4c5d6e7f80
-// last-edited: 2026-04-28
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -100,7 +100,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		case 0:
 			unresolved++
 		case 1:
-			newFP := util.CleanPath(matches[0])
+			newFP := filepath.Clean(matches[0])
 			if !util.WithinRoot(newFP, iTunesRoot) {
 				log.Printf("[WARN] relink-missing-to-itunes: match %q outside iTunesRoot, skipping", newFP)
 				unresolved++
@@ -124,7 +124,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		default:
 			best := rmt_disambiguate(matches, authorName, book.Title)
 			if best != "" {
-				best = util.CleanPath(best)
+				best = filepath.Clean(best)
 				if !util.WithinRoot(best, iTunesRoot) {
 					log.Printf("[WARN] relink-missing-to-itunes: best match %q outside iTunesRoot, skipping", best)
 					unresolved++
@@ -186,6 +186,7 @@ func rmt_updateBookFiles(store database.Store, bookID, newFP string, fi os.FileI
 
 // rmt_findInITunes searches iTunesRoot for iTunes album directories matching author+title.
 func rmt_findInITunes(iTunesRoot, authorName, title string, audioExts map[string]bool) []string {
+	iTunesRoot = filepath.Clean(iTunesRoot)
 	titlePrefix := title
 	if len(titlePrefix) > 25 {
 		titlePrefix = titlePrefix[:25]

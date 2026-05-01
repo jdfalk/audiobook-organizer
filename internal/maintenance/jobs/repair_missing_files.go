@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/repair_missing_files.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f1a7b5e6-8c9d-0e1f-2a3b-4c5d6e7f8a90
-// last-edited: 2026-04-28
+// last-edited: 2026-05-01
 
 package jobs
 
@@ -215,7 +215,7 @@ func rmfr_searchRoots() []string {
 	var out []string
 	for _, r := range roots {
 		if r != "" {
-			out = append(out, r)
+			out = append(out, filepath.Clean(r))
 		}
 	}
 	return out
@@ -502,7 +502,7 @@ func rmfr_repairOne(
 		return res
 	}
 
-	candidate = util.CleanPath(candidate)
+	candidate = filepath.Clean(candidate)
 	withinARoot := false
 	for _, root := range searchRoots {
 		if util.WithinRoot(candidate, root) {
