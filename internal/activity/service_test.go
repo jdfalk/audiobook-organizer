@@ -1,10 +1,11 @@
 // file: internal/activity/service_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 package activity
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -64,7 +65,7 @@ func TestService_RecordAndQuery(t *testing.T) {
 
 	// Summarize realtime entries older than 1 hour in the future (captures all).
 	future := time.Now().UTC().Add(time.Hour)
-	deleted, err := svc.Summarize(future, "realtime")
+	deleted, err := svc.Summarize(context.Background(), future, "realtime")
 	require.NoError(t, err)
 	assert.Equal(t, 1, deleted)
 

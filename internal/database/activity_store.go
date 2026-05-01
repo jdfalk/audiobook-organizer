@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.7.0
+// version: 1.7.1
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -267,7 +267,7 @@ func (s *ActivityStore) Query(f ActivityFilter) ([]ActivityEntry, int, error) {
 // Summarize collapses old unpruned entries (older than olderThan, matching tier)
 // into one summary row per (operation_id, type) group. Returns the count of
 // original rows deleted.
-func (s *ActivityStore) Summarize(olderThan time.Time, tier string) (int, error) {
+func (s *ActivityStore) Summarize(ctx context.Context, olderThan time.Time, tier string) (int, error) {
 	var err error
 	defer func() {
 		if err != nil {
@@ -315,7 +315,7 @@ func (s *ActivityStore) Summarize(olderThan time.Time, tier string) (int, error)
 	totalDeleted := 0
 
 	for _, g := range groups {
-		tx, err := s.db.BeginTx(context.Background(), nil)
+		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
 			return totalDeleted, fmt.Errorf("activity_store: summarize begin tx: %w", err)
 		}
@@ -325,7 +325,7 @@ func (s *ActivityStore) Summarize(olderThan time.Time, tier string) (int, error)
 		)
 
 		// Insert summary row
-		_, txErr := tx.ExecContext(context.Background(), `
+		_, txErr := tx.ExecContext(ctx, `
 			INSERT INTO activity_log
 				(timestamp, tier, type, level, source, operation_id,
 				 summary, pruned_at)
@@ -342,14 +342,14 @@ func (s *ActivityStore) Summarize(olderThan time.Time, tier string) (int, error)
 		// Delete originals
 		var res sql.Result
 		if g.opID.Valid {
-			res, txErr = tx.ExecContext(context.Background(), `
+			res, txErr = tx.ExecContext(ctx, `
 				DELETE FROM activity_log
 				WHERE tier = ? AND type = ? AND operation_id = ?
 				  AND timestamp < ? AND pruned_at IS NULL`,
 				tier, g.typ, g.opID.String, olderThan.UTC(),
 			)
 		} else {
-			res, txErr = tx.ExecContext(context.Background(), `
+			res, txErr = tx.ExecContext(ctx, `
 				DELETE FROM activity_log
 				WHERE tier = ? AND type = ? AND operation_id IS NULL
 				  AND timestamp < ? AND pruned_at IS NULL`,
@@ -532,7 +532,7 @@ func nullableJSON(v map[string]any) (any, error) {
 // CompactByDay collapses old change/debug entries into one daily_digest row per
 // UTC day. Audit-tier entries are never touched. Each day is processed in its
 // own transaction for atomicity.
-func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error) {
+func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (CompactResult, error) {
 	var result CompactResult
 
 	// 1. Fetch all compactable entries.
@@ -662,7 +662,7 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 		}
 
 		// Transaction: merge-or-insert digest + delete originals.
-		tx, err := s.db.BeginTx(context.Background(), nil)
+		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
 			return result, fmt.Errorf("activity_store: compact begin tx: %w", err)
 		}
@@ -682,7 +682,7 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 			existingID          int64
 			existingDetailsJSON sql.NullString
 		)
-		err = tx.QueryRowContext(context.Background(), `
+		err = tx.QueryRowContext(ctx, `
 			SELECT id, details FROM activity_log
 			WHERE tier = 'digest' AND type = 'daily_digest'
 			  AND date(timestamp) = ?
@@ -734,7 +734,7 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 			detailsBytes = merged
 
 			// Delete the old digest row — we'll insert the combined one below.
-			if _, delErr := tx.ExecContext(context.Background(), `DELETE FROM activity_log WHERE id = ?`, existingID); delErr != nil {
+			if _, delErr := tx.ExecContext(ctx, `DELETE FROM activity_log WHERE id = ?`, existingID); delErr != nil {
 				if rbErr := tx.Rollback(); rbErr != nil {
 					log.Printf("CompactByDay rollback on delete old digest: %v", rbErr)
 				}
@@ -742,7 +742,7 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 			}
 		}
 
-		_, err = tx.ExecContext(context.Background(), `
+		_, err = tx.ExecContext(ctx, `
 			INSERT INTO activity_log
 				(timestamp, tier, type, level, source, summary, details, compacted)
 			VALUES (?, 'digest', 'daily_digest', 'info', 'compaction', ?, ?, 1)`,
@@ -770,7 +770,7 @@ func (s *ActivityStore) CompactByDay(olderThan time.Time) (CompactResult, error)
 			for j, id := range batch {
 				args[j] = id
 			}
-			delRes, delErr := tx.ExecContext(context.Background(), "DELETE FROM activity_log WHERE id IN ("+placeholders+")", args...)
+			delRes, delErr := tx.ExecContext(ctx, "DELETE FROM activity_log WHERE id IN ("+placeholders+")", args...)
 			if delErr != nil {
 				if rbErr := tx.Rollback(); rbErr != nil {
 					log.Printf("CompactByDay rollback on delete originals: %v", rbErr)
