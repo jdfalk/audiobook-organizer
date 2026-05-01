@@ -1,5 +1,5 @@
 // file: internal/metadata/audnexus.go
-// version: 2.3.0
+// version: 2.3.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-a3b4c5d6e7f8
 
 package metadata
@@ -112,7 +112,7 @@ func (c *AudnexusClient) SearchByTitleAndAuthor(ctx context.Context, title, auth
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Audnexus author search returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("audnexus author search returned status %d", resp.StatusCode)
 	}
 
 	var authors []audnexusAuthor
@@ -182,7 +182,7 @@ func (c *AudnexusClient) LookupByASIN(asin string) (*BookMetadata, error) {
 			return c.bookToMetadata(&book), nil
 		}
 		resp.Body.Close()
-		lastErr = fmt.Errorf("Audnexus book lookup returned status %d (region=%s)", resp.StatusCode, region)
+		lastErr = fmt.Errorf("audnexus book lookup returned status %d (region=%s)", resp.StatusCode, region)
 	}
 	return nil, lastErr
 }

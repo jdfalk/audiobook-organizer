@@ -1,5 +1,5 @@
 // file: internal/metadata/googlebooks.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-f2a3b4c5d6e7
 
 package metadata
@@ -112,7 +112,7 @@ func (c *GoogleBooksClient) search(ctx context.Context, escapedQuery string) ([]
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Google Books API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("google Books API returned status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
