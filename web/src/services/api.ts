@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.12.0
+// version: 2.13.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-04-30
+// last-edited: 2026-05-03
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -4599,3 +4599,36 @@ export async function backfillFileHashes(dryRun = false): Promise<BackfillHashes
   return response.json();
 }
 
+
+// ── Unified Maintenance Jobs ──────────────────────────────────────────────────
+
+export interface MaintenanceJobDef {
+  id: string;
+  description: string;
+  can_resume: boolean;
+}
+
+export interface MaintenanceJobsResult {
+  jobs: MaintenanceJobDef[];
+}
+
+export async function listMaintenanceJobs(): Promise<MaintenanceJobDef[]> {
+  const response = await fetch(`${API_BASE}/maintenance/jobs`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to list maintenance jobs');
+  }
+  const body = await response.json();
+  return (body as MaintenanceJobsResult).jobs ?? [];
+}
+
+export async function runMaintenanceJob(jobId: string, dryRun = false): Promise<{ operation_id: string }> {
+  const response = await fetch(`${API_BASE}/maintenance/jobs/${encodeURIComponent(jobId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dry_run: dryRun }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, `Failed to run maintenance job "${jobId}"`);
+  }
+  return response.json();
+}

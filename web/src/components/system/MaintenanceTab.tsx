@@ -1,7 +1,7 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
-// last-edited: 2026-04-30
+// last-edited: 2026-05-03
 
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -593,6 +593,78 @@ function MetadataHashDuplicateCard() {
   );
 }
 
+// ─── ManualFixesCard ──────────────────────────────────────────────────────────
+
+function ManualFixesCard() {
+  const [jobs, setJobs] = useState<api.MaintenanceJobDef[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState<string | null>(null);
+  const [opId, setOpId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.listMaintenanceJobs()
+      .then(setJobs)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load jobs'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleRun = async (jobId: string) => {
+    setRunning(jobId);
+    setError(null);
+    setOpId(null);
+    try {
+      const result = await api.runMaintenanceJob(jobId);
+      setOpId(result.operation_id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : `Failed to run ${jobId}`);
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  return (
+    <Card sx={{ mb: 3 }}>
+      <CardHeader title="Manual Fixes" subheader="One-shot maintenance jobs dispatched as async operations" />
+      <CardContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 1.5 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+        {opId && (
+          <Alert severity="success" sx={{ mb: 1.5 }} onClose={() => setOpId(null)}>
+            Operation enqueued: {opId}
+          </Alert>
+        )}
+        {loading ? (
+          <CircularProgress size={24} />
+        ) : (
+          <Stack spacing={1}>
+            {jobs.map((job) => (
+              <Box key={job.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="body2" fontWeight="medium">{job.id}</Typography>
+                  <Typography variant="caption" color="text.secondary">{job.description}</Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={running === job.id ? <CircularProgress size={14} color="inherit" /> : <PlayArrowIcon />}
+                  disabled={running !== null}
+                  onClick={() => handleRun(job.id)}
+                >
+                  {running === job.id ? 'Starting…' : 'Run'}
+                </Button>
+              </Box>
+            ))}
+          </Stack>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── MaintenanceTab ───────────────────────────────────────────────────────────
 
 export function MaintenanceTab() {
@@ -688,6 +760,8 @@ export function MaintenanceTab() {
       </Typography>
 
       <MaintenanceWindowCard />
+
+      <ManualFixesCard />
 
       <ChapterConsolidationCard />
 
