@@ -13577,6 +13577,61 @@ func (_c *MockBookFileStore_GetBookFilesNeedingDelugeImport_Call) RunAndReturn(r
 	return _c
 }
 
+// GetBookMetadataHashStats provides a mock function for the type MockBookFileStore
+func (_mock *MockBookFileStore) GetBookMetadataHashStats() (*database.BookMetadataHashStats, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookMetadataHashStats")
+	}
+
+	var r0 *database.BookMetadataHashStats
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (*database.BookMetadataHashStats, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() *database.BookMetadataHashStats); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.BookMetadataHashStats)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookFileStore_GetBookMetadataHashStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookMetadataHashStats'
+type MockBookFileStore_GetBookMetadataHashStats_Call struct {
+	*mock.Call
+}
+
+// GetBookMetadataHashStats is a helper method to define mock.On call
+func (_e *MockBookFileStore_Expecter) GetBookMetadataHashStats() *MockBookFileStore_GetBookMetadataHashStats_Call {
+	return &MockBookFileStore_GetBookMetadataHashStats_Call{Call: _e.mock.On("GetBookMetadataHashStats")}
+}
+
+func (_c *MockBookFileStore_GetBookMetadataHashStats_Call) Run(run func()) *MockBookFileStore_GetBookMetadataHashStats_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockBookFileStore_GetBookMetadataHashStats_Call) Return(bookMetadataHashStats *database.BookMetadataHashStats, err error) *MockBookFileStore_GetBookMetadataHashStats_Call {
+	_c.Call.Return(bookMetadataHashStats, err)
+	return _c
+}
+
+func (_c *MockBookFileStore_GetBookMetadataHashStats_Call) RunAndReturn(run func() (*database.BookMetadataHashStats, error)) *MockBookFileStore_GetBookMetadataHashStats_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetDuplicateFilesByHash provides a mock function for the type MockBookFileStore
 func (_mock *MockBookFileStore) GetDuplicateFilesByHash(limit int) ([]database.DuplicateFileGroup, error) {
 	ret := _mock.Called(limit)
@@ -13698,6 +13753,63 @@ func (_c *MockBookFileStore_MoveBookFilesToBook_Call) Return(err error) *MockBoo
 }
 
 func (_c *MockBookFileStore_MoveBookFilesToBook_Call) RunAndReturn(run func(fileIDs []string, sourceBookID string, targetBookID string) error) *MockBookFileStore_MoveBookFilesToBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetBookFileHash provides a mock function for the type MockBookFileStore
+func (_mock *MockBookFileStore) SetBookFileHash(id string, hash string) error {
+	ret := _mock.Called(id, hash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetBookFileHash")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(id, hash)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBookFileStore_SetBookFileHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetBookFileHash'
+type MockBookFileStore_SetBookFileHash_Call struct {
+	*mock.Call
+}
+
+// SetBookFileHash is a helper method to define mock.On call
+//   - id string
+//   - hash string
+func (_e *MockBookFileStore_Expecter) SetBookFileHash(id interface{}, hash interface{}) *MockBookFileStore_SetBookFileHash_Call {
+	return &MockBookFileStore_SetBookFileHash_Call{Call: _e.mock.On("SetBookFileHash", id, hash)}
+}
+
+func (_c *MockBookFileStore_SetBookFileHash_Call) Run(run func(id string, hash string)) *MockBookFileStore_SetBookFileHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookFileStore_SetBookFileHash_Call) Return(err error) *MockBookFileStore_SetBookFileHash_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBookFileStore_SetBookFileHash_Call) RunAndReturn(run func(id string, hash string) error) *MockBookFileStore_SetBookFileHash_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -31874,6 +31986,61 @@ func (_c *MockStore_GetBookFilesNeedingDelugeImport_Call) RunAndReturn(run func(
 	return _c
 }
 
+// GetBookMetadataHashStats provides a mock function for the type MockStore
+func (_mock *MockStore) GetBookMetadataHashStats() (*database.BookMetadataHashStats, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBookMetadataHashStats")
+	}
+
+	var r0 *database.BookMetadataHashStats
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (*database.BookMetadataHashStats, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() *database.BookMetadataHashStats); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.BookMetadataHashStats)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetBookMetadataHashStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBookMetadataHashStats'
+type MockStore_GetBookMetadataHashStats_Call struct {
+	*mock.Call
+}
+
+// GetBookMetadataHashStats is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetBookMetadataHashStats() *MockStore_GetBookMetadataHashStats_Call {
+	return &MockStore_GetBookMetadataHashStats_Call{Call: _e.mock.On("GetBookMetadataHashStats")}
+}
+
+func (_c *MockStore_GetBookMetadataHashStats_Call) Run(run func()) *MockStore_GetBookMetadataHashStats_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetBookMetadataHashStats_Call) Return(bookMetadataHashStats *database.BookMetadataHashStats, err error) *MockStore_GetBookMetadataHashStats_Call {
+	_c.Call.Return(bookMetadataHashStats, err)
+	return _c
+}
+
+func (_c *MockStore_GetBookMetadataHashStats_Call) RunAndReturn(run func() (*database.BookMetadataHashStats, error)) *MockStore_GetBookMetadataHashStats_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBookNarrators provides a mock function for the type MockStore
 func (_mock *MockStore) GetBookNarrators(bookID string) ([]database.BookNarrator, error) {
 	ret := _mock.Called(bookID)
@@ -41608,6 +41775,63 @@ func (_c *MockStore_SetBookAuthors_Call) Return(err error) *MockStore_SetBookAut
 }
 
 func (_c *MockStore_SetBookAuthors_Call) RunAndReturn(run func(bookID string, authors []database.BookAuthor) error) *MockStore_SetBookAuthors_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetBookFileHash provides a mock function for the type MockStore
+func (_mock *MockStore) SetBookFileHash(id string, hash string) error {
+	ret := _mock.Called(id, hash)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetBookFileHash")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(id, hash)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_SetBookFileHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetBookFileHash'
+type MockStore_SetBookFileHash_Call struct {
+	*mock.Call
+}
+
+// SetBookFileHash is a helper method to define mock.On call
+//   - id string
+//   - hash string
+func (_e *MockStore_Expecter) SetBookFileHash(id interface{}, hash interface{}) *MockStore_SetBookFileHash_Call {
+	return &MockStore_SetBookFileHash_Call{Call: _e.mock.On("SetBookFileHash", id, hash)}
+}
+
+func (_c *MockStore_SetBookFileHash_Call) Run(run func(id string, hash string)) *MockStore_SetBookFileHash_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SetBookFileHash_Call) Return(err error) *MockStore_SetBookFileHash_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_SetBookFileHash_Call) RunAndReturn(run func(id string, hash string) error) *MockStore_SetBookFileHash_Call {
 	_c.Call.Return(run)
 	return _c
 }
