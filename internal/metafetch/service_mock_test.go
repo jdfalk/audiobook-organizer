@@ -1,6 +1,7 @@
 // file: internal/metafetch/service_mock_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: c3d4e5f6-a7b8-9012-cdef-012345678901
+// last-edited: 2026-05-01
 
 package metafetch
 
@@ -305,7 +306,6 @@ func TestCollapseEmptySegments(t *testing.T) {
 
 func TestBuildCandidateBookInfo(t *testing.T) {
 	t.Run("full_book", func(t *testing.T) {
-		itunesPath := "/itunes/path"
 		coverURL := "http://cover.jpg"
 		duration := 3600
 		fileSize := int64(1000000)
@@ -317,14 +317,17 @@ func TestBuildCandidateBookInfo(t *testing.T) {
 			FilePath: "/path/to/book.m4b",
 			Format:   "m4b",
 			Author:   &database.Author{Name: "Test Author"},
-			ITunesPath: &itunesPath,
 			CoverURL:   &coverURL,
 			Duration:   &duration,
 			FileSize:   &fileSize,
 			Language:   &language,
 		}
+		store := &database.MockStore{}
+		store.GetBookFilesFunc = func(bookID string) ([]database.BookFile, error) {
+			return []database.BookFile{{ITunesPath: "/itunes/path"}}, nil
+		}
 
-		info := BuildCandidateBookInfo(book)
+		info := BuildCandidateBookInfo(book, store)
 		assert.Equal(t, "book-1", info.ID)
 		assert.Equal(t, "Test Book", info.Title)
 		assert.Equal(t, "Test Author", info.Author)
@@ -343,7 +346,7 @@ func TestBuildCandidateBookInfo(t *testing.T) {
 			Title:    "Minimal",
 			FilePath: "/path.m4b",
 		}
-		info := BuildCandidateBookInfo(book)
+		info := BuildCandidateBookInfo(book, nil)
 		assert.Equal(t, "book-2", info.ID)
 		assert.Equal(t, "", info.Author)
 		assert.Equal(t, "", info.ITunesPath)

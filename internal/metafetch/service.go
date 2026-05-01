@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 4.64.0
+// version: 4.64.1
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 // last-edited: 2026-05-01
 
@@ -3663,9 +3663,6 @@ func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 			newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
 			if newBookPath != book.FilePath {
 				book.FilePath = newBookPath
-				if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
-					book.ITunesPath = &itunesPath
-				}
 				if _, err := mfs.db.UpdateBook(id, book); err != nil {
 					log.Printf("[WARN] failed to update book path for %s: %v", id, err)
 				} else {
@@ -3676,12 +3673,14 @@ func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 		setCheckpoint(mfs.db, id, phaseRename)
 	}
 
-	// Always ensure itunes_path is set if a mapping exists (for already-organized books)
-	if book.ITunesPath == nil || *book.ITunesPath == "" {
-		if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
-			book.ITunesPath = &itunesPath
-			if _, err := mfs.db.UpdateBook(id, book); err != nil {
-				log.Printf("[WARN] failed to update itunes_path for %s: %v", id, err)
+	// Always ensure itunes_path is set on each BookFile if a mapping exists.
+	for i := range bookFiles {
+		if bookFiles[i].ITunesPath == "" {
+			if itunesPath := ComputeITunesPath(bookFiles[i].FilePath); itunesPath != "" {
+				bookFiles[i].ITunesPath = itunesPath
+				if err := mfs.db.UpdateBookFile(bookFiles[i].ID, &bookFiles[i]); err != nil {
+					log.Printf("[WARN] failed to update itunes_path for book file %s: %v", bookFiles[i].ID, err)
+				}
 			}
 		}
 	}
@@ -3800,8 +3799,9 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 		if strings.HasPrefix(entry.SegmentID, "virtual-") {
 			// Virtual entry = single-file book. Update book.FilePath directly to the new file path.
 			book.FilePath = entry.TargetPath
-			if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
-				book.ITunesPath = &itunesPath
+			// Keep in-memory virtual BookFile in sync so ITunesPath can be computed below.
+			if len(bookFiles) > 0 && bookFiles[0].ID == entry.SegmentID {
+				bookFiles[0].FilePath = entry.TargetPath
 			}
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
 				log.Printf("[WARN] failed to update book path for %s: %v", id, err)
@@ -3843,9 +3843,6 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 		newBookPath := filepath.Dir(renameResult.Succeeded[0].TargetPath)
 		if newBookPath != book.FilePath {
 			book.FilePath = newBookPath
-			if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
-				book.ITunesPath = &itunesPath
-			}
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
 				log.Printf("[WARN] failed to update book path for %s: %v", id, err)
 			} else {
@@ -3854,12 +3851,16 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 		}
 	}
 
-	// Always ensure itunes_path is set if a mapping exists (for already-organized books)
-	if book.ITunesPath == nil || *book.ITunesPath == "" {
-		if itunesPath := ComputeITunesPath(book.FilePath); itunesPath != "" {
-			book.ITunesPath = &itunesPath
-			if _, err := mfs.db.UpdateBook(id, book); err != nil {
-				log.Printf("[WARN] failed to update itunes_path for %s: %v", id, err)
+	// Always ensure itunes_path is set on each BookFile if a mapping exists.
+	for i := range bookFiles {
+		if bookFiles[i].ITunesPath == "" {
+			if itunesPath := ComputeITunesPath(bookFiles[i].FilePath); itunesPath != "" {
+				bookFiles[i].ITunesPath = itunesPath
+				if !strings.HasPrefix(bookFiles[i].ID, "virtual-") {
+					if err := mfs.db.UpdateBookFile(bookFiles[i].ID, &bookFiles[i]); err != nil {
+						log.Printf("[WARN] failed to update itunes_path for book file %s: %v", bookFiles[i].ID, err)
+					}
+				}
 			}
 		}
 	}
