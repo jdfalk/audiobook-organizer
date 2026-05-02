@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-05
+// last-edited: 2026-05-02
 
 package server
 
@@ -987,6 +987,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/scan-llm", s.perm(auth.PermScanTrigger), s.triggerDedupLLM)
 			protected.POST("/dedup/scan-acoustid", s.perm(auth.PermScanTrigger), s.triggerDedupAcoustID)
 			protected.POST("/dedup/refresh", s.perm(auth.PermScanTrigger), s.triggerDedupRefresh)
+			protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), s.triggerEmbedScan)
 
 			// File system routes
 			protected.GET("/filesystem/home", s.perm(auth.PermSettingsManage), s.getHomeDirectory)

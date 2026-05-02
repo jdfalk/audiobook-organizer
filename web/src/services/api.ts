@@ -4300,6 +4300,15 @@ export async function triggerDedupRefresh(): Promise<{ status: string }> {
   return responseData.data;
 }
 
+export async function triggerEmbedScan(): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE}/dedup/embed`, { method: 'POST' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to trigger embedding scan');
+  }
+  const responseData = await response.json();
+  return responseData.data;
+}
+
 // ── API Key management ────────────────────────────────────────────────────────
 
 export interface APIKey {

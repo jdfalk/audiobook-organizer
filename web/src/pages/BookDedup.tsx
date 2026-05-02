@@ -2627,6 +2627,19 @@ function EmbeddingDedupTab() {
     }
   };
 
+  const handleEmbed = async () => {
+    setScanning(true);
+    setScanMsg(null);
+    try {
+      const { status } = await api.triggerEmbedScan();
+      setScanMsg(status || 'Embedding scan triggered — check Operations for progress');
+    } catch (err) {
+      setScanMsg(err instanceof Error ? err.message : 'Embedding scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
   // clusters must be computed before the page-merge handler so the
   // handler closure can read it directly.
   const allClusters = useMemo(() => buildClusters(candidates), [candidates]);
@@ -2925,6 +2938,16 @@ function EmbeddingDedupTab() {
           title="Compare acoustic fingerprints across all books to find audio duplicates"
         >
           Scan (AcoustID)
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={scanning ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+          onClick={handleEmbed}
+          disabled={scanning || bulkMerging}
+          size="small"
+          title="Regenerate embeddings for all books — run this before Re-scan if embeddings are missing"
+        >
+          Re-embed All
         </Button>
         <Button
           variant="outlined"
