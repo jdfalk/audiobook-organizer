@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -46,7 +47,7 @@ func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
 	result, err := s.filesystemService.BrowseDirectory(path)
 	if err != nil {
-		if errors.Is(err, ErrPathNotAllowed) {
+		if errors.Is(err, fileops.ErrPathNotAllowed) {
 			httputil.RespondWithForbidden(c, err.Error())
 			return
 		}

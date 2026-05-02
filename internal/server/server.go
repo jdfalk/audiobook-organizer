@@ -1,7 +1,7 @@
 // file: internal/server/server.go
 // version: 2.2.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-05
+// last-edited: 2026-05-01
 
 package server
 
@@ -44,6 +44,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 	"github.com/jdfalk/audiobook-organizer/internal/updater"
 	"github.com/quic-go/quic-go/http3"
@@ -148,14 +150,14 @@ type Server struct {
 	batchService           *BatchService
 	workService            *WorkService
 	authorSeriesService    *audiobookspkg.AuthorSeriesService
-	filesystemService      *FilesystemService
+	filesystemService      *fileops.FilesystemService
 	importPathService      *importer.ImportPathService
 	importService          *importer.ImportService
 	scanService            *scanner.ScanService
 	organizeService        *OrganizeService
 	metadataFetchService   *metafetch.Service
 	configUpdateService    *ConfigUpdateService
-	systemService          *SystemService
+	systemService          *sysinfo.SystemService
 	metadataStateService   *MetadataStateService
 	dashboardService       *DashboardService
 	olService              *metafetch.OpenLibraryService
@@ -290,14 +292,14 @@ func NewServer(store database.Store) *Server {
 		batchService:           NewBatchService(resolvedStore),
 		workService:            NewWorkService(resolvedStore),
 		authorSeriesService:    audiobookspkg.NewAuthorSeriesService(resolvedStore),
-		filesystemService:      NewFilesystemService(resolvedStore),
+		filesystemService:      fileops.NewFilesystemService(resolvedStore),
 		importPathService:      importer.NewImportPathService(resolvedStore),
 		importService:          importer.NewImportService(resolvedStore),
 		scanService:            scanner.NewScanService(resolvedStore),
 		organizeService:        NewOrganizeService(resolvedStore),
 		metadataFetchService:   metafetch.NewService(resolvedStore),
 		configUpdateService:    NewConfigUpdateService(resolvedStore),
-		systemService:          NewSystemService(resolvedStore),
+		systemService:          sysinfo.NewSystemService(resolvedStore, appVersion, calculateLibrarySizes),
 		metadataStateService:   NewMetadataStateService(resolvedStore),
 		dashboardService:       NewDashboardService(resolvedStore),
 		dedupCache:             cache.New[gin.H]("dedup", 24*time.Hour),

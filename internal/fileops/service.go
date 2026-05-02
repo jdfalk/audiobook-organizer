@@ -1,17 +1,16 @@
-// file: internal/server/filesystem_service.go
-// version: 1.2.1
+// file: internal/fileops/service.go
+// version: 1.0.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
-package server
+package fileops
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"errors"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
