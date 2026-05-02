@@ -1,6 +1,6 @@
 // file: internal/server/organize_handlers.go
-// version: 2.1.0
-// last-edited: 2026-05-01
+// version: 2.1.1
+// last-edited: 2026-05-10
 // guid: 1522f0ec-663c-4527-a6d0-645658206a24
 //
 // Organize/rename HTTP handlers split out of server.go: preview/apply
@@ -9,6 +9,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -24,6 +25,17 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	ulid "github.com/oklog/ulid/v2"
 )
+
+// organizeHandlerDeps documents the narrow Server surface needed by the
+// organize/rename handlers in this file. *Server satisfies this interface
+// automatically via Store(), OrganizeService(), and publishEvent().
+type organizeHandlerDeps interface {
+	Store() database.Store
+	OrganizeService() *OrganizeService
+	publishEvent(ctx context.Context, event plugin.Event)
+}
+
+var _ organizeHandlerDeps = (*Server)(nil)
 
 // previewRename returns current path, proposed path, and tag diff for a book.
 func (s *Server) previewRename(c *gin.Context) {

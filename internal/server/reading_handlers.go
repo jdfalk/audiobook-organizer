@@ -1,6 +1,6 @@
 // file: internal/server/reading_handlers.go
-// version: 1.2.0
-// last-edited: 2026-05-01
+// version: 1.2.1
+// last-edited: 2026-05-10
 // guid: 7f2c4a1d-5b8e-4f70-a9d6-2e8c0f1b9a57
 //
 // HTTP endpoints for the per-user read/unread tracking system
@@ -22,6 +22,14 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	svrmw "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 )
+
+// readingHandlerDeps documents the narrow Server surface needed by the reading
+// progress handlers in this file. *Server satisfies this interface automatically.
+type readingHandlerDeps interface {
+	Store() database.Store
+}
+
+var _ readingHandlerDeps = (*Server)(nil)
 
 // callingUserID pulls the authenticated user's ID from context.
 // Falls back to "_local" for unauthenticated / bootstrap mode so
