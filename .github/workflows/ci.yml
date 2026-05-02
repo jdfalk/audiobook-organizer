@@ -1,5 +1,5 @@
 # file: .github/workflows/ci.yml
-# version: 3.0.0
+# version: 3.0.1
 # guid: f1a2b3c4-d5e6-f7a8-b9c0-d1e2f3a4b5c6
 # last-edited: 2026-05-01
 
@@ -28,7 +28,7 @@ jobs:
   # Parallel fast jobs via reusable minimal workflow
   ci:
     name: Minimal CI
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci-minimal.yml@cf2068996e1ecf737a6e2c269a9429f0764e76cd # feat/reusable-ci-minimal
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci-minimal.yml@fe1e3081e230dd5ac3d358f9c6a3e4dc0b209529 # feat/reusable-ci-minimal
     with:
       go-version: '1.26'
       go-experiment: 'jsonv2'

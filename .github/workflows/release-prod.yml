@@ -1,6 +1,7 @@
 # file: .github/workflows/release-prod.yml
-# version: 4.8.0
+# version: 4.8.1
 # guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
+# last-edited: 2026-05-01
 
 name: Production Release
 
@@ -41,7 +42,7 @@ permissions:
 jobs:
   release:
     name: Create Production Release
-    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@c46f978c3de2ddc839f6e8e47c4a1739d932623e # latest
+    uses: jdfalk/ghcommon/.github/workflows/reusable-release.yml@fe1e3081e230dd5ac3d358f9c6a3e4dc0b209529 # latest
     with:
       release-type: ${{ github.event.inputs.release-type }}
       prerelease: false

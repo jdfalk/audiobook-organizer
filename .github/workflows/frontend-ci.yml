@@ -1,6 +1,7 @@
 # file: .github/workflows/frontend-ci.yml
-# version: 2.9.0
+# version: 2.9.1
 # guid: 1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f
+# last-edited: 2026-05-01
 
 name: Frontend CI
 
@@ -39,7 +40,7 @@ jobs:
 
       - name: Load frontend configuration
         id: frontend-config
-        uses: jdfalk/get-frontend-config-action@3d728dd5c1f057dfdc97fc6eb3ca1e8fe8ba3a1b # v1.1.3
+        uses: jdfalk/get-frontend-config-action@9a5882d405edad2f4f48c3f584fee779d478f4a4 # v1.1.3
         with:
           repository-config: ''
           config-file: '.github/repository-config.yml'
@@ -48,7 +49,7 @@ jobs:
     name: Frontend Build and Test
     needs: frontend-config
     if: needs.frontend-config.outputs.has-frontend == 'true'
-    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@c46f978c3de2ddc839f6e8e47c4a1739d932623e # latest
+    uses: jdfalk/ghcommon/.github/workflows/reusable-ci.yml@fe1e3081e230dd5ac3d358f9c6a3e4dc0b209529 # latest
     with:
       go-version: '1.26'
       go-experiment: 'jsonv2'
