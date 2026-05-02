@@ -38,6 +38,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
+	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
@@ -179,6 +180,7 @@ type Server struct {
 	itunesActivityFn       func(entry database.ActivityEntry)
 	eventBus               *plugin.EventBus
 	pluginRegistry         *plugin.Registry
+	quarantineSvc          *quarantine.QuarantineService
 	// searchIndex is the Bleve library search index (spec DES-1).
 	// Opened at startup, nil if DB path isn't set yet.
 	searchIndex *search.BleveIndex
@@ -319,6 +321,7 @@ func NewServer(store database.Store) *Server {
 	// Initialize plugin event bus and registry
 	server.eventBus = plugin.NewEventBus()
 	server.pluginRegistry = plugin.Global()
+	server.quarantineSvc = quarantine.NewQuarantineService(resolvedStore, &config.AppConfig, server.eventBus)
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
 	// so the real TrackProvisioner gets wired into the import pipeline;
@@ -576,6 +579,7 @@ func NewServer(store database.Store) *Server {
 	server.organizeService.SetWriteBackBatcher(server.writeBackBatcher)
 	server.organizeService.SetQueue(server.queue)
 	server.mergeService.SetWriteBackBatcher(server.writeBackBatcher)
+	server.quarantineSvc.SetWriteBackBatcher(server.writeBackBatcher)
 
 	// Wire iTunes-specific organizer callbacks now that itunesSvc is ready.
 	if server.itunesSvc.Enabled() {
@@ -656,7 +660,7 @@ func NewServer(store database.Store) *Server {
 	}
 
 	// Wire post-scan auto-quarantine hook.
-	server.scanService.PostScanFn = server.autoQuarantineFailedScans
+	server.scanService.PostScanFn = server.quarantineSvc.AutoQuarantineFailedScans
 
 	// Wire post-folder auto-organize hook (breaks scanner→organizer import cycle).
 	server.scanService.AutoOrganizeFn = func(ctx context.Context, books []scanner.Book, l logger.Logger) {

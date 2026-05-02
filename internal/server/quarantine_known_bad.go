@@ -1,5 +1,5 @@
 // file: internal/server/quarantine_known_bad.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 
 package server
@@ -39,7 +39,7 @@ func (s *Server) quarantineKnownBadFiles() {
 		if err != nil || setting == nil || setting.Value != "true" {
 			continue
 		}
-		if err := s.QuarantineBook(b.ID, "taglib permanently unreadable after transcode attempt"); err != nil {
+		if err := s.quarantineSvc.QuarantineBook(b.ID, "taglib permanently unreadable after transcode attempt"); err != nil {
 			log.Printf("[WARN] quarantineKnownBadFiles: quarantine %s: %v", b.FilePath, err)
 			continue
 		}

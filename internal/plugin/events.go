@@ -1,5 +1,5 @@
 // file: internal/plugin/events.go
-// version: 1.1.0
+// version: 1.2.0
 
 package plugin
 
@@ -45,6 +45,11 @@ func NewEvent(eventType EventType, bookID string, data map[string]any) Event {
 		BookID:    bookID,
 		Data:      data,
 	}
+}
+
+// EventPublisher is the narrow interface for publishing lifecycle events.
+type EventPublisher interface {
+	Publish(ctx context.Context, event Event)
 }
 
 // EventHandler processes a single event.
