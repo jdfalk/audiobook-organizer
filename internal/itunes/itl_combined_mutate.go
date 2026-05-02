@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_combined_mutate.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f7a8b9c0-d1e2-3f4a-5b6c-7d8e9f0a1b2c
 //
 // Combined ITL mutation: applies removes, adds, and location patches in a
@@ -94,6 +94,20 @@ func ApplyITLOperations(inputPath, outputPath string, ops ITLOperationSet) (*ITL
 			var metaUpdated int
 			decompressed, metaUpdated = UpdateMetadataLE(decompressed, ops.MetadataUpdates)
 			totalUpdated += metaUpdated
+		}
+	}
+
+	// Safety gate: re-read the original payload and diff dangling playlist
+	// refs. If our writes introduced any new orphans, refuse to write the
+	// file rather than corrupt the iTunes library. Re-decoding the input
+	// is intentional — we want to compare against an immutable baseline,
+	// not whatever the in-memory `decompressed` started as before mutation.
+	if isLE {
+		origPayload := data[hdr.headerLen:]
+		origDec := itlDecrypt(hdr, origPayload)
+		origInflated, _ := itlInflate(origDec)
+		if err := VerifyITLNoNewDanglingRefsLE(origInflated, decompressed); err != nil {
+			return nil, fmt.Errorf("aborting ITL write to %s: %w", outputPath, err)
 		}
 	}
 
