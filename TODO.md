@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.0.0 -->
+<!-- version: 8.1.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-01 -->
+<!-- last-edited: 2026-05-05 -->
 
 # Project TODO
 
@@ -140,31 +140,55 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 - [ ] **FE-10** `chore/frontend-coverage-thresholds` — Add Vitest coverage thresholds
   → [`2026-04-30-fe-10-coverage.md`](docs/superpowers/bot-tasks/2026-04-30-fe-10-coverage.md)
 
-### STRUCT — Structural Refactors — 2026-05-01 (10 tasks)
+### STRUCT — Structural Refactors — 2026-05-01
 
 Full audit at [`docs/audits/2026-05-01-structure-audit.md`](docs/audits/2026-05-01-structure-audit.md).
 Bot-tasks at [`docs/superpowers/bot-tasks/2026-05-01-struct-*.md`](docs/superpowers/bot-tasks/).
 
-- [ ] **STRUCT-1** `refactor/struct-1-server-response-helpers` — Adopt existing RespondWith* helpers for 61 direct c.JSON calls
+- [x] **STRUCT-1** — Migrate all direct `c.JSON` calls to `httputil.RespondWith*` helpers
   → [`2026-05-01-struct-1-server-response-helpers.md`](docs/superpowers/bot-tasks/2026-05-01-struct-1-server-response-helpers.md)
-- [ ] **STRUCT-2** `refactor/struct-2-pagination-helper` — Consolidate 7+ duplicate pagination parsers into shared paginationFromQuery
+  ✅ `internal/httputil/` created; 0 raw `c.JSON` calls remain outside test files
+- [x] **STRUCT-2** — Consolidate duplicate pagination parsers into `httputil.ParsePaginationParams`
   → [`2026-05-01-struct-2-pagination-helper.md`](docs/superpowers/bot-tasks/2026-05-01-struct-2-pagination-helper.md)
-- [ ] **STRUCT-3** `refactor/struct-3-maintenance-fixups-split` — Split 6400-line maintenance_fixups.go into 8 domain files
+  ✅ `internal/httputil/parse.go` exports `ParsePaginationParams`; `server/pagination.go` deleted
+- [x] **STRUCT-3** — Reduce 6400-line `maintenance_fixups.go`
   → [`2026-05-01-struct-3-maintenance-fixups-split.md`](docs/superpowers/bot-tasks/2026-05-01-struct-3-maintenance-fixups-split.md)
-- [ ] **STRUCT-4** `refactor/struct-4-metafetch-service-split` — Split 3932-line metafetch/service.go into 8 domain files
+  ✅ ASYNC-CLEAN-1 removed old sync maintenance handlers; file reduced 6400→581 lines; 8-domain split no longer necessary
+- [x] **STRUCT-4** — Split 3932-line `metafetch/service.go` into domain files
   → [`2026-05-01-struct-4-metafetch-service-split.md`](docs/superpowers/bot-tasks/2026-05-01-struct-4-metafetch-service-split.md)
-- [ ] **STRUCT-5** `refactor/struct-5-ai-retry-helper` — Extract shared withRetry helper from 4 identical AI retry loops
+  ✅ Split into 11 files: `service_writeback.go`, `service_apply.go`, `service_scoring.go`, `service_search.go`, `service_fetch.go`, `service_normalize.go`, `service_files.go`, `helpers.go`, `isbn.go`, `file_pipeline.go`, `path_format.go`
+- [x] **STRUCT-5** — Extract shared `withRetry` helper from 4 identical AI retry loops
   → [`2026-05-01-struct-5-ai-retry-helper.md`](docs/superpowers/bot-tasks/2026-05-01-struct-5-ai-retry-helper.md)
-- [ ] **STRUCT-6** `refactor/struct-6-sqlite-store-split` — Split 6976-line sqlite_store.go into 7 domain files
+  ✅ `internal/ai/retry.go` created; wired into 5 AI callers
+- [x] **STRUCT-6** — Split 6976-line `sqlite_store.go` into 7 domain files
   → [`2026-05-01-struct-6-sqlite-store-split.md`](docs/superpowers/bot-tasks/2026-05-01-struct-6-sqlite-store-split.md)
-- [ ] **STRUCT-7** `refactor/struct-7-server-go-split` — Split 3401-line server.go into 6 responsibility files
+  ✅ `sqlite_store.go` deleted; 7 domain files created under `internal/database/`
+- [x] **STRUCT-7** — Split 3401-line `server.go` into 6 responsibility files
   → [`2026-05-01-struct-7-server-go-split.md`](docs/superpowers/bot-tasks/2026-05-01-struct-7-server-go-split.md)
-- [ ] **STRUCT-8** `refactor/struct-8-use-async-action-hook` — Extract useAsyncAction hook from 148 setLoading patterns in frontend
+  ✅ `server.go` reduced to 853 lines; 6 split files created
+- [x] **STRUCT-8** — Extract `useAsyncAction` hook from 148 `setLoading` patterns
   → [`2026-05-01-struct-8-use-async-action-hook.md`](docs/superpowers/bot-tasks/2026-05-01-struct-8-use-async-action-hook.md)
-- [ ] **STRUCT-9** `refactor/struct-9-frontend-component-splits` — Split Library.tsx (2900 lines) and BookDedup.tsx (2100 lines) into sub-components
+  ✅ `web/src/hooks/useAsyncAction.ts` created and wired
+- [~] **STRUCT-9** — Split oversized frontend page components into sub-components *(partial)*
   → [`2026-05-01-struct-9-frontend-component-splits.md`](docs/superpowers/bot-tasks/2026-05-01-struct-9-frontend-component-splits.md)
-- [ ] **STRUCT-10** `refactor/struct-10-narrow-server-interfaces` — Narrow *Server receivers with small local interfaces in 5 handler groups
+  🔲 `Library.tsx` still **3243 lines** (was 3333)
+  🔲 `BookDedup.tsx` still **3424 lines** (was 3656)
+  🔲 `Settings.tsx` still **2902 lines** (9 tab components extracted but main page not reduced)
+  🔲 `BookDetail.tsx` still **2773 lines** — not started
+- [~] **STRUCT-10** — Narrow `*Server` receivers with small local interfaces in handler groups *(partial)*
   → [`2026-05-01-struct-10-narrow-server-interfaces.md`](docs/superpowers/bot-tasks/2026-05-01-struct-10-narrow-server-interfaces.md)
+  ✅ `internal/server/interfaces.go` added with 4 narrow store interfaces + compile-time assertions
+  🔲 Handler functions still accept `*Server` receiver — narrowing signatures to use the new interfaces is NOT done
+
+#### STRUCT — Open gaps from audit (no task yet)
+
+- [ ] **STRUCT-11** — Split 1686-line `scheduler.go` into domain files
+  Proposed split: `scheduler_core.go` (struct/start/stop/run), `scheduler_tasks.go` (registerAllTasks, 1100 lines of task defs), `scheduler_maintenance.go` (maintenance window logic), `scheduler_triggers.go` (triggerOperation helpers)
+  Audit ref: §1 Giant files
+- [ ] **STRUCT-12** — Create `internal/util/normalize.go` path/string normalization helper
+  Audit ref: §2d — 611 scattered `strings.ToLower`/`TrimSpace`/`filepath.Clean` call chains have no shared helper
+- [ ] **STRUCT-13** — Finish splitting `BookDetail.tsx` (2773 lines) into sub-components
+  Audit ref: §5 Oversized page components — no work done on BookDetail yet
 
 ---
 
