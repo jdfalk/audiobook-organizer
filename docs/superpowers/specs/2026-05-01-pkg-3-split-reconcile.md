@@ -1,5 +1,5 @@
 <!-- file: docs/superpowers/specs/2026-05-01-pkg-3-split-reconcile.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: a1b2c3d4-e5f6-7890-abcd-ef1234560003 -->
 <!-- last-edited: 2026-05-01 -->
 
@@ -137,16 +137,20 @@ pure-logic functions before moving.
 After extraction, the server-side handlers become thin wrappers:
 
 ```go
-// Example after extraction
+// Example after extraction — handlers now use httputil package (not server-local helpers)
 func (s *Server) reconcilePreview(c *gin.Context) {
     result, err := reconcile.BuildReconcilePreview(c.Request.Context(), s.store, ...)
     if err != nil {
-        RespondWithInternalError(c, err.Error())
+        httputil.RespondWithInternalError(c, err.Error())
         return
     }
-    RespondWithOK(c, result)
+    httputil.RespondWithOK(c, result)
 }
 ```
+
+> **Note:** As of 2026-05-01 the httputil migration is complete. Handlers in reconcile.go
+> already call `httputil.RespondWith*` and `httputil.InternalError`. The pure-logic
+> extraction does NOT touch handler code — keep those httputil calls as-is.
 
 ---
 

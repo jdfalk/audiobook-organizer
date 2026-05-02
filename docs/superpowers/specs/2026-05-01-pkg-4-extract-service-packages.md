@@ -1,5 +1,5 @@
 <!-- file: docs/superpowers/specs/2026-05-01-pkg-4-extract-service-packages.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: a1b2c3d4-e5f6-7890-abcd-ef1234560004 -->
 <!-- last-edited: 2026-05-01 -->
 
@@ -83,14 +83,38 @@ any `*Server` field accesses. If present, they must become explicit params first
 
 **File:** `quarantine_service.go`
 
+**⚠️ Coupling warning:** `quarantine_service.go` calls `s.publishEvent(ctx, plugin.Event)` and
+`s.Store()`, and accesses `s.writeBackBatcher`. These are `*Server` fields. Before
+extraction, the service must accept a `plugin.EventPublisher` interface:
+
+```go
+// Add to internal/plugin/events.go (or internal/quarantine/service.go):
+type EventPublisher interface {
+    Publish(ctx context.Context, event plugin.Event)
+}
+```
+
+Then change `QuarantineService` constructor to accept `EventPublisher` instead of `*Server`.
+The `*plugin.EventBus` concrete type already implements `Publish(ctx, event)`, so no
+other changes are needed at call sites.
+
 **Steps:**
-1. `mkdir -p internal/quarantine`
-2. Copy `internal/server/quarantine_service.go` → `internal/quarantine/service.go`
-3. Change to `package quarantine`
-4. Check for `*Server` field accesses; replace with explicit params
-5. Delete original from `internal/server/`
-6. Update references in `internal/server/` to `quarantine.XYZ`
-7. `go build ./...` and `go vet ./...`
+1. Add `EventPublisher` interface to `internal/plugin/events.go` (if not already present)
+2. `mkdir -p internal/quarantine`
+3. Copy `internal/server/quarantine_service.go` → `internal/quarantine/service.go`
+4. Change to `package quarantine`
+5. Replace `s *Server` receiver with `qs *QuarantineService` and a `QuarantineService` struct:
+   ```go
+   type QuarantineService struct {
+       store  Store
+       cfg    *config.Config
+       events plugin.EventPublisher
+   }
+   ```
+6. Replace `s.Store()` with `qs.store`, `s.publishEvent(...)` with `qs.events.Publish(...)`
+7. Delete original from `internal/server/`
+8. Update references in `internal/server/` to `quarantine.XYZ`, passing `s.eventBus`
+9. `go build ./...` and `go vet ./...`
 
 ---
 

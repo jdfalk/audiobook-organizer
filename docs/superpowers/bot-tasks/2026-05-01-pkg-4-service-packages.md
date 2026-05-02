@@ -1,5 +1,5 @@
 <!-- file: docs/superpowers/bot-tasks/2026-05-01-pkg-4-service-packages.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: b2c3d4e5-f6a7-8901-bcde-f01234560004 -->
 <!-- last-edited: 2026-05-01 -->
 
@@ -111,35 +111,74 @@ go build ./... && go vet ./...
 
 **Branch:** `refactor/pkg-4c-quarantine`
 
-### Step 1 — Audit
+### Step 1 — Add EventPublisher interface to plugin package
 
-```bash
-grep -n "s\.\|server\." internal/server/quarantine_service.go | grep -v "//"
+Open `internal/plugin/events.go`. Check if `EventPublisher` interface already exists.
+If not, add after the `EventBus` struct:
+
+```go
+// EventPublisher is the narrow interface for publishing lifecycle events.
+type EventPublisher interface {
+    Publish(ctx context.Context, event Event)
+}
 ```
 
-### Step 2 — Create and move
+Build: `go build ./internal/plugin/...` must pass.
+
+### Step 2 — Create destination package
 
 ```bash
 mkdir -p internal/quarantine
+```
+
+### Step 3 — Move and refactor
+
+```bash
 cp internal/server/quarantine_service.go internal/quarantine/service.go
 ```
 
-In new file:
-- `package server` → `package quarantine`
-- Replace `*Server` field accesses with explicit params
-- Update file header
+In `internal/quarantine/service.go`:
+1. `package server` → `package quarantine`
+2. Add a `Store` interface (narrow slice of database methods the service needs):
+   ```go
+   type Store interface {
+       // (copy the specific db method signatures called in the file)
+   }
+   ```
+3. Add a `QuarantineService` struct:
+   ```go
+   type QuarantineService struct {
+       store  Store
+       cfg    *config.Config
+       events plugin.EventPublisher
+   }
+   func NewQuarantineService(store Store, cfg *config.Config, events plugin.EventPublisher) *QuarantineService {
+       return &QuarantineService{store: store, cfg: cfg, events: events}
+   }
+   ```
+4. Change all `func (s *Server) QuarantineBook(...)` → `func (qs *QuarantineService) QuarantineBook(...)`
+5. Replace `s.Store()` → `qs.store`
+6. Replace `s.publishEvent(ctx, ...)` → `qs.events.Publish(ctx, ...)`
+7. Replace `s.Config` or `s.cfg` → `qs.cfg`
+8. Update file header (path, bump patch version, update last-edited)
 
 ```bash
 rm internal/server/quarantine_service.go
 ```
 
-### Step 3 — Update server references
+### Step 4 — Update server references
 
 ```bash
-grep -rn "QuarantineService\|NewQuarantine" internal/server/*.go | grep -v _test
+grep -rn "QuarantineBook\|UnquarantineBook\|autoQuarantine\|processITunes\|QuarantineService" internal/server/*.go | grep -v _test
 ```
 
-### Step 4 — Build
+For each match:
+1. Add import `"github.com/jdfalk/audiobook-organizer/internal/quarantine"`
+2. Add `quarantine *quarantine.QuarantineService` field to the `Server` struct (in server.go or similar)
+3. Initialize in the server constructor: `quarantine.NewQuarantineService(store, cfg, s.eventBus)`
+4. Update method calls: `s.QuarantineBook(...)` → `s.quarantine.QuarantineBook(...)`
+
+### Step 5 — Build
 
 ```bash
 go build ./... && go vet ./...

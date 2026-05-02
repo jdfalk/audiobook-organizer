@@ -1,5 +1,5 @@
 <!-- file: docs/superpowers/bot-tasks/2026-05-01-pkg-3-reconcile-split.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: b2c3d4e5-f6a7-8901-bcde-f01234560003 -->
 <!-- last-edited: 2026-05-01 -->
 
@@ -115,6 +115,8 @@ In `internal/server/reconcile.go`, for each handler function:
 2. Change any direct type references (e.g. `ReconcileMatch`) to `reconcile.ReconcileMatch`
 3. Change function calls to the moved functions: `s.runReconcileScan(...)` → `reconcile.RunReconcileScan(s.store, ...)`
 4. Also rename the `reconcileStore` interface — it should be removed (or kept for local use, since the handlers will just pass `s.store` directly)
+5. **DO NOT touch `httputil.*` calls** — handlers already use `httputil.RespondWith*`
+   and `httputil.InternalError`. Leave those as-is; they are already correct.
 
 ## Step 6 — Add required imports to `internal/reconcile/reconcile.go`
 
