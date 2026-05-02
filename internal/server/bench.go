@@ -1,5 +1,5 @@
 // file: internal/server/bench.go
-// version: 1.1.1
+// version: 1.2.0
 // guid: 5e6f7a8b-9c0d-1234-ef01-555555555555
 
 //go:build bench
@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
@@ -46,7 +47,7 @@ func (s *Server) setupBenchRoutes(protected *gin.RouterGroup) {
 func (s *Server) benchStatus(c *gin.Context) {
 	client, err := benchOpenAIClient()
 	if err != nil {
-		internalError(c, "failed to create OpenAI client", err)
+		httputil.InternalError(c, "failed to create OpenAI client", err)
 		return
 	}
 
@@ -58,7 +59,7 @@ func (s *Server) benchStatus(c *gin.Context) {
 		Limit: openai.Int(100),
 	})
 	if err != nil {
-		internalError(c, "failed to list batches", err)
+		httputil.InternalError(c, "failed to list batches", err)
 		return
 	}
 
@@ -84,7 +85,7 @@ func (s *Server) benchStatus(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"items":     items,
 		"pending":   pending,
 		"completed": completed,
@@ -105,7 +106,7 @@ type benchSubmitRequest struct {
 func (s *Server) benchSubmit(c *gin.Context) {
 	var req benchSubmitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -121,7 +122,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 
 	apiKey := benchAPIKey()
 	if apiKey == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "OPENAI_API_KEY not configured"})
+		httputil.RespondWithInternalError(c, "OPENAI_API_KEY not configured")
 		return
 	}
 
@@ -134,7 +135,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 	ts := time.Now().Format("2006-01-02T15-04-05")
 	runDir := filepath.Join("testdata/dedup-bench", ts)
 	if err := os.MkdirAll(filepath.Join(runDir, "runs"), 0775); err != nil {
-		internalError(c, "failed to create run directory", err)
+		httputil.InternalError(c, "failed to create run directory", err)
 		return
 	}
 
@@ -213,7 +214,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 		log.Printf("[bench] Submitted %d batch jobs to %s", len(jobs), runDir)
 	}()
 
-	c.JSON(http.StatusAccepted, gin.H{
+	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{
 		"message": "Benchmark run started in background",
 		"run_dir": runDir,
 	})
@@ -227,7 +228,7 @@ func (s *Server) benchCheck(c *gin.Context) {
 
 	jobsData, err := os.ReadFile(filepath.Join(runDir, "batch_jobs.json"))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "batch_jobs.json not found in " + runDir})
+		httputil.RespondWithNotFound(c, "batch_jobs.json not found in "+runDir, "")
 		return
 	}
 
@@ -236,7 +237,7 @@ func (s *Server) benchCheck(c *gin.Context) {
 
 	client, err := benchOpenAIClient()
 	if err != nil {
-		internalError(c, "failed to create OpenAI client", err)
+		httputil.InternalError(c, "failed to create OpenAI client", err)
 		return
 	}
 
@@ -278,7 +279,7 @@ func (s *Server) benchCheck(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"run_dir":   runDir,
 		"items":     results,
 		"pending":   pending,
@@ -292,7 +293,7 @@ func (s *Server) benchListRuns(c *gin.Context) {
 	benchDir := "testdata/dedup-bench"
 	entries, err := os.ReadDir(benchDir)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"runs": []string{}})
+		httputil.RespondWithOK(c, gin.H{"runs": []string{}})
 		return
 	}
 
@@ -313,7 +314,7 @@ func (s *Server) benchListRuns(c *gin.Context) {
 		runs = append(runs, run)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"runs": runs})
+	httputil.RespondWithOK(c, gin.H{"runs": runs})
 }
 
 // benchPass2 runs second-pass enrichment via API.
@@ -325,7 +326,7 @@ func (s *Server) benchPass2(c *gin.Context) {
 		ServerURL   string `json:"server"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if req.Model == "" {
@@ -335,7 +336,7 @@ func (s *Server) benchPass2(c *gin.Context) {
 		req.ServerURL = fmt.Sprintf("https://127.0.0.1:%d", 8484)
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{
+	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{
 		"message": "Pass2 enrichment started — use CLI for now: ./audiobook-organizer dedup-bench pass2",
 		"hint":    fmt.Sprintf("./audiobook-organizer dedup-bench pass2 --results %s --groups %s --model %s --server %s", req.ResultsPath, req.GroupsPath, req.Model, req.ServerURL),
 	})
@@ -353,11 +354,11 @@ func (s *Server) benchCrossval(c *gin.Context) {
 		ServerURL string `json:"server"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{
+	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{
 		"message": "Crossval started — use CLI for now: ./audiobook-organizer dedup-bench crossval",
 		"hint":    fmt.Sprintf("./audiobook-organizer dedup-bench crossval --results-a %s --model-a %s --model-b %s", req.ResultsA, req.ModelA, req.ModelB),
 	})

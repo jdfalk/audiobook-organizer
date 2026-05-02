@@ -1,5 +1,5 @@
 // file: internal/server/file_ops_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 5a2e0c6b-1d4f-4a9e-9c3b-6f1a2d7e8b01
 //
 // HTTP handlers for in-flight file I/O operations. Exposes the
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 type pendingFileOp struct {
@@ -27,7 +28,10 @@ type pendingFileOp struct {
 func (s *Server) handleListPendingFileOps(c *gin.Context) {
 	pool := s.fileIOPool
 	if pool == nil {
-		RespondWithOK(c, gin.H{"operations": []pendingFileOp{}, "count": 0})
+		httputil.RespondWithOK(c, struct {
+			Operations []pendingFileOp `json:"operations"`
+			Count      int             `json:"count"`
+		}{Operations: []pendingFileOp{}, Count: 0})
 		return
 	}
 
@@ -52,5 +56,8 @@ func (s *Server) handleListPendingFileOps(c *gin.Context) {
 		return out[i].StartedAt.Before(out[j].StartedAt)
 	})
 
-	RespondWithOK(c, gin.H{"operations": out, "count": len(out)})
+	httputil.RespondWithOK(c, struct {
+		Operations []pendingFileOp `json:"operations"`
+		Count      int             `json:"count"`
+	}{Operations: out, Count: len(out)})
 }

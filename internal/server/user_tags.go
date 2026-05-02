@@ -1,5 +1,5 @@
 // file: internal/server/user_tags.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 
 package server
@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // setupUserTagRoutes registers the user tag API routes on the given router group.
@@ -21,20 +22,20 @@ func (s *Server) setupUserTagRoutes(protected *gin.RouterGroup) {
 func (s *Server) setBookUserTags(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	// Verify the book exists before creating tag entries to prevent orphaned rows.
 	if _, err := store.GetBookByID(id); err != nil {
-		RespondWithNotFound(c, "book", id)
+		httputil.RespondWithNotFound(c, "book", id)
 		return
 	}
 	var req struct {
 		Tags []string `json:"tags" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	// Filter empty and normalize to lowercase
@@ -46,76 +47,82 @@ func (s *Server) setBookUserTags(c *gin.Context) {
 		}
 	}
 	if err := store.SetBookUserTags(id, validTags); err != nil {
-		internalError(c, "failed to set tags", err)
+		httputil.InternalError(c, "failed to set tags", err)
 		return
 	}
 	tags, err := store.GetBookUserTags(id)
 	if err != nil {
-		internalError(c, "failed to get tags after set", err)
+		httputil.InternalError(c, "failed to get tags after set", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"tags": tags})
+	httputil.RespondWithOK(c, struct {
+		Tags []string `json:"tags"`
+	}{Tags: tags})
 }
 
 // addBookUserTag adds a single user-defined tag to a book.
 func (s *Server) addBookUserTag(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	// Verify the book exists before creating tag entries to prevent orphaned rows.
 	if _, err := store.GetBookByID(id); err != nil {
-		RespondWithNotFound(c, "book", id)
+		httputil.RespondWithNotFound(c, "book", id)
 		return
 	}
 	var req struct {
 		Tag string `json:"tag" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	tag := strings.ToLower(strings.TrimSpace(req.Tag))
 	if err := store.AddBookUserTag(id, tag); err != nil {
-		internalError(c, "failed to add tag", err)
+		httputil.InternalError(c, "failed to add tag", err)
 		return
 	}
 	tags, err := store.GetBookUserTags(id)
 	if err != nil {
-		internalError(c, "failed to get tags after add", err)
+		httputil.InternalError(c, "failed to get tags after add", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"tags": tags})
+	httputil.RespondWithOK(c, struct {
+		Tags []string `json:"tags"`
+	}{Tags: tags})
 }
 
 // removeBookUserTag removes a single user-defined tag from a book.
 func (s *Server) removeBookUserTag(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
 	// Verify the book exists before modifying tag entries to prevent orphaned rows.
 	if _, err := store.GetBookByID(id); err != nil {
-		RespondWithNotFound(c, "book", id)
+		httputil.RespondWithNotFound(c, "book", id)
 		return
 	}
 	tag := c.Param("tag")
 	if tag == "" {
-		RespondWithBadRequest(c, "tag parameter required")
+		httputil.RespondWithBadRequest(c, "tag parameter required")
 		return
 	}
 	if err := store.RemoveBookUserTag(id, tag); err != nil {
-		internalError(c, "failed to remove tag", err)
+		httputil.InternalError(c, "failed to remove tag", err)
 		return
 	}
 	tags, err := store.GetBookUserTags(id)
 	if err != nil {
-		internalError(c, "failed to get tags after remove", err)
+		httputil.InternalError(c, "failed to get tags after remove", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"tags": tags})
+	httputil.RespondWithOK(c, struct {
+		Tags []string `json:"tags"`
+	}{Tags: tags})
 }

@@ -1,6 +1,7 @@
 // file: internal/server/bootstrap.go
-// version: 1.4.1
+// version: 1.5.0
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
+// last-edited: 2026-05-01
 
 package server
 
@@ -25,6 +26,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -189,25 +191,25 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	ip := strings.TrimSpace(c.ClientIP())
 
 	if bootstrapIsRateLimited(ip) {
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many bootstrap attempts — try again later"})
+		httputil.RespondWithError(c, http.StatusTooManyRequests, "too many bootstrap attempts — try again later", "TOO_MANY_REQUESTS")
 		return
 	}
 	bootstrapRecordAttempt(ip)
 
 	var req bootstrapRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	req.Token = strings.TrimSpace(req.Token)
 	if req.Token == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
+		httputil.RespondWithBadRequest(c, "token is required")
 		return
 	}
 
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -218,19 +220,19 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	adminUser, generatedPassword, err := findOrCreateAdminUser(store)
 	if err != nil || adminUser == nil {
 		log.Printf("[BOOTSTRAP] find/create admin error ip=%s err=%v", ip, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to find or create admin user"})
+		httputil.RespondWithInternalError(c, "failed to find or create admin user")
 		return
 	}
 
 	valid, err := ConsumeBootstrapToken(store, dataDir, req.Token)
 	if err != nil {
 		log.Printf("[BOOTSTRAP] consume error ip=%s err=%v", ip, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		httputil.RespondWithInternalError(c, "internal error")
 		return
 	}
 	if !valid {
 		time.Sleep(500 * time.Millisecond)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid bootstrap token"})
+		httputil.RespondWithUnauthorized(c, "invalid bootstrap token")
 		return
 	}
 
@@ -242,7 +244,7 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	raw, hash, err := database.GenerateAPIKeyToken()
 	if err != nil {
 		log.Printf("[BOOTSTRAP] generate api key error ip=%s err=%v", ip, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate API key"})
+		httputil.RespondWithInternalError(c, "failed to generate API key")
 		return
 	}
 
@@ -262,26 +264,36 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	created, err := store.CreateAPIKey(key)
 	if err != nil {
 		log.Printf("[BOOTSTRAP] create api key error user=%s ip=%s err=%v", adminUser.ID, ip, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create API key"})
+		httputil.RespondWithInternalError(c, "failed to create API key")
 		return
 	}
 
 	log.Printf("[BOOTSTRAP] Token consumed: new API key created user=%s key_id=%s ip=%s", adminUser.Username, created.ID, ip)
 
-	resp := gin.H{
-		"api_key":  raw,
-		"key_id":   created.ID,
-		"user_id":  adminUser.ID,
-		"username": adminUser.Username,
-		"scopes":   scopes,
-		"message":  "Bootstrap token consumed. This key will not be shown again.",
+	type bootstrapResp struct {
+		APIKey            string   `json:"api_key"`
+		KeyID             string   `json:"key_id"`
+		UserID            string   `json:"user_id"`
+		Username          string   `json:"username"`
+		Scopes            []string `json:"scopes"`
+		Message           string   `json:"message"`
+		GeneratedPassword string   `json:"generated_password,omitempty"`
+		PasswordMessage   string   `json:"password_message,omitempty"`
+	}
+	rsp := bootstrapResp{
+		APIKey:   raw,
+		KeyID:    created.ID,
+		UserID:   adminUser.ID,
+		Username: adminUser.Username,
+		Scopes:   scopes,
+		Message:  "Bootstrap token consumed. This key will not be shown again.",
 	}
 	if generatedPassword != "" {
-		resp["generated_password"] = generatedPassword
-		resp["password_message"] = "Admin account created. Change this password after logging in."
+		rsp.GeneratedPassword = generatedPassword
+		rsp.PasswordMessage = "Admin account created. Change this password after logging in."
 		log.Printf("[BOOTSTRAP] Created admin user=%s — save the generated_password from this response", adminUser.Username)
 	}
-	c.JSON(http.StatusOK, resp)
+	httputil.RespondWithOK(c, rsp)
 }
 
 // findOrCreateAdminUser returns the first user with PermUsersManage, creating

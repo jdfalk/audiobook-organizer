@@ -1,5 +1,5 @@
 // file: internal/server/itl_rebuild.go
-// version: 1.2.1
+// version: 1.3.0
 // guid: 8f7e6d5c-4b3a-2c1d-0e9f-8a7b6c5d4e3f
 // last-edited: 2026-05-01
 //
@@ -23,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
 
@@ -238,29 +239,29 @@ func pidToHex(pid [8]byte) string {
 func (s *Server) rebuildITLHandler(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	if itlPath == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ITunesLibraryWritePath not configured"})
+		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath not configured")
 		return
 	}
 
 	store := s.Store()
 	ops, preview, err := computeITLDiff(store, itlPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("diff failed: %v", err)})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("diff failed: %v", err))
 		return
 	}
 
 	dryRun := c.Query("dry_run") == "true"
 	if dryRun {
-		c.JSON(http.StatusOK, gin.H{
-			"dry_run": true,
-			"preview": preview,
-		})
+		httputil.RespondWithOK(c, struct {
+			DryRun  bool               `json:"dry_run"`
+			Preview *ITLRebuildPreview `json:"preview"`
+		}{DryRun: true, Preview: preview})
 		return
 	}
 
 	// Apply.
 	if ops.IsEmpty() {
-		c.JSON(http.StatusOK, ITLRebuildResult{
+		httputil.RespondWithOK(c, ITLRebuildResult{
 			Preview: *preview,
 			Applied: true,
 		})
@@ -268,7 +269,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 	}
 
 	if err := itunesservice.SafeWriteITL(itlPath, *ops); err != nil {
-		c.JSON(http.StatusInternalServerError, ITLRebuildResult{
+		httputil.RespondWithSuccess(c, http.StatusInternalServerError, ITLRebuildResult{
 			Preview: *preview,
 			Applied: false,
 			Error:   err.Error(),
@@ -279,7 +280,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 	log.Printf("[INFO] ITL rebuild: removed %d, added %d, updated-meta %d, updated-loc %d",
 		preview.ToRemove, preview.ToAdd, preview.ToUpdateMeta, preview.ToUpdateLoc)
 
-	c.JSON(http.StatusOK, ITLRebuildResult{
+	httputil.RespondWithOK(c, ITLRebuildResult{
 		Preview: *preview,
 		Applied: true,
 	})

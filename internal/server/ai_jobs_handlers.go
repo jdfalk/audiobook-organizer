@@ -1,15 +1,16 @@
 // file: internal/server/ai_jobs_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: cbb3180d-eb39-40d0-9f14-a2d57e738c0b
+// last-edited: 2026-05-01
 
 package server
 
 import (
-	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // unwrapAIJobsStore peels Store decorator layers (anything with Unwrap()) until
@@ -45,13 +46,15 @@ func (s *Server) handleListAIJobs(c *gin.Context) {
 
 	store, ok := unwrapAIJobsStore(s.Store())
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "store does not implement AIJobsStore"})
+		httputil.RespondWithInternalError(c, "store does not implement AIJobsStore")
 		return
 	}
 	jobs, err := store.ListAIJobs(typeF, statusF, limit, offset)
 	if err != nil {
-		internalError(c, "list ai_jobs", err)
+		httputil.InternalError(c, "list ai_jobs", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"jobs": jobs})
+	httputil.RespondWithOK(c, struct {
+		Jobs any `json:"jobs"`
+	}{Jobs: jobs})
 }

@@ -1,6 +1,7 @@
 // file: internal/server/audio_sample.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
+// last-edited: 2026-05-01
 
 package server
 
@@ -13,6 +14,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
 )
 
@@ -34,20 +36,20 @@ const (
 func (s *Server) handleAudioSample(c *gin.Context) {
 	book, err := s.Store().GetBookByID(c.Param("id"))
 	if err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		httputil.RespondWithNotFound(c, "book", "")
 		return
 	}
 	if book.FilePath == "" {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "book has no file path"})
+		httputil.RespondWithError(c, http.StatusUnprocessableEntity, "book has no file path", "UNPROCESSABLE_ENTITY")
 		return
 	}
 
-	start, err := queryInt(c, "start", 0)
-	if err != nil || start < 0 {
+	start := httputil.ParseQueryInt(c, "start", 0)
+	if start < 0 {
 		start = 0
 	}
-	dur, err := queryInt(c, "duration", sampleDefault)
-	if err != nil || dur <= 0 {
+	dur := httputil.ParseQueryInt(c, "duration", sampleDefault)
+	if dur <= 0 {
 		dur = sampleDefault
 	}
 	if dur > sampleMaxDuration {
@@ -56,7 +58,7 @@ func (s *Server) handleAudioSample(c *gin.Context) {
 
 	ffmpegPath, err := transcode.FindFFmpeg()
 	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ffmpeg not available"})
+		httputil.RespondWithServiceUnavailable(c, "ffmpeg not available")
 		return
 	}
 
@@ -77,11 +79,11 @@ func (s *Server) handleAudioSample(c *gin.Context) {
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("pipe: %v", err)})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("pipe: %v", err))
 		return
 	}
 	if err := cmd.Start(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("ffmpeg start: %v", err)})
+		httputil.RespondWithInternalError(c, fmt.Sprintf("ffmpeg start: %v", err))
 		return
 	}
 
@@ -100,17 +102,4 @@ func (s *Server) handleAudioSample(c *gin.Context) {
 	})
 
 	_ = cmd.Wait()
-}
-
-// queryInt reads a query parameter as int, returning defaultVal if absent or unparseable.
-func queryInt(c *gin.Context, key string, defaultVal int) (int, error) {
-	raw := c.Query(key)
-	if raw == "" {
-		return defaultVal, nil
-	}
-	v, err := strconv.Atoi(raw)
-	if err != nil {
-		return defaultVal, err
-	}
-	return v, nil
 }

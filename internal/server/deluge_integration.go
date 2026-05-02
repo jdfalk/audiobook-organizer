@@ -1,6 +1,7 @@
 // file: internal/server/deluge_integration.go
-// version: 1.4.1
+// version: 1.5.0
 // guid: 1c9d0e8f-2a3b-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-05-01
 //
 // Deluge integration for library centralization (backlog 6.1).
 //
@@ -24,6 +25,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/deluge"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 var (
@@ -103,7 +105,7 @@ func NotifyDelugeMoveStorage(torrentHash, newPath string) {
 func (s *Server) handleDelugeTestConnection(c *gin.Context) {
 	url := config.AppConfig.DelugeWebURL
 	if url == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "deluge_web_url not configured"})
+		httputil.RespondWithBadRequest(c, "deluge_web_url not configured")
 		return
 	}
 	pass := config.AppConfig.DelugeWebPassword
@@ -112,25 +114,22 @@ func (s *Server) handleDelugeTestConnection(c *gin.Context) {
 	}
 	client, err := deluge.New(url, pass)
 	if err != nil {
-		RespondWithInternalError(c, err.Error())
+		httputil.RespondWithInternalError(c, err.Error())
 		return
 	}
 	if err := client.Login(); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"connected": false, "error": err.Error(), "url": url,
-		})
+		httputil.RespondWithError(c, http.StatusBadGateway, err.Error(), "BAD_GATEWAY")
 		return
 	}
 	connected, err := client.Connected()
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"connected": false, "error": err.Error(), "url": url,
-		})
+		httputil.RespondWithError(c, http.StatusBadGateway, err.Error(), "BAD_GATEWAY")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"connected": connected, "url": url,
-	})
+	httputil.RespondWithOK(c, struct {
+		Connected bool   `json:"connected"`
+		URL       string `json:"url"`
+	}{Connected: connected, URL: url})
 }
 
 // handleDelugeListTorrents returns all torrents from Deluge.
@@ -138,15 +137,18 @@ func (s *Server) handleDelugeTestConnection(c *gin.Context) {
 func (s *Server) handleDelugeListTorrents(c *gin.Context) {
 	client := getDelugeClient()
 	if client == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "deluge not configured"})
+		httputil.RespondWithBadRequest(c, "deluge not configured")
 		return
 	}
 	torrents, err := client.ListTorrents()
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		httputil.RespondWithError(c, http.StatusBadGateway, err.Error(), "BAD_GATEWAY")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"torrents": torrents, "count": len(torrents)})
+	httputil.RespondWithOK(c, struct {
+		Torrents any `json:"torrents"`
+		Count    int `json:"count"`
+	}{Torrents: torrents, Count: len(torrents)})
 }
 
 // handleDelugeStatus returns Deluge config status.
@@ -163,12 +165,18 @@ func (s *Server) handleDelugeStatus(c *gin.Context) {
 			url = fmt.Sprintf("http://%s:%d", dc.Host, port)
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"configured":        url != "",
-		"url":               url,
-		"discovery_enabled": config.AppConfig.DelugeDiscoveryEnabled,
-		"move_enabled":      config.AppConfig.DelugeMoveEnabled,
-		"discovery_label":   config.AppConfig.DelugeDiscoveryLabel,
+	httputil.RespondWithOK(c, struct {
+		Configured       bool   `json:"configured"`
+		URL              string `json:"url"`
+		DiscoveryEnabled bool   `json:"discovery_enabled"`
+		MoveEnabled      bool   `json:"move_enabled"`
+		DiscoveryLabel   string `json:"discovery_label"`
+	}{
+		Configured:       url != "",
+		URL:              url,
+		DiscoveryEnabled: config.AppConfig.DelugeDiscoveryEnabled,
+		MoveEnabled:      config.AppConfig.DelugeMoveEnabled,
+		DiscoveryLabel:   config.AppConfig.DelugeDiscoveryLabel,
 	})
 }
 

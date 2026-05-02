@@ -1,5 +1,5 @@
 // file: internal/server/entity_tag_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 7e5f6a4b-8c9d-4a70-b8c5-3d7e0f1b9a99
 //
 // HTTP endpoints for author and series tags (backlog 7.7).
@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // entityTagOps bundles the store operations for one tagged-entity type
@@ -48,7 +49,7 @@ func (s *Server) seriesTagOps() entityTagOps {
 func parseEntityID(c *gin.Context, entityName string) (int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		RespondWithValidationError(c, entityName+" id", "must be an integer")
+		httputil.RespondWithValidationError(c, entityName+" id", "must be an integer")
 		return 0, false
 	}
 	return id, true
@@ -62,13 +63,15 @@ func (s *Server) handleGetEntityTags(c *gin.Context, ops entityTagOps) {
 	}
 	tags, err := ops.getDetailed(id)
 	if err != nil {
-		internalError(c, "get "+ops.name+" tags", err)
+		httputil.InternalError(c, "get "+ops.name+" tags", err)
 		return
 	}
 	if tags == nil {
 		tags = []database.BookTag{}
 	}
-	RespondWithOK(c, gin.H{"tags": tags})
+	httputil.RespondWithOK(c, struct {
+		Tags []database.BookTag `json:"tags"`
+	}{Tags: tags})
 }
 
 // handleAddEntityTag adds a tag to an author or series, optionally with a
@@ -83,7 +86,7 @@ func (s *Server) handleAddEntityTag(c *gin.Context, ops entityTagOps) {
 		Source string `json:"source,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -94,10 +97,12 @@ func (s *Server) handleAddEntityTag(c *gin.Context, ops entityTagOps) {
 		err = ops.add(id, req.Tag)
 	}
 	if err != nil {
-		internalError(c, "add "+ops.name+" tag", err)
+		httputil.InternalError(c, "add "+ops.name+" tag", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"added": req.Tag})
+	httputil.RespondWithOK(c, struct {
+		Added string `json:"added"`
+	}{Added: req.Tag})
 }
 
 // registerEntityTagRoutes wires the author/series tag endpoints.

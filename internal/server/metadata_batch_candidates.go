@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.8.2
+// version: 1.9.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-05-01
 
@@ -20,6 +20,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 )
@@ -69,11 +70,11 @@ type batchApplyRequest struct {
 func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 	var req batchFetchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids is required"})
+		httputil.RespondWithBadRequest(c, "book_ids is required")
 		return
 	}
 	if len(req.BookIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids must not be empty"})
+		httputil.RespondWithBadRequest(c, "book_ids must not be empty")
 		return
 	}
 
@@ -112,11 +113,16 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 	}
 
 	if len(bookIDs) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"message":      fmt.Sprintf("All %d books are already being fetched in another operation", skippedCount),
-			"operation_id": "",
-			"book_count":   0,
-			"skipped":      skippedCount,
+		httputil.RespondWithOK(c, struct {
+			Message     string `json:"message"`
+			OperationID string `json:"operation_id"`
+			BookCount   int    `json:"book_count"`
+			Skipped     int    `json:"skipped"`
+		}{
+			Message:     fmt.Sprintf("All %d books are already being fetched in another operation", skippedCount),
+			OperationID: "",
+			BookCount:   0,
+			Skipped:     skippedCount,
 		})
 		return
 	}
@@ -124,7 +130,7 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 	opID := ulid.Make().String()
 	_, err := store.CreateOperation(opID, "metadata_candidate_fetch", nil)
 	if err != nil {
-		internalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 
@@ -198,14 +204,18 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 	}
 
 	if err := s.queue.Enqueue(opID, "metadata_candidate_fetch", operations.PriorityNormal, opFunc); err != nil {
-		internalError(c, "failed to enqueue operation", err)
+		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{
-		"operation_id": opID,
-		"total_books":  totalBooks,
-		"message":      "metadata candidate fetch started",
+	httputil.RespondWithSuccess(c, http.StatusAccepted, struct {
+		OperationID string `json:"operation_id"`
+		TotalBooks  int    `json:"total_books"`
+		Message     string `json:"message"`
+	}{
+		OperationID: opID,
+		TotalBooks:  totalBooks,
+		Message:     "metadata candidate fetch started",
 	})
 }
 
@@ -323,23 +333,25 @@ func buildCandidateBookInfo(store database.BookFileStore, book *database.Book) C
 func (s *Server) handleGetOperationResults(c *gin.Context) {
 	opID := c.Param("id")
 	if opID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "operation id is required"})
+		httputil.RespondWithBadRequest(c, "operation id is required")
 		return
 	}
 
-	limit, offset := paginationFromQuery(c)
+	params := httputil.ParsePaginationParams(c)
+	limit := params.Limit
+	offset := params.Offset
 
 	store := s.Store()
 
 	op, err := store.GetOperationByID(opID)
 	if err != nil || op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		httputil.RespondWithNotFound(c, "operation", opID)
 		return
 	}
 
 	allRaw, err := store.GetOperationResults(opID)
 	if err != nil {
-		internalError(c, "failed to get operation results", err)
+		httputil.InternalError(c, "failed to get operation results", err)
 		return
 	}
 	totalCount := len(allRaw)
@@ -377,19 +389,32 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 		candidateResults = append(candidateResults, cr)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"operation":      op,
-		"results":        candidateResults,
-		"total":          totalCount,
-		"total_count":    totalCount,
-		"matched":        countByStatus(candidateResults, "matched"),
-		"no_match":       countByStatus(candidateResults, "no_match"),
-		"errors":         countByStatus(candidateResults, "error"),
-		"total_matched":  totalMatched,
-		"total_no_match": totalNoMatch,
-		"total_errors":   totalErrors,
-		"limit":          limit,
-		"offset":         offset,
+	httputil.RespondWithOK(c, struct {
+		Operation    *database.Operation `json:"operation"`
+		Results      []CandidateResult   `json:"results"`
+		Total        int                 `json:"total"`
+		TotalCount   int                 `json:"total_count"`
+		Matched      int                 `json:"matched"`
+		NoMatch      int                 `json:"no_match"`
+		Errors       int                 `json:"errors"`
+		TotalMatched int                 `json:"total_matched"`
+		TotalNoMatch int                 `json:"total_no_match"`
+		TotalErrors  int                 `json:"total_errors"`
+		Limit        int                 `json:"limit"`
+		Offset       int                 `json:"offset"`
+	}{
+		Operation:    op,
+		Results:      candidateResults,
+		Total:        totalCount,
+		TotalCount:   totalCount,
+		Matched:      countByStatus(candidateResults, "matched"),
+		NoMatch:      countByStatus(candidateResults, "no_match"),
+		Errors:       countByStatus(candidateResults, "error"),
+		TotalMatched: totalMatched,
+		TotalNoMatch: totalNoMatch,
+		TotalErrors:  totalErrors,
+		Limit:        limit,
+		Offset:       offset,
 	})
 }
 
@@ -420,7 +445,7 @@ func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
 	// quickly push older metadata-fetch operations out of the top 200.
 	ops, err := store.GetRecentOperations(5000)
 	if err != nil {
-		internalError(c, "failed to list recent operations", err)
+		httputil.InternalError(c, "failed to list recent operations", err)
 		return
 	}
 	type fetchOpSummary struct {
@@ -485,7 +510,10 @@ func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
 		}
 		out = append(out, summary)
 	}
-	c.JSON(http.StatusOK, gin.H{"operations": out, "count": len(out)})
+	httputil.RespondWithOK(c, struct {
+		Operations []fetchOpSummary `json:"operations"`
+		Count      int              `json:"count"`
+	}{Operations: out, Count: len(out)})
 }
 
 // countByStatus counts CandidateResults with the given status.
@@ -503,11 +531,11 @@ func countByStatus(results []CandidateResult, status string) int {
 func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 	var req batchApplyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "operation_id and book_ids are required"})
+		httputil.RespondWithBadRequest(c, "operation_id and book_ids are required")
 		return
 	}
 	if len(req.BookIDs) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "book_ids must not be empty"})
+		httputil.RespondWithBadRequest(c, "book_ids must not be empty")
 		return
 	}
 
@@ -517,7 +545,7 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 	// Load all operation results for the given operation.
 	results, err := store.GetOperationResults(req.OperationID)
 	if err != nil {
-		internalError(c, "failed to load operation results", err)
+		httputil.InternalError(c, "failed to load operation results", err)
 		return
 	}
 
@@ -584,12 +612,18 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"applied":      applied,
-		"skipped":      skipped,
-		"errors":       errors,
-		"error_count":  len(errors),
-		"operation_id": req.OperationID,
+	httputil.RespondWithOK(c, struct {
+		Applied     int      `json:"applied"`
+		Skipped     int      `json:"skipped"`
+		Errors      []string `json:"errors"`
+		ErrorCount  int      `json:"error_count"`
+		OperationID string   `json:"operation_id"`
+	}{
+		Applied:     applied,
+		Skipped:     skipped,
+		Errors:      errors,
+		ErrorCount:  len(errors),
+		OperationID: req.OperationID,
 	})
 }
 
@@ -623,7 +657,7 @@ func (s *Server) handleRejectCandidates(c *gin.Context) {
 		BookIDs     []string `json:"book_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -632,7 +666,7 @@ func (s *Server) handleRejectCandidates(c *gin.Context) {
 	// For each book, update the stored result status to "rejected"
 	results, err := store.GetOperationResults(req.OperationID)
 	if err != nil {
-		internalError(c, "failed to load results", err)
+		httputil.InternalError(c, "failed to load results", err)
 		return
 	}
 
@@ -670,7 +704,9 @@ func (s *Server) handleRejectCandidates(c *gin.Context) {
 		rejected++
 	}
 
-	c.JSON(http.StatusOK, gin.H{"rejected": rejected})
+	httputil.RespondWithOK(c, struct {
+		Rejected int `json:"rejected"`
+	}{Rejected: rejected})
 }
 
 // handleUnrejectCandidates reverses a rejection — restores the candidate to "matched" status
@@ -681,7 +717,7 @@ func (s *Server) handleUnrejectCandidates(c *gin.Context) {
 		BookIDs     []string `json:"book_ids"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -689,7 +725,7 @@ func (s *Server) handleUnrejectCandidates(c *gin.Context) {
 
 	results, err := store.GetOperationResults(req.OperationID)
 	if err != nil {
-		internalError(c, "failed to load results", err)
+		httputil.InternalError(c, "failed to load results", err)
 		return
 	}
 
@@ -728,7 +764,9 @@ func (s *Server) handleUnrejectCandidates(c *gin.Context) {
 		unrejected++
 	}
 
-	c.JSON(http.StatusOK, gin.H{"unrejected": unrejected})
+	httputil.RespondWithOK(c, struct {
+		Unrejected int `json:"unrejected"`
+	}{Unrejected: unrejected})
 }
 
 // handleGetRecentOperations returns the last 10 completed metadata_candidate_fetch operations.
@@ -736,7 +774,7 @@ func (s *Server) handleUnrejectCandidates(c *gin.Context) {
 func (s *Server) handleGetRecentOperations(c *gin.Context) {
 	cacheKey := "recent_ops"
 	if cached, ok := s.listCache.Get(cacheKey); ok {
-		c.JSON(http.StatusOK, cached)
+		httputil.RespondWithOK(c, cached)
 		return
 	}
 
@@ -745,7 +783,7 @@ func (s *Server) handleGetRecentOperations(c *gin.Context) {
 	// Get recent operations and filter to metadata_candidate_fetch type.
 	ops, err := store.GetRecentOperations(50)
 	if err != nil {
-		internalError(c, "failed to get recent operations", err)
+		httputil.InternalError(c, "failed to get recent operations", err)
 		return
 	}
 
@@ -756,12 +794,9 @@ func (s *Server) handleGetRecentOperations(c *gin.Context) {
 		}
 	}
 
-	resp := gin.H{
-		"operations": filtered,
-		"count":      len(filtered),
-	}
+	resp := gin.H{"operations": filtered, "count": len(filtered)}
 	s.listCache.Set(cacheKey, resp)
-	c.JSON(http.StatusOK, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 // resumeInterruptedMetadataFetch checks for metadata_candidate_fetch operations

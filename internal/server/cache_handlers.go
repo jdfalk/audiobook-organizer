@@ -1,19 +1,20 @@
 // file: internal/server/cache_handlers.go
-// version: 1.3.1
+// version: 1.4.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
+// last-edited: 2026-05-01
 
 package server
 
 import (
 	"encoding/json"
 	"log"
-	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_model/go"
 )
@@ -48,7 +49,7 @@ type GetDurationMetric struct {
 func (s *Server) handleCacheStats(c *gin.Context) {
 	metrics, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to gather metrics"})
+		httputil.RespondWithInternalError(c, "failed to gather metrics")
 		return
 	}
 
@@ -70,7 +71,7 @@ func (s *Server) handleCacheStats(c *gin.Context) {
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	c.JSON(http.StatusOK, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 // handleCacheKeysIntrospection returns key names for a specific cache
@@ -78,7 +79,7 @@ func (s *Server) handleCacheStats(c *gin.Context) {
 func (s *Server) handleCacheKeysIntrospection(c *gin.Context) {
 	cacheName := c.Query("cache")
 	if cacheName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cache parameter required"})
+		httputil.RespondWithBadRequest(c, "cache parameter required")
 		return
 	}
 
@@ -87,26 +88,20 @@ func (s *Server) handleCacheKeysIntrospection(c *gin.Context) {
 	if !ok {
 		// Cache not found — check if it's a known non-introspectable name
 		if isNonIntrospectableCache(cacheName) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "not introspectable",
-				"cache": cacheName,
-			})
+			httputil.RespondWithBadRequest(c, "not introspectable: "+cacheName)
 			return
 		}
 		// Unknown cache
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "cache not found",
-			"cache": cacheName,
-		})
+		httputil.RespondWithBadRequest(c, "cache not found: "+cacheName)
 		return
 	}
 
 	keys := cacheInst.Keys()
-	c.JSON(http.StatusOK, gin.H{
-		"cache": cacheName,
-		"keys":  keys,
-		"count": len(keys),
-	})
+	httputil.RespondWithOK(c, struct {
+		Cache string   `json:"cache"`
+		Keys  []string `json:"keys"`
+		Count int      `json:"count"`
+	}{Cache: cacheName, Keys: keys, Count: len(keys)})
 }
 
 // aggregateCacheMetrics extracts all audiobook_organizer_cache_* metrics from Prometheus
@@ -408,7 +403,7 @@ func (s *Server) runCacheStatsSnapshotter(shutdown <-chan struct{}) {
 // `since` defaults to 24h ago; `limit` defaults to 0 (no cap).
 func (s *Server) handleCacheStatsHistory(c *gin.Context) {
 	if s.metricsStore == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "metrics store not initialized"})
+		httputil.RespondWithServiceUnavailable(c, "metrics store not initialized")
 		return
 	}
 	cacheName := c.Query("cache")
@@ -416,7 +411,7 @@ func (s *Server) handleCacheStatsHistory(c *gin.Context) {
 	if raw := c.Query("since"); raw != "" {
 		t, err := time.Parse(time.RFC3339, raw)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "since must be RFC3339"})
+			httputil.RespondWithBadRequest(c, "since must be RFC3339")
 			return
 		}
 		since = t
@@ -425,19 +420,19 @@ func (s *Server) handleCacheStatsHistory(c *gin.Context) {
 	if raw := c.Query("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil || n < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a non-negative integer"})
+			httputil.RespondWithBadRequest(c, "limit must be a non-negative integer")
 			return
 		}
 		limit = n
 	}
 	snaps, err := s.metricsStore.GetCacheStatsHistory(cacheName, since, limit)
 	if err != nil {
-		RespondWithInternalError(c, err.Error())
+		httputil.RespondWithInternalError(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"cache":     cacheName,
-		"since":     since.UTC().Format(time.RFC3339),
-		"snapshots": snaps,
-	})
+	httputil.RespondWithOK(c, struct {
+		Cache     string `json:"cache"`
+		Since     string `json:"since"`
+		Snapshots any    `json:"snapshots"`
+	}{Cache: cacheName, Since: since.UTC().Format(time.RFC3339), Snapshots: snaps})
 }

@@ -1,6 +1,7 @@
 // file: internal/server/deluge_discovery.go
-// version: 2.3.1
+// version: 2.4.0
 // guid: e6f7a8b9-c0d1-2e3f-4a5b-6c7d8e9f0a1b
+// last-edited: 2026-05-01
 //
 // Deluge label-based audiobook discovery.
 //
@@ -41,6 +42,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // DiscoveredTorrent is a Deluge torrent not yet tracked in the library.
@@ -343,12 +345,12 @@ func normalizeTitle(s string) string {
 // GET /api/v1/deluge/discover?label=audiobooks
 func (s *Server) handleDelugeDiscover(c *gin.Context) {
 	if !config.AppConfig.DelugeDiscoveryEnabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "deluge discovery is disabled (set deluge_discovery_enabled=true to enable)"})
+		httputil.RespondWithForbidden(c, "deluge discovery is disabled (set deluge_discovery_enabled=true to enable)")
 		return
 	}
 	client := getDelugeClient()
 	if client == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "deluge not configured"})
+		httputil.RespondWithBadRequest(c, "deluge not configured")
 		return
 	}
 
@@ -359,15 +361,15 @@ func (s *Server) handleDelugeDiscover(c *gin.Context) {
 
 	unimported, err := s.discoverUnimported(client, label)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		httputil.RespondWithError(c, http.StatusBadGateway, err.Error(), "BAD_GATEWAY")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"label":      label,
-		"candidates": unimported,
-		"count":      len(unimported),
-	})
+	httputil.RespondWithOK(c, struct {
+		Label      string              `json:"label"`
+		Candidates []DiscoveredTorrent `json:"candidates"`
+		Count      int                 `json:"count"`
+	}{Label: label, Candidates: unimported, Count: len(unimported)})
 }
 
 // handleDelugeListLabels returns all labels from the Deluge Label plugin.
@@ -375,15 +377,18 @@ func (s *Server) handleDelugeDiscover(c *gin.Context) {
 func (s *Server) handleDelugeListLabels(c *gin.Context) {
 	client := getDelugeClient()
 	if client == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "deluge not configured"})
+		httputil.RespondWithBadRequest(c, "deluge not configured")
 		return
 	}
 	labels, err := client.ListLabels()
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		httputil.RespondWithError(c, http.StatusBadGateway, err.Error(), "BAD_GATEWAY")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"labels": labels, "count": len(labels)})
+	httputil.RespondWithOK(c, struct {
+		Labels any `json:"labels"`
+		Count  int `json:"count"`
+	}{Labels: labels, Count: len(labels)})
 }
 
 // handleDelugeDiscoverImport triggers an import of a discovered torrent's
@@ -392,7 +397,7 @@ func (s *Server) handleDelugeListLabels(c *gin.Context) {
 // Body: { "content_path": "/mnt/downloads/Dune by Frank Herbert", "torrent_hash": "abc123" }
 func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 	if !config.AppConfig.DelugeDiscoveryEnabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "deluge discovery is disabled (set deluge_discovery_enabled=true to enable)"})
+		httputil.RespondWithForbidden(c, "deluge discovery is disabled (set deluge_discovery_enabled=true to enable)")
 		return
 	}
 	var req struct {
@@ -400,11 +405,11 @@ func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 		TorrentHash string `json:"torrent_hash"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if s.importService == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "import service not initialized"})
+		httputil.RespondWithInternalError(c, "import service not initialized")
 		return
 	}
 
@@ -413,14 +418,14 @@ func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 		Organize: false,
 	})
 	if err != nil {
-		RespondWithInternalError(c, err.Error())
+		httputil.RespondWithInternalError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"book":         resp,
-		"torrent_hash": req.TorrentHash,
-	})
+	httputil.RespondWithCreated(c, struct {
+		Book        any    `json:"book"`
+		TorrentHash string `json:"torrent_hash"`
+	}{Book: resp, TorrentHash: req.TorrentHash})
 }
 
 // handleDiscoveryImport triggers importToLibrary for all book_files that
@@ -437,18 +442,18 @@ func (s *Server) handleDiscoveryImport(c *gin.Context) {
 
 	store := s.Store()
 	if store == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	client := getDelugeClient()
 	if client == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "deluge not configured"})
+		httputil.RespondWithServiceUnavailable(c, "deluge not configured")
 		return
 	}
 
 	files, err := store.GetAllBookFiles()
 	if err != nil {
-		internalError(c, "failed to load book files", err)
+		httputil.InternalError(c, "failed to load book files", err)
 		return
 	}
 
@@ -491,12 +496,12 @@ func (s *Server) handleDiscoveryImport(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"total":    len(pending),
-		"imported": imported,
-		"skipped":  skipped,
-		"failed":   failed,
-		"dry_run":  req.DryRun,
-		"results":  results,
-	})
+	httputil.RespondWithOK(c, struct {
+		Total    int      `json:"total"`
+		Imported int      `json:"imported"`
+		Skipped  int      `json:"skipped"`
+		Failed   int      `json:"failed"`
+		DryRun   bool     `json:"dry_run"`
+		Results  []result `json:"results"`
+	}{Total: len(pending), Imported: imported, Skipped: skipped, Failed: failed, DryRun: req.DryRun, Results: results})
 }

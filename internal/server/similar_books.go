@@ -1,6 +1,7 @@
 // file: internal/server/similar_books.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3a1b2c0d-4e5f-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-05-01
 //
 // "Similar books" lookup (backlog 5.2). Given a book, searches Bleve
 // for other books by the same author or in the same series — quick
@@ -9,11 +10,11 @@
 package server
 
 import (
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 )
 
@@ -23,13 +24,13 @@ func (s *Server) handleSimilarBooks(c *gin.Context) {
 	bookID := c.Param("id")
 	book, err := s.Store().GetBookByID(bookID)
 	if err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		httputil.RespondWithNotFound(c, "book", "")
 		return
 	}
 
 	idx := s.SearchIndex()
 	if idx == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "search index not available"})
+		httputil.RespondWithServiceUnavailable(c, "search index not available")
 		return
 	}
 
@@ -49,25 +50,37 @@ func (s *Server) handleSimilarBooks(c *gin.Context) {
 	}
 
 	if len(queryParts) == 0 {
-		c.JSON(http.StatusOK, gin.H{"books": []database.Book{}, "count": 0})
+		httputil.RespondWithOK(c, struct {
+			Books []database.Book `json:"books"`
+			Count int             `json:"count"`
+		}{Books: []database.Book{}, Count: 0})
 		return
 	}
 
 	query := strings.Join(queryParts, " || ")
 	ast, err := search.ParseQuery(query)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"books": []database.Book{}, "count": 0})
+		httputil.RespondWithOK(c, struct {
+			Books []database.Book `json:"books"`
+			Count int             `json:"count"`
+		}{Books: []database.Book{}, Count: 0})
 		return
 	}
 	bleveQ, _, err := search.Translate(ast)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"books": []database.Book{}, "count": 0})
+		httputil.RespondWithOK(c, struct {
+			Books []database.Book `json:"books"`
+			Count int             `json:"count"`
+		}{Books: []database.Book{}, Count: 0})
 		return
 	}
 
 	hits, _, err := idx.SearchNative(bleveQ, 0, 20)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"books": []database.Book{}, "count": 0})
+		httputil.RespondWithOK(c, struct {
+			Books []database.Book `json:"books"`
+			Count int             `json:"count"`
+		}{Books: []database.Book{}, Count: 0})
 		return
 	}
 
@@ -88,7 +101,10 @@ func (s *Server) handleSimilarBooks(c *gin.Context) {
 		similar = []database.Book{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"books": similar, "count": len(similar)})
+	httputil.RespondWithOK(c, struct {
+		Books []database.Book `json:"books"`
+		Count int             `json:"count"`
+	}{Books: similar, Count: len(similar)})
 }
 
 func quoteIfNeeded(s string) string {

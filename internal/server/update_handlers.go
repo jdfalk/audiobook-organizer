@@ -1,5 +1,5 @@
 // file: internal/server/update_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 
 package server
@@ -7,22 +7,29 @@ package server
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // getUpdateStatus returns the last update check info.
 func (s *Server) getUpdateStatus(c *gin.Context) {
 	info := s.updater.LastCheck()
 	if info == nil {
-		RespondWithOK(c, gin.H{
-			"current_version":  appVersion,
-			"latest_version":   "",
-			"channel":          config.AppConfig.AutoUpdateChannel,
-			"update_available": false,
-			"last_checked":     nil,
+		httputil.RespondWithOK(c, struct {
+			CurrentVersion  string  `json:"current_version"`
+			LatestVersion   string  `json:"latest_version"`
+			Channel         string  `json:"channel"`
+			UpdateAvailable bool    `json:"update_available"`
+			LastChecked     any     `json:"last_checked"`
+		}{
+			CurrentVersion:  appVersion,
+			LatestVersion:   "",
+			Channel:         config.AppConfig.AutoUpdateChannel,
+			UpdateAvailable: false,
+			LastChecked:     nil,
 		})
 		return
 	}
-	RespondWithOK(c, info)
+	httputil.RespondWithOK(c, info)
 }
 
 // checkForUpdate triggers an immediate update check and returns the result.
@@ -30,26 +37,26 @@ func (s *Server) checkForUpdate(c *gin.Context) {
 	channel := config.AppConfig.AutoUpdateChannel
 	info, err := s.updater.CheckForUpdate(channel)
 	if err != nil {
-		internalError(c, "failed to check for updates", err)
+		httputil.InternalError(c, "failed to check for updates", err)
 		return
 	}
-	RespondWithOK(c, info)
+	httputil.RespondWithOK(c, info)
 }
 
 // applyUpdate downloads and applies an available update, then exits for restart.
 func (s *Server) applyUpdate(c *gin.Context) {
 	info := s.updater.LastCheck()
 	if info == nil || !info.UpdateAvailable {
-		RespondWithBadRequest(c, "no update available")
+		httputil.RespondWithBadRequest(c, "no update available")
 		return
 	}
 
 	if err := s.updater.DownloadAndReplace(info); err != nil {
-		internalError(c, "failed to apply update", err)
+		httputil.InternalError(c, "failed to apply update", err)
 		return
 	}
 
-	RespondWithOK(c, gin.H{"message": "update applied, restarting..."})
+	httputil.RespondWithOK(c, httputil.MessageResponse{Message: "update applied, restarting..."})
 
 	// Exit after response is sent; systemd/launchd restarts the process
 	go s.updater.RestartSelf()

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // maintenanceStore is the narrow slice of database.Store that the
@@ -42,17 +42,17 @@ func (s *Server) handleWipe(c *gin.Context) {
 	req.DryRun = true
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 	if req.Confirm != "WIPE" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": `must include "confirm": "WIPE" in the request body`})
+		httputil.RespondWithBadRequest(c, `must include "confirm": "WIPE" in the request body`)
 		return
 	}
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -222,10 +222,10 @@ func (s *Server) handleWipe(c *gin.Context) {
 	}
 
 	log.Printf("[INFO] wipe: complete dry_run=%v targets=%v results=%v", dryRun, req.Targets, results)
-	c.JSON(http.StatusOK, gin.H{
-		"dry_run": dryRun,
-		"results": results,
-	})
+	httputil.RespondWithOK(c, struct {
+		DryRun  bool             `json:"dry_run"`
+		Results map[string]int64 `json:"results"`
+	}{DryRun: dryRun, Results: results})
 }
 
 // dryRunLabel returns a label for logging.
@@ -399,31 +399,31 @@ type composerTagResult struct {
 func (s *Server) handleGetComposerScanResults(c *gin.Context) {
 	opID := c.Param("id")
 	if opID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "operation id required"})
+		httputil.RespondWithBadRequest(c, "operation id required")
 		return
 	}
 
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	op, err := store.GetOperationByID(opID)
 	if err != nil || op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		httputil.RespondWithNotFound(c, "operation", opID)
 		return
 	}
 	// Accept both the legacy "composer_tag_scan" type (pre-ASYNC-CLEAN-1) and
 	// the new "maintenance:scan-composer-tags" type created by the job dispatcher.
 	if op.Type != "composer_tag_scan" && op.Type != "maintenance:scan-composer-tags" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "not a composer_tag_scan operation"})
+		httputil.RespondWithBadRequest(c, "not a composer_tag_scan operation")
 		return
 	}
 
 	rawResults, err := store.GetOperationResults(opID)
 	if err != nil {
-		internalError(c, "failed to load results", err)
+		httputil.InternalError(c, "failed to load results", err)
 		return
 	}
 
@@ -440,19 +440,26 @@ func (s *Server) handleGetComposerScanResults(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"operation_id": opID,
-		"status":       op.Status,
-		"progress":     op.Progress,
-		"total":        op.Total,
-		"by_category":  counts,
-		"problems":     len(problems),
-		"details":      problems,
+	httputil.RespondWithOK(c, struct {
+		OperationID string              `json:"operation_id"`
+		Status      string              `json:"status"`
+		Progress    int                 `json:"progress"`
+		Total       int                 `json:"total"`
+		ByCategory  map[string]int      `json:"by_category"`
+		Problems    int                 `json:"problems"`
+		Details     []composerTagResult `json:"details"`
+	}{
+		OperationID: opID,
+		Status:      op.Status,
+		Progress:    op.Progress,
+		Total:       op.Total,
+		ByCategory:  counts,
+		Problems:    len(problems),
+		Details:     problems,
 	})
 }
 
 type missingFileRepairResult struct {
-	FileID  string `json:"file_id"`
 	BookID  string `json:"book_id"`
 	Title   string `json:"book_title"`
 	OldPath string `json:"old_path"`
@@ -468,28 +475,28 @@ type missingFileRepairResult struct {
 func (s *Server) handleGetMissingFileRepairResults(c *gin.Context) {
 	opID := c.Param("id")
 	if opID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "operation id required"})
+		httputil.RespondWithBadRequest(c, "operation id required")
 		return
 	}
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	op, err := store.GetOperationByID(opID)
 	if err != nil || op == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "operation not found"})
+		httputil.RespondWithNotFound(c, "operation", opID)
 		return
 	}
 	// Accept both the legacy "missing-file-repair" type (pre-ASYNC-CLEAN-1) and
 	// the new "maintenance:repair-missing-files" type created by the job dispatcher.
 	if op.Type != "missing-file-repair" && op.Type != "maintenance:repair-missing-files" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "not a missing-file-repair operation"})
+		httputil.RespondWithBadRequest(c, "not a missing-file-repair operation")
 		return
 	}
 	rawResults, err := store.GetOperationResults(opID)
 	if err != nil {
-		internalError(c, "failed to load results", err)
+		httputil.InternalError(c, "failed to load results", err)
 		return
 	}
 
@@ -516,44 +523,59 @@ func (s *Server) handleGetMissingFileRepairResults(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"operation_id": opID,
-		"status":       op.Status,
-		"progress":     op.Progress,
-		"total":        op.Total,
-		"by_method":    byMethod,
-		"repaired":     repaired,
-		"unresolved":   unresolved,
-		"ambiguous":    ambiguous,
-		"skipped":      skipped,
-		"problems":     problems,
+	httputil.RespondWithOK(c, struct {
+		OperationID string                    `json:"operation_id"`
+		Status      string                    `json:"status"`
+		Progress    int                       `json:"progress"`
+		Total       int                       `json:"total"`
+		ByMethod    map[string]int            `json:"by_method"`
+		Repaired    int                       `json:"repaired"`
+		Unresolved  int                       `json:"unresolved"`
+		Ambiguous   int                       `json:"ambiguous"`
+		Skipped     int                       `json:"skipped"`
+		Problems    []missingFileRepairResult `json:"problems"`
+	}{
+		OperationID: opID,
+		Status:      op.Status,
+		Progress:    op.Progress,
+		Total:       op.Total,
+		ByMethod:    byMethod,
+		Repaired:    repaired,
+		Unresolved:  unresolved,
+		Ambiguous:   ambiguous,
+		Skipped:     skipped,
+		Problems:    problems,
 	})
 }
 
 func (s *Server) handleGetBookFileHashStats(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	stats, err := store.GetBookFileHashStats()
 	if err != nil {
-		internalError(c, "failed to get book file hash stats", err)
+		httputil.InternalError(c, "failed to get book file hash stats", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	httputil.RespondWithOK(c, struct {
+		Data any `json:"data"`
+	}{Data: stats})
 }
 
 func (s *Server) handleGetBookMetadataHashStats(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database not initialized"})
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	stats, err := store.GetBookMetadataHashStats()
 	if err != nil {
-		internalError(c, "failed to get book metadata hash stats", err)
+		httputil.InternalError(c, "failed to get book metadata hash stats", err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	httputil.RespondWithOK(c, struct {
+		Data any `json:"data"`
+	}{Data: stats})
 }
