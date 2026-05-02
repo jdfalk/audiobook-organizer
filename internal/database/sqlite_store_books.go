@@ -3110,6 +3110,26 @@ func (s *SQLiteStore) GetBookFilesNeedingDelugeImport() ([]BookFile, error) {
 	return files, rows.Err()
 }
 
+// ClearITunesPID clears itunes_persistent_id and itunes_path on the
+// book_files row with the given PID. Returns (true, nil) if a row was
+// updated, (false, nil) if no such PID exists. Used by the iTunes
+// orphan-cleanup path so DB state stays consistent with the ITL after
+// a successful remove.
+func (s *SQLiteStore) ClearITunesPID(itunesPID string) (bool, error) {
+	if itunesPID == "" {
+		return false, nil
+	}
+	res, err := s.db.Exec(
+		`UPDATE book_files SET itunes_persistent_id = '', itunes_path = '', updated_at = ? WHERE itunes_persistent_id = ?`,
+		time.Now().Format(time.RFC3339), itunesPID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("ClearITunesPID: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 // GetBookFileByPID returns the book_file with the given iTunes persistent ID, or
 // nil if not found.
 func (s *SQLiteStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {

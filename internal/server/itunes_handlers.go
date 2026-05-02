@@ -1,5 +1,5 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
 // last-edited: 2026-05-01
 
@@ -425,11 +425,11 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	}
 
 	httputil.RespondWithOK(c, gin.H{
-		"success":              true,
-		"updated_count":        itlResult.UpdatedCount,
-		"file_pid_pairs":       len(itlUpdates),
-		"primary_book_count":   len(writtenBookIDs),
-		"message":              fmt.Sprintf("ITL write-back complete: %d ITL chunks updated across %d (file,PID) pairs from %d primary books", itlResult.UpdatedCount, len(itlUpdates), len(writtenBookIDs)),
+		"success":            true,
+		"updated_count":      itlResult.UpdatedCount,
+		"file_pid_pairs":     len(itlUpdates),
+		"primary_book_count": len(writtenBookIDs),
+		"message":            fmt.Sprintf("ITL write-back complete: %d ITL chunks updated across %d (file,PID) pairs from %d primary books", itlResult.UpdatedCount, len(itlUpdates), len(writtenBookIDs)),
 	})
 }
 
@@ -517,21 +517,29 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 	}
 
 	enqueued := 0
+	cleared := 0
 	for _, pid := range nonPrimaryPIDs {
 		s.writeBackBatcher.EnqueueRemove(pid)
 		enqueued++
+		if ok, _ := s.Store().ClearITunesPID(pid); ok {
+			cleared++
+		}
 	}
 	for _, pid := range softDeletedPIDs {
 		s.writeBackBatcher.EnqueueRemove(pid)
 		enqueued++
+		if ok, _ := s.Store().ClearITunesPID(pid); ok {
+			cleared++
+		}
 	}
 	for _, pid := range truePIDOrphans {
 		s.writeBackBatcher.EnqueueRemove(pid)
 		enqueued++
+		// True orphans by definition have no DB row to clear.
 	}
 
-	stdlog.Printf("[INFO] iTunes cleanup-orphans: enqueued %d removes (non_primary=%d soft_deleted=%d true_orphans=%d)",
-		enqueued, len(nonPrimaryPIDs), len(softDeletedPIDs), len(truePIDOrphans))
+	stdlog.Printf("[INFO] iTunes cleanup-orphans: enqueued %d removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d DB PIDs",
+		enqueued, len(nonPrimaryPIDs), len(softDeletedPIDs), len(truePIDOrphans), cleared)
 
 	httputil.RespondWithOK(c, gin.H{
 		"success":         true,
@@ -539,8 +547,9 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 		"non_primary":     len(nonPrimaryPIDs),
 		"soft_deleted":    len(softDeletedPIDs),
 		"true_orphans":    len(truePIDOrphans),
+		"db_pids_cleared": cleared,
 		"valid_pid_count": len(validPIDs),
-		"message":         fmt.Sprintf("enqueued %d iTunes removes (non_primary=%d soft_deleted=%d true_orphans=%d). The next batcher flush will splice them out of the ITL.", enqueued, len(nonPrimaryPIDs), len(softDeletedPIDs), len(truePIDOrphans)),
+		"message":         fmt.Sprintf("enqueued %d iTunes removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d stale DB PIDs. The next batcher flush will splice removed tracks out of the ITL.", enqueued, len(nonPrimaryPIDs), len(softDeletedPIDs), len(truePIDOrphans), cleared),
 	})
 }
 
@@ -922,4 +931,49 @@ func calculatePercent(current, total int) int {
 		return 100
 	}
 	return pct
+}
+
+// handleITunesLibraryStats reads the configured ITL file and reports
+// low-level structural counts useful for verifying orphan-cleanup
+// progress: master-track count and dangling playlist→track refs
+// (mtph items pointing at TrackIDs not present in the master list).
+//
+// Cheap to call: parses the binary directly with ITL helpers, no
+// full library-object materialization.
+func (s *Server) handleITunesLibraryStats(c *gin.Context) {
+	if !s.itunesEnabledOrError(c) {
+		return
+	}
+	itlPath := config.AppConfig.ITunesLibraryWritePath
+	if itlPath == "" {
+		httputil.RespondWithBadRequest(c, "no ITL library path configured")
+		return
+	}
+	if _, err := os.Stat(itlPath); err != nil {
+		httputil.RespondWithBadRequest(c, fmt.Sprintf("ITL not accessible: %v", err))
+		return
+	}
+
+	data, err := os.ReadFile(itlPath)
+	if err != nil {
+		httputil.InternalError(c, "read ITL", err)
+		return
+	}
+	dec, decErr := itunes.DecryptAndInflateITL(data)
+	if decErr != nil {
+		httputil.InternalError(c, "decrypt/inflate ITL", decErr)
+		return
+	}
+
+	masterTIDs := itunes.CollectMasterTrackIDsLE(dec)
+	dangling := itunes.FindDanglingMtphRefsLE(dec, masterTIDs)
+
+	httputil.RespondWithOK(c, gin.H{
+		"success":        true,
+		"itl_path":       itlPath,
+		"itl_size_bytes": len(data),
+		"master_tracks":  len(masterTIDs),
+		"dangling_mtph":  len(dangling),
+		"itl_size_mb":    fmt.Sprintf("%.2f", float64(len(data))/(1024*1024)),
+	})
 }

@@ -13154,6 +13154,66 @@ func (_c *MockBookFileStore_BatchUpsertBookFiles_Call) RunAndReturn(run func(fil
 	return _c
 }
 
+// ClearITunesPID provides a mock function for the type MockBookFileStore
+func (_mock *MockBookFileStore) ClearITunesPID(itunesPID string) (bool, error) {
+	ret := _mock.Called(itunesPID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearITunesPID")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (bool, error)); ok {
+		return returnFunc(itunesPID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) bool); ok {
+		r0 = returnFunc(itunesPID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(itunesPID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookFileStore_ClearITunesPID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearITunesPID'
+type MockBookFileStore_ClearITunesPID_Call struct {
+	*mock.Call
+}
+
+// ClearITunesPID is a helper method to define mock.On call
+//   - itunesPID string
+func (_e *MockBookFileStore_Expecter) ClearITunesPID(itunesPID interface{}) *MockBookFileStore_ClearITunesPID_Call {
+	return &MockBookFileStore_ClearITunesPID_Call{Call: _e.mock.On("ClearITunesPID", itunesPID)}
+}
+
+func (_c *MockBookFileStore_ClearITunesPID_Call) Run(run func(itunesPID string)) *MockBookFileStore_ClearITunesPID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookFileStore_ClearITunesPID_Call) Return(cleared bool, err error) *MockBookFileStore_ClearITunesPID_Call {
+	_c.Call.Return(cleared, err)
+	return _c
+}
+
+func (_c *MockBookFileStore_ClearITunesPID_Call) RunAndReturn(run func(itunesPID string) (bool, error)) *MockBookFileStore_ClearITunesPID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateBookFile provides a mock function for the type MockBookFileStore
 func (_mock *MockBookFileStore) CreateBookFile(file *database.BookFile) error {
 	ret := _mock.Called(file)
@@ -25858,6 +25918,66 @@ func (_c *MockStore_BulkCreateExternalIDMappings_Call) Return(err error) *MockSt
 }
 
 func (_c *MockStore_BulkCreateExternalIDMappings_Call) RunAndReturn(run func(mappings []database.ExternalIDMapping) error) *MockStore_BulkCreateExternalIDMappings_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ClearITunesPID provides a mock function for the type MockStore
+func (_mock *MockStore) ClearITunesPID(itunesPID string) (bool, error) {
+	ret := _mock.Called(itunesPID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearITunesPID")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (bool, error)); ok {
+		return returnFunc(itunesPID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) bool); ok {
+		r0 = returnFunc(itunesPID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(itunesPID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ClearITunesPID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearITunesPID'
+type MockStore_ClearITunesPID_Call struct {
+	*mock.Call
+}
+
+// ClearITunesPID is a helper method to define mock.On call
+//   - itunesPID string
+func (_e *MockStore_Expecter) ClearITunesPID(itunesPID interface{}) *MockStore_ClearITunesPID_Call {
+	return &MockStore_ClearITunesPID_Call{Call: _e.mock.On("ClearITunesPID", itunesPID)}
+}
+
+func (_c *MockStore_ClearITunesPID_Call) Run(run func(itunesPID string)) *MockStore_ClearITunesPID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ClearITunesPID_Call) Return(cleared bool, err error) *MockStore_ClearITunesPID_Call {
+	_c.Call.Return(cleared, err)
+	return _c
+}
+
+func (_c *MockStore_ClearITunesPID_Call) RunAndReturn(run func(itunesPID string) (bool, error)) *MockStore_ClearITunesPID_Call {
 	_c.Call.Return(run)
 	return _c
 }
