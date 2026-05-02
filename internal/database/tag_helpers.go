@@ -1,10 +1,14 @@
 // file: internal/database/tag_helpers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 package database
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/util"
+)
 
 // Tag helpers for the "exactly one tag in this namespace" idiom.
 //
@@ -33,8 +37,8 @@ import "strings"
 // programmer bugs ("metadata:source:audible" with prefix
 // "metadata:language:" would delete every language tag).
 func EnsureSingletonBookTag(store Store, bookID, prefix, fullTag, source string) error {
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
-	fullTag = strings.ToLower(strings.TrimSpace(fullTag))
+	prefix = util.NormalizeString(prefix)
+	fullTag = util.NormalizeString(fullTag)
 	if prefix == "" || fullTag == "" {
 		return nil
 	}
@@ -85,8 +89,8 @@ func EnsureSingletonBookTag(store Store, bookID, prefix, fullTag, source string)
 // EnsureSingletonAuthorTag mirrors EnsureSingletonBookTag for
 // authors — same semantics, keyed by author integer ID.
 func EnsureSingletonAuthorTag(store Store, authorID int, prefix, fullTag, source string) error {
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
-	fullTag = strings.ToLower(strings.TrimSpace(fullTag))
+	prefix = util.NormalizeString(prefix)
+	fullTag = util.NormalizeString(fullTag)
 	if prefix == "" || fullTag == "" {
 		return nil
 	}
@@ -128,8 +132,8 @@ func EnsureSingletonAuthorTag(store Store, authorID int, prefix, fullTag, source
 // EnsureSingletonSeriesTag mirrors EnsureSingletonBookTag for
 // series — same semantics, keyed by series integer ID.
 func EnsureSingletonSeriesTag(store Store, seriesID int, prefix, fullTag, source string) error {
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
-	fullTag = strings.ToLower(strings.TrimSpace(fullTag))
+	prefix = util.NormalizeString(prefix)
+	fullTag = util.NormalizeString(fullTag)
 	if prefix == "" || fullTag == "" {
 		return nil
 	}

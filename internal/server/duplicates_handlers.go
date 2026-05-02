@@ -1,7 +1,7 @@
 // file: internal/server/duplicates_handlers.go
-// version: 2.8.0
+// version: 2.9.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
-// last-edited: 2026-05-01
+// last-edited: 2026-05-02
 //
 // SQL-backed duplicate detection handlers split out of server.go:
 // find, list, merge, skip, dismiss, pair-level actions, and series
@@ -27,6 +27,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -532,7 +533,7 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 			if isGarbageSeries(s.Name) {
 				continue
 			}
-			key := strings.ToLower(strings.TrimSpace(s.Name))
+			key := util.NormalizeString(s.Name)
 			exactGroups[key] = append(exactGroups[key], s)
 		}
 
@@ -632,8 +633,8 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 
 		seriesByNormalizedName := make(map[string][]database.Series)
 		for _, s := range allSeries {
-			seriesByNormalizedName[strings.ToLower(strings.TrimSpace(s.Name))] = append(
-				seriesByNormalizedName[strings.ToLower(strings.TrimSpace(s.Name))], s)
+			seriesByNormalizedName[util.NormalizeString(s.Name)] = append(
+				seriesByNormalizedName[util.NormalizeString(s.Name)], s)
 		}
 
 		for _, s := range allSeries {
@@ -644,7 +645,7 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 			if !ok {
 				continue
 			}
-			suggestedKey := strings.ToLower(strings.TrimSpace(suggested))
+			suggestedKey := util.NormalizeString(suggested)
 			if matches, exists := seriesByNormalizedName[suggestedKey]; exists {
 				group := []database.Series{s}
 				seen[s.ID] = true
@@ -780,7 +781,7 @@ func (s *Server) deduplicateSeriesHandler(c *gin.Context) {
 		// Group by normalized name only
 		groups := make(map[string][]database.Series)
 		for _, s := range allSeries {
-			key := strings.ToLower(strings.TrimSpace(s.Name))
+			key := util.NormalizeString(s.Name)
 			groups[key] = append(groups[key], s)
 		}
 
@@ -927,7 +928,7 @@ func (s *Server) executeSeriesPrune(ctx context.Context, store interface { datab
 		if s.AuthorID != nil {
 			aid = *s.AuthorID
 		}
-		key := groupKey{name: strings.ToLower(strings.TrimSpace(s.Name)), authorID: aid}
+		key := groupKey{name: util.NormalizeString(s.Name), authorID: aid}
 		groups[key] = append(groups[key], s)
 	}
 
