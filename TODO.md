@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.1.0 -->
+<!-- version: 8.2.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-05 -->
 
@@ -169,26 +169,24 @@ Bot-tasks at [`docs/superpowers/bot-tasks/2026-05-01-struct-*.md`](docs/superpow
 - [x] **STRUCT-8** — Extract `useAsyncAction` hook from 148 `setLoading` patterns
   → [`2026-05-01-struct-8-use-async-action-hook.md`](docs/superpowers/bot-tasks/2026-05-01-struct-8-use-async-action-hook.md)
   ✅ `web/src/hooks/useAsyncAction.ts` created and wired
-- [~] **STRUCT-9** — Split oversized frontend page components into sub-components *(partial)*
+- [x] **STRUCT-9** — Split oversized frontend page components into sub-components *(completed)*
   → [`2026-05-01-struct-9-frontend-component-splits.md`](docs/superpowers/bot-tasks/2026-05-01-struct-9-frontend-component-splits.md)
-  🔲 `Library.tsx` still **3243 lines** (was 3333)
-  🔲 `BookDedup.tsx` still **3424 lines** (was 3656)
-  🔲 `Settings.tsx` still **2902 lines** (9 tab components extracted but main page not reduced)
-  🔲 `BookDetail.tsx` still **2773 lines** — not started
-- [~] **STRUCT-10** — Narrow `*Server` receivers with small local interfaces in handler groups *(partial)*
+  ✅ `Library.tsx` reduced 3243 → 1916 lines (LibraryToolbar, LibraryBookGrid, LibraryDialogs extracted)
+  ✅ `BookDedup.tsx` reduced 3424 → 1656 lines (DedupAdvancedScanTab, DedupAuthorTab, DedupSeriesTab, DedupReconcileTab extracted)
+  ✅ `BookDetail.tsx` reduced 2773 → 1073 lines (BookDetailHeader, BookDetailActions, BookDetailInfoTab, BookDetailFilesTab, BookDetailDialogs, BookDetailVersionGroup, BookDetailStatusAlerts extracted)
+- [x] **STRUCT-10** — Narrow `*Server` receivers with small local interfaces in handler groups *(completed)*
   → [`2026-05-01-struct-10-narrow-server-interfaces.md`](docs/superpowers/bot-tasks/2026-05-01-struct-10-narrow-server-interfaces.md)
-  ✅ `internal/server/interfaces.go` added with 4 narrow store interfaces + compile-time assertions
-  🔲 Handler functions still accept `*Server` receiver — narrowing signatures to use the new interfaces is NOT done
+  ✅ `internal/server/interfaces.go` with 4 narrow store interfaces + compile-time assertions
+  ✅ Handler receivers narrowed in organize_handlers.go, ai_jobs_handlers.go, filesystem_handlers.go, reading_handlers.go, activity_handlers.go
 
 #### STRUCT — Open gaps from audit (no task yet)
 
-- [ ] **STRUCT-11** — Split 1686-line `scheduler.go` into domain files
-  Proposed split: `scheduler_core.go` (struct/start/stop/run), `scheduler_tasks.go` (registerAllTasks, 1100 lines of task defs), `scheduler_maintenance.go` (maintenance window logic), `scheduler_triggers.go` (triggerOperation helpers)
-  Audit ref: §1 Giant files
-- [ ] **STRUCT-12** — Create `internal/util/normalize.go` path/string normalization helper
-  Audit ref: §2d — 611 scattered `strings.ToLower`/`TrimSpace`/`filepath.Clean` call chains have no shared helper
-- [ ] **STRUCT-13** — Finish splitting `BookDetail.tsx` (2773 lines) into sub-components
-  Audit ref: §5 Oversized page components — no work done on BookDetail yet
+- [x] **STRUCT-11** — Split 1686-line `scheduler.go` into domain files *(completed)*
+  ✅ scheduler_core.go (254 lines), scheduler_tasks.go (1101 lines), scheduler_triggers.go (69 lines), scheduler_maintenance.go (344 lines)
+- [x] **STRUCT-12** — Create `internal/util/normalize.go` path/string normalization helper *(completed)*
+  ✅ NormalizePath, NormalizeTitle, NormalizeAuthor, NormalizeString, CollapseSpaces; 45 call-chain replacements across 5 files
+- [x] **STRUCT-13** — Finish splitting `BookDetail.tsx` (2773 lines) into sub-components *(completed)*
+  ✅ See STRUCT-9 above — BookDetail.tsx reduced to 1073 lines
 
 ---
 
@@ -482,11 +480,15 @@ since it was last edited on 2026-04-11).
 - [~] **4.8** Split the `database.Store` interface (ISP refactor) (**L**) — foundation + 3 proof-points shipped (#372, #376, #379, #380, #381, #382); ~38-file sweep + 18-file noop cleanup remain per [`docs/superpowers/plans/2026-04-17-store-iface-sweep.md`](docs/superpowers/plans/2026-04-17-store-iface-sweep.md)
 - [x] **4.9** Eliminate remaining package globals (DI Phase 2) (**M**) — 10 globals replaced with interface injection + Server fields (#386)
 - [ ] **4.10** Service-layer unit tests with mock stores (**L**) — leverage DI + ISP to unit-test AudiobookService, OrganizeService, MetadataFetchService, MergeService with MockStore; test error paths, edge cases, and business logic in isolation without HTTP or real DB
-- [ ] **4.11** Split `internal/server` into sub-packages (**XL**) — extract standalone services (DedupEngine, MetadataFetchService, OrganizeService, etc.) into own packages; handlers stay in server; Server struct remains as wiring hub
-  - **PKG-1** Extract audiobooks service to `internal/audiobooks/` (7 gin-free files) → [`spec`](docs/superpowers/specs/2026-05-01-pkg-1-extract-audiobooks-package.md) [`bot-task`](docs/superpowers/bot-tasks/2026-05-01-pkg-1-audiobooks-service.md)
-  - **PKG-2** Extract AI scan pipeline to `internal/aiscan/` + remove dead `*Server` field → [`spec`](docs/superpowers/specs/2026-05-01-pkg-2-extract-aiscan-package.md) [`bot-task`](docs/superpowers/bot-tasks/2026-05-01-pkg-2-aiscan-pipeline.md)
-  - **PKG-3** Split `reconcile.go` — pure logic → `internal/reconcile/`, HTTP handlers stay in server → [`spec`](docs/superpowers/specs/2026-05-01-pkg-3-split-reconcile.md) [`bot-task`](docs/superpowers/bot-tasks/2026-05-01-pkg-3-reconcile-split.md)
-  - **PKG-4** Extract remaining gin-free services (scan, importer, quarantine, writeback, filesystem, sysinfo) → [`spec`](docs/superpowers/specs/2026-05-01-pkg-4-extract-service-packages.md) [`bot-task`](docs/superpowers/bot-tasks/2026-05-01-pkg-4-service-packages.md)
+- [x] **4.11** Split `internal/server` into sub-packages (**XL**) — all 8 PKG tasks completed
+  - ✅ **PKG-1** `internal/audiobooks/` — audiobook service extracted (#663)
+  - ✅ **PKG-2** `internal/aiscan/` — AI scan pipeline extracted (#656)
+  - ✅ **PKG-3** `internal/reconcile/` — reconcile logic extracted (#657)
+  - ✅ **PKG-4a** `internal/scanner/` — scan service extracted (#658)
+  - ✅ **PKG-4b** `internal/importer/` — import services extracted (#660)
+  - ✅ **PKG-4c** `internal/quarantine/` — quarantine service extracted (#662)
+  - ✅ **PKG-4d** `internal/writeback/` — writeback enqueuer/outbox extracted (#661)
+  - ✅ **PKG-4e** `internal/fileops/` + `internal/sysinfo/` — filesystem/system services extracted (#664)
 - [ ] **4.12** Narrow extracted service dependencies to ISP sub-interfaces (**M**) — after 4.8 + 4.11, update extracted packages to accept narrow store interfaces (BookReader, etc.) instead of full database.Store
 - [ ] **4.13** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
 
