@@ -1,68 +1,13 @@
 // file: web/src/pages/Library.tsx
-// version: 1.55.0
+// version: 1.56.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
-// last-edited: 2026-05-01
+// last-edited: 2026-05-11
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Typography,
-  Box,
-  Pagination,
-  Button,
-  Stack,
-  Chip,
-  Paper,
-  Alert,
-  AlertTitle,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  TextField,
-  IconButton,
-  FormControlLabel,
-  Checkbox,
-  Collapse,
-  MenuItem,
-  LinearProgress,
-  CircularProgress,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Tooltip,
-  Drawer,
-  Divider,
-} from '@mui/material';
-import {
-  FilterList as FilterListIcon,
-  Upload as UploadIcon,
-  FolderOpen as FolderOpenIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  DeleteSweep as DeleteSweepIcon,
-  ExpandMore as ExpandMoreIcon,
-  Refresh as RefreshIcon,
-  Search as SearchIcon,
-} from '@mui/icons-material';
-import { ColumnChooser } from '../components/audiobooks/ColumnChooser';
+import { Box } from '@mui/material';
 import { ViewMode } from '../components/audiobooks/SearchBar';
 import { useColumnConfig } from '../hooks/useColumnConfig';
-import { FilterSidebar } from '../components/audiobooks/FilterSidebar';
-import { FilterPanel } from '../components/FilterPanel';
-import { BookGrid } from '../components/BookGrid';
-import { BatchToolbar } from '../components/BatchToolbar';
-import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
-import { LibrarySoftDeletedSection } from '../components/library/LibrarySoftDeletedSection';
-import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
-import { BatchEditDialog } from '../components/audiobooks/BatchEditDialog';
-import { VersionManagement } from '../components/audiobooks/VersionManagement';
-import { BulkMetadataSearchDialog } from '../components/audiobooks/BulkMetadataSearchDialog';
-import { BulkTagDialog } from '../components/audiobooks/BulkTagDialog';
-import { BulkRatingDialog } from '../components/audiobooks/BulkRatingDialog';
-import { MetadataReviewDialog } from '../components/audiobooks/MetadataReviewDialog';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook, FilterOptions } from '../types';
 import { SortField, SortOrder } from '../types';
@@ -75,40 +20,21 @@ import {
 } from '../services/eventSourceManager';
 import { pollOperation } from '../utils/operationPolling';
 import { useOperationsStore } from '../stores/useOperationsStore';
-import AddToPlaylistDialog from '../components/audiobooks/AddToPlaylistDialog';
 import { STORAGE_KEYS } from '../lib/storageKeys';
+import { LibraryToolbar } from '../components/library/LibraryToolbar';
+import { LibraryBookGrid } from '../components/library/LibraryBookGrid';
+import { LibraryDialogs } from '../components/library/LibraryDialogs';
+import type {
+  ImportPath,
+  BulkActionResult,
+  BulkActionProgress,
+  DuplicateAction,
+  DuplicateDialogState,
+  OrganizeErrorState,
+} from './libraryTypes';
 
-interface ImportPath {
-  id: number;
-  path: string;
-  status: 'idle' | 'scanning';
-  book_count: number;
-}
-
-interface BulkActionResult {
-  book_id: string;
-  title: string;
-  status: 'updated' | 'organized' | 'error' | 'skipped';
-  message?: string;
-}
-
-interface BulkActionProgress {
-  total: number;
-  completed: number;
-  results: BulkActionResult[];
-}
-
-type DuplicateAction = 'skip' | 'link' | 'replace';
-
-type DuplicateDialogState = {
-  duplicate: Audiobook;
-  existing: Audiobook;
-};
-
-type OrganizeErrorState = {
-  book: Audiobook;
-  message: string;
-};
+// Types ImportPath, BulkActionResult, BulkActionProgress, DuplicateAction,
+// DuplicateDialogState, OrganizeErrorState imported from './libraryTypes'
 
 const convertApiBook = (book: api.Book): Audiobook => ({
   id: book.id,
@@ -166,13 +92,7 @@ const buildHashCandidates = (book: Audiobook): string[] => {
   return hashes;
 };
 
-const getResultLabel = (result: BulkActionResult): string => {
-  if (result.message) return result.message;
-  if (result.status === 'organized') return 'Organized';
-  if (result.status === 'updated') return 'Updated';
-  if (result.status === 'skipped') return 'Skipped';
-  return 'Failed';
-};
+// getResultLabel is defined in ./libraryTypes and used by LibraryDialogs
 
 export const Library = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -332,7 +252,7 @@ export const Library = () => {
     null
   );
   const [bulkSaveAllDialogOpen, setBulkSaveAllDialogOpen] = useState(false);
-  const [bulkSaveAllEstimate, setBulkSaveAllEstimate] = useState<number | null>(null);
+  const [bulkSaveAllEstimate] = useState<number | null>(null);
   const [bulkSaveAllRename, setBulkSaveAllRename] = useState(false);
   const [bulkSaveAllStarting, setBulkSaveAllStarting] = useState(false);
   const [duplicateDialog, setDuplicateDialog] = useState<DuplicateDialogState | null>(null);
@@ -1274,20 +1194,6 @@ export const Library = () => {
     setBulkWriteBackRename(false);
   };
 
-  const handleOpenBulkSaveAll = async () => {
-    setBulkSaveAllDialogOpen(true);
-    setBulkSaveAllEstimate(null);
-    setBulkSaveAllRename(false);
-    setBulkSaveAllStarting(false);
-    try {
-      const result = await api.bulkWriteBackMetadata({ dry_run: true });
-      setBulkSaveAllEstimate(result.estimated_books);
-    } catch (error) {
-      console.error('Failed to estimate bulk write-back:', error);
-      toast('Failed to estimate book count.', 'error');
-    }
-  };
-
   const handleBulkSaveAll = async () => {
     setBulkSaveAllStarting(true);
     try {
@@ -1733,6 +1639,37 @@ export const Library = () => {
     }
   };
 
+  const handleFetchReview = async () => {
+    try {
+      const resp = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
+      const opId = resp.operation_id;
+      if (!opId) {
+        toast('All selected books are already being fetched.', 'info');
+        return;
+      }
+      setMetadataReviewOpId(opId);
+      startOperationPolling(opId, 'metadata_candidate_fetch');
+      toast(
+        `Metadata fetch started for ${selectedAudiobooks.length} book${selectedAudiobooks.length !== 1 ? 's' : ''} — watch the bell for progress.`,
+        'info',
+      );
+    } catch { toast('Failed to start metadata fetch', 'error'); }
+  };
+
+  const handleResumeReview = async () => {
+    try {
+      const list = await api.getRecentMetadataFetches();
+      if (list.length === 0) {
+        toast('No recent metadata fetch with results found. Start a Fetch & Review first.', 'info');
+        return;
+      }
+      setRecentFetches(list);
+      setResumeReviewPickerOpen(true);
+    } catch {
+      toast('Failed to load recent metadata fetches', 'error');
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -1742,634 +1679,93 @@ export const Library = () => {
         overflow: 'hidden',
       }}
     >
-      {/* Unified toolbar — sticky, shows library actions or batch actions based on selection */}
-      <Paper
-        sx={{
-          p: 1.5,
-          mb: 2,
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          boxShadow: 2,
-        }}
-      >
-        {hasSelection ? (
-          /* Batch actions mode */
-          <BatchToolbar
-            selectedCount={selectedAudiobooks.length}
-            onBatchEditClick={() => setBatchEditOpen(true)}
-            onFetchReviewClick={async () => {
-              try {
-                const resp = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
-                const opId = resp.operation_id;
-                if (!opId) {
-                  toast('All selected books are already being fetched.', 'info');
-                  return;
-                }
-                setMetadataReviewOpId(opId);
-                startOperationPolling(opId, 'metadata_candidate_fetch');
-                toast(
-                  `Metadata fetch started for ${selectedAudiobooks.length} book${selectedAudiobooks.length !== 1 ? 's' : ''} — watch the bell for progress.`,
-                  'info',
-                );
-              } catch { toast('Failed to start metadata fetch', 'error'); }
-            }}
-            onResumeReviewClick={async () => {
-              try {
-                const list = await api.getRecentMetadataFetches();
-                if (list.length === 0) {
-                  toast('No recent metadata fetch with results found. Start a Fetch & Review first.', 'info');
-                  return;
-                }
-                setRecentFetches(list);
-                setResumeReviewPickerOpen(true);
-              } catch {
-                toast('Failed to load recent metadata fetches', 'error');
-              }
-            }}
-            onSearchMetadataClick={() => setBulkSearchOpen(true)}
-            onSaveToFilesClick={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }}
-            onOrganizeSelectedClick={() => setBulkOrganizeDialogOpen(true)}
-            onMergeAsVersionsClick={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }}
-            onTagClick={() => setBulkTagDialogOpen(true)}
-            onRateClick={() => setBulkRatingDialogOpen(true)}
-            onDeleteSelectedClick={() => setBatchDeleteDialogOpen(true)}
-            onRestoreSelectedClick={handleBatchRestore}
-            batchRestoreInProgress={batchRestoreInProgress}
-            selectedHasActive={selectedHasActive}
-            selectedHasDeleted={selectedHasDeleted}
-            selectedHasImport={selectedHasImport}
-            selectedAudiobooksLength={selectedAudiobooks.length}
-          />
-        ) : (
-          /* Library actions mode */
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-            <Typography variant="h6" sx={{ mr: 1 }}>Library</Typography>
-            <Button startIcon={<UploadIcon />} onClick={handleManualImport} variant="contained" size="small">Import Files</Button>
-            <Button startIcon={<FilterListIcon />} onClick={() => setFilterOpen(true)} variant="outlined" size="small">
-              Filters{getActiveFilterCount() > 0 && <Chip label={getActiveFilterCount()} size="small" color="primary" sx={{ ml: 0.5, height: 18 }} />}
-            </Button>
-            <ColumnChooser visibleColumnIds={visibleColumnIds} onToggleColumn={toggleColumn} onResetDefaults={resetColumnsToDefaults} />
-            <Button variant="outlined" size="small" startIcon={organizeRunning ? <CircularProgress size={16} /> : undefined} disabled={organizeRunning} onClick={handleOrganizeLibrary}>{organizeRunning ? 'Organizing…' : 'Organize Library'}</Button>
-            <Button variant="outlined" size="small" startIcon={activeScanOp !== null ? <CircularProgress size={16} /> : <RefreshIcon />} disabled={activeScanOp !== null} onClick={handleFullRescan}>{activeScanOp !== null ? 'Scanning…' : 'Full Rescan'}</Button>
-            <Button startIcon={<DeleteSweepIcon />} onClick={() => setPurgeDialogOpen(true)} variant="outlined" size="small" color="secondary" disabled={softDeletedCount === 0}>Purge Deleted{softDeletedCount > 0 ? ` (${softDeletedCount})` : ''}</Button>
-          </Stack>
-        )}
-      </Paper>
-
-      {/* Active operations progress (always visible) */}
-      {activeOrganizeOp && activeOrganizeOp.status !== 'completed' && (
-        <Box sx={{ mb: 1 }}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <LinearProgress
-              variant="determinate"
-              value={activeOrganizeOp.total > 0 ? (activeOrganizeOp.progress / activeOrganizeOp.total) * 100 : 0}
-              sx={{ flex: 1, height: 6, borderRadius: 1 }}
-            />
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, whiteSpace: 'nowrap' }}
-              onClick={() => navigate(`/activity?op=${activeOrganizeOp.id}`)}
-            >
-              Organizing: {activeOrganizeOp.progress}/{activeOrganizeOp.total}
-            </Typography>
-            <Button size="small" variant="text" onClick={() => api.cancelOperation(activeOrganizeOp.id)}>Cancel</Button>
-          </Stack>
-        </Box>
-      )}
-      {activeScanOp && activeScanOp.status !== 'completed' && (
-        <Box sx={{ mb: 1 }}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <LinearProgress
-              variant={activeScanOp.total > 0 ? 'determinate' : 'indeterminate'}
-              value={activeScanOp.total > 0 ? (activeScanOp.progress / activeScanOp.total) * 100 : 0}
-              sx={{ flex: 1, height: 6, borderRadius: 1 }}
-            />
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' }, whiteSpace: 'nowrap' }}
-              onClick={() => navigate(`/activity?op=${activeScanOp.id}`)}
-            >
-              {activeScanOp.total > 0 ? `Scanning: ${activeScanOp.progress}/${activeScanOp.total}` : 'Scanning...'}
-            </Typography>
-            <Button size="small" variant="text" onClick={() => api.cancelOperation(activeScanOp.id)}>Cancel</Button>
-          </Stack>
-        </Box>
-      )}
-
-      {/* Storage info drawer */}
-      <Drawer anchor="right" open={storageDrawerOpen} onClose={() => setStorageDrawerOpen(false)}>
-        <Box sx={{ width: 360, p: 2 }}>
-          <Typography variant="h6" gutterBottom>Library Info</Typography>
-          <Divider sx={{ mb: 2 }} />
-          {systemStatus && (
-            <>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>Storage</Typography>
-              <Typography variant="body2">{libraryBookCount} books in Library</Typography>
-              <Typography variant="body2">{importBookCount} scanned but not imported</Typography>
-              <Typography variant="body2">{systemStatus.import_paths?.folder_count || 0} import paths</Typography>
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                {(librarySizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB Library
-              </Typography>
-              <Typography variant="body2">
-                {(importSizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB Scanned
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>Library Path</Typography>
-              <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-                {systemStatus.library.path || 'Not configured'}
-              </Typography>
-            </>
-          )}
-        </Box>
-      </Drawer>
+      <LibraryToolbar
+        hasSelection={hasSelection}
+        selectedAudiobooks={selectedAudiobooks}
+        batchRestoreInProgress={batchRestoreInProgress}
+        selectedHasActive={selectedHasActive}
+        selectedHasDeleted={selectedHasDeleted}
+        selectedHasImport={selectedHasImport}
+        organizeRunning={organizeRunning}
+        activeScanOp={activeScanOp}
+        activeOrganizeOp={activeOrganizeOp}
+        storageDrawerOpen={storageDrawerOpen}
+        systemStatus={systemStatus}
+        softDeletedCount={softDeletedCount}
+        libraryBookCount={libraryBookCount}
+        importBookCount={importBookCount}
+        librarySizeBytes={librarySizeBytes}
+        importSizeBytes={importSizeBytes}
+        visibleColumnIds={visibleColumnIds}
+        toggleColumn={toggleColumn}
+        resetColumnsToDefaults={resetColumnsToDefaults}
+        getActiveFilterCount={getActiveFilterCount}
+        onBatchEdit={() => setBatchEditOpen(true)}
+        onFetchReview={handleFetchReview}
+        onResumeReview={handleResumeReview}
+        onSearchMetadata={() => setBulkSearchOpen(true)}
+        onSaveToFiles={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }}
+        onOrganizeSelected={() => setBulkOrganizeDialogOpen(true)}
+        onMergeAsVersions={() => { setMergePrimaryId(selectedAudiobooks[0]?.id || ''); setMergeDialogOpen(true); }}
+        onTagClick={() => setBulkTagDialogOpen(true)}
+        onRateClick={() => setBulkRatingDialogOpen(true)}
+        onDeleteSelected={() => setBatchDeleteDialogOpen(true)}
+        onRestoreSelected={handleBatchRestore}
+        onManualImport={handleManualImport}
+        onFilterOpen={() => setFilterOpen(true)}
+        onOrganizeLibrary={handleOrganizeLibrary}
+        onFullRescan={handleFullRescan}
+        onPurgeOpen={() => setPurgeDialogOpen(true)}
+        onStorageDrawerClose={() => setStorageDrawerOpen(false)}
+        navigate={navigate}
+      />
 
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 3 }}>
-        {audiobooks.length === 0 && !loading && !searchQuery ? (
-          <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'background.default' }}>
-            <FolderOpenIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2 }} />
-            <Alert severity="info" sx={{ textAlign: 'center' }}>
-              <AlertTitle>No Audiobooks Found</AlertTitle>
-              {importPaths.length === 0 ? (
-                <>
-                  You haven't added any import paths yet. Get started by:
-                  <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
-                    <li>
-                      Importing individual audiobook files using the "Import Files" button below
-                    </li>
-                    <li>
-                      Adding import paths using the "Add Import Path" button below (watches folders
-                      for new files)
-                    </li>
-                  </ul>
-                </>
-              ) : (
-                <>
-                  No audiobooks found in your library. Try:
-                  <ul style={{ marginTop: 8, marginBottom: 0, textAlign: 'left' }}>
-                    <li>Scanning your import paths using the "Scan All" button below</li>
-                    <li>Adding more import paths where audiobooks are located</li>
-                  </ul>
-                </>
-              )}
-            </Alert>
-            <Box sx={{ mt: 3 }}>
-              <Button
-                variant="contained"
-                size="large"
-                startIcon={<UploadIcon />}
-                onClick={handleManualImport}
-                sx={{ mr: 2 }}
-              >
-                Import Files
-              </Button>
-              <Button
-                variant="outlined"
-                size="large"
-                startIcon={<AddIcon />}
-                onClick={() => setAddPathDialogOpen(true)}
-                sx={{ mr: 2 }}
-              >
-                Add Import Path
-              </Button>
-              {importPaths.length > 0 && (
-                <Button
-                  variant="outlined"
-                  size="large"
-                  startIcon={scanningAll ? <CircularProgress size={20} /> : <RefreshIcon />}
-                  onClick={handleScanAll}
-                  disabled={scanningAll}
-                >
-                  {scanningAll ? 'Scanning...' : 'Scan All'}
-                </Button>
-              )}
-            </Box>
-          </Paper>
-        ) : (
-          <Stack spacing={1.5}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <FilterPanel
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                onParsedSearchChange={setParsedSearch}
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                sortBy={sortBy}
-                onSortChange={handleSortChange}
-                sortOrder={sortOrder}
-                onSortOrderChange={setSortOrder}
-                onLibraryInfoClick={() => setStorageDrawerOpen(true)}
-              />
-            </Stack>
-
-            {/* Select All bar — always visible */}
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5, mt: -0.5, mb: -1 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={allOnPageSelected}
-                    indeterminate={someOnPageSelected && !allOnPageSelected}
-                    onChange={handleToggleSelectAllOnPage}
-                    size="small"
-                  />
-                }
-                label={<Typography variant="body2" color="text.secondary">Select All</Typography>}
-              />
-              {hasSelection && (
-                <>
-                  <Chip label={`${selectedAudiobooks.length} selected`} size="small" color="primary" />
-                  <Button size="small" variant="text" onClick={handleClearSelection}>Deselect</Button>
-                </>
-              )}
-            </Stack>
-
-            {/* Gmail-style "Select all X items" banner */}
-            {showSelectAllBanner && (
-              <Box
-                sx={{
-                  py: 0.75,
-                  px: 2,
-                  bgcolor: 'action.selected',
-                  borderRadius: 1,
-                  textAlign: 'center',
-                  mb: 0.5,
-                }}
-              >
-                <Typography variant="body2" component="span">
-                  All {audiobooks.length} items on this page are selected.{' '}
-                </Typography>
-                <Button
-                  size="small"
-                  variant="text"
-                  sx={{ textTransform: 'none', fontWeight: 'bold' }}
-                  onClick={() => { void handleSelectAllItems(); }}
-                  disabled={selectingAll}
-                >
-                  {selectingAll ? 'Loading…' : `Select all ${totalCount.toLocaleString()} items`}
-                </Button>
-              </Box>
-            )}
-
-            {/* Banner when all items are selected */}
-            {selectedAudiobooks.length >= totalCount && totalCount > audiobooks.length && (
-              <Box
-                sx={{
-                  py: 0.75,
-                  px: 2,
-                  bgcolor: 'action.selected',
-                  borderRadius: 1,
-                  textAlign: 'center',
-                  mb: 0.5,
-                }}
-              >
-                <Typography variant="body2" component="span">
-                  All {totalCount.toLocaleString()} items are selected.{' '}
-                </Typography>
-                <Button
-                  size="small"
-                  variant="text"
-                  sx={{ textTransform: 'none' }}
-                  onClick={handleClearSelection}
-                >
-                  Clear selection
-                </Button>
-              </Box>
-            )}
-
-            <Paper sx={{ p: 2, display: 'none' }}>
-              <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Typography variant="body2">Old batch actions hidden</Typography>
-                </Stack>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }}>
-                  <Tooltip
-                    title={!hasSelection ? 'Select books first' : ''}
-                    disableHoverListener={hasSelection}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setBatchEditOpen(true)}
-                        disabled={!hasSelection}
-                      >
-                        Batch Edit
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={!hasSelection ? 'Select books first' : ''}
-                    disableHoverListener={hasSelection}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setBulkTagDialogOpen(true)}
-                        disabled={!hasSelection}
-                      >
-                        Tag
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={!hasSelection ? 'Select books first' : ''}
-                    disableHoverListener={hasSelection}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setBulkRatingDialogOpen(true)}
-                        disabled={!hasSelection}
-                      >
-                        Rate
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={!hasSelection ? 'Select books first' : ''}
-                    disableHoverListener={hasSelection}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setBulkFetchDialogOpen(true)}
-                        disabled={!hasSelection}
-                      >
-                        Fetch Metadata
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={!hasSelection ? 'Select books first' : ''}
-                    disableHoverListener={hasSelection}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setBulkSearchOpen(true)}
-                        disabled={!hasSelection}
-                      >
-                        Search Metadata
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={
-                      !selectedHasActive
-                        ? hasSelection
-                          ? 'Select active books first'
-                          : 'Select books first'
-                        : ''
-                    }
-                    disableHoverListener={selectedHasActive}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        onClick={() => {
-                          setBulkWriteBackResult(null);
-                          setBulkWriteBackRename(false);
-                          setBulkWriteBackDialogOpen(true);
-                        }}
-                        disabled={!selectedHasActive}
-                      >
-                        Save to Files
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={
-                      !selectedHasImport
-                        ? hasSelection
-                          ? 'Select scanned books (not yet imported) first'
-                          : 'Select books first'
-                        : ''
-                    }
-                    disableHoverListener={selectedHasImport}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        onClick={() => setBulkOrganizeDialogOpen(true)}
-                        disabled={!selectedHasImport}
-                      >
-                        Organize Selected
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={
-                      selectedAudiobooks.length < 2
-                        ? 'Select 2+ books to merge as versions'
-                        : ''
-                    }
-                    disableHoverListener={selectedAudiobooks.length >= 2}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        onClick={() => {
-                          setMergePrimaryId(selectedAudiobooks[0]?.id || '');
-                          setMergeDialogOpen(true);
-                        }}
-                        disabled={selectedAudiobooks.length < 2}
-                      >
-                        Merge as Versions
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setBatchPlaylistOpen(true)}
-                    disabled={selectedAudiobooks.length === 0}
-                  >
-                    Add to Playlist
-                  </Button>
-                  <Tooltip
-                    title={selectedAudiobooks.length < 2 ? 'Select 2+ books' : ''}
-                    disableHoverListener={selectedAudiobooks.length >= 2}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="primary"
-                        onClick={async () => {
-                          try {
-                            const resp = await api.batchFetchCandidates(
-                              selectedAudiobooks.map((b) => b.id)
-                            );
-                            const opId = resp.operation_id;
-                            if (!opId) {
-                              toast('All selected books are already being fetched.', 'info');
-                              return;
-                            }
-                            setMetadataReviewOpId(opId);
-                            startOperationPolling(opId, 'metadata_candidate_fetch');
-                            toast(
-                              `Metadata fetch started for ${selectedAudiobooks.length} book${selectedAudiobooks.length !== 1 ? 's' : ''} — watch the bell for progress.`,
-                              'info',
-                            );
-                          } catch {
-                            toast('Failed to start metadata fetch', 'error');
-                          }
-                        }}
-                        disabled={selectedAudiobooks.length < 2}
-                      >
-                        Fetch &amp; Review
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={
-                      !selectedHasActive
-                        ? hasSelection
-                          ? 'Select active books first'
-                          : 'Select books first'
-                        : ''
-                    }
-                    disableHoverListener={selectedHasActive}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="secondary"
-                        onClick={() => setBatchDeleteDialogOpen(true)}
-                        disabled={!selectedHasActive}
-                      >
-                        Delete Selected
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Tooltip
-                    title={
-                      !selectedHasDeleted
-                        ? hasSelection
-                          ? 'Select deleted books first'
-                          : 'Select books first'
-                        : ''
-                    }
-                    disableHoverListener={selectedHasDeleted}
-                  >
-                    <span>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="success"
-                        onClick={handleBatchRestore}
-                        disabled={!selectedHasDeleted || batchRestoreInProgress}
-                      >
-                        {batchRestoreInProgress ? 'Restoring...' : 'Restore Selected'}
-                      </Button>
-                    </span>
-                  </Tooltip>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    color="primary"
-                    onClick={handleOpenBulkSaveAll}
-                  >
-                    Save All to Files
-                  </Button>
-                </Stack>
-              </Stack>
-            </Paper>
-
-            {audiobooks.length === 0 && !loading && searchQuery ? (
-              <Paper sx={{ p: 4, textAlign: 'center' }}>
-                <SearchIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 1 }} />
-                <Typography variant="h6" color="text.secondary">
-                  No results for "{searchQuery}"
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Try a different search term or clear the search to see all books.
-                </Typography>
-                <Button variant="outlined" sx={{ mt: 2 }} onClick={() => setSearchQuery('')}>
-                  Clear Search
-                </Button>
-              </Paper>
-            ) : (
-            <BookGrid
-              audiobooks={audiobooks}
-              loading={loading}
-              viewMode={viewMode}
-              page={page}
-              totalPages={totalPages}
-              itemsPerPage={itemsPerPage}
-              onPageChange={setPage}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onClick={handleClick}
-              onVersionManage={handleVersionManage}
-              onFetchMetadata={handleFetchMetadata}
-              onParseWithAI={handleParseWithAI}
-              selectedIds={selectedIds}
-              onToggleSelect={handleToggleSelect}
-              columns={columnDefs}
-              columnWidths={columnWidths}
-              sortBy={sortBy}
-              sortOrder={sortOrder}
-              onSortChange={handleColumnSortChange}
-              onColumnResize={resizeColumn}
-              onSelectAll={handleToggleSelectAllOnPage}
-            />
-            )}
-
-            {!loading && (
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={2}
-                alignItems="center"
-                justifyContent="center"
-                mt={4}
-              >
-                <TextField
-                  select
-                  size="small"
-                  label="Items per page"
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setItemsPerPage(val);
-                    localStorage.setItem(STORAGE_KEYS.LIBRARY_ITEMS_PER_PAGE, String(val));
-                  }}
-                  sx={{ minWidth: 150 }}
-                >
-                  <MenuItem value={20}>20</MenuItem>
-                  <MenuItem value={50}>50</MenuItem>
-                  <MenuItem value={100}>100</MenuItem>
-                  <MenuItem value={250}>250</MenuItem>
-                  <MenuItem value={500}>500</MenuItem>
-                </TextField>
-                {totalPages > 1 && (
-                  <Pagination
-                    count={totalPages}
-                    page={page}
-                    onChange={(_, value) => setPage(value)}
-                    color="primary"
-                    siblingCount={3}
-                  />
-                )}
-              </Stack>
-            )}
-          </Stack>
-        )}
-
-        <LibrarySoftDeletedSection
+        <LibraryBookGrid
+          audiobooks={audiobooks}
+          loading={loading}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          setParsedSearch={setParsedSearch}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          sortBy={sortBy}
+          handleSortChange={handleSortChange}
+          sortOrder={sortOrder}
+          setSortOrder={setSortOrder}
+          setStorageDrawerOpen={setStorageDrawerOpen}
+          importPaths={importPaths}
+          handleManualImport={handleManualImport}
+          setAddPathDialogOpen={setAddPathDialogOpen}
+          handleScanAll={handleScanAll}
+          scanningAll={scanningAll}
+          page={page}
+          setPage={setPage}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          itemsPerPage={itemsPerPage}
+          setItemsPerPage={setItemsPerPage}
+          allOnPageSelected={allOnPageSelected}
+          someOnPageSelected={someOnPageSelected}
+          handleToggleSelectAllOnPage={handleToggleSelectAllOnPage}
+          hasSelection={hasSelection}
+          selectedAudiobooks={selectedAudiobooks}
+          handleClearSelection={handleClearSelection}
+          showSelectAllBanner={showSelectAllBanner}
+          handleSelectAllItems={handleSelectAllItems}
+          selectingAll={selectingAll}
+          handleEdit={handleEdit}
+          handleDelete={handleDelete}
+          handleClick={handleClick}
+          handleVersionManage={handleVersionManage}
+          handleFetchMetadata={handleFetchMetadata}
+          handleParseWithAI={handleParseWithAI}
+          selectedIds={selectedIds}
+          handleToggleSelect={handleToggleSelect}
+          columnDefs={columnDefs}
+          columnWidths={columnWidths}
+          handleColumnSortChange={handleColumnSortChange}
+          resizeColumn={resizeColumn}
           softDeletedCount={softDeletedCount}
           softDeletedBooks={softDeletedBooks}
           softDeletedLoading={softDeletedLoading}
@@ -2377,867 +1773,144 @@ export const Library = () => {
           restoringBookId={restoringBookId}
           purgeInProgress={purgeInProgress}
           purgingBookId={purgingBookId}
-          onToggleExpanded={() => setSoftDeletedExpanded(!softDeletedExpanded)}
-          onRefresh={loadSoftDeleted}
-          onRestoreOne={handleRestoreOne}
-          onPurgeOne={handlePurgeOne}
-        />
-
-        <FilterSidebar
-          open={filterOpen}
-          onClose={() => setFilterOpen(false)}
+          onToggleSoftDeletedExpanded={() => setSoftDeletedExpanded(!softDeletedExpanded)}
+          loadSoftDeleted={loadSoftDeleted}
+          handleRestoreOne={handleRestoreOne}
+          handlePurgeOne={handlePurgeOne}
+          filterOpen={filterOpen}
+          setFilterOpen={setFilterOpen}
           filters={filters}
-          onFiltersChange={handleFiltersChange}
-          authors={availableAuthors}
-          series={availableSeries}
-          genres={availableGenres}
-          languages={availableLanguages}
+          handleFiltersChange={handleFiltersChange}
+          availableAuthors={availableAuthors}
+          availableSeries={availableSeries}
+          availableGenres={availableGenres}
+          availableLanguages={availableLanguages}
           availableTags={availableTags}
           selectedTags={selectedTags}
-          onTagsChange={handleTagFilterChange}
+          handleTagFilterChange={handleTagFilterChange}
         />
 
-        <MetadataEditDialog
-          open={!!editingAudiobook}
-          audiobook={editingAudiobook}
-          onClose={() => setEditingAudiobook(null)}
-          onSave={handleSaveMetadata}
-        />
-
-        <BatchEditDialog
-          open={batchEditOpen}
-          audiobooks={selectedAudiobooks}
-          onClose={() => setBatchEditOpen(false)}
-          onSave={handleBatchSave}
-          onSavePerBook={async (bookId, updates) => {
-            await api.updateBook(bookId, updates as Record<string, unknown> & Partial<import('../services/api').Book>);
-          }}
-        />
-
-        <BulkTagDialog
-          open={bulkTagDialogOpen}
-          onClose={() => setBulkTagDialogOpen(false)}
-          bookIds={selectedAudiobooks.map((b) => b.id)}
-          allTags={availableTags.map((t) => t.tag)}
-          onComplete={() => {
-            refreshTags();
-            loadAudiobooks();
-          }}
-        />
-
-        <BulkRatingDialog
-          open={bulkRatingDialogOpen}
-          onClose={() => setBulkRatingDialogOpen(false)}
-          bookIds={selectedAudiobooks.map((b) => b.id)}
-          onComplete={() => loadAudiobooks()}
-        />
-
-        <Dialog open={mergeDialogOpen} onClose={() => setMergeDialogOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Merge as Versions</DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" gutterBottom>
-              Merge {selectedAudiobooks.length} books into a version group. Pick which book to keep as the primary version:
-            </Typography>
-            <Box sx={{ mt: 1 }}>
-              {selectedAudiobooks.map((book) => (
-                <FormControlLabel
-                  key={book.id}
-                  control={
-                    <Checkbox
-                      checked={mergePrimaryId === book.id}
-                      onChange={() => setMergePrimaryId(book.id)}
-                    />
-                  }
-                  label={
-                    <Typography variant="body2">
-                      <strong>{book.title}</strong>
-                      {book.author ? ` by ${book.author}` : ''}
-                      {book.file_path ? ` (${book.file_path.split('/').pop()})` : ''}
-                    </Typography>
-                  }
-                />
-              ))}
-            </Box>
-            <Alert severity="info" sx={{ mt: 1 }}>
-              Non-primary versions will be linked as alternate formats. Files stay in place.
-            </Alert>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setMergeDialogOpen(false)} disabled={mergeInProgress}>
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleMergeAsVersions}
-              disabled={mergeInProgress || !mergePrimaryId}
-            >
-              {mergeInProgress ? 'Merging...' : 'Merge'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={batchDeleteDialogOpen} onClose={() => setBatchDeleteDialogOpen(false)}>
-          <DialogTitle>Delete Selected Audiobooks</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" gutterBottom>
-              Are you sure you want to soft delete {selectedAudiobooks.length} selected audiobooks?
-            </Typography>
-            <Alert severity="warning">
-              Selected books will be hidden from the library and can be restored from the
-              soft-deleted list.
-            </Alert>
-          </DialogContent>
-          <DialogActions>
-            <Button
-              onClick={() => setBatchDeleteDialogOpen(false)}
-              disabled={batchDeleteInProgress}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={handleBatchDelete}
-              disabled={batchDeleteInProgress}
-            >
-              {batchDeleteInProgress ? 'Deleting...' : 'Delete Selected'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={bulkOrganizeDialogOpen} onClose={handleCancelBulkOrganize}>
-          <DialogTitle>Organize Selected Audiobooks</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" gutterBottom>
-              Organize {selectedAudiobooks.length} selected books.
-            </Typography>
-            {bulkOrganizeProgress && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" gutterBottom>
-                  Organized {bulkOrganizeProgress.completed} of {bulkOrganizeProgress.total}
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={
-                    bulkOrganizeProgress.total > 0
-                      ? (bulkOrganizeProgress.completed / bulkOrganizeProgress.total) * 100
-                      : 0
-                  }
-                />
-                {bulkOrganizeProgress.results.length > 0 && (
-                  <List dense sx={{ mt: 2 }}>
-                    {bulkOrganizeProgress.results.map((result) => (
-                      <ListItem key={result.book_id}>
-                        <ListItemText
-                          primary={result.title || result.book_id}
-                          secondary={getResultLabel(result)}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCancelBulkOrganize}>
-              {bulkOrganizeInProgress ? 'Cancel' : 'Close'}
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleBulkOrganize}
-              disabled={bulkOrganizeInProgress || !selectedHasImport}
-            >
-              {bulkOrganizeInProgress ? 'Organizing…' : 'Organize Selected'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={bulkWriteBackDialogOpen} onClose={handleCloseBulkWriteBackDialog}>
-          <DialogTitle>Save Selected to Files</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" gutterBottom>
-              Write current database metadata to {selectedAudiobooks.length} selected books.
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={bulkWriteBackRename}
-                  onChange={(event) => setBulkWriteBackRename(event.target.checked)}
-                  disabled={bulkWriteBackInProgress}
-                />
-              }
-              label="Organize files after write"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={bulkWriteBackForce}
-                  onChange={(event) => setBulkWriteBackForce(event.target.checked)}
-                  disabled={bulkWriteBackInProgress}
-                />
-              }
-              label="Force rewrite (skip change detection)"
-            />
-            {bulkWriteBackResult && (
-              <Box sx={{ mt: 2 }}>
-                <Alert
-                  severity={(bulkWriteBackResult.failed ?? 0) > 0 ? 'warning' : 'success'}
-                  sx={{ mb: 2 }}
-                >
-                  Wrote {bulkWriteBackResult.written ?? 0} books to files, updated{' '}
-                  {bulkWriteBackResult.written_files ?? 0} file
-                  {(bulkWriteBackResult.written_files ?? 0) === 1 ? '' : 's'}
-                  {(bulkWriteBackResult.renamed ?? 0) > 0
-                    ? `, renamed ${bulkWriteBackResult.renamed}`
-                    : ''}
-                  {(bulkWriteBackResult.failed ?? 0) > 0 ? `, ${bulkWriteBackResult.failed} failed` : ''}.
-                </Alert>
-                {(bulkWriteBackResult.errors ?? []).length > 0 && (
-                  <List dense>
-                    {(bulkWriteBackResult.errors ?? []).map((error) => (
-                      <ListItem key={`${error.book_id}-${error.error}`}>
-                        <ListItemText primary={error.book_id} secondary={error.error} />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseBulkWriteBackDialog} disabled={bulkWriteBackInProgress}>
-              Close
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleBulkWriteBack}
-              disabled={bulkWriteBackInProgress || !selectedHasActive}
-            >
-              {bulkWriteBackInProgress ? 'Saving…' : 'Save to Files'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={bulkSaveAllDialogOpen} onClose={handleCloseBulkSaveAllDialog}>
-          <DialogTitle>Save All to Files</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" gutterBottom>
-              This will write metadata tags and rename files for all organized and imported
-              books in your library.
-            </Typography>
-            {bulkSaveAllEstimate !== null ? (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                {bulkSaveAllEstimate} book{bulkSaveAllEstimate === 1 ? '' : 's'} will be
-                processed. Books in protected paths (iTunes) will be skipped.
-              </Alert>
-            ) : (
-              <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-                <CircularProgress size={24} />
-              </Box>
-            )}
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={bulkSaveAllRename}
-                  onChange={(event) => setBulkSaveAllRename(event.target.checked)}
-                  disabled={bulkSaveAllStarting}
-                />
-              }
-              label="Organize files after write"
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseBulkSaveAllDialog} disabled={bulkSaveAllStarting}>
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleBulkSaveAll}
-              disabled={
-                bulkSaveAllStarting || bulkSaveAllEstimate === null || bulkSaveAllEstimate === 0
-              }
-            >
-              {bulkSaveAllStarting ? 'Starting...' : 'Save All to Files'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={Boolean(duplicateDialog)} onClose={() => handleDuplicateAction('skip')}>
-          <DialogTitle>Duplicate File Detected</DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" gutterBottom>
-              The file for <strong>{duplicateDialog?.duplicate.title || 'this audiobook'}</strong>{' '}
-              matches an existing audiobook.
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Existing: {duplicateDialog?.existing.title || 'Unknown audiobook'}
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => handleDuplicateAction('skip')}>Skip</Button>
-            <Button onClick={() => handleDuplicateAction('link')}>Link as Version</Button>
-            <Button
-              color="warning"
-              variant="contained"
-              onClick={() => handleDuplicateAction('replace')}
-            >
-              Replace
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={Boolean(bulkOrganizeError)} onClose={handleCloseOrganizeError}>
-          <DialogTitle>Organize Error</DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" gutterBottom>
-              {bulkOrganizeError?.message || 'Organize operation failed.'}
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseOrganizeError}>Close</Button>
-            <Button color="warning" variant="contained" onClick={handleOrganizeRollback}>
-              Rollback
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog
-          open={importFileDialogOpen}
-          onClose={() => setImportFileDialogOpen(false)}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>Import Audiobook File</DialogTitle>
-          <DialogContent>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Select a file on the server to import into the library. Use the organize toggle to
-              immediately move it into the library layout.
-            </Alert>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }}>
-              <TextField
-                fullWidth
-                label="Import file path"
-                value={importFilePath}
-                onChange={(e) => setImportFilePath(e.target.value)}
-                placeholder="/path/to/audiobook.m4b"
-              />
-              <Button
-                variant="outlined"
-                onClick={handleAddImportFilePath}
-                disabled={!importFilePath.trim()}
-                sx={{ minWidth: 140 }}
-              >
-                Add to list
-              </Button>
-            </Stack>
-            <ServerFileBrowser
-              initialPath="/"
-              showFiles
-              allowDirSelect={false}
-              allowFileSelect
-              onSelect={(path, isDir) => {
-                if (!isDir) {
-                  handleToggleImportFilePath(path);
-                }
-              }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-              Click files to add or remove them from the import list.
-            </Typography>
-            {importFilePaths.length > 0 && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Selected Files ({importFilePaths.length}):
-                </Typography>
-                <List dense>
-                  {importFilePaths.map((path) => (
-                    <ListItem key={path}>
-                      <ListItemText primary={path} />
-                      <ListItemSecondaryAction>
-                        <IconButton
-                          edge="end"
-                          aria-label="remove"
-                          onClick={() => handleRemoveImportFilePath(path)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-            )}
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={importFileOrganize}
-                  onChange={(e) => setImportFileOrganize(e.target.checked)}
-                />
-              }
-              label="Organize into library after import"
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setImportFileDialogOpen(false)} disabled={importFileInProgress}>
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleImportFile}
-              disabled={
-                importFileInProgress || (!importFilePath.trim() && importFilePaths.length === 0)
-              }
-            >
-              {importFileInProgress ? 'Importing…' : 'Import'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog open={bulkFetchDialogOpen} onClose={handleCancelBulkFetch}>
-          <DialogTitle>Bulk Fetch Metadata</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" gutterBottom>
-              Fetch metadata for {selectedAudiobooks.length} selected books.
-            </Typography>
-            {bulkFetchProgress && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body2" gutterBottom>
-                  {bulkFetchProgress.completed} / {bulkFetchProgress.total} completed
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={
-                    bulkFetchProgress.total > 0
-                      ? (bulkFetchProgress.completed / bulkFetchProgress.total) * 100
-                      : 0
-                  }
-                />
-                {bulkFetchProgress.results.length > 0 && (
-                  <List dense sx={{ mt: 2 }}>
-                    {bulkFetchProgress.results.map((result) => (
-                      <ListItem key={result.book_id}>
-                        <ListItemText
-                          primary={result.title || result.book_id}
-                          secondary={getResultLabel(result)}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCancelBulkFetch}>
-              {bulkFetchInProgress ? 'Cancel' : 'Close'}
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleBulkFetchMetadata}
-              disabled={bulkFetchInProgress || !hasSelection}
-            >
-              {bulkFetchInProgress ? 'Fetching…' : 'Fetch Metadata'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <BulkMetadataSearchDialog
-          open={bulkSearchOpen}
-          books={selectedAudiobooks}
-          onClose={() => setBulkSearchOpen(false)}
-          onComplete={() => {
-            loadAudiobooks();
-            setSelectedAudiobooks([]);
-          }}
+        <LibraryDialogs
+          selectedAudiobooks={selectedAudiobooks}
+          setSelectedAudiobooks={setSelectedAudiobooks}
+          hasSelection={hasSelection}
+          selectedHasActive={selectedHasActive}
+          selectedHasImport={selectedHasImport}
           toast={toast}
+          loadAudiobooks={loadAudiobooks}
+          refreshTags={refreshTags}
+          editingAudiobook={editingAudiobook}
+          setEditingAudiobook={setEditingAudiobook}
+          handleSaveMetadata={handleSaveMetadata}
+          batchEditOpen={batchEditOpen}
+          setBatchEditOpen={setBatchEditOpen}
+          handleBatchSave={handleBatchSave}
+          bulkTagDialogOpen={bulkTagDialogOpen}
+          setBulkTagDialogOpen={setBulkTagDialogOpen}
+          availableTags={availableTags}
+          bulkRatingDialogOpen={bulkRatingDialogOpen}
+          setBulkRatingDialogOpen={setBulkRatingDialogOpen}
+          mergeDialogOpen={mergeDialogOpen}
+          setMergeDialogOpen={setMergeDialogOpen}
+          mergePrimaryId={mergePrimaryId}
+          setMergePrimaryId={setMergePrimaryId}
+          mergeInProgress={mergeInProgress}
+          handleMergeAsVersions={handleMergeAsVersions}
+          batchDeleteDialogOpen={batchDeleteDialogOpen}
+          setBatchDeleteDialogOpen={setBatchDeleteDialogOpen}
+          batchDeleteInProgress={batchDeleteInProgress}
+          handleBatchDelete={handleBatchDelete}
+          bulkOrganizeDialogOpen={bulkOrganizeDialogOpen}
+          handleCancelBulkOrganize={handleCancelBulkOrganize}
+          bulkOrganizeProgress={bulkOrganizeProgress}
+          bulkOrganizeInProgress={bulkOrganizeInProgress}
+          handleBulkOrganize={handleBulkOrganize}
+          bulkWriteBackDialogOpen={bulkWriteBackDialogOpen}
+          handleCloseBulkWriteBackDialog={handleCloseBulkWriteBackDialog}
+          bulkWriteBackRename={bulkWriteBackRename}
+          setBulkWriteBackRename={setBulkWriteBackRename}
+          bulkWriteBackForce={bulkWriteBackForce}
+          setBulkWriteBackForce={setBulkWriteBackForce}
+          bulkWriteBackResult={bulkWriteBackResult}
+          bulkWriteBackInProgress={bulkWriteBackInProgress}
+          handleBulkWriteBack={handleBulkWriteBack}
+          bulkSaveAllDialogOpen={bulkSaveAllDialogOpen}
+          handleCloseBulkSaveAllDialog={handleCloseBulkSaveAllDialog}
+          bulkSaveAllEstimate={bulkSaveAllEstimate}
+          bulkSaveAllRename={bulkSaveAllRename}
+          setBulkSaveAllRename={setBulkSaveAllRename}
+          bulkSaveAllStarting={bulkSaveAllStarting}
+          handleBulkSaveAll={handleBulkSaveAll}
+          duplicateDialog={duplicateDialog}
+          handleDuplicateAction={handleDuplicateAction}
+          bulkOrganizeError={bulkOrganizeError}
+          handleCloseOrganizeError={handleCloseOrganizeError}
+          handleOrganizeRollback={handleOrganizeRollback}
+          importFileDialogOpen={importFileDialogOpen}
+          setImportFileDialogOpen={setImportFileDialogOpen}
+          importFilePath={importFilePath}
+          setImportFilePath={setImportFilePath}
+          handleAddImportFilePath={handleAddImportFilePath}
+          importFilePaths={importFilePaths}
+          handleToggleImportFilePath={handleToggleImportFilePath}
+          handleRemoveImportFilePath={handleRemoveImportFilePath}
+          importFileOrganize={importFileOrganize}
+          setImportFileOrganize={setImportFileOrganize}
+          importFileInProgress={importFileInProgress}
+          handleImportFile={handleImportFile}
+          bulkFetchDialogOpen={bulkFetchDialogOpen}
+          handleCancelBulkFetch={handleCancelBulkFetch}
+          bulkFetchProgress={bulkFetchProgress}
+          bulkFetchInProgress={bulkFetchInProgress}
+          handleBulkFetchMetadata={handleBulkFetchMetadata}
+          bulkSearchOpen={bulkSearchOpen}
+          setBulkSearchOpen={setBulkSearchOpen}
+          metadataReviewOpen={metadataReviewOpen}
+          setMetadataReviewOpen={setMetadataReviewOpen}
+          metadataReviewOpId={metadataReviewOpId}
+          setMetadataReviewOpId={(id) => setMetadataReviewOpId(id)}
+          resumeReviewPickerOpen={resumeReviewPickerOpen}
+          setResumeReviewPickerOpen={setResumeReviewPickerOpen}
+          recentFetches={recentFetches}
+          versionManagingAudiobook={versionManagingAudiobook}
+          versionManagementOpen={versionManagementOpen}
+          handleVersionManagementClose={handleVersionManagementClose}
+          handleVersionUpdate={handleVersionUpdate}
+          deleteDialogOpen={deleteDialogOpen}
+          handleCloseDeleteDialog={handleCloseDeleteDialog}
+          bookPendingDelete={bookPendingDelete}
+          deleteOptions={deleteOptions}
+          setDeleteOptions={setDeleteOptions}
+          deleteInProgress={deleteInProgress}
+          handleConfirmDelete={handleConfirmDelete}
+          purgeDialogOpen={purgeDialogOpen}
+          setPurgeDialogOpen={setPurgeDialogOpen}
+          purgeDeleteFiles={purgeDeleteFiles}
+          setPurgeDeleteFiles={setPurgeDeleteFiles}
+          softDeletedCount={softDeletedCount}
+          purgeInProgress={purgeInProgress}
+          handleConfirmPurge={handleConfirmPurge}
+          addPathDialogOpen={addPathDialogOpen}
+          setAddPathDialogOpen={setAddPathDialogOpen}
+          showServerBrowser={showServerBrowser}
+          setShowServerBrowser={setShowServerBrowser}
+          newImportPath={newImportPath}
+          setNewImportPath={setNewImportPath}
+          handleAddImportPath={handleAddImportPath}
+          handleServerBrowserSelect={handleServerBrowserSelect}
+          importPaths={importPaths}
+          importPathsExpanded={importPathsExpanded}
+          setImportPathsExpanded={setImportPathsExpanded}
+          scanningAll={scanningAll}
+          handleScanAll={handleScanAll}
+          scanningPathId={scanningPathId}
+          handleScanImportPath={handleScanImportPath}
+          removingPathId={removingPathId}
+          handleRemoveImportPath={handleRemoveImportPath}
+          batchPlaylistOpen={batchPlaylistOpen}
+          setBatchPlaylistOpen={setBatchPlaylistOpen}
         />
-
-        {/* Always render the review dialog so its internal state
-            (loaded results, row states, scroll position) survives
-            across close/reopen cycles. Only toggle the `open` prop.
-            The dialog ignores backdrop clicks and Escape — the
-            user must click the × button or Done to close, which
-            prevents accidentally blowing away a long review
-            session. Reopening is instant because the data is
-            already loaded.
-
-            When the user explicitly closes, we KEEP the opId
-            alive so clicking "Resume Review" with the same
-            operation reopens the same dialog state without a
-            re-query. Clearing the opId happens only when the
-            user picks a DIFFERENT operation from the picker. */}
-        <MetadataReviewDialog
-          open={metadataReviewOpen}
-          operationId={metadataReviewOpId || ''}
-          onClose={() => {
-            setMetadataReviewOpen(false);
-            // Intentionally NOT clearing metadataReviewOpId so
-            // the dialog's internal state survives and reopen is
-            // instant. The opId is cleared when the user picks a
-            // new operation from the Resume Review picker.
-          }}
-          onComplete={() => {
-            loadAudiobooks();
-            setSelectedAudiobooks([]);
-          }}
-          toast={toast}
-        />
-
-        {/* Resume Review picker: lists recent completed
-            metadata_candidate_fetch ops with their result counts.
-            Click a row to open the MetadataReviewDialog for that
-            specific operation. Solves the "fired two fetches, first
-            one's results are lost in the UI" scenario. */}
-        <Dialog
-          open={resumeReviewPickerOpen}
-          onClose={() => setResumeReviewPickerOpen(false)}
-          maxWidth="sm"
-          fullWidth
-        >
-          <DialogTitle>Resume metadata review</DialogTitle>
-          <DialogContent>
-            <DialogContentText sx={{ mb: 2 }}>
-              Pick a completed metadata fetch to review. Results stay in
-              the operation log until you review them, so even older
-              fetches can still be opened if you never got around to it.
-            </DialogContentText>
-            {recentFetches.length === 0 ? (
-              <Typography color="text.secondary">No recent fetches found.</Typography>
-            ) : (
-              <Stack spacing={1}>
-                {recentFetches.map((op) => (
-                  <Box
-                    key={op.id}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      p: 1.5,
-                      border: 1,
-                      borderColor: 'divider',
-                      borderRadius: 1,
-                      cursor: 'pointer',
-                      '&:hover': { borderColor: 'primary.main' },
-                    }}
-                    onClick={() => {
-                      setMetadataReviewOpId(op.id);
-                      setMetadataReviewOpen(true);
-                      setResumeReviewPickerOpen(false);
-                    }}
-                  >
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography variant="body2" fontWeight="medium" noWrap>
-                        {new Date(op.completed_at || op.created_at).toLocaleString()}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {op.matched_count} matched ·{' '}
-                        {op.no_match_count} no match ·{' '}
-                        {op.error_count} error{' '}
-                        ({op.result_count} total)
-                      </Typography>
-                    </Box>
-                    <Button size="small" variant="contained">
-                      Review
-                    </Button>
-                  </Box>
-                ))}
-              </Stack>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setResumeReviewPickerOpen(false)}>Close</Button>
-          </DialogActions>
-        </Dialog>
-
-        <VersionManagement
-          audiobookId={versionManagingAudiobook?.id || ''}
-          open={versionManagementOpen}
-          onClose={handleVersionManagementClose}
-          onUpdate={handleVersionUpdate}
-        />
-
-        <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
-          <DialogTitle>Delete Audiobook</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" gutterBottom>
-              {bookPendingDelete
-                ? `Are you sure you want to delete "${bookPendingDelete.title}"?`
-                : 'Are you sure you want to delete this audiobook?'}
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={deleteOptions.softDelete}
-                  onChange={(e) =>
-                    setDeleteOptions((prev) => ({
-                      ...prev,
-                      softDelete: e.target.checked,
-                    }))
-                  }
-                />
-              }
-              label="Soft delete (hide from library, keep for purge)"
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={deleteOptions.blockHash}
-                  onChange={(e) =>
-                    setDeleteOptions((prev) => ({
-                      ...prev,
-                      blockHash: e.target.checked,
-                    }))
-                  }
-                />
-              }
-              label="Prevent reimporting this file (block hash)"
-            />
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              Soft deleting keeps the record for auditing and purging. Use purge to permanently
-              remove it later.
-            </Alert>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
-            <Button
-              onClick={handleConfirmDelete}
-              color="error"
-              variant="contained"
-              disabled={deleteInProgress}
-            >
-              {deleteInProgress
-                ? 'Deleting...'
-                : deleteOptions.softDelete
-                  ? 'Soft Delete'
-                  : 'Delete'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        <Dialog
-          open={purgeDialogOpen}
-          onClose={() => {
-            setPurgeDialogOpen(false);
-            setPurgeDeleteFiles(false);
-          }}
-        >
-          <DialogTitle>Purge Soft-Deleted Books</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1" gutterBottom>
-              {softDeletedCount === 0
-                ? 'There are no soft-deleted books to purge.'
-                : `This will permanently remove ${softDeletedCount} soft-deleted ${
-                    softDeletedCount === 1 ? 'book' : 'books'
-                  } from the library.`}
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={purgeDeleteFiles}
-                  onChange={(e) => setPurgeDeleteFiles(e.target.checked)}
-                />
-              }
-              label="Also delete files from disk (if they still exist)"
-            />
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              This cannot be undone. Purge removes the records entirely and deletes files when
-              selected.
-            </Alert>
-          </DialogContent>
-          <DialogActions>
-            <Button
-              onClick={() => {
-                setPurgeDialogOpen(false);
-                setPurgeDeleteFiles(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmPurge}
-              color="error"
-              variant="contained"
-              disabled={purgeInProgress || softDeletedCount === 0}
-            >
-              {purgeInProgress ? 'Purging...' : 'Purge Now'}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Import Path Management Dialog */}
-        <Dialog
-          open={addPathDialogOpen}
-          onClose={() => setAddPathDialogOpen(false)}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>Add Import Folder (Watch Location)</DialogTitle>
-          <DialogContent>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              <strong>Import folders</strong> are watch locations where the scanner looks for new
-              audiobooks. Files discovered here will be copied and organized into your main library
-              path (configured in Settings).
-            </Alert>
-
-            {!showServerBrowser ? (
-              <Box>
-                <TextField
-                  autoFocus
-                  fullWidth
-                  label="Import Path"
-                  value={newImportPath}
-                  onChange={(e) => setNewImportPath(e.target.value)}
-                  placeholder="/path/to/downloads"
-                  sx={{ mt: 1 }}
-                />
-                <Button
-                  startIcon={<FolderOpenIcon />}
-                  onClick={() => setShowServerBrowser(true)}
-                  sx={{ mt: 2 }}
-                >
-                  Browse Server Filesystem
-                </Button>
-              </Box>
-            ) : (
-              <Box>
-                <Button onClick={() => setShowServerBrowser(false)} sx={{ mb: 2 }}>
-                  ← Back to Manual Entry
-                </Button>
-                <ServerFileBrowser
-                  initialPath={newImportPath || '/'}
-                  onSelect={handleServerBrowserSelect}
-                  showFiles={false}
-                  allowDirSelect={true}
-                  allowFileSelect={false}
-                />
-                {newImportPath && (
-                  <Alert severity="success" sx={{ mt: 2 }}>
-                    <Typography variant="body2">
-                      <strong>Selected:</strong> {newImportPath}
-                    </Typography>
-                  </Alert>
-                )}
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button
-              onClick={() => {
-                setAddPathDialogOpen(false);
-                setShowServerBrowser(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddImportPath}
-              variant="contained"
-              disabled={!newImportPath.trim()}
-            >
-              Add Path
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Import Paths List */}
-        {importPaths.length > 0 && (
-          <Paper sx={{ mt: 2 }}>
-            <Box
-              sx={{
-                p: 2,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-              }}
-              onClick={() => setImportPathsExpanded(!importPathsExpanded)}
-            >
-              <Typography variant="h6">Import Paths ({importPaths.length})</Typography>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={scanningAll ? <CircularProgress size={16} /> : undefined}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleScanAll();
-                  }}
-                  disabled={
-                    scanningAll ||
-                    importPaths.length === 0 ||
-                    importPaths.some((p) => p.status === 'scanning')
-                  }
-                >
-                  {scanningAll ? 'Scanning...' : 'Scan All'}
-                </Button>
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setImportPathsExpanded(!importPathsExpanded);
-                  }}
-                >
-                  <ExpandMoreIcon
-                    sx={{
-                      transform: importPathsExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.3s',
-                    }}
-                  />
-                </IconButton>
-              </Stack>
-            </Box>
-            <Collapse in={importPathsExpanded}>
-              <List>
-                {importPaths.map((path) => (
-                  <ListItem key={path.id}>
-                    <ListItemText
-                      primary={path.path}
-                      secondary={
-                        path.status === 'scanning'
-                          ? 'Scanning...'
-                          : `${path.book_count} books found`
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleScanImportPath(path.id)}
-                        disabled={
-                          path.status === 'scanning' || scanningPathId === path.id.toString()
-                        }
-                        sx={{ mr: 1 }}
-                      >
-                        {scanningPathId === path.id.toString() ? (
-                          <CircularProgress size={20} />
-                        ) : (
-                          <RefreshIcon />
-                        )}
-                      </IconButton>
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleRemoveImportPath(path.id)}
-                        disabled={removingPathId === path.id.toString()}
-                      >
-                        {removingPathId === path.id.toString() ? (
-                          <CircularProgress size={20} />
-                        ) : (
-                          <DeleteIcon />
-                        )}
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
-            </Collapse>
-          </Paper>
-        )}
       </Box>
-      <AddToPlaylistDialog
-        open={batchPlaylistOpen}
-        onClose={() => setBatchPlaylistOpen(false)}
-        bookIds={selectedAudiobooks.map((b) => b.id)}
-      />
     </Box>
   );
 };
