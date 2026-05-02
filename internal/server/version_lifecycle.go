@@ -1,6 +1,7 @@
 // file: internal/server/version_lifecycle.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5a3b4c0d-6e7f-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-05-01
 //
 // Version lifecycle HTTP handlers. Core logic lives in internal/versions.
 
@@ -8,11 +9,11 @@ package server
 
 import (
 	"log"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/versions"
 )
 
@@ -26,11 +27,11 @@ func (s *Server) handleTrashVersion(c *gin.Context) {
 
 	ver, err := s.Store().GetBookVersion(versionID)
 	if err != nil || ver == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+		httputil.RespondWithNotFound(c, "version", "")
 		return
 	}
 	if ver.BookID != bookID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "version/book mismatch"})
+		httputil.RespondWithBadRequest(c, "version/book mismatch")
 		return
 	}
 
@@ -38,7 +39,7 @@ func (s *Server) handleTrashVersion(c *gin.Context) {
 
 	ver.Status = database.BookVersionStatusTrash
 	if err := s.Store().UpdateBookVersion(ver); err != nil {
-		internalError(c, "trash version", err)
+		httputil.InternalError(c, "trash version", err)
 		return
 	}
 
@@ -48,7 +49,9 @@ func (s *Server) handleTrashVersion(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"version": ver})
+	httputil.RespondWithOK(c, struct {
+		Version any `json:"version"`
+	}{Version: ver})
 }
 
 // handleRestoreVersion restores a trashed version to alt.
@@ -59,25 +62,27 @@ func (s *Server) handleRestoreVersion(c *gin.Context) {
 
 	ver, err := s.Store().GetBookVersion(versionID)
 	if err != nil || ver == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+		httputil.RespondWithNotFound(c, "version", "")
 		return
 	}
 	if ver.BookID != bookID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "version/book mismatch"})
+		httputil.RespondWithBadRequest(c, "version/book mismatch")
 		return
 	}
 	if ver.Status != database.BookVersionStatusTrash {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "version is not in trash"})
+		httputil.RespondWithBadRequest(c, "version is not in trash")
 		return
 	}
 
 	ver.Status = database.BookVersionStatusAlt
 	if err := s.Store().UpdateBookVersion(ver); err != nil {
-		internalError(c, "restore version", err)
+		httputil.InternalError(c, "restore version", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"version": ver})
+	httputil.RespondWithOK(c, struct {
+		Version any `json:"version"`
+	}{Version: ver})
 }
 
 // handlePurgeVersion physically deletes files and marks purged.
@@ -88,20 +93,22 @@ func (s *Server) handlePurgeVersion(c *gin.Context) {
 
 	ver, err := s.Store().GetBookVersion(versionID)
 	if err != nil || ver == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+		httputil.RespondWithNotFound(c, "version", "")
 		return
 	}
 	if ver.BookID != bookID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "version/book mismatch"})
+		httputil.RespondWithBadRequest(c, "version/book mismatch")
 		return
 	}
 
 	if err := versions.PurgeVersion(s.Store(), ver); err != nil {
-		internalError(c, "purge version", err)
+		httputil.InternalError(c, "purge version", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"version": ver})
+	httputil.RespondWithOK(c, struct {
+		Version any `json:"version"`
+	}{Version: ver})
 }
 
 // handleHardDeleteVersion removes all traces of a purged version.
@@ -111,20 +118,22 @@ func (s *Server) handleHardDeleteVersion(c *gin.Context) {
 
 	ver, err := s.Store().GetBookVersion(versionID)
 	if err != nil || ver == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "version not found"})
+		httputil.RespondWithNotFound(c, "version", "")
 		return
 	}
 	if ver.Status != database.BookVersionStatusInactivePurged {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "version is not purged"})
+		httputil.RespondWithBadRequest(c, "version is not purged")
 		return
 	}
 
 	if err := s.Store().DeleteBookVersion(ver.ID); err != nil {
-		internalError(c, "hard delete version", err)
+		httputil.InternalError(c, "hard delete version", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"deleted": ver.ID})
+	httputil.RespondWithOK(c, struct {
+		Deleted string `json:"deleted"`
+	}{Deleted: ver.ID})
 }
 
 // CleanupTrashedVersions delegates to versions.CleanupTrashedVersions.

@@ -1,6 +1,7 @@
 // file: internal/server/covers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-05-01
 
 package server
 
@@ -15,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // handleCoverProxy proxies and caches cover images from external URLs.
@@ -22,13 +24,13 @@ import (
 func (s *Server) handleCoverProxy(c *gin.Context) {
 	coverURL := c.Query("url")
 	if coverURL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "url parameter required"})
+		httputil.RespondWithBadRequest(c, "url parameter required")
 		return
 	}
 
 	// Only allow known cover sources
 	if !isAllowedCoverSource(coverURL) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "URL not from an allowed cover source"})
+		httputil.RespondWithBadRequest(c, "URL not from an allowed cover source")
 		return
 	}
 
@@ -50,33 +52,33 @@ func (s *Server) handleCoverProxy(c *gin.Context) {
 	// Fetch from source
 	resp, err := http.Get(coverURL) //nolint:gosec // URL is validated above
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch cover"})
+		httputil.RespondWithError(c, http.StatusBadGateway, "failed to fetch cover", "BAD_GATEWAY")
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		c.JSON(resp.StatusCode, gin.H{"error": "cover source returned error"})
+		httputil.RespondWithError(c, resp.StatusCode, "cover source returned error", "UPSTREAM_ERROR")
 		return
 	}
 
 	// Create cache directory
 	if err := os.MkdirAll(cacheDir, 0775); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create cache directory"})
+		httputil.RespondWithInternalError(c, "failed to create cache directory")
 		return
 	}
 
 	// Write to cache
 	f, err := os.Create(cachePath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to cache cover"})
+		httputil.RespondWithInternalError(c, "failed to cache cover")
 		return
 	}
 
 	if _, err := io.Copy(f, resp.Body); err != nil {
 		f.Close()
 		os.Remove(cachePath)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write cover"})
+		httputil.RespondWithInternalError(c, "failed to write cover")
 		return
 	}
 	f.Close()
@@ -92,7 +94,7 @@ func (s *Server) handleLocalCover(c *gin.Context) {
 
 	// Prevent path traversal
 	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || strings.Contains(filename, "..") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid filename"})
+		httputil.RespondWithBadRequest(c, "invalid filename")
 		return
 	}
 
@@ -108,7 +110,7 @@ func (s *Server) handleLocalCover(c *gin.Context) {
 			return
 		}
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "cover not found"})
+	httputil.RespondWithNotFound(c, "cover", "")
 }
 
 func isAllowedCoverSource(url string) bool {

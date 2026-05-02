@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_dispatcher.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 55555555-5555-5555-5555-555555555555
-// last-edited: 2026-04-28
+// last-edited: 2026-05-01
 
 package server
 
@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -63,7 +64,9 @@ func (s *Server) listMaintenanceJobs(c *gin.Context) {
 			Permission:    perm,
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"jobs": out})
+	httputil.RespondWithOK(c, struct {
+		Jobs []jobDef `json:"jobs"`
+	}{Jobs: out})
 }
 
 // runMaintenanceJob enqueues the named maintenance job as an async operation.
@@ -71,7 +74,7 @@ func (s *Server) runMaintenanceJob(c *gin.Context) {
 	jobID := c.Param("job_id")
 	job, err := maintenance.Get(jobID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		httputil.RespondWithNotFound(c, "maintenance job", jobID)
 		return
 	}
 
@@ -84,9 +87,9 @@ func (s *Server) runMaintenanceJob(c *gin.Context) {
 		}
 		if !auth.Can(c.Request.Context(), required) {
 			if _, hasUser := auth.UserFromContext(c.Request.Context()); !hasUser {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+				httputil.RespondWithUnauthorized(c, "authentication required")
 			} else {
-				c.JSON(http.StatusForbidden, gin.H{"error": "permission denied: " + string(required)})
+				httputil.RespondWithForbidden(c, "permission denied: "+string(required))
 			}
 			return
 		}
@@ -103,7 +106,7 @@ func (s *Server) runMaintenanceJob(c *gin.Context) {
 
 	// Create the operation record first so it appears in active operations / activity bell.
 	if _, err := store.CreateOperation(opID, opType, nil); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create operation record"})
+		httputil.RespondWithInternalError(c, "failed to create operation record")
 		return
 	}
 
@@ -114,8 +117,10 @@ func (s *Server) runMaintenanceJob(c *gin.Context) {
 	})
 
 	if err := s.queue.Enqueue(opID, opType, operations.PriorityNormal, enqueueFn); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		httputil.RespondWithConflict(c, err.Error())
 		return
 	}
-	c.JSON(http.StatusAccepted, gin.H{"operation_id": opID})
+	httputil.RespondWithSuccess(c, http.StatusAccepted, struct {
+		OperationID string `json:"operation_id"`
+	}{OperationID: opID})
 }

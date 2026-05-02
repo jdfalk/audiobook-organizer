@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-01
 
@@ -38,6 +38,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 func (s *Server) resumeInterruptedOperations() {
@@ -762,7 +763,7 @@ func (s *Server) perm(p auth.Permission) gin.HandlerFunc {
 func (s *Server) itunesSvcGuard(fn gin.HandlerFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if s.itunesSvc == nil || !s.itunesSvc.Enabled() {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "iTunes service is disabled"})
+			httputil.RespondWithServiceUnavailable(c, "iTunes service is disabled")
 			return
 		}
 		fn(c)

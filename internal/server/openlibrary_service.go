@@ -1,5 +1,5 @@
 // file: internal/server/openlibrary_service.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -35,7 +36,7 @@ func (s *Server) getOLStatus(c *gin.Context) {
 	if svc.OLStore != nil {
 		status, err := svc.OLStore.GetStatus()
 		if err != nil {
-			internalError(c, "failed to get OpenLibrary status", err)
+			httputil.InternalError(c, "failed to get OpenLibrary status", err)
 			return
 		}
 		resp["status"] = status
@@ -60,7 +61,7 @@ func (s *Server) getOLStatus(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, resp)
+	httputil.RespondWithOK(c, resp)
 }
 
 type olDownloadRequest struct {
@@ -75,14 +76,14 @@ func (s *Server) startOLDownload(c *gin.Context) {
 
 	for _, t := range req.Types {
 		if !metafetch.ValidDumpTypes[t] {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid dump type: %s", t)})
+			httputil.RespondWithBadRequest(c, fmt.Sprintf("invalid dump type: %s", t))
 			return
 		}
 	}
 
 	targetDir := metafetch.GetOLDumpDir()
 	if targetDir == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "openlibrary_dump_dir not configured"})
+		httputil.RespondWithBadRequest(c, "openlibrary_dump_dir not configured")
 		return
 	}
 
@@ -139,7 +140,7 @@ func (s *Server) startOLDownload(c *gin.Context) {
 		}()
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{"message": "download started", "types": req.Types, "operation_id": opID})
+	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{"message": "download started", "types": req.Types, "operation_id": opID})
 }
 
 func (s *Server) startOLImport(c *gin.Context) {
@@ -150,13 +151,13 @@ func (s *Server) startOLImport(c *gin.Context) {
 
 	targetDir := metafetch.GetOLDumpDir()
 	if targetDir == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "openlibrary_dump_dir not configured"})
+		httputil.RespondWithBadRequest(c, "openlibrary_dump_dir not configured")
 		return
 	}
 
 	svc := s.olService
 	if err := svc.EnsureStore(targetDir); err != nil {
-		internalError(c, "failed to open store", err)
+		httputil.InternalError(c, "failed to open store", err)
 		return
 	}
 
@@ -189,7 +190,7 @@ func (s *Server) startOLImport(c *gin.Context) {
 		}()
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{"message": "import started", "types": req.Types, "operation_id": opID})
+	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{"message": "import started", "types": req.Types, "operation_id": opID})
 }
 
 func (s *Server) executeOLImport(ctx context.Context, progress operations.ProgressReporter, svc *metafetch.OpenLibraryService, targetDir string, types []string) error {
@@ -273,49 +274,49 @@ func (s *Server) uploadOLDump(c *gin.Context) {
 	dumpType := c.PostForm("type")
 	log.Printf("[DEBUG] uploadOLDump: dumpType=%q", dumpType)
 	if !metafetch.ValidDumpTypes[dumpType] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "type must be one of: editions, authors, works"})
+		httputil.RespondWithBadRequest(c, "type must be one of: editions, authors, works")
 		return
 	}
 
 	targetDir := metafetch.GetOLDumpDir()
 	if targetDir == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "openlibrary_dump_dir not configured"})
+		httputil.RespondWithBadRequest(c, "openlibrary_dump_dir not configured")
 		return
 	}
 
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		httputil.RespondWithBadRequest(c, "file is required")
 		return
 	}
 	defer file.Close()
 
 	if !strings.HasSuffix(header.Filename, ".gz") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file must be a .gz dump file"})
+		httputil.RespondWithBadRequest(c, "file must be a .gz dump file")
 		return
 	}
 
 	if err := os.MkdirAll(targetDir, 0o775); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create dump dir"})
+		httputil.RespondWithInternalError(c, "failed to create dump dir")
 		return
 	}
 
 	targetPath := filepath.Join(targetDir, openlibrary.DumpFilename(dumpType))
 	out, err := os.Create(targetPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create target file"})
+		httputil.RespondWithInternalError(c, "failed to create target file")
 		return
 	}
 	defer out.Close()
 
 	written, err := io.Copy(out, file)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
+		httputil.RespondWithInternalError(c, "failed to save file")
 		return
 	}
 
 	log.Printf("[INFO] OL dump uploaded: %s (%d bytes) -> %s", header.Filename, written, targetPath)
-	c.JSON(http.StatusOK, gin.H{
+	httputil.RespondWithOK(c, gin.H{
 		"message":  "dump file uploaded",
 		"type":     dumpType,
 		"filename": header.Filename,
@@ -326,7 +327,7 @@ func (s *Server) uploadOLDump(c *gin.Context) {
 func (s *Server) deleteOLData(c *gin.Context) {
 	svc := s.olService
 	if svc == nil {
-		c.JSON(http.StatusOK, gin.H{"message": "no data to delete"})
+		httputil.RespondWithOK(c, httputil.MessageResponse{Message: "no data to delete"})
 		return
 	}
 
@@ -341,10 +342,10 @@ func (s *Server) deleteOLData(c *gin.Context) {
 	targetDir := metafetch.GetOLDumpDir()
 	if targetDir != "" {
 		if err := os.RemoveAll(targetDir); err != nil {
-			internalError(c, "failed to delete data", err)
+			httputil.InternalError(c, "failed to delete data", err)
 			return
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "data deleted"})
+	httputil.RespondWithOK(c, httputil.MessageResponse{Message: "data deleted"})
 }

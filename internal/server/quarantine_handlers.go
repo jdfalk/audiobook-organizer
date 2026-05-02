@@ -1,5 +1,5 @@
 // file: internal/server/quarantine_handlers.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package server
@@ -7,13 +7,14 @@ package server
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // quarantineBook handles POST /api/v1/audiobooks/:id/quarantine
 func (s *Server) quarantineBook(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
@@ -21,7 +22,7 @@ func (s *Server) quarantineBook(c *gin.Context) {
 		Reason string `json:"reason"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 	if req.Reason == "" {
@@ -29,42 +30,51 @@ func (s *Server) quarantineBook(c *gin.Context) {
 	}
 
 	if err := s.QuarantineBook(id, req.Reason); err != nil {
-		internalError(c, "quarantine failed", err)
+		httputil.InternalError(c, "quarantine failed", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"status": "quarantined", "book_id": id})
+	httputil.RespondWithOK(c, struct {
+		Status string `json:"status"`
+		BookID string `json:"book_id"`
+	}{Status: "quarantined", BookID: id})
 }
 
 // unquarantineBook handles DELETE /api/v1/audiobooks/:id/quarantine
 func (s *Server) unquarantineBook(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
 	if err := s.UnquarantineBook(id); err != nil {
-		internalError(c, "unquarantine failed", err)
+		httputil.InternalError(c, "unquarantine failed", err)
 		return
 	}
-	RespondWithOK(c, gin.H{"status": "unquarantined", "book_id": id})
+	httputil.RespondWithOK(c, struct {
+		Status string `json:"status"`
+		BookID string `json:"book_id"`
+	}{Status: "unquarantined", BookID: id})
 }
 
 // listQuarantinedBooks handles GET /api/v1/audiobooks/quarantined
 func (s *Server) listQuarantinedBooks(c *gin.Context) {
 	if s.Store() == nil {
-		RespondWithInternalError(c, "database not initialized")
+		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	params := ParsePaginationParams(c)
+	params := httputil.ParsePaginationParams(c)
 	books, err := s.Store().GetQuarantinedBooks(params.Limit, params.Offset)
 	if err != nil {
-		internalError(c, "list quarantined books failed", err)
+		httputil.InternalError(c, "list quarantined books failed", err)
 		return
 	}
 	if books == nil {
 		books = []database.Book{}
 	}
 	total, _ := s.Store().CountQuarantinedBooks()
-	RespondWithOK(c, gin.H{"books": books, "total": total})
+	httputil.RespondWithOK(c, struct {
+		Books []database.Book `json:"books"`
+		Total int             `json:"total"`
+	}{Books: books, Total: total})
 }

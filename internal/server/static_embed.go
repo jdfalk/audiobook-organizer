@@ -1,8 +1,9 @@
 //go:build embed_frontend
 
 // file: internal/server/static_embed.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+// last-edited: 2026-05-01
 
 package server
 
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // webFS holds the embedded filesystem passed from main package
@@ -38,7 +40,7 @@ func (s *Server) setupStaticFiles() {
 	s.router.NoRoute(func(c *gin.Context) {
 		// Return 404 for unknown API routes
 		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "endpoint not found"})
+			httputil.RespondWithNotFound(c, "endpoint", "")
 			return
 		}
 

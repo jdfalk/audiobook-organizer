@@ -1,6 +1,7 @@
 // file: internal/server/import_collision.go
-// version: 1.1.1
+// version: 1.2.0
 // guid: 4b2c3d1e-5f6a-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-05-01
 //
 // Import-time collision preview (backlog 1.6). Before importing a
 // file, check whether it collides with an existing book (by title
@@ -10,11 +11,11 @@
 package server
 
 import (
-	"net/http"
 	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
@@ -28,7 +29,7 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 		TorrentHash string `json:"torrent_hash,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
@@ -91,9 +92,9 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 	if candidates == nil {
 		candidates = []merge.CollisionCandidate{}
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"collisions":    candidates,
-		"count":         len(candidates),
-		"has_collision": len(candidates) > 0,
-	})
+	httputil.RespondWithOK(c, struct {
+		Collisions   []merge.CollisionCandidate `json:"collisions"`
+		Count        int                        `json:"count"`
+		HasCollision bool                       `json:"has_collision"`
+	}{Collisions: candidates, Count: len(candidates), HasCollision: len(candidates) > 0})
 }

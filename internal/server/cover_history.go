@@ -1,6 +1,7 @@
 // file: internal/server/cover_history.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: 6d4e5f3a-7b8c-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-05-01
 //
 // Cover art history browsing + restore (backlog 3.5).
 //
@@ -11,7 +12,6 @@
 package server
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // CoverHistoryEntry represents one saved cover version.
@@ -38,10 +39,13 @@ func (s *Server) handleListCoverHistory(c *gin.Context) {
 	entries, err := os.ReadDir(histDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			c.JSON(http.StatusOK, gin.H{"covers": []CoverHistoryEntry{}, "count": 0})
+			httputil.RespondWithOK(c, struct {
+				Covers []CoverHistoryEntry `json:"covers"`
+				Count  int                 `json:"count"`
+			}{Covers: []CoverHistoryEntry{}, Count: 0})
 			return
 		}
-		internalError(c, "read cover history", err)
+		httputil.InternalError(c, "read cover history", err)
 		return
 	}
 
@@ -71,7 +75,10 @@ func (s *Server) handleListCoverHistory(c *gin.Context) {
 		return covers[i].ModTime > covers[j].ModTime
 	})
 
-	c.JSON(http.StatusOK, gin.H{"covers": covers, "count": len(covers)})
+	httputil.RespondWithOK(c, struct {
+		Covers []CoverHistoryEntry `json:"covers"`
+		Count  int                 `json:"count"`
+	}{Covers: covers, Count: len(covers)})
 }
 
 // handleRestoreCover copies a history cover back as the book's
@@ -83,19 +90,19 @@ func (s *Server) handleRestoreCover(c *gin.Context) {
 		Filename string `json:"filename" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		RespondWithBadRequest(c, err.Error())
+		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
 
 	book, err := s.Store().GetBookByID(bookID)
 	if err != nil || book == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "book not found"})
+		httputil.RespondWithNotFound(c, "book", "")
 		return
 	}
 
 	srcPath := filepath.Join(config.AppConfig.RootDir, "covers", "history", bookID, req.Filename)
 	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "cover file not found"})
+		httputil.RespondWithNotFound(c, "cover file", "")
 		return
 	}
 
@@ -106,11 +113,11 @@ func (s *Server) handleRestoreCover(c *gin.Context) {
 
 	src, err := os.ReadFile(srcPath)
 	if err != nil {
-		internalError(c, "read history cover", err)
+		httputil.InternalError(c, "read history cover", err)
 		return
 	}
 	if err := os.WriteFile(dstPath, src, 0o644); err != nil {
-		internalError(c, "write restored cover", err)
+		httputil.InternalError(c, "write restored cover", err)
 		return
 	}
 
@@ -118,9 +125,11 @@ func (s *Server) handleRestoreCover(c *gin.Context) {
 	coverURL := "/api/v1/covers/local/" + bookID + ext
 	book.CoverURL = &coverURL
 	if _, err := s.Store().UpdateBook(book.ID, book); err != nil {
-		internalError(c, "update book cover", err)
+		httputil.InternalError(c, "update book cover", err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"cover_url": coverURL})
+	httputil.RespondWithOK(c, struct {
+		CoverURL string `json:"cover_url"`
+	}{CoverURL: coverURL})
 }

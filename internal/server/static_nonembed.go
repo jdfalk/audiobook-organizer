@@ -1,8 +1,9 @@
 //go:build !embed_frontend
 
 // file: internal/server/static_nonembed.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
+// last-edited: 2026-05-01
 
 package server
 
@@ -11,6 +12,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 // SetEmbeddedFS is a no-op when not embedding frontend
@@ -100,7 +102,7 @@ func (s *Server) setupPlaceholder() {
 	s.router.NoRoute(func(c *gin.Context) {
 		// Return 404 for unknown API routes
 		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "endpoint not found"})
+			httputil.RespondWithNotFound(c, "endpoint", "")
 			return
 		}
 		// For non-API routes, redirect to home
