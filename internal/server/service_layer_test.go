@@ -1333,7 +1333,7 @@ func TestAudiobookService_CountAudiobooks_Error(t *testing.T) {
 
 // TestAudiobookService_CountAudiobooks_NilDB tests nil database
 func TestAudiobookService_CountAudiobooks_NilDB(t *testing.T) {
-	svc := &AudiobookService{store: nil}
+	svc := NewAudiobookService(nil)
 
 	count, err := svc.CountAudiobooks(context.Background())
 	if err == nil {
@@ -1349,7 +1349,7 @@ func TestAudiobookService_CountAudiobooks_NilDB(t *testing.T) {
 
 // TestAudiobookService_GetSoftDeletedBooks_NilDB tests nil database
 func TestAudiobookService_GetSoftDeletedBooks_NilDB(t *testing.T) {
-	svc := &AudiobookService{store: nil}
+	svc := NewAudiobookService(nil)
 
 	books, err := svc.GetSoftDeletedBooks(context.Background(), 50, 0, nil)
 	if err == nil {

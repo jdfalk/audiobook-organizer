@@ -183,7 +183,7 @@ func TestParsePaginationParams(t *testing.T) {
 		{
 			name:       "limit exceeds max",
 			queryStr:   "/?limit=20000",
-			wantLimit:  10000,
+			wantLimit:  500,
 			wantOffset: 0,
 			wantSearch: "",
 		},

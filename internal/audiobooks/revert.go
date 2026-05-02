@@ -1,8 +1,8 @@
-// file: internal/server/revert_service.go
-// version: 1.2.0
+// file: internal/audiobooks/revert.go
+// version: 1.2.1
 // guid: d4e5f6a7-b8c9-d0e1-f2a3-b4c5d6e7f8a9
 
-package server
+package audiobooks
 
 import (
 	"fmt"

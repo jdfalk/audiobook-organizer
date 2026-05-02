@@ -1,8 +1,8 @@
-// file: internal/server/author_series_service.go
-// version: 1.5.0
+// file: internal/audiobooks/author_series.go
+// version: 1.5.1
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 
-package server
+package audiobooks
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"

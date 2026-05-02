@@ -1,5 +1,5 @@
-// file: internal/server/organize_preview_service.go
-// version: 2.0.0
+// file: internal/audiobooks/organize_preview.go
+// version: 2.0.1
 // guid: f1a2b3c4-d5e6-7890-abcd-ef1234567890
 //
 // Thin forwarding layer — the real implementation now lives in
@@ -7,7 +7,7 @@
 // constructor wrappers so the rest of the server package can keep using
 // the old names.
 
-package server
+package audiobooks
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
