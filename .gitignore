@@ -270,3 +270,8 @@ third_party/taglib/lib/*.a
 # Private reports with local file paths — never commit these
 docs/private/
 docs/reports/
+
+# stray binary from cmd/itunes-sync-tests build
+/itunes-sync-tests
+/itl-diff
+/verify-suite
