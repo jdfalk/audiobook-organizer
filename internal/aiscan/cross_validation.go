@@ -1,8 +1,9 @@
-// file: internal/server/cross_validation.go
-// version: 1.0.0
+// file: internal/aiscan/cross_validation.go
+// version: 1.0.1
 // guid: d0e6f2a4-7b8c-9d0e-1f2a-3b4c5d6e7f8a
+// last-edited: 2026-05-05
 
-package server
+package aiscan
 
 import (
 	"encoding/json"

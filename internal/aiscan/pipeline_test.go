@@ -1,8 +1,9 @@
-// file: internal/server/ai_scan_pipeline_test.go
-// version: 1.0.0
+// file: internal/aiscan/pipeline_test.go
+// version: 1.0.1
 // guid: c9d5e1f3-6a7b-8c9d-0e1f-2a3b4c5d6e7f
+// last-edited: 2026-05-05
 
-package server
+package aiscan
 
 import (
 	"testing"
