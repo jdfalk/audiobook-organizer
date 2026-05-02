@@ -1,6 +1,7 @@
-// file: internal/server/writeback_outbox.go
-// version: 1.1.0
+// file: internal/writeback/outbox.go
+// version: 1.0.0
 // guid: 5c3d4e2f-6a7b-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-05-01
 //
 // Durable outbox for the ITL write-back queue (backlog 4.3).
 //
@@ -12,7 +13,7 @@
 //
 // Outbox key schema: `outbox:writeback:{bookID}` → timestamp
 
-package server
+package writeback
 
 import (
 	"log"
@@ -27,11 +28,17 @@ const outboxPrefix = "outbox:writeback:"
 // WriteBackOutbox persists pending ITL write-back book IDs to the
 // store so they survive server restarts.
 type WriteBackOutbox struct {
-	store interface { database.BookReader; database.UserPreferenceStore }
+	store interface {
+		database.BookReader
+		database.UserPreferenceStore
+	}
 }
 
 // NewWriteBackOutbox creates an outbox backed by the given store.
-func NewWriteBackOutbox(store interface { database.BookReader; database.UserPreferenceStore }) *WriteBackOutbox {
+func NewWriteBackOutbox(store interface {
+	database.BookReader
+	database.UserPreferenceStore
+}) *WriteBackOutbox {
 	return &WriteBackOutbox{store: store}
 }
 
@@ -100,10 +107,9 @@ func (o *WriteBackOutbox) ReplayOrphans(batcher Enqueuer) int {
 	return replayed
 }
 
-// EnqueueWithOutbox is a convenience that writes to both the durable
-// outbox and the in-memory batcher. The batcher handles debounce +
-// flush; the outbox survives crashes. After flush, the caller should
-// call Dequeue to clean up.
+// EnqueueWithOutbox writes to both the durable outbox and the in-memory
+// batcher. The batcher handles debounce + flush; the outbox survives
+// crashes. After flush, the caller should call Dequeue to clean up.
 func EnqueueWithOutbox(outbox *WriteBackOutbox, batcher Enqueuer, bookID string) {
 	if outbox != nil {
 		if err := outbox.Enqueue(bookID); err != nil {
