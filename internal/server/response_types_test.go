@@ -1,17 +1,20 @@
 // file: internal/server/response_types_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
+// last-edited: 2026-05-01
 
 package server
 
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 func TestNewListResponse(t *testing.T) {
 	items := []string{"item1", "item2"}
-	resp := NewListResponse(items, 2, 50, 0)
+	resp := httputil.NewListResponse(items, 2, 50, 0)
 
 	if resp.Count != 2 {
 		t.Errorf("expected count 2, got %d", resp.Count)
@@ -29,7 +32,7 @@ func TestNewListResponse(t *testing.T) {
 
 func TestNewListResponseWithTotal(t *testing.T) {
 	items := []string{"item1"}
-	resp := NewListResponseWithTotal(items, 1, 50, 0, 100)
+	resp := httputil.NewListResponseWithTotal(items, 1, 50, 0, 100)
 
 	if resp.Count != 1 {
 		t.Errorf("expected count 1, got %d", resp.Count)
@@ -40,12 +43,12 @@ func TestNewListResponseWithTotal(t *testing.T) {
 }
 
 func TestNewBulkResponse(t *testing.T) {
-	results := []BulkItem{
+	results := []httputil.BulkItem{
 		{ID: "1", Status: "success"},
 		{ID: "2", Status: "success"},
 		{ID: "3", Status: "failed", Error: "not found"},
 	}
-	resp := NewBulkResponse(3, results)
+	resp := httputil.NewBulkResponse(3, results)
 
 	if resp.Total != 3 {
 		t.Errorf("expected total 3, got %d", resp.Total)
@@ -59,7 +62,7 @@ func TestNewBulkResponse(t *testing.T) {
 }
 
 func TestNewMessageResponse(t *testing.T) {
-	resp := NewMessageResponse("test message", "TEST_CODE")
+	resp := httputil.NewMessageResponse("test message", "TEST_CODE")
 
 	if resp.Message != "test message" {
 		t.Errorf("expected 'test message', got %q", resp.Message)
@@ -71,7 +74,7 @@ func TestNewMessageResponse(t *testing.T) {
 
 func TestListResponseJSON(t *testing.T) {
 	items := []int{1, 2, 3}
-	resp := NewListResponse(items, 3, 10, 0)
+	resp := httputil.NewListResponse(items, 3, 10, 0)
 
 	data, err := json.Marshal(resp)
 	if err != nil {
@@ -145,7 +148,7 @@ func TestDuplicatesResponse(t *testing.T) {
 
 func TestNewStatusResponse(t *testing.T) {
 	t.Run("ok status with nil data", func(t *testing.T) {
-		resp := NewStatusResponse("ok", nil)
+		resp := httputil.NewStatusResponse("ok", nil)
 
 		if resp.Status != "ok" {
 			t.Errorf("expected status %q, got %q", "ok", resp.Status)
@@ -156,7 +159,7 @@ func TestNewStatusResponse(t *testing.T) {
 	})
 
 	t.Run("error status with string data", func(t *testing.T) {
-		resp := NewStatusResponse("error", "something went wrong")
+		resp := httputil.NewStatusResponse("error", "something went wrong")
 
 		if resp.Status != "error" {
 			t.Errorf("expected status %q, got %q", "error", resp.Status)
@@ -168,7 +171,7 @@ func TestNewStatusResponse(t *testing.T) {
 
 	t.Run("degraded status with map data", func(t *testing.T) {
 		data := map[string]any{"service": "database", "latency": 500}
-		resp := NewStatusResponse("degraded", data)
+		resp := httputil.NewStatusResponse("degraded", data)
 
 		if resp.Status != "degraded" {
 			t.Errorf("expected status %q, got %q", "degraded", resp.Status)
