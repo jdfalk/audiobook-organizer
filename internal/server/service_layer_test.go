@@ -1,7 +1,7 @@
 // file: internal/server/service_layer_test.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-02-14
+// last-edited: 2026-05-01
 
 package server
 
@@ -19,6 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
+	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -270,7 +271,7 @@ func TestAudiobookUpdateService_ExtractOverrides_EdgeCases(t *testing.T) {
 // TestImportPathService_ValidatePath_Whitespace tests whitespace handling
 func TestImportPathService_ValidatePath_Whitespace(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewImportPathService(mockStore)
+	svc := importer.NewImportPathService(mockStore)
 
 	tests := []struct {
 		name    string
@@ -311,8 +312,8 @@ func TestImportPathService_ValidatePath_Whitespace(t *testing.T) {
 				if err == nil {
 					t.Error("expected error, got nil")
 				}
-				if err != ErrImportPathEmpty {
-					t.Errorf("expected ErrImportPathEmpty, got %v", err)
+				if err != importer.ErrImportPathEmpty {
+					t.Errorf("expected importer.ErrImportPathEmpty, got %v", err)
 				}
 			} else {
 				if err != nil {
@@ -852,7 +853,7 @@ func strPtr(s string) *string {
 func TestImportPathService_UpdateImportPathEnabled(t *testing.T) {
 	t.Run("success case", func(t *testing.T) {
 		mockStore := mocks.NewMockStore(t)
-		svc := NewImportPathService(mockStore)
+		svc := importer.NewImportPathService(mockStore)
 
 		importPath := &database.ImportPath{
 			ID:      1,
@@ -877,7 +878,7 @@ func TestImportPathService_UpdateImportPathEnabled(t *testing.T) {
 
 	t.Run("import path not found", func(t *testing.T) {
 		mockStore := mocks.NewMockStore(t)
-		svc := NewImportPathService(mockStore)
+		svc := importer.NewImportPathService(mockStore)
 
 		mockStore.EXPECT().GetImportPathByID(999).Return(nil, nil)
 
@@ -892,7 +893,7 @@ func TestImportPathService_UpdateImportPathEnabled(t *testing.T) {
 
 	t.Run("database error on get", func(t *testing.T) {
 		mockStore := mocks.NewMockStore(t)
-		svc := NewImportPathService(mockStore)
+		svc := importer.NewImportPathService(mockStore)
 
 		mockStore.EXPECT().GetImportPathByID(1).Return(nil, errors.New("database error"))
 
@@ -910,7 +911,7 @@ func TestImportPathService_UpdateImportPathEnabled(t *testing.T) {
 func TestImportPathService_GetImportPath(t *testing.T) {
 	t.Run("success case", func(t *testing.T) {
 		mockStore := mocks.NewMockStore(t)
-		svc := NewImportPathService(mockStore)
+		svc := importer.NewImportPathService(mockStore)
 
 		expectedPath := &database.ImportPath{
 			ID:      1,
@@ -935,7 +936,7 @@ func TestImportPathService_GetImportPath(t *testing.T) {
 
 	t.Run("import path not found", func(t *testing.T) {
 		mockStore := mocks.NewMockStore(t)
-		svc := NewImportPathService(mockStore)
+		svc := importer.NewImportPathService(mockStore)
 
 		mockStore.EXPECT().GetImportPathByID(999).Return(nil, nil)
 
@@ -953,7 +954,7 @@ func TestImportPathService_GetImportPath(t *testing.T) {
 
 	t.Run("database error", func(t *testing.T) {
 		mockStore := mocks.NewMockStore(t)
-		svc := NewImportPathService(mockStore)
+		svc := importer.NewImportPathService(mockStore)
 
 		mockStore.EXPECT().GetImportPathByID(1).Return(nil, errors.New("database error"))
 

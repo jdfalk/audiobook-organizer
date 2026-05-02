@@ -1,8 +1,9 @@
-// file: internal/server/import_path_service.go
-// version: 1.2.0
-// guid: d4e5f6g7-h8i9-j0k1-l2m3-n4o5p6q7r8s9
+// file: internal/importer/path_service.go
+// version: 1.0.0
+// guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9b
+// last-edited: 2026-05-01
 
-package server
+package importer
 
 import (
 	"errors"

@@ -1,8 +1,9 @@
-// file: internal/server/import_service.go
-// version: 1.4.0
-// guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a
+// file: internal/importer/service.go
+// version: 1.0.0
+// guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5b
+// last-edited: 2026-05-01
 
-package server
+package importer
 
 import (
 	"fmt"
@@ -16,21 +17,17 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/versions"
 )
 
-// importServiceStore is the narrow slice of database.Store this service uses.
-// Includes the transitive surfaces required by forwarded helpers:
-// CreateIngestVersion needs BookVersionStore + BookFileStore; ProvisionITLTracksForBook
-// needs ExternalIDStore (plus the AuthorReader + BookFileStore already present).
-// importServiceStore is temporarily widened to database.Store because
-// CreateIngestVersion (in the extracted versions package) requires
-// the full Store interface. A future ISP pass on the versions package
+// Store is the narrow slice of database.Store this service uses.
+// Temporarily widened to database.Store because versions.CreateIngestVersion
+// requires the full Store interface. A future ISP pass on the versions package
 // will re-narrow this.
-type importServiceStore = database.Store
-
+type Store = database.Store
 
 type ImportService struct {
-	db          importServiceStore
+	db          Store
 	provisioner *itunesservice.TrackProvisioner
 }
 
@@ -40,7 +37,7 @@ func (is *ImportService) SetTrackProvisioner(p *itunesservice.TrackProvisioner) 
 	is.provisioner = p
 }
 
-func NewImportService(db importServiceStore) *ImportService {
+func NewImportService(db Store) *ImportService {
 	return &ImportService{db: db}
 }
 
@@ -177,17 +174,15 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 	}
 
 	// Create version row for the imported file (spec 3.1).
-	if _, verErr := CreateIngestVersion(is.db, IngestVersionParams{
+	if _, verErr := versions.CreateIngestVersion(is.db, versions.IngestVersionParams{
 		BookID: created.ID, FilePath: created.FilePath,
 		Format: created.Format, Source: "imported",
 	}); verErr != nil {
 		log.Printf("[WARN] create ingest version for %s: %v", created.ID, verErr)
 	}
 
-	// Provision ITL track via the injected iTunes service (moved from this
-	// package into internal/itunes/service/ during Phase 2 M1 step 1).
-	// Nil provisioner → iTunes disabled or not wired; book is still created
-	// and ITL provisioning can happen later when iTunes comes online.
+	// Provision ITL track via the injected iTunes service.
+	// Nil provisioner → iTunes disabled or not wired; book is still created.
 	if is.provisioner != nil {
 		if err := is.provisioner.ProvisionAll(created); err != nil {
 			log.Printf("[WARN] ITL track provisioning failed for %s: %v", created.ID, err)
@@ -199,4 +194,8 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 		Title:    created.Title,
 		FilePath: created.FilePath,
 	}, nil
+}
+
+func stringPtr(s string) *string {
+	return &s
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
+	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
@@ -146,8 +147,8 @@ type Server struct {
 	workService            *WorkService
 	authorSeriesService    *AuthorSeriesService
 	filesystemService      *FilesystemService
-	importPathService      *ImportPathService
-	importService          *ImportService
+	importPathService      *importer.ImportPathService
+	importService          *importer.ImportService
 	scanService            *scanner.ScanService
 	organizeService        *OrganizeService
 	metadataFetchService   *metafetch.Service
@@ -287,8 +288,8 @@ func NewServer(store database.Store) *Server {
 		workService:            NewWorkService(resolvedStore),
 		authorSeriesService:    NewAuthorSeriesService(resolvedStore),
 		filesystemService:      NewFilesystemService(resolvedStore),
-		importPathService:      NewImportPathService(resolvedStore),
-		importService:          NewImportService(resolvedStore),
+		importPathService:      importer.NewImportPathService(resolvedStore),
+		importService:          importer.NewImportService(resolvedStore),
 		scanService:            scanner.NewScanService(resolvedStore),
 		organizeService:        NewOrganizeService(resolvedStore),
 		metadataFetchService:   metafetch.NewService(resolvedStore),
