@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package server
 
@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/aiscan"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -163,7 +164,7 @@ type Server struct {
 	updateScheduler        *updater.Scheduler
 	scheduler              *TaskScheduler
 	aiScanStore            *database.AIScanStore
-	pipelineManager        *PipelineManager
+	pipelineManager        *aiscan.PipelineManager
 	batchPoller            *BatchPoller
 	mergeService           *merge.Service
 	diagnosticsService     *diagnostics.Service
@@ -398,7 +399,7 @@ func NewServer(store database.Store) *Server {
 			server.aiScanStore = aiScanStore
 			aiParserInst := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 			if p, ok := aiParserInst.(*ai.OpenAIParser); ok {
-				server.pipelineManager = NewPipelineManager(aiScanStore, database.GetGlobalStore(), p, server)
+				server.pipelineManager = aiscan.NewPipelineManager(aiScanStore, database.GetGlobalStore(), p)
 				server.batchPoller = NewBatchPoller(database.GetGlobalStore(), p)
 				server.registerBatchPollerHandlers()
 			}

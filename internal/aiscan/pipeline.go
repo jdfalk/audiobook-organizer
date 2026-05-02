@@ -1,8 +1,9 @@
-// file: internal/server/ai_scan_pipeline.go
-// version: 3.1.0
+// file: internal/aiscan/pipeline.go
+// version: 3.1.1
 // guid: b8c4d0e2-5f6a-7b8c-9d0e-1f2a3b4c5d6e
+// last-edited: 2026-05-05
 
-package server
+package aiscan
 
 import (
 	"context"
@@ -18,8 +19,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 )
 
-// aiScanPipelineStore is the narrow slice of database.Store this service uses.
-type aiScanPipelineStore interface {
+// Store is the narrow slice of database.Store this service uses.
+type Store interface {
 	database.AuthorReader
 	database.OperationStore
 }
@@ -28,21 +29,19 @@ type aiScanPipelineStore interface {
 // PipelineManager coordinates the multi-pass AI author dedup pipeline.
 type PipelineManager struct {
 	scanStore *database.AIScanStore
-	mainStore aiScanPipelineStore
+	mainStore Store
 	parser    *ai.OpenAIParser
-	server    *Server
 	mu        sync.Mutex
 	// cancels tracks cancel functions for active scans, keyed by scan ID.
 	cancels map[int]context.CancelFunc
 }
 
 // NewPipelineManager creates a new pipeline manager.
-func NewPipelineManager(scanStore *database.AIScanStore, mainStore aiScanPipelineStore, parser *ai.OpenAIParser, server *Server) *PipelineManager {
+func NewPipelineManager(scanStore *database.AIScanStore, mainStore Store, parser *ai.OpenAIParser) *PipelineManager {
 	return &PipelineManager{
 		scanStore: scanStore,
 		mainStore: mainStore,
 		parser:    parser,
-		server:    server,
 		cancels:   make(map[int]context.CancelFunc),
 	}
 }

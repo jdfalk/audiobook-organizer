@@ -1,8 +1,9 @@
-// file: internal/server/cross_validation_test.go
-// version: 1.0.0
+// file: internal/aiscan/cross_validation_test.go
+// version: 1.0.1
 // guid: e1f7a3b5-8c9d-0e1f-2a3b-4c5d6e7f8a9b
+// last-edited: 2026-05-05
 
-package server
+package aiscan
 
 import (
 	"testing"
