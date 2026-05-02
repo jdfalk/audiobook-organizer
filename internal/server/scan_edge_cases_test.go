@@ -1,5 +1,5 @@
 // file: internal/server/scan_edge_cases_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-9012-3456-789012abcdef
 
 package server
@@ -15,6 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ func TestScanService_EmptyDirectory(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := emptyDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -49,7 +50,7 @@ func TestScanService_DeepNestedDirectories(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := env.ImportDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -76,7 +77,7 @@ func TestScanService_SpecialCharsInFilenames(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := env.ImportDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -98,7 +99,7 @@ func TestScanService_UnsupportedFileExtensions(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := env.ImportDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -118,7 +119,7 @@ func TestScanService_RescanUpdatesExistingBooks(t *testing.T) {
 	folderPath := env.ImportDir
 
 	// First scan
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -127,7 +128,7 @@ func TestScanService_RescanUpdatesExistingBooks(t *testing.T) {
 	require.Len(t, books1, 1)
 
 	// Second scan (should not create duplicate)
-	err = svc.PerformScan(context.Background(), &ScanRequest{
+	err = svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -166,7 +167,7 @@ func TestScanService_NonexistentScanFolder(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := "/nonexistent/scan/path"
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	// Should complete without error (logs warning about missing folder)
@@ -188,7 +189,7 @@ func TestScanService_MultiChapterAudiobook(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := env.ImportDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -211,7 +212,7 @@ func TestScanService_RealLibrivoxFiles(t *testing.T) {
 
 	// Scan the smallest librivox directory (mobydick2 ~45MB, 6 files)
 	svc := NewScanService(env.Store)
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &librivoxDir,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -247,7 +248,7 @@ func TestScanService_LongFilePaths(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := env.ImportDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)

@@ -1,12 +1,14 @@
-// file: internal/server/scan_service.go
-// version: 1.5.0
+// file: internal/scanner/service.go
+// version: 1.5.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+// last-edited: 2026-05-05
 
-package server
+package scanner
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,8 +19,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/organizer"
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 )
 
 // scanServiceStore is the narrow slice of database.Store this service uses.
@@ -30,13 +30,18 @@ type scanServiceStore interface {
 	database.MaintenanceStore
 }
 
-
+// ScanService orchestrates multi-folder audiobook scanning.
 type ScanService struct {
 	db             scanServiceStore
 	PostScanFn     func() // optional hook called after each full scan completes
 	activityWriter *activity.Writer
+	// AutoOrganizeFn is an optional hook called after books are processed in a
+	// folder. The server layer wires in the auto-organize logic here to avoid
+	// an import cycle (organizer → scanner → organizer).
+	AutoOrganizeFn func(ctx context.Context, books []Book, log logger.Logger)
 }
 
+// NewScanService creates a new ScanService backed by the given store.
 func NewScanService(db scanServiceStore) *ScanService {
 	return &ScanService{db: db}
 }
@@ -46,12 +51,14 @@ func (ss *ScanService) SetActivityWriter(w *activity.Writer) {
 	ss.activityWriter = w
 }
 
+// ScanRequest holds parameters for a scan operation.
 type ScanRequest struct {
 	FolderPath  *string
 	Priority    *int
 	ForceUpdate *bool
 }
 
+// ScanStats accumulates per-scan book counts by source.
 type ScanStats struct {
 	TotalBooks   int
 	LibraryBooks int
@@ -143,8 +150,8 @@ func (ss *ScanService) performScanInternal(ctx context.Context, opID string, req
 	}
 
 	// Install scan cache into the scanner package so workers can skip unchanged files.
-	scanner.SetScanCache(scanCache)
-	defer scanner.ClearScanCache()
+	SetScanCache(scanCache)
+	defer ClearScanCache()
 
 	// Scan each folder
 	stats := &ScanStats{}
@@ -253,7 +260,7 @@ func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath
 	if workers < 1 {
 		workers = 4
 	}
-	books, err := scanner.ScanDirectoryParallel(folderPath, workers, log.With("scanner"))
+	books, err := ScanDirectoryParallel(folderPath, workers, log.With("scanner"))
 	if err != nil {
 		return fmt.Errorf("failed to scan folder: %w", err)
 	}
@@ -304,62 +311,22 @@ func (ss *ScanService) scanFolder(ctx context.Context, folderIdx int, folderPath
 		}
 
 		log.Info("Processing metadata for %d books using %d workers", len(books), workers)
-		if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback, log.With("scanner")); err != nil {
+		if err := ProcessBooksParallel(ctx, books, workers, progressCallback, log.With("scanner")); err != nil {
 			log.Error("Failed to process books: %v", err)
 		} else {
 			log.Info("Successfully processed %d books", len(books))
 		}
 
-		// Auto-organize if enabled
-		ss.autoOrganizeScannedBooks(ctx, books, log)
+		// Auto-organize if enabled (via server-layer hook to avoid import cycle)
+		if ss.AutoOrganizeFn != nil {
+			ss.AutoOrganizeFn(ctx, books, log)
+		}
 	}
 
 	// Update book count for this import path
 	ss.updateImportPathBookCount(folderPath, len(books), log)
 
 	return nil
-}
-
-func (ss *ScanService) autoOrganizeScannedBooks(_ context.Context, books []scanner.Book, log logger.Logger) {
-	if len(books) == 0 {
-		return
-	}
-	if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
-		org := organizer.NewOrganizer(&config.AppConfig)
-		organized := 0
-		for i := range books {
-			if log.IsCanceled() {
-				break
-			}
-			// Lookup DB book by file path
-			dbBook, err := ss.db.GetBookByFilePath(books[i].FilePath)
-			if err != nil || dbBook == nil {
-				continue
-			}
-			newPath, _, err := org.OrganizeBook(dbBook)
-			if err != nil {
-				log.Warn("Organize failed for %s: %v", dbBook.Title, err)
-				continue
-			}
-			// Update DB path if changed
-			if newPath != dbBook.FilePath {
-				oldPath := dbBook.FilePath
-				dbBook.FilePath = newPath
-				applyOrganizedFileMetadata(dbBook, newPath)
-				if _, err := ss.db.UpdateBook(dbBook.ID, dbBook); err != nil {
-					log.Error("Failed to update path for %s: %v — rolling back", dbBook.Title, err)
-					if rbErr := os.Rename(newPath, oldPath); rbErr != nil {
-						log.Error("CRITICAL: rollback failed for %s: file at %s, DB expects %s", dbBook.ID, newPath, oldPath)
-					}
-				} else {
-					organized++
-				}
-			}
-		}
-		log.Info("Auto-organize complete: %d organized", organized)
-	} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
-		log.Warn("Auto-organize enabled but root_dir not set")
-	}
 }
 
 // updateImportPathBookCount stores the accurate total book count for an import
@@ -402,4 +369,23 @@ func (ss *ScanService) reportCompletion(totalFilesAcrossFolders int, finalProces
 	}
 	log.UpdateProgress(finalProcessed, finalTotal, completionMsg)
 	log.Info("%s", completionMsg)
+}
+
+// ApplyOrganizedFileMetadata updates a book's hash and size fields to reflect
+// a newly-organized file path. It is exported so server-layer code can reuse it.
+func ApplyOrganizedFileMetadata(book *database.Book, newPath string) {
+	hash, err := ComputeFileHash(newPath)
+	if err != nil {
+		log.Printf("[WARN] failed to compute organized hash for %s: %v", newPath, err)
+	} else if hash != "" {
+		book.FileHash = stringPtr(hash)
+		book.OrganizedFileHash = stringPtr(hash)
+		if book.OriginalFileHash == nil {
+			book.OriginalFileHash = stringPtr(hash)
+		}
+	}
+	if info, err := os.Stat(newPath); err == nil {
+		size := info.Size()
+		book.FileSize = &size
+	}
 }

@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package server
 
@@ -33,6 +33,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/reconcile"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
 	"github.com/jdfalk/audiobook-organizer/internal/watcher"
 	ulid "github.com/oklog/ulid/v2"
@@ -105,7 +106,7 @@ func (s *Server) resumeInterruptedOperations() {
 			}
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				forceUpdate := params.ForceUpdate
-				return s.scanService.PerformScanWithID(ctx, opID, &ScanRequest{
+				return s.scanService.PerformScanWithID(ctx, opID, &scanner.ScanRequest{
 					FolderPath:  params.FolderPath,
 					ForceUpdate: &forceUpdate,
 				}, operations.LoggerFromReporter(progress))
@@ -545,7 +546,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 								watchLog.Error("Auto-scan: failed to create operation: %v", opErr)
 								return
 							}
-							scanReq := &ScanRequest{FolderPath: &scanPath}
+							scanReq := &scanner.ScanRequest{FolderPath: &scanPath}
 							opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
 								return s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
 							}

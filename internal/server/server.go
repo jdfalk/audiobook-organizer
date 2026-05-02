@@ -9,6 +9,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -147,7 +148,7 @@ type Server struct {
 	filesystemService      *FilesystemService
 	importPathService      *ImportPathService
 	importService          *ImportService
-	scanService            *ScanService
+	scanService            *scanner.ScanService
 	organizeService        *OrganizeService
 	metadataFetchService   *metafetch.Service
 	configUpdateService    *ConfigUpdateService
@@ -288,7 +289,7 @@ func NewServer(store database.Store) *Server {
 		filesystemService:      NewFilesystemService(resolvedStore),
 		importPathService:      NewImportPathService(resolvedStore),
 		importService:          NewImportService(resolvedStore),
-		scanService:            NewScanService(resolvedStore),
+		scanService:            scanner.NewScanService(resolvedStore),
 		organizeService:        NewOrganizeService(resolvedStore),
 		metadataFetchService:   metafetch.NewService(resolvedStore),
 		configUpdateService:    NewConfigUpdateService(resolvedStore),
@@ -655,6 +656,49 @@ func NewServer(store database.Store) *Server {
 
 	// Wire post-scan auto-quarantine hook.
 	server.scanService.PostScanFn = server.autoQuarantineFailedScans
+
+	// Wire post-folder auto-organize hook (breaks scanner→organizer import cycle).
+	server.scanService.AutoOrganizeFn = func(ctx context.Context, books []scanner.Book, l logger.Logger) {
+		if len(books) == 0 {
+			return
+		}
+		if !config.AppConfig.AutoOrganize || config.AppConfig.RootDir == "" {
+			if config.AppConfig.AutoOrganize {
+				l.Warn("Auto-organize enabled but root_dir not set")
+			}
+			return
+		}
+		org := organizer.NewOrganizer(&config.AppConfig)
+		organized := 0
+		for i := range books {
+			if l.IsCanceled() {
+				break
+			}
+			dbBook, err := server.store.GetBookByFilePath(books[i].FilePath)
+			if err != nil || dbBook == nil {
+				continue
+			}
+			newPath, _, err := org.OrganizeBook(dbBook)
+			if err != nil {
+				l.Warn("Organize failed for %s: %v", dbBook.Title, err)
+				continue
+			}
+			if newPath != dbBook.FilePath {
+				oldPath := dbBook.FilePath
+				dbBook.FilePath = newPath
+				scanner.ApplyOrganizedFileMetadata(dbBook, newPath)
+				if _, err := server.store.UpdateBook(dbBook.ID, dbBook); err != nil {
+					l.Error("Failed to update path for %s: %v — rolling back", dbBook.Title, err)
+					if rbErr := os.Rename(newPath, oldPath); rbErr != nil {
+						l.Error("CRITICAL: rollback failed for %s: file at %s, DB expects %s", dbBook.ID, newPath, oldPath)
+					}
+				} else {
+					organized++
+				}
+			}
+		}
+		l.Info("Auto-organize complete: %d organized", organized)
+	}
 
 	// Note: the search index is opened in Start(), not here, so
 	// tests that construct a Server without calling Start don't

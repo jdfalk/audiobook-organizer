@@ -1,7 +1,7 @@
 // file: internal/server/server_metadata.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 588350bc-83db-47ed-9590-2b6513aadcda
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package server
 
@@ -16,7 +16,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 )
 
 func metadataStateKey(bookID string) string {
@@ -538,21 +537,4 @@ func buildMetadataProvenance(book *database.Book, state map[string]metadataField
 	addEntry("google_books_id", nonEmpty(meta.GoogleBooksID), stringVal(book.GoogleBooksID))
 
 	return provenance
-}
-
-func applyOrganizedFileMetadata(book *database.Book, newPath string) {
-	hash, err := scanner.ComputeFileHash(newPath)
-	if err != nil {
-		log.Printf("[WARN] failed to compute organized hash for %s: %v", newPath, err)
-	} else if hash != "" {
-		book.FileHash = stringPtr(hash)
-		book.OrganizedFileHash = stringPtr(hash)
-		if book.OriginalFileHash == nil {
-			book.OriginalFileHash = stringPtr(hash)
-		}
-	}
-	if info, err := os.Stat(newPath); err == nil {
-		size := info.Size()
-		book.FileSize = &size
-	}
 }

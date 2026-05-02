@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -24,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -59,7 +60,7 @@ func (s *Server) startScan(c *gin.Context) {
 	}
 
 	// Create operation function that delegates to service
-	scanReq := &ScanRequest{
+	scanReq := &scanner.ScanRequest{
 		FolderPath:  req.FolderPath,
 		Priority:    req.Priority,
 		ForceUpdate: req.ForceUpdate,
