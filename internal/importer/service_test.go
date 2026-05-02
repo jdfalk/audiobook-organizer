@@ -1,8 +1,9 @@
-// file: internal/server/import_service_test.go
+// file: internal/importer/service_test.go
 // version: 1.0.0
-// guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
+// guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5b6c
+// last-edited: 2026-05-01
 
-package server
+package importer
 
 import (
 	"testing"

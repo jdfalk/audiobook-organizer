@@ -43,6 +43,7 @@ import (
 	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/importer"
 )
 
 // DiscoveredTorrent is a Deluge torrent not yet tracked in the library.
@@ -413,7 +414,7 @@ func (s *Server) handleDelugeDiscoverImport(c *gin.Context) {
 		return
 	}
 
-	resp, err := s.importService.ImportFile(&ImportFileRequest{
+	resp, err := s.importService.ImportFile(&importer.ImportFileRequest{
 		FilePath: req.ContentPath,
 		Organize: false,
 	})
