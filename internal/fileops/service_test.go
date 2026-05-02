@@ -1,12 +1,11 @@
-// file: internal/server/filesystem_service_test.go
-// version: 1.1.0
+// file: internal/fileops/service_test.go
+// version: 1.0.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
-// last-edited: 2026-04-30
+// last-edited: 2026-05-01
 
-package server
+package fileops
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,7 +42,7 @@ func TestFilesystemService_CreateExclusion_Success(t *testing.T) {
 	mockStore := new(mocks.MockImportPathStore)
 	fs := NewFilesystemService(mockStore)
 
-	tmpDir, err := ioutil.TempDir("", "test-exclusion")
+	tmpDir, err := os.MkdirTemp("", "test-exclusion")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -64,7 +63,7 @@ func TestFilesystemService_RemoveExclusion_NotFound(t *testing.T) {
 	mockStore := new(mocks.MockImportPathStore)
 	fs := NewFilesystemService(mockStore)
 
-	tmpDir, err := ioutil.TempDir("", "test-remove-exclusion")
+	tmpDir, err := os.MkdirTemp("", "test-remove-exclusion")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

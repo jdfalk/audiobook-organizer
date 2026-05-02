@@ -20,6 +20,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -327,7 +329,7 @@ func TestImportPathService_ValidatePath_Whitespace(t *testing.T) {
 // TestSystemService_FilterLogsBySearch_CaseInsensitive tests case insensitivity
 func TestSystemService_FilterLogsBySearch_CaseInsensitive(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewSystemService(mockStore)
+	svc := sysinfo.NewSystemService(mockStore, "test", nil)
 
 	logs := []database.OperationLog{
 		{Message: "Starting SCAN operation"},
@@ -380,7 +382,7 @@ func TestSystemService_FilterLogsBySearch_CaseInsensitive(t *testing.T) {
 // TestSystemService_SortLogsByTimestamp_EdgeCases tests edge cases for sorting
 func TestSystemService_SortLogsByTimestamp_EdgeCases(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewSystemService(mockStore)
+	svc := sysinfo.NewSystemService(mockStore, "test", nil)
 
 	now := time.Now()
 
@@ -437,7 +439,7 @@ func TestSystemService_SortLogsByTimestamp_EdgeCases(t *testing.T) {
 // TestSystemService_PaginateLogs_EdgeCases tests edge cases for pagination
 func TestSystemService_PaginateLogs_EdgeCases(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewSystemService(mockStore)
+	svc := sysinfo.NewSystemService(mockStore, "test", nil)
 
 	logs := make([]database.OperationLog, 50)
 	for i := 0; i < 50; i++ {
@@ -508,7 +510,7 @@ func TestSystemService_PaginateLogs_EdgeCases(t *testing.T) {
 // TestSystemService_GetFormattedUptime tests uptime formatting
 func TestSystemService_GetFormattedUptime(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewSystemService(mockStore)
+	svc := sysinfo.NewSystemService(mockStore, "test", nil)
 
 	tests := []struct {
 		name      string
@@ -1504,7 +1506,7 @@ func TestServerHelpers_IntVal(t *testing.T) {
 
 // TestFilesystemService_CreateExclusion_EmptyPath tests empty path error
 func TestFilesystemService_CreateExclusion_EmptyPath(t *testing.T) {
-	svc := &FilesystemService{}
+	svc := fileops.NewFilesystemService(nil)
 
 	err := svc.CreateExclusion("")
 	if err == nil {
@@ -1517,7 +1519,7 @@ func TestFilesystemService_CreateExclusion_EmptyPath(t *testing.T) {
 
 // TestFilesystemService_CreateExclusion_NotDirectory tests file path error
 func TestFilesystemService_CreateExclusion_NotDirectory(t *testing.T) {
-	svc := &FilesystemService{}
+	svc := fileops.NewFilesystemService(nil)
 
 	// Create a real file so stat succeeds but it's not a directory
 	tmpFile := filepath.Join(t.TempDir(), "not_a_dir.txt")
@@ -1534,7 +1536,7 @@ func TestFilesystemService_CreateExclusion_NotDirectory(t *testing.T) {
 
 // TestFilesystemService_RemoveExclusion_EmptyPath tests empty path error
 func TestFilesystemService_RemoveExclusion_EmptyPath(t *testing.T) {
-	svc := &FilesystemService{}
+	svc := fileops.NewFilesystemService(nil)
 
 	err := svc.RemoveExclusion("")
 	if err == nil {

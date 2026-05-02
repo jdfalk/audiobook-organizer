@@ -1,8 +1,8 @@
-// file: internal/server/system_service_test.go
+// file: internal/sysinfo/service_test.go
 // version: 1.0.0
 // guid: g7h8i9j0-k1l2-m3n4-o5p6-q7r8s9t0u1v2
 
-package server
+package sysinfo
 
 import (
 	"testing"
@@ -16,7 +16,7 @@ func TestSystemService_CollectSystemStatus_Success(t *testing.T) {
 			return []database.ImportPath{}, nil
 		},
 	}
-	service := NewSystemService(mockDB)
+	service := NewSystemService(mockDB, "test", nil)
 
 	status, err := service.CollectSystemStatus()
 
@@ -29,7 +29,7 @@ func TestSystemService_CollectSystemStatus_Success(t *testing.T) {
 }
 
 func TestSystemService_FilterLogsBySearch_Match(t *testing.T) {
-	service := NewSystemService(&database.MockStore{})
+	service := NewSystemService(&database.MockStore{}, "test", nil)
 
 	logs := []database.OperationLog{
 		{
@@ -45,7 +45,7 @@ func TestSystemService_FilterLogsBySearch_Match(t *testing.T) {
 }
 
 func TestSystemService_FilterLogsBySearch_NoMatch(t *testing.T) {
-	service := NewSystemService(&database.MockStore{})
+	service := NewSystemService(&database.MockStore{}, "test", nil)
 
 	logs := []database.OperationLog{
 		{
@@ -61,7 +61,7 @@ func TestSystemService_FilterLogsBySearch_NoMatch(t *testing.T) {
 }
 
 func TestSystemService_PaginateLogs_Success(t *testing.T) {
-	service := NewSystemService(&database.MockStore{})
+	service := NewSystemService(&database.MockStore{}, "test", nil)
 
 	logs := make([]database.OperationLog, 100)
 	for i := 0; i < 100; i++ {

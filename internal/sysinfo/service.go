@@ -1,8 +1,9 @@
-// file: internal/server/system_service.go
-// version: 1.7.0
+// file: internal/sysinfo/service.go
+// version: 1.0.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
+// last-edited: 2026-05-01
 
-package server
+package sysinfo
 
 import (
 	"fmt"
@@ -12,24 +13,39 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 )
 
-// systemServiceStore is the narrow slice of database.Store this service uses.
-type systemServiceStore interface {
+// SystemServiceStore is the narrow slice of database.Store this service uses.
+type SystemServiceStore interface {
 	database.ImportPathStore
 	database.OperationStore
 	database.StatsStore
 }
 
+// LibrarySizesFn computes library and import-path disk usage.
+type LibrarySizesFn func(rootDir string, importFolders []database.ImportPath) (librarySize, importSize int64)
 
 type SystemService struct {
-	db        systemServiceStore
-	startTime time.Time
+	db          SystemServiceStore
+	version     string
+	libSizesFn  LibrarySizesFn
+	startTime   time.Time
 }
 
-func NewSystemService(db systemServiceStore) *SystemService {
-	return &SystemService{db: db, startTime: time.Now()}
+// NewSystemService constructs a SystemService.
+// version is the application version string (e.g. "1.2.3" or "dev").
+// libSizesFn is called to compute library/import disk sizes; if nil a no-op
+// implementation is used (both sizes returned as 0).
+func NewSystemService(db SystemServiceStore, version string, libSizesFn LibrarySizesFn) *SystemService {
+	if libSizesFn == nil {
+		libSizesFn = func(_ string, _ []database.ImportPath) (int64, int64) { return 0, 0 }
+	}
+	return &SystemService{
+		db:         db,
+		version:    version,
+		libSizesFn: libSizesFn,
+		startTime:  time.Now(),
+	}
 }
 
 type SystemStatus struct {
@@ -51,8 +67,8 @@ type SystemStatus struct {
 	Runtime          SystemRuntimeStatus  `json:"runtime"`
 	Operations       SystemOperationsInfo `json:"operations"`
 	PluginHealth     map[string]string    `json:"plugin_health,omitempty"`
-	AppUptimeSeconds    float64              `json:"app_uptime_seconds"`
-	SystemUptimeSeconds float64              `json:"system_uptime_seconds"`
+	AppUptimeSeconds    float64           `json:"app_uptime_seconds"`
+	SystemUptimeSeconds float64           `json:"system_uptime_seconds"`
 }
 
 type SystemLibraryStatus struct {
@@ -125,7 +141,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	librarySize, importSize := calculateLibrarySizes(rootDir, importFolders)
+	librarySize, importSize := ss.libSizesFn(rootDir, importFolders)
 	// Fall back to DB file sizes when filesystem walk returns 0 (e.g. paths don't exist on this host)
 	if librarySize+importSize == 0 {
 		librarySize = dbStats.OrganizedSize
@@ -135,7 +151,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 
 	status := &SystemStatus{
 		Status:           "running",
-		Version:          appVersion,
+		Version:          ss.version,
 		LibraryBookCount: dbStats.OrganizedBooks,
 		ImportBookCount:  dbStats.UnorganizedBooks,
 		TotalBookCount:   dbStats.TotalBooks,
@@ -164,7 +180,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 			NumGC:           memStats.NumGC,
 			HeapAlloc:       memStats.HeapAlloc,
 			HeapSys:         memStats.HeapSys,
-			SystemTotal:     sysinfo.GetTotalMemory(),
+			SystemTotal:     GetTotalMemory(),
 		},
 		Runtime: SystemRuntimeStatus{
 			GoVersion:    runtime.Version(),
@@ -177,7 +193,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 			Recent: recentOps,
 		},
 		AppUptimeSeconds:    time.Since(ss.startTime).Seconds(),
-		SystemUptimeSeconds: sysinfo.GetSystemUptimeSeconds(),
+		SystemUptimeSeconds: GetSystemUptimeSeconds(),
 	}
 
 	return status, nil
