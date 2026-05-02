@@ -19,6 +19,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,7 +37,7 @@ func TestServerHelpers(t *testing.T) {
 	require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
 
 	book := &database.Book{FilePath: filePath}
-	applyOrganizedFileMetadata(book, filePath)
+	scanner.ApplyOrganizedFileMetadata(book, filePath)
 	if book.FileHash == nil || book.OrganizedFileHash == nil || book.OriginalFileHash == nil {
 		t.Fatal("expected hashes to be set")
 	}

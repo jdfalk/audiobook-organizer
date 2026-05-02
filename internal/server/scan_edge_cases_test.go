@@ -28,7 +28,7 @@ func TestScanService_EmptyDirectory(t *testing.T) {
 	emptyDir := filepath.Join(env.TempDir, "empty")
 	require.NoError(t, os.MkdirAll(emptyDir, 0755))
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := emptyDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
@@ -48,7 +48,7 @@ func TestScanService_DeepNestedDirectories(t *testing.T) {
 	deepPath := filepath.Join(env.ImportDir, "Level1", "Level2", "Level3", "Level4")
 	env.CopyFixture("test_sample.m4b", deepPath, "Deep Book.m4b")
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
@@ -75,7 +75,7 @@ func TestScanService_SpecialCharsInFilenames(t *testing.T) {
 		env.CreateFakeAudiobook(env.ImportDir, name)
 	}
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
@@ -97,7 +97,7 @@ func TestScanService_UnsupportedFileExtensions(t *testing.T) {
 	env.CreateFakeAudiobook(env.ImportDir, "image.jpg")
 	env.CreateFakeAudiobook(env.ImportDir, "document.pdf")
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
@@ -115,7 +115,7 @@ func TestScanService_RescanUpdatesExistingBooks(t *testing.T) {
 
 	env.CopyFixture("test_sample.m4b", env.ImportDir, "MyBook.m4b")
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
 
 	// First scan
@@ -165,7 +165,7 @@ func TestScanService_NonexistentScanFolder(t *testing.T) {
 	env, cleanup := testutil.SetupIntegration(t)
 	defer cleanup()
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := "/nonexistent/scan/path"
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
@@ -187,7 +187,7 @@ func TestScanService_MultiChapterAudiobook(t *testing.T) {
 		env.CreateFakeAudiobook(bookDir, fmt.Sprintf("Chapter %02d.mp3", i))
 	}
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
@@ -211,7 +211,7 @@ func TestScanService_RealLibrivoxFiles(t *testing.T) {
 	}
 
 	// Scan the smallest librivox directory (mobydick2 ~45MB, 6 files)
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &librivoxDir,
 	}, logger.New("test"))
@@ -246,7 +246,7 @@ func TestScanService_LongFilePaths(t *testing.T) {
 	longDir := filepath.Join(env.ImportDir, longAuthor, longTitle)
 	env.CreateFakeAudiobook(longDir, strings.Repeat("C", 50)+".m4b")
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,

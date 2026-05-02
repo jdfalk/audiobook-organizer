@@ -26,7 +26,7 @@ func TestScanService_ScanWithRealFiles(t *testing.T) {
 	env.CopyFixture("test_sample.mp3", filepath.Join(env.ImportDir, "Herbert", "Dune"), "Dune.mp3")
 	env.CopyFixture("test_sample.flac", filepath.Join(env.ImportDir, "Asimov", "Foundation"), "Foundation.flac")
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
@@ -51,7 +51,7 @@ func TestScanService_AutoOrganize(t *testing.T) {
 
 	env.CopyFixture("test_sample.m4b", env.ImportDir, "The Hobbit.m4b")
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
@@ -82,7 +82,7 @@ func TestScanService_MultipleFolders(t *testing.T) {
 	_, err = env.Store.CreateImportPath(dir2, "Import 2")
 	require.NoError(t, err)
 
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	forceUpdate := true
 	err = svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		ForceUpdate: &forceUpdate,
