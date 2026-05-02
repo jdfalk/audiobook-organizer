@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store_tags.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b7c8d9e0-f1a2-3b4c-5d6e-7f8a9b0c1d2e
 // last-edited: 2026-05-02
 
@@ -7,7 +7,8 @@ package database
 
 import (
 	"fmt"
-	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 )
 
 // Hash Blocklist Methods
@@ -33,7 +34,7 @@ func (s *SQLiteStore) AddBookTag(bookID, tag string) error {
 // source ("user" or "system"). Later writes overwrite the source
 // so a user can claim a system tag or vice versa.
 func (s *SQLiteStore) AddBookTagWithSource(bookID, tag, source string) error {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
@@ -50,7 +51,7 @@ func (s *SQLiteStore) AddBookTagWithSource(bookID, tag, source string) error {
 
 // RemoveBookTag removes a tag from a book regardless of source.
 func (s *SQLiteStore) RemoveBookTag(bookID, tag string) error {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
@@ -68,7 +69,7 @@ func (s *SQLiteStore) RemoveBookTag(bookID, tag string) error {
 // `metadata:source:*` system tags first so each book has exactly
 // one source tag at a time. Empty `source` matches all sources.
 func (s *SQLiteStore) RemoveBookTagsByPrefix(bookID, prefix, source string) error {
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
+	prefix = util.NormalizeString(prefix)
 	if prefix == "" {
 		return fmt.Errorf("prefix cannot be empty")
 	}
@@ -155,7 +156,7 @@ func (s *SQLiteStore) SetBookTags(bookID string, tags []string) error {
 	}
 
 	for _, tag := range tags {
-		tag = strings.ToLower(strings.TrimSpace(tag))
+		tag = util.NormalizeString(tag)
 		if tag == "" {
 			continue
 		}
@@ -200,7 +201,7 @@ func (s *SQLiteStore) ListAllTags() ([]TagWithCount, error) {
 
 // GetBooksByTag returns all book IDs that have the given tag.
 func (s *SQLiteStore) GetBooksByTag(tag string) ([]string, error) {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return nil, fmt.Errorf("tag cannot be empty")
 	}
@@ -235,7 +236,7 @@ func (s *SQLiteStore) GetBooksByTag(tag string) ([]string, error) {
 // interface exposes typed wrappers below.
 
 func (s *SQLiteStore) addTagGeneric(table, idCol string, id any, tag, source string) error {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
@@ -252,7 +253,7 @@ func (s *SQLiteStore) addTagGeneric(table, idCol string, id any, tag, source str
 }
 
 func (s *SQLiteStore) removeTagGeneric(table, idCol string, id any, tag string) error {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
@@ -262,7 +263,7 @@ func (s *SQLiteStore) removeTagGeneric(table, idCol string, id any, tag string) 
 }
 
 func (s *SQLiteStore) removeTagsByPrefixGeneric(table, idCol string, id any, prefix, source string) error {
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
+	prefix = util.NormalizeString(prefix)
 	if prefix == "" {
 		return fmt.Errorf("prefix cannot be empty")
 	}
@@ -335,7 +336,7 @@ func (s *SQLiteStore) setTagsGeneric(table, idCol string, id any, tags []string)
 		table, idCol,
 	)
 	for _, tag := range tags {
-		tag = strings.ToLower(strings.TrimSpace(tag))
+		tag = util.NormalizeString(tag)
 		if tag == "" {
 			continue
 		}
@@ -398,7 +399,7 @@ func (s *SQLiteStore) ListAllAuthorTags() ([]TagWithCount, error) {
 	return s.listAllTagsGeneric("author_tags")
 }
 func (s *SQLiteStore) GetAuthorsByTag(tag string) ([]int, error) {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return nil, fmt.Errorf("tag cannot be empty")
 	}
@@ -445,7 +446,7 @@ func (s *SQLiteStore) ListAllSeriesTags() ([]TagWithCount, error) {
 	return s.listAllTagsGeneric("series_tags")
 }
 func (s *SQLiteStore) GetSeriesByTag(tag string) ([]int, error) {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return nil, fmt.Errorf("tag cannot be empty")
 	}

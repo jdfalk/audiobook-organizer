@@ -1,7 +1,7 @@
 // file: internal/scanner/scanner.go
-// version: 1.38.0
+// version: 1.39.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-05-01
+// last-edited: 2026-05-02
 
 package scanner
 
@@ -29,6 +29,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/matcher"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -996,7 +997,7 @@ func looksLikePersonName(s string) bool {
 
 // looksLikeTitleCandidate flags titles that commonly begin with articles.
 func looksLikeTitleCandidate(s string) bool {
-	lower := strings.ToLower(strings.TrimSpace(s))
+	lower := util.NormalizeString(s)
 	return strings.HasPrefix(lower, "the ") || strings.HasPrefix(lower, "a ") || strings.HasPrefix(lower, "an ")
 }
 
@@ -1280,8 +1281,8 @@ func groupFilesIntoBooks(files []string) []Book {
 			break
 		}
 		if firstAlbum == "" {
-			firstAlbum = strings.ToLower(strings.TrimSpace(album))
-		} else if strings.ToLower(strings.TrimSpace(album)) != firstAlbum {
+			firstAlbum = util.NormalizeString(album)
+		} else if util.NormalizeString(album) != firstAlbum {
 			allSame = false
 			break
 		}
@@ -1305,7 +1306,7 @@ func groupFilesIntoBooks(files []string) []Book {
 		if album == "" {
 			noAlbum = append(noAlbum, f)
 		} else {
-			key := strings.ToLower(strings.TrimSpace(album))
+			key := util.NormalizeString(album)
 			albumGroups[key] = append(albumGroups[key], f)
 		}
 	}
@@ -1323,7 +1324,7 @@ func groupFilesIntoBooks(files []string) []Book {
 			}
 			// Merge playlist groups into albumGroups
 			for title, groupFiles := range plGroups {
-				key := "pl:" + strings.ToLower(strings.TrimSpace(title))
+				key := "pl:" + util.NormalizeString(title)
 				albumGroups[key] = append(albumGroups[key], groupFiles...)
 			}
 			// Reduce noAlbum to only unclaimed files
@@ -1377,12 +1378,12 @@ func saveBookToDatabase(book *Book) error {
 		// Attempt Work association (normalize title + author)
 		var workID *string
 		if book.Title != "" {
-			canonical := strings.ToLower(strings.TrimSpace(book.Title))
+			canonical := util.NormalizeString(book.Title)
 			// Simple heuristic: try existing works then create new.
 			works, err := database.GetGlobalStore().GetAllWorks()
 			if err == nil { // non-critical
 				for _, w := range works {
-					if strings.ToLower(strings.TrimSpace(w.Title)) == canonical && ((authorID == nil && w.AuthorID == nil) || (authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
+					if util.NormalizeString(w.Title) == canonical && ((authorID == nil && w.AuthorID == nil) || (authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
 						wid := w.ID
 						workID = &wid
 						break
@@ -1400,7 +1401,7 @@ func saveBookToDatabase(book *Book) error {
 					works, lookupErr := database.GetGlobalStore().GetAllWorks()
 					if lookupErr == nil {
 						for _, w := range works {
-							if strings.ToLower(strings.TrimSpace(w.Title)) == canonical &&
+							if util.NormalizeString(w.Title) == canonical &&
 								((authorID == nil && w.AuthorID == nil) ||
 									(authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
 								wid := w.ID

@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.68.0
+// version: 1.69.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-02
 
@@ -21,6 +21,7 @@ import (
 
 	"github.com/cockroachdb/pebble/v2"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
+	"github.com/jdfalk/audiobook-organizer/internal/util"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -913,7 +914,7 @@ func (p *PebbleStore) CreateWork(work *Work) (*Work, error) {
 		return nil, err
 	}
 	// Basic title index (case-insensitive normalized) for future lookup
-	normTitle := strings.ToLower(strings.TrimSpace(work.Title))
+	normTitle := util.NormalizeString(work.Title)
 	if normTitle != "" {
 		idxKey := []byte(fmt.Sprintf("work:title:%s:%s", normTitle, work.ID))
 		if err := batch.Set(idxKey, []byte(work.ID), nil); err != nil {
@@ -946,8 +947,8 @@ func (p *PebbleStore) UpdateWork(id string, work *Work) (*Work, error) {
 		batch.Close()
 		return nil, err
 	}
-	oldNorm := strings.ToLower(strings.TrimSpace(old.Title))
-	newNorm := strings.ToLower(strings.TrimSpace(work.Title))
+	oldNorm := util.NormalizeString(old.Title)
+	newNorm := util.NormalizeString(work.Title)
 	if oldNorm != newNorm {
 		if oldNorm != "" {
 			if err := batch.Delete([]byte(fmt.Sprintf("work:title:%s:%s", oldNorm, id)), nil); err != nil {
@@ -982,7 +983,7 @@ func (p *PebbleStore) DeleteWork(id string) error {
 		batch.Close()
 		return err
 	}
-	norm := strings.ToLower(strings.TrimSpace(work.Title))
+	norm := util.NormalizeString(work.Title)
 	if norm != "" {
 		if err := batch.Delete([]byte(fmt.Sprintf("work:title:%s:%s", norm, id)), nil); err != nil {
 			batch.Close()
@@ -6739,7 +6740,7 @@ func (p *PebbleStore) AddBookTag(bookID, tag string) error {
 // source field so a user-claimed tag can promote to system or vice
 // versa without needing a delete-first step.
 func (p *PebbleStore) AddBookTagWithSource(bookID, tag, source string) error {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
@@ -6771,7 +6772,7 @@ func (p *PebbleStore) AddBookTagWithSource(bookID, tag, source string) error {
 
 // RemoveBookTag removes a tag from a book regardless of source.
 func (p *PebbleStore) RemoveBookTag(bookID, tag string) error {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
@@ -6798,7 +6799,7 @@ func (p *PebbleStore) RemoveBookTag(bookID, tag string) error {
 //
 // If `source` is empty, all sources match.
 func (p *PebbleStore) RemoveBookTagsByPrefix(bookID, prefix, source string) error {
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
+	prefix = util.NormalizeString(prefix)
 	if prefix == "" {
 		return fmt.Errorf("prefix cannot be empty")
 	}
@@ -6892,7 +6893,7 @@ func (p *PebbleStore) SetBookTags(bookID string, tags []string) error {
 	// Normalize incoming tags.
 	normalized := make(map[string]bool)
 	for _, t := range tags {
-		t = strings.ToLower(strings.TrimSpace(t))
+		t = util.NormalizeString(t)
 		if t != "" {
 			normalized[t] = true
 		}
@@ -6961,7 +6962,7 @@ func (p *PebbleStore) ListAllTags() ([]TagWithCount, error) {
 
 // GetBooksByTag returns all book IDs that have the given tag.
 func (p *PebbleStore) GetBooksByTag(tag string) ([]string, error) {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return nil, fmt.Errorf("tag cannot be empty")
 	}
@@ -7030,7 +7031,7 @@ var (
 // pebbleAddTag upserts a tag for any entity type. Serializes a
 // BookTag with the source field so it survives round-trips.
 func (p *PebbleStore) pebbleAddTag(ks pebbleTagKeyspace, entityID, tag, source string) error {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
@@ -7056,7 +7057,7 @@ func (p *PebbleStore) pebbleAddTag(ks pebbleTagKeyspace, entityID, tag, source s
 }
 
 func (p *PebbleStore) pebbleRemoveTag(ks pebbleTagKeyspace, entityID, tag string) error {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return fmt.Errorf("tag cannot be empty")
 	}
@@ -7126,7 +7127,7 @@ func (p *PebbleStore) pebbleGetTagsDetailed(ks pebbleTagKeyspace, entityID strin
 }
 
 func (p *PebbleStore) pebbleRemoveTagsByPrefix(ks pebbleTagKeyspace, entityID, prefix, source string) error {
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
+	prefix = util.NormalizeString(prefix)
 	if prefix == "" {
 		return fmt.Errorf("prefix cannot be empty")
 	}
@@ -7155,7 +7156,7 @@ func (p *PebbleStore) pebbleSetTags(ks pebbleTagKeyspace, entityID string, tags 
 	}
 	normalized := make(map[string]bool)
 	for _, t := range tags {
-		t = strings.ToLower(strings.TrimSpace(t))
+		t = util.NormalizeString(t)
 		if t != "" {
 			normalized[t] = true
 		}
@@ -7216,7 +7217,7 @@ func (p *PebbleStore) pebbleListAllTags(ks pebbleTagKeyspace) ([]TagWithCount, e
 }
 
 func (p *PebbleStore) pebbleEntitiesByTag(ks pebbleTagKeyspace, tag string) ([]string, error) {
-	tag = strings.ToLower(strings.TrimSpace(tag))
+	tag = util.NormalizeString(tag)
 	if tag == "" {
 		return nil, fmt.Errorf("tag cannot be empty")
 	}
