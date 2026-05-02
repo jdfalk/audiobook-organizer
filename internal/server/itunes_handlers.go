@@ -465,7 +465,12 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 		return
 	}
 	validPIDs := make(map[string]bool)
-	var nonPrimaryPIDs []string
+	type fileRef struct {
+		bookID string
+		fileID string
+		pid    string
+	}
+	var nonPrimaryFiles []fileRef
 	for i := range allBooks {
 		b := &allBooks[i]
 		files, _ := s.Store().GetBookFiles(b.ID)
@@ -481,7 +486,7 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 			// Non-primary OR soft-deleted: collect for removal.
 			for _, f := range files {
 				if f.ITunesPersistentID != "" {
-					nonPrimaryPIDs = append(nonPrimaryPIDs, f.ITunesPersistentID)
+					nonPrimaryFiles = append(nonPrimaryFiles, fileRef{bookID: b.ID, fileID: f.ID, pid: f.ITunesPersistentID})
 				}
 			}
 		}
@@ -490,13 +495,13 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 	// Soft-deleted books are excluded from GetAllBooks above (filter is
 	// COALESCE(marked_for_deletion,0)=0). Pull them separately.
 	softDeleted, _ := s.Store().ListSoftDeletedBooks(1_000_000, 0, nil)
-	var softDeletedPIDs []string
+	var softDeletedFiles []fileRef
 	for i := range softDeleted {
 		b := &softDeleted[i]
 		files, _ := s.Store().GetBookFiles(b.ID)
 		for _, f := range files {
 			if f.ITunesPersistentID != "" {
-				softDeletedPIDs = append(softDeletedPIDs, f.ITunesPersistentID)
+				softDeletedFiles = append(softDeletedFiles, fileRef{bookID: b.ID, fileID: f.ID, pid: f.ITunesPersistentID})
 			}
 		}
 	}
@@ -518,19 +523,29 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 
 	enqueued := 0
 	cleared := 0
-	for _, pid := range nonPrimaryPIDs {
-		s.writeBackBatcher.EnqueueRemove(pid)
-		enqueued++
-		if ok, _ := s.Store().ClearITunesPID(pid); ok {
+	clearFile := func(fr fileRef) {
+		full, err := s.Store().GetBookFileByID(fr.bookID, fr.fileID)
+		if err != nil || full == nil {
+			return
+		}
+		if full.ITunesPersistentID == "" && full.ITunesPath == "" {
+			return
+		}
+		full.ITunesPersistentID = ""
+		full.ITunesPath = ""
+		if err := s.Store().UpdateBookFile(fr.fileID, full); err == nil {
 			cleared++
 		}
 	}
-	for _, pid := range softDeletedPIDs {
-		s.writeBackBatcher.EnqueueRemove(pid)
+	for _, fr := range nonPrimaryFiles {
+		s.writeBackBatcher.EnqueueRemove(fr.pid)
 		enqueued++
-		if ok, _ := s.Store().ClearITunesPID(pid); ok {
-			cleared++
-		}
+		clearFile(fr)
+	}
+	for _, fr := range softDeletedFiles {
+		s.writeBackBatcher.EnqueueRemove(fr.pid)
+		enqueued++
+		clearFile(fr)
 	}
 	for _, pid := range truePIDOrphans {
 		s.writeBackBatcher.EnqueueRemove(pid)
@@ -539,17 +554,17 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 	}
 
 	stdlog.Printf("[INFO] iTunes cleanup-orphans: enqueued %d removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d DB PIDs",
-		enqueued, len(nonPrimaryPIDs), len(softDeletedPIDs), len(truePIDOrphans), cleared)
+		enqueued, len(nonPrimaryFiles), len(softDeletedFiles), len(truePIDOrphans), cleared)
 
 	httputil.RespondWithOK(c, gin.H{
 		"success":         true,
 		"enqueued":        enqueued,
-		"non_primary":     len(nonPrimaryPIDs),
-		"soft_deleted":    len(softDeletedPIDs),
+		"non_primary":     len(nonPrimaryFiles),
+		"soft_deleted":    len(softDeletedFiles),
 		"true_orphans":    len(truePIDOrphans),
 		"db_pids_cleared": cleared,
 		"valid_pid_count": len(validPIDs),
-		"message":         fmt.Sprintf("enqueued %d iTunes removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d stale DB PIDs. The next batcher flush will splice removed tracks out of the ITL.", enqueued, len(nonPrimaryPIDs), len(softDeletedPIDs), len(truePIDOrphans), cleared),
+		"message":         fmt.Sprintf("enqueued %d iTunes removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d stale DB PIDs. The next batcher flush will splice removed tracks out of the ITL.", enqueued, len(nonPrimaryFiles), len(softDeletedFiles), len(truePIDOrphans), cleared),
 	})
 }
 
