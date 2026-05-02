@@ -1,7 +1,9 @@
-// file: internal/server/writeback_outbox_test.go
+// file: internal/writeback/outbox_test.go
 // version: 1.0.0
+// guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
+// last-edited: 2026-05-01
 
-package server
+package writeback
 
 import (
 	"path/filepath"
@@ -112,6 +114,5 @@ func TestWriteBackOutbox_ListPending(t *testing.T) {
 
 func TestEnqueueWithOutbox_NilOutbox(t *testing.T) {
 	// Should not panic with nil outbox and nil batcher.
-	// Should silently no-op.
 	EnqueueWithOutbox(nil, nil, "book-789")
 }

@@ -1,6 +1,7 @@
 // file: internal/server/version_swap.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6c3d5a2e-8b4c-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-05-01
 //
 // Thin wrappers delegating to internal/versions package.
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/versions"
+	"github.com/jdfalk/audiobook-organizer/internal/writeback"
 )
 
 // VersionSwapParams is an alias for versions.VersionSwapParams.
@@ -23,7 +25,7 @@ func RunVersionSwap(
 	store database.Store,
 	params VersionSwapParams,
 	progress func(step string, pct int),
-	batcher Enqueuer,
+	batcher writeback.Enqueuer,
 ) error {
 	var onWriteBack func(bookID string)
 	if batcher != nil {
