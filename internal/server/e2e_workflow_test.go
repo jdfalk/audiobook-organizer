@@ -1,5 +1,5 @@
 // file: internal/server/e2e_workflow_test.go
-// version: 1.0.0
+// version: 1.2.0
 // guid: c9d0e1f2-a3b4-5678-cdef-901234567012
 
 package server
@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -135,9 +136,9 @@ func TestE2E_ScanAndFetchMetadata(t *testing.T) {
 	env.CopyFixture("test_sample.m4b", env.ImportDir, "The Hobbit.m4b")
 
 	// Step 1: Scan
-	svc := NewScanService(env.Store)
+	svc := scanner.NewScanService(env.Store)
 	folderPath := env.ImportDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)

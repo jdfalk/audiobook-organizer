@@ -1,5 +1,5 @@
 // file: internal/server/scan_integration_test.go
-// version: 1.0.0
+// version: 1.2.0
 // guid: f6a7b8c9-d0e1-2345-fabc-678901234def
 
 package server
@@ -11,6 +11,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ func TestScanService_ScanWithRealFiles(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := env.ImportDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -52,7 +53,7 @@ func TestScanService_AutoOrganize(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	folderPath := env.ImportDir
-	err := svc.PerformScan(context.Background(), &ScanRequest{
+	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
 	}, logger.New("test"))
 	require.NoError(t, err)
@@ -83,7 +84,7 @@ func TestScanService_MultipleFolders(t *testing.T) {
 
 	svc := NewScanService(env.Store)
 	forceUpdate := true
-	err = svc.PerformScan(context.Background(), &ScanRequest{
+	err = svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		ForceUpdate: &forceUpdate,
 	}, logger.New("test"))
 	require.NoError(t, err)

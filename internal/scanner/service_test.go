@@ -1,8 +1,9 @@
-// file: internal/server/scan_service_test.go
+// file: internal/scanner/service_test.go
 // version: 1.1.0
 // guid: b2c3d4e5-f6a7-b8c9-d0e1-f2a3b4c5d6e7
+// last-edited: 2026-05-05
 
-package server
+package scanner
 
 import (
 	"context"
@@ -72,4 +73,3 @@ func TestScanService_PerformScan_NoFolders(t *testing.T) {
 		t.Errorf("expected no error for empty folders, got %v", err)
 	}
 }
-

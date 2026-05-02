@@ -1,7 +1,7 @@
 // file: internal/server/filesystem_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 565db679-19ba-4518-b63e-6892663be41b
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 //
 // Filesystem HTTP handlers split out of server.go: home directory,
 // filesystem browse, exclusion add/remove, import-path CRUD, and the
@@ -184,7 +184,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 							}
 							if newPath != dbBook.FilePath {
 								dbBook.FilePath = newPath
-								applyOrganizedFileMetadata(dbBook, newPath)
+								scanner.ApplyOrganizedFileMetadata(dbBook, newPath)
 								if _, err := s.Store().UpdateBook(dbBook.ID, dbBook); err != nil {
 									_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
 								} else {
@@ -255,7 +255,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 							}
 							if newPath != dbBook.FilePath {
 								dbBook.FilePath = newPath
-								applyOrganizedFileMetadata(dbBook, newPath)
+								scanner.ApplyOrganizedFileMetadata(dbBook, newPath)
 								_, _ = s.Store().UpdateBook(dbBook.ID, dbBook)
 							}
 						}

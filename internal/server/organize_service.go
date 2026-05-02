@@ -1,6 +1,7 @@
 // file: internal/server/organize_service.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
+// last-edited: 2026-05-05
 //
 // Thin forwarding layer — the real implementation now lives in
 // internal/organizer/service.go. This file provides type aliases and
@@ -13,6 +14,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 )
 
 // Type aliases — allow existing server code to keep using the old names.
@@ -28,7 +30,7 @@ func NewOrganizeService(db database.Store) *OrganizeService {
 	// Wire server-specific callbacks. iTunes callbacks are set later in
 	// Server.New() after itunesSvc is constructed (see server.go).
 	svc.ApplyOrganizedFileMetadata = func(book *database.Book, newPath string) {
-		applyOrganizedFileMetadata(book, newPath)
+		scanner.ApplyOrganizedFileMetadata(book, newPath)
 	}
 	svc.ComputeITunesPath = metafetch.ComputeITunesPath
 	svc.FetchMetadataForBook = func(bookID string) (interface{}, error) {

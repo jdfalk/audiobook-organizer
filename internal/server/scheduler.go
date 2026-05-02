@@ -1,6 +1,7 @@
 // file: internal/server/scheduler.go
-// version: 1.19.2
+// version: 1.19.3
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-05-05
 
 package server
 
@@ -23,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/reconcile"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -110,7 +112,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				if s.scanService == nil {
 					return fmt.Errorf("scan service not initialized")
 				}
-				return s.scanService.PerformScan(ctx, &ScanRequest{}, operations.LoggerFromReporter(progress))
+				return s.scanService.PerformScan(ctx, &scanner.ScanRequest{}, operations.LoggerFromReporter(progress))
 			})
 		},
 		IsEnabled:              func() bool { return config.AppConfig.ScanOnStartup }, // reuse existing field

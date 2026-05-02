@@ -1,8 +1,9 @@
-// file: internal/server/scan_service_unit_test.go
+// file: internal/scanner/service_unit_test.go
 // version: 1.0.0
 // guid: e2f3a4b5-c6d7-8e9f-0a1b-3c4d5e6f7a8b
+// last-edited: 2026-05-05
 
-package server
+package scanner
 
 import (
 	"context"
@@ -188,7 +189,6 @@ func TestScanService_ReportCompletion_Messages(t *testing.T) {
 			log := logger.New("test")
 
 			// reportCompletion should not panic; verify it runs without error.
-			// The method logs its message, so we just confirm no crash.
 			ss.reportCompletion(tt.stats.TotalBooks, tt.stats.TotalBooks, &tt.stats, log)
 		})
 	}
