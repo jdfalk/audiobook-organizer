@@ -1,5 +1,5 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
 // last-edited: 2026-05-01
 
@@ -523,6 +523,7 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 
 	enqueued := 0
 	cleared := 0
+	skippedShared := 0
 	clearFile := func(fr fileRef) {
 		full, err := s.Store().GetBookFileByID(fr.bookID, fr.fileID)
 		if err != nil || full == nil {
@@ -537,12 +538,31 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 			cleared++
 		}
 	}
+	// CRITICAL: never enqueue a remove for a PID that is ALSO referenced
+	// by a primary, non-soft-deleted book. EnqueueRemove deletes the
+	// track from the ITL by PID — so if a primary book and a non-primary
+	// duplicate share the same PID (common when duplicate audiobooks
+	// were imported under the same iTunes track), removing it would wipe
+	// the legitimate primary track. We still scrub the non-primary DB
+	// row (so it stops showing up in cleanup-orphans), but skip the
+	// EnqueueRemove. This is the guard that prevents recurrence of the
+	// catastrophic ~90 K-track shrink.
 	for _, fr := range nonPrimaryFiles {
+		if validPIDs[strings.ToLower(fr.pid)] {
+			skippedShared++
+			clearFile(fr)
+			continue
+		}
 		s.writeBackBatcher.EnqueueRemove(fr.pid)
 		enqueued++
 		clearFile(fr)
 	}
 	for _, fr := range softDeletedFiles {
+		if validPIDs[strings.ToLower(fr.pid)] {
+			skippedShared++
+			clearFile(fr)
+			continue
+		}
 		s.writeBackBatcher.EnqueueRemove(fr.pid)
 		enqueued++
 		clearFile(fr)
@@ -553,18 +573,19 @@ func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
 		// True orphans by definition have no DB row to clear.
 	}
 
-	stdlog.Printf("[INFO] iTunes cleanup-orphans: enqueued %d removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d DB PIDs",
-		enqueued, len(nonPrimaryFiles), len(softDeletedFiles), len(truePIDOrphans), cleared)
+	stdlog.Printf("[INFO] iTunes cleanup-orphans: enqueued %d removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d DB PIDs, skipped %d shared-with-primary",
+		enqueued, len(nonPrimaryFiles), len(softDeletedFiles), len(truePIDOrphans), cleared, skippedShared)
 
 	httputil.RespondWithOK(c, gin.H{
-		"success":         true,
-		"enqueued":        enqueued,
-		"non_primary":     len(nonPrimaryFiles),
-		"soft_deleted":    len(softDeletedFiles),
-		"true_orphans":    len(truePIDOrphans),
-		"db_pids_cleared": cleared,
-		"valid_pid_count": len(validPIDs),
-		"message":         fmt.Sprintf("enqueued %d iTunes removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d stale DB PIDs. The next batcher flush will splice removed tracks out of the ITL.", enqueued, len(nonPrimaryFiles), len(softDeletedFiles), len(truePIDOrphans), cleared),
+		"success":             true,
+		"enqueued":            enqueued,
+		"non_primary":         len(nonPrimaryFiles),
+		"soft_deleted":        len(softDeletedFiles),
+		"true_orphans":        len(truePIDOrphans),
+		"db_pids_cleared":     cleared,
+		"shared_pids_skipped": skippedShared,
+		"valid_pid_count":     len(validPIDs),
+		"message":             fmt.Sprintf("enqueued %d iTunes removes (non_primary=%d soft_deleted=%d true_orphans=%d), cleared %d stale DB PIDs, skipped %d removes whose PID is also held by a primary book. The next batcher flush will splice removed tracks out of the ITL.", enqueued, len(nonPrimaryFiles), len(softDeletedFiles), len(truePIDOrphans), cleared, skippedShared),
 	})
 }
 
