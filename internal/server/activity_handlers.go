@@ -1,6 +1,7 @@
 // file: internal/server/activity_handlers.go
-// version: 2.2.0
+// version: 2.2.1
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
+// last-edited: 2026-05-10
 
 package server
 
@@ -9,9 +10,19 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
+
+// activityHandlerDeps documents the narrow Server surface needed by the activity
+// log handlers in this file. *Server satisfies this interface automatically via
+// ActivityService().
+type activityHandlerDeps interface {
+	ActivityService() *activity.Service
+}
+
+var _ activityHandlerDeps = (*Server)(nil)
 
 // listActivity handles GET /api/v1/activity.
 //

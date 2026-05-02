@@ -1,7 +1,7 @@
 // file: internal/server/ai_jobs_handlers.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: cbb3180d-eb39-40d0-9f14-a2d57e738c0b
-// last-edited: 2026-05-01
+// last-edited: 2026-05-10
 
 package server
 
@@ -12,6 +12,14 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
+
+// aiJobsHandlerDeps documents the narrow Server surface needed by the AI jobs
+// handlers in this file. *Server satisfies this interface automatically.
+type aiJobsHandlerDeps interface {
+	Store() database.Store
+}
+
+var _ aiJobsHandlerDeps = (*Server)(nil)
 
 // unwrapAIJobsStore peels Store decorator layers (anything with Unwrap()) until
 // it finds one that satisfies AIJobsStore, mirroring the errors.As() pattern.

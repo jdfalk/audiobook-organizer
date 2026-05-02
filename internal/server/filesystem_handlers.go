@@ -1,7 +1,7 @@
 // file: internal/server/filesystem_handlers.go
-// version: 2.3.0
+// version: 2.3.1
 // guid: 565db679-19ba-4518-b63e-6892663be41b
-// last-edited: 2026-05-05
+// last-edited: 2026-05-10
 //
 // Filesystem HTTP handlers split out of server.go: home directory,
 // filesystem browse, exclusion add/remove, import-path CRUD, and the
@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
@@ -31,6 +32,21 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	ulid "github.com/oklog/ulid/v2"
 )
+
+// filesystemHandlerDeps documents the narrow Server surface needed by the
+// filesystem-browse and import-path handlers in this file. *Server satisfies
+// this interface automatically via its exported accessor methods.
+type filesystemHandlerDeps interface {
+	Store() database.Store
+	FilesystemService() *fileops.FilesystemService
+	ImportPathService() *importer.ImportPathService
+	ImportService() *importer.ImportService
+	Queue() operations.Queue
+	DedupEngine() *dedup.Engine
+	publishEvent(ctx context.Context, event plugin.Event)
+}
+
+var _ filesystemHandlerDeps = (*Server)(nil)
 
 // getHomeDirectory returns the server user's home directory path.
 func (s *Server) getHomeDirectory(c *gin.Context) {
