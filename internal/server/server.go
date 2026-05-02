@@ -583,6 +583,9 @@ func NewServer(store database.Store) *Server {
 	server.organizeService.SetQueue(server.queue)
 	server.mergeService.SetWriteBackBatcher(server.writeBackBatcher)
 	server.quarantineSvc.SetWriteBackBatcher(server.writeBackBatcher)
+	if server.audiobookService != nil && server.writeBackBatcher != nil {
+		server.audiobookService.SetITunesEnqueuer(server.writeBackBatcher)
+	}
 
 	// Wire iTunes-specific organizer callbacks now that itunesSvc is ready.
 	if server.itunesSvc.Enabled() {

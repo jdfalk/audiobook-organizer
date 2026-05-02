@@ -1,5 +1,5 @@
 // file: internal/audiobooks/audiobook_service_unit_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-01
 
@@ -17,6 +17,57 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+// --- iTunes enqueuer wiring on delete paths ---
+
+// fakeITunesEnqueuer captures EnqueueRemove calls for assertion.
+type fakeITunesEnqueuer struct {
+	pids []string
+}
+
+func (f *fakeITunesEnqueuer) EnqueueRemove(pid string) {
+	f.pids = append(f.pids, pid)
+}
+
+func TestAudiobookService_DeleteAudiobook_HardDelete_EnqueuesITunesRemoves(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+	enq := &fakeITunesEnqueuer{}
+	svc.SetITunesEnqueuer(enq)
+
+	pidA, pidB := "deadbeefdeadbeef", "feedfacefeedface"
+	book := &database.Book{ID: "del-itl", Title: "Has iTunes Tracks"}
+	mockStore.EXPECT().GetBookByID("del-itl").Return(book, nil)
+	mockStore.EXPECT().GetBookFiles("del-itl").Return([]database.BookFile{
+		{ID: "f1", ITunesPersistentID: pidA},
+		{ID: "f2", ITunesPersistentID: pidB},
+		{ID: "f3", ITunesPersistentID: ""}, // no PID, ignored
+	}, nil)
+	mockStore.EXPECT().DeleteBook("del-itl").Return(nil)
+
+	_, err := svc.DeleteAudiobook(context.Background(), "del-itl", &DeleteAudiobookOptions{})
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, []string{pidA, pidB}, enq.pids)
+}
+
+func TestAudiobookService_DeleteAudiobook_SoftDelete_EnqueuesITunesRemoves(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+	enq := &fakeITunesEnqueuer{}
+	svc.SetITunesEnqueuer(enq)
+
+	pid := "0011223344556677"
+	book := &database.Book{ID: "sd-itl", Title: "Soft Delete Has Tracks"}
+	mockStore.EXPECT().GetBookByID("sd-itl").Return(book, nil)
+	mockStore.EXPECT().UpdateBook("sd-itl", mock.AnythingOfType("*database.Book")).Return(book, nil)
+	mockStore.EXPECT().GetBookFiles("sd-itl").Return([]database.BookFile{
+		{ID: "f1", ITunesPersistentID: pid},
+	}, nil)
+
+	_, err := svc.DeleteAudiobook(context.Background(), "sd-itl", &DeleteAudiobookOptions{SoftDelete: true})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{pid}, enq.pids)
+}
 
 // --- GetAudiobooks ---
 

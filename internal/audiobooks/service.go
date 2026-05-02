@@ -1,5 +1,5 @@
 // file: internal/audiobooks/service.go
-// version: 1.23.1
+// version: 1.24.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package audiobooks
@@ -49,6 +49,13 @@ type audiobookStore interface {
 	database.UserPositionStore
 }
 
+// ITunesEnqueuer is the narrow surface AudiobookService uses to push
+// iTunes mutations from delete/purge paths. Satisfied by
+// *itunesservice.WriteBackBatcher. Optional — nil-safe.
+type ITunesEnqueuer interface {
+	EnqueueRemove(pid string)
+}
+
 // AudiobookService handles all audiobook business logic
 type AudiobookService struct {
 	store           audiobookStore
@@ -60,6 +67,10 @@ type AudiobookService struct {
 	// Wired in by the Server after Bleve opens in Start(), which is
 	// after NewAudiobookService runs in NewServer.
 	searchIndex *search.BleveIndex
+	// itunesEnqueuer is wired by the Server after the WriteBackBatcher
+	// is constructed. Nil-safe — when nil the delete/purge paths skip
+	// the iTunes side-effect (e.g. tests, iTunes disabled in config).
+	itunesEnqueuer ITunesEnqueuer
 }
 
 // SetActivityService wires the activity service for snapshot fallback in GetAudiobookTags.
@@ -71,6 +82,12 @@ func (svc *AudiobookService) SetActivityService(as *activity.Service) {
 // Calling with nil reverts to the Store.SearchBooks fallback.
 func (svc *AudiobookService) SetSearchIndex(idx *search.BleveIndex) {
 	svc.searchIndex = idx
+}
+
+// SetITunesEnqueuer wires (or re-wires) the iTunes write-back batcher.
+// Nil disables iTunes side-effects in delete/purge paths.
+func (svc *AudiobookService) SetITunesEnqueuer(e ITunesEnqueuer) {
+	svc.itunesEnqueuer = e
 }
 
 // NewAudiobookService creates a new AudiobookService instance
@@ -1147,14 +1164,12 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 			}
 		}
 
-		// Protect books with iTunes PIDs from import paths — these are the
-		// canonical link to the iTunes library. Purging them would cause
-		// reimport on the next iTunes sync.
-		if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" &&
-			book.ITunesImportSource != nil && *book.ITunesImportSource != "" {
-			log.Printf("[DEBUG] purge: skipping %s (has iTunes PID %s)", book.ID, *book.ITunesPersistentID)
-			continue
-		}
+		// Defense-in-depth: enqueue iTunes removes for any PIDs still
+		// on this book. Soft-delete already enqueues these but if the
+		// book was soft-deleted before that hook existed, this is the
+		// last chance to clean iTunes before the row vanishes.
+		bookCopy := book
+		svc.enqueueITunesRemovesForBook(book.ID, &bookCopy)
 
 		// Step 1: Create tombstone (snapshot of book for rollback)
 		if err := svc.store.CreateBookTombstone(&book); err != nil {
@@ -1688,6 +1703,11 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 			}
 		}
 
+		// Remove the book's tracks from iTunes. Soft-delete is treated
+		// as "user no longer wants this in their library" and the
+		// iTunes side should reflect that immediately.
+		svc.enqueueITunesRemovesForBook(id, book)
+
 		svc.InvalidateBookCaches()
 		return map[string]any{
 			"message":     "audiobook soft deleted",
@@ -1708,6 +1728,13 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 		}
 	}
 
+	// Capture iTunes PIDs BEFORE the DB row vanishes so we can
+	// enqueue iTunes removes after the hard delete succeeds.
+	var itunesPIDs []string
+	if svc.itunesEnqueuer != nil {
+		itunesPIDs = svc.collectITunesPIDsForBook(id, book)
+	}
+
 	if err := svc.store.DeleteBook(id); err != nil {
 		if err.Error() == "book not found" {
 			return nil, fmt.Errorf("audiobook not found")
@@ -1715,11 +1742,47 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 		return nil, err
 	}
 
+	if svc.itunesEnqueuer != nil {
+		for _, pid := range itunesPIDs {
+			svc.itunesEnqueuer.EnqueueRemove(pid)
+		}
+	}
+
 	svc.InvalidateBookCaches()
 	return map[string]any{
 		"message": "audiobook deleted",
 		"blocked": blocked,
 	}, nil
+}
+
+// collectITunesPIDsForBook returns every PID stored on the book's
+// book_files plus the legacy Book.ITunesPersistentID field. Used by
+// hard-delete to pre-capture PIDs before the row is gone, and by the
+// orphan-cleanup endpoint.
+func (svc *AudiobookService) collectITunesPIDsForBook(bookID string, book *database.Book) []string {
+	pids := []string{}
+	files, _ := svc.store.GetBookFiles(bookID)
+	for _, f := range files {
+		if f.ITunesPersistentID != "" {
+			pids = append(pids, f.ITunesPersistentID)
+		}
+	}
+	if book != nil && book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+		pids = append(pids, *book.ITunesPersistentID)
+	}
+	return pids
+}
+
+// enqueueITunesRemovesForBook is a soft-delete helper: it pulls the
+// PIDs and enqueues each via the wired batcher. No-op if the batcher
+// isn't wired.
+func (svc *AudiobookService) enqueueITunesRemovesForBook(bookID string, book *database.Book) {
+	if svc.itunesEnqueuer == nil {
+		return
+	}
+	for _, pid := range svc.collectITunesPIDsForBook(bookID, book) {
+		svc.itunesEnqueuer.EnqueueRemove(pid)
+	}
 }
 
 // ApplyOverrideToPayload applies an override value to the update payload

@@ -1046,6 +1046,7 @@ func (s *Server) setupRoutes() {
 				itunesGroup.POST("/import", s.perm(auth.PermLibraryEditMetadata), s.handleITunesImport)
 				itunesGroup.POST("/write-back", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBack)
 				itunesGroup.POST("/write-back-all", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBackAll)
+				itunesGroup.POST("/cleanup-orphans", s.perm(auth.PermLibraryEditMetadata), s.handleITunesCleanupOrphans)
 				itunesGroup.POST("/write-back/preview", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBackPreview)
 				itunesGroup.GET("/books", s.perm(auth.PermLibraryView), s.handleListITunesBooks)
 				itunesGroup.GET("/import-status/:id", s.perm(auth.PermLibraryView), s.handleITunesImportStatus)

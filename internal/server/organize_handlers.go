@@ -1,5 +1,5 @@
 // file: internal/server/organize_handlers.go
-// version: 2.1.1
+// version: 2.2.0
 // last-edited: 2026-05-10
 // guid: 1522f0ec-663c-4527-a6d0-645658206a24
 //
@@ -85,6 +85,13 @@ func (s *Server) applyRename(c *gin.Context) {
 		}
 		httputil.InternalError(c, "failed to apply rename", err)
 		return
+	}
+
+	// Rename moved the file on disk → push a location update to iTunes
+	// so the ITL keeps pointing at the right path. The batcher already
+	// filters non-primary books and is nil-safe.
+	if s.writeBackBatcher != nil {
+		s.writeBackBatcher.Enqueue(id)
 	}
 
 	httputil.RespondWithOK(c, result)
