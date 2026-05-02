@@ -30,6 +30,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
+	"github.com/jdfalk/audiobook-organizer/internal/reconcile"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
@@ -138,8 +139,9 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = s.runMetadataRefreshScan
 		case "reconcile_scan":
 			scanOpID := opID
+			store := s.Store()
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.runReconcileScan(ctx, scanOpID, progress)
+				return reconcile.RunReconcileScan(store, ctx, scanOpID, progress)
 			}
 		case "itunes_path_reconcile":
 			reconcileOpID := opID
