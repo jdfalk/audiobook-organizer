@@ -1,7 +1,7 @@
 // file: internal/dedup/engine.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
-// last-edited: 2026-04-30
+// last-edited: 2026-05-02
 
 package dedup
 
@@ -1085,14 +1085,18 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 		}
 
 		// Layer 2 embedding: re-embed if stale, then similarity scan.
+		// findSimilarBooks is only meaningful when an embedding exists, so
+		// skip it entirely when there is no embed client or when EmbedBook
+		// signals the book was skipped / errored (no vector was stored).
 		if de.embedClient != nil {
-			if _, err := de.EmbedBook(ctx, book.ID); err != nil {
+			status, err := de.EmbedBook(ctx, book.ID)
+			if err != nil {
 				log.Printf("dedup: full scan embed error for %s: %v", book.ID, err)
+			} else if status == EmbedStatusEmbedded || status == EmbedStatusCached {
+				if err := de.findSimilarBooks(ctx, book.ID); err != nil {
+					log.Printf("dedup: full scan similarity error for %s: %v", book.ID, err)
+				}
 			}
-		}
-		if err := de.findSimilarBooks(ctx, book.ID); err != nil {
-			// Not fatal — just means no embedding yet
-			log.Printf("dedup: full scan similarity error for %s: %v", book.ID, err)
 		}
 
 		if progress != nil && (i%10 == 0 || i == total-1) {
