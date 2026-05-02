@@ -22,6 +22,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/reconcile"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -883,7 +884,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err := ts.server.queue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal,
 				func(ctx context.Context, progress operations.ProgressReporter) error {
 					reconcileLog := operations.LoggerFromReporter(progress)
-					result, scanErr := buildReconcilePreviewWithProgress(store, reconcileLog)
+					result, scanErr := reconcile.BuildReconcilePreviewWithProgress(store, reconcileLog)
 					if scanErr != nil {
 						return fmt.Errorf("reconcile scan failed: %w", scanErr)
 					}
