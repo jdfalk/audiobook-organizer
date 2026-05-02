@@ -267,4 +267,6 @@ testdata/dedup-bench/
 
 # Static libraries for native taglib CGO build (built locally)
 third_party/taglib/lib/*.a
-docs/reports/unresolved-relinks*.md
+# Private reports with local file paths — never commit these
+docs/private/
+docs/reports/
