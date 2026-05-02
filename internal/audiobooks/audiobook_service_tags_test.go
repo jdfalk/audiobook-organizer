@@ -1,8 +1,8 @@
-// file: internal/server/audiobook_service_tags_test.go
+// file: internal/audiobooks/audiobook_service_tags_test.go
 // version: 1.0.0
 // guid: 6f6a8d8d-0c5d-4c0a-9f1d-5b9ad01a5b42
 
-package server
+package audiobooks
 
 import (
 	"context"

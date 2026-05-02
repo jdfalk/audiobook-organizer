@@ -1,8 +1,8 @@
-// file: internal/server/audiobook_service.go
-// version: 1.23.0
+// file: internal/audiobooks/service.go
+// version: 1.23.1
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
-package server
+package audiobooks
 
 import (
 	"context"
@@ -1370,7 +1370,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 	}
 
 	// Create a MetadataStateService for recording change history.
-	mss := NewMetadataStateService(svc.store)
+	mss := newMetadataStateSvc(svc.store)
 
 	// Process overrides
 	for field, override := range req.Updates.Overrides {
@@ -1390,7 +1390,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 				entry.OverrideValue = val
 				entry.OverrideLocked = override.Locked == nil || *override.Locked
 				entry.UpdatedAt = now
-				applyOverrideToPayload(payload, field, val)
+				ApplyOverrideToPayload(payload, field, val)
 				// Record history for setting an override.
 				if fmt.Sprintf("%v", oldOverrideValue) != fmt.Sprintf("%v", val) {
 					mss.recordChange(id, field, "override", "user_edit", oldOverrideValue, val)
@@ -1722,8 +1722,8 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 	}, nil
 }
 
-// applyOverrideToPayload applies an override value to the update payload
-func applyOverrideToPayload(payload *AudiobookUpdate, field string, value any) {
+// ApplyOverrideToPayload applies an override value to the update payload
+func ApplyOverrideToPayload(payload *AudiobookUpdate, field string, value any) {
 	switch field {
 	case "title":
 		if v, ok := value.(string); ok {

@@ -1,8 +1,8 @@
-// file: internal/server/revert_service_organize_test.go
+// file: internal/audiobooks/revert_service_organize_test.go
 // version: 1.0.0
 // guid: 4f8c2a1d-5e9b-4f70-a3c6-8d1e0f2b9a47
 
-package server
+package audiobooks
 
 import (
 	"os"

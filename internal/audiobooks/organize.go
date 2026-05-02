@@ -1,4 +1,4 @@
-// file: internal/server/organize_service.go
+// file: internal/audiobooks/organize.go
 // version: 2.2.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 // last-edited: 2026-05-05
@@ -8,7 +8,7 @@
 // constructor wrappers so the rest of the server package can keep using
 // the old names without a large rename diff.
 
-package server
+package audiobooks
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"

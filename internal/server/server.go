@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-05
 
@@ -19,6 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/aiscan"
+	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -142,11 +143,11 @@ type Server struct {
 	store                  database.Store
 	httpServer             *http.Server
 	router                 *gin.Engine
-	audiobookService       *AudiobookService
+	audiobookService       *audiobookspkg.AudiobookService
 	audiobookUpdateService *AudiobookUpdateService
 	batchService           *BatchService
 	workService            *WorkService
-	authorSeriesService    *AuthorSeriesService
+	authorSeriesService    *audiobookspkg.AuthorSeriesService
 	filesystemService      *FilesystemService
 	importPathService      *importer.ImportPathService
 	importService          *importer.ImportService
@@ -284,11 +285,11 @@ func NewServer(store database.Store) *Server {
 		bgCtx:                  bgCtx,
 		bgCancel:               bgCancel,
 		router:                 router,
-		audiobookService:       NewAudiobookService(resolvedStore),
+		audiobookService:       audiobookspkg.NewAudiobookService(resolvedStore),
 		audiobookUpdateService: NewAudiobookUpdateService(resolvedStore),
 		batchService:           NewBatchService(resolvedStore),
 		workService:            NewWorkService(resolvedStore),
-		authorSeriesService:    NewAuthorSeriesService(resolvedStore),
+		authorSeriesService:    audiobookspkg.NewAuthorSeriesService(resolvedStore),
 		filesystemService:      NewFilesystemService(resolvedStore),
 		importPathService:      importer.NewImportPathService(resolvedStore),
 		importService:          importer.NewImportService(resolvedStore),

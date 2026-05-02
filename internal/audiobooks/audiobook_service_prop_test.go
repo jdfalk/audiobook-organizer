@@ -1,4 +1,4 @@
-// file: internal/server/audiobook_service_prop_test.go
+// file: internal/audiobooks/audiobook_service_prop_test.go
 // version: 1.1.0
 // guid: 864889b2-5529-4d23-9220-2f17e11fab35
 
@@ -23,7 +23,7 @@
 // Each property draws a fresh slice (or a fresh PebbleStore) per
 // rapid.Check iteration so state never leaks between shrinks.
 
-package server
+package audiobooks
 
 import (
 	"path/filepath"

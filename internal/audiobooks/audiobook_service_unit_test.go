@@ -1,9 +1,9 @@
-// file: internal/server/audiobook_service_unit_test.go
+// file: internal/audiobooks/audiobook_service_unit_test.go
 // version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-01
 
-package server
+package audiobooks
 
 import (
 	"context"

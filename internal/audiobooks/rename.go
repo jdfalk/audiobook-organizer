@@ -1,5 +1,5 @@
-// file: internal/server/rename_service.go
-// version: 2.0.0
+// file: internal/audiobooks/rename.go
+// version: 2.0.1
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 //
 // Thin forwarding layer — the real implementation now lives in
@@ -7,7 +7,7 @@
 // constructor wrappers so the rest of the server package can keep using
 // the old names.
 
-package server
+package audiobooks
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
