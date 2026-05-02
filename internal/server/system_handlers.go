@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 2.2.0
+// version: 2.2.1
 // last-edited: 2026-05-01
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
@@ -323,7 +323,8 @@ func (s *Server) updateConfig(c *gin.Context) {
 	status, resp := s.configUpdateService.UpdateConfig(payload)
 	if status >= 400 {
 		config.AppConfig = previousConfig
-		c.JSON(status, resp)
+		errMsg, _ := resp["error"].(string)
+		httputil.RespondWithError(c, status, errMsg, "CONFIG_ERROR")
 		return
 	}
 
