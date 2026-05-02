@@ -459,6 +459,10 @@ since it was last edited on 2026-04-11).
 - [x] **4.9** Eliminate remaining package globals (DI Phase 2) (**M**) — 10 globals replaced with interface injection + Server fields (#386)
 - [ ] **4.10** Service-layer unit tests with mock stores (**L**) — leverage DI + ISP to unit-test AudiobookService, OrganizeService, MetadataFetchService, MergeService with MockStore; test error paths, edge cases, and business logic in isolation without HTTP or real DB
 - [ ] **4.11** Split `internal/server` into sub-packages (**XL**) — extract standalone services (DedupEngine, MetadataFetchService, OrganizeService, etc.) into own packages; handlers stay in server; Server struct remains as wiring hub
+  - **PKG-1** Extract audiobooks service to `internal/audiobooks/` (7 gin-free files) → [`spec`](docs/superpowers/specs/2026-05-01-pkg-1-extract-audiobooks-package.md) [`bot-task`](docs/superpowers/bot-tasks/2026-05-01-pkg-1-audiobooks-service.md)
+  - **PKG-2** Extract AI scan pipeline to `internal/aiscan/` + remove dead `*Server` field → [`spec`](docs/superpowers/specs/2026-05-01-pkg-2-extract-aiscan-package.md) [`bot-task`](docs/superpowers/bot-tasks/2026-05-01-pkg-2-aiscan-pipeline.md)
+  - **PKG-3** Split `reconcile.go` — pure logic → `internal/reconcile/`, HTTP handlers stay in server → [`spec`](docs/superpowers/specs/2026-05-01-pkg-3-split-reconcile.md) [`bot-task`](docs/superpowers/bot-tasks/2026-05-01-pkg-3-reconcile-split.md)
+  - **PKG-4** Extract remaining gin-free services (scan, importer, quarantine, writeback, filesystem, sysinfo) → [`spec`](docs/superpowers/specs/2026-05-01-pkg-4-extract-service-packages.md) [`bot-task`](docs/superpowers/bot-tasks/2026-05-01-pkg-4-service-packages.md)
 - [ ] **4.12** Narrow extracted service dependencies to ISP sub-interfaces (**M**) — after 4.8 + 4.11, update extracted packages to accept narrow store interfaces (BookReader, etc.) instead of full database.Store
 - [ ] **4.13** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
 
