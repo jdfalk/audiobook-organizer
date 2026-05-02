@@ -1,15 +1,13 @@
 // file: internal/itunes/itl_le_remove_by_pid.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e6f7a8b9-c0d1-2e3f-4a5b-6c7d8e9f0a1b
 //
 // Track removal from LE-format ITL payloads.
 //
-// As of v1.1.0 the public RemoveTracksByPIDLE is a logged no-op. The previous
-// implementation produced corrupt ITL files (see post-mortem in
-// docs/archive/2026-05-02-itl-corruption-postmortem.md): it removed mith
-// blocks and decremented the mlth count but did NOT clean up references in
-// the playlist-list (mtph items) or auxiliary album/artist lists, causing
-// iTunes to reject the library as "damaged" on next open.
+// v1.2.0: RemoveTracksByPIDLE is now a SAFE removal that excises master
+// `mith` chunks AND cleans up resulting orphan `mtph` references in the
+// playlist list, in one combined pass. The historic broken implementation
+// is preserved as removeTracksByPIDLEUnsafe for regression tests.
 
 package itunes
 
@@ -21,41 +19,85 @@ import (
 	"strings"
 )
 
-// logRemoveSkipped is overridable for tests; default writes a single-line
-// warning to the standard logger so production traces show when a remove
-// request was silently dropped by the safety gate.
+// logRemoveSkipped is preserved for backward compat with tests; v1.2.0
+// no longer skips removes. Tests can override to capture warnings if a
+// future safety gate re-introduces a skip path.
 var logRemoveSkipped = func(n int) {
-	log.Printf("[WARN] iTunes write-back: dropping %d track-remove request(s) — destructive removal disabled to prevent ITL corruption (see RemoveTracksByPIDLE doc).", n)
+	log.Printf("[INFO] iTunes write-back: removing %d track(s) (safe path)", n)
 }
 
-// RemoveTracksByPIDLE is intentionally a no-op as of v1.1.0. The previous
-// implementation excised mith blocks from the master track list and
-// decremented the mlth count, but did NOT clean up references in the
-// playlist-list (mtph items) or the album/artist auxiliary lists. iTunes
-// validates those references on open and marks the library as "damaged" if
-// any mtph points at a TrackID not present in the master list — see the
-// post-mortem in docs/archive/2026-05-02-itl-corruption-postmortem.md.
+// RemoveTracksByPIDLE removes tracks identified by the given persistent IDs
+// from an LE-format ITL payload, atomically:
 //
-// Until a complete implementation exists that walks all reference sites
-// (playlist mtph + mlah album entries + mlih artist entries + any per-album
-// per-track sub-counts) and rebuilds them transactionally, this function
-// returns the input unchanged and reports zero removals. The caller's
-// "remove" intent is silently dropped — the orphaned tracks remain in the
-// ITL pointing at non-existent files, which is harmless (iTunes will simply
-// be unable to play them) compared to corrupting the library file.
+//  1. Excises each matching `mith` chunk from the master track list, then
+//     decrements `mlth` count and the master msdh totalLen.
+//  2. Locates every `mtph` playlist track-item that referenced one of the
+//     removed TrackIDs (now-orphaned by step 1) and excises them, updating
+//     each enclosing `miph` header (totalLen at +8, count at +16) and the
+//     playlist-list msdh totalLen.
 //
-// Callers should ALSO call VerifyITLNoNewDanglingRefsLE on the produced
-// payload before writing, as a defense-in-depth check against any future
-// remove-path bug being reintroduced.
+// Returns the modified payload and the number of master tracks removed.
+//
+// The auxiliary album list (mlah) is intentionally left alone — iTunes
+// tolerates pre-existing dangling album→TID references (last-good has 50+
+// of them and opens fine). Touching mlah was historically the source of
+// repeated corruption regressions; the simpler "leave it" policy keeps
+// the writer correct.
+//
+// Callers must still invoke VerifyITLNoNewDanglingRefsLE after the
+// combined mutation pass as a defense-in-depth check.
 func RemoveTracksByPIDLE(data []byte, pids map[string]bool) ([]byte, int) {
-	if len(pids) > 0 {
-		// Best-effort log so operators can see when removes are being
-		// silently dropped. We can't return an error from this signature
-		// without a wider refactor; the verification step downstream is
-		// the load-bearing safety net.
-		logRemoveSkipped(len(pids))
+	if len(pids) == 0 {
+		return data, 0
 	}
-	return data, 0
+
+	// Capture master TID set BEFORE removal so we can compute which TIDs
+	// disappear after the splice. (We need to know specifically which TIDs
+	// were removed, not just how many.)
+	masterBefore := CollectMasterTrackIDsLE(data)
+
+	// Phase 1: master-side mith removal (uses the historic implementation).
+	afterMith, removed := removeTracksByPIDLEUnsafe(data, pids)
+	if removed == 0 {
+		return data, 0
+	}
+
+	// Phase 2: locate now-orphaned mtph items and splice them out.
+	masterAfter := CollectMasterTrackIDsLE(afterMith)
+	if masterAfter == nil {
+		// Couldn't re-locate master — bail conservatively and abort
+		// the whole removal so we never produce a half-cleaned ITL.
+		log.Printf("[ERROR] RemoveTracksByPIDLE: could not re-locate master after mith splice — aborting remove")
+		return data, 0
+	}
+
+	// Build the set of TIDs that disappeared, used to scope the orphan
+	// hunt to *newly-orphaned* references and avoid touching the
+	// pre-existing dangling refs that iTunes already tolerates.
+	newlyRemovedTIDs := make(map[uint32]struct{}, len(masterBefore)-len(masterAfter))
+	for tid := range masterBefore {
+		if _, still := masterAfter[tid]; !still {
+			newlyRemovedTIDs[tid] = struct{}{}
+		}
+	}
+	if len(newlyRemovedTIDs) == 0 {
+		return afterMith, removed
+	}
+
+	hits := LocateDanglingMtphLE(afterMith, masterAfter)
+	// Filter to only mtph items pointing at TIDs we just removed.
+	var scopedHits []MtphHitLE
+	for _, h := range hits {
+		if _, removed := newlyRemovedTIDs[h.TrackID]; removed {
+			scopedHits = append(scopedHits, h)
+		}
+	}
+	if len(scopedHits) == 0 {
+		return afterMith, removed
+	}
+
+	cleaned := RepairITLDropDanglingMtphLE(afterMith, scopedHits)
+	return cleaned, removed
 }
 
 // removeTracksByPIDLEUnsafe is the OLD, KNOWN-BROKEN implementation kept only

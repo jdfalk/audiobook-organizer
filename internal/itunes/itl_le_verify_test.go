@@ -68,24 +68,76 @@ func TestVerifyDanglingRefs_RealCorruption(t *testing.T) {
 	}
 }
 
-// TestRemoveTracksByPIDLE_IsNoOp pins the safety behavior: production code
-// must not destructively remove tracks until the full reference-cleanup is
-// implemented.
-func TestRemoveTracksByPIDLE_IsNoOp(t *testing.T) {
-	calls := 0
-	prev := logRemoveSkipped
-	logRemoveSkipped = func(int) { calls++ }
-	defer func() { logRemoveSkipped = prev }()
+// TestRemoveTracksByPIDLE_SafePath verifies the v1.2.0 safe removal:
+// removing one real track from last-good produces a payload with no NEW
+// dangling refs (pre-existing orphans tolerated by iTunes are preserved).
+func TestRemoveTracksByPIDLE_SafePath(t *testing.T) {
+	const lastGood = "/tmp/last-good.itl"
+	if _, err := os.Stat(lastGood); err != nil {
+		t.Skip("last-good ITL fixture not present locally")
+	}
+	raw, err := os.ReadFile(lastGood)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib, err := ParseITLBytes(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dec := lib.RawData()
 
-	in := []byte("payload-bytes")
-	out, removed := RemoveTracksByPIDLE(in, map[string]bool{"deadbeefdeadbeef": true})
-	if removed != 0 {
-		t.Fatalf("RemoveTracksByPIDLE must report 0 removed, got %d", removed)
+	// Pick the first track's PID by scanning master mith chunks
+	pid := firstMithPID(dec)
+	if pid == "" {
+		t.Skip("could not locate a real PID to remove")
 	}
-	if string(out) != string(in) {
-		t.Fatal("RemoveTracksByPIDLE must return input unchanged")
+	beforeMaster := CollectMasterTrackIDsLE(dec)
+
+	out, removed := RemoveTracksByPIDLE(dec, map[string]bool{pid: true})
+	if removed != 1 {
+		t.Fatalf("expected 1 removal, got %d", removed)
 	}
-	if calls != 1 {
-		t.Fatalf("expected 1 dropped-remove warning, got %d", calls)
+	afterMaster := CollectMasterTrackIDsLE(out)
+	if len(afterMaster) != len(beforeMaster)-1 {
+		t.Fatalf("master count: before=%d after=%d (want %d)", len(beforeMaster), len(afterMaster), len(beforeMaster)-1)
 	}
+	if err := VerifyITLNoNewDanglingRefsLE(dec, out); err != nil {
+		t.Fatalf("safe removal introduced new dangling refs: %v", err)
+	}
+}
+
+// firstMithPID returns the PID of the first mith chunk in the master track
+// list, or "" if the structure can't be walked.
+func firstMithPID(data []byte) string {
+	msdhOffset, msdhHeaderLen, _ := findMsdhByType(data, 1)
+	if msdhOffset < 0 {
+		return ""
+	}
+	off := msdhOffset + msdhHeaderLen
+	if off+12 > len(data) {
+		return ""
+	}
+	if readTag(data, off) == "mlth" {
+		off += int(readUint32LE(data, off+4))
+	}
+	for off+12 < len(data) {
+		t := readTag(data, off)
+		if t == "" {
+			return ""
+		}
+		hdr := int(readUint32LE(data, off+4))
+		tot := int(readUint32LE(data, off+8))
+		size := hdr
+		if (t == "mith" || t == "mhoh" || t == "miah") && tot > hdr {
+			size = tot
+		}
+		if t == "mith" && off+136 <= len(data) {
+			return extractMithPIDLE(data, off)
+		}
+		if size < 8 {
+			return ""
+		}
+		off += size
+	}
+	return ""
 }
