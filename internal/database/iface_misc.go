@@ -134,6 +134,11 @@ type BookFileStore interface {
 	GetBookFilesNeedingDelugeImport() ([]BookFile, error)
 	GetBookFileByID(bookID, fileID string) (*BookFile, error)
 	GetBookFileByPID(itunesPID string) (*BookFile, error)
+	// ClearITunesPID surgically clears itunes_persistent_id and itunes_path
+	// on the book_file row matching the given PID. Used by the iTunes
+	// orphan-cleanup path so that DB state converges after a successful
+	// ITL remove. Returns (false, nil) if no matching row exists.
+	ClearITunesPID(itunesPID string) (cleared bool, err error)
 	GetBookFileByPath(filePath string) (*BookFile, error)
 	GetBookFileByAcoustID(fingerprint string) (*BookFile, error)
 	GetBookFileByAcoustIDFuzzy(fingerprint string, minSimilarity float64) (*BookFile, error)

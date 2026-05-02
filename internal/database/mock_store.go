@@ -323,6 +323,7 @@ type MockStore struct {
 	GetBookFilesFunc            func(bookID string) ([]BookFile, error)
 	GetBookFileByIDFunc         func(bookID, fileID string) (*BookFile, error)
 	GetBookFileByPIDFunc           func(itunesPID string) (*BookFile, error)
+	ClearITunesPIDFunc             func(itunesPID string) (bool, error)
 	GetBookFileByPathFunc          func(filePath string) (*BookFile, error)
 	GetBookFileByAcoustIDFunc      func(fingerprint string) (*BookFile, error)
 	GetBookFileByAcoustIDFuzzyFunc func(fingerprint string, minSimilarity float64) (*BookFile, error)
@@ -2224,6 +2225,12 @@ func (m *MockStore) GetBookFileByPID(itunesPID string) (*BookFile, error) {
 		return m.GetBookFileByPIDFunc(itunesPID)
 	}
 	return nil, nil
+}
+func (m *MockStore) ClearITunesPID(itunesPID string) (bool, error) {
+	if m.ClearITunesPIDFunc != nil {
+		return m.ClearITunesPIDFunc(itunesPID)
+	}
+	return false, nil
 }
 func (m *MockStore) GetBookFileByPath(filePath string) (*BookFile, error) {
 	if m.GetBookFileByPathFunc != nil {
