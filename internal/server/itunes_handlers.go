@@ -1,5 +1,5 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
 // last-edited: 2026-05-01
 
@@ -16,6 +16,7 @@ import (
 	stdlog "log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -424,10 +425,122 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	}
 
 	httputil.RespondWithOK(c, gin.H{
-		"success":       true,
-		"updated_count": itlResult.UpdatedCount,
-		"total_books":   len(itlUpdates),
-		"message":       fmt.Sprintf("ITL write-back complete: %d tracks updated out of %d books with iTunes PIDs", itlResult.UpdatedCount, len(itlUpdates)),
+		"success":              true,
+		"updated_count":        itlResult.UpdatedCount,
+		"file_pid_pairs":       len(itlUpdates),
+		"primary_book_count":   len(writtenBookIDs),
+		"message":              fmt.Sprintf("ITL write-back complete: %d ITL chunks updated across %d (file,PID) pairs from %d primary books", itlResult.UpdatedCount, len(itlUpdates), len(writtenBookIDs)),
+	})
+}
+
+// handleITunesCleanupOrphans removes iTunes tracks that should not be in the
+// library: tracks owned by non-primary book versions, tracks owned by
+// soft-deleted books, and tracks present in the ITL but with no matching
+// row in the DB ("true orphans" left behind by past hard-deletes that did
+// not fire an iTunes remove hook). Each candidate PID is enqueued via the
+// WriteBackBatcher; the actual ITL mutation happens on the next flush.
+func (s *Server) handleITunesCleanupOrphans(c *gin.Context) {
+	if !s.itunesEnabledOrError(c) {
+		return
+	}
+	if s.Store() == nil {
+		httputil.RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	if s.writeBackBatcher == nil {
+		httputil.RespondWithBadRequest(c, "iTunes write-back batcher not configured")
+		return
+	}
+	itlPath := config.AppConfig.ITunesLibraryWritePath
+	if itlPath == "" {
+		httputil.RespondWithBadRequest(c, "no ITL library path configured")
+		return
+	}
+
+	// Build the set of "valid" PIDs from the DB: every primary,
+	// non-soft-deleted book contributes its book_files PIDs.
+	allBooks, err := s.Store().GetAllBooks(1_000_000, 0)
+	if err != nil {
+		httputil.InternalError(c, "failed to enumerate books", err)
+		return
+	}
+	validPIDs := make(map[string]bool)
+	var nonPrimaryPIDs []string
+	for i := range allBooks {
+		b := &allBooks[i]
+		files, _ := s.Store().GetBookFiles(b.ID)
+		isPrimary := b.IsPrimaryVersion == nil || *b.IsPrimaryVersion
+		isSoftDeleted := b.MarkedForDeletion != nil && *b.MarkedForDeletion
+		if isPrimary && !isSoftDeleted {
+			for _, f := range files {
+				if f.ITunesPersistentID != "" {
+					validPIDs[strings.ToLower(f.ITunesPersistentID)] = true
+				}
+			}
+		} else {
+			// Non-primary OR soft-deleted: collect for removal.
+			for _, f := range files {
+				if f.ITunesPersistentID != "" {
+					nonPrimaryPIDs = append(nonPrimaryPIDs, f.ITunesPersistentID)
+				}
+			}
+		}
+	}
+
+	// Soft-deleted books are excluded from GetAllBooks above (filter is
+	// COALESCE(marked_for_deletion,0)=0). Pull them separately.
+	softDeleted, _ := s.Store().ListSoftDeletedBooks(1_000_000, 0, nil)
+	var softDeletedPIDs []string
+	for i := range softDeleted {
+		b := &softDeleted[i]
+		files, _ := s.Store().GetBookFiles(b.ID)
+		for _, f := range files {
+			if f.ITunesPersistentID != "" {
+				softDeletedPIDs = append(softDeletedPIDs, f.ITunesPersistentID)
+			}
+		}
+	}
+
+	// Walk the ITL master list and find any PID NOT in validPIDs —
+	// those are true orphans (DB row was hard-deleted in the past
+	// without firing the EnqueueRemove hook).
+	var truePIDOrphans []string
+	if library, parseErr := itunes.ParseLibrary(itlPath); parseErr == nil {
+		for _, track := range library.Tracks {
+			if track.PersistentID == "" {
+				continue
+			}
+			if !validPIDs[strings.ToLower(track.PersistentID)] {
+				truePIDOrphans = append(truePIDOrphans, track.PersistentID)
+			}
+		}
+	}
+
+	enqueued := 0
+	for _, pid := range nonPrimaryPIDs {
+		s.writeBackBatcher.EnqueueRemove(pid)
+		enqueued++
+	}
+	for _, pid := range softDeletedPIDs {
+		s.writeBackBatcher.EnqueueRemove(pid)
+		enqueued++
+	}
+	for _, pid := range truePIDOrphans {
+		s.writeBackBatcher.EnqueueRemove(pid)
+		enqueued++
+	}
+
+	stdlog.Printf("[INFO] iTunes cleanup-orphans: enqueued %d removes (non_primary=%d soft_deleted=%d true_orphans=%d)",
+		enqueued, len(nonPrimaryPIDs), len(softDeletedPIDs), len(truePIDOrphans))
+
+	httputil.RespondWithOK(c, gin.H{
+		"success":         true,
+		"enqueued":        enqueued,
+		"non_primary":     len(nonPrimaryPIDs),
+		"soft_deleted":    len(softDeletedPIDs),
+		"true_orphans":    len(truePIDOrphans),
+		"valid_pid_count": len(validPIDs),
+		"message":         fmt.Sprintf("enqueued %d iTunes removes (non_primary=%d soft_deleted=%d true_orphans=%d). The next batcher flush will splice them out of the ITL.", enqueued, len(nonPrimaryPIDs), len(softDeletedPIDs), len(truePIDOrphans)),
 	})
 }
 

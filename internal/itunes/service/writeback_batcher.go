@@ -1,5 +1,5 @@
 // file: internal/itunes/service/writeback_batcher.go
-// version: 4.0.1
+// version: 4.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
@@ -247,6 +247,14 @@ func (b *WriteBackBatcher) flush() {
 	for _, id := range bookIDs {
 		book, err := store.GetBookByID(id)
 		if err != nil || book == nil {
+			continue
+		}
+		// Only primary versions are written to iTunes. A non-primary
+		// version of a book that was somehow enqueued (e.g. via a
+		// metadata edit on the alternate format) must NOT push to
+		// iTunes — its PID, if any, was created in error and the
+		// orphan-cleanup pass will remove it.
+		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
 			continue
 		}
 

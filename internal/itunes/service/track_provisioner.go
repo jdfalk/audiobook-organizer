@@ -1,5 +1,5 @@
 // file: internal/itunes/service/track_provisioner.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8e768742-5ace-4e4b-8495-9550ed4620b5
 //
 // TrackProvisioner generates ITL tracks for books that weren't imported
@@ -73,6 +73,14 @@ func (p *TrackProvisioner) Provision(book *database.Book, bookFile *database.Boo
 	}
 	if bookFile.ITunesPersistentID != "" {
 		return nil // already has a PID
+	}
+	// Only the primary version of a book gets written into iTunes.
+	// Non-primary versions (alternate formats, lower-quality rips, the
+	// "loser" side of a merge) must NOT generate PIDs or get added to
+	// the ITL — historically this was the source of large amounts of
+	// duplicate iTunes tracks for the same audiobook.
+	if book != nil && book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
+		return nil
 	}
 
 	// Generate a new PID

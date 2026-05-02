@@ -123,6 +123,24 @@ func TestProvision_SkipsAlreadyHasPID(t *testing.T) {
 	// Mock would fail on any unexpected call — verifies no store access
 }
 
+// TestProvision_SkipsNonPrimary asserts non-primary book versions never
+// get a PID generated or an iTunes EnqueueAdd. Past behavior (no filter)
+// was the source of large amounts of duplicate iTunes tracks.
+func TestProvision_SkipsNonPrimary(t *testing.T) {
+	m := dbmocks.NewMockStore(t)
+	enq := &mockEnqueuer{}
+	p := newTrackProvisioner(m, enq, Config{AutoWriteBack: true})
+
+	notPrimary := false
+	book := &database.Book{ID: "b1", IsPrimaryVersion: &notPrimary}
+	file := &database.BookFile{ID: "f1"}
+
+	err := p.Provision(book, file)
+	require.NoError(t, err)
+	assert.Empty(t, enq.adds, "non-primary book must not enqueue ITL add")
+	// Mock would fail on any unexpected store call — verifies no PID side-effects.
+}
+
 // ---------------------------------------------------------------------------
 // Provision — happy path
 // ---------------------------------------------------------------------------
