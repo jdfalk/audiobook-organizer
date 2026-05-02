@@ -1,94 +1,32 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.49.0
+// version: 1.50.0
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
-// last-edited: 2026-04-30
+// last-edited: 2026-05-02
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  Avatar,
+  Alert,
   Box,
-  Paper,
-  Stack,
-  Chip,
   Button,
   CircularProgress,
-  Alert,
-  Typography,
-  Grid,
-  Tabs,
-  Tab,
-  FormControlLabel,
-  Checkbox,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   LinearProgress,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  TextField,
-  Tooltip,
-  Collapse,
-  IconButton,
-  Rating,
+  Paper,
+  Tab,
+  Tabs,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack.js';
-import DeleteIcon from '@mui/icons-material/Delete.js';
-import RestoreIcon from '@mui/icons-material/Restore.js';
-import EditIcon from '@mui/icons-material/Edit.js';
-import PsychologyIcon from '@mui/icons-material/Psychology.js';
-import CloudDownloadIcon from '@mui/icons-material/CloudDownload.js';
-import CompareIcon from '@mui/icons-material/Compare.js';
-import HistoryIcon from '@mui/icons-material/History.js';
-import InfoIcon from '@mui/icons-material/Info.js';
-import AccessTimeIcon from '@mui/icons-material/AccessTime.js';
-// StorageIcon removed — not used in Sonarr-style layout
-import SaveIcon from '@mui/icons-material/Save.js';
-import SearchIcon from '@mui/icons-material/Search.js';
-import TransformIcon from '@mui/icons-material/Transform.js';
-import LinkIcon from '@mui/icons-material/Link.js';
-import LinkOffIcon from '@mui/icons-material/LinkOff.js';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen.js';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline.js';
-import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline.js';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown.js';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp.js';
-import StarIcon from '@mui/icons-material/Star.js';
-import StarBorderIcon from '@mui/icons-material/StarBorder.js';
-import RefreshIcon from '@mui/icons-material/Refresh.js';
 import type { Book, BookFile, BookSegment, BookTags, SegmentTags, OverridePayload, OrganizePreviewResponse } from '../services/api';
-import FileCopyIcon from '@mui/icons-material/FileCopy.js';
-import LabelIcon from '@mui/icons-material/Label.js';
-import ImageIcon from '@mui/icons-material/Image.js';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber.js';
-import BuildIcon from '@mui/icons-material/Build.js';
 import * as api from '../services/api';
-import { MetadataEditDialog } from '../components/audiobooks/MetadataEditDialog';
-import { MetadataHistory } from '../components/MetadataHistory';
-import { MetadataSearchDialog } from '../components/audiobooks/MetadataSearchDialog';
-import { RelocateFileDialog } from '../components/audiobooks/RelocateFileDialog';
-import { TagComparison } from '../components/TagComparison';
-import { ChangeLog } from '../components/ChangeLog';
 import { useToast } from '../components/toast/ToastProvider';
-import ReadStatusChip from '../components/audiobooks/ReadStatusChip';
-import AddToPlaylistDialog from '../components/audiobooks/AddToPlaylistDialog';
-import VersionsPanel from '../components/audiobooks/VersionsPanel';
 import type { Audiobook } from '../types';
+import { BookDetailHeader } from '../components/bookdetail/BookDetailHeader';
+import { BookDetailStatusAlerts } from '../components/bookdetail/BookDetailStatusAlerts';
+import { BookDetailActions } from '../components/bookdetail/BookDetailActions';
+import { BookDetailInfoTab } from '../components/bookdetail/BookDetailInfoTab';
+import { BookDetailFilesTab } from '../components/bookdetail/BookDetailFilesTab';
+import { BookDetailDialogs, type MetadataRejection } from '../components/bookdetail/BookDetailDialogs';
 
-const SEGMENT_PREVIEW_COUNT = 5;
-const OVERALL_METADATA_FIELDS = [
-  { key: 'title', label: 'Title' },
-  { key: 'author_name', label: 'Author' },
-  { key: 'narrator', label: 'Narrator' },
-  { key: 'series_name', label: 'Series' },
-  { key: 'publisher', label: 'Publisher' },
-  { key: 'language', label: 'Language' },
-  { key: 'isbn13', label: 'ISBN' },
-] as const;
 
 export const BookDetail = () => {
   const { id } = useParams();
@@ -144,8 +82,6 @@ export const BookDetail = () => {
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
   const [segmentTags, setSegmentTags] = useState<SegmentTags | null>(null);
   const [segmentTagsLoading, setSegmentTagsLoading] = useState(false);
-  const [coverError, setCoverError] = useState(false);
-  const [coverLightboxOpen, setCoverLightboxOpen] = useState(false);
   const [splittingVersion, setSplittingVersion] = useState(false);
   const [splittingToBooks, setSplittingToBooks] = useState(false);
   // moveToVersionDialogOpen removed — "Move to Existing Version" is now inline
@@ -165,46 +101,12 @@ export const BookDetail = () => {
   // Detailed tags with source attribution (CAT-1, PR #548)
   const [detailedTags, setDetailedTags] = useState<api.DetailedBookTag[]>([]);
 
-  // Rating widget state (RATE-2)
-  const [ratingOverall, setRatingOverall] = useState<number | null>(null);
-  const [ratingStory, setRatingStory] = useState<number | null>(null);
-  const [ratingPerformance, setRatingPerformance] = useState<number | null>(null);
-  const [ratingNotes, setRatingNotes] = useState<string>('');
-  const ratingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Rejection history state (META-REJ-1)
-  type MetadataRejection = {
-    id: string;
-    book_id: string;
-    source: string;
-    candidate_asin?: string;
-    candidate_isbn?: string;
-    candidate_title?: string;
-    candidate_author?: string;
-    rejection_reason: string;
-    score?: number;
-    rejected_at: string;
-  };
   const [rejections, setRejections] = useState<MetadataRejection[]>([]);
   const [rejHistoryOpen, setRejHistoryOpen] = useState(false);
 
   // Derived multi-select state
   const isSingleSelect = selectedSegmentIds.size === 1;
   const singleSelectedId = isSingleSelect ? Array.from(selectedSegmentIds)[0] : null;
-
-  // Reset cover error when cover URL changes (e.g. after metadata fetch)
-  useEffect(() => {
-    setCoverError(false);
-  }, [book?.cover_url]);
-
-  // Sync rating local state when book is (re)loaded (RATE-2)
-  useEffect(() => {
-    if (!book) return;
-    setRatingOverall(book.user_rating_overall ?? null);
-    setRatingStory(book.user_rating_story ?? null);
-    setRatingPerformance(book.user_rating_performance ?? null);
-    setRatingNotes(book.user_rating_notes ?? '');
-  }, [book?.id]); // intentionally on id only — don't overwrite in-progress edits on silent refresh
 
   // Load detailed tags for source attribution (CAT-1 / PR #548)
   useEffect(() => {
@@ -311,42 +213,6 @@ export const BookDetail = () => {
     }
   };
 
-  // Debounced rating save (RATE-2): fires 500 ms after the last change.
-  const saveRating = useCallback(
-    (patch: api.RatingPatchBody) => {
-      if (!id) return;
-      if (ratingDebounceRef.current) clearTimeout(ratingDebounceRef.current);
-      ratingDebounceRef.current = setTimeout(async () => {
-        try {
-          await api.patchAudiobookRating(id, patch);
-          toast('Rating saved', 'success');
-        } catch {
-          toast('Failed to save rating', 'error');
-        }
-      }, 500);
-    },
-    [id, toast]
-  );
-
-  const handleRatingOverallChange = (_: unknown, value: number | null) => {
-    setRatingOverall(value);
-    saveRating({ overall: value, story: ratingStory, performance: ratingPerformance, notes: ratingNotes || null });
-  };
-
-  const handleRatingStoryChange = (_: unknown, value: number | null) => {
-    setRatingStory(value);
-    saveRating({ overall: ratingOverall, story: value, performance: ratingPerformance, notes: ratingNotes || null });
-  };
-
-  const handleRatingPerformanceChange = (_: unknown, value: number | null) => {
-    setRatingPerformance(value);
-    saveRating({ overall: ratingOverall, story: ratingStory, performance: value, notes: ratingNotes || null });
-  };
-
-  const handleRatingNotesBlur = () => {
-    saveRating({ overall: ratingOverall, story: ratingStory, performance: ratingPerformance, notes: ratingNotes || null });
-  };
-
   // Load book files from the canonical book_files endpoint.
   // Falls back to legacy segments endpoint if book_files is unavailable.
   useEffect(() => {
@@ -417,42 +283,6 @@ export const BookDetail = () => {
       setSegmentTags(null);
     }
   }, [selectedSegmentIds, isSingleSelect, singleSelectedId, loadSegmentTags]);
-
-  const formatDateTime = (value?: string) => {
-    if (!value) return '—';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-  };
-
-  const formatDuration = (seconds?: number) => {
-    if (!seconds || seconds <= 0) return '—';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    const parts: string[] = [];
-    if (hours > 0) parts.push(`${hours}h`);
-    if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
-    if (remainingSeconds > 0 && hours === 0) parts.push(`${remainingSeconds}s`);
-    return parts.join(' ');
-  };
-
-  const formatBytes = (bytes?: number) => {
-    if (!bytes || bytes <= 0) return '—';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    let value = bytes;
-    let unitIndex = 0;
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex += 1;
-    }
-    const decimals = value >= 10 || unitIndex === 0 ? 0 : 1;
-    return `${value.toFixed(decimals)} ${units[unitIndex]}`;
-  };
-
-  const formatTagValue = (value?: string | number | boolean | null) => {
-    if (value == null || value === '') return '—';
-    return String(value);
-  };
 
   const handleDelete = async () => {
     if (!book) return;
@@ -896,7 +726,7 @@ export const BookDetail = () => {
     work_id: current.work_id,
   });
 
-  const handleEditSave = async (updated: Audiobook, dirtyFields?: Set<string>) => {
+  const handleEditSave = async (updated: Audiobook, dirtyFields: Set<string>) => {
     if (!book) return;
     setActionLoading(true);
     setActionLabel('Saving changes...');
@@ -1047,1727 +877,197 @@ export const BookDetail = () => {
     );
   }
 
-  const isSoftDeleted = book.marked_for_deletion;
-  const isQuarantined = !!book.quarantined_at;
-  const coverLetter = (book.title || 'A')[0]?.toUpperCase();
-  const coverImageUrl = book.cover_url
-    ? book.cover_url.startsWith('/')
-      ? book.cover_url
-      : `/api/v1/covers/proxy?url=${encodeURIComponent(book.cover_url)}`
-    : `/api/v1/audiobooks/${book.id}/cover`;
+  const isSoftDeleted = book.marked_for_deletion ?? false;
 
   return (
     <Box p={3} sx={{ height: '100%', overflowY: 'auto' }}>
-      {actionLoading && (
-        <LinearProgress
-          sx={{ mb: 2 }}
-          color="secondary"
-          aria-label={actionLabel || 'Processing action'}
-        />
-      )}
-
-      <Stack
-        direction="row"
-        alignItems="center"
-        spacing={2}
-        mb={3}
-        flexWrap="wrap"
-      >
-        <Button
-          startIcon={<ArrowBackIcon />}
-          variant="text"
-          onClick={() => {
-            const returnUrl = sessionStorage.getItem('library_return_url');
-            if (returnUrl) navigate(returnUrl);
-            else navigate('/library');
-          }}
-        >
-          Back to Library
-        </Button>
-        <Stack direction="row" spacing={2} alignItems="center">
-          {coverError ? (
-            <Avatar
-              sx={{
-                bgcolor: 'primary.main',
-                width: 120,
-                height: 120,
-                fontSize: 48,
-                borderRadius: 2,
-              }}
-              variant="rounded"
-            >
-              {coverLetter}
-            </Avatar>
-          ) : (
-            <Box
-              component="img"
-              src={coverImageUrl}
-              alt={`Cover art for ${book.title || 'Untitled'}`}
-              onError={() => setCoverError(true)}
-              onClick={() => setCoverLightboxOpen(true)}
-              sx={{
-                width: 120,
-                height: 120,
-                objectFit: 'cover',
-                borderRadius: 2,
-                boxShadow: 2,
-                cursor: 'pointer',
-                '&:hover': { opacity: 0.85 },
-              }}
-            />
-          )}
-          <Stack spacing={0.5}>
-            <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-              <Typography variant="h4" component="h1">
-                {book.title || 'Untitled'}
-              </Typography>
-              {isSoftDeleted && (
-                <Chip label="Soft Deleted" color="warning" size="small" />
-              )}
-              {isQuarantined && (
-                <Tooltip title={book.quarantine_reason || 'Quarantined'}>
-                  <Chip label="Failed" color="error" size="small" />
-                </Tooltip>
-              )}
-              {book.library_state && (
-                <Chip
-                  label={`State: ${book.library_state}`}
-                  color={
-                    book.library_state === 'imported'
-                      ? 'warning'
-                      : book.library_state === 'organized'
-                        ? 'success'
-                        : 'default'
-                  }
-                  size="small"
-                />
-              )}
-              {book.is_primary_version && (
-                <Chip label="Primary Version" color="primary" />
-              )}
-              {bookFiles.some((f) => f.imported_from_deluge_at) && (
-                <Tooltip title="At least one file was imported via Deluge">
-                  <Chip label="Imported from Deluge" color="secondary" size="small" variant="outlined" />
-                </Tooltip>
-              )}
-              <ReadStatusChip bookId={book.id} />
-            </Box>
-            <Typography variant="subtitle1" color="text.secondary">
-              {book.authors && book.authors.length > 0
-                ? `By ${book.authors.map((a) => a.name).join(' & ')}`
-                : book.author_name
-                  ? `By ${book.author_name}`
-                  : 'Unknown Author'}
-            </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 0.5 }}>
-              <Chip
-                icon={<AccessTimeIcon />}
-                label={`Created ${formatDateTime(book.created_at)}`}
-                variant="outlined"
-                size="small"
-              />
-              <Chip
-                icon={<InfoIcon />}
-                label={`Updated ${formatDateTime(book.updated_at)}`}
-                variant="outlined"
-                size="small"
-              />
-              {book.version_group_id && (() => {
-                const anyMissing = book.file_exists === false || segments.some((s) => s.file_exists === false);
-                return (
-                  <Chip
-                    icon={<CompareIcon />}
-                    label="Version Group Linked"
-                    color={anyMissing ? 'error' : 'success'}
-                    variant="outlined"
-                    size="small"
-                  />
-                );
-              })()}
-              {itunesLinked && (
-                <Chip
-                  label={`iTunes Linked (${itunesPidCount} PID${itunesPidCount !== 1 ? 's' : ''})`}
-                  color="info"
-                  variant="outlined"
-                  size="small"
-                  clickable
-                  onClick={() => setActiveTab('files')}
-                />
-              )}
-            </Stack>
-          </Stack>
-        </Stack>
-      </Stack>
-
-      {isSoftDeleted && (
-        <Alert
-          severity="warning"
-          action={
-            <Stack direction="row" spacing={1}>
-              <Button
-                color="inherit"
-                size="small"
-                onClick={handleRestore}
-                disabled={actionLoading}
-              >
-                Restore
-              </Button>
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => setPurgeDialogOpen(true)}
-                disabled={actionLoading}
-              >
-                Purge
-              </Button>
-            </Stack>
-          }
-          sx={{ mb: 2 }}
-        >
-          Marked for deletion on {formatDateTime(book.marked_for_deletion_at)}.
-          Last updated {formatDateTime(book.updated_at)}.
-          Restore to keep the book or purge to remove it permanently.
+      {actionLoading && <LinearProgress sx={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999 }} />}
+      {actionLabel && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {actionLabel}
         </Alert>
       )}
 
-      {isQuarantined && (
-        <Alert
-          severity="error"
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={handleUnquarantine}
-              disabled={actionLoading}
-            >
-              Restore
-            </Button>
-          }
-          sx={{ mb: 2 }}
-        >
-          Quarantined on {formatDateTime(book.quarantined_at)}.
-          Reason: {book.quarantine_reason || 'unknown'}.
-          File is in .failed/ and excluded from scans and write-back.
-        </Alert>
-      )}
+      <BookDetailHeader
+        book={book}
+        bookFiles={bookFiles}
+        segments={segments}
+        itunesLinked={itunesLinked}
+        itunesPidCount={itunesPidCount}
+        activeTab={activeTab}
+        onBack={() => {
+          const returnUrl = sessionStorage.getItem('library_return_url');
+          if (returnUrl) navigate(returnUrl);
+          else navigate('/library');
+        }}
+        onSetActiveTab={setActiveTab}
+      />
 
-      {!isQuarantined && (
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Tooltip title="Move to .failed/ — excludes from scans and iTunes">
-            <Button
-              size="small"
-              color="error"
-              variant="outlined"
-              startIcon={<WarningAmberIcon />}
-              onClick={handleQuarantine}
-              disabled={actionLoading}
-            >
-              Quarantine
-            </Button>
-          </Tooltip>
-        </Box>
-      )}
+      <BookDetailStatusAlerts
+        book={book}
+        actionLoading={actionLoading}
+        onRestore={handleRestore}
+        onUnquarantine={handleUnquarantine}
+        onOpenPurgeDialog={() => setPurgeDialogOpen(true)}
+        onQuarantine={handleQuarantine}
+      />
 
-      {book.file_exists === false && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          File missing: The audio file at <strong>{book.file_path}</strong> could not be found on disk.
-          The file may have been moved, renamed, or deleted.
-        </Alert>
-      )}
-
-      {book.metadata_source_hash && (book.metadata_source_hash_duplicate_count ?? 0) > 0 && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          ⚠ This book shares its metadata source with{' '}
-          <strong>{book.metadata_source_hash_duplicate_count}</strong>{' '}
-          other book{(book.metadata_source_hash_duplicate_count ?? 0) === 1 ? '' : 's'} — possible duplicate.{' '}
-          <a href="/dedup/candidates" style={{ color: 'inherit', fontWeight: 'bold' }}>
-            View duplicates
-          </a>
-        </Alert>
-      )}
+      <BookDetailActions
+        book={book}
+        isSoftDeleted={isSoftDeleted}
+        loading={loading}
+        actionLoading={actionLoading}
+        parsingWithAI={parsingWithAI}
+        rescanningFolder={rescanningFolder}
+        fetchingMetadata={fetchingMetadata}
+        transcoding={transcoding}
+        organizePreviewLoading={organizePreviewLoading}
+        applyingOrganize={applyingOrganize}
+        writingToFiles={writingToFiles}
+        onOpenHistory={() => setHistoryDialogOpen(true)}
+        onParseWithAI={handleParseWithAI}
+        onRescanFolder={handleRescanFolder}
+        onRefresh={() => { loadBook(); loadVersions(); refreshFilesTab(); }}
+        onOpenEdit={() => setEditDialogOpen(true)}
+        onFetchMetadata={handleFetchMetadata}
+        onOpenMetadataSearch={() => setMetadataSearchOpen(true)}
+        onOpenPlaylist={() => setPlaylistDialogOpen(true)}
+        onTranscode={handleTranscode}
+        onPreviewOrganize={handlePreviewOrganize}
+        onOpenWriteBack={() => setWriteBackDialogOpen(true)}
+        onOpenDelete={() => { setDeleteOptions({ softDelete: true, blockHash: true }); setDeleteDialogOpen(true); }}
+        onRestore={handleRestore}
+      />
 
       <Paper sx={{ p: 2, mb: 3 }}>
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          justifyContent="space-between"
-        >
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            <Button
-              variant="outlined"
-              startIcon={<HistoryIcon />}
-              onClick={() => setHistoryDialogOpen(true)}
-              disabled={actionLoading}
-            >
-              History
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={
-                parsingWithAI ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <PsychologyIcon />
-                )
-              }
-              onClick={handleParseWithAI}
-              disabled={parsingWithAI || actionLoading}
-            >
-              {parsingWithAI ? 'Parsing...' : 'Parse with AI'}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={
-                rescanningFolder ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <FolderOpenIcon />
-                )
-              }
-              onClick={handleRescanFolder}
-              disabled={rescanningFolder || actionLoading}
-            >
-              {rescanningFolder ? 'Scanning...' : 'Rescan Folder'}
-            </Button>
-          </Stack>
-          <Stack
-            direction="row"
-            spacing={1}
-            flexWrap="wrap"
-            justifyContent="flex-end"
-            alignItems="center"
-          >
-            <Tooltip title="Refresh book data">
-              <IconButton
-                onClick={() => { loadBook(); loadVersions(); refreshFilesTab(); }}
-                disabled={loading || actionLoading}
-                size="small"
-              >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-            <Button
-              variant="outlined"
-              startIcon={<EditIcon />}
-              onClick={() => setEditDialogOpen(true)}
-              disabled={actionLoading}
-            >
-              Edit Metadata
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={
-                fetchingMetadata ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <CloudDownloadIcon />
-                )
-              }
-              onClick={handleFetchMetadata}
-              disabled={fetchingMetadata || actionLoading}
-            >
-              {fetchingMetadata ? 'Fetching...' : 'Fetch Metadata'}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<SearchIcon />}
-              onClick={() => setMetadataSearchOpen(true)}
-              disabled={actionLoading}
-            >
-              Search Metadata
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => setPlaylistDialogOpen(true)}
-              disabled={actionLoading}
-            >
-              Add to Playlist
-            </Button>
-            {book && book.format?.toLowerCase() !== 'm4b' && (
-              <Button
-                variant="outlined"
-                startIcon={
-                  transcoding ? (
-                    <CircularProgress size={20} />
-                  ) : (
-                    <TransformIcon />
-                  )
-                }
-                onClick={handleTranscode}
-                disabled={transcoding || actionLoading}
-              >
-                {transcoding ? 'Converting...' : 'Convert to M4B'}
-              </Button>
-            )}
-            <Button
-              variant="outlined"
-              startIcon={
-                organizePreviewLoading || applyingOrganize ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <BuildIcon />
-                )
-              }
-              onClick={handlePreviewOrganize}
-              disabled={organizePreviewLoading || applyingOrganize || actionLoading}
-            >
-              {applyingOrganize ? 'Organizing...' : organizePreviewLoading ? 'Loading...' : 'Preview Organize'}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={
-                writingToFiles ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <SaveIcon />
-                )
-              }
-              onClick={() => setWriteBackDialogOpen(true)}
-              disabled={writingToFiles || actionLoading}
-            >
-              {writingToFiles ? 'Writing...' : 'Save to Files'}
-            </Button>
-            {!isSoftDeleted ? (
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<DeleteIcon />}
-                onClick={() => {
-                  setDeleteOptions({ softDelete: true, blockHash: true });
-                  setDeleteDialogOpen(true);
-                }}
-                disabled={actionLoading}
-              >
-                Delete
-              </Button>
-            ) : (
-              <Button
-                variant="outlined"
-                color="success"
-                startIcon={<RestoreIcon />}
-                onClick={handleRestore}
-                disabled={actionLoading}
-              >
-                Restore
-              </Button>
-            )}
-          </Stack>
-        </Stack>
-      </Paper>
-
-      {/* File selector chip bar removed — checkboxes are now in the files table */}
-
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, value) => setActiveTab(value)}
-          textColor="primary"
-          indicatorColor="primary"
-          variant="scrollable"
-        >
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} textColor="primary" indicatorColor="primary" variant="scrollable">
           <Tab label="Info" value="info" />
-          <Tab
-            label="Files &amp; History"
-            value="files"
-          />
+          <Tab label="Files &amp; History" value="files" />
         </Tabs>
       </Paper>
 
       {activeTab === 'info' && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          {singleSelectedId && segmentTags ? (
-            <>
-              {segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                File-specific info for: {segmentTags.file_path.split('/').pop()}
-              </Typography>
-              <Grid container spacing={2}>
-                {[
-                  { label: 'Filename', value: segmentTags.file_path.split('/').pop() },
-                  { label: 'Format', value: segmentTags.format?.toUpperCase() },
-                  { label: 'Duration', value: formatDuration(segmentTags.duration_sec) },
-                  {
-                    label: 'Size',
-                    value: formatBytes(segmentTags.size_bytes),
-                  },
-                  {
-                    label: 'Track Number',
-                    value: segmentTags.track_number != null
-                      ? `${segmentTags.track_number}${segmentTags.total_tracks ? ` of ${segmentTags.total_tracks}` : ''}`
-                      : undefined,
-                  },
-                  { label: 'Codec', value: segmentTags.tags?.codec },
-                  { label: 'Bitrate', value: segmentTags.tags?.bitrate ? `${segmentTags.tags.bitrate} kbps` : undefined },
-                  { label: 'Sample Rate', value: segmentTags.tags?.sample_rate ? `${segmentTags.tags.sample_rate} Hz` : undefined },
-                ]
-                  .filter((item) => item.value !== undefined && item.value !== '' && item.value !== null && item.value !== '\u2014')
-                  .map((item) => (
-                    <Grid item xs={12} sm={6} md={4} key={item.label}>
-                      <Box
-                        sx={{
-                          p: 2,
-                          borderRadius: 1,
-                          bgcolor: 'background.default',
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          height: '100%',
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ textTransform: 'uppercase' }}
-                        >
-                          {item.label}
-                        </Typography>
-                        <Typography variant="body1">
-                          {item.value as string}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  ))}
-              </Grid>
-              {segmentTags.tags_read_error && (
-                <Alert severity="warning" sx={{ mt: 2 }}>
-                  Tag read error: {segmentTags.tags_read_error}
-                </Alert>
-              )}
-              {segmentTags.used_filename_fallback && (
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  Some metadata was extracted from the filename because embedded tags were incomplete.
-                </Alert>
-              )}
-            </>
-          ) : (
-            <>
-              {singleSelectedId && segmentTagsLoading && <LinearProgress sx={{ mb: 2 }} />}
-              <Grid container spacing={2}>
-                {(() => {
-                  const authorVal = book.authors && book.authors.length > 0
-                    ? book.authors.map((a) => a.name).join(' & ')
-                    : book.author_name || '';
-                  const narratorVal = book.narrators && book.narrators.length > 0
-                    ? book.narrators.map((n) => n.name).join(' & ')
-                    : book.narrator || '';
-                  // Core fields always shown
-                  const coreFields = [
-                    { label: 'Title', value: book.title || '' },
-                    { label: 'Author', value: authorVal },
-                    { label: 'Narrator', value: narratorVal },
-                    { label: 'Language', value: book.language || '' },
-                    { label: 'Series', value: book.series_name ? `${book.series_name}${book.series_position ? ` #${book.series_position}` : ''}` : '' },
-                  ];
-                  // Dynamic fields: only shown when set
-                  const dynamicFields = [
-                    { label: 'Publisher', value: book.publisher },
-                    { label: 'Release Year', value: book.audiobook_release_year ? String(book.audiobook_release_year) : undefined },
-                    { label: 'Print Year', value: book.print_year ? String(book.print_year) : undefined },
-                    { label: 'ISBN 13', value: book.isbn13 },
-                    { label: 'ISBN 10', value: book.isbn10 },
-                    { label: 'Genre', value: book.genre },
-                    { label: 'Format', value: book.format?.toUpperCase() },
-                    { label: 'Codec', value: book.codec },
-                    { label: 'Bitrate', value: book.bitrate ? `${book.bitrate} kbps` : undefined },
-                    { label: 'Duration', value: book.duration ? formatDuration(book.duration) : undefined },
-                    { label: 'Audible Runtime', value: (() => {
-                      if (!book.audible_runtime_min) return undefined;
-                      const h = Math.floor(book.audible_runtime_min / 60);
-                      const m = book.audible_runtime_min % 60;
-                      return h > 0 ? `${h}h ${m}m` : `${m}m`;
-                    })() },
-                    { label: 'Edition', value: book.edition && book.edition !== '0' && book.edition.length <= 50 ? book.edition : undefined },
-                    { label: 'Description', value: book.description || (book.edition && book.edition.length > 50 ? book.edition : undefined) },
-                    { label: 'Work ID', value: book.work_id },
-                  ].filter((item) => item.value !== undefined && item.value !== '' && item.value !== null);
-                  return [...coreFields, ...dynamicFields].map((item) => (
-                    <Grid item xs={12} sm={item.label === 'Description' ? 12 : 6} md={item.label === 'Description' ? 12 : 4} key={item.label}>
-                      <Box
-                        sx={{
-                          p: 2,
-                          borderRadius: 1,
-                          bgcolor: 'background.default',
-                          border: '1px solid',
-                          borderColor: 'divider',
-                          height: '100%',
-                        }}
-                      >
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}
-                        >
-                          {item.label}
-                        </Typography>
-                        <Typography variant="body1" sx={{ color: item.value ? 'text.primary' : 'text.disabled' }}>
-                          {item.value || '\u2014'}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  ));
-                })()}
-                {/* Duration delta warning chip — shown when actual audio differs from Audible runtime by >5 min */}
-                {book.duration_delta_sec != null && Math.abs(book.duration_delta_sec) > 300 && (() => {
-                  const absDelta = Math.abs(book.duration_delta_sec!);
-                  const sign = book.duration_delta_sec! > 0 ? '+' : '-';
-                  const totalMin = Math.floor(absDelta / 60);
-                  const h = Math.floor(totalMin / 60);
-                  const m = totalMin % 60;
-                  const deltaLabel = absDelta >= 60
-                    ? (h > 0 ? `${sign}${h}h ${m}m off from Audible` : `${sign}${m}m off from Audible`)
-                    : `${sign}${absDelta}s off from Audible`;
-                  return (
-                    <Grid item xs={12}>
-                      <Tooltip title="Difference between actual audio duration and Audible's listed runtime">
-                        <Chip color="warning" label={deltaLabel} size="small" />
-                      </Tooltip>
-                    </Grid>
-                  );
-                })()}
-              </Grid>
-            </>
-          )}
-        </Paper>
+        <BookDetailInfoTab
+          book={book}
+          bookId={id!}
+          singleSelectedId={singleSelectedId}
+          segmentTags={segmentTags}
+          segmentTagsLoading={segmentTagsLoading}
+          detailedTags={detailedTags}
+          toast={toast}
+        />
       )}
 
-      {/* Star rating widget — RATE-2 */}
-      {activeTab === 'info' && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-            Your Rating
-          </Typography>
-          <Stack spacing={2}>
-            {(
-              [
-                { label: 'Overall', value: ratingOverall, onChange: handleRatingOverallChange },
-                { label: 'Story', value: ratingStory, onChange: handleRatingStoryChange },
-                { label: 'Performance', value: ratingPerformance, onChange: handleRatingPerformanceChange },
-              ] as const
-            ).map(({ label, value, onChange }) => (
-              <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="body2" sx={{ width: 110, flexShrink: 0 }}>
-                  {label}
-                </Typography>
-                <Rating
-                  value={value}
-                  onChange={onChange}
-                  precision={0.5}
-                  max={5}
-                />
-                {value != null && (
-                  <Typography variant="caption" color="text.secondary">
-                    {value.toFixed(1)} / 5
-                  </Typography>
-                )}
-              </Box>
-            ))}
-            <Box>
-              <Typography variant="body2" sx={{ mb: 0.5 }}>
-                Notes
-              </Typography>
-              <TextField
-                multiline
-                minRows={2}
-                maxRows={6}
-                fullWidth
-                placeholder="Your thoughts on this audiobook…"
-                value={ratingNotes}
-                onChange={(e) => setRatingNotes(e.target.value)}
-                onBlur={handleRatingNotesBlur}
-                size="small"
-              />
-            </Box>
-          </Stack>
-        </Paper>
-      )}
-
-      {/* Tags section — Audible Categories + Your Labels (CAT-1 / PR #548) */}
-      {activeTab === 'info' && detailedTags.length > 0 && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-            Tags
-          </Typography>
-          {detailedTags.filter((t) => t.source !== 'user').length > 0 && (
-            <>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Audible Categories
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: detailedTags.some((t) => t.source === 'user') ? 2 : 0 }}>
-                {detailedTags.filter((t) => t.source !== 'user').map((t) => (
-                  <Chip key={t.tag} label={t.tag} size="small" variant="outlined" icon={<LabelIcon />} />
-                ))}
-              </Box>
-            </>
-          )}
-          {detailedTags.filter((t) => t.source === 'user').length > 0 && (
-            <>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Your Labels
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {detailedTags.filter((t) => t.source === 'user').map((t) => (
-                  <Chip key={t.tag} label={t.tag} size="small" />
-                ))}
-              </Box>
-            </>
-          )}
-        </Paper>
-      )}
-
-      {activeTab === 'files' && (() => {
-        // Group versions by format, but use a unique key per version when
-        // multiple versions share the same format (so each gets its own tray).
-        const allVersions = versions.length > 0 ? versions : [book];
-        // Count how many versions exist per format to detect collisions.
-        const formatCounts = new Map<string, number>();
-        for (const v of allVersions) {
-          const fmt = v.format?.toUpperCase() || 'UNKNOWN';
-          formatCounts.set(fmt, (formatCounts.get(fmt) ?? 0) + 1);
-        }
-        // Build one tray per version. Key = format when unique, else version.id.
-        const formatGroups = new Map<string, Book[]>();
-        for (const v of allVersions) {
-          const fmt = v.format?.toUpperCase() || 'UNKNOWN';
-          const key = (formatCounts.get(fmt) ?? 0) > 1 ? v.id : fmt;
-          if (!formatGroups.has(key)) formatGroups.set(key, []);
-          formatGroups.get(key)!.push(v);
-        }
-
-        return (
-        <Stack spacing={0}>
-          {/* Link another version — above format trays */}
-          <Box sx={{ mb: 1 }}>
-            {!linkSearchOpen ? (
-              <Button size="small" variant="text" startIcon={<LinkIcon />}
-                onClick={() => setLinkSearchOpen(true)}>
-                Link Another Version
-              </Button>
-            ) : (
-              <Stack spacing={1} sx={{ maxWidth: 400 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography variant="caption">Search for a book to link as a version</Typography>
-                  <Button size="small" onClick={() => setLinkSearchOpen(false)}>Cancel</Button>
-                </Stack>
-                <TextField size="small" autoFocus placeholder="Search by title or author..."
-                  value={linkSearchQuery} onChange={(e) => setLinkSearchQuery(e.target.value)} fullWidth />
-                {linkSearchLoading && <CircularProgress size={16} />}
-                {linkSearchResults.map((result) => (
-                  <Button key={result.id} variant="outlined" size="small"
-                    sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-                    onClick={() => handleInlineLinkVersion(result.id)}>
-                    {result.title} — {result.author_name}
-                  </Button>
-                ))}
-              </Stack>
-            )}
-          </Box>
-
-          {/* Format group sections */}
-          {Array.from(formatGroups.entries()).map(([, groupVersions]) => {
-            // Use first version in group as the representative
-            const representative = groupVersions[0];
-            const isExpanded = groupVersions.some((v) => expandedVersionIds.has(v.id));
-            const groupId = groupVersions.map((v) => v.id).join('-');
-            const hasPrimary = groupVersions.some((v) => v.is_primary_version);
-            const hasItunes = groupVersions.some((v) => v.itunes_persistent_id);
-            const totalFiles = groupVersions.reduce((sum, v) => {
-              // Prefer bookFiles for the current book; fall back to segments.
-              const segs =
-                v.id === book.id
-                  ? bookFiles.length > 0
-                    ? bookFiles
-                    : segments
-                  : (versionSegments[v.id] || []);
-              return sum + (segs.length || 1);
-            }, 0);
-            const totalSize = groupVersions.reduce((sum, v) => sum + (v.file_size || 0), 0);
-            const totalDuration = groupVersions.reduce((sum, v) => sum + (v.duration || 0), 0);
-
-            // Build a descriptive label for the tray header.
-            // When there is only one version in the group (unique format), show
-            // just the format.  When grouped by version ID (same format, multiple
-            // versions) show the last 2-3 path segments so the user can tell the
-            // copies apart.
-            const fmt = representative.format?.toUpperCase() || 'UNKNOWN';
-            const trayLabel = (() => {
-              if (groupVersions.length === 1 && representative.file_path) {
-                const parts = representative.file_path.replace(/\\/g, '/').split('/').filter(Boolean);
-                const segments = parts.slice(-3).join('/');
-                // Prefer iTunes-prefixed label for iTunes copies
-                if (hasItunes && representative.itunes_persistent_id) {
-                  return `iTunes: ${segments}`;
-                }
-                return segments || fmt;
-              }
-              return fmt;
-            })();
-
-            return (
-              <Paper key={groupId} sx={{ mb: 1, overflow: 'hidden' }} data-testid={`format-tray-${fmt.toLowerCase()}`}>
-                {/* Format tray header */}
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    px: 2,
-                    py: 1,
-                    bgcolor: hasPrimary ? 'primary.dark' : 'background.paper',
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: hasPrimary ? 'primary.dark' : 'action.hover' },
-                    borderBottom: isExpanded ? '1px solid' : 'none',
-                    borderColor: 'divider',
-                  }}
-                  onClick={() => {
-                    // Toggle all versions in this format group
-                    for (const v of groupVersions) {
-                      toggleVersionExpanded(v.id);
-                    }
-                  }}
-                >
-                  <IconButton size="small" sx={{ mr: 1, color: 'inherit' }}>
-                    {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                  </IconButton>
-                  {hasPrimary ? (
-                    <StarIcon fontSize="small" sx={{ mr: 1, color: 'warning.main' }} />
-                  ) : (
-                    <StarBorderIcon fontSize="small" sx={{ mr: 1, opacity: 0.4 }} />
-                  )}
-                  <Typography variant="subtitle1" fontWeight="bold" sx={{ flex: 1, minWidth: 0 }} noWrap>
-                    {fmt}{representative.codec ? ` (${representative.codec})` : ''}
-                    {trayLabel !== fmt && (
-                      <Typography component="span" variant="body2" sx={{ ml: 1, opacity: 0.75, fontWeight: 'normal' }}>
-                        {trayLabel}
-                      </Typography>
-                    )}
-                  </Typography>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 2, flexShrink: 0 }}>
-                    <Chip
-                      label={`${totalFiles} file${totalFiles !== 1 ? 's' : ''}`}
-                      size="small"
-                      variant="outlined"
-                    />
-                    {totalSize > 0 && (
-                      <Typography variant="body2" color="text.secondary">
-                        {formatBytes(totalSize)}
-                      </Typography>
-                    )}
-                    {totalDuration > 0 && (
-                      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 50 }}>
-                        {formatDuration(totalDuration)}
-                      </Typography>
-                    )}
-                    {hasPrimary && (
-                      <Chip label="Primary" size="small" color="warning" />
-                    )}
-                    {hasItunes && (
-                      <Chip label="iTunes" size="small" color="info" variant="outlined" />
-                    )}
-                  </Stack>
-                </Box>
-
-                {/* Expanded content for each version in this format group */}
-                <Collapse in={isExpanded}>
-                  {groupVersions.map((version) => {
-                    const isCurrent = version.id === book.id;
-                    const isPrimary = version.is_primary_version;
-                    // Prefer bookFiles for the current book; normalize to BookSegment shape.
-                    const vSegs: BookSegment[] = isCurrent && bookFiles.length > 0
-                      ? bookFiles.map((f) => ({
-                          id: f.id,
-                          file_path: f.file_path,
-                          format: f.format ?? '',
-                          size_bytes: f.file_size ?? 0,
-                          duration_seconds: f.duration ?? 0,
-                          track_number: f.track_number,
-                          total_tracks: f.track_count,
-                          active: !f.missing,
-                          file_exists: f.file_exists,
-                        }))
-                      : isCurrent
-                        ? segments
-                        : (versionSegments[version.id] || []);
-                    const showAllSegments = expandedSegmentVersionIds.has(version.id);
-                    const visibleSegments = showAllSegments
-                      ? vSegs
-                      : vSegs.slice(0, SEGMENT_PREVIEW_COUNT);
-                    const hiddenSegmentCount = Math.max(vSegs.length - visibleSegments.length, 0);
-                    const metadataEntries = OVERALL_METADATA_FIELDS
-                      .map(({ key, label }) => {
-                        const tag = versionFileTags[version.id]?.tags?.[key];
-                        if (!tag) return null;
-                        const fileValue = formatTagValue(tag.file_value);
-                        const storedValue = formatTagValue(tag.stored_value);
-                        if (fileValue === '—' && storedValue === '—') return null;
-                        return {
-                          key,
-                          label,
-                          fileValue,
-                          storedValue,
-                          differsFromDb:
-                            fileValue !== '—' &&
-                            storedValue !== '—' &&
-                            fileValue !== storedValue,
-                        };
-                      })
-                      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-
-                    return (
-                      <Box key={version.id} sx={{ p: 2, borderBottom: groupVersions.length > 1 ? '2px solid' : 'none', borderColor: 'divider', '&:not(:last-child)': { pb: 3 }, '&:not(:first-of-type)': { pt: 3 } }}>
-                        {/* Version action buttons */}
-                        <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-                          {!isPrimary && versions.length > 1 && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<StarIcon />}
-                              onClick={(e) => { e.stopPropagation(); handleSetPrimary(version.id); }}
-                            >
-                              Set as Primary
-                            </Button>
-                          )}
-                          {!isCurrent && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={(e) => { e.stopPropagation(); navigate(`/library/${version.id}`); }}
-                            >
-                              View Details
-                            </Button>
-                          )}
-                          {!isCurrent && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="error"
-                              startIcon={<LinkOffIcon />}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  await api.unlinkBookVersion(book.id, version.id);
-                                  loadVersions(); loadBook();
-                                  toast('Version unlinked', 'success');
-                                } catch { toast('Failed to unlink version', 'error'); }
-                              }}
-                            >
-                              Unlink
-                            </Button>
-                          )}
-                        </Stack>
-
-                        {/* Path and codec info */}
-                        <Table size="small" sx={{ mb: 2 }}>
-                          <TableBody>
-                            <TableRow>
-                              <TableCell sx={{ fontWeight: 'bold', width: 140, color: 'text.secondary' }}>Path</TableCell>
-                              <TableCell sx={{ wordBreak: 'break-all', fontSize: '0.85rem' }}>{version.file_path}</TableCell>
-                            </TableRow>
-                            {version.bitrate && (
-                              <TableRow>
-                                <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Bitrate</TableCell>
-                                <TableCell>{version.bitrate} kbps</TableCell>
-                              </TableRow>
-                            )}
-                            {version.sample_rate && (
-                              <TableRow>
-                                <TableCell sx={{ fontWeight: 'bold', color: 'text.secondary' }}>Sample Rate</TableCell>
-                                <TableCell>{version.sample_rate} Hz</TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-
-                        {vSegs.length > 1 && metadataEntries.length > 0 && (
-                          <Box
-                            sx={{
-                              mb: 2,
-                              p: 1.5,
-                              border: '1px solid',
-                              borderColor: 'divider',
-                              borderRadius: 1,
-                              bgcolor: 'background.default',
-                            }}
-                          >
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              alignItems="center"
-                              flexWrap="wrap"
-                              useFlexGap
-                              sx={{ mb: 1 }}
-                            >
-                              <Typography variant="subtitle2">
-                                Overall Metadata
-                              </Typography>
-                              <Chip
-                                label={`${metadataEntries.length} field${metadataEntries.length !== 1 ? 's' : ''}`}
-                                size="small"
-                                variant="outlined"
-                              />
-                            </Stack>
-                            <Grid container spacing={1.5}>
-                              {metadataEntries.map((entry) => (
-                                <Grid item xs={12} md={6} key={`${version.id}-${entry.key}`}>
-                                  <Box
-                                    sx={{
-                                      p: 1.25,
-                                      borderRadius: 1,
-                                      border: '1px solid',
-                                      borderColor: entry.differsFromDb ? 'warning.main' : 'divider',
-                                      bgcolor: entry.differsFromDb ? 'warning.50' : 'background.paper',
-                                      height: '100%',
-                                    }}
-                                  >
-                                    <Stack
-                                      direction="row"
-                                      alignItems="center"
-                                      justifyContent="space-between"
-                                      spacing={1}
-                                      sx={{ mb: 0.5 }}
-                                    >
-                                      <Typography variant="caption" color="text.secondary">
-                                        {entry.label}
-                                      </Typography>
-                                      {entry.differsFromDb && (
-                                        <Chip label="≠ DB" size="small" color="warning" />
-                                      )}
-                                    </Stack>
-                                    <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                                      {entry.fileValue}
-                                    </Typography>
-                                    {entry.differsFromDb && (
-                                      <Typography variant="caption" color="text.secondary">
-                                        DB: {entry.storedValue}
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                </Grid>
-                              ))}
-                            </Grid>
-                          </Box>
-                        )}
-
-                        {/* Tag comparison component (replaces inline tags table) */}
-                        <TagComparison bookId={version.id} versions={allVersions} refreshKey={filesRefreshKey} snapshotTimestamp={compareSnapshotTs} onClearSnapshot={() => setCompareSnapshotTs(null)} />
-
-                        {/* Segments/files table for multi-file books */}
-                        {vSegs.length === 0 && (
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontStyle: 'italic' }}>
-                            No files found for this version.
-                          </Typography>
-                        )}
-                        {vSegs.length > 0 && (() => {
-                          const missingCount = vSegs.filter((s) => s.file_exists === false).length;
-                          const isCurrentBook = isCurrent;
-                          const allSelected = isCurrentBook && vSegs.length > 0 && selectedSegmentIds.size === vSegs.length;
-                          const someSelected = isCurrentBook && selectedSegmentIds.size > 0 && !allSelected;
-                          return (
-                            <Box sx={{ mt: 2 }}>
-                              <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
-                                <Typography variant="subtitle2" color="text.secondary">
-                                  Files ({vSegs.length})
-                                </Typography>
-                                {isCurrentBook && vSegs.length > 1 && (
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    onClick={async () => {
-                                      try {
-                                        const result = await api.extractTrackInfo(book.id);
-                                        toast(`Updated track numbers for ${result.updated} of ${result.total} files`, 'success');
-                                        if (id) {
-                                          await reloadCurrentBookFiles(id);
-                                        }
-                                      } catch {
-                                        toast('Failed to extract track info', 'error');
-                                      }
-                                    }}
-                                  >
-                                    Auto-fill Track Numbers
-                                  </Button>
-                                )}
-                              </Stack>
-                              {missingCount > 0 && (
-                                <Alert severity="warning" sx={{ mb: 1 }}>
-                                  {missingCount} of {vSegs.length} file{vSegs.length !== 1 ? 's' : ''} missing on disk.
-                                </Alert>
-                              )}
-                              {/* Segment action bar for current version */}
-                              {isCurrentBook && selectedSegmentIds.size > 0 && vSegs.length > 1 && (
-                                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1, p: 1, bgcolor: 'action.selected', borderRadius: 1 }}>
-                                  <Typography variant="body2">{selectedSegmentIds.size} selected</Typography>
-                                  <Button size="small" variant="contained" startIcon={<TransformIcon />}
-                                    disabled={splittingVersion} onClick={handleSplitVersion}>
-                                    {splittingVersion ? 'Splitting...' : 'Split to New Version'}
-                                  </Button>
-                                  <Button size="small" variant="contained" color="secondary" startIcon={<TransformIcon />}
-                                    disabled={splittingToBooks} onClick={handleSplitToBooks}>
-                                    {splittingToBooks ? 'Splitting...' : 'Split to New Books'}
-                                  </Button>
-                                  {versions.length > 1 && versions
-                                    .filter((v) => v.id !== book.id)
-                                    .map((v) => (
-                                      <Button key={v.id} size="small" variant="outlined"
-                                        onClick={() => handleMoveToVersion(v.id)}>
-                                        Move to: {v.title}{v.format ? ` (${v.format.toUpperCase()})` : ''}
-                                      </Button>
-                                    ))}
-                                </Stack>
-                              )}
-                              <Table size="small" data-testid="segment-table">
-                                <TableHead>
-                                  <TableRow>
-                                    {isCurrentBook && vSegs.length > 1 && (
-                                      <TableCell padding="checkbox">
-                                        <Checkbox size="small" checked={allSelected} indeterminate={someSelected}
-                                          onChange={(e) => {
-                                            if (e.target.checked) {
-                                              setSelectedSegmentIds(new Set(vSegs.map((s) => s.id)));
-                                            } else {
-                                              setSelectedSegmentIds(new Set());
-                                            }
-                                          }} />
-                                      </TableCell>
-                                    )}
-                                    <TableCell>#</TableCell>
-                                    <TableCell>File</TableCell>
-                                    <TableCell>Origin</TableCell>
-                                    <TableCell>Duration</TableCell>
-                                    <TableCell align="right">Size</TableCell>
-                                  </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                  {visibleSegments.map((seg) => {
-                                    const isMissing = seg.file_exists === false;
-                                    const isSelected = isCurrentBook && selectedSegmentIds.has(seg.id);
-                                    return (
-                                      <TableRow key={seg.id} hover selected={isSelected}
-                                        sx={{ cursor: isCurrentBook ? 'pointer' : 'default',
-                                          ...(isMissing && { bgcolor: 'error.50', '&:hover': { bgcolor: 'error.100' } }) }}
-                                        onClick={() => {
-                                          if (!isCurrentBook) return;
-                                          if (isMissing) { setRelocateSegment(seg); }
-                                          else { setSelectedSegmentIds(new Set([seg.id])); setActiveTab('info'); }
-                                        }}>
-                                        {isCurrentBook && vSegs.length > 1 && (
-                                          <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                                            <Checkbox size="small" checked={isSelected}
-                                              onChange={(e) => {
-                                                const next = new Set(selectedSegmentIds);
-                                                if (e.target.checked) next.add(seg.id); else next.delete(seg.id);
-                                                setSelectedSegmentIds(next);
-                                              }} />
-                                          </TableCell>
-                                        )}
-                                        <TableCell>
-                                          <Stack direction="row" alignItems="center" spacing={0.5}>
-                                            {isMissing && (
-                                              <Tooltip title={`Missing: ${seg.file_path}`}>
-                                                <ErrorOutlineIcon color="error" fontSize="small" />
-                                              </Tooltip>
-                                            )}
-                                            <span>{seg.track_number ?? '\u2014'}</span>
-                                          </Stack>
-                                        </TableCell>
-                                        <TableCell sx={{ wordBreak: 'break-all', fontSize: '0.8rem', ...(isMissing && { color: 'error.main' }) }}>
-                                          <Tooltip title={seg.file_path}><span>{seg.file_path}</span></Tooltip>
-                                        </TableCell>
-                                        <TableCell>
-                                          {(seg as unknown as api.BookFile).deluge_original_path
-                                            ? (
-                                              <Tooltip title={(seg as unknown as api.BookFile).deluge_original_path!}>
-                                                <Chip label="Deluge" size="small" variant="outlined" color="secondary" />
-                                              </Tooltip>
-                                            )
-                                            : '\u2014'}
-                                        </TableCell>
-                                        <TableCell>{formatDuration(seg.duration_seconds)}</TableCell>
-                                        <TableCell align="right">
-                                          {formatBytes(seg.size_bytes)}
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                              {vSegs.length > SEGMENT_PREVIEW_COUNT && (
-                                <Box sx={{ mt: 1 }}>
-                                  <Button
-                                    size="small"
-                                    onClick={() => {
-                                      setExpandedSegmentVersionIds((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(version.id)) {
-                                          next.delete(version.id);
-                                        } else {
-                                          next.add(version.id);
-                                        }
-                                        return next;
-                                      });
-                                    }}
-                                  >
-                                    {showAllSegments
-                                      ? 'Show fewer files'
-                                      : `Show all ${vSegs.length} files${hiddenSegmentCount > 0 ? ` (${hiddenSegmentCount} more)` : ''}`}
-                                  </Button>
-                                </Box>
-                              )}
-                            </Box>
-                          );
-                        })()}
-                      </Box>
-                    );
-                  })}
-                </Collapse>
-              </Paper>
-            );
-          })}
-
-          {/* iTunes link info panel */}
-          {itunesLinked && (
-            <Alert
-              severity="info"
-              variant="outlined"
-              icon={false}
-              sx={{ mt: 1 }}
-            >
-              <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap alignItems="center">
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  iTunes Linked
-                </Typography>
-                {book.itunes_persistent_id && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">PID</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{book.itunes_persistent_id}</Typography>
-                  </Box>
-                )}
-                <Box>
-                  <Typography variant="caption" color="text.secondary">Tracks Mapped</Typography>
-                  <Typography variant="body2">{itunesPidCount}</Typography>
-                </Box>
-                {book.itunes_date_added && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Date Added</Typography>
-                    <Typography variant="body2">{new Date(book.itunes_date_added).toLocaleDateString()}</Typography>
-                  </Box>
-                )}
-                {book.itunes_play_count != null && book.itunes_play_count > 0 && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Play Count</Typography>
-                    <Typography variant="body2">{book.itunes_play_count}</Typography>
-                  </Box>
-                )}
-                {book.itunes_last_played && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Last Played</Typography>
-                    <Typography variant="body2">{new Date(book.itunes_last_played).toLocaleDateString()}</Typography>
-                  </Box>
-                )}
-                {book.itunes_rating != null && book.itunes_rating > 0 && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Rating</Typography>
-                    <Typography variant="body2">{'★'.repeat(Math.round(book.itunes_rating / 20))}{'☆'.repeat(5 - Math.round(book.itunes_rating / 20))}</Typography>
-                  </Box>
-                )}
-                {book.itunes_bookmark != null && book.itunes_bookmark > 0 && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Bookmark</Typography>
-                    <Typography variant="body2">{formatDuration(book.itunes_bookmark / 1000)}</Typography>
-                  </Box>
-                )}
-                {book.itunes_import_source && (
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">Import Source</Typography>
-                    <Typography variant="body2">{book.itunes_import_source}</Typography>
-                  </Box>
-                )}
-                {book.file_path && (
-                  <Box sx={{ flex: '1 1 100%' }}>
-                    <Typography variant="caption" color="text.secondary">File Path</Typography>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}>{book.file_path}</Typography>
-                  </Box>
-                )}
-                {/* Per-track file paths from external_id_map (when no book-level file_path or when multi-track) */}
-                {itunesExternalIDs.length > 0 && itunesExternalIDs.some((e) => e.file_path) && (
-                  <Box sx={{ flex: '1 1 100%' }}>
-                    <Typography variant="caption" color="text.secondary">iTunes Track Files</Typography>
-                    {[...itunesExternalIDs]
-                      .sort((a, b) => (a.track_number ?? Infinity) - (b.track_number ?? Infinity))
-                      .map((e) => (
-                        e.file_path ? (
-                          <Typography
-                            key={e.id}
-                            variant="body2"
-                            sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}
-                          >
-                            {e.track_number != null ? `[${e.track_number}] ` : ''}{e.file_path}
-                          </Typography>
-                        ) : null
-                      ))}
-                  </Box>
-                )}
-                {/* Track PIDs when multiple tracks mapped */}
-                {itunesExternalIDs.length > 1 && (
-                  <Box sx={{ flex: '1 1 100%' }}>
-                    <Typography variant="caption" color="text.secondary">Track PIDs ({itunesExternalIDs.length})</Typography>
-                    <Stack direction="row" flexWrap="wrap" spacing={0.5} useFlexGap sx={{ mt: 0.25 }}>
-                      {[...itunesExternalIDs]
-                        .sort((a, b) => (a.track_number ?? Infinity) - (b.track_number ?? Infinity))
-                        .map((e) => (
-                          <Typography
-                            key={e.id}
-                            variant="body2"
-                            sx={{ fontFamily: 'monospace', fontSize: '0.75rem', bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 }}
-                          >
-                            {e.track_number != null ? `${e.track_number}: ` : ''}{e.external_id}
-                          </Typography>
-                        ))}
-                    </Stack>
-                  </Box>
-                )}
-              </Stack>
-            </Alert>
-          )}
-
-          {/* Change Log */}
-          <Paper sx={{ p: 2, mt: 2 }} data-testid="changelog-section">
-            <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
-              Change Log
-            </Typography>
-            <ChangeLog bookId={book.id} refreshKey={filesRefreshKey} onRevert={() => { refreshFilesTab(); loadBook(); }} onCompareSnapshot={setCompareSnapshotTs} />
-          </Paper>
-
-        </Stack>
-        );
-      })()}
-
-
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-      >
-        <DialogTitle>Delete Audiobook</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body1" gutterBottom>
-            {deleteOptions.softDelete
-              ? 'Soft delete hides the book from the library but keeps it available for purge or restore.'
-              : 'Hard delete will remove this book immediately.'}
-          </Typography>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={deleteOptions.softDelete}
-                onChange={(e) =>
-                  setDeleteOptions((prev) => ({
-                    ...prev,
-                    softDelete: e.target.checked,
-                  }))
-                }
-              />
-            }
-            label="Soft delete (recommended)"
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={deleteOptions.blockHash}
-                onChange={(e) =>
-                  setDeleteOptions((prev) => ({
-                    ...prev,
-                    blockHash: e.target.checked,
-                  }))
-                }
-              />
-            }
-            label="Prevent reimporting this file (block hash)"
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 4, display: 'block', mt: -0.5, mb: 1 }}>
-            Block hash prevents this exact file from being re-imported by remembering its unique fingerprint.
-          </Typography>
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            Soft deleted books can be restored or purged later. Blocking the
-            hash prevents reimports of the same file.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleDelete}
-            color={deleteOptions.softDelete ? 'warning' : 'error'}
-            variant="contained"
-            disabled={actionLoading}
-          >
-            {deleteOptions.softDelete ? 'Soft Delete' : 'Delete Now'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Organize preview dialog */}
-      <Dialog
-        open={organizePreviewDialogOpen}
-        onClose={() => setOrganizePreviewDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Preview Organize</DialogTitle>
-        <DialogContent>
-          {organizePreview && (
-            <>
-              {organizePreview.steps.length === 0 && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  This book is already organized. No changes needed.
-                </Alert>
-              )}
-
-              {organizePreview.steps.map((step, index) => (
-                <Box
-                  key={index}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 1.5,
-                    mb: 2,
-                    p: 1.5,
-                    borderRadius: 1,
-                    bgcolor: step.action === 'warning' ? 'warning.main' : 'action.hover',
-                    opacity: step.action === 'warning' ? 0.9 : 1,
-                  }}
-                >
-                  <Box sx={{ mt: 0.25, color: step.action === 'warning' ? 'warning.contrastText' : 'primary.main' }}>
-                    {step.action === 'copy' && <FileCopyIcon />}
-                    {step.action === 'rename' && <DriveFileRenameOutlineIcon />}
-                    {step.action === 'write_tags' && <LabelIcon />}
-                    {step.action === 'embed_cover' && <ImageIcon />}
-                    {step.action === 'warning' && <WarningAmberIcon />}
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography
-                      variant="subtitle2"
-                      sx={{
-                        color: step.action === 'warning' ? 'warning.contrastText' : 'text.primary',
-                      }}
-                    >
-                      {step.description}
-                    </Typography>
-
-                    {(step.from || step.to) && (
-                      <Table size="small" sx={{ mt: 0.5 }}>
-                        <TableBody>
-                          {step.from && (
-                            <TableRow>
-                              <TableCell sx={{ fontWeight: 'bold', width: 60, py: 0.5, border: 0 }}>From</TableCell>
-                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all', py: 0.5, border: 0 }}>
-                                {step.from}
-                              </TableCell>
-                            </TableRow>
-                          )}
-                          {step.to && (
-                            <TableRow>
-                              <TableCell sx={{ fontWeight: 'bold', width: 60, py: 0.5, border: 0 }}>To</TableCell>
-                              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all', py: 0.5, border: 0 }}>
-                                {step.to}
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    )}
-
-                    {step.files && step.files.length > 0 && (
-                      <Box sx={{ mt: 0.5 }}>
-                        <Typography variant="caption" color="text.secondary">
-                          Files to copy: {step.files.join(', ')}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {step.tags && (
-                      <>
-                        <Button
-                          size="small"
-                          onClick={() => setExpandedTagStep(!expandedTagStep)}
-                          endIcon={expandedTagStep ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                          sx={{ mt: 0.5, textTransform: 'none' }}
-                        >
-                          {Object.keys(step.tags).length} tags will be written
-                        </Button>
-                        <Collapse in={expandedTagStep}>
-                          <Table size="small" sx={{ mt: 0.5 }}>
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Tag</TableCell>
-                                <TableCell>Value</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {Object.entries(step.tags).map(([key, val]) => (
-                                <TableRow key={key}>
-                                  <TableCell sx={{ fontWeight: 'bold' }}>{key}</TableCell>
-                                  <TableCell>{String(val)}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </Collapse>
-                      </>
-                    )}
-
-                    {step.cover_url && (
-                      <Typography variant="body2" sx={{ mt: 0.5, fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}>
-                        {step.cover_url}
-                      </Typography>
-                    )}
-                  </Box>
-                </Box>
-              ))}
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOrganizePreviewDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            startIcon={<BuildIcon />}
-            onClick={handleApplyOrganize}
-            disabled={applyingOrganize}
-          >
-            Apply
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Write-back confirmation dialog */}
-      <Dialog
-        open={writeBackDialogOpen}
-        onClose={() => setWriteBackDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Save Metadata to Files</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" gutterBottom>
-            This will write the following metadata from the database directly
-            into the audio file tags on disk:
-          </Typography>
-          <Box component="ul" sx={{ mt: 1, '& li': { mb: 0.5 } }}>
-            {[
-              { label: 'Title', value: book?.title },
-              { label: 'Album', value: book?.title ? `${book.title} (groups tracks in players)` : undefined },
-              { label: 'Artist', value: book?.authors?.map((a) => a.name).join(' & ') || book?.author_name },
-              { label: 'Narrator', value: book?.narrators?.map((n) => n.name).join(' & ') || book?.narrator },
-              { label: 'Year', value: book?.audiobook_release_year || book?.print_year },
-              { label: 'Genre', value: 'Audiobook' },
-              { label: 'Language', value: book?.language },
-              { label: 'Publisher', value: book?.publisher },
-              { label: 'Series', value: book?.series_name },
-              { label: 'Series Index', value: book?.series_position },
-              { label: 'Description', value: book?.description ? `${book.description.slice(0, 60)}…` : undefined },
-              { label: 'ISBN-13', value: book?.isbn13 },
-              { label: 'ISBN-10', value: book?.isbn10 },
-              { label: 'ASIN', value: book?.asin },
-              { label: 'Edition', value: book?.edition },
-              { label: 'Print Year', value: book?.print_year },
-              { label: 'Book ID', value: book?.id },
-              { label: 'Open Library', value: book?.open_library_id },
-              { label: 'Google Books', value: book?.google_books_id },
-              { label: 'Hardcover', value: book?.hardcover_id },
-              { label: 'Cover art', value: book?.cover_url ? 'embedded (old cover archived to history)' : undefined },
-              { label: 'Track numbers', value: segments.length > 1 ? 'written for multi-file books' : undefined },
-            ]
-              .filter((item) => item.value != null && item.value !== '' && item.value !== 0)
-              .map((item) => (
-                <li key={item.label}>
-                  <strong>{item.label}</strong> — {String(item.value)}
-                </li>
-              ))}
-          </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            A backup of each file is created before writing and removed on
-            success. The original file is restored automatically if writing
-            fails.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setWriteBackDialogOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            startIcon={<SaveIcon />}
-            onClick={handleWriteBackMetadata}
-          >
-            Write to Files
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={purgeDialogOpen} onClose={() => { setPurgeDialogOpen(false); setPurgeConfirmed(false); }}>
-        <DialogTitle>Purge Audiobook</DialogTitle>
-        <DialogContent dividers>
-          <Alert severity="error" sx={{ mb: 2 }}>
-            This will permanently delete this audiobook. This cannot be undone.
-          </Alert>
-          <Typography gutterBottom>
-            Are you sure you want to purge{' '}
-            <strong>{book.title || 'this audiobook'}</strong> from the library?
-            All associated files and metadata will be removed.
-          </Typography>
-          {book.marked_for_deletion_at && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Soft deleted on {formatDateTime(book.marked_for_deletion_at)}.
-            </Typography>
-          )}
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={purgeConfirmed}
-                onChange={(e) => setPurgeConfirmed(e.target.checked)}
-              />
-            }
-            label="I understand this action is permanent and cannot be undone"
-            sx={{ mt: 2 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => { setPurgeDialogOpen(false); setPurgeConfirmed(false); }}>Cancel</Button>
-          <Button
-            onClick={handlePurge}
-            color="error"
-            variant="contained"
-            disabled={actionLoading || !purgeConfirmed}
-          >
-            Purge Permanently
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <MetadataEditDialog
-        open={editDialogOpen}
-        audiobook={book ? mapBookToAudiobook(book) : null}
-        onClose={() => setEditDialogOpen(false)}
-        onSave={handleEditSave}
-      />
-
-      <Dialog
-        open={conflictDialogOpen}
-        onClose={() => setConflictDialogOpen(false)}
-      >
-        <DialogTitle>Update Conflict</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" gutterBottom>
-            This audiobook was updated by another user while you were editing.
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Reload to fetch the latest data, or overwrite to save your changes
-            anyway.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleConflictReload}>Reload</Button>
-          <Button variant="contained" onClick={handleConflictOverwrite}>
-            Overwrite
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <MetadataHistory
-        bookId={book.id}
-        open={historyDialogOpen}
-        onClose={() => setHistoryDialogOpen(false)}
-        onUndoComplete={() => {
-          loadBook();
-        }}
-      />
-      <MetadataSearchDialog
-        open={metadataSearchOpen}
-        book={book}
-        onClose={() => setMetadataSearchOpen(false)}
-        onApplied={(updatedBook) => {
-          setBook(updatedBook);
-        }}
-        toast={toast}
-      />
-
-      {/* Cover image lightbox */}
-      <Dialog
-        open={coverLightboxOpen}
-        onClose={() => setCoverLightboxOpen(false)}
-        maxWidth="sm"
-      >
-        <DialogContent sx={{ p: 1 }}>
-          <Box
-            component="img"
-            src={coverImageUrl}
-            alt={`Cover art for ${book.title || 'Untitled'}`}
-            sx={{ width: '100%', maxWidth: 600, display: 'block' }}
-          />
-        </DialogContent>
-      </Dialog>
-      {relocateSegment && (
-        <RelocateFileDialog
-          open={!!relocateSegment}
-          onClose={() => setRelocateSegment(null)}
-          segment={relocateSegment}
-          bookId={book.id}
-          onRelocated={async () => {
-            if (id) {
-              await reloadCurrentBookFiles(id);
+      {activeTab === 'files' && (
+        <BookDetailFilesTab
+          book={book}
+          versions={versions}
+          bookFiles={bookFiles}
+          segments={segments}
+          versionSegments={versionSegments}
+          versionFileTags={versionFileTags}
+          expandedVersionIds={expandedVersionIds}
+          expandedSegmentVersionIds={expandedSegmentVersionIds}
+          selectedSegmentIds={selectedSegmentIds}
+          filesRefreshKey={filesRefreshKey}
+          compareSnapshotTs={compareSnapshotTs}
+          itunesLinked={itunesLinked}
+          itunesPidCount={itunesPidCount}
+          itunesExternalIDs={itunesExternalIDs}
+          linkSearchOpen={linkSearchOpen}
+          linkSearchQuery={linkSearchQuery}
+          linkSearchResults={linkSearchResults}
+          linkSearchLoading={linkSearchLoading}
+          splittingVersion={splittingVersion}
+          splittingToBooks={splittingToBooks}
+          onSetLinkSearchOpen={setLinkSearchOpen}
+          onSetLinkSearchQuery={setLinkSearchQuery}
+          onInlineLinkVersion={handleInlineLinkVersion}
+          onToggleVersionExpanded={toggleVersionExpanded}
+          onSetExpandedSegmentVersionIds={setExpandedSegmentVersionIds}
+          onSetSelectedSegmentIds={setSelectedSegmentIds}
+          onSetActiveTab={setActiveTab}
+          onSetRelocateSegment={setRelocateSegment}
+          onSetPrimary={handleSetPrimary}
+          onUnlinkVersion={async (vid) => {
+            try {
+              await api.unlinkBookVersion(book.id, vid);
+              loadVersions();
+              loadBook();
+              toast('Version unlinked', 'success');
+            } catch {
+              toast('Failed to unlink version', 'error');
             }
           }}
+          onMoveToVersion={handleMoveToVersion}
+          onSplitVersion={handleSplitVersion}
+          onSplitToBooks={handleSplitToBooks}
+          onClearCompareSnapshot={setCompareSnapshotTs}
+          onExtractTrackInfo={async () => {
+            try {
+              const result = await api.extractTrackInfo(book.id);
+              toast(`Updated track numbers for ${result.updated} of ${result.total} files`, 'success');
+              if (id) {
+                await reloadCurrentBookFiles(id);
+              }
+            } catch {
+              toast('Failed to extract track info', 'error');
+            }
+          }}
+          onLoadBook={loadBook}
+          onRefreshFiles={refreshFilesTab}
         />
       )}
-      {book && (
-        <Box sx={{ mt: 3 }}>
-          <VersionsPanel bookId={book.id} />
-        </Box>
-      )}
-      {/* Rejection History (META-REJ-1) */}
-      {rejections.length > 0 && (
-        <Box sx={{ mt: 2 }}>
-          <Box
-            sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
-            onClick={() => setRejHistoryOpen((v) => !v)}
-          >
-            <IconButton size="small">
-              {rejHistoryOpen ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            </IconButton>
-            <Typography variant="subtitle2" sx={{ ml: 1 }}>
-              Rejection History ({rejections.length})
-            </Typography>
-          </Box>
-          <Collapse in={rejHistoryOpen}>
-            <Table size="small" sx={{ mt: 1 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Source</TableCell>
-                  <TableCell>Reason</TableCell>
-                  <TableCell>Candidate</TableCell>
-                  <TableCell>Score</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rejections.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>{new Date(r.rejected_at).toLocaleString()}</TableCell>
-                    <TableCell>{r.source}</TableCell>
-                    <TableCell>{r.rejection_reason}</TableCell>
-                    <TableCell>
-                      {r.candidate_title
-                        ? `${r.candidate_title}${r.candidate_author ? ` — ${r.candidate_author}` : ''}`
-                        : r.candidate_asin || r.candidate_isbn || '—'}
-                    </TableCell>
-                    <TableCell>{r.score != null ? r.score.toFixed(3) : '—'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Collapse>
-        </Box>
-      )}
-      {book && (
-        <AddToPlaylistDialog
-          open={playlistDialogOpen}
-          onClose={() => setPlaylistDialogOpen(false)}
-          bookIds={[book.id]}
-        />
-      )}
+
+      <BookDetailDialogs
+        book={book}
+        segments={segments}
+        deleteDialogOpen={deleteDialogOpen}
+        deleteOptions={deleteOptions}
+        onCloseDelete={() => setDeleteDialogOpen(false)}
+        onSetDeleteOptions={setDeleteOptions}
+        onDelete={handleDelete}
+        organizePreviewDialogOpen={organizePreviewDialogOpen}
+        organizePreview={organizePreview}
+        expandedTagStep={expandedTagStep}
+        applyingOrganize={applyingOrganize}
+        onSetExpandedTagStep={setExpandedTagStep}
+        onCloseOrganizePreview={() => setOrganizePreviewDialogOpen(false)}
+        onApplyOrganize={handleApplyOrganize}
+        writeBackDialogOpen={writeBackDialogOpen}
+        writingToFiles={writingToFiles}
+        onCloseWriteBack={() => setWriteBackDialogOpen(false)}
+        onWriteBackMetadata={handleWriteBackMetadata}
+        purgeDialogOpen={purgeDialogOpen}
+        purgeConfirmed={purgeConfirmed}
+        actionLoading={actionLoading}
+        onSetPurgeConfirmed={setPurgeConfirmed}
+        onClosePurge={() => { setPurgeDialogOpen(false); setPurgeConfirmed(false); }}
+        onPurge={handlePurge}
+        editDialogOpen={editDialogOpen}
+        editAudiobook={mapBookToAudiobook(book)}
+        onCloseEdit={() => setEditDialogOpen(false)}
+        onEditSave={handleEditSave}
+        conflictDialogOpen={conflictDialogOpen}
+        onCloseConflict={() => setConflictDialogOpen(false)}
+        onConflictReload={handleConflictReload}
+        onConflictOverwrite={handleConflictOverwrite}
+        historyDialogOpen={historyDialogOpen}
+        onCloseHistory={() => setHistoryDialogOpen(false)}
+        onUndoComplete={loadBook}
+        metadataSearchOpen={metadataSearchOpen}
+        onCloseMetadataSearch={() => setMetadataSearchOpen(false)}
+        onMetadataApplied={setBook}
+        toast={toast}
+        relocateSegment={relocateSegment}
+        onCloseRelocate={() => setRelocateSegment(null)}
+        onRelocated={async () => { if (id) await reloadCurrentBookFiles(id); }}
+        rejections={rejections}
+        rejHistoryOpen={rejHistoryOpen}
+        onSetRejHistoryOpen={setRejHistoryOpen}
+        playlistDialogOpen={playlistDialogOpen}
+        onClosePlaylist={() => setPlaylistDialogOpen(false)}
+      />
     </Box>
   );
 };
