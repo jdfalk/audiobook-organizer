@@ -1,5 +1,5 @@
 // file: internal/server/server_middleware.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6a093405-441a-4c14-a9c5-46326ea767c1
 // last-edited: 2026-05-01
 
@@ -168,7 +168,7 @@ func (s *Server) triggerITunesSync() {
 	}
 
 	// Flush any quarantine-triggered ITL removals before the sync read.
-	s.processITunesPurgePending()
+	s.quarantineSvc.ProcessITunesPurgePending()
 	libraryPath := s.itunesSvc.Importer.DiscoverLibraryPath()
 	if libraryPath == "" {
 		return

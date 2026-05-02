@@ -1,5 +1,5 @@
 // file: internal/server/quarantine_handlers.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package server
@@ -29,7 +29,7 @@ func (s *Server) quarantineBook(c *gin.Context) {
 		req.Reason = "manually quarantined"
 	}
 
-	if err := s.QuarantineBook(id, req.Reason); err != nil {
+	if err := s.quarantineSvc.QuarantineBook(id, req.Reason); err != nil {
 		httputil.InternalError(c, "quarantine failed", err)
 		return
 	}
@@ -47,7 +47,7 @@ func (s *Server) unquarantineBook(c *gin.Context) {
 		return
 	}
 
-	if err := s.UnquarantineBook(id); err != nil {
+	if err := s.quarantineSvc.UnquarantineBook(id); err != nil {
 		httputil.InternalError(c, "unquarantine failed", err)
 		return
 	}

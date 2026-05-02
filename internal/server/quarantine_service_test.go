@@ -1,5 +1,5 @@
 // file: internal/server/quarantine_service_test.go
-// version: 1.0.0
+// version: 1.1.0
 
 package server
 
@@ -34,7 +34,7 @@ func TestQuarantineBook_MovesFileAndUpdatesDB(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.NoError(t, srv.QuarantineBook(book.ID, "taglib failed"))
+	require.NoError(t, srv.quarantineSvc.QuarantineBook(book.ID, "taglib failed"))
 
 	// File should be gone from original location
 	_, err = os.Stat(src)
@@ -105,7 +105,7 @@ func TestUnquarantineBook_MovesFileBack(t *testing.T) {
 		ChangeType: "quarantine",
 	})
 
-	require.NoError(t, srv.UnquarantineBook(book.ID))
+	require.NoError(t, srv.quarantineSvc.UnquarantineBook(book.ID))
 
 	// File should be back at original path
 	require.NoError(t, os.MkdirAll(filepath.Dir(origPath), 0755))
