@@ -1,13 +1,34 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.42.0 -->
+<!-- version: 2.43.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-04-30 -->
+<!-- last-edited: 2026-05-02 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Added / Changed
+
+#### May 2, 2026 — Structure audit completion: PKG extractions + STRUCT refactors (#656–#671)
+
+**Package extractions — `internal/server/` split into focused packages:**
+
+- **PR #663** `refactor(server)`: extract audiobooks service → `internal/audiobooks/` (PKG-1)
+- **PR #656** `refactor(server)`: extract AI scan pipeline → `internal/aiscan/` (PKG-2)
+- **PR #657** `refactor(server)`: extract reconcile logic → `internal/reconcile/` (PKG-3)
+- **PR #658** `refactor(server)`: extract scan service → `internal/scanner/` (PKG-4a)
+- **PR #660** `refactor(server)`: extract import services → `internal/importer/` (PKG-4b)
+- **PR #662** `refactor(server)`: extract quarantine service → `internal/quarantine/` (PKG-4c)
+- **PR #661** `refactor(server)`: extract writeback enqueuer/outbox → `internal/writeback/` (PKG-4d)
+- **PR #664** `refactor(server)`: extract filesystem/system services → `internal/fileops/` + `internal/sysinfo/` (PKG-4e)
+
+**Structural refactors:**
+
+- **PR #668** `refactor(server)`: narrow `*Server` handler receivers with local interfaces — `organizeHandlerDeps`, `aiJobsHandlerDeps`, `filesystemHandlerDeps`, `readingHandlerDeps`, `activityHandlerDeps` (STRUCT-10)
+- **PR #667** `refactor(server)`: split `scheduler.go` (1689 lines) → `scheduler_core.go`, `scheduler_tasks.go`, `scheduler_triggers.go`, `scheduler_maintenance.go` (STRUCT-11)
+- **PR #666** `feat(util)`: add `internal/util/normalize.go` — NormalizePath, NormalizeTitle, NormalizeAuthor, NormalizeString, CollapseSpaces; 45 call-chain replacements across 5 files (STRUCT-12)
+- **PR #669** `refactor(web)`: split `BookDetail.tsx` 2773 → 1073 lines — BookDetailHeader, BookDetailActions, BookDetailInfoTab, BookDetailFilesTab, BookDetailDialogs, BookDetailVersionGroup, BookDetailStatusAlerts (STRUCT-13)
+- **PR #671** `refactor(web)`: complete STRUCT-9 — `Library.tsx` 3243 → 1916 lines, `BookDedup.tsx` 3424 → 1656 lines; 7 sub-components extracted
 
 #### April 30, 2026 — Import path book count fix, metadata cache TTL extended (#582, config)
 
