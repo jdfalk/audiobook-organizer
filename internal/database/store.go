@@ -1,7 +1,7 @@
 // file: internal/database/store.go
-// version: 2.70.0
+// version: 2.71.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
-// last-edited: 2026-04-30
+// last-edited: 2026-05-03
 
 package database
 
@@ -194,6 +194,13 @@ type Book struct {
 	// (e.g. "audible", "google_books", "openlibrary"). Used to selectively
 	// re-fetch from a specific source in the future.
 	MetadataSource *string `json:"metadata_source,omitempty"`
+	// Book signature fields for unified per-book audio fingerprint (spec: 2026-05-03-unified-book-fingerprint.md).
+	// BookSigV1 is the base64-encoded down-sampled book signature (4096 uint32s).
+	// BookSigSegments is the pre-downsample segment count (for diagnostics).
+	// BookSigBuiltAt is when the signature was last synthesized.
+	BookSigV1        *string    `json:"book_sig_v1,omitempty"`
+	BookSigSegments  *int       `json:"book_sig_segments,omitempty"`
+	BookSigBuiltAt   *time.Time `json:"book_sig_built_at,omitempty"`
 	// ITunesSyncStatus tracks whether this book's metadata is in sync with the iTunes library.
 	// Values: "synced" (up-to-date in ITL), "dirty" (changed since last write-back),
 	// "unlinked" (no iTunes presence), "pending" (new, needs adding to iTunes),

@@ -1,7 +1,7 @@
 // file: internal/dedup/engine.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
-// last-edited: 2026-05-02
+// last-edited: 2026-05-03
 
 package dedup
 
@@ -1821,3 +1821,83 @@ func bestSeg(f *database.BookFile) string {
 }
 
 // derefStr is defined in audiobook_service.go
+
+// BookSignatureScan walks all primary books and emits dedup_candidates based
+// on book-level fingerprint similarity (layer: "book_signature"). Books are
+// compared pairwise using BookSignatureSimilarity; pairs exceeding
+// FuzzyMinSimilarity (0.80) are emitted as candidates.
+//
+// Skips books that don't have a synthesized book_sig_v1 yet (not backfilled).
+// Progress callback receives (done, total) book counts.
+func (de *Engine) BookSignatureScan(ctx context.Context, progress func(done, total int)) error {
+books, err := de.getAllBooks()
+if err != nil {
+return fmt.Errorf("book signature scan: get all books: %w", err)
+}
+
+// Filter to books that have a book signature
+var booksWithSig []database.Book
+for _, b := range books {
+if b.BookSigV1 != nil && *b.BookSigV1 != "" {
+booksWithSig = append(booksWithSig, b)
+}
+}
+
+emitted := make(map[string]struct{})
+pairKey := func(a, b string) string {
+if a > b {
+a, b = b, a
+}
+return a + ":" + b
+}
+
+emit := func(bookAID, bookBID string, sim float64) {
+key := pairKey(bookAID, bookBID)
+if _, already := emitted[key]; already {
+return
+}
+emitted[key] = struct{}{}
+if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
+EntityType: "book",
+EntityAID:  bookAID,
+EntityBID:  bookBID,
+Layer:      "book_signature",
+Similarity: &sim,
+Status:     "pending",
+}); err != nil {
+log.Printf("[dedup] book signature scan: upsert candidate (%s, %s): %v", bookAID, bookBID, err)
+}
+}
+
+total := len(booksWithSig)
+for i, bookA := range booksWithSig {
+select {
+case <-ctx.Done():
+return ctx.Err()
+default:
+}
+
+sigA := *bookA.BookSigV1
+for j := i + 1; j < len(booksWithSig); j++ {
+bookB := booksWithSig[j]
+sigB := *bookB.BookSigV1
+
+sim, err := fingerprint.BookSignatureSimilarity(sigA, sigB)
+if err != nil {
+log.Printf("[dedup] book signature scan: compare %s vs %s: %v", bookA.ID, bookB.ID, err)
+continue
+}
+
+if sim >= fingerprint.FuzzyMinSimilarity {
+emit(bookA.ID, bookB.ID, sim)
+}
+}
+
+if progress != nil {
+progress(i+1, total)
+}
+}
+
+log.Printf("[dedup] book signature scan complete: %d books scanned, %d candidate pair(s) emitted", total, len(emitted))
+return nil
+}

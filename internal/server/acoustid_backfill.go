@@ -1,11 +1,13 @@
 // file: internal/server/acoustid_backfill.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
+// last-edited: 2026-05-03
 
 package server
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -107,15 +109,24 @@ func (s *Server) backfillAcoustIDs() {
 		if err != nil {
 			continue
 		}
+		bookModified := false
 		for _, f := range files {
 			switch fingerprintBookFile(store, f, false) {
 			case fingerprintOutcomeFingerprinted:
 				fingerprinted++
+				bookModified = true
 				time.Sleep(fingerprintThrottle)
 			case fingerprintOutcomeSkipped:
 				skipped++
 			case fingerprintOutcomeFailed:
 				failed++
+			}
+		}
+
+		// After fingerprinting all files for this book, synthesize the book signature
+		if bookModified || b.BookSigV1 == nil {
+			if err := synthesizeBookSignatureForBook(store, b.ID); err != nil {
+				log.Printf("[WARN] acoustid backfill: synthesize book signature for %s: %v", b.ID, err)
 			}
 		}
 	}
@@ -127,4 +138,63 @@ func (s *Server) backfillAcoustIDs() {
 // AcoustIDLookupStore is the subset of the store needed for fingerprint lookups.
 type AcoustIDLookupStore interface {
 	database.BookFileStore
+}
+
+// synthesizeBookSignatureForBook generates and persists the unified book signature
+// for a single book from its files' 7-segment chromaprint fingerprints.
+func synthesizeBookSignatureForBook(store database.Store, bookID string) error {
+files, err := store.GetBookFiles(bookID)
+if err != nil {
+return fmt.Errorf("get book files: %w", err)
+}
+
+// Sort files by sort_order or original_filename
+var orderedFiles []fingerprint.FileWithSegments
+for _, f := range files {
+orderedFiles = append(orderedFiles, fingerprint.FileWithSegments{
+SortOrder: f.TrackNumber,
+Filename:  f.OriginalFilename,
+Segments: fingerprint.FileSegmentData{
+Seg0: f.AcoustIDSeg0,
+Seg1: f.AcoustIDSeg1,
+Seg2: f.AcoustIDSeg2,
+Seg3: f.AcoustIDSeg3,
+Seg4: f.AcoustIDSeg4,
+Seg5: f.AcoustIDSeg5,
+Seg6: f.AcoustIDSeg6,
+},
+})
+}
+fingerprint.SortFilesByOrder(orderedFiles)
+
+// Extract just the segments in order
+var segData []fingerprint.FileSegmentData
+for _, f := range orderedFiles {
+segData = append(segData, f.Segments)
+}
+
+sig, segCount, err := fingerprint.SynthesizeBookSignature(segData)
+if err != nil {
+if err == fingerprint.ErrIncompleteFingerprint {
+return nil
+}
+return fmt.Errorf("synthesize signature: %w", err)
+}
+
+	now := time.Now()
+	book, err := store.GetBookByID(bookID)
+	if err != nil {
+		return fmt.Errorf("get book: %w", err)
+	}
+
+	book.BookSigV1 = &sig
+	book.BookSigSegments = &segCount
+	book.BookSigBuiltAt = &now
+
+	_, err = store.UpdateBook(book.ID, book)
+	if err != nil {
+		return fmt.Errorf("update book: %w", err)
+	}
+
+	return nil
 }
