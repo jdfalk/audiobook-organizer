@@ -1046,7 +1046,15 @@ func (s *Server) setupRoutes() {
 				itunesGroup.POST("/import", s.perm(auth.PermLibraryEditMetadata), s.handleITunesImport)
 				itunesGroup.POST("/write-back", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBack)
 				itunesGroup.POST("/write-back-all", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBackAll)
-				itunesGroup.POST("/cleanup-orphans", s.perm(auth.PermLibraryEditMetadata), s.handleITunesCleanupOrphans)
+				// REMOVED in v5: cleanup-orphans was a bulk-remove
+				// endpoint that inferred "what should not be in iTunes"
+				// from the DB. With a stale or partially-cleared DB
+				// (or with manually-managed iTunes content), it would
+				// wipe legitimate tracks. Targeted-only removes (one
+				// PID per explicit user delete via the per-book delete
+				// path) are the only safe pattern. Any future bulk
+				// reconciliation must be opt-in, dry-run-by-default,
+				// preview-required, and reviewed item-by-item.
 				itunesGroup.GET("/library-stats", s.perm(auth.PermLibraryView), s.handleITunesLibraryStats)
 				itunesGroup.POST("/write-back/preview", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBackPreview)
 				itunesGroup.GET("/books", s.perm(auth.PermLibraryView), s.handleListITunesBooks)
