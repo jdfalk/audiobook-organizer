@@ -1,6 +1,7 @@
 // file: internal/server/metadata_handlers_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 7a3e2f1b-9c4d-4e8a-b6f0-1d5c2a0e3b7f
+// last-edited: 2026-05-03
 
 package server
 
@@ -56,10 +57,13 @@ func TestHandleUpdateBookRating_SetRatings(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var result database.Book
-	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+	var envelope struct {
+		Data database.Book `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
+	result := envelope.Data
 	if result.ID != bookID {
 		t.Errorf("expected book ID %s, got %s", bookID, result.ID)
 	}

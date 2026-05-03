@@ -1,6 +1,7 @@
 // file: internal/itunes/service/transfer_handler_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+// last-edited: 2026-05-03
 
 package itunesservice
 
@@ -147,16 +148,19 @@ func TestHandleBackupList_WithBackups(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp struct {
-		Count   int `json:"count"`
-		Backups []struct {
-			Name string `json:"name"`
-		} `json:"backups"`
+	var envelope struct {
+		Data struct {
+			Count   int `json:"count"`
+			Backups []struct {
+				Name string `json:"name"`
+			} `json:"backups"`
+		} `json:"data"`
 	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, 2, resp.Count)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.Equal(t, 2, envelope.Data.Count)
+	require.NotEmpty(t, envelope.Data.Backups, "should have backups in response")
 	// Newest-first: bak2 should come first
-	assert.Equal(t, filepath.Base(bak2), resp.Backups[0].Name)
+	assert.Equal(t, filepath.Base(bak2), envelope.Data.Backups[0].Name)
 }
 
 // ---------------------------------------------------------------------------
@@ -231,10 +235,12 @@ func TestHandleUpload_ValidITL_NoInstall(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp ITLUploadResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.True(t, resp.Valid)
-	assert.False(t, resp.Installed)
+	var envelope struct {
+		Data ITLUploadResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.True(t, envelope.Data.Valid)
+	assert.False(t, envelope.Data.Installed)
 
 	// Target file must NOT have been created (install=false)
 	_, err := os.Stat(itlPath)
@@ -258,10 +264,12 @@ func TestHandleUpload_ValidITL_WithInstall(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp ITLUploadResponse
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.True(t, resp.Valid)
-	assert.True(t, resp.Installed)
+	var envelope struct {
+		Data ITLUploadResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.True(t, envelope.Data.Valid)
+	assert.True(t, envelope.Data.Installed)
 
 	// File must now exist at the configured path
 	_, err := os.Stat(itlPath)
@@ -348,9 +356,11 @@ func TestHandleRestore_ValidBackup(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, true, resp["restored"])
+	var envelope struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &envelope))
+	assert.Equal(t, true, envelope.Data["restored"])
 
 	// Current ITL should now contain the backup's data
 	got, err := os.ReadFile(itlPath)

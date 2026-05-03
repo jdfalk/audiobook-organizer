@@ -1,5 +1,7 @@
 // file: internal/server/deluge_integration_test.go
-// version: 1.1.0
+// version: 1.1.1
+// guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
+// last-edited: 2026-05-03
 
 package server
 
@@ -155,16 +157,18 @@ func TestHandleDelugeStatus_Configured(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp struct {
-		Configured bool   `json:"configured"`
-		URL        string `json:"url"`
+	var envelope struct {
+		Data struct {
+			Configured bool   `json:"configured"`
+			URL        string `json:"url"`
+		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if !resp.Configured {
+	json.Unmarshal(w.Body.Bytes(), &envelope)
+	if !envelope.Data.Configured {
 		t.Error("expected configured=true")
 	}
-	if resp.URL != "http://localhost:8112" {
-		t.Errorf("expected url=http://localhost:8112, got %s", resp.URL)
+	if envelope.Data.URL != "http://localhost:8112" {
+		t.Errorf("expected url=http://localhost:8112, got %s", envelope.Data.URL)
 	}
 }
 

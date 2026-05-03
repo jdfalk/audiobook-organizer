@@ -1,5 +1,7 @@
 // file: internal/server/version_lifecycle_test.go
-// version: 1.1.0
+// version: 1.1.1
+// guid: 3a4b5c6d-7e8f-9a0b-1c2d-3e4f5a6b7c8d
+// last-edited: 2026-05-03
 
 package server
 
@@ -181,10 +183,12 @@ func TestHandleHardDeleteVersion(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp["deleted"] != ver.ID {
-		t.Errorf("expected deleted=%s, got %v", ver.ID, resp["deleted"])
+	var envelope struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &envelope)
+	if envelope.Data["deleted"] != ver.ID {
+		t.Errorf("expected deleted=%s, got %v", ver.ID, envelope.Data["deleted"])
 	}
 
 	// Should be gone from store.

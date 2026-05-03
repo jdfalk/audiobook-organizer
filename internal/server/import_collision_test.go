@@ -1,5 +1,7 @@
 // file: internal/server/import_collision_test.go
-// version: 1.0.0
+// version: 1.0.1
+// guid: 9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f
+// last-edited: 2026-05-03
 
 package server
 
@@ -112,18 +114,20 @@ func TestHandleImportCollisionPreview_FileHashCollision(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp struct {
-		Collisions   []merge.CollisionCandidate `json:"collisions"`
-		Count        int                  `json:"count"`
-		HasCollision bool                 `json:"has_collision"`
+	var envelope struct {
+		Data struct {
+			Collisions   []merge.CollisionCandidate `json:"collisions"`
+			Count        int                        `json:"count"`
+			HasCollision bool                       `json:"has_collision"`
+		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if !resp.HasCollision {
+	json.Unmarshal(w.Body.Bytes(), &envelope)
+	if !envelope.Data.HasCollision {
 		t.Error("expected collision for matching file hash")
 	}
 
 	found := false
-	for _, c := range resp.Collisions {
+	for _, c := range envelope.Data.Collisions {
 		if c.MatchType == "file_hash" && c.BookID == "b-existing" {
 			found = true
 		}

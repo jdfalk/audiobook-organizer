@@ -1,6 +1,7 @@
 // file: internal/server/settings_persistence_test.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-05-03
 
 package server
 
@@ -243,11 +244,13 @@ func TestOLDumpUpload(t *testing.T) {
 	t.Logf("Upload response: status=%d body=%s", w.Code, w.Body.String())
 	assert.Equal(t, http.StatusOK, w.Code, "Upload should succeed")
 
-	var resp map[string]any
-	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	var envelope struct {
+		Data map[string]any `json:"data"`
+	}
+	err = json.Unmarshal(w.Body.Bytes(), &envelope)
 	require.NoError(t, err)
-	assert.Equal(t, "dump file uploaded", resp["message"])
-	assert.Equal(t, "editions", resp["type"])
+	assert.Equal(t, "dump file uploaded", envelope.Data["message"])
+	assert.Equal(t, "editions", envelope.Data["type"])
 }
 
 // TestOLDumpUploadBadType tests upload with invalid dump type.
