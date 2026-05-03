@@ -19,6 +19,7 @@ so the failure pattern can be analyzed.
 | `scripts/Generate-Suite.ps1`      | Wrapper around `cmd/itunes-sync-tests`. Builds the binary and runs it.     |
 | `scripts/Run-Tests.ps1`           | Interactive Windows runner. Opens each variant; prompts works/fail/wont.   |
 | `scripts/Restore-Baseline.ps1`    | One-click safety net: copies the baseline back to the iTunes library path. |
+| `scripts/Analyze-Results.ps1`     | Groups `results.json` by mutation tag; flags suspects for sync-fail-step-3. |
 | `manifest.example.json`           | Reference for the `index.json` the generator writes.                       |
 | `results.example.json`            | Reference for the per-run output the runner writes.                        |
 
@@ -116,6 +117,19 @@ The results file is a JSON array of:
 
 Cross-reference variant IDs against the catalog (or `info.json` per variant)
 to map outcomes to mutations.
+
+Or just run the analyzer:
+
+```powershell
+.\sync-tests\scripts\Analyze-Results.ps1 `
+  -ResultsPath C:\sync-tests-out\results.json `
+  -SuiteDir    C:\sync-tests-out
+```
+
+It prints a per-variant table, a per-mutation-tag outcome breakdown,
+and a "suspects" list ranked by step-3 failure rate. Pass
+`-OutputJson C:\sync-tests-out\analysis.json` to also dump structured
+output for sharing back.
 
 ## Safety
 
