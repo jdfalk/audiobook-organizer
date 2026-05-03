@@ -1,6 +1,7 @@
 // file: internal/server/scan_integration_test.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: f6a7b8c9-d0e1-2345-fabc-678901234def
+// last-edited: 2026-05-03
 
 package server
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -52,6 +54,38 @@ func TestScanService_AutoOrganize(t *testing.T) {
 	env.CopyFixture("test_sample.m4b", env.ImportDir, "The Hobbit.m4b")
 
 	svc := scanner.NewScanService(env.Store)
+	// Wire up the AutoOrganizeFn like the server does
+	svc.AutoOrganizeFn = func(ctx context.Context, books []scanner.Book, l logger.Logger) {
+		if len(books) == 0 {
+			return
+		}
+		if !config.AppConfig.AutoOrganize || config.AppConfig.RootDir == "" {
+			return
+		}
+		org := organizer.NewOrganizer(&config.AppConfig)
+		for i := range books {
+			if l.IsCanceled() {
+				break
+			}
+			dbBook, err := env.Store.GetBookByFilePath(books[i].FilePath)
+			if err != nil || dbBook == nil {
+				continue
+			}
+			newPath, _, err := org.OrganizeBook(dbBook)
+			if err != nil {
+				l.Warn("Organize failed for %s: %v", dbBook.Title, err)
+				continue
+			}
+			if newPath != dbBook.FilePath {
+				dbBook.FilePath = newPath
+				scanner.ApplyOrganizedFileMetadata(dbBook, newPath)
+				if _, err := env.Store.UpdateBook(dbBook.ID, dbBook); err != nil {
+					l.Error("Failed to update path for %s: %v", dbBook.Title, err)
+				}
+			}
+		}
+	}
+
 	folderPath := env.ImportDir
 	err := svc.PerformScan(context.Background(), &scanner.ScanRequest{
 		FolderPath: &folderPath,
