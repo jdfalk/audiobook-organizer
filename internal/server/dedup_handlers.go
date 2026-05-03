@@ -1,7 +1,7 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-02
+// last-edited: 2026-05-03
 
 package server
 
@@ -1239,4 +1239,64 @@ func (s *Server) triggerEmbedScan(c *gin.Context) {
 	}
 
 	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
+}
+
+// triggerBookSignatureScan handles POST /api/v1/dedup/scan-book-signature.
+// Runs a unified per-book fingerprint scan as a tracked Operation. Compares
+// synthesized book signatures across all primary books and emits DedupCandidate
+// rows with layer="book_signature" for any matches.
+func (s *Server) triggerBookSignatureScan(c *gin.Context) {
+if s.dedupEngine == nil {
+httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
+return
+}
+if s.queue == nil {
+httputil.RespondWithInternalError(c, "operation queue not initialized")
+return
+}
+
+opID := ulid.Make().String()
+op, err := s.Store().CreateOperation(opID, "dedup-book-signature-scan", nil)
+if err != nil {
+httputil.InternalError(c, "failed to create dedup-book-signature-scan operation", err)
+return
+}
+
+opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
+_ = progress.UpdateProgress(0, 100, "Starting book signature scan...")
+
+var lastPct int
+scanErr := s.dedupEngine.BookSignatureScan(ctx, func(done, total int) {
+if total <= 0 {
+return
+}
+pct := 1 + (98 * done / total)
+if pct == lastPct {
+return
+}
+lastPct = pct
+_ = progress.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
+})
+if scanErr != nil {
+return fmt.Errorf("book signature scan: %w", scanErr)
+}
+
+pendingCount := 0
+if s.embeddingStore != nil {
+filter := database.CandidateFilter{EntityType: "book", Status: "pending", Layer: "book_signature", Limit: 1}
+if _, total, listErr := s.embeddingStore.ListCandidates(filter); listErr == nil {
+pendingCount = total
+}
+}
+_ = progress.UpdateProgress(100, 100,
+fmt.Sprintf("Book signature scan complete — %d pending candidate(s)", pendingCount))
+return nil
+}
+
+if err := s.queue.Enqueue(opID, "dedup-book-signature-scan", operations.PriorityLow, opFunc); err != nil {
+httputil.InternalError(c, "failed to enqueue book signature scan", err)
+return
+}
+
+httputil.RespondWithSuccess(c, http.StatusAccepted, op)
 }

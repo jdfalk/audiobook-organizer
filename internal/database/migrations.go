@@ -1,7 +1,7 @@
 // file: internal/database/migrations.go
-// version: 1.36.0
+// version: 1.37.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
-// last-edited: 2026-04-30
+// last-edited: 2026-05-03
 
 package database
 
@@ -381,6 +381,12 @@ var migrations = []Migration{
 		Version:     57,
 		Description: "Add unique index on (file_hash, source_import_path) to prevent duplicate audiobook records",
 		Up:          migration057Up,
+		Down:        nil,
+	},
+	{
+		Version:     58,
+		Description: "Add book signature columns for unified per-book audio fingerprint",
+		Up:          migration058Up,
 		Down:        nil,
 	},
 }
@@ -2784,4 +2790,29 @@ log.Printf("  - [WARN] migration 057: %v (continuing)", err)
 }
 log.Println("  - Added unique index on (file_hash, source_import_path)")
 return nil
+}
+
+
+// migration058Up adds book signature columns for unified per-book audio fingerprint
+// (spec: 2026-05-03-unified-book-fingerprint.md). These columns synthesize a
+// deterministic book-level fingerprint from the per-file 7-segment chromaprints,
+// enabling dedup matching across different file splits (e.g., 1 .m4b vs 30 .mp3s).
+func migration058Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: schema-free, fields live on struct
+	}
+	stmts := []string{
+		`ALTER TABLE books ADD COLUMN book_sig_v1 TEXT`,
+		`ALTER TABLE books ADD COLUMN book_sig_segments INTEGER`,
+		`ALTER TABLE books ADD COLUMN book_sig_built_at DATETIME`,
+		`CREATE INDEX IF NOT EXISTS idx_books_book_sig_v1 ON books(book_sig_v1) WHERE book_sig_v1 IS NOT NULL`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			log.Printf("  - [WARN] migration 058: %v (continuing)", err)
+		}
+	}
+	log.Println("  - Added book_sig_v1, book_sig_segments, book_sig_built_at to books")
+	return nil
 }

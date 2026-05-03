@@ -1,12 +1,14 @@
 // file: internal/server/fingerprint_rescan.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: e8cf338d-2d99-47ae-a4b8-d31d8772d955
+// last-edited: 2026-05-03
 
 package server
 
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -144,6 +146,11 @@ func (s *Server) triggerFingerprintRescan(c *gin.Context) {
 				case fingerprintOutcomeFailed:
 					failed++
 				}
+			}
+
+			// After fingerprinting all files for this book, synthesize the book signature
+			if err := synthesizeBookSignatureForBook(store, b.ID); err != nil {
+				log.Printf("[WARN] fingerprint rescan: synthesize book signature for %s: %v", b.ID, err)
 			}
 
 			if i%25 == 0 || i == total-1 {
