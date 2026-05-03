@@ -1,9 +1,18 @@
 // file: internal/itunes/service/writeback_batcher.go
-// version: 4.1.0
+// version: 5.0.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e90
 //
 // Combined write-back batcher: handles location updates, track additions,
 // and track removals in a single ITL read-modify-write cycle.
+//
+// SAFETY RAILS (v5.0.0):
+//   - MaxRemovesPerFlush hard-caps the number of removes that can land
+//     in a single flush. A flush exceeding the cap is REFUSED entirely
+//     (no partial writes) and logged loudly. Prevents any single bug
+//     or runaway loop from wiping the user's iTunes library.
+//   - DryRun mode (env ITUNES_WRITEBACK_DRYRUN=true) logs every flush
+//     in detail but performs NO write to disk. Use it to diagnose
+//     a suspicious enqueue pattern without risk.
 
 package itunesservice
 
@@ -20,6 +29,30 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
+
+// MaxRemovesPerFlush is the hard cap on iTunes track removals applied
+// in a single batcher flush. Any flush whose pendingRemoves set
+// exceeds this count is REFUSED — pendingRemoves are dropped, the
+// flush logs an error, and the operator is expected to investigate.
+//
+// Rationale: bulk-remove paths historically wiped legitimate primary
+// tracks when the DB was inconsistent (see the ~90 K-track shrink
+// incident, May 2026). With targeted-only removes (one PID per
+// explicit user delete), no legitimate flush should ever hit this
+// cap — it's purely a circuit breaker.
+const MaxRemovesPerFlush = 50
+
+// dryRunEnabled returns true when ITUNES_WRITEBACK_DRYRUN is set to
+// a truthy value. Checked at flush time so it can be toggled without
+// a process restart by editing the systemd unit / env file and
+// kicking the service.
+func dryRunEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("ITUNES_WRITEBACK_DRYRUN"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
 
 // WriteBackBatcherConfig is the tiny config surface the batcher needs.
 // Deliberately not using config.AppConfig directly — this makes the
@@ -229,6 +262,21 @@ func (b *WriteBackBatcher) flush() {
 	b.firstEnqueue = time.Time{} // reset for next batch
 	b.mu.Unlock()
 
+	// SAFETY RAIL: cap removes per flush. If exceeded, REFUSE the
+	// entire flush (don't apply a partial subset — that's how we got
+	// in trouble before). Pending removes are dropped, the operator
+	// is expected to investigate. Adds and metadata updates are also
+	// skipped to avoid an inconsistent state mid-incident.
+	if len(removes) > MaxRemovesPerFlush {
+		log.Printf("[ERROR] iTunes write-back: REFUSING flush — %d pending removes exceeds MaxRemovesPerFlush=%d. "+
+			"Dropped %d removes, %d adds, %d location-updates without writing. "+
+			"This is a safety circuit-breaker; investigate what enqueued so many removes before re-enabling writes.",
+			len(removes), MaxRemovesPerFlush, len(removes), len(adds), len(bookIDs))
+		return
+	}
+
+	dryRun := dryRunEnabled()
+
 	store := b.store
 	if store == nil {
 		log.Printf("[WARN] iTunes write-back: no database store")
@@ -328,6 +376,16 @@ func (b *WriteBackBatcher) flush() {
 
 	log.Printf("[INFO] iTunes write-back: flushing %d location updates, %d metadata updates, %d adds, %d removes",
 		len(locationUpdates), len(metadataUpdates), len(adds), len(removes))
+
+	if dryRun {
+		log.Printf("[INFO] iTunes write-back: DRY-RUN active (ITUNES_WRITEBACK_DRYRUN=true) — no file written. "+
+			"Would have written %d location updates, %d metadata updates, %d adds, %d removes to %s",
+			len(locationUpdates), len(metadataUpdates), len(adds), len(removes), writePath)
+		for pid := range removes {
+			log.Printf("[INFO] iTunes write-back DRY-RUN: would remove PID %s", pid)
+		}
+		return
+	}
 
 	itlPath := writePath // from b.flushEnabled() above
 	if err := SafeWriteITL(itlPath, ops); err != nil {
