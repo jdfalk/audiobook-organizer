@@ -986,6 +986,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/scan", s.perm(auth.PermScanTrigger), s.triggerDedupScan)
 			protected.POST("/dedup/scan-llm", s.perm(auth.PermScanTrigger), s.triggerDedupLLM)
 			protected.POST("/dedup/scan-acoustid", s.perm(auth.PermScanTrigger), s.triggerDedupAcoustID)
+			protected.POST("/dedup/fingerprint-rescan", s.perm(auth.PermScanTrigger), s.triggerFingerprintRescan)
 			protected.POST("/dedup/refresh", s.perm(auth.PermScanTrigger), s.triggerDedupRefresh)
 			protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), s.triggerEmbedScan)
 
