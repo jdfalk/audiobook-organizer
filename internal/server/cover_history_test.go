@@ -1,5 +1,7 @@
 // file: internal/server/cover_history_test.go
-// version: 1.0.0
+// version: 1.0.1
+// guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
+// last-edited: 2026-05-03
 
 package server
 
@@ -82,13 +84,15 @@ func TestHandleListCoverHistory_WithCovers(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp struct {
-		Covers []CoverHistoryEntry `json:"covers"`
-		Count  int                 `json:"count"`
+	var envelope struct {
+		Data struct {
+			Covers []CoverHistoryEntry `json:"covers"`
+			Count  int                 `json:"count"`
+		} `json:"data"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Count != 2 {
-		t.Errorf("expected 2 covers (skipping .txt), got %d", resp.Count)
+	json.Unmarshal(w.Body.Bytes(), &envelope)
+	if envelope.Data.Count != 2 {
+		t.Errorf("expected 2 covers (skipping .txt), got %d", envelope.Data.Count)
 	}
 }
 

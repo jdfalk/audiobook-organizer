@@ -1,5 +1,7 @@
 // file: internal/server/similar_books_test.go
-// version: 1.0.0
+// version: 1.0.1
+// guid: 1e2f3a4b-5c6d-7e8f-9a0b-1c2d3e4f5a6b
+// last-edited: 2026-05-03
 
 package server
 
@@ -77,21 +79,23 @@ func TestHandleSimilarBooks_ReturnsSimilar(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp struct {
-		Books []database.Book `json:"books"`
-		Count int             `json:"count"`
+	var envelope struct {
+		Data struct {
+			Books []database.Book `json:"books"`
+			Count int             `json:"count"`
+		} `json:"data"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 
 	// Should return b2 and b3 but not b1 itself.
-	for _, b := range resp.Books {
+	for _, b := range envelope.Data.Books {
 		if b.ID == "b1" {
 			t.Error("similar books should not include the source book")
 		}
 	}
-	if resp.Count == 0 {
+	if envelope.Data.Count == 0 {
 		t.Error("expected at least one similar book")
 	}
 }
