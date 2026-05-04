@@ -1,5 +1,5 @@
 // file: internal/fingerprint/fpcalc.go
-// version: 3.2.0
+// version: 3.2.1
 // guid: b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e
 
 // Package fingerprint generates AcoustID-compatible acoustic fingerprints for
@@ -393,9 +393,29 @@ func decodeAnyFingerprint(fp string) ([]uint32, error) {
 			}
 			return ints, nil
 		}
+		// Decoded fine but length is not aligned to a chromaprint payload.
+		// Truncate the trailing 1–3 bytes that prevent alignment so we can
+		// still produce a usable signature instead of failing the whole
+		// book. (Most occurrences are off-by-one bytes from a write that
+		// pre-dates the canonical-on-write change.)
+		if len(b) >= 8 {
+			cut := (len(b) - 4) & ^3 // largest multiple of 4 ≤ len-4
+			payload := b[4 : 4+cut]
+			ints := make([]uint32, len(payload)/4)
+			for i := range ints {
+				ints[i] = binary.LittleEndian.Uint32(payload[i*4:])
+			}
+			return ints, nil
+		}
 	}
-	// Last resort: AcoustID base62 (legacy/external strings).
-	return decodeBase62Fingerprint(fp)
+	// Real decode failure — only call base62 if the input looks like base62
+	// (alphanumeric only). Inputs containing '+', '/', '-', or '_' are
+	// definitely base64; falling through to base62 produces misleading
+	// "invalid character" errors.
+	if !strings.ContainsAny(fp, "+/-_=") {
+		return decodeBase62Fingerprint(fp)
+	}
+	return nil, fmt.Errorf("decode fingerprint: not a valid base64 chromaprint payload (len=%d)", len(fp))
 }
 
 // NormalizeFingerprint converts a fingerprint string into the canonical

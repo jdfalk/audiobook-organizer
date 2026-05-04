@@ -1,5 +1,5 @@
 // file: internal/fingerprint/fpcalc_decode_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e2c4a6b8-9d0e-4f1a-8b2c-3d4e5f6a7b8c
 
 package fingerprint
@@ -81,6 +81,11 @@ func TestDecodeAnyFingerprint_BrokenPadding(t *testing.T) {
 		"too_many_pad":            urlEncoded + "==",                           // extra padding
 		"whitespace_in_middle":    urlEncoded[:10] + "\n  \t" + urlEncoded[10:],
 		"raw_url_with_extra_pad":  base64.RawURLEncoding.EncodeToString(payload) + "===",
+		// Append a stray byte so decoded length becomes 65 (4-byte header
+		// + 60 bytes payload + 1 stray). Pre-fix this fell to base62 and
+		// produced the misleading "invalid character '+' in fingerprint"
+		// warning. Now we truncate to header + 60 bytes and parse 15 ints.
+		"trailing_byte_misalign": base64.StdEncoding.EncodeToString(append(append([]byte{}, payload...), 0xff)),
 	}
 	for name, fp := range cases {
 		t.Run(name, func(t *testing.T) {
