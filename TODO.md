@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.5.0 -->
+<!-- version: 8.6.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-03 -->
+<!-- last-edited: 2026-05-04 -->
 
 # Project TODO
 
@@ -630,6 +630,7 @@ since it was last edited on 2026-04-11).
 - [x] **1.8** Smarter "split cluster" with edge preview (#233)
 - [x] **1.9** Series-aware bulk merge (#232)
 - [x] **1.10** Export dedup state as CSV/JSON (#231)
+- [ ] **1.11** **Async embed via OpenAI Batch API for nightly re-scans** — submit FullScan as a single Batch job (`endpoint=/v1/embeddings`), 50% discount + 24h SLA, results routed via the existing universal batch poller. Sync path stays for interactive callers. Spec: [`docs/superpowers/bot-tasks/2026-05-04-async-embed-batch-api.md`](docs/superpowers/bot-tasks/2026-05-04-async-embed-batch-api.md)
 
 ### 2. Known Bugs — all closed in #227
 
