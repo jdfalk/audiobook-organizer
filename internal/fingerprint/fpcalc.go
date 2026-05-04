@@ -1,5 +1,5 @@
 // file: internal/fingerprint/fpcalc.go
-// version: 3.1.0
+// version: 3.2.0
 // guid: b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e
 
 // Package fingerprint generates AcoustID-compatible acoustic fingerprints for
@@ -344,33 +344,46 @@ func HammingSimilarity(a, b string) (float64, error) {
 }
 
 // decodeAnyFingerprint decodes a fingerprint string into its uint32 array.
-// It tries standard and URL-safe base64 first (ffmpeg chromaprint output),
-// then falls back to the AcoustID base62 encoding. URL-safe handling is
-// required because chromaprint/ffmpeg often emits '-' and '_' in place of
-// '+' and '/' depending on version/flags.
+//
+// Production data accumulated multiple ffmpeg/chromaprint output dialects:
+// standard alphabet, URL-safe alphabet (`-`/`_`), with-padding, without-
+// padding, and — critically — *wrong-length* padding. The previous
+// implementation looped four base64 variants but each one is strict about
+// padding length, so a URL-safe string with a single trailing `=` (when two
+// were needed) failed all four and fell to `decodeBase62Fingerprint`, which
+// rejects `-`/`_`. That produced the
+// `invalid character '-' in fingerprint` warn-spam in prod.
+//
+// We now do a single tolerant pass: strip whitespace and any existing `=`
+// padding, translate URL-safe chars to the standard alphabet, re-pad to a
+// multiple of 4, and decode with `StdEncoding`. The base62 decoder is kept
+// as a last-resort for legacy/external AcoustID fingerprints.
 func decodeAnyFingerprint(fp string) ([]uint32, error) {
-	// Try several base64 variants (with/without padding, std/url-safe).
-	encodings := []*base64.Encoding{
-		base64.StdEncoding,
-		base64.URLEncoding,
-		base64.RawStdEncoding,
-		base64.RawURLEncoding,
-	}
-	for _, enc := range encodings {
-		b, err := enc.DecodeString(fp)
-		if err != nil {
-			continue
+	// Strip whitespace + existing padding, normalize URL-safe alphabet.
+	canonical := strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\n', '\r', '\t', '=':
+			return -1
+		case '-':
+			return '+'
+		case '_':
+			return '/'
 		}
-		// Chromaprint base64 format: 4-byte header + uint32 little-endian values.
-		if len(b) >= 8 {
+		return r
+	}, fp)
+	if pad := len(canonical) % 4; pad > 0 {
+		canonical += strings.Repeat("=", 4-pad)
+	}
+
+	if b, err := base64.StdEncoding.DecodeString(canonical); err == nil {
+		// Chromaprint format: 4-byte header + uint32 little-endian values.
+		if len(b) >= 8 && (len(b)-4)%4 == 0 {
 			payload := b[4:]
-			if len(payload)%4 == 0 {
-				ints := make([]uint32, len(payload)/4)
-				for i := range ints {
-					ints[i] = binary.LittleEndian.Uint32(payload[i*4:])
-				}
-				return ints, nil
+			ints := make([]uint32, len(payload)/4)
+			for i := range ints {
+				ints[i] = binary.LittleEndian.Uint32(payload[i*4:])
 			}
+			return ints, nil
 		}
 		// Raw base64 without the 4-byte header (some ffmpeg versions).
 		if len(b) > 0 && len(b)%4 == 0 {
@@ -381,8 +394,44 @@ func decodeAnyFingerprint(fp string) ([]uint32, error) {
 			return ints, nil
 		}
 	}
-	// Fall through to AcoustID base62.
+	// Last resort: AcoustID base62 (legacy/external strings).
 	return decodeBase62Fingerprint(fp)
+}
+
+// NormalizeFingerprint converts a fingerprint string into the canonical
+// base64 form (standard alphabet, with `=` padding) that the rest of this
+// codebase uses, without round-tripping through the decoded uint32 array
+// (which would risk dropping or mis-attributing the chromaprint header
+// byte).
+//
+// Used by the writer path so the database stops accumulating divergent
+// encodings (URL-safe alphabet, missing or wrong-length padding). The
+// reader (decodeAnyFingerprint) tolerates both forms, so existing rows are
+// not affected.
+func NormalizeFingerprint(fp string) string {
+	if fp == "" {
+		return ""
+	}
+	canonical := strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\n', '\r', '\t', '=':
+			return -1
+		case '-':
+			return '+'
+		case '_':
+			return '/'
+		}
+		return r
+	}, fp)
+	if pad := len(canonical) % 4; pad > 0 {
+		canonical += strings.Repeat("=", 4-pad)
+	}
+	// Validate by decoding; on failure keep the raw input so we never
+	// destroy data that may still be readable by some other path.
+	if _, err := base64.StdEncoding.DecodeString(canonical); err != nil {
+		return fp
+	}
+	return canonical
 }
 
 // decodeBase62Fingerprint base62-decodes an AcoustID fingerprint string into
