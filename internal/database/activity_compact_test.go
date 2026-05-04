@@ -1,5 +1,5 @@
 // file: internal/database/activity_compact_test.go
-// version: 1.1.1
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package database
@@ -14,9 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCompactByDay_BasicCompaction inserts 5 entries across 2 days (change tier)
-// plus 1 audit entry, compacts, and verifies 2 digests created, 5 entries
-// deleted, and the audit entry survives.
+// TestCompactByDay_BasicCompaction inserts 5 change-tier entries across 2
+// days plus 1 audit entry on day 1, compacts, and verifies 2 digests
+// created, 6 entries deleted (audit folds into day 1's digest), and the
+// audit entry is reflected in that digest.
 func TestCompactByDay_BasicCompaction(t *testing.T) {
 	s := newTestActivityStore(t)
 
@@ -54,28 +55,31 @@ func TestCompactByDay_BasicCompaction(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// 1 audit entry (must survive)
+	// 1 audit entry on day 1 — folds into day 1's digest with forensic
+	// fields (operation_id, tier='audit') preserved as DigestItem.
 	_, err := s.Record(ActivityEntry{
-		Tier:      "audit",
-		Type:      "user_login",
-		Level:     "info",
-		Source:    "auth",
-		Summary:   "user logged in",
-		Timestamp: day1.Add(30 * time.Minute),
+		Tier:        "audit",
+		Type:        "user_login",
+		Level:       "info",
+		Source:      "auth",
+		OperationID: "op-login-42",
+		Summary:     "user logged in",
+		Timestamp:   day1.Add(30 * time.Minute),
 	})
 	require.NoError(t, err)
 
 	result, err := s.CompactByDay(context.Background(), olderThan)
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.DaysCompacted)
-	assert.Equal(t, 5, result.EntriesDeleted)
+	assert.Equal(t, 6, result.EntriesDeleted, "5 change + 1 audit folded")
 
-	// Should now have: 2 digest rows + 1 audit row = 3 total
+	// Should now have: 2 digest rows total — audit folded into day 1.
 	all, total, err := s.Query(ActivityFilter{Limit: 50})
 	require.NoError(t, err)
-	assert.Equal(t, 3, total)
+	assert.Equal(t, 2, total)
 
-	var digestCount, auditCount int
+	var digestCount, auditSurvived int
+	var day1Digest DigestDetails
 	for _, e := range all {
 		switch e.Tier {
 		case "digest":
@@ -83,7 +87,6 @@ func TestCompactByDay_BasicCompaction(t *testing.T) {
 			assert.Equal(t, "daily_digest", e.Type)
 			assert.Equal(t, "compaction", e.Source)
 
-			// Verify digest details structure
 			require.NotNil(t, e.Details)
 			detailsJSON, err := json.Marshal(e.Details)
 			require.NoError(t, err)
@@ -94,12 +97,28 @@ func TestCompactByDay_BasicCompaction(t *testing.T) {
 			assert.Greater(t, dd.OriginalCount, 0)
 			assert.NotEmpty(t, dd.Counts)
 			assert.NotEmpty(t, dd.Items)
+
+			if dd.Date == "2025-06-10" {
+				day1Digest = dd
+			}
 		case "audit":
-			auditCount++
+			auditSurvived++
 		}
 	}
 	assert.Equal(t, 2, digestCount, "expected 2 digest rows")
-	assert.Equal(t, 1, auditCount, "audit entry must survive")
+	assert.Equal(t, 0, auditSurvived, "audit entry must be folded, not survive raw")
+
+	// Day 1 digest must reflect 4 entries (3 change + 1 audit), keep the
+	// audit's operation_id, and place audit first in items.
+	require.Equal(t, "2025-06-10", day1Digest.Date)
+	assert.Equal(t, 4, day1Digest.OriginalCount)
+	assert.Equal(t, 1, day1Digest.Counts["user_login"])
+	assert.Equal(t, 3, day1Digest.Counts["metadata_applied"])
+	require.NotEmpty(t, day1Digest.Items)
+	first := day1Digest.Items[0]
+	assert.Equal(t, "audit", first.Tier, "audit items must sort first")
+	assert.Equal(t, "user_login", first.Type)
+	assert.Equal(t, "op-login-42", first.OperationID, "operation_id preserved")
 }
 
 // TestCompactByDay_Idempotent verifies that compacting twice is a no-op the
@@ -134,35 +153,50 @@ func TestCompactByDay_Idempotent(t *testing.T) {
 	assert.Equal(t, 0, r2.EntriesDeleted)
 }
 
-// TestCompactByDay_SkipsAuditTier verifies that audit-tier entries are never
-// compacted.
-func TestCompactByDay_SkipsAuditTier(t *testing.T) {
+// TestCompactByDay_FoldsAuditTier verifies that audit-tier entries are
+// folded into the daily digest (preserving forensic fields) rather than
+// left as raw rows. This is the regression test for the "Compact →
+// Everything (now)" button leaving pages of audit entries behind.
+func TestCompactByDay_FoldsAuditTier(t *testing.T) {
 	s := newTestActivityStore(t)
 
 	ts := time.Date(2025, 4, 15, 8, 0, 0, 0, time.UTC)
 	olderThan := time.Date(2025, 4, 16, 0, 0, 0, 0, time.UTC)
 
 	_, err := s.Record(ActivityEntry{
-		Tier:      "audit",
-		Type:      "permission_change",
-		Level:     "info",
-		Source:    "admin",
-		Summary:   "permissions updated",
-		Timestamp: ts,
+		Tier:        "audit",
+		Type:        "permission_change",
+		Level:       "info",
+		Source:      "admin",
+		OperationID: "op-perm-7",
+		Summary:     "permissions updated",
+		Timestamp:   ts,
 	})
 	require.NoError(t, err)
 
 	result, err := s.CompactByDay(context.Background(), olderThan)
 	require.NoError(t, err)
-	assert.Equal(t, 0, result.DaysCompacted)
-	assert.Equal(t, 0, result.EntriesDeleted)
+	assert.Equal(t, 1, result.DaysCompacted)
+	assert.Equal(t, 1, result.EntriesDeleted)
 
-	// Original entry still exists
+	// Original audit row gone, replaced by a single digest row.
 	all, total, err := s.Query(ActivityFilter{Limit: 50})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
-	assert.Len(t, all, 1)
-	assert.Equal(t, "audit", all[0].Tier)
+	require.Len(t, all, 1)
+	assert.Equal(t, "digest", all[0].Tier)
+
+	// Digest must carry the audit item with its operation_id and tier.
+	detailsJSON, err := json.Marshal(all[0].Details)
+	require.NoError(t, err)
+	var dd DigestDetails
+	require.NoError(t, json.Unmarshal(detailsJSON, &dd))
+	require.Len(t, dd.Items, 1)
+	item := dd.Items[0]
+	assert.Equal(t, "audit", item.Tier)
+	assert.Equal(t, "permission_change", item.Type)
+	assert.Equal(t, "op-perm-7", item.OperationID)
+	assert.Equal(t, 1, dd.Counts["permission_change"])
 }
 
 // TestCompactByDay_TruncatesLargeDays inserts 600 entries on one day and

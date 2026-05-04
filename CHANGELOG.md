@@ -1,11 +1,23 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.43.0 -->
+<!-- version: 2.44.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-02 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixed
+
+#### May 2, 2026 — Activity-log "Compact (Everything now)" left audit-tier rows behind
+
+- **fix(activity)**: `CompactByDay` now folds `tier='audit'` entries into the
+  daily digest (previously skipped, leaving pages of un-compactable rows on
+  the Activity page after a manual "Everything (now)" compact). Forensic
+  fields (`tier`, `operation_id`) preserved on each `DigestItem`; audit items
+  sort first so they survive the 500-item digest cap. Frontend digest
+  expander surfaces the new audit chip + operation_id. Test:
+  `TestCompactByDay_FoldsAuditTier`.
 
 ### Added / Changed
 
