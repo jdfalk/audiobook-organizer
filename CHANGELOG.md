@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.2 -->
+<!-- version: 2.44.3 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-04 -->
 
@@ -8,6 +8,21 @@
 ## [Unreleased]
 
 ### Fixed
+
+#### May 4, 2026 — Acoustid backfill spam: `'+' in fingerprint` after the URL-safe fix
+
+- **fix(fingerprint)**: when `StdEncoding` decodes successfully but the
+  resulting byte length isn't aligned to the chromaprint format (4-byte
+  header + N×4 payload), truncate the trailing 1–3 stray bytes instead of
+  falling through to `decodeBase62Fingerprint`. The previous behavior on
+  off-by-one inputs produced the misleading
+  `decode segment: invalid character '+' in fingerprint` (base62 doesn't
+  accept `+`).
+- **fix(fingerprint)**: only fall through to base62 when the input is
+  alphanumeric-only (no `+`, `/`, `-`, `_`, `=`). Inputs containing any
+  base64 special chars now report a clear "not a valid base64 chromaprint
+  payload" error rather than misattributing the failure to base62.
+- Test: `trailing_byte_misalign` covers the off-by-one truncation path.
 
 #### May 4, 2026 — Acoustid backfill log spam (URL-safe + broken padding)
 
