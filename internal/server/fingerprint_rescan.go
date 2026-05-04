@@ -1,5 +1,5 @@
 // file: internal/server/fingerprint_rescan.go
-// version: 1.0.0
+// version: 1.2.0
 // guid: e8cf338d-2d99-47ae-a4b8-d31d8772d955
 
 package server
@@ -50,15 +50,9 @@ const (
 // scope selectors so an operator can repair a stale or incomplete library
 // without restarting the service.
 func (s *Server) triggerFingerprintRescan(c *gin.Context) {
-	if !fingerprint.Available() {
-		httputil.RespondWithServiceUnavailable(c, "no fingerprint backend (fpcalc / ffmpeg) found")
-		return
-	}
-	if s.Store() == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
-		return
-	}
-
+	// Validate request body first so bad input always wins 400 over
+	// environment-state errors (503/500). Keeps the contract stable across
+	// CI environments where ffmpeg/fpcalc may or may not be installed.
 	var req FingerprintRescanRequest
 	if err := c.ShouldBindJSON(&req); err != nil && err.Error() != "EOF" {
 		httputil.RespondWithBadRequest(c, err.Error())
@@ -82,6 +76,14 @@ func (s *Server) triggerFingerprintRescan(c *gin.Context) {
 		return
 	}
 
+	if !fingerprint.Available() {
+		httputil.RespondWithServiceUnavailable(c, "no fingerprint backend (fpcalc / ffmpeg) found")
+		return
+	}
+	if s.Store() == nil {
+		httputil.RespondWithInternalError(c, "database not initialized")
+		return
+	}
 	if s.queue == nil {
 		httputil.RespondWithInternalError(c, "operation queue not initialized")
 		return
