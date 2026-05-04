@@ -1,5 +1,5 @@
 // file: scripts/record_demo.js
-// version: 2.1.0
+// version: 2.2.0
 // Playwright script to automatically record end-to-end demo with video - Phase 2 (Interactive)
 //
 // Phase 2 Approach:
@@ -7,10 +7,14 @@
 // - UI interactions: Used for demo workflow (navigate, edit, view results)
 // This approach ensures clean state while showing realistic user interactions.
 
-const { chromium } = require('playwright');
-const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
+const { createRequire } = require('module');
+// Resolve playwright + axios from web/node_modules so we don't need a
+// separate root-level package.json/lock just for this script.
+const webRequire = createRequire(path.join(__dirname, '..', 'web', 'package.json'));
+const { chromium } = webRequire('playwright');
+const fs = require('fs');
+const axios = webRequire('axios');
 
 const BASE_URL = process.env.API_URL || 'https://localhost:8484';
 const OUTPUT_DIR = process.env.OUTPUT_DIR || './demo_recordings';
