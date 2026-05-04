@@ -1,9 +1,9 @@
 // file: web/src/hooks/useAsyncAction.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: h8i9j0k1-l2m3-4567-nopq-890123456789
-// last-edited: 2026-05-01
+// last-edited: 2026-05-04
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 interface AsyncActionState {
   loading: boolean;
@@ -19,6 +19,12 @@ interface UseAsyncActionReturn<T> extends AsyncActionState {
  * useAsyncAction wraps an async function with loading and error state.
  * Eliminates repeated useState(false) / try-finally loading boilerplate.
  *
+ * The returned `run` callback has a STABLE identity across renders, even when
+ * `fn` is an inline arrow function. This is critical: callers commonly pass
+ * `run` (or a wrapper) as a useEffect dependency, and an unstable identity
+ * triggers an infinite render loop that exhausts browser network sockets
+ * (ERR_INSUFFICIENT_RESOURCES).
+ *
  * @example
  * const { run: handleSave, loading, error } = useAsyncAction(async () => {
  *   await api.saveBook(book);
@@ -30,12 +36,17 @@ export function useAsyncAction<T = void>(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const fnRef = useRef(fn);
+  useEffect(() => {
+    fnRef.current = fn;
+  }, [fn]);
+
   const run = useCallback(
     async (...args: unknown[]): Promise<T | undefined> => {
       setLoading(true);
       setError(null);
       try {
-        return await fn(...args);
+        return await fnRef.current(...args);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         return undefined;
@@ -43,7 +54,7 @@ export function useAsyncAction<T = void>(
         setLoading(false);
       }
     },
-    [fn]
+    []
   );
 
   const clearError = useCallback(() => setError(null), []);
