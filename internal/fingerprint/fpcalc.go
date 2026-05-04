@@ -1,5 +1,5 @@
 // file: internal/fingerprint/fpcalc.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e
 
 // Package fingerprint generates AcoustID-compatible acoustic fingerprints for
@@ -344,29 +344,42 @@ func HammingSimilarity(a, b string) (float64, error) {
 }
 
 // decodeAnyFingerprint decodes a fingerprint string into its uint32 array.
-// It tries base64 first (ffmpeg chromaprint output), then falls back to the
-// AcoustID base62 encoding.
+// It tries standard and URL-safe base64 first (ffmpeg chromaprint output),
+// then falls back to the AcoustID base62 encoding. URL-safe handling is
+// required because chromaprint/ffmpeg often emits '-' and '_' in place of
+// '+' and '/' depending on version/flags.
 func decodeAnyFingerprint(fp string) ([]uint32, error) {
-	// Try standard base64 (ffmpeg -fp_format base64 output).
-	// The chromaprint base64 format: 4-byte header + uint32 little-endian values.
-	if b, err := base64.StdEncoding.DecodeString(fp); err == nil && len(b) >= 8 {
-		// First 4 bytes are a header (magic + version + algo).
-		payload := b[4:]
-		if len(payload)%4 == 0 {
-			ints := make([]uint32, len(payload)/4)
+	// Try several base64 variants (with/without padding, std/url-safe).
+	encodings := []*base64.Encoding{
+		base64.StdEncoding,
+		base64.URLEncoding,
+		base64.RawStdEncoding,
+		base64.RawURLEncoding,
+	}
+	for _, enc := range encodings {
+		b, err := enc.DecodeString(fp)
+		if err != nil {
+			continue
+		}
+		// Chromaprint base64 format: 4-byte header + uint32 little-endian values.
+		if len(b) >= 8 {
+			payload := b[4:]
+			if len(payload)%4 == 0 {
+				ints := make([]uint32, len(payload)/4)
+				for i := range ints {
+					ints[i] = binary.LittleEndian.Uint32(payload[i*4:])
+				}
+				return ints, nil
+			}
+		}
+		// Raw base64 without the 4-byte header (some ffmpeg versions).
+		if len(b) > 0 && len(b)%4 == 0 {
+			ints := make([]uint32, len(b)/4)
 			for i := range ints {
-				ints[i] = binary.LittleEndian.Uint32(payload[i*4:])
+				ints[i] = binary.LittleEndian.Uint32(b[i*4:])
 			}
 			return ints, nil
 		}
-	}
-	// Also try raw base64 without the 4-byte header (some ffmpeg versions).
-	if b, err := base64.StdEncoding.DecodeString(fp); err == nil && len(b) > 0 && len(b)%4 == 0 {
-		ints := make([]uint32, len(b)/4)
-		for i := range ints {
-			ints[i] = binary.LittleEndian.Uint32(b[i*4:])
-		}
-		return ints, nil
 	}
 	// Fall through to AcoustID base62.
 	return decodeBase62Fingerprint(fp)
