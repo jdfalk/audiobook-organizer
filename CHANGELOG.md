@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.1 -->
+<!-- version: 2.44.2 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-04 -->
 
@@ -8,6 +8,24 @@
 ## [Unreleased]
 
 ### Fixed
+
+#### May 4, 2026 — Acoustid backfill log spam (URL-safe + broken padding)
+
+- **fix(fingerprint)**: rewrite `decodeAnyFingerprint` as a single tolerant
+  pass — strip whitespace + existing `=` padding, translate URL-safe alphabet
+  (`-`/`_`) to standard, re-pad to multiple of 4, decode with `StdEncoding`.
+  The previous loop tried 4 base64 variants but each is strict about padding
+  length, so chromaprint output with a wrong-length `=` padding fell through
+  to the AcoustID base62 decoder which rejected `-`/`_`. That produced log
+  spam: `synthesize signature: decode segment: invalid character '-' in
+  fingerprint`, repeated per-book per-cycle.
+- **fix(fingerprint)**: add `NormalizeFingerprint(fp string) string` and call
+  it on the writer path (`fingerprintBookFile`) so newly-stored segments are
+  always canonical (standard alphabet + correct padding). Database stops
+  accumulating divergent encodings going forward; existing rows still work
+  via the tolerant reader.
+- Tests: `TestDecodeAnyFingerprint_BrokenPadding` covers strip_padding,
+  too_few_pad, too_many_pad, whitespace_in_middle, raw_url_with_extra_pad.
 
 #### May 4, 2026 — Activity compaction 500: "database is locked"
 

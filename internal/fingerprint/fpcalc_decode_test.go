@@ -1,5 +1,5 @@
 // file: internal/fingerprint/fpcalc_decode_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e2c4a6b8-9d0e-4f1a-8b2c-3d4e5f6a7b8c
 
 package fingerprint
@@ -48,6 +48,45 @@ func TestDecodeAnyFingerprint_URLSafeBase64(t *testing.T) {
 			ints, err := decodeAnyFingerprint(fp)
 			if err != nil {
 				t.Fatalf("decodeAnyFingerprint(%s) err: %v", name, err)
+			}
+			if len(ints) != 15 {
+				t.Fatalf("expected 15 ints, got %d", len(ints))
+			}
+		})
+	}
+}
+
+// TestDecodeAnyFingerprint_BrokenPadding is the regression for the prod
+// log-spam after the URL-safe fix shipped: chromaprint output sometimes
+// arrives with the URL-safe alphabet *and* wrong-length `=` padding. Both
+// `URLEncoding` (needs correct padding) and `RawURLEncoding` (needs no
+// padding) reject those, and the loop in v3.1 fell through to the base62
+// decoder which barfs on `-`/`_`. v3.2 normalizes padding before decoding.
+func TestDecodeAnyFingerprint_BrokenPadding(t *testing.T) {
+	payload := make([]byte, 0, 64)
+	payload = append(payload, 0xfb, 0x01, 0x00, 0x00)
+	for i := uint32(0); i < 15; i++ {
+		var b [4]byte
+		binary.LittleEndian.PutUint32(b[:], 0xFFFFFFF0|i)
+		payload = append(payload, b[:]...)
+	}
+	urlEncoded := base64.URLEncoding.EncodeToString(payload)
+	if !strings.ContainsAny(urlEncoded, "-_") {
+		t.Skip("payload happens not to contain URL-safe chars")
+	}
+
+	cases := map[string]string{
+		"strip_padding":           strings.TrimRight(urlEncoded, "="),
+		"too_few_pad":             strings.TrimRight(urlEncoded, "=") + "=",   // 1 `=` when input needs 0/2
+		"too_many_pad":            urlEncoded + "==",                           // extra padding
+		"whitespace_in_middle":    urlEncoded[:10] + "\n  \t" + urlEncoded[10:],
+		"raw_url_with_extra_pad":  base64.RawURLEncoding.EncodeToString(payload) + "===",
+	}
+	for name, fp := range cases {
+		t.Run(name, func(t *testing.T) {
+			ints, err := decodeAnyFingerprint(fp)
+			if err != nil {
+				t.Fatalf("decodeAnyFingerprint(%s) err: %v (input %q)", name, err, fp)
 			}
 			if len(ints) != 15 {
 				t.Fatalf("expected 15 ints, got %d", len(ints))

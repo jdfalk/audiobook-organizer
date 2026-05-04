@@ -1,7 +1,7 @@
 // file: internal/server/acoustid_backfill.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-05-03
+// last-edited: 2026-05-04
 
 package server
 
@@ -57,13 +57,17 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	}
 
 	updated := f
-	updated.AcoustIDSeg0 = segs[0]
-	updated.AcoustIDSeg1 = segs[1]
-	updated.AcoustIDSeg2 = segs[2]
-	updated.AcoustIDSeg3 = segs[3]
-	updated.AcoustIDSeg4 = segs[4]
-	updated.AcoustIDSeg5 = segs[5]
-	updated.AcoustIDSeg6 = segs[6]
+	// Normalize at write time: chromaprint/ffmpeg dialects produce
+	// URL-safe alphabet and varying padding, which the database has been
+	// accumulating since fingerprinting started. Canonicalize here so new
+	// rows are uniform.
+	updated.AcoustIDSeg0 = fingerprint.NormalizeFingerprint(segs[0])
+	updated.AcoustIDSeg1 = fingerprint.NormalizeFingerprint(segs[1])
+	updated.AcoustIDSeg2 = fingerprint.NormalizeFingerprint(segs[2])
+	updated.AcoustIDSeg3 = fingerprint.NormalizeFingerprint(segs[3])
+	updated.AcoustIDSeg4 = fingerprint.NormalizeFingerprint(segs[4])
+	updated.AcoustIDSeg5 = fingerprint.NormalizeFingerprint(segs[5])
+	updated.AcoustIDSeg6 = fingerprint.NormalizeFingerprint(segs[6])
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
 		log.Printf("[WARN] fingerprint: update %s: %v", f.ID, err)
 		return fingerprintOutcomeFailed
