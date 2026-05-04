@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.6.0 -->
+<!-- version: 8.7.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-04 -->
 
@@ -631,6 +631,8 @@ since it was last edited on 2026-04-11).
 - [x] **1.9** Series-aware bulk merge (#232)
 - [x] **1.10** Export dedup state as CSV/JSON (#231)
 - [ ] **1.11** **Async embed via OpenAI Batch API for nightly re-scans** — submit FullScan as a single Batch job (`endpoint=/v1/embeddings`), 50% discount + 24h SLA, results routed via the existing universal batch poller. Sync path stays for interactive callers. Spec: [`docs/superpowers/bot-tasks/2026-05-04-async-embed-batch-api.md`](docs/superpowers/bot-tasks/2026-05-04-async-embed-batch-api.md)
+- [ ] **1.12** **Tag operation log lines with the originating operation ID** — pipe `op.ID` into a context-bound logger, replace bare `log.Printf` inside operation funcs with op-scoped calls, and write each line into `operation_logs` so the Activity-page log view shows everything (ffmpeg warnings, fingerprint failures, etc.) instead of only the explicit `progress.Log()` calls. Spec: [`docs/superpowers/bot-tasks/2026-05-04-tag-operation-logs.md`](docs/superpowers/bot-tasks/2026-05-04-tag-operation-logs.md)
+- [ ] **1.13** **Broken-files dashboard card + repair pipeline** — persist per-file ffmpeg / fingerprint errors to a new `book_file_errors` table associated with the book, surface a dashboard card ("N books with broken files"), add a `has_file_errors` library facet, and wire a repair pipeline (remux / restore-from-version / mark-ignored / delete-and-rescan). Pairs with 1.12. Spec: [`docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md`](docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md)
 
 ### 2. Known Bugs — all closed in #227
 
