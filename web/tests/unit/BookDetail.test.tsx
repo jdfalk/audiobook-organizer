@@ -1,5 +1,5 @@
 // file: web/tests/unit/BookDetail.test.tsx
-// version: 1.2.0
+// version: 1.2.1
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 /**
@@ -146,9 +146,13 @@ describe('BookDetail Component', () => {
 
     await user.click(fetchButton);
 
-    // Should show loading state
-    expect(fetchButton).toHaveTextContent('Fetching...');
-    expect(fetchButton).toBeDisabled();
+    // Should show loading state. Wrap in waitFor — the state update from
+    // user.click() is async and can lag behind the click promise on slow
+    // CI runners.
+    await waitFor(() => {
+      expect(fetchButton).toHaveTextContent('Fetching...');
+      expect(fetchButton).toBeDisabled();
+    });
 
     // Wait for completion - after fetch, loadBook() is called which may briefly show loading
     await waitFor(
@@ -191,9 +195,12 @@ describe('BookDetail Component', () => {
 
     await user.click(parseButton);
 
-    // Should show loading state
-    expect(parseButton).toHaveTextContent('Parsing...');
-    expect(parseButton).toBeDisabled();
+    // Should show loading state. Wrap in waitFor — see Fetch Metadata test
+    // above for rationale.
+    await waitFor(() => {
+      expect(parseButton).toHaveTextContent('Parsing...');
+      expect(parseButton).toBeDisabled();
+    });
 
     await waitFor(
       () => {
