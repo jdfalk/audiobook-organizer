@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-02
+// last-edited: 2026-05-04
 
 package server
 
@@ -30,7 +30,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
-	"github.com/jdfalk/audiobook-organizer/internal/reconcile"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -138,12 +137,6 @@ func (s *Server) resumeInterruptedOperations() {
 			}
 		case "metadata-refresh":
 			resumeFn = s.runMetadataRefreshScan
-		case "reconcile_scan":
-			scanOpID := opID
-			store := s.Store()
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return reconcile.RunReconcileScan(store, ctx, scanOpID, progress)
-			}
 		case "itunes_path_reconcile":
 			reconcileOpID := opID
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
@@ -161,7 +154,14 @@ func (s *Server) resumeInterruptedOperations() {
 			"purge-deleted", "tombstone-cleanup",
 			"author-dedup-scan", "author-split-scan", "series-prune", "series-normalize",
 			"db-optimize", "cleanup-old-backups", "batch_poller",
-			"itunes_sync":
+			"itunes_sync",
+			// reconcile_scan: a 271K-file hash sweep that ignores ctx, runs
+			// nightly via the scheduler, and pins both queue workers for ~45min
+			// when auto-resumed. Repeated quick deploys produced a queue jam
+			// where new ops (AcoustID, embed, etc.) sat queued behind two
+			// stuck reconcile_scans that the cancel API couldn't actually
+			// kill. Letting the scheduler re-run it tomorrow is fine.
+			"reconcile_scan":
 			// These are not resumable — mark as failed silently
 			_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
 			_ = operations.ClearState(store, opID)

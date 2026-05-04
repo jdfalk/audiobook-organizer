@@ -31,7 +31,7 @@ func run() int {
 	// Early initialization of operation queue (without store). This allows
 	// code paths that enqueue operations prior to full server startup to avoid nil checks.
 	if operations.GlobalQueue == nil {
-		operations.InitializeQueue(nil, 2) // store will be attached later once initialized
+		operations.InitializeQueue(nil, 8) // store will be attached later once initialized
 	}
 
 	if err := executeCmd(); err != nil {

@@ -343,7 +343,7 @@ func NewServer(store database.Store) *Server {
 	// later in this function (kept for the GlobalQueue back-compat) is
 	// a no-op once this assignment lands.
 	if server.queue == nil {
-		server.queue = operations.NewOperationQueue(resolvedStore, 2, nil, server.hub)
+		server.queue = operations.NewOperationQueue(resolvedStore, 8, nil, server.hub)
 		// Long-running maintenance ops (path repair scans 80K+ files
 		// across many spinning disks) need more than the 2-hour default.
 		if oq, ok := server.queue.(*operations.OperationQueue); ok {
@@ -583,7 +583,7 @@ func NewServer(store database.Store) *Server {
 	realtime.SetGlobalHub(server.hub)
 
 	if server.queue == nil {
-		server.queue = operations.NewOperationQueue(resolvedStore, 2, nil, server.hub)
+		server.queue = operations.NewOperationQueue(resolvedStore, 8, nil, server.hub)
 		operations.GlobalQueue = server.queue
 	}
 
