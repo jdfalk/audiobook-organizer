@@ -1,5 +1,5 @@
 // file: internal/dedup/engine_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 2a7e4d91-c538-4f06-b1d3-9e8c5a6f0d72
 
 package dedup
@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -422,6 +423,64 @@ func TestEngine_EmbedBook_NilClient(t *testing.T) {
 	}
 	if err.Error() != "no embedding client configured" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestEngine_FullScan_BatchesEmbeddings asserts FullScan coalesces embedding
+// API calls into chunks of ≤embedChunkSize (64) instead of one call per book.
+// Regression guard for the issue where every primary book in the library was
+// sent to OpenAI in its own request, multiplying request count by 64× and
+// inflating wall time / cost accordingly.
+func TestEngine_FullScan_BatchesEmbeddings(t *testing.T) {
+	engine, mock, _ := setupTestEngine(t)
+
+	// 150 books → with chunk size 64 we expect 3 batch calls (64+64+22).
+	const numBooks = 150
+	books := make([]database.Book, numBooks)
+	for i := 0; i < numBooks; i++ {
+		title := "Book " + strconv.Itoa(i)
+		primary := true
+		books[i] = database.Book{
+			ID:               "B" + strconv.Itoa(i),
+			Title:            title,
+			IsPrimaryVersion: &primary,
+		}
+	}
+	mock.GetAllBooksFunc = func(limit, offset int) ([]database.Book, error) {
+		return books, nil
+	}
+	mock.GetBookByIDFunc = func(id string) (*database.Book, error) {
+		idx, _ := strconv.Atoi(id[1:])
+		if idx < 0 || idx >= len(books) {
+			return nil, nil
+		}
+		return &books[idx], nil
+	}
+
+	client := ai.NewEmbeddingClient("test-key")
+	var calls []int
+	client.SetRawEmbedForTest(func(ctx context.Context, texts []string) ([][]float32, error) {
+		calls = append(calls, len(texts))
+		out := make([][]float32, len(texts))
+		for i := range out {
+			out[i] = []float32{0.1, 0.2, 0.3}
+		}
+		return out, nil
+	})
+	engine.embedClient = client
+
+	if err := engine.FullScan(context.Background(), nil); err != nil {
+		t.Fatalf("FullScan: %v", err)
+	}
+
+	if len(calls) != 3 {
+		t.Fatalf("expected 3 batch API calls (64+64+22), got %d: sizes=%v", len(calls), calls)
+	}
+	want := []int{64, 64, 22}
+	for i, n := range want {
+		if calls[i] != n {
+			t.Fatalf("call %d size=%d, want %d (sizes=%v)", i, calls[i], n, calls)
+		}
 	}
 }
 

@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-05-04
 
@@ -989,94 +989,151 @@ func (s EmbedStatus) String() string {
 // cleaned up as we walk the library. Empty-title books are skipped with
 // the same cleanup behavior.
 func (de *Engine) EmbedBook(ctx context.Context, bookID string) (EmbedStatus, error) {
-	if de.embedClient == nil {
-		return 0, fmt.Errorf("no embedding client configured")
-	}
-
-	book, err := de.bookStore.GetBookByID(bookID)
+	results, err := de.EmbedBooks(ctx, []string{bookID})
 	if err != nil {
-		return 0, fmt.Errorf("get book %s: %w", bookID, err)
+		return 0, err
+	}
+	return results[bookID], nil
+}
+
+// prepBookEmbed runs the per-book skip-checks and builds the embedding text +
+// hash. Returns terminal=true when a final EmbedStatus has been determined
+// (skip cases or pre-existing cache hit by hash) so the caller can record the
+// result without further work; terminal=false means the book needs a fresh
+// embed and (text, hash) are valid.
+//
+// Extracted from the old EmbedBook so the per-book prep is shared between
+// EmbedBook (single) and EmbedBooks (batched). The mirror-to-chromem call on
+// the cached path happens here because it's free regardless of which caller
+// invoked us.
+func (de *Engine) prepBookEmbed(ctx context.Context, bookID string) (
+	book *database.Book, text string, hash string, status EmbedStatus, terminal bool, err error,
+) {
+	book, err = de.bookStore.GetBookByID(bookID)
+	if err != nil {
+		return nil, "", "", 0, true, fmt.Errorf("get book %s: %w", bookID, err)
 	}
 	if book == nil {
-		return 0, fmt.Errorf("book %s not found", bookID)
+		return nil, "", "", 0, true, fmt.Errorf("book %s not found", bookID)
 	}
 
-	// Skip non-primary version-group members. If the book was previously
-	// embedded (stale data from a pre-fix backfill), remove that row now.
 	if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
-		if err := de.embedStore.Delete("book", bookID); err != nil {
-			log.Printf("dedup: delete stale embedding for non-primary %s: %v", bookID, err)
+		if delErr := de.embedStore.Delete("book", bookID); delErr != nil {
+			log.Printf("dedup: delete stale embedding for non-primary %s: %v", bookID, delErr)
 		}
 		de.deleteBookFromChromem(ctx, bookID)
-		return EmbedStatusSkippedNonPrimary, nil
+		return book, "", "", EmbedStatusSkippedNonPrimary, true, nil
 	}
 
-	// Skip books without a usable title. Embedding a blank or near-empty
-	// title produces a vector that lives in a dense cluster of other
-	// empty-title vectors, matching them all at ~100% cosine — the exact
-	// false-positive pattern the user saw in prod. We also delete any
-	// stale embedding for the book in case a pre-fix backfill had stored
-	// one, so the next similarity scan is clean.
 	if !hasUsableTitle(book.Title) {
-		if err := de.embedStore.Delete("book", bookID); err != nil {
-			log.Printf("dedup: delete stale embedding for empty-title %s: %v", bookID, err)
+		if delErr := de.embedStore.Delete("book", bookID); delErr != nil {
+			log.Printf("dedup: delete stale embedding for empty-title %s: %v", bookID, delErr)
 		}
 		de.deleteBookFromChromem(ctx, bookID)
-		return EmbedStatusSkippedEmptyTitle, nil
+		return book, "", "", EmbedStatusSkippedEmptyTitle, true, nil
 	}
 
 	authorName := ""
 	if book.AuthorID != nil {
-		author, err := de.bookStore.GetAuthorByID(*book.AuthorID)
-		if err == nil && author != nil {
+		if author, lookupErr := de.bookStore.GetAuthorByID(*book.AuthorID); lookupErr == nil && author != nil {
 			authorName = author.Name
 		}
 	}
-
-	// Series name + sequence go into the embedding text so two volumes
-	// of the same series ("Foo Book 3" vs "Foo Book 4") get vectors that
-	// actually differ. Without this they collapse into a tight cluster
-	// and the dedup engine reports a spurious 100% match across the
-	// whole series — exactly the false positive the user reported in
-	// production for 6+ books in a series.
 	seriesName := ""
 	if book.SeriesID != nil {
-		if series, err := de.bookStore.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+		if series, lookupErr := de.bookStore.GetSeriesByID(*book.SeriesID); lookupErr == nil && series != nil {
 			seriesName = series.Name
 		}
 	}
 	seriesSeq := seriesNumberOf(book)
 
-	text := ai.BuildBookEmbeddingText(book.Title, authorName, derefStr(book.Narrator), seriesName, seriesSeq)
-	hash := ai.TextHash(text)
+	text = ai.BuildBookEmbeddingText(book.Title, authorName, derefStr(book.Narrator), seriesName, seriesSeq)
+	hash = ai.TextHash(text)
 
-	// Check if existing embedding already has this hash — skip if so.
-	existing, err := de.embedStore.Get("book", bookID)
-	if err == nil && existing != nil && existing.TextHash == hash {
-		// Even on a cache hit we mirror to chromem in case the ANN
-		// store is empty (first run after a chromem rebuild) or out
-		// of sync with sqlite. mirrorBookToChromem is a no-op if the
-		// chromem store is nil and never fails the call.
+	existing, getErr := de.embedStore.Get("book", bookID)
+	if getErr == nil && existing != nil && existing.TextHash == hash {
 		de.mirrorBookToChromem(ctx, book, existing.Vector)
-		return EmbedStatusCached, nil
+		return book, text, hash, EmbedStatusCached, true, nil
+	}
+	return book, text, hash, 0, false, nil
+}
+
+// EmbedBooks generates embeddings for the given book IDs in a single API call
+// per chunk, instead of one call per book. Returns a status map keyed by book
+// ID describing what happened (Embedded / Cached / SkippedNonPrimary /
+// SkippedEmptyTitle). Per-book errors are logged and the book is omitted from
+// the result map; the call only returns an error for whole-batch failures
+// (API call, missing client).
+//
+// Why batch: text-embedding-3-large bills per request and per token. Calling
+// it once with N inputs costs roughly the same as calling it once with 1
+// input — token volume dominates, request overhead does not. Sending books
+// one at a time across a 10K-book FullScan therefore wasted ~10K request
+// round-trips and ~10× the wall time vs. batched calls, with no cost benefit.
+func (de *Engine) EmbedBooks(ctx context.Context, bookIDs []string) (map[string]EmbedStatus, error) {
+	if de.embedClient == nil {
+		return nil, fmt.Errorf("no embedding client configured")
+	}
+	results := make(map[string]EmbedStatus, len(bookIDs))
+	if len(bookIDs) == 0 {
+		return results, nil
 	}
 
-	vec, err := de.embedClient.EmbedOne(ctx, text)
+	type pending struct {
+		id   string
+		book *database.Book
+		text string
+		hash string
+	}
+	var todo []pending
+	for _, id := range bookIDs {
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
+		book, text, hash, status, terminal, err := de.prepBookEmbed(ctx, id)
+		if err != nil {
+			log.Printf("dedup: prep embed for %s: %v", id, err)
+			continue
+		}
+		if terminal {
+			results[id] = status
+			continue
+		}
+		todo = append(todo, pending{id: id, book: book, text: text, hash: hash})
+	}
+
+	if len(todo) == 0 {
+		return results, nil
+	}
+
+	texts := make([]string, len(todo))
+	for i, p := range todo {
+		texts[i] = p.text
+	}
+
+	vecs, err := de.embedClient.EmbedBatch(ctx, texts)
 	if err != nil {
-		return 0, fmt.Errorf("embed text: %w", err)
+		return results, fmt.Errorf("embed batch (%d books): %w", len(todo), err)
+	}
+	if len(vecs) != len(todo) {
+		return results, fmt.Errorf("embed batch returned %d vectors for %d inputs", len(vecs), len(todo))
 	}
 
-	if err := de.embedStore.Upsert(database.Embedding{
-		EntityType: "book",
-		EntityID:   bookID,
-		TextHash:   hash,
-		Vector:     vec,
-		Model:      "text-embedding-3-large",
-	}); err != nil {
-		return 0, err
+	for i, p := range todo {
+		if upErr := de.embedStore.Upsert(database.Embedding{
+			EntityType: "book",
+			EntityID:   p.id,
+			TextHash:   p.hash,
+			Vector:     vecs[i],
+			Model:      "text-embedding-3-large",
+		}); upErr != nil {
+			log.Printf("dedup: upsert embedding for %s: %v", p.id, upErr)
+			continue
+		}
+		de.mirrorBookToChromem(ctx, p.book, vecs[i])
+		results[p.id] = EmbedStatusEmbedded
 	}
-	de.mirrorBookToChromem(ctx, book, vec)
-	return EmbedStatusEmbedded, nil
+	return results, nil
 }
 
 // mirrorBookToChromem writes the book's vector + filter metadata to the
@@ -1195,7 +1252,42 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 		return fmt.Errorf("get all books: %w", err)
 	}
 
+	// Embedding chunk size — picked so the OpenAI request comfortably fits
+	// under the 2048-input / 300K-token caps for text-embedding-3-large
+	// while still amortising request overhead. Empirically, batches of
+	// ~64 cut FullScan wall time and request count by an order of
+	// magnitude vs. the previous one-call-per-book loop.
+	const embedChunkSize = 64
+
 	total := len(books)
+	chunkIDs := make([]string, 0, embedChunkSize)
+	chunkStart := 0
+
+	flushChunk := func(endIdx int) error {
+		if len(chunkIDs) == 0 {
+			return nil
+		}
+		statuses, err := de.EmbedBooks(ctx, chunkIDs)
+		if err != nil {
+			log.Printf("dedup: full scan embed batch error (start=%d size=%d): %v",
+				chunkStart, len(chunkIDs), err)
+		}
+		for _, id := range chunkIDs {
+			st, ok := statuses[id]
+			if !ok {
+				continue
+			}
+			if st == EmbedStatusEmbedded || st == EmbedStatusCached {
+				if simErr := de.findSimilarBooks(ctx, id); simErr != nil {
+					log.Printf("dedup: full scan similarity error for %s: %v", id, simErr)
+				}
+			}
+		}
+		chunkIDs = chunkIDs[:0]
+		chunkStart = endIdx
+		return nil
+	}
+
 	for i, book := range books {
 		select {
 		case <-ctx.Done():
@@ -1203,8 +1295,7 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 		default:
 		}
 
-		// Resolve author name once — reused by both Layer 1 title check
-		// and (indirectly) by Layer 2 via EmbedBook.
+		// Resolve author name once — used by Layer 1 title check below.
 		authorName := ""
 		if book.AuthorID != nil {
 			if author, err := de.bookStore.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
@@ -1213,9 +1304,8 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 		}
 
 		// Layer 1 exact checks (file hash, ISBN/ASIN, near-identical title,
-		// duration match).
-		// Errors are logged but non-fatal — one missing field shouldn't
-		// abort the whole scan.
+		// duration match). Cheap and synchronous, no API calls — runs
+		// inline regardless of embed batching.
 		if _, err := de.checkExactFileHash(&book, authorName); err != nil {
 			log.Printf("dedup: full scan hash check error for %s: %v", book.ID, err)
 		}
@@ -1229,18 +1319,14 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 			log.Printf("dedup: full scan duration check error for %s: %v", book.ID, err)
 		}
 
-		// Layer 2 embedding: re-embed if stale, then similarity scan.
-		// findSimilarBooks is only meaningful when an embedding exists, so
-		// skip it entirely when there is no embed client or when EmbedBook
-		// signals the book was skipped / errored (no vector was stored).
+		// Layer 2 embedding: accumulate IDs and flush in batches to keep
+		// OpenAI calls coalesced. findSimilarBooks runs after each batch
+		// flush so similarity work overlaps with the embedding work for
+		// the next chunk in flight.
 		if de.embedClient != nil {
-			status, err := de.EmbedBook(ctx, book.ID)
-			if err != nil {
-				log.Printf("dedup: full scan embed error for %s: %v", book.ID, err)
-			} else if status == EmbedStatusEmbedded || status == EmbedStatusCached {
-				if err := de.findSimilarBooks(ctx, book.ID); err != nil {
-					log.Printf("dedup: full scan similarity error for %s: %v", book.ID, err)
-				}
+			chunkIDs = append(chunkIDs, book.ID)
+			if len(chunkIDs) >= embedChunkSize {
+				_ = flushChunk(i + 1)
 			}
 		}
 
@@ -1248,6 +1334,9 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 			progress(i+1, total)
 		}
 	}
+
+	// Final partial chunk.
+	_ = flushChunk(total)
 	return nil
 }
 

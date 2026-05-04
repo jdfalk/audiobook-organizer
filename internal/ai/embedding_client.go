@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_client.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package ai
@@ -79,6 +79,15 @@ func NewEmbeddingClient(apiKey string) *EmbeddingClient {
 func (c *EmbeddingClient) WithCache(cache EmbeddingCache) *EmbeddingClient {
 	c.cache = cache
 	return c
+}
+
+// SetRawEmbedForTest replaces the underlying API-call function with a fake.
+// Test-only; production code uses the OpenAI-backed default wired in
+// NewEmbeddingClient. Cross-package tests need this because rawEmbed is
+// unexported, and the dedup engine holds a concrete *EmbeddingClient (not
+// an interface) so a stub-by-interface substitution isn't available.
+func (c *EmbeddingClient) SetRawEmbedForTest(fn func(ctx context.Context, texts []string) ([][]float32, error)) {
+	c.rawEmbed = fn
 }
 
 // Model returns the embedding model name this client is pinned
