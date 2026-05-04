@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 1.2.0
+// version: 1.3.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -43,6 +43,12 @@ function formatOpLabel(type: string): string {
     series_normalize: 'Series Normalize',
     transcode: 'Transcode',
     ol_dump_import: 'Open Library Import',
+    'dedup-scan': 'Dedup Scan',
+    'dedup-llm-review': 'Dedup AI Review',
+    'dedup-acoustid-scan': 'AcoustID Scan',
+    'dedup-book-signature-scan': 'Book Signature Scan',
+    'embed-scan': 'Embedding Rescan',
+    'fingerprint-rescan': 'Fingerprint Rescan',
   };
   return labels[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }

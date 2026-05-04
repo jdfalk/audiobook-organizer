@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.13.0
+// version: 2.14.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-03
+// last-edited: 2026-05-04
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -4260,7 +4260,13 @@ export async function removeFromDedupCluster(
   return responseData.data;
 }
 
-export async function triggerDedupScan(): Promise<{ status: string }> {
+// All trigger* dedup endpoints return the full Operation row (id, type,
+// status, progress, ...). Returning the bare Operation lets callers
+// register the op with useOperationsStore.startPolling immediately so the
+// bell icon and Activity page surface the op without waiting for the next
+// 15s background sweep — that wait is what made fast scans look invisible
+// after the user clicked "Re-scan" or "Re-embed All".
+export async function triggerDedupScan(): Promise<Operation> {
   const response = await fetch(`${API_BASE}/dedup/scan`, { method: 'POST' });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to trigger dedup scan');
@@ -4269,7 +4275,7 @@ export async function triggerDedupScan(): Promise<{ status: string }> {
   return responseData.data;
 }
 
-export async function triggerDedupLLM(): Promise<{ status: string }> {
+export async function triggerDedupLLM(): Promise<Operation> {
   const response = await fetch(`${API_BASE}/dedup/scan-llm`, {
     method: 'POST',
   });
@@ -4280,7 +4286,7 @@ export async function triggerDedupLLM(): Promise<{ status: string }> {
   return responseData.data;
 }
 
-export async function triggerDedupAcoustID(): Promise<{ status: string }> {
+export async function triggerDedupAcoustID(): Promise<Operation> {
   const response = await fetch(`${API_BASE}/dedup/scan-acoustid`, { method: 'POST' });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to trigger AcoustID scan');
@@ -4289,7 +4295,7 @@ export async function triggerDedupAcoustID(): Promise<{ status: string }> {
   return responseData.data;
 }
 
-export async function triggerDedupRefresh(): Promise<{ status: string }> {
+export async function triggerDedupRefresh(): Promise<Operation> {
   const response = await fetch(`${API_BASE}/dedup/refresh`, {
     method: 'POST',
   });
@@ -4300,7 +4306,7 @@ export async function triggerDedupRefresh(): Promise<{ status: string }> {
   return responseData.data;
 }
 
-export async function triggerEmbedScan(): Promise<{ status: string }> {
+export async function triggerEmbedScan(): Promise<Operation> {
   const response = await fetch(`${API_BASE}/dedup/embed`, { method: 'POST' });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to trigger embedding scan');

@@ -1,7 +1,7 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.19.0
+// version: 3.20.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
-// last-edited: 2026-05-01
+// last-edited: 2026-05-04
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -51,7 +51,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import * as api from '../services/api';
-import type { Book, DedupCandidate, DedupStats } from '../services/api';
+import type { Book, DedupCandidate, DedupStats, Operation } from '../services/api';
+import { useOperationsStore } from '../stores/useOperationsStore';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import { AudioSampleCompare } from '../components/AudioSampleCompare';
 import type { SampleBook } from '../components/AudioSampleCompare';
@@ -816,13 +817,24 @@ function EmbeddingDedupTab() {
     setCompareCluster({ a: toSample(cluster.bookIds[0]), b: toSample(cluster.bookIds[1]) });
   };
 
+  // trackOp registers the returned op with the operations store so the bell
+  // icon and Activity page surface it within one poll cycle, instead of
+  // waiting up to 15s for the next background ActiveOperations sweep.
+  // Returns a user-facing message that names the op type and id.
+  const trackOp = (op: Operation, label: string): string => {
+    if (op?.id && op?.type) {
+      useOperationsStore.getState().startPolling(op.id, op.type);
+      return `${label} started — see bell icon for progress (op ${op.id.slice(-6)})`;
+    }
+    return `${label} started`;
+  };
+
   const handleScan = async () => {
     setScanning(true);
     setScanMsg(null);
     try {
-      const { status } = await api.triggerDedupScan();
-      setScanMsg(status || 'Scan triggered');
-      // Refresh after a short delay
+      const op = await api.triggerDedupScan();
+      setScanMsg(trackOp(op, 'Dedup scan'));
       setTimeout(() => { loadCandidates(); loadStats(); }, 2000);
     } catch (err) {
       setScanMsg(err instanceof Error ? err.message : 'Scan failed');
@@ -835,8 +847,8 @@ function EmbeddingDedupTab() {
     setScanning(true);
     setScanMsg(null);
     try {
-      const { status } = await api.triggerDedupLLM();
-      setScanMsg(status || 'AI review triggered');
+      const op = await api.triggerDedupLLM();
+      setScanMsg(trackOp(op, 'AI review'));
       setTimeout(() => { loadCandidates(); loadStats(); }, 3000);
     } catch (err) {
       setScanMsg(err instanceof Error ? err.message : 'AI review failed');
@@ -849,8 +861,8 @@ function EmbeddingDedupTab() {
     setScanning(true);
     setScanMsg(null);
     try {
-      const { status } = await api.triggerDedupAcoustID();
-      setScanMsg(status || 'AcoustID scan triggered');
+      const op = await api.triggerDedupAcoustID();
+      setScanMsg(trackOp(op, 'AcoustID scan'));
       setTimeout(() => { loadCandidates(); loadStats(); }, 3000);
     } catch (err) {
       setScanMsg(err instanceof Error ? err.message : 'AcoustID scan failed');
@@ -863,8 +875,8 @@ function EmbeddingDedupTab() {
     setScanning(true);
     setScanMsg(null);
     try {
-      const { status } = await api.triggerEmbedScan();
-      setScanMsg(status || 'Embedding scan triggered — check Operations for progress');
+      const op = await api.triggerEmbedScan();
+      setScanMsg(trackOp(op, 'Embedding rescan'));
     } catch (err) {
       setScanMsg(err instanceof Error ? err.message : 'Embedding scan failed');
     } finally {

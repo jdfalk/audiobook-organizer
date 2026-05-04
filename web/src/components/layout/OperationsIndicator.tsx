@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.4.0
+// version: 3.5.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useEffect, useState } from 'react';
@@ -51,6 +51,18 @@ function formatOperationType(type: string): string {
       return 'Metadata Fetch (Batch)';
     case 'ol_dump_import':
       return 'Open Library Import';
+    case 'dedup-scan':
+      return 'Dedup Scan';
+    case 'dedup-llm-review':
+      return 'Dedup AI Review';
+    case 'dedup-acoustid-scan':
+      return 'AcoustID Scan';
+    case 'dedup-book-signature-scan':
+      return 'Book Signature Scan';
+    case 'embed-scan':
+      return 'Embedding Rescan';
+    case 'fingerprint-rescan':
+      return 'Fingerprint Rescan';
     default:
       return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
