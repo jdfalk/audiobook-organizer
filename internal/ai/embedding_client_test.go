@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_client_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 package ai
@@ -27,6 +27,43 @@ func TestBuildEmbeddingText_BookNoNarrator(t *testing.T) {
 func TestBuildEmbeddingText_Author(t *testing.T) {
 	result := BuildEmbeddingText("author", "Brandon Sanderson", "", "")
 	assert.Equal(t, "Brandon Sanderson", result)
+}
+
+func TestBuildBookEmbeddingText(t *testing.T) {
+	cases := []struct {
+		name, title, author, narrator, series, seq, want string
+	}{
+		{
+			name: "series and sequence",
+			title: "Words of Radiance", author: "Brandon Sanderson", narrator: "Michael Kramer",
+			series: "Stormlight Archive", seq: "2",
+			want: "Words of Radiance by Brandon Sanderson narrated by Michael Kramer (Stormlight Archive #2)",
+		},
+		{
+			name: "series only",
+			title: "Words of Radiance", author: "Brandon Sanderson", narrator: "",
+			series: "Stormlight Archive", seq: "",
+			want: "Words of Radiance by Brandon Sanderson (Stormlight Archive)",
+		},
+		{
+			name: "sequence only",
+			title: "Words of Radiance", author: "Brandon Sanderson", narrator: "",
+			series: "", seq: "2",
+			want: "Words of Radiance by Brandon Sanderson (#2)",
+		},
+		{
+			name: "neither falls back to base",
+			title: "Dune", author: "Frank Herbert", narrator: "",
+			series: "", seq: "",
+			want: "Dune by Frank Herbert",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := BuildBookEmbeddingText(tc.title, tc.author, tc.narrator, tc.series, tc.seq)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }
 
 func TestTextHash(t *testing.T) {

@@ -1,7 +1,7 @@
 // file: internal/dedup/engine.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
-// last-edited: 2026-05-03
+// last-edited: 2026-05-04
 
 package dedup
 
@@ -108,6 +108,65 @@ func (de *Engine) LookupCandidate(id int64) (database.DedupCandidate, bool) {
 // the SQLite linear scan.
 func (de *Engine) SetChromemStore(cs *database.ChromemEmbeddingStore) {
 	de.chromemStore = cs
+}
+
+// HydrateChromem walks the SQLite embedding rows and copies any that are
+// missing from the chromem ANN index. Run once at startup to bring chromem
+// into sync with the canonical SQLite table — without this step, a fresh
+// chromem dir (or one that fell behind because writes only went to SQLite)
+// will return zero matches and Layer 2 silently degrades to "no candidates".
+//
+// Books that no longer exist or are non-primary version-group members are
+// skipped; the embedding table may contain stale rows that EmbedBook would
+// have cleaned up on its next visit.
+//
+// Returns counts so the caller can log progress. Errors on individual rows
+// are logged but never abort the hydrate — partial coverage is better than
+// no coverage.
+func (de *Engine) HydrateChromem(ctx context.Context) (booksHydrated, authorsHydrated int, err error) {
+	if de.chromemStore == nil || de.embedStore == nil {
+		return 0, 0, nil
+	}
+
+	bookEmbeds, err := de.embedStore.ListByType("book")
+	if err != nil {
+		return 0, 0, fmt.Errorf("list book embeddings: %w", err)
+	}
+	for _, e := range bookEmbeds {
+		if err := ctx.Err(); err != nil {
+			return booksHydrated, authorsHydrated, err
+		}
+		if len(e.Vector) == 0 {
+			continue
+		}
+		book, _ := de.bookStore.GetBookByID(e.EntityID)
+		if book == nil {
+			continue
+		}
+		// Skip non-primary versions — they should not participate in
+		// dedup matches and the on-disk row is stale.
+		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
+			continue
+		}
+		de.mirrorBookToChromem(ctx, book, e.Vector)
+		booksHydrated++
+	}
+
+	authorEmbeds, err := de.embedStore.ListByType("author")
+	if err != nil {
+		return booksHydrated, authorsHydrated, fmt.Errorf("list author embeddings: %w", err)
+	}
+	for _, e := range authorEmbeds {
+		if err := ctx.Err(); err != nil {
+			return booksHydrated, authorsHydrated, err
+		}
+		if len(e.Vector) == 0 {
+			continue
+		}
+		de.mirrorAuthorToChromem(ctx, e.EntityID, e.Vector)
+		authorsHydrated++
+	}
+	return booksHydrated, authorsHydrated, nil
 }
 
 // CheckBook runs Layer 1 (exact) and Layer 2 (embedding) dedup checks for a book.
@@ -948,6 +1007,7 @@ func (de *Engine) EmbedBook(ctx context.Context, bookID string) (EmbedStatus, er
 		if err := de.embedStore.Delete("book", bookID); err != nil {
 			log.Printf("dedup: delete stale embedding for non-primary %s: %v", bookID, err)
 		}
+		de.deleteBookFromChromem(ctx, bookID)
 		return EmbedStatusSkippedNonPrimary, nil
 	}
 
@@ -961,6 +1021,7 @@ func (de *Engine) EmbedBook(ctx context.Context, bookID string) (EmbedStatus, er
 		if err := de.embedStore.Delete("book", bookID); err != nil {
 			log.Printf("dedup: delete stale embedding for empty-title %s: %v", bookID, err)
 		}
+		de.deleteBookFromChromem(ctx, bookID)
 		return EmbedStatusSkippedEmptyTitle, nil
 	}
 
@@ -972,12 +1033,31 @@ func (de *Engine) EmbedBook(ctx context.Context, bookID string) (EmbedStatus, er
 		}
 	}
 
-	text := ai.BuildEmbeddingText("book", book.Title, authorName, derefStr(book.Narrator))
+	// Series name + sequence go into the embedding text so two volumes
+	// of the same series ("Foo Book 3" vs "Foo Book 4") get vectors that
+	// actually differ. Without this they collapse into a tight cluster
+	// and the dedup engine reports a spurious 100% match across the
+	// whole series — exactly the false positive the user reported in
+	// production for 6+ books in a series.
+	seriesName := ""
+	if book.SeriesID != nil {
+		if series, err := de.bookStore.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+			seriesName = series.Name
+		}
+	}
+	seriesSeq := seriesNumberOf(book)
+
+	text := ai.BuildBookEmbeddingText(book.Title, authorName, derefStr(book.Narrator), seriesName, seriesSeq)
 	hash := ai.TextHash(text)
 
 	// Check if existing embedding already has this hash — skip if so.
 	existing, err := de.embedStore.Get("book", bookID)
 	if err == nil && existing != nil && existing.TextHash == hash {
+		// Even on a cache hit we mirror to chromem in case the ANN
+		// store is empty (first run after a chromem rebuild) or out
+		// of sync with sqlite. mirrorBookToChromem is a no-op if the
+		// chromem store is nil and never fails the call.
+		de.mirrorBookToChromem(ctx, book, existing.Vector)
 		return EmbedStatusCached, nil
 	}
 
@@ -995,7 +1075,38 @@ func (de *Engine) EmbedBook(ctx context.Context, bookID string) (EmbedStatus, er
 	}); err != nil {
 		return 0, err
 	}
+	de.mirrorBookToChromem(ctx, book, vec)
 	return EmbedStatusEmbedded, nil
+}
+
+// mirrorBookToChromem writes the book's vector + filter metadata to the
+// chromem ANN store. Without this mirror the chromem index drifts out of
+// sync with the SQLite embeddings table — new embeds aren't indexed, and
+// the dedup engine queries an empty (or stale) ANN store and either finds
+// nothing or returns wrong matches.
+//
+// Best-effort: chromem write failures are logged and dropped. The SQLite
+// embedding row is the source of truth; chromem is just an index.
+func (de *Engine) mirrorBookToChromem(ctx context.Context, book *database.Book, vec []float32) {
+	if de.chromemStore == nil || book == nil || len(vec) == 0 {
+		return
+	}
+	primary := "true"
+	if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
+		primary = "false"
+	}
+	meta := map[string]string{
+		"is_primary_version": primary,
+	}
+	if book.SeriesID != nil {
+		meta["series_id"] = strconv.Itoa(*book.SeriesID)
+	}
+	if seq := seriesNumberOf(book); seq != "" {
+		meta["series_sequence"] = seq
+	}
+	if err := de.chromemStore.Upsert(ctx, "book", book.ID, vec, meta); err != nil {
+		log.Printf("[WARN] dedup: chromem upsert book %s: %v", book.ID, err)
+	}
 }
 
 // EmbedAuthor generates and stores an embedding for the given author.
@@ -1018,6 +1129,9 @@ func (de *Engine) EmbedAuthor(ctx context.Context, authorID int) error {
 
 	existing, err := de.embedStore.Get("author", entityID)
 	if err == nil && existing != nil && existing.TextHash == hash {
+		// Mirror to chromem on cache hits too — see mirrorBookToChromem
+		// for the rationale (keeps ANN index in sync with sqlite).
+		de.mirrorAuthorToChromem(ctx, entityID, existing.Vector)
 		return nil
 	}
 
@@ -1026,13 +1140,44 @@ func (de *Engine) EmbedAuthor(ctx context.Context, authorID int) error {
 		return fmt.Errorf("embed text: %w", err)
 	}
 
-	return de.embedStore.Upsert(database.Embedding{
+	if err := de.embedStore.Upsert(database.Embedding{
 		EntityType: "author",
 		EntityID:   entityID,
 		TextHash:   hash,
 		Vector:     vec,
 		Model:      "text-embedding-3-large",
-	})
+	}); err != nil {
+		return err
+	}
+	de.mirrorAuthorToChromem(ctx, entityID, vec)
+	return nil
+}
+
+// mirrorAuthorToChromem writes an author embedding to the chromem index.
+// Best-effort; see mirrorBookToChromem for rationale.
+func (de *Engine) mirrorAuthorToChromem(ctx context.Context, authorID string, vec []float32) {
+	if de.chromemStore == nil || authorID == "" || len(vec) == 0 {
+		return
+	}
+	if err := de.chromemStore.Upsert(ctx, "author", authorID, vec, nil); err != nil {
+		log.Printf("[WARN] dedup: chromem upsert author %s: %v", authorID, err)
+	}
+}
+
+// deleteBookFromChromem removes a book entry from the chromem ANN index.
+// Called whenever EmbedBook deletes the SQLite embedding row (non-primary
+// version, empty title, etc.) so the chromem index doesn't keep returning
+// stale matches for a book that should no longer participate in dedup.
+//
+// chromem-go's Delete returns nil for missing IDs, so this is safe to call
+// even when the entry doesn't exist.
+func (de *Engine) deleteBookFromChromem(ctx context.Context, bookID string) {
+	if de.chromemStore == nil || bookID == "" {
+		return
+	}
+	if err := de.chromemStore.Delete(ctx, "book", bookID); err != nil {
+		log.Printf("[WARN] dedup: chromem delete book %s: %v", bookID, err)
+	}
 }
 
 // FullScan re-embeds stale entities and runs both Layer 1 (exact) and
