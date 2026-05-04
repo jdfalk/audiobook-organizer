@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.2.0 -->
+<!-- version: 8.3.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-05 -->
+<!-- last-edited: 2026-05-03 -->
 
 # Project TODO
 
@@ -28,7 +28,18 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🛠️ Codebase Audit — 2026-04-30
+## 🧹 Tech Debt Sweep — Deprecated Code & Warnings
+
+- [ ] **TECHDEBT-1** Audit and remove deprecated code across the entire codebase
+  - Backend: scan for `// Deprecated:` markers, dead code paths flagged in past evaluations, unused exported symbols, packages with replacement candidates already in use.
+  - Frontend: resolve **React Router v6 future-flag warnings** (`v7_startTransition`, `v7_relativeSplatPath`) — opt in via `<BrowserRouter future={{...}}>` (and matching `MemoryRouter` usage in tests). Then upgrade-prep for v7 properly.
+  - Frontend: audit `package.json` for deprecated transitive deps (`npm outdated`, `npm audit`), remove dead Material-UI v4-style imports if any remain, kill `console.log` left in src.
+  - Go: `staticcheck`/`go vet` clean run; remove unused mocks; replace `ioutil.*` with `io`/`os`; collapse redundant context plumbing flagged in `docs/codebase-evaluation.md`.
+  - SQL: drop schema columns/tables marked deprecated in migration history once readers/writers are gone.
+  - Tests: replace `t.Skip` markers, remove `//nolint` that no longer apply, dedupe fixture builders.
+  - Output: one PR per cluster (router warnings, backend deprecated APIs, frontend deps, dead code) so each can review/revert independently.
+
+
 
 Full evaluation of the audiobook-organizer backend and frontend. 12 issue groups,
 38 atomic bot-task PRs. Specs: `docs/superpowers/specs/2026-04-30-*.md`.
