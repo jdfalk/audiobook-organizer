@@ -1,10 +1,11 @@
 # file: .github/workflows/codeql.yml
-# version: 1.0.0
+# version: 1.1.0
 # guid: 4e7a1b2c-3d5f-6e8a-9b0c-1d2e3f4a5b6c
+# last-edited: 2026-05-03
 #
 # Overrides GitHub's dynamic default CodeQL workflow so GOEXPERIMENT is set.
-# GOEXPERIMENT=jsonv2 is required by the project's JSON handling (go.yaml.in indirect deps
-# the project's JSON handling.
+# GOEXPERIMENT=jsonv2 is required by the project's JSON handling.
+# Custom sanitizer pack in .github/codeql/ reduces false-positive path-injection alerts.
 
 name: CodeQL
 
@@ -44,7 +45,7 @@ jobs:
         uses: github/codeql-action/init@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
         with:
           languages: go
-          queries: security-extended
+          config-file: .github/codeql/codeql-config.yml
 
       - name: Build for CodeQL
         run: go build ./...

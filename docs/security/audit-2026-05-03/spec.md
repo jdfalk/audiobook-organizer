@@ -1,7 +1,7 @@
 <!-- file: docs/security/audit-2026-05-03/spec.md -->
-<!-- version: 2.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- guid: 60ffcab8-352a-44e9-8e21-9b07d7143474 -->
-<!-- last-edited: 2026-05-04 -->
+<!-- last-edited: 2026-05-03 -->
 
 # Security Alert Audit Specification — 2026-05-03
 
@@ -86,6 +86,34 @@ This document provides a complete inventory and actionable remediation plan for 
 - Potential data exfiltration or file manipulation
 
 **Remediation Strategy:**
+
+**Phase 0: CodeQL Custom Sanitizer Pack (Noise Reduction)**
+
+Before systematic remediation, deploy a CodeQL Models-as-Data (MaD) pack to teach CodeQL about existing sanitizer functions in `internal/util/path.go`:
+
+- **`SafeJoin(root string, parts ...string) (string, error)`** — Already validates that joined paths stay within root. When error is nil, the return value is safe.
+- **`WithinRoot(path, root string) bool`** — Predicate that returns true if path is contained within root.
+
+**Implementation:**
+- CodeQL pack at `.github/codeql/` with `models/path-sanitizers.model.yml`
+- MaD entries:
+  ```yaml
+  # SafeJoin as barrier (stops taint on return value)
+  - ["github.com/jdfalk/audiobook-organizer/internal/util", "", False, "SafeJoin", "", "", "ReturnValue[0]", "path-injection", "manual"]
+  
+  # WithinRoot as barrier guard (conditional sanitizer)
+  - ["github.com/jdfalk/audiobook-organizer/internal/util", "", False, "WithinRoot", "", "", "Argument[0]", "true", "path-injection", "manual"]
+  ```
+- Workflow updated to use `config-file: .github/codeql/codeql-config.yml`
+
+**Expected Impact:** Based on spot-check analysis (see `reviews/sast-sca-auditor.md`), approximately **35-45% of the 217 path-injection alerts are false positives** caused by CodeQL not recognizing these sanitizers. Deploying this pack should reduce the count to **~120-140 actionable alerts** (~77 alert reduction).
+
+**Status:** ✅ **Implemented in PR #[TBD]** — Pending CI validation.
+
+---
+
+**Phase 1: Systematic Path Validation**
+
 1. **Create centralized path validation utilities** in `internal/security/pathvalidation/`:
    - `ValidateRelativePath(input string, baseDir string) (string, error)` — ensures resolved path stays within baseDir
    - `SanitizeFilename(input string) (string, error)` — strips path separators, null bytes, control chars
@@ -380,267 +408,96 @@ This document provides a complete inventory and actionable remediation plan for 
 
 ---
 
-## Phase 0 Status: Govulncheck Blocker — ✅ RESOLVED
+## Govulncheck Blocker — GOEXPERIMENT=jsonv2
 
-**Resolution Date:** 2026-04-30  
-**Resolution:** Root `package.json` and `package-lock.json` were deleted in PR #687 (commit `f2d16dd8`). The reported govulncheck incompatibility with `GOEXPERIMENT=jsonv2` was stale information.
+### Problem Statement
 
-### Lessons Learned
+The repository's `go.mod` specifies `go 1.24.0`, but the codebase targets Go 1.25 features (per the `.github/instructions/go.instructions.md`). The build uses `GOEXPERIMENT=jsonv2` (a Go 1.25 experiment) to enable enhanced JSON support.
 
-**Original Problem Statement (Stale):**
-The original audit claimed that `govulncheck ./...` fails or skips when `GOEXPERIMENT=jsonv2` is set, requiring binary-mode scanning workarounds.
+**Current Situation:**
+- `.github/workflows/vulnerability-scan.yml` (lines 30-33) runs `govulncheck ./...` with `GOEXPERIMENT: jsonv2` set as an environment variable.
+- **This workflow does NOT use a reusable workflow from `jdfalk/ghcommon`** — it runs govulncheck directly inline.
+- The user reports that govulncheck "does NOT work" with jsonv2, seeing the package environment as incompatible and skipping/erroring.
 
-**Actual Reality (Verified):**
-1. **`go.mod` is at `go 1.26.0`**, not `1.24.0` as the initial audit stated.
-2. **Govulncheck runs cleanly** with `GOEXPERIMENT=jsonv2`. Verified command:
-   ```bash
-   GOEXPERIMENT=jsonv2 govulncheck ./...
-   # Output: "No vulnerabilities found."
+### Root Cause
+
+`govulncheck` analyzes Go binaries and source code for known vulnerabilities. When `GOEXPERIMENT=jsonv2` is set, the Go toolchain may:
+1. Change build tags or constraints, making govulncheck think modules are for a different Go version/OS.
+2. Produce binaries with altered symbols or imports, confusing the vuln scanner's pattern matching.
+3. Fail to match vulnerability database entries that assume standard Go builds.
+
+The jsonv2 experiment is not yet stable, so tooling (including govulncheck) may not fully support it.
+
+### Impact
+
+Without working govulncheck:
+- **No automated Go vulnerability detection** for `golang.org/x/` packages, stdlib issues, or third-party Go deps.
+- **Risk of undetected CVEs** in critical dependencies (crypto, net, etc.).
+- **Compliance gaps** if security audits require vuln scanning.
+
+### Proposed Solution (Does NOT Require ghcommon Changes)
+
+Since the workflow runs govulncheck inline (not via ghcommon reusable workflow), the fix is local to this repository:
+
+1. **Option A: Remove jsonv2 from govulncheck step**
+   ```yaml
+   - name: Run govulncheck
+     run: govulncheck ./...
+     # DO NOT set GOEXPERIMENT here
    ```
-3. **The `GOEXPERIMENT=jsonv2` env var must NOT be removed** — it is required for the codebase's use of Go 1.25+ JSON features and is correctly set in both `.github/workflows/codeql.yml` and `.github/workflows/vulnerability-scan.yml`.
-4. **The nightly `vulnerability-scan.yml` workflow is active and green**, confirming govulncheck is working as intended.
+   **Pros:** Govulncheck works immediately.  
+   **Cons:** Govulncheck scans code as-if built without jsonv2, potentially missing issues specific to that build mode.
 
-**Root Cause of the Stale Information:**
-- The audit was prepared based on documentation that referenced an older Go version configuration.
-- Independent review by `sast-sca-auditor` caught the discrepancy by re-running govulncheck locally on the `chore/security-audit` branch.
+2. **Option B: Run govulncheck on built binary**
+   ```yaml
+   - name: Build with jsonv2
+     run: go build -o audiobook-organizer ./cmd/...
+     env:
+       GOEXPERIMENT: jsonv2
 
-**Corrective Action:**
-- Original Phase 0 ("Implement binary-mode govulncheck workaround, ~1 hour") is **OBSOLETE**.
-- New Phase 1 in the reconciled implementation plan verifies that the nightly workflow is green and reporting correctly — no code changes needed.
-- This resolution saves ~1 hour of remediation effort and prevents unnecessary workflow modifications.
+   - name: Run govulncheck on binary
+     run: govulncheck -mode=binary ./audiobook-organizer
+   ```
+   **Pros:** Scans the actual deployed binary, including jsonv2 behavior.  
+   **Cons:** Requires building first; may not catch source-level issues govulncheck usually finds.
 
-**Key Takeaway:**
-Always verify tool compatibility claims against the current codebase state. Independent review caught a stale blocker that would have wasted remediation cycles.
+3. **Option C: Wait for Go 1.25 release**
+   Once Go 1.25 is stable and jsonv2 is no longer experimental, govulncheck should work. Update `go.mod` to `go 1.25` and remove `GOEXPERIMENT`.
 
----
+**Recommended Approach:** **Option B** (scan built binary) for immediate coverage, then transition to **Option C** when Go 1.25 releases.
 
-## OWASP LLM Top 10 Findings
+### User's Original Request (Re-examined)
 
-Independent security review (`SE: Security` persona) identified OWASP LLM Top 10 risks that are entirely absent from CodeQL's default ruleset. These represent production-grade risks that static analysis tools cannot currently detect.
+The user initially requested adding **env injection support to a ghcommon reusable workflow**. However:
+- The vulnerability-scan workflow **does not use ghcommon reusable workflows** (see grep output above).
+- The reusable workflows found (`reusable-ci.yml`, `reusable-release.yml`, `reusable-ci-minimal.yml`) are for CI/build/release, not vuln scanning.
 
-### LLM01 — Prompt Injection via Crafted Filenames
+**Conclusion:** **No ghcommon changes needed for govulncheck.** The fix is entirely within `.github/workflows/vulnerability-scan.yml` in this repository.
 
-**Location:** `internal/openai/openai_parser.go:218`
+**If ghcommon env injection is desired for other reasons** (e.g., passing `GOEXPERIMENT` to reusable CI workflows), that's a separate feature request. The relevant workflows are:
+- `jdfalk/ghcommon/.github/workflows/reusable-ci.yml`
+- `jdfalk/ghcommon/.github/workflows/reusable-ci-minimal.yml`
+- `jdfalk/ghcommon/.github/workflows/reusable-release.yml`
 
-**Issue:** The OpenAI metadata parser sends raw OS filesystem paths (including audiobook filenames) directly to the LLM via prompt construction with zero sanitization:
-```go
-prompt := fmt.Sprintf("Extract metadata from: %s", filepath.Base(audiobookPath))
+**Proposed Input (if implementing in ghcommon):**
+```yaml
+inputs:
+  build_env_vars:
+    description: 'Additional environment variables for build steps (KEY=VALUE, newline-separated)'
+    required: false
+    type: string
+    default: ''
 ```
 
-**Attack Vector:**
-- An attacker places a file named `"; DROP TABLE books; --` or `<script>alert('xss')</script>.m4b` in the audiobook directory.
-- The scanner picks it up, sends the filename verbatim to OpenAI's API.
-- OpenAI's LLM may interpret the filename as a command injection attempt (LLM01) or execute embedded directives if the prompt structure is weak.
-
-**Why CodeQL Missed It:**
-CodeQL has no LLM-aware static analysis rules. The `go/path-injection` rule flags filesystem operations, not LLM prompt construction.
-
-**Recommended Action:** **P0 Fix**
-1. Sanitize all filenames/metadata before prompt construction (strip special chars, SQL keywords, script tags, path separators).
-2. Use structured prompts with clear delimiters: `Filename: """<sanitized_name>"""`
-3. Validate LLM responses against a JSON schema to prevent injection via response manipulation.
-4. Add token limits and rate limits to the OpenAI client.
-
----
-
-### LLM06 — Information Disclosure (PII in Prompts)
-
-**Location:** `internal/openai/openai_parser.go:218`
-
-**Issue:** Full filesystem paths (e.g., `/Users/alice/audiobooks/private_collection/...`) are sent to OpenAI verbatim. These paths can leak:
-- OS usernames (PII)
-- Directory structure (internal information)
-- File naming conventions (security through obscurity破られる)
-
-**Example:**
-```go
-path := "/Users/alice/Documents/Confidential/2026-Taxes/audiobook.m4b"
-// This entire path goes to OpenAI's API in the prompt
+**Usage in job:**
+```yaml
+- name: Set custom env vars
+  if: inputs.build_env_vars != ''
+  run: |
+    echo "${{ inputs.build_env_vars }}" >> $GITHUB_ENV
 ```
 
-**Why CodeQL Missed It:**
-No rule for "PII in external API requests." The `go/clear-text-logging` rule flags logging, not API calls.
-
-**Recommended Action:** **P1 Fix**
-1. Redact OS usernames from paths before sending to OpenAI: `s.Replace("/Users/alice/", "/Users/[REDACTED]/")`
-2. Send only the base filename, not the full path, unless path structure is required for metadata extraction.
-3. Add a `redactPII(s string) string` helper that strips known PII patterns (usernames, email addresses, etc.).
-4. Log all OpenAI API requests (sanitized) to a security audit trail.
-
----
-
-### LLM Security — Combined Remediation Plan
-
-Both findings point to the same root cause: **the LLM integration (`internal/openai/openai_parser.go`) was never designed with adversarial input in mind**.
-
-**Recommended Phase (New):** **Phase 5 — LLM Security Hardening**
-- Sanitize all inputs (filenames, metadata) before prompt construction (LLM01 mitigation).
-- Redact PII (OS usernames, paths) from prompts (LLM06 mitigation).
-- Validate all LLM responses against a JSON schema (prevent response-based injection).
-- Add token limits (e.g., max 2000 tokens per request) and rate limits (e.g., 10 req/min per user).
-- Implement structured logging for all OpenAI API calls (input sanitized, output sanitized, token usage, latency).
-
-**Estimated Effort:** 3 hours  
-**Files Affected:** `internal/openai/openai_parser.go`, `internal/openai/client.go`  
-**Dependencies:** None (can run in parallel with path-injection fixes)
-
----
-
-## Authentication & Authorization Findings
-
-`SE: Security` review found three critical authentication/authorization issues missed by CodeQL's default rulesets.
-
-### Unauthenticated SSE Event Stream
-
-**Location:** `internal/server/server_lifecycle.go:787`
-
-**Issue:** The Server-Sent Events (SSE) endpoint `GET /api/events` is registered on the global (unprotected) router, outside all authentication middleware:
-```go
-// Line 787 in server_lifecycle.go
-r.Get("/api/events", s.handleEvents)
-```
-
-The `handleEvents` function at `internal/server/system_handlers.go:351–358` performs no auth check. **Any unauthenticated caller** can subscribe to real-time system events, including:
-- Operation progress (file moves, metadata fetches)
-- Scan results (which files are being processed)
-- System shutdown broadcasts
-- File paths and metadata (via event payloads)
-
-**Why CodeQL Missed It:**
-No rule for "route registered outside auth middleware." This is a design-level issue, not a code-level pattern match.
-
-**Attack Impact:** **CRITICAL**
-- **Information disclosure:** Attacker learns internal file structure, scan patterns, operation timing.
-- **Reconnaissance:** Real-time feed of server activity enables targeted attacks.
-- **Denial of Service:** Attacker can hold open many SSE connections, exhausting server resources.
-
-**Recommended Action:** **P0 Fix**
-1. Move `r.Get("/api/events", ...)` to an authenticated route group (apply `s.perm(auth.PermReadEvents)` middleware).
-2. Add a unit test that fails if any route registration does not have auth middleware (or is explicitly on an allowlist like `/health`, `/metrics`).
-3. Audit all route registrations in `server_lifecycle.go:760–1231` for similar gaps.
-
----
-
-### In-Memory Login Lockout + OOM Allocation Chain
-
-**Locations:**
-- `internal/server/auth_handlers.go:33–35` — in-memory login lockout map
-- `internal/scanner/scanner.go:219,339` — uncontrolled allocation size alerts
-
-**Issue:** The login lockout mechanism uses a process-local `map[string]*failedAttempt` (auth_handlers.go:33–35) that is wiped on server restart:
-```go
-var loginLockout = make(map[string]*failedAttempt)  // package-level, not durable
-```
-
-**Attack Chain:**
-1. Attacker makes 9 failed login attempts (limit is 10 per 15 minutes per user).
-2. Attacker triggers an OOM crash via the uncontrolled-allocation alerts at `scanner.go:219,339` (CodeQL alerts #129, #44).
-3. Server restarts; `loginLockout` map is empty.
-4. Attacker immediately makes 9 more attempts, repeating the cycle.
-
-**Why CodeQL Missed It:**
-CodeQL flags each issue in isolation:
-- `#129, #44`: Uncontrolled allocation (flagged as DoS, not as auth-chain).
-- Auth lockout map: No rule for "in-memory-only state that should be durable."
-
-**Attack Impact:** **HIGH**
-- **Brute-force protection bypass:** Attacker can indefinitely retry passwords by triggering restarts.
-- **Denial of Service:** The OOM crash itself is a DoS vector.
-
-**Recommended Action:** **P0 Fix (combined)**
-1. **Move login lockout to durable storage** (SQLite table, PebbleDB, or Redis). Persist attempt counts and lockout expiry across restarts.
-2. **Cap upload/scan allocations** at `scanner.go:219,339` (e.g., `min(size, maxAllowedScanBuffer)`) to prevent OOM attacks.
-3. **Add integration test:** Verify that login lockout survives a server restart (start server, lock account, kill server, restart, verify account still locked).
-
----
-
-### Combined Auth Remediation Plan
-
-**Recommended Phase (New):** **Phase 6 — Auth-Chain Hardening**
-- Authenticate `/api/events` SSE endpoint (apply `s.perm(...)` middleware).
-- Move login lockout from in-memory map to durable store (`internal/database/auth_lockout.go` table).
-- Cap upload allocations in `scanner.go` to prevent OOM-triggered lockout resets.
-- Add unit test: every route registration must have auth middleware or be explicitly allowlisted (`/health`, `/metrics`, `/bootstrap`).
-
-**Estimated Effort:** 4 hours  
-**Files Affected:** `server_lifecycle.go`, `auth_handlers.go`, `scanner.go`, `internal/database/auth_lockout.go` (new)  
-**Dependencies:** None (can run in parallel)
-
----
-
-## False Positive Cluster — Path Injection Alerts
-
-Independent review (`sast-sca-auditor`) spot-checked 11 of the 217 open `go/path-injection` alerts and found **~35–45% are likely false positives** of the same shape as the 17 already-dismissed cluster.
-
-### False Positive Shape
-
-**Pattern:** Paths sourced exclusively from `config.AppConfig.*` fields (set at process startup, not user-controlled) or from admin-only database settings.
-
-**Examples:**
-- **Alert #627:** `internal/server/itunes_handlers.go:837` — `os.ReadFile(itlPath)` where `itlPath = config.AppConfig.ITunesLibraryWritePath`. Config-only, not request-borne.
-- **Alert #505:** `internal/server/bootstrap.go:119` — `os.Remove(BootstrapTokenPath(dataDir))` where `dataDir` is the server's configured data directory (set at startup).
-- **Alert #348:** `internal/config/persistence.go:129` — `os.MkdirAll(filepath.Dir(path))` where `path` is the resolved config-file location at startup, derived from CLI flag/env/OS default.
-
-**True Positive Shape (for contrast):**
-- **Alert #388:** `internal/server/filesystem_handlers.go:165` — `os.Stat(folderPath)` where `folderPath = folder.Path` from a request body. Reaches the FS without `SafeJoin`/`WithinRoot`. **Real path-injection through HTTP.**
-- **Alert #442:** `internal/metafetch/service.go:254` — `os.MkdirAll(historyDir)` where `historyDir = filepath.Join(RootDir, "covers", "history", bookID)` and `bookID` flows in from API requests. `filepath.Join` on its own is **not** a sanitizer against `..`.
-
-### Why CodeQL Over-Fires Here
-
-The repository has a working sanitizer pair in `internal/util/path.go`:
-```go
-func SafeJoin(root string, parts ...string) (string, error)  // returns error if escapes root
-func WithinRoot(path, root string) bool                       // boolean check
-```
-
-CodeQL's default `go/path-injection` model does **not** recognize these as sanitizers (they are project-specific). Every code path that uses them is still flagged. The `internal/maintenance/jobs/` dismissals (#544–#560) are explicit evidence of this pattern and were correctly dismissed.
-
-### Spot-Check Results (11 Alerts)
-
-| Alert | File:line | Source | Verdict |
-|-------|-----------|--------|---------|
-| #627  | `itunes_handlers.go:837` | `config.AppConfig.ITunesLibraryWritePath` | **FP** (config-only) |
-| #505  | `bootstrap.go:119` | `dataDir` (startup config) | **FP** (startup-only) |
-| #348  | `config/persistence.go:129` | CLI flag/env (startup) | **FP** (startup-only) |
-| #609  | `openlibrary_service.go:305` | `targetDir` from config, `DumpFilename` enum-mapped | **FP** (config + enum) |
-| #388  | `filesystem_handlers.go:165` | Request body `folder.Path` | **TP** (real HTTP boundary) |
-| #442  | `metafetch/service.go:254` | `bookID` from API request | **TP** (real HTTP boundary) |
-| #422  | `organizer/rename.go:424` | Rename pipeline (metadata-driven) | **Likely TP** (no boundary check) |
-| #225  | `metadata/metadata.go:112` | `ExtractMetadata(filePath, ...)` library function | **FP** for scanner; **TP** if HTTP calls it (none observed) |
-| #202  | `fileops/safe_operations.go:174` | `op.backupPath` (internal struct field) | **Likely FP** (internal-only) |
-| #479  | `itunes/itl.go:673` | Function param (config-supplied) | **Likely FP** (config) |
-| #14   | `backup/backup.go:135` | `RestoreBackup(backupPath, ...)` (admin restore flow) | **TP** (admin-auth required, still a boundary) |
-
-**Summary:** 4 definite TP, 4 definite FP, 3 likely-FP (edge cases). **Roughly 35–45% FP rate**, matching the team's prior dismissal cluster.
-
-### Recommended Triage Strategy
-
-**Do NOT bulk-fix 217 alerts.** Instead:
-
-1. **Phase 1: CodeQL Custom Sanitizer Pack** (MUST come first)
-   - Use GitHub's Models-as-Data feature (introduced 2026-04-21, https://github.blog/changelog/2026-04-21-codeql-now-supports-sanitizers-and-validators-in-models-as-data/) to teach CodeQL about `internal/util.SafeJoin` and `WithinRoot`.
-   - Create `.github/codeql/` directory with `codeql-pack.yml` and MaD `.yml` files registering these functions as path-traversal sanitizers.
-   - Update `.github/workflows/codeql.yml` to reference the local pack.
-   - Re-run code scanning; expect ~80–100 of the 217 alerts to drop automatically.
-
-2. **Phase 2: Triage Remaining Alerts**
-   - Bucket alerts into:
-     - **Config-borne paths only** (startup, not request-driven) → dismiss as FP with documented rationale.
-     - **Internal pipeline** (scan-derived paths inside `RootDir`, already wrapped in `SafeJoin`/`WithinRoot`) → dismiss as FP.
-     - **Genuine HTTP/API boundary** (e.g. #388, #442, file-upload + folder-creation handlers) → these are the real P0s; expect ≤ 30–40 of them.
-
-3. **Phase 3: Fix Real True Positives**
-   - Apply the typed-boundary `safepath.SafePath` package (see arch-design recommendation) to the ≤ 30–40 genuine alerts.
-   - Add forbidigo lint rule banning raw `os.Open/Create/ReadFile` outside `internal/security/safepath`.
-
-**Why This Matters:**
-- Fixing ~120 false positives by hand wastes remediation effort.
-- Bulk-fixing 217 alerts without triage creates a massive PR blast radius (14+ files, hard to review).
-- The custom sanitizer pack is the **right tool** for this problem — it teaches CodeQL the codebase's existing security boundary.
-
-**Alert Shape Reference:**
-- **FP shape:** `#627, #505, #348, #609` (config/data-dir sourced)
-- **TP shape:** `#388, #442` (HTTP request body → filesystem operation)
+But again: **This is NOT needed for the govulncheck fix described above.**
 
 ---
 
@@ -685,177 +542,6 @@ See **`implementation-plan.md`** for the phased remediation plan with concrete t
 
 ---
 
-## Reviewer Disagreements Resolved — Amendment Log
-
-Four independent reviewers evaluated the original `spec.md` + `implementation-plan.md`. This section documents each substantive disagreement and how it was incorporated into v2.0.0.
-
-### Amendment 1: Phase 0 Govulncheck Blocker is Stale (`sast-sca-auditor`)
-
-**Original claim:** Govulncheck fails with `GOEXPERIMENT=jsonv2`; needs binary-mode workaround (~1 hour).
-
-**Reviewer finding:** `go.mod` is at `go 1.26.0` (not `1.24.0`), and `govulncheck ./...` runs cleanly with `GOEXPERIMENT=jsonv2` today. Verified live: "No vulnerabilities found."
-
-**Resolution:**
-- Marked Phase 0 as **✅ RESOLVED** with lessons-learned section (lines 383–418).
-- New Phase 1 in `implementation-plan.md` verifies nightly workflow is green (~30 min), not implementing a workaround.
-- Saves ~30–60 minutes of remediation effort.
-
----
-
-### Amendment 2: ~35–45% of Path-Injection Alerts are False Positives (`sast-sca-auditor`)
-
-**Original claim:** All 217 `go/path-injection` alerts are real vulnerabilities; fix systematically.
-
-**Reviewer finding:** Spot-checked 11 random alerts; found 4 TP, 4 FP, 3 likely-FP. FP pattern: paths sourced from `config.AppConfig.*` or startup-only settings (e.g. #627, #505, #348, #609). Real TP pattern: HTTP request body → filesystem operation (e.g. #388, #442).
-
-**Resolution:**
-- Added "False Positive Cluster" section (lines 280–378) documenting the FP shape and spot-check results.
-- New Phase 1 in `implementation-plan.md`: **CodeQL Custom Sanitizer Pack** (must run first) to teach CodeQL about `internal/util.SafeJoin` and `WithinRoot`. Expected to drop ~80–100 alerts automatically.
-- Phase 2 and beyond now operate on the post-sanitizer-pack alert count (~110–137 remaining), not the full 217.
-- Changed spec's §1.1 Recommended Action from "fix individually" to "triage-via-sanitizer-pack."
-
----
-
-### Amendment 3: Dependabot #27 is in Root `package-lock.json`, Not `web/` (`sast-sca-auditor`)
-
-**Original claim:** Alert #27 (`follow-redirects`) is in `web/package-lock.json`; fix with `npm update` in `web/`.
-
-**Reviewer finding:** The vulnerable copy is in **root** `package-lock.json`, pulled in transitively by `axios@1.15.2` (root devDep, used by Playwright test harness). `web/` is clean (`npm audit` → 0). The proposed fix command will not move the alert.
-
-**Resolution:**
-- Updated §2.1 Dependabot section (lines 319–342) to correctly identify **root** `package.json` as the location.
-- Noted that root `package.json` and `package-lock.json` were **deleted in PR #687** (commit `f2d16dd8`), making this alert moot.
-- Dependabot #27 was dismissed (not merged).
-- Removed the `npm update follow-redirects` remediation task from Phase 9 in `implementation-plan.md`.
-
----
-
-### Amendment 4: The Proposed `pathvalidation` Package is Too Weak (`arch-design-reviewer`)
-
-**Original proposal:** Create `internal/security/pathvalidation/` with free functions (`ValidateRelativePath`, `SanitizeFilename`, etc.).
-
-**Reviewer critique:** Free functions are advisory; nothing forces callers to use them. 218th alert will appear after the 217th is "fixed." Recommend a **typed boundary** (`safepath.Root` + `safepath.SafePath` newtype) + wrapped FS methods (`Open`, `ReadFile`, `Create`) + `golangci-lint` forbidigo rule banning raw `os.Open/Create/ReadFile` outside `internal/security/safepath`.
-
-**Resolution:**
-- Phase 2 in `implementation-plan.md` (formerly Phase 1) now creates `internal/security/safepath/` with the typed-boundary design.
-- Added forbidigo lint rule to CI (Phase 2 sub-task).
-- Same pattern applied to SSRF (`safehttp.Client`) in Phase 3 and logging (`seclog.Secret`/`PII` LogValuer wrappers) in Phase 4.
-- Updated §1.1 Path Injection remediation strategy to reference typed boundaries, not free functions.
-
----
-
-### Amendment 5: Plan is Back-Loaded; Front-Load High-Impact Work (`arch-design-reviewer`)
-
-**Original order:** Phase 0 (govulncheck) → Phase 1 (pathvalidation package) → Phase 2 (fileops) → Phase 3 (covers) → Phase 4 (iTunes/transfer, largest alert drop).
-
-**Reviewer recommendation:** Swap phases to deliver value sooner. Recommend: CodeQL sanitizer pack first (immediate 80-alert drop), then typed boundaries, then fan out.
-
-**Resolution:**
-- New phase order in `implementation-plan.md`:
-  - **Phase 1:** CodeQL custom sanitizer pack (~3h, drops ~80 alerts immediately).
-  - **Phase 2:** Typed `safepath` boundary (~6h, blocks all raw `os.*` calls).
-  - **Phase 3:** SSRF boundary (`safehttp`) (~4h).
-  - **Phase 4:** Logging hardening (`seclog`) (~3h).
-  - **Phase 5:** LLM security (new, ~3h, can run parallel).
-  - **Phase 6:** Auth-chain hardening (new, ~4h, can run parallel).
-  - **Phase 7:** Convert remaining filesystem call-sites to safepath (~6h, depends on Phase 2).
-  - **Phase 8:** Threat model + ADRs (new, ~3h, can run parallel from start).
-  - **Phase 9:** Regression gate (new, ~2h).
-  - **Phase 10:** False-positive cleanup (~2h, depends on Phases 1, 7).
-  - **Phase 11:** Verification + closeout (~1h, depends on all).
-- Total: ~37 hours (down from ~44h due to Phase 0 obsolescence).
-
----
-
-### Amendment 6: Audit Missed OWASP LLM Top 10 Entirely (`SE: Security`)
-
-**Original audit scope:** Only CodeQL-detected alerts (path injection, clear-text logging, SSRF, etc.).
-
-**Reviewer finding:** Zero manual inspection of LLM integration. Found LLM01 (prompt injection via crafted filenames at `openai_parser.go:218`) and LLM06 (PII disclosure via OS usernames in paths sent to OpenAI).
-
-**Resolution:**
-- Added "OWASP LLM Top 10 Findings" section (lines 130–180).
-- New Phase 5 in `implementation-plan.md`: **LLM Security Hardening** (~3h, can run parallel).
-- Remediation: sanitize filenames, redact PII from prompts, validate LLM responses, add token/rate limits.
-
----
-
-### Amendment 7: Unauthenticated SSE Endpoint + Auth-Chain Issues (`SE: Security`)
-
-**Original audit scope:** Only CodeQL-detected alerts.
-
-**Reviewer finding:** `GET /api/events` (SSE endpoint at `server_lifecycle.go:787`) is registered outside auth middleware — any unauthenticated caller can subscribe to real-time system events. Combined with in-memory login lockout (`auth_handlers.go:33–35`) + OOM allocation alerts (`scanner.go:219,339`), attacker can bypass brute-force protection by triggering restarts.
-
-**Resolution:**
-- Added "Authentication & Authorization Findings" section (lines 181–279).
-- New Phase 6 in `implementation-plan.md`: **Auth-Chain Hardening** (~4h, can run parallel).
-- Remediation: authenticate `/api/events`, move login lockout to durable store, cap upload allocations, add unit test for route auth coverage.
-
----
-
-### Amendment 8: No Regression Gate (`arch-design-reviewer`)
-
-**Original plan:** Fix all 236 alerts, then re-pull data to verify (Phase 11).
-
-**Reviewer critique:** Without a CI gate, the 237th alert will appear the day after merge. Recommend `.github/workflows/security-gate.yml` that fails any PR increasing open code-scanning alert count vs main.
-
-**Resolution:**
-- New Phase 9 in `implementation-plan.md`: **Regression Gate** (~2h).
-- Creates `security-gate.yml` workflow that queries GitHub Code Scanning API, compares open alert count vs main branch, fails on increase.
-- Also adds root-level npm coverage to `vulnerability-scan.yml` (future-proofing in case root manifests reappear).
-
----
-
-### Amendment 9: No Threat Model or ADRs (`arch-design-reviewer`)
-
-**Original plan:** Fix alerts per CodeQL output; document path validation utilities.
-
-**Reviewer critique:** Fix decisions are being made per-alert rather than per-asset. No structured security-event channel, no SBOM, no ADRs for remediation pattern decisions.
-
-**Resolution:**
-- New Phase 8 in `implementation-plan.md`: **Threat Model + ADRs** (~3h, can run parallel from start).
-- Deliverables:
-  - `docs/security/threat-model.md` (assets, principals, trust boundaries, attacker model).
-  - ADRs 0001–0012 listed in `arch-design.md` §7: safepath newtype, typed boundaries, CodeQL sanitizer pack strategy, safehttp design, seclog design, threat model alignment, regression gate strategy, LLM security hardening, auth-chain hardening, forbidigo lint rule enforcement, security-event logging, SBOM policy.
-
----
-
-### Amendment 10: Plan Ships Without Coverage for Root NPM Tree (`sast-sca-auditor`)
-
-**Original plan:** Fix `web/package-lock.json` Dependabot alert; assume root manifest is covered.
-
-**Reviewer finding:** Nightly `vulnerability-scan.yml` only audits `web/`. Root manifest has zero CI coverage outside Dependabot itself. If Dependabot is paused, root vulns go silent.
-
-**Resolution:**
-- Phase 9 in `implementation-plan.md` (Regression Gate) now includes adding root manifest to nightly scan as a sub-task (conditional: only if root `package.json` exists; currently it doesn't post-PR #687).
-- Documents that root `package.json` was deleted in PR #687, so this is future-proofing.
-
----
-
-## Amendments Summary Table
-
-| # | Source | Amendment | Impact on Plan |
-|---|--------|-----------|----------------|
-| 1 | `sast-sca-auditor` | Phase 0 govulncheck blocker is stale | Saves ~1h; Phase 0 → Phase 1 (verification only) |
-| 2 | `sast-sca-auditor` | ~35–45% path-injection alerts are FP | Front-loads CodeQL sanitizer pack (Phase 1); drops ~80 alerts before manual triage |
-| 3 | `sast-sca-auditor` | Dependabot #27 in root, not `web/` | Removed from remediation (already resolved in PR #687) |
-| 4 | `arch-design-reviewer` | `pathvalidation` → typed `safepath` boundary | Phase 2 now creates newtype + lint gate |
-| 5 | `arch-design-reviewer` | Plan back-loaded; front-load value | Reordered phases to ship sanitizer pack + boundaries first |
-| 6 | `SE: Security` | LLM Top 10 missing (LLM01, LLM06) | New Phase 5 (~3h) |
-| 7 | `SE: Security` | Unauthenticated SSE + auth-chain | New Phase 6 (~4h) |
-| 8 | `arch-design-reviewer` | No regression gate | New Phase 9 (~2h) |
-| 9 | `arch-design-reviewer` | No threat model / ADRs | New Phase 8 (~3h) |
-| 10 | `sast-sca-auditor` | Root NPM tree not in CI scan | Phase 9 sub-task (conditional) |
-
-**Net effect:**
-- Original plan: 11 phases (0–11), ~44h, 236 alerts.
-- Reconciled plan: 11 phases (1–11), ~37h, 236 alerts (but ~80–100 drop after Phase 1).
-- New phases cover OWASP LLM Top 10, auth/authz, regression prevention, and architectural governance (threat model + ADRs).
-
----
-
-*Document Version: 2.0.0*  
-*Original Audit Date: 2026-05-03*  
-*Reconciliation Date: 2026-05-04*  
-*Independent Reviews: `sast-sca-auditor`, `SE: Security`, `arch-design-reviewer`, `code-review`*  
+*Document Version: 1.0.0*  
+*Audit Date: 2026-05-03*  
 *Raw Data: `docs/security/audit-2026-05-03/raw/`*
