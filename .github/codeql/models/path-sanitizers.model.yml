@@ -1,0 +1,21 @@
+# file: .github/codeql/models/path-sanitizers.model.yml
+# version: 0.1.0
+# guid: 07edd0c5-64fa-4d57-8830-fbfaa513c052
+# last-edited: 2026-05-03
+
+extensions:
+  - addsTo:
+      pack: codeql/go-all
+      extensible: barrierModel
+    data:
+      # SafeJoin sanitizes path-injection on return value (when error is nil)
+      # The return value is guaranteed to be within root or an error is returned
+      - ["github.com/jdfalk/audiobook-organizer/internal/util", "", False, "SafeJoin", "", "", "ReturnValue[0]", "path-injection", "manual"]
+  
+  - addsTo:
+      pack: codeql/go-all
+      extensible: barrierGuardModel
+    data:
+      # WithinRoot acts as a validation guard for path-injection
+      # When this predicate returns true, the path argument is sanitized
+      - ["github.com/jdfalk/audiobook-organizer/internal/util", "", False, "WithinRoot", "", "", "Argument[0]", "true", "path-injection", "manual"]

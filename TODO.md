@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
 <!-- version: 8.5.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-04 -->
+<!-- last-edited: 2026-05-03 -->
 
 # Project TODO
 
@@ -46,176 +46,169 @@ future agent) can scan the entire workspace in one page.
 **Complete inventory and remediation plan for all GitHub security alerts.**
 
 **Audit Documents:**
-- **Spec v2:** [`docs/security/audit-2026-05-03/spec.md`](docs/security/audit-2026-05-03/spec.md) — Alert inventory, OWASP LLM Top 10 findings, auth issues, FP cluster analysis
-- **Implementation Plan v2:** [`docs/security/audit-2026-05-03/implementation-plan.md`](docs/security/audit-2026-05-03/implementation-plan.md) — Reconciled 11-phase plan (~37 hours, down from ~44h)
-- **Reviews:** [`docs/security/audit-2026-05-03/reviews/SYNTHESIS.md`](docs/security/audit-2026-05-03/reviews/SYNTHESIS.md) — Independent review synthesis
+- **Spec:** [`docs/security/audit-2026-05-03/spec.md`](docs/security/audit-2026-05-03/spec.md) — Alert inventory, severity breakdown, remediation recommendations
+- **Implementation Plan:** [`docs/security/audit-2026-05-03/implementation-plan.md`](docs/security/audit-2026-05-03/implementation-plan.md) — Phased remediation plan (11 phases, 16 tasks, ~44 hours)
 - **Raw Data:** [`docs/security/audit-2026-05-03/raw/`](docs/security/audit-2026-05-03/raw/) — JSON dumps from `gh api`
 
 **Alert Totals (as of 2026-05-03):**
 - **Code Scanning:** 602 total (235 open, 17 dismissed, 350 fixed)
-- **Dependabot:** 20 total (1 open → RESOLVED in PR #687, 19 fixed)
+- **Dependabot:** 20 total (1 open, 19 fixed)
 - **Secret Scanning:** 0 alerts
 
-**Open Alert Breakdown (236 total → post-reconciliation: ~156 after Phase 1):**
-- **231 Error/High:** 217 path injection (~80–100 drop after Phase 1), 6 clear-text logging, 4 SSRF, 2 allocation, 1 zipslip, 1 weak hashing
-- **5 Warning/Medium:** 4 code scanning warnings, 1 Dependabot (already resolved)
-- **New categories (not in original audit):** Unauthenticated SSE endpoint, LLM prompt injection + PII disclosure, in-memory auth lockout
+**Open Alert Breakdown (236 total):**
+- **231 Error/High:** 217 path injection, 6 clear-text logging, 4 SSRF, 2 allocation, 1 zipslip, 1 weak hashing
+- **5 Warning/Medium:** 4 code scanning warnings, 1 Dependabot (follow-redirects)
 
-### Phase 0 Status: Govulncheck (✅ RESOLVED)
+### Phase -1: CodeQL Custom Sanitizer Pack (Noise Reduction)
 
-- [x] **SEC-AUDIT-0** Govulncheck blocker with `GOEXPERIMENT=jsonv2` — **✅ COMPLETE (stale issue)**
-  - **Resolution:** PR #687 (commit `f2d16dd8`) deleted root `package.json`/`package-lock.json`. Independent review (`sast-sca-auditor`) verified `GOEXPERIMENT=jsonv2 govulncheck ./...` runs cleanly: "No vulnerabilities found."
-  - **Root cause:** Audit was based on stale documentation referencing older Go version configuration.
-  - **Lesson learned:** Always verify tool compatibility claims against current codebase state before planning remediation.
-  - **Spec:** [`spec.md#phase-0-status-govulncheck-blocker`](docs/security/audit-2026-05-03/spec.md#phase-0-status-govulncheck-blocker--resolved)
-
-### Phase 1: CodeQL Custom Sanitizer Pack (✅ READY)
-
-- [ ] **SEC-AUDIT-1** CodeQL custom sanitizer pack for existing path validators
-  - **Priority:** P0 (must run first)
-  - **Effort:** 3 hours
-  - **Expected Alert Drop:** ~80–100 of 217 path injection alerts
-  - **Files:** `.github/codeql/` (new), `.github/workflows/codeql.yml`
-  - **Action:** Use GitHub Models-as-Data feature to teach CodeQL about `internal/util.SafeJoin` and `WithinRoot` sanitizers
+- [ ] **SEC-AUDIT--1** Deploy CodeQL Models-as-Data pack for existing sanitizers
+  - **Priority:** P0 (Unblocks Phase 1-6 by reducing false positives)
+  - **Effort:** 2 hours
+  - **Alerts:** Expected to reduce path injection from 217 → ~120-140 (~77 FP reduction)
+  - **Files:** `.github/codeql/` (new pack), `.github/workflows/codeql.yml`, `docs/security/audit-2026-05-03/spec.md`
+  - **Action:** Create MaD pack declaring `internal/util.SafeJoin` and `internal/util.WithinRoot` as path-injection sanitizers
   - **Dependencies:** None
-  - **Dispatch:** ✅ READY — sub-agent prompt in implementation plan
-  - **Plan:** [`implementation-plan.md#phase-1`](docs/security/audit-2026-05-03/implementation-plan.md#phase-1-codeql-custom-sanitizer-pack)
+  - **Status:** ✅ **IN PROGRESS** (PR pending)
+  - **Details:** 
+    - Pack declares `SafeJoin` return value as barrier for path-injection
+    - Pack declares `WithinRoot` as barrier guard (conditional sanitizer)
+    - Based on sast-sca-auditor spot-check: 35-45% of alerts are FPs from CodeQL not recognizing existing sanitizers
+  - **Spec:** [`spec.md#remediation-strategy-phase-0`](docs/security/audit-2026-05-03/spec.md#remediation-strategy)
 
-### Phase 2: Typed Safepath Boundary (⏳ AFTER 1)
+### Phase 0: Unblock Govulncheck
 
-- [ ] **SEC-AUDIT-2** Typed `safepath.SafePath` newtype + forbidigo lint gate
+- [ ] **SEC-AUDIT-0** Enable govulncheck for `GOEXPERIMENT=jsonv2` builds
+  - **Priority:** P0 (Blocker)
+  - **Effort:** 1 hour
+  - **Alerts:** N/A (unblocks Go vuln detection)
+  - **Files:** `.github/workflows/vulnerability-scan.yml`
+  - **Action:** Switch to binary-mode scanning (`govulncheck -mode=binary`)
+  - **Dependencies:** None
+  - **Spec:** [`spec.md#govulncheck-blocker`](docs/security/audit-2026-05-03/spec.md#govulncheck-blocker--goexperimentjsonv2)
+  - **Plan:** [`implementation-plan.md#phase-0`](docs/security/audit-2026-05-03/implementation-plan.md#phase-0-enable-govulncheck-unblock-vulnerability-scanning)
+
+### Phase 1-6: Path Injection (217 alerts)
+
+- [ ] **SEC-AUDIT-1** Create `internal/security/pathvalidation` package (foundation)
+  - **Priority:** P0
+  - **Effort:** 4 hours
+  - **Alerts:** Foundation for 217 path injection alerts
+  - **Files:** `internal/security/pathvalidation/` (new)
+  - **Action:** Build centralized path validation utilities (`ValidateRelativePath`, `SanitizeFilename`, `SecureJoin`)
+  - **Dependencies:** Phase 0
+  - **Plan:** [`implementation-plan.md#phase-1`](docs/security/audit-2026-05-03/implementation-plan.md#phase-1-path-injection--foundation-build-validation-utilities)
+
+- [ ] **SEC-AUDIT-2** Fix path injection in fileops layer (9 alerts: #625-#620, #543, #542, #539, #538-#536)
   - **Priority:** P0
   - **Effort:** 6 hours
-  - **Alerts:** 0 (enables fixes, prevents regressions)
-  - **Files:** `internal/security/safepath/` (new), `.golangci.yml`, `internal/fileops/hash.go` (proof-of-concept)
-  - **Action:** Create `Root` + `SafePath` types with wrapped FS methods, ban raw `os.Open/Create/ReadFile` outside the package
+  - **Files:** `internal/fileops/` (service.go, hash.go, write_tags_safe.go, safe_operations.go)
   - **Dependencies:** Phase 1
-  - **Dispatch:** ⏳ AFTER Phase 1
-  - **Plan:** [`implementation-plan.md#phase-2`](docs/security/audit-2026-05-03/implementation-plan.md#phase-2-typed-safepath-boundary--lint-gate)
+  - **Plan:** [`implementation-plan.md#phase-2`](docs/security/audit-2026-05-03/implementation-plan.md#phase-2-path-injection--apply-validation-file-operations-core)
 
-### Phase 3: SSRF Boundary (⏳ AFTER 2)
-
-- [ ] **SEC-AUDIT-3** SSRF boundary (`safehttp.Client`)
-  - **Priority:** P1
-  - **Effort:** 4 hours
-  - **Alerts:** 4 (SSRF: #587, #467, #458, #232)
-  - **Files:** `internal/security/safehttp/` (new), `internal/metafetch/service.go`, `internal/server/covers.go`, `internal/openai/client.go`
-  - **Action:** Typed `Client` wrapping `http.Client`, enforcing allowlist + private-IP blocking
-  - **Dependencies:** Phase 2 (for pattern consistency)
-  - **Dispatch:** ⏳ AFTER Phase 2
-  - **Plan:** [`implementation-plan.md#phase-3`](docs/security/audit-2026-05-03/implementation-plan.md#phase-3-ssrf-boundary-safehttp)
-
-### Phase 4: Logging Hardening (⏳ AFTER 2)
-
-- [ ] **SEC-AUDIT-4** Logging hardening (`seclog` redaction wrappers)
-  - **Priority:** P1
+- [ ] **SEC-AUDIT-3** Fix path injection in cover handlers (9 alerts: #602-#594)
+  - **Priority:** P0
   - **Effort:** 3 hours
-  - **Alerts:** 6 (clear-text logging: #530-#526, #47)
-  - **Files:** `internal/security/seclog/` (new), `internal/server/maintenance_fixups.go`, `cmd/root.go`
-  - **Action:** `Secret`/`PII` `slog.LogValuer` types that redact in production
-  - **Dependencies:** Phase 2 (for pattern consistency)
-  - **Dispatch:** ⏳ AFTER Phase 2
-  - **Plan:** [`implementation-plan.md#phase-4`](docs/security/audit-2026-05-03/implementation-plan.md#phase-4-logging-hardening-seclog)
+  - **Files:** `internal/server/covers.go`, `internal/server/cover_history.go`
+  - **Dependencies:** Phase 2
+  - **Plan:** [`implementation-plan.md#phase-3`](docs/security/audit-2026-05-03/implementation-plan.md#phase-3-path-injection--server-handlers-covers)
 
-### Phase 5: LLM Security (✅ READY, parallel)
-
-- [ ] **SEC-AUDIT-5** LLM security hardening (OWASP LLM01, LLM06)
-  - **Priority:** P0 (new category, not in original audit)
-  - **Effort:** 3 hours
-  - **Alerts:** 0 (new category: prompt injection + PII disclosure)
-  - **Files:** `internal/openai/openai_parser.go`, `internal/openai/client.go`
-  - **Action:** Sanitize filenames before prompts, redact PII (OS usernames), validate LLM responses, add token/rate limits
-  - **Dependencies:** None
-  - **Dispatch:** ✅ READY (can run parallel to Phases 1-4)
-  - **Plan:** [`implementation-plan.md#phase-5`](docs/security/audit-2026-05-03/implementation-plan.md#phase-5-llm-security)
-
-### Phase 6: Auth-Chain Hardening (✅ READY, parallel)
-
-- [ ] **SEC-AUDIT-6** Auth-chain hardening (SSE auth, durable lockout, OOM caps)
-  - **Priority:** P0 (new category, not in original audit)
-  - **Effort:** 4 hours
-  - **Alerts:** 2 (uncontrolled allocation: #129, #44) + unauthenticated SSE endpoint + auth lockout reset chain
-  - **Files:** `internal/server/server_lifecycle.go`, `internal/server/auth_handlers.go`, `internal/database/auth_lockout.go` (new), `internal/scanner/scanner.go`
-  - **Action:** Authenticate `/api/events`, move login lockout to DB, cap scanner allocations, add route auth coverage test
-  - **Dependencies:** None
-  - **Dispatch:** ✅ READY (can run parallel to Phases 1-5)
-  - **Plan:** [`implementation-plan.md#phase-6`](docs/security/audit-2026-05-03/implementation-plan.md#phase-6-auth-chain-hardening)
-
-### Phase 7: Convert Filesystem Call-Sites (⏳ AFTER 2)
-
-- [ ] **SEC-AUDIT-7** Convert remaining filesystem call-sites to `safepath`
+- [ ] **SEC-AUDIT-4** Fix path injection in iTunes/transfer/audiobook handlers (20+ alerts: #627-#603, #619-#588)
   - **Priority:** P0
   - **Effort:** 6 hours
-  - **Alerts:** ~70–90 of the ~110–137 remaining post-Phase-1 path injection alerts
-  - **Files:** `internal/scanner/`, `internal/server/itunes_handlers.go`, `internal/server/covers.go`, `internal/reconcile/`, `internal/backup/`, others
-  - **Action:** Apply `safepath.Root.Resolve()` to all genuine HTTP boundary alerts; document FPs for Phase 10 dismissal
+  - **Files:** `internal/server/itunes_handlers.go`, `internal/itunes/service/transfer.go`, `internal/server/audiobooks_handlers.go`, `internal/audiobooks/service.go`, `internal/server/server.go`
   - **Dependencies:** Phase 2
-  - **Dispatch:** ⏳ AFTER Phase 2
-  - **Plan:** [`implementation-plan.md#phase-7`](docs/security/audit-2026-05-03/implementation-plan.md#phase-7-convert-remaining-filesystem-call-sites-to-safepath)
+  - **Plan:** [`implementation-plan.md#phase-4`](docs/security/audit-2026-05-03/implementation-plan.md#phase-4-path-injection--itunestransferserver-core)
 
-### Phase 8: Threat Model + ADRs (✅ READY, parallel)
+- [ ] **SEC-AUDIT-5** Fix path injection in scanner/reconcile/OpenLibrary (15+ alerts: #618-#608)
+  - **Priority:** P0
+  - **Effort:** 5 hours
+  - **Files:** `internal/scanner/service.go`, `internal/reconcile/reconcile.go`, `internal/server/openlibrary_service.go`, `internal/importer/service.go`
+  - **Dependencies:** Phase 2
+  - **Plan:** [`implementation-plan.md#phase-5`](docs/security/audit-2026-05-03/implementation-plan.md#phase-5-path-injection--scannerreconcileopenlibrary)
 
-- [ ] **SEC-AUDIT-8** Threat model + ADRs (governance)
-  - **Priority:** P2 (governance, non-blocking)
+- [ ] **SEC-AUDIT-6** Fix path injection in backup/Deluge/remaining (10+ alerts: #541, #535-#534, others)
+  - **Priority:** P0
   - **Effort:** 3 hours
-  - **Alerts:** 0 (documentation)
-  - **Files:** `docs/security/threat-model.md` (new), `docs/adr/ADR-0000-0012.md` (new)
-  - **Action:** Document assets/principals/trust boundaries, write 13 ADRs for remediation pattern decisions
-  - **Dependencies:** None
-  - **Dispatch:** ✅ READY (can run parallel from start)
-  - **Plan:** [`implementation-plan.md#phase-8`](docs/security/audit-2026-05-03/implementation-plan.md#phase-8-threat-model--adrs)
+  - **Files:** `internal/backup/backup.go`, `internal/server/deluge_import_unix.go`
+  - **Dependencies:** Phase 2
+  - **Plan:** [`implementation-plan.md#phase-6`](docs/security/audit-2026-05-03/implementation-plan.md#phase-6-path-injection--backupdelugeremaining)
 
-### Phase 9: Regression Gate (⏳ AFTER 1)
+### Phase 7: Non-Path-Injection Errors (14 alerts)
 
-- [ ] **SEC-AUDIT-9** Regression gate (CI alert-count check)
-  - **Priority:** P1 (prevents future regressions)
+- [ ] **SEC-AUDIT-7a** Fix clear-text logging (6 alerts: #530-#526, #47)
+  - **Priority:** P1
   - **Effort:** 2 hours
-  - **Alerts:** 0 (CI gate)
-  - **Files:** `.github/workflows/security-gate.yml` (new), `.github/workflows/vulnerability-scan.yml`
-  - **Action:** Create workflow that fails PRs increasing open code-scanning alert count vs main
-  - **Dependencies:** At least one fix phase merged (Phase 1 or later)
-  - **Dispatch:** ⏳ AFTER Phase 1 (or any fix phase)
-  - **Plan:** [`implementation-plan.md#phase-9`](docs/security/audit-2026-05-03/implementation-plan.md#phase-9-regression-gate)
+  - **Files:** `internal/server/maintenance_fixups.go`, `cmd/root.go`
+  - **Action:** Redact sensitive fields before logging
+  - **Plan:** [`implementation-plan.md#task-71`](docs/security/audit-2026-05-03/implementation-plan.md#task-71-fix-clear-text-logging-6-alerts)
 
-### Phase 10: False-Positive Cleanup (⏳ AFTER 1, 7)
+- [ ] **SEC-AUDIT-7b** Fix SSRF via URL validation (4 alerts: #587, #467, #458, #232)
+  - **Priority:** P1
+  - **Effort:** 4 hours
+  - **Files:** `internal/server/covers.go`, `internal/deluge/client.go`, `internal/plugins/webhook/plugin.go`, `internal/metadata/cover.go`
+  - **Action:** Whitelist allowed domains, block private IPs
+  - **Plan:** [`implementation-plan.md#task-72`](docs/security/audit-2026-05-03/implementation-plan.md#task-72-fix-request-forgery-4-alerts)
 
-- [ ] **SEC-AUDIT-10** False-positive cleanup (dismiss with rationale)
+- [ ] **SEC-AUDIT-7c** Fix uncontrolled allocation (2 alerts: #129, #44)
   - **Priority:** P2
+  - **Effort:** 1 hour
+  - **Files:** `internal/scanner/scanner.go`
+  - **Action:** Cap allocation sizes
+  - **Plan:** [`implementation-plan.md#task-73`](docs/security/audit-2026-05-03/implementation-plan.md#task-73-fix-uncontrolled-allocation-2-alerts)
+
+- [ ] **SEC-AUDIT-7d** Fix zipslip in backup extraction (1 alert: #13)
+  - **Priority:** P1
+  - **Effort:** 1 hour
+  - **Files:** `internal/backup/backup.go`
+  - **Action:** Validate archive entry paths
+  - **Plan:** [`implementation-plan.md#task-74`](docs/security/audit-2026-05-03/implementation-plan.md#task-74-fix-zipslip-1-alert)
+
+- [ ] **SEC-AUDIT-7e** Fix weak sensitive data hashing (1 alert: #132)
+  - **Priority:** P1
   - **Effort:** 2 hours
-  - **Alerts:** ~20–40 remaining FPs (config-sourced, startup-only)
-  - **Files:** None (API-only dismissals)
-  - **Action:** For each remaining FP alert, dismiss via `gh api` with `dismissed_reason=false_positive` and specific comment
-  - **Dependencies:** Phases 1, 7
-  - **Dispatch:** ⏳ AFTER Phases 1, 7
-  - **Plan:** [`implementation-plan.md#phase-10`](docs/security/audit-2026-05-03/implementation-plan.md#phase-10-false-positive-cleanup)
+  - **Files:** `internal/database/settings.go`
+  - **Action:** Upgrade to bcrypt/argon2 (passwords) or SHA-256 (non-password)
+  - **Plan:** [`implementation-plan.md#task-75`](docs/security/audit-2026-05-03/implementation-plan.md#task-75-fix-weak-hashing-1-alert)
 
-### Phase 11: Verification + Closeout (⏳ AFTER ALL)
+### Phase 8: Warnings (4 alerts)
 
-- [ ] **SEC-AUDIT-11** Verification + closeout report
+- [ ] **SEC-AUDIT-8** Fix warning-level alerts (4 alerts: #379, #468, #160, #50)
+  - **Priority:** P2-P3
+  - **Effort:** 3.5 hours
+  - **Alerts:** Disabled cert check (#379), allocation overflow (#468), JS cert bypass (#160), incomplete sanitization (#50)
+  - **Files:** `internal/mtls/provisioning.go`, `internal/itunes/itl.go`, `scripts/record_demo.js`, `web/src/pages/Settings.tsx`
+  - **Plan:** [`implementation-plan.md#phase-8`](docs/security/audit-2026-05-03/implementation-plan.md#phase-8-warnings-4-alerts)
+
+### Phase 9: Dependabot
+
+- [ ] **SEC-AUDIT-9** Bump follow-redirects to 1.16.0+ (1 alert: #27, GHSA-r4q5-vmmm-2653)
+  - **Priority:** P2
+  - **Effort:** 0.5 hours
+  - **Files:** `web/package-lock.json`
+  - **Action:** `npm update follow-redirects && npm audit fix`
+  - **Plan:** [`implementation-plan.md#phase-9`](docs/security/audit-2026-05-03/implementation-plan.md#phase-9-dependabot-1-alert)
+
+### Phase 10: Documentation
+
+- [ ] **SEC-AUDIT-10** Document path validation policy & add dismissal comments
+  - **Priority:** P3
+  - **Effort:** 1.5 hours
+  - **Action:** Create `docs/security/path-validation-policy.md`, add comments to 13 dismissed alerts (#560-#547)
+  - **Plan:** [`implementation-plan.md#phase-10`](docs/security/audit-2026-05-03/implementation-plan.md#phase-10-documentation--dismissed-alerts)
+
+### Phase 11: Verification
+
+- [ ] **SEC-AUDIT-11** Final verification (re-pull alerts, confirm 0 open)
   - **Priority:** P0 (gate for completion)
   - **Effort:** 1 hour
-  - **Alerts:** Confirm 0 open
-  - **Files:** `docs/security/audit-2026-05-XX/raw/` (new dated dir), `docs/security/audit-2026-05-03/closeout.md` (new)
-  - **Action:** Re-pull all alert APIs, compare against 2026-05-03 baseline, write closeout report
-  - **Dependencies:** All phases (1-10)
-  - **Dispatch:** ⏳ AFTER ALL
-  - **Plan:** [`implementation-plan.md#phase-11`](docs/security/audit-2026-05-03/implementation-plan.md#phase-11-verification--closeout)
+  - **Action:** `gh api repos/.../code-scanning/alerts --paginate | jq '[.[] | select(.state == "open")] | length'`
+  - **Plan:** [`implementation-plan.md#phase-11`](docs/security/audit-2026-05-03/implementation-plan.md#phase-11-final-verification)
 
-**Estimated Total Effort:** ~37 hours (down from ~44h in v1.0)
-
-**Parallel Dispatch Strategy:**
-- **Day 1:** Phases 1, 5, 6, 8 (all READY, no dependencies)
-- **Day 2+:** Phases 2, 3, 4, 7, 9, 10, 11 (sequential after their dependencies)
+**Estimated Total Effort:** 44 hours (~6-8 weeks part-time, 2-3 weeks full-time)
 
 **Acceptance Criteria:**
 - ✅ All 236 open alerts addressed (fixed or consciously dismissed with rationale)
-- ✅ Phase 0 govulncheck issue confirmed resolved (already done)
-- ✅ CodeQL custom sanitizer pack deployed (~80-alert drop)
-- ✅ Typed safepath boundary + lint gate deployed
-- ✅ SSRF boundary + logging hardening deployed
-- ✅ LLM security + auth-chain hardening deployed
-- ✅ Threat model + ADRs documented
-- ✅ Regression gate active in CI
+- ✅ Govulncheck runs successfully on jsonv2 builds
 - ✅ All PRs merged, `make ci` passes on main
 - ✅ Post-remediation audit confirms 0 open alerts (or only accepted-risk)
 

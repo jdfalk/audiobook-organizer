@@ -1,0 +1,22 @@
+# file: .github/codeql/codeql-config.yml
+# version: 1.0.0
+# guid: c446d899-a3a4-440d-9031-c932f11f1603
+# last-edited: 2026-05-03
+
+name: audiobook-organizer-codeql-config
+
+# Include the custom sanitizer pack
+packs:
+  go:
+    - .github/codeql
+
+# Use security-extended query suite
+queries:
+  - uses: security-extended
+
+# Ignore test files and vendored code
+paths-ignore:
+  - '**/*_test.go'
+  - 'vendor/**'
+  - 'testdata/**'
+  - 'third_party/**'
