@@ -1080,7 +1080,7 @@ export default function ActivityLog() {
                     date?: string;
                     original_count?: number;
                     counts?: Record<string, number>;
-                    items?: Array<{ type: string; book?: string; book_id?: string; summary: string; details?: string }>;
+                    items?: Array<{ type: string; tier?: string; book?: string; book_id?: string; operation_id?: string; summary: string; details?: string }>;
                     truncated?: boolean;
                     truncated_count?: number;
                   } | undefined;
@@ -1140,6 +1140,9 @@ export default function ActivityLog() {
                                   }}
                                 >
                                   <Chip size="small" label={item.type.replace(/_/g, ' ')} sx={{ minWidth: 100 }} />
+                                  {item.tier === 'audit' && (
+                                    <Chip size="small" label="audit" sx={{ bgcolor: '#7c4dff', color: 'white', fontSize: '0.65rem' }} />
+                                  )}
                                   {item.book_id ? (
                                     <Typography
                                       variant="body2"
@@ -1157,6 +1160,11 @@ export default function ActivityLog() {
                                   <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
                                     {item.summary}
                                   </Typography>
+                                  {item.operation_id && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.65rem' }}>
+                                      {item.operation_id}
+                                    </Typography>
+                                  )}
                                   {item.details && (
                                     <Typography variant="caption" color="error.main">
                                       {item.details}

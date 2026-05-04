@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.7.1
+// version: 1.8.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -59,11 +59,13 @@ type CompactResult struct {
 
 // DigestItem represents a single compacted entry within a daily digest.
 type DigestItem struct {
-	Type    string `json:"type"`
-	Book    string `json:"book,omitempty"`
-	BookID  string `json:"book_id,omitempty"`
-	Summary string `json:"summary"`
-	Details string `json:"details,omitempty"`
+	Type        string `json:"type"`
+	Tier        string `json:"tier,omitempty"`
+	Book        string `json:"book,omitempty"`
+	BookID      string `json:"book_id,omitempty"`
+	OperationID string `json:"operation_id,omitempty"`
+	Summary     string `json:"summary"`
+	Details     string `json:"details,omitempty"`
 }
 
 // DigestDetails is the JSON structure stored in a daily digest row's details column.
@@ -529,9 +531,12 @@ func nullableJSON(v map[string]any) (any, error) {
 	return string(b), nil
 }
 
-// CompactByDay collapses old change/debug entries into one daily_digest row per
-// UTC day. Audit-tier entries are never touched. Each day is processed in its
-// own transaction for atomicity.
+// CompactByDay collapses old change, debug, and audit entries into one
+// daily_digest row per UTC day. Audit entries are folded into the digest
+// (preserving their type, summary, and operation_id in DigestItem) so the
+// audit record survives compaction in summarized form. Existing 'digest'
+// rows are never re-compacted. Each day is processed in its own transaction
+// for atomicity.
 func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (CompactResult, error) {
 	var result CompactResult
 
@@ -540,7 +545,7 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 		SELECT id, timestamp, tier, type, level, source, operation_id,
 		       book_id, summary, details, tags
 		FROM   activity_log
-		WHERE  tier IN ('change', 'debug')
+		WHERE  tier IN ('change', 'debug', 'audit')
 		  AND  compacted = 0
 		  AND  timestamp < ?
 		ORDER BY timestamp ASC`,
@@ -613,23 +618,30 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 			counts[e.Type]++
 		}
 
-		// Build items — error/warn first, then the rest.
-		var errItems, normalItems []DigestItem
+		// Build items — audit first (forensic record must survive
+		// truncation), then error/warn, then the rest.
+		var auditItems, errItems, normalItems []DigestItem
 		for _, e := range dg.entries {
 			item := DigestItem{
-				Type:    e.Type,
-				Book:    extractBookName(e),
-				BookID:  e.BookID,
-				Summary: extractItemSummary(e),
+				Type:        e.Type,
+				Tier:        e.Tier,
+				Book:        extractBookName(e),
+				BookID:      e.BookID,
+				OperationID: e.OperationID,
+				Summary:     extractItemSummary(e),
 			}
-			if e.Level == "error" || e.Level == "warn" {
+			switch {
+			case e.Tier == "audit":
+				auditItems = append(auditItems, item)
+			case e.Level == "error" || e.Level == "warn":
 				item.Details = extractErrorDetails(e)
 				errItems = append(errItems, item)
-			} else {
+			default:
 				normalItems = append(normalItems, item)
 			}
 		}
-		items := append(errItems, normalItems...)
+		items := append(auditItems, errItems...)
+		items = append(items, normalItems...)
 
 		truncated := false
 		truncatedCount := 0
