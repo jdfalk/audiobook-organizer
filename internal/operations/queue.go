@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -94,7 +94,12 @@ type OperationProgress struct {
 // NewOperationQueue creates a new operation queue
 func NewOperationQueue(store database.OperationStore, workers int, activityLogger ActivityLogger, hub *realtime.EventHub) *OperationQueue {
 	if workers <= 0 {
-		workers = 2 // Default to 2 workers
+		// Default to 8 workers — bumped from 2 after the 2026-05-04
+		// queue-jam incident: a single long-running, ctx-ignoring op
+		// (reconcile_scan) parked both workers for ~45 minutes and
+		// stalled every other queued operation. 8 workers gives enough
+		// head-room that one stuck job doesn't deadlock the whole queue.
+		workers = 8
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

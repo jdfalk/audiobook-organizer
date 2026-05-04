@@ -54,21 +54,21 @@ func TestNewOperationQueue(t *testing.T) {
 		}
 	})
 
-	t.Run("defaults to 2 workers when 0 specified", func(t *testing.T) {
+	t.Run("defaults to 8 workers when 0 specified", func(t *testing.T) {
 		q := NewOperationQueue(store, 0, nil, nil)
 		defer q.Shutdown(time.Second)
 
-		if q.workers != 2 {
-			t.Errorf("expected 2 workers, got %d", q.workers)
+		if q.workers != 8 {
+			t.Errorf("expected 8 workers, got %d", q.workers)
 		}
 	})
 
-	t.Run("defaults to 2 workers when negative specified", func(t *testing.T) {
+	t.Run("defaults to 8 workers when negative specified", func(t *testing.T) {
 		q := NewOperationQueue(store, -1, nil, nil)
 		defer q.Shutdown(time.Second)
 
-		if q.workers != 2 {
-			t.Errorf("expected 2 workers, got %d", q.workers)
+		if q.workers != 8 {
+			t.Errorf("expected 8 workers, got %d", q.workers)
 		}
 	})
 }
