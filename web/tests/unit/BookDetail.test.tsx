@@ -1,5 +1,5 @@
 // file: web/tests/unit/BookDetail.test.tsx
-// version: 1.2.1
+// version: 1.3.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 /**
@@ -118,18 +118,13 @@ describe('BookDetail Component', () => {
   it('Fetch Metadata button shows loading state', async () => {
     const user = userEvent.setup();
 
+    // Manually-controlled deferred so the loading state is observable
+    // for as long as the test needs (no race against a fixed setTimeout).
+    let resolveFetch: (v: unknown) => void = () => {};
     vi.mocked(api.fetchBookMetadata).mockImplementation(
       () =>
         new Promise((resolve) => {
-          setTimeout(
-            () =>
-              resolve({
-                message: 'Success',
-                source: 'Open Library',
-                book: mockBook,
-              }),
-            100
-          );
+          resolveFetch = resolve as (v: unknown) => void;
         })
     );
 
@@ -146,15 +141,19 @@ describe('BookDetail Component', () => {
 
     await user.click(fetchButton);
 
-    // Should show loading state. Wrap in waitFor — the state update from
-    // user.click() is async and can lag behind the click promise on slow
-    // CI runners.
+    // Loading state must appear and stay until we resolve.
     await waitFor(() => {
       expect(fetchButton).toHaveTextContent('Fetching...');
       expect(fetchButton).toBeDisabled();
     });
 
-    // Wait for completion - after fetch, loadBook() is called which may briefly show loading
+    // Now release the mock and confirm the button returns to its normal state.
+    resolveFetch({
+      message: 'Success',
+      source: 'Open Library',
+      book: mockBook,
+    });
+
     await waitFor(
       () => {
         const btn = screen.getByRole('button', { name: /fetch metadata/i });
@@ -168,17 +167,11 @@ describe('BookDetail Component', () => {
   it('Parse with AI button shows loading state', async () => {
     const user = userEvent.setup();
 
+    let resolveParse: (v: unknown) => void = () => {};
     vi.mocked(api.parseAudiobookWithAI).mockImplementation(
       () =>
         new Promise((resolve) => {
-          setTimeout(
-            () =>
-              resolve({
-                message: 'Success',
-                book: mockBook,
-              }),
-            100
-          );
+          resolveParse = resolve as (v: unknown) => void;
         })
     );
 
@@ -195,12 +188,12 @@ describe('BookDetail Component', () => {
 
     await user.click(parseButton);
 
-    // Should show loading state. Wrap in waitFor — see Fetch Metadata test
-    // above for rationale.
     await waitFor(() => {
       expect(parseButton).toHaveTextContent('Parsing...');
       expect(parseButton).toBeDisabled();
     });
+
+    resolveParse({ message: 'Success', book: mockBook });
 
     await waitFor(
       () => {
