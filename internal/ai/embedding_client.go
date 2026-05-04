@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_client.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package ai
@@ -220,6 +220,14 @@ func (c *EmbeddingClient) embedBatchRaw(ctx context.Context, texts []string) ([]
 }
 
 // EmbedOne is a convenience wrapper that embeds a single text string.
+//
+// EmbedOne goes through EmbedBatch, which transparently consults the
+// content-hash cache attached via WithCache. So callers DO get the cache
+// for free — there is no separate cache path that needs to be wired here.
+// (This note exists because the question keeps coming up during reviews:
+// "EmbedOne doesn't touch the cache, that's a bug." It is not. EmbedBatch
+// is the single source of truth for cache logic, and EmbedOne is a thin
+// shim over it.)
 func (c *EmbeddingClient) EmbedOne(ctx context.Context, text string) ([]float32, error) {
 	results, err := c.EmbedBatch(ctx, []string{text})
 	if err != nil {
@@ -233,6 +241,11 @@ func (c *EmbeddingClient) EmbedOne(ctx context.Context, text string) ([]float32,
 
 // BuildEmbeddingText constructs a human-readable text representation of an entity
 // suitable for embedding. entityType may be "book" or "author".
+//
+// Prefer BuildBookEmbeddingText for books — it adds series + sequence so two
+// volumes of the same series ("Foo, Book 3" vs "Foo, Book 4") produce vectors
+// that actually differ. Without that, near-identical titles collapse into a
+// dense cluster of false ~100% cosine matches.
 func BuildEmbeddingText(entityType, title, author, narrator string) string {
 	switch entityType {
 	case "book":
@@ -244,6 +257,30 @@ func BuildEmbeddingText(entityType, title, author, narrator string) string {
 		return title
 	default:
 		return title
+	}
+}
+
+// BuildBookEmbeddingText is the book-specific variant that incorporates series
+// and sequence. Use this whenever the caller has a Book record. Including the
+// series name and number in the embedding text materially separates volumes of
+// a series in vector space — without it, "Reclaiming Honor by John Smith" and
+// the same string for book 7 produce identical embeddings and the dedup
+// engine reports a spurious 100% match across the whole series.
+//
+// Callers that don't have series info (e.g. external metadata candidates that
+// haven't been resolved yet) should pass empty strings; the output then
+// matches BuildEmbeddingText("book", ...).
+func BuildBookEmbeddingText(title, author, narrator, seriesName, seriesSequence string) string {
+	base := BuildEmbeddingText("book", title, author, narrator)
+	switch {
+	case seriesName != "" && seriesSequence != "":
+		return fmt.Sprintf("%s (%s #%s)", base, seriesName, seriesSequence)
+	case seriesName != "":
+		return fmt.Sprintf("%s (%s)", base, seriesName)
+	case seriesSequence != "":
+		return fmt.Sprintf("%s (#%s)", base, seriesSequence)
+	default:
+		return base
 	}
 }
 

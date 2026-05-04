@@ -481,6 +481,25 @@ func NewServer(store database.Store) *Server {
 				} else {
 					server.dedupEngine.SetChromemStore(chromemStore)
 					log.Println("[INFO] chromem-go ANN store active for dedup Layer 2")
+
+					// Hydrate chromem from the SQLite embeddings table in
+					// the background. Without this, an empty or stale
+					// chromem dir means Layer 2 returns zero matches even
+					// though tens of thousands of embeddings exist on disk.
+					// Run async so it doesn't block startup; the dedup
+					// engine works (slowly) before hydration completes
+					// because mirrorBookToChromem populates entries on
+					// demand whenever EmbedBook is called.
+					go func() {
+						hCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+						defer cancel()
+						books, authors, err := server.dedupEngine.HydrateChromem(hCtx)
+						if err != nil {
+							log.Printf("[WARN] chromem hydrate finished with error: %v (books=%d authors=%d)", err, books, authors)
+							return
+						}
+						log.Printf("[INFO] chromem hydrate complete: books=%d authors=%d", books, authors)
+					}()
 				}
 
 				// Wire aijobs store for async dedup review batches.
