@@ -185,7 +185,7 @@ local.env
 .remember/
 .superpowers/
 .claude/scheduled_tasks.lock
-.claude/notes/migrate-loop-resume.md
+.claude/notes/
 
 # Build output
 bin/
