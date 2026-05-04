@@ -58,6 +58,7 @@ import HeadphonesIcon from '@mui/icons-material/Headphones';
 import { AudioSampleCompare } from '../components/AudioSampleCompare';
 import type { SampleBook } from '../components/AudioSampleCompare';
 import ClearIcon from '@mui/icons-material/Clear';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { DedupBookTab } from '../components/dedup/DedupBookTab';
 import BuildIcon from '@mui/icons-material/Build';
@@ -589,6 +590,7 @@ function EmbeddingDedupTab() {
   const [bulkMergeOpen, setBulkMergeOpen] = useState(false);
   const [pageMergeOpen, setPageMergeOpen] = useState(false);
   const [exportMenuAnchor, setExportMenuAnchor] = useState<HTMLElement | null>(null);
+  const [moreMenuAnchor, setMoreMenuAnchor] = useState<HTMLElement | null>(null);
   const [seriesMergeOpen, setSeriesMergeOpen] = useState(false);
   const [seriesMergeLoading, setSeriesMergeLoading] = useState(false);
   const [seriesSummary, setSeriesSummary] = useState<api.DedupSeriesSummary[]>([]);
@@ -1153,46 +1155,85 @@ function EmbeddingDedupTab() {
 
   return (
     <Box>
-      {/* Toolbar */}
+      {/* Toolbar — primary "find duplicates" actions, then merge actions
+          (defined further down). The "Force Re-embed All" maintenance
+          action used to live up here as a peer button but it competed
+          visually with the primary actions despite being a once-in-a-
+          while task — moved into the More menu so it's still reachable
+          but doesn't fight for attention. */}
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="center">
-        <Button
-          variant="outlined"
-          startIcon={scanning ? <CircularProgress size={16} /> : <RefreshIcon />}
-          onClick={handleScan}
-          disabled={scanning || bulkMerging}
-          size="small"
+        <Tooltip title="Re-embed any stale books, then re-run exact + similarity matching to find new duplicate candidates. This is the standard 'find dupes again' button.">
+          <span>
+            <Button
+              variant="contained"
+              startIcon={scanning ? <CircularProgress size={16} /> : <RefreshIcon />}
+              onClick={handleScan}
+              disabled={scanning || bulkMerging}
+              size="small"
+            >
+              Find Duplicates
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title="Compare acoustic fingerprints (AcoustID) across all books to find audio-level duplicates. Catches re-encodes and chapter splits that text-similarity would miss.">
+          <span>
+            <Button
+              variant="outlined"
+              startIcon={scanning ? <CircularProgress size={16} /> : <FingerprintIcon />}
+              onClick={handleAcoustID}
+              disabled={scanning || bulkMerging}
+              size="small"
+            >
+              Find Audio Duplicates
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title="Run an LLM verdict (merge / dismiss / undecided) on existing pending candidates. Use after Find Duplicates surfaces a batch you want auto-classified. Costs OpenAI tokens.">
+          <span>
+            <Button
+              variant="outlined"
+              startIcon={scanning ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
+              onClick={handleLLM}
+              disabled={scanning || bulkMerging}
+              size="small"
+            >
+              Run AI Review
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title="More actions">
+          <span>
+            <IconButton
+              size="small"
+              onClick={(e) => setMoreMenuAnchor(e.currentTarget)}
+              disabled={scanning || bulkMerging}
+              aria-label="more dedup actions"
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Menu
+          anchorEl={moreMenuAnchor}
+          open={Boolean(moreMenuAnchor)}
+          onClose={() => setMoreMenuAnchor(null)}
         >
-          Re-scan
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={scanning ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
-          onClick={handleLLM}
-          disabled={scanning || bulkMerging}
-          size="small"
-        >
-          AI Review
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={scanning ? <CircularProgress size={16} /> : <FingerprintIcon />}
-          onClick={handleAcoustID}
-          disabled={scanning || bulkMerging}
-          size="small"
-          title="Compare acoustic fingerprints across all books to find audio duplicates"
-        >
-          Scan (AcoustID)
-        </Button>
-        <Button
-          variant="outlined"
-          startIcon={scanning ? <CircularProgress size={16} /> : <AutoAwesomeIcon />}
-          onClick={handleEmbed}
-          disabled={scanning || bulkMerging}
-          size="small"
-          title="Regenerate embeddings for all books — run this before Re-scan if embeddings are missing"
-        >
-          Re-embed All
-        </Button>
+          <MenuItem
+            onClick={() => {
+              setMoreMenuAnchor(null);
+              void handleEmbed();
+            }}
+          >
+            <Box>
+              <Typography variant="body2">Force Re-embed All</Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                Regenerate embeddings for every book. Only needed once
+                after adding an OpenAI key — Find Duplicates already
+                re-embeds stale books on its own.
+              </Typography>
+            </Box>
+          </MenuItem>
+        </Menu>
         <Button
           variant="outlined"
           color="warning"
