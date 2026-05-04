@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.8.0
+// version: 1.8.1
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -113,9 +113,15 @@ CREATE INDEX IF NOT EXISTS idx_activity_level_timestamp  ON activity_log (level,
 `
 
 // NewActivityStore opens (or creates) the SQLite activity log at dbPath.
-// WAL mode and a 5 s busy timeout are enabled for concurrent access.
+// WAL mode + 30 s busy timeout + BEGIN IMMEDIATE for all transactions.
+// _txlock=immediate is load-bearing: CompactByDay starts a tx with a SELECT
+// (read), then upgrades to a write on the first DELETE. Under deferred BEGIN
+// a concurrent INSERT from Record() can grab the write lock during that
+// SELECT window, after which our DELETE upgrade fails with "database is
+// locked" instead of waiting on busy_timeout. IMMEDIATE acquires the write
+// lock at BEGIN so subsequent writers queue on busy_timeout cleanly.
 func NewActivityStore(dbPath string) (*ActivityStore, error) {
-	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=off", dbPath)
+	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=30000&_txlock=immediate&_foreign_keys=off", dbPath)
 	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("activity_store: open %q: %w", dbPath, err)

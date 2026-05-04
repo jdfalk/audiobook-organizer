@@ -1,13 +1,26 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.0 -->
+<!-- version: 2.44.1 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-02 -->
+<!-- last-edited: 2026-05-04 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Fixed
+
+#### May 4, 2026 — Activity compaction 500: "database is locked"
+
+- **fix(activity)**: open the activity-log SQLite with `_txlock=immediate` and
+  bump `_busy_timeout` to 30 s. `CompactByDay` begins its tx with a SELECT
+  (read), then upgrades to a write on the first DELETE. Under deferred
+  BEGIN a concurrent `Record()` insert could grab the write lock during the
+  SELECT window, after which our DELETE upgrade returned `SQLITE_BUSY`
+  ("database is locked") instead of waiting. IMMEDIATE acquires the write
+  lock at BEGIN so concurrent writers queue cleanly. Surfaced after the
+  audit-folding change extended each tx's write window on busy prod.
+
+
 
 #### May 2, 2026 — Activity-log "Compact (Everything now)" left audit-tier rows behind
 
