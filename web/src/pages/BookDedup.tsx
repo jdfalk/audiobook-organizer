@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.20.0
+// version: 3.21.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 // last-edited: 2026-05-04
 
@@ -53,6 +53,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import * as api from '../services/api';
 import type { Book, DedupCandidate, DedupStats, Operation } from '../services/api';
 import { useOperationsStore } from '../stores/useOperationsStore';
+import { FilterTagBar, type FilterTag } from '../components/common/FilterTagBar';
 import HeadphonesIcon from '@mui/icons-material/Headphones';
 import { AudioSampleCompare } from '../components/AudioSampleCompare';
 import type { SampleBook } from '../components/AudioSampleCompare';
@@ -977,7 +978,6 @@ function EmbeddingDedupTab() {
   const pendingCount = stats.filter(s => s.status === 'pending').reduce((sum, s) => sum + s.count, 0);
   const mergedCount = stats.filter(s => s.status === 'merged').reduce((sum, s) => sum + s.count, 0);
   const dismissedCount = stats.filter(s => s.status === 'dismissed').reduce((sum, s) => sum + s.count, 0);
-  const allCount = pendingCount + mergedCount + dismissedCount;
   const exactCount = stats.filter(s => s.layer === 'exact').reduce((sum, s) => sum + s.count, 0);
   const embeddingCount = stats.filter(s => s.layer === 'embedding').reduce((sum, s) => sum + s.count, 0);
   const llmCount = stats.filter(s => s.layer === 'llm').reduce((sum, s) => sum + s.count, 0);
@@ -1400,42 +1400,113 @@ function EmbeddingDedupTab() {
         </DialogActions>
       </Dialog>
 
-      {/* Stats chips — one per status bucket plus per-layer breakdown. */}
+      {/* Stat chips — clickable. Each chip applies its corresponding
+          filter (status or layer); the active filter chip is rendered
+          filled instead of outlined so the user sees which slice they
+          are viewing. The "showing" chip is informational only. The
+          previous Tabs + secondary chip-toggle row below was redundant
+          with this control and was removed — active filters now show
+          up below as removable tags via FilterTagBar. */}
       <Stack direction="row" spacing={1} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-        <Chip label={`${pendingCount} pending`} size="small" color="warning" variant="outlined" />
-        <Chip label={`${mergedCount} merged`} size="small" color="success" variant="outlined" />
-        <Chip label={`${dismissedCount} dismissed`} size="small" color="default" variant="outlined" />
-        <Chip label={`${exactCount} exact`} size="small" color="error" variant="outlined" />
-        <Chip label={`${embeddingCount} embedding`} size="small" color="primary" variant="outlined" />
-        <Chip label={`${llmCount} LLM`} size="small" color="secondary" variant="outlined" />
+        <Chip
+          label={`${pendingCount} pending`}
+          size="small"
+          color="warning"
+          variant={statusFilter === 'pending' ? 'filled' : 'outlined'}
+          onClick={() => { setStatusFilter('pending'); setPage(0); }}
+          sx={{ cursor: 'pointer' }}
+        />
+        <Chip
+          label={`${mergedCount} merged`}
+          size="small"
+          color="success"
+          variant={statusFilter === 'merged' ? 'filled' : 'outlined'}
+          onClick={() => { setStatusFilter('merged'); setPage(0); }}
+          sx={{ cursor: 'pointer' }}
+        />
+        <Chip
+          label={`${dismissedCount} dismissed`}
+          size="small"
+          color="default"
+          variant={statusFilter === 'dismissed' ? 'filled' : 'outlined'}
+          onClick={() => { setStatusFilter('dismissed'); setPage(0); }}
+          sx={{ cursor: 'pointer' }}
+        />
+        <Chip
+          label={`${exactCount} exact`}
+          size="small"
+          color="error"
+          variant={layerFilter === 'exact' ? 'filled' : 'outlined'}
+          onClick={() => { setLayerFilter(layerFilter === 'exact' ? '' : 'exact'); setPage(0); }}
+          sx={{ cursor: 'pointer' }}
+        />
+        <Chip
+          label={`${embeddingCount} embedding`}
+          size="small"
+          color="primary"
+          variant={layerFilter === 'embedding' ? 'filled' : 'outlined'}
+          onClick={() => { setLayerFilter(layerFilter === 'embedding' ? '' : 'embedding'); setPage(0); }}
+          sx={{ cursor: 'pointer' }}
+        />
+        <Chip
+          label={`${llmCount} LLM`}
+          size="small"
+          color="secondary"
+          variant={layerFilter === 'llm' ? 'filled' : 'outlined'}
+          onClick={() => { setLayerFilter(layerFilter === 'llm' ? '' : 'llm'); setPage(0); }}
+          sx={{ cursor: 'pointer' }}
+        />
         <Chip label={`${total} showing`} size="small" variant="outlined" />
       </Stack>
 
-      {/* Filters — tab labels carry the running per-status count so you
-          can see at a glance how many you've merged/dismissed without
-          needing to click into each bucket. */}
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap" useFlexGap>
-        <Tabs value={statusFilter} onChange={(_, v) => { setStatusFilter(v); setPage(0); }}>
-          <Tab value="pending" label={`Pending (${pendingCount})`} />
-          <Tab value="merged" label={`Merged (${mergedCount})`} />
-          <Tab value="dismissed" label={`Dismissed (${dismissedCount})`} />
-          <Tab value="" label={`All (${allCount})`} />
-        </Tabs>
-        <Divider orientation="vertical" flexItem />
-        <Stack direction="row" spacing={0.5}>
-          {(['', 'exact', 'embedding', 'llm'] as const).map((layer) => (
-            <Chip
-              key={layer || 'all'}
-              label={layer || 'All'}
-              size="small"
-              color={layerFilter === layer ? (LAYER_COLORS[layer] || 'default') : 'default'}
-              variant={layerFilter === layer ? 'filled' : 'outlined'}
-              onClick={() => { setLayerFilter(layer); setPage(0); }}
-              sx={{ cursor: 'pointer' }}
-            />
-          ))}
-        </Stack>
-        <Divider orientation="vertical" flexItem />
+      {/* Active filters (removable). The bar hides itself when no
+          filters are active, so it doesn't reserve empty visual space. */}
+      <FilterTagBar
+        tags={(() => {
+          const tags: FilterTag[] = [];
+          if (statusFilter) {
+            tags.push({
+              id: `status:${statusFilter}`,
+              label: `Status: ${statusFilter}`,
+              color:
+                statusFilter === 'pending'
+                  ? 'warning'
+                  : statusFilter === 'merged'
+                  ? 'success'
+                  : 'default',
+              onRemove: () => { setStatusFilter(''); setPage(0); },
+            });
+          }
+          if (layerFilter) {
+            tags.push({
+              id: `layer:${layerFilter}`,
+              label: `Layer: ${layerFilter}`,
+              color: LAYER_COLORS[layerFilter] || 'default',
+              onRemove: () => { setLayerFilter(''); setPage(0); },
+            });
+          }
+          if (searchQuery.trim()) {
+            tags.push({
+              id: 'search',
+              label: `Search: "${searchQuery.trim()}"`,
+              color: 'info',
+              onRemove: () => setSearchQuery(''),
+            });
+          }
+          return tags;
+        })()}
+        onClearAll={() => {
+          setStatusFilter('');
+          setLayerFilter('');
+          setSearchQuery('');
+          setPage(0);
+        }}
+      />
+
+      {/* Search box — live-filters the current page. The query is also
+          mirrored into the FilterTagBar above so it can be cleared via
+          the same X gesture as other filters. */}
+      <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
         <TextField
           size="small"
           placeholder="Search title, author, path…"
@@ -1459,7 +1530,7 @@ function EmbeddingDedupTab() {
               : 'Searches the current page only'
           }
         />
-      </Stack>
+      </Box>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
 
