@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.14.0
+// version: 2.15.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-04
 
@@ -1606,8 +1606,15 @@ export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch active operations');
   }
-  const data = await response.json();
-  return data.operations || [];
+  const body = await response.json();
+  // Backend wraps every successful response in `{ data: ... }` via
+  // RespondWithOK; the actual payload is `{ data: { operations: [...] } }`.
+  // The previous read used top-level `body.operations`, which was always
+  // undefined, so this function silently returned `[]` — making the
+  // Activity page's "Active Operations" section permanently empty AND
+  // breaking the bell icon's auto-discovery of in-flight ops triggered
+  // outside of the dedup page.
+  return body?.data?.operations || body?.operations || [];
 }
 
 // System
