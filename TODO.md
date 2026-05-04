@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.3.0 -->
+<!-- version: 8.4.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-03 -->
 
@@ -39,7 +39,166 @@ future agent) can scan the entire workspace in one page.
   - Tests: replace `t.Skip` markers, remove `//nolint` that no longer apply, dedupe fixture builders.
   - Output: one PR per cluster (router warnings, backend deprecated APIs, frontend deps, dead code) so each can review/revert independently.
 
+---
 
+## 🔒 Security Alert Sweep — Audit 2026-05-03
+
+**Complete inventory and remediation plan for all GitHub security alerts.**
+
+**Audit Documents:**
+- **Spec:** [`docs/security/audit-2026-05-03/spec.md`](docs/security/audit-2026-05-03/spec.md) — Alert inventory, severity breakdown, remediation recommendations
+- **Implementation Plan:** [`docs/security/audit-2026-05-03/implementation-plan.md`](docs/security/audit-2026-05-03/implementation-plan.md) — Phased remediation plan (11 phases, 16 tasks, ~44 hours)
+- **Raw Data:** [`docs/security/audit-2026-05-03/raw/`](docs/security/audit-2026-05-03/raw/) — JSON dumps from `gh api`
+
+**Alert Totals (as of 2026-05-03):**
+- **Code Scanning:** 602 total (235 open, 17 dismissed, 350 fixed)
+- **Dependabot:** 20 total (1 open, 19 fixed)
+- **Secret Scanning:** 0 alerts
+
+**Open Alert Breakdown (236 total):**
+- **231 Error/High:** 217 path injection, 6 clear-text logging, 4 SSRF, 2 allocation, 1 zipslip, 1 weak hashing
+- **5 Warning/Medium:** 4 code scanning warnings, 1 Dependabot (follow-redirects)
+
+### Phase 0: Unblock Govulncheck
+
+- [ ] **SEC-AUDIT-0** Enable govulncheck for `GOEXPERIMENT=jsonv2` builds
+  - **Priority:** P0 (Blocker)
+  - **Effort:** 1 hour
+  - **Alerts:** N/A (unblocks Go vuln detection)
+  - **Files:** `.github/workflows/vulnerability-scan.yml`
+  - **Action:** Switch to binary-mode scanning (`govulncheck -mode=binary`)
+  - **Dependencies:** None
+  - **Spec:** [`spec.md#govulncheck-blocker`](docs/security/audit-2026-05-03/spec.md#govulncheck-blocker--goexperimentjsonv2)
+  - **Plan:** [`implementation-plan.md#phase-0`](docs/security/audit-2026-05-03/implementation-plan.md#phase-0-enable-govulncheck-unblock-vulnerability-scanning)
+
+### Phase 1-6: Path Injection (217 alerts)
+
+- [ ] **SEC-AUDIT-1** Create `internal/security/pathvalidation` package (foundation)
+  - **Priority:** P0
+  - **Effort:** 4 hours
+  - **Alerts:** Foundation for 217 path injection alerts
+  - **Files:** `internal/security/pathvalidation/` (new)
+  - **Action:** Build centralized path validation utilities (`ValidateRelativePath`, `SanitizeFilename`, `SecureJoin`)
+  - **Dependencies:** Phase 0
+  - **Plan:** [`implementation-plan.md#phase-1`](docs/security/audit-2026-05-03/implementation-plan.md#phase-1-path-injection--foundation-build-validation-utilities)
+
+- [ ] **SEC-AUDIT-2** Fix path injection in fileops layer (9 alerts: #625-#620, #543, #542, #539, #538-#536)
+  - **Priority:** P0
+  - **Effort:** 6 hours
+  - **Files:** `internal/fileops/` (service.go, hash.go, write_tags_safe.go, safe_operations.go)
+  - **Dependencies:** Phase 1
+  - **Plan:** [`implementation-plan.md#phase-2`](docs/security/audit-2026-05-03/implementation-plan.md#phase-2-path-injection--apply-validation-file-operations-core)
+
+- [ ] **SEC-AUDIT-3** Fix path injection in cover handlers (9 alerts: #602-#594)
+  - **Priority:** P0
+  - **Effort:** 3 hours
+  - **Files:** `internal/server/covers.go`, `internal/server/cover_history.go`
+  - **Dependencies:** Phase 2
+  - **Plan:** [`implementation-plan.md#phase-3`](docs/security/audit-2026-05-03/implementation-plan.md#phase-3-path-injection--server-handlers-covers)
+
+- [ ] **SEC-AUDIT-4** Fix path injection in iTunes/transfer/audiobook handlers (20+ alerts: #627-#603, #619-#588)
+  - **Priority:** P0
+  - **Effort:** 6 hours
+  - **Files:** `internal/server/itunes_handlers.go`, `internal/itunes/service/transfer.go`, `internal/server/audiobooks_handlers.go`, `internal/audiobooks/service.go`, `internal/server/server.go`
+  - **Dependencies:** Phase 2
+  - **Plan:** [`implementation-plan.md#phase-4`](docs/security/audit-2026-05-03/implementation-plan.md#phase-4-path-injection--itunestransferserver-core)
+
+- [ ] **SEC-AUDIT-5** Fix path injection in scanner/reconcile/OpenLibrary (15+ alerts: #618-#608)
+  - **Priority:** P0
+  - **Effort:** 5 hours
+  - **Files:** `internal/scanner/service.go`, `internal/reconcile/reconcile.go`, `internal/server/openlibrary_service.go`, `internal/importer/service.go`
+  - **Dependencies:** Phase 2
+  - **Plan:** [`implementation-plan.md#phase-5`](docs/security/audit-2026-05-03/implementation-plan.md#phase-5-path-injection--scannerreconcileopenlibrary)
+
+- [ ] **SEC-AUDIT-6** Fix path injection in backup/Deluge/remaining (10+ alerts: #541, #535-#534, others)
+  - **Priority:** P0
+  - **Effort:** 3 hours
+  - **Files:** `internal/backup/backup.go`, `internal/server/deluge_import_unix.go`
+  - **Dependencies:** Phase 2
+  - **Plan:** [`implementation-plan.md#phase-6`](docs/security/audit-2026-05-03/implementation-plan.md#phase-6-path-injection--backupdelugeremaining)
+
+### Phase 7: Non-Path-Injection Errors (14 alerts)
+
+- [ ] **SEC-AUDIT-7a** Fix clear-text logging (6 alerts: #530-#526, #47)
+  - **Priority:** P1
+  - **Effort:** 2 hours
+  - **Files:** `internal/server/maintenance_fixups.go`, `cmd/root.go`
+  - **Action:** Redact sensitive fields before logging
+  - **Plan:** [`implementation-plan.md#task-71`](docs/security/audit-2026-05-03/implementation-plan.md#task-71-fix-clear-text-logging-6-alerts)
+
+- [ ] **SEC-AUDIT-7b** Fix SSRF via URL validation (4 alerts: #587, #467, #458, #232)
+  - **Priority:** P1
+  - **Effort:** 4 hours
+  - **Files:** `internal/server/covers.go`, `internal/deluge/client.go`, `internal/plugins/webhook/plugin.go`, `internal/metadata/cover.go`
+  - **Action:** Whitelist allowed domains, block private IPs
+  - **Plan:** [`implementation-plan.md#task-72`](docs/security/audit-2026-05-03/implementation-plan.md#task-72-fix-request-forgery-4-alerts)
+
+- [ ] **SEC-AUDIT-7c** Fix uncontrolled allocation (2 alerts: #129, #44)
+  - **Priority:** P2
+  - **Effort:** 1 hour
+  - **Files:** `internal/scanner/scanner.go`
+  - **Action:** Cap allocation sizes
+  - **Plan:** [`implementation-plan.md#task-73`](docs/security/audit-2026-05-03/implementation-plan.md#task-73-fix-uncontrolled-allocation-2-alerts)
+
+- [ ] **SEC-AUDIT-7d** Fix zipslip in backup extraction (1 alert: #13)
+  - **Priority:** P1
+  - **Effort:** 1 hour
+  - **Files:** `internal/backup/backup.go`
+  - **Action:** Validate archive entry paths
+  - **Plan:** [`implementation-plan.md#task-74`](docs/security/audit-2026-05-03/implementation-plan.md#task-74-fix-zipslip-1-alert)
+
+- [ ] **SEC-AUDIT-7e** Fix weak sensitive data hashing (1 alert: #132)
+  - **Priority:** P1
+  - **Effort:** 2 hours
+  - **Files:** `internal/database/settings.go`
+  - **Action:** Upgrade to bcrypt/argon2 (passwords) or SHA-256 (non-password)
+  - **Plan:** [`implementation-plan.md#task-75`](docs/security/audit-2026-05-03/implementation-plan.md#task-75-fix-weak-hashing-1-alert)
+
+### Phase 8: Warnings (4 alerts)
+
+- [ ] **SEC-AUDIT-8** Fix warning-level alerts (4 alerts: #379, #468, #160, #50)
+  - **Priority:** P2-P3
+  - **Effort:** 3.5 hours
+  - **Alerts:** Disabled cert check (#379), allocation overflow (#468), JS cert bypass (#160), incomplete sanitization (#50)
+  - **Files:** `internal/mtls/provisioning.go`, `internal/itunes/itl.go`, `scripts/record_demo.js`, `web/src/pages/Settings.tsx`
+  - **Plan:** [`implementation-plan.md#phase-8`](docs/security/audit-2026-05-03/implementation-plan.md#phase-8-warnings-4-alerts)
+
+### Phase 9: Dependabot
+
+- [ ] **SEC-AUDIT-9** Bump follow-redirects to 1.16.0+ (1 alert: #27, GHSA-r4q5-vmmm-2653)
+  - **Priority:** P2
+  - **Effort:** 0.5 hours
+  - **Files:** `web/package-lock.json`
+  - **Action:** `npm update follow-redirects && npm audit fix`
+  - **Plan:** [`implementation-plan.md#phase-9`](docs/security/audit-2026-05-03/implementation-plan.md#phase-9-dependabot-1-alert)
+
+### Phase 10: Documentation
+
+- [ ] **SEC-AUDIT-10** Document path validation policy & add dismissal comments
+  - **Priority:** P3
+  - **Effort:** 1.5 hours
+  - **Action:** Create `docs/security/path-validation-policy.md`, add comments to 13 dismissed alerts (#560-#547)
+  - **Plan:** [`implementation-plan.md#phase-10`](docs/security/audit-2026-05-03/implementation-plan.md#phase-10-documentation--dismissed-alerts)
+
+### Phase 11: Verification
+
+- [ ] **SEC-AUDIT-11** Final verification (re-pull alerts, confirm 0 open)
+  - **Priority:** P0 (gate for completion)
+  - **Effort:** 1 hour
+  - **Action:** `gh api repos/.../code-scanning/alerts --paginate | jq '[.[] | select(.state == "open")] | length'`
+  - **Plan:** [`implementation-plan.md#phase-11`](docs/security/audit-2026-05-03/implementation-plan.md#phase-11-final-verification)
+
+**Estimated Total Effort:** 44 hours (~6-8 weeks part-time, 2-3 weeks full-time)
+
+**Acceptance Criteria:**
+- ✅ All 236 open alerts addressed (fixed or consciously dismissed with rationale)
+- ✅ Govulncheck runs successfully on jsonv2 builds
+- ✅ All PRs merged, `make ci` passes on main
+- ✅ Post-remediation audit confirms 0 open alerts (or only accepted-risk)
+
+---
+
+## 📊 Codebase Evaluation — 2026-04-30
 
 Full evaluation of the audiobook-organizer backend and frontend. 12 issue groups,
 38 atomic bot-task PRs. Specs: `docs/superpowers/specs/2026-04-30-*.md`.
