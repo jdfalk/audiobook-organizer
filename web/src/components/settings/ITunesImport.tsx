@@ -1,6 +1,7 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.15.0
+// version: 1.16.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
+// last-edited: 2026-05-05
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -12,7 +13,6 @@ import {
   CardContent,
   CardHeader,
   Checkbox,
-  Chip,
   Divider,
   Dialog,
   DialogActions,
@@ -54,6 +54,7 @@ import SyncIcon from '@mui/icons-material/Sync.js';
 import IconButton from '@mui/material/IconButton';
 import { ITunesConflictDialog, type ConflictItem } from './ITunesConflictDialog';
 import { ServerFileBrowser } from '../common/ServerFileBrowser';
+import { WriteBackPreviewTable } from './WriteBackPreviewTable';
 import {
   ApiError,
   cancelOperation,
@@ -143,6 +144,13 @@ export function ITunesImport() {
     useState<ITunesWriteBackResponse | null>(null);
   const [writeBackBackup, setWriteBackBackup] = useState(true);
   const [writeBackLibraryPath, setWriteBackLibraryPath] = useState(settings.libraryPath || '');
+  // Configured paths sourced from server config — purely informational
+  // banners on the dialog. The dialog no longer asks the user to type a
+  // .xml path; both paths live in Settings (Paths tab) and the dialog
+  // shows what's currently configured so users can see at a glance
+  // which file the preview reads and which file write-back targets.
+  const [configuredReadPath, setConfiguredReadPath] = useState<string>('');
+  const [configuredWritePath, setConfiguredWritePath] = useState<string>('');
   const [writeBackMode, setWriteBackMode] = useState(0); // 0=manual, 1=sync all, 2=browse
   const [previewItems, setPreviewItems] = useState<ITunesBookMapping[]>([]);
   const [browseItems, setBrowseItems] = useState<ITunesBookMapping[]>([]);
@@ -173,11 +181,15 @@ export function ITunesImport() {
     };
   }, []);
 
-  // Pre-fill library path from server config if not already set
+  // Pre-fill library path from server config + capture both configured
+  // paths for the write-back dialog's info banner. Read-path is used as
+  // a fallback when the user hasn't manually entered one in localStorage;
+  // write-path is purely informational (the .itl that write-back targets).
   useEffect(() => {
-    if (!settings.libraryPath) {
-      getConfig().then((cfg) => {
+    getConfig()
+      .then((cfg) => {
         if (cfg.itunes_library_read_path) {
+          setConfiguredReadPath(cfg.itunes_library_read_path);
           setSettings((prev) => {
             if (!prev.libraryPath) {
               return { ...prev, libraryPath: cfg.itunes_library_read_path! };
@@ -185,8 +197,13 @@ export function ITunesImport() {
             return prev;
           });
         }
-      }).catch(() => { /* ignore */ });
-    }
+        if (cfg.itunes_library_write_path) {
+          setConfiguredWritePath(cfg.itunes_library_write_path);
+        }
+      })
+      .catch(() => {
+        /* ignore — banners just hide */
+      });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep writeBackLibraryPath in sync when settings.libraryPath changes
@@ -347,15 +364,16 @@ export function ITunesImport() {
     }, 300);
   };
 
+  // The library-path field has been removed from the dialog; the backend
+  // falls back to the configured ITunesLibraryReadPath when the request
+  // omits one. We pass undefined (not the locally-cached path) so the
+  // dialog always reflects the latest server-side config without needing
+  // to reload after the user changes it in Settings.
   const handlePreviewAll = async () => {
-    if (!writeBackLibraryPath.trim()) {
-      setWriteBackNotice({ severity: 'error', message: 'Library path is required.' });
-      return;
-    }
     setWriteBackLoading(true);
     setWriteBackNotice(null);
     try {
-      const result = await previewITunesWriteBack(writeBackLibraryPath);
+      const result = await previewITunesWriteBack(undefined);
       const differing = (result.items || []).filter((item) => item.path_differs);
       setPreviewItems(result.items || []);
       setSyncAllCount(differing.length);
@@ -367,10 +385,6 @@ export function ITunesImport() {
   };
 
   const handlePreviewManual = async () => {
-    if (!writeBackLibraryPath.trim()) {
-      setWriteBackNotice({ severity: 'error', message: 'Library path is required.' });
-      return;
-    }
     const ids = parseWriteBackIds(writeBackIds);
     if (ids.length === 0) {
       setWriteBackNotice({ severity: 'error', message: 'Enter one or more IDs to preview.' });
@@ -379,7 +393,7 @@ export function ITunesImport() {
     setWriteBackLoading(true);
     setWriteBackNotice(null);
     try {
-      const result = await previewITunesWriteBack(writeBackLibraryPath, ids);
+      const result = await previewITunesWriteBack(undefined, ids);
       setPreviewItems(result.items || []);
       if (result.items.length === 0) {
         setWriteBackNotice({ severity: 'warning', message: 'No books found with iTunes persistent IDs for those IDs.' });
@@ -397,16 +411,15 @@ export function ITunesImport() {
   };
 
   const executeWriteBack = async (bookIds: string[], forceOverwrite = false) => {
-    if (!writeBackLibraryPath.trim()) {
-      setWriteBackNotice({ severity: 'error', message: 'Library path is required.' });
-      return;
-    }
     setWriteBackLoading(true);
     setWriteBackNotice(null);
     setWriteBackResult(null);
     try {
+      // library_path is sent for backwards compatibility with older backends
+      // but is ignored by the current handler — write-back always targets
+      // the configured ITunesLibraryWritePath (.itl).
       const result = await writeBackITunesLibrary({
-        library_path: writeBackLibraryPath,
+        library_path: writeBackLibraryPath || configuredReadPath || '',
         audiobook_ids: bookIds,
         create_backup: writeBackBackup,
         force_overwrite: forceOverwrite,
@@ -981,14 +994,35 @@ export function ITunesImport() {
                   )}
                 </Alert>
               )}
-              <TextField
-                label="Library.xml Path"
-                value={writeBackLibraryPath}
-                onChange={(event) => setWriteBackLibraryPath(event.target.value)}
-                fullWidth
-                size="small"
-                placeholder="/Users/username/Music/iTunes/Library.xml"
-              />
+              {/* Configured paths banner. The dialog no longer accepts a
+                  Library.xml path on every preview — both paths live on
+                  the Settings → Paths tab. The banner shows the user
+                  which file we'll read for the comparison and which file
+                  write-back will modify, so they can verify before
+                  clicking Sync. */}
+              <Alert severity="info" icon={false} sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+                <Stack spacing={0.5}>
+                  <Stack direction="row" spacing={1} alignItems="baseline">
+                    <Typography variant="caption" sx={{ fontWeight: 600, minWidth: 110 }}>
+                      Reading from:
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                      {configuredReadPath || '(not configured — set in Settings → Paths)'}
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" spacing={1} alignItems="baseline">
+                    <Typography variant="caption" sx={{ fontWeight: 600, minWidth: 110 }}>
+                      Writing to:
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                      {configuredWritePath || '(not configured — write-back will fail until set in Settings → Paths)'}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    Write-back always targets the .itl binary — iTunes ignores Library.xml for inbound changes.
+                  </Typography>
+                </Stack>
+              </Alert>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -1040,38 +1074,10 @@ export function ITunesImport() {
                     </Button>
                   </Stack>
                   {previewItems.length > 0 && (
-                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-                      <Table size="small" stickyHeader>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Title</TableCell>
-                            <TableCell>Author</TableCell>
-                            <TableCell>Local Path</TableCell>
-                            <TableCell>iTunes Path</TableCell>
-                            <TableCell>Status</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {previewItems.map((item) => (
-                            <TableRow key={item.book_id} sx={item.path_differs ? { bgcolor: 'warning.50' } : undefined}>
-                              <TableCell>{item.title}</TableCell>
-                              <TableCell>{item.author}</TableCell>
-                              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <Tooltip title={item.local_path}><span>{item.local_path}</span></Tooltip>
-                              </TableCell>
-                              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <Tooltip title={item.itunes_path || '(not in library)'}><span>{item.itunes_path || '(not in library)'}</span></Tooltip>
-                              </TableCell>
-                              <TableCell>
-                                {item.path_differs
-                                  ? <Chip label="Differs" color="warning" size="small" />
-                                  : <Chip label="Match" color="success" size="small" />}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+                    <WriteBackPreviewTable
+                      storageKey="itunes-writeback-preview-manual"
+                      items={previewItems}
+                    />
                   )}
                 </Stack>
               )}
@@ -1094,7 +1100,7 @@ export function ITunesImport() {
                     <Button
                       variant="outlined"
                       onClick={handlePreviewAll}
-                      disabled={writeBackLoading || !writeBackLibraryPath.trim()}
+                      disabled={writeBackLoading}
                     >
                       Preview All
                     </Button>
@@ -1114,38 +1120,10 @@ export function ITunesImport() {
                     </Button>
                   </Stack>
                   {previewItems.length > 0 && (
-                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-                      <Table size="small" stickyHeader>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Title</TableCell>
-                            <TableCell>Author</TableCell>
-                            <TableCell>Local Path</TableCell>
-                            <TableCell>iTunes Path</TableCell>
-                            <TableCell>Status</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {previewItems.map((item) => (
-                            <TableRow key={item.book_id} sx={item.path_differs ? { bgcolor: 'warning.50' } : undefined}>
-                              <TableCell>{item.title}</TableCell>
-                              <TableCell>{item.author}</TableCell>
-                              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <Tooltip title={item.local_path}><span>{item.local_path}</span></Tooltip>
-                              </TableCell>
-                              <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <Tooltip title={item.itunes_path || '(not in library)'}><span>{item.itunes_path || '(not in library)'}</span></Tooltip>
-                              </TableCell>
-                              <TableCell>
-                                {item.path_differs
-                                  ? <Chip label="Differs" color="warning" size="small" />
-                                  : <Chip label="Match" color="success" size="small" />}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+                    <WriteBackPreviewTable
+                      storageKey="itunes-writeback-preview-syncall"
+                      items={previewItems}
+                    />
                   )}
                 </Stack>
               )}
@@ -1305,7 +1283,7 @@ export function ITunesImport() {
           <DialogTitle>Confirm Write-Back</DialogTitle>
           <DialogContent>
             <Typography>
-              This will update {pendingWriteBackIds.length} book path{pendingWriteBackIds.length !== 1 ? 's' : ''} in your iTunes Library.xml.
+              This will update {pendingWriteBackIds.length} book path{pendingWriteBackIds.length !== 1 ? 's' : ''} in your iTunes library (.itl).
               {writeBackBackup ? ' A backup will be created first.' : ' No backup will be created.'}
             </Typography>
           </DialogContent>

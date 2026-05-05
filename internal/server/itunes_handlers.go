@@ -1,7 +1,7 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 // iTunes HTTP handlers. All business logic lives in internal/itunes/service.
 // Handlers that call s.itunesSvc.Importer.* guard with itunesEnabledOrError
@@ -16,6 +16,7 @@ import (
 	stdlog "log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -92,19 +93,47 @@ type ITunesWriteBackResponse struct {
 }
 
 // ITunesBookMapping is a single book-to-iTunes-path mapping used in preview.
+//
+// Four path columns surface the full picture so users can see exactly what
+// is currently in iTunes vs what AO has on disk vs what AO would write back:
+//
+//   - ITunesPath               — what iTunes currently has, e.g. W:/foo/bar.m4b
+//   - ITunesPathTranslated     — local equivalent of ITunesPath after applying
+//                                forward path mappings (so users can stat it)
+//   - AOPath                   — where AO has the file on disk (book.FilePath)
+//   - AOITunesTranslatedPath   — what AO will write into the iTunes ITL when
+//                                write-back runs (ReverseRemapPath of AOPath)
+//
+// PathDiffers is true iff AOITunesTranslatedPath != ITunesPath — i.e. the
+// thing AO wants to write does not match what iTunes already has.
+//
+// Backwards compatibility: LocalPath is preserved as an alias of AOPath so
+// older clients keep working through the migration. Remove once no caller
+// reads it.
 type ITunesBookMapping struct {
-	BookID             string `json:"book_id"`
-	Title              string `json:"title"`
-	Author             string `json:"author"`
-	ITunesPersistentID string `json:"itunes_persistent_id"`
-	LocalPath          string `json:"local_path"`
-	ITunesPath         string `json:"itunes_path,omitempty"`
-	PathDiffers        bool   `json:"path_differs,omitempty"`
+	BookID                 string `json:"book_id"`
+	Title                  string `json:"title"`
+	Author                 string `json:"author"`
+	ITunesPersistentID     string `json:"itunes_persistent_id"`
+	ITunesPath             string `json:"itunes_path,omitempty"`
+	ITunesPathTranslated   string `json:"itunes_path_translated,omitempty"`
+	AOPath                 string `json:"ao_path"`
+	AOITunesTranslatedPath string `json:"ao_itunes_translated_path,omitempty"`
+	PathDiffers            bool   `json:"path_differs,omitempty"`
+
+	// LocalPath duplicates AOPath for backwards compatibility with the
+	// previous response shape. Will be removed once no caller reads it.
+	LocalPath string `json:"local_path"`
 }
 
 // ITunesWriteBackPreviewRequest is the wire type for POST /itunes/write-back-preview.
+//
+// LibraryPath is now optional — when empty, the handler uses the configured
+// ITunesLibraryReadPath. The dialog used to require the user to type this
+// path on every preview, which was confusing because the actual write-back
+// always targets the configured ITunesLibraryWritePath (.itl) regardless.
 type ITunesWriteBackPreviewRequest struct {
-	LibraryPath string   `json:"library_path" binding:"required"`
+	LibraryPath string   `json:"library_path,omitempty"`
 	BookIDs     []string `json:"book_ids,omitempty"`
 }
 
@@ -446,12 +475,26 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 		return
 	}
 
-	if _, err := os.Stat(req.LibraryPath); os.IsNotExist(err) {
+	// Fall back to the configured read path when the request omits one.
+	// The dialog no longer requires users to type the .xml path — they
+	// configure it once in Settings and the preview endpoint uses it
+	// directly. The actual write-back always targets the configured
+	// ITunesLibraryWritePath (.itl) regardless of this read path.
+	libraryPath := strings.TrimSpace(req.LibraryPath)
+	if libraryPath == "" {
+		libraryPath = config.AppConfig.ITunesLibraryReadPath
+	}
+	if libraryPath == "" {
+		httputil.RespondWithBadRequest(c, "no iTunes library path configured (set ITunesLibraryReadPath in settings)")
+		return
+	}
+
+	if _, err := os.Stat(libraryPath); os.IsNotExist(err) {
 		httputil.RespondWithBadRequest(c, "iTunes library file not found")
 		return
 	}
 
-	library, err := itunes.ParseLibrary(req.LibraryPath)
+	library, err := itunes.ParseLibrary(libraryPath)
 	if err != nil {
 		httputil.InternalError(c, "failed to parse iTunes library", err)
 		return
@@ -497,6 +540,11 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 	for _, m := range config.AppConfig.ITunesPathMappings {
 		previewMappings = append(previewMappings, itunes.PathMapping{From: m.From, To: m.To})
 	}
+	// Forward-mapper for translating an iTunes location into its local
+	// equivalent. Wraps the existing ImportOptions.RemapPath because that
+	// is the canonical forward direction; the receiver pattern is
+	// historical and not worth refactoring here.
+	forwardOpts := itunes.ImportOptions{PathMappings: previewMappings}
 
 	items := make([]ITunesBookMapping, 0, len(books))
 	for _, book := range books {
@@ -508,15 +556,22 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 				author = a.Name
 			}
 		}
-		reverseMapped := itunes.ReverseRemapPath(book.FilePath, previewMappings)
+		aoITunesTranslated := itunes.ReverseRemapPath(book.FilePath, previewMappings)
+		itunesTranslated := ""
+		if itunesPath != "" {
+			itunesTranslated = forwardOpts.RemapPath(itunesPath)
+		}
 		items = append(items, ITunesBookMapping{
-			BookID:             book.ID,
-			Title:              book.Title,
-			Author:             author,
-			ITunesPersistentID: persistentID,
-			LocalPath:          book.FilePath,
-			ITunesPath:         itunesPath,
-			PathDiffers:        reverseMapped != itunesPath,
+			BookID:                 book.ID,
+			Title:                  book.Title,
+			Author:                 author,
+			ITunesPersistentID:     persistentID,
+			ITunesPath:             itunesPath,
+			ITunesPathTranslated:   itunesTranslated,
+			AOPath:                 book.FilePath,
+			AOITunesTranslatedPath: aoITunesTranslated,
+			PathDiffers:            aoITunesTranslated != itunesPath,
+			LocalPath:              book.FilePath,
 		})
 	}
 
