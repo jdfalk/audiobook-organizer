@@ -1,7 +1,7 @@
 // file: internal/database/migrations.go
-// version: 1.37.0
+// version: 1.38.0
 // guid: 9a8b7c6d-5e4f-3d2c-1b0a-9f8e7d6c5b4a
-// last-edited: 2026-05-03
+// last-edited: 2026-05-05
 
 package database
 
@@ -388,6 +388,12 @@ var migrations = []Migration{
 		Description: "Add book signature columns for unified per-book audio fingerprint",
 		Up:          migration058Up,
 		Down:        nil,
+	},
+	{
+		Version:     59,
+		Description: "Add Unified Operations System v2 core schema",
+		Up:          migration059Up,
+		Down:        migration059Down,
 	},
 }
 
@@ -2814,5 +2820,150 @@ func migration058Up(store Store) error {
 		}
 	}
 	log.Println("  - Added book_sig_v1, book_sig_segments, book_sig_built_at to books")
+	return nil
+}
+
+// migration059Up adds the UOS v2 core schema described in
+// docs/superpowers/specs/2026-05-04-unified-operations-system.md §2.1.
+func migration059Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+
+	stmts := []string{
+		`CREATE TABLE op_definitions_v2 (
+    id              TEXT PRIMARY KEY,
+    plugin          TEXT NOT NULL,
+    display_name    TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    capabilities    TEXT NOT NULL,
+    permissions     TEXT NOT NULL,
+    cancellable     BOOLEAN NOT NULL,
+    isolate         BOOLEAN NOT NULL,
+    resume_policy   TEXT NOT NULL,
+    schedule_cron   TEXT,
+    triggers        TEXT NOT NULL,
+    depends_on      TEXT NOT NULL,
+    phases          TEXT NOT NULL,
+    timeout_seconds INTEGER NOT NULL,
+    registered_at   TIMESTAMP NOT NULL
+)`,
+		`CREATE TABLE operations_v2 (
+    id                  TEXT PRIMARY KEY,
+    def_id              TEXT NOT NULL,
+    plugin              TEXT NOT NULL,
+    parent_id           TEXT,
+    actor_user_id       TEXT,
+    trace_id            TEXT NOT NULL,
+    span_id             TEXT NOT NULL,
+    parent_span_id      TEXT,
+    status              TEXT NOT NULL,
+    priority            INTEGER NOT NULL,
+    progress_current    INTEGER NOT NULL DEFAULT 0,
+    progress_total      INTEGER NOT NULL DEFAULT 0,
+    progress_message    TEXT NOT NULL DEFAULT '',
+    current_phase       TEXT,
+    params              TEXT NOT NULL DEFAULT '{}',
+    error_message       TEXT,
+    result_data         TEXT,
+    queued_at           TIMESTAMP NOT NULL,
+    started_at          TIMESTAMP,
+    completed_at        TIMESTAMP,
+    last_progress_at    TIMESTAMP,
+    last_checkpoint_at  TIMESTAMP,
+    high_water_progress INTEGER NOT NULL DEFAULT 0,
+    resume_count        INTEGER NOT NULL DEFAULT 0
+)`,
+		`CREATE INDEX idx_operations_v2_status ON operations_v2(status, queued_at)`,
+		`CREATE INDEX idx_operations_v2_parent ON operations_v2(parent_id)`,
+		`CREATE INDEX idx_operations_v2_def    ON operations_v2(def_id, completed_at DESC)`,
+		`CREATE TABLE op_logs_v2 (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    operation_id TEXT NOT NULL,
+    level        TEXT NOT NULL,
+    message      TEXT NOT NULL,
+    attrs        TEXT NOT NULL DEFAULT '{}',
+    created_at   TIMESTAMP NOT NULL
+)`,
+		`CREATE INDEX idx_op_logs_v2_op_time ON op_logs_v2(operation_id, created_at)`,
+		`CREATE TABLE op_errors_v2 (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    operation_id TEXT NOT NULL,
+    plugin       TEXT NOT NULL,
+    def_id       TEXT NOT NULL,
+    message      TEXT NOT NULL,
+    attrs        TEXT NOT NULL DEFAULT '{}',
+    occurred_at  TIMESTAMP NOT NULL
+)`,
+		`CREATE INDEX idx_op_errors_v2_def     ON op_errors_v2(def_id, occurred_at DESC)`,
+		`CREATE INDEX idx_op_errors_v2_plugin  ON op_errors_v2(plugin, occurred_at DESC)`,
+		`CREATE TABLE op_state_v2 (
+    operation_id TEXT PRIMARY KEY,
+    phase        TEXT,
+    state_blob   BLOB NOT NULL,
+    schema_version INTEGER NOT NULL,
+    written_at   TIMESTAMP NOT NULL
+)`,
+		`CREATE TABLE op_strikes_v2 (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    def_id      TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    details     TEXT NOT NULL DEFAULT '{}',
+    occurred_at TIMESTAMP NOT NULL
+)`,
+		`CREATE INDEX idx_op_strikes_v2_def_time ON op_strikes_v2(def_id, occurred_at DESC)`,
+		`CREATE TABLE plugin_schema_v2 (
+    plugin               TEXT NOT NULL,
+    migration_version    INTEGER NOT NULL,
+    applied_at           TIMESTAMP NOT NULL,
+    PRIMARY KEY (plugin, migration_version)
+)`,
+		`CREATE TABLE core_schema_meta_v2 (
+    id                INTEGER PRIMARY KEY CHECK (id = 1),
+    core_schema_version INTEGER NOT NULL
+)`,
+		`INSERT INTO core_schema_meta_v2 (id, core_schema_version) VALUES (1, 1)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 059 failed running %q: %w", stmt, err)
+		}
+	}
+	log.Println("  - Added UOS v2 core schema")
+	return nil
+}
+
+// migration059Down removes the UOS v2 core schema added by migration059Up.
+func migration059Down(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil
+	}
+
+	stmts := []string{
+		`DROP TABLE IF EXISTS core_schema_meta_v2`,
+		`DROP TABLE IF EXISTS plugin_schema_v2`,
+		`DROP INDEX IF EXISTS idx_op_strikes_v2_def_time`,
+		`DROP TABLE IF EXISTS op_strikes_v2`,
+		`DROP TABLE IF EXISTS op_state_v2`,
+		`DROP INDEX IF EXISTS idx_op_errors_v2_plugin`,
+		`DROP INDEX IF EXISTS idx_op_errors_v2_def`,
+		`DROP TABLE IF EXISTS op_errors_v2`,
+		`DROP INDEX IF EXISTS idx_op_logs_v2_op_time`,
+		`DROP TABLE IF EXISTS op_logs_v2`,
+		`DROP INDEX IF EXISTS idx_operations_v2_def`,
+		`DROP INDEX IF EXISTS idx_operations_v2_parent`,
+		`DROP INDEX IF EXISTS idx_operations_v2_status`,
+		`DROP TABLE IF EXISTS operations_v2`,
+		`DROP TABLE IF EXISTS op_definitions_v2`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			return fmt.Errorf("migration 059 down failed running %q: %w", stmt, err)
+		}
+	}
+	log.Println("  - Removed UOS v2 core schema")
 	return nil
 }
