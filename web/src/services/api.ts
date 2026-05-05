@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.15.0
+// version: 2.16.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-04
+// last-edited: 2026-05-05
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -2021,14 +2021,23 @@ export async function writeBackITunesLibrary(
   return body.data;
 }
 
+// ITunesBookMapping mirrors the backend ITunesBookMapping struct. Four
+// path columns surface the full picture: what iTunes currently has, the
+// local equivalent of that, where AO has the file on disk, and what AO
+// would write back into iTunes. local_path is preserved as an alias of
+// ao_path for callers that still read the older field name.
 export interface ITunesBookMapping {
   book_id: string;
   title: string;
   author: string;
   itunes_persistent_id: string;
+  itunes_path?: string;
+  itunes_path_translated?: string;
+  ao_path: string;
+  ao_itunes_translated_path?: string;
+  path_differs?: boolean;
+  /** @deprecated Use ao_path. Kept for backwards compatibility during migration. */
   local_path: string;
-  itunes_path: string;
-  path_differs: boolean;
 }
 
 export async function getITunesBooks(
@@ -2048,14 +2057,18 @@ export async function getITunesBooks(
   return body.data;
 }
 
+// previewITunesWriteBack accepts an optional libraryPath. When omitted (or
+// empty) the backend uses the configured ITunesLibraryReadPath — the dialog
+// no longer asks the user for this on every preview because it's a
+// configure-once value that lives in Settings.
 export async function previewITunesWriteBack(
-  libraryPath: string,
+  libraryPath?: string,
   bookIds?: string[]
 ): Promise<{ items: ITunesBookMapping[]; total: number }> {
   const response = await fetch(`${API_BASE}/itunes/write-back/preview`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ library_path: libraryPath, book_ids: bookIds }),
+    body: JSON.stringify({ library_path: libraryPath || undefined, book_ids: bookIds }),
   });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to preview write-back');
