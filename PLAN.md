@@ -1,36 +1,43 @@
-# Plan: Fingerprint rescan endpoint + unified per-book fingerprint spec
+<!-- file: PLAN.md -->
+<!-- version: 2.0.0 -->
+<!-- guid: 7d8e9f10-2345-4abc-9def-0123456789ab -->
+<!-- last-edited: 2026-05-05 -->
+
+# Plan: UOS-01 Schema Migrations
 
 ## Goal
 
-1. **Bot-task spec** for "unified per-book audio fingerprint synthesis +
-   book-level matching" — fills the documented gap where today's matcher only
-   compares per-file segments and has no canonical book-level signature.
-2. **HTTP endpoint** (`POST /api/v1/dedup/fingerprint-rescan`) that
-   force-(re)generates per-file AcoustID segments on demand.
+Implement bot-task `docs/superpowers/bot-tasks/2026-05-04-uos-01-schema.md`
+on branch `feat/uos-01-schema` by adding the exact `*_v2` core schema from
+spec §2.1 as a reversible migration. No runtime code should use the new tables
+in this task.
 
-## Files
+## Files To Change
 
-- **NEW** `docs/superpowers/bot-tasks/2026-05-03-unified-book-fingerprint.md`
-- **NEW** `internal/server/fingerprint_rescan.go` — handler + worker
-- **EDIT** `internal/server/server_lifecycle.go` — register route under `/dedup`
-- **EDIT** `internal/server/acoustid_backfill.go` — extract shared per-file helper
-- **NEW** `internal/server/fingerprint_rescan_test.go`
+- `internal/database/migrations.go`
+  - Add the next migration entry.
+  - Add `migrationNNNUp` and `migrationNNNDown` helpers, or follow the local
+    migration pattern if migrations are split elsewhere.
+- `internal/database/migrations_extra_test.go` or a new focused test file under
+  `internal/database/`
+  - Verify every `*_v2` table and required column type.
+  - Verify every named index.
+  - Verify `core_schema_meta_v2` rejects a second row.
+  - Verify down migration drops all new tables and indexes.
 
-## Endpoint
+## Ordered Steps
 
-```
-POST /api/v1/dedup/fingerprint-rescan
-Auth: PermScanTrigger
-Body: { "scope": "missing"|"all"|"books", "book_ids": [...], "force": bool }
-202 Accepted: { "operation_id": "..." }
-```
-
-## Test
-
-- Unit tests via mockery store
-- `make build-api`
-- `make test-short ./internal/server/...`
+1. Inspect the existing migration registration and migration test helpers.
+2. Pick the next migration number after the existing list.
+3. Add the schema SQL exactly from spec §2.1, plus the single
+   `core_schema_meta_v2` seed row.
+4. Add the reversible down migration in dependency-safe drop order.
+5. Add focused tests for table columns, indexes, single-row meta behavior, and
+   down migration cleanup.
+6. Run the required task checks as far as practical locally:
+   `go test ./internal/database/...`, `make build`, and `make ci`.
 
 ## Rollback
 
-Additive route, no migrations. Revert the branch.
+Revert the migration entry, migration functions, and focused tests. The down
+migration also drops every new `*_v2` table and index added by this task.
