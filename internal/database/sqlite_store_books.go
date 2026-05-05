@@ -1,7 +1,7 @@
 // file: internal/database/sqlite_store_books.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-02
+// last-edited: 2026-05-05
 
 package database
 
@@ -2542,9 +2542,11 @@ func (s *SQLiteStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping,
 			m.Provenance = provenance.String
 		}
 		if removedAt.Valid {
-			if t, err := time.Parse(time.RFC3339, removedAt.String); err == nil {
-				m.RemovedAt = &t
+			t, parseErr := time.Parse(time.RFC3339, removedAt.String)
+			if parseErr != nil {
+				return nil, fmt.Errorf("parse RemovedAt %q: %w", removedAt.String, parseErr)
 			}
+			m.RemovedAt = &t
 		}
 		results = append(results, m)
 	}
