@@ -1,6 +1,7 @@
 # file: Makefile
-# version: 2.9.1
+# version: 2.10.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
+# last-edited: 2026-05-06
 
 BINARY := audiobook-organizer
 ROOT_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -15,7 +16,7 @@ export GOEXPERIMENT := jsonv2
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
         test test-all test-frontend test-e2e coverage coverage-check ci \
-        vet mocks mocks-check check-mock-fresh staticcheck \
+        vet mocks mocks-check check-mock-fresh staticcheck oplint \
         docker docker-run docker-stop \
         release-dry-run release-snapshot version \
         build-mtls-bridge build-mtls-bridge-windows
@@ -194,6 +195,12 @@ staticcheck:
 	@echo "==> Running staticcheck..."
 	@command -v staticcheck >/dev/null 2>&1 && staticcheck ./... || echo "==> staticcheck not installed, skipping."
 	@echo "==> staticcheck passed."
+
+## oplint: Run plugin import lint
+oplint:
+	@echo "🔍 Running plugin import lint..."
+	@go run ./tools/cmd/oplint ./internal/plugins/...
+	@echo "✅ Plugin import lint passed"
 
 ## test-all: Run all tests (backend + frontend)
 test-all: test web-test
