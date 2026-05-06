@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/relink_missing_to_itunes.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: e0f6a4d5-7b8c-9d0e-1f2a-3b4c5d6e7f80
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package jobs
 
@@ -210,6 +210,70 @@ func rmt_findInITunes(iTunesRoot, authorName, title string, audioExts map[string
 			continue
 		}
 		if !strings.Contains(strings.ToLower(entry.Name()), authorWordLower) {
+			continue
+		}
+		authorDir := filepath.Join(iTunesRoot, entry.Name())
+
+		albumEntries, err := os.ReadDir(authorDir)
+		if err != nil {
+			continue
+		}
+		for _, album := range albumEntries {
+			albumPath := filepath.Join(authorDir, album.Name())
+			if album.IsDir() {
+				if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+					dirMatches[albumPath] = struct{}{}
+					continue
+				}
+				_ = filepath.WalkDir(albumPath, func(path string, d os.DirEntry, err error) error {
+					if err != nil || d.IsDir() {
+						return nil
+					}
+					if !audioExts[strings.ToLower(filepath.Ext(path))] {
+						return nil
+					}
+					if strings.Contains(strings.ToLower(filepath.Base(path)), titlePrefixLower) {
+						dirMatches[albumPath] = struct{}{}
+						return filepath.SkipDir
+					}
+					return nil
+				})
+			} else {
+				if !audioExts[strings.ToLower(filepath.Ext(albumPath))] {
+					continue
+				}
+				if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+					dirMatches[albumPath] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Primary pass produced matches — return them directly.
+	if len(dirMatches) > 0 {
+		result := make([]string, 0, len(dirMatches))
+		for d := range dirMatches {
+			result = append(result, d)
+		}
+		sort.Strings(result)
+		return result
+	}
+
+	// Surname fallback: when the primary (first-word) pass finds nothing,
+	// try matching iTunes directories by the author's surname — the last
+	// space-delimited word of the primary author name. This handles
+	// co-author directories like "Robert Jordan, Brandon Sanderson".
+	surname := authorName
+	if idx := strings.LastIndex(authorName, " "); idx > 0 {
+		surname = authorName[idx+1:]
+	}
+	surnameLower := strings.ToLower(surname)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(entry.Name()), surnameLower) {
 			continue
 		}
 		authorDir := filepath.Join(iTunesRoot, entry.Name())
