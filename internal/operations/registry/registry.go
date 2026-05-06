@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-05-06
 
@@ -23,35 +23,55 @@ import (
 type Registry struct {
 	mu              sync.RWMutex
 	defs            map[string]OperationDef
-	running         map[string]*runHandle       // opID → handle
-	pluginRunning   map[string]int              // plugin → count of running ops
-	pluginMax       map[string]int              // plugin → max_concurrent (0 = unlimited)
-	concurrencyKeys map[string]string           // key → opID of holder
+	running         map[string]*runHandle  // opID → handle
+	pluginRunning   map[string]int         // plugin → count of running ops
+	pluginMax       map[string]int         // plugin → max_concurrent (0 = unlimited)
+	concurrencyKeys map[string]string      // key → opID of holder
 	nextRun         chan *queuedRun
 	dispatch        chan struct{}
 	store           database.OpsV2Store
 	logger          *slog.Logger
 	workers         int
+	abandoned       *abandonedTracker
+
+	// Tunable intervals for testing. Zero means use defaults.
+	watchdogInterval time.Duration
+}
+
+// Options contains optional tunable parameters for a Registry. Zero values
+// use sensible defaults. Primarily used in tests to shorten intervals.
+type Options struct {
+	// WatchdogInterval overrides the 30-second watchdog ticker. Zero = default.
+	WatchdogInterval time.Duration
+	// AbandonedCap overrides the per-plugin abandoned goroutine cap (default 4).
+	AbandonedCap int
 }
 
 // New creates a new Registry. workers controls the in-process worker pool size.
 // store must implement database.OpsV2Store; the database.Store composite
 // interface satisfies this automatically.
 func New(store database.OpsV2Store, logger *slog.Logger, workers int) *Registry {
+	return NewWithOptions(store, logger, workers, Options{})
+}
+
+// NewWithOptions is like New but accepts optional tunable parameters.
+func NewWithOptions(store database.OpsV2Store, logger *slog.Logger, workers int, opts Options) *Registry {
 	if workers <= 0 {
 		workers = 8
 	}
 	return &Registry{
-		defs:            make(map[string]OperationDef),
-		running:         make(map[string]*runHandle),
-		pluginRunning:   make(map[string]int),
-		pluginMax:       make(map[string]int),
-		concurrencyKeys: make(map[string]string),
-		nextRun:         make(chan *queuedRun, workers*2),
-		dispatch:        make(chan struct{}, 1),
-		store:           store,
-		logger:          logger,
-		workers:         workers,
+		defs:             make(map[string]OperationDef),
+		running:          make(map[string]*runHandle),
+		pluginRunning:    make(map[string]int),
+		pluginMax:        make(map[string]int),
+		concurrencyKeys:  make(map[string]string),
+		nextRun:          make(chan *queuedRun, workers*2),
+		dispatch:         make(chan struct{}, 1),
+		store:            store,
+		logger:           logger,
+		workers:          workers,
+		abandoned:        newAbandonedTracker(opts.AbandonedCap),
+		watchdogInterval: opts.WatchdogInterval,
 	}
 }
 
@@ -64,9 +84,14 @@ func (r *Registry) SetPluginMaxConcurrent(plugin string, max int) {
 }
 
 // Start launches the dispatcher and worker goroutines. Call once at startup.
+// resumeAfterStartup is called first (synchronously in a goroutine context)
+// to re-queue or drop ops that were in-flight at the last shutdown.
 func (r *Registry) Start(ctx context.Context) {
 	r.logger.Info("registry: starting", "workers", r.workers)
+	// Resume must complete before the dispatcher starts accepting new work.
+	r.resumeAfterStartup(ctx)
 	go r.runDispatcher(ctx)
+	go r.runWatchdog(ctx)
 	for i := range r.workers {
 		go r.startWorker(ctx, i)
 	}
@@ -252,6 +277,12 @@ func (r *Registry) Cancel(opID string) error {
 	return nil
 }
 
+// AbandonedCount returns the current number of abandoned goroutines for a
+// plugin. Used by tests and metrics; the dispatcher uses isBlocked internally.
+func (r *Registry) AbandonedCount(plugin string) int {
+	return r.abandoned.countFor(plugin)
+}
+
 // ActiveDefs returns all registered OperationDefs.
 func (r *Registry) ActiveDefs() []OperationDef {
 	r.mu.RLock()
@@ -318,6 +349,22 @@ func (r *Registry) Shutdown(ctx context.Context) error {
 		r.logger.Warn("registry: shutdown timeout; marked remaining ops as interrupted")
 		return ctx.Err()
 	}
+}
+
+// writeStrike appends a strike record to op_strikes_v2 and logs it.
+func (r *Registry) writeStrike(opID, defID, plugin, kind, message string) {
+	details := fmt.Sprintf(`{"plugin":%q,"message":%q}`, plugin, message)
+	row := database.OpStrikeV2Row{
+		DefID:       defID,
+		OperationID: opID,
+		Kind:        kind,
+		Details:     details,
+		OccurredAt:  time.Now().UTC(),
+	}
+	if err := r.store.InsertOpStrikeV2(row); err != nil {
+		r.logger.Warn("registry: failed to write strike", "op_id", opID, "kind", kind, "error", err)
+	}
+	r.logger.Warn("registry: strike recorded", "op_id", opID, "def_id", defID, "kind", kind, "message", message)
 }
 
 // pingDispatch sends a non-blocking signal to the dispatch channel.

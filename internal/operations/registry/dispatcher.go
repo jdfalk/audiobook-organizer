@@ -1,5 +1,5 @@
 // file: internal/operations/registry/dispatcher.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d
 // last-edited: 2026-05-06
 
@@ -59,6 +59,13 @@ func (r *Registry) dispatchCycle(ctx context.Context) {
 		currentRunning := r.pluginRunning[def.Plugin]
 		r.mu.RUnlock()
 		if maxC > 0 && currentRunning >= maxC {
+			continue
+		}
+
+		// Gate 2b: abandoned goroutine cap.
+		if r.abandoned.isBlocked(def.Plugin) {
+			r.logger.Warn("registry: plugin blocked due to abandoned goroutines; skipping dispatch",
+				"plugin", def.Plugin, "abandoned", r.abandoned.countFor(def.Plugin))
 			continue
 		}
 
