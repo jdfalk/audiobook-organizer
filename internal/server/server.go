@@ -340,8 +340,12 @@ func NewServer(store database.Store) *Server {
 
 	// Register UOS plugins. Dedup embed-scan is the canary (UOS-07).
 	// Additional plugins registered in UOS-09 through UOS-12.
-	if err := dedupplugin.New(server.dedupEngine, resolvedStore).Register(server.opRegistry); err != nil {
-		log.Printf("[server] dedup plugin register: %v", err)
+	// Guard on dedupEngine: tests don't initialize the embedding subsystem,
+	// so we skip registration to avoid unexpected mock store calls.
+	if server.dedupEngine != nil {
+		if err := dedupplugin.New(server.dedupEngine, resolvedStore).Register(server.opRegistry); err != nil {
+			log.Printf("[server] dedup plugin register: %v", err)
+		}
 	}
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
