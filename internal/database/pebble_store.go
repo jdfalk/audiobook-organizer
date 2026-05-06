@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.70.0
+// version: 1.71.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-02
+// last-edited: 2026-05-05
 
 package database
 
@@ -378,8 +378,14 @@ func (p *PebbleStore) DeleteAuthor(id int) error {
 	}
 
 	batch := p.db.NewBatch()
-	batch.Delete([]byte(fmt.Sprintf("author:%d", id)), nil)
-	batch.Delete([]byte(fmt.Sprintf("author:name:%s", strings.ToLower(author.Name))), nil)
+	if err := batch.Delete([]byte(fmt.Sprintf("author:%d", id)), nil); err != nil {
+		batch.Close()
+		return fmt.Errorf("pebble Delete author:%d: %w", id, err)
+	}
+	if err := batch.Delete([]byte(fmt.Sprintf("author:name:%s", strings.ToLower(author.Name))), nil); err != nil {
+		batch.Close()
+		return fmt.Errorf("pebble Delete author:name: %w", err)
+	}
 
 	// Delete aliases for this author (cascade)
 	if err := p.deleteAuthorAliases(batch, id); err != nil {
@@ -401,7 +407,10 @@ func (p *PebbleStore) DeleteAuthor(id int) error {
 			}
 			var ba BookAuthor
 			if json.Unmarshal(val, &ba) == nil && ba.AuthorID == id {
-				batch.Delete(iter.Key(), nil)
+				if err := batch.Delete(iter.Key(), nil); err != nil {
+					batch.Close()
+					return fmt.Errorf("pebble Delete book_author entry: %w", err)
+				}
 			}
 		}
 	}
@@ -420,7 +429,10 @@ func (p *PebbleStore) UpdateAuthorName(id int, name string) error {
 
 	batch := p.db.NewBatch()
 	// Remove old name index
-	batch.Delete([]byte(fmt.Sprintf("author:name:%s", strings.ToLower(author.Name))), nil)
+	if err := batch.Delete([]byte(fmt.Sprintf("author:name:%s", strings.ToLower(author.Name))), nil); err != nil {
+		batch.Close()
+		return fmt.Errorf("pebble Delete author:name: %w", err)
+	}
 
 	// Update author record
 	author.Name = name
@@ -530,9 +542,18 @@ func (p *PebbleStore) CreateAuthorAlias(authorID int, aliasName string, aliasTyp
 	}
 
 	batch := p.db.NewBatch()
-	batch.Set([]byte(fmt.Sprintf("author_alias:%d", id)), data, nil)
-	batch.Set([]byte(fmt.Sprintf("author_alias:author:%d:%d", authorID, id)), []byte(strconv.Itoa(id)), nil)
-	batch.Set([]byte(nameKey), []byte(strconv.Itoa(id)), nil)
+	if err := batch.Set([]byte(fmt.Sprintf("author_alias:%d", id)), data, nil); err != nil {
+		batch.Close()
+		return nil, fmt.Errorf("pebble Set author_alias:%d: %w", id, err)
+	}
+	if err := batch.Set([]byte(fmt.Sprintf("author_alias:author:%d:%d", authorID, id)), []byte(strconv.Itoa(id)), nil); err != nil {
+		batch.Close()
+		return nil, fmt.Errorf("pebble Set author_alias:author index: %w", err)
+	}
+	if err := batch.Set([]byte(nameKey), []byte(strconv.Itoa(id)), nil); err != nil {
+		batch.Close()
+		return nil, fmt.Errorf("pebble Set author_alias name index: %w", err)
+	}
 
 	if err := batch.Commit(pebble.Sync); err != nil {
 		batch.Close()
@@ -551,9 +572,18 @@ func (p *PebbleStore) DeleteAuthorAlias(id int) error {
 	}
 
 	batch := p.db.NewBatch()
-	batch.Delete([]byte(fmt.Sprintf("author_alias:%d", id)), nil)
-	batch.Delete([]byte(fmt.Sprintf("author_alias:author:%d:%d", alias.AuthorID, id)), nil)
-	batch.Delete([]byte(fmt.Sprintf("author_alias:name:%s", strings.ToLower(alias.AliasName))), nil)
+	if err := batch.Delete([]byte(fmt.Sprintf("author_alias:%d", id)), nil); err != nil {
+		batch.Close()
+		return fmt.Errorf("pebble Delete author_alias:%d: %w", id, err)
+	}
+	if err := batch.Delete([]byte(fmt.Sprintf("author_alias:author:%d:%d", alias.AuthorID, id)), nil); err != nil {
+		batch.Close()
+		return fmt.Errorf("pebble Delete author_alias:author index: %w", err)
+	}
+	if err := batch.Delete([]byte(fmt.Sprintf("author_alias:name:%s", strings.ToLower(alias.AliasName))), nil); err != nil {
+		batch.Close()
+		return fmt.Errorf("pebble Delete author_alias:name index: %w", err)
+	}
 	return batch.Commit(pebble.Sync)
 }
 
@@ -611,10 +641,16 @@ func (p *PebbleStore) deleteAuthorAliases(batch *pebble.Batch, authorID int) err
 			return err
 		}
 		if alias != nil {
-			batch.Delete([]byte(fmt.Sprintf("author_alias:%d", aliasID)), nil)
-			batch.Delete([]byte(fmt.Sprintf("author_alias:name:%s", strings.ToLower(alias.AliasName))), nil)
+			if err := batch.Delete([]byte(fmt.Sprintf("author_alias:%d", aliasID)), nil); err != nil {
+				return fmt.Errorf("pebble Delete author_alias:%d: %w", aliasID, err)
+			}
+			if err := batch.Delete([]byte(fmt.Sprintf("author_alias:name:%s", strings.ToLower(alias.AliasName))), nil); err != nil {
+				return fmt.Errorf("pebble Delete author_alias:name index: %w", err)
+			}
 		}
-		batch.Delete(iter.Key(), nil)
+		if err := batch.Delete(iter.Key(), nil); err != nil {
+			return fmt.Errorf("pebble Delete author_alias:author index: %w", err)
+		}
 	}
 	return nil
 }
@@ -1504,11 +1540,15 @@ func (p *PebbleStore) CreateNarrator(name string) (*Narrator, error) {
 	// Save name index
 	nameKey := []byte(fmt.Sprintf("narrator_name:%s", strings.ToLower(name)))
 	idData, _ := json.Marshal(nextID)
-	p.db.Set(nameKey, idData, pebble.Sync)
+	if err := p.db.Set(nameKey, idData, pebble.Sync); err != nil {
+		return nil, fmt.Errorf("pebble Set narrator name index: %w", err)
+	}
 
 	// Update counter
 	counterData, _ := json.Marshal(nextID)
-	p.db.Set(counterKey, counterData, pebble.Sync)
+	if err := p.db.Set(counterKey, counterData, pebble.Sync); err != nil {
+		return nil, fmt.Errorf("pebble Set narrator counter: %w", err)
+	}
 
 	return narrator, nil
 }
@@ -5679,8 +5719,12 @@ func (p *PebbleStore) CreateExternalIDMapping(mapping *ExternalIDMapping) error 
 	batch := p.db.NewBatch()
 	defer batch.Close()
 
-	batch.Set(primaryKey, data, pebble.Sync)
-	batch.Set(reverseKey, []byte(mapping.ExternalID), pebble.Sync)
+	if err := batch.Set(primaryKey, data, nil); err != nil {
+		return fmt.Errorf("pebble Set ext_id primary: %w", err)
+	}
+	if err := batch.Set(reverseKey, []byte(mapping.ExternalID), nil); err != nil {
+		return fmt.Errorf("pebble Set ext_id reverse: %w", err)
+	}
 
 	return batch.Commit(pebble.Sync)
 }
@@ -5802,7 +5846,9 @@ func (p *PebbleStore) ReassignExternalIDs(oldBookID, newBookID string) error {
 	for _, m := range mappings {
 		// Delete old reverse key
 		oldReverseKey := []byte(fmt.Sprintf("ext_id:book:%s:%s:%s", oldBookID, m.Source, m.ExternalID))
-		batch.Delete(oldReverseKey, pebble.Sync)
+		if err := batch.Delete(oldReverseKey, nil); err != nil {
+			return fmt.Errorf("pebble Delete ext_id old reverse: %w", err)
+		}
 
 		// Update mapping
 		m.BookID = newBookID
@@ -5812,11 +5858,15 @@ func (p *PebbleStore) ReassignExternalIDs(oldBookID, newBookID string) error {
 			return err
 		}
 		primaryKey := []byte(fmt.Sprintf("ext_id:%s:%s", m.Source, m.ExternalID))
-		batch.Set(primaryKey, data, pebble.Sync)
+		if err := batch.Set(primaryKey, data, nil); err != nil {
+			return fmt.Errorf("pebble Set ext_id primary: %w", err)
+		}
 
 		// Add new reverse key
 		newReverseKey := []byte(fmt.Sprintf("ext_id:book:%s:%s:%s", newBookID, m.Source, m.ExternalID))
-		batch.Set(newReverseKey, []byte(m.ExternalID), pebble.Sync)
+		if err := batch.Set(newReverseKey, []byte(m.ExternalID), nil); err != nil {
+			return fmt.Errorf("pebble Set ext_id new reverse: %w", err)
+		}
 	}
 
 	return batch.Commit(pebble.Sync)
@@ -5843,10 +5893,14 @@ func (p *PebbleStore) BulkCreateExternalIDMappings(mappings []ExternalIDMapping)
 		if err != nil {
 			return err
 		}
-		batch.Set(primaryKey, data, pebble.Sync)
+		if err := batch.Set(primaryKey, data, nil); err != nil {
+			return fmt.Errorf("pebble Set ext_id primary: %w", err)
+		}
 
 		reverseKey := []byte(fmt.Sprintf("ext_id:book:%s:%s:%s", m.BookID, m.Source, m.ExternalID))
-		batch.Set(reverseKey, []byte(m.ExternalID), pebble.Sync)
+		if err := batch.Set(reverseKey, []byte(m.ExternalID), nil); err != nil {
+			return fmt.Errorf("pebble Set ext_id reverse: %w", err)
+		}
 	}
 
 	return batch.Commit(pebble.Sync)
