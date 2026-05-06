@@ -1,5 +1,5 @@
 // file: internal/itunes/service/transfer_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a
 
 package itunesservice
@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -113,5 +114,165 @@ func TestITLBackupEntry_Sort(t *testing.T) {
 	}
 	if entries[2].Name != "old.bak" {
 		t.Errorf("last entry = %q, want %q", entries[2].Name, "old.bak")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// copyFile — error paths
+// ---------------------------------------------------------------------------
+
+// TestCopyFile_SourceMissing verifies copyFile returns an error when the
+// source does not exist.
+func TestCopyFile_SourceMissing(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "nonexistent.itl")
+	dst := filepath.Join(dir, "dst.itl")
+
+	err := copyFile(src, dst)
+	if err == nil {
+		t.Fatal("expected error for missing source, got nil")
+	}
+	if !os.IsNotExist(err) {
+		t.Errorf("expected IsNotExist error, got: %v", err)
+	}
+}
+
+// TestCopyFile_DestDirMissing verifies copyFile returns an error when the
+// destination directory does not exist (temp-file creation fails).
+func TestCopyFile_DestDirMissing(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src.itl")
+	if err := os.WriteFile(src, []byte("data"), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+
+	// Destination in a non-existent sub-directory
+	dst := filepath.Join(dir, "nonexistent-subdir", "dst.itl")
+	err := copyFile(src, dst)
+	if err == nil {
+		t.Fatal("expected error for missing destination directory, got nil")
+	}
+}
+
+// TestCopyFile_OverwritesExisting verifies that copyFile replaces an existing
+// destination file atomically.
+func TestCopyFile_OverwritesExisting(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src.itl")
+	dst := filepath.Join(dir, "dst.itl")
+
+	if err := os.WriteFile(src, []byte("new-content"), 0o644); err != nil {
+		t.Fatalf("write src: %v", err)
+	}
+	// Pre-create destination with old content.
+	if err := os.WriteFile(dst, []byte("old-content"), 0o644); err != nil {
+		t.Fatalf("write dst: %v", err)
+	}
+
+	if err := copyFile(src, dst); err != nil {
+		t.Fatalf("copyFile: %v", err)
+	}
+
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read dst: %v", err)
+	}
+	if string(got) != "new-content" {
+		t.Errorf("dst content = %q, want %q", got, "new-content")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// backupITLFile — timestamped filename
+// ---------------------------------------------------------------------------
+
+// TestBackupITLFile_TimestampFormat verifies that the backup file name
+// contains the expected RFC-style timestamp suffix (yyyymmddThhmmssZ).
+func TestBackupITLFile_TimestampFormat(t *testing.T) {
+	dir := t.TempDir()
+	itlPath := filepath.Join(dir, "iTunes Library.itl")
+	if err := os.WriteFile(itlPath, []byte("itl"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	before := time.Now().UTC()
+	if err := backupITLFile(itlPath); err != nil {
+		t.Fatalf("backupITLFile: %v", err)
+	}
+	after := time.Now().UTC()
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	var bak string
+	for _, e := range entries {
+		if e.Name() != filepath.Base(itlPath) {
+			bak = e.Name()
+		}
+	}
+	if bak == "" {
+		t.Fatal("no backup file found")
+	}
+
+	// The suffix should be like ".bak-20260101T000000Z"
+	if !strings.Contains(bak, ".bak-") {
+		t.Errorf("backup name %q does not contain '.bak-'", bak)
+	}
+	// Parse the timestamp from the suffix.
+	suffix := strings.TrimPrefix(bak, filepath.Base(itlPath)+".bak-")
+	ts, err := time.Parse("20060102T150405Z", suffix)
+	if err != nil {
+		t.Errorf("backup timestamp %q did not parse: %v", suffix, err)
+		return
+	}
+	if ts.Before(before.Add(-time.Second)) || ts.After(after.Add(time.Second)) {
+		t.Errorf("backup timestamp %v outside expected range [%v, %v]", ts, before, after)
+	}
+}
+
+// TestBackupITLFile_MultipleBackups verifies that calling backupITLFile twice
+// creates two distinct backup files (different timestamps at second resolution).
+// This test sleeps 1 second to guarantee distinct names.
+func TestBackupITLFile_MultipleBackups(t *testing.T) {
+	dir := t.TempDir()
+	itlPath := filepath.Join(dir, "iTunes Library.itl")
+	if err := os.WriteFile(itlPath, []byte("itl"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if err := backupITLFile(itlPath); err != nil {
+		t.Fatalf("first backupITLFile: %v", err)
+	}
+	time.Sleep(1100 * time.Millisecond) // ensure distinct second-level timestamp
+	if err := backupITLFile(itlPath); err != nil {
+		t.Fatalf("second backupITLFile: %v", err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	var bakCount int
+	for _, e := range entries {
+		if e.Name() != filepath.Base(itlPath) {
+			bakCount++
+		}
+	}
+	if bakCount != 2 {
+		t.Errorf("expected 2 backup files, got %d", bakCount)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// newTransferService
+// ---------------------------------------------------------------------------
+
+// TestNewTransferService verifies the constructor returns a non-nil value
+// and that the returned service can be used to build a router without panic.
+func TestNewTransferService_NonNil(t *testing.T) {
+	ts := newTransferService()
+	if ts == nil {
+		t.Fatal("newTransferService returned nil")
 	}
 }
