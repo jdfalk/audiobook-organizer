@@ -1,7 +1,7 @@
 // file: internal/metafetch/service_fetch.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b24c7a25-2efa-4b85-adb0-2d591218eff2
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package metafetch
 
@@ -88,19 +88,13 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 		// The cache is shared with the search-dialog path — a bulk library
 		// fetch or a prior search dialog populates it, so a subsequent single-
 		// book fetch can return immediately without another network round-trip.
-		if cached, cerr := database.GetCachedMetadataFetch(mfs.db, id, src.Name()); cerr == nil && cached != nil {
-			ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
-			expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
-			if expired {
-				log.Printf("[DEBUG] metadata-fetch: cache EXPIRED for (%s, %s) — age=%s",
-					id, src.Name(), time.Since(cached.CachedAt).Round(time.Hour))
-			} else {
-				var cachedResults []metadata.BookMetadata
-				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
-					results = cachedResults
-					log.Printf("[DEBUG] metadata-fetch: cache HIT for (%s, %s) — %d results, age=%s",
-						id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
-				}
+		maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
+		if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(mfs.db, id, src.Name(), maxAge); cerr == nil && cached != nil {
+			var cachedResults []metadata.BookMetadata
+			if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+				results = cachedResults
+				log.Printf("[DEBUG] metadata-fetch: cache HIT for (%s, %s) — %d results, age=%s",
+					id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
 			}
 		}
 

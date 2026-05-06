@@ -517,6 +517,7 @@ next picks up. Full plan in
 - [x] **DIAG-3** Surface `ai_scans.db` and `embeddings.db` stats in Diagnostics — both are opened in `server.go:934-1004` but never shown on the diagnostics or system-info pages — PR #570
 - [x] **DIAG-4** Increase `MetadataFetchCacheTTLDays` default — metadata_fetch cache TTL (configured via `config.AppConfig.MetadataFetchCacheTTLDays`) is expiring too fast; increased default to 30 days — PR #570
 - [x] **DIAG-5** Add path-prefix diagnostic to Storage page UI — `GET /api/v1/diagnostics/db-health` now returns `book_path_prefixes`; surface this in StorageTab so mismatches between configured import paths and actual stored paths are visible without a separate API call
+- [x] **CACHE-FOLLOWUP-1** Metadata-fetch cache TTL enforcement — `GetCachedMetadataFetchWithMaxAge` centralizes the TTL check and emits `metrics.RecordCacheMiss("metadata_fetch","expired")`; `GetCachedMetadataFetch` is a backward-compat maxAge=0 wrapper; all 7 non-test callers updated; 3 new TTL unit tests — PR feat/metadata-fetch-ttl
 
 ---
 

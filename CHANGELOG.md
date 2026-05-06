@@ -19,6 +19,16 @@
   enabled/disabled/no-hash/deluge-error for the undo path, verifying the
   destination passed to `MoveStorage` is the restored original path, not the
   centralized `.versions/` path.
+#### May 5, 2026 — CACHE-FOLLOWUP-1: Metadata-fetch TTL enforcement
+
+- **feat(cache)**: `GetCachedMetadataFetchWithMaxAge` centralizes TTL logic and
+  emits `metrics.RecordCacheMiss("metadata_fetch","expired")` on stale entries.
+  `GetCachedMetadataFetch` preserved as a backward-compat `maxAge=0` wrapper.
+- All 7 non-test callers in `server/metadata_handlers.go`,
+  `metafetch/service_fetch.go`, `metafetch/service_search.go`, and
+  `maintenance/jobs/bulk_fetch_metadata.go` migrated to the new function.
+- Three new TTL unit tests: `ZeroMeansInfinite`, `ExpiredReturnsMiss`,
+  `FreshReturnsHit`.
 
 ### Tests
 

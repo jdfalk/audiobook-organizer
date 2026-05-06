@@ -1,5 +1,5 @@
 // file: internal/database/metadata_fetch_cache_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6f5e4d3c-2b1a-0f9e-8d7c-6b5a4f3e2d1c
 
 package database
@@ -7,6 +7,7 @@ package database
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -146,5 +147,89 @@ func TestMetadataFetchCache_CorruptEntry_TreatedAsMiss(t *testing.T) {
 	raw, _ := store.GetRaw(metadataFetchCacheKey("book-1", "Hardcover"))
 	if raw != nil {
 		t.Errorf("expected corrupt entry to be cleaned up, still got %d bytes", len(raw))
+	}
+}
+
+// TestMetadataFetchCache_TTL_ZeroMeansInfinite verifies that maxAge=0 disables
+// the TTL check so even a very old entry is returned as a hit.
+func TestMetadataFetchCache_TTL_ZeroMeansInfinite(t *testing.T) {
+	store := newCacheTestStore(t)
+
+	payload := json.RawMessage(`[{"title":"Old Book"}]`)
+	require.NoError(t, PutCachedMetadataFetch(store, "book-1", "Audible", payload, 0.80))
+
+	// Backdate the entry by 1 year by overwriting with a manipulated timestamp.
+	key := metadataFetchCacheKey("book-1", "audible")
+	blob, err := store.GetRaw(key)
+	require.NoError(t, err)
+	require.NotNil(t, blob)
+	var entry CachedMetadataEntry
+	require.NoError(t, json.Unmarshal(blob, &entry))
+	entry.CachedAt = time.Now().UTC().Add(-365 * 24 * time.Hour)
+	updated, err := json.Marshal(entry)
+	require.NoError(t, err)
+	require.NoError(t, store.SetRaw(key, updated))
+
+	// maxAge=0 → infinite TTL, must return hit.
+	got, hit, err := GetCachedMetadataFetchWithMaxAge(store, "book-1", "Audible", 0)
+	require.NoError(t, err)
+	require.True(t, hit, "expected hit when maxAge=0")
+	require.NotNil(t, got)
+}
+
+// TestMetadataFetchCache_TTL_ExpiredReturnsMiss verifies that an entry older
+// than maxAge is returned as a miss.
+func TestMetadataFetchCache_TTL_ExpiredReturnsMiss(t *testing.T) {
+	store := newCacheTestStore(t)
+
+	payload := json.RawMessage(`[{"title":"Old Book"}]`)
+	require.NoError(t, PutCachedMetadataFetch(store, "book-2", "Audnexus", payload, 0.70))
+
+	// Backdate to 8 days ago.
+	key := metadataFetchCacheKey("book-2", "audnexus")
+	blob, err := store.GetRaw(key)
+	require.NoError(t, err)
+	require.NotNil(t, blob)
+	var entry CachedMetadataEntry
+	require.NoError(t, json.Unmarshal(blob, &entry))
+	entry.CachedAt = time.Now().UTC().Add(-8 * 24 * time.Hour)
+	updated, err := json.Marshal(entry)
+	require.NoError(t, err)
+	require.NoError(t, store.SetRaw(key, updated))
+
+	// maxAge=7d → entry is expired, must return miss.
+	got, hit, err := GetCachedMetadataFetchWithMaxAge(store, "book-2", "Audnexus", 7*24*time.Hour)
+	require.NoError(t, err)
+	require.False(t, hit, "expected miss for expired entry")
+	require.Nil(t, got)
+}
+
+// TestMetadataFetchCache_TTL_FreshReturnsHit verifies that an entry within
+// maxAge is returned as a hit.
+func TestMetadataFetchCache_TTL_FreshReturnsHit(t *testing.T) {
+	store := newCacheTestStore(t)
+
+	payload := json.RawMessage(`[{"title":"Fresh Book"}]`)
+	require.NoError(t, PutCachedMetadataFetch(store, "book-3", "OpenLibrary", payload, 0.90))
+
+	// Backdate to 1 day ago (within a 7d maxAge).
+	key := metadataFetchCacheKey("book-3", "openlibrary")
+	blob, err := store.GetRaw(key)
+	require.NoError(t, err)
+	require.NotNil(t, blob)
+	var entry CachedMetadataEntry
+	require.NoError(t, json.Unmarshal(blob, &entry))
+	entry.CachedAt = time.Now().UTC().Add(-1 * 24 * time.Hour)
+	updated, err := json.Marshal(entry)
+	require.NoError(t, err)
+	require.NoError(t, store.SetRaw(key, updated))
+
+	// maxAge=7d → entry is fresh, must return hit.
+	got, hit, err := GetCachedMetadataFetchWithMaxAge(store, "book-3", "OpenLibrary", 7*24*time.Hour)
+	require.NoError(t, err)
+	require.True(t, hit, "expected hit for fresh entry")
+	require.NotNil(t, got)
+	if string(got.Results) != string(payload) {
+		t.Errorf("results = %s, want %s", got.Results, payload)
 	}
 }

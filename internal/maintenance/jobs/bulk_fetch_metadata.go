@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/bulk_fetch_metadata.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b3c9d7e8-0f1a-2b3c-4d5e-6f7a8b9c0d1e
-// last-edited: 2026-04-28
+// last-edited: 2026-05-05
 
 package jobs
 
@@ -106,14 +106,12 @@ func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, re
 			continue
 		}
 		if skipCached {
+			maxAge := time.Duration(ttlDays) * 24 * time.Hour
 			hasFreshCache := false
 			for _, src := range sourceChain {
-				if cached, cerr := database.GetCachedMetadataFetch(store, b.ID, src.Name()); cerr == nil && cached != nil {
-					expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
-					if !expired {
-						hasFreshCache = true
-						break
-					}
+				if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, b.ID, src.Name(), maxAge); cerr == nil && cached != nil {
+					hasFreshCache = true
+					break
 				}
 			}
 			if hasFreshCache {
@@ -159,17 +157,15 @@ func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, re
 		var sourceName string
 		cacheHit := false
 
+		maxAge := time.Duration(ttlDays) * 24 * time.Hour
 		for _, src := range sourceChain {
-			if cached, cerr := database.GetCachedMetadataFetch(store, bookID, src.Name()); cerr == nil && cached != nil {
-				expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
-				if !expired {
-					var cachedResults []metadata.BookMetadata
-					if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
-						metaResults = cachedResults
-						sourceName = src.Name()
-						cacheHit = true
-						break
-					}
+			if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, bookID, src.Name(), maxAge); cerr == nil && cached != nil {
+				var cachedResults []metadata.BookMetadata
+				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+					metaResults = cachedResults
+					sourceName = src.Name()
+					cacheHit = true
+					break
 				}
 			}
 			var fetchErr error

@@ -1,7 +1,7 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.2.0
+// version: 3.3.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
 // search/apply/revert/no-match, bulk fetch and bulk writeback, the
@@ -583,23 +583,17 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		// for better match quality. Author is used as a filter, not as the primary query.
 		var metaResults []metadata.BookMetadata
 		var sourceName string
-		ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+		maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
 		for _, src := range sourceChain {
 			// Check the persistent fetch cache before hitting the external API.
-			if cached, cerr := database.GetCachedMetadataFetch(s.Store(), bookID, src.Name()); cerr == nil && cached != nil {
-				expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
-				if expired {
-					log.Printf("[DEBUG] bulkFetchMetadata: cache EXPIRED for (%s, %s) — age=%s",
-						bookID, src.Name(), time.Since(cached.CachedAt).Round(time.Hour))
-				} else {
-					var cachedResults []metadata.BookMetadata
-					if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
-						metaResults = cachedResults
-						sourceName = src.Name()
-						log.Printf("[DEBUG] bulkFetchMetadata: cache HIT for (%s, %s) — %d results, age=%s",
-							bookID, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
-						break
-					}
+			if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(s.Store(), bookID, src.Name(), maxAge); cerr == nil && cached != nil {
+				var cachedResults []metadata.BookMetadata
+				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+					metaResults = cachedResults
+					sourceName = src.Name()
+					log.Printf("[DEBUG] bulkFetchMetadata: cache HIT for (%s, %s) — %d results, age=%s",
+						bookID, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+					break
 				}
 			}
 
@@ -946,7 +940,7 @@ func (s *Server) runBulkMetadataFetchAll(
 		return fmt.Errorf("GetAllBooks: %w", err)
 	}
 
-	ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
+	maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
 
 	existingResults, _ := store.GetOperationResults(opID)
 	done := make(map[string]bool, len(existingResults))
@@ -978,12 +972,9 @@ func (s *Server) runBulkMetadataFetchAll(
 		if params.SkipCached {
 			hasFreshCache := false
 			for _, src := range s.metadataFetchService.BuildSourceChain() {
-				if cached, cerr := database.GetCachedMetadataFetch(store, b.ID, src.Name()); cerr == nil && cached != nil {
-					expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
-					if !expired {
-						hasFreshCache = true
-						break
-					}
+				if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, b.ID, src.Name(), maxAge); cerr == nil && cached != nil {
+					hasFreshCache = true
+					break
 				}
 			}
 			if hasFreshCache {
@@ -1043,16 +1034,13 @@ func (s *Server) runBulkMetadataFetchAll(
 		cacheHit := false
 
 		for _, src := range sourceChain {
-			if cached, cerr := database.GetCachedMetadataFetch(store, bookID, src.Name()); cerr == nil && cached != nil {
-				expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
-				if !expired {
-					var cachedResults []metadata.BookMetadata
-					if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
-						metaResults = cachedResults
-						sourceName = src.Name()
-						cacheHit = true
-						break
-					}
+			if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, bookID, src.Name(), maxAge); cerr == nil && cached != nil {
+				var cachedResults []metadata.BookMetadata
+				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
+					metaResults = cachedResults
+					sourceName = src.Name()
+					cacheHit = true
+					break
 				}
 			}
 			var fetchErr error
