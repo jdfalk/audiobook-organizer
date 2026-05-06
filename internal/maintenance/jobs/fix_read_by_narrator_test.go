@@ -4,8 +4,8 @@
 // last-edited: 2026-05-05
 
 // Package jobs_test exercises the fix-read-by-narrator maintenance job.
-// Shared test helpers (noopReporter, assertJobRegistered, blank jobs import)
-// live in testhelpers_test.go.
+// Importing the jobs package (via the blank import below) triggers all
+// init() functions, registering every job with the maintenance registry.
 package jobs_test
 
 import (
@@ -14,7 +14,10 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	_ "github.com/jdfalk/audiobook-organizer/internal/maintenance/jobs" // register all jobs
 )
+
+// noopReporter is declared once in cleanup_empty_folders_test.go (shared across the package).
 
 func TestFixReadByNarratorJob_Registered(t *testing.T) {
 	// Verify that importing the jobs package registered the job.
