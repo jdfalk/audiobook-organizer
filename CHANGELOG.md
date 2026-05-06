@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.45.0 -->
+<!-- version: 2.46.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-06 -->
 
@@ -8,6 +8,23 @@
 ## [Unreleased]
 
 ### Features
+
+#### May 6, 2026 — UOS-07: Canary — Migrate dedup.embed-scan to UOS
+
+- **feat(uos)**: `dedup.embed-scan` operation now registered and dispatched via the
+  UOS-02 registry as the first live canary operation. Replaces old POST /api/v1/dedup/embed
+  inline queue with registry-backed dispatch.
+- **internal/plugins/dedup/plugin.go** — new: dedup plugin wrapping the embeddings
+  engine, implements `sdk.Plugin` interface.
+- **internal/plugins/dedup/embed_scan.go** — new: operation implementation for
+  `dedup.embed-scan`, uses identical logic to original handler but now isolated
+  in plugin code and reusable via UOS dispatch.
+- **internal/server/dedup_handlers.go** — refactor: `triggerEmbedScan` handler now
+  delegates to `s.opRegistry.EnqueueOp("dedup.embed-scan", nil)`, removes inline
+  operation queue dispatch.
+- **internal/server/server.go** — added: dedup plugin instantiation and registry
+  registration immediately after dedup engine initialization. Gated on
+  `dedupEngine != nil` to avoid mock panics in tests.
 
 #### May 6, 2026 — UOS-04: Public plugin SDK + import lint
 
