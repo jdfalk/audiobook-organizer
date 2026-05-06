@@ -1,5 +1,5 @@
 // file: internal/scanner/service.go
-// version: 1.5.1
+// version: 1.6.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 // last-edited: 2026-05-05
 
@@ -8,7 +8,6 @@ package scanner
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -169,6 +168,10 @@ func (ss *ScanService) performScanInternal(ctx context.Context, opID string, req
 			continue
 		}
 	}
+
+	// Flush any pending per-file batches before writing the completion entry,
+	// so batch rows land in the activity log before the scan-finished marker.
+	activity.FlushOperation(ss.activityWriter, opID)
 
 	// Report completion with change counters
 	counters := log.ChangeCounters()
@@ -376,7 +379,7 @@ func (ss *ScanService) reportCompletion(totalFilesAcrossFolders int, finalProces
 func ApplyOrganizedFileMetadata(book *database.Book, newPath string) {
 	hash, err := ComputeFileHash(newPath)
 	if err != nil {
-		log.Printf("[WARN] failed to compute organized hash for %s: %v", newPath, err)
+		defaultLog.Warn("failed to compute organized hash for %s: %v", newPath, err)
 	} else if hash != "" {
 		book.FileHash = stringPtr(hash)
 		book.OrganizedFileHash = stringPtr(hash)
