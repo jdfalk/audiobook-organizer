@@ -1,7 +1,7 @@
 // file: internal/metafetch/service_search.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: bcba782a-8ed4-4285-be91-2af3eddc90e3
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package metafetch
 
@@ -230,17 +230,14 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 		// where re-fetching 8000 books hit every external API
 		// 8000 times even for books we'd already matched with
 		// high confidence.
-		if cached, cerr := database.GetCachedMetadataFetch(mfs.db, id, src.Name()); cerr == nil && cached != nil {
-			ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
-			expired := ttlDays > 0 && time.Since(cached.CachedAt) > time.Duration(ttlDays)*24*time.Hour
-			if !expired {
-				var cachedResults []metadata.BookMetadata
-				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil {
-					allResults = cachedResults
-					cacheHit = true
-					log.Printf("[DEBUG] metadata-search: cache HIT for (%s, %s) — %d results, age=%s",
-						id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
-				}
+		maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
+		if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(mfs.db, id, src.Name(), maxAge); cerr == nil && cached != nil {
+			var cachedResults []metadata.BookMetadata
+			if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil {
+				allResults = cachedResults
+				cacheHit = true
+				log.Printf("[DEBUG] metadata-search: cache HIT for (%s, %s) — %d results, age=%s",
+					id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
 			}
 		}
 

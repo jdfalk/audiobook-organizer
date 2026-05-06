@@ -1,7 +1,7 @@
 // file: internal/database/metadata_fetch_cache.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 9e8d7c6b-5a4f-3e2d-1c0b-9a8b7c6d5e4f
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package database
 
@@ -40,10 +40,10 @@ import (
 // or wholesale invalidation.
 
 // CachedMetadataEntry is the serialized shape of a cache row.
-// The CachedAt timestamp exists so an optional TTL policy can
-// filter stale entries; the current implementation never
-// expires, but the timestamp is recorded for future use and
-// for the diagnostics surface.
+// The CachedAt timestamp is used by GetCachedMetadataFetchWithMaxAge
+// to enforce an optional TTL; callers passing maxAge=0 get the old
+// infinite-TTL behaviour. Recorded since the first version for the
+// diagnostics surface.
 type CachedMetadataEntry struct {
 	BookID    string            `json:"book_id"`
 	Source    string            `json:"source"`
@@ -61,37 +61,61 @@ func metadataFetchCacheKey(bookID, source string) string {
 	return "metadata_fetch_cache:" + bookID + ":" + strings.ToLower(strings.TrimSpace(source))
 }
 
-// GetCachedMetadataFetch looks up a cache entry. Returns nil
-// on miss (not an error). The returned Results slice is the
-// raw JSON payload the caller originally stored — the caller
-// is responsible for unmarshalling it into its own type.
-func GetCachedMetadataFetch(store Store, bookID, source string) (*CachedMetadataEntry, error) {
+// GetCachedMetadataFetchWithMaxAge looks up a cache entry and enforces
+// an optional TTL. maxAge=0 disables the TTL check (infinite TTL,
+// preserving the pre-TTL behaviour).
+//
+// On an expired entry the function records a cache miss with
+// reason="expired" and returns nil, false, nil so the caller
+// falls through to the API path. The entry is NOT deleted — it
+// remains available for diagnostics and will be overwritten on
+// the next successful fetch.
+func GetCachedMetadataFetchWithMaxAge(store Store, bookID, source string, maxAge time.Duration) (*CachedMetadataEntry, bool, error) {
 	if bookID == "" || source == "" {
-		return nil, nil
+		return nil, false, nil
 	}
 	start := time.Now()
 	defer func() { metrics.ObserveCacheGetDuration("metadata_fetch", time.Since(start)) }()
 
 	blob, err := store.GetRaw(metadataFetchCacheKey(bookID, source))
 	if err != nil {
-		return nil, fmt.Errorf("cache get: %w", err)
+		return nil, false, fmt.Errorf("cache get: %w", err)
 	}
 	if blob == nil {
 		metrics.RecordCacheMiss("metadata_fetch", "not_found")
-		return nil, nil
+		return nil, false, nil
 	}
 	var entry CachedMetadataEntry
 	if err := json.Unmarshal(blob, &entry); err != nil {
 		// Corrupt entry — treat as a miss and delete it so
 		// the next call writes a fresh row.
-		if err := store.DeleteRaw(metadataFetchCacheKey(bookID, source)); err != nil {
-			slog.Warn("failed to delete corrupt cache entry", "key", metadataFetchCacheKey(bookID, source), "error", err)
+		if delErr := store.DeleteRaw(metadataFetchCacheKey(bookID, source)); delErr != nil {
+			slog.Warn("failed to delete corrupt cache entry", "key", metadataFetchCacheKey(bookID, source), "error", delErr)
 		}
 		metrics.RecordCacheMiss("metadata_fetch", "stale")
-		return nil, nil
+		return nil, false, nil
+	}
+	if maxAge > 0 {
+		age := time.Since(entry.CachedAt)
+		if age > maxAge {
+			metrics.RecordCacheMiss("metadata_fetch", "expired")
+			return nil, false, nil
+		}
 	}
 	metrics.RecordCacheHit("metadata_fetch")
-	return &entry, nil
+	return &entry, true, nil
+}
+
+// GetCachedMetadataFetch looks up a cache entry with no TTL check.
+// Returns nil on miss (not an error). The returned Results slice is
+// the raw JSON payload the caller originally stored — the caller
+// is responsible for unmarshalling it into its own type.
+//
+// Thin wrapper around GetCachedMetadataFetchWithMaxAge(maxAge=0)
+// kept for backward compatibility.
+func GetCachedMetadataFetch(store Store, bookID, source string) (*CachedMetadataEntry, error) {
+	entry, _, err := GetCachedMetadataFetchWithMaxAge(store, bookID, source, 0)
+	return entry, err
 }
 
 // PutCachedMetadataFetch writes a cache entry. The `results`
