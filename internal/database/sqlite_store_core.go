@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store_core.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
 // last-edited: 2026-05-01
 
@@ -8,6 +8,7 @@ package database
 import (
 "database/sql"
 "fmt"
+"log/slog"
 "strings"
 "time"
 
@@ -146,7 +147,7 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	// Deduplicate series records (NULL author_id bypasses UNIQUE constraint)
 	if err := store.deduplicateSeries(); err != nil {
 		// Non-fatal — log and continue
-		fmt.Printf("Warning: series deduplication failed: %v\n", err)
+		slog.Warn("series deduplication failed", "error", err)
 	}
 
 	return store, nil
@@ -549,7 +550,7 @@ func (s *SQLiteStore) deduplicateSeries() error {
 	}
 
 	if totalMerged > 0 {
-		fmt.Printf("Deduplicated %d series records\n", totalMerged)
+		slog.Info("series deduplication complete", "merged", totalMerged)
 	}
 	return rows.Err()
 }

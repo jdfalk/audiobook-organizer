@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.69.0
+// version: 1.70.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-02
 
@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -91,7 +91,7 @@ func (p *PebbleStore) SetRootDir(rootDir string) {
 // GetDashboardStats call triggers a fresh full recompute.
 func (p *PebbleStore) InvalidateLibraryStats() {
 	if err := p.db.Delete([]byte(statsLibraryKey), pebble.Sync); err != nil {
-		log.Printf("ERROR: pebble Delete stats:library: %v", err)
+		slog.Error("pebble Delete stats:library", "error", err)
 	}
 }
 
@@ -117,7 +117,7 @@ func (p *PebbleStore) writeCachedLibraryStats(s *LibraryStats) {
 		return
 	}
 	if err := p.db.Set([]byte(statsLibraryKey), data, pebble.Sync); err != nil {
-		log.Printf("ERROR: pebble Set stats:library: %v", err)
+		slog.Error("pebble Set stats:library", "error", err)
 	}
 }
 
@@ -132,7 +132,7 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 
 	store := &PebbleStore{db: db}
 
-	log.Printf("[INFO] PebbleDB opened at %s (format version: %s)", path, db.FormatMajorVersion())
+	slog.Info("PebbleDB opened", "path", path, "format_version", db.FormatMajorVersion())
 
 	if err := store.migrateImportPathKeys(); err != nil {
 		db.Close()
@@ -752,7 +752,7 @@ func (p *PebbleStore) DeleteSeries(id int) error {
 			}
 			indexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(series.Name), authorIDStr))
 			if err := p.db.Delete(indexKey, pebble.Sync); err != nil {
-				log.Printf("WARNING: pebble Delete series name index %q: %v", indexKey, err)
+				slog.Warn("pebble Delete series name index", "key", string(indexKey), "error", err)
 			}
 		}
 		closer.Close()
@@ -781,7 +781,7 @@ func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
 	}
 	oldIndexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(series.Name), oldAuthorIDStr))
 	if err := p.db.Delete(oldIndexKey, pebble.Sync); err != nil {
-		log.Printf("WARNING: pebble Delete old series name index %q: %v", oldIndexKey, err)
+		slog.Warn("pebble Delete old series name index", "key", string(oldIndexKey), "error", err)
 	}
 
 	// Update name

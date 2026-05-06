@@ -1,5 +1,5 @@
 // file: internal/organizer/organizer.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package organizer
@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -65,7 +65,7 @@ func NewOrganizer(cfg *config.Config) *Organizer {
 	if cfg != nil && strings.TrimSpace(cfg.RootDir) != "" {
 		tempCleanupOnce.Do(func() {
 			if err := organizer.cleanupTempFiles(); err != nil {
-				fmt.Printf("Warning: failed to clean temporary organizer files: %v\n", err)
+				slog.Warn("failed to clean temporary organizer files", "error", err)
 			}
 		})
 	}
@@ -549,7 +549,7 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 
 		// Verify dstPath stays inside targetDir (defense against crafted filenames)
 		if err := ensureUnderRoot(dstPath, targetDir); err != nil {
-			log.Printf("[WARN] organizeFile: skipping unsafe destination: %s", err)
+			slog.Warn("organizeFile: skipping unsafe destination", "error", err)
 			continue
 		}
 
@@ -567,7 +567,7 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 		if _, err := o.organizeFile(srcPath, dstPath); err != nil {
 			// Skip missing source files instead of aborting the entire book
 			if os.IsNotExist(err) || strings.Contains(err.Error(), "no such file") {
-				log.Printf("[WARN] organizeFile: skipping missing source file: %s", srcPath)
+				slog.Warn("organizeFile: skipping missing source file", "path", srcPath)
 				continue
 			}
 			// Handle race: another worker may have created the file between our stat and copy
@@ -590,18 +590,18 @@ func (o *Organizer) organizeFile(src, dst string) (string, error) {
 
 	if strategy == "auto" {
 		if err := o.reflinkFile(src, dst); err == nil {
-			log.Printf("[DEBUG] organizeFile: reflink succeeded %s → %s", filepath.Base(src), filepath.Base(dst))
+			slog.Debug("organizeFile: reflink succeeded", "src", filepath.Base(src), "dst", filepath.Base(dst))
 			return "reflink", nil
 		} else {
-			log.Printf("[WARN] organizeFile: reflink failed for %s: %v", filepath.Base(src), err)
+			slog.Warn("organizeFile: reflink failed", "file", filepath.Base(src), "error", err)
 		}
 		if err := o.hardlinkFile(src, dst); err == nil {
-			log.Printf("[DEBUG] organizeFile: hardlink succeeded %s → %s", filepath.Base(src), filepath.Base(dst))
+			slog.Debug("organizeFile: hardlink succeeded", "src", filepath.Base(src), "dst", filepath.Base(dst))
 			return "hardlink", nil
 		} else {
-			log.Printf("[WARN] organizeFile: hardlink failed for %s: %v", filepath.Base(src), err)
+			slog.Warn("organizeFile: hardlink failed", "file", filepath.Base(src), "error", err)
 		}
-		log.Printf("[WARN] organizeFile: falling back to copy for %s", filepath.Base(src))
+		slog.Warn("organizeFile: falling back to copy", "file", filepath.Base(src))
 		strategy = "copy"
 	}
 

@@ -1,5 +1,5 @@
 // file: internal/playlist/playlist.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 package playlist
@@ -7,6 +7,7 @@ package playlist
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -91,7 +92,7 @@ func GeneratePlaylistsForSeries() error {
 			return fmt.Errorf("failed to save playlist to database: %w", err)
 		}
 
-		fmt.Printf("Generated playlist: %s\n", playlistName)
+		slog.Info("generated playlist", "name", playlistName)
 	}
 
 	return nil
