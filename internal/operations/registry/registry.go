@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-05-06
 
@@ -78,6 +78,15 @@ func NewWithOptions(store database.OpsV2Store, logger *slog.Logger, workers int,
 		abandoned:        newAbandonedTracker(opts.AbandonedCap),
 		watchdogInterval: opts.WatchdogInterval,
 	}
+}
+
+// SetBus wires an EventHub to the registry so that operation lifecycle
+// events (op.created, op.updated, op.log, op.terminal) are published
+// as SSE events. Must be called BEFORE Start(). Safe to call with nil.
+func (r *Registry) SetBus(bus Bus) {
+	r.mu.Lock()
+	r.bus = bus
+	r.mu.Unlock()
 }
 
 // SetPluginMaxConcurrent configures the per-plugin concurrency cap.

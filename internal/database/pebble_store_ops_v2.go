@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_ops_v2.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-05-06
 
@@ -89,4 +89,12 @@ func (p *PebbleStore) InsertOpErrorV2(_ OpErrorV2Row) error {
 
 func (p *PebbleStore) UpsertOpStateV2(_ OpStateV2Row) error {
 	return ErrOpsV2NotSupported
+}
+
+func (p *PebbleStore) ListOperationsV2Since(_ time.Time, _ int) ([]OperationV2Row, error) {
+	return nil, ErrOpsV2NotSupported
+}
+
+func (p *PebbleStore) GetOpLogsV2(_ string, _ int) ([]OpLogV2Row, error) {
+	return nil, ErrOpsV2NotSupported
 }
