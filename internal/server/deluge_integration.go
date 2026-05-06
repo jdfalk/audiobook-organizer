@@ -1,7 +1,7 @@
 // file: internal/server/deluge_integration.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 1c9d0e8f-2a3b-4a70-b8c5-3d7e0f1b9a99
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 //
 // Deluge integration for library centralization (backlog 6.1).
 //
@@ -198,18 +198,26 @@ func (s *Server) registerDelugeRoutes(protected *gin.RouterGroup) {
 
 // NotifyDelugeAfterUndo checks whether the reverted operation moved
 // Deluge-sourced files and updates the torrent storage path.
+//
+// oldFilePath is the path the file was restored to (the original location
+// before the organize operation ran). This is the destination Deluge needs
+// to know about — NOT book.FilePath, which may not yet be updated in the DB
+// at the point this is called from the undo engine.
 func NotifyDelugeAfterUndo(store interface {
 	database.BookReader
 	database.BookVersionStore
 }, bookID, oldFilePath string) {
-	book, _ := store.GetBookByID(bookID)
-	if book == nil {
+	if oldFilePath == "" {
 		return
 	}
+	_, _ = store.GetBookByID(bookID) // ensure book exists; ignore result
 	versions, _ := store.GetBookVersionsByBookID(bookID)
 	for _, v := range versions {
 		if v.TorrentHash != "" && v.Status == database.BookVersionStatusActive {
-			NotifyDelugeMoveStorage(v.TorrentHash, book.FilePath)
+			// Use oldFilePath (the restored destination), not book.FilePath,
+			// because the DB FilePath may not have been updated yet when this
+			// is called immediately after the file rename-back.
+			NotifyDelugeMoveStorage(v.TorrentHash, oldFilePath)
 		}
 	}
 }
