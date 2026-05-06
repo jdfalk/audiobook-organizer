@@ -195,6 +195,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 		return fmt.Errorf("itunes service start: %w", err)
 	}
 
+	// Start the UOS-02 operations registry (dispatcher + worker pool).
+	if s.opRegistry != nil {
+		s.opRegistry.Start(s.bgCtx)
+	}
+
 	// Pre-warm the facets cache in the background so the first Library page
 	// load doesn't block on a full PebbleDB scan.
 	go s.warmFacetsCache()
@@ -642,6 +647,16 @@ func (s *Server) Start(cfg ServerConfig) error {
 	}
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		log.Printf("[WARN] HTTP server forced shutdown: %v", err)
+	}
+
+	// Drain the UOS-02 operations registry before canceling bgCtx so that
+	// in-flight ops get a clean shutdown signal via their per-run ctx.
+	if s.opRegistry != nil {
+		regCtx, regCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer regCancel()
+		if err := s.opRegistry.Shutdown(regCtx); err != nil {
+			log.Printf("[WARN] ops registry shutdown: %v", err)
+		}
 	}
 
 	// Cancel fire-and-forget background work (embedding backfill, async

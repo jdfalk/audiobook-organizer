@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.71.0
+// version: 2.72.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 // last-edited: 2026-05-03
 
@@ -52,6 +52,7 @@ type Store interface {
 	SystemActivityStore
 	AIJobsStore
 	RejectedMetadataStore
+	OpsV2Store
 }
 
 // BookAlternativeTitle represents a variant name for a book — romaji

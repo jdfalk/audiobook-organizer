@@ -1,5 +1,5 @@
 // file: internal/database/iface_assert.go
-// version: 1.1.0
+// version: 1.3.0
 // guid: 2b9b0aba-e44f-43f0-a40b-56de5e95ab8e
 
 package database
@@ -44,4 +44,5 @@ var (
 	_ MaintenanceStore    = (*PebbleStore)(nil)
 	_ SystemActivityStore = (*PebbleStore)(nil)
 	_ AIJobsStore         = (*PebbleStore)(nil)
+	_ OpsV2Store          = (*PebbleStore)(nil)
 )

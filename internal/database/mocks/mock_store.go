@@ -26489,6 +26489,66 @@ func (_c *MockStore_CountQuarantinedBooks_Call) RunAndReturn(run func() (int, er
 	return _c
 }
 
+// CountRunningByPluginV2 provides a mock function for the type MockStore
+func (_mock *MockStore) CountRunningByPluginV2(plugin string) (int, error) {
+	ret := _mock.Called(plugin)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountRunningByPluginV2")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (int, error)); ok {
+		return returnFunc(plugin)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) int); ok {
+		r0 = returnFunc(plugin)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(plugin)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_CountRunningByPluginV2_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountRunningByPluginV2'
+type MockStore_CountRunningByPluginV2_Call struct {
+	*mock.Call
+}
+
+// CountRunningByPluginV2 is a helper method to define mock.On call
+//   - plugin string
+func (_e *MockStore_Expecter) CountRunningByPluginV2(plugin interface{}) *MockStore_CountRunningByPluginV2_Call {
+	return &MockStore_CountRunningByPluginV2_Call{Call: _e.mock.On("CountRunningByPluginV2", plugin)}
+}
+
+func (_c *MockStore_CountRunningByPluginV2_Call) Run(run func(plugin string)) *MockStore_CountRunningByPluginV2_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CountRunningByPluginV2_Call) Return(n int, err error) *MockStore_CountRunningByPluginV2_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockStore_CountRunningByPluginV2_Call) RunAndReturn(run func(plugin string) (int, error)) *MockStore_CountRunningByPluginV2_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CountSeries provides a mock function for the type MockStore
 func (_mock *MockStore) CountSeries() (int, error) {
 	ret := _mock.Called()
@@ -28929,6 +28989,57 @@ func (_c *MockStore_DeleteOperationsByStatus_Call) Return(n int, err error) *Moc
 }
 
 func (_c *MockStore_DeleteOperationsByStatus_Call) RunAndReturn(run func(statuses []string) (int, error)) *MockStore_DeleteOperationsByStatus_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteOrphanOpDefsV2 provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteOrphanOpDefsV2(keepIDs []string) error {
+	ret := _mock.Called(keepIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteOrphanOpDefsV2")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func([]string) error); ok {
+		r0 = returnFunc(keepIDs)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DeleteOrphanOpDefsV2_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteOrphanOpDefsV2'
+type MockStore_DeleteOrphanOpDefsV2_Call struct {
+	*mock.Call
+}
+
+// DeleteOrphanOpDefsV2 is a helper method to define mock.On call
+//   - keepIDs []string
+func (_e *MockStore_Expecter) DeleteOrphanOpDefsV2(keepIDs interface{}) *MockStore_DeleteOrphanOpDefsV2_Call {
+	return &MockStore_DeleteOrphanOpDefsV2_Call{Call: _e.mock.On("DeleteOrphanOpDefsV2", keepIDs)}
+}
+
+func (_c *MockStore_DeleteOrphanOpDefsV2_Call) Run(run func(keepIDs []string)) *MockStore_DeleteOrphanOpDefsV2_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []string
+		if args[0] != nil {
+			arg0 = args[0].([]string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteOrphanOpDefsV2_Call) Return(err error) *MockStore_DeleteOrphanOpDefsV2_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteOrphanOpDefsV2_Call) RunAndReturn(run func(keepIDs []string) error) *MockStore_DeleteOrphanOpDefsV2_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -35851,6 +35962,68 @@ func (_c *MockStore_GetOperationSummaryLog_Call) RunAndReturn(run func(id string
 	return _c
 }
 
+// GetOperationV2 provides a mock function for the type MockStore
+func (_mock *MockStore) GetOperationV2(id string) (*database.OperationV2Row, error) {
+	ret := _mock.Called(id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOperationV2")
+	}
+
+	var r0 *database.OperationV2Row
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.OperationV2Row, error)); ok {
+		return returnFunc(id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.OperationV2Row); ok {
+		r0 = returnFunc(id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.OperationV2Row)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetOperationV2_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOperationV2'
+type MockStore_GetOperationV2_Call struct {
+	*mock.Call
+}
+
+// GetOperationV2 is a helper method to define mock.On call
+//   - id string
+func (_e *MockStore_Expecter) GetOperationV2(id interface{}) *MockStore_GetOperationV2_Call {
+	return &MockStore_GetOperationV2_Call{Call: _e.mock.On("GetOperationV2", id)}
+}
+
+func (_c *MockStore_GetOperationV2_Call) Run(run func(id string)) *MockStore_GetOperationV2_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetOperationV2_Call) Return(operationV2Row *database.OperationV2Row, err error) *MockStore_GetOperationV2_Call {
+	_c.Call.Return(operationV2Row, err)
+	return _c
+}
+
+func (_c *MockStore_GetOperationV2_Call) RunAndReturn(run func(id string) (*database.OperationV2Row, error)) *MockStore_GetOperationV2_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetPendingDeferredITunesUpdates provides a mock function for the type MockStore
 func (_mock *MockStore) GetPendingDeferredITunesUpdates() ([]database.DeferredITunesUpdate, error) {
 	ret := _mock.Called()
@@ -38159,6 +38332,57 @@ func (_c *MockStore_IncrementUserListenStats_Call) RunAndReturn(run func(userID 
 	return _c
 }
 
+// InsertOperationV2 provides a mock function for the type MockStore
+func (_mock *MockStore) InsertOperationV2(row database.OperationV2Row) error {
+	ret := _mock.Called(row)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InsertOperationV2")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(database.OperationV2Row) error); ok {
+		r0 = returnFunc(row)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_InsertOperationV2_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InsertOperationV2'
+type MockStore_InsertOperationV2_Call struct {
+	*mock.Call
+}
+
+// InsertOperationV2 is a helper method to define mock.On call
+//   - row database.OperationV2Row
+func (_e *MockStore_Expecter) InsertOperationV2(row interface{}) *MockStore_InsertOperationV2_Call {
+	return &MockStore_InsertOperationV2_Call{Call: _e.mock.On("InsertOperationV2", row)}
+}
+
+func (_c *MockStore_InsertOperationV2_Call) Run(run func(row database.OperationV2Row)) *MockStore_InsertOperationV2_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OperationV2Row
+		if args[0] != nil {
+			arg0 = args[0].(database.OperationV2Row)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_InsertOperationV2_Call) Return(err error) *MockStore_InsertOperationV2_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_InsertOperationV2_Call) RunAndReturn(run func(row database.OperationV2Row) error) *MockStore_InsertOperationV2_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // InvalidateLibraryStats provides a mock function for the type MockStore
 func (_mock *MockStore) InvalidateLibraryStats() {
 	_mock.Called()
@@ -39236,6 +39460,61 @@ func (_c *MockStore_ListPurgedBookVersions_Call) Return(bookVersions []database.
 }
 
 func (_c *MockStore_ListPurgedBookVersions_Call) RunAndReturn(run func() ([]database.BookVersion, error)) *MockStore_ListPurgedBookVersions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListQueuedOperationsV2 provides a mock function for the type MockStore
+func (_mock *MockStore) ListQueuedOperationsV2() ([]database.OperationV2Row, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListQueuedOperationsV2")
+	}
+
+	var r0 []database.OperationV2Row
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.OperationV2Row, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.OperationV2Row); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.OperationV2Row)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListQueuedOperationsV2_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListQueuedOperationsV2'
+type MockStore_ListQueuedOperationsV2_Call struct {
+	*mock.Call
+}
+
+// ListQueuedOperationsV2 is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListQueuedOperationsV2() *MockStore_ListQueuedOperationsV2_Call {
+	return &MockStore_ListQueuedOperationsV2_Call{Call: _e.mock.On("ListQueuedOperationsV2")}
+}
+
+func (_c *MockStore_ListQueuedOperationsV2_Call) Run(run func()) *MockStore_ListQueuedOperationsV2_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListQueuedOperationsV2_Call) Return(operationV2Rows []database.OperationV2Row, err error) *MockStore_ListQueuedOperationsV2_Call {
+	_c.Call.Return(operationV2Rows, err)
+	return _c
+}
+
+func (_c *MockStore_ListQueuedOperationsV2_Call) RunAndReturn(run func() ([]database.OperationV2Row, error)) *MockStore_ListQueuedOperationsV2_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -42792,6 +43071,72 @@ func (_c *MockStore_SetLastWrittenAt_Call) RunAndReturn(run func(id string, t ti
 	return _c
 }
 
+// SetOperationV2StatusIfQueued provides a mock function for the type MockStore
+func (_mock *MockStore) SetOperationV2StatusIfQueued(id string, newStatus string) (bool, error) {
+	ret := _mock.Called(id, newStatus)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetOperationV2StatusIfQueued")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (bool, error)); ok {
+		return returnFunc(id, newStatus)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) bool); ok {
+		r0 = returnFunc(id, newStatus)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(id, newStatus)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_SetOperationV2StatusIfQueued_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetOperationV2StatusIfQueued'
+type MockStore_SetOperationV2StatusIfQueued_Call struct {
+	*mock.Call
+}
+
+// SetOperationV2StatusIfQueued is a helper method to define mock.On call
+//   - id string
+//   - newStatus string
+func (_e *MockStore_Expecter) SetOperationV2StatusIfQueued(id interface{}, newStatus interface{}) *MockStore_SetOperationV2StatusIfQueued_Call {
+	return &MockStore_SetOperationV2StatusIfQueued_Call{Call: _e.mock.On("SetOperationV2StatusIfQueued", id, newStatus)}
+}
+
+func (_c *MockStore_SetOperationV2StatusIfQueued_Call) Run(run func(id string, newStatus string)) *MockStore_SetOperationV2StatusIfQueued_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SetOperationV2StatusIfQueued_Call) Return(b bool, err error) *MockStore_SetOperationV2StatusIfQueued_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockStore_SetOperationV2StatusIfQueued_Call) RunAndReturn(run func(id string, newStatus string) (bool, error)) *MockStore_SetOperationV2StatusIfQueued_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetRaw provides a mock function for the type MockStore
 func (_mock *MockStore) SetRaw(key string, value []byte) error {
 	ret := _mock.Called(key, value)
@@ -44025,6 +44370,81 @@ func (_c *MockStore_UpdateOperationStatus_Call) RunAndReturn(run func(id string,
 	return _c
 }
 
+// UpdateOperationV2Status provides a mock function for the type MockStore
+func (_mock *MockStore) UpdateOperationV2Status(id string, status string, startedAt *time.Time, completedAt *time.Time, errMsg *string) error {
+	ret := _mock.Called(id, status, startedAt, completedAt, errMsg)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateOperationV2Status")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, *time.Time, *time.Time, *string) error); ok {
+		r0 = returnFunc(id, status, startedAt, completedAt, errMsg)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_UpdateOperationV2Status_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateOperationV2Status'
+type MockStore_UpdateOperationV2Status_Call struct {
+	*mock.Call
+}
+
+// UpdateOperationV2Status is a helper method to define mock.On call
+//   - id string
+//   - status string
+//   - startedAt *time.Time
+//   - completedAt *time.Time
+//   - errMsg *string
+func (_e *MockStore_Expecter) UpdateOperationV2Status(id interface{}, status interface{}, startedAt interface{}, completedAt interface{}, errMsg interface{}) *MockStore_UpdateOperationV2Status_Call {
+	return &MockStore_UpdateOperationV2Status_Call{Call: _e.mock.On("UpdateOperationV2Status", id, status, startedAt, completedAt, errMsg)}
+}
+
+func (_c *MockStore_UpdateOperationV2Status_Call) Run(run func(id string, status string, startedAt *time.Time, completedAt *time.Time, errMsg *string)) *MockStore_UpdateOperationV2Status_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 *time.Time
+		if args[2] != nil {
+			arg2 = args[2].(*time.Time)
+		}
+		var arg3 *time.Time
+		if args[3] != nil {
+			arg3 = args[3].(*time.Time)
+		}
+		var arg4 *string
+		if args[4] != nil {
+			arg4 = args[4].(*string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_UpdateOperationV2Status_Call) Return(err error) *MockStore_UpdateOperationV2Status_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_UpdateOperationV2Status_Call) RunAndReturn(run func(id string, status string, startedAt *time.Time, completedAt *time.Time, errMsg *string) error) *MockStore_UpdateOperationV2Status_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdatePlaybackProgress provides a mock function for the type MockStore
 func (_mock *MockStore) UpdatePlaybackProgress(progress *database.PlaybackProgress) error {
 	ret := _mock.Called(progress)
@@ -44515,6 +44935,57 @@ func (_c *MockStore_UpsertMetadataFieldState_Call) Return(err error) *MockStore_
 }
 
 func (_c *MockStore_UpsertMetadataFieldState_Call) RunAndReturn(run func(state *database.MetadataFieldState) error) *MockStore_UpsertMetadataFieldState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpsertOpDefinitionV2 provides a mock function for the type MockStore
+func (_mock *MockStore) UpsertOpDefinitionV2(row database.OpDefinitionV2Row) error {
+	ret := _mock.Called(row)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpsertOpDefinitionV2")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(database.OpDefinitionV2Row) error); ok {
+		r0 = returnFunc(row)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_UpsertOpDefinitionV2_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpsertOpDefinitionV2'
+type MockStore_UpsertOpDefinitionV2_Call struct {
+	*mock.Call
+}
+
+// UpsertOpDefinitionV2 is a helper method to define mock.On call
+//   - row database.OpDefinitionV2Row
+func (_e *MockStore_Expecter) UpsertOpDefinitionV2(row interface{}) *MockStore_UpsertOpDefinitionV2_Call {
+	return &MockStore_UpsertOpDefinitionV2_Call{Call: _e.mock.On("UpsertOpDefinitionV2", row)}
+}
+
+func (_c *MockStore_UpsertOpDefinitionV2_Call) Run(run func(row database.OpDefinitionV2Row)) *MockStore_UpsertOpDefinitionV2_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 database.OpDefinitionV2Row
+		if args[0] != nil {
+			arg0 = args[0].(database.OpDefinitionV2Row)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_UpsertOpDefinitionV2_Call) Return(err error) *MockStore_UpsertOpDefinitionV2_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_UpsertOpDefinitionV2_Call) RunAndReturn(run func(row database.OpDefinitionV2Row) error) *MockStore_UpsertOpDefinitionV2_Call {
 	_c.Call.Return(run)
 	return _c
 }
