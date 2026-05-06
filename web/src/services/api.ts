@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.16.0
+// version: 2.17.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-05
+// last-edited: 2026-05-06
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -406,6 +406,46 @@ export interface ActiveOperationSummary {
   progress: number;
   total: number;
   message: string;
+}
+
+// Operations V2 (UOS-05: new timeline endpoint)
+export interface OperationV2 {
+  id: string;
+  def_id: string;
+  plugin: string;
+  display_name: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'interrupted_dropped' | 'interrupted_restart';
+  priority: number;
+  progress_current: number | null;
+  progress_total: number | null;
+  progress_message: string | null;
+  current_phase: string | null;
+  current_item: string | null;
+  actor_user_id: string | null;
+  parent_id: string | null;
+  queued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  resume_count: number;
+  trace_id: string | null;
+  span_id: string | null;
+}
+
+export interface OperationTimelineResponse {
+  operations: OperationV2[];
+}
+
+export async function getOperationTimeline(sinceMinutes = 15): Promise<OperationV2[]> {
+  try {
+    const response = await fetch(`${API_BASE}/operations/timeline?since=${sinceMinutes}m`);
+    if (response.status === 404) return []; // endpoint not yet deployed
+    if (!response.ok) return [];
+    const body = await response.json();
+    return body?.data?.operations ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export interface SystemStatus {
