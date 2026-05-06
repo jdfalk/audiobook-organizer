@@ -1,45 +1,198 @@
 // file: internal/maintenance/jobs/refetch_missing_authors.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: a1000012-0000-0000-0000-000000000012
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package jobs
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
 func init() { maintenance.Register(&refetchMissingAuthorsJob{}) }
 
 type refetchMissingAuthorsJob struct{}
 
+type rma_params struct {
+	DryRun bool `json:"dry_run"`
+}
+
 func (j *refetchMissingAuthorsJob) ID() string          { return "refetch-missing-authors" }
-func (j *refetchMissingAuthorsJob) Name() string     { return "Refetch Missing Authors" }
-func (j *refetchMissingAuthorsJob) Category() string { return "library" }
-func (j *refetchMissingAuthorsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
-func (j *refetchMissingAuthorsJob) Description() string { return "Report books missing an author record" }
-func (j *refetchMissingAuthorsJob) CanResume() bool     { return false }
-func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, _ bool) error {
-	books, err := store.GetAllBooks(0, 0)
+func (j *refetchMissingAuthorsJob) Name() string        { return "Refetch Missing Authors" }
+func (j *refetchMissingAuthorsJob) Category() string    { return "library" }
+func (j *refetchMissingAuthorsJob) Description() string {
+	return "Re-reads author info from file tags (album_artist > artist > composer) for books where the author field is empty."
+}
+func (j *refetchMissingAuthorsJob) DefaultParams() any { return &rma_params{DryRun: true} }
+func (j *refetchMissingAuthorsJob) CanResume() bool    { return true }
+
+func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
+	opID := maintenance.OperationIDFromCtx(ctx)
+
+	// Load all books without an author.
+	allBooks, err := store.GetAllBooks(0, 0)
 	if err != nil {
-		return err
+		return fmt.Errorf("GetAllBooks: %w", err)
 	}
+
+	// Filter to only books with no author.
+	var books []database.Book
+	for i := range allBooks {
+		if allBooks[i].AuthorID == nil {
+			books = append(books, allBooks[i])
+		}
+	}
+
+	log.Printf("[INFO] refetch-missing-authors %s: %d/%d books have no author",
+		opID, len(books), len(allBooks))
+
+	// Load all book files upfront to avoid N+1 queries.
+	allFiles, err := store.GetAllBookFiles()
+	if err != nil {
+		return fmt.Errorf("GetAllBookFiles: %w", err)
+	}
+	filesByBook := make(map[string][]database.BookFile, len(allFiles))
+	for i := range allFiles {
+		f := &allFiles[i]
+		filesByBook[f.BookID] = append(filesByBook[f.BookID], *f)
+	}
+
 	reporter.SetTotal(len(books))
-	count := 0
+
+	audioExts := map[string]bool{
+		".m4b": true, ".m4a": true, ".mp3": true,
+		".flac": true, ".ogg": true, ".opus": true,
+	}
+
+	filled := 0
+	skipped := 0
+	errors := 0
+
 	for i := range books {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+
+		b := &books[i]
 		reporter.Increment()
-		if books[i].AuthorID == nil {
-			count++
-			reporter.Log("info", "missing author: "+books[i].Title, nil)
+
+		if i%100 == 0 && i > 0 {
+			log.Printf("[INFO] refetch-missing-authors %s: progress %d/%d (filled=%d, skipped=%d, errors=%d)",
+				opID, i, len(books), filled, skipped, errors)
+		}
+
+		// Pick the first audio file for this book.
+		var audioPath string
+		for _, f := range filesByBook[b.ID] {
+			if f.FilePath == "" || f.Missing {
+				continue
+			}
+			if audioExts[strings.ToLower(fileExt(f.FilePath))] {
+				audioPath = f.FilePath
+				break
+			}
+		}
+
+		// Fall back to the book's own FilePath if no book_files row was found.
+		if audioPath == "" && b.FilePath != "" && audioExts[strings.ToLower(fileExt(b.FilePath))] {
+			audioPath = b.FilePath
+		}
+
+		if audioPath == "" {
+			reporter.Log("warn", fmt.Sprintf("no audio file for book %s (%s), skipping", b.ID, b.Title), nil)
+			skipped++
+			continue
+		}
+
+		// Read tags from disk using taglib.
+		// Tag priority: ALBUMARTIST > ARTIST > COMPOSER (composer = narrator in audiobooks).
+		tags, readErr := metadata.ReadRawTags(audioPath)
+		if readErr != nil {
+			reporter.Log("error", fmt.Sprintf("failed to read tags for %s: %v", audioPath, readErr), nil)
+			errors++
+			continue
+		}
+
+		getRaw := func(keys ...string) string {
+			for _, k := range keys {
+				if vs, ok := tags[strings.ToUpper(k)]; ok {
+					for _, v := range vs {
+						v = strings.TrimSpace(v)
+						if v != "" {
+							return v
+						}
+					}
+				}
+			}
+			return ""
+		}
+
+		authorName := getRaw("ALBUMARTIST", "ALBUM_ARTIST", "ALBUM ARTIST")
+		if authorName == "" {
+			authorName = getRaw("ARTIST")
+		}
+		if authorName == "" {
+			authorName = getRaw("COMPOSER")
+		}
+
+		if authorName == "" {
+			reporter.Log("warn", fmt.Sprintf("no author found in tags for book %s (%s)", b.ID, b.Title), nil)
+			skipped++
+			continue
+		}
+
+		if dryRun {
+			reporter.Log("info", fmt.Sprintf("[dry] would set author %q for book %s (%s)", authorName, b.ID, b.Title), nil)
+			filled++
+			continue
+		}
+
+		// Find or create the author record, then link it to the book.
+		author, err := store.GetAuthorByName(authorName)
+		if err != nil || author == nil {
+			author, err = store.CreateAuthor(authorName)
+			if err != nil {
+				reporter.Log("error", fmt.Sprintf("failed to create author %q for book %s: %v", authorName, b.ID, err), nil)
+				errors++
+				continue
+			}
+			log.Printf("[INFO] refetch-missing-authors %s: created author %q (id=%d)", opID, authorName, author.ID)
+		}
+
+		b.AuthorID = &author.ID
+		if _, err := store.UpdateBook(b.ID, b); err != nil {
+			reporter.Log("error", fmt.Sprintf("failed to update book %s: %v", b.ID, err), nil)
+			errors++
+			continue
+		}
+
+		log.Printf("[INFO] refetch-missing-authors %s: set author %q on book %s (%s)", opID, authorName, b.ID, b.Title)
+		filled++
+	}
+
+	summary := fmt.Sprintf("refetch-missing-authors complete: total=%d filled=%d skipped=%d errors=%d dryRun=%v",
+		len(books), filled, skipped, errors, dryRun)
+	reporter.Log("info", summary, nil)
+	log.Printf("[INFO] %s %s", opID, summary)
+	return nil
+}
+
+// fileExt returns the lowercase file extension including the leading dot.
+func fileExt(path string) string {
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '.' {
+			return strings.ToLower(path[i:])
+		}
+		if path[i] == '/' {
+			break
 		}
 	}
-	_ = count
-	reporter.Log("info", "refetch-missing-authors complete", nil)
-	return nil
+	return ""
 }
