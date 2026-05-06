@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package ai
@@ -15,29 +15,31 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 )
 
 func TestNewOpenAIParser_Disabled(t *testing.T) {
 	// Test with empty API key
-	parser := NewOpenAIParser("", true)
+	parser := NewOpenAIParser(nil, "", true)
 	if parser.enabled {
 		t.Error("Expected parser to be disabled with empty API key")
 	}
 
 	// Test with enabled=false
-	parser = NewOpenAIParser("test-key", false)
+	parser = NewOpenAIParser(nil, "test-key", false)
 	if parser.enabled {
 		t.Error("Expected parser to be disabled when enabled=false")
 	}
 }
 
 func TestNewOpenAIParser_Enabled(t *testing.T) {
-	parser := NewOpenAIParser("test-api-key", true)
+	parser := NewOpenAIParser(nil, "test-api-key", true)
 	if !parser.enabled {
 		t.Error("Expected parser to be enabled with valid API key")
 	}
-	if parser.model != "gpt-5-mini" {
-		t.Errorf("Expected model gpt-5-mini, got %s", parser.model)
+	if parser.filenameParseModel() != "gpt-5-mini" {
+		t.Errorf("Expected model gpt-5-mini, got %s", parser.filenameParseModel())
 	}
 	if parser.maxRetries != 2 {
 		t.Errorf("Expected maxRetries 2, got %d", parser.maxRetries)
@@ -76,7 +78,7 @@ func TestIsEnabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parser := NewOpenAIParser(tt.apiKey, tt.enabled)
+			parser := NewOpenAIParser(nil, tt.apiKey, tt.enabled)
 			if got := parser.IsEnabled(); got != tt.want {
 				t.Errorf("IsEnabled() = %v, want %v", got, tt.want)
 			}
@@ -85,7 +87,7 @@ func TestIsEnabled(t *testing.T) {
 }
 
 func TestParseFilename_Disabled(t *testing.T) {
-	parser := NewOpenAIParser("", false)
+	parser := NewOpenAIParser(nil, "", false)
 	ctx := context.Background()
 
 	_, err := parser.ParseFilename(ctx, "test.mp3")
@@ -98,7 +100,7 @@ func TestParseFilename_Disabled(t *testing.T) {
 }
 
 func TestParseBatch_Disabled(t *testing.T) {
-	parser := NewOpenAIParser("", false)
+	parser := NewOpenAIParser(nil, "", false)
 	ctx := context.Background()
 
 	_, err := parser.ParseBatch(ctx, []string{"test1.mp3", "test2.mp3"})
@@ -111,7 +113,7 @@ func TestParseBatch_Disabled(t *testing.T) {
 }
 
 func TestParseBatch_EmptyInput(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 	ctx := context.Background()
 
 	results, err := parser.ParseBatch(ctx, []string{})
@@ -124,7 +126,7 @@ func TestParseBatch_EmptyInput(t *testing.T) {
 }
 
 func TestTestConnection_Disabled(t *testing.T) {
-	parser := NewOpenAIParser("", false)
+	parser := NewOpenAIParser(nil, "", false)
 	ctx := context.Background()
 
 	err := parser.TestConnection(ctx)
@@ -217,7 +219,7 @@ func TestParsedMetadata_JSONOmitEmpty(t *testing.T) {
 
 func TestTestConnection_Timeout(t *testing.T) {
 	// This test verifies the timeout logic exists
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
 	// Create a context that's already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
@@ -233,7 +235,7 @@ func TestTestConnection_Timeout(t *testing.T) {
 
 func TestParseBatch_BatchSizeLimit(t *testing.T) {
 	// Test that batch size is limited to maxBatchSize (20)
-	_ = NewOpenAIParser("test-key", true)
+	_ = NewOpenAIParser(nil, "test-key", true)
 
 	// Create 25 filenames
 	filenames := make([]string, 25)
@@ -249,22 +251,22 @@ func TestParseBatch_BatchSizeLimit(t *testing.T) {
 }
 
 func TestOpenAIParser_ModelConfiguration(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
-	// Verify default model is set
-	if parser.model == "" {
+	// Verify default model is set (nil cfg falls back to defaultModel constant)
+	if parser.filenameParseModel() == "" {
 		t.Error("Expected model to be set")
 	}
 
 	// Verify it's the expected model
 	expectedModel := "gpt-5-mini"
-	if parser.model != expectedModel {
-		t.Errorf("Expected model %s, got %s", expectedModel, parser.model)
+	if parser.filenameParseModel() != expectedModel {
+		t.Errorf("Expected model %s, got %s", expectedModel, parser.filenameParseModel())
 	}
 }
 
 func TestOpenAIParser_RetryConfiguration(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
 	// Verify default maxRetries is set
 	expectedRetries := 2
@@ -293,7 +295,7 @@ func hasSubstring(s, substr string) bool {
 // TestParseFilename_APIError tests API error handling
 func TestParseFilename_APIError(t *testing.T) {
 	// Create parser with invalid API key to trigger error
-	parser := NewOpenAIParser("invalid-key-format", true)
+	parser := NewOpenAIParser(nil, "invalid-key-format", true)
 	ctx := context.Background()
 
 	_, err := parser.ParseFilename(ctx, "Test Book - Test Author.mp3")
@@ -327,7 +329,7 @@ func TestParseFilename_InvalidJSON(t *testing.T) {
 // TestParseBatch_APIError tests batch API error handling
 func TestParseBatch_APIError(t *testing.T) {
 	// Create parser with invalid API key to trigger error
-	parser := NewOpenAIParser("invalid-key-format", true)
+	parser := NewOpenAIParser(nil, "invalid-key-format", true)
 	ctx := context.Background()
 
 	filenames := []string{
@@ -362,7 +364,7 @@ func TestParseBatch_InvalidJSONResponse(t *testing.T) {
 
 // TestParseBatch_SingleFile tests batch with single file
 func TestParseBatch_SingleFile(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
 	// Verify parser accepts single file in batch
 	filenames := []string{"Single Book - Author.mp3"}
@@ -379,7 +381,7 @@ func TestParseBatch_SingleFile(t *testing.T) {
 
 // TestParseBatch_ExactlyMaxSize tests batch with exactly 20 files
 func TestParseBatch_ExactlyMaxSize(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
 	// Create exactly 20 filenames (the max batch size)
 	filenames := make([]string, 20)
@@ -398,7 +400,7 @@ func TestParseBatch_ExactlyMaxSize(t *testing.T) {
 
 // TestParseBatch_OverMaxSize tests batch size limiting
 func TestParseBatch_OverMaxSize(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
 	// Create 25 filenames (over the max of 20)
 	filenames := make([]string, 25)
@@ -514,7 +516,7 @@ func TestParsedMetadata_ZeroValues(t *testing.T) {
 
 // TestParseFilename_ContextCancellation tests context cancellation handling
 func TestParseFilename_ContextCancellation(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
 	// Create an already-cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -529,7 +531,7 @@ func TestParseFilename_ContextCancellation(t *testing.T) {
 
 // TestParseBatch_ContextCancellation tests batch context cancellation
 func TestParseBatch_ContextCancellation(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
 	// Create an already-cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -545,7 +547,7 @@ func TestParseBatch_ContextCancellation(t *testing.T) {
 
 // TestOpenAIParser_ClientNilWhenDisabled tests client is nil when disabled
 func TestOpenAIParser_ClientNilWhenDisabled(t *testing.T) {
-	parser := NewOpenAIParser("", false)
+	parser := NewOpenAIParser(nil, "", false)
 
 	if parser.client != nil {
 		t.Error("Expected client to be nil when disabled")
@@ -581,10 +583,10 @@ func TestParsedMetadata_ConfidenceLevels(t *testing.T) {
 
 // TestOpenAIParser_StructFields tests parser struct has expected fields
 func TestOpenAIParser_StructFields(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
-	// Verify struct fields are initialized
-	if parser.model == "" {
+	// Verify model is accessible (nil cfg → falls back to defaultModel)
+	if parser.filenameParseModel() == "" {
 		t.Error("Expected model to be set")
 	}
 	if parser.maxRetries == 0 {
@@ -601,7 +603,7 @@ func TestOpenAIParser_StructFields(t *testing.T) {
 // TestNewOpenAIParser_BothDisabledConditions tests both disabled conditions
 func TestNewOpenAIParser_BothDisabledConditions(t *testing.T) {
 	// Both conditions that disable the parser
-	parser := NewOpenAIParser("", false)
+	parser := NewOpenAIParser(nil, "", false)
 
 	if parser.enabled {
 		t.Error("Expected parser to be disabled")
@@ -613,7 +615,7 @@ func TestNewOpenAIParser_BothDisabledConditions(t *testing.T) {
 
 // TestParseBatch_LargeInputTruncation tests that large inputs are truncated
 func TestParseBatch_LargeInputTruncation(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 
 	// Create 100 filenames (way over the max of 20)
 	filenames := make([]string, 100)
@@ -865,7 +867,7 @@ func TestParsedMetadata_EdgeCaseValues(t *testing.T) {
 
 // TestOpenAIParser_ErrorMessageFormat tests error message formatting
 func TestOpenAIParser_ErrorMessageFormat(t *testing.T) {
-	parser := NewOpenAIParser("", false)
+	parser := NewOpenAIParser(nil, "", false)
 
 	testCases := []struct {
 		name          string
@@ -912,7 +914,7 @@ func TestOpenAIParser_ErrorMessageFormat(t *testing.T) {
 
 // TestParseBatch_EmptyStringFilenames tests batch with empty filename strings
 func TestParseBatch_EmptyStringFilenames(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -927,7 +929,7 @@ func TestParseBatch_EmptyStringFilenames(t *testing.T) {
 
 // TestParseFilename_EmptyFilename tests parsing an empty filename
 func TestParseFilename_EmptyFilename(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -941,7 +943,7 @@ func TestParseFilename_EmptyFilename(t *testing.T) {
 
 // TestParseFilename_VeryLongFilename tests parsing a very long filename
 func TestParseFilename_VeryLongFilename(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -988,7 +990,7 @@ func TestParseFilename_Integration(t *testing.T) {
 		t.Skip("Skipping integration test: OPENAI_API_KEY not set")
 	}
 
-	parser := NewOpenAIParser(apiKey, true)
+	parser := NewOpenAIParser(nil, apiKey, true)
 	ctx := context.Background()
 
 	testCases := []struct {
@@ -1044,7 +1046,7 @@ func TestParseBatch_Integration(t *testing.T) {
 		t.Skip("Skipping integration test: OPENAI_API_KEY not set")
 	}
 
-	parser := NewOpenAIParser(apiKey, true)
+	parser := NewOpenAIParser(nil, apiKey, true)
 	ctx := context.Background()
 
 	filenames := []string{
@@ -1092,7 +1094,7 @@ func TestTestConnection_Integration(t *testing.T) {
 		t.Skip("Skipping integration test: OPENAI_API_KEY not set")
 	}
 
-	parser := NewOpenAIParser(apiKey, true)
+	parser := NewOpenAIParser(nil, apiKey, true)
 	ctx := context.Background()
 
 	err := parser.TestConnection(ctx)
@@ -1253,10 +1255,10 @@ func TestOpenAIParser_DefaultValues(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			parser := NewOpenAIParser(tc.apiKey, tc.enabled)
+			parser := NewOpenAIParser(nil, tc.apiKey, tc.enabled)
 
-			if tc.wantModel != "" && parser.model != tc.wantModel {
-				t.Errorf("Expected model '%s', got '%s'", tc.wantModel, parser.model)
+			if tc.wantModel != "" && parser.filenameParseModel() != tc.wantModel {
+				t.Errorf("Expected model '%s', got '%s'", tc.wantModel, parser.filenameParseModel())
 			}
 			if tc.wantRetry != 0 && parser.maxRetries != tc.wantRetry {
 				t.Errorf("Expected maxRetries %d, got %d", tc.wantRetry, parser.maxRetries)
@@ -1314,7 +1316,7 @@ func TestParsedMetadata_CompletenessCoverage(t *testing.T) {
 
 // TestParseBatch_NilFilenames tests nil slice handling
 func TestParseBatch_NilFilenames(t *testing.T) {
-	parser := NewOpenAIParser("test-key", true)
+	parser := NewOpenAIParser(nil, "test-key", true)
 	ctx := context.Background()
 
 	// nil slice should be handled like empty slice
@@ -1539,7 +1541,7 @@ func TestParseBatchMetadataFromJSON_ErrorWrapping(t *testing.T) {
 // --- ParseAudiobook tests ---
 
 func TestParseAudiobook_Disabled(t *testing.T) {
-	parser := NewOpenAIParser("", false)
+	parser := NewOpenAIParser(nil, "", false)
 	ctx := context.Background()
 
 	_, err := parser.ParseAudiobook(ctx, AudiobookContext{FilePath: "/test/path.mp3"})
@@ -1580,7 +1582,7 @@ func TestParseAudiobook_WithFakeServer(t *testing.T) {
 	os.Setenv("OPENAI_BASE_URL", server.URL)
 	defer os.Unsetenv("OPENAI_BASE_URL")
 
-	parser := NewOpenAIParser("fake-key", true)
+	parser := NewOpenAIParser(nil, "fake-key", true)
 	ctx := context.Background()
 
 	abCtx := AudiobookContext{
@@ -1653,7 +1655,7 @@ func TestParseAudiobook_MinimalContext(t *testing.T) {
 	os.Setenv("OPENAI_BASE_URL", server.URL)
 	defer os.Unsetenv("OPENAI_BASE_URL")
 
-	parser := NewOpenAIParser("fake-key", true)
+	parser := NewOpenAIParser(nil, "fake-key", true)
 	ctx := context.Background()
 
 	abCtx := AudiobookContext{
@@ -1678,6 +1680,115 @@ func TestParseAudiobook_MinimalContext(t *testing.T) {
 	}
 	if strings.Contains(capturedBody, "File count") {
 		t.Error("Prompt should not contain 'File count' when file count is 0")
+	}
+}
+
+// TestOpenAIParser_UsesConfiguredModels verifies that each Parse* method sends
+// the model string from the corresponding config field to the OpenAI API.
+func TestOpenAIParser_UsesConfiguredModels(t *testing.T) {
+	// Minimal JSON response accepted by all Parse* methods
+	successResponse := `{
+		"id": "chatcmpl-test",
+		"object": "chat.completion",
+		"model": "test-model",
+		"choices": [{
+			"index": 0,
+			"message": {"role": "assistant", "content": "{\"title\":\"T\",\"author\":\"A\",\"confidence\":\"high\"}"},
+			"finish_reason": "stop"
+		}]
+	}`
+
+	tests := []struct {
+		name          string
+		cfg           *config.Config
+		invoke        func(p *OpenAIParser, srv *httptest.Server) error
+		wantModelFrag string
+	}{
+		{
+			name: "ParseFilename uses FilenameParseModel",
+			cfg:  &config.Config{FilenameParseModel: "test-filename-model"},
+			invoke: func(p *OpenAIParser, _ *httptest.Server) error {
+				_, err := p.ParseFilename(context.Background(), "MyBook.mp3")
+				return err
+			},
+			wantModelFrag: "test-filename-model",
+		},
+		{
+			name: "ParseBatch uses FilenameParseModel",
+			cfg:  &config.Config{FilenameParseModel: "test-batch-model"},
+			invoke: func(p *OpenAIParser, _ *httptest.Server) error {
+				batchResp := `{"results":[{"title":"T","author":"A","confidence":"high"}]}`
+				_ = batchResp // the mock returns successResponse which parseBatch accepts
+				_, err := p.ParseBatch(context.Background(), []string{"file1.mp3"})
+				return err
+			},
+			wantModelFrag: "test-batch-model",
+		},
+		{
+			name: "ParseCoverArt uses CoverArtModel",
+			cfg:  &config.Config{CoverArtModel: "test-cover-model"},
+			invoke: func(p *OpenAIParser, _ *httptest.Server) error {
+				_, err := p.ParseCoverArt(context.Background(), []byte{0xFF, 0xD8}, "image/jpeg")
+				return err
+			},
+			wantModelFrag: "test-cover-model",
+		},
+		{
+			name: "ReviewAuthorDuplicates uses MetadataReviewModel",
+			cfg:  &config.Config{MetadataReviewModel: "test-metadata-model"},
+			invoke: func(p *OpenAIParser, _ *httptest.Server) error {
+				// ReviewAuthorDuplicates expects {"suggestions":[...]}
+				// We override the mock per subtest below.
+				_, err := p.ReviewAuthorDuplicates(context.Background(), []AuthorDedupInput{
+					{Index: 0, CanonicalName: "Test Author", BookCount: 1},
+				})
+				return err
+			},
+			wantModelFrag: "test-metadata-model",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var capturedModel string
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				var req struct {
+					Model    string                   `json:"model"`
+					Messages []map[string]interface{} `json:"messages"`
+				}
+				_ = json.Unmarshal(body, &req)
+				capturedModel = req.Model
+
+				// Select response body based on request content
+				resp := successResponse
+				bodyStr := string(body)
+				switch {
+				case strings.Contains(bodyStr, "Review these") || strings.Contains(bodyStr, "Find duplicate"):
+					// ReviewAuthorDuplicates / DiscoverAuthorDuplicates
+					resp = `{"id":"chatcmpl-test","object":"chat.completion","model":"test","choices":[{"index":0,"message":{"role":"assistant","content":"{\"suggestions\":[]}"},"finish_reason":"stop"}]}`
+				case strings.Contains(bodyStr, "Parse these audiobook filenames"):
+					// ParseBatch — needs {"results":[...]}
+					resp = `{"id":"chatcmpl-test","object":"chat.completion","model":"test","choices":[{"index":0,"message":{"role":"assistant","content":"{\"results\":[{\"title\":\"T\",\"author\":\"A\",\"confidence\":\"high\"}]}"},"finish_reason":"stop"}]}`
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(resp))
+			}))
+			defer srv.Close()
+
+			t.Setenv("OPENAI_BASE_URL", srv.URL)
+
+			p := NewOpenAIParser(tt.cfg, "test-api-key", true)
+			if err := tt.invoke(p, srv); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if capturedModel != tt.wantModelFrag {
+				t.Errorf("model sent to API = %q, want %q", capturedModel, tt.wantModelFrag)
+			}
+		})
 	}
 }
 

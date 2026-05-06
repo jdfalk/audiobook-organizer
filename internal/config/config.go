@@ -1,5 +1,5 @@
 // file: internal/config/config.go
-// version: 1.44.0
+// version: 1.45.0
 // guid: 7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e
 // last-edited: 2026-05-01
 
@@ -131,6 +131,13 @@ type Config struct {
 	// AI-powered parsing
 	EnableAIParsing bool   `json:"enable_ai_parsing"`
 	OpenAIAPIKey    string `json:"openai_api_key"`
+
+	// Per-feature OpenAI model selection. Default to gpt-5-mini for all four
+	// to preserve historical behavior. See spec docs/superpowers/specs/2026-04-27-per-feature-llm-model-knob-design.md.
+	DedupReviewModel    string `json:"dedup_review_model"    mapstructure:"dedup_review_model"`
+	MetadataReviewModel string `json:"metadata_review_model" mapstructure:"metadata_review_model"`
+	FilenameParseModel  string `json:"filename_parse_model"  mapstructure:"filename_parse_model"`
+	CoverArtModel       string `json:"cover_art_model"       mapstructure:"cover_art_model"`
 
 	// Performance
 	ConcurrentScans int `json:"concurrent_scans"`
@@ -380,6 +387,12 @@ func InitConfig() {
 	viper.SetDefault("enable_ai_parsing", true)
 	viper.SetDefault("openai_api_key", "")
 
+	// Per-feature model defaults — gpt-5-mini preserves historical behavior
+	viper.SetDefault("dedup_review_model", "gpt-5-mini")
+	viper.SetDefault("metadata_review_model", "gpt-5-mini")
+	viper.SetDefault("filename_parse_model", "gpt-5-mini")
+	viper.SetDefault("cover_art_model", "gpt-5-mini")
+
 	// Set performance defaults — scale with available CPUs
 	defaultWorkers := runtime.NumCPU()
 	if defaultWorkers < 4 {
@@ -549,8 +562,12 @@ func InitConfig() {
 		GoogleBooksAPIKey: viper.GetString("google_books_api_key"),
 
 		// AI parsing
-		EnableAIParsing: viper.GetBool("enable_ai_parsing"),
-		OpenAIAPIKey:    viper.GetString("openai_api_key"),
+		EnableAIParsing:     viper.GetBool("enable_ai_parsing"),
+		OpenAIAPIKey:        viper.GetString("openai_api_key"),
+		DedupReviewModel:    viper.GetString("dedup_review_model"),
+		MetadataReviewModel: viper.GetString("metadata_review_model"),
+		FilenameParseModel:  viper.GetString("filename_parse_model"),
+		CoverArtModel:       viper.GetString("cover_art_model"),
 
 		// Performance
 		ConcurrentScans:                  viper.GetInt("concurrent_scans"),
@@ -939,8 +956,12 @@ func ResetToDefaults() {
 		OpenLibraryDumpDir:     "",
 
 		// AI parsing
-		EnableAIParsing: true,
-		OpenAIAPIKey:    "",
+		EnableAIParsing:     true,
+		OpenAIAPIKey:        "",
+		DedupReviewModel:    "gpt-5-mini",
+		MetadataReviewModel: "gpt-5-mini",
+		FilenameParseModel:  "gpt-5-mini",
+		CoverArtModel:       "gpt-5-mini",
 
 		// Performance
 		ConcurrentScans:         max(runtime.NumCPU(), 4),

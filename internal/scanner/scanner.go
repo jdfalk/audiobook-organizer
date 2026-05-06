@@ -1,5 +1,5 @@
 // file: internal/scanner/scanner.go
-// version: 1.39.0
+// version: 1.40.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-05-02
 
@@ -320,7 +320,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 		if config.AppConfig.OpenAIAPIKey == "" {
 			scanLog.Warn("AI parsing enabled but OpenAI API key is not configured")
 		} else {
-			aiParser = ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, true)
+			aiParser = ai.NewOpenAIParser(&config.AppConfig, config.AppConfig.OpenAIAPIKey, true)
 			if aiParser != nil && aiParser.IsEnabled() {
 				aiEnabled = true
 				scanLog.Debug("OpenAI parser initialized for filename metadata fallback")

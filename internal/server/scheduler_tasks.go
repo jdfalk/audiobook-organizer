@@ -1,5 +1,5 @@
 // file: internal/server/scheduler_tasks.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4ed1afbd-7c63-487a-9a53-3b1b05eb06ee
 // last-edited: 2026-05-02
 
@@ -867,7 +867,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
 			if err := ts.server.queue.Enqueue(op.ID, "ai-dedup-batch", operations.PriorityLow, func(ctx context.Context, progress operations.ProgressReporter) error {
-				parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+				parser := ai.NewOpenAIParser(&config.AppConfig, config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 				if !parser.IsEnabled() {
 					return fmt.Errorf("AI parsing is not enabled")
 				}

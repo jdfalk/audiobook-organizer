@@ -1,5 +1,5 @@
 // file: internal/ai/openai_batch.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e
 
 package ai
@@ -182,7 +182,7 @@ Only include groups where you find actual duplicates or issues.`
 		Method:   "POST",
 		URL:      "/v1/chat/completions",
 		Body: map[string]interface{}{
-			"model": p.model,
+			"model": p.metadataReviewModel(), // batch author dedup uses MetadataReviewModel
 			"messages": []map[string]string{
 				{"role": "system", "content": systemPrompt},
 				{"role": "user", "content": userPrompt},
@@ -346,7 +346,7 @@ Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|spl
 		Method:   "POST",
 		URL:      "/v1/chat/completions",
 		Body: map[string]interface{}{
-			"model": p.model,
+			"model": p.metadataReviewModel(), // batch author dedup uses MetadataReviewModel
 			"messages": []map[string]string{
 				{"role": "system", "content": systemPrompt},
 				{"role": "user", "content": userPrompt},
@@ -519,6 +519,6 @@ Return ONLY valid JSON: {"suggestions": [{"author_ids": [1, 42], "action": "merg
 
 	batchJSON, _ := json.Marshal(inputs)
 	user = fmt.Sprintf("Find duplicate authors in this list:\n\n%s", string(batchJSON))
-	model = shared.ChatModel(p.model)
+	model = shared.ChatModel(p.metadataReviewModel()) // BuildAuthorDedupMessages uses MetadataReviewModel
 	return
 }

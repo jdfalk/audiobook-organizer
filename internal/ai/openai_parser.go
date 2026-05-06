@@ -1,5 +1,5 @@
 // file: internal/ai/openai_parser.go
-// version: 13.2.0
+// version: 13.3.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package ai
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
@@ -36,7 +37,7 @@ type ParsedMetadata struct {
 // OpenAIParser handles AI-powered metadata parsing using OpenAI
 type OpenAIParser struct {
 	client        *openai.Client
-	model         string
+	cfg           *config.Config // Per-feature model selection; may be nil (falls back to gpt-5-mini)
 	maxRetries    int
 	enabled       bool
 	responseCache *cache.Cache[*ParsedMetadata] // Application-level response cache
@@ -45,10 +46,38 @@ type OpenAIParser struct {
 // Default cache TTL for AI responses (24 hours — metadata doesn't change often)
 const aiResponseCacheTTL = 24 * time.Hour
 
-// NewOpenAIParser creates a new OpenAI parser
-func NewOpenAIParser(apiKey string, enabled bool) *OpenAIParser {
+// defaultModel is the fallback when cfg is nil or the per-feature field is empty.
+const defaultModel = "gpt-5-mini"
+
+// filenameParseModel returns the configured model for filename/audiobook parsing.
+func (p *OpenAIParser) filenameParseModel() string {
+	if p.cfg != nil && p.cfg.FilenameParseModel != "" {
+		return p.cfg.FilenameParseModel
+	}
+	return defaultModel
+}
+
+// coverArtModel returns the configured model for cover-art parsing.
+func (p *OpenAIParser) coverArtModel() string {
+	if p.cfg != nil && p.cfg.CoverArtModel != "" {
+		return p.cfg.CoverArtModel
+	}
+	return defaultModel
+}
+
+// metadataReviewModel returns the configured model for metadata review operations.
+func (p *OpenAIParser) metadataReviewModel() string {
+	if p.cfg != nil && p.cfg.MetadataReviewModel != "" {
+		return p.cfg.MetadataReviewModel
+	}
+	return defaultModel
+}
+
+// NewOpenAIParser creates a new OpenAI parser.
+// cfg may be nil; when provided, per-feature model fields override the default.
+func NewOpenAIParser(cfg *config.Config, apiKey string, enabled bool) *OpenAIParser {
 	if !enabled || apiKey == "" {
-		return &OpenAIParser{enabled: false}
+		return &OpenAIParser{enabled: false, cfg: cfg}
 	}
 
 	clientOptions := []option.RequestOption{option.WithAPIKey(apiKey)}
@@ -60,7 +89,7 @@ func NewOpenAIParser(apiKey string, enabled bool) *OpenAIParser {
 
 	return &OpenAIParser{
 		client:        &client,
-		model:         "gpt-5-mini", // Primary model for all AI operations
+		cfg:           cfg,
 		maxRetries:    2,
 		enabled:       true,
 		responseCache: cache.New[*ParsedMetadata]("ai_response", aiResponseCacheTTL),
@@ -139,7 +168,7 @@ Set confidence based on clarity of the filename structure.`
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(userPrompt),
 		},
-		Model:          shared.ChatModel(p.model),
+		Model:          shared.ChatModel(p.filenameParseModel()), // filename parsing uses FilenameParseModel
 		MaxCompletionTokens: param.NewOpt[int64](500),
 		PromptCacheKey: param.NewOpt("audiobook-filename-parser-v1"),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
@@ -242,7 +271,7 @@ Set confidence based on how much context was available and how unambiguous it is
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(userPrompt),
 		},
-		Model:          shared.ChatModel(p.model),
+		Model:          shared.ChatModel(p.filenameParseModel()), // audiobook context parsing uses FilenameParseModel
 		MaxCompletionTokens: param.NewOpt[int64](500),
 		PromptCacheKey: param.NewOpt("audiobook-context-parser-v1"),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
@@ -333,7 +362,7 @@ Set confidence based on clarity of the filename structure.`
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(userPrompt),
 			},
-			Model:          shared.ChatModel(p.model),
+			Model:          shared.ChatModel(p.filenameParseModel()), // batch filename parsing uses FilenameParseModel
 			MaxCompletionTokens: param.NewOpt[int64](2000),
 			PromptCacheKey: param.NewOpt("audiobook-batch-parser-v1"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
@@ -400,7 +429,7 @@ Set confidence based on how clearly the text is readable on the cover.`
 				openai.TextContentPart("Read the metadata from this audiobook cover image."),
 			}),
 		},
-		Model:          shared.ChatModel(p.model),
+		Model:          shared.ChatModel(p.coverArtModel()), // cover art parsing uses CoverArtModel
 		PromptCacheKey:      param.NewOpt("audiobook-cover-parser-v1"),
 		MaxCompletionTokens: param.NewOpt[int64](500),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
@@ -548,7 +577,7 @@ The roles object fields are all optional — only include roles that are detecte
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(userPrompt),
 			},
-			Model:               shared.ChatModel(p.model),
+			Model:               shared.ChatModel(p.metadataReviewModel()), // author dedup review uses MetadataReviewModel
 			MaxCompletionTokens: param.NewOpt[int64](32000),
 			PromptCacheKey:      param.NewOpt("audiobook-author-dedup-v4"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
@@ -682,7 +711,7 @@ The roles object fields are all optional — only include roles that are detecte
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(userPrompt),
 			},
-			Model:               shared.ChatModel(p.model),
+			Model:               shared.ChatModel(p.metadataReviewModel()), // author discovery review uses MetadataReviewModel
 			MaxCompletionTokens: param.NewOpt[int64](16000),
 			PromptCacheKey:      param.NewOpt("audiobook-author-discover-v4"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{

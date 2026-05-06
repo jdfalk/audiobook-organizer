@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-01
 
@@ -79,7 +79,7 @@ type aiParser interface {
 }
 
 var newAIParser = func(apiKey string, enabled bool) aiParser {
-	return ai.NewOpenAIParser(apiKey, enabled)
+	return ai.NewOpenAIParser(&config.AppConfig, apiKey, enabled)
 }
 
 // enrichedBookResponse wraps a Book with resolved names for JSON responses.
@@ -459,7 +459,7 @@ func NewServer(store database.Store) *Server {
 					WithCache(embeddingStore)
 				// Dedup Layer 3 uses a dedicated chat parser so it can call
 				// OpenAIParser.ReviewDedupPairs during maintenance runs.
-				llmParser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+				llmParser := ai.NewOpenAIParser(&config.AppConfig, config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 				server.dedupEngine = dedup.NewEngine(
 					embeddingStore,
 					database.GetGlobalStore(),
