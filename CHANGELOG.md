@@ -1,11 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.5 -->
+<!-- version: 2.44.6 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-05 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Features
+
+#### May 5, 2026 — ASYNC-W2-2: cleanup-empty-folders as MaintenanceJob
+
+- **feat(maintenance)**: `cleanup_empty_folders.go` upgraded to bottom-up
+  directory walk (deepest first via path-length sort), `SetTotal`/`Increment`
+  progress reporting, dry-run logging for each directory, and `CanResume=true`.
+- **test(maintenance)**: 5 new tests covering registration, dry-run, removal,
+  bottom-up ordering, and context cancellation.
 
 ### Features
 
