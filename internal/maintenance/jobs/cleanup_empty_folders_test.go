@@ -1,8 +1,9 @@
 // file: internal/maintenance/jobs/cleanup_empty_folders_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e6f7a8b9-c0d1-2345-efab-678901234f01
 // last-edited: 2026-05-05
 
+// Shared test helpers (noopReporter, blank jobs import) live in testhelpers_test.go.
 package jobs_test
 
 import (
@@ -16,15 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// noopReporter satisfies maintenance.ProgressReporter with no-op implementations.
-type noopReporter struct {
-	logs []string
-}
-
-func (r *noopReporter) SetTotal(_ int)                              {}
-func (r *noopReporter) Increment()                                  {}
-func (r *noopReporter) Log(_ string, msg string, _ *string)         { r.logs = append(r.logs, msg) }
 
 func TestCleanupEmptyFoldersJob_Registered(t *testing.T) {
 	job, err := maintenance.Get("cleanup-empty-folders")

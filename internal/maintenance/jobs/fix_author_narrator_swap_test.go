@@ -3,6 +3,8 @@
 // guid: a7b8c9d0-e1f2-3456-abcd-789012345678
 // last-edited: 2026-05-05
 
+// Shared test helpers (noopReporter, assertJobRegistered, blank jobs import)
+// live in testhelpers_test.go.
 package jobs_test
 
 import (
@@ -14,14 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// assertJobRegistered verifies the job is present in the global registry.
-func assertJobRegistered(t *testing.T, id string) {
-	t.Helper()
-	j, err := maintenance.Get(id)
-	require.NoError(t, err, "job %q should be registered", id)
-	assert.Equal(t, id, j.ID())
-}
 
 func TestFixAuthorNarratorSwapJob_Registered(t *testing.T) {
 	assertJobRegistered(t, "fix-author-narrator-swap")
