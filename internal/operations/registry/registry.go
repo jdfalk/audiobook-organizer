@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
 // last-edited: 2026-05-06
 
@@ -23,13 +23,14 @@ import (
 type Registry struct {
 	mu              sync.RWMutex
 	defs            map[string]OperationDef
-	running         map[string]*runHandle  // opID → handle
-	pluginRunning   map[string]int         // plugin → count of running ops
-	pluginMax       map[string]int         // plugin → max_concurrent (0 = unlimited)
-	concurrencyKeys map[string]string      // key → opID of holder
+	running         map[string]*runHandle // opID → handle
+	pluginRunning   map[string]int        // plugin → count of running ops
+	pluginMax       map[string]int        // plugin → max_concurrent (0 = unlimited)
+	concurrencyKeys map[string]string     // key → opID of holder
 	nextRun         chan *queuedRun
 	dispatch        chan struct{}
 	store           database.OpsV2Store
+	bus             Bus // may be nil; wired in UOS-06
 	logger          *slog.Logger
 	workers         int
 	abandoned       *abandonedTracker
@@ -45,13 +46,16 @@ type Options struct {
 	WatchdogInterval time.Duration
 	// AbandonedCap overrides the per-plugin abandoned goroutine cap (default 4).
 	AbandonedCap int
+	// Bus is the SSE event bus (UOS-06). Nil is safe.
+	Bus Bus
 }
 
 // New creates a new Registry. workers controls the in-process worker pool size.
 // store must implement database.OpsV2Store; the database.Store composite
 // interface satisfies this automatically.
-func New(store database.OpsV2Store, logger *slog.Logger, workers int) *Registry {
-	return NewWithOptions(store, logger, workers, Options{})
+// bus may be nil; it will be wired to the real EventHub in UOS-06.
+func New(store database.OpsV2Store, logger *slog.Logger, workers int, bus Bus) *Registry {
+	return NewWithOptions(store, logger, workers, Options{Bus: bus})
 }
 
 // NewWithOptions is like New but accepts optional tunable parameters.
@@ -68,6 +72,7 @@ func NewWithOptions(store database.OpsV2Store, logger *slog.Logger, workers int,
 		nextRun:          make(chan *queuedRun, workers*2),
 		dispatch:         make(chan struct{}, 1),
 		store:            store,
+		bus:              opts.Bus,
 		logger:           logger,
 		workers:          workers,
 		abandoned:        newAbandonedTracker(opts.AbandonedCap),

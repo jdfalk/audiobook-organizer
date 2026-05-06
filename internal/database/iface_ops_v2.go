@@ -1,5 +1,5 @@
 // file: internal/database/iface_ops_v2.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-06
 
@@ -28,30 +28,30 @@ type OpDefinitionV2Row struct {
 
 // OperationV2Row is a queued/running/terminal row from operations_v2.
 type OperationV2Row struct {
-	ID              string
-	DefID           string
-	Plugin          string
-	ParentID        *string
-	ActorUserID     *string
-	TraceID         string
-	SpanID          string
-	ParentSpanID    *string
-	Status          string
-	Priority        int
-	ProgressCurrent int
-	ProgressTotal   int
-	ProgressMessage string
-	CurrentPhase    *string
-	Params          string
-	ErrorMessage    *string
-	ResultData      *string
-	QueuedAt        time.Time
-	StartedAt       *time.Time
-	CompletedAt     *time.Time
-	LastProgressAt  *time.Time
+	ID               string
+	DefID            string
+	Plugin           string
+	ParentID         *string
+	ActorUserID      *string
+	TraceID          string
+	SpanID           string
+	ParentSpanID     *string
+	Status           string
+	Priority         int
+	ProgressCurrent  int
+	ProgressTotal    int
+	ProgressMessage  string
+	CurrentPhase     *string
+	Params           string
+	ErrorMessage     *string
+	ResultData       *string
+	QueuedAt         time.Time
+	StartedAt        *time.Time
+	CompletedAt      *time.Time
+	LastProgressAt   *time.Time
 	LastCheckpointAt *time.Time
 	HighWaterProgress int
-	ResumeCount     int
+	ResumeCount      int
 }
 
 // OpStrikeV2Row is a single row in op_strikes_v2.
@@ -70,6 +70,25 @@ type OpStateV2Row struct {
 	StateBlob     []byte
 	SchemaVersion int
 	WrittenAt     time.Time
+}
+
+// OpLogV2Row is a single log line written to op_logs_v2.
+type OpLogV2Row struct {
+	OperationID string
+	Level       string // "debug", "info", "warn", "error"
+	Message     string
+	Attrs       string // JSON object
+	CreatedAt   time.Time
+}
+
+// OpErrorV2Row is a persistent error record written to op_errors_v2.
+type OpErrorV2Row struct {
+	OperationID string
+	Plugin      string
+	DefID       string
+	Message     string
+	Attrs       string // JSON object
+	OccurredAt  time.Time
 }
 
 // OpsV2Store covers the UOS v2 schema surface used by the registry.
@@ -115,4 +134,23 @@ type OpsV2Store interface {
 
 	// DeleteOpStateV2 removes the state blob for an op (used by ResumeRequeue).
 	DeleteOpStateV2(opID string) error
+
+	// UpdateOpProgressV2 updates the progress columns and last_progress_at.
+	UpdateOpProgressV2(id string, current, total int, message string) error
+
+	// UpdateOpPhaseV2 sets (or clears) current_phase on an operation.
+	UpdateOpPhaseV2(id string, phase *string) error
+
+	// UpdateOpCheckpointV2 sets last_checkpoint_at and updates high_water_progress
+	// to MAX(old, newHWM).
+	UpdateOpCheckpointV2(id string, newHWM int) error
+
+	// AppendOpLogsV2 bulk-inserts log rows into op_logs_v2.
+	AppendOpLogsV2(rows []OpLogV2Row) error
+
+	// InsertOpErrorV2 inserts a single row into op_errors_v2.
+	InsertOpErrorV2(row OpErrorV2Row) error
+
+	// UpsertOpStateV2 inserts or replaces a checkpoint row in op_state_v2.
+	UpsertOpStateV2(row OpStateV2Row) error
 }

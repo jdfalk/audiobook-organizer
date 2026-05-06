@@ -1,5 +1,5 @@
 // file: internal/operations/registry/coverage_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a3b4c5d6-e7f8-9a0b-1c2d-3e4f5a6b7c8d
 // last-edited: 2026-05-06
 
@@ -27,7 +27,7 @@ func TestReporter_StubMethods(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 1)
+	r := registry.New(store, slog.Default(), 1, nil)
 
 	called := make(chan struct{}, 1)
 	def := makeValidDef("test.reporter-methods")
@@ -91,7 +91,7 @@ func TestShutdown_DrainsAllWorkers(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 2)
+	r := registry.New(store, slog.Default(), 2, nil)
 
 	def := makeValidDef("test.shutdown-drain")
 	def.Run = func(runCtx context.Context, _ json.RawMessage, _ registry.Reporter) error {
@@ -129,7 +129,7 @@ func TestShutdown_TimeoutMarksInterrupted(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 1)
+	r := registry.New(store, slog.Default(), 1, nil)
 
 	blocking := make(chan struct{})
 	def := makeValidDef("test.shutdown-timeout")
@@ -175,7 +175,7 @@ func TestDispatcher_DependsOnBlocksUntilDepEnds(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 4)
+	r := registry.New(store, slog.Default(), 4, nil)
 
 	depGate := make(chan struct{})
 	depDef := makeValidDef("test.dep")

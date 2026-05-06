@@ -1,5 +1,5 @@
 // file: internal/operations/registry/registry_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a
 // last-edited: 2026-05-06
 
@@ -34,7 +34,7 @@ func makeValidDef(id string) registry.OperationDef {
 func newTestRegistry(t *testing.T) (*registry.Registry, *fakeStore) {
 	t.Helper()
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 4)
+	r := registry.New(store, slog.Default(), 4, nil)
 	return r, store
 }
 

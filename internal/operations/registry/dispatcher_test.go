@@ -1,5 +1,5 @@
 // file: internal/operations/registry/dispatcher_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
 // last-edited: 2026-05-06
 
@@ -36,7 +36,7 @@ func TestDispatcher_SingleOpRunsAndCompletes(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 2)
+	r := registry.New(store, slog.Default(), 2, nil)
 
 	def := makeValidDef("test.single")
 	_ = r.RegisterOp(def)
@@ -56,7 +56,7 @@ func TestDispatcher_SameConcurrencyKeySerializes(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 4)
+	r := registry.New(store, slog.Default(), 4, nil)
 
 	var overlap int64
 	var running int64
@@ -107,7 +107,7 @@ func TestDispatcher_DifferentConcurrencyKeysRunConcurrently(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 4)
+	r := registry.New(store, slog.Default(), 4, nil)
 
 	var running int64
 	var maxOverlap int64
@@ -164,7 +164,7 @@ func TestDispatcher_PriorityOrderingHighBeforeLow(t *testing.T) {
 
 	// Use a single worker so we get strict ordering.
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 1)
+	r := registry.New(store, slog.Default(), 1, nil)
 
 	order := make([]string, 0, 2)
 	var mu sync.Mutex
@@ -221,7 +221,7 @@ func TestDispatcher_MaxConcurrentCapsPlugin(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 8)
+	r := registry.New(store, slog.Default(), 8, nil)
 	r.SetPluginMaxConcurrent("capped-plugin", 1)
 
 	var running int64

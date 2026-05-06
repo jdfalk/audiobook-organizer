@@ -1,5 +1,5 @@
 // file: internal/operations/registry/worker_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f2a3b4c5-d6e7-8f9a-0b1c-2d3e4f5a6b7c
 // last-edited: 2026-05-06
 
@@ -23,7 +23,7 @@ func TestWorker_SuccessfulRunSetsCompleted(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 1)
+	r := registry.New(store, slog.Default(), 1, nil)
 
 	def := makeValidDef("test.w-success")
 	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
@@ -42,7 +42,7 @@ func TestWorker_RunReturningErrorSetsFailed(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 1)
+	r := registry.New(store, slog.Default(), 1, nil)
 
 	def := makeValidDef("test.w-fail")
 	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
@@ -70,7 +70,7 @@ func TestWorker_PanicSetsFailed(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 1)
+	r := registry.New(store, slog.Default(), 1, nil)
 
 	def := makeValidDef("test.w-panic")
 	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
@@ -98,7 +98,7 @@ func TestWorker_IsolateReturnsSentinelError(t *testing.T) {
 	defer cancel()
 
 	store := newFakeStore()
-	r := registry.New(store, slog.Default(), 1)
+	r := registry.New(store, slog.Default(), 1, nil)
 
 	def := makeValidDef("test.w-isolate")
 	def.Isolate = true
@@ -137,7 +137,7 @@ func TestPropertyPluginRunningNeverNegative(t *testing.T) {
 		defer cancel()
 
 		store := newFakeStore()
-		r := registry.New(store, slog.Default(), 4)
+		r := registry.New(store, slog.Default(), 4, nil)
 
 		// Generate between 1 and 5 defs (all Draw calls on test goroutine).
 		numDefs := rapid.IntRange(1, 5).Draw(rt, "numDefs")
