@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 1.3.0
+// version: 2.0.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -15,15 +15,52 @@ export interface ActiveOperation {
   message: string;
   startedAt?: number; // timestamp ms
   resumed?: boolean;
+  // Runtime field added when operation comes from v2 source
+  _source?: 'v1' | 'v2';
+  // V2 fields (optional, populated when coming from v2)
+  parent_id?: string | null;
+  current_phase?: string | null;
+  current_item?: string | null;
 }
 
 interface OperationsState {
-  activeOperations: ActiveOperation[];
+  operations: Record<string, ActiveOperation>; // Keyed by id
+  activeOperations: ActiveOperation[]; // Derived from operations
   polling: boolean;
 
   startPolling: (operationId: string, type: string, resumed?: boolean) => void;
   removeOperation: (operationId: string) => void;
   updateOperation: (op: ActiveOperation) => void;
+  loadFromServer: () => Promise<void>;
+}
+
+// Converts v1 operation (ActiveOperationSummary) to unified ActiveOperation
+function fromV1(op: api.ActiveOperationSummary): ActiveOperation {
+  return {
+    id: op.id,
+    type: op.type,
+    status: op.status,
+    progress: op.progress,
+    total: op.total,
+    message: op.message,
+    _source: 'v1',
+  };
+}
+
+// Converts v2 operation to unified ActiveOperation
+function fromV2(op: api.OperationV2): ActiveOperation {
+  return {
+    id: op.id,
+    type: op.plugin, // In v2, the operation type is stored in 'plugin'
+    status: op.status,
+    progress: op.progress_current ?? 0,
+    total: op.progress_total ?? 0,
+    message: op.progress_message ?? op.display_name ?? '',
+    _source: 'v2',
+    parent_id: op.parent_id,
+    current_phase: op.current_phase,
+    current_item: op.current_item,
+  };
 }
 
 function formatOpLabel(type: string): string {
@@ -53,9 +90,61 @@ function formatOpLabel(type: string): string {
   return labels[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Helper to derive activeOperations array from operations map
+function deriveActiveOperations(operations: Record<string, ActiveOperation>): ActiveOperation[] {
+  return Object.values(operations);
+}
+
 export const useOperationsStore = create<OperationsState>()((set, get) => ({
+  operations: {},
   activeOperations: [],
   polling: false,
+
+  loadFromServer: async () => {
+    try {
+      // Load from both v1 and v2 in parallel
+      const [v1Active, v1Recent, v2Ops] = await Promise.all([
+        api.getActiveOperations(),
+        api.getRecentCompletedOperations(),
+        api.getOperationTimeline(15),
+      ]);
+
+      set(() => {
+        // Start with empty operations map
+        const merged: Record<string, ActiveOperation> = {};
+
+        // Add v1 active operations
+        for (const op of v1Active) {
+          merged[op.id] = fromV1(op);
+        }
+
+        // Add v1 recent (completed) operations
+        for (const op of v1Recent) {
+          merged[op.id] = {
+            id: op.id,
+            type: op.type,
+            status: op.status,
+            progress: op.progress,
+            total: op.total,
+            message: op.message,
+            _source: 'v1',
+          };
+        }
+
+        // Merge v2 operations (v2 wins on id collision)
+        for (const op of v2Ops) {
+          merged[op.id] = fromV2(op);
+        }
+
+        return {
+          operations: merged,
+          activeOperations: deriveActiveOperations(merged),
+        };
+      });
+    } catch (err) {
+      console.error('Failed to load operations from server', err);
+    }
+  },
 
   startPolling: (operationId: string, type: string, resumed = false) => {
     const label = formatOpLabel(type);
@@ -74,10 +163,14 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
       resumed,
     };
 
-    set((state) => ({
-      activeOperations: [...state.activeOperations, op],
-      polling: true,
-    }));
+    set((state) => {
+      const operations = { ...state.operations, [operationId]: op };
+      return {
+        operations,
+        activeOperations: deriveActiveOperations(operations),
+        polling: true,
+      };
+    });
 
     const poll = async () => {
       try {
@@ -118,21 +211,25 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
 
   removeOperation: (operationId: string) => {
     set((state) => {
-      const activeOperations = state.activeOperations.filter(
-        (op) => op.id !== operationId
-      );
+      const { [operationId]: _, ...remaining } = state.operations;
       return {
-        activeOperations,
-        polling: activeOperations.length > 0,
+        operations: remaining,
+        activeOperations: deriveActiveOperations(remaining),
+        polling: Object.keys(remaining).length > 0,
       };
     });
   },
 
   updateOperation: (updated: ActiveOperation) => {
-    set((state) => ({
-      activeOperations: state.activeOperations.map((op) =>
-        op.id === updated.id ? updated : op
-      ),
-    }));
+    set((state) => {
+      const operations = {
+        ...state.operations,
+        [updated.id]: updated,
+      };
+      return {
+        operations,
+        activeOperations: deriveActiveOperations(operations),
+      };
+    });
   },
 }));

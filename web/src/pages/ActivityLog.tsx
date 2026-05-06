@@ -45,6 +45,7 @@ import { BatchActivityEntry } from '../components/BatchActivityEntry';
 import * as api from '../services/api';
 import { PendingFileOpsBanner } from '../components/PendingFileOpsBanner';
 import { usePendingFileOps } from '../hooks/usePendingFileOps';
+import { useOperationsStore } from '../stores/useOperationsStore';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
@@ -137,8 +138,9 @@ export default function ActivityLog() {
   // Pending background file operations (cover embed, tag write, rename)
   const { operations: pendingFileOps } = usePendingFileOps();
 
-  // Active ops
-  const [activeOps, setActiveOps] = useState<api.ActiveOperationSummary[]>([]);
+  // Active ops from unified store
+  const activeOps = useOperationsStore((state) => state.activeOperations);
+  const loadActiveOpsFromServer = useOperationsStore((state) => state.loadFromServer);
   const [pinned, setPinned] = useState(() => localStorage.getItem(STORAGE_KEYS.ACTIVITY_OPS_PINNED) !== 'false');
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [expandedOpId, setExpandedOpId] = useState<string | null>(searchParams.get('op'));
@@ -185,15 +187,6 @@ export default function ActivityLog() {
     localStorage.setItem(STORAGE_KEYS.ACTIVITY_OPS_PINNED, String(pinned));
   }, [pinned]);
 
-  // Load active operations
-  const loadActiveOps = useCallback(async () => {
-    try {
-      const ops = await api.getActiveOperations();
-      setActiveOps(ops);
-    } catch (err) {
-      console.error('Failed to load active operations', err);
-    }
-  }, []);
 
   // Load logs for expanded operation
   useEffect(() => {
@@ -268,14 +261,14 @@ export default function ActivityLog() {
     }
   }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp]);
 
-  // Initial load + polling for active ops (3s)
+  // Initial load + polling for active ops (3s when Activity page is mounted or bell is open)
   useEffect(() => {
-    loadActiveOps();
-    opsIntervalRef.current = window.setInterval(loadActiveOps, 3000);
+    loadActiveOpsFromServer();
+    opsIntervalRef.current = window.setInterval(loadActiveOpsFromServer, 3000);
     return () => {
       if (opsIntervalRef.current) window.clearInterval(opsIntervalRef.current);
     };
-  }, [loadActiveOps]);
+  }, [loadActiveOpsFromServer]);
 
   // Load feed when filters change
   useEffect(() => {
@@ -319,7 +312,7 @@ export default function ActivityLog() {
 
   const handleRefresh = () => {
     loadFeed(page);
-    loadActiveOps();
+    loadActiveOpsFromServer();
     loadSources();
   };
 
@@ -327,7 +320,7 @@ export default function ActivityLog() {
     setCancelling((prev) => new Set(prev).add(opId));
     try {
       await api.cancelOperation(opId);
-      await loadActiveOps();
+      await loadActiveOpsFromServer();
     } catch (err) {
       console.error('Failed to cancel operation', err);
     }
@@ -341,7 +334,7 @@ export default function ActivityLog() {
   const handleClearStale = async () => {
     try {
       await api.clearStaleOperations();
-      await loadActiveOps();
+      await loadActiveOpsFromServer();
     } catch (err) {
       console.error('Failed to clear stale operations', err);
     }
@@ -618,89 +611,116 @@ export default function ActivityLog() {
             </Typography>
           ) : (
             <Stack spacing={1.5}>
-              {activeOps.map((op) => {
-                const pct = op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
-                return (
-                  <Paper
-                    key={op.id}
-                    variant="outlined"
-                    sx={{
-                      p: 1.5,
-                      cursor: 'pointer',
-                      border: expandedOpId === op.id ? 2 : 1,
-                      borderColor: expandedOpId === op.id ? 'primary.main' : 'divider',
-                    }}
-                    onClick={() => setExpandedOpId(expandedOpId === op.id ? null : op.id)}
-                  >
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography variant="subtitle2" fontWeight="bold">
-                          {op.type.replace(/_/g, ' ')}
-                        </Typography>
-                        <Chip
+              {/* Build hierarchical view: indent children by parent_id */}
+              {(() => {
+                // Create a map for quick parent lookup
+                const opsById = Object.fromEntries(activeOps.map((op) => [op.id, op]));
+
+                // Helper to get depth based on parent chain
+                const getDepth = (op: typeof activeOps[0]): number => {
+                  let depth = 0;
+                  let current = op;
+                  while (current.parent_id && opsById[current.parent_id]) {
+                    depth++;
+                    current = opsById[current.parent_id];
+                  }
+                  return depth;
+                };
+
+                return activeOps.map((op) => {
+                  const pct = op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
+                  const depth = getDepth(op);
+                  const indent = depth * 24; // 24px per level for indentation
+
+                  return (
+                    <Paper
+                      key={op.id}
+                      variant="outlined"
+                      sx={{
+                        p: 1.5,
+                        cursor: 'pointer',
+                        border: expandedOpId === op.id ? 2 : 1,
+                        borderColor: expandedOpId === op.id ? 'primary.main' : 'divider',
+                        ml: indent,
+                        transition: 'all 0.2s ease',
+                      }}
+                      onClick={() => setExpandedOpId(expandedOpId === op.id ? null : op.id)}
+                    >
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          {depth > 0 && (
+                            <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.75rem', minWidth: 8 }}>
+                              ↳
+                            </Typography>
+                          )}
+                          <Typography variant="subtitle2" fontWeight="bold">
+                            {op.type.replace(/_/g, ' ')}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={op.status === 'queued' ? 'pending' : op.status}
+                            color={op.status === 'queued' ? 'default' : 'info'}
+                            icon={op.status === 'queued' ? undefined : undefined}
+                          />
+                        </Stack>
+                        <Button
                           size="small"
-                          label={op.status === 'queued' ? 'pending' : op.status}
-                          color={op.status === 'queued' ? 'default' : 'info'}
-                          icon={op.status === 'queued' ? undefined : undefined}
-                        />
+                          color="error"
+                          variant="outlined"
+                          startIcon={<CancelIcon />}
+                          onClick={(e) => { e.stopPropagation(); handleCancelOp(op.id); }}
+                          disabled={cancelling.has(op.id)}
+                        >
+                          {cancelling.has(op.id) ? 'Cancelling...' : 'Cancel'}
+                        </Button>
                       </Stack>
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="outlined"
-                        startIcon={<CancelIcon />}
-                        onClick={(e) => { e.stopPropagation(); handleCancelOp(op.id); }}
-                        disabled={cancelling.has(op.id)}
-                      >
-                        {cancelling.has(op.id) ? 'Cancelling...' : 'Cancel'}
-                      </Button>
-                    </Stack>
-                    {op.status === 'queued' ? (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        Waiting to start…
-                      </Typography>
-                    ) : op.total > 0 ? (
-                      <Box>
-                        <LinearProgress variant="determinate" value={pct} sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
-                        <Typography variant="caption" color="text.secondary">
-                          {op.progress.toLocaleString()} / {op.total.toLocaleString()} ({pct}%)
+                      {op.status === 'queued' ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          Waiting to start…
                         </Typography>
-                      </Box>
-                    ) : (
-                      <LinearProgress sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
-                    )}
-                    <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
-                      {op.message}
-                    </Typography>
-                    <Collapse in={expandedOpId === op.id}>
-                      <Box
-                        ref={expandedOpId === op.id ? opLogsRef : undefined}
-                        sx={{
-                          mt: 1,
-                          maxHeight: 300,
-                          overflowY: 'auto',
-                          bgcolor: 'grey.900',
-                          color: 'grey.300',
-                          borderRadius: 1,
-                          p: 1,
-                          fontFamily: 'monospace',
-                          fontSize: '0.75rem',
-                          lineHeight: 1.4,
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {opLogs.length === 0 ? (
-                          <Typography variant="caption" color="grey.500">Loading logs...</Typography>
-                        ) : (
-                          opLogs.map((line, i) => (
-                            <Box key={i} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{line}</Box>
-                          ))
-                        )}
-                      </Box>
-                    </Collapse>
-                  </Paper>
-                );
-              })}
+                      ) : op.total > 0 ? (
+                        <Box>
+                          <LinearProgress variant="determinate" value={pct} sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
+                          <Typography variant="caption" color="text.secondary">
+                            {op.progress.toLocaleString()} / {op.total.toLocaleString()} ({pct}%)
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <LinearProgress sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
+                      )}
+                      <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
+                        {op.message}
+                      </Typography>
+                      <Collapse in={expandedOpId === op.id}>
+                        <Box
+                          ref={expandedOpId === op.id ? opLogsRef : undefined}
+                          sx={{
+                            mt: 1,
+                            maxHeight: 300,
+                            overflowY: 'auto',
+                            bgcolor: 'grey.900',
+                            color: 'grey.300',
+                            borderRadius: 1,
+                            p: 1,
+                            fontFamily: 'monospace',
+                            fontSize: '0.75rem',
+                            lineHeight: 1.4,
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {opLogs.length === 0 ? (
+                            <Typography variant="caption" color="grey.500">Loading logs...</Typography>
+                          ) : (
+                            opLogs.map((line, i) => (
+                              <Box key={i} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{line}</Box>
+                            ))
+                          )}
+                        </Box>
+                      </Collapse>
+                    </Paper>
+                  );
+                });
+              })()}
             </Stack>
           )}
         </Paper>
