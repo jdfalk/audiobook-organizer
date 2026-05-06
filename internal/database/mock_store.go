@@ -1,7 +1,7 @@
 // file: internal/database/mock_store.go
-// version: 1.51.0
+// version: 1.52.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
-// last-edited: 2026-05-05
+// last-edited: 2026-05-06
 
 package database
 
@@ -2436,3 +2436,7 @@ func (m *MockStore) UpdateOpCheckpointV2(_ string, _ int) error             { re
 func (m *MockStore) AppendOpLogsV2(_ []OpLogV2Row) error                    { return nil }
 func (m *MockStore) InsertOpErrorV2(_ OpErrorV2Row) error                   { return nil }
 func (m *MockStore) UpsertOpStateV2(_ OpStateV2Row) error                   { return nil }
+func (m *MockStore) ListOperationsV2Since(_ time.Time, _ int) ([]OperationV2Row, error) {
+	return nil, nil
+}
+func (m *MockStore) GetOpLogsV2(_ string, _ int) ([]OpLogV2Row, error) { return nil, nil }

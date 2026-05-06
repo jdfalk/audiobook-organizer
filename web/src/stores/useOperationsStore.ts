@@ -1,9 +1,10 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 2.0.0
+// version: 2.1.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
 import * as api from '../services/api';
+import { type OperationSSEEventName } from '../services/api';
 import { useAppStore } from './useAppStore';
 
 export interface ActiveOperation {
@@ -27,11 +28,18 @@ interface OperationsState {
   operations: Record<string, ActiveOperation>; // Keyed by id
   activeOperations: ActiveOperation[]; // Derived from operations
   polling: boolean;
+  // SSE EventSource instance — kept here so it can be closed on unmount.
+  _sseSource: EventSource | null;
 
   startPolling: (operationId: string, type: string, resumed?: boolean) => void;
   removeOperation: (operationId: string) => void;
   updateOperation: (op: ActiveOperation) => void;
   loadFromServer: () => Promise<void>;
+  // openSSE opens the SSE connection and subscribes to op.* events.
+  // Calling it again while a connection is already open is a no-op.
+  openSSE: () => void;
+  // closeSSE tears down the SSE connection.
+  closeSSE: () => void;
 }
 
 // Converts v1 operation (ActiveOperationSummary) to unified ActiveOperation
@@ -99,6 +107,7 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
   operations: {},
   activeOperations: [],
   polling: false,
+  _sseSource: null,
 
   loadFromServer: async () => {
     try {
@@ -231,5 +240,56 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
         activeOperations: deriveActiveOperations(operations),
       };
     });
+  },
+
+  openSSE: () => {
+    // Guard: don't open a second connection if one is already active.
+    if (get()._sseSource !== null) return;
+
+    const es = api.openOperationsSSE({
+      onEvent: (name: OperationSSEEventName, payload: unknown) => {
+        const p = payload as Record<string, unknown>;
+        const opId = (p?.op_id ?? '') as string;
+
+        if (name === 'op.created') {
+          // A new v2 op appeared — re-fetch the full timeline to pick it up.
+          get().loadFromServer();
+        } else if (name === 'op.updated' && opId) {
+          // Partial progress update: merge into existing operation if present.
+          set((state) => {
+            const existing = state.operations[opId];
+            if (!existing) return state;
+            const updated: ActiveOperation = {
+              ...existing,
+              progress: (p.progress_current as number | undefined) ?? existing.progress,
+              total: (p.progress_total as number | undefined) ?? existing.total,
+              message: (p.message as string | undefined) ?? existing.message,
+            };
+            const operations = { ...state.operations, [opId]: updated };
+            return { operations, activeOperations: deriveActiveOperations(operations) };
+          });
+        } else if (name === 'op.terminal' && opId) {
+          // Operation reached a terminal state — refresh from server.
+          get().loadFromServer();
+        }
+        // op.log is informational; no store update needed (logs are fetched on-demand).
+      },
+      onError: () => {
+        // On error, clear the source so the next openSSE() call reconnects.
+        // The browser EventSource already retries automatically, but if the
+        // connection is truly closed we want the next call to re-open it.
+        set({ _sseSource: null });
+      },
+    });
+
+    set({ _sseSource: es });
+  },
+
+  closeSSE: () => {
+    const es = get()._sseSource;
+    if (es) {
+      es.close();
+      set({ _sseSource: null });
+    }
   },
 }));

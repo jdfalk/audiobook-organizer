@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-04
+// last-edited: 2026-05-06
 
 package server
 
@@ -1025,6 +1025,16 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/organize", s.perm(auth.PermScanTrigger), s.startOrganize)
 			protected.POST("/operations/transcode", s.perm(auth.PermScanTrigger), s.startTranscode)
 			protected.GET("/operations/recent", s.perm(auth.PermLibraryView), s.handleGetRecentOperations)
+
+			// UOS-06: operations v2 SSE + timeline + introspection endpoints
+			protected.GET("/operations/timeline", s.perm(auth.PermLibraryView), s.handleGetOperationTimeline)
+			protected.GET("/operations/events", s.perm(auth.PermLibraryView), s.handleOperationsSSE)
+			protected.GET("/operations/v2/:id", s.perm(auth.PermLibraryView), s.handleGetOperationV2)
+			protected.DELETE("/operations/v2/:id", s.perm(auth.PermSettingsManage), s.handleCancelOperationV2)
+			protected.POST("/operations/v2", s.perm(auth.PermScanTrigger), s.handleTriggerOperationV2)
+			protected.GET("/op-defs", s.perm(auth.PermLibraryView), s.handleListOpDefs)
+			protected.GET("/op-defs/:id", s.perm(auth.PermLibraryView), s.handleGetOpDef)
+
 			protected.GET("/file-ops/pending", s.perm(auth.PermLibraryView), s.handleListPendingFileOps)
 			protected.GET("/operations/:id/results", s.perm(auth.PermLibraryView), s.handleGetOperationResults)
 			protected.GET("/operations/:id/status", s.perm(auth.PermLibraryView), s.getOperationStatus)

@@ -45457,3 +45457,91 @@ func (_c *MockStore_UpsertOpStateV2_Call) RunAndReturn(run func(database.OpState
 	_c.Call.Return(run)
 	return _c
 }
+
+// ListOperationsV2Since provides a mock function for the type MockStore
+func (_mock *MockStore) ListOperationsV2Since(since time.Time, limit int) ([]database.OperationV2Row, error) {
+	ret := _mock.Called(since, limit)
+	if len(ret) == 0 {
+		panic("no return value specified for ListOperationsV2Since")
+	}
+	if returnFunc, ok := ret.Get(0).(func(time.Time, int) ([]database.OperationV2Row, error)); ok {
+		return returnFunc(since, limit)
+	}
+	var r0 []database.OperationV2Row
+	if returnFunc, ok := ret.Get(0).(func(time.Time, int) []database.OperationV2Row); ok {
+		r0 = returnFunc(since, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.OperationV2Row)
+		}
+	}
+	var r1 error
+	if returnFunc, ok := ret.Get(1).(func(time.Time, int) error); ok {
+		r1 = returnFunc(since, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_ListOperationsV2Since_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) ListOperationsV2Since(since interface{}, limit interface{}) *MockStore_ListOperationsV2Since_Call {
+	return &MockStore_ListOperationsV2Since_Call{Call: _e.mock.On("ListOperationsV2Since", since, limit)}
+}
+func (_c *MockStore_ListOperationsV2Since_Call) Run(run func(since time.Time, limit int)) *MockStore_ListOperationsV2Since_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(time.Time), args[1].(int)) })
+	return _c
+}
+func (_c *MockStore_ListOperationsV2Since_Call) Return(rows []database.OperationV2Row, err error) *MockStore_ListOperationsV2Since_Call {
+	_c.Call.Return(rows, err)
+	return _c
+}
+func (_c *MockStore_ListOperationsV2Since_Call) RunAndReturn(run func(time.Time, int) ([]database.OperationV2Row, error)) *MockStore_ListOperationsV2Since_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetOpLogsV2 provides a mock function for the type MockStore
+func (_mock *MockStore) GetOpLogsV2(opID string, limit int) ([]database.OpLogV2Row, error) {
+	ret := _mock.Called(opID, limit)
+	if len(ret) == 0 {
+		panic("no return value specified for GetOpLogsV2")
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int) ([]database.OpLogV2Row, error)); ok {
+		return returnFunc(opID, limit)
+	}
+	var r0 []database.OpLogV2Row
+	if returnFunc, ok := ret.Get(0).(func(string, int) []database.OpLogV2Row); ok {
+		r0 = returnFunc(opID, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.OpLogV2Row)
+		}
+	}
+	var r1 error
+	if returnFunc, ok := ret.Get(1).(func(string, int) error); ok {
+		r1 = returnFunc(opID, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+type MockStore_GetOpLogsV2_Call struct{ *mock.Call }
+
+func (_e *MockStore_Expecter) GetOpLogsV2(opID interface{}, limit interface{}) *MockStore_GetOpLogsV2_Call {
+	return &MockStore_GetOpLogsV2_Call{Call: _e.mock.On("GetOpLogsV2", opID, limit)}
+}
+func (_c *MockStore_GetOpLogsV2_Call) Run(run func(opID string, limit int)) *MockStore_GetOpLogsV2_Call {
+	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(int)) })
+	return _c
+}
+func (_c *MockStore_GetOpLogsV2_Call) Return(rows []database.OpLogV2Row, err error) *MockStore_GetOpLogsV2_Call {
+	_c.Call.Return(rows, err)
+	return _c
+}
+func (_c *MockStore_GetOpLogsV2_Call) RunAndReturn(run func(string, int) ([]database.OpLogV2Row, error)) *MockStore_GetOpLogsV2_Call {
+	_c.Call.Return(run)
+	return _c
+}

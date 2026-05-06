@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.17.0
+// version: 2.18.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-06
 
@@ -439,13 +439,51 @@ export interface OperationTimelineResponse {
 export async function getOperationTimeline(sinceMinutes = 15): Promise<OperationV2[]> {
   try {
     const response = await fetch(`${API_BASE}/operations/timeline?since=${sinceMinutes}m`);
-    if (response.status === 404) return []; // endpoint not yet deployed
     if (!response.ok) return [];
     const body = await response.json();
     return body?.data?.operations ?? [];
   } catch {
     return [];
   }
+}
+
+// SSE event types emitted by the operations EventHub (UOS-06).
+export type OperationSSEEventName = 'op.created' | 'op.updated' | 'op.log' | 'op.terminal';
+
+export interface OperationSSEHandler {
+  onEvent: (name: OperationSSEEventName, payload: unknown) => void;
+  onError?: (err: Event) => void;
+}
+
+/**
+ * openOperationsSSE opens a Server-Sent Events connection to the operations
+ * event stream. Returns an EventSource that the caller should close when
+ * the component unmounts.
+ *
+ * The returned EventSource reconnects automatically on transient drops
+ * (browser EventSource standard behaviour).
+ */
+export function openOperationsSSE(handler: OperationSSEHandler): EventSource {
+  const url = `${API_BASE}/operations/events`;
+  const es = new EventSource(url);
+
+  const eventNames: OperationSSEEventName[] = ['op.created', 'op.updated', 'op.log', 'op.terminal'];
+  for (const name of eventNames) {
+    es.addEventListener(name, (e: MessageEvent) => {
+      try {
+        const payload = JSON.parse(e.data);
+        handler.onEvent(name, payload);
+      } catch {
+        handler.onEvent(name, e.data);
+      }
+    });
+  }
+
+  if (handler.onError) {
+    es.onerror = handler.onError;
+  }
+
+  return es;
 }
 
 export interface SystemStatus {

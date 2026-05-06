@@ -26,6 +26,31 @@
   registration immediately after dedup engine initialization. Gated on
   `dedupEngine != nil` to avoid mock panics in tests.
 
+#### May 6, 2026 — UOS-06: SSE event hub + /operations/timeline + introspection endpoints
+
+- **feat(uos)**: `EventHub` in `internal/operations/registry/bus.go` — thread-safe
+  fan-out SSE bus implementing the `Bus` interface; per-subscriber buffered channel
+  (size 64); non-blocking send (slow clients drop events rather than blocking
+  the publisher).
+- **feat(uos)**: `Registry.SetBus(Bus)` — wires EventHub before Start(); opHub
+  created in `NewServer` and passed to registry constructor.
+- **feat(uos)**: `GET /api/v1/operations/timeline?since=15m` — returns up to 200
+  ops queued within the given duration, ordered by started_at DESC NULLS LAST.
+- **feat(uos)**: `GET /api/v1/operations/events` — SSE stream of `op.created`,
+  `op.updated`, `op.log`, `op.terminal` events; reconnects automatically.
+- **feat(uos)**: `GET /api/v1/operations/v2/:id` — single op + last 50 log lines.
+- **feat(uos)**: `DELETE /api/v1/operations/v2/:id` — cancel via registry.
+- **feat(uos)**: `POST /api/v1/operations/v2` — trigger any registered op def.
+- **feat(uos)**: `GET /api/v1/op-defs` + `GET /api/v1/op-defs/:id` — introspect
+  registered OperationDefs.
+- **feat(uos)**: `OpsV2Store` extended with `ListOperationsV2Since` and
+  `GetOpLogsV2`; SQLite implements, PebbleStore stubs, fakeStore and MockStore
+  updated.
+- **feat(uos)**: `openOperationsSSE` in `api.ts` opens EventSource, wires typed
+  listeners for all four event names; 404 fallback removed from `getOperationTimeline`.
+- **feat(uos)**: `useOperationsStore` gains `openSSE`/`closeSSE` actions; `op.created`
+  and `op.terminal` trigger full reload; `op.updated` merges progress in-place.
+
 #### May 6, 2026 — UOS-04: Public plugin SDK + import lint
 
 - **feat(uos)**: `pkg/plugin/sdk` package provides the stable public API for
