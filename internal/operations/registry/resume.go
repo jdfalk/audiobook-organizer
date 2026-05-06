@@ -1,5 +1,5 @@
 // file: internal/operations/registry/resume.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3c4d5e6f-7a8b-9012-cdef-012345678901
 // last-edited: 2026-05-06
 
@@ -7,7 +7,6 @@ package registry
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -82,42 +81,27 @@ func (r *Registry) resumeAfterStartup(ctx context.Context) {
 	}
 }
 
-// resumeRestart increments resume_count, loads saved state, and dispatches.
+// resumeRestart increments resume_count, clears state if needed, resets the
+// DB row to status=queued, and signals the dispatcher. The dispatcher picks it
+// up via ListQueuedOperationsV2 on its next cycle — same path as a fresh enqueue.
+// State blob restoration is UOS-03's responsibility; initialState on queuedRun
+// is not yet consumed by executeRun, so direct-dispatch would add no value and
+// would race with the dispatcher re-queuing the same row.
 func (r *Registry) resumeRestart(ctx context.Context, row database.OperationV2Row, def OperationDef) {
+	_ = ctx // context used only for cancel guard; dispatcher started after us
+
 	if err := r.store.IncrementResumeCountV2(row.ID); err != nil {
 		r.logger.Warn("registry: resumeAfterStartup: failed to increment resume_count",
 			"op_id", row.ID, "error", err)
 	}
 
-	// Load saved state (may be nil — Run must tolerate that).
-	var stateBlob []byte
-	if stateRow, err := r.store.GetOpStateV2(row.ID); err == nil && stateRow != nil {
-		stateBlob = stateRow.StateBlob
-	}
-
-	// Reset status to queued for the dispatcher to pick up.
+	// Reset status to queued so the dispatcher picks it up normally.
 	_ = r.store.UpdateOperationV2Status(row.ID, "queued", nil, nil, nil)
 
-	qr := &queuedRun{
-		opID:         row.ID,
-		defID:        def.ID,
-		params:       json.RawMessage(row.Params),
-		priority:     Priority(row.Priority),
-		concurrKey:   def.ConcurrencyKey,
-		plugin:       def.Plugin,
-		resumePolicy: def.ResumePolicy,
-		initialState: stateBlob,
-	}
-
-	r.logger.Info("registry: resumeAfterStartup: re-dispatching restart op",
+	r.logger.Info("registry: resumeAfterStartup: re-queued restart op",
 		"op_id", row.ID, "def_id", def.ID, "resume_count_new", row.ResumeCount+1)
 
-	select {
-	case r.nextRun <- qr:
-	case <-ctx.Done():
-		r.logger.Warn("registry: resumeAfterStartup: context done before dispatch",
-			"op_id", row.ID)
-	}
+	r.pingDispatch()
 }
 
 // resumeRequeue clears state and re-inserts as a brand-new queued op.

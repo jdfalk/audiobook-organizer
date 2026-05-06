@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.12.0 -->
+<!-- version: 8.13.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-06 -->
 
@@ -642,6 +642,7 @@ since it was last edited on 2026-04-11).
 - [ ] **1.13** **Broken-files dashboard card + repair pipeline** — persist per-file ffmpeg / fingerprint errors to a new `book_file_errors` table associated with the book, surface a dashboard card ("N books with broken files"), add a `has_file_errors` library facet, and wire a repair pipeline (remux / restore-from-version / mark-ignored / delete-and-rescan). Pairs with 1.12. Spec: [`docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md`](docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md)
 - [ ] **1.14** **Unified Operations System (UOS)** — greenfield redesign of the async-work infrastructure. Single `Registry` owns every OperationDef; plugins register through `pkg/plugin/sdk`; subprocess isolation for heavy ops (ffmpeg / chromaprint / whisper auto-tagged with op_id); explicit `ResumePolicy` per OperationDef structurally prevents queue-jam bugs (incl. today's `reconcile_scan` auto-resume jam); single SSE-fed frontend store replaces three desynced stores. **15 PRs, ~3 weeks.** Human spec: [`docs/superpowers/specs/2026-05-04-unified-operations-system.md`](docs/superpowers/specs/2026-05-04-unified-operations-system.md). Bot-task index: [`docs/superpowers/bot-tasks/2026-05-04-uos-00-index.md`](docs/superpowers/bot-tasks/2026-05-04-uos-00-index.md). Subsumes 1.12 (log tagging) and provides the substrate for 1.13 (broken-files repair) and 1.11 (async embed batch).
   - [x] **UOS-02** Registry shell + dispatcher + in-process worker pool (PR #741, merged 2026-05-06)
+  - [x] **UOS-08** Watchdog + op_strikes_v2 + startup resume orchestration (abandoned tracker, infinite-restart guard, ResumePolicy dispatch — merged 2026-05-06)
   - [ ] **UOS-03** Reporter DB writes + subprocess runner
   - [ ] **UOS-04** and beyond (see bot-task index)
 - [ ] **1.15** **UOS amendment — `Reporter.SetCurrentItem(label)` for live "currently working on" ticker** — Sonarr/Radarr-style high-frequency current-item display under the progress bar. New SDK Reporter method that's purely ephemeral (in-memory on the registry's run handle, no DB write); SSE event `op.current_item` patches the frontend store; timeline endpoint returns the cached value so refresh / new tab / re-login re-hydrates. Survives refresh; survives a brief gap on server restart (next per-item iteration repopulates). If we ever want it to survive restart, retrofit is a single column add to `operations_v2` flushed at 30s cadence — explicit out of v1. Implementation footprint: amend §1 (Reporter) + §9 (timeline payload) + UOS-03/UOS-06 bot-tasks. Spec: [`docs/superpowers/bot-tasks/2026-05-05-uos-amendment-current-item.md`](docs/superpowers/bot-tasks/2026-05-05-uos-amendment-current-item.md).
