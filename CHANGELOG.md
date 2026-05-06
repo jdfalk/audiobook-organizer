@@ -1,5 +1,6 @@
 <!-- file: CHANGELOG.md -->
 <!-- version: 2.44.6 -->
+<!-- version: 2.44.5 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-05 -->
 
@@ -61,6 +62,17 @@ a cheaper or more capable model independently. Tests assert each `Parse*`
 path on `OpenAIParser` sends the correct model string from config.
 
 Spec: `docs/superpowers/specs/2026-04-27-per-feature-llm-model-knob-design.md`
+#### May 5, 2026 — TODO 3.1-deluge: wire move_storage into centralization path
+
+- **feat(deluge)**: `internal/server/deluge_integration.go` — `NotifyDelugeAfterOrganize`
+  tells Deluge to follow a book that was just moved into the library by the organize
+  pipeline. Gated by `DelugeMoveEnabled`; skipped when the active BookVersion has no
+  `TorrentHash`. Best-effort: Deluge errors are logged and do not fail the organize.
+- **feat(server)**: `internal/server/organize_handlers.go` — `organizeBook` handler calls
+  `NotifyDelugeAfterOrganize` after a successful version-aware organize move so that torrent
+  clients keep seeding from the new library path.
+- **test(deluge)**: `internal/server/deluge_centralization_test.go` — 4 new tests covering
+  enabled/disabled/no-hash/error scenarios per spec (TODO 3.1-deluge).
 
 ### Tests
 

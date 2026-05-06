@@ -196,6 +196,32 @@ func (s *Server) registerDelugeRoutes(protected *gin.RouterGroup) {
 	protected.POST("/discovery/import", s.perm("settings.manage"), s.handleDiscoveryImport)
 }
 
+// NotifyDelugeAfterOrganize tells Deluge to follow a book that was
+// just moved into the library by the organize pipeline.
+//
+// Called after the file move succeeds and the Book record has been
+// updated to point at newPath. It looks up the active BookVersion(s)
+// for the book; for each with a non-empty TorrentHash it calls
+// NotifyDelugeMoveStorage so the torrent client keeps seeding from
+// the new location.
+//
+// Best-effort: errors are logged but do not bubble up — the organize
+// operation already succeeded.
+func NotifyDelugeAfterOrganize(store interface {
+	database.BookVersionStore
+}, bookID, newPath string) {
+	versions, err := store.GetBookVersionsByBookID(bookID)
+	if err != nil {
+		log.Printf("[WARN] deluge-organize: failed to load versions for book %s: %v", bookID, err)
+		return
+	}
+	for _, v := range versions {
+		if v.TorrentHash != "" && v.Status == database.BookVersionStatusActive {
+			NotifyDelugeMoveStorage(v.TorrentHash, newPath)
+		}
+	}
+}
+
 // NotifyDelugeAfterUndo checks whether the reverted operation moved
 // Deluge-sourced files and updates the torrent storage path.
 //
