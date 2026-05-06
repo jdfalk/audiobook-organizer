@@ -184,6 +184,18 @@ func rmt_updateBookFiles(store database.Store, bookID, newFP string, fi os.FileI
 	}
 }
 
+// normalizeForFilename normalizes a string for iTunes/macOS filename comparison.
+// macOS HFS+ and iTunes replace ": " and ":" with "_ " and "_" respectively
+// because colons are illegal in filenames. This function applies the same
+// transformation so that "Mistborn: The Final Empire" matches the file
+// "Mistborn_ The Final Empire.m4b".
+func normalizeForFilename(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, ": ", "_ ")
+	s = strings.ReplaceAll(s, ":", "_")
+	return strings.TrimSpace(s)
+}
+
 // rmt_findInITunes searches iTunesRoot for iTunes album directories matching author+title.
 func rmt_findInITunes(iTunesRoot, authorName, title string, audioExts map[string]bool) []string {
 	iTunesRoot = filepath.Clean(iTunesRoot)
@@ -191,7 +203,8 @@ func rmt_findInITunes(iTunesRoot, authorName, title string, audioExts map[string
 	if len(titlePrefix) > 25 {
 		titlePrefix = titlePrefix[:25]
 	}
-	titlePrefixLower := strings.ToLower(titlePrefix)
+	// Normalize for macOS/iTunes filename encoding: ":" → "_", ": " → "_ "
+	titlePrefixLower := normalizeForFilename(titlePrefix)
 
 	authorWord := authorName
 	if idx := strings.Index(authorName, " "); idx > 0 {
@@ -221,7 +234,7 @@ func rmt_findInITunes(iTunesRoot, authorName, title string, audioExts map[string
 		for _, album := range albumEntries {
 			albumPath := filepath.Join(authorDir, album.Name())
 			if album.IsDir() {
-				if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+				if strings.Contains(normalizeForFilename(album.Name()), titlePrefixLower) {
 					dirMatches[albumPath] = struct{}{}
 					continue
 				}
@@ -232,7 +245,7 @@ func rmt_findInITunes(iTunesRoot, authorName, title string, audioExts map[string
 					if !audioExts[strings.ToLower(filepath.Ext(path))] {
 						return nil
 					}
-					if strings.Contains(strings.ToLower(filepath.Base(path)), titlePrefixLower) {
+					if strings.Contains(normalizeForFilename(filepath.Base(path)), titlePrefixLower) {
 						dirMatches[albumPath] = struct{}{}
 						return filepath.SkipDir
 					}
@@ -242,7 +255,7 @@ func rmt_findInITunes(iTunesRoot, authorName, title string, audioExts map[string
 				if !audioExts[strings.ToLower(filepath.Ext(albumPath))] {
 					continue
 				}
-				if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+				if strings.Contains(normalizeForFilename(album.Name()), titlePrefixLower) {
 					dirMatches[albumPath] = struct{}{}
 				}
 			}
