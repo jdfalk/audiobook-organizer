@@ -18,6 +18,19 @@
   non-managed path passthrough, PID uniqueness across calls, duration
   seconds→ms conversion, and ProvisionAll best-effort partial-failure
   continuation.
+#### May 5, 2026 — iTunes service.go and transfer.go coverage (TODO 4.13e)
+
+- **test(itunes)**: `service_test.go` — constructor happy path (`New` with
+  `Enabled=true`, nil-logger defaulting), all sub-components wired, `Start` /
+  `Shutdown` on enabled service, `Enabled()` accessor in all states, disabled-mode
+  propagation with multiple repeated calls. `service.go` coverage: 14% → 100%.
+- **test(itunes)**: `transfer_test.go` — `copyFile` error paths (missing source,
+  missing destination directory, overwrite-existing), `backupITLFile` timestamp
+  format verification and multiple-backup deduplication,
+  `newTransferService` non-nil check. `transfer.go` functions all ≥ 71%.
+- Package coverage: 55.9% → 56.8%. service.go + transfer.go combined: ~91%.
+  Remaining gap is in `importer.go` (enrichment / organize paths) and other
+  sub-components out of scope for 4.13e.
 
 ### Fixed
 
