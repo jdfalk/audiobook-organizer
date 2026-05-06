@@ -1,5 +1,5 @@
 // file: internal/database/metadata_fetch_cache.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 9e8d7c6b-5a4f-3e2d-1c0b-9a8b7c6d5e4f
 // last-edited: 2026-05-01
 
@@ -8,7 +8,7 @@ package database
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -85,7 +85,7 @@ func GetCachedMetadataFetch(store Store, bookID, source string) (*CachedMetadata
 		// Corrupt entry — treat as a miss and delete it so
 		// the next call writes a fresh row.
 		if err := store.DeleteRaw(metadataFetchCacheKey(bookID, source)); err != nil {
-			log.Printf("WARNING: failed to delete corrupt cache entry %q: %v", metadataFetchCacheKey(bookID, source), err)
+			slog.Warn("failed to delete corrupt cache entry", "key", metadataFetchCacheKey(bookID, source), "error", err)
 		}
 		metrics.RecordCacheMiss("metadata_fetch", "stale")
 		return nil, nil
