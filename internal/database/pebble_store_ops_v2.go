@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store_ops_v2.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-05-06
 
@@ -31,6 +31,10 @@ func (p *PebbleStore) ListQueuedOperationsV2() ([]OperationV2Row, error) {
 	return nil, ErrOpsV2NotSupported
 }
 
+func (p *PebbleStore) ListActiveOperationsV2() ([]OperationV2Row, error) {
+	return nil, ErrOpsV2NotSupported
+}
+
 func (p *PebbleStore) GetOperationV2(_ string) (*OperationV2Row, error) {
 	return nil, ErrOpsV2NotSupported
 }
@@ -47,10 +51,6 @@ func (p *PebbleStore) CountRunningByPluginV2(_ string) (int, error) {
 	return 0, ErrOpsV2NotSupported
 }
 
-func (p *PebbleStore) ListActiveOperationsV2() ([]OperationV2Row, error) {
-	return nil, ErrOpsV2NotSupported
-}
-
 func (p *PebbleStore) IncrementResumeCountV2(_ string) error {
 	return ErrOpsV2NotSupported
 }
@@ -64,5 +64,29 @@ func (p *PebbleStore) GetOpStateV2(_ string) (*OpStateV2Row, error) {
 }
 
 func (p *PebbleStore) DeleteOpStateV2(_ string) error {
+	return ErrOpsV2NotSupported
+}
+
+func (p *PebbleStore) UpdateOpProgressV2(_ string, _, _ int, _ string) error {
+	return ErrOpsV2NotSupported
+}
+
+func (p *PebbleStore) UpdateOpPhaseV2(_ string, _ *string) error {
+	return ErrOpsV2NotSupported
+}
+
+func (p *PebbleStore) UpdateOpCheckpointV2(_ string, _ int) error {
+	return ErrOpsV2NotSupported
+}
+
+func (p *PebbleStore) AppendOpLogsV2(_ []OpLogV2Row) error {
+	return ErrOpsV2NotSupported
+}
+
+func (p *PebbleStore) InsertOpErrorV2(_ OpErrorV2Row) error {
+	return ErrOpsV2NotSupported
+}
+
+func (p *PebbleStore) UpsertOpStateV2(_ OpStateV2Row) error {
 	return ErrOpsV2NotSupported
 }

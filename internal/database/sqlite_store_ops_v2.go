@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store_ops_v2.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d71
 // last-edited: 2026-05-06
 
@@ -165,6 +165,107 @@ func (s *SQLiteStore) CountRunningByPluginV2(plugin string) (int, error) {
 	return n, err
 }
 
+// UpdateOpProgressV2 updates progress_current, progress_total, progress_message, last_progress_at.
+func (s *SQLiteStore) UpdateOpProgressV2(id string, current, total int, message string) error {
+	_, err := s.db.Exec(`
+		UPDATE operations_v2
+		SET progress_current   = ?,
+		    progress_total     = ?,
+		    progress_message   = ?,
+		    last_progress_at   = ?
+		WHERE id = ?
+	`, current, total, message, time.Now().UTC(), id)
+	return err
+}
+
+// UpdateOpPhaseV2 sets or clears the current_phase column.
+func (s *SQLiteStore) UpdateOpPhaseV2(id string, phase *string) error {
+	_, err := s.db.Exec(`UPDATE operations_v2 SET current_phase = ? WHERE id = ?`, phase, id)
+	return err
+}
+
+// UpdateOpCheckpointV2 sets last_checkpoint_at and updates high_water_progress to MAX(old, newHWM).
+func (s *SQLiteStore) UpdateOpCheckpointV2(id string, newHWM int) error {
+	_, err := s.db.Exec(`
+		UPDATE operations_v2
+		SET last_checkpoint_at  = ?,
+		    high_water_progress = MAX(high_water_progress, ?)
+		WHERE id = ?
+	`, time.Now().UTC(), newHWM, id)
+	return err
+}
+
+// AppendOpLogsV2 bulk-inserts log rows into op_logs_v2.
+func (s *SQLiteStore) AppendOpLogsV2(rows []OpLogV2Row) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`
+		INSERT INTO op_logs_v2 (operation_id, level, message, attrs, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+	for _, row := range rows {
+		if _, err := stmt.Exec(row.OperationID, row.Level, row.Message, row.Attrs, row.CreatedAt); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// InsertOpErrorV2 inserts a single error record into op_errors_v2.
+func (s *SQLiteStore) InsertOpErrorV2(row OpErrorV2Row) error {
+	_, err := s.db.Exec(`
+		INSERT INTO op_errors_v2 (operation_id, plugin, def_id, message, attrs, occurred_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, row.OperationID, row.Plugin, row.DefID, row.Message, row.Attrs, row.OccurredAt)
+	return err
+}
+
+// UpsertOpStateV2 inserts or replaces the checkpoint row for an operation.
+func (s *SQLiteStore) UpsertOpStateV2(row OpStateV2Row) error {
+	_, err := s.db.Exec(`
+		INSERT INTO op_state_v2 (operation_id, phase, state_blob, schema_version, written_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(operation_id) DO UPDATE SET
+			phase          = excluded.phase,
+			state_blob     = excluded.state_blob,
+			schema_version = excluded.schema_version,
+			written_at     = excluded.written_at
+	`, row.OperationID, row.Phase, row.StateBlob, row.SchemaVersion, row.WrittenAt)
+	return err
+}
+
+// GetOpStateV2 returns the latest checkpoint row for an operation, or nil if not found.
+func (s *SQLiteStore) GetOpStateV2(opID string) (*OpStateV2Row, error) {
+	row := &OpStateV2Row{}
+	err := s.db.QueryRow(`
+		SELECT operation_id, phase, state_blob, schema_version, written_at
+		FROM op_state_v2
+		WHERE operation_id = ?
+	`, opID).Scan(&row.OperationID, &row.Phase, &row.StateBlob, &row.SchemaVersion, &row.WrittenAt)
+	if err != nil {
+		// Not found is treated as nil, no state.
+		return nil, nil //nolint:nilerr
+	}
+	return row, nil
+}
+
+// DeleteOpStateV2 removes the state blob for an op.
+func (s *SQLiteStore) DeleteOpStateV2(opID string) error {
+	_, err := s.db.Exec(`DELETE FROM op_state_v2 WHERE operation_id = ?`, opID)
+	return err
+}
+
 // ListActiveOperationsV2 returns ops with status 'queued' or 'running'.
 func (s *SQLiteStore) ListActiveOperationsV2() ([]OperationV2Row, error) {
 	rows, err := s.db.Query(`
@@ -210,26 +311,5 @@ func (s *SQLiteStore) InsertOpStrikeV2(row OpStrikeV2Row) error {
 		INSERT INTO op_strikes_v2 (def_id, operation_id, kind, details, occurred_at)
 		VALUES (?, ?, ?, ?, ?)
 	`, row.DefID, row.OperationID, row.Kind, row.Details, row.OccurredAt)
-	return err
-}
-
-// GetOpStateV2 returns the state blob for an op, or nil if not found.
-func (s *SQLiteStore) GetOpStateV2(opID string) (*OpStateV2Row, error) {
-	row := &OpStateV2Row{}
-	err := s.db.QueryRow(`
-		SELECT operation_id, phase, state_blob, schema_version, written_at
-		FROM op_state_v2
-		WHERE operation_id = ?
-	`, opID).Scan(&row.OperationID, &row.Phase, &row.StateBlob, &row.SchemaVersion, &row.WrittenAt)
-	if err != nil {
-		// Not found is treated as nil, no state.
-		return nil, nil //nolint:nilerr
-	}
-	return row, nil
-}
-
-// DeleteOpStateV2 removes the state blob for an op.
-func (s *SQLiteStore) DeleteOpStateV2(opID string) error {
-	_, err := s.db.Exec(`DELETE FROM op_state_v2 WHERE operation_id = ?`, opID)
 	return err
 }

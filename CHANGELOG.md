@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.8 -->
+<!-- version: 2.44.9 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-06 -->
 
@@ -8,6 +8,27 @@
 ## [Unreleased]
 
 ### Features
+
+#### May 6, 2026 — UOS-03: DB-backed Reporter + subprocess runner
+
+- **feat(uos)**: Real DB-backed `Reporter` replaces stub; writes progress, logs,
+  errors, and checkpoints to UOS v2 schema tables (`op_logs_v2`, `op_errors_v2`,
+  `op_state_v2`, `operations_v2`).
+- Log buffering: flushes at 100 entries or 250ms; error-level immediately writes
+  to `op_errors_v2` in addition to `op_logs_v2`.
+- `Checkpoint(state)` gob-encodes state → `op_state_v2` + updates
+  `high_water_progress` on `operations_v2`.
+- `RunPhase` sets/clears `current_phase`; inner reporter prefixes phase name in
+  log attrs.
+- `Bus` interface (nil-safe until UOS-06) for SSE publishing on progress/log events.
+- Subprocess runner: `Isolate=true` ops re-exec binary with `--operation-runner
+  <opID>`, communicate over unix socket pair; child stdout/stderr routed to
+  reporter. Cancel sends SIGTERM → SIGKILL after 10s.
+- `OpsV2Store` extended with 7 new methods (`UpdateOpProgressV2`,
+  `UpdateOpPhaseV2`, `UpdateOpCheckpointV2`, `AppendOpLogsV2`, `InsertOpErrorV2`,
+  `UpsertOpStateV2`); all implemented in SQLite; PebbleStore stubs return
+  `ErrNotSupported`.
+- `registry.New()` now takes `bus Bus` as 4th arg (nil until UOS-06).
 
 #### May 6, 2026 — UOS-08: Watchdog + strikes + startup resume orchestration
 

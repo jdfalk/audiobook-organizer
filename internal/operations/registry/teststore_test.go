@@ -1,5 +1,5 @@
 // file: internal/operations/registry/teststore_test.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
 // last-edited: 2026-05-06
 
@@ -24,6 +24,8 @@ type fakeStore struct {
 	ops     map[string]database.OperationV2Row
 	strikes []database.OpStrikeV2Row
 	states  map[string]database.OpStateV2Row
+	logs    []database.OpLogV2Row
+	errors  []database.OpErrorV2Row
 }
 
 func newFakeStore() *fakeStore {
@@ -276,5 +278,107 @@ func (f *fakeStore) statusOf(id string) string {
 		return op.Status
 	}
 	return ""
+}
+
+// --- UOS-03 reporter methods ---
+
+func (f *fakeStore) UpdateOpProgressV2(id string, current, total int, message string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[id]
+	if !ok {
+		return nil
+	}
+	op.ProgressCurrent = current
+	op.ProgressTotal = total
+	op.ProgressMessage = message
+	f.ops[id] = op
+	return nil
+}
+
+func (f *fakeStore) UpdateOpPhaseV2(id string, phase *string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[id]
+	if !ok {
+		return nil
+	}
+	op.CurrentPhase = phase
+	f.ops[id] = op
+	return nil
+}
+
+func (f *fakeStore) UpdateOpCheckpointV2(id string, newHWM int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[id]
+	if !ok {
+		return nil
+	}
+	now := time.Now()
+	op.LastCheckpointAt = &now
+	if newHWM > op.HighWaterProgress {
+		op.HighWaterProgress = newHWM
+	}
+	f.ops[id] = op
+	return nil
+}
+
+func (f *fakeStore) AppendOpLogsV2(rows []database.OpLogV2Row) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.logs = append(f.logs, rows...)
+	return nil
+}
+
+func (f *fakeStore) InsertOpErrorV2(row database.OpErrorV2Row) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.errors = append(f.errors, row)
+	return nil
+}
+
+func (f *fakeStore) UpsertOpStateV2(row database.OpStateV2Row) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.states[row.OperationID] = row
+	return nil
+}
+
+// logsFor returns all log rows for a given operation ID.
+func (f *fakeStore) logsFor(opID string) []database.OpLogV2Row {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var result []database.OpLogV2Row
+	for _, l := range f.logs {
+		if l.OperationID == opID {
+			result = append(result, l)
+		}
+	}
+	return result
+}
+
+// errorsFor returns all error rows for a given operation ID.
+func (f *fakeStore) errorsFor(opID string) []database.OpErrorV2Row {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var result []database.OpErrorV2Row
+	for _, e := range f.errors {
+		if e.OperationID == opID {
+			result = append(result, e)
+		}
+	}
+	return result
+}
+
+// progressOf returns the current progress fields for a given op.
+func (f *fakeStore) progressOf(id string) (current, total int, message string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[id]
+	if !ok {
+		return 0, 0, ""
+	}
+	return op.ProgressCurrent, op.ProgressTotal, op.ProgressMessage
 }
 

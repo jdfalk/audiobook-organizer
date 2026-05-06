@@ -335,7 +335,7 @@ func NewServer(store database.Store) *Server {
 	// Initialize the UOS-02 operations registry. The registry holds the
 	// OperationDef registration table, dispatcher, and worker pool.
 	// Plugins register their defs in their own bot-tasks (UOS-03+).
-	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8)
+	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8, nil /* bus: wired in UOS-06 */)
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
 	// so the real TrackProvisioner gets wired into the import pipeline;

@@ -1,7 +1,7 @@
 // file: internal/database/mock_store.go
-// version: 1.52.0
+// version: 1.51.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
-// last-edited: 2026-05-06
+// last-edited: 2026-05-05
 
 package database
 
@@ -2415,18 +2415,24 @@ func (m *MockStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string)
 }
 
 // OpsV2Store stub methods — permissive no-ops for tests that don't need v2 ops.
-func (m *MockStore) UpsertOpDefinitionV2(_ OpDefinitionV2Row) error    { return nil }
-func (m *MockStore) DeleteOrphanOpDefsV2(_ []string) error             { return nil }
-func (m *MockStore) InsertOperationV2(_ OperationV2Row) error          { return nil }
-func (m *MockStore) ListQueuedOperationsV2() ([]OperationV2Row, error) { return nil, nil }
-func (m *MockStore) ListActiveOperationsV2() ([]OperationV2Row, error) { return nil, nil }
-func (m *MockStore) GetOperationV2(_ string) (*OperationV2Row, error)  { return nil, nil }
+func (m *MockStore) UpsertOpDefinitionV2(_ OpDefinitionV2Row) error       { return nil }
+func (m *MockStore) DeleteOrphanOpDefsV2(_ []string) error                { return nil }
+func (m *MockStore) InsertOperationV2(_ OperationV2Row) error              { return nil }
+func (m *MockStore) ListQueuedOperationsV2() ([]OperationV2Row, error)    { return nil, nil }
+func (m *MockStore) GetOperationV2(_ string) (*OperationV2Row, error)     { return nil, nil }
 func (m *MockStore) UpdateOperationV2Status(_ string, _ string, _, _ *time.Time, _ *string) error {
 	return nil
 }
 func (m *MockStore) SetOperationV2StatusIfQueued(_, _ string) (bool, error) { return false, nil }
 func (m *MockStore) CountRunningByPluginV2(_ string) (int, error)           { return 0, nil }
+func (m *MockStore) ListActiveOperationsV2() ([]OperationV2Row, error)      { return nil, nil }
 func (m *MockStore) IncrementResumeCountV2(_ string) error                  { return nil }
 func (m *MockStore) InsertOpStrikeV2(_ OpStrikeV2Row) error                 { return nil }
 func (m *MockStore) GetOpStateV2(_ string) (*OpStateV2Row, error)           { return nil, nil }
 func (m *MockStore) DeleteOpStateV2(_ string) error                         { return nil }
+func (m *MockStore) UpdateOpProgressV2(_ string, _, _ int, _ string) error  { return nil }
+func (m *MockStore) UpdateOpPhaseV2(_ string, _ *string) error              { return nil }
+func (m *MockStore) UpdateOpCheckpointV2(_ string, _ int) error             { return nil }
+func (m *MockStore) AppendOpLogsV2(_ []OpLogV2Row) error                    { return nil }
+func (m *MockStore) InsertOpErrorV2(_ OpErrorV2Row) error                   { return nil }
+func (m *MockStore) UpsertOpStateV2(_ OpStateV2Row) error                   { return nil }

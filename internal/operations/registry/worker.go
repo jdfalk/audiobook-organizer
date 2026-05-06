@@ -1,5 +1,5 @@
 // file: internal/operations/registry/worker.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
 // last-edited: 2026-05-06
 
@@ -124,18 +124,35 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 
 	r.logger.Info("registry: starting run", "op_id", qr.opID, "def_id", qr.defID)
 
-	// Subprocess path: not implemented in UOS-02.
+	// Build reporter (DB-backed).
+	reporter := newDBReporter(runCtx, qr.opID, qr.defID, qr.plugin,
+		"", "", // traceID / spanID loaded from DB row in future; empty for now
+		r.store, r.bus, r.logger)
+
+	// Subprocess path (Isolate=true): re-exec self.
 	if def.Isolate {
+		runErr := runSubprocess(runCtx, def, qr.opID, qr.params, reporter)
 		r.releaseRunHandle(qr.opID)
-		errMsg := ErrSubprocessNotImplemented.Error()
-		completed := time.Now().UTC()
-		_ = r.store.UpdateOperationV2Status(qr.opID, "failed", nil, &completed, &errMsg)
-		r.logger.Warn("registry: isolate=true not yet supported", "op_id", qr.opID)
+		var finalStatus string
+		var errMsg *string
+		completedAt := time.Now().UTC()
+		if runCtx.Err() != nil {
+			finalStatus = "canceled"
+		} else if runErr != nil {
+			finalStatus = "failed"
+			msg := runErr.Error()
+			errMsg = &msg
+		} else {
+			finalStatus = "completed"
+		}
+		if err := r.store.UpdateOperationV2Status(qr.opID, finalStatus, nil, &completedAt, errMsg); err != nil {
+			r.logger.Warn("registry: failed to update subprocess op terminal status", "op_id", qr.opID, "error", err)
+		}
+		r.logger.Info("registry: subprocess run finished", "op_id", qr.opID, "status", finalStatus)
 		return false
 	}
 
 	// In-process path: run in a separate goroutine so we can detect abandonment.
-	reporter := newStubReporter(runCtx, qr.opID)
 	done := make(chan error, 1)
 	go func() {
 		done <- r.safeRun(runCtx, def, qr.params, reporter)
