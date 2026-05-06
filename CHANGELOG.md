@@ -1,11 +1,24 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.4 -->
+<!-- version: 2.44.5 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-05 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Features
+
+#### May 5, 2026 — 3.2-deluge: Wire MoveStorage into undo path
+
+- **feat(deluge)**: `NotifyDelugeAfterUndo` now uses the restored original
+  file path (the undo destination) instead of `book.FilePath` from the DB,
+  ensuring Deluge is told the correct post-restore location when a
+  torrent-sourced book is reverted.
+- **test(deluge)**: 4 new cases in `deluge_integration_test.go` covering
+  enabled/disabled/no-hash/deluge-error for the undo path, verifying the
+  destination passed to `MoveStorage` is the restored original path, not the
+  centralized `.versions/` path.
 
 ### Tests
 
