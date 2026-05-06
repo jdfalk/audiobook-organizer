@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-05-04
 
@@ -1564,7 +1564,11 @@ func (de *Engine) RunLLMReview(ctx context.Context) error {
 		Store:  de.aiJobsStore,
 		Client: &ai.AIJobsBatchClient{Parser: de.llmParser},
 	}
-	jobID, err := ai.SubmitDedupReviewJob(ctx, deps, "gpt-5-mini", inputs, byIndexIDs)
+	model := config.AppConfig.DedupReviewModel // per-feature model knob (AI-MODEL-1)
+	if model == "" {
+		model = "gpt-5-mini"
+	}
+	jobID, err := ai.SubmitDedupReviewJob(ctx, deps, model, inputs, byIndexIDs)
 	if err != nil {
 		return fmt.Errorf("submit dedup review job: %w", err)
 	}

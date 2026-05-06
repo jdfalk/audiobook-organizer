@@ -1,5 +1,5 @@
 // file: internal/ai/metadata_llm_review.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: e4f92b17-3c8a-4d65-a1f3-9b2e07d84c61
 
 package ai
@@ -155,7 +155,7 @@ Include one score per input candidate, using the same index as the input.`
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(userPrompt),
 			},
-			Model:               shared.ChatModel(p.model),
+			Model:               shared.ChatModel(p.metadataReviewModel()), // metadata LLM review uses MetadataReviewModel
 			MaxCompletionTokens: param.NewOpt[int64](8000),
 			PromptCacheKey:      param.NewOpt("audiobook-metadata-score-v1"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{

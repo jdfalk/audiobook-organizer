@@ -39,6 +39,18 @@
 - **refactor(activity)**: `batcher.go` — added `"scan-file-processed"` noun → `"files scanned"`.
 - **feat(activity)**: `writer.go` — added `Chan()` accessor returning the read-only entry channel.
 - **test(scanner)**: `service_unit_test.go` — `TestScanService_ProgressCallback_UsesLogBatch` ACT-BATCH-FU-2 regression guard.
+#### May 5, 2026 — AI-MODEL-1: Per-feature LLM model knob
+
+Adds four new config fields (`dedup_review_model`, `metadata_review_model`,
+`filename_parse_model`, `cover_art_model`) to `Config`, all defaulting to
+`gpt-5-mini` to preserve existing behavior. Replaces every hardcoded
+`"gpt-5-mini"` in `openai_parser.go`, `openai_batch.go`,
+`metadata_llm_review.go`, and `dedup/engine.go` with config-driven getters,
+allowing operators to direct individual AI features (e.g. dedup review) at
+a cheaper or more capable model independently. Tests assert each `Parse*`
+path on `OpenAIParser` sends the correct model string from config.
+
+Spec: `docs/superpowers/specs/2026-04-27-per-feature-llm-model-knob-design.md`
 
 ### Tests
 

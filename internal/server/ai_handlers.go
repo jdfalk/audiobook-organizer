@@ -1,5 +1,5 @@
 // file: internal/server/ai_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 5d3a6a95-4ac8-42c2-a7fe-5ff4857dd31a
 //
 // AI-related HTTP handlers split out of server.go: filename parsing,
@@ -42,7 +42,7 @@ func (s *Server) parseFilenameWithAI(c *gin.Context) {
 	}
 
 	// Create AI parser
-	parser := ai.NewOpenAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
+	parser := ai.NewOpenAIParser(&config.AppConfig, config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 	if !parser.IsEnabled() {
 		httputil.RespondWithBadRequest(c, "AI parsing is not enabled or API key not configured")
 		return
@@ -77,7 +77,7 @@ func (s *Server) testAIConnection(c *gin.Context) {
 	}
 
 	// Create parser with the provided/configured API key
-	parser := ai.NewOpenAIParser(apiKey, true)
+	parser := ai.NewOpenAIParser(&config.AppConfig, apiKey, true)
 	if err := parser.TestConnection(c.Request.Context()); err != nil {
 		log.Printf("[ERROR] connection test failed: %v", err)
 		httputil.RespondWithInternalError(c, "connection test failed")

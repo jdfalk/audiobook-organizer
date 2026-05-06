@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.9.0 -->
+<!-- version: 8.10.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-05 -->
 
@@ -25,6 +25,12 @@ future agent) can scan the entire workspace in one page.
 **Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
 **Latest shipped release:** v0.221.0 (2026-04-29) — PRs #507–#521; PRs #561–#563 merged 2026-04-30; PRs #570–#573 merged 2026-04-30
 **In flight:** User Ratings UI, ASYNC spec revision, iTunes relink unresolved cases (6,719 files)
+
+---
+
+## AI Model Configuration
+
+- [x] **AI-MODEL-1** Per-feature LLM model knob — adds `DedupReviewModel`, `MetadataReviewModel`, `FilenameParseModel`, `CoverArtModel` to `config.Config` (defaults `gpt-5-mini`). Replaces hardcoded literals in `openai_parser.go`, `openai_batch.go`, `metadata_llm_review.go`, and `dedup/engine.go` with config getters. PR feat/per-feature-llm-model.
 
 ---
 
