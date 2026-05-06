@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/fix_read_by_narrator_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a3b4c5d6-e7f8-9012-abcd-345678901234
 // last-edited: 2026-05-05
 
@@ -16,13 +16,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	_ "github.com/jdfalk/audiobook-organizer/internal/maintenance/jobs" // register all jobs
 )
-
-// noopReporter satisfies maintenance.ProgressReporter without emitting output.
-type noopReporter struct{}
-
-func (n *noopReporter) SetTotal(_ int)             {}
-func (n *noopReporter) Increment()                 {}
-func (n *noopReporter) Log(_, _ string, _ *string) {}
 
 func TestFixReadByNarratorJob_Registered(t *testing.T) {
 	// Verify that importing the jobs package registered the job.
