@@ -1,7 +1,7 @@
 // file: internal/maintenance/jobs/relink_report.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1000022-0000-0000-0000-000000000022
-// last-edited: 2026-05-01
+// last-edited: 2026-05-05
 
 package jobs
 
@@ -123,7 +123,8 @@ titlePrefix := title
 if len(titlePrefix) > 25 {
 titlePrefix = titlePrefix[:25]
 }
-titlePrefixLower := strings.ToLower(titlePrefix)
+// Normalize for macOS/iTunes filename encoding: ":" → "_", ": " → "_ "
+titlePrefixLower := normalizeForFilename(titlePrefix)
 authorWord := authorName
 if idx := strings.Index(authorName, " "); idx > 0 {
 authorWord = authorName[:idx]
@@ -151,7 +152,7 @@ continue
 for _, album := range albumEntries {
 albumPath := filepath.Join(authorDir, album.Name())
 if album.IsDir() {
-if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+if strings.Contains(normalizeForFilename(album.Name()), titlePrefixLower) {
 dirMatches[albumPath] = struct{}{}
 continue
 }
@@ -162,7 +163,7 @@ return nil
 if !rrAudioExts[strings.ToLower(filepath.Ext(path))] {
 return nil
 }
-if strings.Contains(strings.ToLower(filepath.Base(path)), titlePrefixLower) {
+if strings.Contains(normalizeForFilename(filepath.Base(path)), titlePrefixLower) {
 dirMatches[albumPath] = struct{}{}
 return filepath.SkipDir
 }
@@ -172,7 +173,7 @@ return nil
 if !rrAudioExts[strings.ToLower(filepath.Ext(albumPath))] {
 continue
 }
-if strings.Contains(strings.ToLower(album.Name()), titlePrefixLower) {
+if strings.Contains(normalizeForFilename(album.Name()), titlePrefixLower) {
 dirMatches[albumPath] = struct{}{}
 }
 }
