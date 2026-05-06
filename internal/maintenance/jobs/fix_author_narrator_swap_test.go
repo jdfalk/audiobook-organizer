@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/fix_author_narrator_swap_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a7b8c9d0-e1f2-3456-abcd-789012345678
 // last-edited: 2026-05-05
 
@@ -14,15 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// noopReporter satisfies maintenance.ProgressReporter for test use.
-type noopReporter struct {
-	logs []string
-}
-
-func (r *noopReporter) SetTotal(_ int)                             {}
-func (r *noopReporter) Increment()                                 {}
-func (r *noopReporter) Log(_ string, msg string, _ *string)        { r.logs = append(r.logs, msg) }
 
 // assertJobRegistered verifies the job is present in the global registry.
 func assertJobRegistered(t *testing.T, id string) {
