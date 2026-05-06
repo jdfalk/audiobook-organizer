@@ -31,6 +31,16 @@
 - Package coverage: 55.9% → 56.8%. service.go + transfer.go combined: ~91%.
   Remaining gap is in `importer.go` (enrichment / organize paths) and other
   sub-components out of scope for 4.13e.
+#### May 5, 2026 — iTunes importer error-path coverage (TODO 4.13d)
+
+- **test(itunes)**: added `importer_error_paths_test.go` with 21 new tests for
+  `internal/itunes/service/importer.go` error and edge-case paths.
+  Covers: disabled-mode guard, corrupt ITL parse failure, concurrent Sync
+  no-panic, tombstoned PID skip, already-mapped PID link, SkipDuplicates
+  path-dedup link, CreateBook store failure (continue-and-count), Sync
+  GetAllBooks failure, cover-art missing (nil CoverURL), empty album group,
+  missing-file-on-disk, linkITunesMetadata (changed/unchanged), linkAsVersion
+  (with/without existing VGID), organizeOneBook nil/no-factory.
 
 ### Fixed
 
