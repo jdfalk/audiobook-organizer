@@ -1,12 +1,35 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.6 -->
-<!-- version: 2.44.5 -->
+<!-- version: 2.44.7 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-05 -->
+<!-- last-edited: 2026-05-06 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Features
+
+#### May 6, 2026 — UOS-02: Registry shell + dispatcher + in-process worker pool (PR #741)
+
+- **feat(uos)**: New `internal/operations/registry` package implements the
+  foundational OperationDef registry, dispatcher, and in-process worker pool for
+  the Unified Operations System (UOS-02).
+- `OperationDef` — static registration contract (spec §1): ID, Plugin, Version,
+  ResumePolicy, Priority, Isolate, MaxRuntime, ConcurrencyKey, DependsOn,
+  Capabilities, Phases, EventSubscriptions, Schedule, ParamsSchema, and Run func.
+- `Registry.New(store OpsV2Store, logger, workers)` — narrow DB dependency
+  (`database.OpsV2Store`, not full `database.Store`) keeps test surface minimal.
+- Dispatcher: 4-gate dispatch cycle (def registered → plugin max_concurrent →
+  ConcurrencyKey held → DependsOn running), with 100ms tick + signal channel.
+- Worker pool: configurable size, panic recovery, `Isolate=true` returns
+  `ErrSubprocessNotImplemented` (UOS-03 wires subprocess runner).
+- `ResumeUnspecified` rejected at `RegisterOp` — prevents accidental zero-value
+  policy in production ops.
+- `Registry.Shutdown` drains with grace timeout; ops that don't finish are marked
+  `interrupted_dropped` or `interrupted_quiesced` per ResumePolicy.
+- Wired into `server.go`: 8 workers started on `Start()`, graceful shutdown.
+- **test**: 30+ unit tests + property test (`pgregory.net/rapid`) for
+  pluginRunning-never-negative invariant. Local coverage 92%. All CI green.
 
 ### Performance
 
