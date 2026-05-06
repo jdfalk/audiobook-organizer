@@ -1,6 +1,6 @@
 // file: internal/server/organize_handlers.go
-// version: 2.2.0
-// last-edited: 2026-05-10
+// version: 2.3.0
+// last-edited: 2026-05-05
 // guid: 1522f0ec-663c-4527-a6d0-645658206a24
 //
 // Organize/rename HTTP handlers split out of server.go: preview/apply
@@ -243,6 +243,11 @@ func (s *Server) organizeBook(c *gin.Context) {
 	if _, updateErr := s.Store().UpdateBook(createdBook.ID, createdBook); updateErr != nil {
 		log.Printf("[WARN] organize: failed to stamp organized book %s: %v", createdBook.ID, updateErr)
 	}
+
+	// Notify Deluge that the file moved so the torrent client keeps
+	// seeding from the new library path. Best-effort — errors are logged
+	// inside NotifyDelugeAfterOrganize; the organize itself already succeeded.
+	NotifyDelugeAfterOrganize(s.Store(), book.ID, newPath)
 
 	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventFileOrganized, createdBook.ID, map[string]any{
 		"old_path":         oldPath,
