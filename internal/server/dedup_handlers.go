@@ -1161,12 +1161,23 @@ func (s *Server) triggerDedupAcoustID(c *gin.Context) {
 }
 
 // triggerEmbedScan handles POST /api/v1/dedup/embed.
-// Generates or refreshes embeddings for all primary books as a tracked
-// Operation. Unlike the full dedup scan, this only calls EmbedBook — it does
-// not run similarity matching or emit new candidates. Use this when you want
-// to force-regenerate embeddings (e.g. after adding an OpenAI key to a
-// library that had none before) without also kicking off a full dedup pass.
+// Delegates to the UOS registry (dedup.embed-scan op) since UOS-07.
 func (s *Server) triggerEmbedScan(c *gin.Context) {
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
+		return
+	}
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.embed-scan", nil)
+	if err != nil {
+		httputil.InternalError(c, "failed to enqueue embed scan", err)
+		return
+	}
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
+}
+
+// triggerEmbedScanLegacy is the pre-UOS-07 inline implementation, kept for
+// reference until the old queue is fully removed in UOS-14.
+func (s *Server) triggerEmbedScanLegacy(c *gin.Context) {
 	if s.dedupEngine == nil {
 		httputil.RespondWithServiceUnavailable(c, "dedup engine not available (embedding may be disabled or API key not configured)")
 		return
