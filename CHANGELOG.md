@@ -9,34 +9,30 @@
 
 ### Features
 
-#### May 6, 2026 — UOS-04: Public plugin SDK + import lint
+#### May 6, 2026 — UOS-06: SSE event hub + /operations/timeline + introspection endpoints
 
-- **feat(uos)**: `pkg/plugin/sdk` package provides the stable public API for
-  audiobook-organizer plugins. All type aliases point back to
-  `internal/operations/registry`, avoiding circular dependencies.
-- **pkg/plugin/sdk/doc.go** — package documentation pointing to the spec.
-- **pkg/plugin/sdk/operation.go** — aliases: `OperationDef`, `ResumePolicy`,
-  `Priority`, `ActorMode`, `Phase`, and all corresponding constants.
-- **pkg/plugin/sdk/reporter.go** — alias: `Reporter` interface for per-run
-  progress/logging/checkpointing.
-- **pkg/plugin/sdk/capability.go** — alias: `Capability` type + 13 constants
-  (LibraryRead/Write, FilesRead/Write/Execute, Network×5, Schedule×2,
-  SubprocessSpawn, DBMigrate).
-- **pkg/plugin/sdk/events.go** — aliases: `EventSubscription`, `Bus` interface.
-- **pkg/plugin/sdk/plugin.go** — new: `Plugin` interface (ID, Name, Version,
-  Register), `DisableMode` enum (Immediate, WhenIdle).
-- **pkg/plugin/sdk/registration.go** — new: `Registry` narrowed interface
-  (RegisterOp, EnqueueOp) that plugins call during register.
-- **pkg/plugin/sdk/enqueue_options.go** — aliases: `EnqueueOption` + exported
-  constructors `WithParent`, `WithActor`, `WithPriority`.
-- **pkg/plugin/sdk/errors.go** — new: `ErrCanceled`, `ErrQuiesced`,
-  `ErrPluginCapabilityMissing`.
-- **tools/cmd/oplint/main.go** — new: plugin import-path lint tool that walks
-  `internal/plugins/...` and rejects imports from internal packages except
-  `internal/operations/registry`, `internal/database/iface`, `internal/auth`.
-  Prevents accidental walled-garden violations.
-- **Makefile** — new target `make oplint` that invokes the linter on
-  `internal/plugins/...`. Version bumped from 2.9.1 → 2.10.0.
+- **feat(uos)**: `EventHub` in `internal/operations/registry/bus.go` — thread-safe
+  fan-out SSE bus implementing the `Bus` interface; per-subscriber buffered channel
+  (size 64); non-blocking send (slow clients drop events rather than blocking
+  the publisher).
+- **feat(uos)**: `Registry.SetBus(Bus)` — wires EventHub before Start(); opHub
+  created in `NewServer` and passed to registry constructor.
+- **feat(uos)**: `GET /api/v1/operations/timeline?since=15m` — returns up to 200
+  ops queued within the given duration, ordered by started_at DESC NULLS LAST.
+- **feat(uos)**: `GET /api/v1/operations/events` — SSE stream of `op.created`,
+  `op.updated`, `op.log`, `op.terminal` events; reconnects automatically.
+- **feat(uos)**: `GET /api/v1/operations/v2/:id` — single op + last 50 log lines.
+- **feat(uos)**: `DELETE /api/v1/operations/v2/:id` — cancel via registry.
+- **feat(uos)**: `POST /api/v1/operations/v2` — trigger any registered op def.
+- **feat(uos)**: `GET /api/v1/op-defs` + `GET /api/v1/op-defs/:id` — introspect
+  registered OperationDefs.
+- **feat(uos)**: `OpsV2Store` extended with `ListOperationsV2Since` and
+  `GetOpLogsV2`; SQLite implements, PebbleStore stubs, fakeStore and MockStore
+  updated.
+- **feat(uos)**: `openOperationsSSE` in `api.ts` opens EventSource, wires typed
+  listeners for all four event names; 404 fallback removed from `getOperationTimeline`.
+- **feat(uos)**: `useOperationsStore` gains `openSSE`/`closeSSE` actions; `op.created`
+  and `op.terminal` trigger full reload; `op.updated` merges progress in-place.
 
 #### May 6, 2026 — UOS-03: DB-backed Reporter + subprocess runner
 

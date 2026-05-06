@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store_ops_v2.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d71
 // last-edited: 2026-05-06
 
@@ -312,4 +312,93 @@ func (s *SQLiteStore) InsertOpStrikeV2(row OpStrikeV2Row) error {
 		VALUES (?, ?, ?, ?, ?)
 	`, row.DefID, row.OperationID, row.Kind, row.Details, row.OccurredAt)
 	return err
+}
+
+// ListOperationsV2Since returns operations queued at or after the given time.
+// Results are ordered by started_at DESC NULLS LAST, queued_at DESC.
+// A limit of 0 uses a safe default of 200.
+func (s *SQLiteStore) ListOperationsV2Since(since time.Time, limit int) ([]OperationV2Row, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	// SQLite does not support NULLS LAST directly.
+	// "started_at IS NULL" evaluates to 1 for NULL rows (1 > 0), so ordering
+	// ASC on that column sorts non-NULL rows first, giving us NULLS LAST behaviour.
+	rows, err := s.db.Query(`
+		SELECT id, def_id, plugin, parent_id, actor_user_id, trace_id, span_id,
+		       parent_span_id, status, priority, params, queued_at,
+		       started_at, completed_at, error_message,
+		       progress_current, progress_total, progress_message,
+		       current_phase, high_water_progress, resume_count
+		FROM operations_v2
+		WHERE queued_at >= ?
+		ORDER BY started_at IS NULL, started_at DESC, queued_at DESC
+		LIMIT ?
+	`, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []OperationV2Row
+	for rows.Next() {
+		var r OperationV2Row
+		if err := rows.Scan(
+			&r.ID, &r.DefID, &r.Plugin, &r.ParentID, &r.ActorUserID,
+			&r.TraceID, &r.SpanID, &r.ParentSpanID,
+			&r.Status, &r.Priority, &r.Params, &r.QueuedAt,
+			&r.StartedAt, &r.CompletedAt, &r.ErrorMessage,
+			&r.ProgressCurrent, &r.ProgressTotal, &r.ProgressMessage,
+			&r.CurrentPhase, &r.HighWaterProgress, &r.ResumeCount,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// GetOpLogsV2 returns the last limit log lines for the given operation,
+// ordered by created_at ASC. A limit ≤ 0 returns all rows.
+func (s *SQLiteStore) GetOpLogsV2(opID string, limit int) ([]OpLogV2Row, error) {
+	query := `
+		SELECT operation_id, level, message, attrs, created_at
+		FROM op_logs_v2
+		WHERE operation_id = ?
+		ORDER BY created_at ASC
+	`
+	args := []any{opID}
+
+	if limit > 0 {
+		// Fetch the last N rows by wrapping in a sub-query so they come back
+		// in chronological order (oldest-first) but we only keep the newest limit lines.
+		query = `
+			SELECT operation_id, level, message, attrs, created_at
+			FROM (
+				SELECT operation_id, level, message, attrs, created_at
+				FROM op_logs_v2
+				WHERE operation_id = ?
+				ORDER BY created_at DESC
+				LIMIT ?
+			)
+			ORDER BY created_at ASC
+		`
+		args = []any{opID, limit}
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []OpLogV2Row
+	for rows.Next() {
+		var r OpLogV2Row
+		if err := rows.Scan(&r.OperationID, &r.Level, &r.Message, &r.Attrs, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
 }

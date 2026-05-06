@@ -1,5 +1,5 @@
 // file: internal/database/iface_ops_v2.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-06
 
@@ -153,4 +153,13 @@ type OpsV2Store interface {
 
 	// UpsertOpStateV2 inserts or replaces a checkpoint row in op_state_v2.
 	UpsertOpStateV2(row OpStateV2Row) error
+
+	// ListOperationsV2Since returns all operations whose queued_at timestamp is
+	// at or after the given time, ordered by started_at DESC NULLS LAST,
+	// queued_at DESC. At most limit rows are returned (0 = use a safe default).
+	ListOperationsV2Since(since time.Time, limit int) ([]OperationV2Row, error)
+
+	// GetOpLogsV2 returns the last limit log lines for the given operation ID,
+	// ordered by created_at ASC. A limit ≤ 0 returns all rows.
+	GetOpLogsV2(opID string, limit int) ([]OpLogV2Row, error)
 }

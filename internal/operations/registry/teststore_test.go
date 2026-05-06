@@ -1,5 +1,5 @@
 // file: internal/operations/registry/teststore_test.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
 // last-edited: 2026-05-06
 
@@ -380,5 +380,58 @@ func (f *fakeStore) progressOf(id string) (current, total int, message string) {
 		return 0, 0, ""
 	}
 	return op.ProgressCurrent, op.ProgressTotal, op.ProgressMessage
+}
+
+// ListOperationsV2Since returns ops queued at or after the given time, up to limit rows.
+func (f *fakeStore) ListOperationsV2Since(since time.Time, limit int) ([]database.OperationV2Row, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if limit <= 0 {
+		limit = 200
+	}
+	var result []database.OperationV2Row
+	for _, op := range f.ops {
+		if !op.QueuedAt.Before(since) {
+			result = append(result, op)
+		}
+	}
+	// Sort: started_at DESC NULLS LAST, queued_at DESC
+	sort.Slice(result, func(i, j int) bool {
+		iNil := result[i].StartedAt == nil
+		jNil := result[j].StartedAt == nil
+		if iNil != jNil {
+			return !iNil // non-nil (has started_at) sorts first
+		}
+		if !iNil && !jNil {
+			if !result[i].StartedAt.Equal(*result[j].StartedAt) {
+				return result[i].StartedAt.After(*result[j].StartedAt)
+			}
+		}
+		return result[i].QueuedAt.After(result[j].QueuedAt)
+	})
+	if len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+// GetOpLogsV2 returns the last limit log lines for the given operation ID.
+func (f *fakeStore) GetOpLogsV2(opID string, limit int) ([]database.OpLogV2Row, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var result []database.OpLogV2Row
+	for _, l := range f.logs {
+		if l.OperationID == opID {
+			result = append(result, l)
+		}
+	}
+	// Sort ASC by created_at.
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[len(result)-limit:]
+	}
+	return result, nil
 }
 

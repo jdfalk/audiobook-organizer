@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-01
+// last-edited: 2026-05-06
 
 package server
 
@@ -207,6 +207,10 @@ type Server struct {
 	// No plugins are registered until their own bot-tasks wire them in.
 	opRegistry *opsregistry.Registry
 
+	// opHub is the UOS-06 SSE event bus for operations events.
+	// Created in NewServer, wired to opRegistry via SetBus before Start().
+	opHub *opsregistry.EventHub
+
 	// protectedPathCache holds the union of Deluge save_paths and
 	// config.ProtectedPaths. Consulted before any in-place tag write.
 	// Nil when Deluge is not configured (extra paths only, or no Deluge URL).
@@ -335,7 +339,8 @@ func NewServer(store database.Store) *Server {
 	// Initialize the UOS-02 operations registry. The registry holds the
 	// OperationDef registration table, dispatcher, and worker pool.
 	// Plugins register their defs in their own bot-tasks (UOS-03+).
-	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8, nil /* bus: wired in UOS-06 */)
+	server.opHub = opsregistry.NewEventHub()
+	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8, server.opHub)
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
 	// so the real TrackProvisioner gets wired into the import pipeline;
