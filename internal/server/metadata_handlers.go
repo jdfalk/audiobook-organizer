@@ -527,11 +527,6 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		onlyMissing = *req.OnlyMissing
 	}
 
-	sourceChain := s.metadataFetchService.BuildSourceChain()
-	if len(sourceChain) == 0 {
-		// Fallback to Audible if no sources configured (best for audiobooks)
-		sourceChain = []metadata.MetadataSource{metadata.NewAudibleClient()}
-	}
 	results := make([]bulkFetchMetadataResult, 0, len(req.BookIDs))
 	updatedCount := 0
 
@@ -566,95 +561,50 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			state = map[string]metadataFieldState{}
 		}
 
-		// Resolve current author for post-search verification (NOT for search query)
-		currentAuthor := ""
-		if book.Author != nil {
-			currentAuthor = book.Author.Name
-		} else if book.AuthorID != nil {
-			if author, err := s.Store().GetAuthorByID(*book.AuthorID); err == nil && author != nil {
-				currentAuthor = author.Name
-			}
+		// Delegate search to service using empty query (uses book's title).
+		// Service handles source chain, caching, and candidate scoring.
+		searchResp, searchErr := s.metadataFetchService.SearchMetadataForBookWithOptions(
+			bookID, "", "", "", "",
+			metafetch.SearchOptions{},
+		)
+		if searchErr != nil {
+			result.Status = "error"
+			result.Message = fmt.Sprintf("search failed: %v", searchErr)
+			results = append(results, result)
+			continue
 		}
-
-		// Clean title: strip track number prefixes like "01 - ", chapter markers, etc.
-		searchTitle := stripChapterFromTitle(book.Title)
-
-		// Search using both title and author (like the manual search dialog does)
-		// for better match quality. Author is used as a filter, not as the primary query.
-		var metaResults []metadata.BookMetadata
-		var sourceName string
-		maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
-		for _, src := range sourceChain {
-			// Check the persistent fetch cache before hitting the external API.
-			if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(s.Store(), bookID, src.Name(), maxAge); cerr == nil && cached != nil {
-				var cachedResults []metadata.BookMetadata
-				if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil && len(cachedResults) > 0 {
-					metaResults = cachedResults
-					sourceName = src.Name()
-					log.Printf("[DEBUG] bulkFetchMetadata: cache HIT for (%s, %s) — %d results, age=%s",
-						bookID, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
-					break
-				}
-			}
-
-			// If we have an author, try title+author search first for more precise results
-			if currentAuthor != "" {
-				metaResults, err = src.SearchByTitleAndAuthor(c.Request.Context(), searchTitle, currentAuthor)
-				if err == nil && len(metaResults) > 0 {
-					sourceName = src.Name()
-					break
-				}
-			}
-			// Fall back to title-only search
-			metaResults, err = src.SearchByTitle(c.Request.Context(), searchTitle)
-			if err == nil && len(metaResults) > 0 {
-				sourceName = src.Name()
-				break
-			}
-			// Try original title if stripped version returned nothing
-			if searchTitle != book.Title {
-				if currentAuthor != "" {
-					metaResults, err = src.SearchByTitleAndAuthor(c.Request.Context(), book.Title, currentAuthor)
-					if err == nil && len(metaResults) > 0 {
-						sourceName = src.Name()
-						break
-					}
-				}
-				metaResults, err = src.SearchByTitle(c.Request.Context(), book.Title)
-				if err == nil && len(metaResults) > 0 {
-					sourceName = src.Name()
-					break
-				}
-			}
-			log.Printf("[DEBUG] bulkFetchMetadata: source %s returned no results for %q, trying next", src.Name(), searchTitle)
-		}
-
-		// Write to cache after the loop so all break paths are covered.
-		if len(metaResults) > 0 && sourceName != "" {
-			if blob, merr := json.Marshal(metaResults); merr == nil {
-				if perr := database.PutCachedMetadataFetch(s.Store(), bookID, sourceName, blob, 0); perr != nil {
-					log.Printf("[WARN] bulkFetchMetadata: cache put failed for (%s, %s): %v", bookID, sourceName, perr)
-				}
-			}
-		}
-		if len(metaResults) == 0 {
+		if searchResp == nil || len(searchResp.Results) == 0 {
 			result.Status = "not_found"
 			result.Message = "no metadata found from any source"
 			results = append(results, result)
 			continue
 		}
 
-		// Pick best match: prefer result whose author matches current author if known
-		meta := metaResults[0]
-		if currentAuthor != "" && len(metaResults) > 1 {
-			lowerAuthor := strings.ToLower(currentAuthor)
-			for _, r := range metaResults {
-				if strings.EqualFold(r.Author, currentAuthor) || strings.Contains(strings.ToLower(r.Author), lowerAuthor) {
-					meta = r
-					break
-				}
-			}
+		// Pick best match from service's scored candidates (first is already best)
+		candidate := searchResp.Results[0]
+		// Convert MetadataCandidate to BookMetadata for field mapping
+		meta := metadata.BookMetadata{
+			Title:          candidate.Title,
+			Author:         candidate.Author,
+			Narrator:       candidate.Narrator,
+			Series:         candidate.Series,
+			SeriesPosition: candidate.SeriesPosition,
+			PublishYear:    candidate.Year,
+			Publisher:      candidate.Publisher,
+			ISBN:           candidate.ISBN,
+			CoverURL:       candidate.CoverURL,
+			Description:    candidate.Description,
+			Language:       candidate.Language,
+			DurationSec:    candidate.DurationSec,
+			AudibleRatingOverall:     candidate.AudibleRatingOverall,
+			AudibleRatingPerformance: 0, // not available from candidate
+			AudibleRatingStory:       0, // not available from candidate
+			AudibleRatingCount:       candidate.AudibleRatingCount,
+			AudibleNumReviews:        0, // not available from candidate
+			GoogleRatingAverage:      candidate.GoogleRatingAverage,
+			GoogleRatingCount:        candidate.GoogleRatingCount,
 		}
+		sourceName := candidate.Source
 		fetchedValues := map[string]any{}
 		appliedFields := []string{}
 		fetchedFields := []string{}
