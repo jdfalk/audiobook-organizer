@@ -1,13 +1,13 @@
 // file: internal/scanner/service.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 // last-edited: 2026-05-05
-
 package scanner
 
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -224,8 +224,8 @@ func (ss *ScanService) countFilesAcrossFolders(foldersToScan []string, log logge
 			continue
 		}
 		fileCount := 0
-		_ = filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
+		_ = filepath.WalkDir(folderPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
 				return nil
 			}
 			ext := strings.ToLower(filepath.Ext(path))

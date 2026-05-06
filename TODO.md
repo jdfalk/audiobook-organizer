@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.10.0 -->
+<!-- version: 8.11.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-05 -->
 
@@ -299,7 +299,7 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### SCAN — Scanner Efficiency (1 task)
 
-- [ ] **SCAN-1** `perf/scanner-walkdir` — Replace filepath.Walk with filepath.WalkDir
+- [x] **SCAN-1** `perf/scanner-walkdir` — Replace filepath.Walk with filepath.WalkDir
   → [`2026-04-30-scan-1-walkdir.md`](docs/superpowers/bot-tasks/2026-04-30-scan-1-walkdir.md)
 
 ### SRV — Server Response Optimization (2 tasks)

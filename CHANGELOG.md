@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+### Performance
+
+#### May 5, 2026 — SCAN-1: Replace filepath.Walk with filepath.WalkDir in scanner
+
+- **perf(scanner)**: `countFilesAcrossFolders` now uses `filepath.WalkDir`
+  instead of `filepath.Walk`. `filepath.WalkDir` passes `fs.DirEntry` to the
+  callback, avoiding an extra `os.Stat` syscall per file. On large libraries
+  (10k+ files) this reduces syscall overhead noticeably.
+
 ### Features
 
 #### May 5, 2026 — ASYNC-W2-2: cleanup-empty-folders as MaintenanceJob
