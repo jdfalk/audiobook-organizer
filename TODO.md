@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.14.0 -->
+<!-- version: 8.15.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-06 -->
 
@@ -644,8 +644,9 @@ since it was last edited on 2026-04-11).
   - [x] **UOS-02** Registry shell + dispatcher + in-process worker pool (PR #741, merged 2026-05-06)
   - [x] **UOS-08** Watchdog + op_strikes_v2 + startup resume orchestration (abandoned tracker, infinite-restart guard, ResumePolicy dispatch — merged 2026-05-06)
   - [x] **UOS-03** Reporter DB writes + subprocess runner (merged 2026-05-06)
-  - [x] **UOS-04** Public plugin SDK at `pkg/plugin/sdk` + import lint tool (in progress)
-  - [ ] **UOS-05** and beyond (see bot-task index)
+  - [x] **UOS-04** Public plugin SDK at `pkg/plugin/sdk` + import lint tool (merged 2026-05-06)
+  - [x] **UOS-07** Canary — migrate `dedup.embed-scan` as the first live plugin op (merged 2026-05-06)
+  - [ ] **UOS-05**, **UOS-06**, **UOS-09** and beyond (see bot-task index)
 - [ ] **1.15** **UOS amendment — `Reporter.SetCurrentItem(label)` for live "currently working on" ticker** — Sonarr/Radarr-style high-frequency current-item display under the progress bar. New SDK Reporter method that's purely ephemeral (in-memory on the registry's run handle, no DB write); SSE event `op.current_item` patches the frontend store; timeline endpoint returns the cached value so refresh / new tab / re-login re-hydrates. Survives refresh; survives a brief gap on server restart (next per-item iteration repopulates). If we ever want it to survive restart, retrofit is a single column add to `operations_v2` flushed at 30s cadence — explicit out of v1. Implementation footprint: amend §1 (Reporter) + §9 (timeline payload) + UOS-03/UOS-06 bot-tasks. Spec: [`docs/superpowers/bot-tasks/2026-05-05-uos-amendment-current-item.md`](docs/superpowers/bot-tasks/2026-05-05-uos-amendment-current-item.md).
 - [ ] **1.16** **Resizable + dynamically-sortable columns everywhere** — every page that renders a table (library, dedup, activity, iTunes write-back preview, metadata review, etc.) should have draggable column dividers and click-to-sort headers, persisted per-user. Today some pages have it, most don't, and the inconsistency is jarring. Build a single `<ResizableSortableTable>` component (or extend the existing `ConfigurableTable`); roll across pages in follow-ups. Acceptance: every column on every page resizes; every column on every page sorts; user-resized widths and sort states persist via `localStorage` keyed on page+column.
 - [ ] **1.17** **Replace "AO" / "audiobook-organizer" branding with a real product name + logo** — the placeholder "AO" leaks into UI labels (e.g. proposed "AO Path" column on the iTunes write-back dialog), service names, status panels, etc. Pick a product name + minimal logo, apply consistently. Out of scope until name is decided; this entry is the placeholder for the rename sweep.
