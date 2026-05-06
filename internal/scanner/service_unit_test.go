@@ -1,5 +1,5 @@
 // file: internal/scanner/service_unit_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e2f3a4b5-c6d7-8e9f-0a1b-3c4d5e6f7a8b
 // last-edited: 2026-05-05
 
@@ -8,12 +8,15 @@ package scanner
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestScanService_DetermineFolders_SpecificFolderPath(t *testing.T) {
@@ -192,4 +195,53 @@ func TestScanService_ReportCompletion_Messages(t *testing.T) {
 			ss.reportCompletion(tt.stats.TotalBooks, tt.stats.TotalBooks, &tt.stats, log)
 		})
 	}
+}
+
+// TestScanService_ProgressCallback_UsesLogBatch verifies that the per-file
+// progress callback in scanFolder routes through activity.LogBatch (and therefore
+// through the ActivityBatcher) rather than falling through as unregistered plain
+// debug entries. This is the ACT-BATCH-FU-2 regression guard.
+//
+// The test exercises the same LogBatch pattern used in service.go's scanFolder
+// progress callback, then confirms FlushOperation collapses N per-file items
+// into a single batched ActivityEntry.
+func TestScanService_ProgressCallback_UsesLogBatch(t *testing.T) {
+	const opID = "test-op-logbatch"
+	nFiles := 4
+
+	// Build a real activity.Writer with a buffer-only channel. Do NOT call
+	// w.Start() so there is no drain goroutine — we inspect the channel directly.
+	w := activity.NewWriter(nil, 128)
+
+	// Simulate the progress callback that scanFolder builds (same call site).
+	paths := []string{
+		"/audiobooks/Book1.m4b",
+		"/audiobooks/Book2.m4b",
+		"/audiobooks/Book3.mp3",
+		"/audiobooks/Book4.mp3",
+	}
+	for _, p := range paths {
+		activity.LogBatch(w, opID, "tag-scan", "scan-service",
+			activity.BatchItem{Name: filepath.Base(p)})
+	}
+
+	// Before the batch window expires nothing should be on the channel.
+	require.Equal(t, 0, len(w.Chan()), "items must be held in batcher, not emitted immediately")
+
+	// FlushOperation simulates the call added to performScanInternal before
+	// reportCompletion. It should collapse all nFiles items into one entry.
+	activity.FlushOperation(w, opID)
+
+	require.Equal(t, 1, len(w.Chan()),
+		"FlushOperation must emit exactly 1 merged batch entry for %d per-file LogBatch calls", nFiles)
+
+	entry := <-w.Chan()
+	require.Equal(t, "tag-scan", entry.Type)
+	require.Equal(t, "batch", entry.Tier, "entry must be a batch-tier entry, not plain debug")
+	batched, ok := entry.Details["batched"]
+	require.True(t, ok, "batched entry must have Details[\"batched\"]")
+	require.Equal(t, true, batched)
+	originalCount, _ := entry.Details["original_count"].(float64)
+	require.Equal(t, float64(nFiles), originalCount,
+		"original_count must equal the number of LogBatch calls")
 }

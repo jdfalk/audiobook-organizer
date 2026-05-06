@@ -1,5 +1,5 @@
 // file: internal/activity/writer.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
 
 package activity
@@ -199,6 +199,12 @@ func (w *Writer) Flush() {
 			return
 		}
 	}
+}
+
+// Chan returns the underlying entry channel. Intended for use in tests only —
+// callers should not write to this channel directly.
+func (w *Writer) Chan() <-chan database.ActivityEntry {
+	return w.ch
 }
 
 // Stop marks the writer as closed, signals the drain goroutine to finish,

@@ -1,5 +1,5 @@
 // file: internal/scanner/process_file.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 // Package scanner provides file scanning and processing utilities for the
@@ -12,7 +12,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"os"
 
 	"github.com/dhowden/tag"
@@ -72,10 +71,10 @@ func ProcessFile(filePath string) (*metadata.Metadata, *mediainfo.MediaInfo, str
 	var mi *mediainfo.MediaInfo
 
 	if tagErr != nil {
-		log.Printf("[WARN] scanner.ProcessFile: tag read failed for %s: %v; using filename fallback", filePath, tagErr)
+		defaultLog.Warn("scanner.ProcessFile: tag read failed for %s: %v; using filename fallback", filePath, tagErr)
 		meta, err = metadata.ExtractMetadata(filePath, nil) // opens file again — rare error path
 		if err != nil {
-			log.Printf("[WARN] scanner.ProcessFile: filename fallback also failed for %s: %v", filePath, err)
+			defaultLog.Warn("scanner.ProcessFile: filename fallback also failed for %s: %v", filePath, err)
 		}
 		// mi stays nil — we have no tag to build from
 	} else {

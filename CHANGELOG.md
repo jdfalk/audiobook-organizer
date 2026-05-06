@@ -29,6 +29,16 @@
   `maintenance/jobs/bulk_fetch_metadata.go` migrated to the new function.
 - Three new TTL unit tests: `ZeroMeansInfinite`, `ExpiredReturnsMiss`,
   `FreshReturnsHit`.
+### Refactor
+
+#### May 5, 2026 — ACT-BATCH-FU-2: scanner per-file logs use LogBatch
+
+- **refactor(scanner)**: `service.go` — `activity.FlushOperation` before `reportCompletion`; replaced `log.Printf` in `ApplyOrganizedFileMetadata` with `defaultLog.Warn`.
+- **refactor(scanner)**: `process_file.go` — replaced two `log.Printf` warning calls with `defaultLog.Warn`; removed unused `"log"` import.
+- **refactor(activity)**: `api.go` — registered `"scan-file-processed"` as a batchable type.
+- **refactor(activity)**: `batcher.go` — added `"scan-file-processed"` noun → `"files scanned"`.
+- **feat(activity)**: `writer.go` — added `Chan()` accessor returning the read-only entry channel.
+- **test(scanner)**: `service_unit_test.go` — `TestScanService_ProgressCallback_UsesLogBatch` ACT-BATCH-FU-2 regression guard.
 
 ### Tests
 

@@ -1,5 +1,5 @@
 // file: internal/activity/api.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
@@ -9,14 +9,15 @@ import "github.com/jdfalk/audiobook-organizer/internal/database"
 // batchableTypes is the set of type strings that route through the ActivityBatcher.
 // Only entries with both a non-empty OperationID and a registered type are batched.
 var batchableTypes = map[string]bool{
-	"embedded-tag-load": true,
-	"tag-scan":          true,
-	"metadata-apply":    true,
-	"path-repair":       true,
-	"isbn-enrich":       true,
-	"temp-file-cleanup": true,
-	"missing-file-repair": true,
-	"purge-deleted":     true,
+	"embedded-tag-load":    true,
+	"tag-scan":             true,
+	"scan-file-processed":  true,
+	"metadata-apply":       true,
+	"path-repair":          true,
+	"isbn-enrich":          true,
+	"temp-file-cleanup":    true,
+	"missing-file-repair":  true,
+	"purge-deleted":        true,
 }
 
 // LogBatch submits a single BatchItem to the batcher inside w for the given

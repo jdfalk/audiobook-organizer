@@ -1,5 +1,5 @@
 // file: internal/activity/batcher.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7f3c1a2e-8b4d-4e9f-a5c6-2d0e3b7f9a1c
 
 package activity
@@ -204,6 +204,8 @@ func batchNoun(batchType string) string {
 		return "embedded tag loads"
 	case "tag-scan":
 		return "tag scans"
+	case "scan-file-processed":
+		return "files scanned"
 	case "metadata-apply":
 		return "metadata applies"
 	case "path-repair":
