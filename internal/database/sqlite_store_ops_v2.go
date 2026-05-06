@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store_ops_v2.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d71
 // last-edited: 2026-05-06
 
@@ -163,4 +163,73 @@ func (s *SQLiteStore) CountRunningByPluginV2(plugin string) (int, error) {
 		WHERE plugin = ? AND status = 'running'
 	`, plugin).Scan(&n)
 	return n, err
+}
+
+// ListActiveOperationsV2 returns ops with status 'queued' or 'running'.
+func (s *SQLiteStore) ListActiveOperationsV2() ([]OperationV2Row, error) {
+	rows, err := s.db.Query(`
+		SELECT id, def_id, plugin, parent_id, actor_user_id, trace_id, span_id,
+		       parent_span_id, status, priority, params, queued_at,
+		       started_at, high_water_progress, resume_count
+		FROM operations_v2
+		WHERE status IN ('queued', 'running')
+		ORDER BY queued_at ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []OperationV2Row
+	for rows.Next() {
+		var r OperationV2Row
+		if err := rows.Scan(
+			&r.ID, &r.DefID, &r.Plugin, &r.ParentID, &r.ActorUserID,
+			&r.TraceID, &r.SpanID, &r.ParentSpanID,
+			&r.Status, &r.Priority, &r.Params, &r.QueuedAt,
+			&r.StartedAt, &r.HighWaterProgress, &r.ResumeCount,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// IncrementResumeCountV2 atomically increments resume_count for the given op.
+func (s *SQLiteStore) IncrementResumeCountV2(id string) error {
+	_, err := s.db.Exec(`
+		UPDATE operations_v2 SET resume_count = resume_count + 1 WHERE id = ?
+	`, id)
+	return err
+}
+
+// InsertOpStrikeV2 appends a row to op_strikes_v2.
+func (s *SQLiteStore) InsertOpStrikeV2(row OpStrikeV2Row) error {
+	_, err := s.db.Exec(`
+		INSERT INTO op_strikes_v2 (def_id, operation_id, kind, details, occurred_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, row.DefID, row.OperationID, row.Kind, row.Details, row.OccurredAt)
+	return err
+}
+
+// GetOpStateV2 returns the state blob for an op, or nil if not found.
+func (s *SQLiteStore) GetOpStateV2(opID string) (*OpStateV2Row, error) {
+	row := &OpStateV2Row{}
+	err := s.db.QueryRow(`
+		SELECT operation_id, phase, state_blob, schema_version, written_at
+		FROM op_state_v2
+		WHERE operation_id = ?
+	`, opID).Scan(&row.OperationID, &row.Phase, &row.StateBlob, &row.SchemaVersion, &row.WrittenAt)
+	if err != nil {
+		// Not found is treated as nil, no state.
+		return nil, nil //nolint:nilerr
+	}
+	return row, nil
+}
+
+// DeleteOpStateV2 removes the state blob for an op.
+func (s *SQLiteStore) DeleteOpStateV2(opID string) error {
+	_, err := s.db.Exec(`DELETE FROM op_state_v2 WHERE operation_id = ?`, opID)
+	return err
 }

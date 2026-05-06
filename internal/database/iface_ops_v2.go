@@ -1,5 +1,5 @@
 // file: internal/database/iface_ops_v2.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-06
 
@@ -54,6 +54,24 @@ type OperationV2Row struct {
 	ResumeCount     int
 }
 
+// OpStrikeV2Row is a single row in op_strikes_v2.
+type OpStrikeV2Row struct {
+	DefID       string
+	OperationID string
+	Kind        string // "uncheckpointed" | "stuck" | "infinite_restart"
+	Details     string // JSON object with plugin, message, etc.
+	OccurredAt  time.Time
+}
+
+// OpStateV2Row is a single row in op_state_v2.
+type OpStateV2Row struct {
+	OperationID   string
+	Phase         *string
+	StateBlob     []byte
+	SchemaVersion int
+	WrittenAt     time.Time
+}
+
 // OpsV2Store covers the UOS v2 schema surface used by the registry.
 // Only implemented by SQLiteStore; PebbleStore returns ErrNotSupported.
 type OpsV2Store interface {
@@ -69,6 +87,9 @@ type OpsV2Store interface {
 	// ListQueuedOperationsV2 returns queued ops ordered by priority DESC, queued_at ASC.
 	ListQueuedOperationsV2() ([]OperationV2Row, error)
 
+	// ListActiveOperationsV2 returns ops with status 'queued' or 'running'.
+	ListActiveOperationsV2() ([]OperationV2Row, error)
+
 	// GetOperationV2 returns a single run by id.
 	GetOperationV2(id string) (*OperationV2Row, error)
 
@@ -82,4 +103,16 @@ type OpsV2Store interface {
 
 	// CountRunningByPluginV2 returns the number of running ops for a plugin.
 	CountRunningByPluginV2(plugin string) (int, error)
+
+	// IncrementResumeCountV2 atomically increments resume_count for the given op.
+	IncrementResumeCountV2(id string) error
+
+	// InsertOpStrikeV2 appends a row to op_strikes_v2.
+	InsertOpStrikeV2(row OpStrikeV2Row) error
+
+	// GetOpStateV2 returns the state blob for an op, or nil if none.
+	GetOpStateV2(opID string) (*OpStateV2Row, error)
+
+	// DeleteOpStateV2 removes the state blob for an op (used by ResumeRequeue).
+	DeleteOpStateV2(opID string) error
 }

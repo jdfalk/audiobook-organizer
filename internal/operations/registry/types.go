@@ -1,5 +1,5 @@
 // file: internal/operations/registry/types.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 // last-edited: 2026-05-06
 
@@ -38,6 +38,16 @@ type OperationDef struct {
 
 	// Resumability. Required (no default — must be explicit).
 	ResumePolicy ResumePolicy // ResumeRestart | ResumeRequeue | ResumeDrop | ResumeAsk
+
+	// Watchdog. Optional.
+	// MinCheckpointInterval is the maximum gap between Checkpoint calls before a
+	// strike is written. Only meaningful when ResumePolicy == ResumeRestart.
+	// Zero means "use default 60s".
+	MinCheckpointInterval time.Duration
+	// ProgressTimeout is the maximum gap between UpdateProgress calls before the
+	// op is considered stuck and its context is canceled.
+	// Zero means "use default 5m".
+	ProgressTimeout time.Duration
 
 	// Concurrency. Required.
 	// ConcurrencyKey: ops with same non-empty key serialize; empty = no serialization.

@@ -1,5 +1,5 @@
 // file: internal/operations/registry/teststore_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
 // last-edited: 2026-05-06
 
@@ -19,15 +19,18 @@ import (
 
 // fakeStore implements database.OpsV2Store in memory.
 type fakeStore struct {
-	mu   sync.Mutex
-	defs map[string]database.OpDefinitionV2Row
-	ops  map[string]database.OperationV2Row
+	mu      sync.Mutex
+	defs    map[string]database.OpDefinitionV2Row
+	ops     map[string]database.OperationV2Row
+	strikes []database.OpStrikeV2Row
+	states  map[string]database.OpStateV2Row
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		defs: make(map[string]database.OpDefinitionV2Row),
-		ops:  make(map[string]database.OperationV2Row),
+		defs:   make(map[string]database.OpDefinitionV2Row),
+		ops:    make(map[string]database.OperationV2Row),
+		states: make(map[string]database.OpStateV2Row),
 	}
 }
 
@@ -141,6 +144,128 @@ func (f *fakeStore) CountRunningByPluginV2(plugin string) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+func (f *fakeStore) ListActiveOperationsV2() ([]database.OperationV2Row, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var result []database.OperationV2Row
+	for _, op := range f.ops {
+		if op.Status == "queued" || op.Status == "running" {
+			result = append(result, op)
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeStore) IncrementResumeCountV2(id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[id]
+	if !ok {
+		return nil
+	}
+	op.ResumeCount++
+	f.ops[id] = op
+	return nil
+}
+
+func (f *fakeStore) InsertOpStrikeV2(row database.OpStrikeV2Row) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.strikes = append(f.strikes, row)
+	return nil
+}
+
+func (f *fakeStore) GetOpStateV2(opID string) (*database.OpStateV2Row, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	st, ok := f.states[opID]
+	if !ok {
+		return nil, nil
+	}
+	return &st, nil
+}
+
+func (f *fakeStore) DeleteOpStateV2(opID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.states, opID)
+	return nil
+}
+
+// strikeCount returns the number of strikes recorded for a given op id.
+func (f *fakeStore) strikeCount(opID string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, s := range f.strikes {
+		if s.OperationID == opID {
+			n++
+		}
+	}
+	return n
+}
+
+// strikesOfKind returns strikes of a given kind for an op.
+func (f *fakeStore) strikesOfKind(opID, kind string) []database.OpStrikeV2Row {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []database.OpStrikeV2Row
+	for _, s := range f.strikes {
+		if s.OperationID == opID && s.Kind == kind {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// setLastProgressAt allows tests to simulate stale progress timestamps.
+func (f *fakeStore) setLastProgressAt(opID string, t *time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[opID]
+	if !ok {
+		return
+	}
+	op.LastProgressAt = t
+	f.ops[opID] = op
+}
+
+// setLastCheckpointAt allows tests to simulate stale checkpoint timestamps.
+func (f *fakeStore) setLastCheckpointAt(opID string, t *time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[opID]
+	if !ok {
+		return
+	}
+	op.LastCheckpointAt = t
+	f.ops[opID] = op
+}
+
+// setStartedAt allows tests to simulate started_at.
+func (f *fakeStore) setStartedAt(opID string, t *time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[opID]
+	if !ok {
+		return
+	}
+	op.StartedAt = t
+	f.ops[opID] = op
+}
+
+// setResumeCount sets the resume_count for an op.
+func (f *fakeStore) setResumeCount(opID string, n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	op, ok := f.ops[opID]
+	if !ok {
+		return
+	}
+	op.ResumeCount = n
+	f.ops[opID] = op
 }
 
 // statusOf is a helper for tests to read an op's current status.
