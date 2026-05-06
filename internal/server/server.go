@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-01
 
@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,6 +38,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
@@ -200,6 +202,10 @@ type Server struct {
 	hub              *realtime.EventHub
 	writeBackBatcher *itunesservice.WriteBackBatcher
 	fileIOPool       *FileIOPool
+	// opRegistry is the UOS-02 registry. Plugins register their OperationDefs
+	// here; the registry owns dispatch and worker pool lifecycle.
+	// No plugins are registered until their own bot-tasks wire them in.
+	opRegistry *opsregistry.Registry
 
 	// protectedPathCache holds the union of Deluge save_paths and
 	// config.ProtectedPaths. Consulted before any in-place tag write.
@@ -325,6 +331,11 @@ func NewServer(store database.Store) *Server {
 	server.eventBus = plugin.NewEventBus()
 	server.pluginRegistry = plugin.Global()
 	server.quarantineSvc = quarantine.NewQuarantineService(resolvedStore, &config.AppConfig, server.eventBus)
+
+	// Initialize the UOS-02 operations registry. The registry holds the
+	// OperationDef registration table, dispatcher, and worker pool.
+	// Plugins register their defs in their own bot-tasks (UOS-03+).
+	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8)
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
 	// so the real TrackProvisioner gets wired into the import pipeline;

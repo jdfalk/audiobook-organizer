@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.50.0
+// version: 1.51.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-05-05
 
@@ -2413,3 +2413,15 @@ func (m *MockStore) GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (
 func (m *MockStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Narrator, error) {
 	return make(map[string][]Narrator), nil
 }
+
+// OpsV2Store stub methods — permissive no-ops for tests that don't need v2 ops.
+func (m *MockStore) UpsertOpDefinitionV2(_ OpDefinitionV2Row) error       { return nil }
+func (m *MockStore) DeleteOrphanOpDefsV2(_ []string) error                { return nil }
+func (m *MockStore) InsertOperationV2(_ OperationV2Row) error              { return nil }
+func (m *MockStore) ListQueuedOperationsV2() ([]OperationV2Row, error)    { return nil, nil }
+func (m *MockStore) GetOperationV2(_ string) (*OperationV2Row, error)     { return nil, nil }
+func (m *MockStore) UpdateOperationV2Status(_ string, _ string, _, _ *time.Time, _ *string) error {
+	return nil
+}
+func (m *MockStore) SetOperationV2StatusIfQueued(_, _ string) (bool, error) { return false, nil }
+func (m *MockStore) CountRunningByPluginV2(_ string) (int, error)           { return 0, nil }
