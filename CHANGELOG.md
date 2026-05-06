@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.9 -->
+<!-- version: 2.45.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-06 -->
 
@@ -8,6 +8,35 @@
 ## [Unreleased]
 
 ### Features
+
+#### May 6, 2026 — UOS-04: Public plugin SDK + import lint
+
+- **feat(uos)**: `pkg/plugin/sdk` package provides the stable public API for
+  audiobook-organizer plugins. All type aliases point back to
+  `internal/operations/registry`, avoiding circular dependencies.
+- **pkg/plugin/sdk/doc.go** — package documentation pointing to the spec.
+- **pkg/plugin/sdk/operation.go** — aliases: `OperationDef`, `ResumePolicy`,
+  `Priority`, `ActorMode`, `Phase`, and all corresponding constants.
+- **pkg/plugin/sdk/reporter.go** — alias: `Reporter` interface for per-run
+  progress/logging/checkpointing.
+- **pkg/plugin/sdk/capability.go** — alias: `Capability` type + 13 constants
+  (LibraryRead/Write, FilesRead/Write/Execute, Network×5, Schedule×2,
+  SubprocessSpawn, DBMigrate).
+- **pkg/plugin/sdk/events.go** — aliases: `EventSubscription`, `Bus` interface.
+- **pkg/plugin/sdk/plugin.go** — new: `Plugin` interface (ID, Name, Version,
+  Register), `DisableMode` enum (Immediate, WhenIdle).
+- **pkg/plugin/sdk/registration.go** — new: `Registry` narrowed interface
+  (RegisterOp, EnqueueOp) that plugins call during register.
+- **pkg/plugin/sdk/enqueue_options.go** — aliases: `EnqueueOption` + exported
+  constructors `WithParent`, `WithActor`, `WithPriority`.
+- **pkg/plugin/sdk/errors.go** — new: `ErrCanceled`, `ErrQuiesced`,
+  `ErrPluginCapabilityMissing`.
+- **tools/cmd/oplint/main.go** — new: plugin import-path lint tool that walks
+  `internal/plugins/...` and rejects imports from internal packages except
+  `internal/operations/registry`, `internal/database/iface`, `internal/auth`.
+  Prevents accidental walled-garden violations.
+- **Makefile** — new target `make oplint` that invokes the linter on
+  `internal/plugins/...`. Version bumped from 2.9.1 → 2.10.0.
 
 #### May 6, 2026 — UOS-03: DB-backed Reporter + subprocess runner
 
