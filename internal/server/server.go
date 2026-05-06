@@ -39,6 +39,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
@@ -336,6 +337,12 @@ func NewServer(store database.Store) *Server {
 	// OperationDef registration table, dispatcher, and worker pool.
 	// Plugins register their defs in their own bot-tasks (UOS-03+).
 	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8, nil /* bus: wired in UOS-06 */)
+
+	// Register UOS plugins. Dedup embed-scan is the canary (UOS-07).
+	// Additional plugins registered in UOS-09 through UOS-12.
+	if err := dedupplugin.New(server.dedupEngine, resolvedStore).Register(server.opRegistry); err != nil {
+		log.Printf("[server] dedup plugin register: %v", err)
+	}
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
 	// so the real TrackProvisioner gets wired into the import pipeline;

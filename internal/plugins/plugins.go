@@ -1,0 +1,17 @@
+// file: internal/plugins/plugins.go
+// version: 1.0.0
+// guid: f3a4b5c6-d7e8-9012-cdef-234567890123
+// last-edited: 2026-05-06
+
+// Package plugins is the central registration point for all UOS plugins.
+// Import this package (blank import) in the server binary to register all
+// plugin operations with the global UOS registry.
+//
+// As plugins are migrated (UOS-07 through UOS-12), their blank imports are
+// added here. The server calls each plugin's Register method explicitly.
+package plugins
+
+import (
+	// Dedup plugin — embed-scan op (UOS-07); additional ops in UOS-09.
+	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
+)
