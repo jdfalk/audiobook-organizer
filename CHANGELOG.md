@@ -1,11 +1,23 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.3 -->
+<!-- version: 2.44.4 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-04 -->
+<!-- last-edited: 2026-05-05 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Tests
+
+#### May 5, 2026 — bot-task 4.13b: TrackProvisioner unit tests
+
+- **test(itunes)**: `track_provisioner_test.go` — 11 new tests covering
+  multi-segment provisioning (3 files ordered), empty title/author metadata,
+  idempotency (second call on a file with PID is a no-op), UpsertBookFile
+  error propagation, iTunes-managed path → Windows-mapped ITunesPath,
+  non-managed path passthrough, PID uniqueness across calls, duration
+  seconds→ms conversion, and ProvisionAll best-effort partial-failure
+  continuation.
 
 ### Fixed
 

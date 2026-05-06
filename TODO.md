@@ -684,6 +684,7 @@ since it was last edited on 2026-04-11).
   - ✅ **PKG-4e** `internal/fileops/` + `internal/sysinfo/` — filesystem/system services extracted (#664)
 - [ ] **4.12** Narrow extracted service dependencies to ISP sub-interfaces (**M**) — after 4.8 + 4.11, update extracted packages to accept narrow store interfaces (BookReader, etc.) instead of full database.Store
 - [ ] **4.13** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
+  - [x] **4.13b** Unit tests for `internal/itunes/service/track_provisioner.go` — 11 tests: multi-segment, missing metadata, idempotency, UpsertBookFile error, managed/unmanaged paths, PID uniqueness, duration conversion, partial-failure best-effort. (`track_provisioner_test.go`, bot-task 4-13b)
 
 ### 5. UX / DX Polish — [section](docs/backlog-2026-04-10.md#5-ux--dx-polish)
 
