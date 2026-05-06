@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.44.7 -->
+<!-- version: 2.44.8 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-06 -->
 
@@ -8,6 +8,46 @@
 ## [Unreleased]
 
 ### Features
+
+#### May 6, 2026 — UOS-08: Watchdog + strikes + startup resume orchestration
+
+- **feat(uos)**: `registry.runWatchdog` goroutine fires every 30 s (configurable
+  for tests via `Options.WatchdogInterval`). Checks every in-flight op for two
+  conditions:
+  - **Stuck**: `last_progress_at` is stale beyond `ProgressTimeout` (default 5 min)
+    → write `stuck` strike to `op_strikes_v2`, cancel the run context.
+  - **Uncheckpointed**: `ResumeRestart` op running ≥ `MinCheckpointInterval`
+    without a checkpoint → write `uncheckpointed` strike (no cancel; advisory only).
+- **feat(uos)**: `abandonedTracker` — per-plugin abandoned goroutine counter with
+  configurable cap (`Options.AbandonedCap`, default 4). Dispatcher Gate 2b blocks
+  the plugin when `isBlocked(plugin)` is true, preventing avalanche on stuck ops.
+  Abandoned goroutines are tracked and decremented when the goroutine eventually
+  returns.
+- **feat(uos)**: `resumeAfterStartup` — called synchronously in `Registry.Start`
+  before dispatcher begins. Walks `operations_v2` rows with status `queued` or
+  `running` and applies the def's `ResumePolicy`:
+  - `ResumeRestart`: increments `resume_count`, resets to `queued`, pings
+    dispatcher (no direct-push to avoid double-dispatch race).
+  - `ResumeRequeue`: clears state, marks original `interrupted_dropped`, inserts
+    fresh queued op with new ULID.
+  - `ResumeDrop`: sets `interrupted_dropped`.
+  - `ResumeAsk`: sets `interrupted_ask`.
+  - `reconcile_scan` def-id: always force-dropped regardless of policy.
+- **feat(uos)**: `checkInfiniteRestart` — if `resume_count ≥ 3` and
+  `high_water_progress == 0`, write `infinite_restart` strike and force
+  `interrupted_dropped`; prevents infinite crash-loop restarts.
+- **feat(uos)**: Worker abandoned-goroutine detection: after ctx cancel, worker
+  waits `abandonGrace` (5 s); if the run goroutine hasn't returned, spawns a
+  replacement worker, decrements abandoned count when goroutine eventually returns.
+- **refactor**: `executeRun` returns `wasAbandoned bool`; `startWorker` exits
+  when true to keep pool size stable.
+- **db**: `OpsV2Store` extended with 5 new methods: `ListActiveOperationsV2`,
+  `IncrementResumeCountV2`, `InsertOpStrikeV2`, `GetOpStateV2`, `DeleteOpStateV2`.
+  All three store implementations updated (SQLite, PebbleDB stubs, mock).
+- **test**: `watchdog_test.go` (stuck/uncheckpointed/infinite-restart cases),
+  `abandoned_test.go` (block/cap), `resume_test.go` (Drop/Ask/Restart/Requeue/
+  reconcile_scan). `TestResume_RestartReDispatchesWithIncrementedResumeCount`
+  asserts `Run` called exactly once (regression guard for double-dispatch).
 
 #### May 6, 2026 — UOS-02: Registry shell + dispatcher + in-process worker pool (PR #741)
 

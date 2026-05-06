@@ -1,5 +1,5 @@
 // file: internal/operations/registry/resume_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6f7a8b9c-0d1e-2345-f012-34567890abcd
 // last-edited: 2026-05-06
 
@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -87,17 +88,20 @@ func TestResume_AskLeavesInterruptedAsk(t *testing.T) {
 }
 
 // TestResume_RestartReDispatchesWithIncrementedResumeCount verifies that
-// ResumeRestart ops are re-dispatched and resume_count is incremented.
+// ResumeRestart ops are re-dispatched exactly once and resume_count is incremented.
 func TestResume_RestartReDispatchesWithIncrementedResumeCount(t *testing.T) {
 	store := newFakeStore()
 	r := registry.NewWithOptions(store, slog.Default(), 2, registry.Options{
 		WatchdogInterval: 30 * time.Second,
 	})
 
+	var runCount atomic.Int32
 	ran := make(chan struct{}, 1)
 	def := makeValidDef("test.resume-restart")
 	def.ResumePolicy = registry.ResumeRestart
 	def.Run = func(_ context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		runCount.Add(1)
+		// Signal first run only; buffer=1 so extra sends are dropped.
 		select {
 		case ran <- struct{}{}:
 		default:
@@ -117,6 +121,14 @@ func TestResume_RestartReDispatchesWithIncrementedResumeCount(t *testing.T) {
 	case <-ran:
 	case <-time.After(5 * time.Second):
 		t.Fatal("resume-restart op did not run within 5s")
+	}
+
+	// Give a brief window to detect a spurious second dispatch (double-dispatch bug).
+	time.Sleep(100 * time.Millisecond)
+
+	// Run must have been called exactly once — the resumed op, not a double-dispatch.
+	if got := runCount.Load(); got != 1 {
+		t.Errorf("expected Run called exactly 1 time, got %d (double-dispatch?)", got)
 	}
 
 	// resume_count should be 1 (was 0, incremented to 1 in resumeRestart).
