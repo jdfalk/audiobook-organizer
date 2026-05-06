@@ -1,5 +1,5 @@
 // file: vitest.config.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f
 
 import { defineConfig } from 'vitest/config';
@@ -16,5 +16,15 @@ export default defineConfig({
     // multiple async operations. 30s is generous enough for CI
     // while still catching genuinely hung tests.
     testTimeout: 30000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      thresholds: {
+        lines: 30,
+        functions: 20,
+        branches: 20,
+        statements: 25,
+      },
+    },
   },
 });
