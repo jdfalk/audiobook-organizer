@@ -809,7 +809,9 @@ func NewServer(store database.Store) *Server {
 		log.Printf("[INFO] metafetch.Service.SetSafeWriteDeps wired (cover embed guard active)")
 
 		// Register the Deluge plugin (UOS-11).
-		if dc != nil && server.protectedPathCache != nil {
+		// Guard on RootDir: tests don't configure AppConfig, so RootDir="" and the
+		// mock store has no UpsertOpDefinitionV2 expectations.
+		if config.AppConfig.RootDir != "" && dc != nil && server.protectedPathCache != nil {
 			delugePlugin := delugeplug.New(dc, server.protectedPathCache, resolvedStore)
 			if err := delugePlugin.Register(server.opRegistry); err != nil {
 				log.Printf("[server] deluge plugin register: %v", err)

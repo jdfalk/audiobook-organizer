@@ -1,5 +1,5 @@
 // file: internal/plugins/plugins.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: f3a4b5c6-d7e8-9012-cdef-234567890123
 // last-edited: 2026-05-07
 
@@ -14,10 +14,6 @@ package plugins
 import (
 	// Dedup plugin — embed-scan, full-scan, llm-review, book-signature-scan ops (UOS-07 + UOS-09).
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
-	// AcoustID plugin — scan, backfill, fingerprint-rescan ops (UOS-09).
-	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
-	// iTunes plugin — import, sync, path-reconcile, path-repair, position-sync ops (UOS-10).
-	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
 	// Deluge plugin — protected-paths-sync, centralize, path-update ops (UOS-11).
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
 )
