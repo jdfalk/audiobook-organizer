@@ -1,0 +1,85 @@
+// file: internal/plugins/maintenance/plugin.go
+// version: 1.0.0
+// guid: b2c3d4e5-f6a7-8901-bcde-123456789012
+// last-edited: 2026-05-07
+
+package maintenance
+
+import "github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+
+// Plugin is the UOS maintenance plugin. It holds a reference to a ServerDeps
+// implementation (provided by *server.Server at startup) so that Run functions
+// can call server methods without an import cycle.
+type Plugin struct {
+	deps  ServerDeps
+	store interface{ Optimize() error } // main store for db-optimize
+}
+
+// New constructs a maintenance Plugin. deps must not be nil.
+func New(deps ServerDeps) *Plugin {
+	return &Plugin{deps: deps}
+}
+
+// ID implements sdk.Plugin.
+func (p *Plugin) ID() string { return "maintenance" }
+
+// Name implements sdk.Plugin.
+func (p *Plugin) Name() string { return "Maintenance" }
+
+// Version implements sdk.Plugin.
+func (p *Plugin) Version() string { return "1.0.0" }
+
+// Register registers all 26 maintenance OperationDefs with the UOS registry.
+func (p *Plugin) Register(r sdk.Registry) error {
+	defs := []sdk.OperationDef{
+		// --- cleanup ---
+		p.purgeDeletedDef(),
+		p.tombstoneCleanupDef(),
+		p.tempFileCleanupDef(),
+		p.cleanupActivityLogDef(),
+		p.purgeOldLogsDef(),
+		p.cleanupOldBackupsDef(),
+		p.trashCleanupDef(),
+		p.archiveSweepDef(),
+
+		// --- database ---
+		p.dbOptimizeDef(),
+
+		// --- author/series ---
+		p.authorDedupScanDef(),
+		p.authorSplitScanDef(),
+		p.seriesNormalizeDef(),
+		p.seriesPruneDef(),
+		p.resolveProductionAuthorsDef(),
+
+		// --- metadata ---
+		p.metadataRefreshDef(),
+		p.metadataUpgradeDef(),
+		p.isbnEnrichmentDef(),
+
+		// --- dedup ---
+		p.dedupLLMReviewDef(),
+		p.aiDedupBatchDef(),
+
+		// --- batch poller ---
+		p.batchPollerDef(),
+
+		// --- write-back ---
+		p.bulkWriteBackDef(),
+
+		// --- reconcile ---
+		p.reconcileScanDef(),
+
+		// --- one-shot startup backfills ---
+		p.externalIDBackfillDef(),
+		p.movementAtomCleanupDef(),
+		p.malformedM4BRemuxDef(),
+		p.malformedM4BTranscodeDef(),
+	}
+	for _, d := range defs {
+		if err := r.RegisterOp(d); err != nil {
+			return err
+		}
+	}
+	return nil
+}

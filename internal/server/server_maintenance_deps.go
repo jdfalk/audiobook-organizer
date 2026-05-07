@@ -1,0 +1,237 @@
+// file: internal/server/server_maintenance_deps.go
+// version: 1.0.0
+// guid: b4c5d6e7-f8a9-0123-7890-345678901234
+// last-edited: 2026-05-07
+
+// This file implements the maintenance.ServerDeps interface on *Server, giving
+// the maintenance plugin access to server internals without creating an import
+// cycle (internal/plugins/maintenance must NOT import internal/server).
+
+package server
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	maintenanceplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/maintenance"
+)
+
+// Verify *Server implements maintenance.ServerDeps at compile time.
+var _ maintenanceplugin.ServerDeps = (*Server)(nil)
+
+// ---- delegated run helpers ----
+
+func (s *Server) RunIsbnEnrichment(ctx context.Context, progress operations.ProgressReporter, opID string) error {
+	return s.runIsbnEnrichment(ctx, progress, opID)
+}
+
+func (s *Server) RunMetadataRefreshScan(ctx context.Context, progress operations.ProgressReporter) error {
+	return s.runMetadataRefreshScan(ctx, progress)
+}
+
+func (s *Server) RunBulkWriteBack(ctx context.Context, opID string, bookIDs []string, doRename bool, startIdx int, progress operations.ProgressReporter) error {
+	return s.runBulkWriteBack(ctx, opID, bookIDs, doRename, startIdx, progress)
+}
+
+func (s *Server) RunAutoPurgeSoftDeleted(opID string) {
+	s.runAutoPurgeSoftDeleted(opID)
+}
+
+func (s *Server) ExecuteSeriesPrune(ctx context.Context, store database.Store, progress operations.ProgressReporter, opID string) error {
+	return s.executeSeriesPrune(ctx, store, progress, opID)
+}
+
+func (s *Server) ExecuteSeriesNormalizeCore(ctx context.Context, store database.Store, enqueueWB func(string)) ([]string, error) {
+	return executeSeriesNormalizeCore(ctx, store, enqueueWB)
+}
+
+// ---- one-shot startup ops ----
+
+func (s *Server) BackfillExternalIDs() {
+	s.backfillExternalIDs()
+}
+
+func (s *Server) StripMovementAtoms() {
+	s.stripMovementAtoms()
+}
+
+func (s *Server) RemuxMalformedM4BFiles() {
+	s.remuxMalformedM4BFiles()
+}
+
+func (s *Server) TranscodeMalformedM4BFiles() {
+	s.transcodeMalformedM4BFiles()
+}
+
+// ---- store helpers ----
+
+func (s *Server) CleanupOrphanedTempFiles(rootDir string, opID string) int {
+	return cleanupOrphanedTempFiles(rootDir, s.activityWriter, opID)
+}
+
+func (s *Server) CleanupTrashedVersions() int {
+	return CleanupTrashedVersions(s.Store())
+}
+
+func (s *Server) SweepArchivedBooks() int {
+	return SweepArchivedBooks(s.Store())
+}
+
+// ---- optional component accessors ----
+
+func (s *Server) ActivityFlushOp(opID string) {
+	activity.FlushOperation(s.activityWriter, opID)
+}
+
+func (s *Server) EnqueueWriteBack(bookID string) {
+	if s.writeBackBatcher != nil {
+		s.writeBackBatcher.Enqueue(bookID)
+	}
+}
+
+func (s *Server) PollBatch(ctx context.Context) (int, error) {
+	if s.batchPoller == nil {
+		return 0, nil
+	}
+	return s.batchPoller.Poll(ctx)
+}
+
+func (s *Server) DedupLLMReview(ctx context.Context) error {
+	if s.dedupEngine == nil {
+		return fmt.Errorf("dedup engine not initialized")
+	}
+	return s.dedupEngine.RunLLMReview(ctx)
+}
+
+func (s *Server) InvalidateDedupCache() {
+	if s.dedupCache != nil {
+		s.dedupCache.Invalidate("author-duplicates")
+	}
+}
+
+func (s *Server) MetadataUpgradeRun(ctx context.Context, limit int) (checked, upgraded, skipped, errs int, err error) {
+	if s.metadataFetchService == nil {
+		return 0, 0, 0, 0, fmt.Errorf("metadata fetch service not initialized")
+	}
+	svc := NewMetadataUpgradeService(s.Store(), s.metadataFetchService)
+	result, err := svc.RunUpgrade(ctx, limit)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+	return result.Checked, result.Upgraded, result.Skipped, result.Errors, nil
+}
+
+func (s *Server) OptimizeAIScanStore() error {
+	if s.aiScanStore == nil {
+		return nil
+	}
+	return s.aiScanStore.Optimize()
+}
+
+func (s *Server) OptimizeOLStore() error {
+	if s.olService == nil || s.olService.Store() == nil {
+		return nil
+	}
+	return s.olService.Store().Optimize()
+}
+
+func (s *Server) PruneOldLogs(retentionDays int) error {
+	retLog := logger.New("purge_old_logs")
+	_, err := logger.PruneOldLogs(s.Store(), retentionDays, retLog)
+	return err
+}
+
+func (s *Server) CompactActivityLog(ctx context.Context, compactionDays, changeDays, debugDays int) (compacted int, summarized int, pruned int, err error) {
+	if s.activityService == nil {
+		return 0, 0, 0, nil
+	}
+
+	if compactionDays <= 0 {
+		compactionDays = 14
+	}
+	compactionCutoff := time.Now().AddDate(0, 0, -compactionDays)
+	compactResult, err := s.activityService.CompactByDay(ctx, compactionCutoff)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("compact activity: %w", err)
+	}
+
+	if changeDays <= 0 {
+		changeDays = 90
+	}
+	changeCutoff := time.Now().AddDate(0, 0, -changeDays)
+	sumCount, err := s.activityService.Summarize(ctx, changeCutoff, "change")
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("summarize activity: %w", err)
+	}
+
+	if debugDays <= 0 {
+		debugDays = 30
+	}
+	debugCutoff := time.Now().AddDate(0, 0, -debugDays)
+	pruneCount, err := s.activityService.Prune(debugCutoff, "debug")
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("prune activity: %w", err)
+	}
+
+	return compactResult.DaysCompacted, sumCount, pruneCount, nil
+}
+
+// ---- feature flags ----
+
+func (s *Server) HasDedupEngine() bool {
+	return s.dedupEngine != nil
+}
+
+func (s *Server) HasMetadataFetchService() bool {
+	return s.metadataFetchService != nil
+}
+
+func (s *Server) HasISBNEnrichment() bool {
+	return s.metadataFetchService != nil && s.metadataFetchService.ISBNEnrichment() != nil
+}
+
+func (s *Server) HasAIParsing() bool {
+	return config.AppConfig.EnableAIParsing && config.AppConfig.OpenAIAPIKey != ""
+}
+
+func (s *Server) HasBatchPoller() bool {
+	return s.batchPoller != nil
+}
+
+func (s *Server) RootDir() string {
+	return config.AppConfig.RootDir
+}
+
+func (s *Server) LogRetentionDays() int {
+	return config.AppConfig.LogRetentionDays
+}
+
+func (s *Server) PurgeSoftDeletedAfterDays() int {
+	return config.AppConfig.PurgeSoftDeletedAfterDays
+}
+
+func (s *Server) ActivityLogCompactionDays() int {
+	return config.AppConfig.ActivityLogCompactionDays
+}
+
+func (s *Server) ActivityLogRetentionChangeDays() int {
+	return config.AppConfig.ActivityLogRetentionChangeDays
+}
+
+func (s *Server) ActivityLogRetentionDebugDays() int {
+	return config.AppConfig.ActivityLogRetentionDebugDays
+}
+
+func (s *Server) BackupRetentionDays() int {
+	days := config.AppConfig.PurgeSoftDeletedAfterDays
+	if days <= 0 {
+		days = 30
+	}
+	return days
+}

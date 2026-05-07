@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
 // version: 1.5.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-06
+// last-edited: 2026-05-07
 
 package server
 
@@ -149,12 +149,7 @@ func (s *Server) resumeInterruptedOperations() {
 			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
 				return s.itunesSvc.Repair.Repair(ctx, repairOpID, true, progress)
 			}
-		case "transcode", "diagnostics_export", "diagnostics_ai",
-			"cleanup_activity_log", "purge_old_logs",
-			"purge-deleted", "tombstone-cleanup",
-			"author-dedup-scan", "author-split-scan", "series-prune", "series-normalize",
-			"db-optimize", "cleanup-old-backups", "batch_poller",
-			"itunes_sync",
+		case "transcode", "diagnostics_export", "diagnostics_ai", "itunes_sync",
 			// reconcile_scan: a 271K-file hash sweep that ignores ctx, runs
 			// nightly via the scheduler, and pins both queue workers for ~45min
 			// when auto-resumed. Repeated quick deploys produced a queue jam
@@ -162,7 +157,9 @@ func (s *Server) resumeInterruptedOperations() {
 			// stuck reconcile_scans that the cancel API couldn't actually
 			// kill. Letting the scheduler re-run it tomorrow is fine.
 			"reconcile_scan":
-			// These are not resumable — mark as failed silently
+			// UOS-12 migrated ops removed — see maintenance plugin (internal/plugins/maintenance);
+			// remaining legacy op IDs above will be cleaned up in UOS-14.
+			// These are not resumable — mark as failed silently.
 			_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
 			_ = operations.ClearState(store, opID)
 			continue

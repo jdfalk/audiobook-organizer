@@ -1,7 +1,7 @@
 // file: internal/server/server.go
 // version: 2.5.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-06
+// last-edited: 2026-05-07
 
 package server
 
@@ -40,6 +40,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
+	maintenanceplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
@@ -351,6 +352,11 @@ func NewServer(store database.Store) *Server {
 		if err := dedupplugin.New(server.dedupEngine, resolvedStore).Register(server.opRegistry); err != nil {
 			log.Printf("[server] dedup plugin register: %v", err)
 		}
+	}
+
+	// UOS-12: maintenance plugin — 26 ops migrated from scheduler_tasks.go.
+	if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
+		log.Printf("[server] maintenance plugin register: %v", err)
 	}
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
