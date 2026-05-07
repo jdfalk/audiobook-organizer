@@ -1,27 +1,30 @@
 // file: internal/plugins/itunes/plugin.go
 // version: 1.0.0
-// guid: a7b8c9d0-e1f2-4a5b-8c9d-0e1f2a4b5c6d
+// guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-07
 
-// Package itunes is the UOS plugin for iTunes operations.
+// Package itunes is the UOS plugin for iTunes/Music library operations.
 // It wraps the internal iTunes service and registers OperationDefs through
 // the public pkg/plugin/sdk interface.
 package itunes
 
 import (
+	"fmt"
+
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
-// Plugin is the iTunes plugin. It wraps the iTunes service so that
+// Plugin is the iTunes plugin. It wraps the shared iTunes service so that
 // the Run functions can call service methods without importing internal packages.
 type Plugin struct {
 	svc   *itunesservice.Service
 	store database.Store
 }
 
-// New constructs an iTunes Plugin.
+// New constructs an iTunes Plugin. svc may be nil or disabled;
+// the Register method will return nil (nil-guard pattern).
 func New(svc *itunesservice.Service, store database.Store) *Plugin {
 	return &Plugin{svc: svc, store: store}
 }
@@ -30,33 +33,32 @@ func New(svc *itunesservice.Service, store database.Store) *Plugin {
 func (p *Plugin) ID() string { return "itunes" }
 
 // Name implements sdk.Plugin.
-func (p *Plugin) Name() string { return "iTunes" }
+func (p *Plugin) Name() string { return "iTunes/Music Library" }
 
 // Version implements sdk.Plugin.
 func (p *Plugin) Version() string { return "1.0.0" }
 
 // Register registers all iTunes OperationDefs with the UOS registry.
-// UOS-10 migrates itunes.import, itunes.sync, itunes.path-reconcile,
-// itunes.path-repair, and itunes.position-sync to UOS.
+// Returns nil if the service is nil or disabled (nil-guard pattern).
 func (p *Plugin) Register(r sdk.Registry) error {
-	// Guard: if iTunes service is nil, skip registration.
-	// This happens when iTunes is disabled or the service failed to initialize.
-	if p.svc == nil {
+	// Nil-guard: don't register if service not configured or disabled.
+	if p.svc == nil || !p.svc.Enabled() {
 		return nil
 	}
 
-	ops := []sdk.OperationDef{
-		p.importDef(),
+	defs := []sdk.OperationDef{
 		p.syncDef(),
-		p.pathReconcileDef(),
+		p.importDef(),
+		p.pathReconciledDef(),
 		p.pathRepairDef(),
 		p.positionSyncDef(),
 	}
 
-	for _, op := range ops {
-		if err := r.RegisterOp(op); err != nil {
-			return err
+	for _, def := range defs {
+		if err := r.RegisterOp(def); err != nil {
+			return fmt.Errorf("register %s: %w", def.ID, err)
 		}
 	}
+
 	return nil
 }
