@@ -1,12 +1,12 @@
-// file: internal/plugins/dedup/plugin.go
+// file: internal/plugins/acoustid/plugin.go
 // version: 1.0.0
-// guid: d1e2f3a4-b5c6-7890-abcd-ef1234567890
+// guid: d4e5f6a7-b8c9-0123-def0-123456789abc
 // last-edited: 2026-05-06
 
-// Package dedup is the UOS plugin for deduplication operations.
+// Package acoustid is the UOS plugin for AcoustID fingerprinting operations.
 // It wraps the internal dedup.Engine and registers OperationDefs through
 // the public pkg/plugin/sdk interface.
-package dedup
+package acoustid
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -14,7 +14,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
-// Plugin is the dedup plugin. It wraps the shared dedup.Engine and embedding store so that
+// Plugin is the AcoustID plugin. It wraps the shared dedup.Engine and embedding store so that
 // the Run functions can call engine methods without importing internal packages.
 type Plugin struct {
 	engine         *dedupengine.Engine
@@ -22,33 +22,31 @@ type Plugin struct {
 	embeddingStore *database.EmbeddingStore
 }
 
-// New constructs a dedup Plugin. engine and embeddingStore may be nil if embedding is disabled;
-// the embed-scan op will return a descriptive error when run.
+// New constructs an acoustid Plugin. engine and embeddingStore may be nil if embedding is disabled;
+// the plugin will no-op gracefully in that case.
 func New(engine *dedupengine.Engine, store database.Store, embeddingStore *database.EmbeddingStore) *Plugin {
 	return &Plugin{engine: engine, store: store, embeddingStore: embeddingStore}
 }
 
 // ID implements sdk.Plugin.
-func (p *Plugin) ID() string { return "dedup" }
+func (p *Plugin) ID() string { return "acoustid" }
 
 // Name implements sdk.Plugin.
-func (p *Plugin) Name() string { return "Deduplication" }
+func (p *Plugin) Name() string { return "AcoustID" }
 
 // Version implements sdk.Plugin.
 func (p *Plugin) Version() string { return "1.0.0" }
 
-// Register registers all dedup OperationDefs with the UOS registry.
-// UOS-07 registers embed-scan; UOS-09 adds full-scan, llm-review, and book-signature-scan.
+// Register registers all AcoustID OperationDefs with the UOS registry.
 func (p *Plugin) Register(r sdk.Registry) error {
 	if p.engine == nil {
 		return nil
 	}
 
 	ops := []sdk.OperationDef{
-		p.embedScanDef(),
-		p.fullScanDef(),
-		p.llmReviewDef(),
-		p.bookSignatureScanDef(),
+		p.scanDef(),
+		p.backfillDef(),
+		p.fingerprintRescanDef(),
 	}
 
 	for _, op := range ops {

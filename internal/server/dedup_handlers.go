@@ -1,7 +1,7 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-03
+// last-edited: 2026-05-06
 
 package server
 
@@ -981,116 +981,33 @@ func (s *Server) dismissDedupCandidate(c *gin.Context) {
 }
 
 // triggerDedupScan handles POST /api/v1/dedup/scan.
-// Runs a full embedding-based dedup scan as a tracked Operation so the
-// UI can show progress and completion. Before scanning, stale candidates
-// (non-primary versions, same-group pairs, orphaned book IDs) are purged.
-//
-// Previously this fired a fire-and-forget goroutine and returned
-// {"status": "started"} with no way for the UI to see progress or
-// completion. Now the operation shows up in the Operations panel with
-// live progress updates and final-completion messages.
+// Delegates to the UOS registry (dedup.full-scan op) since UOS-09.
 func (s *Server) triggerDedupScan(c *gin.Context) {
-	if s.dedupEngine == nil {
-		httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
-	}
-
-	opID := ulid.Make().String()
-	op, err := s.Store().CreateOperation(opID, "dedup-scan", nil)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.full-scan", nil)
 	if err != nil {
-		httputil.InternalError(c, "failed to create dedup-scan operation", err)
-		return
-	}
-
-	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		_ = progress.UpdateProgress(0, 100, "Purging stale candidates...")
-		if deleted, err := s.dedupEngine.PurgeStaleCandidates(ctx); err != nil {
-			log.Printf("[dedup] purge stale candidates error: %v", err)
-		} else if deleted > 0 {
-			log.Printf("[dedup] purged %d stale candidate(s) before scan", deleted)
-		}
-
-		// FullScan reports progress via a callback (done, total). Translate
-		// that into ProgressReporter updates, reserving 5% at the start for
-		// the purge pass and 5% at the end for the "complete" line so the
-		// bar actually moves all the way to 100.
-		var lastPct int
-		fullScanErr := s.dedupEngine.FullScan(ctx, func(done, total int) {
-			if total <= 0 {
-				return
-			}
-			pct := 5 + (90 * done / total)
-			if pct == lastPct {
-				return
-			}
-			lastPct = pct
-			_ = progress.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
-		})
-		if fullScanErr != nil {
-			log.Printf("[dedup] FullScan error: %v", fullScanErr)
-			return fmt.Errorf("dedup scan: %w", fullScanErr)
-		}
-
-		// Fetch final candidate counts for the completion message.
-		pendingCount := 0
-		if s.embeddingStore != nil {
-			filter := database.CandidateFilter{EntityType: "book", Status: "pending", Limit: 1}
-			if _, total, listErr := s.embeddingStore.ListCandidates(filter); listErr == nil {
-				pendingCount = total
-			}
-		}
-		_ = progress.UpdateProgress(100, 100,
-			fmt.Sprintf("Dedup scan complete — %d pending candidates", pendingCount))
-		return nil
-	}
-
-	if err := s.queue.Enqueue(opID, "dedup-scan", operations.PriorityLow, opFunc); err != nil {
 		httputil.InternalError(c, "failed to enqueue dedup scan", err)
 		return
 	}
-
-	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
 // triggerDedupLLM handles POST /api/v1/dedup/scan-llm.
-// Runs an LLM review pass over ambiguous embedding-layer candidates as a
-// tracked Operation so the UI can display progress and completion.
+// Delegates to the UOS registry (dedup.llm-review op) since UOS-09.
 func (s *Server) triggerDedupLLM(c *gin.Context) {
-	if s.dedupEngine == nil {
-		httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
-	}
-
-	opID := ulid.Make().String()
-	op, err := s.Store().CreateOperation(opID, "dedup-llm-review", nil)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.llm-review", nil)
 	if err != nil {
-		httputil.InternalError(c, "failed to create dedup-llm-review operation", err)
-		return
-	}
-
-	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		_ = progress.UpdateProgress(0, 100, "Starting LLM review of ambiguous candidates...")
-		if err := s.dedupEngine.RunLLMReview(ctx); err != nil {
-			return fmt.Errorf("LLM review: %w", err)
-		}
-		_ = progress.UpdateProgress(100, 100, "LLM review complete")
-		return nil
-	}
-
-	if err := s.queue.Enqueue(opID, "dedup-llm-review", operations.PriorityLow, opFunc); err != nil {
 		httputil.InternalError(c, "failed to enqueue LLM review", err)
 		return
 	}
-
-	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
 // triggerDedupRefresh handles POST /api/v1/dedup/refresh.
@@ -1101,63 +1018,18 @@ func (s *Server) triggerDedupRefresh(c *gin.Context) {
 }
 
 // triggerDedupAcoustID handles POST /api/v1/dedup/scan-acoustid.
-// Runs an AcoustID fingerprint-based dedup scan as a tracked Operation.
-// Compares acoustic fingerprints stored in book_files across all primary books
-// and emits DedupCandidate rows with layer="acoustid" for any matches.
+// Delegates to the UOS registry (acoustid.scan op) since UOS-09.
 func (s *Server) triggerDedupAcoustID(c *gin.Context) {
-	if s.dedupEngine == nil {
-		httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
-	}
-
-	opID := ulid.Make().String()
-	op, err := s.Store().CreateOperation(opID, "dedup-acoustid-scan", nil)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.scan", nil)
 	if err != nil {
-		httputil.InternalError(c, "failed to create dedup-acoustid-scan operation", err)
-		return
-	}
-
-	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		_ = progress.UpdateProgress(0, 100, "Starting AcoustID fingerprint scan...")
-
-		var lastPct int
-		scanErr := s.dedupEngine.AcoustIDScan(ctx, func(done, total int) {
-			if total <= 0 {
-				return
-			}
-			pct := 1 + (98 * done / total)
-			if pct == lastPct {
-				return
-			}
-			lastPct = pct
-			_ = progress.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
-		})
-		if scanErr != nil {
-			return fmt.Errorf("acoustid scan: %w", scanErr)
-		}
-
-		pendingCount := 0
-		if s.embeddingStore != nil {
-			filter := database.CandidateFilter{EntityType: "book", Status: "pending", Layer: "acoustid", Limit: 1}
-			if _, total, listErr := s.embeddingStore.ListCandidates(filter); listErr == nil {
-				pendingCount = total
-			}
-		}
-		_ = progress.UpdateProgress(100, 100,
-			fmt.Sprintf("AcoustID scan complete — %d pending candidate(s)", pendingCount))
-		return nil
-	}
-
-	if err := s.queue.Enqueue(opID, "dedup-acoustid-scan", operations.PriorityLow, opFunc); err != nil {
 		httputil.InternalError(c, "failed to enqueue acoustid scan", err)
 		return
 	}
-
-	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
 // triggerEmbedScan handles POST /api/v1/dedup/embed.
@@ -1253,61 +1125,16 @@ func (s *Server) triggerEmbedScanLegacy(c *gin.Context) {
 }
 
 // triggerBookSignatureScan handles POST /api/v1/dedup/scan-book-signature.
-// Runs a unified per-book fingerprint scan as a tracked Operation. Compares
-// synthesized book signatures across all primary books and emits DedupCandidate
-// rows with layer="book_signature" for any matches.
+// Delegates to the UOS registry (dedup.book-signature-scan op) since UOS-09.
 func (s *Server) triggerBookSignatureScan(c *gin.Context) {
-if s.dedupEngine == nil {
-httputil.RespondWithServiceUnavailable(c, "dedup engine not available")
-return
-}
-if s.queue == nil {
-httputil.RespondWithInternalError(c, "operation queue not initialized")
-return
-}
-
-opID := ulid.Make().String()
-op, err := s.Store().CreateOperation(opID, "dedup-book-signature-scan", nil)
-if err != nil {
-httputil.InternalError(c, "failed to create dedup-book-signature-scan operation", err)
-return
-}
-
-opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-_ = progress.UpdateProgress(0, 100, "Starting book signature scan...")
-
-var lastPct int
-scanErr := s.dedupEngine.BookSignatureScan(ctx, func(done, total int) {
-if total <= 0 {
-return
-}
-pct := 1 + (98 * done / total)
-if pct == lastPct {
-return
-}
-lastPct = pct
-_ = progress.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
-})
-if scanErr != nil {
-return fmt.Errorf("book signature scan: %w", scanErr)
-}
-
-pendingCount := 0
-if s.embeddingStore != nil {
-filter := database.CandidateFilter{EntityType: "book", Status: "pending", Layer: "book_signature", Limit: 1}
-if _, total, listErr := s.embeddingStore.ListCandidates(filter); listErr == nil {
-pendingCount = total
-}
-}
-_ = progress.UpdateProgress(100, 100,
-fmt.Sprintf("Book signature scan complete — %d pending candidate(s)", pendingCount))
-return nil
-}
-
-if err := s.queue.Enqueue(opID, "dedup-book-signature-scan", operations.PriorityLow, opFunc); err != nil {
-httputil.InternalError(c, "failed to enqueue book signature scan", err)
-return
-}
-
-httputil.RespondWithSuccess(c, http.StatusAccepted, op)
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
+		return
+	}
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.book-signature-scan", nil)
+	if err != nil {
+		httputil.InternalError(c, "failed to enqueue book signature scan", err)
+		return
+	}
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }

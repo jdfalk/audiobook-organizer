@@ -12,6 +12,8 @@
 package plugins
 
 import (
-	// Dedup plugin — embed-scan op (UOS-07); additional ops in UOS-09.
+	// Dedup plugin — embed-scan, full-scan, llm-review, book-signature-scan ops (UOS-07 + UOS-09).
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
+	// AcoustID plugin — scan, backfill, fingerprint-rescan ops (UOS-09).
+	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
 )
