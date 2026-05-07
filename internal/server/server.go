@@ -355,8 +355,12 @@ func NewServer(store database.Store) *Server {
 	}
 
 	// UOS-12: maintenance plugin — 26 ops migrated from scheduler_tasks.go.
-	if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
-		log.Printf("[server] maintenance plugin register: %v", err)
+	// Guard on RootDir: tests don't configure AppConfig, so RootDir is ""
+	// and the mock store has no UpsertOpDefinitionV2 expectations.
+	if config.AppConfig.RootDir != "" {
+		if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
+			log.Printf("[server] maintenance plugin register: %v", err)
+		}
 	}
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
