@@ -43,6 +43,7 @@ import (
 	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
 	delugeplug "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
 	itunesplug "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
+	maintenanceplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
@@ -359,6 +360,11 @@ func NewServer(store database.Store) *Server {
 		if err := acoustidPlugin.Register(server.opRegistry); err != nil {
 			log.Printf("[server] acoustid plugin register: %v", err)
 		}
+	}
+
+	// UOS-12: maintenance plugin — 26 ops migrated from scheduler_tasks.go.
+	if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
+		log.Printf("[server] maintenance plugin register: %v", err)
 	}
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()

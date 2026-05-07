@@ -1,0 +1,122 @@
+// file: internal/plugins/maintenance/backfill.go
+// version: 1.0.0
+// guid: f2a3b4c5-d6e7-8901-5678-123456789012
+// last-edited: 2026-05-07
+
+package maintenance
+
+import (
+	"context"
+	"encoding/json"
+	"log/slog"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+)
+
+// One-shot startup backfills / file repairs. Schedule is nil — they are
+// enqueued once at startup by server.Start() and not repeated. ResumeDrop
+// because they are idempotent (guarded by skip-keys) and short enough that
+// re-running from zero on restart is safe.
+
+func (p *Plugin) externalIDBackfillDef() sdk.OperationDef {
+	return sdk.OperationDef{
+		ID:              "maintenance.external-id-backfill",
+		Plugin:          "maintenance",
+		DisplayName:     "External ID backfill",
+		Description:     "One-shot backfill of external IDs (iTunes PIDs, etc.) from the existing database.",
+		ResumePolicy:    sdk.ResumeDrop,
+		DefaultPriority: sdk.PriorityLow,
+		ConcurrencyKey:  "maintenance.external-id-backfill",
+		Cancellable:     false,
+		Isolate:         false,
+		Timeout:         30 * time.Minute,
+		Schedule:        nil,
+		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapLibraryWrite},
+		Run:             p.runExternalIDBackfill,
+	}
+}
+
+func (p *Plugin) runExternalIDBackfill(_ context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
+	_ = reporter.Log(slog.LevelInfo, "Starting external ID backfill")
+	p.deps.BackfillExternalIDs()
+	_ = reporter.Log(slog.LevelInfo, "External ID backfill complete")
+	return nil
+}
+
+func (p *Plugin) movementAtomCleanupDef() sdk.OperationDef {
+	return sdk.OperationDef{
+		ID:              "maintenance.movement-atom-cleanup",
+		Plugin:          "maintenance",
+		DisplayName:     "Strip movement atoms",
+		Description:     "Strips unwanted movement atoms from M4B files that cause chapter parsing issues.",
+		ResumePolicy:    sdk.ResumeDrop,
+		DefaultPriority: sdk.PriorityLow,
+		ConcurrencyKey:  "maintenance.movement-atom-cleanup",
+		Cancellable:     false,
+		Isolate:         true, // uses ffmpeg subprocess
+		Timeout:         60 * time.Minute,
+		Schedule:        nil,
+		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
+		Run:             p.runMovementAtomCleanup,
+	}
+}
+
+func (p *Plugin) runMovementAtomCleanup(_ context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
+	_ = reporter.Log(slog.LevelInfo, "Starting movement atom cleanup")
+	p.deps.StripMovementAtoms()
+	_ = reporter.Log(slog.LevelInfo, "Movement atom cleanup complete")
+	return nil
+}
+
+func (p *Plugin) malformedM4BRemuxDef() sdk.OperationDef {
+	return sdk.OperationDef{
+		ID:              "maintenance.malformed-m4b-remux",
+		Plugin:          "maintenance",
+		DisplayName:     "Remux malformed M4B files",
+		Description:     "Remuxes M4B files with broken container structure without re-encoding audio.",
+		ResumePolicy:    sdk.ResumeDrop,
+		DefaultPriority: sdk.PriorityLow,
+		ConcurrencyKey:  "maintenance.malformed-m4b-remux",
+		Cancellable:     false,
+		Isolate:         true, // uses ffmpeg subprocess
+		Timeout:         120 * time.Minute,
+		Schedule:        nil,
+		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
+		Run:             p.runMalformedM4BRemux,
+	}
+}
+
+func (p *Plugin) runMalformedM4BRemux(_ context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
+	_ = reporter.Log(slog.LevelInfo, "Starting malformed M4B remux")
+	p.deps.RemuxMalformedM4BFiles()
+	_ = reporter.Log(slog.LevelInfo, "Malformed M4B remux complete")
+	return nil
+}
+
+// Hard rule: transcode = ResumeAsk (destructive; operator must confirm).
+
+func (p *Plugin) malformedM4BTranscodeDef() sdk.OperationDef {
+	return sdk.OperationDef{
+		ID:              "maintenance.malformed-m4b-transcode",
+		Plugin:          "maintenance",
+		DisplayName:     "Transcode malformed M4B files",
+		Description:     "Full re-encode of M4B files that cannot be remuxed. Interrupted runs surface in UI for operator confirmation.",
+		ResumePolicy:    sdk.ResumeAsk,
+		DefaultPriority: sdk.PriorityLow,
+		ConcurrencyKey:  "maintenance.malformed-m4b-transcode",
+		Cancellable:     true,
+		Isolate:         true, // uses ffmpeg subprocess
+		Timeout:         6 * time.Hour,
+		Schedule:        nil,
+		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
+		Run:             p.runMalformedM4BTranscode,
+	}
+}
+
+func (p *Plugin) runMalformedM4BTranscode(_ context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
+	_ = reporter.Log(slog.LevelInfo, "Starting malformed M4B transcode")
+	p.deps.TranscodeMalformedM4BFiles()
+	_ = reporter.Log(slog.LevelInfo, "Malformed M4B transcode complete")
+	return nil
+}
