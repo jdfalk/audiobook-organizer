@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.4.0
+// version: 2.6.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-01
+// last-edited: 2026-05-07
 
 package server
 
@@ -39,7 +39,10 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	acoustidplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
 	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
+	delugeplug "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
+	itunesplug "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
@@ -343,8 +346,13 @@ func NewServer(store database.Store) *Server {
 	// Guard on dedupEngine: tests don't initialize the embedding subsystem,
 	// so we skip registration to avoid unexpected mock store calls.
 	if server.dedupEngine != nil {
-		if err := dedupplugin.New(server.dedupEngine, resolvedStore).Register(server.opRegistry); err != nil {
+		if err := dedupplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore).Register(server.opRegistry); err != nil {
 			log.Printf("[server] dedup plugin register: %v", err)
+		}
+		// Register acoustid plugin (UOS-09)
+		acoustidPlugin := acoustidplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore)
+		if err := acoustidPlugin.Register(server.opRegistry); err != nil {
+			log.Printf("[server] acoustid plugin register: %v", err)
 		}
 	}
 
@@ -393,6 +401,14 @@ func NewServer(store database.Store) *Server {
 		itunesSvc = itunesservice.NewDisabled()
 	}
 	server.itunesSvc = itunesSvc
+
+	// Register iTunes plugin (UOS-10)
+	if itunesSvc != nil && itunesSvc.Enabled() {
+		itunesPlugin := itunesplug.New(itunesSvc, resolvedStore)
+		if err := itunesPlugin.Register(server.opRegistry); err != nil {
+			log.Printf("[server] iTunes plugin register: %v", err)
+		}
+	}
 
 	// Initialize update scheduler
 	server.updateScheduler = updater.NewScheduler(server.updater, func() updater.SchedulerConfig {
@@ -780,6 +796,14 @@ func NewServer(store database.Store) *Server {
 		// Also wire into the metafetch service so cover-art embeds use the guard.
 		server.metadataFetchService.SetSafeWriteDeps(deps)
 		log.Printf("[INFO] metafetch.Service.SetSafeWriteDeps wired (cover embed guard active)")
+
+		// Register the Deluge plugin (UOS-11).
+		if dc != nil && server.protectedPathCache != nil {
+			delugePlugin := delugeplug.New(dc, server.protectedPathCache, resolvedStore)
+			if err := delugePlugin.Register(server.opRegistry); err != nil {
+				log.Printf("[server] deluge plugin register: %v", err)
+			}
+		}
 	}
 
 	server.setupRoutes()

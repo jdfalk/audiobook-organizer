@@ -1,0 +1,261 @@
+// file: internal/plugins/deluge/centralization.go
+// version: 1.0.0
+// guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
+// last-edited: 2026-05-07
+
+package deluge
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
+)
+
+func (p *Plugin) centralizationDef() sdk.OperationDef {
+	return sdk.OperationDef{
+		ID:              "deluge.centralize",
+		Plugin:          "deluge",
+		DisplayName:     "Centralize Deluge books",
+		Description:     "Moves Deluge-sourced audiobooks from protected paths into the main library.",
+		ResumePolicy:    sdk.ResumeRestart,
+		DefaultPriority: sdk.PriorityNormal,
+		ConcurrencyKey:  "deluge.centralize",
+		Cancellable:     true,
+		Isolate:         false,
+		Timeout:         24 * time.Hour,
+		Run:             p.runCentralization,
+		Capabilities: []sdk.Capability{
+			sdk.CapLibraryRead,
+			sdk.CapLibraryWrite,
+			sdk.CapFilesRead,
+			sdk.CapFilesWrite,
+		},
+		MinCheckpointInterval: 30 * time.Second, // checkpoint after each file
+	}
+}
+
+// centralizationCheckpoint tracks state across restarts.
+type centralizationCheckpoint struct {
+	ProcessedFiles int    `json:"processed_files"`
+	TotalFiles     int    `json:"total_files"`
+	LastBookFileID string `json:"last_book_file_id"`
+	LastError      string `json:"last_error,omitempty"`
+}
+
+func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, reporter sdk.Reporter) error {
+	cfg := &config.AppConfig
+
+	// Load checkpoint if resuming from a restart.
+	var checkpoint centralizationCheckpoint
+	if err := reporter.Checkpoint(nil); err == nil && params != nil {
+		// Try to unmarshal checkpoint from last run
+		_ = json.Unmarshal(params, &checkpoint)
+	}
+
+	_ = reporter.UpdateProgress(0, 100, "Loading Deluge-imported files...")
+
+	// Fetch all BookFiles that have a DelugeHash set (these were imported from Deluge).
+	bookFiles, err := p.store.GetAllBookFiles()
+	if err != nil {
+		return fmt.Errorf("load book files: %w", err)
+	}
+
+	// Filter to only those with DelugeHash that haven't been imported yet.
+	var toImport []*database.BookFile
+	for i := range bookFiles {
+		bf := &bookFiles[i]
+		if bf.DelugeHash != "" && bf.ImportedFromDelugeAt == nil {
+			toImport = append(toImport, bf)
+		}
+	}
+
+	total := len(toImport)
+	if total == 0 {
+		_ = reporter.UpdateProgress(100, 100, "No files to centralize")
+		return nil
+	}
+
+	if checkpoint.ProcessedFiles == 0 {
+		checkpoint.TotalFiles = total
+	}
+
+	var successCount, skipCount, errCount int
+	lastProcessedIdx := checkpoint.ProcessedFiles
+
+	for i, bf := range toImport {
+		if reporter.IsCanceled() {
+			return context.Canceled
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// Skip already processed files on restart.
+		if i < lastProcessedIdx {
+			continue
+		}
+
+		srcPath := bf.FilePath
+		if srcPath == "" {
+			skipCount++
+			_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Skipped %d files with no path", skipCount))
+			continue
+		}
+
+		// Determine destination directory.
+		var destDir string
+		rel, relErr := filepath.Rel(cfg.RootDir, filepath.Dir(srcPath))
+		if relErr == nil && !filepath.IsAbs(rel) && !isParentTraversal(rel) {
+			// Source is under RootDir — preserve structure.
+			destDir = filepath.Join(cfg.RootDir, rel)
+		} else {
+			// Source is outside RootDir — place directly under RootDir.
+			destDir = cfg.RootDir
+		}
+
+		dest := filepath.Join(destDir, filepath.Base(srcPath))
+
+		// Skip if already at destination.
+		if srcPath == dest {
+			skipCount++
+			_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Skipped %d files already in library", skipCount))
+			continue
+		}
+
+		// Copy the file.
+		if err := os.MkdirAll(destDir, 0o755); err != nil {
+			errCount++
+			checkpoint.LastError = fmt.Sprintf("mkdir %s: %v", destDir, err)
+			reporter.Logger().Error("mkdir failed", "path", destDir, "error", err)
+			_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Error: %s", checkpoint.LastError))
+			continue
+		}
+
+		// Use reflink if available, fall back to copy.
+		if err := reflinkCopy(srcPath, dest); err != nil {
+			if err := ioCopy(srcPath, dest); err != nil {
+				errCount++
+				checkpoint.LastError = fmt.Sprintf("copy %s: %v", srcPath, err)
+				reporter.Logger().Error("copy failed", "src", srcPath, "dest", dest, "error", err)
+				_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Error: %s", checkpoint.LastError))
+				continue
+			}
+		}
+
+		// Update the BookFile record.
+		now := time.Now()
+		bf.DelugeOriginalPath = srcPath
+		bf.FilePath = dest
+		bf.ImportedFromDelugeAt = &now
+
+		if err := p.store.UpdateBookFile(bf.ID, bf); err != nil {
+			errCount++
+			checkpoint.LastError = fmt.Sprintf("update book file: %v", err)
+			reporter.Logger().Error("update book file failed", "id", bf.ID, "error", err)
+			_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Error: %s", checkpoint.LastError))
+			continue
+		}
+
+		// Update Deluge storage path.
+		if cfg.DelugeMoveEnabled && bf.DelugeHash != "" && p.client != nil {
+			moveErr := p.client.MoveStorage([]string{bf.DelugeHash}, filepath.Dir(dest))
+			if moveErr != nil {
+				reporter.Logger().Warn("deluge move_storage failed", "hash", bf.DelugeHash, "error", moveErr)
+				// Non-fatal: continue processing.
+			} else {
+				log.Printf("[INFO] deluge move_storage %s -> %s succeeded", bf.DelugeHash, filepath.Dir(dest))
+			}
+		}
+
+		successCount++
+		checkpoint.ProcessedFiles = i + 1
+
+		// Checkpoint after each file to support fine-grained restart.
+		_ = reporter.Checkpoint(checkpoint)
+
+		progress := (successCount * 100) / total
+		if progress > 100 {
+			progress = 100
+		}
+		_ = reporter.UpdateProgress(progress, 100, fmt.Sprintf("Centralized %d/%d files", successCount, total))
+	}
+
+	_ = reporter.UpdateProgress(100, 100, fmt.Sprintf("Done: %d succeeded, %d skipped, %d errors", successCount, skipCount, errCount))
+	return nil
+}
+
+// Helper functions copied from deluge_import.go
+func isParentTraversal(rel string) bool {
+	return rel == ".." || len(rel) >= 3 && rel[:3] == "../"
+}
+
+// reflinkCopy attempts a reflink (copy-on-write) copy.
+// Falls back to normal copy on error.
+func reflinkCopy(src, dest string) error {
+	// This would use platform-specific system calls.
+	// For now, this is a placeholder that returns an error to force fallback.
+	return fmt.Errorf("reflink not available")
+}
+
+// ioCopy copies a file using standard I/O.
+func ioCopy(src, dest string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open src: %w", err)
+	}
+	defer srcFile.Close()
+
+	destFile, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("create dest: %w", err)
+	}
+	defer destFile.Close()
+
+	_, err = ioCopyWithBuffer(destFile, srcFile)
+	return err
+}
+
+// ioCopyWithBuffer copies from src to dst with a buffer.
+func ioCopyWithBuffer(dst, src *os.File) (written int64, err error) {
+	// Simple buffer copy.
+	buf := make([]byte, 32*1024)
+	return ioCopyBuffer(dst, src, buf)
+}
+
+// ioCopyBuffer copies with a provided buffer.
+func ioCopyBuffer(dst, src *os.File, buf []byte) (written int64, err error) {
+	for {
+		nr, err := src.Read(buf)
+		if nr > 0 {
+			nw, err := dst.Write(buf[0:nr])
+			if nw < 0 || nr < nw {
+				nw = 0
+			}
+			written += int64(nw)
+			if err != nil {
+				return written, err
+			}
+			if nr != nw {
+				return written, fmt.Errorf("short write")
+			}
+		}
+		if err != nil {
+			// io.EOF is expected at EOF
+			if err.Error() == "EOF" {
+				return written, nil
+			}
+			return written, err
+		}
+	}
+}

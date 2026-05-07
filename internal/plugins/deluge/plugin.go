@@ -1,117 +1,61 @@
 // file: internal/plugins/deluge/plugin.go
-// version: 1.1.0
+// version: 1.0.0
+// guid: a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6
+// last-edited: 2026-05-07
 
+// Package deluge implements the UOS plugin for Deluge integration operations.
 package deluge
 
 import (
-	"context"
-	"fmt"
-
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
+	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
-// Plugin wraps the existing Deluge Web JSON-RPC client as a plugin.
+// Plugin wraps Deluge integration operations for the UOS registry.
+// It owns a reference to the Deluge client and protected path cache.
 type Plugin struct {
 	client *delugeclient.Client
+	cache  *delugeclient.ProtectedPathCache
+	store  database.Store
 }
 
-func init() { plugin.Register(&Plugin{}) }
+// New constructs a Deluge plugin. client and cache may be nil if Deluge is not configured;
+// the plugin gracefully returns nil from Register if so.
+func New(client *delugeclient.Client, cache *delugeclient.ProtectedPathCache, store database.Store) *Plugin {
+	return &Plugin{
+		client: client,
+		cache:  cache,
+		store:  store,
+	}
+}
 
-func (p *Plugin) ID() string      { return "deluge" }
-func (p *Plugin) Name() string    { return "Deluge" }
+// ID implements sdk.Plugin.
+func (p *Plugin) ID() string { return "deluge" }
+
+// Name implements sdk.Plugin.
+func (p *Plugin) Name() string { return "Deluge" }
+
+// Version implements sdk.Plugin.
 func (p *Plugin) Version() string { return "1.0.0" }
 
-func (p *Plugin) Capabilities() []plugin.Capability {
-	return []plugin.Capability{plugin.CapDownloadClient}
-}
+// Register registers all Deluge OperationDefs with the UOS registry.
+// If Deluge is not configured (client == nil), Register returns nil silently.
+func (p *Plugin) Register(r sdk.Registry) error {
+	if p.client == nil || p.cache == nil {
+		return nil
+	}
 
-func (p *Plugin) Init(ctx context.Context, deps plugin.Deps) error {
-	url := deps.Config["web_url"]
-	password := deps.Config["password"]
-	if url == "" {
-		return fmt.Errorf("deluge: web_url is required")
+	ops := []sdk.OperationDef{
+		p.protectedPathsSyncDef(),
+		p.centralizationDef(),
+		p.pathUpdateDef(),
 	}
-	client, err := delugeclient.New(url, password)
-	if err != nil {
-		return fmt.Errorf("deluge: failed to create client: %w", err)
-	}
-	p.client = client
-	return nil
-}
 
-func (p *Plugin) Shutdown(ctx context.Context) error {
-	p.client = nil
-	return nil
-}
-
-func (p *Plugin) HealthCheck() error {
-	if p.client == nil {
-		return fmt.Errorf("deluge: not initialized")
-	}
-	connected, err := p.client.Connected()
-	if err != nil {
-		return fmt.Errorf("deluge: health check failed: %w", err)
-	}
-	if !connected {
-		return fmt.Errorf("deluge: web UI not connected to daemon")
+	for _, op := range ops {
+		if err := r.RegisterOp(op); err != nil {
+			return err
+		}
 	}
 	return nil
 }
-
-// --- DownloadClient interface ---
-
-func (p *Plugin) TestConnection() error {
-	if p.client == nil {
-		return fmt.Errorf("deluge: not initialized")
-	}
-	_, err := p.client.Connected()
-	return err
-}
-
-func (p *Plugin) ListTorrents() ([]plugin.TorrentInfo, error) {
-	if p.client == nil {
-		return nil, fmt.Errorf("deluge: not initialized")
-	}
-	torrents, err := p.client.ListTorrents()
-	if err != nil {
-		return nil, err
-	}
-	result := make([]plugin.TorrentInfo, 0, len(torrents))
-	for _, t := range torrents {
-		result = append(result, plugin.TorrentInfo{
-			Hash:     t.Hash,
-			Name:     t.Name,
-			SavePath: t.SavePath,
-			Progress: t.Progress,
-			State:    t.State,
-		})
-	}
-	return result, nil
-}
-
-func (p *Plugin) MoveStorage(torrentHash, newPath string) error {
-	if p.client == nil {
-		return fmt.Errorf("deluge: not initialized")
-	}
-	return p.client.MoveStorage([]string{torrentHash}, newPath)
-}
-
-// Discover returns torrents matching label. Empty label returns all torrents.
-func (p *Plugin) Discover(label string) ([]delugeclient.TorrentStatus, error) {
-	if p.client == nil {
-		return nil, fmt.Errorf("deluge: not initialized")
-	}
-	return p.client.ListTorrentsByLabel(label)
-}
-
-// ListLabels returns all labels defined in the Deluge Label plugin.
-func (p *Plugin) ListLabels() ([]string, error) {
-	if p.client == nil {
-		return nil, fmt.Errorf("deluge: not initialized")
-	}
-	return p.client.ListLabels()
-}
-
-// Ensure Plugin satisfies DownloadClient at compile time.
-var _ plugin.DownloadClient = (*Plugin)(nil)
