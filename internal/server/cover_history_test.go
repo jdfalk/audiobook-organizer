@@ -1,7 +1,7 @@
 // file: internal/server/cover_history_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
-// last-edited: 2026-05-03
+// last-edited: 2026-05-07
 
 package server
 
@@ -24,6 +24,7 @@ func setupCoverHistoryServer(t *testing.T) (*Server, database.Store, string) {
 	gin.SetMode(gin.TestMode)
 
 	rootDir := t.TempDir()
+	origCfg := config.AppConfig
 	config.AppConfig.RootDir = rootDir
 
 	pebblePath := filepath.Join(t.TempDir(), "pebble")
@@ -34,6 +35,7 @@ func setupCoverHistoryServer(t *testing.T) (*Server, database.Store, string) {
 	origStore := database.GetGlobalStore()
 	database.SetGlobalStore(store)
 	t.Cleanup(func() {
+		config.AppConfig = origCfg
 		database.SetGlobalStore(origStore)
 		store.Close()
 	})
