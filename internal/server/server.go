@@ -39,7 +39,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	acoustidplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
 	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
 	delugeplug "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
 	itunesplug "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
@@ -352,13 +351,8 @@ func NewServer(store database.Store) *Server {
 	// Guard on dedupEngine: tests don't initialize the embedding subsystem,
 	// so we skip registration to avoid unexpected mock store calls.
 	if server.dedupEngine != nil {
-		if err := dedupplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore).Register(server.opRegistry); err != nil {
+		if err := dedupplugin.New(server.dedupEngine, resolvedStore).Register(server.opRegistry); err != nil {
 			log.Printf("[server] dedup plugin register: %v", err)
-		}
-		// Register acoustid plugin (UOS-09)
-		acoustidPlugin := acoustidplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore)
-		if err := acoustidPlugin.Register(server.opRegistry); err != nil {
-			log.Printf("[server] acoustid plugin register: %v", err)
 		}
 	}
 
