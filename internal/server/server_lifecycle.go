@@ -24,7 +24,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
@@ -78,7 +77,7 @@ func (s *Server) resumeInterruptedOperations() {
 		case "itunes_import":
 			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
 			if s.opRegistry != nil {
-				_ = s.opRegistry.EnqueueOp(ctx, "itunes.import", nil)
+				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.import", nil)
 			} else {
 				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
@@ -127,7 +126,7 @@ func (s *Server) resumeInterruptedOperations() {
 		case "itunes_path_reconcile":
 			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
 			if s.opRegistry != nil {
-				_ = s.opRegistry.EnqueueOp(ctx, "itunes.path-reconcile", nil)
+				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.path-reconcile", nil)
 			} else {
 				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
@@ -135,7 +134,7 @@ func (s *Server) resumeInterruptedOperations() {
 		case "itunes_path_repair":
 			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
 			if s.opRegistry != nil {
-				_ = s.opRegistry.EnqueueOp(ctx, "itunes.path-repair", nil)
+				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.path-repair", nil)
 			} else {
 				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
