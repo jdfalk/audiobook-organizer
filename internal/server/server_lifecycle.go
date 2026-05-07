@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
 // version: 1.5.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-06
+// last-edited: 2026-05-07
 
 package server
 
@@ -76,26 +76,13 @@ func (s *Server) resumeInterruptedOperations() {
 		var resumeFn operations.OperationFunc
 		switch opType {
 		case "itunes_import":
-			params, _ := operations.LoadParams[operations.ITunesImportParams](store, opID)
-			if params == nil {
-				log.Printf("[WARN] No params found for interrupted iTunes import %s, marking as failed", opID)
-				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
-				continue
+			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
+			if s.opRegistry != nil {
+				_ = s.opRegistry.EnqueueOp(ctx, "itunes.import", nil)
+			} else {
+				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				var mappings []itunesservice.PathMapping
-				for from, to := range params.PathMappings {
-					mappings = append(mappings, itunesservice.PathMapping{From: from, To: to})
-				}
-				return s.itunesSvc.Importer.Execute(ctx, opID, itunesservice.ImportRequest{
-					LibraryPath:      params.LibraryXMLPath,
-					ImportMode:       params.ImportMode,
-					PathMappings:     mappings,
-					SkipDuplicates:   params.SkipDuplicates,
-					FetchMetadata:    params.EnrichMetadata,
-					PreserveLocation: !params.AutoOrganize,
-				}, operations.LoggerFromReporter(progress))
-			}
+			continue
 		case "scan":
 			params, _ := operations.LoadParams[operations.ScanParams](store, opID)
 			if params == nil {
@@ -138,17 +125,21 @@ func (s *Server) resumeInterruptedOperations() {
 		case "metadata-refresh":
 			resumeFn = s.runMetadataRefreshScan
 		case "itunes_path_reconcile":
-			reconcileOpID := opID
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.itunesSvc.Paths.Reconcile(ctx, reconcileOpID, progress)
+			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
+			if s.opRegistry != nil {
+				_ = s.opRegistry.EnqueueOp(ctx, "itunes.path-reconcile", nil)
+			} else {
+				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
+			continue
 		case "itunes_path_repair":
-			repairOpID := opID
-			// Resume always defaults to dry-run for safety — operator
-			// can re-trigger with apply=true once they confirm the report.
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.itunesSvc.Repair.Repair(ctx, repairOpID, true, progress)
+			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
+			if s.opRegistry != nil {
+				_ = s.opRegistry.EnqueueOp(ctx, "itunes.path-repair", nil)
+			} else {
+				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
+			continue
 		case "transcode", "diagnostics_export", "diagnostics_ai",
 			"cleanup_activity_log", "purge_old_logs",
 			"purge-deleted", "tombstone-cleanup",
