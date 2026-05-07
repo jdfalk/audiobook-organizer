@@ -1,7 +1,7 @@
 // file: internal/server/scheduler_tasks.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4ed1afbd-7c63-487a-9a53-3b1b05eb06ee
-// last-edited: 2026-05-02
+// last-edited: 2026-05-07
 
 package server
 
@@ -84,39 +84,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 	})
 
 	// --- Sync tasks ---
-
-	ts.registerTask(TaskDefinition{
-		Name:        "itunes_sync",
-		Description: "Sync with iTunes/Music library",
-		Category:    "sync",
-		TriggerFn: func(source string) (*database.Operation, error) {
-			s.triggerITunesSync()
-			return nil, nil // iTunes sync creates its own operation internally
-		},
-		IsEnabled: func() bool { return config.AppConfig.ITunesSyncEnabled },
-		GetInterval: func() time.Duration {
-			mins := config.AppConfig.ITunesSyncInterval
-			if mins < 1 {
-				mins = 30
-			}
-			return time.Duration(mins) * time.Minute
-		},
-		RunOnStart:             func() bool { return false },
-		RunInMaintenanceWindow: func() bool { return false },
-	})
-
-	ts.registerTask(TaskDefinition{
-		Name:        "itunes_import",
-		Description: "Import from iTunes library",
-		Category:    "sync",
-		TriggerFn: func(source string) (*database.Operation, error) {
-			return nil, fmt.Errorf("iTunes import requires parameters — use the iTunes API directly")
-		},
-		IsEnabled:              func() bool { return true },
-		GetInterval:            func() time.Duration { return 0 },
-		RunOnStart:             func() bool { return false },
-		RunInMaintenanceWindow: func() bool { return false },
-	})
+	// iTunes sync and import are now registered via UOS plugin (UOS-10)
 
 	// --- Maintenance tasks ---
 
@@ -280,22 +248,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowMetadataRefresh },
 	})
 
-	ts.registerTask(TaskDefinition{
-		Name:        "itunes_position_sync",
-		Description: "Sync reading positions between iTunes bookmarks and the app",
-		Category:    "maintenance",
-		TriggerFn: func(source string) (*database.Operation, error) {
-			return ts.triggerOperation("itunes-position-sync", source, func(_ context.Context, progress operations.ProgressReporter) error {
-				pulled, pushed := ts.server.itunesSvc.Positions.Sync()
-				_ = progress.Log("info", fmt.Sprintf("iTunes position sync: pulled %d, pushed %d", pulled, pushed), nil)
-				return nil
-			})
-		},
-		IsEnabled:              func() bool { return true },
-		GetInterval:            func() time.Duration { return 0 },
-		RunOnStart:             func() bool { return true },
-		RunInMaintenanceWindow: func() bool { return true },
-	})
+	// iTunes position sync is now registered via UOS plugin (UOS-10)
 
 	ts.registerTask(TaskDefinition{
 		Name:        "temp_file_cleanup",
