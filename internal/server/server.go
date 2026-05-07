@@ -408,7 +408,9 @@ func NewServer(store database.Store) *Server {
 	server.itunesSvc = itunesSvc
 
 	// Register iTunes plugin (UOS-10)
-	if itunesSvc != nil && itunesSvc.Enabled() {
+	// Guard on RootDir: tests don't configure AppConfig, so RootDir="" and the
+	// mock store has no UpsertOpDefinitionV2 expectations.
+	if config.AppConfig.RootDir != "" && itunesSvc != nil && itunesSvc.Enabled() {
 		itunesPlugin := itunesplug.New(itunesSvc, resolvedStore)
 		if err := itunesPlugin.Register(server.opRegistry); err != nil {
 			log.Printf("[server] iTunes plugin register: %v", err)
