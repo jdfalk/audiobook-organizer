@@ -1,13 +1,44 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.46.0 -->
+<!-- version: 2.47.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-06 -->
+<!-- last-edited: 2026-05-07 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Features
+
+#### May 7, 2026 — UOS-12: Migrate 26 maintenance ops to UOS plugin
+
+- **feat(uos)**: Created `internal/plugins/maintenance/` UOS plugin registering 26
+  OperationDefs migrated from `scheduler_tasks.go`. All defs have explicit
+  `ResumePolicy`, `Capabilities`, and `Timeout`. Hard rules enforced:
+  `reconcile-scan`=ResumeDrop, `isbn-enrichment`=ResumeRestart,
+  `bulk-write-back`=ResumeAsk, `malformed-m4b-transcode`=ResumeAsk.
+- **internal/plugins/maintenance/plugin.go** — new: plugin shell + `Register()`.
+- **internal/plugins/maintenance/deps.go** — new: narrow `ServerDeps` interface
+  + `sdkToOpsAdapter` bridging v2 sdk.Reporter to v1 operations.ProgressReporter.
+- **internal/plugins/maintenance/cleanup.go** — 8 cleanup ops (purge-deleted,
+  tombstone-cleanup, temp-file-cleanup, cleanup-activity-log, purge-old-logs,
+  cleanup-old-backups, trash-cleanup, archive-sweep).
+- **internal/plugins/maintenance/db.go** — db-optimize op.
+- **internal/plugins/maintenance/author.go** — author-dedup-scan, author-split-scan,
+  resolve-production-authors ops.
+- **internal/plugins/maintenance/series.go** — series-normalize, series-prune ops.
+- **internal/plugins/maintenance/metadata.go** — metadata-refresh, metadata-upgrade,
+  isbn-enrichment ops.
+- **internal/plugins/maintenance/reconcile.go** — reconcile-scan op (ResumeDrop).
+- **internal/plugins/maintenance/batch_poller.go** — batch-poller op.
+- **internal/plugins/maintenance/write_back.go** — bulk-write-back op (ResumeAsk).
+- **internal/plugins/maintenance/dedup_ops.go** — dedup-llm-review, ai-dedup-batch ops.
+- **internal/plugins/maintenance/backfill.go** — external-id-backfill,
+  movement-atom-cleanup, malformed-m4b-remux, malformed-m4b-transcode ops.
+- **internal/server/server_maintenance_deps.go** — new: compile-time satisfaction
+  of `maintenance.ServerDeps` by `*Server`; all accessor methods implemented.
+- **internal/server/server.go** — added maintenance plugin construction + registration.
+- **internal/server/server_lifecycle.go** — removed migrated op IDs from
+  `resumeInterruptedOperations` not-resumable case; added UOS-14 cleanup comment.
 
 #### May 6, 2026 — UOS-07: Canary — Migrate dedup.embed-scan to UOS
 
