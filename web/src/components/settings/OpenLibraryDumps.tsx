@@ -1,5 +1,5 @@
 // file: web/src/components/settings/OpenLibraryDumps.tsx
-// version: 2.1.0
+// version: 2.2.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -24,7 +24,6 @@ import {
   startOLDumpImport,
   uploadOLDump,
   deleteOLDumpData,
-  getActiveOperations,
   OLDumpStatus,
   OLDumpTypeStatus,
   OLDownloadProgress,
@@ -167,24 +166,17 @@ export function OpenLibraryDumps() {
     refresh();
   }, [refresh]);
 
-  // Detect running OL import on mount
+  // Detect running OL import on mount — read from v2 store (UOS-13).
   useEffect(() => {
-    const detectRunningImport = async () => {
-      try {
-        const ops = await getActiveOperations();
-        const running = ops.find(
-          (op) =>
-            op.type === 'ol_dump_import' &&
-            !['completed', 'failed', 'canceled'].includes(op.status)
-        );
-        if (running) {
-          setImporting(true);
-        }
-      } catch {
-        // Ignore
-      }
-    };
-    detectRunningImport();
+    const ops = useOperationsStore.getState().activeOperations;
+    const running = ops.find(
+      (op) =>
+        op.type === 'ol_dump_import' &&
+        !['completed', 'failed', 'canceled'].includes(op.status)
+    );
+    if (running) {
+      setImporting(true);
+    }
   }, []);
 
   // Poll while downloading or importing
@@ -195,18 +187,17 @@ export function OpenLibraryDumps() {
     if (hasActiveDownload || importing) {
       pollRef.current = setInterval(() => {
         refresh();
-        // Check if import operation is still running
+        // Check if import operation is still running — read from v2 store (UOS-13).
         if (importing) {
-          getActiveOperations().then((ops) => {
-            const running = ops.find(
-              (op) =>
-                op.type === 'ol_dump_import' &&
-                !['completed', 'failed', 'canceled'].includes(op.status)
-            );
-            if (!running) {
-              setImporting(false);
-            }
-          }).catch((err) => console.error('Failed to poll import status:', err));
+          const ops = useOperationsStore.getState().activeOperations;
+          const running = ops.find(
+            (op) =>
+              op.type === 'ol_dump_import' &&
+              !['completed', 'failed', 'canceled'].includes(op.status)
+          );
+          if (!running) {
+            setImporting(false);
+          }
         }
       }, 3000);
     } else if (pollRef.current) {

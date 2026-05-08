@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.56.0
+// version: 1.57.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-05-11
 
@@ -281,42 +281,39 @@ export const Library = () => {
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
-    // Fetch active operations to hydrate UI on reload
+    // Hydrate UI from v2 store on reload (UOS-13: no v1 getActiveOperations call).
+    // The store is already populated via SSE + loadFromServer at app level.
     (async () => {
-      try {
-        const active = await api.getActiveOperations();
-        for (const op of active) {
-          const partial: api.Operation = {
-            id: op.id,
-            type: op.type,
-            status: op.status,
-            progress: op.progress,
-            total: op.total,
-            message: op.message,
-            created_at: new Date().toISOString(),
-          } as api.Operation;
-          if (op.type === 'scan') setActiveScanOp(partial);
-          if (op.type === 'organize') setActiveOrganizeOp(partial);
-          // Hydrate historical tail logs (last 100)
-          try {
-            const hist = await api.getOperationLogsTail(op.id, 100);
-            if (hist && hist.length) {
-              setOperationLogs((prev) => ({
-                ...prev,
-                [op.id]: hist.map((h: api.OperationLog) => ({
-                  level: h.level,
-                  message: h.message,
-                  details: h.details,
-                  timestamp: Date.parse(h.created_at) || Date.now(),
-                })),
-              }));
-            }
-          } catch (_e) {
-            // ignore hydration errors
+      const active = useOperationsStore.getState().activeOperations;
+      for (const op of active) {
+        const partial: api.Operation = {
+          id: op.id,
+          type: op.type,
+          status: op.status,
+          progress: op.progress,
+          total: op.total,
+          message: op.message,
+          created_at: new Date().toISOString(),
+        } as api.Operation;
+        if (op.type === 'scan') setActiveScanOp(partial);
+        if (op.type === 'organize') setActiveOrganizeOp(partial);
+        // Hydrate historical tail logs (last 100)
+        try {
+          const hist = await api.getOperationLogsTail(op.id, 100);
+          if (hist && hist.length) {
+            setOperationLogs((prev) => ({
+              ...prev,
+              [op.id]: hist.map((h: api.OperationLog) => ({
+                level: h.level,
+                message: h.message,
+                details: h.details,
+                timestamp: Date.parse(h.created_at) || Date.now(),
+              })),
+            }));
           }
+        } catch (_e) {
+          // ignore hydration errors
         }
-      } catch {
-        // ignore
       }
     })();
 
