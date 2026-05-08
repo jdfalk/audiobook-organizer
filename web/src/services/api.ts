@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.20.0
+// version: 2.21.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-06
+// last-edited: 2026-05-08
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -396,16 +396,6 @@ export interface OperationLog {
   message: string;
   details?: string;
   created_at: string;
-}
-
-// Active operations (subset when listing current queue state)
-export interface ActiveOperationSummary {
-  id: string;
-  type: string;
-  status: string;
-  progress: number;
-  total: number;
-  message: string;
 }
 
 // Operations V2 (UOS-05: new timeline endpoint)
@@ -1677,27 +1667,6 @@ export async function getBookChanges(bookId: string): Promise<OperationChange[]>
   }
   const data = await response.json();
   return data.changes || [];
-}
-
-/**
- * @deprecated UI now reads exclusively from the v2 SSE + /operations/timeline (UOS-13).
- * No remaining UI callers as of UOS-13; kept alive only for backwards compat.
- * Will be deleted in UOS-14.
- */
-export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
-  const response = await fetch(`${API_BASE}/operations/active`);
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to fetch active operations');
-  }
-  const body = await response.json();
-  // Backend wraps every successful response in `{ data: ... }` via
-  // RespondWithOK; the actual payload is `{ data: { operations: [...] } }`.
-  // The previous read used top-level `body.operations`, which was always
-  // undefined, so this function silently returned `[]` — making the
-  // Activity page's "Active Operations" section permanently empty AND
-  // breaking the bell icon's auto-discovery of in-flight ops triggered
-  // outside of the dedup page.
-  return body?.data?.operations || body?.operations || [];
 }
 
 // System
@@ -3110,18 +3079,6 @@ export async function batchUnrejectCandidates(operationId: string, bookIds: stri
   });
   if (!response.ok) throw await buildApiError(response, 'Failed to unreject candidates');
   return response.json();
-}
-
-/**
- * @deprecated UI now reads exclusively from the v2 SSE + /operations/timeline (UOS-13).
- * No remaining UI callers as of UOS-13; kept alive only for backwards compat.
- * Will be deleted in UOS-14.
- */
-export async function getRecentCompletedOperations(): Promise<Operation[]> {
-  const response = await fetch(`${API_BASE}/operations/recent`);
-  if (!response.ok) throw await buildApiError(response, 'Failed to get recent operations');
-  const data = await response.json();
-  return data.operations || [];
 }
 
 export async function revertToSnapshot(bookId: string, timestamp: string): Promise<{ message: string; book: Book }> {

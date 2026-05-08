@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-07
+// last-edited: 2026-05-08
 
 package server
 
@@ -75,7 +75,7 @@ func (s *Server) resumeInterruptedOperations() {
 		var resumeFn operations.OperationFunc
 		switch opType {
 		case "itunes_import":
-			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
+			// Migrated to UOS (itunes.import); re-enqueue via registry on resume.
 			if s.opRegistry != nil {
 				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.import", nil)
 			} else {
@@ -124,7 +124,7 @@ func (s *Server) resumeInterruptedOperations() {
 		case "metadata-refresh":
 			resumeFn = s.runMetadataRefreshScan
 		case "itunes_path_reconcile":
-			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
+			// Migrated to UOS (itunes.path-reconcile); re-enqueue via registry on resume.
 			if s.opRegistry != nil {
 				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.path-reconcile", nil)
 			} else {
@@ -132,7 +132,7 @@ func (s *Server) resumeInterruptedOperations() {
 			}
 			continue
 		case "itunes_path_repair":
-			// v1 straggler — cases removed when migrated to UOS; delete in UOS-14
+			// Migrated to UOS (itunes.path-repair); re-enqueue via registry on resume.
 			if s.opRegistry != nil {
 				_, _ = s.opRegistry.EnqueueOp(context.Background(), "itunes.path-repair", nil)
 			} else {
@@ -147,8 +147,6 @@ func (s *Server) resumeInterruptedOperations() {
 			// stuck reconcile_scans that the cancel API couldn't actually
 			// kill. Letting the scheduler re-run it tomorrow is fine.
 			"reconcile_scan":
-			// UOS-12 migrated ops removed — see maintenance plugin (internal/plugins/maintenance);
-			// remaining legacy op IDs above will be cleaned up in UOS-14.
 			// These are not resumable — mark as failed silently.
 			_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
 			_ = operations.ClearState(store, opID)
@@ -1006,12 +1004,18 @@ func (s *Server) setupRoutes() {
 
 			// Operation routes
 			protected.GET("/operations", s.perm(auth.PermLibraryView), s.listOperations)
-			protected.GET("/operations/active", s.perm(auth.PermLibraryView), s.listActiveOperations)
+			// UOS-14: /operations/active and /operations/recent are removed — return 410 Gone.
+			// Use GET /operations/timeline instead.
+			protected.GET("/operations/active", s.perm(auth.PermLibraryView), func(c *gin.Context) {
+				c.JSON(http.StatusGone, gin.H{"error": "gone", "message": "this endpoint has been removed; use GET /api/v1/operations/timeline instead"})
+			})
+			protected.GET("/operations/recent", s.perm(auth.PermLibraryView), func(c *gin.Context) {
+				c.JSON(http.StatusGone, gin.H{"error": "gone", "message": "this endpoint has been removed; use GET /api/v1/operations/timeline instead"})
+			})
 			protected.GET("/operations/stale", s.perm(auth.PermLibraryView), s.listStaleOperations)
 			protected.POST("/operations/scan", s.perm(auth.PermScanTrigger), s.startScan)
 			protected.POST("/operations/organize", s.perm(auth.PermScanTrigger), s.startOrganize)
 			protected.POST("/operations/transcode", s.perm(auth.PermScanTrigger), s.startTranscode)
-			protected.GET("/operations/recent", s.perm(auth.PermLibraryView), s.handleGetRecentOperations)
 
 			// UOS-06: operations v2 SSE + timeline + introspection endpoints
 			protected.GET("/operations/timeline", s.perm(auth.PermLibraryView), s.handleGetOperationTimeline)

@@ -27,6 +27,15 @@
 - **Makefile** — new `sdkguard` target; added to `ci` dependency chain alongside
   `oplint`.
 
+#### May 8, 2026 — UOS-14: Delete v1 legacy API wrappers and deprecated endpoints
+
+- **feat(uos)**: Removed `getActiveOperations()`, `getRecentCompletedOperations()`, and `ActiveOperationSummary` type from `web/src/services/api.ts` (deprecated since UOS-13, no remaining callers).
+- **feat(uos)**: `GET /api/v1/operations/active` and `GET /api/v1/operations/recent` now return 410 Gone with redirect hint to `/api/v1/operations/timeline`.
+- **fix(uos)**: Moved dedup plugin registration to after engine+store init; fixed missing `embeddingStore` arg to `dedupplugin.New()`.
+- **fix(uos)**: Deleted unreachable `triggerEmbedScanLegacy` (pre-UOS-07 reference copy).
+- **fix(uos)**: Cleaned up `server_lifecycle.go` UOS-14 straggler comments.
+- Updated test fixtures that mocked deleted v1 API functions.
+
 #### May 7, 2026 — UOS-12: Migrate 26 maintenance ops to UOS plugin
 
 - **feat(uos)**: Created `internal/plugins/maintenance/` UOS plugin registering 26

@@ -1,6 +1,7 @@
 // file: web/src/pages/Library.importFile.test.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6f4a7b0d-9c9f-4f0b-8d85-1dd9e1ffb913
+// last-edited: 2026-05-08
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -21,7 +22,6 @@ vi.mock('../services/api', () => {
   }
   return {
     ApiError,
-    getActiveOperations: vi.fn().mockResolvedValue([]),
     getOperationLogsTail: vi.fn().mockResolvedValue([]),
     getBooks: vi.fn().mockResolvedValue({
       items: [

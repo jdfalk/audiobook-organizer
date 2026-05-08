@@ -1,6 +1,7 @@
 // file: internal/server/server_handlers_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b1c2d3e4-f5a6-7b8c-9d0e-1f2a3b4c5d6e
+// last-edited: 2026-05-08
 
 package server
 
@@ -177,11 +178,11 @@ func TestOperationEndpoints(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	// List active operations
+	// /operations/active returns 410 Gone since UOS-14 (removed in favour of /operations/timeline)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/operations/active", nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusGone, w.Code)
 
 	// Test get operation status
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/operations/nonexistent/status", nil)
