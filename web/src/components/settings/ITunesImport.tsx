@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.16.0
+// version: 1.17.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 // last-edited: 2026-05-05
 
@@ -58,7 +58,6 @@ import { WriteBackPreviewTable } from './WriteBackPreviewTable';
 import {
   ApiError,
   cancelOperation,
-  getActiveOperations,
   getConfig,
   getITunesBooks,
   getITunesImportStatus,
@@ -232,24 +231,20 @@ export function ITunesImport() {
     return () => clearInterval(interval);
   }, [settings.libraryPath]);
 
-  // Detect an already-running iTunes import on mount
+  // Detect an already-running iTunes import on mount — read from v2 store (UOS-13).
   useEffect(() => {
     let cancelled = false;
     const detectRunningImport = async () => {
-      try {
-        const ops = await getActiveOperations();
-        if (cancelled) return;
-        const running = ops.find(
-          (op) =>
-            op.type === 'itunes_import' &&
-            !['completed', 'failed', 'canceled'].includes(op.status)
-        );
-        if (running) {
-          setImporting(true);
-          await pollImportStatus(running.id);
-        }
-      } catch {
-        // Ignore — API may not be ready
+      const ops = useOperationsStore.getState().activeOperations;
+      if (cancelled) return;
+      const running = ops.find(
+        (op) =>
+          op.type === 'itunes_import' &&
+          !['completed', 'failed', 'canceled'].includes(op.status)
+      );
+      if (running) {
+        setImporting(true);
+        await pollImportStatus(running.id);
       }
     };
     detectRunningImport();
