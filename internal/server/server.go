@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-08
 
@@ -373,12 +373,11 @@ func NewServer(store database.Store) *Server {
 	// later in this function (kept for the GlobalQueue back-compat) is
 	// a no-op once this assignment lands.
 	if server.queue == nil {
-		server.queue = operations.NewOperationQueue(resolvedStore, 8, nil, server.hub)
+		innerQ := operations.NewOperationQueue(resolvedStore, 8, nil, server.hub)
+		server.queue = operations.NewBridgeQueue(innerQ, resolvedStore)
 		// Long-running maintenance ops (path repair scans 80K+ files
 		// across many spinning disks) need more than the 2-hour default.
-		if oq, ok := server.queue.(*operations.OperationQueue); ok {
-			oq.SetOperationTimeout(6 * time.Hour)
-		}
+		server.queue.SetOperationTimeout(6 * time.Hour)
 		operations.GlobalQueue = server.queue
 	}
 	itunesSvc, err := itunesservice.New(itunesservice.Deps{
@@ -629,7 +628,8 @@ func NewServer(store database.Store) *Server {
 	realtime.SetGlobalHub(server.hub)
 
 	if server.queue == nil {
-		server.queue = operations.NewOperationQueue(resolvedStore, 8, nil, server.hub)
+		innerQ := operations.NewOperationQueue(resolvedStore, 8, nil, server.hub)
+		server.queue = operations.NewBridgeQueue(innerQ, resolvedStore)
 		operations.GlobalQueue = server.queue
 	}
 
@@ -688,9 +688,7 @@ func NewServer(store database.Store) *Server {
 	// Wire activity log dual-write hooks
 	if server.activityService != nil {
 		// Task 10: Operation changes → activity log (injected via interface)
-		if oq, ok := server.queue.(*operations.OperationQueue); ok {
-			oq.SetActivityLogger(&activityServiceLogger{svc: server.activityService})
-		}
+		server.queue.SetActivityLogger(&activityServiceLogger{svc: server.activityService})
 
 		// Task 11/14: Metadata fetch service → activity log
 		server.metadataFetchService.SetActivityService(server.activityService)

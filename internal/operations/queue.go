@@ -1,5 +1,5 @@
 // file: internal/operations/queue.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 7d6e5f4a-3c2b-1a09-8f7e-6d5c4b3a2190
 
 package operations
@@ -59,10 +59,13 @@ type QueuedOperation struct {
 // Queue defines the interface for operation queue management
 type Queue interface {
 	Enqueue(id, opType string, priority int, fn OperationFunc) error
+	EnqueueResume(id, opType string, priority int, fn OperationFunc) error
 	Cancel(id string) error
 	ActiveOperations() []ActiveOperation
 	Shutdown(timeout time.Duration) error
 	SetStore(store database.OperationStore)
+	SetOperationTimeout(d time.Duration)
+	SetActivityLogger(l ActivityLogger)
 }
 
 // OperationQueue manages async operations with priority handling
