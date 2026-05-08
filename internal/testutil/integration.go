@@ -1,7 +1,7 @@
 // file: internal/testutil/integration.go
 // version: 1.3.0
-// last-edited: 2026-05-07
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-05-07
 
 package testutil
 
