@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.7.0
+// version: 3.8.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useState } from 'react';
@@ -403,6 +403,14 @@ export function OperationsIndicator() {
                 <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
                   {op.message}
                 </Typography>
+              )}
+              {op.current_item && op.status === 'running' && (
+                <Tooltip title={op.current_item} placement="bottom-start">
+                  <Typography variant="caption" color="text.disabled" display="block" noWrap
+                    sx={{ fontStyle: 'italic', fontSize: '0.68rem' }}>
+                    {op.current_item}
+                  </Typography>
+                </Tooltip>
               )}
               {op.type === 'metadata_candidate_fetch' && op.status === 'completed' && (
                 <Button

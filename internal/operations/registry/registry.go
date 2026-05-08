@@ -1,7 +1,7 @@
 // file: internal/operations/registry/registry.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c
-// last-edited: 2026-05-06
+// last-edited: 2026-05-08
 
 package registry
 
@@ -295,6 +295,18 @@ func (r *Registry) Cancel(opID string) error {
 // plugin. Used by tests and metrics; the dispatcher uses isBlocked internally.
 func (r *Registry) AbandonedCount(plugin string) int {
 	return r.abandoned.countFor(plugin)
+}
+
+// GetCurrentItem returns the last SetCurrentItem label for a running operation.
+// Returns empty string if the op is not running or no label has been set.
+func (r *Registry) GetCurrentItem(opID string) string {
+	r.mu.RLock()
+	h, ok := r.running[opID]
+	r.mu.RUnlock()
+	if !ok {
+		return ""
+	}
+	return h.getCurrentItem()
 }
 
 // ActiveDefs returns all registered OperationDefs.
