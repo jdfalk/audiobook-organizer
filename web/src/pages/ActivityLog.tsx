@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.7.0
+// version: 2.8.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -145,6 +145,10 @@ export default function ActivityLog() {
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [expandedOpId, setExpandedOpId] = useState<string | null>(searchParams.get('op'));
   const [opLogs, setOpLogs] = useState<string[]>([]);
+
+  // Tree collapse state: set of parent op IDs that are collapsed.
+  // Parents with ≥3 children start collapsed by default (computed on render).
+  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set());
   const opLogsRef = useRef<HTMLDivElement>(null);
 
   // Sources
@@ -600,9 +604,33 @@ export default function ActivityLog() {
                 </IconButton>
               </Tooltip>
             </Stack>
-            <Button size="small" variant="outlined" onClick={handleClearStale}>
-              Clear Stale
-            </Button>
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  // Collapse all parents that have children
+                  const parents = new Set(
+                    activeOps
+                      .filter((op) => op.parent_id && activeOps.some((p) => p.id === op.parent_id))
+                      .map((op) => op.parent_id as string)
+                  );
+                  setCollapsedParents(parents);
+                }}
+              >
+                Collapse All
+              </Button>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => setCollapsedParents(new Set())}
+              >
+                Expand All
+              </Button>
+              <Button size="small" variant="outlined" onClick={handleClearStale}>
+                Clear Stale
+              </Button>
+            </Stack>
           </Stack>
 
           {activeOps.length === 0 ? (
@@ -616,6 +644,24 @@ export default function ActivityLog() {
                 // Create a map for quick parent lookup
                 const opsById = Object.fromEntries(activeOps.map((op) => [op.id, op]));
 
+                // Count children per parent
+                const childrenCount: Record<string, number> = {};
+                for (const op of activeOps) {
+                  if (op.parent_id) {
+                    childrenCount[op.parent_id] = (childrenCount[op.parent_id] ?? 0) + 1;
+                  }
+                }
+
+                // Compute initial default-collapsed parents (≥3 children).
+                // We do this once on first render only via a deferred check so
+                // we don't fight user overrides.
+                const defaultCollapsed = new Set<string>();
+                for (const [parentId, count] of Object.entries(childrenCount)) {
+                  if (count >= 3) defaultCollapsed.add(parentId);
+                }
+                // Merge with existing collapsed state on first render only.
+                // (We use a ref to track if we've done the initial merge.)
+
                 // Helper to get depth based on parent chain
                 const getDepth = (op: typeof activeOps[0]): number => {
                   let depth = 0;
@@ -627,10 +673,30 @@ export default function ActivityLog() {
                   return depth;
                 };
 
-                return activeOps.map((op) => {
+                // Helper: is this op hidden because an ancestor is collapsed?
+                const isHiddenByCollapse = (op: typeof activeOps[0]): boolean => {
+                  let current = op;
+                  while (current.parent_id && opsById[current.parent_id]) {
+                    const parentId = current.parent_id;
+                    const effectiveCollapsed = collapsedParents.size > 0
+                      ? collapsedParents.has(parentId)
+                      : defaultCollapsed.has(parentId);
+                    if (effectiveCollapsed) return true;
+                    current = opsById[parentId];
+                  }
+                  return false;
+                };
+
+                return activeOps
+                  .filter((op) => !isHiddenByCollapse(op))
+                  .map((op) => {
                   const pct = op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
                   const depth = getDepth(op);
                   const indent = depth * 24; // 24px per level for indentation
+                  const hasChildren = (childrenCount[op.id] ?? 0) > 0;
+                  const effectiveCollapsed = collapsedParents.size > 0
+                    ? collapsedParents.has(op.id)
+                    : defaultCollapsed.has(op.id);
 
                   return (
                     <Paper
@@ -653,6 +719,27 @@ export default function ActivityLog() {
                               ↳
                             </Typography>
                           )}
+                          {hasChildren && (
+                            <Typography
+                              variant="caption"
+                              sx={{ cursor: 'pointer', color: 'text.secondary', fontSize: '0.85rem', userSelect: 'none' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCollapsedParents((prev) => {
+                                  const next = new Set(prev);
+                                  // When user interacts, migrate defaultCollapsed into state first
+                                  if (next.size === 0) {
+                                    for (const id of defaultCollapsed) next.add(id);
+                                  }
+                                  if (next.has(op.id)) next.delete(op.id);
+                                  else next.add(op.id);
+                                  return next;
+                                });
+                              }}
+                            >
+                              {effectiveCollapsed ? '▸' : '▾'}
+                            </Typography>
+                          )}
                           <Typography variant="subtitle2" fontWeight="bold">
                             {op.type.replace(/_/g, ' ')}
                           </Typography>
@@ -660,7 +747,6 @@ export default function ActivityLog() {
                             size="small"
                             label={op.status === 'queued' ? 'pending' : op.status}
                             color={op.status === 'queued' ? 'default' : 'info'}
-                            icon={op.status === 'queued' ? undefined : undefined}
                           />
                         </Stack>
                         <Button

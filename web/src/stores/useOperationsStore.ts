@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 2.1.0
+// version: 3.0.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -16,9 +16,7 @@ export interface ActiveOperation {
   message: string;
   startedAt?: number; // timestamp ms
   resumed?: boolean;
-  // Runtime field added when operation comes from v2 source
-  _source?: 'v1' | 'v2';
-  // V2 fields (optional, populated when coming from v2)
+  // V2 fields (populated from v2 timeline/SSE)
   parent_id?: string | null;
   current_phase?: string | null;
   current_item?: string | null;
@@ -42,19 +40,6 @@ interface OperationsState {
   closeSSE: () => void;
 }
 
-// Converts v1 operation (ActiveOperationSummary) to unified ActiveOperation
-function fromV1(op: api.ActiveOperationSummary): ActiveOperation {
-  return {
-    id: op.id,
-    type: op.type,
-    status: op.status,
-    progress: op.progress,
-    total: op.total,
-    message: op.message,
-    _source: 'v1',
-  };
-}
-
 // Converts v2 operation to unified ActiveOperation
 function fromV2(op: api.OperationV2): ActiveOperation {
   return {
@@ -64,7 +49,6 @@ function fromV2(op: api.OperationV2): ActiveOperation {
     progress: op.progress_current ?? 0,
     total: op.progress_total ?? 0,
     message: op.progress_message ?? op.display_name ?? '',
-    _source: 'v2',
     parent_id: op.parent_id,
     current_phase: op.current_phase,
     current_item: op.current_item,
@@ -111,36 +95,12 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
 
   loadFromServer: async () => {
     try {
-      // Load from both v1 and v2 in parallel
-      const [v1Active, v1Recent, v2Ops] = await Promise.all([
-        api.getActiveOperations(),
-        api.getRecentCompletedOperations(),
-        api.getOperationTimeline(15),
-      ]);
+      // Load exclusively from v2 timeline endpoint.
+      const v2Ops = await api.getOperationTimeline(15);
 
       set(() => {
-        // Start with empty operations map
         const merged: Record<string, ActiveOperation> = {};
 
-        // Add v1 active operations
-        for (const op of v1Active) {
-          merged[op.id] = fromV1(op);
-        }
-
-        // Add v1 recent (completed) operations
-        for (const op of v1Recent) {
-          merged[op.id] = {
-            id: op.id,
-            type: op.type,
-            status: op.status,
-            progress: op.progress,
-            total: op.total,
-            message: op.message,
-            _source: 'v1',
-          };
-        }
-
-        // Merge v2 operations (v2 wins on id collision)
         for (const op of v2Ops) {
           merged[op.id] = fromV2(op);
         }
@@ -161,6 +121,8 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
 
     notify(resumed ? `${label} resumed` : `${label} started`, 'info');
 
+    // Insert an optimistic entry so the bell shows activity immediately.
+    // The SSE op.created/op.updated events will update it with real data.
     const op: ActiveOperation = {
       id: operationId,
       type,
@@ -181,41 +143,8 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
       };
     });
 
-    const poll = async () => {
-      try {
-        const status = await api.getOperationStatus(operationId);
-        const updated: ActiveOperation = {
-          id: operationId,
-          type,
-          status: status.status,
-          progress: status.progress,
-          total: status.total,
-          message: status.message,
-          resumed,
-        };
-
-        get().updateOperation(updated);
-
-        if (['completed', 'failed', 'canceled'].includes(status.status)) {
-          const n = useAppStore.getState().addNotification;
-          if (status.status === 'completed') {
-            n(`${label} completed`, 'success');
-          } else if (status.status === 'failed') {
-            n(`${label} failed`, 'error');
-          } else {
-            n(`${label} canceled`, 'info');
-          }
-          setTimeout(() => get().removeOperation(operationId), 10000);
-          return;
-        }
-
-        setTimeout(poll, 2000);
-      } catch {
-        setTimeout(poll, 5000);
-      }
-    };
-
-    setTimeout(poll, 1000);
+    // Trigger a server load shortly after to catch any v2 op registration.
+    setTimeout(() => get().loadFromServer(), 1500);
   },
 
   removeOperation: (operationId: string) => {

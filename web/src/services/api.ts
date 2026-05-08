@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.18.0
+// version: 2.19.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-06
 
@@ -1679,6 +1679,11 @@ export async function getBookChanges(bookId: string): Promise<OperationChange[]>
   return data.changes || [];
 }
 
+/**
+ * @deprecated UI now reads exclusively from the v2 SSE + /operations/timeline (UOS-13).
+ * This wrapper is kept alive for callers outside useOperationsStore; it will be
+ * deleted in UOS-14.
+ */
 export async function getActiveOperations(): Promise<ActiveOperationSummary[]> {
   const response = await fetch(`${API_BASE}/operations/active`);
   if (!response.ok) {
@@ -3107,6 +3112,11 @@ export async function batchUnrejectCandidates(operationId: string, bookIds: stri
   return response.json();
 }
 
+/**
+ * @deprecated UI now reads exclusively from the v2 SSE + /operations/timeline (UOS-13).
+ * This wrapper is kept alive for OperationsIndicator's "Recent" section; it will be
+ * deleted in UOS-14.
+ */
 export async function getRecentCompletedOperations(): Promise<Operation[]> {
   const response = await fetch(`${API_BASE}/operations/recent`);
   if (!response.ok) throw await buildApiError(response, 'Failed to get recent operations');

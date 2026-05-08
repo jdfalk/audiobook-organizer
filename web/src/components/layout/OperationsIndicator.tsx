@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.5.0
+// version: 3.6.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useEffect, useState } from 'react';
@@ -29,7 +29,6 @@ import {
 } from '../../stores/useOperationsStore';
 import {
   cancelOperation,
-  getActiveOperations,
   getRecentCompletedOperations,
   type Operation,
 } from '../../services/api';
@@ -126,43 +125,13 @@ export function OperationsIndicator() {
   const activeOperations = useOperationsStore(
     (state) => state.activeOperations
   );
-  const startPolling = useOperationsStore((state) => state.startPolling);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [recentOps, setRecentOps] = useState<Operation[]>([]);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const checkActiveOps = async () => {
-      try {
-        const ops = await getActiveOperations();
-        if (cancelled) return;
-        const store = useOperationsStore.getState();
-        for (const op of ops) {
-          const alreadyTracked = store.activeOperations.some(
-            (a) => a.id === op.id
-          );
-          if (
-            !alreadyTracked &&
-            !['completed', 'failed', 'canceled'].includes(op.status)
-          ) {
-            startPolling(op.id, op.type, true);
-          }
-        }
-      } catch {
-        // Ignore
-      }
-    };
-
-    void checkActiveOps();
-    const interval = setInterval(checkActiveOps, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [startPolling]);
+  // Active ops are now discovered exclusively via SSE (op.created) and
+  // loadFromServer (v2 timeline). No v1 polling loop needed here.
 
   useEffect(() => {
     let cancelled = false;
