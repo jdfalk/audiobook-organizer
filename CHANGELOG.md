@@ -1,13 +1,31 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.47.0 -->
+<!-- version: 2.48.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-07 -->
+<!-- last-edited: 2026-05-08 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Features
+
+#### May 8, 2026 — UOS-15: Promote pkg/plugin/sdk to stable public API
+
+- **docs(uos)**: Promotes `pkg/plugin/sdk` to STABLE contract. No production
+  code changes; docs-only + CI lint.
+- **docs/development/writing-a-plugin.md** — new: full tutorial covering Plugin
+  lifecycle, OperationDef contract, ResumePolicy decision tree, Isolate flag,
+  capability declarations, schedules/triggers, testing patterns, and a worked
+  60-line example.
+- **pkg/plugin/sdk/doc.go** — updated (v2.0.0): expanded package godoc with
+  30-line minimal plugin example and explicit stability contract listing all
+  stable identifiers.
+- **tools/cmd/sdkguard/main.go** — new: CI tool that shells to `go list -deps
+  ./pkg/plugin/sdk/...` and asserts no unexpected `internal/` packages appear in
+  the dependency tree. Uses an allowlist for the established backplane
+  (operations/registry, auth, and transitive deps).
+- **Makefile** — new `sdkguard` target; added to `ci` dependency chain alongside
+  `oplint`.
 
 #### May 7, 2026 — UOS-12: Migrate 26 maintenance ops to UOS plugin
 

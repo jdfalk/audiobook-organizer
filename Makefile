@@ -1,7 +1,7 @@
 # file: Makefile
-# version: 2.10.0
+# version: 2.11.0
 # guid: c1d2e3f4-g5h6-7890-ijkl-m1234567890n
-# last-edited: 2026-05-06
+# last-edited: 2026-05-08
 
 BINARY := audiobook-organizer
 ROOT_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -16,7 +16,7 @@ export GOEXPERIMENT := jsonv2
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
         test test-all test-frontend test-e2e coverage coverage-check ci \
-        vet mocks mocks-check check-mock-fresh staticcheck oplint \
+        vet mocks mocks-check check-mock-fresh staticcheck oplint sdkguard \
         docker docker-run docker-stop \
         release-dry-run release-snapshot version \
         build-mtls-bridge build-mtls-bridge-windows
@@ -48,6 +48,7 @@ help:
 	@echo "  make test-e2e       - Run Playwright E2E tests"
 	@echo "  make coverage       - Generate coverage report"
 	@echo "  make coverage-check - Verify 30% coverage threshold"
+	@echo "  make sdkguard       - Assert pkg/plugin/sdk has no unexpected internal/ deps"
 	@echo "  make ci             - Full CI: all tests + coverage check"
 	@echo ""
 	@echo "Docker:"
@@ -202,6 +203,12 @@ oplint:
 	@go run ./tools/cmd/oplint ./internal/plugins/...
 	@echo "✅ Plugin import lint passed"
 
+## sdkguard: Assert pkg/plugin/sdk has no unexpected internal/ dependencies
+sdkguard:
+	@echo "🔍 Running SDK guard (asserting no new internal/ deps in pkg/plugin/sdk)..."
+	@go run ./tools/cmd/sdkguard/main.go
+	@echo "✅ SDK guard passed"
+
 ## test-all: Run all tests (backend + frontend)
 test-all: test web-test
 
@@ -237,8 +244,8 @@ coverage-check:
 	fi; \
 	echo "✅ Coverage $$coverage% meets 30% threshold"
 
-## ci: Full CI check (vet + mocks-check + mock freshness + staticcheck + all tests + coverage)
-ci: mocks-check check-mock-fresh staticcheck test-all coverage-check
+## ci: Full CI check (vet + mocks-check + mock freshness + staticcheck + sdkguard + all tests + coverage)
+ci: mocks-check check-mock-fresh staticcheck sdkguard test-all coverage-check
 	@echo "✅ All CI checks passed!"
 
 ## build-mtls-bridge: Build the mTLS bridge binary (macOS)
