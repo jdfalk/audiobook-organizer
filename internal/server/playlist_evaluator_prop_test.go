@@ -1,28 +1,20 @@
 // file: internal/server/playlist_evaluator_prop_test.go
-// version: 1.1.0
+// version: 1.3.0
 // guid: bcc094f5-1645-44d3-be21-3087888fdaea
 
-// Property-based tests for the smart-playlist evaluator in
-// internal/server/playlist_evaluator.go. These properties express
-// invariants that must hold regardless of input, drawing their fuzz
-// inputs from the shared rapidgen generators:
+// Property-based tests for the smart-playlist evaluator.
 //
-//   - Limit is respected: EvaluateSmartPlaylist(limit=N) returns at
-//     most N IDs. Truncation happens AFTER sort, so any N-sized cap
-//     on an arbitrarily-large candidate set must hold.
-//   - Empty query errors: empty or whitespace-only queries return an
-//     error without crashing or returning a non-nil result slice.
-//   - Deterministic evaluation: same query + same seeded index +
-//     same user yields byte-identical results across repeated calls.
-//   - Sort is stable: passing a sortJSON and re-evaluating preserves
-//     exact ID order; a stable in-memory sort must be idempotent.
-//   - Per-user filter isolation: user A's read_status=finished rows
-//     never appear in user B's `read_status:finished` evaluation,
-//     no matter what books either user has touched.
+// Performance note: most tests share ONE PebbleStore + BleveIndex for the
+// entire rapid.Check run (created outside the lambda, closed via t.Cleanup).
+// Books accumulate across iterations but the invariants still hold:
+//   - LimitIsRespected: len(got) <= limit regardless of total book count.
+//   - EmptyQueryErrors: error is returned before the store is touched.
+//   - DeterministicEvaluation: both calls within one iteration see the same set.
+//   - SortIsStable: same analysis.
 //
-// Each property uses a fresh PebbleStore + bleve index per
-// rapid.Check iteration so state never leaks between shrinks or
-// between properties.
+// PerUserFilterIsolation is the exception — it asserts len(aliceGot)==n for
+// THIS iteration's books only, which breaks when alice state from prior
+// iterations lingers. That test uses per-iteration fixtures with rt.Cleanup.
 
 package server
 
@@ -37,13 +29,8 @@ import (
 	"pgregory.net/rapid"
 )
 
-// buildPropEvalFixture creates a fresh PebbleStore and Bleve index,
-// seeds them with n random Books (matching rapidgen.Book), and
-// returns the store, index, and the list of book IDs assigned by
-// CreateBook. Each Book is indexed under a shared author keyword
-// ("common-author") so property queries can match the full set
-// without depending on the randomly-generated titles.
-func buildPropEvalFixture(t *testing.T, rt *rapid.T, n int) (*database.PebbleStore, *search.BleveIndex, []string) {
+// openPropFixture creates a PebbleStore + BleveIndex once, closed in t.Cleanup.
+func openPropFixture(t *testing.T) (*database.PebbleStore, *search.BleveIndex) {
 	t.Helper()
 	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
@@ -57,28 +44,58 @@ func buildPropEvalFixture(t *testing.T, rt *rapid.T, n int) (*database.PebbleSto
 	}
 	t.Cleanup(func() { _ = idx.Close() })
 
+	return store, idx
+}
+
+// seedBooks adds n random books under "common-author" and returns their IDs.
+// Uses batch indexing so all n documents hit Bleve in a single commit.
+// Safe to call repeatedly on the same store+index.
+func seedBooks(rt *rapid.T, store *database.PebbleStore, idx *search.BleveIndex, n int) []string {
 	ids := make([]string, 0, n)
+	docs := make([]search.BookDocument, 0, n)
 	for i := 0; i < n; i++ {
 		b := rapidgen.Book(rt)
 		created, err := store.CreateBook(b)
 		if err != nil {
-			t.Fatalf("create book: %v", err)
+			rt.Fatalf("create book: %v", err)
 		}
 		yr := 0
 		if b.PrintYear != nil {
 			yr = *b.PrintYear
 		}
-		if err := idx.IndexBook(search.BookDocument{
+		docs = append(docs, search.BookDocument{
 			BookID: created.ID,
 			Title:  b.Title,
 			Author: "common-author",
 			Format: b.Format,
 			Year:   yr,
-		}); err != nil {
-			t.Fatalf("index book: %v", err)
-		}
+		})
 		ids = append(ids, created.ID)
 	}
+	if err := idx.IndexBookBatch(docs); err != nil {
+		rt.Fatalf("batch index books: %v", err)
+	}
+	return ids
+}
+
+// buildPropEvalFixture opens a fresh store+index per iteration (registered
+// with rt.Cleanup so they close after each check). Used only by tests that
+// require per-iteration state isolation.
+func buildPropEvalFixture(t *testing.T, rt *rapid.T, n int) (*database.PebbleStore, *search.BleveIndex, []string) {
+	t.Helper()
+	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatalf("pebble open: %v", err)
+	}
+	rt.Cleanup(func() { store.Close() })
+
+	idx, err := search.Open(filepath.Join(t.TempDir(), "bleve"))
+	if err != nil {
+		t.Fatalf("bleve open: %v", err)
+	}
+	rt.Cleanup(func() { _ = idx.Close() })
+
+	ids := seedBooks(rt, store, idx, n)
 	return store, idx, ids
 }
 
@@ -89,11 +106,12 @@ func TestProp_LimitIsRespected(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	store, idx := openPropFixture(t)
 	rapid.Check(t, func(rt *rapid.T) {
 		n := rapid.IntRange(1, 12).Draw(rt, "n_books")
 		limit := rapid.IntRange(1, 20).Draw(rt, "limit")
 
-		store, idx, _ := buildPropEvalFixture(t, rt, n)
+		seedBooks(rt, store, idx, n)
 
 		got, err := EvaluateSmartPlaylist(store, idx, "author:common-author", "", limit, "_local")
 		if err != nil {
@@ -111,11 +129,12 @@ func TestProp_EmptyQueryErrors(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
-	rapid.Check(t, func(rt *rapid.T) {
-		// Draw a random whitespace-only string (possibly empty).
-		ws := rapid.StringMatching(`[ \t\n\r]{0,16}`).Draw(rt, "whitespace")
+	// EvaluateSmartPlaylist checks for an empty query before touching
+	// the store or index — only a non-nil idx is required.
+	store, idx := openPropFixture(t)
 
-		store, idx, _ := buildPropEvalFixture(t, rt, 1)
+	rapid.Check(t, func(rt *rapid.T) {
+		ws := rapid.StringMatching(`[ \t\n\r]{0,16}`).Draw(rt, "whitespace")
 
 		got, err := EvaluateSmartPlaylist(store, idx, ws, "", 0, "_local")
 		if err == nil {
@@ -134,11 +153,12 @@ func TestProp_DeterministicEvaluation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	store, idx := openPropFixture(t)
 	rapid.Check(t, func(rt *rapid.T) {
 		n := rapid.IntRange(1, 10).Draw(rt, "n_books")
 		limit := rapid.IntRange(0, 20).Draw(rt, "limit")
 
-		store, idx, _ := buildPropEvalFixture(t, rt, n)
+		seedBooks(rt, store, idx, n)
 
 		first, err := EvaluateSmartPlaylist(store, idx, "author:common-author", "", limit, "_local")
 		if err != nil {
@@ -168,13 +188,14 @@ func TestProp_SortIsStable(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	store, idx := openPropFixture(t)
 	rapid.Check(t, func(rt *rapid.T) {
 		n := rapid.IntRange(2, 10).Draw(rt, "n_books")
 		field := rapid.SampledFrom([]string{"title", "year", "date_added"}).Draw(rt, "sort_field")
 		direction := rapid.SampledFrom([]string{"asc", "desc"}).Draw(rt, "sort_dir")
 		sortJSON := `[{"field":"` + field + `","direction":"` + direction + `"}]`
 
-		store, idx, _ := buildPropEvalFixture(t, rt, n)
+		seedBooks(rt, store, idx, n)
 
 		first, err := EvaluateSmartPlaylist(store, idx, "author:common-author", sortJSON, 0, "_local")
 		if err != nil {
@@ -199,19 +220,27 @@ func TestProp_SortIsStable(t *testing.T) {
 // written for user A never leaks into user B's evaluation. Filtering
 // B on `read_status:finished` must return zero books when only A has
 // any finished rows.
+//
+// User IDs are scoped to each iteration using the first created book's
+// ULID as a suffix, so accumulated state from prior iterations never
+// contaminates the current check. This allows sharing one store+index.
 func TestProp_PerUserFilterIsolation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	store, idx := openPropFixture(t)
 	rapid.Check(t, func(rt *rapid.T) {
 		n := rapid.IntRange(1, 8).Draw(rt, "n_books")
-		store, idx, bookIDs := buildPropEvalFixture(t, rt, n)
+		bookIDs := seedBooks(rt, store, idx, n)
 
-		// Mark every book finished for user "alice".
+		// Unique per-iteration user IDs prevent cross-iteration state leakage.
+		aliceID := "alice-" + bookIDs[0]
+		bobID := "bob-" + bookIDs[0]
+
 		now := time.Now()
 		for _, id := range bookIDs {
 			if err := store.SetUserBookState(&database.UserBookState{
-				UserID:         "alice",
+				UserID:         aliceID,
 				BookID:         id,
 				Status:         database.UserBookStatusFinished,
 				StatusManual:   true,
@@ -221,9 +250,8 @@ func TestProp_PerUserFilterIsolation(t *testing.T) {
 			}
 		}
 
-		// Alice sees all her finished books.
 		aliceGot, err := EvaluateSmartPlaylist(
-			store, idx, "author:common-author read_status:finished", "", 0, "alice")
+			store, idx, "author:common-author read_status:finished", "", 0, aliceID)
 		if err != nil {
 			rt.Fatalf("evaluate alice: %v", err)
 		}
@@ -232,9 +260,8 @@ func TestProp_PerUserFilterIsolation(t *testing.T) {
 				n, len(aliceGot), aliceGot)
 		}
 
-		// Bob has no state at all — finished filter must reject every book.
 		bobGot, err := EvaluateSmartPlaylist(
-			store, idx, "author:common-author read_status:finished", "", 0, "bob")
+			store, idx, "author:common-author read_status:finished", "", 0, bobID)
 		if err != nil {
 			rt.Fatalf("evaluate bob: %v", err)
 		}

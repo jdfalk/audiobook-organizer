@@ -1,5 +1,5 @@
 // file: internal/search/bleve_index.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3c8e1a2f-4d9b-4f70-a5c6-2f8d0e1b9a47
 //
 // BleveIndex is the single-package wrapper around a Bleve v2 scorch
@@ -91,6 +91,29 @@ func (b *BleveIndex) IndexBook(doc BookDocument) error {
 		doc.Type = BookDocType
 	}
 	return b.idx.Index(doc.BookID, doc)
+}
+
+// IndexBookBatch indexes multiple BookDocuments in a single batch commit.
+// Much faster than calling IndexBook in a loop when adding many documents.
+func (b *BleveIndex) IndexBookBatch(docs []BookDocument) error {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.idx == nil {
+		return fmt.Errorf("bleve index not open")
+	}
+	batch := b.idx.NewBatch()
+	for i := range docs {
+		if docs[i].BookID == "" {
+			continue
+		}
+		if docs[i].Type == "" {
+			docs[i].Type = BookDocType
+		}
+		if err := batch.Index(docs[i].BookID, docs[i]); err != nil {
+			return err
+		}
+	}
+	return b.idx.Batch(batch)
 }
 
 // DeleteBook removes the book with the given ID from the index. No-op

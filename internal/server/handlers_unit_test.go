@@ -1,5 +1,5 @@
 // file: internal/server/handlers_unit_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f8a2d1c3-4b5e-6789-abcd-ef0123456789
 //
 // Unit tests for HTTP handlers using MockStore + httptest.
@@ -20,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/assert"
@@ -701,6 +702,9 @@ func TestHandler_GetSystemActivityLog_WithSourceAndLimit(t *testing.T) {
 // =============== resetSystem ===============
 
 func TestHandler_ResetSystem_Success(t *testing.T) {
+	origCfg := config.AppConfig
+	defer func() { config.AppConfig = origCfg }()
+
 	srv, mockStore, router := setupHandlerTest(t)
 
 	mockStore.EXPECT().Reset().Return(nil)
