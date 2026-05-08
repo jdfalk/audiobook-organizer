@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.16.0 -->
+<!-- version: 8.17.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-08 -->
 
@@ -640,15 +640,22 @@ since it was last edited on 2026-04-11).
 - [ ] **1.11** **Async embed via OpenAI Batch API for nightly re-scans** — submit FullScan as a single Batch job (`endpoint=/v1/embeddings`), 50% discount + 24h SLA, results routed via the existing universal batch poller. Sync path stays for interactive callers. Spec: [`docs/superpowers/bot-tasks/2026-05-04-async-embed-batch-api.md`](docs/superpowers/bot-tasks/2026-05-04-async-embed-batch-api.md)
 - [ ] **1.12** **Tag operation log lines with the originating operation ID** — pipe `op.ID` into a context-bound logger, replace bare `log.Printf` inside operation funcs with op-scoped calls, and write each line into `operation_logs` so the Activity-page log view shows everything (ffmpeg warnings, fingerprint failures, etc.) instead of only the explicit `progress.Log()` calls. Spec: [`docs/superpowers/bot-tasks/2026-05-04-tag-operation-logs.md`](docs/superpowers/bot-tasks/2026-05-04-tag-operation-logs.md)
 - [ ] **1.13** **Broken-files dashboard card + repair pipeline** — persist per-file ffmpeg / fingerprint errors to a new `book_file_errors` table associated with the book, surface a dashboard card ("N books with broken files"), add a `has_file_errors` library facet, and wire a repair pipeline (remux / restore-from-version / mark-ignored / delete-and-rescan). Pairs with 1.12. Spec: [`docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md`](docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md)
-- [ ] **1.14** **Unified Operations System (UOS)** — greenfield redesign of the async-work infrastructure. Single `Registry` owns every OperationDef; plugins register through `pkg/plugin/sdk`; subprocess isolation for heavy ops (ffmpeg / chromaprint / whisper auto-tagged with op_id); explicit `ResumePolicy` per OperationDef structurally prevents queue-jam bugs (incl. today's `reconcile_scan` auto-resume jam); single SSE-fed frontend store replaces three desynced stores. **15 PRs, ~3 weeks.** Human spec: [`docs/superpowers/specs/2026-05-04-unified-operations-system.md`](docs/superpowers/specs/2026-05-04-unified-operations-system.md). Bot-task index: [`docs/superpowers/bot-tasks/2026-05-04-uos-00-index.md`](docs/superpowers/bot-tasks/2026-05-04-uos-00-index.md). Subsumes 1.12 (log tagging) and provides the substrate for 1.13 (broken-files repair) and 1.11 (async embed batch).
+- [x] **1.14** **Unified Operations System (UOS)** — COMPLETE 2026-05-08. All 16 tasks shipped across PRs #740–#759. Single `Registry` owns every OperationDef; plugins register through `pkg/plugin/sdk`; subprocess isolation; explicit `ResumePolicy`; single SSE-fed frontend store. Human spec: [`docs/superpowers/specs/2026-05-04-unified-operations-system.md`](docs/superpowers/specs/2026-05-04-unified-operations-system.md).
+  - [x] **UOS-01** Schema migrations for v2 tables (merged 2026-05-06)
   - [x] **UOS-02** Registry shell + dispatcher + in-process worker pool (PR #741, merged 2026-05-06)
-  - [x] **UOS-08** Watchdog + op_strikes_v2 + startup resume orchestration (abandoned tracker, infinite-restart guard, ResumePolicy dispatch — merged 2026-05-06)
-  - [x] **UOS-03** Reporter DB writes + subprocess runner (merged 2026-05-06)
-  - [x] **UOS-04** Public plugin SDK at `pkg/plugin/sdk` + import lint tool (merged 2026-05-06)
-  - [x] **UOS-06** SSE EventHub + /operations/timeline + introspection endpoints + frontend SSE store integration (merged 2026-05-06)
-  - [x] **UOS-07** Canary — migrate `dedup.embed-scan` as the first live plugin op (merged 2026-05-06)
-  - [x] **UOS-14** Delete v1 legacy API wrappers (`getActiveOperations`, `getRecentCompletedOperations`, `ActiveOperationSummary`) + return 410 Gone for `/operations/active` and `/operations/recent` (PR in progress 2026-05-08)
-  - [ ] **UOS-05**, **UOS-09** and beyond (see bot-task index)
+  - [x] **UOS-03** Reporter DB writes + subprocess runner (PR #745, merged 2026-05-06)
+  - [x] **UOS-04** Public plugin SDK at `pkg/plugin/sdk` + import lint tool (PR #746, merged 2026-05-06)
+  - [x] **UOS-05** Frontend dual-source operations store (PR #740, merged 2026-05-06)
+  - [x] **UOS-06** SSE EventHub + /operations/timeline + introspection endpoints (PR #748, merged 2026-05-06)
+  - [x] **UOS-07** Canary — migrate `dedup.embed-scan` as the first live plugin op (PR #747, merged 2026-05-06)
+  - [x] **UOS-08** Watchdog + op_strikes_v2 + startup resume orchestration (PR #744, merged 2026-05-06)
+  - [x] **UOS-09** Migrate AcoustID + remaining dedup ops to UOS (PR #750, merged 2026-05-08)
+  - [x] **UOS-10** Migrate iTunes plugin (5 ops) to UOS (PR #753, merged 2026-05-08)
+  - [x] **UOS-11** Migrate Deluge plugin (3 ops) to UOS (PR #752, merged 2026-05-08)
+  - [x] **UOS-12** Migrate 26 maintenance ops to UOS plugin (PR #751, merged 2026-05-08)
+  - [x] **UOS-13** Frontend single-source — drop dual-source (PR #754, merged 2026-05-08)
+  - [x] **UOS-14** Delete v1 OperationQueue + legacy endpoints (PR #756, merged 2026-05-08)
+  - [x] **UOS-15** Promote pkg/plugin/sdk to stable public API + sdkguard CI (PR #755, merged 2026-05-08)
 - [ ] **1.15** **UOS amendment — `Reporter.SetCurrentItem(label)` for live "currently working on" ticker** — Sonarr/Radarr-style high-frequency current-item display under the progress bar. New SDK Reporter method that's purely ephemeral (in-memory on the registry's run handle, no DB write); SSE event `op.current_item` patches the frontend store; timeline endpoint returns the cached value so refresh / new tab / re-login re-hydrates. Survives refresh; survives a brief gap on server restart (next per-item iteration repopulates). If we ever want it to survive restart, retrofit is a single column add to `operations_v2` flushed at 30s cadence — explicit out of v1. Implementation footprint: amend §1 (Reporter) + §9 (timeline payload) + UOS-03/UOS-06 bot-tasks. Spec: [`docs/superpowers/bot-tasks/2026-05-05-uos-amendment-current-item.md`](docs/superpowers/bot-tasks/2026-05-05-uos-amendment-current-item.md).
 - [ ] **1.16** **Resizable + dynamically-sortable columns everywhere** — every page that renders a table (library, dedup, activity, iTunes write-back preview, metadata review, etc.) should have draggable column dividers and click-to-sort headers, persisted per-user. Today some pages have it, most don't, and the inconsistency is jarring. Build a single `<ResizableSortableTable>` component (or extend the existing `ConfigurableTable`); roll across pages in follow-ups. Acceptance: every column on every page resizes; every column on every page sorts; user-resized widths and sort states persist via `localStorage` keyed on page+column.
 - [ ] **1.17** **Replace "AO" / "audiobook-organizer" branding with a real product name + logo** — the placeholder "AO" leaks into UI labels (e.g. proposed "AO Path" column on the iTunes write-back dialog), service names, status panels, etc. Pick a product name + minimal logo, apply consistently. Out of scope until name is decided; this entry is the placeholder for the rename sweep.
