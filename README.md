@@ -249,6 +249,14 @@ mock generation.
 | CI/CD | GitHub Actions, GoReleaser |
 | Deployment | Docker (multi-stage), systemd, launchd |
 
+## Plugin Development
+
+Background operations are implemented as UOS plugins using the stable
+`pkg/plugin/sdk` public API. See
+[docs/development/writing-a-plugin.md](docs/development/writing-a-plugin.md)
+for a full tutorial covering lifecycle, `ResumePolicy` selection, capability
+declarations, schedules/triggers, testing patterns, and a worked example.
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
@@ -257,6 +265,7 @@ mock generation.
 - [PebbleDB Keyspace Schema](docs/database-pebble-schema.md)
 - [MVP Specification](docs/mvp-specification.md)
 - [Implementation Plan](docs/mvp-implementation-plan.md)
+- [Writing a Plugin](docs/development/writing-a-plugin.md)
 - [QA Checklist](docs/qa-checklist.md)
 
 ## License
