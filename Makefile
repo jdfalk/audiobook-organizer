@@ -15,7 +15,8 @@ export GOEXPERIMENT := jsonv2
 
 .PHONY: all build build-api run run-api install clean help \
         web-install web-build web-dev web-test web-lint \
-        test test-all test-frontend test-e2e coverage coverage-check ci \
+        test test-short test-all test-all-short test-nightly test-frontend test-e2e \
+        coverage coverage-check coverage-check-short ci \
         vet mocks mocks-check check-mock-fresh staticcheck oplint sdkguard \
         docker docker-run docker-stop \
         release-dry-run release-snapshot version \
@@ -43,13 +44,15 @@ help:
 	@echo "Testing:"
 	@echo "  make test           - Run Go backend tests (full — includes slow prop tests, ~15 min)"
 	@echo "  make test-short     - Run Go backend tests in -short mode (slow prop tests skipped, ~1 min)"
-	@echo "  make test-all       - Run all tests (backend + frontend)"
+	@echo "  make test-all       - Run all tests: backend (full) + frontend"
+	@echo "  make test-all-short - Run all tests: backend (-short) + frontend (for local ci)"
+	@echo "  make test-nightly   - Run all tests including slow property tests (for nightly CI)"
 	@echo "  make test-frontend  - Run frontend tests only"
 	@echo "  make test-e2e       - Run Playwright E2E tests"
 	@echo "  make coverage       - Generate coverage report"
 	@echo "  make coverage-check - Verify 30% coverage threshold"
 	@echo "  make sdkguard       - Assert pkg/plugin/sdk has no unexpected internal/ deps"
-	@echo "  make ci             - Full CI: all tests + coverage check"
+	@echo "  make ci             - Fast CI: short tests + coverage (prop tests skipped)"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker         - Build Docker image"
@@ -209,8 +212,14 @@ sdkguard:
 	@go run ./tools/cmd/sdkguard/main.go
 	@echo "✅ SDK guard passed"
 
-## test-all: Run all tests (backend + frontend)
+## test-all: Run all tests (backend full + frontend)
 test-all: test web-test
+
+## test-all-short: Run all tests with -short backend (prop tests skipped, ~1 min + frontend)
+test-all-short: test-short web-test
+
+## test-nightly: Run full suite including slow property tests (nightly CI only)
+test-nightly: test web-test coverage-check
 
 ## test-frontend: Run frontend tests independently (alias for web-test)
 test-frontend: web-test
@@ -232,7 +241,7 @@ coverage:
 	@echo ""
 	@echo "📄 Detailed report: coverage.html"
 
-## coverage-check: Verify coverage meets 30% threshold
+## coverage-check: Verify coverage meets 30% threshold (full suite)
 coverage-check:
 	@echo "🎯 Checking coverage threshold..."
 	@go test ./... -coverprofile=coverage.out -covermode=atomic >/dev/null 2>&1
@@ -244,8 +253,20 @@ coverage-check:
 	fi; \
 	echo "✅ Coverage $$coverage% meets 30% threshold"
 
-## ci: Full CI check (vet + mocks-check + mock freshness + staticcheck + sdkguard + all tests + coverage)
-ci: mocks-check check-mock-fresh staticcheck sdkguard test-all coverage-check
+## coverage-check-short: Verify coverage using -short suite (prop tests skipped)
+coverage-check-short:
+	@echo "🎯 Checking coverage threshold (-short)..."
+	@go test ./... -short -coverprofile=coverage.out -covermode=atomic >/dev/null 2>&1
+	@coverage=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
+	echo "Coverage: $$coverage%"; \
+	if [ $$(echo "$$coverage < 30" | bc -l) -eq 1 ]; then \
+		echo "❌ Coverage $$coverage% is below 30% threshold"; \
+		exit 1; \
+	fi; \
+	echo "✅ Coverage $$coverage% meets 30% threshold"
+
+## ci: Fast CI check (short tests — prop tests skipped; use test-nightly for full suite)
+ci: mocks-check check-mock-fresh staticcheck sdkguard test-all-short coverage-check-short
 	@echo "✅ All CI checks passed!"
 
 ## build-mtls-bridge: Build the mTLS bridge binary (macOS)

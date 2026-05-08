@@ -1,5 +1,5 @@
 // file: internal/server/server_ai_integration_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6d5c4b3a-2918-1706-f5e4-d3c2b1a09f8e
 // last-edited: 2026-04-23
 
@@ -64,8 +64,7 @@ func TestAIEndpoints_WithStubbedOpenAI(t *testing.T) {
 	t.Cleanup(openAI.Close)
 
 	// Configure AI parsing to be enabled and point at stub server.
-	origCfg := config.AppConfig
-	t.Cleanup(func() { config.AppConfig = origCfg })
+	// (AppConfig is fully restored by defer cleanup() from setupTestServer.)
 	config.AppConfig.EnableAIParsing = true
 	config.AppConfig.OpenAIAPIKey = "test-key"
 	t.Setenv("OPENAI_BASE_URL", openAI.URL+"/v1")

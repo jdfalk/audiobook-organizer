@@ -1,5 +1,5 @@
 // file: internal/server/server_soft_delete_purge_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4a3b2c1d-0e9f-8a7b-6c5d-4e3f2a1b0c9d
 // last-edited: 2026-01-24
 
@@ -48,9 +48,7 @@ func TestRunAutoPurgeSoftDeleted_DeletesOldEntries(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	orig := config.AppConfig
-	t.Cleanup(func() { config.AppConfig = orig })
-
+	// AppConfig is fully restored by defer cleanup() from setupTestServer.
 	config.AppConfig.PurgeSoftDeletedAfterDays = 1
 	config.AppConfig.PurgeSoftDeletedDeleteFiles = true
 
