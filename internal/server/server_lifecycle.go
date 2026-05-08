@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-08
 
@@ -50,11 +50,6 @@ func (s *Server) resumeInterruptedOperations() {
 	interrupted, err := store.GetInterruptedOperations()
 	if err != nil {
 		log.Printf("[WARN] Failed to query interrupted operations: %v", err)
-		return
-	}
-
-	oq, ok := s.queue.(*operations.OperationQueue)
-	if !ok {
 		return
 	}
 
@@ -169,7 +164,7 @@ func (s *Server) resumeInterruptedOperations() {
 			}
 		}
 
-		if err := oq.EnqueueResume(opID, opType, operations.PriorityNormal, resumeFn); err != nil {
+		if err := s.queue.EnqueueResume(opID, opType, operations.PriorityNormal, resumeFn); err != nil {
 			log.Printf("[WARN] Failed to re-enqueue operation %s: %v", opID, err)
 		}
 	}

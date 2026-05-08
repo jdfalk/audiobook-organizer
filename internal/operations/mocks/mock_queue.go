@@ -205,6 +205,146 @@ func (_c *MockQueue_Enqueue_Call) RunAndReturn(run func(id string, opType string
 	return _c
 }
 
+// EnqueueResume provides a mock function for the type MockQueue
+func (_mock *MockQueue) EnqueueResume(id string, opType string, priority int, fn operations.OperationFunc) error {
+	ret := _mock.Called(id, opType, priority, fn)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EnqueueResume")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, int, operations.OperationFunc) error); ok {
+		r0 = returnFunc(id, opType, priority, fn)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockQueue_EnqueueResume_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EnqueueResume'
+type MockQueue_EnqueueResume_Call struct {
+	*mock.Call
+}
+
+// EnqueueResume is a helper method to define mock.On call
+//   - id string
+//   - opType string
+//   - priority int
+//   - fn operations.OperationFunc
+func (_e *MockQueue_Expecter) EnqueueResume(id interface{}, opType interface{}, priority interface{}, fn interface{}) *MockQueue_EnqueueResume_Call {
+	return &MockQueue_EnqueueResume_Call{Call: _e.mock.On("EnqueueResume", id, opType, priority, fn)}
+}
+
+func (_c *MockQueue_EnqueueResume_Call) Run(run func(id string, opType string, priority int, fn operations.OperationFunc)) *MockQueue_EnqueueResume_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 operations.OperationFunc
+		if args[3] != nil {
+			arg3 = args[3].(operations.OperationFunc)
+		}
+		run(arg0, arg1, arg2, arg3)
+	})
+	return _c
+}
+
+func (_c *MockQueue_EnqueueResume_Call) Return(err error) *MockQueue_EnqueueResume_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockQueue_EnqueueResume_Call) RunAndReturn(run func(string, string, int, operations.OperationFunc) error) *MockQueue_EnqueueResume_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetActivityLogger provides a mock function for the type MockQueue
+func (_mock *MockQueue) SetActivityLogger(l operations.ActivityLogger) {
+	_mock.Called(l)
+	return
+}
+
+// MockQueue_SetActivityLogger_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetActivityLogger'
+type MockQueue_SetActivityLogger_Call struct {
+	*mock.Call
+}
+
+// SetActivityLogger is a helper method to define mock.On call
+//   - l operations.ActivityLogger
+func (_e *MockQueue_Expecter) SetActivityLogger(l interface{}) *MockQueue_SetActivityLogger_Call {
+	return &MockQueue_SetActivityLogger_Call{Call: _e.mock.On("SetActivityLogger", l)}
+}
+
+func (_c *MockQueue_SetActivityLogger_Call) Run(run func(l operations.ActivityLogger)) *MockQueue_SetActivityLogger_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 operations.ActivityLogger
+		if args[0] != nil {
+			arg0 = args[0].(operations.ActivityLogger)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockQueue_SetActivityLogger_Call) Return() *MockQueue_SetActivityLogger_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockQueue_SetActivityLogger_Call) RunAndReturn(run func(operations.ActivityLogger)) *MockQueue_SetActivityLogger_Call {
+	_c.Run(run)
+	return _c
+}
+
+// SetOperationTimeout provides a mock function for the type MockQueue
+func (_mock *MockQueue) SetOperationTimeout(d time.Duration) {
+	_mock.Called(d)
+	return
+}
+
+// MockQueue_SetOperationTimeout_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetOperationTimeout'
+type MockQueue_SetOperationTimeout_Call struct {
+	*mock.Call
+}
+
+// SetOperationTimeout is a helper method to define mock.On call
+//   - d time.Duration
+func (_e *MockQueue_Expecter) SetOperationTimeout(d interface{}) *MockQueue_SetOperationTimeout_Call {
+	return &MockQueue_SetOperationTimeout_Call{Call: _e.mock.On("SetOperationTimeout", d)}
+}
+
+func (_c *MockQueue_SetOperationTimeout_Call) Run(run func(d time.Duration)) *MockQueue_SetOperationTimeout_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 time.Duration
+		if args[0] != nil {
+			arg0 = args[0].(time.Duration)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockQueue_SetOperationTimeout_Call) Return() *MockQueue_SetOperationTimeout_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockQueue_SetOperationTimeout_Call) RunAndReturn(run func(time.Duration)) *MockQueue_SetOperationTimeout_Call {
+	_c.Run(run)
+	return _c
+}
+
 // SetStore provides a mock function for the type MockQueue
 func (_mock *MockQueue) SetStore(store database.OperationStore) {
 	_mock.Called(store)
