@@ -1,5 +1,5 @@
 // file: internal/server/server_more_test.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 18a6b0a3-7e78-4e0f-8b8e-0e4c1dbde6de
 // last-edited: 2026-05-08
 
@@ -209,11 +209,6 @@ func TestImportFileEndpoint(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origConfig := config.AppConfig
-	t.Cleanup(func() {
-		config.AppConfig = origConfig
-	})
-
 	tempDir := t.TempDir()
 	filePath := copyFixtureToDir(t, "test_sample.m4b", tempDir)
 	config.AppConfig.SupportedExtensions = []string{".m4b"}
@@ -241,11 +236,6 @@ func TestImportFileEndpoint(t *testing.T) {
 func TestAddImportPathAutoScan(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
-
-	origConfig := config.AppConfig
-	t.Cleanup(func() {
-		config.AppConfig = origConfig
-	})
 
 	importDir := t.TempDir()
 	copyFixtureToDir(t, "test_sample.m4b", importDir)
@@ -291,10 +281,8 @@ func TestAddImportPathFallbackScan(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origConfig := config.AppConfig
 	origQueue := server.queue
 	t.Cleanup(func() {
-		config.AppConfig = origConfig
 		server.queue = origQueue
 	})
 
@@ -322,11 +310,6 @@ func TestAddImportPathFallbackScan(t *testing.T) {
 func TestServerStartGracefulShutdown(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
-
-	origConfig := config.AppConfig
-	t.Cleanup(func() {
-		config.AppConfig = origConfig
-	})
 
 	config.AppConfig.PurgeSoftDeletedAfterDays = 1
 	config.AppConfig.PurgeSoftDeletedDeleteFiles = false
@@ -411,11 +394,6 @@ func TestGetAudiobookAndDashboard(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origConfig := config.AppConfig
-	t.Cleanup(func() {
-		config.AppConfig = origConfig
-	})
-
 	tempDir := t.TempDir()
 	filePath := copyFixtureToDir(t, "test_sample.m4b", tempDir)
 
@@ -473,10 +451,6 @@ func TestParseAudiobookWithAIEndpoint(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origConfig := config.AppConfig
-	t.Cleanup(func() {
-		config.AppConfig = origConfig
-	})
 	config.AppConfig.EnableAIParsing = false
 	config.AppConfig.OpenAIAPIKey = ""
 
@@ -624,11 +598,6 @@ func TestStartScanOperation(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origConfig := config.AppConfig
-	t.Cleanup(func() {
-		config.AppConfig = origConfig
-	})
-
 	rootDir := t.TempDir()
 	importDir := t.TempDir()
 	config.AppConfig.RootDir = rootDir
@@ -663,11 +632,6 @@ func TestStartScanOperation(t *testing.T) {
 func TestStartOrganizeOperation(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
-
-	origConfig := config.AppConfig
-	t.Cleanup(func() {
-		config.AppConfig = origConfig
-	})
 
 	rootDir := t.TempDir()
 	sourceDir := t.TempDir()
@@ -731,11 +695,6 @@ func TestListActiveOperations(t *testing.T) {
 func TestRunAutoPurgeSoftDeleted(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
-
-	origConfig := config.AppConfig
-	t.Cleanup(func() {
-		config.AppConfig = origConfig
-	})
 
 	config.AppConfig.PurgeSoftDeletedAfterDays = 1
 	config.AppConfig.PurgeSoftDeletedDeleteFiles = true
