@@ -1,7 +1,7 @@
 // file: internal/operations/registry/reporter.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
-// last-edited: 2026-05-06
+// last-edited: 2026-05-08
 
 package registry
 
@@ -26,6 +26,11 @@ type Reporter interface {
 	IsCanceled() bool
 	RunPhase(ctx context.Context, name string, fn func(context.Context, Reporter) error) error
 	Trigger(ctx context.Context, eventName string, payload any) error
+	// SetCurrentItem sets the ephemeral "currently working on" label. It is
+	// purely in-memory (no DB write) and fans out via SSE as op.current_item.
+	// Pass an empty string to clear the label. Safe to call once per loop
+	// iteration without measurable cost.
+	SetCurrentItem(label string)
 }
 
 // stubReporter is the UOS-02 stand-in. It buffers log lines in memory
@@ -89,3 +94,6 @@ func (r *stubReporter) Trigger(_ context.Context, _ string, _ any) error {
 	// Event bus wiring lands in UOS-05.
 	return nil
 }
+
+func (r *stubReporter) SetCurrentItem(_ string) {}
+

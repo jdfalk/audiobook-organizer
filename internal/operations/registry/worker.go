@@ -1,7 +1,7 @@
 // file: internal/operations/registry/worker.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-05-06
+// last-edited: 2026-05-08
 
 package registry
 
@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -30,6 +31,20 @@ type runHandle struct {
 	resumePolicy   ResumePolicy
 	cancel         context.CancelFunc
 	abandoned      bool
+	currentItem    string
+	currentItemMu  sync.Mutex
+}
+
+func (h *runHandle) setCurrentItem(label string) {
+	h.currentItemMu.Lock()
+	h.currentItem = label
+	h.currentItemMu.Unlock()
+}
+
+func (h *runHandle) getCurrentItem() string {
+	h.currentItemMu.Lock()
+	defer h.currentItemMu.Unlock()
+	return h.currentItem
 }
 
 // queuedRun is the payload the dispatcher sends to a worker goroutine.
@@ -124,10 +139,12 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 
 	r.logger.Info("registry: starting run", "op_id", qr.opID, "def_id", qr.defID)
 
-	// Build reporter (DB-backed).
+	// Build reporter (DB-backed). Pass a setter so SetCurrentItem updates
+	// the runHandle's in-memory currentItem without a DB write.
+	setItemFn := func(label string) { h.setCurrentItem(label) }
 	reporter := newDBReporter(runCtx, qr.opID, qr.defID, qr.plugin,
 		"", "", // traceID / spanID loaded from DB row in future; empty for now
-		r.store, r.bus, r.logger)
+		r.store, r.bus, r.logger, setItemFn)
 
 	// Subprocess path (Isolate=true): re-exec self.
 	if def.Isolate {

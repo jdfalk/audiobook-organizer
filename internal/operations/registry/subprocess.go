@@ -108,7 +108,7 @@ func RunChildMode(r *Registry) {
 
 	// Create reporter.
 	ctx := context.Background()
-	reporter := newDBReporter(ctx, opID, def.ID, def.Plugin, "", "", r.store, nil, r.logger)
+	reporter := newDBReporter(ctx, opID, def.ID, def.Plugin, "", "", r.store, nil, r.logger, nil)
 
 	// Run.
 	runErr := def.Run(ctx, hs.Params, reporter)

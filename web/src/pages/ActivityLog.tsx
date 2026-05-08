@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.9.0
+// version: 2.10.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -784,6 +784,14 @@ export default function ActivityLog() {
                       <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
                         {op.message}
                       </Typography>
+                      {op.current_item && op.status === 'running' && (
+                        <Tooltip title={op.current_item} placement="bottom-start">
+                          <Typography variant="caption" color="text.disabled" display="block" noWrap
+                            sx={{ fontStyle: 'italic', fontSize: '0.75rem' }}>
+                            {op.current_item}
+                          </Typography>
+                        </Tooltip>
+                      )}
                       <Collapse in={expandedOpId === op.id}>
                         <Box
                           ref={expandedOpId === op.id ? opLogsRef : undefined}

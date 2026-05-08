@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 3.0.0
+// version: 3.1.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -200,6 +200,16 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
         } else if (name === 'op.terminal' && opId) {
           // Operation reached a terminal state — refresh from server.
           get().loadFromServer();
+        } else if (name === 'op.current_item' && opId) {
+          // High-frequency ephemeral label: no DB write, just patch in-memory.
+          const label = (p.label as string | undefined) ?? '';
+          set((state) => {
+            const existing = state.operations[opId];
+            if (!existing) return state;
+            const updated: ActiveOperation = { ...existing, current_item: label || null };
+            const operations = { ...state.operations, [opId]: updated };
+            return { operations, activeOperations: deriveActiveOperations(operations) };
+          });
         }
         // op.log is informational; no store update needed (logs are fetched on-demand).
       },

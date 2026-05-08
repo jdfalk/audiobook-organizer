@@ -438,7 +438,7 @@ export async function getOperationTimeline(sinceMinutes = 15): Promise<Operation
 }
 
 // SSE event types emitted by the operations EventHub (UOS-06).
-export type OperationSSEEventName = 'op.created' | 'op.updated' | 'op.log' | 'op.terminal';
+export type OperationSSEEventName = 'op.created' | 'op.updated' | 'op.log' | 'op.terminal' | 'op.current_item';
 
 export interface OperationSSEHandler {
   onEvent: (name: OperationSSEEventName, payload: unknown) => void;
@@ -457,7 +457,7 @@ export function openOperationsSSE(handler: OperationSSEHandler): EventSource {
   const url = `${API_BASE}/operations/events`;
   const es = new EventSource(url);
 
-  const eventNames: OperationSSEEventName[] = ['op.created', 'op.updated', 'op.log', 'op.terminal'];
+  const eventNames: OperationSSEEventName[] = ['op.created', 'op.updated', 'op.log', 'op.terminal', 'op.current_item'];
   for (const name of eventNames) {
     es.addEventListener(name, (e: MessageEvent) => {
       try {

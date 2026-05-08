@@ -1,7 +1,7 @@
 // file: internal/server/operations_v2_handlers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
-// last-edited: 2026-05-06
+// last-edited: 2026-05-08
 
 // UOS-06: SSE event hub, /operations/timeline, single-op introspection,
 // cancel, trigger-op, and /op-defs endpoints.
@@ -92,7 +92,13 @@ func (s *Server) handleGetOperationTimeline(c *gin.Context) {
 
 	resp := make([]operationV2Response, 0, len(rows))
 	for _, r := range rows {
-		resp = append(resp, rowToResponse(r, s.displayNameFor(r.DefID)))
+		item := rowToResponse(r, s.displayNameFor(r.DefID))
+		if r.Status == "running" && s.opRegistry != nil {
+			if ci := s.opRegistry.GetCurrentItem(r.ID); ci != "" {
+				item.CurrentItem = &ci
+			}
+		}
+		resp = append(resp, item)
 	}
 	httputil.RespondWithOK(c, gin.H{"operations": resp})
 }
@@ -124,8 +130,14 @@ func (s *Server) handleGetOperationV2(c *gin.Context) {
 		logResp = append(logResp, logRowToResponse(l))
 	}
 
+	opResp := rowToResponse(*row, s.displayNameFor(row.DefID))
+	if row.Status == "running" && s.opRegistry != nil {
+		if ci := s.opRegistry.GetCurrentItem(id); ci != "" {
+			opResp.CurrentItem = &ci
+		}
+	}
 	httputil.RespondWithOK(c, gin.H{
-		"operation": rowToResponse(*row, s.displayNameFor(row.DefID)),
+		"operation": opResp,
 		"logs":      logResp,
 	})
 }

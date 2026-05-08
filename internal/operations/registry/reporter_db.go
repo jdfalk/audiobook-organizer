@@ -1,7 +1,7 @@
 // file: internal/operations/registry/reporter_db.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 1a2b3c4d-5e6f-7890-abcd-ef0123456789
-// last-edited: 2026-05-06
+// last-edited: 2026-05-08
 
 package registry
 
@@ -54,6 +54,9 @@ type dbReporter struct {
 	progressMu      sync.Mutex
 	progressCurrent int
 
+	// setCurrentItemFn, if non-nil, updates the runHandle's in-memory label.
+	setCurrentItemFn func(string)
+
 	runCtx context.Context
 }
 
@@ -105,27 +108,31 @@ func NewDBReporterForTest(
 	bus Bus,
 	logger *slog.Logger,
 ) Reporter {
-	return newDBReporter(runCtx, opID, defID, plugin, traceID, spanID, store, bus, logger)
+	return newDBReporter(runCtx, opID, defID, plugin, traceID, spanID, store, bus, logger, nil)
 }
 
 // newDBReporter creates a DB-backed Reporter.
+// setCurrentItemFn, if non-nil, is called by SetCurrentItem to update
+// the registry's in-memory runHandle without a DB write.
 func newDBReporter(
 	runCtx context.Context,
 	opID, defID, plugin, traceID, spanID string,
 	store database.OpsV2Store,
 	bus Bus,
 	logger *slog.Logger,
+	setCurrentItemFn func(string),
 ) Reporter {
 	r := &dbReporter{
-		opID:    opID,
-		defID:   defID,
-		plugin:  plugin,
-		traceID: traceID,
-		spanID:  spanID,
-		store:   store,
-		bus:     bus,
-		flushCh: make(chan struct{}, 1),
-		runCtx:  runCtx,
+		opID:             opID,
+		defID:            defID,
+		plugin:           plugin,
+		traceID:          traceID,
+		spanID:           spanID,
+		store:            store,
+		bus:              bus,
+		flushCh:          make(chan struct{}, 1),
+		runCtx:           runCtx,
+		setCurrentItemFn: setCurrentItemFn,
 	}
 
 	// Build a slog.Logger with default attrs and a fanout handler.
@@ -333,6 +340,20 @@ func (r *dbReporter) Trigger(ctx context.Context, eventName string, payload any)
 		payload = m
 	}
 	return r.bus.Publish(ctx, eventName, payload)
+}
+
+// SetCurrentItem implements Reporter. Updates the registry's in-memory label
+// for this run and emits an op.current_item SSE event. Zero DB writes.
+func (r *dbReporter) SetCurrentItem(label string) {
+	if r.setCurrentItemFn != nil {
+		r.setCurrentItemFn(label)
+	}
+	if r.bus != nil {
+		_ = r.bus.Publish(r.runCtx, "op.current_item", map[string]any{
+			"op_id": r.opID,
+			"label": label,
+		})
+	}
 }
 
 // --- phaseReporter wraps dbReporter and prefixes phase name in Log attrs ---
