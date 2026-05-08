@@ -1,5 +1,5 @@
 // file: internal/server/reset_handler_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package server
@@ -19,6 +19,9 @@ import (
 
 // TestResetSystem_Success tests the reset endpoint with successful reset
 func TestResetSystem_Success(t *testing.T) {
+	origCfg := config.AppConfig
+	defer func() { config.AppConfig = origCfg }()
+
 	server := setupHandlerTestServer(t)
 
 	// Mock the Reset function
@@ -98,6 +101,9 @@ func TestResetSystem_Error(t *testing.T) {
 
 // TestResetSystem_MultipleResets tests that multiple consecutive resets work correctly
 func TestResetSystem_MultipleResets(t *testing.T) {
+	origCfg := config.AppConfig
+	defer func() { config.AppConfig = origCfg }()
+
 	server := setupHandlerTestServer(t)
 
 	// Mock the Reset function

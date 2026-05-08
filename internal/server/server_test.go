@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -29,6 +29,8 @@ import (
 func setupTestServer(t *testing.T) (*Server, func()) {
 	// Set Gin to test mode
 	gin.SetMode(gin.TestMode)
+
+	origCfg := config.AppConfig
 
 	// Create temporary directory for test database
 	tempDir, err := os.MkdirTemp("", "audiobook-test-*")
@@ -70,6 +72,7 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 			store.Close()
 		}
 		_ = os.RemoveAll(tempDir)
+		config.AppConfig = origCfg
 	}
 
 	return server, cleanup

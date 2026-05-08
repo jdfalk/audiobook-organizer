@@ -1,5 +1,5 @@
 // file: internal/server/undo_engine_prop_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 1ff3d071-4c60-4bb0-92ed-d197fe8ad9d0
 //
 // Property-based tests for the undo engine (plan 4.5 task 8).
@@ -35,8 +35,9 @@ import (
 	"pgregory.net/rapid"
 )
 
-// newPropStore spins up a fresh PebbleStore in a per-call temp dir so each
-// rapid draw is isolated. Cleanup closes the DB when the parent test ends.
+// newPropStore opens ONE PebbleStore per test function, closed via t.Cleanup.
+// Call once outside rapid.Check; individual iterations use unique opIDs so
+// they never collide with each other's changes.
 func newPropStore(t *testing.T) database.Store {
 	t.Helper()
 	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
@@ -59,9 +60,8 @@ func TestProp_UndoIdempotent(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	store := newPropStore(t)
 	rapid.Check(t, func(rt *rapid.T) {
-		store := newPropStore(t)
-
 		opID := "op-" + rapid.StringMatching(`[a-z0-9]{8,16}`).Draw(rt, "op_id")
 		n := rapid.IntRange(1, 6).Draw(rt, "n_changes")
 
@@ -113,8 +113,11 @@ func TestProp_UndoRedoRoundTrip(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	store := newPropStore(t)
 	rapid.Check(t, func(rt *rapid.T) {
-		store := newPropStore(t)
+		// Unique opID per iteration so accumulated state from prior iterations
+		// doesn't affect this one's Reverted == 1 assertion.
+		opID := "op-rt-" + rapid.StringMatching(`[a-z0-9]{6,12}`).Draw(rt, "op_id")
 
 		// t.TempDir in a rapid.Check closure returns the *outer* test's
 		// temp dir (rapid.T doesn't expose TempDir), so we scope each
@@ -143,7 +146,7 @@ func TestProp_UndoRedoRoundTrip(t *testing.T) {
 		}
 
 		change := &database.OperationChange{
-			OperationID: "op-rt",
+			OperationID: opID,
 			BookID:      "b-rt",
 			ChangeType:  "file_move",
 			OldValue:    oldPath,
@@ -154,7 +157,7 @@ func TestProp_UndoRedoRoundTrip(t *testing.T) {
 		}
 
 		// Undo: the file should travel new → old.
-		res, err := RunUndoOperation(store, "op-rt", nil)
+		res, err := RunUndoOperation(store, opID, nil)
 		if err != nil {
 			t.Fatalf("undo: %v", err)
 		}
@@ -199,8 +202,11 @@ func TestProp_UndoConflictConservative(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	store := newPropStore(t)
 	rapid.Check(t, func(rt *rapid.T) {
-		store := newPropStore(t)
+		// Unique opID per iteration so each preflight sees only this
+		// iteration's single change (not accumulated ones from prior runs).
+		opID := "op-conf-" + rapid.StringMatching(`[a-z0-9]{6,12}`).Draw(rt, "op_id")
 
 		root := filepath.Join(t.TempDir(), "conf-"+rapid.StringMatching(`[a-z0-9]{6,12}`).Draw(rt, "root"))
 		oldSeg := rapid.StringMatching(`[a-z0-9_-]{3,10}`).Draw(rt, "old_seg")
@@ -220,7 +226,7 @@ func TestProp_UndoConflictConservative(t *testing.T) {
 		}
 
 		change := &database.OperationChange{
-			OperationID: "op-conf",
+			OperationID: opID,
 			BookID:      "b-conf",
 			ChangeType:  "file_move",
 			OldValue:    oldPath,
@@ -239,7 +245,7 @@ func TestProp_UndoConflictConservative(t *testing.T) {
 			t.Fatalf("chtimes: %v", err)
 		}
 
-		report, err := PreflightUndoConflicts(store, "op-conf")
+		report, err := PreflightUndoConflicts(store, opID)
 		if err != nil {
 			t.Fatalf("preflight: %v", err)
 		}
