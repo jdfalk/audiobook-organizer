@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.8.0
+// version: 2.9.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -147,8 +147,11 @@ export default function ActivityLog() {
   const [opLogs, setOpLogs] = useState<string[]>([]);
 
   // Tree collapse state: set of parent op IDs that are collapsed.
-  // Parents with ≥3 children start collapsed by default (computed on render).
+  // Seeded on first render with ops: parents with ≥3 children start collapsed.
+  // After seeding, collapsedParents.size > 0 means "some parents collapsed",
+  // and new Set() unambiguously means "all expanded" (not "use defaults").
   const [collapsedParents, setCollapsedParents] = useState<Set<string>>(new Set());
+  const collapsedInitializedRef = useRef(false);
   const opLogsRef = useRef<HTMLDivElement>(null);
 
   // Sources
@@ -191,6 +194,27 @@ export default function ActivityLog() {
     localStorage.setItem(STORAGE_KEYS.ACTIVITY_OPS_PINNED, String(pinned));
   }, [pinned]);
 
+  // Seed collapsedParents with default-collapsed parents (≥3 children) on
+  // first render that has ops. Uses a ref guard so user interactions after
+  // initial seed are not overwritten. This makes "Expand All" work correctly:
+  // setCollapsedParents(new Set()) = size 0 = all expanded (no fallback needed).
+  useEffect(() => {
+    if (collapsedInitializedRef.current || activeOps.length === 0) return;
+    const childrenCount: Record<string, number> = {};
+    for (const op of activeOps) {
+      if (op.parent_id) {
+        childrenCount[op.parent_id] = (childrenCount[op.parent_id] ?? 0) + 1;
+      }
+    }
+    const defaults = new Set<string>();
+    for (const [id, count] of Object.entries(childrenCount)) {
+      if (count >= 3) defaults.add(id);
+    }
+    if (defaults.size > 0) {
+      collapsedInitializedRef.current = true;
+      setCollapsedParents(defaults);
+    }
+  }, [activeOps]);
 
   // Load logs for expanded operation
   useEffect(() => {
@@ -652,16 +676,6 @@ export default function ActivityLog() {
                   }
                 }
 
-                // Compute initial default-collapsed parents (≥3 children).
-                // We do this once on first render only via a deferred check so
-                // we don't fight user overrides.
-                const defaultCollapsed = new Set<string>();
-                for (const [parentId, count] of Object.entries(childrenCount)) {
-                  if (count >= 3) defaultCollapsed.add(parentId);
-                }
-                // Merge with existing collapsed state on first render only.
-                // (We use a ref to track if we've done the initial merge.)
-
                 // Helper to get depth based on parent chain
                 const getDepth = (op: typeof activeOps[0]): number => {
                   let depth = 0;
@@ -674,14 +688,13 @@ export default function ActivityLog() {
                 };
 
                 // Helper: is this op hidden because an ancestor is collapsed?
+                // collapsedParents is seeded on first render (see useEffect above),
+                // so size === 0 reliably means "user clicked Expand All".
                 const isHiddenByCollapse = (op: typeof activeOps[0]): boolean => {
                   let current = op;
                   while (current.parent_id && opsById[current.parent_id]) {
                     const parentId = current.parent_id;
-                    const effectiveCollapsed = collapsedParents.size > 0
-                      ? collapsedParents.has(parentId)
-                      : defaultCollapsed.has(parentId);
-                    if (effectiveCollapsed) return true;
+                    if (collapsedParents.has(parentId)) return true;
                     current = opsById[parentId];
                   }
                   return false;
@@ -694,9 +707,7 @@ export default function ActivityLog() {
                   const depth = getDepth(op);
                   const indent = depth * 24; // 24px per level for indentation
                   const hasChildren = (childrenCount[op.id] ?? 0) > 0;
-                  const effectiveCollapsed = collapsedParents.size > 0
-                    ? collapsedParents.has(op.id)
-                    : defaultCollapsed.has(op.id);
+                  const effectiveCollapsed = collapsedParents.has(op.id);
 
                   return (
                     <Paper
@@ -727,10 +738,6 @@ export default function ActivityLog() {
                                 e.stopPropagation();
                                 setCollapsedParents((prev) => {
                                   const next = new Set(prev);
-                                  // When user interacts, migrate defaultCollapsed into state first
-                                  if (next.size === 0) {
-                                    for (const id of defaultCollapsed) next.add(id);
-                                  }
                                   if (next.has(op.id)) next.delete(op.id);
                                   else next.add(op.id);
                                   return next;

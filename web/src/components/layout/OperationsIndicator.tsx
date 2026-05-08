@@ -1,8 +1,8 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.6.0
+// version: 3.7.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge,
@@ -18,8 +18,6 @@ import {
   Typography,
 } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications.js';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle.js';
-import ErrorIcon from '@mui/icons-material/Error.js';
 import CancelIcon from '@mui/icons-material/Cancel.js';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew.js';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty.js';
@@ -29,8 +27,6 @@ import {
 } from '../../stores/useOperationsStore';
 import {
   cancelOperation,
-  getRecentCompletedOperations,
-  type Operation,
 } from '../../services/api';
 import { getUndoPreflight, revertOperation as revertOp } from '../../services/versionApi';
 
@@ -127,31 +123,10 @@ export function OperationsIndicator() {
   );
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
-  const [recentOps, setRecentOps] = useState<Operation[]>([]);
   const navigate = useNavigate();
 
   // Active ops are now discovered exclusively via SSE (op.created) and
   // loadFromServer (v2 timeline). No v1 polling loop needed here.
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchRecentOps = async () => {
-      try {
-        const ops = await getRecentCompletedOperations();
-        if (!cancelled) setRecentOps(ops.slice(0, 10));
-      } catch {
-        // Ignore
-      }
-    };
-
-    void fetchRecentOps();
-    const interval = setInterval(fetchRecentOps, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
 
   const handleCancel = async (opId: string) => {
     setCancelling((prev) => new Set(prev).add(opId));
@@ -393,65 +368,24 @@ export function OperationsIndicator() {
             );
           })}
 
-          {/* Completed/failed (from active store) */}
-          {terminal.length > 0 && inProgress.length > 0 && <Divider />}
-          {terminal.map((op: ActiveOperation) => {
-            const details = parseMessageDetails(op.message);
-            return (
-              <Box
-                key={op.id}
-                sx={{ px: 2, py: 1, opacity: 0.7, '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' } }}
+          {/* Recent completed operations — read from v2 store (terminal ops).
+              V1 getRecentCompletedOperations() is no longer called (UOS-13). */}
+          {terminal.length === 0 && inProgress.length === 0 && (
+            <>
+              <Divider />
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ px: 2, py: 1.5, textAlign: 'center', fontSize: '0.8rem' }}
               >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="caption" fontWeight="bold">
-                    {formatOperationType(op.type)}
-                  </Typography>
-                  {op.status === 'completed' && <CheckCircleIcon color="success" sx={{ fontSize: 16 }} />}
-                  {op.status === 'failed' && <ErrorIcon color="error" sx={{ fontSize: 16 }} />}
-                  {op.status === 'canceled' && <CancelIcon color="disabled" sx={{ fontSize: 16 }} />}
-                </Box>
-                {details.imported !== null && (
-                  <Typography variant="caption" color="text.secondary" display="block">
-                    {details.imported} imported
-                    {details.skipped! > 0 ? `, ${details.skipped} skipped` : ''}
-                    {details.failed! > 0 ? `, ${details.failed} failed` : ''}
-                  </Typography>
-                )}
-                {!details.imported && op.message && (
-                  <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
-                    {op.message}
-                  </Typography>
-                )}
-              </Box>
-            );
-          })}
-
-          {/* Recent completed operations section */}
-          <Divider />
-          <Box sx={{ px: 2, pt: 1.5, pb: 0.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Recent
-            </Typography>
-            {recentOps.length > 0 && (
-              <Button size="small" sx={{ fontSize: '0.65rem', py: 0, minHeight: 20, textTransform: 'none' }} onClick={() => setRecentOps([])}>
-                Clear
-              </Button>
-            )}
-          </Box>
-
-          {recentOps.length === 0 && (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ px: 2, py: 1.5, textAlign: 'center', fontSize: '0.8rem' }}
-            >
-              No recent operations
-            </Typography>
+                No recent operations
+              </Typography>
+            </>
           )}
 
-          {recentOps.map((op: Operation) => (
+          {terminal.map((op: ActiveOperation) => (
             <Box
-              key={op.id}
+              key={`recent-${op.id}`}
               onClick={() => {
                 setAnchorEl(null);
                 navigate(`/activity?op=${op.id}`);
@@ -469,9 +403,6 @@ export function OperationsIndicator() {
                   {formatOperationType(op.type)}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    {op.completed_at ? timeAgo(op.completed_at) : op.created_at ? timeAgo(op.created_at) : ''}
-                  </Typography>
                   <Chip
                     label={op.status}
                     size="small"
