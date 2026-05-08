@@ -1,6 +1,7 @@
 // file: internal/testutil/integration.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+// last-edited: 2026-05-07
 
 package testutil
 
@@ -60,6 +61,7 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	queue := operations.NewOperationQueue(store, 2, nil, hub)
 	operations.GlobalQueue = queue
 
+	origCfg := config.AppConfig
 	config.AppConfig = config.Config{
 		DatabaseType:         "sqlite",
 		DatabasePath:         dbPath,
@@ -84,6 +86,7 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 		_ = queue.Shutdown(2 * time.Second)
 		database.SetGlobalStore(nil)
 		store.Close()
+		config.AppConfig = origCfg
 	}
 
 	return env, cleanup
