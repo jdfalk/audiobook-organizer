@@ -1,12 +1,11 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-06
+// last-edited: 2026-05-08
 
 package server
 
 import (
-	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -18,11 +17,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
-	ulid "github.com/oklog/ulid/v2"
 )
 
 // listDedupCandidates handles GET /api/v1/dedup/candidates.
@@ -1045,83 +1041,6 @@ func (s *Server) triggerEmbedScan(c *gin.Context) {
 		return
 	}
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
-}
-
-// triggerEmbedScanLegacy is the pre-UOS-07 inline implementation, kept for
-// reference until the old queue is fully removed in UOS-14.
-func (s *Server) triggerEmbedScanLegacy(c *gin.Context) {
-	if s.dedupEngine == nil {
-		httputil.RespondWithServiceUnavailable(c, "dedup engine not available (embedding may be disabled or API key not configured)")
-		return
-	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
-	}
-
-	opID := ulid.Make().String()
-	op, err := s.Store().CreateOperation(opID, "embed-scan", nil)
-	if err != nil {
-		httputil.InternalError(c, "failed to create embed-scan operation", err)
-		return
-	}
-
-	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		_ = progress.UpdateProgress(0, 100, "Loading books for embedding...")
-
-		books, err := s.Store().GetAllBooks(0, 0)
-		if err != nil {
-			return fmt.Errorf("load books: %w", err)
-		}
-		total := len(books)
-		if total == 0 {
-			_ = progress.UpdateProgress(100, 100, "No books to embed")
-			return nil
-		}
-
-		var embedded, cached, skipped, errs int
-		for i, book := range books {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-
-			status, err := s.dedupEngine.EmbedBook(ctx, book.ID)
-			if err != nil {
-				log.Printf("[embed-scan] embed error for %s: %v", book.ID, err)
-				errs++
-			} else {
-				switch status {
-				case dedup.EmbedStatusEmbedded:
-					embedded++
-				case dedup.EmbedStatusCached:
-					cached++
-				default:
-					skipped++
-				}
-			}
-
-			if i%50 == 0 || i == total-1 {
-				pct := 1 + (98 * (i + 1) / total)
-				_ = progress.UpdateProgress(pct, 100,
-					fmt.Sprintf("Embedding books: %d / %d (new=%d cached=%d skipped=%d errors=%d)",
-						i+1, total, embedded, cached, skipped, errs))
-			}
-		}
-
-		_ = progress.UpdateProgress(100, 100,
-			fmt.Sprintf("Embedding complete — %d new, %d cached, %d skipped, %d errors (of %d books)",
-				embedded, cached, skipped, errs, total))
-		return nil
-	}
-
-	if err := s.queue.Enqueue(opID, "embed-scan", operations.PriorityLow, opFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue embed scan", err)
-		return
-	}
-
-	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
 }
 
 // triggerBookSignatureScan handles POST /api/v1/dedup/scan-book-signature.

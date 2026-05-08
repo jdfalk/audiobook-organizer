@@ -1,6 +1,7 @@
 // file: internal/server/server_coverage_test.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
+// last-edited: 2026-05-08
 
 package server
 
@@ -577,24 +578,20 @@ func TestCoverageStartOrganize(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 11. GET /api/v1/operations/active  (active operations)
+// 11. GET /api/v1/operations/active  (deprecated — returns 410 Gone since UOS-14)
 // ---------------------------------------------------------------------------
 
 func TestCoverageListActiveOperations(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	t.Run("no active operations", func(t *testing.T) {
+	t.Run("returns 410 gone", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operations/active", nil)
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]any
-		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		data := resp["data"].(map[string]any)
-		ops := data["operations"].([]any)
-		assert.NotNil(t, ops)
+		// UOS-14: this endpoint is removed; it now returns 410 Gone.
+		assert.Equal(t, http.StatusGone, w.Code)
 	})
 }
 

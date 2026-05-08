@@ -1,6 +1,7 @@
 // file: internal/server/server_more_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 18a6b0a3-7e78-4e0f-8b8e-0e4c1dbde6de
+// last-edited: 2026-05-08
 
 //go:build !windows
 
@@ -699,6 +700,9 @@ func TestStartOrganizeOperation(t *testing.T) {
 }
 
 func TestListActiveOperations(t *testing.T) {
+	// UOS-14: /operations/active is removed (410 Gone); the queue still works,
+	// but callers should use /operations/timeline instead. This test only
+	// verifies the 410 response and that the queue itself still accepts ops.
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
@@ -717,7 +721,8 @@ func TestListActiveOperations(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/operations/active", nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
+	// Endpoint removed in UOS-14; returns 410 Gone
+	require.Equal(t, http.StatusGone, w.Code)
 
 	close(block)
 	waitForOperationStatus(t, opID, 5*time.Second)

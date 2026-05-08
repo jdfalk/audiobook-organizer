@@ -9,7 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dbmocks "github.com/jdfalk/audiobook-organizer/internal/database/mocks"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	queuemocks "github.com/jdfalk/audiobook-organizer/internal/operations/mocks"
 	"github.com/stretchr/testify/assert"
 )
@@ -108,93 +107,34 @@ func TestCancelOperationWithQueueMock(t *testing.T) {
 	}
 }
 
-// TestGetOperationsWithQueueMock verifies GET /operations/active returns the
-// active operation list from the queue, returning an empty array when nil.
+// TestGetOperationsWithQueueMock verifies GET /operations/active returns 410 Gone
+// since UOS-14 removed this endpoint. Use GET /operations/timeline instead.
 func TestGetOperationsWithQueueMock(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
 		name           string
-		mockStoreSetup func(*dbmocks.MockStore)
 		mockQueueSetup func(*queuemocks.MockQueue)
-		expectedStatus int
-		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
-			name: "successfully get active operations",
-			mockStoreSetup: func(m *dbmocks.MockStore) {
-				// listActiveOperations calls GetOperationByID for each operation
-				m.EXPECT().GetOperationByID("op1").Return(&database.Operation{
-					ID:       "op1",
-					Type:     "scan",
-					Status:   "running",
-					Progress: 5,
-					Total:    10,
-					Message:  "scanning files",
-				}, nil).Once()
-				m.EXPECT().GetOperationByID("op2").Return(&database.Operation{
-					ID:       "op2",
-					Type:     "organize",
-					Status:   "queued",
-					Progress: 0,
-					Total:    0,
-					Message:  "",
-				}, nil).Once()
-			},
-			mockQueueSetup: func(m *queuemocks.MockQueue) {
-				m.EXPECT().ActiveOperations().Return([]operations.ActiveOperation{
-					{ID: "op1", Type: "scan"},
-					{ID: "op2", Type: "organize"},
-				}).Once()
-			},
-			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
-				body := w.Body.String()
-				assert.Contains(t, body, "op1")
-				assert.Contains(t, body, "op2")
-				assert.Contains(t, body, "scan")
-				assert.Contains(t, body, "organize")
-			},
+			name:           "with queue - returns 410 gone",
+			mockQueueSetup: nil,
 		},
 		{
-			name: "empty active operations list",
-			mockStoreSetup: func(m *dbmocks.MockStore) {
-				// No database expectations needed
-			},
-			mockQueueSetup: func(m *queuemocks.MockQueue) {
-				m.EXPECT().ActiveOperations().Return([]operations.ActiveOperation{}).Once()
-			},
-			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
-				assert.Contains(t, w.Body.String(), "[]")
-			},
-		},
-		{
-			name: "nil queue returns empty array",
-			mockStoreSetup: func(m *dbmocks.MockStore) {
-				// No database expectations needed
-			},
-			mockQueueSetup: nil, // Don't set up queue
-			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
-				assert.Contains(t, w.Body.String(), "[]")
-			},
+			name:           "nil queue - returns 410 gone",
+			mockQueueSetup: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock store
 			mockStore := dbmocks.NewMockStore(t)
-			tt.mockStoreSetup(mockStore)
 			database.SetGlobalStore(mockStore)
 
-			// Create server
 			server := &Server{
 				router: gin.New(),
 			}
 
-			// Create and setup mock queue (or leave nil)
 			if tt.mockQueueSetup != nil {
 				mockQueue := queuemocks.NewMockQueue(t)
 				tt.mockQueueSetup(mockQueue)
@@ -204,14 +144,13 @@ func TestGetOperationsWithQueueMock(t *testing.T) {
 			}
 			server.setupRoutes()
 
-			// Make request
+			// UOS-14: /operations/active is removed; must return 410 Gone
 			req := httptest.NewRequest("GET", "/api/v1/operations/active", nil)
 			w := httptest.NewRecorder()
 			server.router.ServeHTTP(w, req)
 
-			// Assert
-			assert.Equal(t, tt.expectedStatus, w.Code)
-			tt.checkResponse(t, w)
+			assert.Equal(t, http.StatusGone, w.Code)
+			assert.Contains(t, w.Body.String(), "gone")
 		})
 	}
 }

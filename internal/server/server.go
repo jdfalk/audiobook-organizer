@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-07
+// last-edited: 2026-05-08
 
 package server
 
@@ -274,8 +274,9 @@ func NewServer(store database.Store) *Server {
 	router := gin.New() // don't use gin.Default() — we add our own middleware
 
 	// Custom logger that skips noisy polling endpoints
+	// (UOS-14: /operations/active removed; SkipPaths entry removed)
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
-		SkipPaths: []string{"/api/v1/operations/active"},
+		SkipPaths: []string{"/api/v1/operations/events"},
 	}))
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
@@ -345,16 +346,6 @@ func NewServer(store database.Store) *Server {
 	// Plugins register their defs in their own bot-tasks (UOS-03+).
 	server.opHub = opsregistry.NewEventHub()
 	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8, server.opHub)
-
-	// Register UOS plugins. Dedup embed-scan is the canary (UOS-07).
-	// Additional plugins registered in UOS-09 through UOS-12.
-	// Guard on dedupEngine: tests don't initialize the embedding subsystem,
-	// so we skip registration to avoid unexpected mock store calls.
-	if server.dedupEngine != nil {
-		if err := dedupplugin.New(server.dedupEngine, resolvedStore).Register(server.opRegistry); err != nil {
-			log.Printf("[server] dedup plugin register: %v", err)
-		}
-	}
 
 	// UOS-12: maintenance plugin — 26 ops migrated from scheduler_tasks.go.
 	// Guard on RootDir: tests don't configure AppConfig, so RootDir is ""
@@ -563,6 +554,12 @@ func NewServer(store database.Store) *Server {
 
 				log.Println("[INFO] Embedding store and dedup engine initialized")
 				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
+
+				// Register UOS dedup plugin (UOS-07). Done here so the engine
+				// and embeddingStore are both available.
+				if err := dedupplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore).Register(server.opRegistry); err != nil {
+					log.Printf("[server] dedup plugin register: %v", err)
+				}
 
 				// Dedup-on-import is now wired via SetScanHooks below
 				// (together with the activity recorder).

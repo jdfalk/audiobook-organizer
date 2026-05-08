@@ -1,6 +1,7 @@
 // file: internal/server/server_extra_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 61a2d3c4-80ab-4f6f-8c39-15a2ac5b7f0c
+// last-edited: 2026-05-08
 
 package server
 
@@ -273,10 +274,11 @@ func TestOperationEndpointsErrors(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 
+	// /operations/active returns 410 Gone since UOS-14
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/operations/active", nil)
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusGone, w.Code)
 	server.queue = origQueue
 
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/operations/bad-id", nil)

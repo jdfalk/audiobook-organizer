@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.test.ts
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-08
 
@@ -56,9 +56,7 @@ describe('useOperationsStore', () => {
     await useOperationsStore.getState().loadFromServer();
 
     expect(api.getOperationTimeline).toHaveBeenCalledTimes(1);
-    // v1 endpoints must NOT be called
-    expect(api.getActiveOperations).not.toHaveBeenCalled();
-    expect(api.getRecentCompletedOperations).not.toHaveBeenCalled();
+    // v1 endpoints are deleted in UOS-14; only v2 timeline is called
 
     const ops = useOperationsStore.getState().activeOperations;
     expect(ops).toHaveLength(1);
