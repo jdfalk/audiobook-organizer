@@ -128,9 +128,7 @@ func TestGetOperationsWithQueueMock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := dbmocks.NewMockStore(t)
-			database.SetGlobalStore(mockStore)
-
+			// The 410 handler returns before any DB or queue call, so no mock needed.
 			server := &Server{
 				router: gin.New(),
 			}
