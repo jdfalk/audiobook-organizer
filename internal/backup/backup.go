@@ -1,5 +1,5 @@
 // file: internal/backup/backup.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 8f9e0a1b-2c3d-4e5f-6a7b-8c9d0e1f2a3b
 
 package backup
@@ -123,6 +123,41 @@ func CreateBackup(databasePath, databaseType string, config BackupConfig) (*Back
 	return info, nil
 }
 
+// isPathWithinTarget validates that a path resolves within the target directory.
+// This prevents zipslip attacks where archive entries use traversal sequences.
+func isPathWithinTarget(targetPath, entryPath string) (bool, error) {
+	// Ensure target path is absolute
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return false, err
+	}
+
+	// Join entry path with target (this handles "." entries)
+	candidate := filepath.Join(absTarget, entryPath)
+
+	// Clean the path to remove . and .. sequences
+	candidate = filepath.Clean(candidate)
+
+	// Verify the cleaned path is still within target
+	// Use filepath.Rel to compute relative path; if it escapes, Rel will return ".." 
+	rel, err := filepath.Rel(absTarget, candidate)
+	if err != nil {
+		return false, err
+	}
+
+	// If rel is absolute, it escaped the target
+	if filepath.IsAbs(rel) {
+		return false, nil
+	}
+
+	// If rel contains "..", it tried to escape
+	if strings.Contains(rel, "..") {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // RestoreBackup restores a database from a backup file
 func RestoreBackup(backupPath, targetPath string, verify bool) error {
 	// Verify checksum if requested
@@ -156,6 +191,15 @@ func RestoreBackup(backupPath, targetPath string, verify bool) error {
 		}
 		if err != nil {
 			return fmt.Errorf("failed to read tar header: %w", err)
+		}
+
+		// Validate entry path to prevent zipslip attacks
+		within, err := isPathWithinTarget(targetPath, header.Name)
+		if err != nil {
+			return fmt.Errorf("failed to validate archive entry path %q: %w", header.Name, err)
+		}
+		if !within {
+			return fmt.Errorf("archive entry %q escapes target directory", header.Name)
 		}
 
 		// Construct target path
