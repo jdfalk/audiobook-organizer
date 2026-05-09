@@ -1,0 +1,25 @@
+# file: .github/workflows/nightly-burndown.yml
+# version: 1.0.0
+name: Nightly burndown
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run | draft-only | full"
+        required: false
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - draft-only
+          - full
+
+jobs:
+  burndown:
+    uses: jdfalk/ghcommon/.github/workflows/reusable-burndown.yml@66b3fa6c49f6aed9e2850309cc0d41a463a20553
+    with:
+      mode: ${{ inputs.mode || 'dry-run' }}
+    secrets: inherit
