@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.8.0
+// version: 2.9.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-08
 
@@ -39,6 +39,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	acoustidplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
 	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
 	delugeplug "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
 	itunesplug "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
@@ -558,6 +559,12 @@ func NewServer(store database.Store) *Server {
 				// and embeddingStore are both available.
 				if err := dedupplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore).Register(server.opRegistry); err != nil {
 					log.Printf("[server] dedup plugin register: %v", err)
+				}
+
+				// Register acoustid plugin so acoustid.fingerprint-rescan
+				// and acoustid.scan op-defs are available via the UOS registry.
+				if err := acoustidplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore).Register(server.opRegistry); err != nil {
+					log.Printf("[server] acoustid plugin register: %v", err)
 				}
 
 				// Dedup-on-import is now wired via SetScanHooks below
