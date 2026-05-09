@@ -22,6 +22,9 @@ import (
 const (
 	hashThreshold = 100 * 1024 * 1024 // 100 MB — files above this get a partial hash
 	hashChunkSize = 10 * 1024 * 1024  // 10 MB chunks for the partial hash
+	// MaxScanBufferBytes caps allocation sizes to prevent DoS attacks via OOM.
+	// This is the maximum amount of memory that can be allocated in a single operation.
+	MaxScanBufferBytes = 100 * 1024 * 1024 // 100 MB
 )
 
 // ProcessFile opens filePath exactly once and returns:
@@ -100,24 +103,30 @@ func ProcessFile(filePath string) (*metadata.Metadata, *mediainfo.MediaInfo, str
 // For files ≤ hashThreshold it hashes all bytes; for larger files it hashes
 // the first hashChunkSize bytes + last hashChunkSize bytes + the file size.
 // This is the same algorithm as ComputeFileHash.
+// Allocation sizes are capped at MaxScanBufferBytes to prevent DoS attacks.
 func computeHashFromReader(f *os.File, fileSize int64) (string, error) {
 	if fileSize > hashThreshold {
 		h := sha256.New()
 
-		// First chunk
-		first := make([]byte, hashChunkSize)
+		// First chunk: cap allocation to MaxScanBufferBytes
+		chunkSize := hashChunkSize
+		if chunkSize > MaxScanBufferBytes {
+			chunkSize = MaxScanBufferBytes
+		}
+
+		first := make([]byte, chunkSize)
 		n, err := f.Read(first)
 		if err != nil && err != io.EOF {
 			return "", err
 		}
 		h.Write(first[:n])
 
-		// Last chunk
-		if fileSize > hashChunkSize {
-			if _, err := f.Seek(-hashChunkSize, io.SeekEnd); err != nil {
+		// Last chunk: cap allocation to MaxScanBufferBytes
+		if fileSize > chunkSize {
+			if _, err := f.Seek(-chunkSize, io.SeekEnd); err != nil {
 				return "", err
 			}
-			last := make([]byte, hashChunkSize)
+			last := make([]byte, chunkSize)
 			n, err = f.Read(last)
 			if err != nil && err != io.EOF {
 				return "", err
