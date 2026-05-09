@@ -8,14 +8,18 @@ extensions:
       pack: codeql/go-all
       extensible: barrierModel
     data:
-      # SafeJoin sanitizes path-injection on return value (when error is nil)
-      # The return value is guaranteed to be within root or an error is returned
-      - ["github.com/jdfalk/audiobook-organizer/internal/util", "", False, "SafeJoin", "", "", "ReturnValue[0]", "path-injection", "manual"]
-  
+      # SafeJoin sanitizes path-injection on return value (when error is nil).
+      # The return value is guaranteed to be within root or an error is returned.
+      # Signature: func SafeJoin(root string, parts ...string) (string, error)
+      # ReturnValue[0] = first return value (the sanitized path string)
+      - ["github.com/jdfalk/audiobook-organizer/internal/util", "", false, "SafeJoin", "", "", "ReturnValue[0]", "path-injection", "manual"]
+
   - addsTo:
       pack: codeql/go-all
       extensible: barrierGuardModel
     data:
-      # WithinRoot acts as a validation guard for path-injection
-      # When this predicate returns true, the path argument is sanitized
-      - ["github.com/jdfalk/audiobook-organizer/internal/util", "", False, "WithinRoot", "", "", "Argument[0]", "true", "path-injection", "manual"]
+      # WithinRoot acts as a validation guard for path-injection.
+      # When this function returns true, the path argument (Argument[0]) is safe.
+      # Signature: func WithinRoot(path, root string) bool
+      # Argument[0] = path parameter (the value being validated)
+      - ["github.com/jdfalk/audiobook-organizer/internal/util", "", false, "WithinRoot", "", "", "Argument[0]", "true", "path-injection", "manual"]
