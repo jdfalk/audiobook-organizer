@@ -19,7 +19,7 @@ on:
 
 jobs:
   burndown:
-    uses: jdfalk/ghcommon/.github/workflows/reusable-burndown.yml@66b3fa6c49f6aed9e2850309cc0d41a463a20553
+    uses: jdfalk/ghcommon/.github/workflows/reusable-burndown.yml@1a52124c9513b0fd05734602734704d81e2cc7ad
     with:
       mode: ${{ inputs.mode || 'dry-run' }}
     secrets: inherit
