@@ -1,5 +1,5 @@
 // file: web/src/App.test.tsx
-// version: 1.0.7
+// version: 1.0.8
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 // last-edited: 2026-05-08
 
@@ -47,6 +47,12 @@ vi.mock('./services/api', () => ({
   searchBooks: vi.fn().mockResolvedValue([]),
   getSoftDeletedBooks: vi.fn().mockResolvedValue({ items: [], count: 0 }),
   getAppVersion: vi.fn().mockResolvedValue('1.0.0-test'),
+  getOperationTimeline: vi.fn().mockResolvedValue([]),
+  openOperationsSSE: vi.fn().mockReturnValue({
+    close: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }),
 }));
 
 beforeEach(() => {
