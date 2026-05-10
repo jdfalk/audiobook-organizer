@@ -23,10 +23,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
-	"github.com/jdfalk/audiobook-organizer/internal/transcode"
-	ulid "github.com/oklog/ulid/v2"
 )
 
 func (s *Server) startScan(c *gin.Context) {
