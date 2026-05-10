@@ -1,0 +1,26 @@
+# file: .github/workflows/triage-poll.yml
+# version: 1.0.0
+name: Triage poll
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run | draft-only | full"
+        required: false
+        default: draft-only
+        type: choice
+        options:
+          - dry-run
+          - draft-only
+          - full
+
+jobs:
+  triage-poll:
+    uses: jdfalk/ghcommon/.github/workflows/reusable-triage-poll.yml@b3778b134dd316f334e2eca7d30c6ef2685afd9e
+    with:
+      mode: ${{ inputs.mode || 'draft-only' }}
+      triage_model: o3
+    secrets: inherit
