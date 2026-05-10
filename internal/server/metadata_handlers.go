@@ -1368,8 +1368,8 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
 
@@ -1454,36 +1454,22 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 		return
 	}
 
-	// Create the operation
-	opID := ulid.Make().String()
-	op, err := store.CreateOperation(opID, "bulk_write_back", nil)
-	if err != nil {
-		httputil.InternalError(c, "failed to create operation", err)
-		return
-	}
-
 	doRename := req.Rename
 	bookIDs := make([]string, len(filtered))
 	for i, b := range filtered {
 		bookIDs[i] = b.ID
 	}
 
-	// Persist params so the operation can be resumed across a restart.
-	if err := operations.SaveParams(store, op.ID, operations.BulkWriteBackParams{BookIDs: bookIDs, Rename: doRename}); err != nil {
-		log.Printf("[WARN] failed to save bulk_write_back params for %s: %v", op.ID, err)
-	}
-
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.runBulkWriteBack(ctx, op.ID, bookIDs, doRename, 0, progress)
-	}
-
-	if err := s.queue.Enqueue(op.ID, "bulk_write_back", operations.PriorityNormal, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	rawParams, _ := json.Marshal(bulkWriteBackOpParams{BookIDs: bookIDs, Rename: doRename})
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.bulk-write-back", rawParams)
+	if err != nil {
+		httputil.InternalError(c, "enqueue failed", err)
 		return
 	}
 
 	httputil.RespondWithSuccess(c, 202, gin.H{
-		"operation_id":    op.ID,
+		"operation_id":    opID,
+		"id":              opID,
 		"estimated_books": estimatedBooks,
 	})
 }
