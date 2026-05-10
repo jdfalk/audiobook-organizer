@@ -1837,7 +1837,6 @@ export const Library = () => {
           metadataReviewOpen={metadataReviewOpen}
           setMetadataReviewOpen={setMetadataReviewOpen}
           metadataReviewOpId={metadataReviewOpId}
-          setMetadataReviewOpId={(id) => setMetadataReviewOpId(id)}
 
           versionManagingAudiobook={versionManagingAudiobook}
           versionManagementOpen={versionManagementOpen}
