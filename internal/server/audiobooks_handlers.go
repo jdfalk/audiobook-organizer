@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -137,6 +137,8 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 // matching the active filters. No pagination cap is applied — this endpoint
 // exists specifically for "select all across all pages" use cases where the
 // 500-row pagination limit would silently truncate the selection.
+// Always filters to primary versions only, matching the behaviour of the
+// main library list endpoint.
 func (s *Server) listAudiobookIDs(c *gin.Context) {
 	authorID := httputil.ParseQueryIntPtr(c, "author_id")
 	seriesID := httputil.ParseQueryIntPtr(c, "series_id")
@@ -145,8 +147,9 @@ func (s *Server) listAudiobookIDs(c *gin.Context) {
 	if sortOrder != "" && sortOrder != "asc" && sortOrder != "desc" {
 		sortOrder = "asc"
 	}
+	trueVal := true
 	filters := ListFilters{
-		IsPrimaryVersion: httputil.ParseQueryBoolPtr(c, "is_primary_version"),
+		IsPrimaryVersion: &trueVal,
 		LibraryState:     httputil.ParseQueryString(c, "library_state"),
 		Tag:              httputil.ParseQueryString(c, "tag"),
 		SortBy:           httputil.ParseQueryString(c, "sort_by"),
