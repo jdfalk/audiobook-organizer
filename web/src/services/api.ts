@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.23.0
+// version: 2.24.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-08
+// last-edited: 2026-05-11
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -1479,47 +1479,35 @@ export async function removeImportPath(id: number): Promise<void> {
   }
 }
 
-// getAudiobookIds returns all book IDs matching the given filters, with no
-// pagination cap. Used for cross-page "select all" without the 500-row limit.
-export async function getAudiobookIds(options?: {
-  sortBy?: string;
-  sortOrder?: string;
-  tag?: string;
-  libraryState?: string;
-  filters?: string;
-  search?: string;
-}): Promise<{ ids: string[]; total: number }> {
-  const params = new URLSearchParams();
-  if (options?.sortBy) params.set('sort_by', options.sortBy);
-  if (options?.sortOrder) params.set('sort_order', options.sortOrder);
-  if (options?.tag) params.set('tag', options.tag);
-  if (options?.libraryState) params.set('library_state', options.libraryState);
-  if (options?.filters) params.set('filters', options.filters);
-  if (options?.search) params.set('search', options.search);
-  const response = await fetch(`${API_BASE}/audiobooks/ids?${params.toString()}`);
-  if (!response.ok) throw await buildApiError(response, 'Failed to fetch audiobook IDs');
-  const body = await response.json();
-  return body?.data ?? { ids: [], total: 0 };
+// SelectionSpec describes which books an operation targets.
+// Either book_ids (explicit list) or filter (resolved server-side) must be set.
+export interface SelectionSpec {
+  book_ids?: string[];
+  filter?: {
+    search?: string;
+    library_state?: string;
+    tag?: string;
+    field_filters?: Array<{ field: string; value: string; negated: boolean }>;
+    author_id?: number;
+    series_id?: number;
+  };
 }
 
-// getITunesBooksIds returns all book IDs that have iTunes persistent IDs, with
-// no pagination cap. Used by the iTunes sync dialog "Select All".
-export async function getITunesBookIds(search?: string): Promise<{ ids: string[]; total: number }> {
-  const params = new URLSearchParams();
-  if (search) params.set('search', search);
-  const response = await fetch(`${API_BASE}/itunes/books/ids?${params.toString()}`);
-  if (!response.ok) throw await buildApiError(response, 'Failed to fetch iTunes book IDs');
-  const body = await response.json();
-  return body?.data ?? { ids: [], total: 0 };
-}
-
-// startBulkMetadataFetch enqueues a v2 bulk metadata fetch operation for the
-// given book IDs. Returns the operation ID for polling via the bell.
-export async function startBulkMetadataFetch(bookIds: string[]): Promise<{ operation_id: string }> {
+// startBulkMetadataFetch enqueues a v2 bulk metadata fetch operation.
+// Pass a SelectionSpec with either book_ids (explicit page-level selection)
+// or filter (cross-page selection, resolved server-side with IsPrimaryVersion=true).
+// Returns the operation ID for polling via the bell.
+export async function startBulkMetadataFetch(
+  selection: SelectionSpec,
+  options?: { prefer_audible?: boolean; skip_cached?: boolean }
+): Promise<{ operation_id: string }> {
   const response = await fetch(`${API_BASE}/operations/v2`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ def_id: 'library.bulk-metadata-fetch', params: { book_ids: bookIds } }),
+    body: JSON.stringify({
+      def_id: 'library.bulk-metadata-fetch',
+      params: { selection, ...options },
+    }),
   });
   if (!response.ok) throw await buildApiError(response, 'Failed to start bulk metadata fetch');
   const body = await response.json();
