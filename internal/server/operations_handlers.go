@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -30,267 +30,58 @@ import (
 )
 
 func (s *Server) startScan(c *gin.Context) {
-	if s.Store() == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
+	body, _ := c.GetRawData()
+	if len(body) == 0 {
+		body = []byte("{}")
 	}
-
-	var req struct {
-		FolderPath  *string `json:"folder_path"`
-		Priority    *int    `json:"priority"`
-		ForceUpdate *bool   `json:"force_update"`
-	}
-	_ = c.ShouldBindJSON(&req)
-
-	id := ulid.Make().String()
-	op, err := s.Store().CreateOperation(id, "scan", req.FolderPath)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.scan", body)
 	if err != nil {
-		httputil.InternalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "enqueue failed", err)
 		return
 	}
-
-	// Determine priority (default to normal)
-	priority := operations.PriorityNormal
-	if req.Priority != nil {
-		priority = *req.Priority
-	}
-
-	// Create operation function that delegates to service
-	scanReq := &scanner.ScanRequest{
-		FolderPath:  req.FolderPath,
-		Priority:    req.Priority,
-		ForceUpdate: req.ForceUpdate,
-	}
-
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
-	}
-
-	// Enqueue the operation
-	if err := s.queue.Enqueue(op.ID, "scan", priority, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
-		return
-	}
-
-	httputil.RespondWithSuccess(c, 202, op)
+	c.JSON(202, gin.H{"op_id": opID, "id": opID})
 }
 
 func (s *Server) startOrganize(c *gin.Context) {
-	if s.Store() == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
+	body, _ := c.GetRawData()
+	if len(body) == 0 {
+		body = []byte("{}")
 	}
-
-	var req struct {
-		FolderPath         *string  `json:"folder_path"`
-		Priority           *int     `json:"priority"`
-		BookIDs            []string `json:"book_ids"`
-		FetchMetadataFirst bool     `json:"fetch_metadata_first"`
-		SyncITunesFirst    bool     `json:"sync_itunes_first"`
-	}
-	_ = c.ShouldBindJSON(&req)
-
-	id := ulid.Make().String()
-	op, err := s.Store().CreateOperation(id, "organize", req.FolderPath)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.organize", body)
 	if err != nil {
-		httputil.InternalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "enqueue failed", err)
 		return
 	}
-
-	// Determine priority (default to normal)
-	priority := operations.PriorityNormal
-	if req.Priority != nil {
-		priority = *req.Priority
-	}
-
-	// Create operation function that delegates to service
-	organizeReq := &OrganizeRequest{
-		FolderPath:         req.FolderPath,
-		Priority:           req.Priority,
-		BookIDs:            req.BookIDs,
-		FetchMetadataFirst: req.FetchMetadataFirst,
-		SyncITunesFirst:    req.SyncITunesFirst,
-		OperationID:        op.ID,
-	}
-
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.organizeService.PerformOrganize(ctx, organizeReq, operations.LoggerFromReporter(progress))
-	}
-
-	// Enqueue the operation
-	if err := s.queue.Enqueue(op.ID, "organize", priority, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
-		return
-	}
-
-	httputil.RespondWithSuccess(c, 202, op)
+	c.JSON(202, gin.H{"op_id": opID, "id": opID})
 }
 
 func (s *Server) startTranscode(c *gin.Context) {
-	if s.Store() == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
+	body, _ := c.GetRawData()
+	var check struct {
+		BookID string `json:"book_id"`
 	}
-
-	var req struct {
-		BookID       string `json:"book_id"`
-		OutputFormat string `json:"output_format"`
-		Bitrate      int    `json:"bitrate"`
-		KeepOriginal *bool  `json:"keep_original"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.BookID == "" {
+	if err := json.Unmarshal(body, &check); err != nil || check.BookID == "" {
 		httputil.RespondWithBadRequest(c, "book_id is required")
 		return
 	}
-
-	// Verify the book exists
-	if _, err := s.Store().GetBookByID(req.BookID); err != nil {
-		httputil.RespondWithNotFound(c, "book", req.BookID)
-		return
-	}
-
-	id := ulid.Make().String()
-	op, err := s.Store().CreateOperation(id, "transcode", nil)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.transcode", body)
 	if err != nil {
-		httputil.InternalError(c, "failed to create operation", err)
+		httputil.InternalError(c, "enqueue failed", err)
 		return
 	}
-
-	keepOriginal := true
-	if req.KeepOriginal != nil {
-		keepOriginal = *req.KeepOriginal
-	}
-
-	opts := transcode.TranscodeOpts{
-		BookID:       req.BookID,
-		OutputFormat: req.OutputFormat,
-		Bitrate:      req.Bitrate,
-		KeepOriginal: keepOriginal,
-	}
-
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		outputPath, err := transcode.Transcode(ctx, opts, s.Store(), progress)
-		if err != nil {
-			return err
-		}
-
-		// Get the original book to preserve its data
-		originalBook, err := s.Store().GetBookByID(req.BookID)
-		if err != nil {
-			return fmt.Errorf("failed to get original book: %w", err)
-		}
-
-		// Set up version group if not already set
-		groupID := ""
-		if originalBook.VersionGroupID != nil && *originalBook.VersionGroupID != "" {
-			groupID = *originalBook.VersionGroupID
-		} else {
-			groupID = ulid.Make().String()
-		}
-
-		// Mark original as non-primary version (modify fetched book to preserve all fields)
-		notPrimary := false
-		origNotes := "Original format"
-		originalBook.IsPrimaryVersion = &notPrimary
-		originalBook.VersionGroupID = &groupID
-		originalBook.VersionNotes = &origNotes
-		if _, err := s.Store().UpdateBook(req.BookID, originalBook); err != nil {
-			progress.Log("warn", fmt.Sprintf("Failed to update original book version info: %v", err), nil)
-		}
-
-		// Create a new book record for the M4B version
-		m4bFormat := "m4b"
-		aacCodec := "aac"
-		bitrateVal := opts.Bitrate
-		if bitrateVal <= 0 {
-			bitrateVal = 128
-		}
-		isPrimary := true
-		m4bNotes := "Transcoded to M4B"
-
-		newBook := &database.Book{
-			ID:                   ulid.Make().String(),
-			Title:                originalBook.Title,
-			FilePath:             outputPath,
-			Format:               m4bFormat,
-			Codec:                &aacCodec,
-			Bitrate:              &bitrateVal,
-			AuthorID:             originalBook.AuthorID,
-			SeriesID:             originalBook.SeriesID,
-			SeriesSequence:       originalBook.SeriesSequence,
-			Duration:             originalBook.Duration,
-			Narrator:             originalBook.Narrator,
-			Publisher:            originalBook.Publisher,
-			PrintYear:            originalBook.PrintYear,
-			AudiobookReleaseYear: originalBook.AudiobookReleaseYear,
-			ISBN10:               originalBook.ISBN10,
-			ISBN13:               originalBook.ISBN13,
-			ASIN:                 originalBook.ASIN,
-			Language:             originalBook.Language,
-			CoverURL:             originalBook.CoverURL,
-			IsPrimaryVersion:     &isPrimary,
-			VersionGroupID:       &groupID,
-			VersionNotes:         &m4bNotes,
-		}
-		if _, err := s.Store().CreateBook(newBook); err != nil {
-			// Fallback: update original in-place but preserve all existing fields
-			progress.Log("warn", fmt.Sprintf("Failed to create M4B version record, updating original: %v", err), nil)
-			isPrim := true
-			fallbackNotes := fmt.Sprintf("Transcoded to M4B (in-place, original was at %s)", originalBook.FilePath)
-			originalBook.FilePath = outputPath
-			originalBook.Format = m4bFormat
-			originalBook.Codec = &aacCodec
-			originalBook.Bitrate = &bitrateVal
-			originalBook.IsPrimaryVersion = &isPrim
-			originalBook.VersionGroupID = &groupID
-			originalBook.VersionNotes = &fallbackNotes
-			if _, updateErr := s.Store().UpdateBook(req.BookID, originalBook); updateErr != nil {
-				return updateErr
-			}
-			return nil
-		}
-
-		progress.Log("info", fmt.Sprintf("Created M4B version %s (group %s), original %s demoted to non-primary", newBook.ID, groupID, req.BookID), nil)
-
-		// If iTunes write-back is disabled and the original book came from iTunes,
-		// store a deferred update so the path change is applied on the next sync.
-		if !config.AppConfig.ITLWriteBackEnabled &&
-			originalBook.ITunesPersistentID != nil &&
-			*originalBook.ITunesPersistentID != "" {
-			if err := s.Store().CreateDeferredITunesUpdate(
-				originalBook.ID,
-				*originalBook.ITunesPersistentID,
-				originalBook.FilePath,
-				newBook.FilePath,
-				"transcode",
-			); err != nil {
-				progress.Log("warn", fmt.Sprintf("Failed to create deferred iTunes update: %v", err), nil)
-			} else {
-				progress.Log("info", "M4B created. iTunes library update deferred until write-back is enabled.", nil)
-			}
-		}
-
-		return nil
-	}
-
-	if err := s.queue.Enqueue(op.ID, "transcode", operations.PriorityNormal, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
-		return
-	}
-
-	httputil.RespondWithSuccess(c, 202, op)
+	c.JSON(202, gin.H{"op_id": opID, "id": opID})
 }
 
 func (s *Server) getOperationStatus(c *gin.Context) {

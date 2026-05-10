@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.9.0
+// version: 2.10.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-08
 
@@ -357,6 +357,15 @@ func NewServer(store database.Store) *Server {
 		}
 		if err := server.RegisterBulkMetadataFetchOp(server.opRegistry); err != nil {
 			log.Printf("[server] bulk-metadata-fetch op register: %v", err)
+		}
+		if err := server.RegisterLibraryScanOp(server.opRegistry); err != nil {
+			log.Printf("[server] library.scan op register: %v", err)
+		}
+		if err := server.RegisterLibraryOrganizeOp(server.opRegistry); err != nil {
+			log.Printf("[server] library.organize op register: %v", err)
+		}
+		if err := server.RegisterLibraryTranscodeOp(server.opRegistry); err != nil {
+			log.Printf("[server] library.transcode op register: %v", err)
 		}
 	}
 
