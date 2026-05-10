@@ -1,5 +1,5 @@
 // file: web/src/components/library/LibraryBookGrid.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
 // last-edited: 2026-05-11
 
@@ -68,8 +68,7 @@ interface LibraryBookGridProps {
   effectiveSelectedCount: number;
   handleClearSelection: () => void;
   showSelectAllBanner: boolean;
-  handleSelectAllItems: () => Promise<void>;
-  selectingAll: boolean;
+  handleSelectAllItems: () => void;
   handleEdit: (book: Audiobook) => void;
   handleDelete: (book: Audiobook) => void;
   handleClick: (book: Audiobook) => void;
@@ -138,7 +137,6 @@ export const LibraryBookGrid = ({
   handleClearSelection,
   showSelectAllBanner,
   handleSelectAllItems,
-  selectingAll,
   handleEdit,
   handleDelete,
   handleClick,
@@ -292,10 +290,9 @@ export const LibraryBookGrid = ({
               size="small"
               variant="text"
               sx={{ textTransform: 'none', fontWeight: 'bold' }}
-              onClick={() => { void handleSelectAllItems(); }}
-              disabled={selectingAll}
+              onClick={() => handleSelectAllItems()}
             >
-              {selectingAll ? 'Loading\u2026' : `Select all ${totalCount.toLocaleString()} items`}
+              {`Select all ${totalCount.toLocaleString()} items`}
             </Button>
           </Box>
         )}

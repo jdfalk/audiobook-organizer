@@ -1,7 +1,7 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.4.0
+// version: 3.5.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
-// last-edited: 2026-05-05
+// last-edited: 2026-05-11
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
 // search/apply/revert/no-match, bulk fetch and bulk writeback, the
@@ -1096,10 +1096,14 @@ func (a registryProgressAdapter) Log(level, message string, details *string) err
 func (a registryProgressAdapter) IsCanceled() bool { return a.r.IsCanceled() }
 
 // bulkMetadataFetchV2Params is the JSON params for the v2 bulk_metadata_fetch op.
+// Selection replaces the old BookIDs field: the client sends either
+//   - book_ids: an explicit list of IDs (page-level selection), or
+//   - filter: a FilterSpec that the server resolves to IDs at run time
+//     with IsPrimaryVersion=true always applied.
 type bulkMetadataFetchV2Params struct {
-	BookIDs       []string `json:"book_ids"`
-	PreferAudible bool     `json:"prefer_audible"`
-	SkipCached    bool     `json:"skip_cached"`
+	Selection     operations.SelectionSpec `json:"selection"`
+	PreferAudible bool                     `json:"prefer_audible"`
+	SkipCached    bool                     `json:"skip_cached"`
 }
 
 // RegisterBulkMetadataFetchOp registers the "library.bulk-metadata-fetch" v2
@@ -1143,8 +1147,59 @@ func (s *Server) RegisterBulkMetadataFetchOp(reg *opsregistry.Registry) error {
 
 			progress := registryProgressAdapter{r: reporter}
 
-			if len(p.BookIDs) > 0 {
-				return s.runBulkMetadataFetchForBookIDs(ctx, opID, p.BookIDs, fetchParams, store, progress)
+			// resolveFilter translates a FilterSpec into a concrete book-ID list.
+			// IsPrimaryVersion is always forced true so the count matches the
+			// visible library list. Per-user fields are dropped here because
+			// bulk ops run server-side without a user context.
+			resolveFilter := func(f operations.FilterSpec) ([]string, error) {
+				trueVal := true
+				filters := ListFilters{
+					IsPrimaryVersion: &trueVal,
+					LibraryState:     f.LibraryState,
+					Tag:              f.Tag,
+				}
+				for _, ff := range f.FieldFilters {
+					if IsPerUserField(ff.Field) {
+						continue // no user context in background op
+					}
+					filters.FieldFilters = append(filters.FieldFilters, FieldFilter{
+						Field:   ff.Field,
+						Value:   ff.Value,
+						Negated: ff.Negated,
+					})
+				}
+				// Convert *int64 to *int for the service method signature.
+				var authorID, seriesID *int
+				if f.AuthorID != nil {
+					v := int(*f.AuthorID)
+					authorID = &v
+				}
+				if f.SeriesID != nil {
+					v := int(*f.SeriesID)
+					seriesID = &v
+				}
+				books, err := s.audiobookService.GetAudiobooks(ctx, 100000, 0, f.Search, authorID, seriesID, filters)
+				if err != nil {
+					return nil, fmt.Errorf("resolve filter: %w", err)
+				}
+				ids := make([]string, 0, len(books))
+				for _, b := range books {
+					// Exclude quarantined books (mirrors the /audiobooks/ids endpoint).
+					if b.QuarantinedAt != nil {
+						continue
+					}
+					ids = append(ids, b.ID)
+				}
+				return ids, nil
+			}
+
+			bookIDs, err := operations.ResolveBookIDs(p.Selection, resolveFilter)
+			if err != nil {
+				return fmt.Errorf("bulk_metadata_fetch: resolve selection: %w", err)
+			}
+
+			if len(bookIDs) > 0 {
+				return s.runBulkMetadataFetchForBookIDs(ctx, opID, bookIDs, fetchParams, store, progress)
 			}
 			return s.runBulkMetadataFetchAll(ctx, opID, fetchParams, store, progress)
 		},

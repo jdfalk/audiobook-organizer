@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-08
 
@@ -865,7 +865,6 @@ func (s *Server) setupRoutes() {
 			// Audiobook routes
 			protected.GET("/audiobooks", s.perm(auth.PermLibraryView), s.listAudiobooks)
 			// /audiobooks/search removed — use GET /audiobooks?search= instead
-			protected.GET("/audiobooks/ids", s.perm(auth.PermLibraryView), s.listAudiobookIDs)
 			protected.GET("/audiobooks/count", s.perm(auth.PermLibraryView), s.countAudiobooks)
 			protected.GET("/audiobooks/facets", s.perm(auth.PermLibraryView), s.audiobookFacets)
 			protected.GET("/audiobooks/duplicates", s.perm(auth.PermLibraryView), s.listDuplicateAudiobooks)
@@ -1072,7 +1071,6 @@ func (s *Server) setupRoutes() {
 				itunesGroup.GET("/library-stats", s.perm(auth.PermLibraryView), s.handleITunesLibraryStats)
 				itunesGroup.POST("/write-back/preview", s.perm(auth.PermLibraryEditMetadata), s.handleITunesWriteBackPreview)
 				itunesGroup.GET("/books", s.perm(auth.PermLibraryView), s.handleListITunesBooks)
-				itunesGroup.GET("/books/ids", s.perm(auth.PermLibraryView), s.handleListITunesBooksIDs)
 				itunesGroup.GET("/import-status/:id", s.perm(auth.PermLibraryView), s.handleITunesImportStatus)
 				itunesGroup.POST("/import-status/bulk", s.perm(auth.PermLibraryEditMetadata), s.handleITunesImportStatusBulk)
 				itunesGroup.GET("/library-status", s.perm(auth.PermLibraryView), s.handleITunesLibraryStatus)

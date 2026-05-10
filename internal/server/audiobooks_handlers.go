@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.8.0
+// version: 2.9.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
@@ -133,67 +133,6 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	httputil.RespondWithOK(c, resp)
 }
 
-// listAudiobookIDs returns only the IDs (no full book objects) for all books
-// matching the active filters. No pagination cap is applied — this endpoint
-// exists specifically for "select all across all pages" use cases where the
-// 500-row pagination limit would silently truncate the selection.
-// Always filters to primary versions only, matching the behaviour of the
-// main library list endpoint.
-func (s *Server) listAudiobookIDs(c *gin.Context) {
-	authorID := httputil.ParseQueryIntPtr(c, "author_id")
-	seriesID := httputil.ParseQueryIntPtr(c, "series_id")
-
-	sortOrder := httputil.ParseQueryString(c, "sort_order")
-	if sortOrder != "" && sortOrder != "asc" && sortOrder != "desc" {
-		sortOrder = "asc"
-	}
-	trueVal := true
-	filters := ListFilters{
-		IsPrimaryVersion: &trueVal,
-		LibraryState:     httputil.ParseQueryString(c, "library_state"),
-		Tag:              httputil.ParseQueryString(c, "tag"),
-		SortBy:           httputil.ParseQueryString(c, "sort_by"),
-		SortOrder:        sortOrder,
-	}
-	if filtersJSON := c.Query("filters"); filtersJSON != "" {
-		var fieldFilters []FieldFilter
-		if err := json.Unmarshal([]byte(filtersJSON), &fieldFilters); err != nil {
-			httputil.RespondWithBadRequest(c, "invalid filters parameter: "+err.Error())
-			return
-		}
-		for _, ff := range fieldFilters {
-			if IsPerUserField(ff.Field) {
-				filters.PerUserFilters = append(filters.PerUserFilters, ff)
-			} else {
-				filters.FieldFilters = append(filters.FieldFilters, ff)
-			}
-		}
-	}
-	if caller, ok := servermiddleware.CurrentUser(c); ok && caller != nil {
-		filters.UserID = caller.ID
-	}
-
-	search := c.Query("search")
-
-	// Fetch up to 100 000 books — IDs only returned so memory is manageable.
-	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), 100000, 0, search, authorID, seriesID, filters)
-	if err != nil {
-		httputil.InternalError(c, "failed to list audiobook IDs", err)
-		return
-	}
-
-	// Exclude quarantined books unless explicitly requested.
-	showQuarantined := c.Query("show_quarantined") == "true"
-	ids := make([]string, 0, len(books))
-	for _, b := range books {
-		if !showQuarantined && b.QuarantinedAt != nil {
-			continue
-		}
-		ids = append(ids, b.ID)
-	}
-
-	httputil.RespondWithOK(c, gin.H{"ids": ids, "total": len(ids)})
-}
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 	params := httputil.ParsePaginationParams(c)
