@@ -355,6 +355,9 @@ func NewServer(store database.Store) *Server {
 		if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
 			log.Printf("[server] maintenance plugin register: %v", err)
 		}
+		if err := server.RegisterBulkMetadataFetchOp(server.opRegistry); err != nil {
+			log.Printf("[server] bulk-metadata-fetch op register: %v", err)
+		}
 	}
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()

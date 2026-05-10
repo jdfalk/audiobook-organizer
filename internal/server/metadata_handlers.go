@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.3.0
+// version: 3.4.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 // last-edited: 2026-05-05
 //
@@ -24,8 +24,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"log/slog"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
+	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
@@ -33,6 +36,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	ulid "github.com/oklog/ulid/v2"
@@ -1062,6 +1066,241 @@ func (s *Server) runBulkMetadataFetchAll(
 	_ = progress.UpdateProgress(int(finalCount), totalBooks,
 		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
 	log.Printf("[INFO] bulk-metadata-fetch %s: done %d books — cached:%d not_found:%d",
+		opID, finalCount, found, notFound)
+	return nil
+}
+
+// registryProgressAdapter bridges registry.Reporter → operations.ProgressReporter
+// so runBulkMetadataFetchAll can be called from a v2 op Run function without changes.
+type registryProgressAdapter struct{ r opsregistry.Reporter }
+
+func (a registryProgressAdapter) UpdateProgress(current, total int, message string) error {
+	return a.r.UpdateProgress(current, total, message)
+}
+func (a registryProgressAdapter) Log(level, message string, details *string) error {
+	l := slog.LevelInfo
+	switch level {
+	case "warn", "warning":
+		l = slog.LevelWarn
+	case "error":
+		l = slog.LevelError
+	case "debug":
+		l = slog.LevelDebug
+	}
+	var attrs []slog.Attr
+	if details != nil {
+		attrs = append(attrs, slog.String("details", *details))
+	}
+	return a.r.Log(l, message, attrs...)
+}
+func (a registryProgressAdapter) IsCanceled() bool { return a.r.IsCanceled() }
+
+// bulkMetadataFetchV2Params is the JSON params for the v2 bulk_metadata_fetch op.
+type bulkMetadataFetchV2Params struct {
+	BookIDs       []string `json:"book_ids"`
+	PreferAudible bool     `json:"prefer_audible"`
+	SkipCached    bool     `json:"skip_cached"`
+}
+
+// RegisterBulkMetadataFetchOp registers the "library.bulk-metadata-fetch" v2
+// OperationDef so that POST /api/v1/operations/v2 with def_id "bulk_metadata_fetch"
+// shows in the bell, is resumable, and can be cancelled.
+func (s *Server) RegisterBulkMetadataFetchOp(reg *opsregistry.Registry) error {
+	return reg.RegisterOp(opsregistry.OperationDef{
+		ID:              "library.bulk-metadata-fetch",
+		Plugin:          "library",
+		DisplayName:     "Bulk Metadata Fetch",
+		Description:     "Fetch and cache external metadata for a set of audiobooks. Nothing is written to book records — results appear in the per-book review UI.",
+		DefaultPriority: opsregistry.PriorityNormal,
+		Cancellable:     true,
+		Isolate:         false,
+		Timeout:         6 * time.Hour,
+		ResumePolicy:    opsregistry.ResumeRestart,
+		ConcurrencyKey:  "library.bulk-metadata-fetch",
+		Permissions:     []auth.Permission{auth.PermLibraryEditMetadata},
+		Capabilities:    []opsregistry.Capability{opsregistry.CapNetworkGeneric, opsregistry.CapLibraryRead},
+		Run: func(ctx context.Context, rawParams json.RawMessage, reporter opsregistry.Reporter) error {
+			var p bulkMetadataFetchV2Params
+			if len(rawParams) > 0 {
+				if err := json.Unmarshal(rawParams, &p); err != nil {
+					return fmt.Errorf("bulk_metadata_fetch: decode params: %w", err)
+				}
+			}
+			store := s.Store()
+			if store == nil {
+				return fmt.Errorf("bulk_metadata_fetch: database not initialized")
+			}
+
+			// Generate a stable opID for OperationResult rows (resume key).
+			// The registry assigns its own run ID; we derive a deterministic
+			// sub-ID so OperationResult rows survive restarts.
+			opID := ulid.Make().String()
+
+			fetchParams := operations.BulkMetadataFetchParams{
+				PreferAudible: p.PreferAudible,
+				SkipCached:    p.SkipCached,
+			}
+
+			progress := registryProgressAdapter{r: reporter}
+
+			if len(p.BookIDs) > 0 {
+				return s.runBulkMetadataFetchForBookIDs(ctx, opID, p.BookIDs, fetchParams, store, progress)
+			}
+			return s.runBulkMetadataFetchAll(ctx, opID, fetchParams, store, progress)
+		},
+	})
+}
+
+// runBulkMetadataFetchForBookIDs fetches and caches metadata for a specific set
+// of books identified by ID. It shares resume semantics with runBulkMetadataFetchAll:
+// books that already have an OperationResult row for this opID are skipped.
+func (s *Server) runBulkMetadataFetchForBookIDs(
+	ctx context.Context,
+	opID string,
+	bookIDs []string,
+	params operations.BulkMetadataFetchParams,
+	store database.Store,
+	progress operations.ProgressReporter,
+) error {
+	_ = progress.UpdateProgress(0, len(bookIDs), "loading books")
+
+	maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
+
+	existingResults, _ := store.GetOperationResults(opID)
+	done := make(map[string]bool, len(existingResults))
+	for _, r := range existingResults {
+		done[r.BookID] = true
+	}
+
+	allAuthors, _ := store.GetAllAuthors()
+	authorByID := make(map[int]string, len(allAuthors))
+	for _, a := range allAuthors {
+		authorByID[a.ID] = a.Name
+	}
+
+	type bookWork struct {
+		book       database.Book
+		authorName string
+	}
+	var work []bookWork
+	for _, id := range bookIDs {
+		if done[id] {
+			continue
+		}
+		b, err := store.GetBookByID(id)
+		if err != nil || b == nil || strings.TrimSpace(b.Title) == "" {
+			continue
+		}
+		if params.SkipCached {
+			hasFresh := false
+			for _, src := range s.metadataFetchService.BuildSourceChain() {
+				if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, id, src.Name(), maxAge); cerr == nil && cached != nil {
+					hasFresh = true
+					break
+				}
+			}
+			if hasFresh {
+				continue
+			}
+		}
+		author := ""
+		if b.AuthorID != nil {
+			author = authorByID[*b.AuthorID]
+		}
+		work = append(work, bookWork{book: *b, authorName: author})
+	}
+
+	alreadyDone := len(existingResults)
+	totalBooks := alreadyDone + len(work)
+	log.Printf("[INFO] bulk-metadata-fetch-ids %s: %d total, %d done, %d to fetch",
+		opID, totalBooks, alreadyDone, len(work))
+	_ = progress.UpdateProgress(alreadyDone, totalBooks,
+		fmt.Sprintf("resuming: %d/%d already done", alreadyDone, totalBooks))
+
+	sourceChain := s.metadataFetchService.BuildSourceChain()
+	if params.PreferAudible {
+		audible := metadata.NewAudibleClient()
+		var rest []metadata.MetadataSource
+		for _, src := range sourceChain {
+			if src.Name() != audible.Name() {
+				rest = append(rest, src)
+			}
+		}
+		sourceChain = append([]metadata.MetadataSource{audible}, rest...)
+	}
+
+	completed := int64(alreadyDone)
+	found, notFound := 0, 0
+	for i, w := range work {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		bookID := w.book.ID
+		searchTitle := stripChapterFromTitle(w.book.Title)
+
+		var metaResults []metadata.BookMetadata
+		var sourceName string
+		cacheHit := false
+		for _, src := range sourceChain {
+			if cached, _, cerr := database.GetCachedMetadataFetchWithMaxAge(store, bookID, src.Name(), maxAge); cerr == nil && cached != nil {
+				var cr []metadata.BookMetadata
+				if jerr := json.Unmarshal(cached.Results, &cr); jerr == nil && len(cr) > 0 {
+					metaResults, sourceName, cacheHit = cr, src.Name(), true
+					break
+				}
+			}
+			var ferr error
+			if w.authorName != "" {
+				metaResults, ferr = src.SearchByTitleAndAuthor(ctx, searchTitle, w.authorName)
+				if ferr == nil && len(metaResults) > 0 {
+					sourceName = src.Name()
+					break
+				}
+			}
+			metaResults, ferr = src.SearchByTitle(ctx, searchTitle)
+			if ferr == nil && len(metaResults) > 0 {
+				sourceName = src.Name()
+				break
+			}
+		}
+
+		resultStatus := "not_found"
+		if len(metaResults) > 0 && sourceName != "" {
+			if !cacheHit {
+				if blob, merr := json.Marshal(metaResults); merr == nil {
+					_ = database.PutCachedMetadataFetch(store, bookID, sourceName, blob, 0)
+				}
+			}
+			found++
+			resultStatus = "cached"
+		} else {
+			notFound++
+		}
+		_ = store.CreateOperationResult(&database.OperationResult{
+			OperationID: opID,
+			BookID:      bookID,
+			ResultJSON:  fmt.Sprintf(`{"status":%q,"source":%q}`, resultStatus, sourceName),
+			Status:      resultStatus,
+		})
+
+		n := atomic.AddInt64(&completed, 1)
+		if i%50 == 0 || int(n) == totalBooks {
+			_ = progress.UpdateProgress(int(n), totalBooks,
+				fmt.Sprintf("fetched %d/%d — cached:%d not_found:%d", n, totalBooks, found, notFound))
+		}
+		if !cacheHit && sourceName != "" && i < len(work)-1 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+	}
+
+	finalCount := atomic.LoadInt64(&completed)
+	_ = progress.UpdateProgress(int(finalCount), totalBooks,
+		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
+	log.Printf("[INFO] bulk-metadata-fetch-ids %s: done %d books — cached:%d not_found:%d",
 		opID, finalCount, found, notFound)
 	return nil
 }

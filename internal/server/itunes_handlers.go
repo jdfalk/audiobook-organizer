@@ -1,5 +1,5 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
 // last-edited: 2026-05-05
 
@@ -644,6 +644,39 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 		"items": items,
 		"count": total,
 	})
+}
+
+// handleListITunesBooksIDs returns all book IDs that have an iTunes persistent
+// ID, without any pagination cap. Accepts an optional search query param.
+// Used by the iTunes sync dialog "Select All" action.
+func (s *Server) handleListITunesBooksIDs(c *gin.Context) {
+	if s.Store() == nil {
+		httputil.RespondWithInternalError(c, "database not initialized")
+		return
+	}
+
+	search := c.Query("search")
+
+	var allBooks []database.Book
+	var err error
+	if search != "" {
+		allBooks, err = s.Store().SearchBooks(search, 0, 0)
+	} else {
+		allBooks, err = s.Store().GetAllBooks(0, 0)
+	}
+	if err != nil {
+		httputil.InternalError(c, "failed to list books", err)
+		return
+	}
+
+	ids := make([]string, 0)
+	for _, book := range allBooks {
+		if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+			ids = append(ids, book.ID)
+		}
+	}
+
+	httputil.RespondWithOK(c, gin.H{"ids": ids, "total": len(ids)})
 }
 
 // handleITunesImportStatus returns the status of an iTunes import operation.

@@ -1,5 +1,5 @@
 // file: web/src/components/library/LibraryBookGrid.tsx
-// version: 1.0.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
 // last-edited: 2026-05-11
 
@@ -65,7 +65,7 @@ interface LibraryBookGridProps {
   someOnPageSelected: boolean;
   handleToggleSelectAllOnPage: () => void;
   hasSelection: boolean;
-  selectedAudiobooks: Audiobook[];
+  effectiveSelectedCount: number;
   handleClearSelection: () => void;
   showSelectAllBanner: boolean;
   handleSelectAllItems: () => Promise<void>;
@@ -134,7 +134,7 @@ export const LibraryBookGrid = ({
   someOnPageSelected,
   handleToggleSelectAllOnPage,
   hasSelection,
-  selectedAudiobooks,
+  effectiveSelectedCount,
   handleClearSelection,
   showSelectAllBanner,
   handleSelectAllItems,
@@ -267,7 +267,7 @@ export const LibraryBookGrid = ({
           />
           {hasSelection && (
             <>
-              <Chip label={`${selectedAudiobooks.length} selected`} size="small" color="primary" />
+              <Chip label={`${effectiveSelectedCount.toLocaleString()} selected`} size="small" color="primary" />
               <Button size="small" variant="text" onClick={handleClearSelection}>Deselect</Button>
             </>
           )}
@@ -300,8 +300,8 @@ export const LibraryBookGrid = ({
           </Box>
         )}
 
-        {/* Banner when all items are selected */}
-        {selectedAudiobooks.length >= totalCount && totalCount > audiobooks.length && (
+        {/* Banner when all items are selected across pages */}
+        {effectiveSelectedCount >= totalCount && totalCount > audiobooks.length && (
           <Box
             sx={{
               py: 0.75,

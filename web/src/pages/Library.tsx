@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.57.0
+// version: 1.61.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-05-11
 
@@ -145,6 +145,10 @@ export const Library = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [editingAudiobook, setEditingAudiobook] = useState<Audiobook | null>(null);
   const [selectedAudiobooks, setSelectedAudiobooks] = useState<Audiobook[]>([]);
+  // crossPageIds is set when the user clicks "select all across all pages".
+  // When non-null it overrides selectedAudiobooks as the source of IDs for
+  // bulk operations, bypassing the per-page 500-row pagination limit.
+  const [crossPageIds, setCrossPageIds] = useState<string[] | null>(null);
   const [batchEditOpen, setBatchEditOpen] = useState(false);
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
   const [versionManagingAudiobook, setVersionManagingAudiobook] = useState<Audiobook | null>(null);
@@ -239,7 +243,7 @@ export const Library = () => {
 
   const [bulkFetchDialogOpen, setBulkFetchDialogOpen] = useState(false);
   const [bulkSearchOpen, setBulkSearchOpen] = useState(false);
-  const [bulkFetchInProgress, setBulkFetchInProgress] = useState(false);
+  const [bulkFetchInProgress] = useState(false);
   const [bulkFetchProgress, setBulkFetchProgress] = useState<BulkActionProgress | null>(null);
   const [bulkOrganizeDialogOpen, setBulkOrganizeDialogOpen] = useState(false);
   const [bulkOrganizeInProgress, setBulkOrganizeInProgress] = useState(false);
@@ -509,7 +513,10 @@ export const Library = () => {
   }, []);
 
   const selectedIds = new Set(selectedAudiobooks.map((book) => book.id));
-  const hasSelection = selectedAudiobooks.length > 0;
+  // effectiveSelectedIds is used by bulk operations; crossPageIds wins when set.
+  const effectiveSelectedIds: string[] = crossPageIds ?? selectedAudiobooks.map((b) => b.id);
+  const effectiveSelectedCount = crossPageIds?.length ?? selectedAudiobooks.length;
+  const hasSelection = effectiveSelectedCount > 0;
   const allOnPageSelected =
     audiobooks.length > 0 && audiobooks.every((book) => selectedIds.has(book.id));
   const someOnPageSelected = audiobooks.some((book) => selectedIds.has(book.id));
@@ -520,6 +527,8 @@ export const Library = () => {
   const lastSelectedIndexRef = useRef<number>(-1);
 
   const handleToggleSelect = (audiobook: Audiobook, event?: React.MouseEvent) => {
+    // Any individual toggle exits cross-page-select-all mode.
+    setCrossPageIds(null);
     const clickedIndex = audiobooks.findIndex((b) => b.id === audiobook.id);
 
     // Shift-click: select range from last selected to clicked
@@ -549,6 +558,7 @@ export const Library = () => {
   };
 
   const handleSelectAllOnPage = () => {
+    setCrossPageIds(null);
     setSelectedAudiobooks((prev) => {
       const byId = new Map(prev.map((book) => [book.id, book]));
       audiobooks.forEach((book) => {
@@ -561,6 +571,7 @@ export const Library = () => {
   };
 
   const handleToggleSelectAllOnPage = () => {
+    setCrossPageIds(null);
     if (allOnPageSelected) {
       setSelectedAudiobooks((prev) =>
         prev.filter((book) => !audiobooks.some((pageBook) => pageBook.id === book.id))
@@ -571,6 +582,7 @@ export const Library = () => {
   };
 
   const handleClearSelection = () => {
+    setCrossPageIds(null);
     setSelectedAudiobooks([]);
   };
 
@@ -588,7 +600,8 @@ export const Library = () => {
     return fieldFilters;
   }, [filters, parsedSearch]);
 
-  // Fetch all matching books on demand for cross-page "select all"
+  // Fetch all matching IDs for cross-page "select all" — bypasses the 500-row
+  // pagination cap by using the IDs-only endpoint.
   const handleSelectAllItems = useCallback(async () => {
     const fieldFilters = buildFieldFilters();
     const searchText = parsedSearch ? parsedSearch.freeText : debouncedSearch;
@@ -599,31 +612,26 @@ export const Library = () => {
 
     setSelectingAll(true);
     try {
-      const page_ = searchText
-        ? await api.searchBooksPage(searchText, totalCount || 10000, 0, filters.showFailed)
-        : await api.getBooks(totalCount || 10000, 0, {
-            sortBy,
-            sortOrder,
-            tag: tagFilter,
-            libraryState,
-            filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
-            showFailed: filters.showFailed,
-          });
-      let all = page_.items.map(convertApiBook);
-      if (filters.libraryState === 'deleted') {
-        all = all.filter((b) => b.marked_for_deletion);
-      }
-      setSelectedAudiobooks(all);
+      const result = await api.getAudiobookIds({
+        search: searchText || undefined,
+        sortBy,
+        sortOrder,
+        tag: tagFilter,
+        libraryState,
+        filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
+      });
+      setCrossPageIds(result.ids);
     } catch (e) {
       console.error('Failed to select all items', e);
     } finally {
       setSelectingAll(false);
     }
-  }, [buildFieldFilters, debouncedSearch, filters, parsedSearch, selectedTags, sortBy, sortOrder, totalCount]);
+  }, [buildFieldFilters, debouncedSearch, filters, parsedSearch, selectedTags, sortBy, sortOrder]);
 
-  // True when all items on the current page are selected but not all items globally
+  // True when all items on the current page are selected but not all items globally,
+  // and the user hasn't already selected all pages.
   const showSelectAllBanner =
-    allOnPageSelected && selectedAudiobooks.length < totalCount && totalCount > audiobooks.length;
+    allOnPageSelected && crossPageIds === null && effectiveSelectedCount < totalCount && totalCount > audiobooks.length;
 
   const loadAudiobooks = useCallback(async () => {
     setLoading(true);
@@ -901,9 +909,14 @@ export const Library = () => {
     if (!hasSelection) return;
     setBatchDeleteInProgress(true);
     try {
-      const activeBooks = selectedAudiobooks.filter((book) => !book.marked_for_deletion);
+      // When cross-page selection is active, send all IDs; backend skips already-deleted.
+      const idsToDelete = crossPageIds
+        ?? selectedAudiobooks.filter((book) => !book.marked_for_deletion).map((b) => b.id);
+      const activeBooks = crossPageIds
+        ? crossPageIds.map((id) => ({ id }))
+        : selectedAudiobooks.filter((book) => !book.marked_for_deletion);
       const results = await Promise.all(
-        activeBooks.map((book) => api.deleteBook(book.id, { softDelete: true, blockHash: true }))
+        idsToDelete.map((id) => api.deleteBook(id, { softDelete: true, blockHash: true }))
       );
       const blockedFailures = results.filter((result) => result.blocked !== true).length;
       const baseMessage = `Soft deleted ${activeBooks.length} selected audiobooks.`;
@@ -915,6 +928,7 @@ export const Library = () => {
       } else {
         toast(baseMessage, 'success');
       }
+      setCrossPageIds(null);
       setSelectedAudiobooks([]);
       await loadAudiobooks();
       await loadSoftDeleted();
@@ -935,6 +949,7 @@ export const Library = () => {
       await Promise.all(deletedBooks.map((book) => api.restoreSoftDeletedBook(book.id)));
       toast(`Restored ${deletedBooks.length} selected audiobooks.`, 'success');
       setSelectedAudiobooks([]);
+      setCrossPageIds(null);
       await loadAudiobooks();
       await loadSoftDeleted();
     } catch (error) {
@@ -954,6 +969,7 @@ export const Library = () => {
       await api.mergeBooks(keepId, mergeIds);
       toast(`Merged ${selectedAudiobooks.length} books as versions.`, 'success');
       setSelectedAudiobooks([]);
+      setCrossPageIds(null);
       setMergeDialogOpen(false);
       await loadAudiobooks();
     } catch (error) {
@@ -1020,8 +1036,7 @@ export const Library = () => {
       // PUT requests. One round trip, one DB write loop. The
       // old path did Promise.allSettled(N × updateBook) which
       // was both slower and noisier in the activity log.
-      const ids = selectedAudiobooks.map((ab) => ab.id);
-      const result = await api.batchUpdateBooks(ids, updates as Record<string, unknown>);
+      const result = await api.batchUpdateBooks(effectiveSelectedIds, updates as Record<string, unknown>);
       if (result.failed > 0) {
         toast(
           `Updated ${result.updated} audiobooks, ${result.failed} failed.`,
@@ -1035,6 +1050,7 @@ export const Library = () => {
       }
       loadAudiobooks();
       setSelectedAudiobooks([]);
+      setCrossPageIds(null);
       setBatchEditOpen(false);
     } catch (error) {
       console.error('Failed to batch update audiobooks:', error);
@@ -1084,64 +1100,17 @@ export const Library = () => {
       toast('Select audiobooks to fetch metadata for.', 'info');
       return;
     }
-
-    setBulkFetchInProgress(true);
-    bulkFetchCancelRef.current = false;
-
-    const total = selectedAudiobooks.length;
-    const results: BulkActionResult[] = [];
-    let completed = 0;
-    setBulkFetchProgress({ total, completed, results: [] });
-
     try {
-      for (const book of selectedAudiobooks) {
-        if (bulkFetchCancelRef.current) {
-          break;
-        }
-
-        try {
-          await api.fetchBookMetadata(book.id);
-          results.push({
-            book_id: book.id,
-            title: book.title,
-            status: 'updated',
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to fetch metadata';
-          results.push({
-            book_id: book.id,
-            title: book.title,
-            status: 'error',
-            message,
-          });
-        }
-
-        completed += 1;
-        setBulkFetchProgress({ total, completed, results: [...results] });
-      }
-
-      if (bulkFetchCancelRef.current) {
-        toast('Bulk fetch cancelled.', 'info');
-      } else {
-        const successCount = results.filter((result) => result.status !== 'error').length;
-        const failedCount = results.length - successCount;
-
-        toast(
-          failedCount > 0
-            ? `${successCount} succeeded, ${failedCount} failed.`
-            : `Metadata fetched for ${successCount} books.`,
-          failedCount > 0 ? 'warning' : 'success'
-        );
-        setSelectedAudiobooks([]);
-      }
-
-      await loadAudiobooks();
+      await api.startBulkMetadataFetch(effectiveSelectedIds);
+      toast(
+        `Metadata fetch queued for ${effectiveSelectedCount.toLocaleString()} books — watch the bell for progress.`,
+        'success'
+      );
+      setSelectedAudiobooks([]);
+      setCrossPageIds(null);
     } catch (error) {
-      console.error('Failed to bulk fetch metadata:', error);
-      toast('Failed to bulk fetch metadata.', 'error');
-    } finally {
-      setBulkFetchInProgress(false);
-      bulkFetchCancelRef.current = false;
+      console.error('Failed to start bulk metadata fetch:', error);
+      toast('Failed to start bulk metadata fetch.', 'error');
     }
   };
 
@@ -1155,24 +1124,27 @@ export const Library = () => {
   };
 
   const handleBulkWriteBack = async () => {
-    const activeBooks = selectedAudiobooks.filter((book) => !book.marked_for_deletion);
-    if (activeBooks.length === 0) {
+    const ids = effectiveSelectedIds.filter((id) => {
+      // When cross-page selection is active, we can't filter by marked_for_deletion.
+      // Pass all selected IDs; the backend skips deleted books gracefully.
+      if (crossPageIds !== null) return true;
+      const book = selectedAudiobooks.find((b) => b.id === id);
+      return book ? !book.marked_for_deletion : true;
+    });
+    if (ids.length === 0) {
       toast('Select active audiobooks to save to files.', 'info');
       return;
     }
 
     setBulkWriteBackInProgress(true);
     try {
-      const result = await api.batchWriteBackMetadata(
-        activeBooks.map((book) => book.id),
-        bulkWriteBackRename,
-        bulkWriteBackForce
-      );
+      const result = await api.batchWriteBackMetadata(ids, bulkWriteBackRename, bulkWriteBackForce);
       if (result.operation_id) {
         startOperationPolling(result.operation_id, 'batch_save_to_files');
       }
-      toast(`Saving ${activeBooks.length} books to files…`, 'success');
+      toast(`Saving ${ids.length} books to files…`, 'success');
       setBulkWriteBackDialogOpen(false);
+      setCrossPageIds(null);
       setSelectedAudiobooks([]);
     } catch (error) {
       console.error('Failed to start save to files:', error);
@@ -1377,6 +1349,7 @@ export const Library = () => {
       } else if (!encounteredError) {
         toast(`Successfully organized ${completed} audiobooks.`, 'success');
         setSelectedAudiobooks([]);
+        setCrossPageIds(null);
       }
 
       if (!bulkOrganizeCancelRef.current && !encounteredError) {
@@ -1638,7 +1611,8 @@ export const Library = () => {
 
   const handleFetchReview = async () => {
     try {
-      const resp = await api.batchFetchCandidates(selectedAudiobooks.map((b) => b.id));
+      const ids = effectiveSelectedIds;
+      const resp = await api.batchFetchCandidates(ids);
       const opId = resp.operation_id;
       if (!opId) {
         toast('All selected books are already being fetched.', 'info');
@@ -1647,7 +1621,7 @@ export const Library = () => {
       setMetadataReviewOpId(opId);
       startOperationPolling(opId, 'metadata_candidate_fetch');
       toast(
-        `Metadata fetch started for ${selectedAudiobooks.length} book${selectedAudiobooks.length !== 1 ? 's' : ''} — watch the bell for progress.`,
+        `Metadata fetch started for ${ids.length} book${ids.length !== 1 ? 's' : ''} — watch the bell for progress.`,
         'info',
       );
     } catch { toast('Failed to start metadata fetch', 'error'); }
@@ -1746,7 +1720,7 @@ export const Library = () => {
           someOnPageSelected={someOnPageSelected}
           handleToggleSelectAllOnPage={handleToggleSelectAllOnPage}
           hasSelection={hasSelection}
-          selectedAudiobooks={selectedAudiobooks}
+          effectiveSelectedCount={effectiveSelectedCount}
           handleClearSelection={handleClearSelection}
           showSelectAllBanner={showSelectAllBanner}
           handleSelectAllItems={handleSelectAllItems}
