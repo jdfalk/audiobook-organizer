@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.8.0
+// version: 3.9.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useState } from 'react';
@@ -106,9 +106,8 @@ function parseMessageDetails(message: string) {
 
 
 export function OperationsIndicator() {
-  const activeOperations = useOperationsStore(
-    (state) => state.activeOperations
-  );
+  const activeOperations = useOperationsStore((state) => state.activeOperations);
+  const alertOperations = useOperationsStore((state) => state.alertOperations);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
@@ -130,6 +129,15 @@ export function OperationsIndicator() {
     });
   };
 
+  // Badge only counts alert-level ops (notify_level === 0).
+  // Activity-only ops (single-book fetches, background maintenance) are visible
+  // in the dropdown list but do not increment the badge.
+  const alertInProgress = alertOperations.filter(
+    (op) => !['completed', 'failed', 'canceled'].includes(op.status)
+  );
+  const badgeCount = alertInProgress.length;
+
+  // The dropdown shows all ops regardless of notify level.
   const inProgress = activeOperations.filter(
     (op) => !['completed', 'failed', 'canceled'].includes(op.status)
   );
@@ -138,7 +146,6 @@ export function OperationsIndicator() {
   const terminal = activeOperations.filter((op) =>
     ['completed', 'failed', 'canceled'].includes(op.status)
   );
-  const badgeCount = inProgress.length;
 
   return (
     <>

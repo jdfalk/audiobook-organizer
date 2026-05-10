@@ -1,5 +1,5 @@
 // file: internal/server/operations_v2_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
 // last-edited: 2026-05-08
 
@@ -29,6 +29,7 @@ type operationV2Response struct {
 	DisplayName     string     `json:"display_name"`
 	Status          string     `json:"status"`
 	Priority        int        `json:"priority"`
+	NotifyLevel     int        `json:"notify_level"`
 	ProgressCurrent *int       `json:"progress_current"`
 	ProgressTotal   *int       `json:"progress_total"`
 	ProgressMessage *string    `json:"progress_message"`
@@ -92,7 +93,7 @@ func (s *Server) handleGetOperationTimeline(c *gin.Context) {
 
 	resp := make([]operationV2Response, 0, len(rows))
 	for _, r := range rows {
-		item := rowToResponse(r, s.displayNameFor(r.DefID))
+		item := rowToResponse(r, s.displayNameFor(r.DefID), s.notifyLevelFor(r.DefID))
 		if r.Status == "running" && s.opRegistry != nil {
 			if ci := s.opRegistry.GetCurrentItem(r.ID); ci != "" {
 				item.CurrentItem = &ci
@@ -130,7 +131,7 @@ func (s *Server) handleGetOperationV2(c *gin.Context) {
 		logResp = append(logResp, logRowToResponse(l))
 	}
 
-	opResp := rowToResponse(*row, s.displayNameFor(row.DefID))
+	opResp := rowToResponse(*row, s.displayNameFor(row.DefID), s.notifyLevelFor(row.DefID))
 	if row.Status == "running" && s.opRegistry != nil {
 		if ci := s.opRegistry.GetCurrentItem(id); ci != "" {
 			opResp.CurrentItem = &ci
@@ -286,24 +287,39 @@ func (s *Server) displayNameFor(defID string) string {
 	return defID
 }
 
+// notifyLevelFor looks up the NotifyLevel for a registered def ID.
+// Returns 0 (NotifyAlert) if the def is not found, preserving old behaviour.
+func (s *Server) notifyLevelFor(defID string) int {
+	if s.opRegistry == nil {
+		return 0
+	}
+	for _, d := range s.opRegistry.ActiveDefs() {
+		if d.ID == defID {
+			return int(d.NotifyLevel)
+		}
+	}
+	return 0
+}
+
 // rowToResponse converts a database.OperationV2Row to the HTTP response shape.
-func rowToResponse(r database.OperationV2Row, displayName string) operationV2Response {
+func rowToResponse(r database.OperationV2Row, displayName string, notifyLevel int) operationV2Response {
 	resp := operationV2Response{
-		ID:          r.ID,
-		DefID:       r.DefID,
-		Plugin:      r.Plugin,
-		DisplayName: displayName,
-		Status:      r.Status,
-		Priority:    r.Priority,
-		ActorUserID: r.ActorUserID,
-		ParentID:    r.ParentID,
-		QueuedAt:    r.QueuedAt,
-		StartedAt:   r.StartedAt,
-		CompletedAt: r.CompletedAt,
+		ID:           r.ID,
+		DefID:        r.DefID,
+		Plugin:       r.Plugin,
+		DisplayName:  displayName,
+		Status:       r.Status,
+		Priority:     r.Priority,
+		NotifyLevel:  notifyLevel,
+		ActorUserID:  r.ActorUserID,
+		ParentID:     r.ParentID,
+		QueuedAt:     r.QueuedAt,
+		StartedAt:    r.StartedAt,
+		CompletedAt:  r.CompletedAt,
 		ErrorMessage: r.ErrorMessage,
-		ResumeCount: r.ResumeCount,
-		TraceID:     r.TraceID,
-		SpanID:      r.SpanID,
+		ResumeCount:  r.ResumeCount,
+		TraceID:      r.TraceID,
+		SpanID:       r.SpanID,
 		CurrentPhase: r.CurrentPhase,
 	}
 	// Convert scalar progress fields to nullable pointers for the JSON contract.

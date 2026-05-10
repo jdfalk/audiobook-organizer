@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 3.1.0
+// version: 3.2.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -20,11 +20,16 @@ export interface ActiveOperation {
   parent_id?: string | null;
   current_phase?: string | null;
   current_item?: string | null;
+  /** 0 = alert (shows in bell badge), 1 = activity-only (no bell badge) */
+  notify_level?: number;
 }
 
 interface OperationsState {
   operations: Record<string, ActiveOperation>; // Keyed by id
-  activeOperations: ActiveOperation[]; // Derived from operations
+  activeOperations: ActiveOperation[]; // All ops regardless of notify_level
+  /** alertOperations contains only ops with notify_level === 0 (NotifyAlert).
+   *  Use this for the bell badge count. */
+  alertOperations: ActiveOperation[];
   polling: boolean;
   // SSE EventSource instance — kept here so it can be closed on unmount.
   _sseSource: EventSource | null;
@@ -52,6 +57,7 @@ function fromV2(op: api.OperationV2): ActiveOperation {
     parent_id: op.parent_id,
     current_phase: op.current_phase,
     current_item: op.current_item,
+    notify_level: op.notify_level ?? 0,
   };
 }
 
@@ -82,14 +88,22 @@ function formatOpLabel(type: string): string {
   return labels[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// Helper to derive activeOperations array from operations map
-function deriveActiveOperations(operations: Record<string, ActiveOperation>): ActiveOperation[] {
-  return Object.values(operations);
+// Helper to derive activeOperations and alertOperations arrays from operations map
+function deriveOperationArrays(operations: Record<string, ActiveOperation>): {
+  activeOperations: ActiveOperation[];
+  alertOperations: ActiveOperation[];
+} {
+  const all = Object.values(operations);
+  return {
+    activeOperations: all,
+    alertOperations: all.filter((op) => (op.notify_level ?? 0) === 0),
+  };
 }
 
 export const useOperationsStore = create<OperationsState>()((set, get) => ({
   operations: {},
   activeOperations: [],
+  alertOperations: [],
   polling: false,
   _sseSource: null,
 
@@ -107,7 +121,7 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
 
         return {
           operations: merged,
-          activeOperations: deriveActiveOperations(merged),
+          ...deriveOperationArrays(merged),
         };
       });
     } catch (err) {
@@ -138,7 +152,7 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
       const operations = { ...state.operations, [operationId]: op };
       return {
         operations,
-        activeOperations: deriveActiveOperations(operations),
+        ...deriveOperationArrays(operations),
         polling: true,
       };
     });
@@ -152,7 +166,7 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
       const { [operationId]: _, ...remaining } = state.operations;
       return {
         operations: remaining,
-        activeOperations: deriveActiveOperations(remaining),
+        ...deriveOperationArrays(remaining),
         polling: Object.keys(remaining).length > 0,
       };
     });
@@ -166,7 +180,7 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
       };
       return {
         operations,
-        activeOperations: deriveActiveOperations(operations),
+        ...deriveOperationArrays(operations),
       };
     });
   },
@@ -195,7 +209,7 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
               message: (p.message as string | undefined) ?? existing.message,
             };
             const operations = { ...state.operations, [opId]: updated };
-            return { operations, activeOperations: deriveActiveOperations(operations) };
+            return { operations, ...deriveOperationArrays(operations) };
           });
         } else if (name === 'op.terminal' && opId) {
           // Operation reached a terminal state — refresh from server.
@@ -208,7 +222,7 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
             if (!existing) return state;
             const updated: ActiveOperation = { ...existing, current_item: label || null };
             const operations = { ...state.operations, [opId]: updated };
-            return { operations, activeOperations: deriveActiveOperations(operations) };
+            return { operations, ...deriveOperationArrays(operations) };
           });
         }
         // op.log is informational; no store update needed (logs are fetched on-demand).
