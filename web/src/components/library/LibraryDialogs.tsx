@@ -167,7 +167,6 @@ interface LibraryDialogsProps {
   metadataReviewOpen: boolean;
   setMetadataReviewOpen: (open: boolean) => void;
   metadataReviewOpId: string | null;
-  setMetadataReviewOpId: (id: string) => void;
 
   // Version management
   versionManagingAudiobook: Audiobook | null;
@@ -297,7 +296,6 @@ export const LibraryDialogs = ({
   metadataReviewOpen,
   setMetadataReviewOpen,
   metadataReviewOpId,
-  setMetadataReviewOpId,
   versionManagingAudiobook,
   versionManagementOpen,
   handleVersionManagementClose,
