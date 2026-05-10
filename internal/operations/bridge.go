@@ -1,7 +1,7 @@
 // file: internal/operations/bridge.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
-// last-edited: 2026-05-08
+// last-edited: 2026-05-10
 
 package operations
 
@@ -32,8 +32,8 @@ func (b *BridgeQueue) Enqueue(id, opType string, priority int, fn OperationFunc)
 	now := time.Now().UTC()
 	row := database.OperationV2Row{
 		ID:       id,
-		DefID:    "legacy." + opType,
-		Plugin:   "legacy",
+		DefID:    "bridge." + opType,
+		Plugin:   opType,
 		TraceID:  id,
 		SpanID:   id,
 		Status:   "queued",
@@ -66,12 +66,15 @@ func (b *BridgeQueue) SetOperationTimeout(d time.Duration) { b.inner.SetOperatio
 func (b *BridgeQueue) SetActivityLogger(l ActivityLogger) { b.inner.SetActivityLogger(l) }
 
 // wrapFn returns an OperationFunc that updates the operations_v2 row around fn.
+// The ProgressReporter passed to fn is wrapped so that UpdateProgress calls are
+// dual-written to the v2 store, making progress visible in the timeline.
 func (b *BridgeQueue) wrapFn(id string, fn OperationFunc) OperationFunc {
 	return func(ctx context.Context, progress ProgressReporter) error {
 		startedAt := time.Now().UTC()
 		_ = b.v2Store.UpdateOperationV2Status(id, "running", &startedAt, nil, nil)
 
-		err := fn(ctx, progress)
+		wrapped := &bridgeProgressReporter{inner: progress, id: id, store: b.v2Store}
+		err := fn(ctx, wrapped)
 
 		completedAt := time.Now().UTC()
 		if err != nil {
@@ -82,4 +85,25 @@ func (b *BridgeQueue) wrapFn(id string, fn OperationFunc) OperationFunc {
 		}
 		return err
 	}
+}
+
+// bridgeProgressReporter wraps a ProgressReporter and syncs progress updates to
+// the v2 store so the timeline shows real progress for bridged operations.
+type bridgeProgressReporter struct {
+	inner ProgressReporter
+	id    string
+	store database.OpsV2Store
+}
+
+func (r *bridgeProgressReporter) UpdateProgress(current, total int, message string) error {
+	_ = r.store.UpdateOpProgressV2(r.id, current, total, message)
+	return r.inner.UpdateProgress(current, total, message)
+}
+
+func (r *bridgeProgressReporter) Log(level, message string, details *string) error {
+	return r.inner.Log(level, message, details)
+}
+
+func (r *bridgeProgressReporter) IsCanceled() bool {
+	return r.inner.IsCanceled()
 }

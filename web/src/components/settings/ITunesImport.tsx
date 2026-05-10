@@ -1,5 +1,5 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.17.0
+// version: 1.18.0
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
 // last-edited: 2026-05-05
 
@@ -60,6 +60,7 @@ import {
   cancelOperation,
   getConfig,
   getITunesBooks,
+  getITunesBookIds,
   getITunesImportStatus,
   getITunesLibraryStatus,
   importITunesLibrary,
@@ -157,6 +158,7 @@ export function ITunesImport() {
   const [browseSearch, setBrowseSearch] = useState('');
   const [browsePage, setBrowsePage] = useState(0);
   const [browseRowsPerPage, setBrowseRowsPerPage] = useState(25);
+  const [browseSelectingAll, setBrowseSelectingAll] = useState(false);
   const [browseSelected, setBrowseSelected] = useState<Set<string>>(new Set());
   const [browseLoading, setBrowseLoading] = useState(false);
   const [syncAllCount, setSyncAllCount] = useState<number | null>(null);
@@ -1154,11 +1156,28 @@ export function ITunesImport() {
                     >
                       Select All Visible
                     </Button>
+                    <Button
+                      size="small"
+                      disabled={browseSelectingAll}
+                      onClick={async () => {
+                        setBrowseSelectingAll(true);
+                        try {
+                          const result = await getITunesBookIds(browseSearch || undefined);
+                          setBrowseSelected(new Set(result.ids));
+                        } catch {
+                          // ignore; user can retry
+                        } finally {
+                          setBrowseSelectingAll(false);
+                        }
+                      }}
+                    >
+                      {browseSelectingAll ? 'Loading…' : `Select All (${browseTotal.toLocaleString()})`}
+                    </Button>
                     <Button size="small" onClick={() => setBrowseSelected(new Set())}>
                       Deselect All
                     </Button>
                     <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>
-                      {browseSelected.size} selected
+                      {browseSelected.size.toLocaleString()} selected
                     </Typography>
                   </Stack>
                   {browseLoading && <LinearProgress />}

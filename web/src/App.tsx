@@ -1,5 +1,5 @@
 // file: web/src/App.tsx
-// version: 1.19.0
+// version: 1.20.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 // Trigger CI E2E test run
 
@@ -22,6 +22,7 @@ import { Login } from './pages/Login';
 import { eventSourceManager } from './services/eventSourceManager';
 import * as api from './services/api';
 import { useAuth } from './contexts/AuthContext';
+import { useOperationsStore } from './stores/useOperationsStore';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Lazy-loaded pages (code-split for smaller initial bundle)
@@ -115,6 +116,16 @@ function App() {
     return () => {
       cancelled = true;
     };
+  }, [auth.initialized, auth.isAuthenticated, auth.requiresAuth]);
+
+  // Open the operations SSE connection and load recent ops once the user is
+  // authenticated. This ensures the bell stays populated across page reloads.
+  useEffect(() => {
+    if (!auth.initialized || (auth.requiresAuth && !auth.isAuthenticated)) return;
+    const store = useOperationsStore.getState();
+    store.openSSE();
+    void store.loadFromServer();
+    return () => store.closeSSE();
   }, [auth.initialized, auth.isAuthenticated, auth.requiresAuth]);
 
   // Listen for server shutdown events and handle reconnection
