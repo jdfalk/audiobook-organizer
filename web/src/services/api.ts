@@ -3088,6 +3088,12 @@ export async function getRecentMetadataFetches(): Promise<MetadataFetchSummary[]
   return data.operations || [];
 }
 
+export async function getPendingReview(): Promise<{ operation_id: string; total_books: number; message: string }> {
+  const response = await fetch(`${API_BASE}/metadata/pending-review`, { method: 'POST' });
+  if (!response.ok) throw await buildApiError(response, 'Failed to get pending review');
+  return response.json();
+}
+
 export async function batchApplyCandidates(operationId: string, bookIds: string[]): Promise<{ applied: number }> {
   const response = await fetch(`${API_BASE}/metadata/batch-apply-candidates`, {
     method: 'POST',

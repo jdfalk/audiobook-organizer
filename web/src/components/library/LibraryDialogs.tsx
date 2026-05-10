@@ -1,5 +1,5 @@
 // file: web/src/components/library/LibraryDialogs.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-b8c9-0123-def0-234567890123
 // last-edited: 2026-05-11
 
@@ -13,7 +13,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogContentText,
   DialogActions,
   TextField,
   IconButton,
@@ -170,11 +169,6 @@ interface LibraryDialogsProps {
   metadataReviewOpId: string | null;
   setMetadataReviewOpId: (id: string) => void;
 
-  // Resume review picker
-  resumeReviewPickerOpen: boolean;
-  setResumeReviewPickerOpen: (open: boolean) => void;
-  recentFetches: api.MetadataFetchSummary[];
-
   // Version management
   versionManagingAudiobook: Audiobook | null;
   versionManagementOpen: boolean;
@@ -304,9 +298,6 @@ export const LibraryDialogs = ({
   setMetadataReviewOpen,
   metadataReviewOpId,
   setMetadataReviewOpId,
-  resumeReviewPickerOpen,
-  setResumeReviewPickerOpen,
-  recentFetches,
   versionManagingAudiobook,
   versionManagementOpen,
   handleVersionManagementClose,
@@ -832,72 +823,6 @@ export const LibraryDialogs = ({
       }}
       toast={toast}
     />
-
-    {/* Resume Review picker: lists recent completed
-        metadata_candidate_fetch ops with their result counts.
-        Click a row to open the MetadataReviewDialog for that
-        specific operation. Solves the "fired two fetches, first
-        one's results are lost in the UI" scenario. */}
-    <Dialog
-      open={resumeReviewPickerOpen}
-      onClose={() => setResumeReviewPickerOpen(false)}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle>Resume metadata review</DialogTitle>
-      <DialogContent>
-        <DialogContentText sx={{ mb: 2 }}>
-          Pick a completed metadata fetch to review. Results stay in
-          the operation log until you review them, so even older
-          fetches can still be opened if you never got around to it.
-        </DialogContentText>
-        {recentFetches.length === 0 ? (
-          <Typography color="text.secondary">No recent fetches found.</Typography>
-        ) : (
-          <Stack spacing={1}>
-            {recentFetches.map((op) => (
-              <Box
-                key={op.id}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  p: 1.5,
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  cursor: 'pointer',
-                  '&:hover': { borderColor: 'primary.main' },
-                }}
-                onClick={() => {
-                  setMetadataReviewOpId(op.id);
-                  setMetadataReviewOpen(true);
-                  setResumeReviewPickerOpen(false);
-                }}
-              >
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography variant="body2" fontWeight="medium" noWrap>
-                    {new Date(op.completed_at || op.created_at).toLocaleString()}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {op.matched_count} matched &middot;{' '}
-                    {op.no_match_count} no match &middot;{' '}
-                    {op.error_count} error{' '}
-                    ({op.result_count} total)
-                  </Typography>
-                </Box>
-                <Button size="small" variant="contained">
-                  Review
-                </Button>
-              </Box>
-            ))}
-          </Stack>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setResumeReviewPickerOpen(false)}>Close</Button>
-      </DialogActions>
-    </Dialog>
 
     <VersionManagement
       audiobookId={versionManagingAudiobook?.id || ''}
