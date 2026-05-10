@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.23.0
+// version: 2.24.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-08
 
@@ -3096,6 +3096,12 @@ export async function getRecentMetadataFetches(): Promise<MetadataFetchSummary[]
   if (!response.ok) throw await buildApiError(response, 'Failed to list recent metadata fetches');
   const data = await response.json();
   return data.operations || [];
+}
+
+export async function getPendingReview(): Promise<{ operation_id: string; total_books: number; message: string }> {
+  const response = await fetch(`${API_BASE}/metadata/pending-review`, { method: 'POST' });
+  if (!response.ok) throw await buildApiError(response, 'Failed to get pending review');
+  return response.json();
 }
 
 export async function batchApplyCandidates(operationId: string, bookIds: string[]): Promise<{ applied: number }> {

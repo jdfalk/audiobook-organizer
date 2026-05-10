@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-08
 
@@ -1155,6 +1155,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/metadata/bulk-fetch", s.perm(auth.PermLibraryEditMetadata), s.bulkFetchMetadata)
 			protected.POST("/metadata/batch-fetch-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchFetchCandidates)
 			protected.GET("/metadata/recent-fetches", s.perm(auth.PermLibraryView), s.handleGetLatestMetadataFetch)
+			protected.POST("/metadata/pending-review", s.perm(auth.PermLibraryView), s.handleGetPendingReview)
 			protected.POST("/metadata/batch-apply-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchApplyCandidates)
 			protected.POST("/metadata/batch-reject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleRejectCandidates)
 			protected.POST("/metadata/batch-unreject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleUnrejectCandidates)

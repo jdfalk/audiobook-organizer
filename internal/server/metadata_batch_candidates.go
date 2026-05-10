@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 1.9.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-05-01
 
@@ -905,4 +905,88 @@ func (s *Server) resumeInterruptedMetadataFetch() {
 			_ = store.UpdateOperationStatus(opID, "failed", alreadyDone, totalBooks, "failed to resume")
 		}
 	}
+}
+
+// handleGetPendingReview implements POST /api/v1/metadata/pending-review.
+// It scans all completed metadata_candidate_fetch operations, deduplicates
+// by book_id (latest status per book), and returns books whose latest
+// result status is "matched" (candidate found, not yet applied/rejected).
+// It creates a new aggregate "pending-review" operation so the standard
+// MetadataReviewDialog can be used without modification.
+func (s *Server) handleGetPendingReview(c *gin.Context) {
+	store := s.Store()
+
+	// Load all operations and find metadata_candidate_fetch ones.
+	allOps, err := store.GetRecentOperations(5000)
+	if err != nil {
+		httputil.InternalError(c, "failed to list operations", err)
+		return
+	}
+
+	// Collect the latest OperationResult per book_id across all candidate-fetch ops.
+	type bookEntry struct {
+		result    database.OperationResult
+		createdAt time.Time
+	}
+	latestByBook := map[string]bookEntry{}
+
+	for _, op := range allOps {
+		if op.Type != "metadata_candidate_fetch" {
+			continue
+		}
+		results, err := store.GetOperationResults(op.ID)
+		if err != nil {
+			continue
+		}
+		for _, r := range results {
+			existing, ok := latestByBook[r.BookID]
+			if !ok || r.CreatedAt.After(existing.createdAt) {
+				latestByBook[r.BookID] = bookEntry{result: r, createdAt: r.CreatedAt}
+			}
+		}
+	}
+
+	// Filter to books whose latest status is "matched" (candidate available, not applied/rejected).
+	var pending []database.OperationResult
+	for _, entry := range latestByBook {
+		if entry.result.Status == "matched" {
+			pending = append(pending, entry.result)
+		}
+	}
+
+	if len(pending) == 0 {
+		httputil.RespondWithOK(c, gin.H{
+			"operation_id": "",
+			"total_books":  0,
+			"message":      "no books with pending metadata candidates",
+		})
+		return
+	}
+
+	// Create an aggregate operation record so MetadataReviewDialog can use its
+	// standard operationId-based flow (apply, reject, pagination).
+	newOpID := ulid.Make().String()
+	if _, err := store.CreateOperation(newOpID, "metadata_candidate_fetch", nil); err != nil {
+		httputil.InternalError(c, "failed to create aggregate operation", err)
+		return
+	}
+
+	// Copy the latest CandidateResult rows under the new operation ID.
+	for _, r := range pending {
+		_ = store.CreateOperationResult(&database.OperationResult{
+			OperationID: newOpID,
+			BookID:      r.BookID,
+			ResultJSON:  r.ResultJSON,
+			Status:      r.Status,
+		})
+	}
+
+	// Mark the aggregate op as completed immediately — all results are already loaded.
+	_ = store.UpdateOperationStatus(newOpID, "completed", len(pending), len(pending), "")
+
+	httputil.RespondWithOK(c, gin.H{
+		"operation_id": newOpID,
+		"total_books":  len(pending),
+		"message":      fmt.Sprintf("%d book(s) have pending metadata candidates", len(pending)),
+	})
 }

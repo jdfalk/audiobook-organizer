@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.61.0
+// version: 1.62.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-05-11
 
@@ -225,8 +225,6 @@ export const Library = () => {
     searchParams.get('reviewOp')
   );
   const [metadataReviewOpen, setMetadataReviewOpen] = useState(!!searchParams.get('reviewOp'));
-  const [resumeReviewPickerOpen, setResumeReviewPickerOpen] = useState(false);
-  const [recentFetches, setRecentFetches] = useState<api.MetadataFetchSummary[]>([]);
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
 
@@ -1629,15 +1627,15 @@ export const Library = () => {
 
   const handleResumeReview = async () => {
     try {
-      const list = await api.getRecentMetadataFetches();
-      if (list.length === 0) {
-        toast('No recent metadata fetch with results found. Start a Fetch & Review first.', 'info');
+      const result = await api.getPendingReview();
+      if (!result.operation_id || result.total_books === 0) {
+        toast('No books with pending metadata candidates found. Start a Fetch & Review first.', 'info');
         return;
       }
-      setRecentFetches(list);
-      setResumeReviewPickerOpen(true);
+      setMetadataReviewOpId(result.operation_id);
+      setMetadataReviewOpen(true);
     } catch {
-      toast('Failed to load recent metadata fetches', 'error');
+      toast('Failed to load pending review', 'error');
     }
   };
 
@@ -1840,9 +1838,7 @@ export const Library = () => {
           setMetadataReviewOpen={setMetadataReviewOpen}
           metadataReviewOpId={metadataReviewOpId}
           setMetadataReviewOpId={(id) => setMetadataReviewOpId(id)}
-          resumeReviewPickerOpen={resumeReviewPickerOpen}
-          setResumeReviewPickerOpen={setResumeReviewPickerOpen}
-          recentFetches={recentFetches}
+
           versionManagingAudiobook={versionManagingAudiobook}
           versionManagementOpen={versionManagementOpen}
           handleVersionManagementClose={handleVersionManagementClose}
