@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.test.ts
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-08
 
@@ -35,6 +35,7 @@ describe('useOperationsStore', () => {
       display_name: 'Library Scan',
       status: 'running',
       priority: 10,
+      notify_level: 0,
       progress_current: 75,
       progress_total: 100,
       progress_message: 'Almost done',
@@ -73,6 +74,7 @@ describe('useOperationsStore', () => {
       display_name: 'Library Scan',
       status: 'running',
       priority: 10,
+      notify_level: 0,
       progress_current: 50,
       progress_total: 100,
       progress_message: 'Parent',
@@ -96,6 +98,7 @@ describe('useOperationsStore', () => {
       display_name: 'Index',
       status: 'running',
       priority: 10,
+      notify_level: 0,
       progress_current: 30,
       progress_total: 100,
       progress_message: 'Child',

@@ -1,5 +1,5 @@
 // file: internal/operations/registry/types.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
 // last-edited: 2026-05-06
 
@@ -75,6 +75,12 @@ type OperationDef struct {
 
 	// Phases. Optional, for fine-grained resume.
 	Phases []Phase // if set, registry tracks phase progress for resume
+
+	// NotifyLevel controls where this op appears. Default (0) = NotifyAlert:
+	// shows in the bell badge and the activity timeline. NotifyActivity: shows
+	// in the activity timeline only — use for background/single-book ops that
+	// don't need to interrupt the user.
+	NotifyLevel NotifyLevel
 }
 
 // ResumePolicy controls what happens when the server restarts with an
@@ -96,6 +102,17 @@ const (
 	PriorityLow    Priority = 0
 	PriorityNormal Priority = 1
 	PriorityHigh   Priority = 2
+)
+
+// NotifyLevel controls where an operation appears in the UI.
+type NotifyLevel int
+
+const (
+	// NotifyAlert is the default: shows in the bell badge and activity timeline.
+	NotifyAlert NotifyLevel = 0
+	// NotifyActivity shows in the activity timeline only; no bell badge.
+	// Use for background or single-book ops that don't warrant interrupting the user.
+	NotifyActivity NotifyLevel = 1
 )
 
 // ActorMode controls the identity under which a triggered run executes.
