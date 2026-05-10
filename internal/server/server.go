@@ -367,6 +367,9 @@ func NewServer(store database.Store) *Server {
 		if err := server.RegisterLibraryTranscodeOp(server.opRegistry); err != nil {
 			log.Printf("[server] library.transcode op register: %v", err)
 		}
+		if err := server.RegisterBulkWriteBackOp(server.opRegistry); err != nil {
+			log.Printf("[server] bulk-write-back op register: %v", err)
+		}
 	}
 
 	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
