@@ -1,5 +1,5 @@
 // file: internal/operations/registry/dispatcher_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b
 // last-edited: 2026-05-06
 
@@ -186,19 +186,27 @@ func TestDispatcher_PriorityOrderingHighBeforeLow(t *testing.T) {
 	_ = r.RegisterOp(makeOrderedDef("test.prio-high", registry.PriorityHigh))
 
 	// Block the worker so both ops are queued before dispatch starts.
+	// blocking is closed by the blocker's Run when it actually starts executing,
+	// replacing a time.Sleep that was racy under CI load.
+	blocking := make(chan struct{})
 	blockDef := makeValidDef("test.prio-blocker")
 	blockDef.Run = func(runCtx context.Context, _ json.RawMessage, _ registry.Reporter) error {
+		close(blocking) // signal: worker has picked us up
 		<-gate
 		return nil
 	}
 	_ = r.RegisterOp(blockDef)
 
-	// Enqueue the blocker first (already registered).
+	// Enqueue the blocker first, then wait until the worker is provably running it.
 	r.Start(ctx)
 	_, _ = r.EnqueueOp(ctx, "test.prio-blocker", nil)
-	time.Sleep(20 * time.Millisecond) // let the worker grab the blocker
+	select {
+	case <-blocking:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for blocker to start")
+	}
 
-	// Enqueue low priority first, then high.
+	// Enqueue low priority first, then high — worker is blocked, both will queue.
 	opLow, _ := r.EnqueueOp(ctx, "test.prio-low", nil)
 	opHigh, _ := r.EnqueueOp(ctx, "test.prio-high", nil)
 
