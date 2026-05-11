@@ -1,5 +1,5 @@
 // file: internal/server/server_more_test.go
-// version: 1.5.0
+// version: 1.7.0
 // guid: 18a6b0a3-7e78-4e0f-8b8e-0e4c1dbde6de
 // last-edited: 2026-05-08
 
@@ -9,7 +9,6 @@ package server
 
 import (
 	"bytes"
-	"context"
 	json "encoding/json/v2"
 	"io"
 	"net/http"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,18 +72,10 @@ func waitForOperationStatus(t *testing.T, id string, timeout time.Duration) *dat
 	return nil
 }
 
-func waitForQueueIdle(t *testing.T, srv *Server, timeout time.Duration) {
+func waitForQueueIdle(t *testing.T, _ *Server, _ time.Duration) {
 	t.Helper()
-
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if srv.queue == nil || len(srv.queue.ActiveOperations()) == 0 {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-
-	t.Fatal("timeout waiting for operation queue to drain")
+	// v2 registry manages its own worker pool; this helper is a no-op now
+	// that the v1 OperationQueue has been removed.
 }
 
 func TestUpdateConfigEndpoint(t *testing.T) {
@@ -281,12 +271,6 @@ func TestAddImportPathFallbackScan(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origQueue := server.queue
-	t.Cleanup(func() {
-		server.queue = origQueue
-	})
-
-	server.queue = nil
 	importDir := t.TempDir()
 	copyFixtureToDir(t, "test_sample.m4b", importDir)
 	config.AppConfig.SupportedExtensions = []string{".m4b"}
@@ -664,32 +648,14 @@ func TestStartOrganizeOperation(t *testing.T) {
 }
 
 func TestListActiveOperations(t *testing.T) {
-	// UOS-14: /operations/active is removed (410 Gone); the queue still works,
-	// but callers should use /operations/timeline instead. This test only
-	// verifies the 410 response and that the queue itself still accepts ops.
+	// UOS-14: /operations/active is removed (410 Gone); use /operations/timeline.
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	block := make(chan struct{})
-	opID := "op-block"
-	_, err := database.GetGlobalStore().CreateOperation(opID, "scan", nil)
-	require.NoError(t, err)
-
-	err = server.queue.Enqueue(opID, "scan", operations.PriorityNormal, func(ctx context.Context, progress operations.ProgressReporter) error {
-		<-block
-		return nil
-	})
-	require.NoError(t, err)
-
-	time.Sleep(100 * time.Millisecond)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/operations/active", nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	// Endpoint removed in UOS-14; returns 410 Gone
 	require.Equal(t, http.StatusGone, w.Code)
-
-	close(block)
-	waitForOperationStatus(t, opID, 5*time.Second)
 }
 
 func TestRunAutoPurgeSoftDeleted(t *testing.T) {

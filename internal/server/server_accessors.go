@@ -1,5 +1,5 @@
 // file: internal/server/server_accessors.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 503fedeb-56f2-4a8e-812d-484a6413d88b
 // last-edited: 2026-05-10
 
@@ -10,7 +10,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 )
 
 // OrganizeService returns the server's organize service instance.
@@ -24,9 +23,6 @@ func (s *Server) ImportPathService() *importer.ImportPathService { return s.impo
 
 // ImportService returns the service handling single-file imports.
 func (s *Server) ImportService() *importer.ImportService { return s.importService }
-
-// Queue returns the server's operation queue (may be nil before server start).
-func (s *Server) Queue() operations.Queue { return s.queue }
 
 // DedupEngine returns the deduplication engine (may be nil if dedup is disabled).
 func (s *Server) DedupEngine() *dedup.Engine { return s.dedupEngine }

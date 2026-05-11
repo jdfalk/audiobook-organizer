@@ -1,5 +1,5 @@
 // file: internal/server/server_extra_test.go
-// version: 1.2.0
+// version: 1.4.0
 // guid: 61a2d3c4-80ab-4f6f-8c39-15a2ac5b7f0c
 // last-edited: 2026-05-08
 
@@ -226,12 +226,6 @@ func TestImportPathEndpoints(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origQueue := server.queue
-	server.queue = nil
-	defer func() {
-		server.queue = origQueue
-	}()
-
 	dir := t.TempDir()
 	payload := bytes.NewBufferString(`{"path":"` + dir + `","name":"Test Import","enabled":false}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/import-paths", payload)
@@ -262,29 +256,27 @@ func TestOperationEndpointsErrors(t *testing.T) {
 	server, cleanup := setupTestServer(t)
 	defer cleanup()
 
-	origQueue := server.queue
-	server.queue = nil
+	// opRegistry is always initialized in NewServer — scan/organize return 202 Accepted.
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operations/scan", nil)
 	w := httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusInternalServerError, w.Code)
+	require.Equal(t, http.StatusAccepted, w.Code)
 
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/operations/organize", nil)
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	require.Equal(t, http.StatusInternalServerError, w.Code)
+	require.Equal(t, http.StatusAccepted, w.Code)
 
 	// /operations/active returns 410 Gone since UOS-14
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/operations/active", nil)
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusGone, w.Code)
-	server.queue = origQueue
 
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/operations/bad-id", nil)
 	w = httptest.NewRecorder()
 	server.router.ServeHTTP(w, req)
-	// Cancel falls back to DB update for stale operations, which succeeds
+	// Cancel falls back to DB update for stale operations, which succeeds.
 	require.Equal(t, http.StatusNoContent, w.Code)
 }
 
