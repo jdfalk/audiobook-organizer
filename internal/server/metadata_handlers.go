@@ -1,7 +1,7 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.6.0
+// version: 3.7.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
-// last-edited: 2026-05-11
+// last-edited: 2026-05-10
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
 // search/apply/revert/no-match, bulk fetch and bulk writeback, the
@@ -18,7 +18,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,12 +31,10 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
-	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -836,40 +833,25 @@ func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operations registry not initialized")
 		return
 	}
-
-	params := operations.BulkMetadataFetchParams{
+	params := bulkMetadataFetchV2Params{
 		PreferAudible: c.DefaultQuery("prefer_audible", "false") == "true",
 		SkipCached:    c.DefaultQuery("skip_cached", "false") == "true",
 	}
-
-	store := s.Store()
-	opID := ulid.Make().String()
-	if _, err := store.CreateOperation(opID, "bulk_metadata_fetch", nil); err != nil {
-		httputil.InternalError(c, "failed to create operation", err)
-		return
-	}
-	if err := operations.SaveParams(store, opID, params); err != nil {
-		log.Printf("[WARN] bulk-metadata-fetch: failed to save params for %s: %v", opID, err)
-	}
-
-	capturedParams := params
-	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.runBulkMetadataFetchAll(ctx, opID, capturedParams, store, progress)
-	}
-	if err := s.queue.Enqueue(opID, "bulk_metadata_fetch", operations.PriorityNormal, opFunc); err != nil {
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.bulk-metadata-fetch", params)
+	if err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
-
 	log.Printf("[INFO] bulk-metadata-fetch: queued %s prefer_audible=%v skip_cached=%v",
 		opID, params.PreferAudible, params.SkipCached)
 	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{
 		"operation_id":   opID,
-		"message":        "bulk metadata fetch started — poll GET /api/v1/operations/" + opID + " for progress",
+		"op_id":          opID,
+		"message":        "bulk metadata fetch started — poll GET /api/v1/operations/v2/" + opID + " for progress",
 		"prefer_audible": params.PreferAudible,
 		"skip_cached":    params.SkipCached,
 	})
@@ -1694,99 +1676,15 @@ func (s *Server) batchWriteBackAudiobooks(c *gin.Context) {
 	bookIDs := make([]string, len(req.BookIDs))
 	copy(bookIDs, req.BookIDs)
 	totalBooks := len(bookIDs)
-	force := req.Force
-	mfs := s.metadataFetchService
-	orgSvc := s.organizeService
 
-	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		_ = progress.UpdateProgress(0, totalBooks, "starting save to files")
-
-		written, organized, failed, skipped := 0, 0, 0, 0
-		org := organizer.NewOrganizer(&config.AppConfig)
-		log2 := logger.NewWithActivityLog("batch-write-back", store)
-
-		for i, id := range bookIDs {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-
-			book, err := store.GetBookByID(id)
-			if err != nil || book == nil {
-				failed++
-				_ = store.AddOperationLog(opID, "warn", fmt.Sprintf("book %s not found", id), nil)
-				continue
-			}
-
-			// Skip if already written and metadata hasn't changed since last write
-			if !force && book.LastWrittenAt != nil && !book.UpdatedAt.After(*book.LastWrittenAt) {
-				skipped++
-				_ = progress.UpdateProgress(i+1, totalBooks,
-					fmt.Sprintf("processed %d/%d (skipped: %d — already up to date)", i+1, totalBooks, skipped))
-				continue
-			}
-
-			// Write tags
-			_, wbErr := mfs.WriteBackMetadataForBook(id)
-			if wbErr != nil {
-				failed++
-				detail := wbErr.Error()
-				_ = store.AddOperationLog(opID, "warn", fmt.Sprintf("write-back failed for %s", book.Title), &detail)
-				continue
-			}
-			written++
-			// Stamp last_written_at on the book the user sees (may differ from library copy)
-			_ = store.SetLastWrittenAt(id, time.Now())
-
-			// Organize
-			if doOrganize {
-				book, _ = store.GetBookByID(id)
-				if book != nil {
-					oldPath := book.FilePath
-					alreadyInRoot := config.AppConfig.RootDir != "" && strings.HasPrefix(oldPath, config.AppConfig.RootDir)
-					var newPath string
-					var orgErr error
-					if alreadyInRoot {
-						newPath, orgErr = orgSvc.ReOrganizeInPlace(book, log2)
-					} else {
-						bookFiles, _ := store.GetBookFiles(id)
-						isDir := len(bookFiles) > 1
-						if !isDir {
-							if info, statErr := os.Stat(oldPath); statErr == nil && info.IsDir() {
-								isDir = true
-							}
-						}
-						if isDir {
-							newPath, orgErr = orgSvc.OrganizeDirectoryBook(org, book, log2)
-						} else {
-							newPath, _, orgErr = org.OrganizeBook(book)
-						}
-					}
-					if orgErr != nil {
-						detail := orgErr.Error()
-						_ = store.AddOperationLog(opID, "warn", fmt.Sprintf("organize failed for %s", book.Title), &detail)
-					} else if newPath != "" && newPath != oldPath {
-						organized++
-					}
-				}
-			}
-
-			// Enqueue ITL write-back
-			if s.writeBackBatcher != nil {
-				s.writeBackBatcher.Enqueue(id)
-			}
-
-			_ = progress.UpdateProgress(i+1, totalBooks,
-				fmt.Sprintf("processed %d/%d (written: %d, organized: %d, failed: %d)",
-					i+1, totalBooks, written, organized, failed))
-		}
-
-		_ = progress.UpdateProgress(totalBooks, totalBooks,
-			fmt.Sprintf("complete: written %d, organized %d, skipped %d, failed %d", written, organized, skipped, failed))
-		return nil
+	params := batchSaveOpParams{
+		LegacyOpID: opID,
+		BookIDs:    bookIDs,
+		Organize:   doOrganize,
+		Force:      req.Force,
 	}
-
-	if err := s.queue.Enqueue(opID, "batch_save_to_files", operations.PriorityNormal, opFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "metadata.batch-save", params); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
 
