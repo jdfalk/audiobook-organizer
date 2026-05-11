@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-11
 
@@ -31,7 +31,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
 	"github.com/jdfalk/audiobook-organizer/internal/watcher"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -42,7 +41,7 @@ import (
 
 func (s *Server) resumeInterruptedOperations() {
 	store := s.Store()
-	if store == nil || s.queue == nil {
+	if store == nil {
 		return
 	}
 
@@ -66,7 +65,6 @@ func (s *Server) resumeInterruptedOperations() {
 		opID := op.ID
 		opType := op.Type
 
-		var resumeFn operations.OperationFunc
 		switch opType {
 		case "itunes_import":
 			// Migrated to UOS (itunes.import); re-enqueue via registry on resume.
@@ -76,24 +74,13 @@ func (s *Server) resumeInterruptedOperations() {
 				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
 			continue
-		case "scan":
-			params, _ := operations.LoadParams[operations.ScanParams](store, opID)
-			if params == nil {
-				log.Printf("[WARN] No params found for interrupted scan %s, marking as failed", opID)
-				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
-				continue
-			}
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				forceUpdate := params.ForceUpdate
-				return s.scanService.PerformScanWithID(ctx, opID, &scanner.ScanRequest{
-					FolderPath:  params.FolderPath,
-					ForceUpdate: &forceUpdate,
-				}, operations.LoggerFromReporter(progress))
-			}
-		case "organize":
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.organizeService.PerformOrganizeWithID(ctx, opID, &OrganizeRequest{}, operations.LoggerFromReporter(progress))
-			}
+		case "scan", "organize":
+			// Pre-migration v1 op types. library.scan and library.organize have
+			// ResumePolicy=Drop; restarting them via the v1 queue would race with
+			// v2 workers. Mark failed so the user can re-trigger manually.
+			_ = store.UpdateOperationError(opID, fmt.Sprintf("interrupted during %s, please retry", opType))
+			_ = operations.ClearState(store, opID)
+			continue
 		case "bulk_write_back":
 			// Migrated to UOS (library.bulk-write-back); re-enqueue via registry on resume.
 			params, _ := operations.LoadParams[operations.BulkWriteBackParams](store, opID)
@@ -182,18 +169,6 @@ func (s *Server) resumeInterruptedOperations() {
 				_ = operations.ClearState(store, opID)
 			}
 			continue
-		}
-
-		// Fallback: v1 queue for scan/organize cases that still use resumeFn.
-		if resumeFn != nil {
-			if s.queue != nil {
-				if err := s.queue.EnqueueResume(opID, opType, operations.PriorityNormal, resumeFn); err != nil {
-					log.Printf("[WARN] Failed to re-enqueue operation %s: %v", opID, err)
-				}
-			} else {
-				log.Printf("[WARN] Cannot resume operation %s (%s): queue not initialized", opID, opType)
-				_ = store.UpdateOperationError(opID, "queue not initialized, cannot resume")
-			}
 		}
 	}
 }
