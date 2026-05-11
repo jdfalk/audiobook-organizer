@@ -1,9 +1,9 @@
-// file: internal/server/scheduler_maintenance.go
-// version: 1.1.0
-// guid: 8822f62e-ed51-4df4-b9d1-4aa41f62139a
-// last-edited: 2026-05-02
+// file: internal/scheduler/maintenance.go
+// version: 1.0.0
+// guid: 7d2e8f4a-c3b1-4a09-8e5f-2d6c0b9a3e71
+// last-edited: 2026-05-11
 
-package server
+package scheduler
 
 import (
 	"context"
@@ -16,14 +16,15 @@ import (
 
 // --- Maintenance Window ---
 
-// maintenanceCtxKey is a typed context key to avoid string-key collisions.
-type maintenanceCtxKey string
+// MaintenanceCtxKey is a typed context key to avoid string-key collisions.
+type MaintenanceCtxKey string
 
-const ignoreWindowKey maintenanceCtxKey = "ignore_window"
+// IgnoreWindowKey is the context key used to bypass the maintenance window check.
+const IgnoreWindowKey MaintenanceCtxKey = "ignore_window"
 
-// isInMaintenanceWindowAt checks if a given hour falls within the configured window.
+// IsInMaintenanceWindowAt checks if a given hour falls within the configured window.
 // Supports midnight-spanning windows (e.g., start=23, end=2).
-func isInMaintenanceWindowAt(hour int) bool {
+func IsInMaintenanceWindowAt(hour int) bool {
 	if !config.AppConfig.MaintenanceWindowEnabled {
 		return false
 	}
@@ -37,14 +38,14 @@ func isInMaintenanceWindowAt(hour int) bool {
 	return hour >= start || hour < end
 }
 
-// isInMaintenanceWindow checks if the current time falls within the configured window.
-func isInMaintenanceWindow() bool {
-	return isInMaintenanceWindowAt(time.Now().Hour())
+// IsInMaintenanceWindow checks if the current time falls within the configured window.
+func IsInMaintenanceWindow() bool {
+	return IsInMaintenanceWindowAt(time.Now().Hour())
 }
 
 // loadLastMaintenanceRun reads the persisted last-run date from the database.
 func (ts *TaskScheduler) loadLastMaintenanceRun() {
-	store := ts.server.Store()
+	store := ts.deps.Store()
 	if store == nil {
 		return
 	}
@@ -61,7 +62,7 @@ func (ts *TaskScheduler) loadLastMaintenanceRun() {
 
 // saveLastMaintenanceRun persists today's date as the last-run date.
 func (ts *TaskScheduler) saveLastMaintenanceRun() {
-	store := ts.server.Store()
+	store := ts.deps.Store()
 	if store == nil {
 		return
 	}
@@ -80,7 +81,7 @@ func (ts *TaskScheduler) GetLastMaintenanceRunDate() string {
 
 // IsMaintenanceRunning returns true if a maintenance-window operation is active.
 func (ts *TaskScheduler) IsMaintenanceRunning() bool {
-	store := ts.server.Store()
+	store := ts.deps.Store()
 	if store == nil {
 		return false
 	}
@@ -102,9 +103,14 @@ func (ts *TaskScheduler) hasRunToday() bool {
 	return ts.lastMaintenanceRun.Format("2006-01-02") == today
 }
 
-// isTaskRunning checks if a task's operation is currently in progress.
+// IsTaskRunning checks if a task's operation is currently in progress.
+func (ts *TaskScheduler) IsTaskRunning(name string) bool {
+	return ts.isTaskRunning(name)
+}
+
+// isTaskRunning is the internal implementation.
 func (ts *TaskScheduler) isTaskRunning(name string) bool {
-	store := ts.server.Store()
+	store := ts.deps.Store()
 	if store == nil {
 		return false
 	}
@@ -134,14 +140,20 @@ func (ts *TaskScheduler) isTaskRunning(name string) bool {
 	return false
 }
 
+// MaintenanceWindowOpParams carries parameters to the maintenance.window operation.
+type MaintenanceWindowOpParams struct {
+	LegacyOpID   string `json:"legacy_op_id"`
+	IgnoreWindow bool   `json:"ignore_window"`
+}
+
 // RunMaintenanceWindow enqueues the maintenance-window operation via the v2 registry.
 // Step 1: auto-update (if enabled). Step 2+: maintenance tasks in fixed order.
 func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
-	store := ts.server.Store()
+	store := ts.deps.Store()
 	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	if ts.server.opRegistry == nil {
+	if ts.deps.OpRegistry == nil {
 		return fmt.Errorf("operation registry not initialized")
 	}
 
@@ -154,8 +166,8 @@ func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
 	// while the async operation is still running.
 	ts.saveLastMaintenanceRun()
 
-	ignoreWindow := ctx.Value(ignoreWindowKey) != nil
-	if _, err := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.window", maintenanceWindowOpParams{
+	ignoreWindow := ctx.Value(IgnoreWindowKey) != nil
+	if _, err := ts.deps.OpRegistry.EnqueueOp(context.Background(), "maintenance.window", MaintenanceWindowOpParams{
 		LegacyOpID:   opID,
 		IgnoreWindow: ignoreWindow,
 	}); err != nil {
@@ -163,4 +175,3 @@ func (ts *TaskScheduler) RunMaintenanceWindow(ctx context.Context) error {
 	}
 	return nil
 }
-
