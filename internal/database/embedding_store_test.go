@@ -1,24 +1,25 @@
 // file: internal/database/embedding_store_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package database
 
 import (
-	"path/filepath"
 	"testing"
 
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// newTestEmbeddingStore creates a temporary EmbeddingStore for use in tests.
+// newTestEmbeddingStore creates a temporary EmbeddingStore backed by an
+// isolated PebbleDB for use in tests.
 func newTestEmbeddingStore(t *testing.T) *EmbeddingStore {
 	t.Helper()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "embeddings.db")
-	store, err := NewEmbeddingStore(dbPath)
+	db, err := pebble.Open(dir, &pebble.Options{})
 	require.NoError(t, err)
+	store := &EmbeddingStore{db: db, owned: true}
 	t.Cleanup(func() { _ = store.Close() })
 	return store
 }

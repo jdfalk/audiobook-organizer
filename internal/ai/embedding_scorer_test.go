@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_scorer_test.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: 9c3e5b17-6f8a-4d2e-b091-5a7c8d4e2f6a
 
 package ai
@@ -9,6 +9,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -161,9 +162,10 @@ func TestEmbeddingScorer_BookIDFastPath(t *testing.T) {
 	// specific book ID. Verify the scorer uses that vector instead of calling
 	// EmbedOne.
 	tmpDir := t.TempDir()
-	store, err := database.NewEmbeddingStore(tmpDir + "/test.db")
+	db, err := pebble.Open(tmpDir, &pebble.Options{})
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = store.Close() })
+	store := database.NewEmbeddingStore(db)
+	t.Cleanup(func() { _ = db.Close() })
 
 	// Seed book BOOK_A with a one-hot 'a'-style vector so it matches
 	// candidates whose text starts with 'a'.
@@ -196,9 +198,10 @@ func TestEmbeddingScorer_BookIDFastPath(t *testing.T) {
 
 func TestEmbeddingScorer_BookIDMissFallsBackToEmbed(t *testing.T) {
 	tmpDir := t.TempDir()
-	store, err := database.NewEmbeddingStore(tmpDir + "/test.db")
+	db, err := pebble.Open(tmpDir, &pebble.Options{})
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = store.Close() })
+	store := database.NewEmbeddingStore(db)
+	t.Cleanup(func() { _ = db.Close() })
 	// Store has no entry for BOOK_MISSING.
 
 	api := &fakeEmbedAPI{textToVec: oneHotByPrefix}

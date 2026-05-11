@@ -837,14 +837,12 @@ func TestSQLiteStore_SeriesTags(t *testing.T) {
 // ---- EmbeddingStore: UpdateCandidateLLM, DeleteCandidate, HealthStats ----
 
 func TestEmbeddingStore_LLMAndDeleteCandidate(t *testing.T) {
-	dir := t.TempDir()
-	es, err := NewEmbeddingStore(filepath.Join(dir, "embed.db"))
-	require.NoError(t, err)
+	es := newTestEmbeddingStore(t)
 	defer es.Close()
 
 	sim := 0.9
 	// Insert a candidate
-	err = es.UpsertCandidate(DedupCandidate{
+	err := es.UpsertCandidate(DedupCandidate{
 		EntityType: "book",
 		EntityAID:  "book-a",
 		EntityBID:  "book-b",

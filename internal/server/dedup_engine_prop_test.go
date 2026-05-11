@@ -1,5 +1,5 @@
 // file: internal/server/dedup_engine_prop_test.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: e6425d8b-3ab4-4e0c-86fd-71ece563085e
 
 package server
@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
 	"testing"
 
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"pgregory.net/rapid"
 )
@@ -137,23 +137,42 @@ func TestProp_CosineZeroVector(t *testing.T) {
 // newPropEmbedStore builds a fresh on-disk SQLite embedding store
 // for a single rapid iteration. Each Check iteration gets its own
 // tmp dir so previous iterations' vectors never pollute the query.
-func newPropEmbedStore(t *rapid.T) *database.EmbeddingStore {
-	// rapid.T doesn't provide t.TempDir(); allocate one under
-	// os.TempDir and register a Cleanup so each iteration gets an
-	// isolated SQLite file.
-	dir := tPropTempDir(t)
-	dbPath := filepath.Join(dir, "embeddings.db")
-	es, err := database.NewEmbeddingStore(dbPath)
+// propDB opens one PebbleDB for the lifetime of the outer *testing.T and
+// returns a factory that produces a fresh EmbeddingStore per rapid iteration
+// by deleting all emb:/dedup: keys between iterations. This avoids opening
+// hundreds of PebbleDB instances (one per rapid iteration) which leaks
+// internal goroutines and file descriptors.
+func propDB(t *testing.T) func(*rapid.T) *database.EmbeddingStore {
+	t.Helper()
+	db, err := pebble.Open(t.TempDir(), &pebble.Options{})
 	if err != nil {
-		t.Fatalf("NewEmbeddingStore: %v", err)
+		t.Fatalf("pebble.Open: %v", err)
 	}
-	t.Cleanup(func() { _ = es.Close() })
-	return es
+	t.Cleanup(func() { _ = db.Close() })
+	es := database.NewEmbeddingStore(db)
+
+	return func(rt *rapid.T) *database.EmbeddingStore {
+		// Clear all emb: and dedup: keys from the previous iteration.
+		for _, pfx := range []string{"emb:", "dedup:"} {
+			lo := []byte(pfx)
+			hi := make([]byte, len(lo))
+			copy(hi, lo)
+			for i := len(hi) - 1; i >= 0; i-- {
+				hi[i]++
+				if hi[i] != 0 {
+					hi = hi[:i+1]
+					break
+				}
+			}
+			if err := db.DeleteRange(lo, hi, pebble.Sync); err != nil {
+				rt.Fatalf("clear prefix %q: %v", pfx, err)
+			}
+		}
+		return es
+	}
 }
 
-// tPropTempDir returns a temporary directory unique to the current
-// rapid iteration. rapid.T exposes t.Cleanup but not t.TempDir, so
-// we build one by hand and register the cleanup.
+// tPropTempDir is kept for compatibility but no longer used for DB allocation.
 func tPropTempDir(t *rapid.T) string {
 	dir, err := os.MkdirTemp("", "rapid-dedup-*")
 	if err != nil {
@@ -171,8 +190,9 @@ func TestProp_FindSimilarOrdering(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	getStore := propDB(t)
 	rapid.Check(t, func(t *rapid.T) {
-		es := newPropEmbedStore(t)
+		es := getStore(t)
 		n := rapid.IntRange(2, 12).Draw(t, "n")
 		for i := 0; i < n; i++ {
 			vec := genVector(t, propVectorDim, fmt.Sprintf("vec_%d", i))
@@ -211,8 +231,9 @@ func TestProp_FindSimilarThreshold(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	getStore := propDB(t)
 	rapid.Check(t, func(t *rapid.T) {
-		es := newPropEmbedStore(t)
+		es := getStore(t)
 		n := rapid.IntRange(2, 12).Draw(t, "n")
 		for i := 0; i < n; i++ {
 			vec := genVector(t, propVectorDim, fmt.Sprintf("vec_%d", i))
@@ -248,8 +269,9 @@ func TestProp_FindSimilarMaxResults(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	getStore := propDB(t)
 	rapid.Check(t, func(t *rapid.T) {
-		es := newPropEmbedStore(t)
+		es := getStore(t)
 		n := rapid.IntRange(5, 20).Draw(t, "n")
 		for i := 0; i < n; i++ {
 			vec := genVector(t, propVectorDim, fmt.Sprintf("vec_%d", i))
@@ -296,9 +318,10 @@ func TestProp_ChromemMatchesSqlite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("slow property test; run without -short")
 	}
+	getStore := propDB(t)
 	rapid.Check(t, func(t *rapid.T) {
 		ctx := context.Background()
-		es := newPropEmbedStore(t)
+		es := getStore(t)
 		cs := database.NewInMemoryChromemStore(propVectorDim)
 
 		n := rapid.IntRange(10, 20).Draw(t, "n")

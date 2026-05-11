@@ -1,16 +1,15 @@
 // file: internal/dedup/engine_test.go
-// version: 1.3.0
+// version: 2.0.0
 // guid: 2a7e4d91-c538-4f06-b1d3-9e8c5a6f0d72
 
 package dedup
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strconv"
 	"testing"
 
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -20,14 +19,12 @@ import (
 // setupTestEngine creates a Engine with an in-memory EmbeddingStore and MockStore.
 func setupTestEngine(t *testing.T) (*Engine, *database.MockStore, *database.EmbeddingStore) {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test_embeddings.db")
-
-	es, err := database.NewEmbeddingStore(dbPath)
+	db, err := pebble.Open(t.TempDir(), &pebble.Options{})
 	if err != nil {
-		t.Fatalf("NewEmbeddingStore: %v", err)
+		t.Fatalf("pebble.Open: %v", err)
 	}
-	t.Cleanup(func() { _ = es.Close(); _ = os.RemoveAll(tmpDir) })
+	es := database.NewEmbeddingStore(db)
+	t.Cleanup(func() { _ = db.Close() })
 
 	mock := &database.MockStore{}
 	ms := merge.NewService(mock)

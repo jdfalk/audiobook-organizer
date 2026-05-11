@@ -1,12 +1,17 @@
 // file: internal/database/embedding_candidates_test.go
-// version: 1.2.0
+// version: 2.0.0
 // guid: f3e2d1c0-b9a8-4765-8e7d-6f5c4b3a2190
 
 package database
 
 import (
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -304,16 +309,28 @@ func TestDedupCandidates_UpsertCanonicalizes(t *testing.T) {
 func TestCanonicalizeCandidates_Cleanup(t *testing.T) {
 	store := newTestEmbeddingStore(t)
 
-	// Bypass the upsert canonicalization by using raw SQL so we can
-	// simulate a pre-fix database state.
+	// Bypass the upsert canonicalization by writing raw PebbleDB keys so we can
+	// simulate a pre-fix database state where pairs were stored in non-canonical order.
+	var seqCounter int64
 	rawInsert := func(typ, a, b, layer string) {
 		t.Helper()
-		_, err := store.db.Exec(`
-			INSERT INTO dedup_candidates
-				(entity_type, entity_a_id, entity_b_id, layer, status, created_at, updated_at)
-			VALUES (?, ?, ?, ?, 'pending', '2026-04-10', '2026-04-10')
-		`, typ, a, b, layer)
+		seqCounter++
+		id := seqCounter
+		now := time.Now().UnixNano()
+		rec := candRec{
+			EntityType: typ, EntityAID: a, EntityBID: b,
+			Layer: layer, Status: "pending",
+			CreatedAt: now, UpdatedAt: now,
+		}
+		data, err := json.Marshal(rec)
 		require.NoError(t, err)
+		idHex := fmt.Sprintf("%016x", id)
+		require.NoError(t, store.db.Set(dedupRecKey(id), data, pebble.Sync))
+		require.NoError(t, store.db.Set(dedupPairKey(typ, a, b), []byte(idHex), pebble.Sync))
+		// Keep the sequence counter consistent.
+		var buf [8]byte
+		binary.LittleEndian.PutUint64(buf[:], uint64(id))
+		require.NoError(t, store.db.Set([]byte(dedupSeqKey), buf[:], pebble.Sync))
 	}
 
 	// Case A: non-canonical row with no canonical sibling — should be
