@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.9.0
+// version: 1.10.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-08
+// last-edited: 2026-05-11
 
 package server
 
@@ -95,28 +95,47 @@ func (s *Server) resumeInterruptedOperations() {
 				return s.organizeService.PerformOrganizeWithID(ctx, opID, &OrganizeRequest{}, operations.LoggerFromReporter(progress))
 			}
 		case "bulk_write_back":
+			// Migrated to UOS (library.bulk-write-back); re-enqueue via registry on resume.
 			params, _ := operations.LoadParams[operations.BulkWriteBackParams](store, opID)
 			if params == nil {
 				log.Printf("[WARN] No params for interrupted bulk_write_back %s, marking failed", opID)
 				_ = store.UpdateOperationError(opID, "no saved params, cannot resume")
 				continue
 			}
-			startIdx := 0
-			if checkpoint != nil {
-				startIdx = checkpoint.PhaseIndex
+			if s.opRegistry != nil {
+				enqParams := bulkWriteBackOpParams{BookIDs: params.BookIDs, Rename: params.Rename}
+				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "library.bulk-write-back", enqParams); enqErr != nil {
+					log.Printf("[WARN] Failed to re-enqueue bulk_write_back %s via v2: %v", opID, enqErr)
+					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
+				}
+			} else {
+				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
-			bookIDs := params.BookIDs
-			doRename := params.Rename
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.runBulkWriteBack(ctx, opID, bookIDs, doRename, startIdx, progress)
-			}
+			continue
 		case "isbn-enrichment":
-			isbnOpID := opID
-			resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.runIsbnEnrichment(ctx, progress, isbnOpID)
+			// Migrated to UOS (scheduler.isbn-enrichment); re-enqueue via registry on resume.
+			if s.opRegistry != nil {
+				enqParams := schedulerExtraOpParams{LegacyOpID: opID}
+				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "scheduler.isbn-enrichment", enqParams); enqErr != nil {
+					log.Printf("[WARN] Failed to re-enqueue isbn-enrichment %s via v2: %v", opID, enqErr)
+					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
+				}
+			} else {
+				_ = store.UpdateOperationError(opID, "operation registry not available")
 			}
+			continue
 		case "metadata-refresh":
-			resumeFn = s.runMetadataRefreshScan
+			// Migrated to UOS (scheduler.metadata-refresh); re-enqueue via registry on resume.
+			if s.opRegistry != nil {
+				enqParams := schedulerExtraOpParams{LegacyOpID: opID}
+				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "scheduler.metadata-refresh", enqParams); enqErr != nil {
+					log.Printf("[WARN] Failed to re-enqueue metadata-refresh %s via v2: %v", opID, enqErr)
+					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
+				}
+			} else {
+				_ = store.UpdateOperationError(opID, "operation registry not available")
+			}
+			continue
 		case "itunes_path_reconcile":
 			// Migrated to UOS (itunes.path-reconcile); re-enqueue via registry on resume.
 			if s.opRegistry != nil {
@@ -146,25 +165,35 @@ func (s *Server) resumeInterruptedOperations() {
 			_ = operations.ClearState(store, opID)
 			continue
 		default:
-			// Try to resume as a maintenance job
-			if j, jobErr := maintenance.Get(strings.TrimPrefix(opType, "maintenance:")); jobErr == nil && j.CanResume() {
-				capturedOpID := opID
-				capturedJob := j
-				capturedStore := store
-				resumeFn = func(ctx context.Context, progress operations.ProgressReporter) error {
-					ctx = maintenance.WithOperationID(ctx, capturedOpID)
-					adapter := &progressAdapter{ops: progress}
-					return capturedJob.Run(ctx, capturedStore, adapter, false)
+			// Try to resume as a maintenance job via v2 registry (maintenance.job).
+			jobID := strings.TrimPrefix(opType, "maintenance:")
+			if j, jobErr := maintenance.Get(jobID); jobErr == nil && j.CanResume() {
+				if s.opRegistry != nil {
+					enqParams := maintenanceJobOpParams{LegacyOpID: opID, JobID: jobID}
+					if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "maintenance.job", enqParams); enqErr != nil {
+						log.Printf("[WARN] Failed to re-enqueue maintenance job %s (%s) via v2: %v", opID, jobID, enqErr)
+						_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
+					}
+				} else {
+					_ = store.UpdateOperationError(opID, "operation registry not available")
 				}
 			} else {
 				_ = store.UpdateOperationError(opID, "interrupted, cannot resume")
 				_ = operations.ClearState(store, opID)
-				continue
 			}
+			continue
 		}
 
-		if err := s.queue.EnqueueResume(opID, opType, operations.PriorityNormal, resumeFn); err != nil {
-			log.Printf("[WARN] Failed to re-enqueue operation %s: %v", opID, err)
+		// Fallback: v1 queue for scan/organize cases that still use resumeFn.
+		if resumeFn != nil {
+			if s.queue != nil {
+				if err := s.queue.EnqueueResume(opID, opType, operations.PriorityNormal, resumeFn); err != nil {
+					log.Printf("[WARN] Failed to re-enqueue operation %s: %v", opID, err)
+				}
+			} else {
+				log.Printf("[WARN] Cannot resume operation %s (%s): queue not initialized", opID, opType)
+				_ = store.UpdateOperationError(opID, "queue not initialized, cannot resume")
+			}
 		}
 	}
 }
