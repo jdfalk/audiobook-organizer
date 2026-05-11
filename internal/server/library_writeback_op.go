@@ -1,5 +1,5 @@
 // file: internal/server/library_writeback_op.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 package server
@@ -53,4 +53,8 @@ func (s *Server) RegisterBulkWriteBackOp(reg *opsregistry.Registry) error {
 			return s.runBulkWriteBack(ctx, opID, p.BookIDs, p.Rename, 0, progress)
 		},
 	})
+}
+
+func init() {
+	addOpRegistrar(func(s *Server, reg *opsregistry.Registry) error { return s.RegisterBulkWriteBackOp(reg) })
 }

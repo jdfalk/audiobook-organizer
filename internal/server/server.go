@@ -355,20 +355,12 @@ func NewServer(store database.Store) *Server {
 		if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
 			log.Printf("[server] maintenance plugin register: %v", err)
 		}
-		if err := server.RegisterBulkMetadataFetchOp(server.opRegistry); err != nil {
-			log.Printf("[server] bulk-metadata-fetch op register: %v", err)
-		}
-		if err := server.RegisterLibraryScanOp(server.opRegistry); err != nil {
-			log.Printf("[server] library.scan op register: %v", err)
-		}
-		if err := server.RegisterLibraryOrganizeOp(server.opRegistry); err != nil {
-			log.Printf("[server] library.organize op register: %v", err)
-		}
-		if err := server.RegisterLibraryTranscodeOp(server.opRegistry); err != nil {
-			log.Printf("[server] library.transcode op register: %v", err)
-		}
-		if err := server.RegisterBulkWriteBackOp(server.opRegistry); err != nil {
-			log.Printf("[server] bulk-write-back op register: %v", err)
+		// Iterate all op registrars. Each file calls addOpRegistrar in its init()
+		// so new ops never require touching this block.
+		for _, reg := range opRegistrars {
+			if err := reg(server, server.opRegistry); err != nil {
+				log.Printf("[server] op registrar: %v", err)
+			}
 		}
 	}
 

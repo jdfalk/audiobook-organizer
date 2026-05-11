@@ -1217,6 +1217,10 @@ func (s *Server) RegisterBulkMetadataFetchOp(reg *opsregistry.Registry) error {
 	})
 }
 
+func init() {
+	addOpRegistrar(func(s *Server, reg *opsregistry.Registry) error { return s.RegisterBulkMetadataFetchOp(reg) })
+}
+
 // runBulkMetadataFetchForBookIDs fetches and caches metadata for a specific set
 // of books identified by ID. It shares resume semantics with runBulkMetadataFetchAll:
 // books that already have an OperationResult row for this opID are skipped.
