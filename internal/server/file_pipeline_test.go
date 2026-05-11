@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 )
 
 func TestComputeTargetPaths(t *testing.T) {
@@ -28,15 +29,15 @@ func TestComputeTargetPaths(t *testing.T) {
 		},
 	}
 
-	vars := FormatVars{
+	vars := organizer.FormatVars{
 		Author: "Author Name",
 		Title:  "Book Title",
 	}
 
 	entries := ComputeTargetPaths(
 		"/library",
-		DefaultPathFormat,
-		DefaultSegmentTitleFormat,
+		organizer.DefaultPathFormat,
+		organizer.DefaultSegmentTitleFormat,
 		&database.Book{ID: "test-id", Title: "Book Title"},
 		files,
 		vars,
@@ -57,7 +58,7 @@ func TestComputeTargetPaths(t *testing.T) {
 }
 
 func TestComputeTargetPathsEmpty(t *testing.T) {
-	entries := ComputeTargetPaths("", DefaultPathFormat, DefaultSegmentTitleFormat, &database.Book{}, nil, FormatVars{})
+	entries := ComputeTargetPaths("", organizer.DefaultPathFormat, organizer.DefaultSegmentTitleFormat, &database.Book{}, nil, organizer.FormatVars{})
 	if entries != nil {
 		t.Errorf("expected nil for empty root dir, got %v", entries)
 	}
@@ -76,11 +77,11 @@ func TestComputeTargetPathsMissingFiles(t *testing.T) {
 
 	entries := ComputeTargetPaths(
 		"/library",
-		DefaultPathFormat,
-		DefaultSegmentTitleFormat,
+		organizer.DefaultPathFormat,
+		organizer.DefaultSegmentTitleFormat,
 		&database.Book{ID: "test-id", Title: "Book Title"},
 		files,
-		FormatVars{Author: "Author", Title: "Book Title"},
+		organizer.FormatVars{Author: "Author", Title: "Book Title"},
 	)
 
 	if len(entries) != 0 {
@@ -108,15 +109,15 @@ func TestComputeTargetPathsFromSegments(t *testing.T) {
 		},
 	}
 
-	vars := FormatVars{
+	vars := organizer.FormatVars{
 		Author: "Author Name",
 		Title:  "Book Title",
 	}
 
 	entries := ComputeTargetPathsFromSegments(
 		"/library",
-		DefaultPathFormat,
-		DefaultSegmentTitleFormat,
+		organizer.DefaultPathFormat,
+		organizer.DefaultSegmentTitleFormat,
 		&database.Book{ID: "test-id", Title: "Book Title"},
 		segments,
 		vars,

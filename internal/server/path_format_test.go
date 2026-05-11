@@ -7,6 +7,7 @@ package server
 import (
 	"testing"
 
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,14 +28,14 @@ func TestFormatSegmentTitle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := FormatSegmentTitle(tt.format, tt.title, tt.track, tt.total)
+			result := organizer.FormatSegmentTitle(tt.format, tt.title, tt.track, tt.total)
 			require.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 func TestFormatPath_BasicTemplate(t *testing.T) {
-	vars := FormatVars{
+	vars := organizer.FormatVars{
 		Author:      "James S.A. Corey",
 		Title:       "Leviathan Falls",
 		Series:      "The Expanse",
@@ -43,61 +44,61 @@ func TestFormatPath_BasicTemplate(t *testing.T) {
 		TotalTracks: 51,
 		Ext:         "mp3",
 	}
-	result := FormatPath("{author}/{series_prefix}{title}/{track_title}.{ext}", vars)
+	result := organizer.FormatPath("{author}/{series_prefix}{title}/{track_title}.{ext}", vars)
 	require.Equal(t, "James S.A. Corey/The Expanse 9 - Leviathan Falls/Leviathan Falls - 1_51.mp3", result)
 }
 
 func TestFormatPath_NoSeries(t *testing.T) {
-	vars := FormatVars{
+	vars := organizer.FormatVars{
 		Author:      "Author Name",
 		Title:       "Book Title",
 		Track:       1,
 		TotalTracks: 10,
 		Ext:         "m4b",
 	}
-	result := FormatPath("{author}/{series_prefix}{title}/{track_title}.{ext}", vars)
+	result := organizer.FormatPath("{author}/{series_prefix}{title}/{track_title}.{ext}", vars)
 	require.Equal(t, "Author Name/Book Title/Book Title - 1_10.m4b", result)
 }
 
 func TestFormatPath_EmptyVariablesCollapse(t *testing.T) {
-	vars := FormatVars{
+	vars := organizer.FormatVars{
 		Author: "Author",
 		Title:  "Title",
 		Ext:    "m4b",
 	}
-	result := FormatPath("{author}/{series_prefix}{title}.{lang}.{ext}", vars)
+	result := organizer.FormatPath("{author}/{series_prefix}{title}.{lang}.{ext}", vars)
 	require.Equal(t, "Author/Title.m4b", result)
 }
 
 func TestFormatPath_LanguageSuffix(t *testing.T) {
-	vars := FormatVars{
+	vars := organizer.FormatVars{
 		Author: "Author",
 		Title:  "Title",
 		Lang:   "de",
 		Ext:    "m4b",
 	}
-	result := FormatPath("{author}/{title}.{lang}.{ext}", vars)
+	result := organizer.FormatPath("{author}/{title}.{lang}.{ext}", vars)
 	require.Equal(t, "Author/Title.de.m4b", result)
 }
 
 func TestFormatPath_WithYear(t *testing.T) {
-	vars := FormatVars{
+	vars := organizer.FormatVars{
 		Author: "Author",
 		Title:  "Title",
 		Year:   2021,
 		Ext:    "m4b",
 	}
-	result := FormatPath("{author}/{title} ({year}).{ext}", vars)
+	result := organizer.FormatPath("{author}/{title} ({year}).{ext}", vars)
 	require.Equal(t, "Author/Title (2021).m4b", result)
 }
 
 func TestFormatPath_NoYear(t *testing.T) {
-	vars := FormatVars{
+	vars := organizer.FormatVars{
 		Author: "Author",
 		Title:  "Title",
 		Ext:    "m4b",
 	}
-	result := FormatPath("{author}/{title} ({year}).{ext}", vars)
+	result := organizer.FormatPath("{author}/{title} ({year}).{ext}", vars)
 	require.Equal(t, "Author/Title ().m4b", result)
 }
 
@@ -115,7 +116,7 @@ func TestSanitizePathComponent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			require.Equal(t, tt.expected, sanitizePathComponent(tt.input))
+			require.Equal(t, tt.expected, organizer.SanitizePathComponent(tt.input))
 		})
 	}
 }
@@ -133,7 +134,7 @@ func TestCollapseEmptySegments(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			require.Equal(t, tt.expected, collapseEmptySegments(tt.input))
+			require.Equal(t, tt.expected, organizer.CollapseEmptySegments(tt.input))
 		})
 	}
 }
