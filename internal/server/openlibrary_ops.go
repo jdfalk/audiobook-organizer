@@ -92,7 +92,7 @@ func (s *Server) RegisterOLImportOp(reg *opsregistry.Registry) error {
 				return fmt.Errorf("failed to open store: %w", err)
 			}
 			progress := registryProgressAdapter{r: reporter}
-			return s.executeOLImport(ctx, progress, svc, p.TargetDir, p.Types)
+			return svc.Import(ctx, progress, p.TargetDir, p.Types)
 		},
 	})
 }
