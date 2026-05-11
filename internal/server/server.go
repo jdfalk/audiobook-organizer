@@ -768,7 +768,7 @@ func NewServer(store database.Store) *Server {
 	// config.ProtectedPaths. If Deluge is not configured, the cache still works
 	// for the static paths (e.g. iTunes library root).
 	{
-		dc := getDelugeClient()
+		dc := deluge.GetClient()
 		server.protectedPathCache = deluge.NewProtectedPathCache(dc, config.AppConfig.ProtectedPaths)
 		log.Printf("[INFO] ProtectedPathCache initialized (%d static extra paths)", len(config.AppConfig.ProtectedPaths))
 
@@ -776,7 +776,7 @@ func NewServer(store database.Store) *Server {
 		// all taglib writes (metadata apply, single-tag patch) check for Deluge-
 		// protected paths before writing. This uses the same ProtectedPathCache
 		// and a LibraryImporterAdapter backed by the server's store.
-		importer := NewLibraryImporterAdapter(resolvedStore, dc, &config.AppConfig)
+		importer := deluge.NewLibraryImporterAdapter(resolvedStore, dc, &config.AppConfig)
 		deps := tagger.SafeWriteDeps{
 			ProtectedCache: server.protectedPathCache,
 			Importer:       importer,

@@ -1,10 +1,11 @@
 // file: internal/server/undo_engine.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 0b8c9d6e-1f7a-4a70-b8c5-3d7e0f1b9a99
+// last-edited: 2026-05-11
 //
 // Backward-compatibility wrapper for the undo engine, now in internal/undo.
 // This file re-exports the public API from internal/undo with server-specific
-// callback handling (NotifyDelugeAfterUndo).
+// callback handling (deluge.NotifyDelugeAfterUndo).
 //
 // The actual undo implementation lives in internal/undo/engine.go
 
@@ -12,6 +13,7 @@ package server
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/undo"
 )
 
@@ -40,7 +42,7 @@ func RunUndoOperation(
 		store,
 		targetOpID,
 		progress,
-		NotifyDelugeAfterUndo,
+		deluge.NotifyDelugeAfterUndo,
 	)
 }
 

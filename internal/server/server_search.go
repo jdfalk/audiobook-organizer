@@ -1,7 +1,7 @@
 // file: internal/server/server_search.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 12815699-f9ea-4788-9af3-2e854d710315
-// last-edited: 2026-05-01
+// last-edited: 2026-05-11
 
 package server
 
@@ -12,6 +12,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 )
@@ -29,7 +30,7 @@ func (s *Server) safeWriteDeps() tagger.SafeWriteDeps {
 		return tagger.SafeWriteDeps{}
 	}
 	store := s.Store()
-	importer := NewLibraryImporterAdapter(store, getDelugeClient(), &config.AppConfig)
+	importer := deluge.NewLibraryImporterAdapter(store, deluge.GetClient(), &config.AppConfig)
 	return tagger.SafeWriteDeps{
 		ProtectedCache: s.protectedPathCache,
 		Importer:       importer,

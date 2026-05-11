@@ -1,7 +1,11 @@
 // file: internal/server/deluge_integration_test.go
-// version: 1.2.0
+// version: 2.0.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
-// last-edited: 2026-05-05
+// last-edited: 2026-05-11
+//
+// Integration tests for Deluge notification helpers and HTTP handlers.
+// Service logic moved to internal/deluge/integration.go; tests updated to
+// use deluge.SetGlobalClientForTest for client injection.
 
 package server
 
@@ -20,25 +24,24 @@ import (
 
 func TestNotifyDelugeMoveStorage_EmptyHash(t *testing.T) {
 	// Should silently no-op with empty hash.
-	NotifyDelugeMoveStorage("", "/some/path")
+	deluge.NotifyDelugeMoveStorage("", "/some/path")
 }
 
 func TestNotifyDelugeMoveStorage_NoClient(t *testing.T) {
-	// Save and clear the global client.
-	orig := globalDelugeClient
-	globalDelugeClient = nil
+	// Inject nil client and clear config so GetClient returns nil.
+	restore := deluge.SetGlobalClientForTest(nil)
 	origURL := config.AppConfig.DelugeWebURL
 	config.AppConfig.DelugeWebURL = ""
 	origHost := config.AppConfig.DownloadClient.Torrent.Deluge.Host
 	config.AppConfig.DownloadClient.Torrent.Deluge.Host = ""
 	defer func() {
-		globalDelugeClient = orig
+		restore()
 		config.AppConfig.DelugeWebURL = origURL
 		config.AppConfig.DownloadClient.Torrent.Deluge.Host = origHost
 	}()
 
 	// Should silently no-op when Deluge is not configured.
-	NotifyDelugeMoveStorage("abc123", "/new/path")
+	deluge.NotifyDelugeMoveStorage("abc123", "/new/path")
 }
 
 func TestNotifyDelugeMoveStorage_WithMockServer(t *testing.T) {
@@ -68,16 +71,15 @@ func TestNotifyDelugeMoveStorage_WithMockServer(t *testing.T) {
 		t.Fatalf("create client: %v", err)
 	}
 
-	orig := globalDelugeClient
-	globalDelugeClient = client
+	restore := deluge.SetGlobalClientForTest(client)
 	origMove := config.AppConfig.DelugeMoveEnabled
 	config.AppConfig.DelugeMoveEnabled = true
 	defer func() {
-		globalDelugeClient = orig
+		restore()
 		config.AppConfig.DelugeMoveEnabled = origMove
 	}()
 
-	NotifyDelugeMoveStorage("abc123", "/new/path/to/book.m4b")
+	deluge.NotifyDelugeMoveStorage("abc123", "/new/path/to/book.m4b")
 
 	if !calledMoveStorage {
 		t.Error("expected MoveStorage to be called")
@@ -187,14 +189,13 @@ func TestNotifyDelugeAfterVersionSwap(t *testing.T) {
 	})
 
 	// With no Deluge client configured, should not panic.
-	orig := globalDelugeClient
-	globalDelugeClient = nil
+	restore := deluge.SetGlobalClientForTest(nil)
 	origURL := config.AppConfig.DelugeWebURL
 	config.AppConfig.DelugeWebURL = ""
 	origHost := config.AppConfig.DownloadClient.Torrent.Deluge.Host
 	config.AppConfig.DownloadClient.Torrent.Deluge.Host = ""
 	defer func() {
-		globalDelugeClient = orig
+		restore()
 		config.AppConfig.DelugeWebURL = origURL
 		config.AppConfig.DownloadClient.Torrent.Deluge.Host = origHost
 	}()
@@ -203,7 +204,7 @@ func TestNotifyDelugeAfterVersionSwap(t *testing.T) {
 	toVer := &database.BookVersion{ID: "v2", BookID: "b1", TorrentHash: "def456"}
 
 	// Should not panic even without Deluge configured.
-	NotifyDelugeAfterVersionSwap(store, fromVer, toVer, "/lib/books/b1/book.m4b")
+	deluge.NotifyDelugeAfterVersionSwap(store, fromVer, toVer, "/lib/books/b1/book.m4b")
 }
 
 // ---------------------------------------------------------------------------
@@ -266,18 +267,17 @@ func TestNotifyDelugeAfterUndo_Enabled(t *testing.T) {
 		t.Fatalf("create client: %v", err)
 	}
 
-	orig := globalDelugeClient
+	restore := deluge.SetGlobalClientForTest(client)
 	origMove := config.AppConfig.DelugeMoveEnabled
-	globalDelugeClient = client
 	config.AppConfig.DelugeMoveEnabled = true
 	defer func() {
-		globalDelugeClient = orig
+		restore()
 		config.AppConfig.DelugeMoveEnabled = origMove
 	}()
 
 	// The undo restores the file to the original path.
 	restoredPath := "/library/Author/Title/book.m4b"
-	NotifyDelugeAfterUndo(store, book.ID, restoredPath)
+	deluge.NotifyDelugeAfterUndo(store, book.ID, restoredPath)
 
 	if len(gotHashes) == 0 {
 		t.Fatal("expected MoveStorage to be called")
@@ -320,16 +320,15 @@ func TestNotifyDelugeAfterUndo_Disabled(t *testing.T) {
 	defer srv.Close()
 
 	client, _ := deluge.New(srv.URL, "deluge")
-	orig := globalDelugeClient
+	restore := deluge.SetGlobalClientForTest(client)
 	origMove := config.AppConfig.DelugeMoveEnabled
-	globalDelugeClient = client
 	config.AppConfig.DelugeMoveEnabled = false // disabled
 	defer func() {
-		globalDelugeClient = orig
+		restore()
 		config.AppConfig.DelugeMoveEnabled = origMove
 	}()
 
-	NotifyDelugeAfterUndo(store, book.ID, "/library/Author/Title/book.m4b")
+	deluge.NotifyDelugeAfterUndo(store, book.ID, "/library/Author/Title/book.m4b")
 
 	if calledMoveStorage {
 		t.Error("MoveStorage should NOT be called when DelugeMoveEnabled=false")
@@ -365,16 +364,15 @@ func TestNotifyDelugeAfterUndo_NoHash(t *testing.T) {
 	defer srv.Close()
 
 	client, _ := deluge.New(srv.URL, "deluge")
-	orig := globalDelugeClient
+	restore := deluge.SetGlobalClientForTest(client)
 	origMove := config.AppConfig.DelugeMoveEnabled
-	globalDelugeClient = client
 	config.AppConfig.DelugeMoveEnabled = true
 	defer func() {
-		globalDelugeClient = orig
+		restore()
 		config.AppConfig.DelugeMoveEnabled = origMove
 	}()
 
-	NotifyDelugeAfterUndo(store, book.ID, "/library/Author/Title/book.m4b")
+	deluge.NotifyDelugeAfterUndo(store, book.ID, "/library/Author/Title/book.m4b")
 
 	if calledMoveStorage {
 		t.Error("MoveStorage should NOT be called when TorrentHash is empty")
@@ -425,16 +423,15 @@ func TestNotifyDelugeAfterUndo_DelugeError(t *testing.T) {
 		t.Fatalf("create client: %v", err)
 	}
 
-	orig := globalDelugeClient
+	restore := deluge.SetGlobalClientForTest(client)
 	origMove := config.AppConfig.DelugeMoveEnabled
-	globalDelugeClient = client
 	config.AppConfig.DelugeMoveEnabled = true
 	defer func() {
-		globalDelugeClient = orig
+		restore()
 		config.AppConfig.DelugeMoveEnabled = origMove
 	}()
 
 	// Must not panic or return error — best-effort, log only.
-	NotifyDelugeAfterUndo(store, book.ID, "/library/Author/Title/book.m4b")
+	deluge.NotifyDelugeAfterUndo(store, book.ID, "/library/Author/Title/book.m4b")
 	// If we reach here, the test passes (no panic, no error propagation).
 }

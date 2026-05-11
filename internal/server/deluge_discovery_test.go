@@ -1,6 +1,9 @@
 // file: internal/server/deluge_discovery_test.go
-// version: 2.0.0
+// version: 3.0.0
 // guid: f7a8b9c0-d1e2-3f4a-5b6c-7d8e9f0a1b2c
+// last-edited: 2026-05-11
+//
+// Tests for the discovery helpers — now delegates to internal/deluge/discovery.go.
 
 package server
 
@@ -11,51 +14,53 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 )
 
 // The shared download dir — every torrent has this as save_path.
 const dlDir = "/mnt/bigdata/books/deluge"
 
 // ---------------------------------------------------------------------------
-// Tier 2: isPathTracked
+// Tier 2: IsPathTracked
 // ---------------------------------------------------------------------------
 
 func TestIsPathTracked_EmptyContentPath(t *testing.T) {
 	known := map[string]struct{}{dlDir + "/Dune/Dune.m4b": {}}
-	assert.False(t, isPathTracked("", known))
+	assert.False(t, deluge.IsPathTracked("", known))
 }
 
 func TestIsPathTracked_ExactMatch(t *testing.T) {
 	known := map[string]struct{}{dlDir + "/Dune.m4b": {}}
-	assert.True(t, isPathTracked(dlDir+"/Dune.m4b", known))
+	assert.True(t, deluge.IsPathTracked(dlDir+"/Dune.m4b", known))
 }
 
 func TestIsPathTracked_ContentDirPrefixMatch(t *testing.T) {
 	known := map[string]struct{}{dlDir + "/Dune/Dune.m4b": {}}
-	assert.True(t, isPathTracked(dlDir+"/Dune", known))
+	assert.True(t, deluge.IsPathTracked(dlDir+"/Dune", known))
 }
 
 func TestIsPathTracked_UnimportedTorrent(t *testing.T) {
 	known := map[string]struct{}{dlDir + "/Dune/Dune.m4b": {}}
-	assert.False(t, isPathTracked(dlDir+"/Foundation", known))
+	assert.False(t, deluge.IsPathTracked(dlDir+"/Foundation", known))
 }
 
 func TestIsPathTracked_EmptyKnown(t *testing.T) {
-	assert.False(t, isPathTracked(dlDir+"/Dune", map[string]struct{}{}))
+	assert.False(t, deluge.IsPathTracked(dlDir+"/Dune", map[string]struct{}{}))
 }
 
 func TestIsPathTracked_PartialNameNotMatched(t *testing.T) {
 	known := map[string]struct{}{dlDir + "/Dune/Dune.m4b": {}}
-	assert.False(t, isPathTracked(dlDir+"/Du", known))
+	assert.False(t, deluge.IsPathTracked(dlDir+"/Du", known))
 }
 
 func TestIsPathTracked_TrailingSlashNormalized(t *testing.T) {
 	known := map[string]struct{}{dlDir + "/Dune/Dune.m4b": {}}
-	assert.True(t, isPathTracked(dlDir+"/Dune/", known))
+	assert.True(t, deluge.IsPathTracked(dlDir+"/Dune/", known))
 }
 
 // ---------------------------------------------------------------------------
-// Tier 3: isTitleTracked / parseTorrentNameCandidates / normalizeTitle
+// Tier 3: IsTitleTracked / ParseTorrentNameCandidates / NormalizeTitle
 // ---------------------------------------------------------------------------
 
 func TestNormalizeTitle(t *testing.T) {
@@ -66,42 +71,42 @@ func TestNormalizeTitle(t *testing.T) {
 		{"Foundation - Isaac Asimov", "foundation isaac asimov"},
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.want, normalizeTitle(c.in), c.in)
+		assert.Equal(t, c.want, deluge.NormalizeTitle(c.in), c.in)
 	}
 }
 
 func TestParseTorrentNameCandidates_DashSeparated(t *testing.T) {
-	candidates := parseTorrentNameCandidates("Brandon Sanderson - The Way of Kings")
-	assert.Contains(t, candidates, normalizeTitle("Brandon Sanderson"))
-	assert.Contains(t, candidates, normalizeTitle("The Way of Kings"))
+	candidates := deluge.ParseTorrentNameCandidates("Brandon Sanderson - The Way of Kings")
+	assert.Contains(t, candidates, deluge.NormalizeTitle("Brandon Sanderson"))
+	assert.Contains(t, candidates, deluge.NormalizeTitle("The Way of Kings"))
 }
 
 func TestParseTorrentNameCandidates_ByKeyword(t *testing.T) {
-	candidates := parseTorrentNameCandidates("The Way of Kings by Brandon Sanderson [M4B]")
-	assert.Contains(t, candidates, normalizeTitle("The Way of Kings"))
+	candidates := deluge.ParseTorrentNameCandidates("The Way of Kings by Brandon Sanderson [M4B]")
+	assert.Contains(t, candidates, deluge.NormalizeTitle("The Way of Kings"))
 }
 
 func TestParseTorrentNameCandidates_DotSeparated(t *testing.T) {
-	candidates := parseTorrentNameCandidates("Dune.Frank.Herbert.2023.M4B")
+	candidates := deluge.ParseTorrentNameCandidates("Dune.Frank.Herbert.2023.M4B")
 	assert.Contains(t, candidates, "dune frank herbert")
 }
 
 func TestIsTitleTracked_Hit(t *testing.T) {
 	titles := map[string]struct{}{
-		normalizeTitle("The Way of Kings"): {},
+		deluge.NormalizeTitle("The Way of Kings"): {},
 	}
-	assert.True(t, isTitleTracked("Brandon Sanderson - The Way of Kings [M4B]", titles))
+	assert.True(t, deluge.IsTitleTracked("Brandon Sanderson - The Way of Kings [M4B]", titles))
 }
 
 func TestIsTitleTracked_Miss(t *testing.T) {
 	titles := map[string]struct{}{
-		normalizeTitle("Dune"): {},
+		deluge.NormalizeTitle("Dune"): {},
 	}
-	assert.False(t, isTitleTracked("Brandon Sanderson - The Way of Kings", titles))
+	assert.False(t, deluge.IsTitleTracked("Brandon Sanderson - The Way of Kings", titles))
 }
 
 // ---------------------------------------------------------------------------
-// Tier 4: isContentHashTracked / sha256File
+// Tier 4: IsContentHashTracked / SHA256File
 // ---------------------------------------------------------------------------
 
 func TestSha256File(t *testing.T) {
@@ -109,17 +114,17 @@ func TestSha256File(t *testing.T) {
 	f := filepath.Join(dir, "test.m4b")
 	require.NoError(t, os.WriteFile(f, []byte("audiodata"), 0o644))
 
-	hash1, err := sha256File(f)
+	hash1, err := deluge.SHA256File(f)
 	require.NoError(t, err)
 	assert.Len(t, hash1, 64) // hex SHA256
 
 	// Same content → same hash.
-	hash2, _ := sha256File(f)
+	hash2, _ := deluge.SHA256File(f)
 	assert.Equal(t, hash1, hash2)
 }
 
 func TestSha256File_Missing(t *testing.T) {
-	_, err := sha256File("/nonexistent/file.m4b")
+	_, err := deluge.SHA256File("/nonexistent/file.m4b")
 	assert.Error(t, err)
 }
 
@@ -128,10 +133,10 @@ func TestIsContentHashTracked_MatchFound(t *testing.T) {
 	audio := filepath.Join(dir, "book.m4b")
 	require.NoError(t, os.WriteFile(audio, []byte("audiodata"), 0o644))
 
-	expected, _ := sha256File(audio)
+	expected, _ := deluge.SHA256File(audio)
 	lookup := func(h string) bool { return h == expected }
 
-	assert.True(t, isContentHashTracked(dir, lookup))
+	assert.True(t, deluge.IsContentHashTracked(dir, lookup))
 }
 
 func TestIsContentHashTracked_NoMatch(t *testing.T) {
@@ -139,7 +144,7 @@ func TestIsContentHashTracked_NoMatch(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "book.m4b"), []byte("audiodata"), 0o644))
 
 	lookup := func(h string) bool { return false }
-	assert.False(t, isContentHashTracked(dir, lookup))
+	assert.False(t, deluge.IsContentHashTracked(dir, lookup))
 }
 
 func TestIsContentHashTracked_SkipsNonAudioFiles(t *testing.T) {
@@ -149,12 +154,12 @@ func TestIsContentHashTracked_SkipsNonAudioFiles(t *testing.T) {
 
 	called := false
 	lookup := func(h string) bool { called = true; return true }
-	assert.False(t, isContentHashTracked(dir, lookup))
+	assert.False(t, deluge.IsContentHashTracked(dir, lookup))
 	assert.False(t, called, "lookup should not be called for non-audio files")
 }
 
 func TestIsContentHashTracked_MissingDir(t *testing.T) {
 	// Walk on a nonexistent dir returns false without panicking.
 	lookup := func(h string) bool { return true }
-	assert.False(t, isContentHashTracked("/nonexistent/path", lookup))
+	assert.False(t, deluge.IsContentHashTracked("/nonexistent/path", lookup))
 }
