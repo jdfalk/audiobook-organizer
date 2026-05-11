@@ -1,13 +1,12 @@
 // file: internal/server/scheduler_tasks.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 4ed1afbd-7c63-487a-9a53-3b1b05eb06ee
-// last-edited: 2026-05-07
+// last-edited: 2026-05-10
 
 package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -16,13 +15,10 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
-	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/reconcile"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	ulid "github.com/oklog/ulid/v2"
 )
@@ -760,32 +756,14 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if store == nil {
 				return nil, fmt.Errorf("database not initialized")
 			}
-			id := ulid.Make().String()
-			op, err := store.CreateOperation(id, "reconcile_scan", nil)
+			opID := ulid.Make().String()
+			op, err := store.CreateOperation(opID, "reconcile_scan", nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
-			if err := ts.server.queue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal,
-				func(ctx context.Context, progress operations.ProgressReporter) error {
-					reconcileLog := operations.LoggerFromReporter(progress)
-					result, scanErr := reconcile.BuildReconcilePreviewWithProgress(store, reconcileLog)
-					if scanErr != nil {
-						return fmt.Errorf("reconcile scan failed: %w", scanErr)
-					}
-					resultJSON, marshalErr := json.Marshal(result)
-					if marshalErr != nil {
-						return fmt.Errorf("failed to marshal scan results: %w", marshalErr)
-					}
-					if err := store.UpdateOperationResultData(id, string(resultJSON)); err != nil {
-						return fmt.Errorf("failed to store scan results: %w", err)
-					}
-					summary := fmt.Sprintf("Found %d broken records, %d matches, %d unmatched",
-						len(result.BrokenRecords), len(result.Matches), len(result.UnmatchedBooks))
-					_ = progress.Log("info", summary, nil)
-					return nil
-				},
-			); err != nil {
-				return nil, fmt.Errorf("failed to enqueue reconcile scan: %w", err)
+			params := maintenanceOpParams{LegacyOpID: op.ID}
+			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.reconcile-scan", params); enqErr != nil {
+				return nil, fmt.Errorf("failed to enqueue reconcile scan: %w", enqErr)
 			}
 			return op, nil
 		},
@@ -811,110 +789,14 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if store == nil {
 				return nil, fmt.Errorf("database not initialized")
 			}
-			if ts.server.queue == nil {
-				return nil, fmt.Errorf("operation queue not initialized")
-			}
 			opID := ulid.Make().String()
 			op, err := store.CreateOperation(opID, "ai-dedup-batch", nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
-			if err := ts.server.queue.Enqueue(op.ID, "ai-dedup-batch", operations.PriorityLow, func(ctx context.Context, progress operations.ProgressReporter) error {
-				parser := ai.NewOpenAIParser(&config.AppConfig, config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
-				if !parser.IsEnabled() {
-					return fmt.Errorf("AI parsing is not enabled")
-				}
-
-				_ = progress.Log("info", "Building author list for batch AI dedup", nil)
-				_ = progress.UpdateProgress(0, 100, "Loading authors...")
-
-				allAuthors, err := store.GetAllAuthors()
-				if err != nil {
-					return fmt.Errorf("failed to get authors: %w", err)
-				}
-
-				var inputs []ai.AuthorDiscoveryInput
-				for _, author := range allAuthors {
-					var sampleTitles []string
-					books, bErr := store.GetBooksByAuthorIDWithRole(author.ID)
-					if bErr == nil {
-						for j, b := range books {
-							if j >= 3 {
-								break
-							}
-							sampleTitles = append(sampleTitles, b.Title)
-						}
-					}
-					inputs = append(inputs, ai.AuthorDiscoveryInput{
-						ID: author.ID, Name: author.Name,
-						BookCount: len(books), SampleTitles: sampleTitles,
-					})
-				}
-
-				if len(inputs) == 0 {
-					_ = progress.Log("info", "No authors to process", nil)
-					return nil
-				}
-
-				_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Submitting %d authors to OpenAI Batch API...", len(inputs)))
-
-				batchID, err := parser.CreateBatchAuthorDedup(ctx, inputs)
-				if err != nil {
-					return fmt.Errorf("failed to create batch: %w", err)
-				}
-
-				_ = progress.Log("info", fmt.Sprintf("Batch created: %s — polling for completion", batchID), nil)
-
-				// Poll for completion (up to 24h, check every 5 min)
-				pollInterval := 5 * time.Minute
-				maxPolls := 288 // 24h / 5min
-				for i := 0; i < maxPolls; i++ {
-					if progress.IsCanceled() {
-						return fmt.Errorf("cancelled")
-					}
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case <-time.After(pollInterval):
-					}
-
-					status, outputFileID, sErr := parser.CheckBatchStatus(ctx, batchID)
-					if sErr != nil {
-						_ = progress.Log("warn", fmt.Sprintf("Poll error: %v", sErr), nil)
-						continue
-					}
-
-					_ = progress.UpdateProgress(10+i, maxPolls, fmt.Sprintf("Batch status: %s", status))
-
-					switch status {
-					case "completed":
-						_ = progress.Log("info", "Batch completed, downloading results", nil)
-						discoveries, dErr := parser.DownloadBatchResults(ctx, outputFileID)
-						if dErr != nil {
-							return fmt.Errorf("failed to download results: %w", dErr)
-						}
-						resultPayload := map[string]any{
-							"mode":        "batch-full",
-							"suggestions": discoveries,
-							"batch_id":    batchID,
-						}
-						resultJSON, jErr := json.Marshal(resultPayload)
-						if jErr != nil {
-							return fmt.Errorf("failed to marshal results: %w", jErr)
-						}
-						if err := store.UpdateOperationResultData(opID, string(resultJSON)); err != nil {
-							return fmt.Errorf("failed to store results: %w", err)
-						}
-						_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Batch complete: %d suggestions", len(discoveries)))
-						return nil
-
-					case "failed", "expired", "cancelled":
-						return fmt.Errorf("batch %s: %s", batchID, status)
-					}
-				}
-				return fmt.Errorf("batch timed out after 24h")
-			}); err != nil {
-				return nil, err
+			params := maintenanceOpParams{LegacyOpID: op.ID}
+			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.ai-dedup-batch", params); enqErr != nil {
+				return nil, fmt.Errorf("failed to enqueue ai-dedup-batch: %w", enqErr)
 			}
 			return op, nil
 		},
@@ -968,18 +850,19 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Prune operation logs and system activity logs older than retention period",
 		Category:    "maintenance",
 		TriggerFn: func(source string) (*database.Operation, error) {
+			store := ts.server.Store()
+			if store == nil {
+				return nil, fmt.Errorf("database not initialized")
+			}
 			opID := ulid.Make().String()
-			op, err := ts.server.Store().CreateOperation(opID, "purge_old_logs", nil)
+			op, err := store.CreateOperation(opID, "purge_old_logs", nil)
 			if err != nil {
 				return nil, err
 			}
-			_ = ts.server.queue.Enqueue(opID, "purge_old_logs", operations.PriorityLow,
-				func(ctx context.Context, progress operations.ProgressReporter) error {
-					retLog := logger.New("purge_old_logs")
-					_, err := logger.PruneOldLogs(ts.server.Store(), config.AppConfig.LogRetentionDays, retLog)
-					return err
-				},
-			)
+			params := maintenanceOpParams{LegacyOpID: op.ID}
+			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.purge-old-logs", params); enqErr != nil {
+				return nil, fmt.Errorf("failed to enqueue purge-old-logs: %w", enqErr)
+			}
 			return op, nil
 		},
 		IsEnabled:              func() bool { return config.AppConfig.LogRetentionDays > 0 },
@@ -994,55 +877,19 @@ func (ts *TaskScheduler) registerAllTasks() {
 		Description: "Summarize old change entries and prune old debug entries from activity log",
 		Category:    "maintenance",
 		TriggerFn: func(source string) (*database.Operation, error) {
+			store := ts.server.Store()
+			if store == nil {
+				return nil, fmt.Errorf("database not initialized")
+			}
 			opID := ulid.Make().String()
-			op, err := ts.server.Store().CreateOperation(opID, "cleanup_activity_log", nil)
+			op, err := store.CreateOperation(opID, "cleanup_activity_log", nil)
 			if err != nil {
 				return nil, err
 			}
-			_ = ts.server.queue.Enqueue(opID, "cleanup_activity_log", operations.PriorityLow,
-				func(ctx context.Context, progress operations.ProgressReporter) error {
-					if ts.server.activityService == nil {
-						return nil
-					}
-
-					// Step 1: Compact old entries into daily digests
-					compactionDays := config.AppConfig.ActivityLogCompactionDays
-					if compactionDays <= 0 {
-						compactionDays = 14
-					}
-					compactionCutoff := time.Now().AddDate(0, 0, -compactionDays)
-					compacted, err := ts.server.activityService.CompactByDay(ctx, compactionCutoff)
-					if err != nil {
-						return fmt.Errorf("compact activity: %w", err)
-					}
-
-					// Step 2: Summarize remaining old change entries
-					changeDays := config.AppConfig.ActivityLogRetentionChangeDays
-					if changeDays <= 0 {
-						changeDays = 90
-					}
-					changeCutoff := time.Now().AddDate(0, 0, -changeDays)
-					summarized, err := ts.server.activityService.Summarize(ctx, changeCutoff, "change")
-					if err != nil {
-						return fmt.Errorf("summarize activity: %w", err)
-					}
-
-					// Step 3: Prune old debug entries
-					debugDays := config.AppConfig.ActivityLogRetentionDebugDays
-					if debugDays <= 0 {
-						debugDays = 30
-					}
-					debugCutoff := time.Now().AddDate(0, 0, -debugDays)
-					pruned, err := ts.server.activityService.Prune(debugCutoff, "debug")
-					if err != nil {
-						return fmt.Errorf("prune activity: %w", err)
-					}
-
-					log.Printf("Activity log cleanup: compacted %d days (%d entries), summarized %d, pruned %d",
-						compacted.DaysCompacted, compacted.EntriesDeleted, summarized, pruned)
-					return nil
-				},
-			)
+			params := maintenanceOpParams{LegacyOpID: op.ID}
+			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.cleanup-activity-log", params); enqErr != nil {
+				return nil, fmt.Errorf("failed to enqueue cleanup-activity-log: %w", enqErr)
+			}
 			return op, nil
 		},
 		IsEnabled:              func() bool { return ts.server.activityService != nil },
