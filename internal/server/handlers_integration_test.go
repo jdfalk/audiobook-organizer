@@ -1,5 +1,5 @@
 // file: internal/server/handlers_integration_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 
 package server
@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/work"
 )
 
 // setupHandlerTestServer creates a test server with mock database
@@ -65,7 +66,7 @@ func TestListWorks_Success(t *testing.T) {
 	}
 
 	var envelope struct {
-		Data WorkListResponse `json:"data"`
+		Data work.WorkListResponse `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)

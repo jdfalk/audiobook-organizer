@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.16.0
+// version: 2.17.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-11
 
@@ -54,6 +54,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 	"github.com/jdfalk/audiobook-organizer/internal/updater"
+	"github.com/jdfalk/audiobook-organizer/internal/work"
 	"github.com/quic-go/quic-go/http3"
 )
 
@@ -145,7 +146,7 @@ type Server struct {
 	audiobookService       *audiobookspkg.AudiobookService
 	audiobookUpdateService *AudiobookUpdateService
 	batchService           *BatchService
-	workService            *WorkService
+	workService            *work.WorkService
 	authorSeriesService    *audiobookspkg.AuthorSeriesService
 	filesystemService      *fileops.FilesystemService
 	importPathService      *importer.ImportPathService
@@ -295,7 +296,7 @@ func NewServer(store database.Store) *Server {
 		audiobookService:       audiobookspkg.NewAudiobookService(resolvedStore),
 		audiobookUpdateService: NewAudiobookUpdateService(resolvedStore),
 		batchService:           NewBatchService(resolvedStore),
-		workService:            NewWorkService(resolvedStore),
+		workService:            work.NewWorkService(resolvedStore),
 		authorSeriesService:    audiobookspkg.NewAuthorSeriesService(resolvedStore),
 		filesystemService:      fileops.NewFilesystemService(resolvedStore),
 		importPathService:      importer.NewImportPathService(resolvedStore),
