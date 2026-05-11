@@ -21,6 +21,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/aiscan"
 	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
+	"github.com/jdfalk/audiobook-organizer/internal/batch"
 	"github.com/jdfalk/audiobook-organizer/internal/cache"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -145,7 +146,7 @@ type Server struct {
 	router                 *gin.Engine
 	audiobookService       *audiobookspkg.AudiobookService
 	audiobookUpdateService *AudiobookUpdateService
-	batchService           *BatchService
+	batchService           *batch.BatchService
 	workService            *work.WorkService
 	authorSeriesService    *audiobookspkg.AuthorSeriesService
 	filesystemService      *fileops.FilesystemService
@@ -295,7 +296,7 @@ func NewServer(store database.Store) *Server {
 		router:                 router,
 		audiobookService:       audiobookspkg.NewAudiobookService(resolvedStore),
 		audiobookUpdateService: NewAudiobookUpdateService(resolvedStore),
-		batchService:           NewBatchService(resolvedStore),
+		batchService:           batch.NewBatchService(resolvedStore),
 		workService:            work.NewWorkService(resolvedStore),
 		authorSeriesService:    audiobookspkg.NewAuthorSeriesService(resolvedStore),
 		filesystemService:      fileops.NewFilesystemService(resolvedStore),

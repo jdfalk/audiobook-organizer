@@ -24,6 +24,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
+	"github.com/jdfalk/audiobook-organizer/internal/batch"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
@@ -1363,7 +1364,7 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 }
 
 func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
-	var req BatchUpdateRequest
+	var req batch.BatchUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
@@ -1384,7 +1385,7 @@ func (s *Server) batchUpdateAudiobooks(c *gin.Context) {
 }
 
 func (s *Server) batchOperations(c *gin.Context) {
-	var req BatchOperationsRequest
+	var req batch.BatchOperationsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
