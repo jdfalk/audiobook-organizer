@@ -31,6 +31,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/metabatch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -1131,7 +1132,7 @@ func (s *Server) resolveFilterToBookIDs(ctx context.Context, f operations.Filter
 		ids = append(ids, b.ID)
 	}
 	if f.OnlyUnmatched {
-		matched := latestMatchedBookIDs(s.Store())
+		matched := metabatch.LatestMatchedBookIDs(s.Store())
 		filtered := ids[:0]
 		for _, id := range ids {
 			if !matched[id] {

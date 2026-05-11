@@ -1,6 +1,10 @@
 // file: internal/server/metadata_candidate_op.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 3f7e2c91-b4a0-4d8e-9c5f-1a6b7d8e0f23
+// last-edited: 2026-05-11
+//
+// Registers the metadata.candidate-fetch v2 OperationDef. Pure params
+// type moved to internal/metabatch.FetchOpParams.
 
 package server
 
@@ -15,21 +19,14 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metabatch"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"golang.org/x/time/rate"
 )
 
-// metadataCandidateFetchOpParams is the JSON params for the
-// metadata.candidate-fetch v2 OperationDef. LegacyOpID is the v1 operation
-// record ID written by the HTTP handler — OperationResult rows are keyed on
-// this so that handleGetPendingReview, handleGetOperationResults, and the
-// dedup scan in handleBatchFetchCandidates all continue working unchanged.
-type metadataCandidateFetchOpParams struct {
-	LegacyOpID  string   `json:"legacy_op_id"`
-	BookIDs     []string `json:"book_ids"`
-	TotalBooks  int      `json:"total_books"`
-	AlreadyDone int      `json:"already_done"` // used by resume path
-}
+// metadataCandidateFetchOpParams is a server-local alias for the shared params
+// type so callers in this package do not need to qualify the package name.
+type metadataCandidateFetchOpParams = metabatch.FetchOpParams
 
 // RegisterMetadataCandidateFetchOp registers the "metadata.candidate-fetch"
 // v2 OperationDef. The HTTP handler creates a v1 op record for backward
