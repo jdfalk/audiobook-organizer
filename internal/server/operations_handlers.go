@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -23,6 +23,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 	"github.com/jdfalk/audiobook-organizer/internal/sweep"
 )
 
@@ -641,7 +642,7 @@ func (s *Server) runMaintenanceWindowNow(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "scheduler not initialized")
 		return
 	}
-	ctx := context.WithValue(c.Request.Context(), ignoreWindowKey, true)
+	ctx := context.WithValue(c.Request.Context(), scheduler.IgnoreWindowKey, true)
 	if err := s.scheduler.RunMaintenanceWindow(ctx); err != nil {
 		httputil.InternalError(c, "failed to run maintenance", err)
 		return

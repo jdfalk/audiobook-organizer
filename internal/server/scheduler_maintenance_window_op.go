@@ -1,6 +1,7 @@
 // file: internal/server/scheduler_maintenance_window_op.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 2a4b6c8d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
+// last-edited: 2026-05-11
 
 package server
 
@@ -16,12 +17,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 )
-
-type maintenanceWindowOpParams struct {
-	LegacyOpID   string `json:"legacy_op_id"`
-	IgnoreWindow bool   `json:"ignore_window"`
-}
 
 // RegisterMaintenanceWindowOp registers the "maintenance.window" OperationDef which
 // runs all maintenance-window-eligible tasks in order, respecting the configured
@@ -41,7 +38,7 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 		Permissions:     []auth.Permission{auth.PermSettingsManage},
 		Capabilities:    []opsregistry.Capability{opsregistry.CapLibraryRead, opsregistry.CapLibraryWrite},
 		Run: func(ctx context.Context, rawParams json.RawMessage, reporter opsregistry.Reporter) error {
-			var p maintenanceWindowOpParams
+			var p scheduler.MaintenanceWindowOpParams
 			if err := json.Unmarshal(rawParams, &p); err != nil {
 				return fmt.Errorf("maintenance.window: decode params: %w", err)
 			}
@@ -94,8 +91,9 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 
 			// Step 2+: Maintenance tasks in order
 			var eligible []string
-			for _, name := range ts.maintenanceOrder {
-				task, ok := ts.tasks[name]
+			tasks := ts.Tasks()
+			for _, name := range ts.MaintenanceOrder() {
+				task, ok := tasks[name]
 				if !ok {
 					continue
 				}
@@ -126,7 +124,7 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 
 			for i, name := range eligible {
 				// Check if window is still open (skip for manual "Run Now" triggers)
-				if !ignoreWindow && !isInMaintenanceWindow() {
+				if !ignoreWindow && !scheduler.IsInMaintenanceWindow() {
 					remaining := eligible[i:]
 					_ = progress.Log("warning", fmt.Sprintf("Maintenance window closed after task %d/%d, skipping: %s", i, len(eligible), strings.Join(remaining, ", ")), nil)
 					skipped = append(skipped, remaining...)
@@ -134,7 +132,7 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 				}
 
 				// Duplicate prevention: skip if already running from interval ticker
-				if ts.isTaskRunning(name) {
+				if ts.IsTaskRunning(name) {
 					_ = progress.Log("info", fmt.Sprintf("Task %s already running (interval), skipping", name), nil)
 					skipped = append(skipped, name)
 					continue
@@ -144,7 +142,7 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 				_ = progress.Log("info", fmt.Sprintf("Starting maintenance task: %s", name), nil)
 				ran++
 
-				taskOp, taskErr := ts.runTask(name, taskSource)
+				taskOp, taskErr := ts.RunTaskWithSource(name, taskSource)
 				if taskErr != nil {
 					errMsg := taskErr.Error()
 					failures = append(failures, taskFailure{name, errMsg})
@@ -154,7 +152,7 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 						activity.Scheduled, mwTag)
 				} else if taskOp != nil {
 					// Wait for the task operation to complete before starting next
-					ts.waitForOperation(ctx, taskOp.ID)
+					ts.WaitForOperation(ctx, taskOp.ID)
 					completedOp, _ := store.GetOperationByID(taskOp.ID)
 					if completedOp != nil && completedOp.Status == "failed" {
 						errMsg := ""

@@ -1,9 +1,12 @@
-// file: internal/server/scheduler_core.go
+// file: internal/scheduler/scheduler.go
 // version: 1.0.0
-// guid: abbadd7b-b5ab-44ea-8f01-b519e3c1c947
-// last-edited: 2026-05-02
+// guid: 3f7a9c21-b4d8-4e05-a6f2-8c1d0e3b7a94
+// last-edited: 2026-05-11
 
-package server
+// Package scheduler implements the unified task scheduling system.
+// TaskScheduler manages all registered tasks, their schedules, and manual
+// triggers. It is decoupled from *server.Server via SchedulerDeps.
+package scheduler
 
 import (
 	"context"
@@ -15,7 +18,40 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 )
+
+// SchedulerDeps contains the external dependencies the TaskScheduler needs.
+// Pass this to NewTaskScheduler instead of a *Server pointer so the scheduler
+// package does not import the server package.
+type SchedulerDeps struct {
+	// Store returns the live database.Store. May return nil before the DB
+	// is fully initialised; callers must nil-check.
+	Store func() database.Store
+
+	// OpRegistry is the UOS-02 operation registry used to enqueue background
+	// operations. Required; must not be nil when Start() is called.
+	OpRegistry *opsregistry.Registry
+
+	// HasDedupEngine returns true when a dedup engine is wired up. Used by the
+	// dedup_llm_review task's IsEnabled guard.
+	HasDedupEngine func() bool
+
+	// HasMetadataFetchSvc returns true when a metadata fetch service is wired.
+	// Used by isbn_enrichment and metadata_upgrade IsEnabled guards.
+	HasMetadataFetchSvc func() bool
+
+	// HasActivitySvc returns true when an activity service is wired. Used by
+	// the cleanup_activity_log task's IsEnabled guard.
+	HasActivitySvc func() bool
+
+	// PollBatches calls the batch poller's Poll method. May be nil when no
+	// batch poller is configured — the batch_poller task will no-op.
+	PollBatches func(ctx context.Context) (int, error)
+
+	// HasBatchPoller returns true when a batch poller is available.
+	HasBatchPoller func() bool
+}
 
 // TaskDefinition defines a registered task in the unified task system.
 type TaskDefinition struct {
@@ -46,7 +82,7 @@ type TaskInfo struct {
 
 // TaskScheduler manages all registered tasks, their schedules, and manual triggers.
 type TaskScheduler struct {
-	server             *Server
+	deps               SchedulerDeps
 	tasks              map[string]*TaskDefinition
 	order              []string // insertion order for listing
 	lastRun            map[string]time.Time
@@ -57,9 +93,9 @@ type TaskScheduler struct {
 }
 
 // NewTaskScheduler creates a scheduler and registers all known tasks.
-func NewTaskScheduler(s *Server) *TaskScheduler {
+func NewTaskScheduler(deps SchedulerDeps) *TaskScheduler {
 	ts := &TaskScheduler{
-		server:  s,
+		deps:    deps,
 		tasks:   make(map[string]*TaskDefinition),
 		lastRun: make(map[string]time.Time),
 	}
@@ -82,9 +118,16 @@ func NewTaskScheduler(s *Server) *TaskScheduler {
 	return ts
 }
 
-func (ts *TaskScheduler) registerTask(def TaskDefinition) {
+// RegisterTask registers a task definition. This is exported so that external
+// packages (e.g. plugins) can add tasks after construction.
+func (ts *TaskScheduler) RegisterTask(def TaskDefinition) {
 	ts.tasks[def.Name] = &def
 	ts.order = append(ts.order, def.Name)
+}
+
+// registerTask is the internal alias used during construction.
+func (ts *TaskScheduler) registerTask(def TaskDefinition) {
+	ts.RegisterTask(def)
 }
 
 // Start launches background goroutines for all scheduled and startup tasks.
@@ -146,7 +189,7 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 			for {
 				select {
 				case <-ticker.C:
-					if isInMaintenanceWindow() && !ts.hasRunToday() {
+					if IsInMaintenanceWindow() && !ts.hasRunToday() {
 						log.Printf("[INFO] Maintenance window open — starting maintenance run")
 						if err := ts.RunMaintenanceWindow(context.Background()); err != nil {
 							log.Printf("[WARN] Maintenance window failed: %v", err)
@@ -169,6 +212,13 @@ func (ts *TaskScheduler) RunTask(name string) (*database.Operation, error) {
 // Task functions can gate AlwaysShow activity-feed entries on operations.IsManual(ctx).
 func (ts *TaskScheduler) RunTaskManual(name string) (*database.Operation, error) {
 	return ts.runTask(name, operations.TriggerManual)
+}
+
+// RunTaskWithSource triggers a task with an explicit source string. Intended
+// for use by the maintenance window operation which needs fine-grained control
+// over the trigger source.
+func (ts *TaskScheduler) RunTaskWithSource(name, source string) (*database.Operation, error) {
+	return ts.runTask(name, source)
 }
 
 func (ts *TaskScheduler) runTask(name, source string) (*database.Operation, error) {
@@ -228,9 +278,19 @@ func (ts *TaskScheduler) GetTask(name string) (*TaskDefinition, bool) {
 	return task, ok
 }
 
-// waitForOperation polls until an operation completes or the context is canceled.
-func (ts *TaskScheduler) waitForOperation(ctx context.Context, opID string) {
-	store := ts.server.Store()
+// Tasks returns the task map (read-only). Used by the maintenance window op.
+func (ts *TaskScheduler) Tasks() map[string]*TaskDefinition {
+	return ts.tasks
+}
+
+// MaintenanceOrder returns the ordered list of maintenance task names.
+func (ts *TaskScheduler) MaintenanceOrder() []string {
+	return ts.maintenanceOrder
+}
+
+// WaitForOperation polls until an operation completes or the context is canceled.
+func (ts *TaskScheduler) WaitForOperation(ctx context.Context, opID string) {
+	store := ts.deps.Store()
 	if store == nil {
 		return
 	}
@@ -251,4 +311,3 @@ func (ts *TaskScheduler) waitForOperation(ctx context.Context, opID string) {
 		}
 	}
 }
-

@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.12.0
+// version: 1.13.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-11
 
@@ -29,6 +29,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
+	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
@@ -439,7 +440,28 @@ func (s *Server) Start(cfg ServerConfig) error {
 	var backgroundWG sync.WaitGroup
 
 	// Start unified task scheduler (replaces individual iTunes sync and purge tickers)
-	s.scheduler = NewTaskScheduler(s)
+	s.scheduler = scheduler.NewTaskScheduler(scheduler.SchedulerDeps{
+		Store:      s.Store,
+		OpRegistry: s.opRegistry,
+		HasDedupEngine: func() bool {
+			return s.dedupEngine != nil
+		},
+		HasMetadataFetchSvc: func() bool {
+			return s.metadataFetchService != nil && s.metadataFetchService.ISBNEnrichment() != nil
+		},
+		HasActivitySvc: func() bool {
+			return s.activityService != nil
+		},
+		HasBatchPoller: func() bool {
+			return s.batchPoller != nil
+		},
+		PollBatches: func(ctx context.Context) (int, error) {
+			if s.batchPoller == nil {
+				return 0, nil
+			}
+			return s.batchPoller.Poll(ctx)
+		},
+	})
 	s.scheduler.Start(shutdown, &backgroundWG)
 
 	ticker := time.NewTicker(5 * time.Second)

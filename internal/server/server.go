@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.17.0
+// version: 2.18.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-11
 
@@ -39,6 +39,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 	acoustidplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
 	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
 	delugeplug "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
@@ -167,7 +168,7 @@ type Server struct {
 	itunesSvc              *itunesservice.Service
 	updater                *updater.Updater
 	updateScheduler        *updater.Scheduler
-	scheduler              *TaskScheduler
+	scheduler              *scheduler.TaskScheduler
 	aiScanStore            *database.AIScanStore
 	pipelineManager        *aiscan.PipelineManager
 	batchPoller            *BatchPoller
