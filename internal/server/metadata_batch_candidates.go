@@ -1,7 +1,10 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 2.2.0
+// version: 3.0.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-05-11
+//
+// HTTP handlers for the metadata candidate batch fetch / apply pipeline.
+// Pure service types and logic live in internal/metabatch.
 
 package server
 
@@ -19,90 +22,23 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/metabatch"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 )
 
-// CandidateBookInfo contains summary info about a book used in candidate results.
-type CandidateBookInfo struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	Author     string `json:"author"`
-	FilePath   string `json:"file_path"`
-	ITunesPath string `json:"itunes_path,omitempty"`
-	CoverURL   string `json:"cover_url,omitempty"`
-	Format     string `json:"format,omitempty"`
-	Duration   int    `json:"duration_seconds,omitempty"`
-	FileSize   int64  `json:"file_size_bytes,omitempty"`
-	// Language is the book's current language as stored on the
-	// Book row (ISO code or full name, whatever was last applied).
-	// Used by the review dialog's language filter to hide
-	// candidates whose language disagrees with the book's — the
-	// motivating Spanish/English "Ancillary Sword" screenshot fix.
-	// Empty when the book has no language set, in which case the
-	// filter is a no-op for that row.
-	Language string `json:"language,omitempty"`
-}
-
-// CandidateResult holds the metadata candidate search result for a single book.
-type CandidateResult struct {
-	Book      CandidateBookInfo            `json:"book"`
-	Candidate *metafetch.MetadataCandidate `json:"candidate,omitempty"`
-	Status    string                       `json:"status"` // "matched", "no_match", "error"
-	Error     string                       `json:"error_message,omitempty"`
-}
+// Re-export metabatch types under server-local aliases so existing
+// JSON serialisation and test references continue to compile unchanged.
+type CandidateBookInfo = metabatch.CandidateBookInfo
+type CandidateResult = metabatch.CandidateResult
 
 // batchFetchRequest is the JSON body for handleBatchFetchCandidates.
 // Either BookIDs or Selection must be provided; OnlyUnmatched can be combined
 // with either to exclude books that already have a "matched" candidate.
-type batchFetchRequest struct {
-	BookIDs       []string                    `json:"book_ids"`
-	Selection     *operations.SelectionSpec   `json:"selection"`
-	OnlyUnmatched bool                        `json:"only_unmatched"`
-}
-
-// latestMatchedBookIDs returns the set of book IDs whose most-recent
-// metadata_candidate_fetch result has status "matched".  Used to exclude
-// already-matched books when OnlyUnmatched is requested.
-func latestMatchedBookIDs(store database.Store) map[string]bool {
-	allOps, err := store.GetRecentOperations(5000)
-	if err != nil {
-		return nil
-	}
-	type entry struct {
-		status    string
-		createdAt time.Time
-	}
-	latest := map[string]entry{}
-	for _, op := range allOps {
-		if op.Type != "metadata_candidate_fetch" {
-			continue
-		}
-		results, err := store.GetOperationResults(op.ID)
-		if err != nil {
-			continue
-		}
-		for _, r := range results {
-			ex, ok := latest[r.BookID]
-			if !ok || r.CreatedAt.After(ex.createdAt) {
-				latest[r.BookID] = entry{status: r.Status, createdAt: r.CreatedAt}
-			}
-		}
-	}
-	matched := make(map[string]bool, len(latest))
-	for bookID, e := range latest {
-		if e.status == "matched" {
-			matched[bookID] = true
-		}
-	}
-	return matched
-}
+type batchFetchRequest = metabatch.BatchFetchRequest
 
 // batchApplyRequest is the JSON body for handleBatchApplyCandidates.
-type batchApplyRequest struct {
-	OperationID string   `json:"operation_id" binding:"required"`
-	BookIDs     []string `json:"book_ids" binding:"required"`
-}
+type batchApplyRequest = metabatch.BatchApplyRequest
 
 // handleBatchFetchCandidates creates a background operation that spawns parallel
 // workers to fetch metadata candidates for the given book IDs.
@@ -134,7 +70,7 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 
 	// Optionally exclude books already having a "matched" candidate.
 	if req.OnlyUnmatched {
-		matched := latestMatchedBookIDs(store)
+		matched := metabatch.LatestMatchedBookIDs(store)
 		filtered := candidateIDs[:0]
 		for _, id := range candidateIDs {
 			if !matched[id] {
@@ -258,7 +194,7 @@ func (s *Server) fetchCandidateForBook(
 		}
 	}
 
-	bookInfo := buildCandidateBookInfo(store, book)
+	bookInfo := metabatch.BuildCandidateBookInfo(store, book)
 
 	// Wait for rate limiter before making external requests.
 	if err := limiter.Wait(ctx); err != nil {
@@ -292,7 +228,7 @@ func (s *Server) fetchCandidateForBook(
 
 	// Load previously rejected candidates for this book (across all operations)
 	// and filter them out so we pick the next best match.
-	rejectedKeys := loadRejectedCandidateKeys(store, bookID)
+	rejectedKeys := metabatch.LoadRejectedCandidateKeys(store, bookID)
 	var filtered []metafetch.MetadataCandidate
 	for _, c := range resp.Results {
 		key := c.Source + "|" + c.Title
@@ -315,36 +251,6 @@ func (s *Server) fetchCandidateForBook(
 		Candidate: &topCandidate,
 		Status:    "matched",
 	}
-}
-
-// buildCandidateBookInfo builds a CandidateBookInfo from a database.Book.
-// store is used to look up BookFile.ITunesPath (the authoritative field).
-func buildCandidateBookInfo(store database.BookFileStore, book *database.Book) CandidateBookInfo {
-	info := CandidateBookInfo{
-		ID:       book.ID,
-		Title:    book.Title,
-		FilePath: book.FilePath,
-		Format:   book.Format,
-	}
-	if book.Author != nil {
-		info.Author = book.Author.Name
-	}
-	if bfs, bfErr := store.GetBookFiles(book.ID); bfErr == nil && len(bfs) > 0 {
-		info.ITunesPath = bfs[0].ITunesPath
-	}
-	if book.CoverURL != nil {
-		info.CoverURL = *book.CoverURL
-	}
-	if book.Duration != nil {
-		info.Duration = *book.Duration
-	}
-	if book.FileSize != nil {
-		info.FileSize = *book.FileSize
-	}
-	if book.Language != nil {
-		info.Language = *book.Language
-	}
-	return info
 }
 
 // handleGetOperationResults returns a paginated page of candidate results for an operation.
@@ -428,9 +334,9 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 		Results:      candidateResults,
 		Total:        totalCount,
 		TotalCount:   totalCount,
-		Matched:      countByStatus(candidateResults, "matched"),
-		NoMatch:      countByStatus(candidateResults, "no_match"),
-		Errors:       countByStatus(candidateResults, "error"),
+		Matched:      metabatch.CountByStatus(candidateResults, "matched"),
+		NoMatch:      metabatch.CountByStatus(candidateResults, "no_match"),
+		Errors:       metabatch.CountByStatus(candidateResults, "error"),
 		TotalMatched: totalMatched,
 		TotalNoMatch: totalNoMatch,
 		TotalErrors:  totalErrors,
@@ -537,17 +443,6 @@ func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
 	}{Operations: out, Count: len(out)})
 }
 
-// countByStatus counts CandidateResults with the given status.
-func countByStatus(results []CandidateResult, status string) int {
-	n := 0
-	for _, r := range results {
-		if r.Status == status {
-			n++
-		}
-	}
-	return n
-}
-
 // handleBatchApplyCandidates applies stored metadata candidates for the selected books.
 func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 	var req batchApplyRequest
@@ -646,28 +541,6 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 		ErrorCount:  len(errors),
 		OperationID: req.OperationID,
 	})
-}
-
-// loadRejectedCandidateKeys finds previously rejected candidates for a book.
-// Uses a dedicated rejection key prefix for fast lookup instead of scanning
-// all operation results.
-func loadRejectedCandidateKeys(store database.RawKVStore, bookID string) map[string]bool {
-	keys := make(map[string]bool)
-	// Scan only rejection keys for this specific book
-	pairs, err := store.ScanPrefix(fmt.Sprintf("rejected_candidate:%s:", bookID))
-	if err != nil {
-		return keys
-	}
-	for _, kv := range pairs {
-		// Key format: rejected_candidate:{bookID}:{source}|{title}
-		// Value is just "1" — we only need the key
-		keyStr := string(kv.Key)
-		prefix := fmt.Sprintf("rejected_candidate:%s:", bookID)
-		if len(keyStr) > len(prefix) {
-			keys[keyStr[len(prefix):]] = true
-		}
-	}
-	return keys
 }
 
 // handleRejectCandidates stores rejected candidates so future fetches exclude them.
