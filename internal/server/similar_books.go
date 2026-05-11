@@ -1,5 +1,5 @@
 // file: internal/server/similar_books.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 3a1b2c0d-4e5f-4a70-b8c5-3d7e0f1b9a99
 // last-edited: 2026-05-01
 //
@@ -39,13 +39,13 @@ func (s *Server) handleSimilarBooks(c *gin.Context) {
 	if book.AuthorID != nil {
 		author, _ := s.Store().GetAuthorByID(*book.AuthorID)
 		if author != nil && author.Name != "" {
-			queryParts = append(queryParts, "author:"+quoteIfNeeded(author.Name))
+			queryParts = append(queryParts, "author:"+search.QuoteIfNeeded(author.Name))
 		}
 	}
 	if book.SeriesID != nil {
 		series, _ := s.Store().GetSeriesByID(*book.SeriesID)
 		if series != nil && series.Name != "" {
-			queryParts = append(queryParts, "series:"+quoteIfNeeded(series.Name))
+			queryParts = append(queryParts, "series:"+search.QuoteIfNeeded(series.Name))
 		}
 	}
 
@@ -105,11 +105,4 @@ func (s *Server) handleSimilarBooks(c *gin.Context) {
 		Books []database.Book `json:"books"`
 		Count int             `json:"count"`
 	}{Books: similar, Count: len(similar)})
-}
-
-func quoteIfNeeded(s string) string {
-	if strings.Contains(s, " ") {
-		return `"` + s + `"`
-	}
-	return s
 }
