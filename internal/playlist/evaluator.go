@@ -1,4 +1,4 @@
-// file: internal/server/playlist_evaluator.go
+// file: internal/playlist/evaluator.go
 // version: 1.1.1
 // guid: 9c2d5f1e-6b4a-4a70-b8c5-3d7e0f1b9a68
 //
@@ -21,7 +21,7 @@
 // evaluator returns an error — iTunes sync and the HTTP GET path
 // both retry after the index opens.
 
-package server
+package playlist
 
 import (
 	"encoding/json"
@@ -349,6 +349,13 @@ func compareBookField(a, b *database.Book, field string) int {
 func derefTime(p *time.Time) time.Time {
 	if p == nil {
 		return time.Time{}
+	}
+	return *p
+}
+
+func derefInt(p *int) int {
+	if p == nil {
+		return 0
 	}
 	return *p
 }

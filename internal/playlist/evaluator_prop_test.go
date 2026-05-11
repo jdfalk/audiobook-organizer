@@ -1,4 +1,4 @@
-// file: internal/server/playlist_evaluator_prop_test.go
+// file: internal/playlist/evaluator_prop_test.go
 // version: 1.3.0
 // guid: bcc094f5-1645-44d3-be21-3087888fdaea
 
@@ -16,7 +16,7 @@
 // THIS iteration's books only, which breaks when alice state from prior
 // iterations lingers. That test uses per-iteration fixtures with rt.Cleanup.
 
-package server
+package playlist
 
 import (
 	"path/filepath"
