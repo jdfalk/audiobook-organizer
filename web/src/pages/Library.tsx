@@ -1611,7 +1611,7 @@ export const Library = () => {
   const handleFetchReview = async () => {
     try {
       const ids = effectiveSelectedIds;
-      const resp = await api.batchFetchCandidates(ids);
+      const resp = await api.batchFetchCandidates({ book_ids: ids });
       const opId = resp.operation_id;
       if (!opId) {
         toast('All selected books are already being fetched.', 'info');
@@ -1624,6 +1624,25 @@ export const Library = () => {
         'info',
       );
     } catch { toast('Failed to start metadata fetch', 'error'); }
+  };
+
+  const handleFetchAllUnmatched = async () => {
+    try {
+      const resp = await api.batchFetchCandidates({
+        selection: { filter: { only_unmatched: true } },
+      });
+      if (!resp.operation_id) {
+        toast(resp.message ?? 'All books already have matched candidates.', 'info');
+        return;
+      }
+      startOperationPolling(resp.operation_id, 'metadata_candidate_fetch');
+      toast(
+        `Fetching metadata for ${resp.book_count ?? 'unmatched'} books — check the operations list for progress.`,
+        'info',
+      );
+    } catch {
+      toast('Failed to start unmatched fetch', 'error');
+    }
   };
 
   const handleResumeReview = async () => {
@@ -1672,6 +1691,7 @@ export const Library = () => {
         getActiveFilterCount={getActiveFilterCount}
         onBatchEdit={() => setBatchEditOpen(true)}
         onFetchReview={handleFetchReview}
+        onFetchAllUnmatched={handleFetchAllUnmatched}
         onResumeReview={handleResumeReview}
         onSearchMetadata={() => setBulkSearchOpen(true)}
         onSaveToFiles={() => { setBulkWriteBackResult(null); setBulkWriteBackRename(false); setBulkWriteBackDialogOpen(true); }}

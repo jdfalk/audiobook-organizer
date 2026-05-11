@@ -1,5 +1,5 @@
 // file: internal/operations/types.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1e2d3c4-b5a6-7890-abcd-ef1234567890
 // last-edited: 2026-05-11
 //
@@ -22,12 +22,16 @@ type SelectionSpec struct {
 // When Filter is set on a SelectionSpec, the server resolves it to book IDs
 // at operation execution time with IsPrimaryVersion=true always applied.
 type FilterSpec struct {
-	Search       string        `json:"search,omitempty"`
-	LibraryState string        `json:"library_state,omitempty"`
-	Tag          string        `json:"tag,omitempty"`
-	FieldFilters []FieldFilter `json:"field_filters,omitempty"`
-	AuthorID     *int64        `json:"author_id,omitempty"`
-	SeriesID     *int64        `json:"series_id,omitempty"`
+	Search         string        `json:"search,omitempty"`
+	LibraryState   string        `json:"library_state,omitempty"`
+	Tag            string        `json:"tag,omitempty"`
+	FieldFilters   []FieldFilter `json:"field_filters,omitempty"`
+	AuthorID       *int64        `json:"author_id,omitempty"`
+	SeriesID       *int64        `json:"series_id,omitempty"`
+	// OnlyUnmatched restricts the resolved set to books that do not have a
+	// "matched" candidate in the most-recent metadata_candidate_fetch result.
+	// Applied server-side after the primary filter; requires DB access.
+	OnlyUnmatched bool `json:"only_unmatched,omitempty"`
 }
 
 // FieldFilter mirrors the server-side FieldFilter used for advanced search.

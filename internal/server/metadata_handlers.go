@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.5.0
+// version: 3.6.0
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 // last-edited: 2026-05-11
 //
@@ -1106,6 +1106,61 @@ type bulkMetadataFetchV2Params struct {
 	SkipCached    bool                     `json:"skip_cached"`
 }
 
+// resolveFilterToBookIDs translates a FilterSpec into a concrete list of primary-
+// version book IDs.  IsPrimaryVersion=true and quarantine exclusion are always
+// applied.  If f.OnlyUnmatched is set, books that already have a "matched"
+// candidate in the most-recent metadata_candidate_fetch result are removed.
+// Per-user FieldFilters are silently dropped (no user context in background ops).
+func (s *Server) resolveFilterToBookIDs(ctx context.Context, f operations.FilterSpec) ([]string, error) {
+	trueVal := true
+	filters := ListFilters{
+		IsPrimaryVersion: &trueVal,
+		LibraryState:     f.LibraryState,
+		Tag:              f.Tag,
+	}
+	for _, ff := range f.FieldFilters {
+		if IsPerUserField(ff.Field) {
+			continue
+		}
+		filters.FieldFilters = append(filters.FieldFilters, FieldFilter{
+			Field:   ff.Field,
+			Value:   ff.Value,
+			Negated: ff.Negated,
+		})
+	}
+	var authorID, seriesID *int
+	if f.AuthorID != nil {
+		v := int(*f.AuthorID)
+		authorID = &v
+	}
+	if f.SeriesID != nil {
+		v := int(*f.SeriesID)
+		seriesID = &v
+	}
+	books, err := s.audiobookService.GetAudiobooks(ctx, 100000, 0, f.Search, authorID, seriesID, filters)
+	if err != nil {
+		return nil, fmt.Errorf("resolve filter: %w", err)
+	}
+	ids := make([]string, 0, len(books))
+	for _, b := range books {
+		if b.QuarantinedAt != nil {
+			continue
+		}
+		ids = append(ids, b.ID)
+	}
+	if f.OnlyUnmatched {
+		matched := latestMatchedBookIDs(s.Store())
+		filtered := ids[:0]
+		for _, id := range ids {
+			if !matched[id] {
+				filtered = append(filtered, id)
+			}
+		}
+		ids = filtered
+	}
+	return ids, nil
+}
+
 // RegisterBulkMetadataFetchOp registers the "library.bulk-metadata-fetch" v2
 // OperationDef so that POST /api/v1/operations/v2 with def_id "bulk_metadata_fetch"
 // shows in the bell, is resumable, and can be cancelled.
@@ -1147,53 +1202,9 @@ func (s *Server) RegisterBulkMetadataFetchOp(reg *opsregistry.Registry) error {
 
 			progress := registryProgressAdapter{r: reporter}
 
-			// resolveFilter translates a FilterSpec into a concrete book-ID list.
-			// IsPrimaryVersion is always forced true so the count matches the
-			// visible library list. Per-user fields are dropped here because
-			// bulk ops run server-side without a user context.
-			resolveFilter := func(f operations.FilterSpec) ([]string, error) {
-				trueVal := true
-				filters := ListFilters{
-					IsPrimaryVersion: &trueVal,
-					LibraryState:     f.LibraryState,
-					Tag:              f.Tag,
-				}
-				for _, ff := range f.FieldFilters {
-					if IsPerUserField(ff.Field) {
-						continue // no user context in background op
-					}
-					filters.FieldFilters = append(filters.FieldFilters, FieldFilter{
-						Field:   ff.Field,
-						Value:   ff.Value,
-						Negated: ff.Negated,
-					})
-				}
-				// Convert *int64 to *int for the service method signature.
-				var authorID, seriesID *int
-				if f.AuthorID != nil {
-					v := int(*f.AuthorID)
-					authorID = &v
-				}
-				if f.SeriesID != nil {
-					v := int(*f.SeriesID)
-					seriesID = &v
-				}
-				books, err := s.audiobookService.GetAudiobooks(ctx, 100000, 0, f.Search, authorID, seriesID, filters)
-				if err != nil {
-					return nil, fmt.Errorf("resolve filter: %w", err)
-				}
-				ids := make([]string, 0, len(books))
-				for _, b := range books {
-					// Exclude quarantined books (mirrors the /audiobooks/ids endpoint).
-					if b.QuarantinedAt != nil {
-						continue
-					}
-					ids = append(ids, b.ID)
-				}
-				return ids, nil
-			}
-
-			bookIDs, err := operations.ResolveBookIDs(p.Selection, resolveFilter)
+			bookIDs, err := operations.ResolveBookIDs(p.Selection, func(f operations.FilterSpec) ([]string, error) {
+				return s.resolveFilterToBookIDs(ctx, f)
+			})
 			if err != nil {
 				return fmt.Errorf("bulk_metadata_fetch: resolve selection: %w", err)
 			}

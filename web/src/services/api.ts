@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.24.0
+// version: 2.25.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-11
 
@@ -3039,11 +3039,25 @@ export interface BatchFetchResponse {
   total_errors?: number;
 }
 
-export async function batchFetchCandidates(bookIds: string[]): Promise<{ operation_id: string }> {
+export interface BatchFetchRequest {
+  book_ids?: string[];
+  selection?: {
+    book_ids?: string[];
+    filter?: {
+      search?: string;
+      library_state?: string;
+      tag?: string;
+      only_unmatched?: boolean;
+    };
+  };
+  only_unmatched?: boolean;
+}
+
+export async function batchFetchCandidates(req: BatchFetchRequest): Promise<{ operation_id: string; book_count?: number; message?: string }> {
   const response = await fetch(`${API_BASE}/metadata/batch-fetch-candidates`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ book_ids: bookIds }),
+    body: JSON.stringify(req),
   });
   if (!response.ok) throw await buildApiError(response, 'Failed to start batch fetch');
   return response.json();
