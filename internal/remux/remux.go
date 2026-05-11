@@ -1,8 +1,8 @@
-// file: internal/server/malformed_m4b_remux.go
-// version: 1.1.0
-// guid: d3e4f5a6-b7c8-9d0e-1f2a-3b4c5d6e7f8a
+// file: internal/remux/remux.go
+// version: 1.0.0
+// guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
-package server
+package remux
 
 import (
 	"fmt"
@@ -14,35 +14,51 @@ import (
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	taglib "go.senan.xyz/taglib"
 )
 
-const malformedRemuxKey = "malformed_m4b_remux_v2_done"
+const RemuxKey = "malformed_m4b_remux_v2_done"
 
-// remuxMalformedM4BFiles walks the library once and re-muxes any M4B/M4A
+// Store interface for setting persistence.
+type Store interface {
+	GetSetting(key string) (*database.Setting, error)
+	SetSetting(key, value, typ string, isSecret bool) error
+}
+
+// Remuxer provides malformed M4B remux operations.
+type Remuxer struct {
+	store Store
+}
+
+// New creates a new Remuxer instance.
+func New(store Store) *Remuxer {
+	return &Remuxer{store: store}
+}
+
+// RemuxMalformedFiles walks the library once and re-muxes any M4B/M4A
 // file that taglib cannot parse (malformed atom structure). Re-muxing with
 // ffmpeg -c copy rewrites the atom layout without re-encoding audio, making
 // the file readable by taglib, AtomicParsley, and Apple Devices. The output
 // is verified before replacing the original. Runs once at startup.
-func (s *Server) remuxMalformedM4BFiles() {
-	store := s.Store()
-	if store == nil {
+func (r *Remuxer) RemuxMalformedFiles() {
+	if r.store == nil {
 		return
 	}
 
-	if setting, err := store.GetSetting(malformedRemuxKey); err == nil && setting != nil && setting.Value == "true" {
+	if setting, err := r.store.GetSetting(RemuxKey); err == nil && setting != nil && setting.Value == "true" {
 		log.Printf("[INFO] Malformed M4B remux already completed, skipping")
 		return
 	}
 
 	root := config.AppConfig.RootDir
 	if root == "" {
-		log.Printf("[WARN] remuxMalformedM4BFiles: RootDir not configured, skipping")
+		log.Printf("[WARN] RemuxMalformedFiles: RootDir not configured, skipping")
 		return
 	}
 
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		log.Printf("[WARN] remuxMalformedM4BFiles: ffmpeg not found, skipping")
+		log.Printf("[WARN] RemuxMalformedFiles: ffmpeg not found, skipping")
 		return
 	}
 
@@ -69,7 +85,7 @@ func (s *Server) remuxMalformedM4BFiles() {
 		}
 
 		// taglib failed — attempt to remux with ffmpeg.
-		if err := remuxFile(path); err != nil {
+		if err := RemuxFile(path); err != nil {
 			log.Printf("[WARN] malformed M4B remux failed for %s: %v", path, err)
 			failed++
 			return nil
@@ -88,12 +104,12 @@ func (s *Server) remuxMalformedM4BFiles() {
 	})
 
 	log.Printf("[INFO] Malformed M4B remux: %d remuxed, %d already readable, %d failed", remuxed, clean, failed)
-	_ = store.SetSetting(malformedRemuxKey, "true", "bool", false)
+	_ = r.store.SetSetting(RemuxKey, "true", "bool", false)
 }
 
-// remuxFile re-muxes an M4B/M4A file in-place using ffmpeg -c copy.
+// RemuxFile re-muxes an M4B/M4A file in-place using ffmpeg -c copy.
 // Writes to a temp file first, then atomically renames over the original.
-func remuxFile(path string) error {
+func RemuxFile(path string) error {
 	tmp := path + ".remux.tmp"
 	defer os.Remove(tmp)
 
