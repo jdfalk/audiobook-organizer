@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/batch"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/work"
 )
@@ -250,7 +251,7 @@ func TestBrowseFilesystem_NoPath(t *testing.T) {
 func TestBatchUpdateAudiobooks_Empty(t *testing.T) {
 	server := setupHandlerTestServer(t)
 
-	req := &BatchUpdateRequest{
+	req := &batch.BatchUpdateRequest{
 		IDs:     []string{},
 		Updates: map[string]interface{}{},
 	}
