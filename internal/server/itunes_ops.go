@@ -1,0 +1,95 @@
+// file: internal/server/itunes_ops.go
+// version: 1.0.0
+// guid: 4b7e9f2a-1c3d-4e5f-8a9b-0c1d2e3f4a5b
+
+// itunes_ops registers v2 OperationDefs for iTunes import and sync.
+// Both ops use the hybrid migration pattern: a v1 op record is created
+// in the handler so clients can still poll /api/v1/operations/{id}/status,
+// and the v1 op ID is passed into the params struct for use by the Run func.
+
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/auth"
+	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
+	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+)
+
+type itunesImportOpParams struct {
+	LegacyOpID string                      `json:"legacy_op_id"`
+	Request    itunesservice.ImportRequest `json:"request"`
+}
+
+type itunesSyncOpParams struct {
+	LegacyOpID   string               `json:"legacy_op_id"`
+	LibraryPath  string               `json:"library_path"`
+	PathMappings []itunes.PathMapping `json:"path_mappings"`
+}
+
+// RegisterITunesImportOp registers the "itunes.import" v2 OperationDef.
+func (s *Server) RegisterITunesImportOp(reg *opsregistry.Registry) error {
+	return reg.RegisterOp(opsregistry.OperationDef{
+		ID:              "itunes.import",
+		Plugin:          "itunes",
+		DisplayName:     "iTunes Import",
+		Description:     "Import audiobooks from an iTunes XML library file into the database.",
+		DefaultPriority: opsregistry.PriorityNormal,
+		Cancellable:     true,
+		Isolate:         false,
+		Timeout:         4 * time.Hour,
+		ResumePolicy:    opsregistry.ResumeDrop,
+		ConcurrencyKey:  "itunes.import",
+		Permissions:     []auth.Permission{auth.PermIntegrationsManage},
+		Capabilities:    []opsregistry.Capability{opsregistry.CapLibraryRead, opsregistry.CapLibraryWrite, opsregistry.CapNetworkITunes},
+		Run: func(ctx context.Context, rawParams json.RawMessage, reporter opsregistry.Reporter) error {
+			var p itunesImportOpParams
+			if len(rawParams) > 0 {
+				if err := json.Unmarshal(rawParams, &p); err != nil {
+					return fmt.Errorf("itunes-import: decode params: %w", err)
+				}
+			}
+			progress := registryProgressAdapter{r: reporter}
+			return s.itunesSvc.Importer.Execute(ctx, p.LegacyOpID, p.Request, operations.LoggerFromReporter(progress))
+		},
+	})
+}
+
+// RegisterITunesSyncOp registers the "itunes.sync" v2 OperationDef.
+func (s *Server) RegisterITunesSyncOp(reg *opsregistry.Registry) error {
+	return reg.RegisterOp(opsregistry.OperationDef{
+		ID:              "itunes.sync",
+		Plugin:          "itunes",
+		DisplayName:     "iTunes Sync",
+		Description:     "Sync the iTunes library XML into the database (incremental, fingerprint-gated).",
+		DefaultPriority: opsregistry.PriorityNormal,
+		Cancellable:     true,
+		Isolate:         false,
+		Timeout:         2 * time.Hour,
+		ResumePolicy:    opsregistry.ResumeDrop,
+		ConcurrencyKey:  "itunes.sync",
+		Permissions:     []auth.Permission{auth.PermIntegrationsManage},
+		Capabilities:    []opsregistry.Capability{opsregistry.CapLibraryRead, opsregistry.CapLibraryWrite, opsregistry.CapNetworkITunes},
+		Run: func(ctx context.Context, rawParams json.RawMessage, reporter opsregistry.Reporter) error {
+			var p itunesSyncOpParams
+			if len(rawParams) > 0 {
+				if err := json.Unmarshal(rawParams, &p); err != nil {
+					return fmt.Errorf("itunes-sync: decode params: %w", err)
+				}
+			}
+			progress := registryProgressAdapter{r: reporter}
+			return s.itunesSvc.Importer.Sync(ctx, p.LibraryPath, p.PathMappings, s.itunesActivityFn, operations.LoggerFromReporter(progress))
+		},
+	})
+}
+
+func init() {
+	addOpRegistrar(func(s *Server, reg *opsregistry.Registry) error { return s.RegisterITunesImportOp(reg) })
+	addOpRegistrar(func(s *Server, reg *opsregistry.Registry) error { return s.RegisterITunesSyncOp(reg) })
+}

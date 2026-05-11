@@ -1,7 +1,7 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
-// last-edited: 2026-05-05
+// last-edited: 2026-05-10
 
 // iTunes HTTP handlers. All business logic lives in internal/itunes/service.
 // Handlers that call s.itunesSvc.Importer.* guard with itunesEnabledOrError
@@ -10,7 +10,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	stdlog "log"
@@ -25,7 +24,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -269,8 +267,8 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
 
@@ -306,12 +304,9 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		PathMappings:     svcMappings,
 	}
 
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.itunesSvc.Importer.Execute(ctx, op.ID, svcReq, operations.LoggerFromReporter(progress))
-	}
-
-	if err := s.queue.Enqueue(op.ID, "itunes_import", operations.PriorityNormal, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	params := itunesImportOpParams{LegacyOpID: op.ID, Request: svcReq}
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "itunes.import", params); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
 
@@ -783,8 +778,8 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
 
@@ -835,15 +830,9 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 		}
 	}
 
-	lp := libraryPath
-	pm := pathMappings
-	actFn := s.itunesActivityFn
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.itunesSvc.Importer.Sync(ctx, lp, pm, actFn, operations.LoggerFromReporter(progress))
-	}
-
-	if err := s.queue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	syncParams := itunesSyncOpParams{LegacyOpID: op.ID, LibraryPath: libraryPath, PathMappings: pathMappings}
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "itunes.sync", syncParams); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
 
