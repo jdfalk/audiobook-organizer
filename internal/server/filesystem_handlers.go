@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_handlers.go
-// version: 2.3.1
+// version: 2.4.0
 // guid: 565db679-19ba-4518-b63e-6892663be41b
 // last-edited: 2026-05-10
 //
@@ -12,7 +12,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -151,108 +150,26 @@ func (s *Server) addImportPath(c *gin.Context) {
 		}
 	}
 
-	// Auto-scan the newly added folder if enabled and operation queue is available
-	if folder.Enabled && s.queue != nil {
+	// Auto-scan the newly added folder if enabled and the v2 op registry is available.
+	if folder.Enabled && s.opRegistry != nil {
 		opID := ulid.Make().String()
 		folderPath := folder.Path
-		op, err := s.Store().CreateOperation(opID, "scan", &folderPath)
+		_, err := s.Store().CreateOperation(opID, "scan", &folderPath)
 		if err == nil {
-			// Create scan operation function
-			operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-				_ = progress.Log("info", fmt.Sprintf("Auto-scanning newly added folder: %s", folderPath), nil)
-
-				// Check if folder exists
-				if _, err := os.Stat(folderPath); os.IsNotExist(err) {
-					return fmt.Errorf("folder does not exist: %s", folderPath)
-				}
-
-				// Scan directory for audiobook files (parallel)
-				workers := config.AppConfig.ConcurrentScans
-				if workers < 1 {
-					workers = 4
-				}
-				scanLog := operations.LoggerFromReporter(progress)
-				books, err := scanner.ScanDirectoryParallel(folderPath, workers, scanLog)
-				if err != nil {
-					return fmt.Errorf("failed to scan folder: %w", err)
-				}
-
-				scanLog.Info("Found %d audiobook files", len(books))
-
-				// Process the books to extract metadata (parallel)
-				if len(books) > 0 {
-					scanLog.Info("Processing metadata for %d books using %d workers", len(books), workers)
-					if err := scanner.ProcessBooksParallel(ctx, books, workers, nil, scanLog); err != nil {
-						return fmt.Errorf("failed to process books: %w", err)
-					}
-					// Auto-organize if enabled
-					if config.AppConfig.AutoOrganize && config.AppConfig.RootDir != "" {
-						org := organizer.NewOrganizer(&config.AppConfig)
-						organized := 0
-						for _, b := range books {
-							// Lookup DB book by file path
-							dbBook, err := s.Store().GetBookByFilePath(b.FilePath)
-							if err != nil || dbBook == nil {
-								continue
-							}
-							newPath, _, err := org.OrganizeBook(dbBook)
-							if err != nil {
-								_ = progress.Log("warn", fmt.Sprintf("Organize failed for %s: %v", dbBook.Title, err), nil)
-								continue
-							}
-							if newPath != dbBook.FilePath {
-								dbBook.FilePath = newPath
-								scanner.ApplyOrganizedFileMetadata(dbBook, newPath)
-								if _, err := s.Store().UpdateBook(dbBook.ID, dbBook); err != nil {
-									_ = progress.Log("warn", fmt.Sprintf("Failed to update path for %s: %v", dbBook.Title, err), nil)
-								} else {
-									organized++
-								}
-							}
-						}
-						_ = progress.Log("info", fmt.Sprintf("Auto-organize complete: %d organized", organized), nil)
-					} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
-						_ = progress.Log("warn", "Auto-organize enabled but root_dir not set", nil)
-					}
-				}
-
-				// Trigger dedup check on newly scanned books
-				if s.dedupEngine != nil && len(books) > 0 {
-					go func() {
-						for _, b := range books {
-							dbBook, err := s.Store().GetBookByFilePath(b.FilePath)
-							if err != nil || dbBook == nil {
-								continue
-							}
-							if _, err := s.dedupEngine.CheckBook(ctx, dbBook.ID); err != nil {
-								log.Printf("[WARN] dedup check failed for scanned book %s: %v", dbBook.ID, err)
-							}
-						}
-					}()
-				}
-
-				// Update book count for this import path
-				folder.BookCount = len(books)
-				now := time.Now()
-				folder.LastScan = &now
-				if err := s.Store().UpdateImportPath(folder.ID, folder); err != nil {
-					_ = progress.Log("warn", fmt.Sprintf("Failed to update book count: %v", err), nil)
-				}
-
-				_ = progress.Log("info", fmt.Sprintf("Auto-scan completed. Total books: %d", len(books)), nil)
-				return nil
+			params := folderAutoScanOpParams{
+				LegacyOpID: opID,
+				FolderPath: folderPath,
+				FolderID:   folder.ID,
 			}
-
-			// Enqueue the scan operation with normal priority
-			_ = s.queue.Enqueue(op.ID, "scan", operations.PriorityNormal, operationFunc)
-
-			httputil.RespondWithCreated(c, gin.H{"importPath": folder, "scan_operation_id": op.ID})
-			return
+			if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "library.folder-auto-scan", params); enqErr == nil {
+				httputil.RespondWithCreated(c, gin.H{"importPath": folder, "scan_operation_id": opID})
+				return
+			}
 		}
 	}
 
-	// Fallback: if enabled but queue unavailable OR operation creation failed, run synchronous scan
-	if folder.Enabled && s.queue == nil {
+	// Fallback: if enabled but op registry unavailable OR operation creation failed, run synchronous scan.
+	if folder.Enabled && s.opRegistry == nil {
 		// Basic scan without progress reporter
 		if _, err := os.Stat(folder.Path); err == nil {
 			books, err := scanner.ScanDirectory(folder.Path, nil)
