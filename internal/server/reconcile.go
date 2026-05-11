@@ -1,6 +1,7 @@
 // file: internal/server/reconcile.go
-// version: 3.1.0
+// version: 3.2.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
+// HTTP adapters — all logic in internal/reconcile
 
 package server
 
@@ -15,7 +16,6 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// reconcilePreview handles GET /api/v1/operations/reconcile/preview (sync, kept for backward compat)
 func (s *Server) reconcilePreview(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
@@ -31,7 +31,6 @@ func (s *Server) reconcilePreview(c *gin.Context) {
 	httputil.RespondWithOK(c, result)
 }
 
-// startReconcileScan handles POST /api/v1/operations/reconcile/scan — async background scan
 func (s *Server) startReconcileScan(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
@@ -58,7 +57,6 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
 }
 
-// latestReconcileScan handles GET /api/v1/operations/reconcile/scan/latest
 func (s *Server) latestReconcileScan(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
@@ -99,7 +97,6 @@ func (s *Server) latestReconcileScan(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"operation": nil, "preview": nil})
 }
 
-// startReconcile handles POST /api/v1/operations/reconcile
 func (s *Server) startReconcile(c *gin.Context) {
 	store := s.Store()
 	if store == nil {
@@ -139,7 +136,6 @@ func (s *Server) startReconcile(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, op)
 }
 
-// cleanupDuplicateVersionGroupsHandler is the HTTP handler for POST /api/v1/operations/cleanup-version-groups
 func (s *Server) cleanupDuplicateVersionGroupsHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	result, err := reconcile.CleanupDuplicateVersionGroups(s.Store(), config.AppConfig.RootDir, dryRun)
@@ -153,7 +149,6 @@ func (s *Server) cleanupDuplicateVersionGroupsHandler(c *gin.Context) {
 	})
 }
 
-// markBrokenSegmentBooksHandler handles POST /api/v1/operations/mark-broken-segments
 func (s *Server) markBrokenSegmentBooksHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	result, err := reconcile.FindBrokenSegmentBooks(s.Store(), dryRun)
@@ -167,7 +162,6 @@ func (s *Server) markBrokenSegmentBooksHandler(c *gin.Context) {
 	})
 }
 
-// mergeNoVGDuplicatesHandler handles POST /api/v1/operations/merge-novg-duplicates
 func (s *Server) mergeNoVGDuplicatesHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	result, err := reconcile.MergeNoVGDuplicates(s.Store(), config.AppConfig.RootDir, dryRun)
@@ -181,7 +175,6 @@ func (s *Server) mergeNoVGDuplicatesHandler(c *gin.Context) {
 	})
 }
 
-// assignOrphanVGsHandler handles POST /api/v1/operations/assign-orphan-vgs
 func (s *Server) assignOrphanVGsHandler(c *gin.Context) {
 	result, err := reconcile.AssignOrphanVGs(s.Store(), config.AppConfig.RootDir)
 	if err != nil {
