@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-08
 
@@ -34,7 +34,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
 	"github.com/jdfalk/audiobook-organizer/internal/watcher"
-	ulid "github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
@@ -522,21 +521,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 							Data: map[string]any{"path": path},
 						})
 					}
-					if s.scanService != nil && s.queue != nil {
+					if s.scanService != nil && s.opRegistry != nil {
 						go func() {
 							scanPath := path
-							id := ulid.Make().String()
-							op, opErr := s.Store().CreateOperation(id, "scan", &scanPath)
-							if opErr != nil {
-								watchLog.Error("Auto-scan: failed to create operation: %v", opErr)
-								return
-							}
-							scanReq := &scanner.ScanRequest{FolderPath: &scanPath}
-							opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-								return s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
-							}
-							if enqueueErr := s.queue.Enqueue(op.ID, "scan", operations.PriorityLow, opFunc); enqueueErr != nil {
-								watchLog.Error("Auto-scan: failed to enqueue: %v", enqueueErr)
+							if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "library.scan", libraryScanParams{FolderPath: &scanPath}); enqErr != nil {
+								watchLog.Error("Auto-scan: failed to enqueue: %v", enqErr)
 							}
 						}()
 					}

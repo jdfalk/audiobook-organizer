@@ -1,0 +1,60 @@
+// file: internal/server/maintenance_job_op.go
+// version: 1.0.0
+// guid: 7f3a9c21-4b8e-4d56-a123-0e5f6c7d8e9f
+
+package server
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/auth"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+)
+
+type maintenanceJobOpParams struct {
+	LegacyOpID string `json:"legacy_op_id"`
+	JobID       string `json:"job_id"`
+	DryRun      bool   `json:"dry_run"`
+}
+
+// RegisterMaintenanceJobOp registers the "maintenance.job" OperationDef which runs
+// any named maintenance job by ID.
+func (s *Server) RegisterMaintenanceJobOp(reg *opsregistry.Registry) error {
+	return reg.RegisterOp(opsregistry.OperationDef{
+		ID:              "maintenance.job",
+		Plugin:          "maintenance",
+		DisplayName:     "Maintenance Job",
+		Description:     "Run a named maintenance job.",
+		DefaultPriority: opsregistry.PriorityNormal,
+		Cancellable:     true,
+		Isolate:         false,
+		Timeout:         4 * time.Hour,
+		ResumePolicy:    opsregistry.ResumeDrop,
+		ConcurrencyKey:  "", // parallel maintenance jobs allowed
+		Permissions:     []auth.Permission{auth.PermSettingsManage},
+		Capabilities:    []opsregistry.Capability{opsregistry.CapLibraryRead, opsregistry.CapLibraryWrite},
+		Run: func(ctx context.Context, rawParams json.RawMessage, reporter opsregistry.Reporter) error {
+			var p maintenanceJobOpParams
+			if err := json.Unmarshal(rawParams, &p); err != nil {
+				return fmt.Errorf("maintenance.job: decode params: %w", err)
+			}
+			job, err := maintenance.Get(p.JobID)
+			if err != nil {
+				return fmt.Errorf("maintenance.job: job %q not found: %w", p.JobID, err)
+			}
+			store := s.Store()
+			ctx = maintenance.WithOperationID(ctx, p.LegacyOpID)
+			progress := registryProgressAdapter{r: reporter}
+			adapter := &progressAdapter{ops: progress}
+			return job.Run(ctx, store, adapter, p.DryRun)
+		},
+	})
+}
+
+func init() {
+	addOpRegistrar(func(s *Server, reg *opsregistry.Registry) error { return s.RegisterMaintenanceJobOp(reg) })
+}
