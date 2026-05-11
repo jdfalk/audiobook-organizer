@@ -1,5 +1,5 @@
 // file: internal/server/entities_handlers.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 52cb6f75-cb3e-44e3-bf36-a8bba8a24d21
 //
 // Entity HTTP handlers split out of server.go: works, authors, series,
@@ -9,19 +9,14 @@
 package server
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -377,11 +372,6 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 		return
 	}
 
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
-	}
-
 	opID := ulid.Make().String()
 	detail := fmt.Sprintf("merge-authors:keep=%d,merge=%v", req.KeepID, req.MergeIDs)
 	op, err := store.CreateOperation(opID, "author-merge", &detail)
@@ -390,139 +380,16 @@ func (s *Server) mergeAuthors(c *gin.Context) {
 		return
 	}
 
-	keepID := req.KeepID
-	mergeIDs := req.MergeIDs
-	keepName := keepAuthor.Name
-
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		_ = progress.Log("info", fmt.Sprintf("Merging %d author(s) into \"%s\"", len(mergeIDs), keepName), nil)
-		_ = progress.UpdateProgress(0, len(mergeIDs), "Starting author merge...")
-
-		merged := 0
-		var mergeErrors []string
-		for i, mergeID := range mergeIDs {
-			if progress.IsCanceled() {
-				return fmt.Errorf("cancelled")
-			}
-			if mergeID == keepID {
-				continue
-			}
-			books, err := store.GetBooksByAuthorIDWithRole(mergeID)
-			if err != nil {
-				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to get books for author %d: %v", mergeID, err))
-				continue
-			}
-
-			mergeAuthor, _ := store.GetAuthorByID(mergeID)
-			mergeAuthorName := ""
-			if mergeAuthor != nil {
-				mergeAuthorName = mergeAuthor.Name
-			}
-
-			for _, book := range books {
-				bookAuthors, err := store.GetBookAuthors(book.ID)
-				if err != nil {
-					continue
-				}
-				hasKeep := false
-				for _, ba := range bookAuthors {
-					if ba.AuthorID == keepID {
-						hasKeep = true
-						break
-					}
-				}
-				var newAuthors []database.BookAuthor
-				for _, ba := range bookAuthors {
-					if ba.AuthorID == mergeID {
-						if !hasKeep {
-							ba.AuthorID = keepID
-							newAuthors = append(newAuthors, ba)
-							hasKeep = true
-						}
-					} else {
-						newAuthors = append(newAuthors, ba)
-					}
-				}
-				if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
-					mergeErrors = append(mergeErrors, fmt.Sprintf("failed to update book %s: %v", book.ID, err))
-				} else {
-					_ = store.CreateOperationChange(&database.OperationChange{
-						ID:          ulid.Make().String(),
-						OperationID: opID,
-						BookID:      book.ID,
-						ChangeType:  "author_reassign",
-						FieldName:   "book_authors",
-						OldValue:    fmt.Sprintf("author_id:%d (%s)", mergeID, mergeAuthorName),
-						NewValue:    fmt.Sprintf("author_id:%d (%s)", keepID, keepName),
-					})
-				}
-
-				// Sync the denormalized `book.AuthorID` pointer
-				// on the Book row itself. SetBookAuthors above
-				// updates the join table, but callers that read
-				// the Book struct directly — organize path,
-				// metadata fetcher, search indexer — expect
-				// book.AuthorID to match the primary author in
-				// the join table. Without this sync, the field
-				// still points at the losing author ID, which
-				// has been hard-deleted on the next iteration.
-				//
-				// Tombstones cover most lookups (GetAuthorByID
-				// follows the tombstone chain), but any code that
-				// uses book.AuthorID as a map key or as an equality
-				// check without going through the lookup helpers
-				// sees the stale ID. This closes that gap.
-				//
-				// Backlog 7.11 — found while investigating the
-				// merge ITL cleanup bug (#251).
-				current, gbErr := store.GetBookByID(book.ID)
-				if gbErr != nil || current == nil {
-					continue
-				}
-				if current.AuthorID != nil && *current.AuthorID == mergeID {
-					newID := keepID
-					current.AuthorID = &newID
-					if _, upErr := store.UpdateBook(book.ID, current); upErr != nil {
-						log.Printf("[WARN] author merge: failed to sync denormalized AuthorID on book %s: %v", book.ID, upErr)
-					}
-				}
-			}
-
-			if err := store.DeleteAuthor(mergeID); err != nil {
-				mergeErrors = append(mergeErrors, fmt.Sprintf("failed to delete author %d: %v", mergeID, err))
-			} else {
-				_ = store.CreateAuthorTombstone(mergeID, keepID)
-				_ = store.CreateOperationChange(&database.OperationChange{
-					ID:          ulid.Make().String(),
-					OperationID: opID,
-					BookID:      "",
-					ChangeType:  "author_delete",
-					FieldName:   "author",
-					OldValue:    fmt.Sprintf("%d:%s", mergeID, mergeAuthorName),
-					NewValue:    fmt.Sprintf("merged_into:%d:%s", keepID, keepName),
-				})
-				merged++
-			}
-
-			_ = progress.UpdateProgress(i+1, len(mergeIDs),
-				fmt.Sprintf("Merged %d/%d authors", i+1, len(mergeIDs)))
-		}
-
-		resultMsg := fmt.Sprintf("Author merge complete: merged %d, %d errors", merged, len(mergeErrors))
-		_ = progress.Log("info", resultMsg, nil)
-		if len(mergeErrors) > 0 {
-			errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
-			_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
-		}
-		s.dedupCache.InvalidateAll()
-		return nil
+	params := authorMergeOpParams{
+		LegacyOpID: op.ID,
+		KeepID:     req.KeepID,
+		MergeIDs:   req.MergeIDs,
+		KeepName:   keepAuthor.Name,
 	}
-
-	if err := s.queue.Enqueue(op.ID, "author-merge", operations.PriorityNormal, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "entities.author-merge", params); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
-
 	httputil.RespondWithSuccess(c, 202, op)
 }
 
@@ -782,98 +649,15 @@ func (s *Server) resolveProductionAuthor(c *gin.Context) {
 		return
 	}
 
-	prodAuthorName := author.Name
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		books, err := store.GetBooksByAuthorIDWithRole(authorID)
-		if err != nil {
-			return fmt.Errorf("failed to get books: %w", err)
-		}
-		_ = progress.Log("info", fmt.Sprintf("Resolving %d books for production company %q", len(books), prodAuthorName), nil)
-
-		resolved := 0
-		failed := 0
-		for i, book := range books {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			_ = progress.UpdateProgress(i, len(books), fmt.Sprintf("Processing %d/%d: %s", i+1, len(books), book.Title))
-
-			// Try metadata fetch by title only
-			resp, fetchErr := s.metadataFetchService.FetchMetadataForBookByTitle(book.ID)
-			if fetchErr == nil && resp != nil && resp.Book != nil && resp.Book.AuthorID != nil {
-				// Check if the found author is different from the production company
-				newAuthor, _ := store.GetAuthorByID(*resp.Book.AuthorID)
-				if newAuthor != nil && !dedup.IsProductionCompany(newAuthor.Name) {
-					_ = progress.Log("info", fmt.Sprintf("Resolved %q → author %q (source: %s)", book.Title, newAuthor.Name, resp.Source), nil)
-					// Reclassify production company as publisher
-					if book.Publisher == nil || *book.Publisher == "" {
-						pub := prodAuthorName
-						book.Publisher = &pub
-						store.UpdateBook(book.ID, &database.Book{Publisher: &pub})
-					}
-					resolved++
-					continue
-				}
-			}
-
-			// If metadata failed and AI is enabled, try cover art analysis
-			aiParser := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
-			if aiParser.IsEnabled() && book.FilePath != "" {
-				imgData, mime, imgErr := metadata.ExtractCoverArtBytes(book.FilePath)
-				if imgErr == nil && len(imgData) > 0 {
-					parsed, aiErr := aiParser.ParseCoverArt(ctx, imgData, mime)
-					if aiErr == nil && parsed != nil && parsed.Author != "" && parsed.Confidence != "low" {
-						_ = progress.Log("info", fmt.Sprintf("AI cover analysis for %q found author: %q (confidence: %s)", book.Title, parsed.Author, parsed.Confidence), nil)
-						// Look up or create the discovered author
-						existing, _ := store.GetAuthorByName(parsed.Author)
-						if existing == nil {
-							existing, _ = store.CreateAuthor(parsed.Author)
-						}
-						if existing != nil {
-							aid := existing.ID
-							book.AuthorID = &aid
-							store.UpdateBook(book.ID, &database.Book{AuthorID: &aid})
-							// Update book_authors
-							bookAuthors, _ := store.GetBookAuthors(book.ID)
-							var updated []database.BookAuthor
-							for _, ba := range bookAuthors {
-								if ba.AuthorID != authorID {
-									updated = append(updated, ba)
-								}
-							}
-							updated = append(updated, database.BookAuthor{
-								BookID:   book.ID,
-								AuthorID: existing.ID,
-								Role:     "author",
-								Position: 0,
-							})
-							store.SetBookAuthors(book.ID, updated)
-							resolved++
-							continue
-						}
-					}
-				}
-			}
-
-			failed++
-			_ = progress.Log("debug", fmt.Sprintf("Could not resolve author for %q", book.Title), nil)
-		}
-
-		if s.dedupCache != nil {
-			s.dedupCache.Invalidate("author-duplicates")
-		}
-
-		resultMsg := fmt.Sprintf("Resolved %d/%d books for %q (%d unresolved)", resolved, len(books), prodAuthorName, failed)
-		_ = progress.Log("info", resultMsg, nil)
-		_ = progress.UpdateProgress(len(books), len(books), resultMsg)
-		return nil
+	params := resolveProductionAuthorOpParams{
+		LegacyOpID:     op.ID,
+		AuthorID:       authorID,
+		ProdAuthorName: author.Name,
 	}
-
-	if err := s.queue.Enqueue(opID, "resolve-production-author", operations.PriorityNormal, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "entities.resolve-production-author", params); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
-
 	httputil.RespondWithSuccess(c, 202, gin.H{"operation": op})
 }
 
