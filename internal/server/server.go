@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.14.0
+// version: 2.15.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-08
 
@@ -458,13 +458,16 @@ func NewServer(store database.Store) *Server {
 		}
 	}
 
-	// Open embedding store for dedup
+	// Open embedding store for dedup (PebbleDB-backed, shared with main DB).
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
-		embeddingDBPath := filepath.Join(filepath.Dir(dbPath), "embeddings.db")
-		embeddingStore, err := database.NewEmbeddingStore(embeddingDBPath)
-		if err != nil {
-			log.Printf("[WARN] Failed to open embedding store: %v", err)
-		} else {
+		dbDir := filepath.Dir(dbPath)
+		// One-shot migration from the legacy embeddings.db SQLite sidecar.
+		// Safe to call every startup: a flag key in PebbleDB prevents re-runs.
+		if ps, ok := database.GetGlobalStore().(*database.PebbleStore); ok {
+			if migrateErr := database.MigrateEmbeddingsFromSQLite(ps.DB(), filepath.Join(dbDir, "embeddings.db")); migrateErr != nil {
+				log.Printf("[WARN] embeddings.db migration error (continuing): %v", migrateErr)
+			}
+			embeddingStore := database.NewEmbeddingStore(ps.DB())
 			server.embeddingStore = embeddingStore
 			if config.AppConfig.OpenAIAPIKey != "" && config.AppConfig.EmbeddingEnabled {
 				// Wire the embedding store as a content-hash cache so
@@ -494,15 +497,15 @@ func NewServer(store database.Store) *Server {
 				server.dedupEngine.AutoMergeEnabled = config.AppConfig.DedupAutoMergeEnabled
 
 				// Wire chromem-go ANN store if available.
-				chromemDir := filepath.Dir(embeddingDBPath)
+				chromemDir := dbDir
 				chromemStore, chromemErr := database.NewChromemEmbeddingStore(chromemDir, 3072)
 				if chromemErr != nil {
-					log.Printf("[WARN] chromem-go init failed (falling back to SQLite linear scan): %v", chromemErr)
+					log.Printf("[WARN] chromem-go init failed (falling back to PebbleDB linear scan): %v", chromemErr)
 				} else {
 					server.dedupEngine.SetChromemStore(chromemStore)
 					log.Println("[INFO] chromem-go ANN store active for dedup Layer 2")
 
-					// Hydrate chromem from the SQLite embeddings table in
+					// Hydrate chromem from the PebbleDB embeddings namespace in
 					// the background. Without this, an empty or stale
 					// chromem dir means Layer 2 returns zero matches even
 					// though tens of thousands of embeddings exist on disk.
