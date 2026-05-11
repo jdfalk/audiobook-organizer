@@ -64,9 +64,6 @@ packages:
     config:
       dir: internal/operations/mocks
     interfaces:
-      Queue:
-        config:
-          filename: mock_queue.go
       ProgressReporter:
         config:
           filename: mock_progress_reporter.go
