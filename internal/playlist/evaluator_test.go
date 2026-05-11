@@ -1,8 +1,8 @@
-// file: internal/server/playlist_evaluator_test.go
+// file: internal/playlist/evaluator_test.go
 // version: 1.0.0
 // guid: 9d3e5f2a-7b4a-4a70-b8c5-3d7e0f1b9a69
 
-package server
+package playlist
 
 import (
 	"path/filepath"

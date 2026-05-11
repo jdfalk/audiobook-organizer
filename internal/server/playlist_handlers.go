@@ -1,13 +1,13 @@
 // file: internal/server/playlist_handlers.go
-// version: 2.1.0
-// last-edited: 2026-05-01
+// version: 2.2.0
+// last-edited: 2026-05-11
 // guid: 7a3d5f2e-8c4b-4a70-b8c5-3d7e0f1b9a79
 //
 // HTTP endpoints for user-created playlists (spec 3.4 task 3).
 // Supports:
 //   - Static playlists: user-curated ordered book lists
 //   - Smart playlists: DSL queries evaluated on demand via
-//     EvaluateSmartPlaylist (delegates to Bleve + per-user filter)
+//     playlist.EvaluateSmartPlaylist (delegates to Bleve + per-user filter)
 //
 // Create/update/delete are gated on `playlists.create` once 3.7
 // permission wiring ships. GET paths require `library.view`.
@@ -24,6 +24,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/playlist"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 )
 
@@ -132,7 +133,7 @@ func (s *Server) handleGetPlaylist(c *gin.Context) {
 	case database.UserPlaylistTypeStatic:
 		resp["book_ids"] = pl.BookIDs
 	case database.UserPlaylistTypeSmart:
-		bookIDs, evalErr := EvaluateSmartPlaylist(
+		bookIDs, evalErr := playlist.EvaluateSmartPlaylist(
 			s.Store(), s.SearchIndex(),
 			pl.Query, pl.SortJSON, pl.Limit,
 			callingUserID(c),
@@ -141,7 +142,7 @@ func (s *Server) handleGetPlaylist(c *gin.Context) {
 			// Surface as 503 when the index is unavailable — this is
 			// a transient condition during startup. Actual query
 			// errors are 400 (user's smart-playlist DSL is busted).
-			if evalErr == ErrSearchIndexUnavailable {
+			if evalErr == playlist.ErrSearchIndexUnavailable {
 				httputil.RespondWithError(c, 503, evalErr.Error(), "SERVICE_UNAVAILABLE")
 				return
 			}
@@ -352,13 +353,13 @@ func (s *Server) handleMaterializePlaylist(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "only smart playlists can be materialized")
 		return
 	}
-	bookIDs, evalErr := EvaluateSmartPlaylist(
+	bookIDs, evalErr := playlist.EvaluateSmartPlaylist(
 		s.Store(), s.SearchIndex(),
 		src.Query, src.SortJSON, src.Limit,
 		callingUserID(c),
 	)
 	if evalErr != nil {
-		if evalErr == ErrSearchIndexUnavailable {
+		if evalErr == playlist.ErrSearchIndexUnavailable {
 			httputil.RespondWithError(c, 503, evalErr.Error(), "SERVICE_UNAVAILABLE")
 			return
 		}
