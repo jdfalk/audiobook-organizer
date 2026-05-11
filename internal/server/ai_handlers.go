@@ -1,5 +1,5 @@
 // file: internal/server/ai_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 5d3a6a95-4ac8-42c2-a7fe-5ff4857dd31a
 //
 // AI-related HTTP handlers split out of server.go: filename parsing,
@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -443,8 +442,8 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
 
@@ -518,18 +517,9 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		switch mode {
-		case "groups":
-			return s.aiReviewGroupsMode(ctx, progress, parser, store, opID, dedupGroups)
-		case "full":
-			return s.aiReviewFullMode(ctx, progress, parser, store, opID)
-		}
-		return fmt.Errorf("unknown mode: %s", mode)
-	}
-
-	if err := s.queue.Enqueue(opID, opType, operations.PriorityNormal, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	reviewParams := aiReviewOpParams{LegacyOpID: op.ID, Mode: mode, DedupGroups: dedupGroups}
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "ai.author-review", reviewParams); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
 
@@ -711,14 +701,7 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 
 func (s *Server) applyAIAuthorReview(c *gin.Context) {
 	var req struct {
-		Suggestions []struct {
-			GroupIndex    int    `json:"group_index"`
-			Action        string `json:"action"`
-			CanonicalName string `json:"canonical_name"`
-			KeepID        int    `json:"keep_id"`
-			MergeIDs      []int  `json:"merge_ids"`
-			Rename        bool   `json:"rename"`
-		} `json:"suggestions"`
+		Suggestions []aiMergeApplySuggestion `json:"suggestions"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
@@ -730,8 +713,8 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 		return
 	}
 
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
 
@@ -743,181 +726,9 @@ func (s *Server) applyAIAuthorReview(c *gin.Context) {
 		return
 	}
 
-	suggestions := req.Suggestions
-
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		total := len(suggestions)
-		applied := 0
-		var applyErrors []string
-
-		_ = progress.Log("info", fmt.Sprintf("Starting AI author review apply: %d suggestion(s)", total), nil)
-
-		for i, sug := range suggestions {
-			if progress.IsCanceled() {
-				_ = progress.Log("warn", "Operation cancelled by user", nil)
-				return fmt.Errorf("cancelled")
-			}
-
-			_ = progress.UpdateProgress(i, total, fmt.Sprintf("Applying suggestion %d/%d...", i+1, total))
-
-			switch sug.Action {
-			case "skip":
-				_ = progress.Log("info", fmt.Sprintf("Skipped group %d", sug.GroupIndex), nil)
-				continue
-
-			case "rename":
-				if sug.KeepID > 0 && sug.CanonicalName != "" {
-					if err := store.UpdateAuthorName(sug.KeepID, dedup.NormalizeAuthorName(sug.CanonicalName)); err != nil {
-						applyErrors = append(applyErrors, fmt.Sprintf("rename author %d: %v", sug.KeepID, err))
-					} else {
-						applied++
-						_ = progress.Log("info", fmt.Sprintf("Renamed author %d to \"%s\"", sug.KeepID, sug.CanonicalName), nil)
-					}
-				}
-
-			case "merge":
-				// Rename canonical if needed
-				if sug.Rename && sug.KeepID > 0 && sug.CanonicalName != "" {
-					if err := store.UpdateAuthorName(sug.KeepID, dedup.NormalizeAuthorName(sug.CanonicalName)); err != nil {
-						applyErrors = append(applyErrors, fmt.Sprintf("rename before merge %d: %v", sug.KeepID, err))
-					}
-				}
-
-				// Merge variant authors
-				for _, mergeID := range sug.MergeIDs {
-					if mergeID == sug.KeepID {
-						continue
-					}
-					books, err := store.GetBooksByAuthorIDWithRole(mergeID)
-					if err != nil {
-						applyErrors = append(applyErrors, fmt.Sprintf("get books for author %d: %v", mergeID, err))
-						continue
-					}
-
-					// Snapshot affected books
-					_ = progress.Log("info", fmt.Sprintf("Snapshotting %d books before merge of author %d", len(books), mergeID), nil)
-
-					for _, book := range books {
-						bookAuthors, err := store.GetBookAuthors(book.ID)
-						if err != nil {
-							continue
-						}
-						hasKeep := false
-						for _, ba := range bookAuthors {
-							if ba.AuthorID == sug.KeepID {
-								hasKeep = true
-								break
-							}
-						}
-						var newAuthors []database.BookAuthor
-						for _, ba := range bookAuthors {
-							if ba.AuthorID == mergeID {
-								if !hasKeep {
-									ba.AuthorID = sug.KeepID
-									newAuthors = append(newAuthors, ba)
-									hasKeep = true
-								}
-							} else {
-								newAuthors = append(newAuthors, ba)
-							}
-						}
-						if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
-							applyErrors = append(applyErrors, fmt.Sprintf("update book %s: %v", book.ID, err))
-						}
-					}
-
-					if err := store.DeleteAuthor(mergeID); err != nil {
-						applyErrors = append(applyErrors, fmt.Sprintf("delete author %d: %v", mergeID, err))
-					} else {
-						_ = store.CreateAuthorTombstone(mergeID, sug.KeepID)
-					}
-				}
-				applied++
-				_ = progress.Log("info", fmt.Sprintf("Merged group %d: %d variants into \"%s\"", sug.GroupIndex, len(sug.MergeIDs), sug.CanonicalName), nil)
-
-			case "alias":
-				// Keep canonical author, add variants as aliases instead of merging
-				if sug.KeepID > 0 && sug.CanonicalName != "" {
-					if sug.Rename {
-						if err := store.UpdateAuthorName(sug.KeepID, dedup.NormalizeAuthorName(sug.CanonicalName)); err != nil {
-							applyErrors = append(applyErrors, fmt.Sprintf("rename for alias %d: %v", sug.KeepID, err))
-						}
-					}
-					for _, mergeID := range sug.MergeIDs {
-						if mergeID == sug.KeepID {
-							continue
-						}
-						variant, err := store.GetAuthorByID(mergeID)
-						if err != nil || variant == nil {
-							continue
-						}
-						if _, err := store.CreateAuthorAlias(sug.KeepID, variant.Name, "pen_name"); err != nil {
-							applyErrors = append(applyErrors, fmt.Sprintf("create alias for author %d: %v", sug.KeepID, err))
-						}
-						// Re-link books and delete the variant author
-						books, err := store.GetBooksByAuthorIDWithRole(mergeID)
-						if err != nil {
-							continue
-						}
-						for _, book := range books {
-							bookAuthors, err := store.GetBookAuthors(book.ID)
-							if err != nil {
-								continue
-							}
-							hasKeep := false
-							for _, ba := range bookAuthors {
-								if ba.AuthorID == sug.KeepID {
-									hasKeep = true
-									break
-								}
-							}
-							var newAuthors []database.BookAuthor
-							for _, ba := range bookAuthors {
-								if ba.AuthorID == mergeID {
-									if !hasKeep {
-										ba.AuthorID = sug.KeepID
-										newAuthors = append(newAuthors, ba)
-										hasKeep = true
-									}
-								} else {
-									newAuthors = append(newAuthors, ba)
-								}
-							}
-							if err := store.SetBookAuthors(book.ID, newAuthors); err != nil {
-								applyErrors = append(applyErrors, fmt.Sprintf("update book %s for alias: %v", book.ID, err))
-							}
-						}
-						if err := store.DeleteAuthor(mergeID); err != nil {
-							applyErrors = append(applyErrors, fmt.Sprintf("delete aliased author %d: %v", mergeID, err))
-						} else {
-							_ = store.CreateAuthorTombstone(mergeID, sug.KeepID)
-						}
-					}
-					applied++
-					_ = progress.Log("info", fmt.Sprintf("Created aliases for group %d: canonical \"%s\"", sug.GroupIndex, sug.CanonicalName), nil)
-				}
-
-			case "split":
-				_ = progress.Log("info", fmt.Sprintf("Split action for group %d — manual intervention needed", sug.GroupIndex), nil)
-				applied++
-			}
-		}
-
-		s.dedupCache.InvalidateAll()
-
-		resultMsg := fmt.Sprintf("AI review applied: %d actions, %d errors", applied, len(applyErrors))
-		_ = progress.Log("info", resultMsg, nil)
-		if len(applyErrors) > 0 {
-			errDetail := strings.Join(applyErrors[:min(len(applyErrors), 10)], "; ")
-			_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
-		}
-
-		_ = progress.UpdateProgress(total, total, resultMsg)
-		return nil
-	}
-
-	if err := s.queue.Enqueue(opID, "ai-author-merge-apply", operations.PriorityNormal, operationFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	applyParams := aiMergeApplyOpParams{LegacyOpID: op.ID, Suggestions: req.Suggestions}
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "ai.author-merge-apply", applyParams); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
 
