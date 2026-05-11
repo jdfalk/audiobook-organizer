@@ -1,6 +1,6 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 3.1.0
-// last-edited: 2026-05-01
+// version: 3.2.0
+// last-edited: 2026-05-10
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
@@ -21,7 +21,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -74,38 +73,14 @@ func (s *Server) startDiagnosticsExport(c *gin.Context) {
 		return
 	}
 
-	ds := s.diagnosticsService
-	if ds == nil {
-		ds = diagnostics.NewService(store, nil, config.AppConfig.ITunesLibraryReadPath)
+	params := diagnosticsExportOpParams{
+		LegacyOpID:  opID,
+		Category:    req.Category,
+		Description: req.Description,
 	}
-
-	category := req.Category
-	description := req.Description
-
-	if s.queue != nil {
-		_ = s.queue.Enqueue(opID, "diagnostics_export", 5, func(_ context.Context, _ operations.ProgressReporter) error {
-			zipPath, genErr := ds.GenerateExport(category, description)
-			if genErr != nil {
-				_ = store.UpdateOperationError(opID, genErr.Error())
-				return genErr
-			}
-			resultJSON, _ := json.Marshal(map[string]string{"zip_path": zipPath})
-			_ = store.UpdateOperationResultData(opID, string(resultJSON))
-			_ = store.UpdateOperationStatus(opID, "completed", 100, 100, "Export complete")
-			return nil
-		})
-	} else {
-		// Synchronous fallback if no queue
-		go func() {
-			zipPath, genErr := ds.GenerateExport(category, description)
-			if genErr != nil {
-				_ = store.UpdateOperationError(opID, genErr.Error())
-				return
-			}
-			resultJSON, _ := json.Marshal(map[string]string{"zip_path": zipPath})
-			_ = store.UpdateOperationResultData(opID, string(resultJSON))
-			_ = store.UpdateOperationStatus(opID, "completed", 100, 100, "Export complete")
-		}()
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "diagnostics.export", params); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue diagnostics export", enqErr)
+		return
 	}
 
 	httputil.RespondWithSuccess(c, 202, gin.H{
