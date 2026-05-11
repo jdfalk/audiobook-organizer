@@ -1,7 +1,11 @@
 // file: internal/server/scheduler_triggers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 03dbb3f6-0076-484c-b55f-5f59c649402d
-// last-edited: 2026-05-02
+// last-edited: 2026-05-11
+// NOTE: triggerOperation and triggerOperationWithID are now dead code — all
+// TriggerFns in scheduler_tasks.go have been migrated to the hybrid UOS v2
+// pattern (create v1 op record + opRegistry.EnqueueOp). These helpers are
+// retained for the transition period and will be removed once v1 is fully retired.
 
 package server
 
