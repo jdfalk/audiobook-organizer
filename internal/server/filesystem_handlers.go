@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 565db679-19ba-4518-b63e-6892663be41b
 // last-edited: 2026-05-10
 //
@@ -25,7 +25,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -40,7 +39,6 @@ type filesystemHandlerDeps interface {
 	FilesystemService() *fileops.FilesystemService
 	ImportPathService() *importer.ImportPathService
 	ImportService() *importer.ImportService
-	Queue() operations.Queue
 	DedupEngine() *dedup.Engine
 	publishEvent(ctx context.Context, event plugin.Event)
 }

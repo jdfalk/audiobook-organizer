@@ -1,5 +1,5 @@
 // file: internal/testutil/integration.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-07
 
@@ -13,7 +13,6 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -58,9 +57,6 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	hub := realtime.NewEventHub()
 	realtime.SetGlobalHub(hub)
 
-	queue := operations.NewOperationQueue(store, 2, nil, hub)
-	operations.GlobalQueue = queue
-
 	origCfg := config.AppConfig
 	config.AppConfig = config.Config{
 		DatabaseType:         "sqlite",
@@ -83,7 +79,6 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	}
 
 	cleanup := func() {
-		_ = queue.Shutdown(2 * time.Second)
 		database.SetGlobalStore(nil)
 		store.Close()
 		config.AppConfig = origCfg

@@ -1,5 +1,5 @@
 // file: internal/server/server_test.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: b2c3d4e5-f6a7-8901-bcde-234567890abc
 
 package server
@@ -64,9 +64,6 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 		if server.writeBackBatcher != nil {
 			server.writeBackBatcher.Stop()
 		}
-		if server.queue != nil {
-			_ = server.queue.Shutdown(5 * time.Second)
-		}
 		if store != nil {
 			database.SetGlobalStore(nil)
 			store.Close()
@@ -96,9 +93,6 @@ func setupTestServerWithStore(t *testing.T, store database.Store) (*Server, func
 		}
 		if server.writeBackBatcher != nil {
 			server.writeBackBatcher.Stop()
-		}
-		if server.queue != nil {
-			_ = server.queue.Shutdown(5 * time.Second)
 		}
 		// Don't close the store - caller is responsible for cleanup
 	}

@@ -1,5 +1,5 @@
 // file: cmd/root.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: 6a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
 package cmd
@@ -17,7 +17,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/mediainfo"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/playlist"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/server"
@@ -45,8 +44,6 @@ var (
 	initEncryption         = database.InitEncryption
 	loadConfigFromDB       = config.LoadConfigFromDatabase
 	syncConfigFromEnv      = config.SyncConfigFromEnv
-	initializeQueue        = operations.InitializeQueue
-	shutdownQueue          = operations.ShutdownQueue
 	newServer              = server.NewServer
 	getDefaultServerConfig = server.GetDefaultServerConfig
 	startServer            = func(srv *server.Server, cfg server.ServerConfig) error {
@@ -239,12 +236,6 @@ var serveCmd = &cobra.Command{
 
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
 
-		// Attach database store to the operation queue (initialized early without store)
-		if operations.GlobalQueue != nil {
-			operations.GlobalQueue.SetStore(database.GetGlobalStore())
-			fmt.Println("Operation queue connected to database store")
-		}
-
 		// Initialize encryption for settings (generates key if needed)
 		dbDir := filepath.Dir(config.AppConfig.DatabasePath)
 		if err := initEncryption(dbDir); err != nil {
@@ -283,26 +274,12 @@ var serveCmd = &cobra.Command{
 
 		fmt.Println("Starting audiobook organizer web server...")
 
-		// Hub and queue are now created inside NewServer.
-		// Shutdown of the queue is handled via the global reference
-		// that NewServer sets for backward compatibility.
-		defer func() {
-			fmt.Println("Shutting down operation queue...")
-			if err := shutdownQueue(30 * time.Second); err != nil {
-				fmt.Printf("Warning: operation queue shutdown error: %v\n", err)
-			}
-		}()
-
 		// Create and start server. Store is passed explicitly per the 4.4 DI
 		// migration; database.GlobalStore remains assigned for call sites that
 		// haven't yet been migrated to use s.Store().
 		srv := newServer(database.GetGlobalStore())
 
-		// Apply operation timeout if configured
-		if config.AppConfig.OperationTimeoutMinutes > 0 {
-			operations.SetGlobalOperationTimeout(time.Duration(config.AppConfig.OperationTimeoutMinutes) * time.Minute)
-		}
-		fmt.Println("Server initialized (hub, queue, batcher, file I/O pool)")
+		fmt.Println("Server initialized (hub, batcher, file I/O pool)")
 		cfg := getDefaultServerConfig()
 
 		// Apply command line flags (use defaults or user-provided values)

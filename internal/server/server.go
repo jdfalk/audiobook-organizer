@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.11.0
+// version: 2.12.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-08
 
@@ -37,7 +37,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	acoustidplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
 	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
@@ -139,15 +138,6 @@ type narratorEntry struct {
 // calculateLibrarySizes computes library and import path sizes with caching
 
 // Server represents the HTTP server
-// activityServiceLogger adapts activity.Service to the operations.ActivityLogger interface.
-type activityServiceLogger struct {
-	svc *activity.Service
-}
-
-func (a *activityServiceLogger) RecordActivity(entry database.ActivityEntry) {
-	_ = a.svc.Record(entry)
-}
-
 type Server struct {
 	store                  database.Store
 	httpServer             *http.Server
@@ -203,7 +193,6 @@ type Server struct {
 	indexQueueClosed bool
 	http3Server      *http3.Server
 
-	queue            operations.Queue
 	hub              *realtime.EventHub
 	writeBackBatcher *itunesservice.WriteBackBatcher
 	fileIOPool       *FileIOPool
@@ -623,16 +612,9 @@ func NewServer(store database.Store) *Server {
 		}()
 	}
 
-	// Create hub, queue, batcher, and file I/O pool as Server fields
+	// Create hub, batcher, and file I/O pool as Server fields
 	server.hub = realtime.NewEventHub()
-	// Also set the global for backward compatibility during migration
 	realtime.SetGlobalHub(server.hub)
-
-	if server.queue == nil {
-		innerQ := operations.NewOperationQueue(resolvedStore, 8, nil, server.hub)
-		server.queue = operations.NewBridgeQueue(innerQ, resolvedStore)
-		operations.GlobalQueue = server.queue
-	}
 
 	// The batcher moved under itunesservice.Service in Phase 2 M1 step 2.
 	// Server still keeps a typed field for back-compat with the many call
@@ -691,9 +673,6 @@ func NewServer(store database.Store) *Server {
 
 	// Wire activity log dual-write hooks
 	if server.activityService != nil {
-		// Task 10: Operation changes → activity log (injected via interface)
-		server.queue.SetActivityLogger(&activityServiceLogger{svc: server.activityService})
-
 		// Task 11/14: Metadata fetch service → activity log
 		server.metadataFetchService.SetActivityService(server.activityService)
 
