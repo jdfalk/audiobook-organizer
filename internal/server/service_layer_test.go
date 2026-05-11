@@ -1,7 +1,7 @@
 // file: internal/server/service_layer_test.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-05-01
+// last-edited: 2026-05-11
 
 package server
 
@@ -28,7 +28,7 @@ import (
 // TestConfigUpdateService_MaskSecrets tests MaskSecrets method
 func TestConfigUpdateService_MaskSecrets(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	tests := []struct {
 		name     string
@@ -77,7 +77,7 @@ func TestConfigUpdateService_MaskSecrets(t *testing.T) {
 // TestConfigUpdateService_ApplyUpdates_ErrorCases tests error cases for ApplyUpdates
 func TestConfigUpdateService_ApplyUpdates_ErrorCases(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	tests := []struct {
 		name      string
@@ -128,7 +128,7 @@ func TestConfigUpdateService_ApplyUpdates_ArrayFields(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockStore.On("GetSetting", mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	originalPatterns := config.AppConfig.ExcludePatterns
 	originalExtensions := config.AppConfig.SupportedExtensions
@@ -654,7 +654,7 @@ func TestApplyOverrideToPayload(t *testing.T) {
 // TestConfigUpdateService_UpdateConfig tests UpdateConfig method
 func TestConfigUpdateService_UpdateConfig(t *testing.T) {
 	t.Run("nil db returns error", func(t *testing.T) {
-		svc := &ConfigUpdateService{db: nil}
+		svc := &config.UpdateService{DB: nil}
 		status, resp := svc.UpdateConfig(map[string]any{"root_dir": "/test"})
 		if status != 500 {
 			t.Errorf("expected 500, got %d", status)
@@ -666,7 +666,7 @@ func TestConfigUpdateService_UpdateConfig(t *testing.T) {
 
 	t.Run("database_type rejected", func(t *testing.T) {
 		mockStore := mocks.NewMockStore(t)
-		svc := NewConfigUpdateService(mockStore)
+		svc := config.NewUpdateService(mockStore)
 		status, resp := svc.UpdateConfig(map[string]any{"database_type": "mysql"})
 		if status != 400 {
 			t.Errorf("expected 400, got %d", status)
@@ -678,7 +678,7 @@ func TestConfigUpdateService_UpdateConfig(t *testing.T) {
 
 	t.Run("enable_sqlite rejected", func(t *testing.T) {
 		mockStore := mocks.NewMockStore(t)
-		svc := NewConfigUpdateService(mockStore)
+		svc := config.NewUpdateService(mockStore)
 		status, resp := svc.UpdateConfig(map[string]any{"enable_sqlite": true})
 		if status != 400 {
 			t.Errorf("expected 400, got %d", status)
@@ -694,7 +694,7 @@ func TestConfigUpdateService_ApplyUpdates_FieldTypes(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockStore.On("GetSetting", mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	originalRootDir := config.AppConfig.RootDir
 	originalAutoOrg := config.AppConfig.AutoOrganize
@@ -974,7 +974,7 @@ func TestImportPathService_GetImportPath(t *testing.T) {
 func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	mockStore.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	originalPlaylistDir := config.AppConfig.PlaylistDir
 	originalDatabasePath := config.AppConfig.DatabasePath
@@ -1007,7 +1007,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 		mockStore2 := mocks.NewMockStore(t)
 		mockStore2.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore2.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
-		svc2 := NewConfigUpdateService(mockStore2)
+		svc2 := config.NewUpdateService(mockStore2)
 
 		status, resp := svc2.UpdateConfig(map[string]any{
 			"database_path": "/new/db/path.db",
@@ -1027,7 +1027,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 		mockStore3 := mocks.NewMockStore(t)
 		mockStore3.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore3.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
-		svc3 := NewConfigUpdateService(mockStore3)
+		svc3 := config.NewUpdateService(mockStore3)
 
 		// setup_complete payload is ignored; actual value is derived from root_dir
 		config.AppConfig.RootDir = ""
@@ -1050,7 +1050,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 		mockStore4 := mocks.NewMockStore(t)
 		mockStore4.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore4.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
-		svc4 := NewConfigUpdateService(mockStore4)
+		svc4 := config.NewUpdateService(mockStore4)
 
 		config.AppConfig.SetupComplete = true
 		status, resp := svc4.UpdateConfig(map[string]any{
@@ -1071,7 +1071,7 @@ func TestConfigUpdateService_UpdateConfig_AdditionalFields(t *testing.T) {
 		mockStore5 := mocks.NewMockStore(t)
 		mockStore5.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 		mockStore5.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
-		svc5 := NewConfigUpdateService(mockStore5)
+		svc5 := config.NewUpdateService(mockStore5)
 
 		config.AppConfig.SetupComplete = false
 		status, resp := svc5.UpdateConfig(map[string]any{
@@ -1094,7 +1094,7 @@ func TestConfigUpdateService_UpdateConfig_AllFields(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	mockStore.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	// Save original values
 	originalOrgStrat := config.AppConfig.OrganizationStrategy
@@ -1189,7 +1189,7 @@ func TestConfigUpdateService_UpdateConfig_IntConcurrentScans(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	mockStore.On("GetSetting", mock.Anything).Return(nil, nil).Maybe()
 	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	originalConcurrentScans := config.AppConfig.ConcurrentScans
 	defer func() {
@@ -1212,7 +1212,7 @@ func TestConfigUpdateService_ApplyUpdates_OpenAIKey(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockStore.On("GetSetting", mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	originalKey := config.AppConfig.OpenAIAPIKey
 	originalAI := config.AppConfig.EnableAIParsing
@@ -1239,7 +1239,7 @@ func TestConfigUpdateService_ApplyUpdates_OpenAIKey(t *testing.T) {
 // TestConfigUpdateService_ValidateUpdate tests ValidateUpdate method
 func TestConfigUpdateService_ValidateUpdate(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewConfigUpdateService(mockStore)
+	svc := config.NewUpdateService(mockStore)
 
 	tests := []struct {
 		name    string

@@ -1,8 +1,8 @@
-// file: internal/server/config_update_service.go
+// file: internal/config/update_service.go
 // version: 3.0.0
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
-package server
+package config
 
 import (
 	"encoding/json"
@@ -11,22 +11,21 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-// ConfigUpdateService handles applying and persisting config changes.
-type ConfigUpdateService struct {
-	db database.Store
+// UpdateService handles applying and persisting config changes.
+type UpdateService struct {
+	DB database.Store
 }
 
-// NewConfigUpdateService creates a new ConfigUpdateService.
-func NewConfigUpdateService(db database.Store) *ConfigUpdateService {
-	return &ConfigUpdateService{db: db}
+// NewUpdateService creates a new UpdateService.
+func NewUpdateService(db database.Store) *UpdateService {
+	return &UpdateService{DB: db}
 }
 
 // ValidateUpdate checks that the payload is non-empty.
-func (cus *ConfigUpdateService) ValidateUpdate(payload map[string]any) error {
+func (us *UpdateService) ValidateUpdate(payload map[string]any) error {
 	if len(payload) == 0 {
 		return fmt.Errorf("no configuration updates provided")
 	}
@@ -34,7 +33,7 @@ func (cus *ConfigUpdateService) ValidateUpdate(payload map[string]any) error {
 }
 
 // MaskSecrets returns a copy of cfg with all secret fields masked for API responses.
-func (cus *ConfigUpdateService) MaskSecrets(cfg config.Config) config.Config {
+func (us *UpdateService) MaskSecrets(cfg Config) Config {
 	masked := cfg
 	if masked.OpenAIAPIKey != "" {
 		masked.OpenAIAPIKey = database.MaskSecret(masked.OpenAIAPIKey)
@@ -67,10 +66,10 @@ var immutableFieldKeys = []string{"database_type", "enable_sqlite"}
 //
 // Architecture: non-secret fields are applied via JSON round-trip onto AppConfig.
 // json.Unmarshal only overwrites keys present in the JSON, so absent keys leave
-// AppConfig unchanged. This means any new field added to config.Config is
+// AppConfig unchanged. This means any new field added to Config is
 // automatically handled here with no registration required.
-func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[string]any) {
-	if cus.db == nil {
+func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]any) {
+	if us.DB == nil {
 		return http.StatusInternalServerError, map[string]any{"error": "database not initialized"}
 	}
 	if payload == nil {
@@ -88,16 +87,16 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 	// flow through the JSON round-trip to avoid plaintext exposure.
 	if val, ok := payloadString(payload, "openai_api_key"); ok {
 		log.Printf("[DEBUG] UpdateConfig: updating OpenAI API key (len=%d)", len(val))
-		config.AppConfig.OpenAIAPIKey = val
+		AppConfig.OpenAIAPIKey = val
 	}
 	if val, ok := payloadString(payload, "google_books_api_key"); ok {
-		config.AppConfig.GoogleBooksAPIKey = val
+		AppConfig.GoogleBooksAPIKey = val
 	}
 	if val, ok := payloadString(payload, "hardcover_api_token"); ok {
-		config.AppConfig.HardcoverAPIToken = val
+		AppConfig.HardcoverAPIToken = val
 	}
 	if val, ok := payloadString(payload, "basic_auth_password"); ok {
-		config.AppConfig.BasicAuthPassword = val
+		AppConfig.BasicAuthPassword = val
 	}
 
 	// Build filtered payload without secrets (already applied above)
@@ -110,20 +109,20 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 	}
 
 	// Apply all remaining fields via JSON round-trip.
-	// Any field in config.Config with a matching json tag is set automatically.
+	// Any field in Config with a matching json tag is set automatically.
 	payloadJSON, err := json.Marshal(filtered)
 	if err != nil {
 		return http.StatusBadRequest, map[string]any{"error": "failed to encode payload: " + err.Error()}
 	}
-	if err := json.Unmarshal(payloadJSON, &config.AppConfig); err != nil {
+	if err := json.Unmarshal(payloadJSON, &AppConfig); err != nil {
 		return http.StatusBadRequest, map[string]any{"error": "failed to apply config: " + err.Error()}
 	}
 
 	// Post-process: trim root_dir whitespace, derive setup_complete
-	config.AppConfig.RootDir = strings.TrimSpace(config.AppConfig.RootDir)
-	config.AppConfig.SetupComplete = config.AppConfig.RootDir != ""
+	AppConfig.RootDir = strings.TrimSpace(AppConfig.RootDir)
+	AppConfig.SetupComplete = AppConfig.RootDir != ""
 
-	if err := config.SaveConfigToDatabase(cus.db); err != nil {
+	if err := SaveConfigToDatabase(us.DB); err != nil {
 		log.Printf("ERROR: failed to persist config: %v", err)
 		return http.StatusInternalServerError, map[string]any{
 			"error":   "failed to save configuration",
@@ -135,7 +134,7 @@ func (cus *ConfigUpdateService) UpdateConfig(payload map[string]any) (int, map[s
 
 	return http.StatusOK, map[string]any{
 		"message": "configuration updated and saved to database",
-		"config":  cus.MaskSecrets(config.AppConfig),
+		"config":  us.MaskSecrets(AppConfig),
 	}
 }
 
@@ -151,8 +150,8 @@ func payloadString(payload map[string]any, key string) (string, bool) {
 
 // ApplyUpdates applies config updates and persists them.
 // Deprecated: prefer UpdateConfig directly.
-func (cus *ConfigUpdateService) ApplyUpdates(payload map[string]any) error {
-	status, resp := cus.UpdateConfig(payload)
+func (us *UpdateService) ApplyUpdates(payload map[string]any) error {
+	status, resp := us.UpdateConfig(payload)
 	if status >= 400 {
 		if errMsg, ok := resp["error"].(string); ok {
 			return fmt.Errorf("%s", errMsg)

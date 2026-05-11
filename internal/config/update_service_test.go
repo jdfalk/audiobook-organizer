@@ -1,8 +1,8 @@
-// file: internal/server/config_update_service_test.go
+// file: internal/config/update_service_test.go
 // version: 1.2.0
 // guid: e5f6g7h8-i9j0-k1l2-m3n4-o5p6q7r8s9t0
 
-package server
+package config
 
 import (
 	"testing"
@@ -10,13 +10,12 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/util"
 
-	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/stretchr/testify/mock"
 )
 
-func TestConfigUpdateService_ValidateUpdate_EmptyPayload(t *testing.T) {
-	service := NewConfigUpdateService(nil)
+func TestUpdateService_ValidateUpdate_EmptyPayload(t *testing.T) {
+	service := NewUpdateService(nil)
 
 	err := service.ValidateUpdate(map[string]any{})
 
@@ -25,7 +24,7 @@ func TestConfigUpdateService_ValidateUpdate_EmptyPayload(t *testing.T) {
 	}
 }
 
-func TestConfigUpdateService_ExtractStringField(t *testing.T) {
+func TestUpdateService_ExtractStringField(t *testing.T) {
 	payload := map[string]any{
 		"root_dir": "/library",
 	}
@@ -37,7 +36,7 @@ func TestConfigUpdateService_ExtractStringField(t *testing.T) {
 	}
 }
 
-func TestConfigUpdateService_ExtractBoolField(t *testing.T) {
+func TestUpdateService_ExtractBoolField(t *testing.T) {
 	payload := map[string]any{
 		"auto_organize": true,
 	}
@@ -49,7 +48,7 @@ func TestConfigUpdateService_ExtractBoolField(t *testing.T) {
 	}
 }
 
-func TestConfigUpdateService_ExtractIntField(t *testing.T) {
+func TestUpdateService_ExtractIntField(t *testing.T) {
 	payload := map[string]any{
 		"concurrent_scans": float64(4),
 	}
@@ -61,26 +60,26 @@ func TestConfigUpdateService_ExtractIntField(t *testing.T) {
 	}
 }
 
-func TestConfigUpdateService_ApplyUpdates_Success(t *testing.T) {
+func TestUpdateService_ApplyUpdates_Success(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
 	mockStore.On("SetSetting", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockStore.On("GetSetting", mock.Anything).Return((*database.Setting)(nil), nil).Maybe()
-	service := NewConfigUpdateService(mockStore)
+	service := NewUpdateService(mockStore)
 
 	updates := map[string]any{
 		"root_dir": "/new/library",
 	}
 
-	originalDir := config.AppConfig.RootDir
+	originalDir := AppConfig.RootDir
 	defer func() {
-		config.AppConfig.RootDir = originalDir
+		AppConfig.RootDir = originalDir
 	}()
 
 	if err := service.ApplyUpdates(updates); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if config.AppConfig.RootDir != "/new/library" {
-		t.Errorf("expected '/new/library', got %q", config.AppConfig.RootDir)
+	if AppConfig.RootDir != "/new/library" {
+		t.Errorf("expected '/new/library', got %q", AppConfig.RootDir)
 	}
 }
