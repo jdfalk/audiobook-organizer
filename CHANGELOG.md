@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.59.0 -->
+<!-- version: 2.60.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-11 -->
 
@@ -8,6 +8,21 @@
 ## [Unreleased]
 
 ### Refactors
+
+#### May 11, 2026 — Wave-2 server thinning: 10-task parallel sweep (PRs #807–#816)
+
+Second parallel sweep further thinning `internal/server`. 10 tasks, 10 PRs, all autonomous:
+
+- **`internal/sweep`** — `SweepTombstones`, `AuditFileConsistency`, `SweeperResult`; 6 tests (PR #807)
+- **`internal/work`** — `WorkService` CRUD; 13 tests (PR #808)
+- **`internal/undo`** — `RunUndoOperation`, `PreflightUndoConflicts`, all types; Deluge callback pattern to avoid import cycle; 6 tests (PR #809)
+- **`internal/batch`** — `BatchService`, `BatchResponse`, `applyUpdates`; 12 tests (PR #810)
+- **`internal/organizer`** — deleted `path_format.go` forwarding shim; callers now import organizer directly (PR #811)
+- **`internal/metafetch`** — `OpenLibraryService.Import` method extracted from server handler (PR #812)
+- **`internal/reconcile`** — verified already thin; comment + version cleanup (PR #813)
+- **`internal/search`** — `QuoteIfNeeded` moved from server handler into search package (PR #814)
+- **`internal/server/user_tags.go`** — verified thin; deduplicated `normalizeTag` helper (PR #815)
+- **`internal/maintenance`** — `ProgressAdapter` exported into maintenance package (PR #816)
 
 #### May 11, 2026 — Extract 4 services from `internal/server` to domain packages (PRs #803–#805, #807)
 

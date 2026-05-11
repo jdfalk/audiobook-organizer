@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.20.0 -->
+<!-- version: 8.21.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-11 -->
 
@@ -41,6 +41,7 @@ future agent) can scan the entire workspace in one page.
 - [x] **SERVER-THIN-3** Extract `MetadataStateService` → `internal/metafetch` (PR #805)
 - [x] **SERVER-THIN-4** Extract `EvaluateSmartPlaylist` → `internal/playlist` (PR #807)
 - [x] **SERVER-THIN-5** Fix stale Queue mock + GlobalQueue references blocking CI
+- [x] **SERVER-THIN-6** Wave 2 parallel-sweep (PRs #807–#816): sweep, work, undo, batch, path-format, openlibrary, reconcile, similar-books, user-tags, maintenance
 
 ---
 
