@@ -1,5 +1,5 @@
 // file: internal/server/scheduler_tasks.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 4ed1afbd-7c63-487a-9a53-3b1b05eb06ee
 // last-edited: 2026-05-11
 
@@ -566,8 +566,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err != nil {
 				return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
-			params := maintenanceOpParams{LegacyOpID: op.ID}
-			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.reconcile-scan", params); enqErr != nil {
+			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.reconcile-scan", nil); enqErr != nil {
 				return nil, fmt.Errorf("failed to enqueue reconcile scan: %w", enqErr)
 			}
 			return op, nil
@@ -599,8 +598,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err != nil {
 				return nil, fmt.Errorf("failed to create operation: %w", err)
 			}
-			params := maintenanceOpParams{LegacyOpID: op.ID}
-			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.ai-dedup-batch", params); enqErr != nil {
+			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.ai-dedup-batch", nil); enqErr != nil {
 				return nil, fmt.Errorf("failed to enqueue ai-dedup-batch: %w", enqErr)
 			}
 			return op, nil
@@ -664,8 +662,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err != nil {
 				return nil, err
 			}
-			params := maintenanceOpParams{LegacyOpID: op.ID}
-			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.purge-old-logs", params); enqErr != nil {
+			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.purge-old-logs", nil); enqErr != nil {
 				return nil, fmt.Errorf("failed to enqueue purge-old-logs: %w", enqErr)
 			}
 			return op, nil
@@ -691,8 +688,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			if err != nil {
 				return nil, err
 			}
-			params := maintenanceOpParams{LegacyOpID: op.ID}
-			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.cleanup-activity-log", params); enqErr != nil {
+			if _, enqErr := ts.server.opRegistry.EnqueueOp(context.Background(), "maintenance.cleanup-activity-log", nil); enqErr != nil {
 				return nil, fmt.Errorf("failed to enqueue cleanup-activity-log: %w", enqErr)
 			}
 			return op, nil
