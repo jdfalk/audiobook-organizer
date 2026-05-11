@@ -1,8 +1,8 @@
-// file: internal/server/sweeper.go
-// version: 1.1.0
-// guid: b2c3d4e5-f6a7-8901-abcd-ef2345678901
+// file: internal/sweep/sweeper.go
+// version: 1.0.0
+// guid: a1b2c3d4-e5f6-4789-abcd-ef2345678901
 
-package server
+package sweep
 
 import (
 	"fmt"

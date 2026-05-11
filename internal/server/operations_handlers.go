@@ -23,6 +23,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/sweep"
 )
 
 func (s *Server) startScan(c *gin.Context) {
@@ -273,7 +274,7 @@ func (s *Server) sweepTombstones(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	result, err := SweepTombstones(s.Store())
+	result, err := sweep.SweepTombstones(s.Store())
 	if err != nil {
 		httputil.InternalError(c, "failed to sweep tombstones", err)
 		return
@@ -309,7 +310,7 @@ func (s *Server) auditFileConsistency(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	result, err := AuditFileConsistency(s.Store())
+	result, err := sweep.AuditFileConsistency(s.Store())
 	if err != nil {
 		httputil.InternalError(c, "failed to audit file consistency", err)
 		return
