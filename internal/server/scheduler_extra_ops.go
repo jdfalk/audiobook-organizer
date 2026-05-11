@@ -26,6 +26,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/jdfalk/audiobook-organizer/internal/sweep"
 )
 
 // schedulerExtraOpParams carries the v1 operation ID from the TriggerFn into
@@ -108,7 +109,7 @@ func (s *Server) RegisterArchiveSweepOp(reg *opsregistry.Registry) error {
 		Capabilities:    []opsregistry.Capability{opsregistry.CapLibraryRead, opsregistry.CapLibraryWrite},
 		Run: func(ctx context.Context, rawParams json.RawMessage, reporter opsregistry.Reporter) error {
 			progress := registryProgressAdapter{r: reporter}
-			cleaned := SweepArchivedBooks(s.Store())
+			cleaned := sweep.SweepArchivedBooks(s.Store())
 			_ = progress.Log("info", fmt.Sprintf("Archive sweep: cleaned %d books", cleaned), nil)
 			return nil
 		},
@@ -492,7 +493,7 @@ func (s *Server) RegisterTempFileCleanupOp(reg *opsregistry.Registry) error {
 				return fmt.Errorf("temp-file-cleanup: decode params: %w", err)
 			}
 			progress := registryProgressAdapter{r: reporter}
-			removed := cleanupOrphanedTempFiles(config.AppConfig.RootDir, s.activityWriter, p.LegacyOpID)
+			removed := sweep.CleanupOrphanedTempFiles(config.AppConfig.RootDir, s.activityWriter, p.LegacyOpID)
 			activity.FlushOperation(s.activityWriter, p.LegacyOpID)
 			msg := fmt.Sprintf("Removed %d orphaned temp files", removed)
 			_ = progress.Log("info", msg, nil)

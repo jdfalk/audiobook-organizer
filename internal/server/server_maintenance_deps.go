@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	maintenanceplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/sweep"
 )
 
 // Verify *Server implements maintenance.ServerDeps at compile time.
@@ -72,7 +73,7 @@ func (s *Server) TranscodeMalformedM4BFiles() {
 // ---- store helpers ----
 
 func (s *Server) CleanupOrphanedTempFiles(rootDir string, opID string) int {
-	return cleanupOrphanedTempFiles(rootDir, s.activityWriter, opID)
+	return sweep.CleanupOrphanedTempFiles(rootDir, s.activityWriter, opID)
 }
 
 func (s *Server) CleanupTrashedVersions() int {
@@ -80,7 +81,7 @@ func (s *Server) CleanupTrashedVersions() int {
 }
 
 func (s *Server) SweepArchivedBooks() int {
-	return SweepArchivedBooks(s.Store())
+	return sweep.SweepArchivedBooks(s.Store())
 }
 
 // ---- optional component accessors ----
