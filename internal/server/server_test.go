@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -242,7 +243,7 @@ func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 	require.NoError(t, err)
 
 	now := time.Now()
-	err = saveMetadataState(created.ID, map[string]metadataFieldState{
+	err = saveMetadataState(created.ID, map[string]metafetch.MetadataFieldState{
 		"title": {
 			FetchedValue:   "Fetched Title",
 			OverrideValue:  "Override Title",
@@ -678,7 +679,7 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = saveMetadataState(created.ID, map[string]metadataFieldState{
+	err = saveMetadataState(created.ID, map[string]metafetch.MetadataFieldState{
 		"publisher": {
 			OverrideValue:  "Manual Publisher",
 			OverrideLocked: true,
@@ -1316,7 +1317,7 @@ func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	state := map[string]metadataFieldState{
+	state := map[string]metafetch.MetadataFieldState{
 		"title": {
 			FetchedValue:   "Fetched Title",
 			OverrideValue:  "Override Title",

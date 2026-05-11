@@ -1,8 +1,8 @@
-// file: internal/server/metadata_state_service.go
+// file: internal/metafetch/metadata_state_service.go
 // version: 1.2.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
-package server
+package metafetch
 
 import (
 	"encoding/json"
@@ -29,14 +29,6 @@ type MetadataStateService struct {
 // NewMetadataStateService creates a new metadata state service
 func NewMetadataStateService(db metadataStateStore) *MetadataStateService {
 	return &MetadataStateService{db: db}
-}
-
-// metadataFieldState represents the state of a single metadata field
-type metadataFieldState struct {
-	FetchedValue   any       `json:"fetched_value,omitempty"`
-	OverrideValue  any       `json:"override_value,omitempty"`
-	OverrideLocked bool      `json:"override_locked"`
-	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // LoadMetadataState loads the complete metadata state for a book

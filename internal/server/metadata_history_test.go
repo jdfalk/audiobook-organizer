@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +36,7 @@ func TestMetadataStateService_RecordsChangeOnSetOverride(t *testing.T) {
 		},
 	}
 
-	service := NewMetadataStateService(mockDB)
+	service := metafetch.NewMetadataStateService(mockDB)
 	err := service.SetOverride("book1", "title", "New Title", false)
 	require.NoError(t, err)
 
@@ -73,7 +74,7 @@ func TestMetadataStateService_RecordsChangeOnClearOverride(t *testing.T) {
 		},
 	}
 
-	service := NewMetadataStateService(mockDB)
+	service := metafetch.NewMetadataStateService(mockDB)
 	err := service.ClearOverride("book1", "title")
 	require.NoError(t, err)
 
@@ -103,7 +104,7 @@ func TestMetadataStateService_RecordsChangeOnFetch(t *testing.T) {
 		},
 	}
 
-	service := NewMetadataStateService(mockDB)
+	service := metafetch.NewMetadataStateService(mockDB)
 	err := service.UpdateFetchedMetadata("book1", map[string]any{"title": "Fetched Title"})
 	require.NoError(t, err)
 

@@ -16,6 +16,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 )
 
 func metadataStateKey(bookID string) string {
@@ -45,8 +46,8 @@ func encodeMetadataValue(value any) (*string, error) {
 	return &encoded, nil
 }
 
-func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, error) {
-	state := map[string]metadataFieldState{}
+func loadLegacyMetadataState(bookID string) (map[string]metafetch.MetadataFieldState, error) {
+	state := map[string]metafetch.MetadataFieldState{}
 
 	pref, err := database.GetGlobalStore().GetUserPreference(metadataStateKey(bookID))
 	if err != nil {
@@ -62,8 +63,8 @@ func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, erro
 	return state, nil
 }
 
-func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
-	state := map[string]metadataFieldState{}
+func loadMetadataState(bookID string) (map[string]metafetch.MetadataFieldState, error) {
+	state := map[string]metafetch.MetadataFieldState{}
 	if database.GetGlobalStore() == nil {
 		return state, fmt.Errorf("database not initialized")
 	}
@@ -73,7 +74,7 @@ func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 		return state, err
 	}
 	for _, entry := range stored {
-		state[entry.Field] = metadataFieldState{
+		state[entry.Field] = metafetch.MetadataFieldState{
 			FetchedValue:   decodeMetadataValue(entry.FetchedValue),
 			OverrideValue:  decodeMetadataValue(entry.OverrideValue),
 			OverrideLocked: entry.OverrideLocked,
@@ -98,7 +99,7 @@ func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	return legacy, nil
 }
 
-func saveMetadataState(bookID string, state map[string]metadataFieldState) error {
+func saveMetadataState(bookID string, state map[string]metafetch.MetadataFieldState) error {
 	if database.GetGlobalStore() == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -167,7 +168,7 @@ func updateFetchedMetadataState(bookID string, values map[string]any) error {
 		return err
 	}
 	if state == nil {
-		state = map[string]metadataFieldState{}
+		state = map[string]metafetch.MetadataFieldState{}
 	}
 	for field, value := range values {
 		entry := state[field]
@@ -459,9 +460,9 @@ func buildComparisonValuesFromActivityLog(as *activity.Service, bookID string, t
 	return compMap
 }
 
-func buildMetadataProvenance(book *database.Book, state map[string]metadataFieldState, meta metadata.Metadata, authorName, seriesName string, comparisonValues map[string]any) map[string]database.MetadataProvenanceEntry {
+func buildMetadataProvenance(book *database.Book, state map[string]metafetch.MetadataFieldState, meta metadata.Metadata, authorName, seriesName string, comparisonValues map[string]any) map[string]database.MetadataProvenanceEntry {
 	if state == nil {
-		state = map[string]metadataFieldState{}
+		state = map[string]metafetch.MetadataFieldState{}
 	}
 
 	provenance := map[string]database.MetadataProvenanceEntry{}
