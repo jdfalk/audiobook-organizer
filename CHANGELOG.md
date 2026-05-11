@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.55.0 -->
+<!-- version: 2.56.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-11 -->
 
@@ -8,6 +8,26 @@
 ## [Unreleased]
 
 ### Features
+
+#### May 11, 2026 — Final BridgeQueue elimination (PR #800)
+
+Deleted all v1 queue infrastructure: `OperationQueue`, `BridgeQueue`,
+`GlobalQueue`, `Queue` interface, `ActivityLogger`, and their 1,800+ lines of
+tests and mocks (`queue.go`, `bridge.go`, `activity.go`,
+`mocks/mock_queue.go`, and all associated test files).
+
+- **`internal/operations/progress.go`** (new) — extracted `ProgressReporter`,
+  `OperationFunc`, and `LoggerFromReporter` from the deleted `queue.go` so
+  packages that call into operation runners retain their type contracts.
+- **`cmd/root.go` / `main.go`** — removed `InitializeQueue`, `ShutdownQueue`,
+  and `GlobalQueue` initialization blocks; startup is now entirely opRegistry-driven.
+- **`internal/server/server.go`** — removed `queue` field, `BridgeQueue`
+  creation block, and `activityServiceLogger`.
+- **Tests** — fixed `TestOperationEndpointsErrors` (scan/organize now return 202
+  because opRegistry is always initialized), `TestAddImportPath_Returns201`
+  (added `CreateOperation` mock expectation), removed stale queue nil-patterns.
+- Zero regressions vs. main: all currently-failing server tests were already
+  failing on the main branch before this change.
 
 #### May 11, 2026 — Complete v1→v2 queue migration (PRs #783–#797)
 
