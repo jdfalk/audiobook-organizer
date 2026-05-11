@@ -1,8 +1,8 @@
-// file: internal/server/dashboard_service.go
+// file: internal/sysinfo/dashboard_service.go
 // version: 1.3.0
 // guid: 9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f
 
-package server
+package sysinfo
 
 import (
 	"fmt"

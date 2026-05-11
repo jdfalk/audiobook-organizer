@@ -1369,7 +1369,7 @@ func TestAudiobookService_GetSoftDeletedBooks_NilDB(t *testing.T) {
 func TestDashboardService_GetHealthCheckResponse_Degraded(t *testing.T) {
 	// Use nil db to trigger the error path in CollectDashboardMetrics
 	// (individual DB call errors are swallowed, only nil db returns error)
-	svc := &DashboardService{db: nil}
+	svc := sysinfo.NewDashboardService(nil)
 
 	resp := svc.GetHealthCheckResponse("1.0.0")
 	if resp.Status != "degraded" {
