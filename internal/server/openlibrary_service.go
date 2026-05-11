@@ -1,5 +1,5 @@
 // file: internal/server/openlibrary_service.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package server
@@ -95,44 +95,9 @@ func (s *Server) startOLDownload(c *gin.Context) {
 		_, _ = store.CreateOperation(opID, "ol_dump_download", &folderPath)
 	}
 
-	oq := s.queue
-	if oq != nil {
-		err := oq.Enqueue(opID, "ol_dump_download", operations.PriorityNormal,
-			func(ctx context.Context, progress operations.ProgressReporter) error {
-				for i, dumpType := range req.Types {
-					if progress != nil && progress.IsCanceled() {
-						return fmt.Errorf("download canceled")
-					}
-					if progress != nil {
-						_ = progress.Log("info", fmt.Sprintf("Starting OL dump download: %s", dumpType), nil)
-						_ = progress.UpdateProgress(i, len(req.Types), fmt.Sprintf("Downloading %s...", dumpType))
-					}
-					err := openlibrary.DownloadDump(dumpType, targetDir, tracker)
-					if err != nil {
-						if progress != nil {
-							_ = progress.Log("error", fmt.Sprintf("OL dump download failed for %s: %v", dumpType, err), nil)
-						}
-						return fmt.Errorf("download failed for %s: %w", dumpType, err)
-					}
-					if progress != nil {
-						_ = progress.Log("info", fmt.Sprintf("OL dump download complete: %s", dumpType), nil)
-					}
-				}
-				if progress != nil {
-					_ = progress.UpdateProgress(len(req.Types), len(req.Types), "All downloads complete")
-				}
-				return nil
-			},
-		)
-		if err != nil {
-			log.Printf("[WARN] Failed to enqueue OL download, running directly: %v", err)
-			go func() {
-				for _, dumpType := range req.Types {
-					_ = openlibrary.DownloadDump(dumpType, targetDir, tracker)
-				}
-			}()
-		}
-	} else {
+	params := olDownloadOpParams{LegacyOpID: opID, Types: req.Types, TargetDir: targetDir}
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "openlibrary.download", params); enqErr != nil {
+		log.Printf("[WARN] Failed to enqueue OL download, running directly: %v", enqErr)
 		go func() {
 			for _, dumpType := range req.Types {
 				_ = openlibrary.DownloadDump(dumpType, targetDir, tracker)
@@ -168,23 +133,9 @@ func (s *Server) startOLImport(c *gin.Context) {
 		_, _ = store.CreateOperation(opID, "ol_dump_import", &folderPath)
 	}
 
-	oq := s.queue
-	if oq != nil {
-		typesStr := strings.Join(req.Types, ",")
-		err := oq.Enqueue(opID, "ol_dump_import", operations.PriorityNormal,
-			func(ctx context.Context, progress operations.ProgressReporter) error {
-				return s.executeOLImport(ctx, progress, svc, targetDir, req.Types)
-			},
-		)
-		if err != nil {
-			log.Printf("[WARN] Failed to enqueue OL import, running directly: %v", err)
-			go func() {
-				_ = s.executeOLImport(context.Background(), nil, svc, targetDir, req.Types)
-			}()
-		}
-		_ = typesStr // used for logging if needed
-	} else {
-		// Fallback: no queue, run directly
+	importParams := olImportOpParams{LegacyOpID: opID, Types: req.Types, TargetDir: targetDir}
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "openlibrary.import", importParams); enqErr != nil {
+		log.Printf("[WARN] Failed to enqueue OL import, running directly: %v", enqErr)
 		go func() {
 			_ = s.executeOLImport(context.Background(), nil, svc, targetDir, req.Types)
 		}()
