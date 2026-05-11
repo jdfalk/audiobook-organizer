@@ -1,23 +1,17 @@
 // file: internal/server/import_collision.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 4b2c3d1e-5f6a-4a70-b8c5-3d7e0f1b9a99
-// last-edited: 2026-05-01
+// last-edited: 2026-05-11
 //
-// Import-time collision preview (backlog 1.6). Before importing a
-// file, check whether it collides with an existing book (by title
-// match or file hash) so the user can decide whether to skip,
-// merge, or create a new version.
+// HTTP handler for import-time collision preview. Delegates to
+// internal/importer for the core collision detection logic.
 
 package server
 
 import (
-	"os"
-	"strings"
-
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	"github.com/jdfalk/audiobook-organizer/internal/merge"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/importer"
 )
 
 // handleImportCollisionPreview checks whether importing a file
@@ -33,68 +27,22 @@ func (s *Server) handleImportCollisionPreview(c *gin.Context) {
 		return
 	}
 
-	var candidates []merge.CollisionCandidate
+	// Delegate to importer package for collision detection.
+	result := importer.CheckImportCollisions(
+		s.Store(),
+		&importer.CollisionPreviewRequest{
+			FilePath:    req.FilePath,
+			TorrentHash: req.TorrentHash,
+		},
+	)
 
-	// 1. Fingerprint check (purged/blocked content).
-	if req.TorrentHash != "" {
-		match := CheckFingerprint(s.Store(), req.TorrentHash, nil)
-		if match != nil && match.Matched {
-			candidates = append(candidates, merge.CollisionCandidate{
-				BookID:    match.BookID,
-				Title:     merge.BookTitle(s.Store(), match.BookID),
-				MatchType: "fingerprint",
-			})
-		}
-	}
-
-	// 2. File hash check against existing books.
-	if _, err := os.Stat(req.FilePath); err == nil {
-		hash := merge.QuickHash(req.FilePath)
-		if hash != "" {
-			existing, _ := s.Store().GetBookByFileHash(hash)
-			if existing != nil {
-				candidates = append(candidates, merge.CollisionCandidate{
-					BookID:    existing.ID,
-					Title:     existing.Title,
-					MatchType: "file_hash",
-					FilePath:  existing.FilePath,
-				})
-			}
-		}
-	}
-
-	// 3. Title match via metadata extraction.
-	meta, err := metadata.ExtractMetadata(req.FilePath, nil)
-	if err == nil && meta.Title != "" {
-		titleLower := strings.ToLower(strings.TrimSpace(meta.Title))
-		books, _ := s.Store().GetAllBooks(0, 0)
-		for _, b := range books {
-			if strings.ToLower(strings.TrimSpace(b.Title)) == titleLower {
-				alreadyListed := false
-				for _, c := range candidates {
-					if c.BookID == b.ID {
-						alreadyListed = true
-						break
-					}
-				}
-				if !alreadyListed {
-					candidates = append(candidates, merge.CollisionCandidate{
-						BookID:    b.ID,
-						Title:     b.Title,
-						MatchType: "title",
-						FilePath:  b.FilePath,
-					})
-				}
-			}
-		}
-	}
-
-	if candidates == nil {
-		candidates = []merge.CollisionCandidate{}
-	}
 	httputil.RespondWithOK(c, struct {
-		Collisions   []merge.CollisionCandidate `json:"collisions"`
-		Count        int                        `json:"count"`
-		HasCollision bool                       `json:"has_collision"`
-	}{Collisions: candidates, Count: len(candidates), HasCollision: len(candidates) > 0})
+		Collisions   interface{} `json:"collisions"`
+		Count        int         `json:"count"`
+		HasCollision bool        `json:"has_collision"`
+	}{
+		Collisions:   result.Collisions,
+		Count:        result.Count,
+		HasCollision: result.HasCollision,
+	})
 }
