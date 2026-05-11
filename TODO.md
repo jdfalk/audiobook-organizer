@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.18.0 -->
+<!-- version: 8.19.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-11 -->
 
@@ -31,6 +31,27 @@ future agent) can scan the entire workspace in one page.
 ## AI Model Configuration
 
 - [x] **AI-MODEL-1** Per-feature LLM model knob — adds `DedupReviewModel`, `MetadataReviewModel`, `FilenameParseModel`, `CoverArtModel` to `config.Config` (defaults `gpt-5-mini`). Replaces hardcoded literals in `openai_parser.go`, `openai_batch.go`, `metadata_llm_review.go`, and `dedup/engine.go` with config getters. PR feat/per-feature-llm-model.
+
+---
+
+## ✅ Completed — May 11, 2026
+
+- [x] **SERVER-THIN-1** Extract `DashboardService` → `internal/sysinfo` (PR #803)
+- [x] **SERVER-THIN-2** Extract `UpdateService` (config) → `internal/config` (PR #804)
+- [x] **SERVER-THIN-3** Extract `MetadataStateService` → `internal/metafetch` (PR #805)
+- [x] **SERVER-THIN-4** Extract `EvaluateSmartPlaylist` → `internal/playlist` (PR #807)
+- [x] **SERVER-THIN-5** Fix stale Queue mock + GlobalQueue references blocking CI
+
+---
+
+## 🔜 Next — Server thinning wave 2
+
+- [ ] **SERVER-THIN-6** Remaining mis-homed service files in `internal/server`:
+  `openlibrary_service.go`, `reconcile.go`, `sweeper.go`, `dedup_engine*.go`
+  (op files and service implementations that belong in their domain packages)
+- [ ] **SERVER-THIN-7** Fix pre-existing iTunes/organize/scan timeout failures
+  (`TestITunesImport_*`, `TestOrganizeService_ViaHTTP`, `TestAddImportPathAutoScan`,
+  `TestStartScanOperation`, `TestStartOrganizeOperation` all timeout at 10–15s)
 
 ---
 

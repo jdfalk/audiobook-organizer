@@ -1,11 +1,33 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.58.0 -->
+<!-- version: 2.59.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-11 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Refactors
+
+#### May 11, 2026 — Extract 4 services from `internal/server` to domain packages (PRs #803–#805, #807)
+
+Parallel-sweep extracted service implementations out of the 200+ test `internal/server`
+package into their canonical domain homes, leaving thin HTTP adapters in server:
+
+- **`internal/sysinfo`** — `DashboardService` (CollectDashboardMetrics, GetHealthCheckResponse,
+  CollectLibraryStats, CollectQuickMetrics); 5 unit tests (PR #803)
+- **`internal/config`** — `UpdateService` (GetSettings, UpdateSettings, ResetSettings,
+  GetValidationRules, ValidateSettings); 5 unit tests (PR #804 / config-svc)
+- **`internal/metafetch`** — `MetadataStateService` (7 methods: field-state, tag-comparison,
+  source-priority, stale detection); `MetadataFieldState` exported; 7 unit tests (PR #805)
+- **`internal/playlist`** — `EvaluateSmartPlaylist`, `ErrSearchIndexUnavailable`, helpers;
+  11 unit tests + 5 property-based tests via `pgregory.net/rapid` (PR #807)
+- **`version-svc` task** — no-op; `internal/versions` already had the full service + tests;
+  server handlers were already thin
+
+Also fixed pre-existing CI failures on main (PRs not numbered individually):
+- Removed stale `Queue` mock from `.mockery.yaml` + regenerated `MockStore`
+- Removed dead `GlobalQueue`/`initializeQueue` references from `main_test.go` / `cmd/commands_test.go`
 
 ### Features
 
