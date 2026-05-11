@@ -6,6 +6,8 @@ package server
 
 import (
 	"log"
+
+	"github.com/jdfalk/audiobook-organizer/internal/remux"
 )
 
 const quarantineKnownBadKey = "quarantine_known_bad_v1_done"
@@ -34,7 +36,7 @@ func (s *Server) quarantineKnownBadFiles() {
 		if b.QuarantinedAt != nil {
 			continue
 		}
-		key := transcodeSkipKey(b.FilePath)
+		key := remux.TranscodeSkipKey(b.FilePath)
 		setting, err := store.GetSetting(key)
 		if err != nil || setting == nil || setting.Value != "true" {
 			continue

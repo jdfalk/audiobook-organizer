@@ -1,8 +1,8 @@
-// file: internal/server/malformed_m4b_transcode.go
-// version: 1.2.0
-// guid: f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
+// file: internal/remux/transcode.go
+// version: 1.0.0
+// guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
-package server
+package remux
 
 import (
 	"crypto/sha256"
@@ -18,38 +18,47 @@ import (
 	taglib "go.senan.xyz/taglib"
 )
 
-const malformedTranscodeKey = "malformed_m4b_transcode_v1_done"
+const TranscodeKey = "malformed_m4b_transcode_v1_done"
 
-// transcodeSkipKey returns a settings key that marks a specific file as
+// Transcoder provides malformed M4B transcode operations.
+type Transcoder struct {
+	store Store
+}
+
+// NewTranscoder creates a new Transcoder instance.
+func NewTranscoder(store Store) *Transcoder {
+	return &Transcoder{store: store}
+}
+
+// TranscodeSkipKey returns a settings key that marks a specific file as
 // permanently unfixable by transcode, so restarts don't re-attempt it.
-func transcodeSkipKey(path string) string {
+func TranscodeSkipKey(path string) string {
 	h := sha256.Sum256([]byte(path))
 	return fmt.Sprintf("transcode_skip_%x", h[:8])
 }
 
-// transcodeMalformedM4BFiles walks the library and re-encodes any M4B/M4A
+// TranscodeMalformedFiles walks the library and re-encodes any M4B/M4A
 // file that taglib cannot parse even after the remux pass. Full AAC transcode
 // at 64 kbps rebuilds the file from scratch, which fixes corruption that a
 // stream copy cannot repair. Runs once at startup.
-func (s *Server) transcodeMalformedM4BFiles() {
-	store := s.Store()
-	if store == nil {
+func (t *Transcoder) TranscodeMalformedFiles() {
+	if t.store == nil {
 		return
 	}
 
-	if setting, err := store.GetSetting(malformedTranscodeKey); err == nil && setting != nil && setting.Value == "true" {
+	if setting, err := t.store.GetSetting(TranscodeKey); err == nil && setting != nil && setting.Value == "true" {
 		log.Printf("[INFO] Malformed M4B transcode already completed, skipping")
 		return
 	}
 
 	root := config.AppConfig.RootDir
 	if root == "" {
-		log.Printf("[WARN] transcodeMalformedM4BFiles: RootDir not configured, skipping")
+		log.Printf("[WARN] TranscodeMalformedFiles: RootDir not configured, skipping")
 		return
 	}
 
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		log.Printf("[WARN] transcodeMalformedM4BFiles: ffmpeg not found, skipping")
+		log.Printf("[WARN] TranscodeMalformedFiles: ffmpeg not found, skipping")
 		return
 	}
 
@@ -60,9 +69,9 @@ func (s *Server) transcodeMalformedM4BFiles() {
 		"/mnt/bigdata/books/audiobook-organizer/Eric Ugland/One More Last Time_ A LitRPG/GameLit Novel (The Good Guys/One More Last Time_ A LitRPG/GameLit Novel (The Good Guys, Book 1)/One More Last Time_ A LitRPG/GameLit Novel (The Good Guys, Book 1) - Eric Ugland - read by narrator.m4b",
 	}
 	for _, p := range permanentlyUnfixable {
-		k := transcodeSkipKey(p)
-		if skip, _ := store.GetSetting(k); skip == nil || skip.Value != "true" {
-			_ = store.SetSetting(k, "true", "bool", false)
+		k := TranscodeSkipKey(p)
+		if skip, _ := t.store.GetSetting(k); skip == nil {
+			_ = t.store.SetSetting(k, "true", "bool", false)
 			log.Printf("[INFO] malformed M4B transcode: pre-marked permanently unfixable: %s", p)
 		}
 	}
@@ -89,7 +98,7 @@ func (s *Server) transcodeMalformedM4BFiles() {
 		}
 
 		// Skip files that have already been confirmed permanently unfixable.
-		if skip, err := store.GetSetting(transcodeSkipKey(path)); err == nil && skip != nil && skip.Value == "true" {
+		if skip, err := t.store.GetSetting(TranscodeSkipKey(path)); err == nil && skip != nil && skip.Value == "true" {
 			log.Printf("[INFO] malformed M4B transcode: skipping known-unfixable %s", path)
 			skipped++
 			failed++
@@ -97,9 +106,9 @@ func (s *Server) transcodeMalformedM4BFiles() {
 		}
 
 		// taglib failed — attempt full AAC transcode.
-		if err := transcodeFile(path); err != nil {
+		if err := TranscodeFile(path); err != nil {
 			log.Printf("[WARN] malformed M4B transcode failed for %s: %v", path, err)
-			_ = store.SetSetting(transcodeSkipKey(path), "true", "bool", false)
+			_ = t.store.SetSetting(TranscodeSkipKey(path), "true", "bool", false)
 			failed++
 			return nil
 		}
@@ -107,7 +116,7 @@ func (s *Server) transcodeMalformedM4BFiles() {
 		// Verify the output is now readable.
 		if _, err := taglib.ReadTags(path); err != nil {
 			log.Printf("[WARN] malformed M4B transcode produced unreadable file for %s: %v", path, err)
-			_ = store.SetSetting(transcodeSkipKey(path), "true", "bool", false)
+			_ = t.store.SetSetting(TranscodeSkipKey(path), "true", "bool", false)
 			failed++
 			return nil
 		}
@@ -118,12 +127,12 @@ func (s *Server) transcodeMalformedM4BFiles() {
 	})
 
 	log.Printf("[INFO] Malformed M4B transcode: %d transcoded, %d already readable, %d failed (%d permanently skipped)", transcoded, clean, failed, skipped)
-	_ = store.SetSetting(malformedTranscodeKey, "true", "bool", false)
+	_ = t.store.SetSetting(TranscodeKey, "true", "bool", false)
 }
 
-// transcodeFile re-encodes an M4B/M4A file to 64 kbps AAC in-place.
+// TranscodeFile re-encodes an M4B/M4A file to 64 kbps AAC in-place.
 // Writes to a temp file first, then atomically renames over the original.
-func transcodeFile(path string) error {
+func TranscodeFile(path string) error {
 	tmp := path + ".remux.tmp"
 	defer os.Remove(tmp)
 
