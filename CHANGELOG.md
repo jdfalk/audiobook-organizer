@@ -1,13 +1,72 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.48.0 -->
+<!-- version: 2.55.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-08 -->
+<!-- last-edited: 2026-05-11 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Features
+
+#### May 11, 2026 — Complete v1→v2 queue migration (PRs #783–#797)
+
+All `s.queue.Enqueue` call sites in `internal/server/` have been migrated to
+`s.opRegistry.EnqueueOp`, completing the UOS v2 migration started in the previous
+session. Operations are now exclusively dispatched through the v2 registry.
+
+- **feat(ops): OpsV2Store PebbleDB implementation** (PR #783) — implements all 20
+  `OpsV2Store` interface methods on PebbleDB so the v2 dispatcher works in production
+  (PebbleDB is the production store; SQLite already had this).
+
+- **feat(ops): op_registrars infrastructure** (PR #784) — introduces
+  `internal/server/op_registrars.go` with `addOpRegistrar`/`opRegistrars` zero-conflict
+  registration mechanism; new op files call `addOpRegistrar` from `init()`, so new ops
+  never require touching `server.go`.
+
+- **feat(ops): migrate library scan/organize/transcode/bulk-write-back** (PRs #785–#788
+  + existing `library_core_ops.go`, `library_writeback_op.go`) — wires `library.scan`,
+  `library.organize`, `library.transcode`, `library.bulk-write-back` OperationDefs.
+
+- **feat(ops): migrate diagnostics, iTunes, entities, folder autoscan** (PRs #785–#788)
+  — `diagnostics.export`, `itunes.import`, `itunes.sync`, `entities.author-merge`,
+  `entities.resolve-production-author`, `library.folder-auto-scan` OperationDefs; updates
+  `diagnostics_handlers.go`, `itunes_handlers.go`, `server_middleware.go`,
+  `entities_handlers.go`, `filesystem_handlers.go`.
+
+- **feat(ops): migrate OpenAI/OpenLibrary, metadata-candidate, batch-save, AI handlers**
+  (PRs #789–#793) — `openlibrary.download`, `openlibrary.import`,
+  `metadata.candidate-fetch`, `metadata.batch-save`, `ai.author-review`,
+  `ai.author-merge-apply` OperationDefs; updates `openlibrary_service.go`,
+  `metadata_batch_candidates.go`, `metadata_handlers.go`, `ai_handlers.go`. 
+  `handleBulkMetadataFetchAll` migrated to pure v2 (no v1 op record).
+
+- **feat(ops): migrate maintenance dispatcher, window, and watcher scan** (PR #794) —
+  `maintenance.job` OperationDef (generic dispatcher for `maintenance.Get` jobs),
+  `maintenance.window` OperationDef (nightly maintenance window); updates
+  `maintenance_dispatcher.go`, `scheduler_maintenance.go`; file-watcher auto-scan
+  switched to pure v2 (`library.scan` def).
+
+- **feat(ops): migrate reconcile + duplicates** (PR #795) — `reconcile.scan`,
+  `reconcile.apply`, `dedup.book-scan`, `dedup.book-merge`, `dedup.author-scan`,
+  `dedup.series-scan`, `dedup.series-dedup`, `dedup.series-prune`, `dedup.series-merge`,
+  `dedup.series-normalize` OperationDefs; updates `reconcile.go`,
+  `duplicates_handlers.go`.
+
+- **feat(ops): migrate all remaining scheduler tasks and resume path** (PR #796) —
+  `scheduler.dedup-llm-review`, `scheduler.trash-cleanup`, `scheduler.archive-sweep`,
+  `scheduler.metadata-upgrade`, `scheduler.author-split-scan`, `scheduler.db-optimize`,
+  `scheduler.cleanup-old-backups`, `scheduler.isbn-enrichment`,
+  `scheduler.temp-file-cleanup`, `scheduler.purge-deleted`, `scheduler.tombstone-cleanup`,
+  `scheduler.resolve-production-authors`, `scheduler.metadata-refresh` OperationDefs;
+  all 19 `TriggerFn`s in `scheduler_tasks.go` migrated to hybrid pattern;
+  `resumeInterruptedOperations` uses v2 for bulk-write-back, isbn-enrichment,
+  metadata-refresh, and maintenance job resume.
+
+- **fix(ops): remove dead scheduler_ops.go** (PR #797) — deletes
+  `scheduler_ops.go` whose 4 OperationDef registrations all failed silently because the
+  maintenance plugin (registered at startup line 355) already owns those IDs; updates
+  `scheduler_tasks.go` to pass `nil` params to the maintenance plugin ops.
 
 #### May 8, 2026 — UOS-15: Promote pkg/plugin/sdk to stable public API
 
