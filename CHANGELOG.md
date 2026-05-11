@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.60.0 -->
+<!-- version: 2.61.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-11 -->
 
@@ -8,6 +8,26 @@
 ## [Unreleased]
 
 ### Refactors
+
+#### May 11, 2026 — Wave-3 server thinning: 13-task parallel sweep (PRs #817–#829)
+
+Third and final parallel sweep completing `internal/server` thinning. 13 tasks, 13 PRs, all autonomous:
+
+- **`internal/scheduler`** — `TaskScheduler` with `SchedulerDeps` struct (22 task registrations, maintenance window logic); replaces `*Server` embedding; 11 tests (PR #817)
+- **`internal/metabatch`** — `CandidateBookInfo`, `CandidateResult`, `BatchFetchRequest`, `LatestMatchedBookIDs`, `BuildCandidateBookInfo`, `MetadataUpgradeService`; 12 tests (PR #818)
+- **`internal/deluge`** — `DiscoveredTorrent`, 4-tier matching, `BuildLibraryIndex`, `ImportToLibrary`, `LibraryImporterAdapter`, integration callbacks; (PR #819)
+- **`internal/dedup`** — `ScanBookDuplicates`, `MergeBooks`, `ScanSeriesDuplicates`, `DedupSeries`, `MergeSeries`, 8 exported param structs, `ProgressReporter` interface; 17 tests (PR #820)
+- **`internal/organizer`** — `SetCheckpoint`, `HasCheckpoint`, `ClearCheckpoints`, `CleanupStaleCheckpoints`; 3 tests (PR #821)
+- **`internal/fingerprint`** + **`internal/itunes`** — `IsAudioFile`, `FileExists`, `BackfillExternalIDs`, `BackfillITunesTrackPIDs` (PR #822)
+- **`internal/covers`** — `FetchAndCacheCover`, `FindCoverFile`, `GetCachePath`, `ListCoverHistory`, `RestoreCoverFile`; 23 tests (PR #823)
+- **`internal/sweep`** — `SweepArchivedBooks`, `CleanupOrphanedTempFiles` (PR #824)
+- **`internal/versions`** — `CheckFingerprint`, `CreateIngestVersion`, version swap logic (PR #825)
+- **`internal/itunes`** — `ComputeITLDiff`, `BuildNewTrackFromBook`, `RebuildStore` interface; 3 tests (PR #826)
+- **`internal/remux`** — `Remuxer.RemuxMalformedFiles`, `Transcoder.TranscodeMalformedFiles`, `TranscodeSkipKey`; 10 tests (PR #827)
+- **`internal/importer`** — `CheckImportCollisions`; 5 tests (PR #828)
+- **`internal/audio`** — `ExtractSample`, `SampleRequest`, `SampleMaxDuration`; 3 tests (PR #829)
+
+`internal/server` is now a pure HTTP adapter layer. The only residual `*Server` receiver code is `scheduler_extra_ops.go` (uses `dedupEngine`, `dedupCache`, `aiScanStore`, `activityWriter`, `olService` — too many server internals to extract cleanly without a larger architectural refactor).
 
 #### May 11, 2026 — Wave-2 server thinning: 10-task parallel sweep (PRs #807–#816)
 
