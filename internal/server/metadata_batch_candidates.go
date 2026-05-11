@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-05-11
 
@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -215,70 +213,19 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 		_ = store.SaveOperationParams(opID, paramsJSON)
 	}
 
-	mfs := s.metadataFetchService
-
-	opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		_ = progress.UpdateProgress(0, totalBooks, "starting metadata candidate fetch")
-
-		// Rate limiter: 10 requests per second globally across all workers.
-		limiter := rate.NewLimiter(rate.Limit(10), 1)
-
-		// Buffered channel for work distribution.
-		workCh := make(chan string, len(bookIDs))
-		for _, id := range bookIDs {
-			workCh <- id
-		}
-		close(workCh)
-
-		var completed int64
-		var wg sync.WaitGroup
-
-		numWorkers := 8
-		if numWorkers > totalBooks {
-			numWorkers = totalBooks
-		}
-
-		for i := 0; i < numWorkers; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for bookID := range workCh {
-					if ctx.Err() != nil {
-						return
-					}
-
-					result := s.fetchCandidateForBook(ctx, mfs, store, limiter, opID, bookID)
-					resultJSON, err := json.Marshal(result)
-					if err != nil {
-						log.Printf("[WARN] failed to marshal candidate result for book %s: %v", bookID, err)
-						continue
-					}
-
-					opResult := &database.OperationResult{
-						OperationID: opID,
-						BookID:      bookID,
-						ResultJSON:  string(resultJSON),
-						Status:      result.Status,
-					}
-					if err := store.CreateOperationResult(opResult); err != nil {
-						log.Printf("[WARN] failed to store candidate result for book %s: %v", bookID, err)
-					}
-
-					done := atomic.AddInt64(&completed, 1)
-					_ = progress.UpdateProgress(int(done), totalBooks, fmt.Sprintf("fetched %d/%d", done, totalBooks))
-				}
-			}()
-		}
-
-		wg.Wait()
-
-		finalCount := atomic.LoadInt64(&completed)
-		_ = progress.UpdateProgress(int(finalCount), totalBooks, "completed")
-		return nil
+	// Enqueue via v2 opRegistry. The Run func in metadata_candidate_op.go
+	// handles all fetch work and writes OperationResult rows under opID so that
+	// all existing v1 readers (handleGetPendingReview, handleGetOperationResults,
+	// handleGetLatestMetadataFetch) continue working without changes.
+	// The v2 run ID returned by EnqueueOp is intentionally discarded — clients
+	// track progress via the v1 opID returned in the response below.
+	params := metadataCandidateFetchOpParams{
+		LegacyOpID: opID,
+		BookIDs:    bookIDs,
+		TotalBooks: totalBooks,
 	}
-
-	if err := s.queue.Enqueue(opID, "metadata_candidate_fetch", operations.PriorityNormal, opFunc); err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
+	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "metadata.candidate-fetch", params); enqErr != nil {
+		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
 
@@ -929,53 +876,26 @@ func (s *Server) resumeInterruptedMetadataFetch() {
 
 		log.Printf("[INFO] resuming metadata fetch %s: %d/%d books remaining", op.ID, len(remaining), len(allBookIDs))
 
-		// Re-enqueue the remaining books as a continuation of the same operation
+		// Re-enqueue the remaining books via v2 opRegistry as a continuation of the
+		// same v1 operation. The Run func in metadata_candidate_op.go handles all
+		// fetch work and writes OperationResult rows under the original opID.
 		opID := op.ID
 		totalBooks := len(allBookIDs)
 		alreadyDone := len(allBookIDs) - len(remaining)
-		mfs := s.metadataFetchService
 
-		opFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-			_ = progress.UpdateProgress(alreadyDone, totalBooks, fmt.Sprintf("resuming: %d/%d already fetched", alreadyDone, totalBooks))
+		// Mark the v1 record as running so handleGetLatestMetadataFetch can surface
+		// it during the resume window before the Run func transitions it itself.
+		_ = store.UpdateOperationStatus(opID, "running", alreadyDone, totalBooks,
+			fmt.Sprintf("resuming: %d/%d already fetched", alreadyDone, totalBooks))
 
-			limiter := rate.NewLimiter(rate.Limit(10), 1)
-			var completed int64 = int64(alreadyDone)
-			const numWorkers = 8
-			ch := make(chan string, len(remaining))
-			for _, id := range remaining {
-				ch <- id
-			}
-			close(ch)
-
-			var wg sync.WaitGroup
-			for w := 0; w < numWorkers; w++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					for bookID := range ch {
-						if ctx.Err() != nil {
-							return
-						}
-						_ = limiter.Wait(ctx)
-						result := s.fetchCandidateForBook(ctx, mfs, store, limiter, opID, bookID)
-						resultJSON, _ := json.Marshal(result)
-						_ = store.CreateOperationResult(&database.OperationResult{
-							OperationID: opID,
-							BookID:      bookID,
-							ResultJSON:  string(resultJSON),
-							Status:      result.Status,
-						})
-						done := atomic.AddInt64(&completed, 1)
-						_ = progress.UpdateProgress(int(done), totalBooks, fmt.Sprintf("fetched %d/%d", done, totalBooks))
-					}
-				}()
-			}
-			wg.Wait()
-			return nil
+		resumeParams := metadataCandidateFetchOpParams{
+			LegacyOpID:  opID,
+			BookIDs:     remaining,
+			TotalBooks:  totalBooks,
+			AlreadyDone: alreadyDone,
 		}
-
-		if err := s.queue.Enqueue(opID, "metadata_candidate_fetch", operations.PriorityNormal, opFunc); err != nil {
-			log.Printf("[WARN] failed to re-enqueue metadata fetch %s: %v", opID, err)
+		if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "metadata.candidate-fetch", resumeParams); enqErr != nil {
+			log.Printf("[WARN] failed to re-enqueue metadata fetch %s: %v", opID, enqErr)
 			_ = store.UpdateOperationStatus(opID, "failed", alreadyDone, totalBooks, "failed to resume")
 		}
 	}
