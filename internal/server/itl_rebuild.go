@@ -1,7 +1,7 @@
 // file: internal/server/itl_rebuild.go
-// version: 1.3.0
+// version: 2.0.0
 // guid: 8f7e6d5c-4b3a-2c1d-0e9f-8a7b6c5d4e3f
-// last-edited: 2026-05-01
+// last-edited: 2026-05-11
 //
 // iTunes library rebuild service: diffs the current DB state
 // against the current ITL file and computes the minimal set of
@@ -10,6 +10,9 @@
 // ApplyITLOperations call through the existing itunesservice.SafeWriteITL
 // pipeline (backup → validate → apply → validate → rollback on
 // failure). Backlog 7.9 — "diff and batch" mode.
+//
+// This file is now a thin wrapper around the core rebuild logic in
+// internal/itunes/rebuild.go.
 
 package server
 
@@ -18,11 +21,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 )
@@ -30,208 +31,14 @@ import (
 // ITLRebuildPreview summarizes the diff between the DB and the
 // current ITL file without applying any changes. Returned by
 // the dry-run path so the user can review before committing.
-type ITLRebuildPreview struct {
-	TracksInITL  int `json:"tracks_in_itl"`
-	BooksInDB    int `json:"books_in_db"`
-	ToRemove     int `json:"to_remove"`
-	ToAdd        int `json:"to_add"`
-	ToUpdateMeta int `json:"to_update_metadata"`
-	ToUpdateLoc  int `json:"to_update_location"`
-	AlreadySynced int `json:"already_synced"`
-}
+//
+// Deprecated: Use itunes.ITLRebuildPreview instead.
+type ITLRebuildPreview = itunes.ITLRebuildPreview
 
 // ITLRebuildResult is the outcome of an applied rebuild.
-type ITLRebuildResult struct {
-	Preview ITLRebuildPreview `json:"preview"`
-	Applied bool              `json:"applied"`
-	Error   string            `json:"error,omitempty"`
-}
-
-// itlRebuildStore is the minimal store interface needed by the ITL rebuild
-// functions: read access to books plus the ability to look up book files
-// (for sourcing ITunesPath from BookFile rather than the deprecated Book field).
-type itlRebuildStore interface {
-	database.BookReader
-	GetBookFiles(bookID string) ([]database.BookFile, error)
-}
-
-// computeITLDiff reads the current ITL and the current DB state,
-// and returns the ITLOperationSet that would synchronize them
-// plus a preview of what that set contains.
-func computeITLDiff(store itlRebuildStore, itlPath string) (*itunes.ITLOperationSet, *ITLRebuildPreview, error) {
-	// Parse the current ITL to get all existing tracks.
-	lib, err := itunes.ParseITL(itlPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("parse ITL: %w", err)
-	}
-
-	// Build a map of existing ITL tracks by PID hex string.
-	itlTracks := make(map[string]*itunes.ITLTrack, len(lib.Tracks))
-	for i := range lib.Tracks {
-		pid := pidToHex(lib.Tracks[i].PersistentID)
-		itlTracks[pid] = &lib.Tracks[i]
-	}
-
-	// Build the "should be in ITL" set from the DB:
-	// all primary-version books that have an iTunes PID.
-	dbPIDs := make(map[string]*database.Book)
-	const pageSize = 500
-	for offset := 0; ; offset += pageSize {
-		books, err := store.GetAllBooks(pageSize, offset)
-		if err != nil {
-			return nil, nil, fmt.Errorf("get books: %w", err)
-		}
-		if len(books) == 0 {
-			break
-		}
-		for i := range books {
-			b := &books[i]
-			// Only sync primary versions — non-primary versions
-			// were merged and should have been removed from the
-			// ITL by the merge cleanup in #251.
-			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
-				continue
-			}
-			// Soft-deleted books should not be in the ITL.
-			if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
-				continue
-			}
-			if b.ITunesPersistentID != nil && *b.ITunesPersistentID != "" {
-				dbPIDs[strings.ToUpper(*b.ITunesPersistentID)] = b
-			}
-		}
-	}
-
-	ops := itunes.ITLOperationSet{
-		Removes: make(map[string]bool),
-	}
-	preview := ITLRebuildPreview{
-		TracksInITL: len(itlTracks),
-		BooksInDB:   len(dbPIDs),
-	}
-
-	// Tracks in ITL but NOT in DB → remove.
-	for pid := range itlTracks {
-		if _, inDB := dbPIDs[pid]; !inDB {
-			ops.Removes[pid] = true
-			preview.ToRemove++
-		}
-	}
-
-	// Books in DB — check for add vs update.
-	for pid, book := range dbPIDs {
-		track, inITL := itlTracks[pid]
-		if !inITL {
-			// Book has a PID but no ITL entry → add.
-			// Build an ITLNewTrack from the book's metadata.
-			newTrack := buildNewTrackFromBook(store, book)
-			ops.Adds = append(ops.Adds, newTrack)
-			preview.ToAdd++
-			continue
-		}
-
-		// Both exist — check if metadata or location need updating.
-		authorName, _ := resolveAuthorAndSeriesNames(book)
-		narrator := ""
-		if book.Narrator != nil {
-			narrator = *book.Narrator
-		}
-		genre := "Audiobook"
-		if book.Genre != nil && *book.Genre != "" {
-			genre = *book.Genre
-		}
-		needsMetaUpdate := false
-		if track.Name != book.Title {
-			needsMetaUpdate = true
-		}
-		if track.Artist != authorName {
-			needsMetaUpdate = true
-		}
-		if track.Album != book.Title {
-			needsMetaUpdate = true
-		}
-		if track.Genre != genre {
-			needsMetaUpdate = true
-		}
-
-		if needsMetaUpdate {
-			ops.MetadataUpdates = append(ops.MetadataUpdates, itunes.ITLMetadataUpdate{
-				PersistentID: pid,
-				Name:         book.Title,
-				Album:        book.Title,
-				Artist:       authorName,
-				Composer:     narrator,
-				Genre:        genre,
-			})
-			preview.ToUpdateMeta++
-		}
-
-		// Location update.
-		wantLoc := ""
-		if bfs, bfErr := store.GetBookFiles(book.ID); bfErr == nil && len(bfs) > 0 && bfs[0].ITunesPath != "" {
-			wantLoc = bfs[0].ITunesPath
-		}
-		if wantLoc != "" && track.Location != wantLoc {
-			ops.LocationUpdates = append(ops.LocationUpdates, itunes.ITLLocationUpdate{
-				PersistentID: pid,
-				NewLocation:  wantLoc,
-			})
-			preview.ToUpdateLoc++
-		}
-
-		if !needsMetaUpdate && (wantLoc == "" || track.Location == wantLoc) {
-			preview.AlreadySynced++
-		}
-	}
-
-	return &ops, &preview, nil
-}
-
-// buildNewTrackFromBook constructs an ITLNewTrack from a database
-// Book for insertion into the ITL. Fills as many fields as
-// possible from the book's metadata.
-func buildNewTrackFromBook(store itlRebuildStore, book *database.Book) itunes.ITLNewTrack {
-	authorName, _ := resolveAuthorAndSeriesNames(book)
-	genre := "Audiobook"
-	if book.Genre != nil && *book.Genre != "" {
-		genre = *book.Genre
-	}
-	location := book.FilePath
-	if bfs, bfErr := store.GetBookFiles(book.ID); bfErr == nil && len(bfs) > 0 && bfs[0].ITunesPath != "" {
-		location = bfs[0].ITunesPath
-	}
-	totalTime := 0
-	if book.Duration != nil {
-		totalTime = *book.Duration * 1000 // convert seconds → ms
-	}
-	size := int64(0)
-	if book.FileSize != nil {
-		size = *book.FileSize
-	}
-
-	// Note: ITLNewTrack doesn't carry a Composer field — narrator
-	// is pushed via a follow-up MetadataUpdate after the add. The
-	// batcher's existing flush path handles that automatically for
-	// books that go through the normal write-back pipeline. For the
-	// rebuild path, the MetadataUpdate pass handles narrator via
-	// the Composer field on ITLMetadataUpdate.
-	return itunes.ITLNewTrack{
-		Location:  location,
-		Name:      book.Title,
-		Album:     book.Title,
-		Artist:    authorName,
-		Genre:     genre,
-		Kind:      "MPEG audio file", // default; the real kind comes from the file format
-		Size:      int(size),
-		TotalTime: totalTime,
-	}
-}
-
-// pidToHex converts an 8-byte PersistentID to an uppercase hex string
-// matching the format stored in the DB and external_id_map.
-func pidToHex(pid [8]byte) string {
-	return fmt.Sprintf("%016X", pid)
-}
+//
+// Deprecated: Use itunes.ITLRebuildResult instead.
+type ITLRebuildResult = itunes.ITLRebuildResult
 
 // rebuildITLHandler handles POST /api/v1/itunes/rebuild.
 // Query param: dry_run=true returns the diff preview without
@@ -244,7 +51,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 	}
 
 	store := s.Store()
-	ops, preview, err := computeITLDiff(store, itlPath)
+	ops, preview, err := itunes.ComputeITLDiff(store, itlPath)
 	if err != nil {
 		httputil.RespondWithInternalError(c, fmt.Sprintf("diff failed: %v", err))
 		return
@@ -253,15 +60,15 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	if dryRun {
 		httputil.RespondWithOK(c, struct {
-			DryRun  bool               `json:"dry_run"`
-			Preview *ITLRebuildPreview `json:"preview"`
+			DryRun  bool                        `json:"dry_run"`
+			Preview *itunes.ITLRebuildPreview  `json:"preview"`
 		}{DryRun: true, Preview: preview})
 		return
 	}
 
 	// Apply.
 	if ops.IsEmpty() {
-		httputil.RespondWithOK(c, ITLRebuildResult{
+		httputil.RespondWithOK(c, itunes.ITLRebuildResult{
 			Preview: *preview,
 			Applied: true,
 		})
@@ -269,7 +76,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 	}
 
 	if err := itunesservice.SafeWriteITL(itlPath, *ops); err != nil {
-		httputil.RespondWithSuccess(c, http.StatusInternalServerError, ITLRebuildResult{
+		httputil.RespondWithSuccess(c, http.StatusInternalServerError, itunes.ITLRebuildResult{
 			Preview: *preview,
 			Applied: false,
 			Error:   err.Error(),
@@ -280,7 +87,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 	log.Printf("[INFO] ITL rebuild: removed %d, added %d, updated-meta %d, updated-loc %d",
 		preview.ToRemove, preview.ToAdd, preview.ToUpdateMeta, preview.ToUpdateLoc)
 
-	httputil.RespondWithOK(c, ITLRebuildResult{
+	httputil.RespondWithOK(c, itunes.ITLRebuildResult{
 		Preview: *preview,
 		Applied: true,
 	})
