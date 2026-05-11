@@ -156,7 +156,7 @@ type Server struct {
 	configUpdateService    *ConfigUpdateService
 	systemService          *sysinfo.SystemService
 	metadataStateService   *MetadataStateService
-	dashboardService       *DashboardService
+	dashboardService       *sysinfo.DashboardService
 	olService              *metafetch.OpenLibraryService
 	dedupCache             *cache.Cache[gin.H]
 	listCache              *cache.Cache[gin.H]
@@ -306,7 +306,7 @@ func NewServer(store database.Store) *Server {
 		configUpdateService:    NewConfigUpdateService(resolvedStore),
 		systemService:          sysinfo.NewSystemService(resolvedStore, appVersion, calculateLibrarySizes),
 		metadataStateService:   NewMetadataStateService(resolvedStore),
-		dashboardService:       NewDashboardService(resolvedStore),
+		dashboardService:       sysinfo.NewDashboardService(resolvedStore),
 		dedupCache:             cache.New[gin.H]("dedup", 24*time.Hour),
 		listCache:              cache.New[gin.H]("list", 24*time.Hour),
 		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
