@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.15.0
+// version: 2.16.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-08
+// last-edited: 2026-05-11
 
 package server
 
@@ -153,7 +153,7 @@ type Server struct {
 	scanService            *scanner.ScanService
 	organizeService        *OrganizeService
 	metadataFetchService   *metafetch.Service
-	configUpdateService    *ConfigUpdateService
+	configUpdateService    *config.UpdateService
 	systemService          *sysinfo.SystemService
 	metadataStateService   *MetadataStateService
 	dashboardService       *DashboardService
@@ -303,7 +303,7 @@ func NewServer(store database.Store) *Server {
 		scanService:            scanner.NewScanService(resolvedStore),
 		organizeService:        NewOrganizeService(resolvedStore),
 		metadataFetchService:   metafetch.NewService(resolvedStore),
-		configUpdateService:    NewConfigUpdateService(resolvedStore),
+		configUpdateService:    config.NewUpdateService(resolvedStore),
 		systemService:          sysinfo.NewSystemService(resolvedStore, appVersion, calculateLibrarySizes),
 		metadataStateService:   NewMetadataStateService(resolvedStore),
 		dashboardService:       NewDashboardService(resolvedStore),
