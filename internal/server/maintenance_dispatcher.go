@@ -1,12 +1,11 @@
 // file: internal/server/maintenance_dispatcher.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 55555555-5555-5555-5555-555555555555
 // last-edited: 2026-05-01
 
 package server
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -110,13 +109,11 @@ func (s *Server) runMaintenanceJob(c *gin.Context) {
 		return
 	}
 
-	enqueueFn := operations.OperationFunc(func(ctx context.Context, reporter operations.ProgressReporter) error {
-		ctx = maintenance.WithOperationID(ctx, opID)
-		adapter := &progressAdapter{ops: reporter}
-		return job.Run(ctx, store, adapter, req.DryRun)
-	})
-
-	if err := s.queue.Enqueue(opID, opType, operations.PriorityNormal, enqueueFn); err != nil {
+	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "maintenance.job", maintenanceJobOpParams{
+		LegacyOpID: opID,
+		JobID:      jobID,
+		DryRun:     req.DryRun,
+	}); err != nil {
 		httputil.RespondWithConflict(c, err.Error())
 		return
 	}
