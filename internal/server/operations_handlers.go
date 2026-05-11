@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -116,9 +116,9 @@ func (s *Server) cancelOperation(c *gin.Context) {
 		}
 	}
 
-	// Try cancel via queue (for running queue operations)
-	if s.queue != nil {
-		if err := s.queue.Cancel(id); err == nil {
+	// Try cancel via v2 registry (running and queued v2 ops).
+	if s.opRegistry != nil {
+		if err := s.opRegistry.Cancel(id); err == nil {
 			httputil.RespondWithNoContent(c)
 			return
 		}
@@ -337,32 +337,30 @@ func (s *Server) listOperations(c *gin.Context) {
 }
 
 func (s *Server) listActiveOperations(c *gin.Context) {
-	if s.queue == nil {
+	store := s.Store()
+	if store == nil {
 		httputil.RespondWithOK(c, gin.H{"operations": []gin.H{}})
 		return
 	}
-	active := s.queue.ActiveOperations()
-	results := make([]gin.H, 0, len(active))
-	for _, a := range active {
-		status := "queued"
-		progress := 0
-		total := 0
-		message := ""
-		if s.Store() != nil {
-			if op, err := s.Store().GetOperationByID(a.ID); err == nil && op != nil {
-				status = op.Status
-				progress = op.Progress
-				total = op.Total
-				message = op.Message
-			}
+	// GetRecentOperations returns the most-recent 200 ops; filter to active states.
+	// Active ops are always in the recent window so no separate indexed query is needed.
+	all, err := store.GetRecentOperations(200)
+	if err != nil {
+		httputil.InternalError(c, "failed to list active operations", err)
+		return
+	}
+	results := make([]gin.H, 0)
+	for _, op := range all {
+		if op.Status != "running" && op.Status != "queued" {
+			continue
 		}
 		results = append(results, gin.H{
-			"id":       a.ID,
-			"type":     a.Type,
-			"status":   status,
-			"progress": progress,
-			"total":    total,
-			"message":  message,
+			"id":       op.ID,
+			"type":     op.Type,
+			"status":   op.Status,
+			"progress": op.Progress,
+			"total":    op.Total,
+			"message":  op.Message,
 		})
 	}
 	httputil.RespondWithOK(c, gin.H{"operations": results})
