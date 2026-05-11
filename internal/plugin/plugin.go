@@ -1,5 +1,5 @@
 // file: internal/plugin/plugin.go
-// version: 1.0.0
+// version: 1.1.0
 
 package plugin
 
@@ -8,7 +8,6 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 )
 
 // Capability identifies what a plugin can do.
@@ -42,7 +41,6 @@ type Deps struct {
 	Config map[string]string
 	Logger logger.Logger
 	Router PluginRouter
-	Queue  operations.Queue
 }
 
 // DownloadClient is implemented by plugins that manage a download client.

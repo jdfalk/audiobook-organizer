@@ -1,5 +1,5 @@
 // file: internal/organizer/service.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package organizer
@@ -20,7 +20,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -35,7 +34,9 @@ type Service struct {
 	db               database.Store
 	organizeHooks    OrganizeHooks
 	writeBackBatcher WriteBackEnqueuer
-	queue            operations.Queue
+	// ScanEnqueuer enqueues a background library scan. Wired by the server
+	// package after construction to avoid a circular import.
+	ScanEnqueuer func(ctx context.Context) error
 
 	// DiscoverITunesLibraryPath discovers the iTunes library path.
 	// Set by the server package after construction.
@@ -61,11 +62,6 @@ type Service struct {
 // SetWriteBackBatcher sets the iTunes write-back batcher.
 func (orgSvc *Service) SetWriteBackBatcher(b WriteBackEnqueuer) {
 	orgSvc.writeBackBatcher = b
-}
-
-// SetQueue sets the operation queue for enqueuing background operations.
-func (orgSvc *Service) SetQueue(q operations.Queue) {
-	orgSvc.queue = q
 }
 
 // SetOrganizeHooks sets optional hooks that are propagated to every
@@ -874,73 +870,19 @@ func (orgSvc *Service) CreateOrganizedVersion(org *Organizer, book *database.Boo
 	return createdBook, nil
 }
 
-// TriggerAutomaticRescan triggers a background rescan of the library.
+// TriggerAutomaticRescan triggers a background rescan of the library via the v2 registry.
 func (orgSvc *Service) TriggerAutomaticRescan(ctx context.Context, log logger.Logger) {
 	if config.AppConfig.RootDir == "" {
 		return
 	}
-
-	log.Info("Starting automatic rescan of library path...")
-
-	// Create a new scan operation
-	scanID := ulid.Make().String()
-	scanOp, err := orgSvc.db.CreateOperation(scanID, "scan", &config.AppConfig.RootDir)
-	if err != nil {
-		log.Warn("Failed to create rescan operation: %s", err.Error())
+	if orgSvc.ScanEnqueuer == nil {
+		log.Warn("ScanEnqueuer not wired; skipping automatic rescan")
 		return
 	}
-
-	// Enqueue the scan operation with low priority
-	scanFunc := func(ctx context.Context, scanProgress operations.ProgressReporter) error {
-		scanLog := operations.LoggerFromReporter(scanProgress)
-		scanLog.Info("Scanning organized books in: %s", config.AppConfig.RootDir)
-
-		workers := config.AppConfig.ConcurrentScans
-		if workers < 1 {
-			workers = 4
-		}
-
-		scanLog.Info("Starting directory scan with %d workers", workers)
-		books, err := scanner.ScanDirectoryParallel(config.AppConfig.RootDir, workers, scanLog)
-		if err != nil {
-			return fmt.Errorf("failed to rescan root directory: %w", err)
-		}
-
-		scanLog.Info("Found %d books in root directory, processing metadata", len(books))
-
-		if len(books) > 0 {
-			var processedFiles atomic.Int64
-			totalBooks := len(books)
-
-			progressCallback := func(_ int, _ int, bookPath string) {
-				current := processedFiles.Add(1)
-				displayTotal := totalBooks
-				if int(current) > displayTotal {
-					displayTotal = int(current)
-				}
-				message := fmt.Sprintf("Processed: %d/%d books", current, displayTotal)
-				if bookPath != "" {
-					message = fmt.Sprintf("Processed: %d/%d books (%s)", current, displayTotal, filepath.Base(bookPath))
-				}
-				scanLog.UpdateProgress(int(current), displayTotal, message)
-			}
-
-			scanLog.Info("Processing metadata for %d books using %d workers", totalBooks, workers)
-			if err := scanner.ProcessBooksParallel(ctx, books, workers, progressCallback, scanLog); err != nil {
-				return fmt.Errorf("failed to process books: %w", err)
-			}
-			scanLog.Info("Metadata processing complete: %d books processed", processedFiles.Load())
-		}
-
-		scanLog.Info("Rescan completed successfully")
-		return nil
-	}
-
-	if orgSvc.queue != nil {
-		if err := orgSvc.queue.Enqueue(scanOp.ID, "scan", operations.PriorityLow, scanFunc); err != nil {
-			log.Warn("Failed to enqueue rescan: %s", err.Error())
-		} else {
-			log.Info("Rescan operation queued successfully")
-		}
+	log.Info("Triggering automatic rescan of library path...")
+	if err := orgSvc.ScanEnqueuer(ctx); err != nil {
+		log.Warn("Failed to enqueue rescan: %s", err.Error())
+	} else {
+		log.Info("Rescan operation queued successfully")
 	}
 }

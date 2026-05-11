@@ -1,5 +1,5 @@
 // file: internal/server/server_coverage_test.go
-// version: 2.2.0
+// version: 2.2.1
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 // last-edited: 2026-05-08
 
@@ -549,8 +549,7 @@ func TestCoverageStartOrganize(t *testing.T) {
 		assert.Equal(t, http.StatusAccepted, w.Code)
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		data := resp["data"].(map[string]any)
-		assert.NotEmpty(t, data["id"])
+		assert.NotEmpty(t, resp["id"])
 	})
 
 	t.Run("organize with folder_path", func(t *testing.T) {

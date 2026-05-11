@@ -1,5 +1,5 @@
 // file: internal/server/plugins_init.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a2b3c4d5-e6f7-8a9b-0c1d-2e3f4a5b6c7d
 
 package server
@@ -19,7 +19,7 @@ import (
 
 // initPlugins enables plugins declared as enabled in config, then initializes
 // them with per-plugin settings and scoped HTTP routes under /api/v1/plugins/.
-// Must be called after s.eventBus, s.pluginRegistry, s.queue, and s.router
+// Must be called after s.eventBus, s.pluginRegistry, and s.router
 // are all set (i.e. at the end of NewServer, after setupRoutes).
 func (s *Server) initPlugins(ctx context.Context) {
 	// Mark enabled plugins from config before calling InitAllScoped.
@@ -37,7 +37,6 @@ func (s *Server) initPlugins(ctx context.Context) {
 		Store:  s.Store(),
 		Events: s.eventBus,
 		Logger: logger.New("plugin"),
-		Queue:  s.queue,
 	}
 
 	pluginGroup := s.router.Group("/api/v1/plugins")

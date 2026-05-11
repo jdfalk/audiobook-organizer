@@ -1,5 +1,5 @@
 // file: internal/itunes/service/path_repair.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 01ad6c79-5f3f-4ee1-a07a-1f4b3a8c0d12
 // last-edited: 2026-05-01
 //
@@ -16,21 +16,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	ulid "github.com/oklog/ulid/v2"
 )
 
 // PathRepairConfig holds the immutable inputs the repairer needs:
@@ -60,7 +55,6 @@ type pathRepairerStore interface {
 type PathRepairer struct {
 	store    pathRepairerStore
 	enqueuer Enqueuer
-	queue    operations.Queue
 	cfg      PathRepairConfig
 	// bookIDExtractor pulls AUDIOBOOK_ORGANIZER_ID from one audio
 	// file. Production wires this to metadata.ExtractMetadata.
@@ -77,11 +71,10 @@ func (r *PathRepairer) SetActivityWriter(w *activity.Writer) {
 
 // newPathRepairer wires a PathRepairer. nil enqueuer skips the
 // write-back enqueue step (used by dry-run-only tests).
-func newPathRepairer(store pathRepairerStore, enqueuer Enqueuer, queue operations.Queue, cfg PathRepairConfig) *PathRepairer {
+func newPathRepairer(store pathRepairerStore, enqueuer Enqueuer, cfg PathRepairConfig) *PathRepairer {
 	return &PathRepairer{
 		store:           store,
 		enqueuer:        enqueuer,
-		queue:           queue,
 		cfg:             cfg,
 		bookIDExtractor: extractBookOrganizerID,
 	}
@@ -131,53 +124,6 @@ const (
 	tierCThreshold = 85
 	tierCTopN      = 3
 )
-
-// parseDryRun reads the apply= query parameter and returns whether the
-// run should stay in dry-run mode. Any value not equal to "true" or
-// "1" leaves dry-run on (safer default).
-func parseDryRun(c *gin.Context) bool {
-	apply := strings.ToLower(c.Query("apply"))
-	if apply == "true" || apply == "1" {
-		return false
-	}
-	return true
-}
-
-// Start kicks off a tracked operation that walks the iTunes XML,
-// finds missing locations, and (in apply mode) enqueues path fixes
-// through the WriteBackBatcher. Defaults to dry-run.
-func (r *PathRepairer) Start(c *gin.Context) {
-	if r.store == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
-		return
-	}
-	if r.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
-	}
-
-	dryRun := parseDryRun(c)
-
-	id := ulid.Make().String()
-	op, err := r.store.CreateOperation(id, "itunes_path_repair", nil)
-	if err != nil {
-		log.Printf("[ERROR] failed to create operation: %v", err)
-		httputil.RespondWithInternalError(c, "failed to create operation")
-		return
-	}
-
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return r.Repair(ctx, id, dryRun, progress)
-	}
-
-	if err := r.queue.Enqueue(op.ID, "itunes_path_repair", operations.PriorityNormal, operationFunc); err != nil {
-		log.Printf("[ERROR] failed to enqueue operation: %v", err)
-		httputil.RespondWithInternalError(c, "failed to enqueue operation")
-		return
-	}
-
-	httputil.RespondWithSuccess(c, 202, op)
-}
 
 // Repair is the operation body. Wraps repairWithResult so the
 // queue-side closure has the (ctx, id, progress) → error signature

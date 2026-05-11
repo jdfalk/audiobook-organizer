@@ -1,5 +1,5 @@
 // file: internal/organizer/unit_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package organizer
@@ -1197,8 +1197,9 @@ func TestServiceSetters(t *testing.T) {
 		svc.SetWriteBackBatcher(nil)
 	})
 
-	t.Run("SetQueue", func(t *testing.T) {
-		svc.SetQueue(nil)
+	t.Run("ScanEnqueuer", func(t *testing.T) {
+		// Verify ScanEnqueuer can be set without panic
+		svc.ScanEnqueuer = nil
 	})
 
 	t.Run("newOrganizer with hooks", func(t *testing.T) {
