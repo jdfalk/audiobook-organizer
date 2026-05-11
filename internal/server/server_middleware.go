@@ -1,7 +1,7 @@
 // file: internal/server/server_middleware.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6a093405-441a-4c14-a9c5-46326ea767c1
-// last-edited: 2026-05-01
+// last-edited: 2026-05-10
 
 package server
 
@@ -19,7 +19,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -159,7 +158,7 @@ func saveDismissedDedupGroups(store database.Store, dismissed map[string]bool) {
 }
 
 func (s *Server) triggerITunesSync() {
-	if s.Store() == nil || s.queue == nil {
+	if s.Store() == nil || s.opRegistry == nil {
 		return
 	}
 
@@ -197,12 +196,9 @@ func (s *Server) triggerITunesSync() {
 		scheduledMappings = append(scheduledMappings, itunes.PathMapping{From: m.From, To: m.To})
 	}
 
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return s.itunesSvc.Importer.Sync(ctx, libraryPath, scheduledMappings, s.itunesActivityFn, operations.LoggerFromReporter(progress))
-	}
-
-	if err := s.queue.Enqueue(op.ID, "itunes_sync", operations.PriorityNormal, operationFunc); err != nil {
-		itunesTriggerLog.Warn("iTunes sync scheduler: failed to enqueue: %v", err)
+	syncParams := itunesSyncOpParams{LegacyOpID: op.ID, LibraryPath: libraryPath, PathMappings: scheduledMappings}
+	if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "itunes.sync", syncParams); enqErr != nil {
+		itunesTriggerLog.Warn("iTunes sync scheduler: failed to enqueue: %v", enqErr)
 		return
 	}
 
