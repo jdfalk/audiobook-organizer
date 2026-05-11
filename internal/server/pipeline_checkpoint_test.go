@@ -1,6 +1,9 @@
 // file: internal/server/pipeline_checkpoint_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 8a9b0c1d-2e3f-4a70-b8c5-3d7e0f1b9a99
+//
+// Tests for the server's pipeline checkpoint forwarding layer.
+// The actual logic is tested in internal/organizer/checkpoint_test.go.
 
 package server
 
@@ -9,15 +12,17 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 )
 
-func TestCheckpoint_SetAndHas(t *testing.T) {
+func TestCheckpointForwarding(t *testing.T) {
 	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
 	if err != nil {
 		t.Fatalf("pebble: %v", err)
 	}
 	t.Cleanup(func() { store.Close() })
 
+	// Test that server functions forward to organizer package
 	if hasCheckpoint(store, "b1", phaseRename) {
 		t.Error("should not have checkpoint before set")
 	}
@@ -27,50 +32,37 @@ func TestCheckpoint_SetAndHas(t *testing.T) {
 	if !hasCheckpoint(store, "b1", phaseRename) {
 		t.Error("should have checkpoint after set")
 	}
-	if hasCheckpoint(store, "b1", phaseTags) {
-		t.Error("different phase should not have checkpoint")
-	}
-	if hasCheckpoint(store, "b2", phaseRename) {
-		t.Error("different book should not have checkpoint")
-	}
-}
-
-func TestCheckpoint_ClearAll(t *testing.T) {
-	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
-	if err != nil {
-		t.Fatalf("pebble: %v", err)
-	}
-	t.Cleanup(func() { store.Close() })
-
-	setCheckpoint(store, "b1", phaseRename)
-	setCheckpoint(store, "b1", phaseTags)
-	setCheckpoint(store, "b1", phaseITunes)
 
 	clearCheckpoints(store, "b1")
 
-	for _, phase := range []string{phaseRename, phaseTags, phaseITunes} {
-		if hasCheckpoint(store, "b1", phase) {
-			t.Errorf("phase %s should be cleared", phase)
-		}
-	}
-}
-
-func TestCheckpoint_Idempotent(t *testing.T) {
-	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
-	if err != nil {
-		t.Fatalf("pebble: %v", err)
-	}
-	t.Cleanup(func() { store.Close() })
-
-	setCheckpoint(store, "b1", phaseRename)
-	setCheckpoint(store, "b1", phaseRename) // double-set
-	if !hasCheckpoint(store, "b1", phaseRename) {
-		t.Error("double-set should still have checkpoint")
-	}
-
-	clearCheckpoints(store, "b1")
-	clearCheckpoints(store, "b1") // double-clear
 	if hasCheckpoint(store, "b1", phaseRename) {
-		t.Error("double-clear should still be cleared")
+		t.Error("should be cleared after clearCheckpoints")
+	}
+}
+
+func TestCleanupStaleCheckpointsForwarding(t *testing.T) {
+	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatalf("pebble: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	// Test that the cleanup function is properly forwarded
+	count := CleanupStaleCheckpoints(store)
+	if count < 0 {
+		t.Errorf("CleanupStaleCheckpoints returned negative count: %d", count)
+	}
+}
+
+func TestConstantsForwarded(t *testing.T) {
+	// Verify constants are correctly forwarded
+	if phaseRename != organizer.PhaseRename {
+		t.Error("phaseRename constant mismatch")
+	}
+	if phaseTags != organizer.PhaseTags {
+		t.Error("phaseTags constant mismatch")
+	}
+	if phaseITunes != organizer.PhaseITunes {
+		t.Error("phaseITunes constant mismatch")
 	}
 }
