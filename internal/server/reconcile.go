@@ -1,18 +1,16 @@
 // file: internal/server/reconcile.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/reconcile"
 	"github.com/oklog/ulid/v2"
 )
@@ -40,8 +38,8 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
 
@@ -52,11 +50,7 @@ func (s *Server) startReconcileScan(c *gin.Context) {
 		return
 	}
 
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return reconcile.RunReconcileScan(store, ctx, id, progress)
-	}
-
-	if err := s.queue.Enqueue(op.ID, "reconcile_scan", operations.PriorityNormal, operationFunc); err != nil {
+	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "reconcile.scan", reconcileScanOpParams{LegacyOpID: op.ID}); err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
@@ -112,8 +106,8 @@ func (s *Server) startReconcile(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
-	if s.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
 
@@ -137,12 +131,7 @@ func (s *Server) startReconcile(c *gin.Context) {
 		return
 	}
 
-	matches := req.Matches
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return reconcile.ExecuteReconcile(ctx, store, id, matches, operations.LoggerFromReporter(progress))
-	}
-
-	if err := s.queue.Enqueue(op.ID, "reconcile", operations.PriorityNormal, operationFunc); err != nil {
+	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "reconcile.apply", reconcileApplyOpParams{LegacyOpID: op.ID, Matches: req.Matches}); err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
