@@ -1,7 +1,7 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
-// last-edited: 2026-05-01
+// last-edited: 2026-05-11
 
 package server
 
@@ -55,8 +55,49 @@ type CandidateResult struct {
 }
 
 // batchFetchRequest is the JSON body for handleBatchFetchCandidates.
+// Either BookIDs or Selection must be provided; OnlyUnmatched can be combined
+// with either to exclude books that already have a "matched" candidate.
 type batchFetchRequest struct {
-	BookIDs []string `json:"book_ids" binding:"required"`
+	BookIDs       []string                    `json:"book_ids"`
+	Selection     *operations.SelectionSpec   `json:"selection"`
+	OnlyUnmatched bool                        `json:"only_unmatched"`
+}
+
+// latestMatchedBookIDs returns the set of book IDs whose most-recent
+// metadata_candidate_fetch result has status "matched".  Used to exclude
+// already-matched books when OnlyUnmatched is requested.
+func latestMatchedBookIDs(store database.Store) map[string]bool {
+	allOps, err := store.GetRecentOperations(5000)
+	if err != nil {
+		return nil
+	}
+	type entry struct {
+		status    string
+		createdAt time.Time
+	}
+	latest := map[string]entry{}
+	for _, op := range allOps {
+		if op.Type != "metadata_candidate_fetch" {
+			continue
+		}
+		results, err := store.GetOperationResults(op.ID)
+		if err != nil {
+			continue
+		}
+		for _, r := range results {
+			ex, ok := latest[r.BookID]
+			if !ok || r.CreatedAt.After(ex.createdAt) {
+				latest[r.BookID] = entry{status: r.Status, createdAt: r.CreatedAt}
+			}
+		}
+	}
+	matched := make(map[string]bool, len(latest))
+	for bookID, e := range latest {
+		if e.status == "matched" {
+			matched[bookID] = true
+		}
+	}
+	return matched
 }
 
 // batchApplyRequest is the JSON body for handleBatchApplyCandidates.
@@ -70,17 +111,50 @@ type batchApplyRequest struct {
 func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 	var req batchFetchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		httputil.RespondWithBadRequest(c, "book_ids is required")
-		return
-	}
-	if len(req.BookIDs) == 0 {
-		httputil.RespondWithBadRequest(c, "book_ids must not be empty")
+		httputil.RespondWithBadRequest(c, "invalid request body")
 		return
 	}
 
 	store := s.Store()
 
-	// Exclude books already in an active metadata fetch to avoid duplicate API calls
+	// Resolve the target book IDs — from either explicit list or SelectionSpec.
+	candidateIDs := req.BookIDs
+	if len(candidateIDs) == 0 && req.Selection != nil {
+		resolved, err := operations.ResolveBookIDs(*req.Selection, func(f operations.FilterSpec) ([]string, error) {
+			return s.resolveFilterToBookIDs(c.Request.Context(), f)
+		})
+		if err != nil {
+			httputil.RespondWithBadRequest(c, "failed to resolve selection: "+err.Error())
+			return
+		}
+		candidateIDs = resolved
+	}
+	if len(candidateIDs) == 0 {
+		httputil.RespondWithBadRequest(c, "book_ids or selection is required")
+		return
+	}
+
+	// Optionally exclude books already having a "matched" candidate.
+	if req.OnlyUnmatched {
+		matched := latestMatchedBookIDs(store)
+		filtered := candidateIDs[:0]
+		for _, id := range candidateIDs {
+			if !matched[id] {
+				filtered = append(filtered, id)
+			}
+		}
+		candidateIDs = filtered
+		if len(candidateIDs) == 0 {
+			httputil.RespondWithOK(c, gin.H{
+				"message":      "all selected books already have matched candidates",
+				"operation_id": "",
+				"book_count":   0,
+			})
+			return
+		}
+	}
+
+	// Exclude books already in an active metadata fetch to avoid duplicate API calls.
 	activeOps, _ := store.GetRecentOperations(50)
 	alreadyFetching := make(map[string]bool)
 	for _, op := range activeOps {
@@ -104,7 +178,7 @@ func (s *Server) handleBatchFetchCandidates(c *gin.Context) {
 
 	var bookIDs []string
 	var skippedCount int
-	for _, id := range req.BookIDs {
+	for _, id := range candidateIDs {
 		if alreadyFetching[id] {
 			skippedCount++
 		} else {

@@ -48,6 +48,7 @@ interface LibraryToolbarProps {
   getActiveFilterCount: () => number;
   onBatchEdit: () => void;
   onFetchReview: () => Promise<void>;
+  onFetchAllUnmatched: () => Promise<void>;
   onResumeReview: () => Promise<void>;
   onSearchMetadata: () => void;
   onSaveToFiles: () => void;
@@ -89,6 +90,7 @@ export const LibraryToolbar = ({
   getActiveFilterCount,
   onBatchEdit,
   onFetchReview,
+  onFetchAllUnmatched,
   onResumeReview,
   onSearchMetadata,
   onSaveToFiles,
@@ -152,6 +154,7 @@ export const LibraryToolbar = ({
           <ColumnChooser visibleColumnIds={visibleColumnIds} onToggleColumn={toggleColumn} onResetDefaults={resetColumnsToDefaults} />
           <Button variant="outlined" size="small" startIcon={organizeRunning ? <CircularProgress size={16} /> : undefined} disabled={organizeRunning} onClick={onOrganizeLibrary}>{organizeRunning ? 'Organizing…' : 'Organize Library'}</Button>
           <Button variant="outlined" size="small" startIcon={activeScanOp !== null ? <CircularProgress size={16} /> : <RefreshIcon />} disabled={activeScanOp !== null} onClick={onFullRescan}>{activeScanOp !== null ? 'Scanning…' : 'Full Rescan'}</Button>
+          <Button variant="outlined" size="small" onClick={onFetchAllUnmatched}>Fetch Unmatched</Button>
           <Button startIcon={<DeleteSweepIcon />} onClick={onPurgeOpen} variant="outlined" size="small" color="secondary" disabled={softDeletedCount === 0}>Purge Deleted{softDeletedCount > 0 ? ` (${softDeletedCount})` : ''}</Button>
         </Stack>
       )}
