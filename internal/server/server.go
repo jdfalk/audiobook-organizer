@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.10.0
+// version: 2.11.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-08
 
@@ -376,22 +376,9 @@ func NewServer(store database.Store) *Server {
 		AutoWriteBack:       config.AppConfig.ITunesAutoWriteBack,
 		ITLWriteBackEnabled: config.AppConfig.ITLWriteBackEnabled,
 	}
-	// Build the operation queue before constructing the iTunes service
-	// so PathReconciler / PathRepairer get a real handle. The duplicate
-	// later in this function (kept for the GlobalQueue back-compat) is
-	// a no-op once this assignment lands.
-	if server.queue == nil {
-		innerQ := operations.NewOperationQueue(resolvedStore, 8, nil, server.hub)
-		server.queue = operations.NewBridgeQueue(innerQ, resolvedStore)
-		// Long-running maintenance ops (path repair scans 80K+ files
-		// across many spinning disks) need more than the 2-hour default.
-		server.queue.SetOperationTimeout(6 * time.Hour)
-		operations.GlobalQueue = server.queue
-	}
 	itunesSvc, err := itunesservice.New(itunesservice.Deps{
 		Store:         resolvedStore,
 		Config:        itunesCfg,
-		OpQueue:       server.queue,
 		AudiobookRoot: config.AppConfig.RootDir,
 		ReportDir:     filepath.Join(config.AppConfig.RootDir, "reports"),
 		OnBookCreated: func(bookID string) {
@@ -659,7 +646,10 @@ func NewServer(store database.Store) *Server {
 	// Wire writeBackBatcher into services that need it
 	server.metadataFetchService.SetWriteBackBatcher(server.writeBackBatcher)
 	server.organizeService.SetWriteBackBatcher(server.writeBackBatcher)
-	server.organizeService.SetQueue(server.queue)
+	server.organizeService.ScanEnqueuer = func(ctx context.Context) error {
+		_, err := server.opRegistry.EnqueueOp(ctx, "library.scan", nil)
+		return err
+	}
 	server.mergeService.SetWriteBackBatcher(server.writeBackBatcher)
 	server.quarantineSvc.SetWriteBackBatcher(server.writeBackBatcher)
 	if server.audiobookService != nil && server.writeBackBatcher != nil {

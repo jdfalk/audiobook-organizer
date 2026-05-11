@@ -1,5 +1,5 @@
 // file: internal/itunes/service/path_reconcile.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 9e3b7a1d-4c2f-4a60-b8d5-2f1e8c0d9a47
 // last-edited: 2026-05-01
 //
@@ -15,15 +15,11 @@ package itunesservice
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
-	ulid "github.com/oklog/ulid/v2"
 )
 
 // pathReconcilerStore is the narrow slice of the service's Store that
@@ -40,15 +36,12 @@ type pathReconcilerStore interface {
 type PathReconciler struct {
 	store    pathReconcilerStore
 	enqueuer Enqueuer
-	queue    operations.Queue
 }
 
-// newPathReconciler wires a PathReconciler with the given store,
-// enqueuer and operation queue. All three are required in production;
-// nil enqueuer just skips the write-back enqueue step (useful for
-// tests).
-func newPathReconciler(store pathReconcilerStore, enqueuer Enqueuer, queue operations.Queue) *PathReconciler {
-	return &PathReconciler{store: store, enqueuer: enqueuer, queue: queue}
+// newPathReconciler wires a PathReconciler with the given store and enqueuer.
+// nil enqueuer just skips the write-back enqueue step (useful for tests).
+func newPathReconciler(store pathReconcilerStore, enqueuer Enqueuer) *PathReconciler {
+	return &PathReconciler{store: store, enqueuer: enqueuer}
 }
 
 // iTunesPathReconcileResult is the per-run tally returned in
@@ -61,41 +54,6 @@ type iTunesPathReconcileResult struct {
 	FilePathsUpdated int `json:"file_paths_updated"`
 	EnqueuedForWrite int `json:"enqueued_for_write"`
 	Errors           int `json:"errors"`
-}
-
-// Start kicks off a tracked operation that walks the library and
-// re-enqueues every iTunes-tracked book so the batcher pushes
-// updated locations + metadata back to the ITL. Returns the operation
-// via the gin context.
-func (r *PathReconciler) Start(c *gin.Context) {
-	if r.store == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
-		return
-	}
-	if r.queue == nil {
-		httputil.RespondWithInternalError(c, "operation queue not initialized")
-		return
-	}
-
-	id := ulid.Make().String()
-	op, err := r.store.CreateOperation(id, "itunes_path_reconcile", nil)
-	if err != nil {
-		log.Printf("[ERROR] failed to create operation: %v", err)
-		httputil.RespondWithInternalError(c, "failed to create operation")
-		return
-	}
-
-	operationFunc := func(ctx context.Context, progress operations.ProgressReporter) error {
-		return r.Reconcile(ctx, id, progress)
-	}
-
-	if err := r.queue.Enqueue(op.ID, "itunes_path_reconcile", operations.PriorityNormal, operationFunc); err != nil {
-		log.Printf("[ERROR] failed to enqueue operation: %v", err)
-		httputil.RespondWithInternalError(c, "failed to enqueue operation")
-		return
-	}
-
-	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // Reconcile is the operation body. Read-only over iTunes PIDs (PIDs

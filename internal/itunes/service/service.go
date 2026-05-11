@@ -1,5 +1,5 @@
 // file: internal/itunes/service/service.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 81ccaec6-42b0-4828-83c8-7a96680112d9
 
 package itunesservice
@@ -11,16 +11,14 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 )
 
 // Deps is the explicit dependency set for Service. No globals, no Server,
 // no config.AppConfig — everything the service needs is passed in.
 type Deps struct {
-	Store            Store
-	OpQueue          operations.Queue
-	ActivityFn       func(database.ActivityEntry)
+	Store      Store
+	ActivityFn func(database.ActivityEntry)
 	Realtime         *realtime.EventHub // may be nil; means no SSE push
 	Config           Config
 	Logger           logger.Logger
@@ -99,14 +97,14 @@ func New(deps Deps) (*Service, error) {
 
 	// M1 step 5: PathReconciler. Backfill operation that fixes up
 	// iTunes paths after library reorganizations.
-	svc.Paths = newPathReconciler(deps.Store, svc.Batcher, deps.OpQueue)
+	svc.Paths = newPathReconciler(deps.Store, svc.Batcher)
 
 	// PathRepairer. Recovers cases where iTunes still references a
 	// stale on-disk path after organize: dumps the iTunes XML, finds
 	// missing locations, and re-discovers them via PID lookup,
 	// embedded tag scan, or fuzzy match. Apply mode enqueues fixes
 	// through the same Batcher.
-	svc.Repair = newPathRepairer(deps.Store, svc.Batcher, deps.OpQueue, PathRepairConfig{
+	svc.Repair = newPathRepairer(deps.Store, svc.Batcher, PathRepairConfig{
 		XMLPath:       deps.Config.LibraryReadPath,
 		AudiobookRoot: deps.AudiobookRoot,
 		ReportDir:     deps.ReportDir,

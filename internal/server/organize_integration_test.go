@@ -1,5 +1,5 @@
 // file: internal/server/organize_integration_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: b8c9d0e1-f2a3-4567-bcde-890123456f01
 
 package server
@@ -55,13 +55,11 @@ func TestOrganizeService_ViaHTTP(t *testing.T) {
 	// Wait for operation
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	data := resp["data"].(map[string]any)
-	opID, ok := data["id"].(string)
+	opID, ok := resp["id"].(string)
 	if !ok {
-		// Fallback: try operation_id key
-		opID, ok = data["operation_id"].(string)
+		opID, ok = resp["op_id"].(string)
 	}
-	require.True(t, ok, "response should contain id or operation_id, got: %v", data)
+	require.True(t, ok, "response should contain id or op_id, got: %v", resp)
 	testutil.WaitForOp(t, env.Store, opID, 15*time.Second)
 
 	// Verify book was organized — now creates a new version record

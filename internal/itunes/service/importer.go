@@ -1,5 +1,5 @@
 // file: internal/itunes/service/importer.go
-// version: 1.0.2
+// version: 1.0.3
 // guid: 2b8e5f1a-4c7d-4e9f-b3a0-6d8c2e7a4f1b
 
 package itunesservice
@@ -69,7 +69,6 @@ type albumGroup struct {
 // Importer runs the iTunes import pipeline and incremental sync.
 type Importer struct {
 	store            Store
-	opQueue          operations.Queue
 	activityFn       func(database.ActivityEntry)
 	onBookCreated    func(bookID string)
 	cfg              Config
@@ -82,7 +81,6 @@ type Importer struct {
 func newImporter(deps Deps) *Importer {
 	return &Importer{
 		store:            deps.Store,
-		opQueue:          deps.OpQueue,
 		activityFn:       deps.ActivityFn,
 		onBookCreated:    deps.OnBookCreated,
 		cfg:              deps.Config,
