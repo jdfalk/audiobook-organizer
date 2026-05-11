@@ -1,5 +1,5 @@
 // file: main_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 9c3cc5d7-3d49-4e97-a0c1-9b2e38a9986f
 
 package main
@@ -7,9 +7,6 @@ package main
 import (
 	"fmt"
 	"testing"
-	"time"
-
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 )
 
 func TestRunSuccess(t *testing.T) {
@@ -17,13 +14,6 @@ func TestRunSuccess(t *testing.T) {
 	executeCmd = func() error { return nil }
 	defer func() {
 		executeCmd = origExecute
-	}()
-
-	origQueue := operations.GlobalQueue
-	operations.GlobalQueue = nil
-	defer func() {
-		_ = operations.ShutdownQueue(100 * time.Millisecond)
-		operations.GlobalQueue = origQueue
 	}()
 
 	if code := run(); code != 0 {
@@ -36,13 +26,6 @@ func TestRunError(t *testing.T) {
 	executeCmd = func() error { return fmt.Errorf("boom") }
 	defer func() {
 		executeCmd = origExecute
-	}()
-
-	origQueue := operations.GlobalQueue
-	operations.GlobalQueue = nil
-	defer func() {
-		_ = operations.ShutdownQueue(100 * time.Millisecond)
-		operations.GlobalQueue = origQueue
 	}()
 
 	if code := run(); code == 0 {

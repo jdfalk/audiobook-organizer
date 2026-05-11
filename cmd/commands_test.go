@@ -1,5 +1,5 @@
 // file: cmd/commands_test.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 6f5b7d78-11d8-4c1a-a150-96d2c4a1a885
 
 package cmd
@@ -32,8 +32,6 @@ func stubCommandDeps(t *testing.T) {
 	origInitEncrypt := initEncryption
 	origLoadConfig := loadConfigFromDB
 	origSyncEnv := syncConfigFromEnv
-	origInitQueue := initializeQueue
-	origShutdownQueue := shutdownQueue
 	origNewServer := newServer
 	origDefaultCfg := getDefaultServerConfig
 	origStart := startServer
@@ -74,8 +72,6 @@ func stubCommandDeps(t *testing.T) {
 		return nil
 	}
 	syncConfigFromEnv = func() {}
-	initializeQueue = func(store database.Store, workers int) {}
-	shutdownQueue = func(timeout time.Duration) error { return nil }
 	newServer = func(_ database.Store) *server.Server { return &server.Server{} }
 	getDefaultServerConfig = func() server.ServerConfig {
 		return server.ServerConfig{Host: "localhost", Port: "8484"}
@@ -92,8 +88,6 @@ func stubCommandDeps(t *testing.T) {
 		initEncryption = origInitEncrypt
 		loadConfigFromDB = origLoadConfig
 		syncConfigFromEnv = origSyncEnv
-		initializeQueue = origInitQueue
-		shutdownQueue = origShutdownQueue
 		newServer = origNewServer
 		getDefaultServerConfig = origDefaultCfg
 		startServer = origStart
