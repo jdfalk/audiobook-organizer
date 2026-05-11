@@ -1,7 +1,7 @@
 // file: internal/server/acoustid_backfill.go
-// version: 2.4.0
+// version: 2.5.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-05-04
+// last-edited: 2026-05-11
 
 package server
 
@@ -9,9 +9,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -43,10 +40,10 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	if f.FilePath == "" || f.Missing {
 		return fingerprintOutcomeIneligible
 	}
-	if _, ok := audioExtensions[strings.ToLower(filepath.Ext(f.FilePath))]; !ok {
+	if !fingerprint.IsAudioFile(f.FilePath) {
 		return fingerprintOutcomeIneligible
 	}
-	if _, err := os.Stat(f.FilePath); err != nil {
+	if !fingerprint.FileExists(f.FilePath) {
 		return fingerprintOutcomeIneligible
 	}
 
