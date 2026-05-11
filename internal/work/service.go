@@ -1,8 +1,8 @@
-// file: internal/server/work_service.go
-// version: 1.2.0
-// guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a
+// file: internal/work/service.go
+// version: 1.0.0
+// guid: e9f0g1h2-i3j4-5k6l-7m8n-9o0p1q2r3s4t
 
-package server
+package work
 
 import (
 	"fmt"
