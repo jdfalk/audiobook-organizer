@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_dispatcher.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: 55555555-5555-5555-5555-555555555555
-// last-edited: 2026-05-01
+// last-edited: 2026-05-11
 
 package server
 
@@ -13,27 +13,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
 )
-
-// progressAdapter adapts operations.ProgressReporter to maintenance.ProgressReporter.
-type progressAdapter struct {
-	ops   operations.ProgressReporter
-	cur   int
-	total int
-}
-
-func (a *progressAdapter) SetTotal(n int) { a.total = n }
-
-func (a *progressAdapter) Increment() {
-	a.cur++
-	_ = a.ops.UpdateProgress(a.cur, a.total, "")
-}
-
-func (a *progressAdapter) Log(level, message string, details *string) {
-	_ = a.ops.Log(level, message, details)
-}
 
 // listMaintenanceJobs returns the catalogue of all registered maintenance jobs.
 func (s *Server) listMaintenanceJobs(c *gin.Context) {
