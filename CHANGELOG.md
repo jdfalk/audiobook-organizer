@@ -68,6 +68,18 @@ session. Operations are now exclusively dispatched through the v2 registry.
   maintenance plugin (registered at startup line 355) already owns those IDs; updates
   `scheduler_tasks.go` to pass `nil` params to the maintenance plugin ops.
 
+- **feat(ops): remove BridgeQueue from iTunes path ops and organizer scan** (PR #798) —
+  removes the last direct `s.queue.Enqueue` call sites outside the intentional
+  legacy-compat group. `PathReconciler.Start()` and `PathRepairer.Start()` deleted;
+  HTTP handlers moved into new `internal/server/itunes_path_ops.go` which registers
+  `itunes.path-reconcile` and `itunes.path-repair` v2 OperationDefs. `organizer.Service`
+  no longer holds a queue reference — replaced with `ScanEnqueuer func(ctx) error`
+  callback wired at server startup. `internal/server/scheduler_triggers.go` deleted
+  (all callers already migrated). `Queue` removed from `plugin.Deps` and
+  `OpQueue` removed from `itunesservice.Deps`. Remaining intentional queue usages
+  (scan/organize resume, cancel fallback, active-ops legacy endpoint) tracked for a
+  follow-up PR.
+
 #### May 8, 2026 — UOS-15: Promote pkg/plugin/sdk to stable public API
 
 - **docs(uos)**: Promotes `pkg/plugin/sdk` to STABLE contract. No production
