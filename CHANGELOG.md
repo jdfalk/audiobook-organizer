@@ -1,11 +1,35 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.56.0 -->
+<!-- version: 2.57.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-11 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Features
+
+#### May 11, 2026 — Replace SQLite activity/metrics sidecars with NutsDB (PR #801)
+
+Eliminates the last CGo-required hot paths by replacing `activity.db` and
+`metrics.db` (SQLite, CGo) with NutsDB v1.1.0 (pure Go, log-structured).
+
+- **`ActivityStorer` / `MetricsStorer` interfaces** (`activity_storer.go`) —
+  both SQLite and NutsDB implementations satisfy them; `activity.Service`,
+  `activity.Writer`, and `server.metricsStore` now use the interface types.
+- **`NutsActivityStore`** — per-tier buckets (`act:change`, `act:debug`,
+  `act:audit`, `act:digest`), time-keyed entries (20-digit unix-nano + ULID),
+  secondary op/book-id indexes, full `CompactByDay` logic. Data dir:
+  `activity.nutsdb` alongside the main DB.
+- **`NutsMetricsStore`** — per-cache-name buckets, 30-day per-entry TTL
+  (replaces explicit prune), cache-name index for cross-cache queries. Data
+  dir: `metrics.nutsdb`.
+- **chromem comment fix** — corrected false "HNSW-based ANN" claim in
+  `chromem_embedding_store.go`; chromem-go v0.7.0 uses brute-force O(n)
+  cosine scan.
+
+Old `activity.db` and `metrics.db` files remain on disk but are no longer
+opened; safe to delete after confirming the new stores on production.
 
 ### Features
 
