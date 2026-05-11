@@ -1,11 +1,26 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.57.0 -->
+<!-- version: 2.58.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-11 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Features
+
+#### May 11, 2026 — Merge AIScanStore into main PebbleDB (no separate ai_scans.db)
+
+Eliminates the `ai_scans.db` sidecar Pebble file by namespacing all AI scan
+keys under `aiscan:` in the main `audiobooks.pebble` instance.
+
+- **`NewAIScanStoreFromDB(*pebble.DB)`** — new shared-DB constructor; `Close`
+  and `Optimize` are no-ops so the host store owns the lifecycle.
+- **`PebbleStore.DB()`** — exposes the underlying `*pebble.DB` for injection.
+- **`server.go`** — type-asserts global store to `*PebbleStore` and calls
+  `NewAIScanStoreFromDB`; the `ai_scans.db` path is no longer opened.
+- Old standalone `NewAIScanStore(path)` kept for backward compatibility.
+
 
 ### Features
 

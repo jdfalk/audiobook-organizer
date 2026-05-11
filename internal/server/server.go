@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.13.0
+// version: 2.14.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-08
 
@@ -420,12 +420,11 @@ func NewServer(store database.Store) *Server {
 		)
 	}
 
-	// Open AI scan store alongside main DB
-	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
-		aiScanDBPath := filepath.Join(filepath.Dir(dbPath), "ai_scans.db")
-		aiScanStore, err := database.NewAIScanStore(aiScanDBPath)
+	// Wire AI scan store into main PebbleDB (aiscan: key namespace, no separate file).
+	if ps, ok := database.GetGlobalStore().(*database.PebbleStore); ok {
+		aiScanStore, err := database.NewAIScanStoreFromDB(ps.DB())
 		if err != nil {
-			log.Printf("[WARN] Failed to open AI scan store: %v", err)
+			log.Printf("[WARN] Failed to init AI scan store: %v", err)
 		} else {
 			server.aiScanStore = aiScanStore
 			aiParserInst := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
