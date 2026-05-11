@@ -1,6 +1,7 @@
 // file: internal/server/maintenance_job_op.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7f3a9c21-4b8e-4d56-a123-0e5f6c7d8e9f
+// last-edited: 2026-05-11
 
 package server
 
@@ -49,7 +50,7 @@ func (s *Server) RegisterMaintenanceJobOp(reg *opsregistry.Registry) error {
 			store := s.Store()
 			ctx = maintenance.WithOperationID(ctx, p.LegacyOpID)
 			progress := registryProgressAdapter{r: reporter}
-			adapter := &progressAdapter{ops: progress}
+			adapter := &maintenance.ProgressAdapter{Ops: progress}
 			return job.Run(ctx, store, adapter, p.DryRun)
 		},
 	})
