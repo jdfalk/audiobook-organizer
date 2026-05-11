@@ -1,6 +1,6 @@
 // file: internal/database/ai_scan_store.go
-// version: 1.3.0
-// last-edited: 2026-04-30
+// version: 2.0.0
+// last-edited: 2026-05-11
 // guid: a7b3c9d1-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 
 package database
@@ -17,16 +17,25 @@ import (
 	"github.com/cockroachdb/pebble/v2"
 )
 
-// AIScanStore is a separate PebbleDB store for AI scan data (scan history and raw I/O).
+// AIScanStore persists AI scan data (scan history, phases, results) inside a
+// PebbleDB instance. It can operate in two modes:
 //
-// Key Schema:
-// - counter:scan              -> next scan ID
-// - counter:scan_result       -> next scan result ID
-// - scan:<id>                 -> Scan JSON
-// - scan_phase:<scanID>:<phaseType> -> ScanPhase JSON
-// - scan_result:<scanID>:<resultID> -> ScanResult JSON
+//   - Standalone (NewAIScanStore): opens and owns its own Pebble file at the
+//     given path. Keys have no prefix.
+//   - Shared (NewAIScanStoreFromDB): reuses the caller's *pebble.DB. All keys
+//     are namespaced under "aiscan:" to avoid collisions with the host store.
+//     Close and Optimize are no-ops in this mode.
+//
+// Key Schema (relative to prefix):
+//   - counter:scan              -> next scan ID
+//   - counter:scan_result       -> next scan result ID
+//   - scan:<id>                 -> Scan JSON
+//   - scan_phase:<scanID>:<phaseType> -> ScanPhase JSON
+//   - scan_result:<scanID>:<resultID> -> ScanResult JSON
 type AIScanStore struct {
-	db *pebble.DB
+	db     *pebble.DB
+	prefix string // "aiscan:" when shared, "" when standalone
+	owned  bool   // if false, Close and Optimize are no-ops
 }
 
 // Scan represents a full pipeline run.
@@ -78,7 +87,7 @@ type ScanResult struct {
 	AppliedAt  *time.Time     `json:"applied_at,omitempty"`
 }
 
-// NewAIScanStore creates a new PebbleDB store for AI scan data.
+// NewAIScanStore creates a standalone AIScanStore that owns its own PebbleDB at path.
 func NewAIScanStore(path string) (*AIScanStore, error) {
 	db, err := pebble.Open(path, &pebble.Options{
 		FormatMajorVersion: pebble.FormatNewest,
@@ -87,42 +96,72 @@ func NewAIScanStore(path string) (*AIScanStore, error) {
 		return nil, fmt.Errorf("failed to open AI scan DB: %w", err)
 	}
 
-	store := &AIScanStore{db: db}
-
-	// Initialize counters if they don't exist
-	counters := []string{"scan", "scan_result"}
-	for _, counter := range counters {
-		key := fmt.Sprintf("counter:%s", counter)
-		if _, closer, err := db.Get([]byte(key)); err == pebble.ErrNotFound {
-			if err := db.Set([]byte(key), []byte("1"), pebble.Sync); err != nil {
-				db.Close()
-				return nil, fmt.Errorf("failed to initialize counter %s: %w", counter, err)
-			}
-		} else if err == nil {
-			closer.Close()
-		} else {
-			db.Close()
-			return nil, fmt.Errorf("failed to check counter %s: %w", counter, err)
-		}
+	store := &AIScanStore{db: db, prefix: "", owned: true}
+	if err := store.initCounters(); err != nil {
+		db.Close()
+		return nil, err
 	}
 
 	log.Printf("[INFO] AI Scan DB opened at %s", path)
 	return store, nil
 }
 
-// Close closes the AI scan database.
+// NewAIScanStoreFromDB creates an AIScanStore that shares an existing *pebble.DB.
+// All keys are namespaced under "aiscan:" to avoid collisions. Close and Optimize
+// are no-ops — the caller owns the DB lifecycle.
+func NewAIScanStoreFromDB(db *pebble.DB) (*AIScanStore, error) {
+	store := &AIScanStore{db: db, prefix: "aiscan:", owned: false}
+	if err := store.initCounters(); err != nil {
+		return nil, err
+	}
+	return store, nil
+}
+
+// initCounters ensures counter keys exist (value "1") if not already present.
+func (s *AIScanStore) initCounters() error {
+	for _, name := range []string{"scan", "scan_result"} {
+		k := s.k("counter:%s", name)
+		if _, closer, err := s.db.Get(k); err == pebble.ErrNotFound {
+			if err := s.db.Set(k, []byte("1"), pebble.Sync); err != nil {
+				return fmt.Errorf("failed to initialize counter %s: %w", name, err)
+			}
+		} else if err == nil {
+			closer.Close()
+		} else {
+			return fmt.Errorf("failed to check counter %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// k builds a prefixed key. Use like fmt.Sprintf but the prefix is prepended.
+func (s *AIScanStore) k(format string, args ...any) []byte {
+	if len(args) == 0 {
+		return []byte(s.prefix + format)
+	}
+	return []byte(s.prefix + fmt.Sprintf(format, args...))
+}
+
+// Close closes the underlying PebbleDB. No-op when sharing an external DB.
 func (s *AIScanStore) Close() error {
+	if !s.owned {
+		return nil
+	}
 	return s.db.Close()
 }
 
-// Optimize compacts the PebbleDB database to reclaim space.
+// Optimize compacts the PebbleDB. No-op when sharing an external DB (compaction
+// is the host store's responsibility).
 func (s *AIScanStore) Optimize() error {
+	if !s.owned {
+		return nil
+	}
 	return s.db.Compact(context.Background(), nil, []byte{0xff}, false)
 }
 
 // nextID atomically reads and increments the counter for the given entity type.
 func (s *AIScanStore) nextID(counter string) (int, error) {
-	key := []byte(fmt.Sprintf("counter:%s", counter))
+	key := s.k("counter:%s", counter)
 
 	value, closer, err := s.db.Get(key)
 	if err != nil {
@@ -164,8 +203,7 @@ func (s *AIScanStore) CreateScan(mode string, models map[string]string, authorCo
 		return nil, fmt.Errorf("failed to marshal scan: %w", err)
 	}
 
-	key := fmt.Sprintf("scan:%d", id)
-	if err := s.db.Set([]byte(key), data, pebble.Sync); err != nil {
+	if err := s.db.Set(s.k("scan:%d", id), data, pebble.Sync); err != nil {
 		return nil, fmt.Errorf("failed to save scan: %w", err)
 	}
 
@@ -174,8 +212,7 @@ func (s *AIScanStore) CreateScan(mode string, models map[string]string, authorCo
 
 // GetScan retrieves a scan by ID. Returns nil, nil if not found.
 func (s *AIScanStore) GetScan(id int) (*Scan, error) {
-	key := fmt.Sprintf("scan:%d", id)
-	value, closer, err := s.db.Get([]byte(key))
+	value, closer, err := s.db.Get(s.k("scan:%d", id))
 	if err == pebble.ErrNotFound {
 		return nil, nil
 	}
@@ -213,8 +250,7 @@ func (s *AIScanStore) UpdateScanStatus(id int, status string) error {
 		return fmt.Errorf("failed to marshal scan: %w", err)
 	}
 
-	key := fmt.Sprintf("scan:%d", id)
-	return s.db.Set([]byte(key), data, pebble.Sync)
+	return s.db.Set(s.k("scan:%d", id), data, pebble.Sync)
 }
 
 // UpdateScanOperationID sets the operation ID on an existing scan.
@@ -231,16 +267,15 @@ func (s *AIScanStore) UpdateScanOperationID(id int, operationID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal scan: %w", err)
 	}
-	key := fmt.Sprintf("scan:%d", id)
-	return s.db.Set([]byte(key), data, pebble.Sync)
+	return s.db.Set(s.k("scan:%d", id), data, pebble.Sync)
 }
 
 // ListScans returns all scans, iterating keys from "scan:0" to "scan:;".
 // It skips keys containing "_" to avoid scan_phase and scan_result keys.
 func (s *AIScanStore) ListScans() ([]Scan, error) {
 	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte("scan:0"),
-		UpperBound: []byte("scan:;"),
+		LowerBound: s.k("scan:0"),
+		UpperBound: s.k("scan:;"),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
@@ -249,14 +284,15 @@ func (s *AIScanStore) ListScans() ([]Scan, error) {
 
 	var scans []Scan
 	for iter.First(); iter.Valid(); iter.Next() {
-		key := string(iter.Key())
-		if strings.Contains(key, "_") {
+		// Strip the prefix before checking for "_" in the bare key portion.
+		bare := string(iter.Key()[len(s.prefix):])
+		if strings.Contains(bare, "_") {
 			continue
 		}
 
 		var scan Scan
 		if err := json.Unmarshal(iter.Value(), &scan); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal scan at key %s: %w", key, err)
+			return nil, fmt.Errorf("failed to unmarshal scan at key %s: %w", string(iter.Key()), err)
 		}
 		scans = append(scans, scan)
 	}
@@ -269,15 +305,13 @@ func (s *AIScanStore) DeleteScan(id int) error {
 	batch := s.db.NewBatch()
 	defer batch.Close()
 
-	// Delete the scan itself
-	scanKey := fmt.Sprintf("scan:%d", id)
-	batch.Delete([]byte(scanKey), pebble.Sync)
+	batch.Delete(s.k("scan:%d", id), pebble.Sync)
 
-	// Delete all phases for this scan
-	phasePrefix := fmt.Sprintf("scan_phase:%d:", id)
+	// Delete all phases for this scan.
+	phasePrefix := s.k("scan_phase:%d:", id)
 	phaseIter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte(phasePrefix),
-		UpperBound: []byte(phasePrefix + "\xff"),
+		LowerBound: phasePrefix,
+		UpperBound: append(append([]byte{}, phasePrefix...), 0xff),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create phase iterator: %w", err)
@@ -287,11 +321,11 @@ func (s *AIScanStore) DeleteScan(id int) error {
 	}
 	phaseIter.Close()
 
-	// Delete all results for this scan
-	resultPrefix := fmt.Sprintf("scan_result:%d:", id)
+	// Delete all results for this scan.
+	resultPrefix := s.k("scan_result:%d:", id)
 	resultIter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte(resultPrefix),
-		UpperBound: []byte(resultPrefix + "\xff"),
+		LowerBound: resultPrefix,
+		UpperBound: append(append([]byte{}, resultPrefix...), 0xff),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create result iterator: %w", err)
@@ -318,8 +352,7 @@ func (s *AIScanStore) CreatePhase(scanID int, phaseType, model string) (*ScanPha
 		return nil, fmt.Errorf("failed to marshal phase: %w", err)
 	}
 
-	key := fmt.Sprintf("scan_phase:%d:%s", scanID, phaseType)
-	if err := s.db.Set([]byte(key), data, pebble.Sync); err != nil {
+	if err := s.db.Set(s.k("scan_phase:%d:%s", scanID, phaseType), data, pebble.Sync); err != nil {
 		return nil, fmt.Errorf("failed to save phase: %w", err)
 	}
 
@@ -328,8 +361,7 @@ func (s *AIScanStore) CreatePhase(scanID int, phaseType, model string) (*ScanPha
 
 // GetPhase retrieves a phase by scan ID and phase type. Returns nil, nil if not found.
 func (s *AIScanStore) GetPhase(scanID int, phaseType string) (*ScanPhase, error) {
-	key := fmt.Sprintf("scan_phase:%d:%s", scanID, phaseType)
-	value, closer, err := s.db.Get([]byte(key))
+	value, closer, err := s.db.Get(s.k("scan_phase:%d:%s", scanID, phaseType))
 	if err == pebble.ErrNotFound {
 		return nil, nil
 	}
@@ -377,8 +409,7 @@ func (s *AIScanStore) UpdatePhaseStatus(scanID int, phaseType, status, batchID s
 		return fmt.Errorf("failed to marshal phase: %w", err)
 	}
 
-	key := fmt.Sprintf("scan_phase:%d:%s", scanID, phaseType)
-	return s.db.Set([]byte(key), data, pebble.Sync)
+	return s.db.Set(s.k("scan_phase:%d:%s", scanID, phaseType), data, pebble.Sync)
 }
 
 // SavePhaseData saves input, output, and suggestions data for a phase.
@@ -400,16 +431,15 @@ func (s *AIScanStore) SavePhaseData(scanID int, phaseType string, input, output,
 		return fmt.Errorf("failed to marshal phase: %w", err)
 	}
 
-	key := fmt.Sprintf("scan_phase:%d:%s", scanID, phaseType)
-	return s.db.Set([]byte(key), data, pebble.Sync)
+	return s.db.Set(s.k("scan_phase:%d:%s", scanID, phaseType), data, pebble.Sync)
 }
 
 // GetPhases returns all phases for a given scan ID.
 func (s *AIScanStore) GetPhases(scanID int) ([]ScanPhase, error) {
-	prefix := fmt.Sprintf("scan_phase:%d:", scanID)
+	prefix := s.k("scan_phase:%d:", scanID)
 	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte(prefix),
-		UpperBound: []byte(prefix + "\xff"),
+		LowerBound: prefix,
+		UpperBound: append(append([]byte{}, prefix...), 0xff),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
@@ -442,16 +472,15 @@ func (s *AIScanStore) SaveScanResult(result *ScanResult) error {
 		return fmt.Errorf("failed to marshal result: %w", err)
 	}
 
-	key := fmt.Sprintf("scan_result:%d:%06d", result.ScanID, id)
-	return s.db.Set([]byte(key), data, pebble.Sync)
+	return s.db.Set(s.k("scan_result:%d:%06d", result.ScanID, id), data, pebble.Sync)
 }
 
 // GetScanResults returns all results for a given scan ID.
 func (s *AIScanStore) GetScanResults(scanID int) ([]ScanResult, error) {
-	prefix := fmt.Sprintf("scan_result:%d:", scanID)
+	prefix := s.k("scan_result:%d:", scanID)
 	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte(prefix),
-		UpperBound: []byte(prefix + "\xff"),
+		LowerBound: prefix,
+		UpperBound: append(append([]byte{}, prefix...), 0xff),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
@@ -472,8 +501,8 @@ func (s *AIScanStore) GetScanResults(scanID int) ([]ScanResult, error) {
 
 // MarkResultApplied marks a scan result as applied with the current timestamp.
 func (s *AIScanStore) MarkResultApplied(scanID, resultID int) error {
-	key := fmt.Sprintf("scan_result:%d:%06d", scanID, resultID)
-	value, closer, err := s.db.Get([]byte(key))
+	key := s.k("scan_result:%d:%06d", scanID, resultID)
+	value, closer, err := s.db.Get(key)
 	if err == pebble.ErrNotFound {
 		return fmt.Errorf("result %d for scan %d not found", resultID, scanID)
 	}
@@ -496,16 +525,16 @@ func (s *AIScanStore) MarkResultApplied(scanID, resultID int) error {
 		return fmt.Errorf("failed to marshal result: %w", err)
 	}
 
-	return s.db.Set([]byte(key), data, pebble.Sync)
+	return s.db.Set(key, data, pebble.Sync)
 }
 
 // GetAllAppliedResults returns all applied scan results across all scans.
 // Used to filter heuristic dedup results by excluding author groups already reviewed.
 func (s *AIScanStore) GetAllAppliedResults() ([]ScanResult, error) {
-	prefix := "scan_result:"
+	prefix := s.k("scan_result:")
 	iter, err := s.db.NewIter(&pebble.IterOptions{
-		LowerBound: []byte(prefix),
-		UpperBound: []byte(prefix + "\xff"),
+		LowerBound: prefix,
+		UpperBound: append(append([]byte{}, prefix...), 0xff),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create iterator: %w", err)
@@ -525,29 +554,30 @@ func (s *AIScanStore) GetAllAppliedResults() ([]ScanResult, error) {
 	return results, nil
 }
 
-// AIScanHealthStats contains diagnostic counts for the AI scan PebbleDB store.
+// AIScanHealthStats contains diagnostic counts for the AI scan store.
 type AIScanHealthStats struct {
-JobCount    int   `json:"job_count"`
-PendingCount int  `json:"pending_count"`
-SizeBytes   uint64 `json:"size_bytes"`
+	JobCount     int    `json:"job_count"`
+	PendingCount int    `json:"pending_count"`
+	SizeBytes    uint64 `json:"size_bytes"`
 }
 
 // HealthStats returns diagnostic counts and disk usage for the AI scan store.
+// SizeBytes reflects the entire shared DB when not in standalone mode.
 func (s *AIScanStore) HealthStats() (AIScanHealthStats, error) {
-scans, err := s.ListScans()
-if err != nil {
-return AIScanHealthStats{}, err
-}
-var pending int
-for _, sc := range scans {
-if sc.Status == "pending" || sc.Status == "scanning" || sc.Status == "enriching" || sc.Status == "cross_validating" {
-pending++
-}
-}
-sizeBytes := s.db.Metrics().DiskSpaceUsage()
-return AIScanHealthStats{
-JobCount:    len(scans),
-PendingCount: pending,
-SizeBytes:   sizeBytes,
-}, nil
+	scans, err := s.ListScans()
+	if err != nil {
+		return AIScanHealthStats{}, err
+	}
+	var pending int
+	for _, sc := range scans {
+		if sc.Status == "pending" || sc.Status == "scanning" || sc.Status == "enriching" || sc.Status == "cross_validating" {
+			pending++
+		}
+	}
+	sizeBytes := s.db.Metrics().DiskSpaceUsage()
+	return AIScanHealthStats{
+		JobCount:     len(scans),
+		PendingCount: pending,
+		SizeBytes:    sizeBytes,
+	}, nil
 }

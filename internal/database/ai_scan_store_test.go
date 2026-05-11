@@ -1,5 +1,5 @@
 // file: internal/database/ai_scan_store_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: b8c4d0e2-5f6a-7b8c-9d0e-1f2a3b4c5d6e
 
 package database
@@ -141,4 +141,34 @@ func TestAIScanStore_Optimize(t *testing.T) {
 	defer store.Close()
 	err = store.Optimize()
 	assert.NoError(t, err)
+}
+
+func TestNewAIScanStoreFromDB(t *testing.T) {
+	// Verify shared-DB mode: all operations work, Close is a no-op.
+	tmpdir := t.TempDir()
+	ps, err := NewPebbleStore(tmpdir + "/main.pebble")
+	require.NoError(t, err)
+	defer ps.Close()
+
+	store, err := NewAIScanStoreFromDB(ps.DB())
+	require.NoError(t, err)
+	require.NotNil(t, store)
+
+	// Round-trip a scan.
+	scan, err := store.CreateScan("batch", map[string]string{"groups": "gpt-4o-mini"}, 5)
+	require.NoError(t, err)
+	require.Equal(t, 1, scan.ID)
+
+	got, err := store.GetScan(scan.ID)
+	require.NoError(t, err)
+	require.Equal(t, scan.ID, got.ID)
+	require.Equal(t, "pending", got.Status)
+
+	// Close must be a no-op (ps.Close() still works after this).
+	require.NoError(t, store.Close())
+	require.NoError(t, store.Optimize())
+
+	// Verify main DB is still alive.
+	_, err = store.ListScans()
+	require.NoError(t, err)
 }

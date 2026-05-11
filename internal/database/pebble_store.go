@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.71.0
+// version: 1.72.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-05
 
@@ -164,6 +164,11 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 // Close closes the database
 func (p *PebbleStore) Close() error {
 	return p.db.Close()
+}
+
+// DB returns the underlying *pebble.DB. Used by AIScanStore to share the DB.
+func (p *PebbleStore) DB() *pebble.DB {
+	return p.db
 }
 
 // Helper functions
