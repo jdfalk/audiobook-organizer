@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.19.0 -->
+<!-- version: 8.20.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-11 -->
 
@@ -46,9 +46,24 @@ future agent) can scan the entire workspace in one page.
 
 ## 🔜 Next — Server thinning wave 2
 
-- [ ] **SERVER-THIN-6** Remaining mis-homed service files in `internal/server`:
-  `openlibrary_service.go`, `reconcile.go`, `sweeper.go`, `dedup_engine*.go`
-  (op files and service implementations that belong in their domain packages)
+- [ ] **SERVER-PLUGIN-REG** Create a service registry analogous to `opRegistry` so domain
+  packages self-register their services and `server.go` iterates the registry at startup
+  instead of having a hardcoded constructor call per service. iTunes extraction enabled
+  this pattern for ops — apply it to synchronous services too.
+
+- [ ] **SERVER-THIN-6** Wave 2 parallel-sweep: move remaining service implementations out
+  of `internal/server` into their domain packages (leave only thin HTTP adapters + routing):
+  - `openlibrary_service.go` → `internal/openlibrary` (302 lines)
+  - `reconcile.go` → `internal/reconcile` (192 lines)
+  - `sweeper.go` → `internal/sweep` (100 lines)
+  - `work_service.go` → `internal/work` (72 lines)
+  - `similar_books.go` → `internal/similarity` (115 lines)
+  - `undo_engine.go` → `internal/undo` (343 lines)
+  - `user_tags.go` → `internal/usertags` (128 lines)
+  - `batch_service.go` → `internal/batch` (248 lines)
+  - `maintenance_dispatcher.go` + `maintenance_fixups.go` → `internal/maintenance` (704 lines)
+  - `path_format.go` → `internal/pathformat` (29 lines)
+
 - [ ] **SERVER-THIN-7** Fix pre-existing iTunes/organize/scan timeout failures
   (`TestITunesImport_*`, `TestOrganizeService_ViaHTTP`, `TestAddImportPathAutoScan`,
   `TestStartScanOperation`, `TestStartOrganizeOperation` all timeout at 10–15s)
