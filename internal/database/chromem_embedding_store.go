@@ -1,11 +1,12 @@
 // file: internal/database/chromem_embedding_store.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2d0e1f9a-3b4c-4a70-b8c5-3d7e0f1b9a99
 //
 // chromem-go backed embedding vector store (DES-2).
 //
 // Replaces the linear-scan FindSimilar from the SQLite embedding
-// store with HNSW-based approximate nearest neighbor search.
+// store with exhaustive cosine-similarity search (brute-force O(n)).
+// chromem-go v0.7.0 does not implement HNSW; that is a roadmap item.
 // Supports metadata filtering at query time (primary-version,
 // series exclusion, etc.).
 //

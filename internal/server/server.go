@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.12.0
+// version: 2.13.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-08
 
@@ -174,7 +174,7 @@ type Server struct {
 	changelogService       *activity.ChangelogService
 	activityService        *activity.Service
 	embeddingStore         *database.EmbeddingStore
-	metricsStore           *database.MetricsStore
+	metricsStore           database.MetricsStorer
 	dedupEngine            *dedup.Engine
 	activityWriter         *activity.Writer
 	itunesActivityFn       func(entry database.ActivityEntry)
@@ -437,10 +437,10 @@ func NewServer(store database.Store) *Server {
 		}
 	}
 
-	// Open activity log store alongside main DB
+	// Open activity log store alongside main DB (NutsDB, CGo-free).
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
-		activityDBPath := filepath.Join(filepath.Dir(dbPath), "activity.db")
-		activityStore, err := database.NewActivityStore(activityDBPath)
+		activityDir := filepath.Join(filepath.Dir(dbPath), "activity.nutsdb")
+		activityStore, err := database.NewNutsActivityStore(activityDir)
 		if err != nil {
 			log.Printf("[WARN] Failed to open activity log store: %v", err)
 		} else {
@@ -448,12 +448,10 @@ func NewServer(store database.Store) *Server {
 		}
 	}
 
-	// Open metrics sidecar store for cache stats history. Always SQLite,
-	// independent of the primary store backend (PebbleDB or SQLite), so
-	// /api/v1/cache/stats/history works everywhere.
+	// Open metrics store alongside main DB (NutsDB, CGo-free).
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
-		metricsDBPath := filepath.Join(filepath.Dir(dbPath), "metrics.db")
-		metricsStore, err := database.NewMetricsStore(metricsDBPath)
+		metricsDir := filepath.Join(filepath.Dir(dbPath), "metrics.nutsdb")
+		metricsStore, err := database.NewNutsMetricsStore(metricsDir)
 		if err != nil {
 			log.Printf("[WARN] Failed to open metrics store: %v", err)
 		} else {

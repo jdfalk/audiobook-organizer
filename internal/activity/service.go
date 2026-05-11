@@ -1,5 +1,5 @@
 // file: internal/activity/service.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package activity
@@ -11,14 +11,14 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-// Service wraps the ActivityStore and provides business-level methods
+// Service wraps an ActivityStorer and provides business-level methods
 // for recording and querying unified activity log entries.
 type Service struct {
-	store *database.ActivityStore
+	store database.ActivityStorer
 }
 
 // NewService creates a new Service backed by the given store.
-func NewService(store *database.ActivityStore) *Service {
+func NewService(store database.ActivityStorer) *Service {
 	return &Service{store: store}
 }
 
@@ -57,7 +57,7 @@ func (s *Service) GetDistinctSources(filter database.ActivityFilter) ([]database
 	return s.store.GetDistinctSources(filter)
 }
 
-// Store returns the underlying ActivityStore (e.g. for direct access or close).
-func (s *Service) Store() *database.ActivityStore {
+// Store returns the underlying ActivityStorer (e.g. for close or direct access).
+func (s *Service) Store() database.ActivityStorer {
 	return s.store
 }

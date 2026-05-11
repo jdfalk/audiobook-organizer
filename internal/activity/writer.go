@@ -1,5 +1,5 @@
 // file: internal/activity/writer.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
 
 package activity
@@ -20,7 +20,7 @@ import (
 type Writer struct {
 	stdout      io.Writer
 	ch          chan database.ActivityEntry
-	store       *database.ActivityStore
+	store       database.ActivityStorer
 	batcher     *ActivityBatcher
 	done        chan struct{}
 	stopOnce    sync.Once
@@ -35,7 +35,7 @@ type Writer struct {
 // chanSize controls the depth of the internal entry buffer.
 // By default the "gin" source is skipped — HTTP request logs are not
 // useful as persistent activity entries and would flood the database.
-func NewWriter(store *database.ActivityStore, chanSize int) *Writer {
+func NewWriter(store database.ActivityStorer, chanSize int) *Writer {
 	w := &Writer{
 		stdout:      os.Stdout,
 		ch:          make(chan database.ActivityEntry, chanSize),
