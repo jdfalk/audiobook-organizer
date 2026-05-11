@@ -1,8 +1,8 @@
-// file: internal/server/temp_file_cleanup.go
-// version: 1.1.0
-// guid: e4f5a6b7-c8d9-0e1f-2a3b-4c5d6e7f8a9b
+// file: internal/sweep/temp_cleanup.go
+// version: 1.0.0
+// guid: f7e6d5c4-b3a2-1908-7654-321fedcba987
 
-package server
+package sweep
 
 import (
 	"io/fs"
@@ -14,12 +14,12 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 )
 
-// cleanupOrphanedTempFiles removes *.tmp.m4b, *.tmp.m4a, *.tmp.mp3, and
+// CleanupOrphanedTempFiles removes *.tmp.m4b, *.tmp.m4a, *.tmp.mp3, and
 // *.remux.tmp files left behind by ffmpeg operations that were interrupted
 // by a crash or server restart. Returns the number of files removed.
 // w and opID are optional — if provided, each removal is submitted to the
 // activity batcher instead of emitting a per-file log line.
-func cleanupOrphanedTempFiles(root string, w *activity.Writer, opID string) int {
+func CleanupOrphanedTempFiles(root string, w *activity.Writer, opID string) int {
 	if root == "" {
 		return 0
 	}
