@@ -1,6 +1,9 @@
 // file: internal/server/deluge_import_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: e1b5d8f2-3c7a-4091-a2e9-6f4d0c8b3a15
+// last-edited: 2026-05-11
+//
+// Tests for ImportToLibrary — delegates to internal/deluge/import.go.
 
 package server
 
@@ -12,6 +15,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 )
 
 // fakeStore is a minimal database.Store implementation for testing.
@@ -49,9 +53,9 @@ func TestImportToLibrary_FallbackToCopy(t *testing.T) {
 		// DelugeHash intentionally empty so MoveStorage is skipped.
 	}
 
-	newPath, err := importToLibrary(cfg, nil, store, bf)
+	newPath, err := deluge.ImportToLibrary(cfg, nil, store, bf)
 	if err != nil {
-		t.Fatalf("importToLibrary returned error: %v", err)
+		t.Fatalf("ImportToLibrary returned error: %v", err)
 	}
 
 	// Verify destination file exists.
@@ -94,9 +98,9 @@ func TestImportToLibrary_SameSourceAndDest(t *testing.T) {
 		FilePath: srcFile,
 	}
 
-	newPath, err := importToLibrary(cfg, nil, store, bf)
+	newPath, err := deluge.ImportToLibrary(cfg, nil, store, bf)
 	if err != nil {
-		t.Fatalf("importToLibrary returned error: %v", err)
+		t.Fatalf("ImportToLibrary returned error: %v", err)
 	}
 	if newPath != srcFile {
 		t.Errorf("expected newPath = %q (same as src), got %q", srcFile, newPath)
@@ -128,9 +132,9 @@ func TestImportToLibrary_Idempotent(t *testing.T) {
 		ImportedFromDelugeAt: &importedAt,
 	}
 
-	newPath, err := importToLibrary(cfg, nil, store, bf)
+	newPath, err := deluge.ImportToLibrary(cfg, nil, store, bf)
 	if err != nil {
-		t.Fatalf("importToLibrary returned error: %v", err)
+		t.Fatalf("ImportToLibrary returned error: %v", err)
 	}
 	if newPath != srcFile {
 		t.Errorf("expected newPath = %q (unchanged), got %q", srcFile, newPath)
@@ -141,7 +145,7 @@ func TestImportToLibrary_Idempotent(t *testing.T) {
 	}
 }
 
-// Test 4: MoveStorage failure is best-effort — importToLibrary must not return an error.
+// Test 4: MoveStorage failure is best-effort — ImportToLibrary must not return an error.
 func TestImportToLibrary_MoveStorageFailureIsNonFatal(t *testing.T) {
 	srcDir := t.TempDir()
 	srcFile := filepath.Join(srcDir, "book.m4b")
@@ -163,9 +167,9 @@ func TestImportToLibrary_MoveStorageFailureIsNonFatal(t *testing.T) {
 
 	// delugeClient is nil, so MoveStorage is skipped (not called).
 	// The function should still succeed.
-	newPath, err := importToLibrary(cfg, nil, store, bf)
+	newPath, err := deluge.ImportToLibrary(cfg, nil, store, bf)
 	if err != nil {
-		t.Fatalf("importToLibrary returned error even with nil delugeClient: %v", err)
+		t.Fatalf("ImportToLibrary returned error even with nil delugeClient: %v", err)
 	}
 	if _, statErr := os.Stat(newPath); statErr != nil {
 		t.Errorf("destination file does not exist: %v", statErr)
