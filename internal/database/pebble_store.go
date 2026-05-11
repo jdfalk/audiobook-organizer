@@ -72,6 +72,8 @@ func prefixEnd(prefix []byte) []byte {
 type PebbleStore struct {
 	db        *pebble.DB
 	counterMu sync.Mutex // protects nextID read-modify-write
+	opsMu     sync.Mutex // serializes v2 op CAS operations (SetOperationV2StatusIfQueued)
+	opsLogSeq int64      // monotonic counter for log key uniqueness; accessed via atomic
 	rootDir   string     // organized library root; set via SetRootDir after config load
 }
 
