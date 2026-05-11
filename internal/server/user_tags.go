@@ -1,5 +1,5 @@
 // file: internal/server/user_tags.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef0123456789
 
 package server
@@ -10,6 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
+
+// normalizeTag normalizes a single tag by trimming whitespace, converting to lowercase,
+// and returning an empty string if the result is empty.
+func normalizeTag(t string) string {
+	t = strings.ToLower(strings.TrimSpace(t))
+	return t
+}
 
 // setupUserTagRoutes registers the user tag API routes on the given router group.
 func (s *Server) setupUserTagRoutes(protected *gin.RouterGroup) {
@@ -41,7 +48,7 @@ func (s *Server) setBookUserTags(c *gin.Context) {
 	// Filter empty and normalize to lowercase
 	validTags := make([]string, 0, len(req.Tags))
 	for _, t := range req.Tags {
-		t = strings.ToLower(strings.TrimSpace(t))
+		t = normalizeTag(t)
 		if t != "" {
 			validTags = append(validTags, t)
 		}
@@ -80,7 +87,7 @@ func (s *Server) addBookUserTag(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
-	tag := strings.ToLower(strings.TrimSpace(req.Tag))
+	tag := normalizeTag(req.Tag)
 	if err := store.AddBookUserTag(id, tag); err != nil {
 		httputil.InternalError(c, "failed to add tag", err)
 		return
