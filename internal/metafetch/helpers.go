@@ -152,13 +152,16 @@ func derefStr(s *string) string {
 	return *s
 }
 
-// metadataFieldState represents the state of a single metadata field.
-type metadataFieldState struct {
+// MetadataFieldState represents the state of a single metadata field.
+type MetadataFieldState struct {
 	FetchedValue   any       `json:"fetched_value,omitempty"`
 	OverrideValue  any       `json:"override_value,omitempty"`
 	OverrideLocked bool      `json:"override_locked"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
+
+// metadataFieldState is an alias for backward compatibility (deprecated).
+type metadataFieldState = MetadataFieldState
 
 func metadataStateKey(bookID string) string {
 	return fmt.Sprintf("metadata_state_%s", bookID)

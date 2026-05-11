@@ -21,6 +21,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database/mocks"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	"github.com/stretchr/testify/mock"
 )
@@ -728,7 +729,7 @@ func TestConfigUpdateService_ApplyUpdates_FieldTypes(t *testing.T) {
 // TestMetadataStateService_UpdateFetchedMetadata tests UpdateFetchedMetadata method
 func TestMetadataStateService_UpdateFetchedMetadata(t *testing.T) {
 	mockStore := mocks.NewMockStore(t)
-	svc := NewMetadataStateService(mockStore)
+	svc := metafetch.NewMetadataStateService(mockStore)
 
 	bookID := "01HXZABC123456789"
 

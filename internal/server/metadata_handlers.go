@@ -559,7 +559,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			continue
 		}
 		if state == nil {
-			state = map[string]metadataFieldState{}
+			state = map[string]metafetch.MetadataFieldState{}
 		}
 
 		// Delegate search to service using empty query (uses book's title).

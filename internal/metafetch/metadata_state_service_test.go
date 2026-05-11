@@ -1,8 +1,8 @@
-// file: internal/server/metadata_state_service_test.go
+// file: internal/metafetch/metadata_state_service_test.go
 // version: 1.0.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
-package server
+package metafetch
 
 import (
 	"testing"
