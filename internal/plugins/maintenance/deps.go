@@ -1,7 +1,7 @@
 // file: internal/plugins/maintenance/deps.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567891
-// last-edited: 2026-05-07
+// last-edited: 2026-05-12
 
 // Package maintenance is the UOS plugin for all maintenance/janitor operations.
 // It holds 26 OperationDefs migrated from the legacy scheduler_tasks.go.
@@ -135,9 +135,6 @@ func (a *sdkToOpsAdapter) Log(level, message string, details *string) error {
 func (a *sdkToOpsAdapter) IsCanceled() bool {
 	return a.r.IsCanceled()
 }
-
-// schedPtr is a helper to make a cron schedule pointer.
-func schedPtr(s string) *string { return &s }
 
 // _ ensures the time import is used (used for Timeout fields in defs).
 var _ = time.Duration(0)
