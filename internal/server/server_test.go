@@ -972,11 +972,9 @@ func TestDashboardSizeFormat(t *testing.T) {
 	assert.NotNil(t, stateDistribution)
 
 	t.Run("format distribution structure", func(t *testing.T) {
-		if formatDistribution != nil {
-			for _, count := range formatDistribution {
-				_, isNumber := count.(float64)
-				assert.True(t, isNumber, "Format counts should be numbers")
-			}
+		for _, count := range formatDistribution {
+			_, isNumber := count.(float64)
+			assert.True(t, isNumber, "Format counts should be numbers")
 		}
 	})
 }

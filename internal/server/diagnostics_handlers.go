@@ -305,11 +305,11 @@ func (s *Server) getDiagnosticsAIResults(c *gin.Context) {
 		return
 	}
 
-	suggestions, _ := resultData["suggestions"]
+	suggestions := resultData["suggestions"]
 	if suggestions == nil {
 		suggestions = []interface{}{}
 	}
-	rawResponses, _ := resultData["raw_responses"]
+	rawResponses := resultData["raw_responses"]
 	if rawResponses == nil {
 		rawResponses = []interface{}{}
 	}

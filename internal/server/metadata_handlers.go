@@ -474,8 +474,6 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 			log.Printf("[WARN] rename failed for book %s: %v", id, err)
 		} else {
 			renamed = 1
-			// Re-fetch book after rename since file_path may have changed
-			book, _ = s.Store().GetBookByID(id)
 		}
 	}
 
@@ -813,48 +811,6 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		"updated_count": updatedCount,
 		"total_count":   len(req.BookIDs),
 		"results":       results,
-	})
-}
-
-// handleBulkMetadataFetchAll starts an async, resumable full-library metadata
-// fetch as a queued operation and returns the operation ID immediately (HTTP 202).
-//
-// Fetches from the full source chain (Audible, OpenLibrary, etc.) for every book
-// and populates the metadata cache. Nothing is written to book records — the user
-// reviews and applies per-book through the normal UI. Already-processed books are
-// skipped on resume so it is safe to restart.
-//
-// Query params:
-//   - prefer_audible=true — move Audible to the front of the source chain
-//   - skip_cached=true    — skip books that already have a valid cache entry
-//
-// Poll progress via GET /api/v1/operations/{id}.
-func (s *Server) handleBulkMetadataFetchAll(c *gin.Context) {
-	if s.Store() == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
-		return
-	}
-	if s.opRegistry == nil {
-		httputil.RespondWithInternalError(c, "operations registry not initialized")
-		return
-	}
-	params := bulkMetadataFetchV2Params{
-		PreferAudible: c.DefaultQuery("prefer_audible", "false") == "true",
-		SkipCached:    c.DefaultQuery("skip_cached", "false") == "true",
-	}
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.bulk-metadata-fetch", params)
-	if err != nil {
-		httputil.InternalError(c, "failed to enqueue operation", err)
-		return
-	}
-	log.Printf("[INFO] bulk-metadata-fetch: queued %s prefer_audible=%v skip_cached=%v",
-		opID, params.PreferAudible, params.SkipCached)
-	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{
-		"operation_id":   opID,
-		"op_id":          opID,
-		"message":        "bulk metadata fetch started — poll GET /api/v1/operations/v2/" + opID + " for progress",
-		"prefer_audible": params.PreferAudible,
-		"skip_cached":    params.SkipCached,
 	})
 }
 

@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"testing"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -170,16 +169,6 @@ func propDB(t *testing.T) func(*rapid.T) *database.EmbeddingStore {
 		}
 		return es
 	}
-}
-
-// tPropTempDir is kept for compatibility but no longer used for DB allocation.
-func tPropTempDir(t *rapid.T) string {
-	dir, err := os.MkdirTemp("", "rapid-dedup-*")
-	if err != nil {
-		t.Fatalf("tempdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	return dir
 }
 
 // TestProp_FindSimilarOrdering asserts that EmbeddingStore.FindSimilar

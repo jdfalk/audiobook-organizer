@@ -663,36 +663,6 @@ func (s *Server) handleUnrejectCandidates(c *gin.Context) {
 	}{Unrejected: unrejected})
 }
 
-// handleGetRecentOperations returns the last 10 completed metadata_candidate_fetch operations.
-// Uses the server's listCache (10s TTL) to avoid expensive PebbleDB prefix scans on every poll.
-func (s *Server) handleGetRecentOperations(c *gin.Context) {
-	cacheKey := "recent_ops"
-	if cached, ok := s.listCache.Get(cacheKey); ok {
-		httputil.RespondWithOK(c, cached)
-		return
-	}
-
-	store := s.Store()
-
-	// Get recent operations and filter to metadata_candidate_fetch type.
-	ops, err := store.GetRecentOperations(50)
-	if err != nil {
-		httputil.InternalError(c, "failed to get recent operations", err)
-		return
-	}
-
-	var filtered []database.Operation
-	for _, op := range ops {
-		if op.Type == "metadata_candidate_fetch" && len(filtered) < 10 {
-			filtered = append(filtered, op)
-		}
-	}
-
-	resp := gin.H{"operations": filtered, "count": len(filtered)}
-	s.listCache.Set(cacheKey, resp)
-	httputil.RespondWithOK(c, resp)
-}
-
 // resumeInterruptedMetadataFetch checks for metadata_candidate_fetch operations
 // that were interrupted (status=running) and re-enqueues the remaining books.
 func (s *Server) resumeInterruptedMetadataFetch() {
