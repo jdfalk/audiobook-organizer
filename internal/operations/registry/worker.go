@@ -56,8 +56,6 @@ type queuedRun struct {
 	concurrKey   string
 	plugin       string
 	resumePolicy ResumePolicy
-	// initialState is the op_state_v2 blob passed on ResumeRestart. May be nil.
-	initialState []byte
 }
 
 // startWorker is a long-running goroutine that reads from r.nextRun and

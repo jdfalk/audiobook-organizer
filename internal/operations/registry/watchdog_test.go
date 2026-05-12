@@ -15,17 +15,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 )
 
-// newTestRegistryWithWatchdog creates a registry with a very short watchdog
-// interval for testing. The progress/checkpoint timeouts are also shortened.
-func newRegistryFast(t *testing.T, watchdogInterval time.Duration) (*registry.Registry, *fakeStore) {
-	t.Helper()
-	store := newFakeStore()
-	r := registry.NewWithOptions(store, slog.Default(), 4, registry.Options{
-		WatchdogInterval: watchdogInterval,
-	})
-	return r, store
-}
-
 // TestWatchdog_StuckOpGetStrike verifies that an op with stale last_progress_at
 // gets a "stuck" strike and its context is canceled.
 func TestWatchdog_StuckOpGetsStrike(t *testing.T) {
