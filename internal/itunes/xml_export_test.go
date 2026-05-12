@@ -313,27 +313,6 @@ func TestEncodeWindowsPathToURL(t *testing.T) {
 	}
 }
 
-// isValidXML checks whether data is well-formed XML by stripping the DOCTYPE
-// (which Go's xml.Decoder does not handle) and parsing the rest.
-func isValidXML(data []byte) bool {
-	// Remove DOCTYPE line since Go's xml package doesn't support it
-	content := string(data)
-	if idx := strings.Index(content, "<!DOCTYPE"); idx >= 0 {
-		end := strings.Index(content[idx:], ">")
-		if end >= 0 {
-			content = content[:idx] + content[idx+end+1:]
-		}
-	}
-	decoder := xml.NewDecoder(strings.NewReader(content))
-	for {
-		_, err := decoder.Token()
-		if err != nil {
-			// io.EOF means we consumed all tokens successfully
-			return err.Error() == "EOF"
-		}
-	}
-}
-
 // isValidPlist is a simple check that the data looks like a valid plist.
 func isValidPlist(data []byte) bool {
 	s := string(data)

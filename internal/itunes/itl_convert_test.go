@@ -309,7 +309,6 @@ func TestParseITLAsLibrary_PlayDateConversion(t *testing.T) {
 	// Unix epoch  + 2082844800 seconds offset from Mac epoch
 	// So Mac seconds 3786825600 → Unix seconds 1704067200 (2024-01-01).
 	const macSecs = 3786825600
-	const expectedUnix = int64(macSecs) - int64(2082844800) // = 1703980800
 
 	// Re-derive: macEpoch is 1904-01-01. Unix epoch is 1970-01-01.
 	// Difference in seconds: (1970-1904) * 365.25 * 86400 ≈ 2082844800.

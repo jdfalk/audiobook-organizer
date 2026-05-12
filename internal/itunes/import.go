@@ -69,7 +69,7 @@ func extractPathPrefixes(locations []string) []string {
 		if len(parts) >= 3 {
 			prefix = "file://localhost/" + parts[0] + "/" + parts[1] + "/" + parts[2]
 		} else {
-			prefix = "file://localhost/" + strings.Join(parts[:len(parts)], "/")
+			prefix = "file://localhost/" + strings.Join(parts[:], "/")
 		}
 		if !seen[prefix] {
 			seen[prefix] = true

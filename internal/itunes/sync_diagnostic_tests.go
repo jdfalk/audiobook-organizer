@@ -23,8 +23,6 @@
 package itunes
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -670,20 +668,3 @@ This folder contains {{N}} variant iTunes Library.itl files. Each
 - The 32-36 mith-field variants need follow-up format research.
 `
 
-// pidHexDeterministic returns a deterministic 8-byte PID; placeholder for
-// when AddTracksLE supports pre-set PIDs.
-func pidHexDeterministic(seed string) string {
-	out := make([]byte, 8)
-	for i, c := range []byte(seed) {
-		out[i%8] ^= c
-	}
-	return hex.EncodeToString(out)
-}
-
-// _randPID is the same shape as crypto/rand.Read but kept as a sanity
-// check that crypto/rand is the source for buildMithLE.
-func _randPID() [8]byte {
-	var p [8]byte
-	_, _ = rand.Read(p[:])
-	return p
-}

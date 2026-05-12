@@ -17,7 +17,6 @@ package itunes
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -215,131 +214,9 @@ func GenerateTestITLSuite(
 // createBlankTemplate reads the production ITL, strips all track and playlist
 // chunks from the payload, and writes the result. This preserves the hdfm
 // header, msdh container structure, encryption, and compression.
-func createBlankTemplate(templatePath, outputPath string) error {
-	data, err := os.ReadFile(templatePath)
-	if err != nil {
-		return fmt.Errorf("reading template: %w", err)
-	}
 
-	hdr, err := parseHdfmHeader(data)
-	if err != nil {
-		return err
-	}
 
-	payload := data[hdr.headerLen:]
-	decrypted := itlDecrypt(hdr, payload)
-	decompressed, wasCompressed := itlInflate(decrypted)
 
-	// Strip all track data from the payload.
-	stripped := stripTracks(decompressed)
-
-	// The hdfm header remainder contains track count at offset 41 and
-	// playlist count at offset 45 (both big-endian). Zero them.
-	if len(hdr.headerRemainder) > 48 {
-		hdr.headerRemainder[41] = 0
-		hdr.headerRemainder[42] = 0
-		hdr.headerRemainder[43] = 0
-		hdr.headerRemainder[44] = 0
-		hdr.headerRemainder[45] = 0
-		hdr.headerRemainder[46] = 0
-		hdr.headerRemainder[47] = 0
-		hdr.headerRemainder[48] = 0
-	}
-
-	return writeITLFileRaw(outputPath, hdr, stripped, wasCompressed)
-}
-
-// stripTracks removes all track data from the decompressed payload.
-// For LE format (msdh containers): finds the track-list msdh (blockType=0x01)
-// and replaces its content with just the mlth header (empty track list).
-// For BE format (hdsm containers or bare chunks): removes htim/hohm chunks.
-func stripTracks(data []byte) []byte {
-	if detectLE(data) {
-		return stripTracksLE(data)
-	}
-	return stripTracksBE(data)
-}
-
-// stripTracksLE handles the LE msdh container format.
-// Walks top-level msdh blocks:
-//   - blockType=1 (tracks): keep msdh header + mlth header with count=0
-//   - blockType=2 (playlists): keep msdh header only (playlists reference
-//     track IDs that no longer exist, so they must be removed)
-//   - All other blockTypes: keep intact
-func stripTracksLE(data []byte) []byte {
-	var out []byte
-	offset := 0
-
-	for offset+16 <= len(data) {
-		tag := readTag(data, offset)
-		if tag != "msdh" {
-			out = append(out, data[offset:]...)
-			break
-		}
-		headerLen := int(readUint32LE(data, offset+4))
-		totalLen := int(readUint32LE(data, offset+8))
-
-		if totalLen < 16 || offset+totalLen > len(data) {
-			out = append(out, data[offset:]...)
-			break
-		}
-
-		// Strip ALL msdh content — keep only the 96-byte headers.
-		// Albums, artists, playlists, artwork all reference tracks;
-		// removing tracks but keeping references = "damaged".
-		emptyMsdh := make([]byte, headerLen)
-		copy(emptyMsdh, data[offset:offset+headerLen])
-		writeUint32LE(emptyMsdh, 8, uint32(headerLen))
-		out = append(out, emptyMsdh...)
-
-		offset += totalLen
-	}
-
-	return out
-}
-
-// stripTracksBE handles the BE format (hdsm containers or bare chunks).
-func stripTracksBE(data []byte) []byte {
-	var out []byte
-	offset := 0
-	inTrackSection := false
-
-	for offset+8 <= len(data) {
-		tag := readTag(data, offset)
-		if tag == "" {
-			out = append(out, data[offset:]...)
-			break
-		}
-		length := int(readUint32BE(data, offset+4))
-		if length < 8 || offset+length > len(data) {
-			out = append(out, data[offset:]...)
-			break
-		}
-
-		switch tag {
-		case "htim":
-			inTrackSection = true
-			offset += length
-		case "hohm":
-			if inTrackSection {
-				offset += length
-			} else {
-				out = append(out, data[offset:offset+length]...)
-				offset += length
-			}
-		case "hpim":
-			inTrackSection = false
-			out = append(out, data[offset:offset+length]...)
-			offset += length
-		default:
-			inTrackSection = false
-			out = append(out, data[offset:offset+length]...)
-			offset += length
-		}
-	}
-
-	return out
-}
 
 // writeITLFileRaw compresses, encrypts, and writes an ITL file.
 func writeITLFileRaw(outputPath string, hdr *hdfmHeader, payload []byte, compress bool) error {
@@ -770,22 +647,6 @@ func writeTestInfo(dir string, info testInfo) error {
 // Helpers
 // ---------------------------------------------------------------------------
 
-func kindFromFormat(format string) string {
-	switch strings.ToLower(format) {
-	case "m4b", "m4a", "aac":
-		return "AAC audio file"
-	case "mp3":
-		return "MPEG audio file"
-	case "ogg":
-		return "Ogg Vorbis file"
-	case "flac":
-		return "FLAC audio file"
-	case "wav":
-		return "WAV audio file"
-	default:
-		return "AAC audio file"
-	}
-}
 
 // randomPID returns a cryptographically random 8-byte persistent ID.
 func randomPID() [8]byte {
@@ -794,9 +655,5 @@ func randomPID() [8]byte {
 	return pid
 }
 
-// pidHex returns the hex string of a PID.
-func pidHex(pid [8]byte) string {
-	return hex.EncodeToString(pid[:])
-}
 
 // hexToPID is defined in itl.go — reuse that.
