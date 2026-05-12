@@ -76,14 +76,13 @@ func wireMockDeluge(t *testing.T, mock *mockDelugeServer) {
 		t.Fatalf("create mock deluge client: %v", err)
 	}
 
-	origClient := globalDelugeClient
+	restoreClient := deluge.SetGlobalClientForTest(client)
 	origURL := config.AppConfig.DelugeWebURL
 	origMove := config.AppConfig.DelugeMoveEnabled
-	globalDelugeClient = client
 	config.AppConfig.DelugeWebURL = mock.server.URL
 	config.AppConfig.DelugeMoveEnabled = true
 	t.Cleanup(func() {
-		globalDelugeClient = origClient
+		restoreClient()
 		config.AppConfig.DelugeWebURL = origURL
 		config.AppConfig.DelugeMoveEnabled = origMove
 	})
@@ -145,12 +144,11 @@ func TestNotifyDelugeAfterOrganize_SkipsWhenDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create mock deluge client: %v", err)
 	}
-	origClient := globalDelugeClient
+	restoreClient := deluge.SetGlobalClientForTest(client)
 	origMove := config.AppConfig.DelugeMoveEnabled
-	globalDelugeClient = client
 	config.AppConfig.DelugeMoveEnabled = false
 	t.Cleanup(func() {
-		globalDelugeClient = origClient
+		restoreClient()
 		config.AppConfig.DelugeMoveEnabled = origMove
 	})
 

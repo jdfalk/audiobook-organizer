@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/covers"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
@@ -56,7 +57,7 @@ func TestHandleListCoverHistory_Empty(t *testing.T) {
 	}
 
 	var resp struct {
-		Covers []CoverHistoryEntry `json:"covers"`
+		Covers []covers.CoverHistoryEntry `json:"covers"`
 		Count  int                 `json:"count"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
@@ -88,7 +89,7 @@ func TestHandleListCoverHistory_WithCovers(t *testing.T) {
 
 	var envelope struct {
 		Data struct {
-			Covers []CoverHistoryEntry `json:"covers"`
+			Covers []covers.CoverHistoryEntry `json:"covers"`
 			Count  int                 `json:"count"`
 		} `json:"data"`
 	}
