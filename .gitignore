@@ -302,3 +302,4 @@ copilot-session-*.md
 .DS_Store
 Thumbs.db
 # <<< jdfalk managed ignore block (sync-gitignore.py) <<<
+.claude/projects/
