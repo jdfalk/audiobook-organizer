@@ -12,10 +12,6 @@ func TestGetTotalMemory(t *testing.T) {
 	total := GetTotalMemory()
 
 	// Memory should be either 0 (not implemented) or > 0 (implemented)
-	if total < 0 {
-		t.Error("Total memory should not be negative")
-	}
-
 	// On most systems, if implemented, should return > 0
 	t.Logf("Total memory: %d bytes (%.2f MB)", total, float64(total)/(1024*1024))
 }

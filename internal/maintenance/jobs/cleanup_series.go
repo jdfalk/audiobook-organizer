@@ -175,9 +175,7 @@ var csNonAlphanumRE = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
 
 func csNormalizeSeriesName(name string) string {
 s := strings.ToLower(strings.TrimSpace(name))
-if strings.HasPrefix(s, "the ") {
-s = s[4:]
-}
+s = strings.TrimPrefix(s, "the ")
 for _, suffix := range []string{" series", " saga", " trilogy", " duology", " quartet"} {
 if strings.HasSuffix(s, suffix) {
 s = s[:len(s)-len(suffix)]

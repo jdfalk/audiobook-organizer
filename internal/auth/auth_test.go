@@ -49,8 +49,8 @@ func TestUserFromContext_Unset(t *testing.T) {
 	if _, ok := UserFromContext(context.Background()); ok {
 		t.Error("UserFromContext should be !ok on empty context")
 	}
-	if _, ok := UserFromContext(nil); ok {
-		t.Error("UserFromContext should be !ok on nil context")
+	if _, ok := UserFromContext(context.TODO()); ok {
+		t.Error("UserFromContext should be !ok on TODO context")
 	}
 }
 
@@ -73,8 +73,8 @@ func TestCan_Unauthenticated(t *testing.T) {
 	if Can(context.Background(), PermLibraryView) {
 		t.Error("unauthenticated Can should always be false")
 	}
-	if Can(nil, PermLibraryView) {
-		t.Error("nil context Can should always be false")
+	if Can(context.TODO(), PermLibraryView) {
+		t.Error("TODO context Can should always be false")
 	}
 }
 

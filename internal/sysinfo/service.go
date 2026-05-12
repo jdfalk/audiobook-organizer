@@ -258,7 +258,7 @@ func (ss *SystemService) PaginateLogs(logs []database.OperationLog, page, pageSi
 
 // GetFormattedUptime returns uptime as a formatted string
 func (ss *SystemService) GetFormattedUptime(startTime time.Time) string {
-	return time.Now().Sub(startTime).String()
+	return time.Since(startTime).String()
 }
 
 // CollectSystemLogs gathers logs for recent operations with filtering and pagination.
