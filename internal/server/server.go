@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.18.0
+// version: 2.19.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-11
+// last-edited: 2026-05-12
 
 package server
 
@@ -53,6 +53,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
 	"github.com/jdfalk/audiobook-organizer/internal/updater"
@@ -225,6 +226,11 @@ type Server struct {
 	bgCtx    context.Context
 	bgCancel context.CancelFunc
 	bgWG     sync.WaitGroup
+
+	// container is the SERVER-PLUGIN-REG service registry built during
+	// NewServer. Stashed so handlers/tests can pull services dynamically
+	// if needed (rare — most access is via the typed fields above).
+	container *serviceregistry.Container
 }
 
 // ServerConfig holds server configuration
@@ -295,21 +301,11 @@ func NewServer(store database.Store) *Server {
 		bgCtx:                  bgCtx,
 		bgCancel:               bgCancel,
 		router:                 router,
-		audiobookService:       audiobookspkg.NewAudiobookService(resolvedStore),
 		audiobookUpdateService: NewAudiobookUpdateService(resolvedStore),
-		batchService:           batch.NewBatchService(resolvedStore),
-		workService:            work.NewWorkService(resolvedStore),
 		authorSeriesService:    audiobookspkg.NewAuthorSeriesService(resolvedStore),
-		filesystemService:      fileops.NewFilesystemService(resolvedStore),
-		importPathService:      importer.NewImportPathService(resolvedStore),
 		importService:          importer.NewImportService(resolvedStore),
-		scanService:            scanner.NewScanService(resolvedStore),
 		organizeService:        NewOrganizeService(resolvedStore),
 		metadataFetchService:   metafetch.NewService(resolvedStore),
-		configUpdateService:    config.NewUpdateService(resolvedStore),
-		systemService:          sysinfo.NewSystemService(resolvedStore, appVersion, calculateLibrarySizes),
-		metadataStateService:   metafetch.NewMetadataStateService(resolvedStore),
-		dashboardService:       sysinfo.NewDashboardService(resolvedStore),
 		dedupCache:             cache.New[gin.H]("dedup", 24*time.Hour),
 		listCache:              cache.New[gin.H]("list", 24*time.Hour),
 		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
@@ -319,6 +315,30 @@ func NewServer(store database.Store) *Server {
 		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
+
+	// SERVER-PLUGIN-REG: build the service registry container.
+	// Wave-1 leaf services come from the container; Waves 2-5 still
+	// construct inline above (for now). IncludeAll() comes once all
+	// services are registered (W7).
+	regCtx := context.Background()
+	regContainer := serviceregistry.NewContainer().
+		Override("store", resolvedStore).
+		Override("config", &config.AppConfig).
+		Include(
+			"audiobook", "batch", "work", "filesystem", "importpath",
+			"scan", "dashboard", "system", "configupdate", "metadatastate",
+		)
+	if err := regContainer.Resolve(); err != nil {
+		log.Fatalf("[server] serviceregistry resolve: %v", err)
+	}
+	if err := regContainer.Build(regCtx); err != nil {
+		log.Fatalf("[server] serviceregistry build: %v", err)
+	}
+	if err := regContainer.PostInit(regCtx); err != nil {
+		log.Fatalf("[server] serviceregistry postinit: %v", err)
+	}
+	wireServerFromContainer(server, regContainer)
+	server.container = regContainer
 
 	// Propagate rootDir into the store so LibraryStats can split organized vs unorganized.
 	resolvedStore.SetRootDir(config.AppConfig.RootDir)
