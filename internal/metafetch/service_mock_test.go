@@ -1455,7 +1455,7 @@ func TestRerankTopK(t *testing.T) {
 			{Title: "A", Score: 0.9},
 			{Title: "B", Score: 0.8},
 		}
-		result := svc.RerankTopK(nil, &database.Book{}, candidates)
+		result := svc.RerankTopK(context.TODO(), &database.Book{}, candidates)
 		assert.Equal(t, candidates, result, "without LLM scorer, should return input unchanged")
 	})
 
@@ -1463,12 +1463,12 @@ func TestRerankTopK(t *testing.T) {
 		candidates := []MetadataCandidate{
 			{Title: "A", Score: 0.9},
 		}
-		result := svc.RerankTopK(nil, &database.Book{}, candidates)
+		result := svc.RerankTopK(context.TODO(), &database.Book{}, candidates)
 		assert.Len(t, result, 1)
 	})
 
 	t.Run("empty_candidates", func(t *testing.T) {
-		result := svc.RerankTopK(nil, &database.Book{}, nil)
+		result := svc.RerankTopK(context.TODO(), &database.Book{}, nil)
 		assert.Nil(t, result)
 	})
 }
@@ -1489,7 +1489,7 @@ func TestScoreBaseCandidates(t *testing.T) {
 		}
 		words := SignificantWords("Mistborn")
 
-		scores, tier := svc.ScoreBaseCandidates(nil, book, results, words)
+		scores, tier := svc.ScoreBaseCandidates(context.TODO(), book, results, words)
 		assert.Equal(t, "f1", tier)
 		assert.Len(t, scores, 2)
 		assert.Greater(t, scores[0], scores[1], "exact match should score higher")
@@ -1497,7 +1497,7 @@ func TestScoreBaseCandidates(t *testing.T) {
 
 	t.Run("empty_results", func(t *testing.T) {
 		book := &database.Book{ID: "b1"}
-		scores, tier := svc.ScoreBaseCandidates(nil, book, nil, map[string]bool{})
+		scores, tier := svc.ScoreBaseCandidates(context.TODO(), book, nil, map[string]bool{})
 		assert.Equal(t, "f1", tier)
 		assert.Empty(t, scores)
 	})
