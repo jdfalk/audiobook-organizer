@@ -197,8 +197,11 @@ check-mock-fresh:
 ## staticcheck: Run staticcheck (install: go install honnef.co/go/tools/cmd/staticcheck@latest)
 staticcheck:
 	@echo "==> Running staticcheck..."
-	@command -v staticcheck >/dev/null 2>&1 && staticcheck ./... || echo "==> staticcheck not installed, skipping."
-	@echo "==> staticcheck passed."
+	@if command -v staticcheck >/dev/null 2>&1; then \
+		staticcheck ./... && echo "==> staticcheck passed."; \
+	else \
+		echo "==> staticcheck not installed, skipping."; \
+	fi
 
 ## oplint: Run plugin import lint
 oplint:
