@@ -95,20 +95,31 @@ func (s *NutsActivityStore) Record(e ActivityEntry) (int64, error) {
 
 	return id, s.db.Update(func(tx *nutsdb.Tx) error {
 		bucket := actBucket(e.Tier)
+		if err := ensureBucket(tx, bucket); err != nil {
+			return err
+		}
 		if err := tx.Put(bucket, key, b, 0); err != nil {
 			return fmt.Errorf("put entry: %w", err)
 		}
 		// Secondary index: op_id
 		if e.OperationID != "" {
 			ref := []byte(e.Tier + ":" + string(key))
-			if err := tx.Put(actOpBucket(e.OperationID), key, ref, 0); err != nil {
+			opBucket := actOpBucket(e.OperationID)
+			if err := ensureBucket(tx, opBucket); err != nil {
+				return err
+			}
+			if err := tx.Put(opBucket, key, ref, 0); err != nil {
 				return err
 			}
 		}
 		// Secondary index: book_id
 		if e.BookID != "" {
 			ref := []byte(e.Tier + ":" + string(key))
-			if err := tx.Put(actBookBucket(e.BookID), key, ref, 0); err != nil {
+			bookBucket := actBookBucket(e.BookID)
+			if err := ensureBucket(tx, bookBucket); err != nil {
+				return err
+			}
+			if err := tx.Put(bookBucket, key, ref, 0); err != nil {
 				return err
 			}
 		}
@@ -258,6 +269,9 @@ func (s *NutsActivityStore) Summarize(ctx context.Context, olderThan time.Time, 
 
 		if err := s.db.Update(func(tx *nutsdb.Tx) error {
 			bucket := actBucket(tier)
+			if err := ensureBucket(tx, bucket); err != nil {
+				return err
+			}
 			if err := tx.Put(bucket, summaryKey, summaryBytes, 0); err != nil {
 				return err
 			}
@@ -532,6 +546,9 @@ func (s *NutsActivityStore) CompactByDay(ctx context.Context, olderThan time.Tim
 
 		var deletedCount int
 		if err := s.db.Update(func(tx *nutsdb.Tx) error {
+			if err := ensureBucket(tx, actBucket("digest")); err != nil {
+				return err
+			}
 			// Delete old digest if present.
 			if existingKey != nil {
 				_ = tx.Delete(actBucket("digest"), existingKey)
