@@ -269,7 +269,7 @@ func TestBatchUpdateAudiobooks_Empty(t *testing.T) {
 		t.Errorf("expected status 200, got %d", w.Code)
 	}
 
-	var resp BatchUpdateResponse
+	var resp batch.BatchUpdateResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}

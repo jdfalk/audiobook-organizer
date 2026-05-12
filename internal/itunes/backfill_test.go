@@ -1,14 +1,20 @@
 // file: internal/itunes/backfill_test.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c9d0e1f2-a3b4-c5d6-e7f8-a9b0c1d2e3f4
 
 package itunes
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+// errMockFailure is the sentinel returned by MockBackfillStore methods when
+// hasError is set. Replaces a stale reference to a non-existent
+// database.ErrNotFound sentinel.
+var errMockFailure = errors.New("mock store failure")
 
 // MockBackfillStore provides a minimal mock for testing backfill operations.
 type MockBackfillStore struct {
@@ -25,7 +31,7 @@ func NewMockBackfillStore() *MockBackfillStore {
 
 func (m *MockBackfillStore) GetAllBooks(limit, offset int) ([]database.Book, error) {
 	if m.hasError {
-		return nil, database.ErrNotFound
+		return nil, errMockFailure
 	}
 	var result []database.Book
 	for _, b := range m.books {
@@ -36,14 +42,14 @@ func (m *MockBackfillStore) GetAllBooks(limit, offset int) ([]database.Book, err
 
 func (m *MockBackfillStore) GetBookFiles(bookID string) ([]database.BookFile, error) {
 	if m.hasError {
-		return nil, database.ErrNotFound
+		return nil, errMockFailure
 	}
 	return []database.BookFile{}, nil
 }
 
 func (m *MockBackfillStore) CreateExternalIDMapping(mapping *database.ExternalIDMapping) error {
 	if m.hasError {
-		return database.ErrNotFound
+		return errMockFailure
 	}
 	m.externalIDMaps = append(m.externalIDMaps, *mapping)
 	return nil
@@ -51,7 +57,7 @@ func (m *MockBackfillStore) CreateExternalIDMapping(mapping *database.ExternalID
 
 func (m *MockBackfillStore) BulkCreateExternalIDMappings(mappings []database.ExternalIDMapping) error {
 	if m.hasError {
-		return database.ErrNotFound
+		return errMockFailure
 	}
 	m.externalIDMaps = append(m.externalIDMaps, mappings...)
 	return nil
@@ -59,7 +65,7 @@ func (m *MockBackfillStore) BulkCreateExternalIDMappings(mappings []database.Ext
 
 func (m *MockBackfillStore) SetSetting(key, value, dataType string, internal bool) error {
 	if m.hasError {
-		return database.ErrNotFound
+		return errMockFailure
 	}
 	return nil
 }

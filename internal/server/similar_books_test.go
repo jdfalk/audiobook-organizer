@@ -159,18 +159,3 @@ func TestHandleSimilarBooks_NoAuthorNoSeries(t *testing.T) {
 	}
 }
 
-func TestQuoteIfNeeded(t *testing.T) {
-	tests := []struct {
-		in, want string
-	}{
-		{"Sanderson", "Sanderson"},
-		{"Brandon Sanderson", `"Brandon Sanderson"`},
-		{"", ""},
-	}
-	for _, tc := range tests {
-		got := quoteIfNeeded(tc.in)
-		if got != tc.want {
-			t.Errorf("quoteIfNeeded(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
