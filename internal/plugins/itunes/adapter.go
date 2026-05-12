@@ -1,7 +1,7 @@
 // file: internal/plugins/itunes/adapter.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c0d1e2f3-a4b5-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-07
+// last-edited: 2026-05-12
 
 package itunes
 
@@ -12,37 +12,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
-
-// progressAdapter converts sdk.Reporter to operations.ProgressReporter.
-// It wraps the SDK reporter and implements the operations.ProgressReporter interface
-// so that service methods that expect ProgressReporter can work with SDK reporters.
-type progressAdapter struct {
-	reporter sdk.Reporter
-}
-
-func (pa *progressAdapter) UpdateProgress(current, total int, message string) error {
-	return pa.reporter.UpdateProgress(current, total, message)
-}
-
-func (pa *progressAdapter) Log(level, message string, details *string) error {
-	switch level {
-	case "error":
-		pa.reporter.Logger().Error(message)
-	case "warn":
-		pa.reporter.Logger().Warn(message)
-	case "info":
-		pa.reporter.Logger().Info(message)
-	case "debug":
-		pa.reporter.Logger().Debug(message)
-	default:
-		pa.reporter.Logger().Info(message)
-	}
-	return nil
-}
-
-func (pa *progressAdapter) IsCanceled() bool {
-	return pa.reporter.IsCanceled()
-}
 
 // loggerWrapper wraps an SDK reporter and implements logger.Logger.
 // It delegates logging to the SDK reporter's slog.Logger and forwards progress updates
