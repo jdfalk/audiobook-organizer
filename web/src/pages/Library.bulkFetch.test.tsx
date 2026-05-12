@@ -75,6 +75,8 @@ vi.mock('../services/api', () => {
       failed: 0,
       errors: [],
     }),
+    getOperationTimeline: vi.fn().mockResolvedValue([]),
+    getActiveOperations: vi.fn().mockResolvedValue([]),
   };
 });
 
@@ -112,7 +114,7 @@ describe('Library bulk metadata fetch', () => {
 
     const fetchMock = vi.mocked(api.batchFetchCandidates);
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(['id-1', 'id-2']);
+      expect(fetchMock).toHaveBeenCalledWith({ book_ids: ['id-1', 'id-2'] });
     });
   });
 
