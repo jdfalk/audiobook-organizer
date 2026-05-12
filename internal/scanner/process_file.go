@@ -1,5 +1,5 @@
 // file: internal/scanner/process_file.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 // Package scanner provides file scanning and processing utilities for the
@@ -22,9 +22,10 @@ import (
 const (
 	hashThreshold = 100 * 1024 * 1024 // 100 MB — files above this get a partial hash
 	hashChunkSize = 10 * 1024 * 1024  // 10 MB chunks for the partial hash
-	// MaxScanBufferBytes caps allocation sizes to prevent DoS attacks via OOM.
-	// This is the maximum amount of memory that can be allocated in a single operation.
-	MaxScanBufferBytes = 100 * 1024 * 1024 // 100 MB
+	// MaxScanBufferBytes is the named compile-time bound on per-operation buffer
+	// allocations. It equals hashChunkSize so CodeQL can statically verify that
+	// every make([]byte, MaxScanBufferBytes) call is bounded.
+	MaxScanBufferBytes = hashChunkSize // 10 MB
 )
 
 // ProcessFile opens filePath exactly once and returns:
@@ -101,32 +102,28 @@ func ProcessFile(filePath string) (*metadata.Metadata, *mediainfo.MediaInfo, str
 
 // computeHashFromReader hashes content from an open file reader.
 // For files ≤ hashThreshold it hashes all bytes; for larger files it hashes
-// the first hashChunkSize bytes + last hashChunkSize bytes + the file size.
-// This is the same algorithm as ComputeFileHash.
-// Allocation sizes are capped at MaxScanBufferBytes to prevent DoS attacks.
+// the first MaxScanBufferBytes bytes + last MaxScanBufferBytes bytes + the
+// file size. This is the same algorithm as ComputeFileHash.
+// MaxScanBufferBytes == hashChunkSize, so CodeQL can statically verify the
+// allocation bound without any runtime cap check.
 func computeHashFromReader(f *os.File, fileSize int64) (string, error) {
 	if fileSize > hashThreshold {
 		h := sha256.New()
 
-		// First chunk: cap allocation to MaxScanBufferBytes
-		chunkSize := hashChunkSize
-		if chunkSize > MaxScanBufferBytes {
-			chunkSize = MaxScanBufferBytes
-		}
-
-		first := make([]byte, chunkSize)
+		// First chunk
+		first := make([]byte, MaxScanBufferBytes)
 		n, err := f.Read(first)
 		if err != nil && err != io.EOF {
 			return "", err
 		}
 		h.Write(first[:n])
 
-		// Last chunk: cap allocation to MaxScanBufferBytes
-		if fileSize > chunkSize {
-			if _, err := f.Seek(-chunkSize, io.SeekEnd); err != nil {
+		// Last chunk (seek from end)
+		if fileSize > MaxScanBufferBytes {
+			if _, err := f.Seek(-MaxScanBufferBytes, io.SeekEnd); err != nil {
 				return "", err
 			}
-			last := make([]byte, chunkSize)
+			last := make([]byte, MaxScanBufferBytes)
 			n, err = f.Read(last)
 			if err != nil && err != io.EOF {
 				return "", err
