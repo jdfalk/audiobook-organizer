@@ -1,7 +1,7 @@
 // file: internal/plugins/maintenance/plugin.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: b2c3d4e5-f6a7-8901-bcde-123456789012
-// last-edited: 2026-05-07
+// last-edited: 2026-05-12
 
 package maintenance
 
@@ -11,8 +11,7 @@ import "github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 // implementation (provided by *server.Server at startup) so that Run functions
 // can call server methods without an import cycle.
 type Plugin struct {
-	deps  ServerDeps
-	store interface{ Optimize() error } // main store for db-optimize
+	deps ServerDeps
 }
 
 // New constructs a maintenance Plugin. deps must not be nil.
