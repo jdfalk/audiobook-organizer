@@ -40,9 +40,7 @@ func TestFixBookFilePathsJob_DefaultParams_DryRunTrue(t *testing.T) {
 	params := j.DefaultParams()
 	require.NotNil(t, params)
 	// DefaultParams should enable dry_run by default.
-	type withDryRun interface{ GetDryRun() bool }
-	// Use reflection-free check: marshal then inspect.
-	// The simplest approach: assert it is not nil (structural check is in the job itself).
+	// The structural check is in the job itself.
 	assert.NotNil(t, params)
 }
 

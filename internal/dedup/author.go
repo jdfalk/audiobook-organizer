@@ -139,11 +139,7 @@ func isDirtyAuthorName(name string) bool {
 		}
 	}
 
-	if IsProductionCompany(name) {
-		return true
-	}
-
-	return false
+	return IsProductionCompany(name)
 }
 
 // SplitCompositeAuthorName splits "Author1 / Author2" or "Author1, Author2" into parts.

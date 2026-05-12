@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,7 +21,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 )
 
 // --- basic pointer helpers --------------------------------------------------
@@ -291,25 +289,6 @@ func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
 		}
 	}
 	return authorName, seriesName
-}
-
-// applyOrganizedFileMetadata updates book's hash and size fields after the
-// backing file has been moved to newPath.
-func applyOrganizedFileMetadata(book *database.Book, newPath string) {
-	hash, err := scanner.ComputeFileHash(newPath)
-	if err != nil {
-		log.Printf("[WARN] failed to compute organized hash for %s: %v", newPath, err)
-	} else if hash != "" {
-		book.FileHash = stringPtr(hash)
-		book.OrganizedFileHash = stringPtr(hash)
-		if book.OriginalFileHash == nil {
-			book.OriginalFileHash = stringPtr(hash)
-		}
-	}
-	if info, err := os.Stat(newPath); err == nil {
-		size := info.Size()
-		book.FileSize = &size
-	}
 }
 
 // --- external ID store helper -----------------------------------------------
