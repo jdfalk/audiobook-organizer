@@ -656,7 +656,6 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 		// DB records stay in sync and the tag map uses current data.
 		mfs.syncMetadataToLibraryCopy(originalBook, libCopy)
 		book = libCopy
-		id = libCopy.ID
 	}
 
 	// --- Resolve author names ---
