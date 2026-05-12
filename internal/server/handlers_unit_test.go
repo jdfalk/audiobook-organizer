@@ -400,7 +400,7 @@ func TestHandler_GetUserPreference_Found(t *testing.T) {
 	assert.Equal(t, "theme", resp.Data["key"])
 }
 
-func TestHandler_GetUserPreference_NotFound(t *testing.T) {
+func TestHandler_GetUserPreference_NotFoundReturnsEmpty(t *testing.T) {
 	srv, mockStore, router := setupHandlerTest(t)
 
 	mockStore.EXPECT().GetUserPreference("missing").Return(nil, nil)
@@ -411,7 +411,15 @@ func TestHandler_GetUserPreference_NotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	// Missing preferences return 200 with an empty value rather than 404
+	// so that clients (browsers in particular) don't surface "failed to
+	// load resource" console noise for optional prefs that legitimately
+	// have no saved value yet.
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp struct{ Data map[string]any }
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "missing", resp.Data["key"])
+	assert.Equal(t, "", resp.Data["value"])
 }
 
 // =============== setUserPreference ===============

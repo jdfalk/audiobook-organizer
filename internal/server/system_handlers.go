@@ -582,6 +582,11 @@ func (s *Server) removeBlockedHash(c *gin.Context) {
 }
 
 // getUserPreference returns a single user preference by key.
+// Unset preferences return 200 with an empty value rather than 404 so that
+// browsers don't surface "Failed to load resource" console noise for
+// optional client-side prefs (library_column_config, dialog state, etc.)
+// that legitimately have no saved value yet. Clients should treat an
+// empty `value` as "not set" — matching the existing frontend pattern.
 func (s *Server) getUserPreference(c *gin.Context) {
 	key := c.Param("key")
 	if key == "" {
@@ -594,7 +599,7 @@ func (s *Server) getUserPreference(c *gin.Context) {
 		return
 	}
 	if pref == nil {
-		httputil.RespondWithNotFound(c, "preference", key)
+		httputil.RespondWithOK(c, gin.H{"key": key, "value": ""})
 		return
 	}
 	httputil.RespondWithOK(c, gin.H{"key": pref.Key, "value": pref.Value})
