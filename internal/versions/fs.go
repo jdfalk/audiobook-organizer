@@ -1,5 +1,5 @@
 // file: internal/versions/fs.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 6c2a1f8d-4b3e-4f70-a9c5-2e8d0f1b9a47
 //
 // Filesystem primitives for the `.versions/{id}/` layout (spec 3.1).
@@ -64,10 +64,8 @@ func MoveToVersionsDir(bookDir, versionID string, filePaths []string) ([]string,
 	for i, src := range filePaths {
 		dst := filepath.Join(slot, filepath.Base(src))
 		newPaths[i] = dst
-		if movedSame, err := movePreservingAttrs(src, dst); err != nil {
+		if _, err := movePreservingAttrs(src, dst); err != nil {
 			errs = append(errs, fmt.Errorf("move %s → %s: %w", src, dst, err))
-		} else if movedSame {
-			// Already in place — no-op.
 		}
 	}
 	return newPaths, errs

@@ -1,5 +1,5 @@
 // file: internal/versions/lifecycle.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 5a3b4c0d-6e7f-4a70-b8c5-3d7e0f1b9a99
 //
 // Version lifecycle operations (spec 3.1 task 6).
@@ -63,8 +63,7 @@ func PurgeVersion(store database.Store, ver *database.BookVersion) error {
 	// Remove files from .versions/{vid}/ or book root.
 	bookDir := ""
 	if book.FilePath != "" {
-		bookDir = book.FilePath[:len(book.FilePath)-len(book.FilePath)+len(book.FilePath)]
-		// Use filepath.Dir in a robust way
+		// Extract directory by finding the last slash
 		for i := len(book.FilePath) - 1; i >= 0; i-- {
 			if book.FilePath[i] == '/' {
 				bookDir = book.FilePath[:i]
