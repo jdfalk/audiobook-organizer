@@ -1,7 +1,7 @@
 // file: internal/operations/registry/worker.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-05-08
+// last-edited: 2026-05-12
 
 package registry
 
@@ -56,8 +56,6 @@ type queuedRun struct {
 	concurrKey   string
 	plugin       string
 	resumePolicy ResumePolicy
-	// initialState is the op_state_v2 blob passed on ResumeRestart. May be nil.
-	initialState []byte
 }
 
 // startWorker is a long-running goroutine that reads from r.nextRun and

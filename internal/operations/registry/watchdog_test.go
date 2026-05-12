@@ -1,7 +1,7 @@
 // file: internal/operations/registry/watchdog_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4d5e6f7a-8b9c-0123-def0-1234567890ab
-// last-edited: 2026-05-06
+// last-edited: 2026-05-12
 
 package registry_test
 
@@ -14,17 +14,6 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 )
-
-// newTestRegistryWithWatchdog creates a registry with a very short watchdog
-// interval for testing. The progress/checkpoint timeouts are also shortened.
-func newRegistryFast(t *testing.T, watchdogInterval time.Duration) (*registry.Registry, *fakeStore) {
-	t.Helper()
-	store := newFakeStore()
-	r := registry.NewWithOptions(store, slog.Default(), 4, registry.Options{
-		WatchdogInterval: watchdogInterval,
-	})
-	return r, store
-}
 
 // TestWatchdog_StuckOpGetStrike verifies that an op with stale last_progress_at
 // gets a "stuck" strike and its context is canceled.
