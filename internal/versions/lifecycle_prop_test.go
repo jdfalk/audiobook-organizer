@@ -154,7 +154,7 @@ func TestProp_PurgeIsIrreversible(t *testing.T) {
 		if afterPurge == nil {
 			t.Fatalf("purged version must still exist in store (row retained for fingerprint)")
 		}
-		if afterPurge.Status != database.BookVersionStatusInactivePurged {
+		if afterPurge != nil && afterPurge.Status != database.BookVersionStatusInactivePurged {
 			t.Fatalf("expected inactive_purged, got %s", afterPurge.Status)
 		}
 		if afterPurge.PurgedDate == nil {
@@ -220,7 +220,7 @@ func TestProp_AutoPromotePicksMostRecent(t *testing.T) {
 		if promoted == nil {
 			t.Fatalf("promoted version vanished")
 		}
-		if promoted.Status != database.BookVersionStatusActive {
+		if promoted != nil && promoted.Status != database.BookVersionStatusActive {
 			t.Errorf("expected promoted version %s to be active, got %s",
 				expected.ID, promoted.Status)
 		}
