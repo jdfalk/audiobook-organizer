@@ -22,6 +22,7 @@ func TestGen_Book(t *testing.T) {
 		b := Book(t)
 		if b == nil {
 			t.Fatal("Book returned nil")
+			return // Unreachable, but satisfies static analyzer
 		}
 		if b.Title == "" {
 			t.Errorf("Title must be non-empty, got %q", b.Title)
