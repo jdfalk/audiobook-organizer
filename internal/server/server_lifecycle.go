@@ -1169,6 +1169,10 @@ func (s *Server) setupRoutes() {
 			protected.POST("/metadata/batch-fetch-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchFetchCandidates)
 			protected.GET("/metadata/recent-fetches", s.perm(auth.PermLibraryView), s.handleGetLatestMetadataFetch)
 			protected.POST("/metadata/pending-review", s.perm(auth.PermLibraryView), s.handleGetPendingReview)
+			// Unified metadata-results listing — preferred over /metadata/pending-review.
+			// Returns books with their latest fetch status + by_status counts; supports
+			// repeatable ?status= filtering for the Library page toggles + Resume Review.
+			protected.GET("/library/metadata-results", s.perm(auth.PermLibraryView), s.handleListMetadataResults)
 			protected.POST("/metadata/batch-apply-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchApplyCandidates)
 			protected.POST("/metadata/batch-reject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleRejectCandidates)
 			protected.POST("/metadata/batch-unreject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleUnrejectCandidates)

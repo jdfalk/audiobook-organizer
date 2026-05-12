@@ -3108,6 +3108,56 @@ export async function getPendingReview(): Promise<{ operation_id: string; total_
   return response.json();
 }
 
+// MetadataResultItem is one row in the unified metadata-results listing.
+// `result_json` is a JSON-encoded CandidateResult and is only populated
+// for statuses that have a stored fetch result (matched / no_match /
+// applied / rejected / error). `unfetched` rows have status only.
+export interface MetadataResultItem {
+  book_id: string;
+  status: 'matched' | 'no_match' | 'applied' | 'rejected' | 'error' | 'unfetched';
+  result_json?: string;
+  operation_id?: string;
+  fetched_at?: string;
+}
+
+export interface MetadataResultsResponse {
+  items: MetadataResultItem[];
+  total: number;
+  by_status: Record<string, number>;
+  limit: number;
+  offset: number;
+}
+
+// getMetadataResults returns the latest metadata-fetch result per book,
+// optionally filtered by status. Single source of truth for the Library
+// page filter toggles and the "Resume Review" entry point. Replaces the
+// scattered logic that lived in getPendingReview + client-side filtering.
+//
+// Pass status=['matched'] to retrieve the same set the legacy Resume
+// Review button used to surface. Pass no status filter to see every
+// book that has been fetched. Pass includeUnfetched=true to also include
+// books that have never been queried.
+export async function getMetadataResults(opts: {
+  status?: ('matched' | 'no_match' | 'applied' | 'rejected' | 'error' | 'unfetched')[];
+  limit?: number;
+  offset?: number;
+  includeUnfetched?: boolean;
+} = {}): Promise<MetadataResultsResponse> {
+  const params = new URLSearchParams();
+  for (const s of opts.status ?? []) params.append('status', s);
+  if (opts.limit !== undefined) params.set('limit', String(opts.limit));
+  if (opts.offset !== undefined) params.set('offset', String(opts.offset));
+  if (opts.includeUnfetched) params.set('include_unfetched', 'true');
+  const qs = params.toString();
+  const url = qs
+    ? `${API_BASE}/library/metadata-results?${qs}`
+    : `${API_BASE}/library/metadata-results`;
+  const response = await fetch(url);
+  if (!response.ok) throw await buildApiError(response, 'Failed to list metadata results');
+  const data = await response.json();
+  return data.data ?? data;
+}
+
 export async function batchApplyCandidates(operationId: string, bookIds: string[]): Promise<{ applied: number }> {
   const response = await fetch(`${API_BASE}/metadata/batch-apply-candidates`, {
     method: 'POST',

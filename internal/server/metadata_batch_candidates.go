@@ -774,60 +774,180 @@ func (s *Server) resumeInterruptedMetadataFetch() {
 	}
 }
 
+// latestMetadataResultsByBook scans the recent metadata_candidate_fetch
+// operations and returns the LATEST OperationResult per book_id, plus a
+// status histogram across the deduplicated set. The same helper backs both
+// the unified GET /library/metadata-results endpoint and the legacy
+// POST /metadata/pending-review endpoint, so the filter logic stays in
+// one place.
+//
+// Returns (results-by-bookID, status-counts, error).
+func latestMetadataResultsByBook(store database.Store) (map[string]database.OperationResult, map[string]int, error) {
+	allOps, err := store.GetRecentOperations(5000)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	type bookEntry struct {
+		result    database.OperationResult
+		createdAt time.Time
+	}
+	latest := map[string]bookEntry{}
+	for _, op := range allOps {
+		if op.Type != "metadata_candidate_fetch" {
+			continue
+		}
+		results, err := store.GetOperationResults(op.ID)
+		if err != nil {
+			continue
+		}
+		for _, r := range results {
+			existing, ok := latest[r.BookID]
+			if !ok || r.CreatedAt.After(existing.createdAt) {
+				latest[r.BookID] = bookEntry{result: r, createdAt: r.CreatedAt}
+			}
+		}
+	}
+
+	out := make(map[string]database.OperationResult, len(latest))
+	counts := map[string]int{}
+	for bookID, entry := range latest {
+		out[bookID] = entry.result
+		counts[entry.result.Status]++
+	}
+	return out, counts, nil
+}
+
+// handleListMetadataResults implements GET /api/v1/library/metadata-results.
+// Returns every book's latest metadata-fetch result joined with book
+// metadata, plus a by_status histogram for filter-toggle counts.
+//
+// Query params:
+//
+//	status= (repeatable) — filter to specific status values
+//	                       (matched / no_match / applied / rejected / error / unfetched).
+//	                       If omitted, all books with any result are returned.
+//	limit / offset       — pagination (defaults: limit=100, offset=0; limit=0 → all).
+//	include_unfetched=true — include books that have NEVER been fetched
+//	                         (status=unfetched). Off by default to keep the
+//	                         payload focused on the review-relevant set.
+func (s *Server) handleListMetadataResults(c *gin.Context) {
+	store := s.Store()
+
+	// Parse filters.
+	statusFilter := map[string]bool{}
+	for _, v := range c.QueryArray("status") {
+		if v != "" {
+			statusFilter[v] = true
+		}
+	}
+	includeUnfetched := c.Query("include_unfetched") == "true"
+	pp := httputil.ParsePaginationParams(c)
+
+	latest, counts, err := latestMetadataResultsByBook(store)
+	if err != nil {
+		httputil.InternalError(c, "failed to load metadata results", err)
+		return
+	}
+
+	// Optionally add an `unfetched` synthetic bucket. We populate the count
+	// without loading every book record (that's expensive); the actual rows
+	// only get streamed when the caller asks for include_unfetched=true.
+	var unfetchedBookIDs []string
+	if includeUnfetched || statusFilter["unfetched"] {
+		allBooks, err := store.GetAllBooks(0, 0)
+		if err == nil {
+			for _, b := range allBooks {
+				if _, ok := latest[b.ID]; !ok {
+					unfetchedBookIDs = append(unfetchedBookIDs, b.ID)
+				}
+			}
+			counts["unfetched"] = len(unfetchedBookIDs)
+		}
+	}
+
+	// Build response item list, applying status filter.
+	type item struct {
+		BookID      string `json:"book_id"`
+		Status      string `json:"status"`
+		ResultJSON  string `json:"result_json,omitempty"`
+		OperationID string `json:"operation_id,omitempty"`
+		FetchedAt   string `json:"fetched_at,omitempty"`
+	}
+	keep := func(status string) bool {
+		if len(statusFilter) == 0 {
+			return status != "unfetched" || includeUnfetched
+		}
+		return statusFilter[status]
+	}
+
+	all := make([]item, 0, len(latest))
+	for bookID, r := range latest {
+		if !keep(r.Status) {
+			continue
+		}
+		all = append(all, item{
+			BookID:      bookID,
+			Status:      r.Status,
+			ResultJSON:  r.ResultJSON,
+			OperationID: r.OperationID,
+			FetchedAt:   r.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	if includeUnfetched || statusFilter["unfetched"] {
+		for _, id := range unfetchedBookIDs {
+			all = append(all, item{BookID: id, Status: "unfetched"})
+		}
+	}
+
+	total := len(all)
+
+	// Apply pagination.
+	start := pp.Offset
+	if start > total {
+		start = total
+	}
+	end := total
+	if pp.Limit > 0 {
+		end = start + pp.Limit
+		if end > total {
+			end = total
+		}
+	}
+	page := all[start:end]
+
+	httputil.RespondWithOK(c, gin.H{
+		"items":     page,
+		"total":     total,
+		"by_status": counts,
+		"limit":     pp.Limit,
+		"offset":    pp.Offset,
+	})
+}
+
 // handleGetPendingReview implements POST /api/v1/metadata/pending-review.
-// It scans all completed metadata_candidate_fetch operations, deduplicates
-// by book_id (latest status per book), and returns books whose latest
-// result status is "matched" (candidate found, not yet applied/rejected).
-// It creates a new aggregate "pending-review" operation so the standard
-// MetadataReviewDialog can be used without modification.
+// Thin compatibility wrapper around latestMetadataResultsByBook that keeps
+// the MetadataReviewDialog working unchanged: it filters to status=matched,
+// creates an aggregate operation, copies the matched rows under the new
+// op ID, and returns the aggregate ID for the dialog to consume.
 func (s *Server) handleGetPendingReview(c *gin.Context) {
 	store := s.Store()
 
-	// Load all operations and find metadata_candidate_fetch ones.
-	allOps, err := store.GetRecentOperations(5000)
+	latest, counts, err := latestMetadataResultsByBook(store)
 	if err != nil {
 		httputil.InternalError(c, "failed to list operations", err)
 		return
 	}
 
-	// Collect the latest OperationResult per book_id across all candidate-fetch ops.
-	type bookEntry struct {
-		result    database.OperationResult
-		createdAt time.Time
-	}
-	latestByBook := map[string]bookEntry{}
-
-	var fetchOpCount, totalResults int
-	for _, op := range allOps {
-		if op.Type != "metadata_candidate_fetch" {
-			continue
-		}
-		fetchOpCount++
-		results, err := store.GetOperationResults(op.ID)
-		if err != nil {
-			continue
-		}
-		totalResults += len(results)
-		for _, r := range results {
-			existing, ok := latestByBook[r.BookID]
-			if !ok || r.CreatedAt.After(existing.createdAt) {
-				latestByBook[r.BookID] = bookEntry{result: r, createdAt: r.CreatedAt}
-			}
-		}
-	}
-
-	// Filter to books whose latest status is "matched" (candidate available, not applied/rejected).
 	var pending []database.OperationResult
-	statusCounts := map[string]int{}
-	for _, entry := range latestByBook {
-		statusCounts[entry.result.Status]++
-		if entry.result.Status == "matched" {
-			pending = append(pending, entry.result)
+	for _, r := range latest {
+		if r.Status == "matched" {
+			pending = append(pending, r)
 		}
 	}
 
-	log.Printf("[INFO] pending-review: scanned %d ops (%d candidate-fetch), %d result rows, %d unique books — status counts: %v",
-		len(allOps), fetchOpCount, totalResults, len(latestByBook), statusCounts)
+	log.Printf("[INFO] pending-review: %d unique books fetched — status counts: %v, matched: %d",
+		len(latest), counts, len(pending))
 
 	if len(pending) == 0 {
 		httputil.RespondWithOK(c, gin.H{
