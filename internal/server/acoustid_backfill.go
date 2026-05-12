@@ -1,7 +1,7 @@
 // file: internal/server/acoustid_backfill.go
-// version: 2.5.0
+// version: 2.5.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-05-11
+// last-edited: 2026-05-12
 
 package server
 
@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 )
 
