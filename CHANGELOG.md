@@ -1,13 +1,28 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.61.0 -->
+<!-- version: 2.62.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-11 -->
+<!-- last-edited: 2026-05-12 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Refactors
+
+#### May 12, 2026 — SERVER-PLUGIN-REG Wave 0: service registry foundation (PR #832)
+
+First wave of the SERVER-PLUGIN-REG migration. Adds `internal/serviceregistry` — a per-instance service container that domain packages register into via `init()` factories. Foundation only; no callers yet. Waves 1–7 wire existing services through it incrementally per `docs/architecture/server-plugin-registry-plan.md`.
+
+- **`internal/serviceregistry/registry.go`** — `ServiceDef`, `Register`, global factory map, `ResetForTest`
+- **`internal/serviceregistry/container.go`** — `Container` with phase tracking; `Include` / `IncludeAll` / `Override` / `Build` / `PostInit` / `Start` / `Stop`; generic `Get[T]` / `TryGet[T]`
+- **`internal/serviceregistry/graph.go`** — Kahn's topological sort with lex-stable ready queue + cycle detection; overrides treated as leaves
+- **`internal/serviceregistry/lifecycle.go`** — optional `PostIniter`, `Starter`, `Stopper` interfaces (picked up by type-assertion per phase)
+- **`internal/serviceregistry/errors.go`** — typed sentinels (ErrCycle, ErrUnknownService, ErrUndeclaredDep, ErrNotBuilt, ErrTypeMismatch, ErrWrongPhase)
+- **12 unit tests** — graph (lex order, cycle, transitive closure, override-as-leaf), container (build dep order, undeclared Get panic, PostInit ordering, reverse Stop), registry (duplicate Register panics)
+
+Companion cleanup landed alongside (PRs #830, #831, #834): unused deluge import, 7 stale `internal/server/*_test.go` files from wave-3 extractions, and a frontend test mock + assertion drift surfaced by the rebuild.
+
+Spec: `docs/architecture/server-plugin-registry-design.md`. Plan: `docs/architecture/server-plugin-registry-plan.md`.
 
 #### May 11, 2026 — Wave-3 server thinning: 13-task parallel sweep (PRs #817–#829)
 

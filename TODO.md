@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.22.0 -->
+<!-- version: 8.23.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-11 -->
+<!-- last-edited: 2026-05-12 -->
 
 # Project TODO
 
@@ -48,10 +48,18 @@ future agent) can scan the entire workspace in one page.
 
 ## 🔜 Next — Post-server-thinning
 
-- [ ] **SERVER-PLUGIN-REG** Create a service registry analogous to `opRegistry` so domain
-  packages self-register their services and `server.go` iterates the registry at startup
-  instead of having a hardcoded constructor call per service. iTunes extraction enabled
-  this pattern for ops — apply it to synchronous services too.
+- [ ] **SERVER-PLUGIN-REG** Service registry analogous to `opRegistry` so domain packages
+  self-register their services and `server.go` iterates the registry at startup instead of
+  having a hardcoded constructor call per service. Spec + plan committed:
+  `docs/architecture/server-plugin-registry-{design,plan}.md` (7-wave migration).
+  - [x] **W0** Registry foundation — `internal/serviceregistry` package + 12 tests (PR #832)
+  - [ ] **W1** Leaf services (10 parallel + 1 serial integration)
+  - [ ] **W2** Cross-wired services (5 parallel + 1 serial integration)
+  - [ ] **W3** Start/Stop services (7 parallel + 1 serial integration)
+  - [ ] **W4** Embedding/AI cluster (8 parallel + 1 serial integration)
+  - [ ] **W5** UOS plugin migrations (5 parallel + 1 serial integration)
+  - [ ] **W6** Scheduler residual extraction — closes SERVER-THIN-RESIDUAL
+  - [ ] **W7** Final cleanup (NewServer ≤ 50 lines, audit GetGlobalStore)
 
 - [ ] **SERVER-THIN-RESIDUAL** `scheduler_extra_ops.go` residual: 5 `*Server` receiver
   methods (dedupEngine, dedupCache, aiScanStore, activityWriter, olService) — too coupled
