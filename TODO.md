@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.23.0 -->
+<!-- version: 8.24.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-12 -->
 
@@ -53,7 +53,8 @@ future agent) can scan the entire workspace in one page.
   having a hardcoded constructor call per service. Spec + plan committed:
   `docs/architecture/server-plugin-registry-{design,plan}.md` (7-wave migration).
   - [x] **W0** Registry foundation — `internal/serviceregistry` package + 12 tests (PR #832)
-  - [ ] **W1** Leaf services (10 parallel + 1 serial integration)
+  - [x] **W1** Leaf services — 9 of 10 leaf `register.go` files merged (PRs #835–#843); `system` (W1.8) deferred to W1.INT
+  - [ ] **W1.INT** `internal/server/registry_wire.go` + `NewServer` registry flow; register `system` service inline; delete corresponding struct-literal entries (1 serial Sonnet task)
   - [ ] **W2** Cross-wired services (5 parallel + 1 serial integration)
   - [ ] **W3** Start/Stop services (7 parallel + 1 serial integration)
   - [ ] **W4** Embedding/AI cluster (8 parallel + 1 serial integration)

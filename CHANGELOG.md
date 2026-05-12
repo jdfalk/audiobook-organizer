@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.62.0 -->
+<!-- version: 2.63.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-12 -->
 
@@ -8,6 +8,22 @@
 ## [Unreleased]
 
 ### Refactors
+
+#### May 12, 2026 — SERVER-PLUGIN-REG Wave 1: leaf services (PRs #835–#843)
+
+Nine parallel haiku tasks register the simple constructor-only services into the new service registry. No callers yet — `internal/server` continues to build them via the struct literal until W1.INT lands the integration. Each PR is one new file pair (`register.go` + `register_test.go`) in a domain package; zero cross-task conflicts.
+
+- **`audiobook`** (PR #835) — `internal/audiobooks/register.go`
+- **`batch`** (PR #836) — `internal/batch/register.go`
+- **`work`** (PR #837) — `internal/work/register.go`
+- **`filesystem`** (PR #838) — `internal/fileops/register.go`
+- **`importpath`** (PR #839) — `internal/importer/register.go`
+- **`scan`** (PR #840) — `internal/scanner/register.go`
+- **`dashboard`** (PR #841) — `internal/sysinfo/register.go`
+- **`configupdate`** (PR #842) — `internal/config/register.go`
+- **`metadatastate`** (PR #843) — `internal/metafetch/register.go`
+
+Deferred from this wave: `system` service (needs `appVersion` + `calculateLibrarySizes` which still live in `internal/server`). Will be handled in W1.INT alongside the `NewServer` registry-flow integration.
 
 #### May 12, 2026 — SERVER-PLUGIN-REG Wave 0: service registry foundation (PR #832)
 
