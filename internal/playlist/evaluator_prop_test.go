@@ -78,27 +78,6 @@ func seedBooks(rt *rapid.T, store *database.PebbleStore, idx *search.BleveIndex,
 	return ids
 }
 
-// buildPropEvalFixture opens a fresh store+index per iteration (registered
-// with rt.Cleanup so they close after each check). Used only by tests that
-// require per-iteration state isolation.
-func buildPropEvalFixture(t *testing.T, rt *rapid.T, n int) (*database.PebbleStore, *search.BleveIndex, []string) {
-	t.Helper()
-	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
-	if err != nil {
-		t.Fatalf("pebble open: %v", err)
-	}
-	rt.Cleanup(func() { store.Close() })
-
-	idx, err := search.Open(filepath.Join(t.TempDir(), "bleve"))
-	if err != nil {
-		t.Fatalf("bleve open: %v", err)
-	}
-	rt.Cleanup(func() { _ = idx.Close() })
-
-	ids := seedBooks(rt, store, idx, n)
-	return store, idx, ids
-}
-
 // TestProp_LimitIsRespected verifies that
 // EvaluateSmartPlaylist(limit=N) returns at most N IDs for any query
 // that produces a non-trivial candidate set.

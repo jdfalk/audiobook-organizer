@@ -343,7 +343,7 @@ func TestSavePlaylistToDatabase(t *testing.T) {
 	seriesID, _ := result.LastInsertId()
 
 	// Insert books
-	result, err = database.DB.Exec(`
+	_, err = database.DB.Exec(`
 		INSERT INTO books (title, author_id, series_id, series_sequence, file_path)
 		VALUES ('Book 1', ?, ?, 1, '/path/to/book1.m4b')
 	`, authorID, seriesID)
@@ -611,7 +611,7 @@ func TestGeneratePlaylistsForSeriesMultiple(t *testing.T) {
 	config.AppConfig.PlaylistDir = tempDir
 
 	// Insert multiple series with books
-	result, err := database.DB.Exec("INSERT INTO authors (name) VALUES ('Author One'), ('Author Two')")
+	_, err := database.DB.Exec("INSERT INTO authors (name) VALUES ('Author One'), ('Author Two')")
 	if err != nil {
 		t.Fatalf("failed to insert authors: %v", err)
 	}
@@ -628,7 +628,7 @@ func TestGeneratePlaylistsForSeriesMultiple(t *testing.T) {
 	}
 
 	// Insert series
-	result, err = database.DB.Exec("INSERT INTO series (name, author_id) VALUES ('Series A', ?)", author1ID)
+	result, err := database.DB.Exec("INSERT INTO series (name, author_id) VALUES ('Series A', ?)", author1ID)
 	if err != nil {
 		t.Fatalf("failed to insert series A: %v", err)
 	}

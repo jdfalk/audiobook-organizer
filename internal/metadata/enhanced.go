@@ -184,14 +184,10 @@ func BatchUpdateMetadata(updates []MetadataUpdate, store database.BookStore, val
 		if title, ok := update.Updates["title"].(string); ok {
 			book.Title = title
 		}
-		if _, ok := update.Updates["author"].(string); ok {
-			// TODO: Resolve author name to ID and update book.AuthorID
-			// For now, skip author updates pending author resolution implementation
-		}
-		if _, ok := update.Updates["series"].(string); ok {
-			// TODO: Resolve series name to ID and update book.SeriesID
-			// For now, skip series updates pending series resolution implementation
-		}
+		// TODO: Resolve author name to ID and update book.AuthorID
+		// For now, skip author updates pending author resolution implementation
+		// TODO: Resolve series name to ID and update book.SeriesID
+		// For now, skip series updates pending series resolution implementation
 		if format, ok := update.Updates["format"].(string); ok {
 			book.Format = format
 		}

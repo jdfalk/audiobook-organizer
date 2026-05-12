@@ -44,6 +44,7 @@ func TestRemuxerNew(t *testing.T) {
 	remuxer := New(store)
 	if remuxer == nil {
 		t.Errorf("New() returned nil")
+		return
 	}
 	if remuxer.store != store {
 		t.Errorf("New() store not set correctly")

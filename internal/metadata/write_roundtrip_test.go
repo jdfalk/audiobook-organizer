@@ -137,16 +137,6 @@ func TestCustomTagsToMap_EmptyFieldsOmitted(t *testing.T) {
 	}
 }
 
-// customPairsTaglib returns the customPairs slice that writeMetadataWithTaglib
-// uses. We reconstruct it here so that if someone changes the source array
-// without updating the test, the test catches it.
-//
-// This is the authoritative expected list. Each test below compares the actual
-// source arrays against this list.
-func customPairsTaglib() [][2]string {
-	return expectedCustomPairs()
-}
-
 // TestCustomTagConsistency_TaglibWriter checks that the customPairs in
 // writeMetadataWithTaglib covers every non-Version tag constant.
 func TestCustomTagConsistency_TaglibWriter(t *testing.T) {

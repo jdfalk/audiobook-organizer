@@ -19,6 +19,7 @@ func TestTranscoderNew(t *testing.T) {
 	transcoder := NewTranscoder(store)
 	if transcoder == nil {
 		t.Errorf("NewTranscoder() returned nil")
+		return
 	}
 	if transcoder.store != store {
 		t.Errorf("NewTranscoder() store not set correctly")
