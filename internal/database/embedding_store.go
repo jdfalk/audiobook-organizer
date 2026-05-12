@@ -344,17 +344,6 @@ func dedupPairKey(entityType, aID, bID string) []byte {
 	return []byte(dedupPairPfx + entityType + ":" + aID + ":" + bID)
 }
 
-// layerPrecedence maps layer names to numeric precedence (higher = more authoritative).
-func layerPrecedence(l string) int {
-	switch l {
-	case "exact":
-		return 3
-	case "llm":
-		return 2
-	default:
-		return 1 // "embedding" and anything unrecognised
-	}
-}
 
 // nextID reads and increments the sequential counter. Must be called with s.mu held.
 // The new counter value is written into the supplied batch so counter + record land atomically.

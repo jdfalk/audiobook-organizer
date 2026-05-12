@@ -78,6 +78,9 @@ func TestProp_Book_RoundTrip(t *testing.T) {
 		if got == nil {
 			t.Fatalf("GetBookByID returned nil for id %q", created.ID)
 		}
+		if got == nil {
+			return
+		}
 		if got.Title != b.Title {
 			t.Errorf("Title: got %q, want %q", got.Title, b.Title)
 		}

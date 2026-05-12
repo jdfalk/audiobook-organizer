@@ -8,9 +8,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -123,16 +121,6 @@ func GenerateArgon2Salt() ([]byte, error) {
 	return salt, nil
 }
 
-// hashForIndex computes a non-secret, collision-resistant identifier for a
-// setting key using SHA-256. This is appropriate for non-password data such
-// as database index keys where speed matters and salting is not required.
-//
-// Do NOT use this function to store user passwords or other secrets —
-// use DeriveKeyFromPasswordWithSalt instead.
-func hashForIndex(value string) string {
-	sum := sha256.Sum256([]byte(value))
-	return hex.EncodeToString(sum[:])
-}
 
 // EncryptValue encrypts a plaintext value
 func EncryptValue(plaintext string) (string, error) {

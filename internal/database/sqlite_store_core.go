@@ -77,16 +77,6 @@ created_at, updated_at, metadata_updated_at,
 is_primary_version, version_group_id, metadata_review_status
 `
 
-// bookSummarySelectColumnsQualified prefixes all columns with "books." for use in JOINs
-const bookSummarySelectColumnsQualified = `
-books.id, books.title, books.author_id, books.series_id, books.series_sequence,
-books.file_path, books.format, books.duration, books.original_filename,
-books.file_hash, books.file_size, books.original_file_hash, books.organized_file_hash,
-books.library_state, books.quarantined_at, books.quarantine_reason, books.cover_url, books.narrator,
-books.created_at, books.updated_at, books.metadata_updated_at,
-books.is_primary_version, books.version_group_id, books.metadata_review_status
-`
-
 const bookFileCols = `id, book_id, file_path, original_filename, itunes_path, itunes_persistent_id,
 track_number, track_count, disc_number, disc_count, title, format, codec, duration,
 file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, original_file_hash,

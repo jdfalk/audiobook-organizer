@@ -33,9 +33,6 @@ type NutsActivityStore struct {
 	counter atomic.Int64
 }
 
-const (
-	actKeyWidth = 20 // zero-padded unix nano, enough for year 2262
-)
 
 func actBucket(tier string) string        { return "act:" + tier }
 func actOpBucket(opID string) string      { return "act:op:" + opID }
@@ -199,7 +196,6 @@ func (s *NutsActivityStore) Summarize(ctx context.Context, olderThan time.Time, 
 	type groupKey struct{ opID, typ string }
 	type group struct {
 		entries []ActivityEntry
-		keys    [][]byte
 	}
 	groups := make(map[groupKey]*group)
 
