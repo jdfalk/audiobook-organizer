@@ -196,19 +196,6 @@ func (f *fakeStore) DeleteOpStateV2(opID string) error {
 	return nil
 }
 
-// strikeCount returns the number of strikes recorded for a given op id.
-func (f *fakeStore) strikeCount(opID string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	n := 0
-	for _, s := range f.strikes {
-		if s.OperationID == opID {
-			n++
-		}
-	}
-	return n
-}
-
 // strikesOfKind returns strikes of a given kind for an op.
 func (f *fakeStore) strikesOfKind(opID, kind string) []database.OpStrikeV2Row {
 	f.mu.Lock()
@@ -231,18 +218,6 @@ func (f *fakeStore) setLastProgressAt(opID string, t *time.Time) {
 		return
 	}
 	op.LastProgressAt = t
-	f.ops[opID] = op
-}
-
-// setLastCheckpointAt allows tests to simulate stale checkpoint timestamps.
-func (f *fakeStore) setLastCheckpointAt(opID string, t *time.Time) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	op, ok := f.ops[opID]
-	if !ok {
-		return
-	}
-	op.LastCheckpointAt = t
 	f.ops[opID] = op
 }
 
