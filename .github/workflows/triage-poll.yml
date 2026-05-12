@@ -1,5 +1,5 @@
 # file: .github/workflows/triage-poll.yml
-# version: 1.0.0
+# version: 1.0.1
 name: Triage poll
 
 on:
@@ -19,7 +19,7 @@ on:
 
 jobs:
   triage-poll:
-    uses: jdfalk/ghcommon/.github/workflows/reusable-triage-poll.yml@b3778b134dd316f334e2eca7d30c6ef2685afd9e
+    uses: jdfalk/ghcommon/.github/workflows/reusable-triage-poll.yml@acbc1ec5a64c5fb497a5077c3a56e56d5e7b4873
     with:
       mode: ${{ inputs.mode || 'draft-only' }}
       triage_model: o3
