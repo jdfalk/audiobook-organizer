@@ -19,13 +19,6 @@ import (
 	"strings"
 )
 
-// logRemoveSkipped is preserved for backward compat with tests; v1.2.0
-// no longer skips removes. Tests can override to capture warnings if a
-// future safety gate re-introduces a skip path.
-var logRemoveSkipped = func(n int) {
-	log.Printf("[INFO] iTunes write-back: removing %d track(s) (safe path)", n)
-}
-
 // RemoveTracksByPIDLE removes tracks identified by the given persistent IDs
 // from an LE-format ITL payload, atomically:
 //
