@@ -40,7 +40,7 @@ func (o *Organizer) reflinkFilePlatform(sourcePath, targetPath string) error {
 
 	// Try Linux FICLONE first (most common)
 	const FICLONE = 0x40049409
-	ret, _, errno = syscall.Syscall(syscall.SYS_IOCTL, uintptr(dstFd), FICLONE, uintptr(srcFd))
+	_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, uintptr(dstFd), FICLONE, uintptr(srcFd))
 	if errno == 0 {
 		return nil
 	}

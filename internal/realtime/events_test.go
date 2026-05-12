@@ -370,7 +370,7 @@ func TestEventHub_Broadcast_ChannelFull(t *testing.T) {
 	// Create client with buffer of 0 to make it immediately full
 	client := &Client{
 		ID:         "client-1",
-		Channel:    make(chan *Event, 0), // No buffer
+		Channel:    make(chan *Event), // No buffer
 		Operations: make(map[string]bool),
 	}
 	hub.RegisterClient(client)

@@ -42,10 +42,6 @@ var ErrAbsolutePathNotAllowed = errors.New("absolute path not allowed in user-su
 // ErrEmptyPath is returned when a path is empty after sanitisation.
 var ErrEmptyPath = errors.New("empty path")
 
-// unsafeSeparatorsRE matches any forward- or back-slash that could be used to
-// inject directory separators into a filename component.
-var unsafeSeparatorsRE = regexp.MustCompile(`[/\\]`)
-
 // unsafeFilenameRE matches characters that are illegal or dangerous in
 // filenames on Windows, macOS, or Linux. The set is intentionally conservative:
 // only printable, non-control, non-reserved characters are allowed.
