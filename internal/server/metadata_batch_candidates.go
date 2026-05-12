@@ -797,14 +797,17 @@ func (s *Server) handleGetPendingReview(c *gin.Context) {
 	}
 	latestByBook := map[string]bookEntry{}
 
+	var fetchOpCount, totalResults int
 	for _, op := range allOps {
 		if op.Type != "metadata_candidate_fetch" {
 			continue
 		}
+		fetchOpCount++
 		results, err := store.GetOperationResults(op.ID)
 		if err != nil {
 			continue
 		}
+		totalResults += len(results)
 		for _, r := range results {
 			existing, ok := latestByBook[r.BookID]
 			if !ok || r.CreatedAt.After(existing.createdAt) {
@@ -815,11 +818,16 @@ func (s *Server) handleGetPendingReview(c *gin.Context) {
 
 	// Filter to books whose latest status is "matched" (candidate available, not applied/rejected).
 	var pending []database.OperationResult
+	statusCounts := map[string]int{}
 	for _, entry := range latestByBook {
+		statusCounts[entry.result.Status]++
 		if entry.result.Status == "matched" {
 			pending = append(pending, entry.result)
 		}
 	}
+
+	log.Printf("[INFO] pending-review: scanned %d ops (%d candidate-fetch), %d result rows, %d unique books — status counts: %v",
+		len(allOps), fetchOpCount, totalResults, len(latestByBook), statusCounts)
 
 	if len(pending) == 0 {
 		httputil.RespondWithOK(c, gin.H{
