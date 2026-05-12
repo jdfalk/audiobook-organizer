@@ -6,6 +6,7 @@ package database
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -51,19 +52,42 @@ func NewNutsMetricsStore(dirPath string) (*NutsMetricsStore, error) {
 // Close shuts down the underlying NutsDB.
 func (s *NutsMetricsStore) Close() error { return s.db.Close() }
 
+// ensureBucket creates a NutsDB BTree bucket if it does not already exist.
+// Returns nil when the bucket is newly created OR when it already exists;
+// any other error is propagated. NutsDB's Put requires the bucket to exist
+// before writing — failing to call this resulted in the "bucket not found"
+// errors on first-write of every new cache name in the snapshotter loop.
+func ensureBucket(tx *nutsdb.Tx, bucket string) error {
+	if err := tx.NewBucket(nutsdb.DataStructureBTree, bucket); err != nil {
+		if errors.Is(err, nutsdb.ErrBucketAlreadyExist) {
+			return nil
+		}
+		return fmt.Errorf("create bucket %q: %w", bucket, err)
+	}
+	return nil
+}
+
 // RecordCacheStatsSnapshots writes all snapshots in a single transaction.
 // Each entry gets a 30-day TTL so old data expires automatically.
+// Buckets are created on demand — cache names are not known at startup.
 func (s *NutsMetricsStore) RecordCacheStatsSnapshots(snapshots []CacheStatsSnapshot) error {
 	if len(snapshots) == 0 {
 		return nil
 	}
 	return s.db.Update(func(tx *nutsdb.Tx) error {
+		// Ensure the index bucket exists before its first write below.
+		if err := ensureBucket(tx, metricsIdxBucket); err != nil {
+			return err
+		}
 		for _, snap := range snapshots {
 			b, err := json.Marshal(snap)
 			if err != nil {
 				return fmt.Errorf("marshal %s: %w", snap.CacheName, err)
 			}
 			bucket := metsBucket(snap.CacheName)
+			if err := ensureBucket(tx, bucket); err != nil {
+				return err
+			}
 			if err := tx.Put(bucket, metsTimeKey(snap.Timestamp), b, metricsTTL); err != nil {
 				return fmt.Errorf("put snapshot %s: %w", snap.CacheName, err)
 			}
