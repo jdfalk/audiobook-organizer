@@ -28,7 +28,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
@@ -165,7 +164,6 @@ type Server struct {
 	dedupCache             *cache.Cache[gin.H]
 	listCache              *cache.Cache[gin.H]
 	facetsCache            *cache.Cache[gin.H]
-	libraryWatcher         *itunes.LibraryWatcher
 	itunesSvc              *itunesservice.Service
 	updater                *updater.Updater
 	updateScheduler        *updater.Scheduler
@@ -921,13 +919,6 @@ type serverOrganizeHooks struct {
 // extractSeriesNameForDedup tries to extract the actual series name from patterns like
 // "Book Title: Series Name" or "Series Name, Book 3". Returns the suggested
 // series name and whether a suggestion was made.
-
-// seriesPruneResult holds the result of a series prune operation.
-type seriesPruneResult struct {
-	DuplicatesMerged int `json:"duplicates_merged"`
-	OrphansDeleted   int `json:"orphans_deleted"`
-	TotalCleaned     int `json:"total_cleaned"`
-}
 
 // seriesPrunePreviewGroup describes a duplicate group or orphan for the preview endpoint.
 type seriesPrunePreviewGroup struct {

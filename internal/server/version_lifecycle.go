@@ -17,8 +17,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/versions"
 )
 
-const trashTTLDays = versions.TrashTTLDays
-
 // handleTrashVersion moves a version to trash.
 // DELETE /api/v1/books/:id/versions/:vid
 func (s *Server) handleTrashVersion(c *gin.Context) {

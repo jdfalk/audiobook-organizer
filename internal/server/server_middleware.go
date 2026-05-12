@@ -6,20 +6,15 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/itunes"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
-	ulid "github.com/oklog/ulid/v2"
 )
 
 func corsMiddleware() gin.HandlerFunc {
@@ -157,50 +152,3 @@ func saveDismissedDedupGroups(store database.Store, dismissed map[string]bool) {
 	}
 }
 
-func (s *Server) triggerITunesSync() {
-	if s.Store() == nil || s.opRegistry == nil {
-		return
-	}
-
-	if !s.itunesSvc.Enabled() {
-		return
-	}
-
-	// Flush any quarantine-triggered ITL removals before the sync read.
-	s.quarantineSvc.ProcessITunesPurgePending()
-	libraryPath := s.itunesSvc.Importer.DiscoverLibraryPath()
-	if libraryPath == "" {
-		return
-	}
-
-	// Check fingerprint — skip if unchanged (quick mtime+size check)
-	if rec, err := s.Store().GetLibraryFingerprint(libraryPath); err == nil && rec != nil {
-		if info, statErr := os.Stat(libraryPath); statErr == nil {
-			if info.Size() == rec.Size && info.ModTime().Equal(rec.ModTime) {
-				return // No changes
-			}
-		}
-	}
-
-	itunesTriggerLog := logger.NewWithActivityLog("itunes-scheduler", s.Store())
-	opID := ulid.Make().String()
-	op, err := s.Store().CreateOperation(opID, "itunes_sync", &libraryPath)
-	if err != nil {
-		itunesTriggerLog.Warn("iTunes sync scheduler: failed to create operation: %v", err)
-		return
-	}
-
-	// Load path mappings from config for the scheduled sync
-	var scheduledMappings []itunes.PathMapping
-	for _, m := range config.AppConfig.ITunesPathMappings {
-		scheduledMappings = append(scheduledMappings, itunes.PathMapping{From: m.From, To: m.To})
-	}
-
-	syncParams := itunesSyncOpParams{LegacyOpID: op.ID, LibraryPath: libraryPath, PathMappings: scheduledMappings}
-	if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "itunes.sync", syncParams); enqErr != nil {
-		itunesTriggerLog.Warn("iTunes sync scheduler: failed to enqueue: %v", enqErr)
-		return
-	}
-
-	itunesTriggerLog.Info("iTunes sync scheduler: enqueued sync operation %s", op.ID)
-}

@@ -15,32 +15,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
 
-func extractSeriesNameForDedup(name string) (string, bool) {
-	// Pattern: "Book Title: Series Name" — the part after colon is often the series
-	if idx := strings.LastIndex(name, ": "); idx > 0 {
-		after := strings.TrimSpace(name[idx+2:])
-		before := strings.TrimSpace(name[:idx])
-		// Heuristic: if after-colon part looks like a series (shorter, no numbers at end),
-		// prefer it. If before-colon part looks like a series, prefer that.
-		// Series names are typically the longer, more generic portion.
-		if len(after) > 3 && len(after) < len(before) {
-			return after, true
-		}
-		if len(before) > 3 && len(before) < len(after) {
-			return before, true
-		}
-	}
-	// Pattern: "Series Name, Book N" or "Series Name, Vol N"
-	commaPatterns := []string{", book ", ", vol ", ", volume ", ", #"}
-	lower := strings.ToLower(name)
-	for _, pat := range commaPatterns {
-		if idx := strings.Index(lower, pat); idx > 0 {
-			return strings.TrimSpace(name[:idx]), true
-		}
-	}
-	return "", false
-}
-
 func computeSeriesPrunePreview(store database.Store) (*seriesPrunePreviewResult, error) {
 	allSeries, err := store.GetAllSeries()
 	if err != nil {

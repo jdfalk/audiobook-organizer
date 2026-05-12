@@ -14,7 +14,6 @@ import (
 	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"strings"
-	"time"
 )
 
 // --- AudiobookService -------------------------------------------------------
@@ -184,50 +183,6 @@ func NewRenameService(db database.Store) *RenameService {
 // applyOverrideToPayload delegates to the audiobooks package.
 // Kept unexported so server-package whitebox tests can reference it directly.
 var applyOverrideToPayload = audiobookspkg.ApplyOverrideToPayload
-
-// --- Small helpers previously in audiobook_service.go -----------------------
-// These are used by operations_handlers.go and playlist_evaluator.go which
-// remain in the server package after the service files were extracted.
-
-func derefStr(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func derefInt(i *int) int {
-	if i == nil {
-		return 0
-	}
-	return *i
-}
-
-func derefInt64(i *int64) int64 {
-	if i == nil {
-		return 0
-	}
-	return *i
-}
-
-func cmpTime(a, b *time.Time) int {
-	ta := time.Time{}
-	tb := time.Time{}
-	if a != nil {
-		ta = *a
-	}
-	if b != nil {
-		tb = *b
-	}
-	switch {
-	case ta.Before(tb):
-		return -1
-	case ta.After(tb):
-		return 1
-	default:
-		return 0
-	}
-}
 
 func splitMultipleNames(name string) []string {
 	parts := strings.Split(name, " & ")

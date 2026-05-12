@@ -338,36 +338,6 @@ func (s *Server) listOperations(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"items": ops, "total": total, "limit": params.Limit, "offset": params.Offset})
 }
 
-func (s *Server) listActiveOperations(c *gin.Context) {
-	store := s.Store()
-	if store == nil {
-		httputil.RespondWithOK(c, gin.H{"operations": []gin.H{}})
-		return
-	}
-	// GetRecentOperations returns the most-recent 200 ops; filter to active states.
-	// Active ops are always in the recent window so no separate indexed query is needed.
-	all, err := store.GetRecentOperations(200)
-	if err != nil {
-		httputil.InternalError(c, "failed to list active operations", err)
-		return
-	}
-	results := make([]gin.H, 0)
-	for _, op := range all {
-		if op.Status != "running" && op.Status != "queued" {
-			continue
-		}
-		results = append(results, gin.H{
-			"id":       op.ID,
-			"type":     op.Type,
-			"status":   op.Status,
-			"progress": op.Progress,
-			"total":    op.Total,
-			"message":  op.Message,
-		})
-	}
-	httputil.RespondWithOK(c, gin.H{"operations": results})
-}
-
 func (s *Server) listStaleOperations(c *gin.Context) {
 	timeoutMinutes := config.AppConfig.OperationTimeoutMinutes
 	if timeoutMinutes <= 0 {

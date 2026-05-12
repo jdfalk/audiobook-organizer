@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
@@ -341,123 +340,6 @@ func enrichBookForResponse(book *database.Book, bookAuthorsMap map[string][]data
 	}
 
 	return resp
-}
-
-func buildComparisonValuesFromMetadata(comparisonMeta *metadata.Metadata) map[string]any {
-	if comparisonMeta == nil {
-		return nil
-	}
-
-	compMap := map[string]any{
-		"title":           nonEmpty(comparisonMeta.Title),
-		"author_name":     nonEmpty(comparisonMeta.Artist),
-		"narrator":        nonEmpty(comparisonMeta.Narrator),
-		"series_name":     nonEmpty(comparisonMeta.Series),
-		"publisher":       nonEmpty(comparisonMeta.Publisher),
-		"language":        nonEmpty(comparisonMeta.Language),
-		"isbn10":          nonEmpty(comparisonMeta.ISBN10),
-		"isbn13":          nonEmpty(comparisonMeta.ISBN13),
-		"genre":           nonEmpty(comparisonMeta.Genre),
-		"album":           nonEmpty(comparisonMeta.Album),
-		"asin":            nonEmpty(comparisonMeta.ASIN),
-		"edition":         nonEmpty(comparisonMeta.Edition),
-		"print_year":      nonEmpty(comparisonMeta.PrintYear),
-		"description":     nonEmpty(comparisonMeta.Comments),
-		"book_id":         nonEmpty(comparisonMeta.BookOrganizerID),
-		"open_library_id": nonEmpty(comparisonMeta.OpenLibraryID),
-		"hardcover_id":    nonEmpty(comparisonMeta.HardcoverID),
-		"google_books_id": nonEmpty(comparisonMeta.GoogleBooksID),
-	}
-	if comparisonMeta.Year > 0 {
-		compMap["audiobook_release_year"] = comparisonMeta.Year
-	}
-	if comparisonMeta.SeriesIndex > 0 {
-		compMap["series_index"] = comparisonMeta.SeriesIndex
-	}
-	return compMap
-}
-
-func buildComparisonValuesFromBook(book *database.Book, authorName, seriesName string) map[string]any {
-	if book == nil {
-		return nil
-	}
-
-	compMap := map[string]any{
-		"title":           nonEmpty(book.Title),
-		"author_name":     nonEmpty(authorName),
-		"narrator":        nonEmpty(ptrStr(book.Narrator)),
-		"series_name":     nonEmpty(seriesName),
-		"publisher":       nonEmpty(ptrStr(book.Publisher)),
-		"language":        nonEmpty(ptrStr(book.Language)),
-		"isbn10":          nonEmpty(ptrStr(book.ISBN10)),
-		"isbn13":          nonEmpty(ptrStr(book.ISBN13)),
-		"genre":           nonEmpty(ptrStr(book.Genre)),
-		"album":           nonEmpty(book.Title),
-		"asin":            nonEmpty(ptrStr(book.ASIN)),
-		"edition":         nonEmpty(ptrStr(book.Edition)),
-		"description":     nonEmpty(ptrStr(book.Description)),
-		"book_id":         nonEmpty(book.ID),
-		"open_library_id": nonEmpty(ptrStr(book.OpenLibraryID)),
-		"hardcover_id":    nonEmpty(ptrStr(book.HardcoverID)),
-		"google_books_id": nonEmpty(ptrStr(book.GoogleBooksID)),
-	}
-	if book.AudiobookReleaseYear != nil && *book.AudiobookReleaseYear > 0 {
-		compMap["audiobook_release_year"] = *book.AudiobookReleaseYear
-	}
-	if book.SeriesSequence != nil && *book.SeriesSequence > 0 {
-		compMap["series_index"] = *book.SeriesSequence
-	}
-	if book.PrintYear != nil && *book.PrintYear > 0 {
-		compMap["print_year"] = *book.PrintYear
-	}
-	return compMap
-}
-
-// buildComparisonValuesFromActivityLog reconstructs a "before" tag snapshot by
-// querying the activity log for metadata_apply entries for the given book
-// recorded within a ±5 second window of ts. For each field found, the
-// old_value (i.e. the value BEFORE that operation) is used as the comparison
-// value. This is the fallback when GetBookAtVersion is unavailable (SQLite) or
-// when the exact version key is not present in PebbleDB.
-func buildComparisonValuesFromActivityLog(as *activity.Service, bookID string, ts time.Time) map[string]any {
-	window := 5 * time.Second
-	since := ts.Add(-window)
-	until := ts.Add(window)
-
-	entries, _, err := as.Query(database.ActivityFilter{
-		BookID: bookID,
-		Type:   "metadata_apply",
-		Since:  &since,
-		Until:  &until,
-		Limit:  200,
-	})
-	if err != nil || len(entries) == 0 {
-		return nil
-	}
-
-	compMap := map[string]any{}
-	for _, e := range entries {
-		if e.Details == nil {
-			continue
-		}
-		field, _ := e.Details["field"].(string)
-		if field == "" {
-			continue
-		}
-		// old_value is the state BEFORE this operation — that's what we want
-		// to show as the "snapshot" comparison row.
-		if oldVal, ok := e.Details["old_value"]; ok && oldVal != nil {
-			if s, ok := oldVal.(string); ok && s != "" {
-				compMap[field] = s
-			} else if oldVal != nil {
-				compMap[field] = oldVal
-			}
-		}
-	}
-	if len(compMap) == 0 {
-		return nil
-	}
-	return compMap
 }
 
 func buildMetadataProvenance(book *database.Book, state map[string]metafetch.MetadataFieldState, meta metadata.Metadata, authorName, seriesName string, comparisonValues map[string]any) map[string]database.MetadataProvenanceEntry {

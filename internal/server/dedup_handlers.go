@@ -322,8 +322,7 @@ func (s *Server) listDedupCandidateSeries(c *gin.Context) {
 	summary := make([]dedupSeriesSummary, 0, len(candsBySeries))
 	for seriesID, pairs := range candsBySeries {
 		parent := make(map[string]string)
-		var find func(string) string
-		find = func(x string) string {
+		var find func(string) string = func(x string) string {
 			for parent[x] != x {
 				parent[x] = parent[parent[x]]
 				x = parent[x]
@@ -440,8 +439,7 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 
 	// Union-find cluster build.
 	parent := make(map[string]string)
-	var find func(string) string
-	find = func(x string) string {
+	var find func(string) string = func(x string) string {
 		for parent[x] != x {
 			parent[x] = parent[parent[x]]
 			x = parent[x]
