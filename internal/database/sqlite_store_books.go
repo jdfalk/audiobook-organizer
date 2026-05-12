@@ -886,7 +886,7 @@ func (s *SQLiteStore) GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]B
 
 func (s *SQLiteStore) GetFolderDuplicates() ([][]Book, error) {
 	// Group by parent directory + lower(title) where there are 2+ books
-	query := fmt.Sprintf(`
+	query := `
 		WITH book_dirs AS (
 			SELECT id, LOWER(title) as ltitle,
 			       SUBSTR(file_path, 1, LENGTH(file_path) - LENGTH(REPLACE(file_path, '/', '')) - LENGTH(SUBSTR(file_path, LENGTH(file_path) - LENGTH(REPLACE(file_path, '/', '')) + 1))) as dir
@@ -899,7 +899,7 @@ func (s *SQLiteStore) GetFolderDuplicates() ([][]Book, error) {
 		WHERE dir != '' AND ltitle != ''
 		GROUP BY dir, ltitle
 		HAVING cnt > 1
-	`)
+	`
 
 	rows, err := s.db.Query(query)
 	if err != nil {

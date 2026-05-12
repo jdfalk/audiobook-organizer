@@ -241,9 +241,9 @@ func (p *PebbleStore) migrateImportPathKeys() error {
 	if value, closer, err := p.db.Get([]byte("counter:library")); err == nil {
 		defer closer.Close()
 
-		if counterValue, counterCloser, counterErr := p.db.Get([]byte("counter:import_path")); counterErr == nil {
+		if _, counterCloser, counterErr := p.db.Get([]byte("counter:import_path")); counterErr == nil {
 			counterCloser.Close()
-			value = counterValue // already migrated; keep existing value
+			_ = value // already migrated; keep existing value
 		} else if counterErr != pebble.ErrNotFound {
 			return fmt.Errorf("failed to read import path counter: %w", counterErr)
 		} else if err := p.db.Set([]byte("counter:import_path"), value, pebble.Sync); err != nil {
@@ -4030,7 +4030,7 @@ func (p *PebbleStore) UpdateUserPlaylist(pl *UserPlaylist) error {
 		b.Close()
 		return err
 	}
-	if strings.ToLower(prev.Name) != strings.ToLower(pl.Name) {
+	if !strings.EqualFold(prev.Name, pl.Name) {
 		if err := b.Delete([]byte("idx:upl:name:"+strings.ToLower(prev.Name)), nil); err != nil {
 			b.Close()
 			return err
@@ -7072,11 +7072,6 @@ type pebbleTagKeyspace struct {
 }
 
 var (
-	bookTagKeyspace = pebbleTagKeyspace{
-		tagPrefix:   "book_tag:",
-		indexPrefix: "tag_idx:",
-		entityLabel: "book",
-	}
 	authorTagKeyspace = pebbleTagKeyspace{
 		tagPrefix:   "author_tag:",
 		indexPrefix: "author_tag_idx:",
