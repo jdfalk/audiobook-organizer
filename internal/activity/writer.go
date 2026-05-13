@@ -1,10 +1,11 @@
 // file: internal/activity/writer.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
 
 package activity
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -59,9 +60,11 @@ func (w *Writer) SetSkipSources(sources ...string) {
 }
 
 // Start launches the background drain goroutine. Call once before writing.
-func (w *Writer) Start() {
+// Implements the Starter interface for serviceregistry.
+func (w *Writer) Start(ctx context.Context) error {
 	w.wg.Add(1)
 	go w.drain()
+	return nil
 }
 
 // Write implements io.Writer. Always writes to stdout first, then parses
@@ -209,11 +212,13 @@ func (w *Writer) Chan() <-chan database.ActivityEntry {
 
 // Stop marks the writer as closed, signals the drain goroutine to finish,
 // and waits for it to flush all remaining entries. Safe to call multiple times.
-func (w *Writer) Stop() {
+// Implements the Stopper interface for serviceregistry.
+func (w *Writer) Stop(ctx context.Context) error {
 	w.batcher.Close()
 	w.closed.Store(true)
 	w.stopOnce.Do(func() { close(w.done) })
 	w.wg.Wait()
+	return nil
 }
 
 // ── log line parser ───────────────────────────────────────────────────────────

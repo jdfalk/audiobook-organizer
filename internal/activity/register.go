@@ -1,5 +1,5 @@
 // file: internal/activity/register.go
-// version: 1.0.0
+// version: 1.1.0
 
 package activity
 
@@ -38,6 +38,18 @@ func init() {
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[*database.NutsActivityStore](c, "activitystore")
 			return NewService(store), nil
+		},
+	})
+
+	// activitywriter: io.Writer that tees log output to stdout and captures
+	// parsed entries into the activity store. Implements Starter and Stopper
+	// for lifecycle management. Depends on activity service for its store.
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:  "activitywriter",
+		Needs: []string{"activity"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			activitySvc := serviceregistry.Get[*Service](c, "activity")
+			return NewWriter(activitySvc.Store(), 10000), nil
 		},
 	})
 }

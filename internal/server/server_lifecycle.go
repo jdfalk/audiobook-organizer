@@ -722,7 +722,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Stop activity writer before closing store
 	if s.activityWriter != nil {
-		s.activityWriter.Stop()
+		s.activityWriter.Stop(context.Background()) //nolint:errcheck
 	}
 
 	// Close activity log store
