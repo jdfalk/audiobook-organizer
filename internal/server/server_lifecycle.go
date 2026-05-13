@@ -691,7 +691,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Flush the ITL write-back batcher
 	if s.writeBackBatcher != nil {
 		log.Println("[INFO] Flushing iTunes write-back batcher...")
-		s.writeBackBatcher.Stop()
+		_ = s.writeBackBatcher.Stop(context.Background())
 	}
 
 	// Shut down the iTunes service (no-op in PR 1 since NewDisabled is

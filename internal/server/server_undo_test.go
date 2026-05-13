@@ -6,6 +6,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -380,7 +381,7 @@ func TestUndoLastApply_WriteBackBatcherEnqueued(t *testing.T) {
 			p.Stop()
 			SetGlobalFileIOPool(nil)
 		}
-		batcher.Stop()
+		_ = batcher.Stop(context.Background())
 		server.writeBackBatcher = origBatcher
 		config.AppConfig = origConfig
 	}()
@@ -430,7 +431,7 @@ func TestApplyAudiobookMetadata_WriteBackTrue(t *testing.T) {
 			p.Stop()
 			SetGlobalFileIOPool(nil)
 		}
-		batcher.Stop()
+		_ = batcher.Stop(context.Background())
 		server.writeBackBatcher = origBatcher
 		config.AppConfig = origConfig
 	}()
@@ -496,7 +497,7 @@ func TestApplyAudiobookMetadata_WriteBackOmitted(t *testing.T) {
 			p.Stop()
 			SetGlobalFileIOPool(nil)
 		}
-		batcher.Stop()
+		_ = batcher.Stop(context.Background())
 		server.writeBackBatcher = origBatcher
 		config.AppConfig = origConfig
 	}()
@@ -561,7 +562,7 @@ func TestApplyAudiobookMetadata_WriteBackFalse(t *testing.T) {
 			p.Stop()
 			SetGlobalFileIOPool(nil)
 		}
-		batcher.Stop()
+		_ = batcher.Stop(context.Background())
 		server.writeBackBatcher = origBatcher
 		config.AppConfig = origConfig
 	}()

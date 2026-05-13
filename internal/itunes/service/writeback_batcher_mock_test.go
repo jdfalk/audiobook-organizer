@@ -13,6 +13,7 @@
 package itunesservice
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -70,7 +71,7 @@ func TestNewWriteBackBatcher_Defaults(t *testing.T) {
 	}
 
 	// Stop must not panic even when nothing has been enqueued.
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_Enqueue_SetsPending checks that Enqueue causes
@@ -88,7 +89,7 @@ func TestWriteBackBatcher_Enqueue_SetsPending(t *testing.T) {
 		t.Error("expected HasPendingBook(\"other-book\") == false")
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_Enqueue_Idempotent verifies that enqueueing the same
@@ -112,7 +113,7 @@ func TestWriteBackBatcher_Enqueue_Idempotent(t *testing.T) {
 		t.Errorf("expected exactly 1 pending book entry, got %d", count)
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_EnqueueAdd_SetsPending verifies that EnqueueAdd stores
@@ -135,7 +136,7 @@ func TestWriteBackBatcher_EnqueueAdd_SetsPending(t *testing.T) {
 		t.Errorf("expected 1 pending add, got %d", adds)
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_EnqueueRemove_SetsPending verifies that EnqueueRemove
@@ -157,7 +158,7 @@ func TestWriteBackBatcher_EnqueueRemove_SetsPending(t *testing.T) {
 		t.Error("expected lowercased PID in pendingRemoves")
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_UpdateConfig verifies that UpdateConfig updates the
@@ -197,7 +198,7 @@ func TestWriteBackBatcher_UpdateConfig(t *testing.T) {
 		t.Errorf("expected libraryWritePath == /some/path.itl, got %q", path)
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_FlushSkipsWhenDisabled verifies that when
@@ -232,7 +233,7 @@ func TestWriteBackBatcher_FlushSkipsWhenDisabled(t *testing.T) {
 		t.Error("expected firstEnqueue to be zeroed after flush")
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_AutoWriteBack verifies autoWriteBackEnabled returns
@@ -247,7 +248,7 @@ func TestWriteBackBatcher_AutoWriteBack(t *testing.T) {
 	if !b.autoWriteBackEnabled() {
 		t.Error("expected autoWriteBackEnabled == true when AutoWriteBack=true")
 	}
-	b.Stop()
+	_ = b.Stop(context.Background())
 
 	// AutoWriteBack == false → autoWriteBackEnabled should be false, and
 	// Enqueue / EnqueueAdd / EnqueueRemove should all be no-ops.
@@ -271,7 +272,7 @@ func TestWriteBackBatcher_AutoWriteBack(t *testing.T) {
 		t.Error("expected no pending operations when AutoWriteBack=false")
 	}
 
-	bOff.Stop()
+	_ = bOff.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_Stop_CancelsTimer verifies that Stop can be called
@@ -284,11 +285,11 @@ func TestWriteBackBatcher_Stop_CancelsTimer(t *testing.T) {
 	b.Enqueue("some-book")
 
 	// First Stop.
-	b.Stop()
+	_ = b.Stop(context.Background())
 
 	// Second and third Stop must not panic.
-	b.Stop()
-	b.Stop()
+	_ = b.Stop(context.Background())
+	_ = b.Stop(context.Background())
 
 	// After Stop, further Enqueue calls must be no-ops (b.stopped == true).
 	b.Enqueue("after-stop")
@@ -314,7 +315,7 @@ func TestWriteBackBatcher_EnqueueWhenAutoDisabled(t *testing.T) {
 		t.Error("expected no pending operations when AutoWriteBack=false")
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_HasPendingBook_AfterFlushClears verifies that after
@@ -340,7 +341,7 @@ func TestWriteBackBatcher_HasPendingBook_AfterFlushClears(t *testing.T) {
 		}
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }
 
 // TestWriteBackBatcher_FlushNoPendingIsNoop verifies that calling flush()
@@ -365,5 +366,5 @@ func TestWriteBackBatcher_FlushNoPendingIsNoop(t *testing.T) {
 		t.Error("expected firstEnqueue to remain zero after no-op flush")
 	}
 
-	b.Stop()
+	_ = b.Stop(context.Background())
 }

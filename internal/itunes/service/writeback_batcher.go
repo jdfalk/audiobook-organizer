@@ -17,6 +17,7 @@
 package itunesservice
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -573,8 +574,22 @@ func pruneITLBackups(itlPath string, keep int) error {
 // renameFile is a helper for os.Rename.
 var renameFile = os.Rename
 
-// Stop flushes any pending writes and stops the batcher.
-func (b *WriteBackBatcher) Stop() {
+// Start is a no-op — the batcher begins processing on the first
+// Enqueue, not at construction. Matches the serviceregistry.Starter
+// signature so the container can drive lifecycle directly without an
+// adapter wrap.
+func (b *WriteBackBatcher) Start(_ context.Context) error {
+	return nil
+}
+
+// Stop flushes any pending writes and stops the batcher. Signature
+// matches serviceregistry.Stopper so Container.Stop can drive shutdown
+// directly. The context is unused — flushing has its own timeout
+// behavior inside the worker.
+func (b *WriteBackBatcher) Stop(_ context.Context) error {
+	if b == nil {
+		return nil
+	}
 	b.mu.Lock()
 	b.stopped = true
 	if b.timer != nil {
@@ -582,4 +597,5 @@ func (b *WriteBackBatcher) Stop() {
 	}
 	b.mu.Unlock()
 	b.flush()
+	return nil
 }
