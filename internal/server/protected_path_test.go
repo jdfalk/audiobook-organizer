@@ -10,6 +10,11 @@ import (
 )
 
 func TestIsProtectedPath_FailedDir(t *testing.T) {
+	// isProtectedPath is now a method on *Server (SERVER-GLOBAL-STORE-AUDIT
+	// phase 3a). A zero-value Server is fine for this test — only the
+	// ".failed/" string-match branch is exercised; s.Store() returns nil
+	// so the import-path branch is skipped.
+	s := &Server{}
 	cases := []struct {
 		path     string
 		expected bool
@@ -20,6 +25,6 @@ func TestIsProtectedPath_FailedDir(t *testing.T) {
 		{"/library/.failedish/book.m4b", false},
 	}
 	for _, tc := range cases {
-		assert.Equal(t, tc.expected, isProtectedPath(tc.path), "path: %s", tc.path)
+		assert.Equal(t, tc.expected, s.isProtectedPath(tc.path), "path: %s", tc.path)
 	}
 }

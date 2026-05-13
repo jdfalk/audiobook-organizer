@@ -1374,7 +1374,7 @@ func (s *Server) handleBulkWriteBack(c *gin.Context) {
 			continue
 		}
 		// Skip protected paths
-		if isProtectedPath(book.FilePath) {
+		if s.isProtectedPath(book.FilePath) {
 			continue
 		}
 		// Filter by library state (only when not filtering by author/series exclusively)
@@ -1509,7 +1509,7 @@ func (s *Server) runBulkWriteBack(
 			mu.Unlock()
 			continue
 		}
-		if isProtectedPath(book.FilePath) {
+		if s.isProtectedPath(book.FilePath) {
 			mu.Lock()
 			_ = progress.Log("info", fmt.Sprintf("book %s: skipping protected path", bookID), nil)
 			mu.Unlock()

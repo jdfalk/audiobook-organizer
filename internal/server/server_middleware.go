@@ -76,12 +76,17 @@ func filesCommonDir(files []database.BookFile) string {
 	return common
 }
 
-func isProtectedPath(filePath string) bool {
+// isProtectedPath is now a method on *Server so it uses the server's
+// resolved store rather than the package-level GetGlobalStore
+// (SERVER-GLOBAL-STORE-AUDIT phase 3a). Nil-safe — if s.Store() is
+// nil, the import-path check is skipped (matches prior behaviour
+// when GetGlobalStore returned nil).
+func (s *Server) isProtectedPath(filePath string) bool {
 	absPath, _ := filepath.Abs(filePath)
 
 	// Check import paths
-	if database.GetGlobalStore() != nil {
-		importPaths, err := database.GetGlobalStore().GetAllImportPaths()
+	if store := s.Store(); store != nil {
+		importPaths, err := store.GetAllImportPaths()
 		if err == nil {
 			for _, ip := range importPaths {
 				ipAbs, _ := filepath.Abs(ip.Path)

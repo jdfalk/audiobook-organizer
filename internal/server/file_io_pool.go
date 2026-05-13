@@ -39,7 +39,16 @@ type FileIOPool struct {
 	stopped  int32
 	pending  sync.Map      // "{bookID}:{opType}" -> FileIOJob, for in-memory tracking
 	overflow chan struct{} // semaphore to limit overflow goroutines
+	// store is the database backing the pending-op persistence layer.
+	// Set via SetStore after construction (SERVER-GLOBAL-STORE-AUDIT
+	// phase 3a). Nil-safe — the three persistence helpers all no-op
+	// when nil, matching the prior GetGlobalStore == nil branch.
+	store database.Store
 }
+
+// SetStore sets the store the pool uses to persist pending file ops.
+// Idempotent. Pass nil to disable persistence (no recovery on restart).
+func (p *FileIOPool) SetStore(s database.Store) { p.store = s }
 
 type fileIOJobEntry struct {
 	bookID string
@@ -116,7 +125,7 @@ func (p *FileIOPool) worker(id int) {
 			}()
 			job.fn()
 			p.pending.Delete(pendingKey(job.bookID, job.opType))
-			removePendingFileOp(job.bookID, job.opType)
+			p.removePendingFileOp(job.bookID, job.opType)
 		}()
 	}
 }
@@ -134,7 +143,7 @@ func (p *FileIOPool) SubmitTyped(bookID, opType string, fn func()) {
 	}
 	job := FileIOJob{BookID: bookID, OpType: opType, CreatedAt: time.Now()}
 	p.pending.Store(pendingKey(bookID, opType), job)
-	storePendingFileOp(job)
+	p.storePendingFileOp(job)
 
 	select {
 	case p.ch <- fileIOJobEntry{bookID: bookID, opType: opType, fn: fn}:
@@ -145,7 +154,7 @@ func (p *FileIOPool) SubmitTyped(bookID, opType string, fn func()) {
 			defer func() { <-p.overflow }()
 			fn()
 			p.pending.Delete(pendingKey(bookID, opType))
-			removePendingFileOp(bookID, opType)
+			p.removePendingFileOp(bookID, opType)
 		}()
 	}
 }
@@ -258,30 +267,36 @@ func parsePebbleKey(key string) (bookID, opType string, ok bool) {
 	return rest[:idx], rest[idx+1:], true
 }
 
-func storePendingFileOp(job FileIOJob) {
-	store := database.GetGlobalStore()
-	if store == nil {
+// storePendingFileOp is a method on FileIOPool so it uses the pool's
+// configured store (set via SetStore from NewServer) instead of
+// reaching for database.GetGlobalStore (SERVER-GLOBAL-STORE-AUDIT
+// phase 3a). Nil-safe — no-op if the pool has no store.
+func (p *FileIOPool) storePendingFileOp(job FileIOJob) {
+	if p == nil || p.store == nil {
 		return
 	}
 	data, _ := json.Marshal(job)
-	_ = store.SetRaw(pebbleKey(job.BookID, job.OpType), data)
+	_ = p.store.SetRaw(pebbleKey(job.BookID, job.OpType), data)
 }
 
-func removePendingFileOp(bookID, opType string) {
-	store := database.GetGlobalStore()
-	if store == nil {
+// removePendingFileOp clears the persisted record for a finished job.
+// See storePendingFileOp for the audit-phase rationale.
+func (p *FileIOPool) removePendingFileOp(bookID, opType string) {
+	if p == nil || p.store == nil {
 		return
 	}
-	_ = store.DeleteRaw(pebbleKey(bookID, opType))
+	_ = p.store.DeleteRaw(pebbleKey(bookID, opType))
 }
 
 // recoverInterruptedFileOps re-queues any file I/O jobs that were in-flight
-// when the server last shut down (or crashed).
+// when the server last shut down (or crashed). Uses the pool's
+// configured store rather than database.GetGlobalStore
+// (SERVER-GLOBAL-STORE-AUDIT phase 3a).
 func recoverInterruptedFileOps(pool *FileIOPool) {
-	store := database.GetGlobalStore()
-	if store == nil {
+	if pool == nil || pool.store == nil {
 		return
 	}
+	store := pool.store
 
 	keys, err := store.ScanPrefix(pendingFileOpPrefix)
 	if err != nil || len(keys) == 0 {
