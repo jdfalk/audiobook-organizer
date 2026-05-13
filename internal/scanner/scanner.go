@@ -56,6 +56,46 @@ func SetScanner(s Scanner) {
 	activeScanner = s
 }
 
+// pkgStore is the database the scanner's package-level helpers use.
+// Wired by SetStore from NewServer at startup. Free helpers in this
+// file (createBookFilesForBook, saveBookToDatabase, the inline DB
+// lookups inside ProcessBooksParallel) read pkgStore rather than the
+// host's database.GetGlobalStore (SERVER-GLOBAL-STORE-AUDIT phase 7).
+// Nil-safe — all helpers check before use. Single-writer at startup,
+// many readers later; the rwmutex protects against goroutines that
+// touch it before NewServer runs (none today, but cheap insurance).
+var (
+	pkgStore   database.Store
+	pkgStoreMu sync.RWMutex
+)
+
+// SetStore wires the database the scanner package's free helpers use
+// for book/file/work/hash lookups. Idempotent; pass nil to clear.
+func SetStore(s database.Store) {
+	pkgStoreMu.Lock()
+	pkgStore = s
+	pkgStoreMu.Unlock()
+}
+
+// getStore returns the package-local store with read-lock protection.
+// Used internally by the free helpers in scanner.go and the per-book
+// helpers in book_files.go.
+//
+// Test back-compat: when SetStore hasn't been called, falls through
+// to database.GetGlobalStore so the many test paths that wire only
+// the package-level global (via SetGlobalStoreForTest) keep working.
+// Production always calls SetStore from NewServer, so this fallback
+// is dead code outside of tests.
+func getStore() database.Store {
+	pkgStoreMu.RLock()
+	s := pkgStore
+	pkgStoreMu.RUnlock()
+	if s == nil {
+		return database.GetGlobalStore()
+	}
+	return s
+}
+
 // globalScanCache is set before a scan and used inside ProcessBooksParallel to
 // skip files whose mtime+size are unchanged since the last successful scan.
 // Protected by globalScanCacheMu because SetScanCache and ProcessBooksParallel
@@ -392,7 +432,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 					scanLog.Warn("suspicious file (%d bytes, threshold %d): %s", fi.Size(), threshold, filePath)
 					func() {
 						defer func() { recover() }()
-						if store := database.GetGlobalStore(); store != nil {
+						if store := getStore(); store != nil {
 							if dbBook, dbErr := store.GetBookByFilePath(filePath); dbErr == nil && dbBook != nil {
 								_ = store.UpdateScanCache(dbBook.ID, fi.ModTime().Unix(), fi.Size())
 							}
@@ -502,7 +542,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 				if pfErr != nil {
 					scanLog.Warn("ProcessFile failed for %s: %v", filePath, pfErr)
 					fallbackUsed = true
-					if gs := database.GetGlobalStore(); gs != nil {
+					if gs := getStore(); gs != nil {
 						sum := sha256.Sum256([]byte(filePath))
 						_, _ = gs.IncrScanFailCount(fmt.Sprintf("%x", sum[:8]))
 					}
@@ -513,7 +553,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 					// wrapping a nil concrete pointer in tests.
 					func() {
 						defer func() { recover() }() //nolint:errcheck
-						if gs := database.GetGlobalStore(); gs != nil {
+						if gs := getStore(); gs != nil {
 							sum := sha256.Sum256([]byte(filePath))
 							_ = gs.ResetScanFailCount(fmt.Sprintf("%x", sum[:8]))
 						}
@@ -576,8 +616,8 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 			// would be a no-op. Skip to avoid thousands of redundant API calls on rescan.
 			if aiEnabled && (fallbackUsed || books[idx].Title == "" || books[idx].Author == "" || books[idx].Series == "") {
 				needsAI := true
-				if database.GetGlobalStore() != nil {
-					if dbExisting, dbErr := database.GetGlobalStore().GetBookByFilePath(books[idx].FilePath); dbErr == nil && dbExisting != nil {
+				if getStore() != nil {
+					if dbExisting, dbErr := getStore().GetBookByFilePath(books[idx].FilePath); dbErr == nil && dbExisting != nil {
 						if dbExisting.Title != "" && dbExisting.AuthorID != nil && *dbExisting.AuthorID != 0 {
 							needsAI = false
 						}
@@ -630,7 +670,7 @@ func ProcessBooksParallel(ctx context.Context, books []Book, workers int, progre
 							scanLog.Warn("scan cache update recovered from panic: %v", r)
 						}
 					}()
-					store := database.GetGlobalStore()
+					store := getStore()
 					if store == nil {
 						return
 					}
@@ -1012,17 +1052,17 @@ func isInitialToken(word string) bool {
 // After creating book files, if book.FilePath points to a file (not a directory),
 // it normalizes it to the parent directory.
 func createBookFilesForBook(bookFilePath string, segmentFiles []string, scanLog logger.Logger) {
-	if database.GetGlobalStore() == nil {
+	if getStore() == nil {
 		return
 	}
 
-	dbBook, err := database.GetGlobalStore().GetBookByFilePath(bookFilePath)
+	dbBook, err := getStore().GetBookByFilePath(bookFilePath)
 	if err != nil || dbBook == nil {
 		return
 	}
 
 	// Check if book files already exist
-	existing, _ := database.GetGlobalStore().GetBookFiles(dbBook.ID)
+	existing, _ := getStore().GetBookFiles(dbBook.ID)
 	if len(existing) > 0 {
 		return // BookFiles already created (rescan)
 	}
@@ -1077,7 +1117,7 @@ func createBookFilesForBook(bookFilePath string, segmentFiles []string, scanLog 
 			bf.OriginalFileHash = h
 		}
 
-		if serr := database.GetGlobalStore().UpsertBookFile(bf); serr != nil {
+		if serr := getStore().UpsertBookFile(bf); serr != nil {
 			scanLog.Warn("failed to upsert book file for %s: %v", filePath, serr)
 		}
 	}
@@ -1086,7 +1126,7 @@ func createBookFilesForBook(bookFilePath string, segmentFiles []string, scanLog 
 	if statErr == nil && !info.IsDir() {
 		dirPath := filepath.Dir(bookFilePath)
 		dbBook.FilePath = dirPath
-		if _, updateErr := database.GetGlobalStore().UpdateBook(dbBook.ID, dbBook); updateErr != nil {
+		if _, updateErr := getStore().UpdateBook(dbBook.ID, dbBook); updateErr != nil {
 			scanLog.Warn("failed to normalize FilePath for book %s: %v", dbBook.ID, updateErr)
 		}
 	}
@@ -1364,7 +1404,7 @@ func groupFilesIntoBooks(files []string) []Book {
 // saveBookToDatabase saves the book information to the database
 func saveBookToDatabase(book *Book) error {
 	// Prefer using the unified Store API when available
-	if database.GetGlobalStore() != nil {
+	if getStore() != nil {
 		// Resolve author/series with conflict-aware get-or-create semantics.
 		authorID, err := resolveAuthorID(book.Author)
 		if err != nil {
@@ -1380,7 +1420,7 @@ func saveBookToDatabase(book *Book) error {
 		if book.Title != "" {
 			canonical := util.NormalizeString(book.Title)
 			// Simple heuristic: try existing works then create new.
-			works, err := database.GetGlobalStore().GetAllWorks()
+			works, err := getStore().GetAllWorks()
 			if err == nil { // non-critical
 				for _, w := range works {
 					if util.NormalizeString(w.Title) == canonical && ((authorID == nil && w.AuthorID == nil) || (authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
@@ -1392,13 +1432,13 @@ func saveBookToDatabase(book *Book) error {
 			}
 			if workID == nil {
 				newWork := &database.Work{Title: book.Title, AuthorID: authorID}
-				created, err := database.GetGlobalStore().CreateWork(newWork)
+				created, err := getStore().CreateWork(newWork)
 				if err == nil {
 					wid := created.ID
 					workID = &wid
 				} else if isUniqueConstraintError(err) {
 					// A parallel worker likely created the same work; resolve it.
-					works, lookupErr := database.GetGlobalStore().GetAllWorks()
+					works, lookupErr := getStore().GetAllWorks()
 					if lookupErr == nil {
 						for _, w := range works {
 							if util.NormalizeString(w.Title) == canonical &&
@@ -1430,7 +1470,7 @@ func saveBookToDatabase(book *Book) error {
 		}
 		if hashErr == nil && hash != "" {
 			// Check if this hash is blocked
-			blocked, err := database.GetGlobalStore().IsHashBlocked(hash)
+			blocked, err := getStore().IsHashBlocked(hash)
 			if err != nil {
 				defaultLog.Warn("failed to check hash blocklist: %v", err)
 			} else if blocked {
@@ -1489,20 +1529,20 @@ func saveBookToDatabase(book *Book) error {
 		// Re-link by embedded AUDIOBOOK_ORGANIZER_ID: if the file contains our ID tag,
 		// find the existing record and update its path (handles file moves/renames).
 		if book.BookOrganizerID != "" {
-			existingByOrgID, orgErr := database.GetGlobalStore().GetBookByID(book.BookOrganizerID)
+			existingByOrgID, orgErr := getStore().GetBookByID(book.BookOrganizerID)
 			if orgErr == nil && existingByOrgID != nil && existingByOrgID.FilePath != book.FilePath {
 				defaultLog.Info("re-linking book %s (moved from %s to %s)",
 					book.BookOrganizerID, existingByOrgID.FilePath, book.FilePath)
 				existingByOrgID.FilePath = book.FilePath
 				preserveExistingFields(dbBook, existingByOrgID)
-				_, err = database.GetGlobalStore().UpdateBook(existingByOrgID.ID, existingByOrgID)
+				_, err = getStore().UpdateBook(existingByOrgID.ID, existingByOrgID)
 				return err
 			}
 		}
 
 		// Upsert semantics with duplicate detection:
 		// 1. Try lookup by file path first (exact match)
-		existing, err := database.GetGlobalStore().GetBookByFilePath(book.FilePath)
+		existing, err := getStore().GetBookByFilePath(book.FilePath)
 		if err != nil {
 			return fmt.Errorf("book lookup failed: %w", err)
 		}
@@ -1510,9 +1550,9 @@ func saveBookToDatabase(book *Book) error {
 		// 2. If not found by path but we have a file hash, check for duplicates via indexes
 		if existing == nil && fileHash != nil && *fileHash != "" {
 			hashLookups := []func(string) (*database.Book, error){
-				database.GetGlobalStore().GetBookByFileHash,
-				database.GetGlobalStore().GetBookByOriginalHash,
-				database.GetGlobalStore().GetBookByOrganizedHash,
+				getStore().GetBookByFileHash,
+				getStore().GetBookByOriginalHash,
+				getStore().GetBookByOrganizedHash,
 			}
 			for _, lookup := range hashLookups {
 				candidate, err := lookup(*fileHash)
@@ -1553,7 +1593,7 @@ func saveBookToDatabase(book *Book) error {
 
 					existing.VersionGroupID = &groupID
 					existing.IsPrimaryVersion = &existingPrimary
-					if _, uerr := database.GetGlobalStore().UpdateBook(existing.ID, existing); uerr != nil {
+					if _, uerr := getStore().UpdateBook(existing.ID, existing); uerr != nil {
 						defaultLog.Warn("Failed to set version group on existing book %s: %v", existing.ID, uerr)
 					}
 
@@ -1580,7 +1620,7 @@ func saveBookToDatabase(book *Book) error {
 				if herr != nil || h == "" {
 					continue
 				}
-				candidate, lerr := database.GetGlobalStore().GetBookBySegmentFileHash(h)
+				candidate, lerr := getStore().GetBookBySegmentFileHash(h)
 				if lerr != nil || candidate == nil {
 					continue
 				}
@@ -1623,7 +1663,7 @@ func saveBookToDatabase(book *Book) error {
 					newPrimary := newInRoot && !existingInRoot
 					matchedBook.VersionGroupID = &groupID
 					matchedBook.IsPrimaryVersion = &matchedPrimary
-					if _, uerr := database.GetGlobalStore().UpdateBook(matchedBook.ID, matchedBook); uerr != nil {
+					if _, uerr := getStore().UpdateBook(matchedBook.ID, matchedBook); uerr != nil {
 						defaultLog.Warn("Multi-file dedup: failed to set version group on %s: %v", matchedBook.ID, uerr)
 					}
 					dbBook.VersionGroupID = &groupID
@@ -1642,7 +1682,7 @@ func saveBookToDatabase(book *Book) error {
 			// Smart dedup: check for same-title books in same directory (format-aware version linking)
 			if dbBook.Title != "" {
 				parentDir := filepath.Dir(book.FilePath)
-				siblings, lookupErr := database.GetGlobalStore().GetBooksByTitleInDir(strings.ToLower(dbBook.Title), parentDir)
+				siblings, lookupErr := getStore().GetBooksByTitleInDir(strings.ToLower(dbBook.Title), parentDir)
 				if lookupErr == nil && len(siblings) > 0 {
 					// Determine or reuse version_group_id
 					var groupID string
@@ -1667,7 +1707,7 @@ func saveBookToDatabase(book *Book) error {
 							sibIsM4B := strings.EqualFold(sib.Format, "m4b")
 							sib.VersionGroupID = &groupID
 							sib.IsPrimaryVersion = &sibIsM4B
-							if _, uerr := database.GetGlobalStore().UpdateBook(sib.ID, &sib); uerr != nil {
+							if _, uerr := getStore().UpdateBook(sib.ID, &sib); uerr != nil {
 								defaultLog.Warn("Failed to update sibling version group for %s: %v", sib.FilePath, uerr)
 							}
 						}
@@ -1676,7 +1716,7 @@ func saveBookToDatabase(book *Book) error {
 				}
 			}
 
-			_, err = database.GetGlobalStore().CreateBook(dbBook)
+			_, err = getStore().CreateBook(dbBook)
 			if err == nil && scanHooks != nil {
 				scanHooks.OnBookScanned(dbBook.ID, dbBook.Title)
 				scanHooks.OnImportDedup(dbBook.ID)
@@ -1695,7 +1735,7 @@ func saveBookToDatabase(book *Book) error {
 		// Preserve enriched fields that scanner doesn't extract (e.g. from metadata fetch or AI parse)
 		preserveExistingFields(dbBook, existing)
 
-		_, err = database.GetGlobalStore().UpdateBook(existing.ID, dbBook)
+		_, err = getStore().UpdateBook(existing.ID, dbBook)
 		return err
 	}
 
@@ -1870,7 +1910,7 @@ func resolveAuthorID(authorName string) (*int, error) {
 	}
 	trimmed = strings.TrimSpace(trimmed)
 
-	author, err := database.GetGlobalStore().GetAuthorByName(trimmed)
+	author, err := getStore().GetAuthorByName(trimmed)
 	if err != nil {
 		return nil, fmt.Errorf("author lookup failed: %w", err)
 	}
@@ -1878,13 +1918,13 @@ func resolveAuthorID(authorName string) (*int, error) {
 		return &author.ID, nil
 	}
 
-	author, err = database.GetGlobalStore().CreateAuthor(trimmed)
+	author, err = getStore().CreateAuthor(trimmed)
 	if err != nil {
 		if !isUniqueConstraintError(err) {
 			return nil, fmt.Errorf("author create failed: %w", err)
 		}
 		// Concurrent create: re-fetch existing record.
-		author, err = database.GetGlobalStore().GetAuthorByName(trimmed)
+		author, err = getStore().GetAuthorByName(trimmed)
 		if err != nil {
 			return nil, fmt.Errorf("author lookup after conflict failed: %w", err)
 		}
@@ -1907,7 +1947,7 @@ func resolveSeriesID(seriesName string, authorID *int) (*int, error) {
 		trimmed = cleaned
 	}
 
-	series, err := database.GetGlobalStore().GetSeriesByName(trimmed, authorID)
+	series, err := getStore().GetSeriesByName(trimmed, authorID)
 	if err != nil {
 		return nil, fmt.Errorf("series lookup failed: %w", err)
 	}
@@ -1915,13 +1955,13 @@ func resolveSeriesID(seriesName string, authorID *int) (*int, error) {
 		return &series.ID, nil
 	}
 
-	series, err = database.GetGlobalStore().CreateSeries(trimmed, authorID)
+	series, err = getStore().CreateSeries(trimmed, authorID)
 	if err != nil {
 		if !isUniqueConstraintError(err) {
 			return nil, fmt.Errorf("series create failed: %w", err)
 		}
 		// Concurrent create: re-fetch existing record.
-		series, err = database.GetGlobalStore().GetSeriesByName(trimmed, authorID)
+		series, err = getStore().GetSeriesByName(trimmed, authorID)
 		if err != nil {
 			return nil, fmt.Errorf("series lookup after conflict failed: %w", err)
 		}
