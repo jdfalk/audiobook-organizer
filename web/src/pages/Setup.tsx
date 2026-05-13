@@ -1,5 +1,5 @@
 // file: web/src/pages/Setup.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 0f8a9b4c-1d2e-4a70-b8c5-3d7e0f1b9a99
 
 import React, { useState } from 'react';
@@ -75,13 +75,29 @@ export default function Setup() {
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit}>
+          <Box
+            component="form"
+            id="setup-form"
+            name="setup-form"
+            method="post"
+            action="#"
+            onSubmit={handleSubmit}
+          >
             <TextField
               fullWidth
               label="Username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               margin="normal"
+              name="username"
+              id="username"
+              type="text"
+              autoComplete="username"
+              inputProps={{
+                autoCapitalize: 'none',
+                autoCorrect: 'off',
+                spellCheck: false,
+              }}
               required
               autoFocus
             />
@@ -91,7 +107,15 @@ export default function Setup() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               margin="normal"
+              name="email"
+              id="email"
               type="email"
+              autoComplete="email"
+              inputProps={{
+                autoCapitalize: 'none',
+                autoCorrect: 'off',
+                spellCheck: false,
+              }}
             />
             <TextField
               fullWidth
@@ -99,7 +123,10 @@ export default function Setup() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               margin="normal"
+              name="password"
+              id="password"
               type="password"
+              autoComplete="new-password"
               required
               helperText="Minimum 8 characters"
             />
@@ -109,7 +136,10 @@ export default function Setup() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               margin="normal"
+              name="confirm-password"
+              id="confirm-password"
               type="password"
+              autoComplete="new-password"
               required
             />
             <Button
