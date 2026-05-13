@@ -100,12 +100,14 @@ func stripSubtitle(title string) string {
 }
 
 // isProtectedPath returns true if the file path is within import or iTunes paths.
-func isProtectedPath(filePath string) bool {
+// Method on *Service so it uses mfs.db rather than database.GetGlobalStore
+// (SERVER-GLOBAL-STORE-AUDIT phase 4).
+func (mfs *Service) isProtectedPath(filePath string) bool {
 	absPath, _ := filepath.Abs(filePath)
 
 	// Check import paths
-	if database.GetGlobalStore() != nil {
-		importPaths, err := database.GetGlobalStore().GetAllImportPaths()
+	if mfs != nil && mfs.db != nil {
+		importPaths, err := mfs.db.GetAllImportPaths()
 		if err == nil {
 			for _, ip := range importPaths {
 				ipAbs, _ := filepath.Abs(ip.Path)
@@ -190,10 +192,15 @@ func encodeMetadataValue(value any) (*string, error) {
 	return &encoded, nil
 }
 
-func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, error) {
+// These four helpers are *Service methods so they use mfs.db rather than
+// the package global (SERVER-GLOBAL-STORE-AUDIT phase 4).
+func (mfs *Service) loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	state := map[string]metadataFieldState{}
+	if mfs == nil || mfs.db == nil {
+		return state, fmt.Errorf("database not initialized")
+	}
 
-	pref, err := database.GetGlobalStore().GetUserPreference(metadataStateKey(bookID))
+	pref, err := mfs.db.GetUserPreference(metadataStateKey(bookID))
 	if err != nil {
 		return state, err
 	}
@@ -207,13 +214,13 @@ func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, erro
 	return state, nil
 }
 
-func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
+func (mfs *Service) loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	state := map[string]metadataFieldState{}
-	if database.GetGlobalStore() == nil {
+	if mfs == nil || mfs.db == nil {
 		return state, fmt.Errorf("database not initialized")
 	}
 
-	stored, err := database.GetGlobalStore().GetMetadataFieldStates(bookID)
+	stored, err := mfs.db.GetMetadataFieldStates(bookID)
 	if err != nil {
 		return state, err
 	}
@@ -229,7 +236,7 @@ func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 		return state, nil
 	}
 
-	legacy, err := loadLegacyMetadataState(bookID)
+	legacy, err := mfs.loadLegacyMetadataState(bookID)
 	if err != nil {
 		return state, err
 	}
@@ -237,18 +244,18 @@ func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 		return state, nil
 	}
 
-	if err := saveMetadataState(bookID, legacy); err != nil {
+	if err := mfs.saveMetadataState(bookID, legacy); err != nil {
 		log.Printf("[WARN] failed to migrate legacy metadata state for %s: %v", bookID, err)
 	}
 	return legacy, nil
 }
 
-func saveMetadataState(bookID string, state map[string]metadataFieldState) error {
-	if database.GetGlobalStore() == nil {
+func (mfs *Service) saveMetadataState(bookID string, state map[string]metadataFieldState) error {
+	if mfs == nil || mfs.db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
-	existing, err := database.GetGlobalStore().GetMetadataFieldStates(bookID)
+	existing, err := mfs.db.GetMetadataFieldStates(bookID)
 	if err != nil {
 		return err
 	}
@@ -280,14 +287,14 @@ func saveMetadataState(bookID string, state map[string]metadataFieldState) error
 			UpdatedAt:      entry.UpdatedAt,
 		}
 
-		if err := database.GetGlobalStore().UpsertMetadataFieldState(&dbState); err != nil {
+		if err := mfs.db.UpsertMetadataFieldState(&dbState); err != nil {
 			return fmt.Errorf("failed to persist metadata state for %s: %w", field, err)
 		}
 		delete(existingFields, field)
 	}
 
 	for field := range existingFields {
-		if err := database.GetGlobalStore().DeleteMetadataFieldState(bookID, field); err != nil {
+		if err := mfs.db.DeleteMetadataFieldState(bookID, field); err != nil {
 			return fmt.Errorf("failed to clean up metadata state for %s: %w", field, err)
 		}
 	}
@@ -295,8 +302,8 @@ func saveMetadataState(bookID string, state map[string]metadataFieldState) error
 	return nil
 }
 
-func updateFetchedMetadataState(bookID string, values map[string]any) error {
-	state, err := loadMetadataState(bookID)
+func (mfs *Service) updateFetchedMetadataState(bookID string, values map[string]any) error {
+	state, err := mfs.loadMetadataState(bookID)
 	if err != nil {
 		return err
 	}
@@ -309,7 +316,7 @@ func updateFetchedMetadataState(bookID string, values map[string]any) error {
 		entry.UpdatedAt = time.Now()
 		state[field] = entry
 	}
-	return saveMetadataState(bookID, state)
+	return mfs.saveMetadataState(bookID, state)
 }
 
 func stringVal(p *string) any {

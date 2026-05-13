@@ -71,7 +71,7 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 
 	// CRITICAL: Never write metadata to files in protected paths (import paths,
 	// iTunes Media folders). Only write to files in our organized library.
-	if isProtectedPath(book.FilePath) {
+	if mfs.isProtectedPath(book.FilePath) {
 		log.Printf("[INFO] skipping write-back for protected path: %s", book.FilePath)
 		return
 	}
@@ -102,7 +102,7 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 			if len(tagMap) == 0 {
 				continue
 			}
-			if isProtectedPath(bf.FilePath) {
+			if mfs.isProtectedPath(bf.FilePath) {
 				log.Printf("[INFO] skipping write-back for protected file: %s", bf.FilePath)
 				continue
 			}
@@ -473,7 +473,7 @@ func (mfs *Service) generateSegmentTitles(bookID string, bookTitle string) error
 // instead of the original to avoid moving source files.
 func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 	// If the book is in a protected path, run the pipeline on the library copy instead
-	if isProtectedPath(book.FilePath) {
+	if mfs.isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
 		if libCopy == nil {
 			log.Printf("[WARN] runApplyPipeline: no library copy for protected book %s, skipping", id)
@@ -647,7 +647,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 	// metadata for building the tag map, rather than the library copy's stale data.
 	originalBook := book
 	originalID := id
-	if isProtectedPath(book.FilePath) {
+	if mfs.isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
 		if libCopy == nil {
 			return 0, fmt.Errorf("cannot write back: no library copy for protected book %s", id)
@@ -754,7 +754,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 				log.Printf("[DEBUG] write-back: file %s tags already match, skipping", bf.FilePath)
 				continue
 			}
-			if isProtectedPath(bf.FilePath) {
+			if mfs.isProtectedPath(bf.FilePath) {
 				log.Printf("[DEBUG] skipping write-back for protected file: %s", bf.FilePath)
 				skippedProtected++
 				continue
@@ -772,7 +772,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 		// Single-file or no files: write to book.FilePath.
 		// If book.FilePath is a directory (multi-file book with no file records),
 		// glob for audio files inside and write to each one individually.
-		if isProtectedPath(book.FilePath) {
+		if mfs.isProtectedPath(book.FilePath) {
 			log.Printf("[DEBUG] skipping write-back for protected path: %s", book.FilePath)
 			skippedProtected++
 		} else {
@@ -789,7 +789,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 				// book.FilePath is a directory — write to each audio file found inside.
 				log.Printf("[INFO] write-back: %s is a directory; writing to %d audio file(s) inside", book.FilePath, len(dirFiles))
 				for _, f := range dirFiles {
-					if isProtectedPath(f) {
+					if mfs.isProtectedPath(f) {
 						log.Printf("[DEBUG] skipping write-back for protected file: %s", f)
 						skippedProtected++
 						continue
@@ -846,7 +846,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 				if !strings.HasPrefix(sib.FilePath, config.AppConfig.RootDir) {
 					continue // only write to library copies, leave import copies alone
 				}
-				if isProtectedPath(sib.FilePath) {
+				if mfs.isProtectedPath(sib.FilePath) {
 					continue
 				}
 				tagMap := mfs.BuildTagMap(bookTitle, bookTitle, artistStr, narratorStr, year, "")

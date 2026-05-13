@@ -1078,7 +1078,7 @@ func TestApplyMetadataToBook(t *testing.T) {
 
 func TestBuildSearchContext(t *testing.T) {
 	t.Run("nil_book", func(t *testing.T) {
-		ctx := buildSearchContext(nil, "Title", "Author", "Narrator")
+		ctx := (&Service{}).buildSearchContext(nil, "Title", "Author", "Narrator")
 		assert.Equal(t, "Title", ctx.Title)
 		assert.Equal(t, "Author", ctx.Author)
 		assert.Equal(t, "Narrator", ctx.Narrator)
@@ -1094,7 +1094,7 @@ func TestBuildSearchContext(t *testing.T) {
 			ISBN13: &isbn13,
 			ASIN:   &asin,
 		}
-		ctx := buildSearchContext(book, "Title", "Author", "Narrator")
+		ctx := (&Service{}).buildSearchContext(book, "Title", "Author", "Narrator")
 		assert.Equal(t, "1234567890", ctx.ISBN10)
 		assert.Equal(t, "9781234567890", ctx.ISBN13)
 		assert.Equal(t, "B01N5AZR76", ctx.ASIN)
@@ -1102,7 +1102,7 @@ func TestBuildSearchContext(t *testing.T) {
 
 	t.Run("book_without_identifiers", func(t *testing.T) {
 		book := &database.Book{}
-		ctx := buildSearchContext(book, "T", "A", "N")
+		ctx := (&Service{}).buildSearchContext(book, "T", "A", "N")
 		assert.Empty(t, ctx.ISBN10)
 		assert.Empty(t, ctx.ISBN13)
 		assert.Empty(t, ctx.ASIN)

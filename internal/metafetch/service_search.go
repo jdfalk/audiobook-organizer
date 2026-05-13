@@ -25,7 +25,10 @@ import (
 // that metadata.ContextualSearch implementations can use to do better
 // than plain title+author lookups. Empty fields are left empty so
 // sources see "" instead of a garbage placeholder.
-func buildSearchContext(book *database.Book, searchTitle, author, narrator string) *metadata.SearchContext {
+//
+// Method on *Service so the series lookup uses mfs.db rather than the
+// package global (SERVER-GLOBAL-STORE-AUDIT phase 4).
+func (mfs *Service) buildSearchContext(book *database.Book, searchTitle, author, narrator string) *metadata.SearchContext {
 	ctx := &metadata.SearchContext{
 		Title:    searchTitle,
 		Author:   author,
@@ -41,10 +44,8 @@ func buildSearchContext(book *database.Book, searchTitle, author, narrator strin
 		if book.ASIN != nil {
 			ctx.ASIN = *book.ASIN
 		}
-		// buildSearchContext is a top-level helper; use the package
-		// global here until the function is refactored into a method.
-		if book.SeriesID != nil && database.GetGlobalStore() != nil {
-			if series, err := database.GetGlobalStore().GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+		if book.SeriesID != nil && mfs != nil && mfs.db != nil {
+			if series, err := mfs.db.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
 				ctx.Series = series.Name
 			}
 		}
