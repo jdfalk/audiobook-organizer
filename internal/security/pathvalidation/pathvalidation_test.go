@@ -330,9 +330,15 @@ func TestSecureJoinResolved_Normal(t *testing.T) {
 		// Other errors (e.g. EvalSymlinks failure on missing path) are acceptable.
 	}
 	if err == nil {
-		// The returned path must be within dir.
-		if !strings.HasPrefix(got, filepath.Clean(dir)) {
-			t.Errorf("resolved path %q is not within root %q", got, dir)
+		// The returned path must be within dir. Use EvalSymlinks on dir
+		// because SecureJoinResolved returns the symlink-resolved form
+		// (e.g. macOS resolves /var/folders → /private/var/folders).
+		realDir, evalErr := filepath.EvalSymlinks(dir)
+		if evalErr != nil {
+			realDir = filepath.Clean(dir)
+		}
+		if !strings.HasPrefix(got, realDir) {
+			t.Errorf("resolved path %q is not within root %q (real=%q)", got, dir, realDir)
 		}
 	}
 }
