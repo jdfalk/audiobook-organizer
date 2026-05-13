@@ -302,30 +302,36 @@ func NewServer(store database.Store) *Server {
 		audiobookUpdateService: NewAudiobookUpdateService(resolvedStore),
 		authorSeriesService:    audiobookspkg.NewAuthorSeriesService(resolvedStore),
 		importService:          importer.NewImportService(resolvedStore),
-		organizeService:        NewOrganizeService(resolvedStore),
-		metadataFetchService:   metafetch.NewService(resolvedStore),
 		dedupCache:             cache.New[gin.H]("dedup", 24*time.Hour),
 		listCache:              cache.New[gin.H]("list", 24*time.Hour),
 		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
 		olService:              metafetch.NewOpenLibraryService(),
 		updater:                updater.NewUpdater(appVersion),
-		mergeService:           merge.NewService(resolvedStore),
 		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
 
 	// SERVER-PLUGIN-REG: build the service registry container.
-	// Wave-1 leaf services come from the container; Waves 2-5 still
-	// construct inline above (for now). IncludeAll() comes once all
-	// services are registered (W7).
+	// W1 + W2 services come from the container; W3-W5 still construct
+	// inline below. IncludeAll() comes once all services are registered (W7).
 	regCtx := context.Background()
+	includeNames := []string{
+		// W1 — leaf services
+		"audiobook", "batch", "work", "filesystem", "importpath",
+		"scan", "dashboard", "system", "configupdate", "metadatastate",
+		// W2 — cross-wired services
+		"metafetch", "merge", "organize", "quarantine", "eventbus",
+	}
+	// `activity` (+ `activitystore`) only registers when DatabasePath is
+	// set — the NutsDB sidecar can't open without a path. Match the
+	// pre-W2 inline conditional construction.
+	if config.AppConfig.DatabasePath != "" {
+		includeNames = append(includeNames, "activity", "activitystore")
+	}
 	regContainer := serviceregistry.NewContainer().
 		Override("store", resolvedStore).
 		Override("config", &config.AppConfig).
-		Include(
-			"audiobook", "batch", "work", "filesystem", "importpath",
-			"scan", "dashboard", "system", "configupdate", "metadatastate",
-		)
+		Include(includeNames...)
 	if err := regContainer.Resolve(); err != nil {
 		log.Fatalf("[server] serviceregistry resolve: %v", err)
 	}
@@ -347,10 +353,10 @@ func NewServer(store database.Store) *Server {
 		maintenance.InjectEnqueuer(server.writeBackBatcher)
 	}
 
-	// Initialize plugin event bus and registry
-	server.eventBus = plugin.NewEventBus()
+	// server.eventBus and server.quarantineSvc are now populated by
+	// wireServerFromContainer above (W2). Only the global plugin registry
+	// needs explicit construction here.
 	server.pluginRegistry = plugin.Global()
-	server.quarantineSvc = quarantine.NewQuarantineService(resolvedStore, &config.AppConfig, server.eventBus)
 
 	// Initialize the UOS-02 operations registry. The registry holds the
 	// OperationDef registration table, dispatcher, and worker pool.
@@ -457,16 +463,8 @@ func NewServer(store database.Store) *Server {
 		}
 	}
 
-	// Open activity log store alongside main DB (NutsDB, CGo-free).
-	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
-		activityDir := filepath.Join(filepath.Dir(dbPath), "activity.nutsdb")
-		activityStore, err := database.NewNutsActivityStore(activityDir)
-		if err != nil {
-			log.Printf("[WARN] Failed to open activity log store: %v", err)
-		} else {
-			server.activityService = activity.NewService(activityStore)
-		}
-	}
+	// server.activityService is now populated by wireServerFromContainer
+	// when config.DatabasePath is set (W2). Nothing to do here.
 
 	// Open metrics store alongside main DB (NutsDB, CGo-free).
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
