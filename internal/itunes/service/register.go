@@ -1,35 +1,17 @@
 // file: internal/itunes/service/register.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: f1e2d3c4-b5a6-7890-1a2b-3c4d5e6f7a8b
 //
-// Registers the writebackbatcher service with the global serviceregistry.
+// Registers the "writebackbatcher" service with the global serviceregistry.
 //
-// WHY THIS IS A STUB
-// ──────────────────
-// itunesservice.Service is constructed in NewServer (internal/server/server.go
-// ~line 395) with several server-bound closures:
+// As of PROMOTE-STUB-REGISTRATIONS (May 13, 2026) this is no longer a stub:
+// itunesservice.Service is container-built (see internal/server/registry_wire.go
+// "itunes" ServiceDef), so Build can pull the parent service and return an
+// adapter wrapping its real Batcher.
 //
-//	OnBookCreated: func(bookID string) { server.fireDedupOnImport(bookID) }
-//	Metafetch:     server.metadataFetchService
-//	OrganizerFactory: func() BookOrganizer { return organizer.NewOrganizer(&config.AppConfig) }
-//
-// Those closures capture a live *Server pointer that cannot be obtained at
-// registry Build time (Build runs before NewServer returns). Therefore the
-// "itunes" parent service cannot be fully registered; the Batcher that lives
-// inside it (svc.Batcher) is likewise unavailable at Build time.
-//
-// The "writebackbatcher" entry is registered as a typed-nil stub so that:
-//   - TryGet[*WriteBackBatcher](c, "writebackbatcher") returns (nil, true),
-//     signalling "service registered but not yet wired". Callers must nil-check
-//     the value.
-//   - The name is reserved in the registry to prevent accidental reuse.
-//   - Once the server-binding closures are moved to PostInit (a future W-series
-//     step), the Build func here can be upgraded to call New() properly.
-//
-// Coordinator note: registering the parent "itunes" service fully is blocked by
-// the OnBookCreated / Metafetch / OrganizerFactory server-bound fields. When
-// those are moved to PostInit, remove the stub and replace it with the real
-// construction.
+// Behavior on test paths (cfg.Enabled false → itunesservice.NewDisabled):
+// svc.Batcher is nil. The adapter still wraps nil-safely (Stop is a no-op),
+// matching the pre-promotion behavior where callers had to nil-check.
 
 package itunesservice
 
@@ -50,6 +32,15 @@ type batcherAdapter struct {
 	b *WriteBackBatcher
 }
 
+// Batcher returns the underlying *WriteBackBatcher. May be nil when the
+// parent itunesservice was constructed via NewDisabled (test paths).
+func (a *batcherAdapter) Batcher() *WriteBackBatcher {
+	if a == nil {
+		return nil
+	}
+	return a.b
+}
+
 // Start implements serviceregistry.Starter. WriteBackBatcher has no explicit
 // start: it begins processing on the first Enqueue. This is a no-op.
 func (a *batcherAdapter) Start(_ context.Context) error {
@@ -57,33 +48,29 @@ func (a *batcherAdapter) Start(_ context.Context) error {
 }
 
 // Stop implements serviceregistry.Stopper. Delegates to WriteBackBatcher.Stop()
-// which flushes pending writes before returning.
+// which flushes pending writes before returning. Nil-safe.
 func (a *batcherAdapter) Stop(_ context.Context) error {
-	if a.b != nil {
+	if a != nil && a.b != nil {
 		a.b.Stop()
 	}
 	return nil
 }
 
 func init() {
-	// "writebackbatcher" — stub registration.
-	//
-	// The real *WriteBackBatcher lives inside itunesservice.Service.Batcher,
-	// which is constructed by NewServer using server-bound closures (see file
-	// header). Build cannot create a real instance here.
-	//
-	// Returns a typed nil (*WriteBackBatcher)(nil) so TryGet returns
-	// (nil, true) — callers know the service is registered but must
-	// nil-check before use. The server's PostInit (or equivalent wiring)
-	// is expected to Override "writebackbatcher" with a real *batcherAdapter
-	// once itunesSvc.Batcher is available.
+	// "writebackbatcher" — adapter around itunesservice.Service.Batcher.
+	// Depends on "itunes" so Build order is well-defined regardless of
+	// group ordering. The adapter's Stop hooks into Container.Stop()
+	// once SERVER-LIFECYCLE-FLIP wires it.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "writebackbatcher",
-		Needs: []string{},
+		Name:   "writebackbatcher",
+		Needs:  []string{"itunes"},
 		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
-			// Stub: the batcher is server-constructed; see file header.
-			return (*batcherAdapter)(nil), nil
+			svc := serviceregistry.Get[*Service](c, "itunes")
+			if svc == nil {
+				return &batcherAdapter{}, nil
+			}
+			return &batcherAdapter{b: svc.Batcher}, nil
 		},
 	})
 }
