@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
@@ -51,6 +52,15 @@ type Engine struct {
 	// LLMMaxPairsPerRun caps how many pairs a single RunLLMReview invocation will
 	// send to the LLM. Zero means "all pending ambiguous candidates".
 	LLMMaxPairsPerRun int
+
+	// Background-context fields used by event-driven flows (e.g. dedup-on-import
+	// subscriber, chromem hydrate). Initialised lazily in PostInit so the
+	// engine doesn't need a New-time ctx and Stop can cleanly cancel
+	// outstanding work. Guarded by bgMu (RWMutex — readers are subscriber
+	// goroutines that snapshot the ctx; writers are PostInit and Stop).
+	bgCtx    context.Context
+	bgCancel context.CancelFunc
+	bgMu     sync.RWMutex
 }
 
 // NewEngine creates a Engine with sensible defaults.
