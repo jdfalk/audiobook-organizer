@@ -22,6 +22,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/oklog/ulid/v2"
 )
@@ -70,7 +71,7 @@ type albumGroup struct {
 type Importer struct {
 	store            Store
 	activityFn       func(database.ActivityEntry)
-	onBookCreated    func(bookID string)
+	eventBus         plugin.EventPublisher // may be nil; replaces OnBookCreated
 	cfg              Config
 	log              logger.Logger
 	mfs              *metafetch.Service
@@ -82,12 +83,25 @@ func newImporter(deps Deps) *Importer {
 	return &Importer{
 		store:            deps.Store,
 		activityFn:       deps.ActivityFn,
-		onBookCreated:    deps.OnBookCreated,
+		eventBus:         deps.EventBus,
 		cfg:              deps.Config,
 		log:              deps.Logger,
 		mfs:              deps.Metafetch,
 		organizerFactory: deps.OrganizerFactory,
 	}
+}
+
+// publishBookCreated emits a plugin.EventBookImported for bookID via the
+// event bus, if configured. Replaces the pre-PLUGIN-DECOUPLE OnBookCreated
+// callback. Subscribers (dedup engine, webhook plugin, etc.) receive the
+// event asynchronously and handle it with their own background contexts.
+func (imp *Importer) publishBookCreated(ctx context.Context, bookID string) {
+	if imp.eventBus == nil || bookID == "" {
+		return
+	}
+	imp.eventBus.Publish(ctx, plugin.NewEvent(plugin.EventBookImported, bookID, map[string]any{
+		"source": "itunes",
+	}))
 }
 
 // GetStatus returns an exported counter snapshot for opID.
@@ -248,9 +262,7 @@ func (imp *Importer) Execute(ctx context.Context, opID string, req ImportRequest
 			continue
 		}
 
-		if imp.onBookCreated != nil {
-			imp.onBookCreated(created.ID)
-		}
+		imp.publishBookCreated(ctx, created.ID)
 
 		incImportImported(status)
 		newBookIDs = append(newBookIDs, created.ID)
@@ -644,9 +656,7 @@ func (imp *Importer) Sync(ctx context.Context, libraryPath string, pathMappings 
 				log.Error("Failed to create '%s': %v", book.Title, err)
 			} else {
 				newBooks++
-				if imp.onBookCreated != nil {
-					imp.onBookCreated(created.ID)
-				}
+				imp.publishBookCreated(ctx, created.ID)
 				if created.AuthorID != nil && len(book.Authors) > 0 {
 					for i := range book.Authors {
 						book.Authors[i].BookID = created.ID

@@ -420,10 +420,10 @@ func NewServer(store database.Store) *Server {
 		Config:        itunesCfg,
 		AudiobookRoot: config.AppConfig.RootDir,
 		ReportDir:     filepath.Join(config.AppConfig.RootDir, "reports"),
-		OnBookCreated: func(bookID string) {
-			// Resolved lazily via closure so server.fireDedupOnImport is available.
-			server.fireDedupOnImport(bookID)
-		},
+		// PLUGIN-DECOUPLE: publish BookImported via event bus instead of
+		// the pre-decouple OnBookCreated closure that captured *Server.
+		// dedup.Engine.PostInit subscribes to EventBookImported.
+		EventBus:  server.eventBus,
 		Metafetch: server.metadataFetchService,
 		OrganizerFactory: func() itunesservice.BookOrganizer {
 			return organizer.NewOrganizer(&config.AppConfig)

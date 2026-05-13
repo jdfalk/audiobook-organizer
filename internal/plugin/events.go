@@ -75,8 +75,11 @@ func (b *EventBus) Subscribe(eventType EventType, handler EventHandler) {
 	b.subscribers[eventType] = append(b.subscribers[eventType], handler)
 }
 
-// Publish sends an event to all subscribers. Handlers run in goroutines.
-// Errors are logged but do not propagate to the publisher.
+// Publish sends an event to all subscribers. Handlers run in goroutines
+// with panic recovery so a buggy subscriber can't crash the publisher
+// (per the May 13 Q1 brainstorm — async dispatch, panic-isolated).
+//
+// Errors and recovered panics are logged but do not propagate.
 func (b *EventBus) Publish(ctx context.Context, event Event) {
 	b.mu.RLock()
 	handlers := b.subscribers[event.Type]
@@ -85,6 +88,11 @@ func (b *EventBus) Publish(ctx context.Context, event Event) {
 	for _, handler := range handlers {
 		h := handler // capture
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[ERROR] plugin event handler panicked for %s: %v", event.Type, r)
+				}
+			}()
 			if err := h(ctx, event); err != nil {
 				log.Printf("[WARN] plugin event handler error for %s: %v", event.Type, err)
 			}

@@ -1,5 +1,5 @@
 // file: internal/itunes/service/service.go
-// version: 1.6.0
+// version: 2.0.0
 // guid: 81ccaec6-42b0-4828-83c8-7a96680112d9
 
 package itunesservice
@@ -11,17 +11,22 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 )
 
 // Deps is the explicit dependency set for Service. No globals, no Server,
-// no config.AppConfig — everything the service needs is passed in.
+// no closure captures of server-owned state.
+//
+// PLUGIN-DECOUPLE (May 13, 2026): replaced two server-bound closure fields
+// with event-bus + organizer-factory deps that don't capture *Server.
+// This unblocks the container's ability to construct itunesservice.
 type Deps struct {
 	Store      Store
 	ActivityFn func(database.ActivityEntry)
-	Realtime         *realtime.EventHub // may be nil; means no SSE push
-	Config           Config
-	Logger           logger.Logger
+	Realtime   *realtime.EventHub // may be nil; means no SSE push
+	Config     Config
+	Logger     logger.Logger
 	// AudiobookRoot is the on-disk audiobook tree the path-repair
 	// operation walks for tier B (embedded tag scan) and tier C
 	// (fuzzy match). Empty disables those tiers.
@@ -29,14 +34,26 @@ type Deps struct {
 	// ReportDir is where the path-repair operation drops its JSON
 	// report file. Empty means inline-only (no file).
 	ReportDir string
-	// OnBookCreated fires after CreateBook so the dedup engine can check
-	// new iTunes imports against the organized library. May be nil.
-	OnBookCreated    func(bookID string)
+	// EventBus is where the service publishes lifecycle events. The
+	// dedup engine subscribes to plugin.EventBookImported and runs its
+	// dedup-on-import check there. May be nil (no events published).
+	//
+	// Replaces the pre-PLUGIN-DECOUPLE `OnBookCreated func(bookID string)`
+	// callback, which captured server.fireDedupOnImport and prevented
+	// container-based construction.
+	EventBus plugin.EventPublisher
 	// Metafetch is a pre-constructed metafetch service used during
 	// metadata enrichment. May be nil (enrichment becomes a no-op).
-	Metafetch        *metafetch.Service
+	Metafetch *metafetch.Service
 	// OrganizerFactory builds a BookOrganizer on demand. Required when
 	// ImportMode is organize/organized. May be nil (organize phase skipped).
+	//
+	// Post PLUGIN-DECOUPLE the factory must be a pure-data closure (no
+	// server captures); callers pass e.g.
+	//   OrganizerFactory: func() BookOrganizer {
+	//       return organizer.NewOrganizer(&config.AppConfig)
+	//   }
+	// which only captures the package-level config pointer.
 	OrganizerFactory func() BookOrganizer
 }
 
