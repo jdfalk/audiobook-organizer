@@ -315,7 +315,8 @@ func NewServer(store database.Store) *Server {
 		listCache:              cache.New[gin.H]("list", 24*time.Hour),
 		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
 		olService:              metafetch.NewOpenLibraryService(),
-		updater:                updater.NewUpdater(appVersion),
+		// updater + updateScheduler are container-built (see
+		// internal/updater/register.go). wireServerFromContainer sets them.
 		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
@@ -330,6 +331,7 @@ func NewServer(store database.Store) *Server {
 	regContainer := serviceregistry.NewContainer().
 		Override("store", resolvedStore).
 		Override("config", &config.AppConfig).
+		Override("appversion", appVersion).
 		IncludeGroup("core", "ai", "scheduler", "plugins").
 		// W3.6 batchpoller is in scheduler group; opregistry/ophub are
 		// in scheduler group. No additional explicit names needed.
@@ -408,17 +410,12 @@ func NewServer(store database.Store) *Server {
 	// internal/plugins/itunes/register.go ("itunesplugin"). No inline
 	// wiring is needed here.
 
-	// Initialize update scheduler
-	server.updateScheduler = updater.NewScheduler(server.updater, func() updater.SchedulerConfig {
-		return updater.SchedulerConfig{
-			Enabled:     config.AppConfig.AutoUpdateEnabled,
-			Channel:     config.AppConfig.AutoUpdateChannel,
-			CheckMins:   config.AppConfig.AutoUpdateCheckMinutes,
-			WindowStart: config.AppConfig.AutoUpdateWindowStart,
-			WindowEnd:   config.AppConfig.AutoUpdateWindowEnd,
-		}
-	})
-	server.updateScheduler.Start()
+	// updater + updateScheduler are container-built (internal/updater/
+	// register.go) and wired in wireServerFromContainer. Start() stays
+	// inline until SERVER-LIFECYCLE-FLIP hands it off to Container.Start.
+	if server.updateScheduler != nil {
+		server.updateScheduler.Start()
+	}
 
 	// Wire OL dump store into metadata fetch service for local-first lookups
 	if server.olService != nil && server.olService.Store() != nil {

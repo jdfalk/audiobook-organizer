@@ -26,6 +26,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
+	"github.com/jdfalk/audiobook-organizer/internal/updater"
 	"github.com/jdfalk/audiobook-organizer/internal/work"
 )
 
@@ -246,4 +247,17 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	// (May 13, 2026). Replaces the prior inline itunesservice.New(...) call
 	// in NewServer. Always present (Build returns NewDisabled() on error).
 	s.itunesSvc = serviceregistry.Get[*itunesservice.Service](c, "itunes")
+
+	// updater + updateScheduler — container-built since the updater
+	// LIFECYCLE-FLIP prep (May 13, 2026). Real version flows in via the
+	// "appversion" Override that NewServer sets to appVersion. The
+	// SchedulerStarterAdapter wraps Scheduler.Start/Stop for the eventual
+	// Container.Start hand-off; until then NewServer calls .Start()
+	// inline against the embedded scheduler.
+	if upd, ok := serviceregistry.TryGet[*updater.Updater](c, "updater"); ok {
+		s.updater = upd
+	}
+	if adapter, ok := serviceregistry.TryGet[*updater.SchedulerStarterAdapter](c, "updatescheduler"); ok && adapter != nil {
+		s.updateScheduler = adapter.Scheduler()
+	}
 }

@@ -1,6 +1,18 @@
 // file: internal/updater/register.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 8c9d0a1b-2c3d-4e5f-6a7b-8c9d0a1b2c3d
+//
+// Service registry registrations for the auto-updater + its scheduler.
+//
+// Two services:
+//   - "updater":         *Updater. Real version comes from the host via
+//                        Override("appversion", appVersion). Falls back to
+//                        "dev" when not overridden (matches the historical
+//                        inline default).
+//   - "updatescheduler": *SchedulerStarterAdapter wrapping *Scheduler.
+//                        Depends on "updater". Implements Starter/Stopper
+//                        for Container.Start / Container.Stop hand-off
+//                        once SERVER-LIFECYCLE-FLIP wires those.
 
 package updater
 
@@ -17,33 +29,56 @@ type SchedulerStarterAdapter struct {
 	scheduler *Scheduler
 }
 
+// Scheduler returns the wrapped *Scheduler. Nil-safe.
+func (a *SchedulerStarterAdapter) Scheduler() *Scheduler {
+	if a == nil {
+		return nil
+	}
+	return a.scheduler
+}
+
 // Start implements the serviceregistry.Starter interface.
-func (a *SchedulerStarterAdapter) Start(ctx context.Context) error {
+func (a *SchedulerStarterAdapter) Start(_ context.Context) error {
+	if a == nil || a.scheduler == nil {
+		return nil
+	}
 	a.scheduler.Start()
 	return nil
 }
 
 // Stop implements the serviceregistry.Stopper interface.
-func (a *SchedulerStarterAdapter) Stop(ctx context.Context) error {
+func (a *SchedulerStarterAdapter) Stop(_ context.Context) error {
+	if a == nil || a.scheduler == nil {
+		return nil
+	}
 	a.scheduler.Stop()
 	return nil
 }
 
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "updatescheduler",
-		Needs: []string{},
+		Name:   "updater",
+		Needs:  []string{},
 		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
-			// Create the Updater with the default "dev" version.
-			// The actual version is set at build time via ldflags in main.go
-			// and propagated to the server package's appVersion var.
-			// For now, we use "dev" as the fallback; the existing server.updater
-			// path (which has the real version from appVersion) remains unchanged.
-			updaterInst := NewUpdater("dev")
+			// appversion is an Override the host (server) sets to the
+			// ldflags-baked version. TryGet falls back to "dev" so the
+			// container can build in isolation (tests, tooling).
+			version, ok := serviceregistry.TryGet[string](c, "appversion")
+			if !ok || version == "" {
+				version = "dev"
+			}
+			return NewUpdater(version), nil
+		},
+	})
 
-			// Create the Scheduler with a closure that captures config.AppConfig
-			scheduler := NewScheduler(updaterInst, func() SchedulerConfig {
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:   "updatescheduler",
+		Needs:  []string{"updater"},
+		Groups: []string{"scheduler"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			upd := serviceregistry.Get[*Updater](c, "updater")
+			scheduler := NewScheduler(upd, func() SchedulerConfig {
 				return SchedulerConfig{
 					Enabled:     config.AppConfig.AutoUpdateEnabled,
 					Channel:     config.AppConfig.AutoUpdateChannel,
@@ -52,8 +87,6 @@ func init() {
 					WindowEnd:   config.AppConfig.AutoUpdateWindowEnd,
 				}
 			})
-
-			// Wrap in adapter to implement Starter/Stopper interfaces
 			return &SchedulerStarterAdapter{scheduler: scheduler}, nil
 		},
 	})
