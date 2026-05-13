@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.27.0 -->
+<!-- version: 8.28.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-13 -->
 
@@ -69,11 +69,19 @@ final-cleanup PR. Splitting them out as their own tickets to be worked
 incrementally:
 
 - [ ] **SERVER-LIFECYCLE-FLIP** Wire `Container.Start(ctx)` / `Container.Stop(ctx)`
-  into Server.Start / Server.Shutdown. Each W3 service registered today has a
-  Starter/Stopper implementation; right now the inline `NewServer` construction
-  still runs alongside the container. Flipping construction over to the container
-  (and removing the inline copies) is what shrinks `NewServer` to the planned
-  ≤50 lines.
+  into Server.Start / Server.Shutdown. **Partially completed** in PR #882
+  (opRegistry/opHub/embeddingStore/dedupEngine now sourced from the container
+  via wireServerFromContainer; plugin op-defs registered via PostInit). The
+  remaining per-service work:
+  - `updatescheduler` — register.go uses hard-coded "dev" version; needs
+    `appVersion` string Override or a server-side Need.
+  - `searchindex` — Container's Start would open Bleve; conflicts with the
+    existing inline Bleve open in `server_lifecycle.go`. Needs either-or.
+  - `activitywriter` — inline `aw := activity.NewWriter(...)` in NewServer
+    still creates a parallel writer; the container's one is unused.
+  - `aiScanStore` + `pipelineManager` — not yet in the container; the AI
+    block at `server.go:~511` still constructs a parallel dedup engine
+    inline because the chromem hydrate goroutine wires off that instance.
 
 - [ ] **SERVER-GLOBAL-STORE-AUDIT** Remove ~120 production `database.GetGlobalStore()`
   callers across `internal/scanner` (35), `internal/audiobooks/helpers` (14),
@@ -87,6 +95,15 @@ incrementally:
   blocked the W3.1 (writebackbatcher), W5.1 (maintenance), and W5.2 (itunes)
   registrations from being non-stub. Once decoupled, those plugins can build
   for real from the container.
+
+  Cleanest decoupling path: introduce a `BookCreated` event on the existing
+  `eventbus` (now registered in the container). Dedup engine subscribes
+  with its own bg-context management. itunesservice publishes when
+  CreateBook succeeds. That removes the `OnBookCreated` closure entirely.
+  `OrganizerFactory` can move into itunesservice itself
+  (`organizer.NewOrganizer(&config.AppConfig)` doesn't actually need `*Server`).
+  Maintenance plugin's ServerDeps needs each field replaced with an
+  explicit container-resolved dep — substantial but mechanical.
 
 - [x] **SERVER-THIN-RESIDUAL** `scheduler_extra_ops.go` residual extracted to
   `internal/scheduler/extra_ops.go` as `*ExtraOpsRegistrar` (W6). All 13 ops moved;

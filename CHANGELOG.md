@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.65.0 -->
+<!-- version: 2.66.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-13 -->
 
@@ -8,6 +8,42 @@
 ## [Unreleased]
 
 ### Refactors
+
+#### May 13, 2026 — SERVER-PLUGIN-REG W4.INT/W5.INT partial cleanup (PR #882)
+
+Finishes the deferred W4.INT/W5.INT cleanup that the original 7-wave sweep
+skipped. Three structural changes:
+
+- **Plugin op-defs self-register via PostInit**: `dedupplugin`,
+  `acoustidplugin`, `delugeplugin` each gain a PostInit that pulls
+  opregistry from the container and calls `Plugin.Register(opRegistry)`.
+  Inline `Plugin.Register(server.opRegistry)` calls deleted from NewServer.
+  Plugins blank-imported in `internal/server/server.go` so their `init()`
+  registers them.
+- **opRegistry/opHub/embeddingStore/dedupEngine sourced from container**:
+  `wireServerFromContainer` now pulls all four from the container. Inline
+  `server.opRegistry = opsregistry.New(...)` + `server.opHub = ...`
+  deleted. The container's `RegistryWrapper` exposes `.Registry` so
+  callers get the embedded `*opsregistry.Registry`.
+- **Stubs remain** (tracked as separate tickets — see TODO):
+  `writebackbatcher`, `maintenanceplugin`, `itunesplugin`. All blocked on
+  `itunesservice.Service.Deps` carrying server-bound closures
+  (`OnBookCreated`, `OrganizerFactory`) and `maintenance.ServerDeps`
+  holding `*Server`. The decoupling is its own refactor (event-bus
+  integration in itunesservice; explicit deps in maintenance).
+
+What still has parallel inline construction: the AI block at
+`server.go:~511` constructs a parallel dedupEngine for `SetChromemStore`/
+`SetAIJobsStore` wiring (the chromem hydrate goroutine runs against
+that instance). Full deletion requires extracting `aiScanStore` +
+`pipelineManager` into the container — tracked under SERVER-LIFECYCLE-FLIP.
+
+Lifecycle handoff (`Container.Start`/`Stop`) is also still pending:
+several W3 services hit non-trivial blockers (the `updatescheduler`
+adapter needs `appVersion` via Override, `searchindex` Start would
+conflict with the existing inline Bleve open in `server_lifecycle.go`).
+Doing this safely requires per-service handling that didn't fit a
+single-session sweep.
 
 #### May 13, 2026 — SERVER-PLUGIN-REG Waves 2.INT through 7: feature-complete migration
 
