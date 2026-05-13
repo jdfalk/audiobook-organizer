@@ -577,16 +577,19 @@ func NewServer(store database.Store) *Server {
 		// Wire activity service into audiobook service for snapshot comparison fallback
 		server.audiobookService.SetActivityService(server.activityService)
 
-		// Global log capture via teeWriter — replaces globalActivityRecorder
-		aw := activity.NewWriter(server.activityService.Store(), 10000)
-		aw.Start(context.Background()) //nolint:errcheck
-		server.activityWriter = aw
-		// Back-fill activityWriter into extraOpsRegistrar now that it is available.
-		server.extraOpsRegistrar.Deps.ActivityWriter = aw
-		server.scanService.SetActivityWriter(aw)
-		log.SetOutput(aw)
-		if server.itunesSvc != nil && server.itunesSvc.Enabled() {
-			server.itunesSvc.Repair.SetActivityWriter(aw)
+		// Global log capture via teeWriter — replaces globalActivityRecorder.
+		// activityWriter is container-built (internal/activity/register.go);
+		// wireServerFromContainer set it above. The inline Start() call here
+		// will move to Container.Start() under SERVER-LIFECYCLE-FLIP.
+		if aw := server.activityWriter; aw != nil {
+			aw.Start(context.Background()) //nolint:errcheck
+			// Back-fill activityWriter into extraOpsRegistrar now that it is available.
+			server.extraOpsRegistrar.Deps.ActivityWriter = aw
+			server.scanService.SetActivityWriter(aw)
+			log.SetOutput(aw)
+			if server.itunesSvc != nil && server.itunesSvc.Enabled() {
+				server.itunesSvc.Repair.SetActivityWriter(aw)
+			}
 		}
 
 		// Task 15: iTunes sync → activity log
