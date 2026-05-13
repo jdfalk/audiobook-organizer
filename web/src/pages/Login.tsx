@@ -1,5 +1,5 @@
 // file: web/src/pages/Login.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9a3f2c1d-4b5e-6f70-8a9b-0c1d2e3f4a5b
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -76,7 +76,15 @@ export function Login() {
         p: 3,
       }}
     >
-      <Paper component="form" onSubmit={submit} sx={{ p: 4, maxWidth: 480, width: '100%' }}>
+      <Paper
+        component="form"
+        id="login-form"
+        name="login-form"
+        method="post"
+        action="#"
+        onSubmit={submit}
+        sx={{ p: 4, maxWidth: 480, width: '100%' }}
+      >
         <Stack spacing={2}>
           <Typography variant="h4" gutterBottom>
             {mode === 'setup' ? 'Create Admin Account' : 'Login'}
@@ -93,7 +101,15 @@ export function Login() {
             label="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            name="username"
+            id="username"
+            type="text"
             autoComplete="username"
+            inputProps={{
+              autoCapitalize: 'none',
+              autoCorrect: 'off',
+              spellCheck: false,
+            }}
             required
             fullWidth
           />
@@ -103,7 +119,15 @@ export function Login() {
               label="Email (optional)"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              name="email"
+              id="email"
+              type="email"
               autoComplete="email"
+              inputProps={{
+                autoCapitalize: 'none',
+                autoCorrect: 'off',
+                spellCheck: false,
+              }}
               fullWidth
             />
           )}
@@ -113,6 +137,8 @@ export function Login() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            name="password"
+            id="password"
             autoComplete={
               mode === 'setup' ? 'new-password' : 'current-password'
             }
