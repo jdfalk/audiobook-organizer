@@ -20,6 +20,11 @@ type revertServiceStore interface {
 	database.BookReader
 	database.BookWriter
 	database.OperationStore
+	// Needed by the embedded isProtectedPath call in revertTagWrite
+	// (SERVER-GLOBAL-STORE-AUDIT phase 6). Inline single-method
+	// rather than database.ImportPathStore so this adapter doesn't
+	// have to expose ImportPath CRUD it never calls.
+	GetAllImportPaths() ([]database.ImportPath, error)
 }
 
 
@@ -187,7 +192,7 @@ func (rs *RevertService) revertTagWrite(c *database.OperationChange) error {
 		return nil
 	}
 
-	if isProtectedPath(book.FilePath) {
+	if isProtectedPath(rs.db, book.FilePath) {
 		log.Printf("[INFO] skipping tag revert for protected path: %s", book.FilePath)
 		return nil
 	}

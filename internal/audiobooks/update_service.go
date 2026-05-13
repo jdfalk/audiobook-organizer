@@ -25,6 +25,11 @@ type audiobookUpdateStore interface {
 	database.MetadataStore
 	database.UserPreferenceStore
 	database.UserPositionStore
+	// Required by audiobookStore (which we pass to NewAudiobookService
+	// below) — used by helpers.isProtectedPath. Inline single method
+	// rather than database.ImportPathStore so this adapter doesn't have
+	// to expose ImportPath CRUD it never calls.
+	GetAllImportPaths() ([]database.ImportPath, error)
 }
 
 
