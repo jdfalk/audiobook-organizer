@@ -1,5 +1,5 @@
 // file: internal/database/nuts_activity_store.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-a7b8-0003-cdef-000000000003
 
 package database
@@ -7,6 +7,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -16,6 +17,33 @@ import (
 	"github.com/nutsdb/nutsdb"
 	"github.com/oklog/ulid/v2"
 )
+
+// isNutsEmptyScan returns true for the family of nutsdb errors that all
+// mean "no entries to scan" — none of which should be propagated as a
+// 500 error to the activity-log API. nutsdb v1.1.0 has THREE relevant
+// sentinels (note the two near-identical names):
+//
+//   - ErrBucketNotFound ("bucket not found")  — tx_bucket.go etc.
+//   - ErrNotFoundBucket ("bucket not found")  — tx_btree.go RangeScanEntries
+//   - ErrRangeScan      ("range scans not found") — RangeScanEntries when
+//     the bucket exists but yields zero results
+//   - ErrBucketEmpty    — the (older) empty-bucket sentinel.
+//
+// nutsdb.IsBucketNotFound only matches the first. Without this helper, a
+// fresh activity store (no buckets created yet) returns 500 on every
+// /api/v1/activity request — because Query() → scanTier() →
+// RangeScanEntries returns ErrNotFoundBucket which IsBucketNotFound
+// doesn't catch. Same applies on the first request to a freshly-deployed
+// server when a tier bucket has never had a write committed.
+func isNutsEmptyScan(err error) bool {
+	if err == nil {
+		return false
+	}
+	return nutsdb.IsBucketNotFound(err) ||
+		nutsdb.IsBucketEmpty(err) ||
+		errors.Is(err, nutsdb.ErrNotFoundBucket) ||
+		errors.Is(err, nutsdb.ErrRangeScan)
+}
 
 // NutsActivityStore persists activity log entries in a NutsDB directory.
 // It is a drop-in replacement for ActivityStore (SQLite).
@@ -611,7 +639,7 @@ func (s *NutsActivityStore) scanTierKeysAndValues(tier string, since, until *tim
 	err := s.db.View(func(tx *nutsdb.Tx) error {
 		keys, vals, err := tx.RangeScanEntries(bucket, start, end, true, true)
 		if err != nil {
-			if nutsdb.IsBucketNotFound(err) || nutsdb.IsBucketEmpty(err) {
+			if isNutsEmptyScan(err) {
 				return nil
 			}
 			return err
@@ -638,7 +666,7 @@ func (s *NutsActivityStore) queryByIndex(indexBucket string, f ActivityFilter) (
 			false, true,
 		)
 		if err != nil {
-			if nutsdb.IsBucketNotFound(err) || nutsdb.IsBucketEmpty(err) {
+			if isNutsEmptyScan(err) {
 				return nil
 			}
 			return err
@@ -705,7 +733,7 @@ func (s *NutsActivityStore) findExistingDigest(dateKey string) (DigestDetails, [
 			true, true,
 		)
 		if err != nil {
-			if nutsdb.IsBucketNotFound(err) || nutsdb.IsBucketEmpty(err) {
+			if isNutsEmptyScan(err) {
 				return nil
 			}
 			return err

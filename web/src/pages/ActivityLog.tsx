@@ -748,24 +748,32 @@ export default function ActivityLog() {
                             </Typography>
                           )}
                           <Typography variant="subtitle2" fontWeight="bold">
-                            {op.type.replace(/_/g, ' ')}
+                            {op.displayName || op.def_id || op.type.replace(/_/g, ' ')}
                           </Typography>
                           <Chip
                             size="small"
                             label={op.status === 'queued' ? 'pending' : op.status}
-                            color={op.status === 'queued' ? 'default' : 'info'}
+                            color={
+                              op.status === 'queued' ? 'default' :
+                              op.status === 'completed' ? 'success' :
+                              op.status === 'failed' ? 'error' :
+                              op.status === 'canceled' ? 'warning' :
+                              'info'
+                            }
                           />
                         </Stack>
-                        <Button
-                          size="small"
-                          color="error"
-                          variant="outlined"
-                          startIcon={<CancelIcon />}
-                          onClick={(e) => { e.stopPropagation(); handleCancelOp(op.id); }}
-                          disabled={cancelling.has(op.id)}
-                        >
-                          {cancelling.has(op.id) ? 'Cancelling...' : 'Cancel'}
-                        </Button>
+                        {!['completed', 'failed', 'canceled'].includes(op.status) && (
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                            startIcon={<CancelIcon />}
+                            onClick={(e) => { e.stopPropagation(); handleCancelOp(op.id); }}
+                            disabled={cancelling.has(op.id)}
+                          >
+                            {cancelling.has(op.id) ? 'Cancelling...' : 'Cancel'}
+                          </Button>
+                        )}
                       </Stack>
                       {op.status === 'queued' ? (
                         <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
