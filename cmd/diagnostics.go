@@ -58,23 +58,24 @@ func init() {
 	diagnosticsCmd.AddCommand(queryCmd)
 }
 
-func ensureDiagnosticsStore() (func(), error) {
-	if err := database.InitializeStore(
+func ensureDiagnosticsStore() (database.Store, func(), error) {
+	store, err := database.InitializeStore(
 		config.AppConfig.DatabaseType,
 		config.AppConfig.DatabasePath,
 		config.AppConfig.EnableSQLite,
-	); err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
 	cleanup := func() {
 		database.CloseStore()
 	}
-	return cleanup, nil
+	return store, cleanup, nil
 }
 
 func runCleanupInvalidBooks(force, dryRun bool) error {
-	closer, err := ensureDiagnosticsStore()
+	store, closer, err := ensureDiagnosticsStore()
 	if err != nil {
 		return err
 	}
@@ -88,7 +89,7 @@ func runCleanupInvalidBooks(force, dryRun bool) error {
 	placeholders := []string{"{series}", "{narrator}", "{author}", "{title}"}
 
 	for {
-		books, err := database.GetGlobalStore().GetAllBooks(batchSize, offset)
+		books, err := store.GetAllBooks(batchSize, offset)
 		if err != nil {
 			return fmt.Errorf("failed to fetch books: %w", err)
 		}
@@ -136,7 +137,7 @@ func runCleanupInvalidBooks(force, dryRun bool) error {
 
 	deleted := 0
 	for _, book := range invalid {
-		if err := database.GetGlobalStore().DeleteBook(book.ID); err != nil {
+		if err := store.DeleteBook(book.ID); err != nil {
 			fmt.Printf("Failed to delete %s: %v\n", book.ID, err)
 			continue
 		}
@@ -159,13 +160,13 @@ func runDiagnosticsQuery(limit int, prefix string, raw bool) error {
 		return runRawPebbleQuery(limit, prefix)
 	}
 
-	closer, err := ensureDiagnosticsStore()
+	store, closer, err := ensureDiagnosticsStore()
 	if err != nil {
 		return err
 	}
 	defer closer()
 
-	books, err := database.GetGlobalStore().GetAllBooks(limit, 0)
+	books, err := store.GetAllBooks(limit, 0)
 	if err != nil {
 		return fmt.Errorf("failed to fetch books: %w", err)
 	}

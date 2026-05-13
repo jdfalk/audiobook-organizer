@@ -476,7 +476,7 @@ func TestSaveBookToDatabaseCodePaths(t *testing.T) {
 		}
 		defer database.Close()
 
-		if err := database.InitializeStore("sqlite", dbPath, true); err != nil {
+		if _, err := database.InitializeStore("sqlite", dbPath, true); err != nil {
 			t.Skip("cannot initialize store for this test")
 		}
 		defer database.CloseStore()

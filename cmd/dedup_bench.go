@@ -105,15 +105,16 @@ func runDedupBench(cmd *cobra.Command, args []string) error {
 		authorData, err = fetchAuthorsFromServer(benchServerURL)
 	} else {
 		log.Println("Fetching authors from local database")
-		if initErr := initializeStore(
+		store, initErr := initializeStore(
 			config.AppConfig.DatabaseType,
 			config.AppConfig.DatabasePath,
 			config.AppConfig.EnableSQLite,
-		); initErr != nil {
+		)
+		if initErr != nil {
 			return fmt.Errorf("failed to initialize database: %w", initErr)
 		}
 		defer closeStore()
-		authorData, err = extractAuthorData(database.GetGlobalStore())
+		authorData, err = extractAuthorData(store)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to extract author data: %w", err)

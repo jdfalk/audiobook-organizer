@@ -80,7 +80,7 @@ var scanCmd = &cobra.Command{
 		}
 
 		// Initialize database
-		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if _, err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
 		defer closeStore()
@@ -112,7 +112,7 @@ var playlistCmd = &cobra.Command{
 	Long:  `Generate iTunes-compatible playlists for each audiobook series.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize database
-		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if _, err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
 		defer closeStore()
@@ -137,7 +137,7 @@ var tagCmd = &cobra.Command{
 	Long:  `Update the metadata tags of audio files to include series information.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Initialize database
-		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if _, err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
 		defer closeStore()
@@ -173,7 +173,7 @@ var organizeCmd = &cobra.Command{
 		}
 
 		// Initialize database
-		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		if _, err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
 		defer closeStore()
@@ -228,8 +228,10 @@ var serveCmd = &cobra.Command{
 			defer logFile.Close()
 		}
 
-		// Initialize database
-		if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+		// Initialize database. Capture the returned Store so we can pass
+		// it explicitly down the call chain (SERVER-GLOBAL-STORE-AUDIT).
+		store, err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite)
+		if err != nil {
 			return fmt.Errorf("failed to initialize database: %w", err)
 		}
 		defer closeStore()
@@ -244,7 +246,7 @@ var serveCmd = &cobra.Command{
 		fmt.Println("Settings encryption initialized")
 
 		// Load configuration from database (overrides defaults with persisted values)
-		if err := loadConfigFromDB(database.GetGlobalStore()); err != nil {
+		if err := loadConfigFromDB(store); err != nil {
 			fmt.Printf("Warning: Could not load config from database: %v\n", err)
 		} else {
 			fmt.Println("Configuration loaded from database")
@@ -265,7 +267,7 @@ var serveCmd = &cobra.Command{
 		}
 
 		// Log import path count
-		if folders, err := database.GetGlobalStore().GetAllImportPaths(); err == nil {
+		if folders, err := store.GetAllImportPaths(); err == nil {
 			fmt.Printf("  - Import paths (scan paths): %d configured\n", len(folders))
 			for _, folder := range folders {
 				fmt.Printf("    * %s (%s)\n", folder.Name, folder.Path)
@@ -277,7 +279,7 @@ var serveCmd = &cobra.Command{
 		// Create and start server. Store is passed explicitly per the 4.4 DI
 		// migration; database.GlobalStore remains assigned for call sites that
 		// haven't yet been migrated to use s.Store().
-		srv := newServer(database.GetGlobalStore())
+		srv := newServer(store)
 
 		fmt.Println("Server initialized (hub, batcher, file I/O pool)")
 		cfg := getDefaultServerConfig()
