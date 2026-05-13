@@ -1,5 +1,5 @@
 // file: internal/metafetch/lifecycle.go
-// version: 1.0.0
+// version: 1.2.0
 
 // Lifecycle methods on *metafetch.Service that the serviceregistry
 // container picks up via interface satisfaction. PostInit wires the
@@ -15,6 +15,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 )
@@ -71,6 +72,24 @@ func (mfs *Service) PostInit(ctx context.Context, c *serviceregistry.Container) 
 	// metafetch).
 	if enq, ok := serviceregistry.TryGet[WriteBackEnqueuer](c, "writebackbatcher"); ok && enq != nil {
 		mfs.SetWriteBackBatcher(enq)
+	}
+
+	// OL dump store — local-first lookups. olservice opens the store
+	// lazily on first EnsureStore; if nothing has called that yet,
+	// Store() returns nil and we skip wiring (the chain reverts to
+	// network-only).
+	if ol, ok := serviceregistry.TryGet[*OpenLibraryService](c, "olservice"); ok && ol != nil {
+		if store := ol.Store(); store != nil {
+			mfs.SetOLStore(store)
+		}
+	}
+
+	// ISBN enrichment — needs a source chain. Empty chain (e.g. no
+	// AI key, no Audnexus) means no enrichment.
+	if store, ok := serviceregistry.TryGet[database.Store](c, "store"); ok && store != nil {
+		if sources := mfs.BuildSourceChain(); len(sources) > 0 {
+			mfs.SetISBNEnrichment(NewISBNService(store, sources))
+		}
 	}
 
 	return nil

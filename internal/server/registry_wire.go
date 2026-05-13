@@ -204,6 +204,9 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 
 	// W2 services
 	s.metadataFetchService = serviceregistry.Get[*metafetch.Service](c, "metafetch")
+	if ol, ok := serviceregistry.TryGet[*metafetch.OpenLibraryService](c, "olservice"); ok && ol != nil {
+		s.olService = ol
+	}
 	s.mergeService = serviceregistry.Get[*merge.Service](c, "merge")
 	s.organizeService = serviceregistry.Get[*OrganizeService](c, "organize")
 	s.quarantineSvc = serviceregistry.Get[*quarantine.QuarantineService](c, "quarantine")
