@@ -12,6 +12,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "audiobook",
 		Needs: []string{"store"},
+		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return NewAudiobookService(store), nil
@@ -20,6 +21,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "organize",
 		Needs: []string{"store"},
+		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return NewOrganizeService(store), nil

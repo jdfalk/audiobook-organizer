@@ -321,39 +321,24 @@ func NewServer(store database.Store) *Server {
 	}
 
 	// SERVER-PLUGIN-REG: build the service registry container.
-	// W1-W4 services flow through the container; remaining inline
-	// construction is for things still being migrated (W5+).
+	// Production wires services by named group (REGISTRY-NAMED-GROUPS,
+	// PR #886). Adding a new service is just `Groups: []string{"core"}`
+	// (or "ai", "plugins", etc.) on its ServiceDef — no edit to this
+	// file. Audit a group with
+	//   grep -rn 'Groups.*"<groupname>"' internal/ --include="*.go"
 	regCtx := context.Background()
-	includeNames := []string{
-		// W1 — leaf services
-		"audiobook", "batch", "work", "filesystem", "importpath",
-		"scan", "dashboard", "system", "configupdate", "metadatastate",
-		// W2 — cross-wired services
-		"metafetch", "merge", "organize", "quarantine", "eventbus",
-		// W3 — backend orchestration (only those with no inline-conflict)
-		"batchpoller", "opregistry", "ophub",
-		// W4 — embedding/AI cluster. Each Build is config-gated and
-		// returns typed nil when preconditions aren't met. The dedup
-		// engine's chromem/aijobs/embedding wiring stays inline in
-		// NewServer for now.
-		"embeddingstore", "embedclient", "llmparser", "chromemstore",
-		"aijobsstore", "dedup", "metadatascorer", "metadatallmscorer",
-		// W5 — UOS plugins. PostInit self-registers their op-defs
-		// against the container's opregistry. maintenanceplugin and
-		// itunesplugin are stubs (server-bound closures); their inline
-		// Register calls remain in NewServer below.
-		"dedupplugin", "acoustidplugin", "delugeplugin",
-	}
-	// `activity` (+ `activitystore`) only registers when DatabasePath is
-	// set — the NutsDB sidecar can't open without a path. Match the
-	// pre-W2 inline conditional construction.
-	if config.AppConfig.DatabasePath != "" {
-		includeNames = append(includeNames, "activity", "activitystore")
-	}
 	regContainer := serviceregistry.NewContainer().
 		Override("store", resolvedStore).
 		Override("config", &config.AppConfig).
-		Include(includeNames...)
+		IncludeGroup("core", "ai", "scheduler", "plugins").
+		// W3.6 batchpoller is in scheduler group; opregistry/ophub are
+		// in scheduler group. No additional explicit names needed.
+		Include() // explicit Include() reserved for ad-hoc additions
+	// `activity` (+ `activitystore`) only registers when DatabasePath is
+	// set — the NutsDB sidecar can't open without a path.
+	if config.AppConfig.DatabasePath != "" {
+		regContainer.IncludeGroup("activity")
+	}
 	if err := regContainer.Resolve(); err != nil {
 		log.Fatalf("[server] serviceregistry resolve: %v", err)
 	}

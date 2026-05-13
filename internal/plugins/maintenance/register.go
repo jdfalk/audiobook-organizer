@@ -29,6 +29,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "maintenanceplugin",
 		Needs: []string{},
+		Groups: []string{"plugins"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			// Stub — see file header. Inline construction remains the
 			// production path until ServerDeps is decoupled from *Server.

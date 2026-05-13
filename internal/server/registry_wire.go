@@ -38,8 +38,9 @@ import (
 //     here avoids forcing a new dependency on that pkg.
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "system",
-		Needs: []string{"store"},
+		Name:   "system",
+		Needs:  []string{"store"},
+		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return sysinfo.NewSystemService(store, appVersion, calculateLibrarySizes), nil
@@ -49,8 +50,9 @@ func init() {
 	// embeddingstore — Pebble-backed key namespace for dedup embeddings.
 	// Returns nil if the underlying store isn't *PebbleStore (e.g. tests).
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "embeddingstore",
-		Needs: []string{"store"},
+		Name:   "embeddingstore",
+		Needs:  []string{"store"},
+		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			ps, ok := store.(*database.PebbleStore)
@@ -65,8 +67,9 @@ func init() {
 	// Optional; failure logs a warning + returns nil so dedup falls back
 	// to the Pebble linear scan.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "chromemstore",
-		Needs: []string{"config"},
+		Name:   "chromemstore",
+		Needs:  []string{"config"},
+		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
 			if cfg.DatabasePath == "" {
@@ -83,8 +86,9 @@ func init() {
 
 	// aijobsstore — interface assertion on the main store.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "aijobsstore",
-		Needs: []string{"store"},
+		Name:   "aijobsstore",
+		Needs:  []string{"store"},
+		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			if s, ok := store.(database.AIJobsStore); ok {
@@ -99,8 +103,9 @@ func init() {
 	// client, etc.) — matches the existing inline conditional construction
 	// in NewServer.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "dedup",
-		Needs: []string{"store", "config", "embeddingstore", "embedclient", "llmparser", "merge"},
+		Name:   "dedup",
+		Needs:  []string{"store", "config", "embeddingstore", "embedclient", "llmparser", "merge"},
+		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
 			if cfg.OpenAIAPIKey == "" || !cfg.EmbeddingEnabled {

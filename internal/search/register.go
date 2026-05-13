@@ -72,6 +72,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "searchindex",
 		Needs: []string{"config"},
+		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
 			return &bleveIndexService{cfg: cfg}, nil

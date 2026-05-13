@@ -33,6 +33,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "updatescheduler",
 		Needs: []string{},
+		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			// Create the Updater with the default "dev" version.
 			// The actual version is set at build time via ldflags in main.go

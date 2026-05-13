@@ -34,6 +34,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "ophub",
 		Needs: []string{},
+		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			return NewEventHub(), nil
 		},
@@ -42,6 +43,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "opregistry",
 		Needs: []string{"store", "ophub"},
+		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.OpsV2Store](c, "store")
 			hub := serviceregistry.Get[*EventHub](c, "ophub")

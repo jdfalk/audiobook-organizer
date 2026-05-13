@@ -1,5 +1,5 @@
 // file: internal/serviceregistry/registry.go
-// version: 1.0.0
+// version: 1.1.0
 
 package serviceregistry
 
@@ -15,6 +15,20 @@ type ServiceDef struct {
 	// Get[T]. The container enforces that Build can only Get services listed
 	// here. Needs is the single source of truth for the build-time dep graph.
 	Needs []string
+
+	// Groups lists zero or more named groups this service belongs to.
+	// Callers Include services by group via Container.IncludeGroup(name).
+	//
+	// Conventions used today:
+	//   "core"      — always-on infrastructure (W1 leaf + W2 cross-wired)
+	//   "ai"        — embedding/AI cluster (each Build is config-gated)
+	//   "activity"  — activity log + sidecar store (DatabasePath-gated)
+	//   "plugins"   — UOS plugin registrations (dedup/acoustid/deluge/...)
+	//   "scheduler" — opregistry, updatescheduler, batchpoller, watchers
+	//
+	// A service can belong to multiple groups. Audit a group with
+	//   grep -rn 'Groups.*"core"' internal/ --include="*.go"
+	Groups []string
 
 	// Build constructs the service instance. May call Get[T](c, name) for
 	// any name in Needs.

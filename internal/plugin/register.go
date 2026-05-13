@@ -13,6 +13,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "eventbus",
 		Needs: []string{},
+		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			return NewEventBus(), nil
 		},

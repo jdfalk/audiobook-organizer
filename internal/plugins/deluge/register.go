@@ -24,6 +24,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "delugeplugin",
 		Needs: []string{"store", "config"},
+		Groups: []string{"plugins"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
 			client := delugeclient.GetClient()

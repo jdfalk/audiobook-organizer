@@ -26,6 +26,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "embedclient",
 		Needs: []string{"config", "embeddingstore"},
+		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
 			if cfg.OpenAIAPIKey == "" || !cfg.EmbeddingEnabled {
@@ -45,6 +46,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "llmparser",
 		Needs: []string{"config"},
+		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
 			if cfg.OpenAIAPIKey == "" {
@@ -59,6 +61,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "metadatascorer",
 		Needs: []string{"config", "embedclient", "embeddingstore"},
+		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
 			if !cfg.MetadataEmbeddingScoringEnabled {
@@ -78,6 +81,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "metadatallmscorer",
 		Needs: []string{"llmparser"},
+		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			parser, _ := serviceregistry.TryGet[*OpenAIParser](c, "llmparser")
 			if parser == nil {
