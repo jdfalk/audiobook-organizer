@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.24.0 -->
+<!-- version: 8.25.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-12 -->
+<!-- last-edited: 2026-05-13 -->
 
 # Project TODO
 
@@ -54,8 +54,8 @@ future agent) can scan the entire workspace in one page.
   `docs/architecture/server-plugin-registry-{design,plan}.md` (7-wave migration).
   - [x] **W0** Registry foundation — `internal/serviceregistry` package + 12 tests (PR #832)
   - [x] **W1** Leaf services — 9 of 10 leaf `register.go` files merged (PRs #835–#843); `system` (W1.8) deferred to W1.INT
-  - [ ] **W1.INT** `internal/server/registry_wire.go` + `NewServer` registry flow; register `system` service inline; delete corresponding struct-literal entries (1 serial Sonnet task)
-  - [ ] **W2** Cross-wired services (5 parallel + 1 serial integration)
+  - [x] **W1.INT** `internal/server/registry_wire.go` + `NewServer` registry flow; `system` service registered inline; 10 struct-literal entries deleted (PR #844)
+  - [ ] **W2** Cross-wired services — `metafetch`, `activity`, `merge`, `quarantine`, `organize` (5 parallel + 1 serial integration). Each gets a register.go + PostInit method that moves the cross-wiring out of NewServer.
   - [ ] **W3** Start/Stop services (7 parallel + 1 serial integration)
   - [ ] **W4** Embedding/AI cluster (8 parallel + 1 serial integration)
   - [ ] **W5** UOS plugin migrations (5 parallel + 1 serial integration)

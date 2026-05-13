@@ -1,13 +1,59 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.63.0 -->
+<!-- version: 2.64.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-12 -->
+<!-- last-edited: 2026-05-13 -->
 
 # Changelog
 
 ## [Unreleased]
 
+### Fixes
+
+#### May 13, 2026 — pathvalidation symlinked-tmpdir fix (PR #863)
+
+`SecureJoinResolved` mishandled symlinked parent directories (notably macOS's `/var/folders → /private/var/folders`). When the joined target didn't exist yet, it kept the symlink-resolved `realRoot` but used the unresolved `joined` path — `isWithinRoot` then falsely rejected safe paths. Fix: `resolveExistingPrefix` walks upward to the first existing ancestor, `EvalSymlinks` on that, then re-appends the non-existent suffix. Both sides of the prefix check now use the same root form.
+
 ### Refactors
+
+#### May 12–13, 2026 — Staticcheck cleanup sweep: 109 warnings → 0 (PRs #850, #852–#862)
+
+11-task parallel sweep + 1 follow-up fix. Removed ~500 lines of dead code, all confirmed unreferenced via grep before deletion. One real bug found:
+
+- **`internal/versions/lifecycle.go:66`** — `book.FilePath[:len(book.FilePath)-len(book.FilePath)+len(book.FilePath)]` (SA4000 identical operands). The expression simplifies to `book.FilePath` itself — dead code, overwritten by the for-loop immediately below.
+
+Largest deletions:
+- `internal/server/` — 14 files, 14 unused funcs/types/fields/imports
+- `internal/operations/registry/reporter.go` — UOS-02 `stubReporter` + 7 methods (superseded by `reporterDB` in UOS-03)
+- `internal/config/persistence.go` — 195-line `legacySaveConfigToDatabase_REMOVED`
+- `internal/itunes/generate_test_itls.go` — 6 unused fixture helpers
+
+Companion fixes during the sweep:
+- `internal/sysinfo/memory_test.go:15` — SA4003 `uint64 < 0` test was vacuously passing; fixed to `> 0`
+- `internal/maintenance/registry.go:29` — removed write-only `enqueuer` package var
+- `internal/openlibrary/store_test.go:149` — unnecessary `fmt.Sprintf` with no interpolation args
+
+Net: `staticcheck ./...` exits 0 across the entire tree.
+
+#### May 12, 2026 — Resume Review architecture + bug fixes
+
+- **Unified `GET /api/v1/library/metadata-results` endpoint** (PR #849) — one generic interface returning books with their latest metadata-fetch status + `by_status` count breakdown. Accepts repeatable `?status=` filters for the Library page toggles. Replaces the broken scan-and-aggregate logic that backed `POST /metadata/pending-review` (kept as a thin compatibility wrapper around the shared helper so the existing dialog flow stays functional).
+- **`fix(server)` preferences GET returns 200/empty when unset** (PR #848) — `library_column_config` and similar optional client prefs no longer trigger 404 console noise on first page load.
+- **`fix(database)` nutsdb buckets created on first write** (PR #846) — both `NutsMetricsStore` and `NutsActivityStore` now call `tx.NewBucket` before `tx.Put`. Eliminates the every-30s log spam: `cache snapshotter: record failed: put snapshot embedding: bucket not found`.
+- **`fix(server)` wave-3 stale test cleanup** (PR #831) — 7 stale `internal/server/*_test.go` files with broken references after the wave-3 extractions: deleted duplicate batch tests, fixed cover/deluge/handlers/itunes refs.
+- **`fix(server)` unused deluge import in acoustid_backfill** (PR #830) — blocked `go build ./...`.
+- **`fix(make)` staticcheck target no longer prints both messages** (PR #845) — the previous form printed both "not installed, skipping" AND "passed" on the same run.
+- **`fix(web)` Library.bulkFetch test mock + assertion** (PR #834) — added missing `getOperationTimeline` / `getActiveOperations` mocks; fixed stale `batchFetchCandidates` assertion shape.
+
+#### May 12, 2026 — SERVER-PLUGIN-REG Wave 1.INT: NewServer registry integration (PR #844)
+
+`NewServer` now drives the service registry container instead of hand-constructing the 10 Wave-1 leaf services. Changes:
+
+- New `internal/server/registry_wire.go` — registers the `system` service inline (needs `appVersion` + `calculateLibrarySizes` from the same package) and defines `wireServerFromContainer` that populates the 10 typed fields on `*Server` from the built container.
+- `*Server` struct gains a `container *serviceregistry.Container` field for handlers/tests that need dynamic lookup (rare — most access stays via the typed fields).
+- `NewServer` flow after the `&Server{...}` literal: `Override("store") → Override("config") → Include(10 services) → Resolve → Build → PostInit → wireServerFromContainer`. Log-fatal on container errors (matches existing pattern).
+- Deletes 10 struct-literal entries from `NewServer`. Wave-2 services (`metafetch`, `merge`, `organize`, etc.) remain inline construction; they get migrated next wave.
+
+Closes Wave 1 of the SERVER-PLUGIN-REG migration. All 10 Wave-1 services now flow through the registry.
 
 #### May 12, 2026 — SERVER-PLUGIN-REG Wave 1: leaf services (PRs #835–#843)
 
