@@ -1,13 +1,13 @@
 // file: internal/search/register.go
-// version: 2.0.0
+// version: 3.0.0
 // guid: 7b4e2c1a-9f3d-4a82-b6e5-1d0c8f5a3e72
 //
-// Registers the BleveIndex as the "searchindex" service in the
-// serviceregistry. IndexService satisfies Starter and Stopper so
-// the container manages its lifecycle once Container.Start/Stop
-// is wired (SERVER-LIFECYCLE-FLIP).
+// Registers the BleveIndex as the "searchindex" service. IndexService
+// satisfies Starter and Stopper — Container.Start opens the index,
+// Container.Stop closes it. server_lifecycle.go pulls Index() into
+// s.searchIndex right after Container.Start returns.
 //
-// Path convention mirrors server_lifecycle.go:
+// Path convention:
 //
 //	{dirname(config.DatabasePath)}/library.bleve
 
@@ -22,44 +22,27 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 )
 
-// IndexService wraps a *BleveIndex and defers the actual file-system
-// open to Start so that test code that never calls Start doesn't leak
-// Bleve file handles.
-//
-// Exported (renamed from bleveIndexService in v2.0.0) so server-package
-// code can fetch it from the container via TryGet[*search.IndexService]
-// and pull the underlying index via Index().
+// IndexService wraps a *BleveIndex with deferred-open semantics so
+// test code that never calls Start doesn't leak Bleve file handles.
 type IndexService struct {
 	cfg  *config.Config
 	idx  *BleveIndex
 	path string
 }
 
-// Start currently a no-op. Bleve open stays inline in
-// server_lifecycle.go because moving it here exposes a pre-existing
-// race between the stripMovementAtoms / remuxMalformedM4BFiles
-// goroutines (which read s.store) and the indexedStore decorator
-// install. Once that race is fixed independently, the OpenInline
-// helper below can move into this Start and Container.Start drives
-// the open.
+// Start opens the on-disk Bleve index. Idempotent — if already open,
+// Start is a no-op and returns nil.
 //
-// Until then, Stop is a no-op too — the inline path also drives Close.
+// Open failures are downgraded to warnings rather than errors so the
+// server can run without search. Returning an error here would abort
+// Container.Start and roll back already-started services. Callers
+// check Index() != nil before using the result.
 func (b *IndexService) Start(_ context.Context) error {
-	return nil
-}
-
-// OpenInline opens the on-disk Bleve index. Idempotent — if already
-// open, returns the existing handle. Called by server_lifecycle.go's
-// inline open path. Open failures are downgraded to nil + warning so
-// the server can run without search.
-func (b *IndexService) OpenInline() *BleveIndex {
-	if b == nil {
+	if b == nil || b.idx != nil {
 		return nil
 	}
-	if b.idx != nil {
-		return b.idx
-	}
 	if b.cfg == nil || b.cfg.DatabasePath == "" {
+		log.Printf("[INFO] searchindex: DatabasePath not configured, running without search")
 		return nil
 	}
 	indexPath := filepath.Join(filepath.Dir(b.cfg.DatabasePath), "library.bleve")
@@ -71,14 +54,24 @@ func (b *IndexService) OpenInline() *BleveIndex {
 	b.idx = idx
 	b.path = indexPath
 	log.Printf("[INFO] Search index opened at %s", indexPath)
-	return idx
+	return nil
 }
 
-// Stop currently a no-op. Bleve close stays inline in
-// server_lifecycle.go alongside the inline open. When the
-// store-install race is fixed and Start/Stop drive open/close, this
-// becomes b.idx.Close() + b.idx = nil.
+// Stop closes the underlying Bleve index. Safe to call multiple times
+// or before Start has been called. Idempotent: clears b.idx so a
+// follow-up Stop (e.g. from the inline s.searchIndex.Close() in
+// Server.Shutdown) is a no-op.
 func (b *IndexService) Stop(_ context.Context) error {
+	if b == nil || b.idx == nil {
+		return nil
+	}
+	err := b.idx.Close()
+	b.idx = nil
+	if err != nil {
+		log.Printf("[WARN] Failed to close search index: %v", err)
+		return err
+	}
+	log.Println("[INFO] Search index closed")
 	return nil
 }
 
