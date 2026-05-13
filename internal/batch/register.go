@@ -12,6 +12,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "batch",
 		Needs: []string{"store"},
+		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return NewBatchService(store), nil

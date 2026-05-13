@@ -12,6 +12,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "metadatastate",
 		Needs: []string{"store"},
+		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return NewMetadataStateService(store), nil
@@ -21,6 +22,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "metafetch",
 		Needs: []string{"store"},
+		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return NewService(store), nil

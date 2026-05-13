@@ -22,6 +22,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "activitystore",
 		Needs: []string{"config"},
+		Groups: []string{"activity"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
 			if cfg.DatabasePath == "" {
@@ -35,6 +36,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "activity",
 		Needs: []string{"activitystore"},
+		Groups: []string{"activity"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[*database.NutsActivityStore](c, "activitystore")
 			return NewService(store), nil
@@ -47,6 +49,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "activitywriter",
 		Needs: []string{"activity"},
+		Groups: []string{"activity"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			activitySvc := serviceregistry.Get[*Service](c, "activity")
 			return NewWriter(activitySvc.Store(), 10000), nil

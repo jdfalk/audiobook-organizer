@@ -80,6 +80,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "writebackbatcher",
 		Needs: []string{},
+		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			// Stub: the batcher is server-constructed; see file header.
 			return (*batcherAdapter)(nil), nil

@@ -27,6 +27,7 @@ func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "itunesplugin",
 		Needs: []string{},
+		Groups: []string{"plugins"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			// Stub — see file header.
 			return (*Plugin)(nil), nil
