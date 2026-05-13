@@ -420,20 +420,12 @@ func NewServer(store database.Store) *Server {
 	// PostInit (internal/metafetch/lifecycle.go). The container drives
 	// these now; no inline server-side wiring needed.
 
-	// Wire AI scan store into main PebbleDB (aiscan: key namespace, no separate file).
-	// BatchPoller is now registered via serviceregistry (W3).
-	if ps, ok := database.GetGlobalStore().(*database.PebbleStore); ok {
-		aiScanStore, err := database.NewAIScanStoreFromDB(ps.DB())
-		if err != nil {
-			log.Printf("[WARN] Failed to init AI scan store: %v", err)
-		} else {
-			server.aiScanStore = aiScanStore
-			server.extraOpsRegistrar.Deps.AIScanStore = aiScanStore
-			aiParserInst := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
-			if p, ok := aiParserInst.(*ai.OpenAIParser); ok {
-				server.pipelineManager = aiscan.NewPipelineManager(aiScanStore, database.GetGlobalStore(), p)
-			}
-		}
+	// aiScanStore + pipelineManager are container-built (registry_wire.go
+	// "aiscanstore" + "pipelinemanager"). Back-fill extraOpsRegistrar's
+	// AIScanStore dep — the registrar was constructed before
+	// wireServerFromContainer populated the field.
+	if server.aiScanStore != nil {
+		server.extraOpsRegistrar.Deps.AIScanStore = server.aiScanStore
 	}
 
 	// server.activityService is now populated by wireServerFromContainer
