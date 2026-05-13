@@ -1,36 +1,60 @@
 // file: internal/plugins/itunes/register.go
-// version: 1.0.0
+// version: 2.0.0
 
 // Service registry registration for the iTunes UOS plugin (W5).
 //
-// **Stub registration.** Mirrors maintenance/register.go: the iTunes
-// plugin's constructor needs `*itunesservice.Service`, which carries
-// server-bound closures (OnBookCreated → server.fireDedupOnImport,
-// OrganizerFactory referencing config.AppConfig, etc.). That coupling
-// blocks clean container registration today; see internal/itunes/
-// service/register.go for the parallel writebackbatcher discussion.
+// As of PROMOTE-STUB-REGISTRATIONS (May 13, 2026) this is no longer a stub.
+// "itunes" is container-built (internal/server/registry_wire.go) and the
+// plugin's only deps — *itunesservice.Service + database.Store — are
+// pullable here. PostInit registers OperationDefs with the opregistry
+// after Build completes, mirroring the same nil-guard ordering used in
+// the prior inline NewServer block.
 //
-// Build returns nil so the plugin slot exists in the container.
-// Production path stays inline in NewServer.
-//
-// W7 (or follow-up): decouple itunesservice.Service from server-bound
-// closures so this plugin (and W3.1's writebackbatcher stub) can build
-// for real.
+// Test-path guard: when *config.Config.RootDir is empty the test MockStore
+// doesn't expect UpsertOpDefinitionV2 calls. Build returns a typed-nil
+// *Plugin in that case; PostInit nil-checks before registering.
 
 package itunes
 
 import (
+	"context"
+
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 )
 
+// PostInit registers iTunes OperationDefs with the opregistry. Runs after
+// all Build calls so opregistry is guaranteed to be present. Nil-safe.
+func (p *Plugin) PostInit(_ context.Context, c *serviceregistry.Container) error {
+	if p == nil {
+		return nil
+	}
+	wrapper, ok := serviceregistry.TryGet[*opsregistry.RegistryWrapper](c, "opregistry")
+	if !ok || wrapper == nil {
+		return nil
+	}
+	return p.Register(wrapper.Registry)
+}
+
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "itunesplugin",
-		Needs: []string{},
+		Name:   "itunesplugin",
+		Needs:  []string{"itunes", "store", "config"},
 		Groups: []string{"plugins"},
 		Build: func(c *serviceregistry.Container) (any, error) {
-			// Stub — see file header.
-			return (*Plugin)(nil), nil
+			cfg := serviceregistry.Get[*config.Config](c, "config")
+			// Test-path guard: empty RootDir means tests without a real
+			// AppConfig — the mock store has no UpsertOpDefinitionV2
+			// expectations, so don't register ops.
+			if cfg.RootDir == "" {
+				return (*Plugin)(nil), nil
+			}
+			svc := serviceregistry.Get[*itunesservice.Service](c, "itunes")
+			store := serviceregistry.Get[database.Store](c, "store")
+			return New(svc, store), nil
 		},
 	})
 }
