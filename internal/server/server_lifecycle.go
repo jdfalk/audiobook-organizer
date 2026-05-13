@@ -177,22 +177,43 @@ func (s *Server) resumeInterruptedOperations() {
 
 func (s *Server) Start(cfg ServerConfig) error {
 	// SERVER-LIFECYCLE-FLIP: drive Starter services via the container.
-	// Replaces the inline s.itunesSvc.Start / s.opRegistry.Start /
-	// updateScheduler.Start / activityWriter.Start calls. Container.Start
-	// runs services in resolved dep order; failures abort startup and
-	// roll back already-started services.
-	//
-	// Note: "searchindex" is registered as a Starter but the Bleve open
-	// stays inline below for now. There is a pre-existing race between
-	// the stripMovementAtoms/remuxMalformedM4BFiles goroutines (which
-	// read s.store) and the indexedStore decorator install. Starting the
-	// Bleve service eagerly here changes timing enough that the race
-	// manifests reliably. Folding searchindex into the container's
-	// Start path is deferred until the underlying store-install race
-	// is fixed independently.
+	// Container.Start runs services in resolved dep order; failures
+	// abort startup and roll back already-started services.
 	if s.container != nil {
 		if err := s.container.Start(s.bgCtx); err != nil {
 			return fmt.Errorf("container start: %w", err)
+		}
+	}
+
+	// Pull the now-open Bleve index out of the searchindex service
+	// (opened above by Container.Start) and install the indexedStore
+	// decorator BEFORE any background goroutines or HTTP handlers
+	// start using s.store. Doing the wrap first eliminates the race
+	// between bg goroutines (stripMovementAtoms / remuxMalformedM4BFiles
+	// / backfills) reading s.store and the indexedStore install — pre-PR
+	// #903 this happened later and was timing-dependent.
+	//
+	// Bleve open failures are already logged inside IndexService.Start;
+	// when Index() returns nil the server runs without search.
+	if s.container != nil && s.searchIndex == nil {
+		if idx, ok := serviceregistry.TryGet[*search.IndexService](s.container, "searchindex"); ok && idx != nil {
+			s.searchIndex = idx.Index()
+		}
+	}
+	if s.searchIndex != nil {
+		s.indexQueue = make(chan indexRequest, 1024)
+		inner := s.Store()
+		wrapped := &indexedStore{Store: inner, server: s}
+		s.store = wrapped
+		database.SetGlobalStore(wrapped)
+		s.bgWG.Add(1)
+		go func() {
+			defer s.bgWG.Done()
+			s.runIndexWorker()
+		}()
+		// Route the /audiobooks?search= path through Bleve.
+		if s.audiobookService != nil {
+			s.audiobookService.SetSearchIndex(s.searchIndex)
 		}
 	}
 
@@ -377,42 +398,6 @@ func (s *Server) Start(cfg ServerConfig) error {
 		defer s.bgWG.Done()
 		s.remuxMalformedM4BFiles()
 	}()
-
-	// Open the library search index (Bleve, spec DES-1) via the
-	// container's IndexService.OpenInline helper. Same lazy-open
-	// semantics as before — kept inline (rather than in
-	// IndexService.Start driven by Container.Start) because folding
-	// it into Container.Start exposes a pre-existing race between
-	// stripMovementAtoms / remuxMalformedM4BFiles goroutines that
-	// read s.store and the indexedStore decorator install below.
-	if s.container != nil && s.searchIndex == nil {
-		if idx, ok := serviceregistry.TryGet[*search.IndexService](s.container, "searchindex"); ok && idx != nil {
-			if bi := idx.OpenInline(); bi != nil {
-				s.searchIndex = bi
-			}
-		}
-	}
-
-	// Install the indexing store decorator + worker once the index is
-	// open. Every downstream book mutation flows through s.Store()
-	// (or the package-level global) so wrapping both keeps the index
-	// in sync regardless of whether a caller has migrated to DI yet.
-	if s.searchIndex != nil {
-		s.indexQueue = make(chan indexRequest, 1024)
-		inner := s.Store()
-		wrapped := &indexedStore{Store: inner, server: s}
-		s.store = wrapped
-		database.SetGlobalStore(wrapped)
-		s.bgWG.Add(1)
-		go func() {
-			defer s.bgWG.Done()
-			s.runIndexWorker()
-		}()
-		// Route the /audiobooks?search= path through Bleve.
-		if s.audiobookService != nil {
-			s.audiobookService.SetSearchIndex(s.searchIndex)
-		}
-	}
 
 	// Build the search index on first startup (or if it got wiped).
 	// Tracked via bgWG so shutdown can wait for in-flight indexing
@@ -720,17 +705,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 		s.pluginRegistry.ShutdownAll(ctx)
 	}
 
-	// Close the search index before the DB goes away — the index is
-	// independent storage but closing it here keeps shutdown order
-	// predictable and avoids Bleve holding file handles after the
-	// process starts tearing down.
-	if s.searchIndex != nil {
-		if err := s.searchIndex.Close(); err != nil {
-			log.Printf("[WARN] Failed to close search index: %v", err)
-		} else {
-			log.Println("[INFO] Search index closed")
-		}
-	}
+	// Search index is closed by Container.Stop below — IndexService.Stop
+	// runs in reverse-resolved order alongside the other registered
+	// Stoppers and clears its handle so a double-call is a no-op.
 
 	// SERVER-LIFECYCLE-FLIP: drive remaining Stoppers via the container.
 	// Runs in reverse resolved order; covers activityWriter (replaces
