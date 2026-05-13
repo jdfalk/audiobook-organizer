@@ -267,7 +267,7 @@ func (mfs *Service) ensureLibraryCopy(book *database.Book) *database.Book {
 	if strings.HasPrefix(book.FilePath, config.AppConfig.RootDir) {
 		return book // already in library
 	}
-	if !isProtectedPath(book.FilePath) {
+	if !mfs.isProtectedPath(book.FilePath) {
 		return book // not protected, safe to modify
 	}
 
@@ -421,7 +421,7 @@ func (mfs *Service) persistFetchedMetadata(bookID string, meta metadata.BookMeta
 		fetchedValues["asin"] = meta.ASIN
 	}
 	if len(fetchedValues) > 0 {
-		if err := updateFetchedMetadataState(bookID, fetchedValues); err != nil {
+		if err := mfs.updateFetchedMetadataState(bookID, fetchedValues); err != nil {
 			log.Printf("[ERROR] FetchMetadataForBook: failed to persist fetched metadata state: %v", err)
 		}
 	}

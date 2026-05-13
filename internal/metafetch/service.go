@@ -137,7 +137,7 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 	}
 
 	// If book is in a protected path, get or create a library copy
-	if isProtectedPath(book.FilePath) {
+	if mfs.isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
 		if libCopy == nil {
 			log.Printf("[WARN] cannot embed cover: no library copy for protected book %s", book.ID)
@@ -162,7 +162,7 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 			if bf.Missing {
 				continue
 			}
-			if isProtectedPath(bf.FilePath) {
+			if mfs.isProtectedPath(bf.FilePath) {
 				continue
 			}
 			bfExt := strings.ToLower(filepath.Ext(bf.FilePath))
@@ -348,7 +348,7 @@ func metadataCanonicalID(c MetadataCandidate) string {
 // Used by the "Save to Files" button to rename files without re-writing tags (tags are written separately).
 func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) error {
 	// If the book is in a protected path, run on library copy
-	if isProtectedPath(book.FilePath) {
+	if mfs.isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
 		if libCopy == nil {
 			return fmt.Errorf("no library copy for protected book %s", id)

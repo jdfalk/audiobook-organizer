@@ -107,7 +107,7 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 			// search. Sources that don't implement the interface just
 			// fall through to the title/author path below.
 			if ctxSearch, ok := src.(metadata.ContextualSearch); ok {
-				ctx := buildSearchContext(book, searchTitle, currentAuthor, currentNarrator)
+				ctx := mfs.buildSearchContext(book, searchTitle, currentAuthor, currentNarrator)
 				results, searchErr = ctxSearch.SearchByContext(ctx)
 				if searchErr != nil {
 					log.Printf("[WARN] %s context search failed for %q: %v", src.Name(), book.Title, searchErr)
