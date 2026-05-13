@@ -114,7 +114,7 @@ func (s *NutsMetricsStore) GetCacheStatsHistory(cacheName string, since time.Tim
 		err := s.db.View(func(tx *nutsdb.Tx) error {
 			_, vals, err := tx.RangeScanEntries(metsBucket(name), start, end, false, true)
 			if err != nil {
-				if nutsdb.IsBucketNotFound(err) || nutsdb.IsBucketEmpty(err) {
+				if isNutsEmptyScan(err) {
 					return nil
 				}
 				return err
@@ -160,7 +160,7 @@ func (s *NutsMetricsStore) cacheNames(cacheName string) ([]string, error) {
 	err := s.db.View(func(tx *nutsdb.Tx) error {
 		keys, _, err := tx.RangeScanEntries(metricsIdxBucket, []byte(""), []byte("\xff\xff\xff\xff"), true, false)
 		if err != nil {
-			if nutsdb.IsBucketNotFound(err) || nutsdb.IsBucketEmpty(err) {
+			if isNutsEmptyScan(err) {
 				return nil
 			}
 			return err

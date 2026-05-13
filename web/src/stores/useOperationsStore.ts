@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 3.2.0
+// version: 3.3.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -9,7 +9,22 @@ import { useAppStore } from './useAppStore';
 
 export interface ActiveOperation {
   id: string;
+  /** def_id is the canonical operation identifier, e.g.
+   *  "scheduler.purge-deleted". Use this for equality checks like
+   *  `op.def_id === 'scan'`. Kept separate from the legacy `type`
+   *  field so existing call sites that match on the old short name
+   *  ('scan', 'itunes_import', 'ol_dump_import') keep working. */
+  def_id?: string;
+  /** Plugin namespace, e.g. "scheduler", "maintenance", "itunes". */
+  plugin?: string;
+  /** Legacy short type code (e.g. 'scan', 'itunes_import'). Old call
+   *  sites filter on this; keep as-is. For NEW filters prefer def_id. */
   type: string;
+  /** Human-readable label for UI display ("Purge soft-deleted books",
+   *  "iTunes Path Repair", etc.). Sourced from the OperationDef
+   *  DisplayName on the backend. Use this in render code instead of
+   *  type. */
+  displayName?: string;
   status: string;
   progress: number;
   total: number;
@@ -45,11 +60,26 @@ interface OperationsState {
   closeSSE: () => void;
 }
 
-// Converts v2 operation to unified ActiveOperation
+// Converts v2 operation to unified ActiveOperation.
+//
+// The legacy `type` field used to be set from `op.plugin`, which made every
+// scheduler op render as "scheduler" (the plugin namespace) in the UI even
+// though the def_id and display_name carried the real identity. We now
+// derive `type` from the def_id's tail segment ("scheduler.purge-deleted"
+// → "purge-deleted") so existing equality checks like
+// `op.type === 'scan'` keep working when the def_id is just "scan", while
+// the bare-plugin display is fixed. The full def_id and the curated
+// display_name are also exposed for code that wants them.
 function fromV2(op: api.OperationV2): ActiveOperation {
+  const defID = op.def_id ?? '';
+  // Strip plugin prefix for back-compat with old `op.type === 'scan'` checks.
+  const shortType = defID.includes('.') ? defID.slice(defID.indexOf('.') + 1) : defID || op.plugin;
   return {
     id: op.id,
-    type: op.plugin, // In v2, the operation type is stored in 'plugin'
+    def_id: defID,
+    plugin: op.plugin,
+    type: shortType,
+    displayName: op.display_name,
     status: op.status,
     progress: op.progress_current ?? 0,
     total: op.progress_total ?? 0,
