@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.26.0 -->
+<!-- version: 8.27.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-13 -->
 
@@ -48,19 +48,45 @@ future agent) can scan the entire workspace in one page.
 
 ## 🔜 Next — Post-server-thinning
 
-- [ ] **SERVER-PLUGIN-REG** Service registry analogous to `opRegistry` so domain packages
-  self-register their services and `server.go` iterates the registry at startup instead of
-  having a hardcoded constructor call per service. Spec + plan committed:
-  `docs/architecture/server-plugin-registry-{design,plan}.md` (7-wave migration).
+- [x] **SERVER-PLUGIN-REG** Service registry analogous to `opRegistry`. Spec + plan
+  in `docs/architecture/server-plugin-registry-{design,plan}.md`. All 7 waves shipped:
   - [x] **W0** Registry foundation — `internal/serviceregistry` package + 12 tests (PR #832)
-  - [x] **W1** Leaf services — 9 of 10 leaf `register.go` files merged (PRs #835–#843); `system` (W1.8) deferred to W1.INT
-  - [x] **W1.INT** `internal/server/registry_wire.go` + `NewServer` registry flow; `system` service registered inline; 10 struct-literal entries deleted (PR #844)
-  - [ ] **W2** Cross-wired services — `metafetch`, `activity`, `merge`, `quarantine`, `organize` (5 parallel + 1 serial integration). Each gets a register.go + PostInit method that moves the cross-wiring out of NewServer.
-  - [ ] **W3** Start/Stop services (7 parallel + 1 serial integration)
-  - [ ] **W4** Embedding/AI cluster (8 parallel + 1 serial integration)
-  - [ ] **W5** UOS plugin migrations (5 parallel + 1 serial integration)
-  - [x] **W6** Scheduler residual extraction — closes SERVER-THIN-RESIDUAL
-  - [ ] **W7** Final cleanup (NewServer ≤ 50 lines, audit GetGlobalStore)
+  - [x] **W1** Leaf services (PRs #835–#843)
+  - [x] **W1.INT** NewServer registry-flow integration (PR #844)
+  - [x] **W2** Cross-wired services — metafetch / activity / merge / quarantine / organize (PRs #864–#868)
+  - [x] **W2.INT** Wire W2 services into NewServer (PR #869)
+  - [x] **W3** Start/Stop services — writebackbatcher / updatescheduler / activitywriter / searchindex / opregistry / batchpoller / librarywatcher (PRs #870–#877 incl. fix-up)
+  - [x] **W4** Embedding/AI cluster — embedclient / llmparser / embeddingstore / chromemstore / aijobsstore / dedup / metadatascorer / metadatallmscorer (PR #878)
+  - [x] **W5** UOS plugin migrations (PR #879) — 3 real registrations (dedup, acoustid, deluge), 2 documented stubs (maintenance, itunes) blocked on server-bound closures
+  - [x] **W6** Scheduler residual extraction — closes SERVER-THIN-RESIDUAL (PR #880)
+  - [x] **W7** Final wrap-up (this PR) — CHANGELOG/TODO consolidated; follow-ups split out below
+
+### 🧹 Follow-ups split from SERVER-PLUGIN-REG W7
+
+The "trim NewServer to ≤50 lines" and "audit GetGlobalStore" deliverables from
+the original W7 plan turned out to be substantially larger than a single
+final-cleanup PR. Splitting them out as their own tickets to be worked
+incrementally:
+
+- [ ] **SERVER-LIFECYCLE-FLIP** Wire `Container.Start(ctx)` / `Container.Stop(ctx)`
+  into Server.Start / Server.Shutdown. Each W3 service registered today has a
+  Starter/Stopper implementation; right now the inline `NewServer` construction
+  still runs alongside the container. Flipping construction over to the container
+  (and removing the inline copies) is what shrinks `NewServer` to the planned
+  ≤50 lines.
+
+- [ ] **SERVER-GLOBAL-STORE-AUDIT** Remove ~120 production `database.GetGlobalStore()`
+  callers across `internal/scanner` (35), `internal/audiobooks/helpers` (14),
+  `internal/server/*` (~30), `internal/metafetch`, `internal/organizer`, etc.
+  Best done as a series of small PRs, one per package, replacing with explicit
+  store params or container `Get` calls.
+
+- [ ] **PLUGIN-DECOUPLE-SERVER-CLOSURES** Decouple `itunesservice.Service` from
+  server-bound closures (`OnBookCreated`, `OrganizerFactory`) and decouple
+  `maintenance.Plugin`'s `ServerDeps` from `*Server`. These coupling points
+  blocked the W3.1 (writebackbatcher), W5.1 (maintenance), and W5.2 (itunes)
+  registrations from being non-stub. Once decoupled, those plugins can build
+  for real from the container.
 
 - [x] **SERVER-THIN-RESIDUAL** `scheduler_extra_ops.go` residual extracted to
   `internal/scheduler/extra_ops.go` as `*ExtraOpsRegistrar` (W6). All 13 ops moved;
