@@ -700,7 +700,7 @@ func NewServer(store database.Store) *Server {
 
 		// Global log capture via teeWriter — replaces globalActivityRecorder
 		aw := activity.NewWriter(server.activityService.Store(), 10000)
-		aw.Start()
+		aw.Start(context.Background()) //nolint:errcheck
 		server.activityWriter = aw
 		server.scanService.SetActivityWriter(aw)
 		log.SetOutput(aw)

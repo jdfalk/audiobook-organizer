@@ -5,6 +5,7 @@
 package activity
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,7 +110,7 @@ func TestWriter_CapturesLogs(t *testing.T) {
 
 	w := NewWriter(store, 100)
 	w.stdout = devNull
-	w.Start()
+	w.Start(context.Background()) //nolint:errcheck
 
 	lines := []string{
 		"2026/03/25 17:35:08 logger.go:103: [info] scheduler: Next sync in 28m",
@@ -121,7 +122,7 @@ func TestWriter_CapturesLogs(t *testing.T) {
 		fmt.Fprintln(w, line)
 	}
 
-	w.Stop()
+	w.Stop(context.Background()) //nolint:errcheck
 
 	entries, total, err := store.Query(database.ActivityFilter{Limit: 50})
 	if err != nil {
