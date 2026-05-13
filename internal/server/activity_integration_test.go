@@ -159,7 +159,7 @@ func TestActivity_Integration_TeeWriterCapture(t *testing.T) {
 	fmt.Fprintln(w, "[GIN] 2026/03/25 - 17:35:11 | 200 |    1.44s |    172.16.3.164 | GET      \"/api/v1/health\"")
 	fmt.Fprintln(w, "2026/03/25 17:35:08 logger.go:103: [warn] server: No params found for scan")
 
-	w.Stop()
+	_ = w.Stop(context.Background())
 
 	entries, total, err := store.Query(database.ActivityFilter{Limit: 100})
 	if err != nil {
