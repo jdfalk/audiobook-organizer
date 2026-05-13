@@ -1,5 +1,5 @@
 <!-- file: docs/architecture/server-plugin-registry-handoff.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- last-edited: 2026-05-13 -->
 
 # SERVER-PLUGIN-REG — Handoff Brief
@@ -21,16 +21,28 @@ Production data lives on `172.16.2.30` (PebbleDB at
 `make deploy` after merging server-side changes** — `Makefile.local`
 builds, scp's, and restarts via systemd.
 
-## State as of 2026-05-13
+## State as of 2026-05-13 (PM update)
 
 - All 7 waves of the original SERVER-PLUGIN-REG plan landed.
-- ~39 services registered across 5 named groups: `core`, `ai`, `scheduler`,
-  `plugins`, `activity`. Audit with
+- **~45 services** registered across the 5 named groups: `core`, `ai`,
+  `scheduler`, `plugins`, `activity`. Audit any one with
   `grep -rn 'Groups.*"core"' internal/ --include="*.go"`.
-- `NewServer` is **462 lines** (target: ≤50). Down from 968 historic / 577
-  at session start.
-- 0 open PRs. `go vet ./...` clean. `staticcheck ./...` clean. `go build`
-  clean.
+- `NewServer` is **390 lines** (target: ≤50). Down from 968 historic /
+  462 at this morning's session start.
+- 0 open PRs. `go vet ./...` clean. `go build` clean.
+- **PRs #890 — #899 (10 PRs)** were shipped today moving inline blocks
+  into the container + PostInit hooks:
+  - #890 itunesservice container-built
+  - #891 writebackbatcher stub promoted
+  - #892 iTunes plugin stub promoted (PostInit registers ops)
+  - #893 activitywriter pulled from container
+  - #894 updater + scheduler container-built (appversion Override)
+  - #895 activity Set wiring moved into 3 services' PostInit hooks
+  - #896 WriteBackBatcher.Start/Stop match Starter/Stopper; fan-out
+    into metafetch/merge/quarantine/audiobook PostInit
+  - #897 olservice + ISBN enrichment via metafetch.PostInit
+  - #898 aiscanstore + pipelinemanager via container
+  - #899 metricsstore via container
 - Pre-existing test failures to ignore: **SERVER-THIN-8** —
   `TestITunesImport_*`, `TestE2E_ITunesImportOrganizeWriteBack`,
   `TestOrganizeService_ViaHTTP`, `TestAddImportPathAutoScan`,
@@ -63,52 +75,80 @@ builds, scp's, and restarts via systemd.
 
 In dependency order. Estimated sizes assume one focused engineer.
 
-### 1. PLUGIN-DECOUPLE-SERVER-CLOSURES (remaining work) — M
-Partially done in PR #887 + #888. **Remaining**: full container
-registration of `itunesservice.Service` so W3.1 (writebackbatcher),
-W5.1 (maintenance plugin), W5.2 (itunes plugin) can be un-stubbed.
+### 1. ~~PLUGIN-DECOUPLE-SERVER-CLOSURES (remaining work)~~ — DONE (PR #890)
 
-Blockers to address:
-- `itunesservice.Deps.ActivityFn` — closure over `server.activityService`.
-  Fix: register the closure in itunesservice's `register.go` Build using
-  `serviceregistry.Get[*activity.Service](c, "activity")` (in container).
-- `itunesservice.Deps.Realtime` — `*realtime.EventHub`. Needs `realtime`
-  package register.go (small).
-- `itunesservice.Deps.Logger` — `logger.Logger`. Needs a "logger" service
-  Override or registration (tiny).
-- `maintenance.ServerDeps` — multi-field struct of `*Server` references.
-  Refactor to pull each field individually via container at Build time.
+### 2. ~~PROMOTE-STUB-REGISTRATIONS~~ — partially DONE
+- writebackbatcher: PR #891 (promoted to real adapter), then PR #896
+  (adapter removed; *WriteBackBatcher registered directly after Start/Stop
+  signature align).
+- iTunes plugin: PR #892 (PostInit registers ops).
+- Maintenance plugin: **STILL DEFERRED**. `ServerDeps` is a 25-method
+  interface delegating to `*Server` closures over `bgCtx`/`bgWG`/
+  package-private helpers. Needs a multi-PR wave decomposing the `runX`
+  helpers into standalone services before this can build for real.
 
-After this: delete inline `itunesservice.New(...)` from `NewServer` (~25
-lines) and the inline `maintenanceplugin.New(server).Register(...)` block.
-
-### 2. PROMOTE-STUB-REGISTRATIONS — S
-Once #1 lands, change three stub Builds in
-`internal/itunes/service/register.go`,
-`internal/plugins/maintenance/register.go`,
-`internal/plugins/itunes/register.go` to return real instances pulled
-from the container.
-
-### 3. SERVER-LIFECYCLE-FLIP (remaining) — L
+### 3. SERVER-LIFECYCLE-FLIP (remaining) — M
 Wire `Container.Start(ctx)` into `Server.Start` and `Container.Stop(ctx)`
-into `Server.Shutdown`. **Per-service blockers** (each is its own small
-PR):
-- `updatescheduler` — register.go uses hard-coded `"dev"` version. Fix
-  by adding an `Override("appversion", appVersion)` from the server.
+into `Server.Shutdown`.
+
+**Per-service blockers — most are now done:**
+- ~~`updatescheduler`~~ — DONE (PR #894; `appversion` Override; adapter
+  exposed via `Scheduler()` accessor).
+- ~~`activitywriter`~~ — DONE (PR #893; pulled from container, inline
+  parallel construction deleted).
 - `searchindex` — Container's `Start` would open Bleve; conflicts with
-  the inline open in `server_lifecycle.go`. Pick one path.
-- `activitywriter` — inline `aw := activity.NewWriter(...)` in NewServer
-  creates a parallel writer. Delete the inline; pull from container.
+  the inline open in `server_lifecycle.go:369`. The unexported
+  `bleveIndexService` needs an exported wrapper type (or rename it) so
+  external packages can fetch and call `Index()`. Then either:
+  (a) wireServerFromContainer Starts the service inline and pulls the
+  index, or (b) full lifecycle-flip Starts it via Container.Start.
 
-After this: delete the inline `server.updateScheduler.Start()` +
-`s.opRegistry.Start(s.bgCtx)` + `s.opRegistry.Shutdown(regCtx)` calls.
+**Inline `Start()` calls still in NewServer that LIFECYCLE-FLIP removes:**
+- `server.updateScheduler.Start()` (line ~415)
+- `aw.Start(context.Background())` (activity writer, line ~568)
+- `server.itunesSvc.Batcher` lifecycle (Start is no-op; Stop is the
+  one called inline at `server_lifecycle.go:694`)
+- `s.opRegistry.Start(s.bgCtx)` + `s.opRegistry.Shutdown(regCtx)`
 
-### 4. W7.1 NEWSERVER-TRIM — M
-Natural output of the above. Target: `NewServer ≤ 50 lines`. The
-remaining ~410 lines after step #1 are inline plugin registration,
-hook wiring (`scanner.SetScanHooks`, `organizeService.SetOrganizeHooks`,
-maintenance.InjectStore, etc), and route registration. Move what's
-movable into PostInit on the relevant services.
+**To do this safely:** call `Container.Start(ctx)` early in `Server.Start`,
+then audit each Starter to confirm it's not also started inline. Mirror
+for `Container.Stop` in `Server.Shutdown`. The post-PR-#896 state already
+has `WriteBackBatcher.Start/Stop` matching the registry interfaces, so
+no adapter wrap is needed.
+
+### 4. W7.1 NEWSERVER-TRIM — M (in progress)
+**Status**: NewServer 462 → 390 lines (-72 net across PRs #890-#899).
+
+Remaining inline blocks all have documented coupling reasons:
+- **Auto-organize closure** (`server.scanService.AutoOrganizeFn`, ~40
+  lines) — captures `server.store` which the search-index decorator
+  rewrites in `Server.Start`. Moving the closure into
+  `scanner.PostInit` with container's `store` would skip the indexed
+  wrapper and break search reindex on auto-organize writes.
+- **Organize collision hook** (~5 lines) — `serverOrganizeHooks`
+  captures `*Server` (`bgCtx` + `bgWG` + cross-service helpers).
+- **Embedding backfill goroutine** (~7 lines) — wants `bgWG.Add(1)` for
+  shutdown coordination; couldn't move to a Starter without exposing
+  the wait-group to the dedup package.
+- **Activity-log residual** (~25 lines) — `log.SetOutput`,
+  `scanner.SetScanHooks`, `server.itunesActivityFn` closure, startup
+  ActivityEntry. All process-global or server-internal.
+- **ProtectedPathCache block** (~30 lines) — deluge.GetClient() global,
+  `metadata.SetSafeWriteDeps` global, `LibraryImporterAdapter` wraps
+  resolvedStore.
+- **AI scan store back-fill** (~3 lines) — extraOpsRegistrar isn't
+  itself a container service.
+- **Server-package services** (`OrganizeService.ScanEnqueuer`,
+  `ImportService.SetTrackProvisioner`, etc.) — closures over server
+  fields or in the `server` package directly.
+
+Hitting ≤50 lines requires:
+- Either moving extraOpsRegistrar + OrganizeService into the container
+  (~50 lines saved between them), or
+- Folding the auto-organize closure into a scanner-package method that
+  takes the *currently-active store* via accessor (refactor of
+  ScanService.AutoOrganizeFn signature), or
+- LIFECYCLE-FLIP (item #3) which deletes the inline Start/Stop calls.
 
 ### 5. SERVER-GLOBAL-STORE-AUDIT — XL (parallel-safe)
 ~120 production callers of `database.GetGlobalStore()`. Migrate
