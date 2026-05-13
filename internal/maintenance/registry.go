@@ -26,14 +26,11 @@ func Register(j MaintenanceJob) {
 	byID[j.ID()] = j
 }
 
-var enqueuer WriteBackEnqueuer
-
 // InjectEnqueuer injects the write-back enqueuer into all registered jobs
 // that implement EnqueuerInjectable.
 func InjectEnqueuer(e WriteBackEnqueuer) {
 	mu.Lock()
 	defer mu.Unlock()
-	enqueuer = e
 	for _, j := range registry {
 		if ei, ok := j.(EnqueuerInjectable); ok {
 			ei.InjectEnqueuer(e)

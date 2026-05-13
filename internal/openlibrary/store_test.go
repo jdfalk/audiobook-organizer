@@ -6,7 +6,6 @@ package openlibrary
 
 import (
 	"compress/gzip"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -146,7 +145,7 @@ func TestImportInvalidDumpType(t *testing.T) {
 	defer store.Close()
 
 	dumpPath := writeTSVGz(t, dir, "bad.txt.gz", []string{
-		fmt.Sprintf("/type/bad\tkey\t1\t2024-01-01\t{}"),
+		"/type/bad\tkey\t1\t2024-01-01\t{}",
 	})
 	err = store.ImportDump("invalid", dumpPath, nil)
 	assert.Error(t, err)
