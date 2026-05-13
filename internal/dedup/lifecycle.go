@@ -15,27 +15,32 @@ package dedup
 import (
 	"context"
 	"log"
+	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 )
 
-// PostInit wires the dedup engine into the plugin event bus. Called by
-// Container.PostInit after Build completes. The engine subscribes to
-// EventBookImported and runs CheckBook in its own goroutine with the
-// engine's bg-context (NOT the event publisher's ctx — see Q1 brainstorm
-// decision in deferred-work doc).
+// PostInit wires the dedup engine into the rest of the container. Called
+// by Container.PostInit after Build completes. Three steps:
+//
+//  1. Subscribe to plugin.EventBookImported via the eventbus so any source
+//     (iTunes import, filesystem watcher, manual upload) triggers a dedup
+//     check on the new book.
+//  2. Pull chromem-go ANN store (optional, soft) and wire it via
+//     SetChromemStore. Launch the chromem hydration goroutine on the
+//     engine's bg-context.
+//  3. Pull AIJobsStore (interface assertion against the main store) and
+//     wire it for async dedup review batches. Register the engine as the
+//     dedup verdict applier for batch callbacks.
 //
 // Safe to call when the engine is nil (Build returns nil when API key
 // isn't configured — typed-nil receiver allowed by Go method dispatch on
 // pointer types only when method has a nil-check, which we do).
 func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) error {
 	if de == nil {
-		return nil
-	}
-	bus, ok := serviceregistry.TryGet[*plugin.EventBus](c, "eventbus")
-	if !ok || bus == nil {
-		log.Printf("[dedup] PostInit: eventbus not available, skipping dedup-on-import subscription")
 		return nil
 	}
 	// Initialise the engine's own bg-context for subscriber goroutines.
@@ -47,10 +52,41 @@ func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) er
 	if de.bgCtx == nil {
 		de.bgCtx, de.bgCancel = context.WithCancel(context.Background())
 	}
+	bgCtx := de.bgCtx
 	de.bgMu.Unlock()
 
-	bus.Subscribe(plugin.EventBookImported, de.onBookImported)
-	log.Printf("[dedup] PostInit: subscribed to EventBookImported")
+	// Step 1 — event bus subscription
+	if bus, ok := serviceregistry.TryGet[*plugin.EventBus](c, "eventbus"); ok && bus != nil {
+		bus.Subscribe(plugin.EventBookImported, de.onBookImported)
+		log.Printf("[dedup] PostInit: subscribed to EventBookImported")
+	} else {
+		log.Printf("[dedup] PostInit: eventbus not available, skipping dedup-on-import subscription")
+	}
+
+	// Step 2 — chromem store + hydrate
+	if chromemStore, ok := serviceregistry.TryGet[*database.ChromemEmbeddingStore](c, "chromemstore"); ok && chromemStore != nil {
+		de.SetChromemStore(chromemStore)
+		log.Println("[INFO] chromem-go ANN store active for dedup Layer 2")
+		// Hydrate asynchronously on the engine's bg-context.
+		go func() {
+			hCtx, cancel := context.WithTimeout(bgCtx, 30*time.Minute)
+			defer cancel()
+			books, authors, err := de.HydrateChromem(hCtx)
+			if err != nil {
+				log.Printf("[WARN] chromem hydrate finished with error: %v (books=%d authors=%d)", err, books, authors)
+				return
+			}
+			log.Printf("[INFO] chromem hydrate complete: books=%d authors=%d", books, authors)
+		}()
+	}
+
+	// Step 3 — aijobs store + verdict applier
+	if jobs, ok := serviceregistry.TryGet[database.AIJobsStore](c, "aijobsstore"); ok && jobs != nil {
+		de.SetAIJobsStore(jobs)
+		ai.SetDedupVerdictApplier(de)
+		log.Println("[INFO] Dedup async review (aijobs) wired")
+	}
+
 	return nil
 }
 
