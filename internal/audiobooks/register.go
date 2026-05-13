@@ -1,5 +1,5 @@
 // file: internal/audiobooks/register.go
-// version: 1.0.0
+// version: 1.1.0
 
 package audiobooks
 
@@ -15,6 +15,14 @@ func init() {
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return NewAudiobookService(store), nil
+		},
+	})
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:  "organize",
+		Needs: []string{"store"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			store := serviceregistry.Get[database.Store](c, "store")
+			return NewOrganizeService(store), nil
 		},
 	})
 }
