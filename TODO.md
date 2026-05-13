@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.25.0 -->
+<!-- version: 8.26.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-13 -->
 
@@ -59,12 +59,12 @@ future agent) can scan the entire workspace in one page.
   - [ ] **W3** Start/Stop services (7 parallel + 1 serial integration)
   - [ ] **W4** Embedding/AI cluster (8 parallel + 1 serial integration)
   - [ ] **W5** UOS plugin migrations (5 parallel + 1 serial integration)
-  - [ ] **W6** Scheduler residual extraction — closes SERVER-THIN-RESIDUAL
+  - [x] **W6** Scheduler residual extraction — closes SERVER-THIN-RESIDUAL
   - [ ] **W7** Final cleanup (NewServer ≤ 50 lines, audit GetGlobalStore)
 
-- [ ] **SERVER-THIN-RESIDUAL** `scheduler_extra_ops.go` residual: 5 `*Server` receiver
-  methods (dedupEngine, dedupCache, aiScanStore, activityWriter, olService) — too coupled
-  to extract cleanly without a larger architectural refactor. Revisit after SERVER-PLUGIN-REG.
+- [x] **SERVER-THIN-RESIDUAL** `scheduler_extra_ops.go` residual extracted to
+  `internal/scheduler/extra_ops.go` as `*ExtraOpsRegistrar` (W6). All 13 ops moved;
+  server shim delegates via `s.extraOpsRegistrar`.
 
 - [ ] **SERVER-THIN-8** Fix pre-existing iTunes/organize/scan timeout failures
   (`TestITunesImport_*`, `TestOrganizeService_ViaHTTP`, `TestAddImportPathAutoScan`,
