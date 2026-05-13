@@ -31,6 +31,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
+	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
 	"github.com/jdfalk/audiobook-organizer/internal/watcher"
@@ -175,13 +176,24 @@ func (s *Server) resumeInterruptedOperations() {
 }
 
 func (s *Server) Start(cfg ServerConfig) error {
-	if err := s.itunesSvc.Start(s.bgCtx); err != nil {
-		return fmt.Errorf("itunes service start: %w", err)
-	}
-
-	// Start the UOS-02 operations registry (dispatcher + worker pool).
-	if s.opRegistry != nil {
-		s.opRegistry.Start(s.bgCtx)
+	// SERVER-LIFECYCLE-FLIP: drive Starter services via the container.
+	// Replaces the inline s.itunesSvc.Start / s.opRegistry.Start /
+	// updateScheduler.Start / activityWriter.Start calls. Container.Start
+	// runs services in resolved dep order; failures abort startup and
+	// roll back already-started services.
+	//
+	// Note: "searchindex" is registered as a Starter but the Bleve open
+	// stays inline below for now. There is a pre-existing race between
+	// the stripMovementAtoms/remuxMalformedM4BFiles goroutines (which
+	// read s.store) and the indexedStore decorator install. Starting the
+	// Bleve service eagerly here changes timing enough that the race
+	// manifests reliably. Folding searchindex into the container's
+	// Start path is deferred until the underlying store-install race
+	// is fixed independently.
+	if s.container != nil {
+		if err := s.container.Start(s.bgCtx); err != nil {
+			return fmt.Errorf("container start: %w", err)
+		}
 	}
 
 	// Pre-warm the facets cache in the background so the first Library page
@@ -366,18 +378,18 @@ func (s *Server) Start(cfg ServerConfig) error {
 		s.remuxMalformedM4BFiles()
 	}()
 
-	// Open the library search index (Bleve, spec DES-1). Opened here
-	// rather than in NewServer so tests that skip Start don't leak
-	// Bleve handles. Failures are non-fatal — server runs without
-	// search until the index comes back.
-	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && s.searchIndex == nil {
-		indexPath := filepath.Join(filepath.Dir(dbPath), "library.bleve")
-		idx, err := search.Open(indexPath)
-		if err != nil {
-			log.Printf("[WARN] Failed to open search index: %v", err)
-		} else {
-			s.searchIndex = idx
-			log.Printf("[INFO] Search index opened at %s", indexPath)
+	// Open the library search index (Bleve, spec DES-1) via the
+	// container's IndexService.OpenInline helper. Same lazy-open
+	// semantics as before — kept inline (rather than in
+	// IndexService.Start driven by Container.Start) because folding
+	// it into Container.Start exposes a pre-existing race between
+	// stripMovementAtoms / remuxMalformedM4BFiles goroutines that
+	// read s.store and the indexedStore decorator install below.
+	if s.container != nil && s.searchIndex == nil {
+		if idx, ok := serviceregistry.TryGet[*search.IndexService](s.container, "searchindex"); ok && idx != nil {
+			if bi := idx.OpenInline(); bi != nil {
+				s.searchIndex = bi
+			}
 		}
 	}
 
@@ -720,9 +732,18 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}
 
-	// Stop activity writer before closing store
-	if s.activityWriter != nil {
-		s.activityWriter.Stop(context.Background()) //nolint:errcheck
+	// SERVER-LIFECYCLE-FLIP: drive remaining Stoppers via the container.
+	// Runs in reverse resolved order; covers activityWriter (replaces
+	// the inline Stop here pre-flip), updateScheduler (previously never
+	// stopped — a leak), and any future Stopper additions. Inline Stops
+	// above remain the source of truth for the carefully-sequenced
+	// teardown (opRegistry drain before bgCancel, writeBackBatcher flush
+	// before itunesSvc.Shutdown, etc.); Container.Stop is idempotent on
+	// already-stopped services for those.
+	if s.container != nil {
+		if err := s.container.Stop(context.Background()); err != nil {
+			log.Printf("[WARN] container stop: %v", err)
+		}
 	}
 
 	// Close activity log store

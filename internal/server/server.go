@@ -409,12 +409,9 @@ func NewServer(store database.Store) *Server {
 	// internal/plugins/itunes/register.go ("itunesplugin"). No inline
 	// wiring is needed here.
 
-	// updater + updateScheduler are container-built (internal/updater/
-	// register.go) and wired in wireServerFromContainer. Start() stays
-	// inline until SERVER-LIFECYCLE-FLIP hands it off to Container.Start.
-	if server.updateScheduler != nil {
-		server.updateScheduler.Start()
-	}
+	// updater + updateScheduler are container-built and started by
+	// Container.Start() during Server.Start (SERVER-LIFECYCLE-FLIP).
+	// No inline Start() needed.
 
 	// OL dump store + ISBN enrichment wiring moved into metafetch.Service
 	// PostInit (internal/metafetch/lifecycle.go). The container drives
@@ -546,10 +543,11 @@ func NewServer(store database.Store) *Server {
 	// the itunesActivityFn closure, scanner.SetScanHooks (process-global),
 	// and the startup-record entry.
 	if server.activityService != nil {
-		// Start the writer + plumb the bits that aren't container services.
-		// aw.Start() moves into Container.Start under SERVER-LIFECYCLE-FLIP.
+		// activityWriter is started by Container.Start in Server.Start
+		// (SERVER-LIFECYCLE-FLIP). What stays inline here is the
+		// extraOpsRegistrar back-fill + log.SetOutput global, both of
+		// which need the writer reference but not its Start.
 		if aw := server.activityWriter; aw != nil {
-			aw.Start(context.Background()) //nolint:errcheck
 			server.extraOpsRegistrar.Deps.ActivityWriter = aw
 			log.SetOutput(aw)
 		}
