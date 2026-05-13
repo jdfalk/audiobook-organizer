@@ -47,6 +47,12 @@ type audiobookStore interface {
 	// Per-user filter pass on the listing endpoint reads UserBookState
 	// to evaluate read_status / progress_pct / last_played.
 	database.UserPositionStore
+	// Needed by isProtectedPath to compare absolute paths against
+	// configured import roots (SERVER-GLOBAL-STORE-AUDIT phase 6).
+	// Single method inline rather than database.ImportPathStore so
+	// the narrower audiobookUpdateStore adapter doesn't have to
+	// implement the full ImportPath CRUD surface.
+	GetAllImportPaths() ([]database.ImportPath, error)
 }
 
 // ITunesEnqueuer is the narrow surface AudiobookService uses to push
@@ -843,7 +849,7 @@ func splitMultipleNames(name string) []string {
 func (svc *AudiobookService) EnrichAudiobooksWithNames(books []database.Book) []AudiobookDetail {
 	enrichedBooks := make([]AudiobookDetail, 0, len(books))
 	for _, book := range books {
-		authorName, seriesName := resolveAuthorAndSeriesNames(&book)
+		authorName, seriesName := resolveAuthorAndSeriesNames(svc.store, &book)
 		detail := AudiobookDetail{Book: &book}
 		if authorName != "" {
 			detail.AuthorName = &authorName
@@ -875,14 +881,14 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 	}
 
 	// Load metadata state and extract file metadata
-	state, err := loadMetadataState(book.ID)
+	state, err := svc.loadMetadataState(book.ID)
 	if err != nil {
 		log.Printf("[ERROR] GetAudiobook: failed to load metadata state for %s: %v", book.ID, err)
 		// Don't fail the entire request, just use empty state
 		state = map[string]metadataFieldState{}
 	}
 
-	authorName, seriesName := resolveAuthorAndSeriesNames(book)
+	authorName, seriesName := resolveAuthorAndSeriesNames(svc.store, book)
 
 	meta := svc.extractBookFileMetadata(book, authorName)
 
@@ -919,13 +925,13 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 		return nil, fmt.Errorf("audiobook not found")
 	}
 
-	state, err := loadMetadataState(book.ID)
+	state, err := svc.loadMetadataState(book.ID)
 	if err != nil {
 		log.Printf("[ERROR] GetAudiobookTags: failed to load metadata state for %s: %v", book.ID, err)
 		state = map[string]metadataFieldState{}
 	}
 
-	authorName, seriesName := resolveAuthorAndSeriesNames(book)
+	authorName, seriesName := resolveAuthorAndSeriesNames(svc.store, book)
 
 	response := map[string]any{
 		"media_info": map[string]any{
@@ -992,7 +998,7 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 		}
 		snapshotBook, verErr := svc.store.GetBookAtVersion(id, ts)
 		if verErr == nil && snapshotBook != nil {
-			snapshotAuthorName, snapshotSeriesName := resolveAuthorAndSeriesNames(snapshotBook)
+			snapshotAuthorName, snapshotSeriesName := resolveAuthorAndSeriesNames(svc.store, snapshotBook)
 			comparisonValues = buildComparisonValuesFromBook(snapshotBook, snapshotAuthorName, snapshotSeriesName)
 		} else {
 			// Fallback: reconstruct "before" state from activity log old_values
@@ -1186,7 +1192,7 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 
 		// Step 3: Delete file if requested (only from organizer root, never from protected/import paths)
 		if deleteFiles && book.FilePath != "" {
-			if isProtectedPath(book.FilePath) {
+			if isProtectedPath(svc.store, book.FilePath) {
 				log.Printf("[DEBUG] purge: skipping file deletion for %s — protected path: %s", book.ID, book.FilePath)
 			} else {
 				info, statErr := os.Stat(book.FilePath)
@@ -1194,7 +1200,7 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 					// Directory-based book: remove all book files then the directory
 					if bookFiles, bfErr := svc.store.GetBookFiles(book.ID); bfErr == nil {
 						for _, bf := range bookFiles {
-							if bf.FilePath != "" && !isProtectedPath(bf.FilePath) {
+							if bf.FilePath != "" && !isProtectedPath(svc.store, bf.FilePath) {
 								if rmErr := os.Remove(bf.FilePath); rmErr != nil && !os.IsNotExist(rmErr) {
 									result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to delete book file %s: %v", book.ID, bf.FilePath, rmErr))
 								}
@@ -1375,7 +1381,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 	}
 
 	// Load and process metadata state
-	state, err := loadMetadataState(id)
+	state, err := svc.loadMetadataState(id)
 	if err != nil {
 		log.Printf("[ERROR] UpdateAudiobook: failed to load metadata state: %v", err)
 		return nil, fmt.Errorf("failed to load metadata state")
@@ -1637,7 +1643,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 	}
 
 	// Save metadata state
-	if err := saveMetadataState(id, state); err != nil {
+	if err := svc.saveMetadataState(id, state); err != nil {
 		log.Printf("[ERROR] UpdateAudiobook: failed to save metadata state: %v", err)
 		return nil, fmt.Errorf("failed to persist metadata state")
 	}

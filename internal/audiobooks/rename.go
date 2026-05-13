@@ -23,10 +23,19 @@ type RenameApplyResult = organizer.RenameApplyResult
 
 // NewRenameService creates a new organizer.RenameService and wires up
 // server-specific callbacks.
+//
+// IsProtectedPath / ResolveAuthorAndSeriesNames are bound to db via
+// closures so the helpers can be free functions that take a store
+// explicitly (SERVER-GLOBAL-STORE-AUDIT phase 6) without changing the
+// function-value signatures organizer.RenameService exposes.
 func NewRenameService(db database.Store) *RenameService {
 	svc := organizer.NewRenameService(db)
-	svc.IsProtectedPath = isProtectedPath
-	svc.ResolveAuthorAndSeriesNames = resolveAuthorAndSeriesNames
+	svc.IsProtectedPath = func(filePath string) bool {
+		return isProtectedPath(db, filePath)
+	}
+	svc.ResolveAuthorAndSeriesNames = func(book *database.Book) (string, string) {
+		return resolveAuthorAndSeriesNames(db, book)
+	}
 	svc.FilterUnchangedTags = metafetch.FilterUnchangedTags
 	svc.ComputeITunesPath = metafetch.ComputeITunesPath
 	return svc

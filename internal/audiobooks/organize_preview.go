@@ -19,11 +19,17 @@ type OrganizePreviewStep = organizer.PreviewStep
 type OrganizePreviewResponse = organizer.PreviewResponse
 type OrganizePreviewService = organizer.PreviewService
 
-// NewOrganizePreviewService creates a new organizer.PreviewService and wires up
-// server-specific callbacks.
+// NewOrganizePreviewService creates a new organizer.PreviewService and
+// wires up server-specific callbacks. IsProtectedPath /
+// ResolveAuthorAndSeriesNames bound to db via closures (see rename.go
+// for the rationale — SERVER-GLOBAL-STORE-AUDIT phase 6).
 func NewOrganizePreviewService(db database.Store) *OrganizePreviewService {
 	svc := organizer.NewPreviewService(db)
-	svc.IsProtectedPath = isProtectedPath
-	svc.ResolveAuthorAndSeriesNames = resolveAuthorAndSeriesNames
+	svc.IsProtectedPath = func(filePath string) bool {
+		return isProtectedPath(db, filePath)
+	}
+	svc.ResolveAuthorAndSeriesNames = func(book *database.Book) (string, string) {
+		return resolveAuthorAndSeriesNames(db, book)
+	}
 	return svc
 }

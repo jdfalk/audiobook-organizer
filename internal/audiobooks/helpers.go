@@ -85,12 +85,18 @@ func decodeRawValue(raw json.RawMessage) any {
 	return value
 }
 
-func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, error) {
+// loadLegacyMetadataState / loadMetadataState / saveMetadataState are now
+// methods on *AudiobookService so they read/write through svc.store
+// rather than the package-level GetGlobalStore (SERVER-GLOBAL-STORE-AUDIT
+// phase 6). Nil-safe: a zero-value AudiobookService falls back to
+// "database not initialized" same as the old GetGlobalStore == nil path.
+
+func (svc *AudiobookService) loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	state := map[string]metadataFieldState{}
-	if database.GetGlobalStore() == nil {
+	if svc == nil || svc.store == nil {
 		return state, nil
 	}
-	pref, err := database.GetGlobalStore().GetUserPreference(metadataStateKey(bookID))
+	pref, err := svc.store.GetUserPreference(metadataStateKey(bookID))
 	if err != nil {
 		return state, err
 	}
@@ -103,12 +109,12 @@ func loadLegacyMetadataState(bookID string) (map[string]metadataFieldState, erro
 	return state, nil
 }
 
-func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
+func (svc *AudiobookService) loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	state := map[string]metadataFieldState{}
-	if database.GetGlobalStore() == nil {
+	if svc == nil || svc.store == nil {
 		return state, fmt.Errorf("database not initialized")
 	}
-	stored, err := database.GetGlobalStore().GetMetadataFieldStates(bookID)
+	stored, err := svc.store.GetMetadataFieldStates(bookID)
 	if err != nil {
 		return state, err
 	}
@@ -123,24 +129,24 @@ func loadMetadataState(bookID string) (map[string]metadataFieldState, error) {
 	if len(state) > 0 {
 		return state, nil
 	}
-	legacy, err := loadLegacyMetadataState(bookID)
+	legacy, err := svc.loadLegacyMetadataState(bookID)
 	if err != nil {
 		return state, err
 	}
 	if len(legacy) == 0 {
 		return state, nil
 	}
-	if err := saveMetadataState(bookID, legacy); err != nil {
+	if err := svc.saveMetadataState(bookID, legacy); err != nil {
 		log.Printf("[WARN] failed to migrate legacy metadata state for %s: %v", bookID, err)
 	}
 	return legacy, nil
 }
 
-func saveMetadataState(bookID string, state map[string]metadataFieldState) error {
-	if database.GetGlobalStore() == nil {
+func (svc *AudiobookService) saveMetadataState(bookID string, state map[string]metadataFieldState) error {
+	if svc == nil || svc.store == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	existing, err := database.GetGlobalStore().GetMetadataFieldStates(bookID)
+	existing, err := svc.store.GetMetadataFieldStates(bookID)
 	if err != nil {
 		return err
 	}
@@ -169,13 +175,13 @@ func saveMetadataState(bookID string, state map[string]metadataFieldState) error
 			OverrideLocked: entry.OverrideLocked,
 			UpdatedAt:      entry.UpdatedAt,
 		}
-		if err := database.GetGlobalStore().UpsertMetadataFieldState(&dbState); err != nil {
+		if err := svc.store.UpsertMetadataFieldState(&dbState); err != nil {
 			return fmt.Errorf("failed to persist metadata state for %s: %w", field, err)
 		}
 		delete(existingFields, field)
 	}
 	for field := range existingFields {
-		if err := database.GetGlobalStore().DeleteMetadataFieldState(bookID, field); err != nil {
+		if err := svc.store.DeleteMetadataFieldState(bookID, field); err != nil {
 			return fmt.Errorf("failed to clean up metadata state for %s: %w", field, err)
 		}
 	}
@@ -222,13 +228,24 @@ func (mss *metadataStateSvc) recordChange(bookID, field, changeType, source stri
 
 // --- path helpers -----------------------------------------------------------
 
-// isProtectedPath returns true if filePath is under a configured import path,
-// an iTunes library path, or another protected location.
-func isProtectedPath(filePath string) bool {
+// importPathLister is the narrow slice isProtectedPath needs from any
+// store: just GetAllImportPaths. Both database.Store and the audiobook
+// service's narrower audiobookStore satisfy it.
+type importPathLister interface {
+	GetAllImportPaths() ([]database.ImportPath, error)
+}
+
+// isProtectedPath returns true if filePath is under a configured import
+// path, an iTunes library path, or another protected location. Takes an
+// explicit importPathLister so callers thread their own database
+// reference rather than reaching for the package global
+// (SERVER-GLOBAL-STORE-AUDIT phase 6). Pass nil to skip the import-path
+// check; the iTunes / .failed checks still apply.
+func isProtectedPath(store importPathLister, filePath string) bool {
 	absPath, _ := filepath.Abs(filePath)
 
-	if database.GetGlobalStore() != nil {
-		importPaths, err := database.GetGlobalStore().GetAllImportPaths()
+	if store != nil {
+		importPaths, err := store.GetAllImportPaths()
 		if err == nil {
 			for _, ip := range importPaths {
 				ipAbs, _ := filepath.Abs(ip.Path)
@@ -265,27 +282,26 @@ func isProtectedPath(filePath string) bool {
 	return false
 }
 
-// resolveAuthorAndSeriesNames returns the author name and series name for book,
-// falling back to a database lookup when the join is not pre-loaded.
-func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
+// resolveAuthorAndSeriesNames returns the author name and series name
+// for book, falling back to a database lookup when the join is not
+// pre-loaded. Takes an explicit store (SERVER-GLOBAL-STORE-AUDIT phase 6).
+// Nil store skips the lookups; inline Book.Author / Book.Series still
+// resolve.
+func resolveAuthorAndSeriesNames(store authorSeriesStore, book *database.Book) (string, string) {
 	authorName := ""
 	if book.Author != nil {
 		authorName = book.Author.Name
-	} else if book.AuthorID != nil {
-		if database.GetGlobalStore() != nil {
-			if author, err := database.GetGlobalStore().GetAuthorByID(*book.AuthorID); err == nil && author != nil {
-				authorName = author.Name
-			}
+	} else if book.AuthorID != nil && store != nil {
+		if author, err := store.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+			authorName = author.Name
 		}
 	}
 	seriesName := ""
 	if book.Series != nil {
 		seriesName = book.Series.Name
-	} else if book.SeriesID != nil {
-		if database.GetGlobalStore() != nil {
-			if series, err := database.GetGlobalStore().GetSeriesByID(*book.SeriesID); err == nil && series != nil {
-				seriesName = series.Name
-			}
+	} else if book.SeriesID != nil && store != nil {
+		if series, err := store.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+			seriesName = series.Name
 		}
 	}
 	return authorName, seriesName
