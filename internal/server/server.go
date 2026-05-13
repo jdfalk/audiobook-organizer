@@ -8,7 +8,6 @@ package server
 import (
 	"context"
 	"log"
-	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,9 +38,12 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
-	acoustidplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
-	dedupplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
-	delugeplug "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
+	// Blank-import the plugin packages so their init() functions run and
+	// the plugins register themselves with the serviceregistry. The
+	// container's PostInit calls Plugin.Register(opRegistry) for each.
+	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
+	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
+	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
 	itunesplug "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
 	maintenanceplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
@@ -319,8 +321,8 @@ func NewServer(store database.Store) *Server {
 	}
 
 	// SERVER-PLUGIN-REG: build the service registry container.
-	// W1 + W2 services come from the container; W3-W5 still construct
-	// inline below. IncludeAll() comes once all services are registered (W7).
+	// W1-W4 services flow through the container; remaining inline
+	// construction is for things still being migrated (W5+).
 	regCtx := context.Background()
 	includeNames := []string{
 		// W1 — leaf services
@@ -328,8 +330,19 @@ func NewServer(store database.Store) *Server {
 		"scan", "dashboard", "system", "configupdate", "metadatastate",
 		// W2 — cross-wired services
 		"metafetch", "merge", "organize", "quarantine", "eventbus",
-		// W3 — backend orchestration
-		"batchpoller",
+		// W3 — backend orchestration (only those with no inline-conflict)
+		"batchpoller", "opregistry", "ophub",
+		// W4 — embedding/AI cluster. Each Build is config-gated and
+		// returns typed nil when preconditions aren't met. The dedup
+		// engine's chromem/aijobs/embedding wiring stays inline in
+		// NewServer for now.
+		"embeddingstore", "embedclient", "llmparser", "chromemstore",
+		"aijobsstore", "dedup", "metadatascorer", "metadatallmscorer",
+		// W5 — UOS plugins. PostInit self-registers their op-defs
+		// against the container's opregistry. maintenanceplugin and
+		// itunesplugin are stubs (server-bound closures); their inline
+		// Register calls remain in NewServer below.
+		"dedupplugin", "acoustidplugin", "delugeplugin",
 	}
 	// `activity` (+ `activitystore`) only registers when DatabasePath is
 	// set — the NutsDB sidecar can't open without a path. Match the
@@ -372,11 +385,10 @@ func NewServer(store database.Store) *Server {
 	// needs explicit construction here.
 	server.pluginRegistry = plugin.Global()
 
-	// Initialize the UOS-02 operations registry. The registry holds the
-	// OperationDef registration table, dispatcher, and worker pool.
-	// Plugins register their defs in their own bot-tasks (UOS-03+).
-	server.opHub = opsregistry.NewEventHub()
-	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8, server.opHub)
+	// server.opHub + server.opRegistry are populated by
+	// wireServerFromContainer above (W3.5 RegistryWrapper). The dispatcher
+	// is started in Server.Start (server_lifecycle.go) where the bgCtx is
+	// available — same lifecycle as before.
 
 	// SERVER-THIN-RESIDUAL: build the ExtraOpsRegistrar before the opRegistrars
 	// loop so the 13 scheduler ops (scheduler_extra_ops.go shim) can delegate
@@ -584,17 +596,9 @@ func NewServer(store database.Store) *Server {
 				log.Println("[INFO] Embedding store and dedup engine initialized")
 				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
 
-				// Register UOS dedup plugin (UOS-07). Done here so the engine
-				// and embeddingStore are both available.
-				if err := dedupplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore).Register(server.opRegistry); err != nil {
-					log.Printf("[server] dedup plugin register: %v", err)
-				}
-
-				// Register acoustid plugin so acoustid.fingerprint-rescan
-				// and acoustid.scan op-defs are available via the UOS registry.
-				if err := acoustidplugin.New(server.dedupEngine, resolvedStore, server.embeddingStore).Register(server.opRegistry); err != nil {
-					log.Printf("[server] acoustid plugin register: %v", err)
-				}
+				// dedupplugin + acoustidplugin op-def registration is now
+				// done in their PostInit methods (W7). Container.PostInit()
+				// runs them earlier in NewServer (before this block).
 
 				// Dedup-on-import is now wired via SetScanHooks below
 				// (together with the activity recorder).
@@ -837,12 +841,8 @@ func NewServer(store database.Store) *Server {
 		// Register the Deluge plugin (UOS-11).
 		// Guard on RootDir: tests don't configure AppConfig, so RootDir="" and the
 		// mock store has no UpsertOpDefinitionV2 expectations.
-		if config.AppConfig.RootDir != "" && dc != nil && server.protectedPathCache != nil {
-			delugePlugin := delugeplug.New(dc, server.protectedPathCache, resolvedStore)
-			if err := delugePlugin.Register(server.opRegistry); err != nil {
-				log.Printf("[server] deluge plugin register: %v", err)
-			}
-		}
+		// delugePlugin op-def registration is now done in its PostInit
+		// method (W7). Container.PostInit() runs it earlier in NewServer.
 	}
 
 	server.setupRoutes()

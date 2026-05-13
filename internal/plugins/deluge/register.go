@@ -1,19 +1,22 @@
 // file: internal/plugins/deluge/register.go
-// version: 1.0.0
+// version: 1.1.0
 
-// Service registry registration for the deluge UOS plugin (W5).
+// Service registry registration for the deluge UOS plugin (W5/W7).
 //
 // Build returns nil when Deluge is not configured (no global client OR
-// no protected-path cache configured). Inline NewServer construction
-// continues to be the production path; W7 migrates registration to
-// PostInit.
+// no protected-path cache configured). PostInit self-registers the
+// plugin's op-defs.
 
 package deluge
 
 import (
+	"context"
+	"log"
+
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 )
 
@@ -32,4 +35,16 @@ func init() {
 			return New(client, cache, store), nil
 		},
 	})
+}
+
+func (p *Plugin) PostInit(ctx context.Context, c *serviceregistry.Container) error {
+	if p == nil {
+		return nil
+	}
+	wrapper, ok := serviceregistry.TryGet[*opsregistry.RegistryWrapper](c, "opregistry")
+	if !ok || wrapper == nil {
+		log.Printf("[plugins/deluge] PostInit: opregistry not available, skipping op-def registration")
+		return nil
+	}
+	return p.Register(wrapper.Registry)
 }
