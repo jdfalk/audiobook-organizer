@@ -224,7 +224,7 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 	}
 	httputil.RespondWithOK(c, gin.H{
 		"message": resp.Message,
-		"book":    enrichBookForResponseSingle(enrichedBook),
+		"book":    s.enrichBookForResponseSingle(enrichedBook),
 		"source":  resp.Source,
 	})
 }
@@ -328,7 +328,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	}
 	httputil.RespondWithOK(c, gin.H{
 		"message": resp.Message,
-		"book":    enrichBookForResponseSingle(enrichedBook),
+		"book":    s.enrichBookForResponseSingle(enrichedBook),
 		"source":  resp.Source,
 	})
 }
@@ -550,7 +550,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 			continue
 		}
 
-		state, err := loadMetadataState(bookID)
+		state, err := s.loadMetadataState(bookID)
 		if err != nil {
 			result.Status = "error"
 			result.Message = "failed to load metadata state"
@@ -777,7 +777,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		}
 
 		if len(fetchedValues) > 0 {
-			if err := updateFetchedMetadataState(bookID, fetchedValues); err != nil {
+			if err := s.updateFetchedMetadataState(bookID, fetchedValues); err != nil {
 				log.Printf("[WARN] bulkFetchMetadata: failed to persist fetched metadata state for %s: %v", bookID, err)
 			}
 		}

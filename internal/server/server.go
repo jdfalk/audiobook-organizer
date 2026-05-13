@@ -437,7 +437,10 @@ func NewServer(store database.Store) *Server {
 	// not a runtime dependency.
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
 		dbDir := filepath.Dir(dbPath)
-		if ps, ok := database.GetGlobalStore().(*database.PebbleStore); ok {
+		// resolvedStore captured above from NewServer's caller (or the
+		// global as fallback in test paths) — avoids a second
+		// GetGlobalStore() lookup here (SERVER-GLOBAL-STORE-AUDIT).
+		if ps, ok := resolvedStore.(*database.PebbleStore); ok {
 			if migrateErr := database.MigrateEmbeddingsFromSQLite(ps.DB(), filepath.Join(dbDir, "embeddings.db")); migrateErr != nil {
 				log.Printf("[WARN] embeddings.db migration error (continuing): %v", migrateErr)
 			}

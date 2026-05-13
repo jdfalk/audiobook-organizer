@@ -244,7 +244,7 @@ func TestGetAudiobookTagsReportsEffectiveSourceSimple(t *testing.T) {
 	require.NoError(t, err)
 
 	now := time.Now()
-	err = saveMetadataState(created.ID, map[string]metafetch.MetadataFieldState{
+	err = server.saveMetadataState(created.ID, map[string]metafetch.MetadataFieldState{
 		"title": {
 			FetchedValue:   "Fetched Title",
 			OverrideValue:  "Override Title",
@@ -680,7 +680,7 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = saveMetadataState(created.ID, map[string]metafetch.MetadataFieldState{
+	err = server.saveMetadataState(created.ID, map[string]metafetch.MetadataFieldState{
 		"publisher": {
 			OverrideValue:  "Manual Publisher",
 			OverrideLocked: true,
@@ -782,7 +782,7 @@ func TestBulkFetchMetadataRespectsOverridesAndMissingFields(t *testing.T) {
 	assert.Equal(t, "eng", *updatedBook.Language)
 	assert.NotNil(t, updatedBook.AuthorID)
 
-	state, err := loadMetadataState(created.ID)
+	state, err := server.loadMetadataState(created.ID)
 	require.NoError(t, err)
 	require.NotNil(t, state)
 	entry := state["publisher"]
@@ -1328,7 +1328,7 @@ func TestGetAudiobookTagsReportsEffectiveSource(t *testing.T) {
 			OverrideLocked: false,
 		},
 	}
-	require.NoError(t, saveMetadataState(book.ID, state))
+	require.NoError(t, server.saveMetadataState(book.ID, state))
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/audiobooks/%s/tags", book.ID), nil)
 	w := httptest.NewRecorder()
@@ -1401,7 +1401,7 @@ func TestUpdateAudiobookPersistsOverrides(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	state, err := loadMetadataState(book.ID)
+	state, err := server.loadMetadataState(book.ID)
 	require.NoError(t, err)
 
 	if assert.Contains(t, state, "title") {

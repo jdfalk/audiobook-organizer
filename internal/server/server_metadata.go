@@ -1,7 +1,7 @@
 // file: internal/server/server_metadata.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 588350bc-83db-47ed-9590-2b6513aadcda
-// last-edited: 2026-05-05
+// last-edited: 2026-05-13
 
 package server
 
@@ -45,10 +45,18 @@ func encodeMetadataValue(value any) (*string, error) {
 	return &encoded, nil
 }
 
-func loadLegacyMetadataState(bookID string) (map[string]metafetch.MetadataFieldState, error) {
-	state := map[string]metafetch.MetadataFieldState{}
+// These helpers are now methods on *Server so they use the server's
+// resolved store (SERVER-GLOBAL-STORE-AUDIT phase 3b). Callers in this
+// package update to s.loadMetadataState(...) / s.saveMetadataState(...).
 
-	pref, err := database.GetGlobalStore().GetUserPreference(metadataStateKey(bookID))
+func (s *Server) loadLegacyMetadataState(bookID string) (map[string]metafetch.MetadataFieldState, error) {
+	state := map[string]metafetch.MetadataFieldState{}
+	store := s.Store()
+	if store == nil {
+		return state, fmt.Errorf("database not initialized")
+	}
+
+	pref, err := store.GetUserPreference(metadataStateKey(bookID))
 	if err != nil {
 		return state, err
 	}
@@ -62,13 +70,14 @@ func loadLegacyMetadataState(bookID string) (map[string]metafetch.MetadataFieldS
 	return state, nil
 }
 
-func loadMetadataState(bookID string) (map[string]metafetch.MetadataFieldState, error) {
+func (s *Server) loadMetadataState(bookID string) (map[string]metafetch.MetadataFieldState, error) {
 	state := map[string]metafetch.MetadataFieldState{}
-	if database.GetGlobalStore() == nil {
+	store := s.Store()
+	if store == nil {
 		return state, fmt.Errorf("database not initialized")
 	}
 
-	stored, err := database.GetGlobalStore().GetMetadataFieldStates(bookID)
+	stored, err := store.GetMetadataFieldStates(bookID)
 	if err != nil {
 		return state, err
 	}
@@ -84,7 +93,7 @@ func loadMetadataState(bookID string) (map[string]metafetch.MetadataFieldState, 
 		return state, nil
 	}
 
-	legacy, err := loadLegacyMetadataState(bookID)
+	legacy, err := s.loadLegacyMetadataState(bookID)
 	if err != nil {
 		return state, err
 	}
@@ -92,18 +101,19 @@ func loadMetadataState(bookID string) (map[string]metafetch.MetadataFieldState, 
 		return state, nil
 	}
 
-	if err := saveMetadataState(bookID, legacy); err != nil {
+	if err := s.saveMetadataState(bookID, legacy); err != nil {
 		log.Printf("[WARN] failed to migrate legacy metadata state for %s: %v", bookID, err)
 	}
 	return legacy, nil
 }
 
-func saveMetadataState(bookID string, state map[string]metafetch.MetadataFieldState) error {
-	if database.GetGlobalStore() == nil {
+func (s *Server) saveMetadataState(bookID string, state map[string]metafetch.MetadataFieldState) error {
+	store := s.Store()
+	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
-	existing, err := database.GetGlobalStore().GetMetadataFieldStates(bookID)
+	existing, err := store.GetMetadataFieldStates(bookID)
 	if err != nil {
 		return err
 	}
@@ -135,14 +145,14 @@ func saveMetadataState(bookID string, state map[string]metafetch.MetadataFieldSt
 			UpdatedAt:      entry.UpdatedAt,
 		}
 
-		if err := database.GetGlobalStore().UpsertMetadataFieldState(&dbState); err != nil {
+		if err := store.UpsertMetadataFieldState(&dbState); err != nil {
 			return fmt.Errorf("failed to persist metadata state for %s: %w", field, err)
 		}
 		delete(existingFields, field)
 	}
 
 	for field := range existingFields {
-		if err := database.GetGlobalStore().DeleteMetadataFieldState(bookID, field); err != nil {
+		if err := store.DeleteMetadataFieldState(bookID, field); err != nil {
 			return fmt.Errorf("failed to clean up metadata state for %s: %w", field, err)
 		}
 	}
@@ -161,8 +171,8 @@ func decodeRawValue(raw json.RawMessage) any {
 	return value
 }
 
-func updateFetchedMetadataState(bookID string, values map[string]any) error {
-	state, err := loadMetadataState(bookID)
+func (s *Server) updateFetchedMetadataState(bookID string, values map[string]any) error {
+	state, err := s.loadMetadataState(bookID)
 	if err != nil {
 		return err
 	}
@@ -175,15 +185,16 @@ func updateFetchedMetadataState(bookID string, values map[string]any) error {
 		entry.UpdatedAt = time.Now()
 		state[field] = entry
 	}
-	return saveMetadataState(bookID, state)
+	return s.saveMetadataState(bookID, state)
 }
 
-func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
+func (s *Server) resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
 	authorName := ""
+	store := s.Store()
 	if book.Author != nil {
 		authorName = book.Author.Name
-	} else if book.AuthorID != nil {
-		if author, err := database.GetGlobalStore().GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+	} else if book.AuthorID != nil && store != nil {
+		if author, err := store.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
 			authorName = author.Name
 		}
 	}
@@ -191,8 +202,8 @@ func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
 	seriesName := ""
 	if book.Series != nil {
 		seriesName = book.Series.Name
-	} else if book.SeriesID != nil {
-		if series, err := database.GetGlobalStore().GetSeriesByID(*book.SeriesID); err == nil && series != nil {
+	} else if book.SeriesID != nil && store != nil {
+		if series, err := store.GetSeriesByID(*book.SeriesID); err == nil && series != nil {
 			seriesName = series.Name
 		}
 	}
@@ -203,13 +214,12 @@ func resolveAuthorAndSeriesNames(book *database.Book) (string, string) {
 // batchFetchBookAuthorsAndNarrators pre-fetches author and narrator join table
 // entries plus their full details for all given books. Returns maps keyed by
 // book ID for join entries, plus maps keyed by author/narrator ID for details.
-// Nil maps are returned if the global store is not available.
-func batchFetchBookAuthorsAndNarrators(bookIDs []string) (map[string][]database.BookAuthor, map[int]*database.Author, map[string][]database.BookNarrator, map[int]*database.Narrator) {
-	if len(bookIDs) == 0 || database.GetGlobalStore() == nil {
+// Nil maps are returned if the server's store is not available.
+func (s *Server) batchFetchBookAuthorsAndNarrators(bookIDs []string) (map[string][]database.BookAuthor, map[int]*database.Author, map[string][]database.BookNarrator, map[int]*database.Narrator) {
+	store := s.Store()
+	if len(bookIDs) == 0 || store == nil {
 		return nil, nil, nil, nil
 	}
-
-	store := database.GetGlobalStore()
 
 	// Collect all book authors and extract author IDs
 	bookAuthorsMap := make(map[string][]database.BookAuthor)
@@ -256,17 +266,17 @@ func batchFetchBookAuthorsAndNarrators(bookIDs []string) (map[string][]database.
 
 // enrichBookForResponseSingle enriches a single book by pre-fetching its
 // author and narrator data. Convenience wrapper for single-book endpoints.
-func enrichBookForResponseSingle(book *database.Book) enrichedBookResponse {
-	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := batchFetchBookAuthorsAndNarrators([]string{book.ID})
-	return enrichBookForResponse(book, bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
+func (s *Server) enrichBookForResponseSingle(book *database.Book) enrichedBookResponse {
+	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := s.batchFetchBookAuthorsAndNarrators([]string{book.ID})
+	return s.enrichBookForResponse(book, bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
 }
 
 // enrichBookForResponse resolves author, series, and narrator names from join
 // tables so the JSON response contains all the fields the frontend expects.
 // Pre-fetched maps of authors and narrators (by book ID) are used instead of
 // per-book DB calls to eliminate N+1 queries.
-func enrichBookForResponse(book *database.Book, bookAuthorsMap map[string][]database.BookAuthor, authorsByID map[int]*database.Author, bookNarratorsMap map[string][]database.BookNarrator, narratorsByID map[int]*database.Narrator) enrichedBookResponse {
-	authorName, seriesName := resolveAuthorAndSeriesNames(book)
+func (s *Server) enrichBookForResponse(book *database.Book, bookAuthorsMap map[string][]database.BookAuthor, authorsByID map[int]*database.Author, bookNarratorsMap map[string][]database.BookNarrator, narratorsByID map[int]*database.Narrator) enrichedBookResponse {
+	authorName, seriesName := s.resolveAuthorAndSeriesNames(book)
 	resp := enrichedBookResponse{Book: book}
 	if authorName != "" {
 		resp.AuthorName = &authorName
@@ -325,8 +335,8 @@ func enrichBookForResponse(book *database.Book, bookAuthorsMap map[string][]data
 	// Populate metadata_source_hash_duplicate_count if this book has a hash.
 	// This lets the BookDetail UI warn about possible duplicates without an
 	// extra round-trip.
-	if book.MetadataSourceHash != nil && *book.MetadataSourceHash != "" && database.GetGlobalStore() != nil {
-		if matches, err := database.GetGlobalStore().GetBooksByMetadataSourceHash(*book.MetadataSourceHash); err == nil {
+	if hashStore := s.Store(); book.MetadataSourceHash != nil && *book.MetadataSourceHash != "" && hashStore != nil {
+		if matches, err := hashStore.GetBooksByMetadataSourceHash(*book.MetadataSourceHash); err == nil {
 			count := 0
 			for _, m := range matches {
 				if m.ID != book.ID {
