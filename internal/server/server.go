@@ -314,9 +314,8 @@ func NewServer(store database.Store) *Server {
 		dedupCache:             cache.New[gin.H]("dedup", 24*time.Hour),
 		listCache:              cache.New[gin.H]("list", 24*time.Hour),
 		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
-		olService:              metafetch.NewOpenLibraryService(),
-		// updater + updateScheduler are container-built (see
-		// internal/updater/register.go). wireServerFromContainer sets them.
+		// olService, updater, updateScheduler are container-built;
+		// wireServerFromContainer populates the fields.
 		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
 		changelogService:       activity.NewChangelogService(resolvedStore),
 	}
@@ -417,18 +416,9 @@ func NewServer(store database.Store) *Server {
 		server.updateScheduler.Start()
 	}
 
-	// Wire OL dump store into metadata fetch service for local-first lookups
-	if server.olService != nil && server.olService.Store() != nil {
-		server.metadataFetchService.SetOLStore(server.olService.Store())
-	}
-
-	// Wire ISBN enrichment service into metadata fetch service
-	isbnSources := server.metadataFetchService.BuildSourceChain()
-	if len(isbnSources) > 0 {
-		server.metadataFetchService.SetISBNEnrichment(
-			metafetch.NewISBNService(database.GetGlobalStore(), isbnSources),
-		)
-	}
+	// OL dump store + ISBN enrichment wiring moved into metafetch.Service
+	// PostInit (internal/metafetch/lifecycle.go). The container drives
+	// these now; no inline server-side wiring needed.
 
 	// Wire AI scan store into main PebbleDB (aiscan: key namespace, no separate file).
 	// BatchPoller is now registered via serviceregistry (W3).
