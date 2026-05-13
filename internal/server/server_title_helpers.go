@@ -204,8 +204,15 @@ func extractTitleFromSegmentFilename(filename string) string {
 	return name
 }
 
-func reassignExternalIDsForFiles(sourceBookID, targetBookID string, files []database.BookFile) {
-	eidStore := asExternalIDStore(database.GetGlobalStore())
+// reassignExternalIDsForFiles is now a method on *Server so it uses
+// the server's resolved store rather than the package-level
+// GetGlobalStore (SERVER-GLOBAL-STORE-AUDIT phase 3a).
+func (s *Server) reassignExternalIDsForFiles(sourceBookID, targetBookID string, files []database.BookFile) {
+	store := s.Store()
+	if store == nil {
+		return
+	}
+	eidStore := asExternalIDStore(store)
 	if eidStore == nil {
 		return
 	}
@@ -242,7 +249,7 @@ func reassignExternalIDsForFiles(sourceBookID, targetBookID string, files []data
 	// Reassign each mapping: delete old reverse key, update primary, add new reverse key
 	for _, m := range toMove {
 		oldReverseKey := fmt.Sprintf("ext_id:book:%s:%s:%s", sourceBookID, m.Source, m.ExternalID)
-		_ = database.GetGlobalStore().DeleteRaw(oldReverseKey)
+		_ = store.DeleteRaw(oldReverseKey)
 
 		m.BookID = targetBookID
 		if createErr := eidStore.CreateExternalIDMapping(&m); createErr != nil {

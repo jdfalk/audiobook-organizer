@@ -366,7 +366,7 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 		_ = s.Store().MoveBookFilesToBook([]string{fileID}, sourceBook.ID, created.ID)
 
 		// Reassign external ID mappings (iTunes PIDs) that belong to the moved file
-		reassignExternalIDsForFiles(sourceBook.ID, created.ID, []database.BookFile{f})
+		s.reassignExternalIDsForFiles(sourceBook.ID, created.ID, []database.BookFile{f})
 
 		createdBooks = append(createdBooks, created)
 	}
@@ -469,7 +469,7 @@ func (s *Server) moveSegments(c *gin.Context) {
 	}
 
 	// 6. Reassign external ID mappings (iTunes PIDs) for moved files
-	reassignExternalIDsForFiles(id, req.TargetBookID, movedFiles)
+	s.reassignExternalIDsForFiles(id, req.TargetBookID, movedFiles)
 
 	httputil.RespondWithOK(c, gin.H{
 		"segments_moved": len(req.SegmentIDs),

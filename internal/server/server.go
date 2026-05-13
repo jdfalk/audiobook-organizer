@@ -490,6 +490,7 @@ func NewServer(store database.Store) *Server {
 	// `if batcher != nil` guards already in place.
 	server.writeBackBatcher = server.itunesSvc.Batcher
 	server.fileIOPool = NewFileIOPool(4)
+	server.fileIOPool.SetStore(resolvedStore)
 
 	// writeBackBatcher fan-out into metafetch / merge / quarantine /
 	// audiobook now happens in those services' PostInit hooks (they pull

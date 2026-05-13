@@ -1311,7 +1311,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 			}
 		}
 		if len(tagMap) > 0 {
-			if isProtectedPath(updatedBook.FilePath) {
+			if s.isProtectedPath(updatedBook.FilePath) {
 				log.Printf("[INFO] skipping write-back for protected path: %s", updatedBook.FilePath)
 			} else {
 				opConfig := fileops.OperationConfig{VerifyChecksums: true}
