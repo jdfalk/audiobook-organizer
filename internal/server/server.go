@@ -593,6 +593,7 @@ func NewServer(store database.Store) *Server {
 			return
 		}
 		org := organizer.NewOrganizer(&config.AppConfig)
+		org.SetStore(server.Store())
 		organized := 0
 		for i := range books {
 			if l.IsCanceled() {

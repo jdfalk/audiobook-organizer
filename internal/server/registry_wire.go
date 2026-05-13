@@ -231,7 +231,9 @@ func init() {
 				EventBus:      bus,
 				Metafetch:     mf,
 				OrganizerFactory: func() itunesservice.BookOrganizer {
-					return organizer.NewOrganizer(cfg)
+					org := organizer.NewOrganizer(cfg)
+					org.SetStore(store)
+					return org
 				},
 			})
 			if err != nil {

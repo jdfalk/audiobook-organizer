@@ -153,6 +153,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 
 	oldPath := book.FilePath
 	org := organizer.NewOrganizer(&config.AppConfig)
+	org.SetStore(s.Store())
 	log2 := logger.NewWithActivityLog("organize", s.Store())
 
 	// Determine whether this is a directory-based (multi-file) book.

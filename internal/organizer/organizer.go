@@ -38,11 +38,23 @@ var ErrTargetOccupied = errors.New("organize: target path already occupied by a 
 type Organizer struct {
 	config *config.Config
 	hooks  OrganizeHooks
+	// store is the optional backing database. Used for duplicate-file
+	// detection, self-owned-target checks, and author/series
+	// resolution. Nil store → those lookups skip with the same
+	// semantics the pre-audit `GetGlobalStore() == nil` branches had
+	// (SERVER-GLOBAL-STORE-AUDIT phase 5).
+	store database.Store
 }
 
 // SetHooks sets the optional organize hooks (e.g. collision callback).
 func (o *Organizer) SetHooks(hooks OrganizeHooks) {
 	o.hooks = hooks
+}
+
+// SetStore wires the database used for duplicate-file + author/series
+// lookups. Idempotent; pass nil to disable lookups.
+func (o *Organizer) SetStore(s database.Store) {
+	o.store = s
 }
 
 const (
@@ -110,8 +122,8 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, string, error) {
 	// content already exists at another path under root would hit the
 	// target-exists branch first (seeing the OLD organized version) and
 	// silently no-op. Order matters.
-	if book.FileHash != nil && *book.FileHash != "" && database.GetGlobalStore() != nil {
-		existingBook, err := database.GetGlobalStore().GetBookByFileHash(*book.FileHash)
+	if book.FileHash != nil && *book.FileHash != "" && o.store != nil {
+		existingBook, err := o.store.GetBookByFileHash(*book.FileHash)
 		if err == nil && existingBook != nil && existingBook.ID != book.ID {
 			if strings.HasPrefix(existingBook.FilePath, o.config.RootDir) {
 				// Content-identical book already organized under a
@@ -145,8 +157,8 @@ func (o *Organizer) OrganizeBook(book *database.Book) (string, string, error) {
 		// Case 2: ask the DB who owns the target. If it's the current
 		// book, this is a re-organize no-op — don't panic, don't fire
 		// the collision hook, just return the target.
-		if database.GetGlobalStore() != nil && book.ID != "" {
-			if owner, lookupErr := database.GetGlobalStore().GetBookByFilePath(targetPath); lookupErr == nil && owner != nil && owner.ID == book.ID {
+		if o.store != nil && book.ID != "" {
+			if owner, lookupErr := o.store.GetBookByFilePath(targetPath); lookupErr == nil && owner != nil && owner.ID == book.ID {
 				return targetPath, "", nil
 			}
 		}
@@ -271,9 +283,9 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) (string, 
 		if trimmed := strings.TrimSpace(book.Author.Name); trimmed != "" {
 			authorName = trimmed
 		}
-	} else if book.AuthorID != nil && database.GetGlobalStore() != nil {
+	} else if book.AuthorID != nil && o.store != nil {
 		// Author object not populated, but we have an ID - look it up
-		author, err := database.GetGlobalStore().GetAuthorByID(*book.AuthorID)
+		author, err := o.store.GetAuthorByID(*book.AuthorID)
 		if err == nil && author != nil {
 			if trimmed := strings.TrimSpace(author.Name); trimmed != "" {
 				authorName = trimmed
@@ -290,9 +302,9 @@ func (o *Organizer) expandPattern(pattern string, book *database.Book) (string, 
 	seriesName := ""
 	if book.Series != nil {
 		seriesName = strings.TrimSpace(book.Series.Name)
-	} else if book.SeriesID != nil && database.GetGlobalStore() != nil {
+	} else if book.SeriesID != nil && o.store != nil {
 		// Series object not populated, but we have an ID - look it up
-		series, err := database.GetGlobalStore().GetSeriesByID(*book.SeriesID)
+		series, err := o.store.GetSeriesByID(*book.SeriesID)
 		if err == nil && series != nil {
 			seriesName = strings.TrimSpace(series.Name)
 		}
