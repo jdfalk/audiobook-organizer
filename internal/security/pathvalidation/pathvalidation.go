@@ -179,15 +179,21 @@ func SecureJoinResolved(root string, parts ...string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("evaluating symlinks for root %q: %w", root, err)
 	}
+	realRoot = filepath.Clean(realRoot)
 
 	// Resolve symlinks in the joined path.
 	realJoined, err := filepath.EvalSymlinks(joined)
 	if err != nil {
-		// Path doesn't exist yet — fall back to a clean static check.
-		realJoined = joined
-		realRoot = filepath.Clean(realRoot)
-	} else {
-		realRoot = filepath.Clean(realRoot)
+		// Path doesn't exist yet — both sides of the comparison must
+		// use the SAME root form, otherwise a symlinked tmpdir like
+		// macOS's /var/folders → /private/var/folders falsely fails:
+		// realRoot resolves to /private/var/folders/... but realJoined
+		// stays at /var/folders/... so isWithinRoot returns false.
+		//
+		// Walk the joined path upward to the first existing ancestor,
+		// EvalSymlinks that, then append the non-existent suffix. The
+		// resulting realJoined now lives under the same realRoot tree.
+		realJoined = resolveExistingPrefix(joined)
 	}
 
 	if !isWithinRoot(realJoined, realRoot) {
@@ -195,6 +201,34 @@ func SecureJoinResolved(root string, parts ...string) (string, error) {
 	}
 
 	return realJoined, nil
+}
+
+// resolveExistingPrefix walks a path upward to the first existing ancestor,
+// resolves symlinks on that ancestor, then re-appends the non-existent
+// suffix. This makes traversal checks consistent across paths that will
+// soon exist but currently don't (e.g. the file the caller is about to
+// create).
+func resolveExistingPrefix(path string) string {
+	clean := filepath.Clean(path)
+	suffix := ""
+	for {
+		resolved, err := filepath.EvalSymlinks(clean)
+		if err == nil {
+			if suffix == "" {
+				return resolved
+			}
+			return filepath.Join(resolved, suffix)
+		}
+		parent := filepath.Dir(clean)
+		if parent == clean {
+			// Reached the root and still couldn't resolve — fall back
+			// to the cleaned path so the static prefix check at least
+			// sees a normalized form.
+			return filepath.Clean(path)
+		}
+		suffix = filepath.Join(filepath.Base(clean), suffix)
+		clean = parent
+	}
 }
 
 // isWithinRoot reports whether path is equal to root or is directly contained
