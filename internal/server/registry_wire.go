@@ -212,6 +212,13 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	if svc, ok := serviceregistry.TryGet[*activity.Service](c, "activity"); ok {
 		s.activityService = svc
 	}
+	// activitywriter is in the "activity" group (same conditional). NewServer
+	// drives Start inline today; SERVER-LIFECYCLE-FLIP will hand that off to
+	// Container.Start (Writer.Start/Stop already match the Starter/Stopper
+	// signatures so no adapter is needed).
+	if aw, ok := serviceregistry.TryGet[*activity.Writer](c, "activitywriter"); ok {
+		s.activityWriter = aw
+	}
 
 	// W3 services
 	// batchpoller is conditional on OpenAI config — pull via TryGet.
