@@ -1,14 +1,18 @@
 // file: internal/server/registry_wire.go
-// version: 1.2.0
+// version: 1.3.0
 
 package server
 
 import (
+	"path/filepath"
+
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
 	"github.com/jdfalk/audiobook-organizer/internal/batch"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
@@ -21,11 +25,16 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/work"
 )
 
-// init registers the `system` service. It lives here (not in
-// internal/sysinfo) because NewSystemService needs appVersion (a
-// package-level var in this package) and calculateLibrarySizes (a
-// function in this package). Both stay where they are; the registry
-// closure just captures them.
+// init registers services that can't live in their domain packages due
+// to import cycles or because they need package-private symbols from
+// internal/server.
+//
+//   - `system` — needs appVersion + calculateLibrarySizes from this pkg.
+//   - `embeddingstore`, `chromemstore`, `aijobsstore` — live in
+//     internal/database which can't import internal/config (cycle).
+//   - `dedup` (the engine) — needs *config.Config to read thresholds;
+//     internal/dedup doesn't already import internal/config, so registering
+//     here avoids forcing a new dependency on that pkg.
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
 		Name:  "system",
@@ -33,6 +42,84 @@ func init() {
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return sysinfo.NewSystemService(store, appVersion, calculateLibrarySizes), nil
+		},
+	})
+
+	// embeddingstore — Pebble-backed key namespace for dedup embeddings.
+	// Returns nil if the underlying store isn't *PebbleStore (e.g. tests).
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:  "embeddingstore",
+		Needs: []string{"store"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			store := serviceregistry.Get[database.Store](c, "store")
+			ps, ok := store.(*database.PebbleStore)
+			if !ok {
+				return (*database.EmbeddingStore)(nil), nil
+			}
+			return database.NewEmbeddingStore(ps.DB()), nil
+		},
+	})
+
+	// chromemstore — chromem-go ANN vector store for dedup Layer 2.
+	// Optional; failure logs a warning + returns nil so dedup falls back
+	// to the Pebble linear scan.
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:  "chromemstore",
+		Needs: []string{"config"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			cfg := serviceregistry.Get[*config.Config](c, "config")
+			if cfg.DatabasePath == "" {
+				return (*database.ChromemEmbeddingStore)(nil), nil
+			}
+			dir := filepath.Dir(cfg.DatabasePath)
+			store, err := database.NewChromemEmbeddingStore(dir, 3072)
+			if err != nil {
+				return (*database.ChromemEmbeddingStore)(nil), nil
+			}
+			return store, nil
+		},
+	})
+
+	// aijobsstore — interface assertion on the main store.
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:  "aijobsstore",
+		Needs: []string{"store"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			store := serviceregistry.Get[database.Store](c, "store")
+			if s, ok := store.(database.AIJobsStore); ok {
+				return s, nil
+			}
+			return database.AIJobsStore(nil), nil
+		},
+	})
+
+	// dedup — the duplicate detection engine.
+	// Returns nil if any required dep is missing (no API key, no embed
+	// client, etc.) — matches the existing inline conditional construction
+	// in NewServer.
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:  "dedup",
+		Needs: []string{"store", "config", "embeddingstore", "embedclient", "llmparser", "merge"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			cfg := serviceregistry.Get[*config.Config](c, "config")
+			if cfg.OpenAIAPIKey == "" || !cfg.EmbeddingEnabled {
+				return (*dedup.Engine)(nil), nil
+			}
+			embStore, _ := serviceregistry.TryGet[*database.EmbeddingStore](c, "embeddingstore")
+			embClient, _ := serviceregistry.TryGet[*ai.EmbeddingClient](c, "embedclient")
+			llmParser, _ := serviceregistry.TryGet[*ai.OpenAIParser](c, "llmparser")
+			if embStore == nil || embClient == nil || llmParser == nil {
+				return (*dedup.Engine)(nil), nil
+			}
+			store := serviceregistry.Get[database.Store](c, "store")
+			mergeSvc := serviceregistry.Get[*merge.Service](c, "merge")
+			engine := dedup.NewEngine(embStore, store, embClient, llmParser, mergeSvc)
+			engine.BookHighThreshold = cfg.DedupBookHighThreshold
+			engine.BookLowThreshold = cfg.DedupBookLowThreshold
+			engine.AuthorHighThreshold = cfg.DedupAuthorHighThreshold
+			engine.AuthorLowThreshold = cfg.DedupAuthorLowThreshold
+			engine.AutoMergeEnabled = cfg.DedupAutoMergeEnabled
+			return engine, nil
 		},
 	})
 }
