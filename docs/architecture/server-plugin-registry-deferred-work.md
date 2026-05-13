@@ -1,5 +1,5 @@
 <!-- file: docs/architecture/server-plugin-registry-deferred-work.md -->
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->
 <!-- last-edited: 2026-05-13 -->
 
 # SERVER-PLUGIN-REG — Deferred Work Plan
@@ -23,14 +23,17 @@ inline-and-container parallel-construction state can be unwound safely.
 
 | Ticket | Size | Risk | Blocks |
 |--------|------|------|--------|
+| **REGISTRY-NAMED-GROUPS** | S (½ day) | None | — (foundation for others) |
 | **PLUGIN-DECOUPLE-SERVER-CLOSURES** | M (1–2 days) | Medium | LIFECYCLE-FLIP, W7.1 |
+| **PROMOTE-STUB-REGISTRATIONS** | S (½ day) | Low | — |
 | **SERVER-LIFECYCLE-FLIP** | L (3–5 days) | Medium–high | W7.1 |
-| **SERVER-GLOBAL-STORE-AUDIT** | XL (1–2 weeks) | Low–medium | — |
 | **W7.1 NEWSERVER-TRIM** | M (1 day) | Low | — |
-| **PROMOTE-STUB-REGISTRATIONS** | S (half day) | Low | — |
+| **SERVER-GLOBAL-STORE-AUDIT** | XL (1–2 weeks) | Low–medium | — |
+| **TEST-GLOBAL-STORE-MIGRATION** | M (1–2 days) | Low | end-state cleanup |
 
-Dependency order: `PLUGIN-DECOUPLE` → `PROMOTE-STUBS` → `LIFECYCLE-FLIP` →
-`W7.1`. `GLOBAL-STORE-AUDIT` is independent and can run in parallel.
+Dependency order: `REGISTRY-NAMED-GROUPS` → `PLUGIN-DECOUPLE` → `PROMOTE-STUBS`
+→ `LIFECYCLE-FLIP` → `W7.1`. `GLOBAL-STORE-AUDIT` is parallel-safe.
+`TEST-GLOBAL-STORE-MIGRATION` follows after `GLOBAL-STORE-AUDIT` lands.
 
 ---
 
@@ -452,7 +455,8 @@ Two-track approach. Track A is structural; Track B is the long-tail cleanup.
 ```
 Track A (structural)
 ═════════════════════
-1. PLUGIN-DECOUPLE-SERVER-CLOSURES     ┐
+0. REGISTRY-NAMED-GROUPS               ┐  ½ day (foundation)
+1. PLUGIN-DECOUPLE-SERVER-CLOSURES     │
 2. PROMOTE-STUB-REGISTRATIONS          ├─ ~1 week
 3. SERVER-LIFECYCLE-FLIP (3a, 3c)      │
 4. SERVER-LIFECYCLE-FLIP (3d)          ├─ ~1 week
@@ -463,21 +467,131 @@ Track B (parallel)
 ═════════════════════
 1-12. SERVER-GLOBAL-STORE-AUDIT (one PR per file/cluster)
                                        ~2 weeks (parallel)
+
+Track C (after Track B)
+═════════════════════
+1. TEST-GLOBAL-STORE-MIGRATION         ~1-2 days
 ```
 
 Total: 2-3 weeks of focused work for one engineer; could compress with parallel
 agents on the Track B sweep.
 
-## Open questions for the next planning session
+## Resolved design decisions (May 13, 2026 brainstorm)
 
-1. Does the event-bus refactor change the semantics of `OnBookCreated` enough
-   to warrant deeper testing? (E.g., what if the subscriber panics — does the
-   itunes import fail or just log?)
-2. For W7.1, should NewServer fully delegate to the container, or is there
-   value in keeping the explicit phase calls visible for debugging?
-3. Is `database.GetGlobalStore` worth keeping as a test affordance, or should
-   tests also migrate to per-test container construction (more correct,
-   bigger change)?
-4. What's the policy on `IncludeAll()` vs explicit `Include(...)` lists?
-   IncludeAll is cleaner but means accidentally registering a heavy service
-   you didn't intend; explicit Include is verbose but auditable.
+### Q1 — Event-bus semantics for `BookCreated`
+
+**Decision: async dispatch, panic-isolated subscribers, decoupled contexts.**
+
+- `EventBus.Publish(ctx, evt)` returns immediately. Publisher's ctx gates only
+  the dispatch enqueue — used for bounded-channel back-pressure, e.g.
+  `select { case b.dispatch <- evt: case <-ctx.Done(): return }`.
+- Subscribers run in their own goroutines, each wrapped in `recover()` so a
+  panicking subscriber can't crash the publisher.
+- Subscribers receive the **bus's lifecycle context**, NOT the publisher's
+  ctx. A canceled publisher ctx = "drop on the floor"; a canceled bus ctx =
+  "shutdown signal to all subscribers."
+- Errors from subscribers are logged but never propagated back to the publisher.
+
+This matches the existing `OnBookCreated` callback semantics (notification-only,
+no return value) and prevents accidental back-pressure on imports.
+
+**New test:** `TestEventBus_SubscriberPanic_DoesNotAffectPublisher`.
+
+### Q2 — NewServer lifecycle: full delegation vs. explicit phases
+
+**Decision: explicit phases. `Build` + `PostInit` in NewServer; `Start` in
+Server.Start; `Stop` in Server.Shutdown.**
+
+Rationale:
+- Construction (Build/PostInit) is "ready to serve a test request."
+- Lifecycle (Start) is "ready to do real work" — when `cmd/serve.go` actually
+  starts the HTTP listener. Background goroutines launch here.
+- Tests that construct without Start stay clean; this is the same pattern as
+  `sql.Open` vs `db.Ping`.
+- Debugging benefit: explicit phase calls in NewServer give precise error
+  attribution (`resolve failed` vs `build failed` vs `postinit failed`).
+
+### Q3 — `database.GetGlobalStore` lifecycle
+
+**Decision (bridge state): keep, but rename to `GetGlobalStoreForTest` /
+`SetGlobalStoreForTest`.**
+
+- Production callers go away in `SERVER-GLOBAL-STORE-AUDIT`.
+- The ~289 test callers update mechanically to the new names; the global
+  itself stays as a test affordance.
+- Naming alone is the documentation — any production code that imports the
+  `*ForTest` variant is an obvious code-review red flag.
+
+**Decision (end state, separate ticket): delete the globals entirely once
+production migration completes.**
+
+- Open a new ticket: **`TEST-GLOBAL-STORE-MIGRATION`**.
+- Migrate tests to per-test container construction (`serviceregistry.NewContainer().Override("store", mockStore)`).
+- Once all 289 sites are migrated, delete `GetGlobalStoreForTest`/`SetGlobalStoreForTest`.
+- Estimated scope: M (1–2 days, mostly mechanical).
+
+The rename now is the cheap step; the test migration is the right end state
+but not on the critical path.
+
+### Q4 — `IncludeAll()` vs explicit `Include(...)`: NAMED GROUPS
+
+**Decision: extend `ServiceDef` with a `Groups []string` field and add
+`Container.IncludeGroup(names ...string)`. Production uses named groups;
+explicit `Include(name)` remains for tests and ad-hoc additions.**
+
+New ServiceDef shape:
+
+```go
+type ServiceDef struct {
+    Name   string
+    Needs  []string
+    Groups []string        // NEW: zero or more group names
+    Build  func(*Container) (any, error)
+}
+```
+
+New Container API:
+
+```go
+func (c *Container) IncludeGroup(names ...string) *Container
+```
+
+Registration example:
+
+```go
+serviceregistry.Register(serviceregistry.ServiceDef{
+    Name:   "audiobook",
+    Needs:  []string{"store"},
+    Groups: []string{"core", "library"},
+    Build:  ...,
+})
+```
+
+Initial group conventions:
+- `core` — W1 leaf + W2 cross-wired (always-on infrastructure)
+- `ai` — W4 embedding/AI cluster (config-gated internally)
+- `activity` — `activity` + `activitystore` (DatabasePath-gated externally)
+- `plugins` — all UOS plugin registrations
+- `scheduler` — `opregistry`, `ophub`, `batchpoller`, `updatescheduler`,
+  `librarywatcher`
+
+NewServer post-migration:
+
+```go
+c := serviceregistry.NewContainer().
+    Override("store", store).
+    Override("config", &config.AppConfig).
+    IncludeGroup("core", "ai", "plugins", "scheduler").
+    Include("system")    // ad-hoc additions still work
+if cfg.DatabasePath != "" {
+    c.IncludeGroup("activity")
+}
+```
+
+Auditability: `grep -rn 'Groups.*"core"' internal/ --include="*.go"` tells
+you exactly what `IncludeGroup("core")` pulls in. No central groups file.
+
+This is **the new top-of-list ticket: `REGISTRY-NAMED-GROUPS`** (S, ½ day,
+no risk). All existing register.go files keep working unchanged — `Groups`
+is opt-in. Add it before `PLUGIN-DECOUPLE` lands so new services land with
+group membership baked in.
