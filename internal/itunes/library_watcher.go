@@ -1,10 +1,11 @@
 // file: internal/itunes/library_watcher.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e9f0a1b2-c3d4-5e6f-7a8b-9c0d1e2f3a4b
 
 package itunes
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -89,6 +90,18 @@ func (w *LibraryWatcher) ClearChanged() {
 	w.changed = false
 	w.changedAt = time.Time{}
 	w.mu.Unlock()
+}
+
+// Start is a no-op; the watcher loop begins in NewLibraryWatcher.
+// Exported to implement the serviceregistry.Starter interface.
+func (w *LibraryWatcher) Start(ctx context.Context) error {
+	return nil
+}
+
+// Stop halts the watcher loop and closes the fsnotify watcher.
+// Exported to implement the serviceregistry.Stopper interface.
+func (w *LibraryWatcher) Stop(ctx context.Context) error {
+	return w.Close()
 }
 
 // Close stops watching.
