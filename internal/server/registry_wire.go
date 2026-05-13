@@ -1,5 +1,5 @@
 // file: internal/server/registry_wire.go
-// version: 1.1.0
+// version: 1.2.0
 
 package server
 
@@ -70,5 +70,11 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	// tests that don't configure a DB path still build.
 	if svc, ok := serviceregistry.TryGet[*activity.Service](c, "activity"); ok {
 		s.activityService = svc
+	}
+
+	// W3 services
+	// batchpoller is conditional on OpenAI config — pull via TryGet.
+	if poller, ok := serviceregistry.TryGet[*BatchPoller](c, "batchpoller"); ok {
+		s.batchPoller = poller
 	}
 }
