@@ -17,6 +17,10 @@ import (
 type RebuildStore interface {
 	database.BookReader
 	GetBookFiles(bookID string) ([]database.BookFile, error)
+	// GetAuthorByID resolves an author by id for the
+	// resolveAuthorName helper. Added in SERVER-GLOBAL-STORE-AUDIT
+	// phase 2 to replace the prior database.GetGlobalStore() call.
+	GetAuthorByID(id int) (*database.Author, error)
 }
 
 // ComputeITLDiff reads the current ITL and the current DB state,
@@ -95,7 +99,7 @@ func ComputeITLDiff(store RebuildStore, itlPath string) (*ITLOperationSet, *ITLR
 		}
 
 		// Both exist — check if metadata or location need updating.
-		authorName := resolveAuthorName(book)
+		authorName := resolveAuthorName(store, book)
 		narrator := ""
 		if book.Narrator != nil {
 			narrator = *book.Narrator
@@ -162,7 +166,7 @@ func BuildNewTrackFromBook(store RebuildStore, book *database.Book) ITLNewTrack 
 // Book for insertion into the ITL. Fills as many fields as
 // possible from the book's metadata.
 func buildNewTrackFromBook(store RebuildStore, book *database.Book) ITLNewTrack {
-	authorName := resolveAuthorName(book)
+	authorName := resolveAuthorName(store, book)
 	genre := "Audiobook"
 	if book.Genre != nil && *book.Genre != "" {
 		genre = *book.Genre
@@ -198,14 +202,17 @@ func buildNewTrackFromBook(store RebuildStore, book *database.Book) ITLNewTrack 
 	}
 }
 
-// resolveAuthorName returns the author name for a book.
-// This is a simplified version that works with the database store.
-func resolveAuthorName(book *database.Book) string {
+// resolveAuthorName returns the author name for a book. Takes the
+// caller's RebuildStore so we no longer depend on the package-level
+// database.GetGlobalStore (SERVER-GLOBAL-STORE-AUDIT phase 2). A nil
+// store falls back to the inline Author field — keeps tests that build
+// a Book{Author: &Author{Name: "..."}} working without wiring a store.
+func resolveAuthorName(store RebuildStore, book *database.Book) string {
 	if book.Author != nil {
 		return book.Author.Name
 	}
-	if book.AuthorID != nil {
-		if author, err := database.GetGlobalStore().GetAuthorByID(*book.AuthorID); err == nil && author != nil {
+	if book.AuthorID != nil && store != nil {
+		if author, err := store.GetAuthorByID(*book.AuthorID); err == nil && author != nil {
 			return author.Name
 		}
 	}

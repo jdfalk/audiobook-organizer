@@ -423,15 +423,20 @@ func ScheduleBackup(interval time.Duration, config BackupConfig) error {
 	return fmt.Errorf("scheduled backups not yet implemented")
 }
 
-// BackupDatabase is a convenience function that backs up the global database
-func BackupDatabase(config BackupConfig) (*BackupInfo, error) {
-	if database.GetGlobalStore() == nil {
+// BackupDatabase is a convenience function that backs up the database
+// referenced by the supplied store. Currently a stub — kept around because
+// tests exercise the nil-store error path, and a future implementation
+// will add Path()/Type() accessors to the Store interface.
+//
+// Signature takes an explicit database.Store (SERVER-GLOBAL-STORE-AUDIT
+// phase 2). Pass nil to exercise the "database not initialized" path.
+func BackupDatabase(store database.Store, config BackupConfig) (*BackupInfo, error) {
+	if store == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	// Get database path and type from config
-	// TODO: Add methods to Store interface to get database path and type
-	// For now, we'll need to pass these as parameters
+	// TODO: Add methods to Store interface to get database path and type.
+	// For now, we'll need to pass these as parameters via BackupConfig.
 
 	return nil, fmt.Errorf("backup requires database path and type information")
 }

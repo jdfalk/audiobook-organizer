@@ -151,6 +151,14 @@ func (m *mockRebuildStore) GetBookFiles(bookID string) ([]database.BookFile, err
 	return []database.BookFile{}, nil
 }
 
+// GetAuthorByID is a no-op for the mock — tests build books with an
+// inline Author pointer, so the AuthorID lookup path isn't exercised.
+// Returning (nil, nil) trips the helper's "nothing found" branch
+// safely (resolveAuthorName already handles a nil store gracefully).
+func (m *mockRebuildStore) GetAuthorByID(id int) (*database.Author, error) {
+	return nil, nil
+}
+
 func TestBuildNewTrackFromBook(t *testing.T) {
 	// Create a mock book
 	bookID := "book-1"
@@ -230,7 +238,7 @@ func TestResolveAuthorName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := resolveAuthorName(tt.book)
+			result := resolveAuthorName(nil, tt.book)
 			if result != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, result)
 			}

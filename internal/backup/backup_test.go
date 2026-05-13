@@ -1129,7 +1129,7 @@ func TestBackupDatabaseNilStore(t *testing.T) {
 	config := DefaultBackupConfig()
 
 	// Act
-	info, err := BackupDatabase(config)
+	info, err := BackupDatabase(nil, config)
 
 	// Assert
 	if err == nil {
@@ -1705,7 +1705,7 @@ func TestBackupDatabaseNotInitialized(t *testing.T) {
 	}
 
 	// Act
-	info, err := BackupDatabase(config)
+	info, err := BackupDatabase(nil, config)
 
 	// Assert
 	if err == nil {
@@ -1734,7 +1734,7 @@ func TestBackupDatabaseMissingInfo(t *testing.T) {
 	}
 
 	// Act
-	info, err := BackupDatabase(config)
+	info, err := BackupDatabase(nil, config)
 
 	// Assert - Should get an error (either "not initialized" or "requires path/type")
 	if err == nil {
