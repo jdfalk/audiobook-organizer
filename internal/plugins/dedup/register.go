@@ -1,19 +1,25 @@
 // file: internal/plugins/dedup/register.go
-// version: 1.0.0
+// version: 1.1.0
 
-// Service registry registration for the dedup UOS plugin (W5).
+// Service registry registration for the dedup UOS plugin (W5/W7).
 //
 // Build returns the constructed *Plugin when all required services are
 // available, or nil when any dep is unavailable (no API key → no dedup
-// engine → no plugin). Inline NewServer construction continues to be
-// the production path that actually calls Plugin.Register(opRegistry);
-// W7 cleanup migrates that registration to PostInit.
+// engine → no plugin).
+//
+// PostInit (W7) self-registers the plugin's op-defs against the
+// container's opregistry, replacing the inline `Register(server.opRegistry)`
+// call that used to live in NewServer.
 
 package dedup
 
 import (
+	"context"
+	"log"
+
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 )
 
@@ -31,4 +37,20 @@ func init() {
 			return New(engine, store, embStore), nil
 		},
 	})
+}
+
+// PostInit self-registers this plugin's op-defs against the container's
+// opregistry. Called by Container.PostInit() after all services are built.
+//
+// Safe to call when the plugin is nil — early-returns without error.
+func (p *Plugin) PostInit(ctx context.Context, c *serviceregistry.Container) error {
+	if p == nil {
+		return nil
+	}
+	wrapper, ok := serviceregistry.TryGet[*opsregistry.RegistryWrapper](c, "opregistry")
+	if !ok || wrapper == nil {
+		log.Printf("[plugins/dedup] PostInit: opregistry not available, skipping op-def registration")
+		return nil
+	}
+	return p.Register(wrapper.Registry)
 }

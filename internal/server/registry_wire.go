@@ -17,6 +17,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -163,5 +164,21 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	// batchpoller is conditional on OpenAI config — pull via TryGet.
 	if poller, ok := serviceregistry.TryGet[*BatchPoller](c, "batchpoller"); ok {
 		s.batchPoller = poller
+	}
+	// opRegistry — Get'd via the RegistryWrapper that exposes Start/Stop;
+	// callers use the embedded *opsregistry.Registry. Always present.
+	if wrapper, ok := serviceregistry.TryGet[*opsregistry.RegistryWrapper](c, "opregistry"); ok && wrapper != nil {
+		s.opRegistry = wrapper.Registry
+	}
+	if hub, ok := serviceregistry.TryGet[*opsregistry.EventHub](c, "ophub"); ok {
+		s.opHub = hub
+	}
+
+	// W4 services — embedding/AI cluster.
+	if embStore, ok := serviceregistry.TryGet[*database.EmbeddingStore](c, "embeddingstore"); ok {
+		s.embeddingStore = embStore
+	}
+	if engine, ok := serviceregistry.TryGet[*dedup.Engine](c, "dedup"); ok {
+		s.dedupEngine = engine
 	}
 }
