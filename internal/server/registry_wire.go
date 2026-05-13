@@ -1,5 +1,5 @@
 // file: internal/server/registry_wire.go
-// version: 1.4.0
+// version: 1.5.0
 
 package server
 
@@ -9,6 +9,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/aiscan"
 	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
 	"github.com/jdfalk/audiobook-organizer/internal/batch"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -133,6 +134,46 @@ func init() {
 		},
 	})
 
+	// aiscanstore — AI scan history/phases/results, sharing the main
+	// PebbleDB under the "aiscan:" key prefix. Returns nil when the
+	// store isn't a PebbleStore (test paths).
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:   "aiscanstore",
+		Needs:  []string{"store"},
+		Groups: []string{"ai"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			store := serviceregistry.Get[database.Store](c, "store")
+			ps, ok := store.(*database.PebbleStore)
+			if !ok {
+				return (*database.AIScanStore)(nil), nil
+			}
+			s, err := database.NewAIScanStoreFromDB(ps.DB())
+			if err != nil {
+				log.Printf("[WARN] Failed to init AI scan store: %v", err)
+				return (*database.AIScanStore)(nil), nil
+			}
+			return s, nil
+		},
+	})
+
+	// pipelinemanager — AI scan pipeline coordinator. Needs aiscanstore +
+	// the main store + an *ai.OpenAIParser (llmparser). When the parser
+	// is nil (no OpenAI key) or aiscanstore is nil, returns nil.
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:   "pipelinemanager",
+		Needs:  []string{"store", "aiscanstore", "llmparser"},
+		Groups: []string{"ai"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			scanStore, _ := serviceregistry.TryGet[*database.AIScanStore](c, "aiscanstore")
+			parser, _ := serviceregistry.TryGet[*ai.OpenAIParser](c, "llmparser")
+			if scanStore == nil || parser == nil {
+				return (*aiscan.PipelineManager)(nil), nil
+			}
+			store := serviceregistry.Get[database.Store](c, "store")
+			return aiscan.NewPipelineManager(scanStore, store, parser), nil
+		},
+	})
+
 	// itunes — the iTunes integration service. Registered here (rather
 	// than in internal/itunes/service/register.go) because the
 	// OrganizerFactory closure needs internal/organizer + internal/config,
@@ -244,6 +285,12 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	}
 	if engine, ok := serviceregistry.TryGet[*dedup.Engine](c, "dedup"); ok {
 		s.dedupEngine = engine
+	}
+	if scanStore, ok := serviceregistry.TryGet[*database.AIScanStore](c, "aiscanstore"); ok && scanStore != nil {
+		s.aiScanStore = scanStore
+	}
+	if pm, ok := serviceregistry.TryGet[*aiscan.PipelineManager](c, "pipelinemanager"); ok && pm != nil {
+		s.pipelineManager = pm
 	}
 
 	// itunesservice.Service — container-built since PLUGIN-DECOUPLE-CLOSURES
