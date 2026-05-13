@@ -500,145 +500,45 @@ func NewServer(store database.Store) *Server {
 		}
 	}
 
-	// Open embedding store for dedup (PebbleDB-backed, shared with main DB).
+	// One-shot migration from the legacy embeddings.db SQLite sidecar.
+	// Safe to call every startup: a flag key in PebbleDB prevents re-runs.
+	// Stays inline (not a service) because it's a one-time migration step,
+	// not a runtime dependency.
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
 		dbDir := filepath.Dir(dbPath)
-		// One-shot migration from the legacy embeddings.db SQLite sidecar.
-		// Safe to call every startup: a flag key in PebbleDB prevents re-runs.
 		if ps, ok := database.GetGlobalStore().(*database.PebbleStore); ok {
 			if migrateErr := database.MigrateEmbeddingsFromSQLite(ps.DB(), filepath.Join(dbDir, "embeddings.db")); migrateErr != nil {
 				log.Printf("[WARN] embeddings.db migration error (continuing): %v", migrateErr)
 			}
-			embeddingStore := database.NewEmbeddingStore(ps.DB())
-			server.embeddingStore = embeddingStore
-			if config.AppConfig.OpenAIAPIKey != "" && config.AppConfig.EmbeddingEnabled {
-				// Wire the embedding store as a content-hash cache so
-				// repeated embeds of identical text (e.g. "Foundation
-				// by Isaac Asimov" appearing as a candidate across
-				// many metadata fetches) return instantly without
-				// re-hitting OpenAI. Added after the 2026-04-11 quota
-				// incident where a single bulk fetch burned the
-				// entire monthly budget by re-embedding every
-				// candidate on every fetch.
-				embedClient := ai.NewEmbeddingClient(config.AppConfig.OpenAIAPIKey).
-					WithCache(embeddingStore)
-				// Dedup Layer 3 uses a dedicated chat parser so it can call
-				// OpenAIParser.ReviewDedupPairs during maintenance runs.
-				llmParser := ai.NewOpenAIParser(&config.AppConfig, config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
-				server.dedupEngine = dedup.NewEngine(
-					embeddingStore,
-					database.GetGlobalStore(),
-					embedClient,
-					llmParser,
-					server.mergeService,
-				)
-				server.dedupEngine.BookHighThreshold = config.AppConfig.DedupBookHighThreshold
-				server.dedupEngine.BookLowThreshold = config.AppConfig.DedupBookLowThreshold
-				server.dedupEngine.AuthorHighThreshold = config.AppConfig.DedupAuthorHighThreshold
-				server.dedupEngine.AuthorLowThreshold = config.AppConfig.DedupAuthorLowThreshold
-				server.dedupEngine.AutoMergeEnabled = config.AppConfig.DedupAutoMergeEnabled
-				server.extraOpsRegistrar.Deps.DedupEngine = server.dedupEngine
-
-				// Wire chromem-go ANN store if available.
-				chromemDir := dbDir
-				chromemStore, chromemErr := database.NewChromemEmbeddingStore(chromemDir, 3072)
-				if chromemErr != nil {
-					log.Printf("[WARN] chromem-go init failed (falling back to PebbleDB linear scan): %v", chromemErr)
-				} else {
-					server.dedupEngine.SetChromemStore(chromemStore)
-					log.Println("[INFO] chromem-go ANN store active for dedup Layer 2")
-
-					// Hydrate chromem from the PebbleDB embeddings namespace in
-					// the background. Without this, an empty or stale
-					// chromem dir means Layer 2 returns zero matches even
-					// though tens of thousands of embeddings exist on disk.
-					// Run async so it doesn't block startup; the dedup
-					// engine works (slowly) before hydration completes
-					// because mirrorBookToChromem populates entries on
-					// demand whenever EmbedBook is called.
-					go func() {
-						hCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-						defer cancel()
-						books, authors, err := server.dedupEngine.HydrateChromem(hCtx)
-						if err != nil {
-							log.Printf("[WARN] chromem hydrate finished with error: %v (books=%d authors=%d)", err, books, authors)
-							return
-						}
-						log.Printf("[INFO] chromem hydrate complete: books=%d authors=%d", books, authors)
-					}()
-				}
-
-				// Wire aijobs store for async dedup review batches.
-				if aiJobsStore, ok := database.GetGlobalStore().(database.AIJobsStore); ok {
-					server.dedupEngine.SetAIJobsStore(aiJobsStore)
-					// Register the engine as the dedup verdict applier for batch callbacks.
-					ai.SetDedupVerdictApplier(server.dedupEngine)
-					log.Println("[INFO] Dedup async review (aijobs) wired")
-				} else {
-					log.Println("[WARN] Global store does not implement AIJobsStore; dedup async review disabled")
-				}
-
-				log.Println("[INFO] Embedding store and dedup engine initialized")
-				server.metadataFetchService.SetDedupEngine(server.dedupEngine)
-
-				// dedupplugin + acoustidplugin op-def registration is now
-				// done in their PostInit methods (W7). Container.PostInit()
-				// runs them earlier in NewServer (before this block).
-
-				// Dedup-on-import is now wired via SetScanHooks below
-				// (together with the activity recorder).
-				log.Println("[INFO] Dedup-on-import hook wired via SetScanHooks")
-
-				// Wire the organize collision hook. When OrganizeBook
-				// hits ErrTargetOccupied (two books with identical
-				// metadata producing the same target path, or a re-organize
-				// of a content-duplicate), this hook creates a pending
-				// "exact" dedup candidate between the current book and the
-				// book that already owns the target. Without it, the
-				// collision would surface only as an opaque error and the
-				// user would have no trail to follow.
-				//
-				// Runs inside a bgWG-tracked goroutine so it doesn't block
-				// the organize caller and shutdown drains it cleanly.
-				server.organizeService.SetOrganizeHooks(&serverOrganizeHooks{server: server})
-				log.Println("[INFO] Organize collision hook wired via OrganizeService")
-
-				// Wire the embedding-based metadata candidate scorer. The
-				// scorer reuses the same embedClient + embeddingStore as the
-				// dedup engine; it's a lightweight wrapper exposing the
-				// MetadataCandidateScorer interface. Any failure at search
-				// time falls back to the F1 path inside scoreBaseCandidates,
-				// so this is safe to leave wired up unconditionally once
-				// the embedding infra is available.
-				if config.AppConfig.MetadataEmbeddingScoringEnabled {
-					server.metadataFetchService.SetMetadataScorer(
-						ai.NewEmbeddingScorer(embedClient, embeddingStore),
-					)
-					log.Println("[INFO] Metadata candidate scoring: embedding tier enabled")
-				}
-
-				// Wire the LLM rerank scorer. It reuses the same llmParser
-				// the dedup engine uses for Layer 3 review. The scorer is
-				// injected unconditionally — the per-search use_rerank flag
-				// and the MetadataLLMScoringEnabled config key together gate
-				// whether it actually fires.
-				server.metadataFetchService.SetMetadataLLMScorer(ai.NewLLMScorer(llmParser))
-				if config.AppConfig.MetadataLLMScoringEnabled {
-					log.Println("[INFO] Metadata candidate scoring: LLM rerank tier enabled (opt-in per search)")
-				} else {
-					log.Println("[INFO] Metadata candidate scoring: LLM rerank tier wired but disabled in config")
-				}
-			} else {
-				log.Println("[INFO] Embedding store opened (dedup engine disabled — no API key or embedding_enabled=false)")
-			}
 		}
+	}
+
+	// AI cluster (embeddingstore / embedclient / llmparser / chromemstore /
+	// aijobsstore / dedup / metadatascorer / metadatallmscorer) is now
+	// fully container-driven. dedup.Engine.PostInit wires SetChromemStore,
+	// SetAIJobsStore, SetDedupVerdictApplier + launches the chromem hydrate
+	// goroutine. metafetch.Service.PostInit wires SetDedupEngine,
+	// SetMetadataScorer, SetMetadataLLMScorer, SetActivityService.
+	// extraOpsRegistrar's DedupEngine dep gets the container's engine.
+	if server.dedupEngine != nil {
+		server.extraOpsRegistrar.Deps.DedupEngine = server.dedupEngine
+	}
+
+	// Organize collision hook stays inline because it uses serverOrganizeHooks
+	// which captures *Server (bgCtx + bgWG + cross-service helpers). Moving
+	// it requires further decoupling — tracked under SERVER-LIFECYCLE-FLIP.
+	if server.dedupEngine != nil {
+		server.organizeService.SetOrganizeHooks(&serverOrganizeHooks{server: server})
+		log.Println("[INFO] Organize collision hook wired via OrganizeService")
 	}
 
 	// Start embedding backfill if dedup engine is ready. Tracked via
 	// bgWG so Shutdown() can wait for it to finish before the database
 	// closes — without this, a backfill still iterating Pebble when the
 	// server stops will leave iterators open and panic inside Pebble's
-	// FileCache.Unref during Close().
+	// FileCache.Unref during Close(). Could move into a Starter on
+	// dedup.Engine; deferred for now because the goroutine wants the
+	// server's bgWG for Shutdown coordination.
 	if server.dedupEngine != nil {
 		server.bgWG.Add(1)
 		go func() {

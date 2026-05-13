@@ -27,6 +27,13 @@ func init() {
 		Groups: []string{"plugins"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
+			// Mirror the original inline guard: skip when library root
+			// isn't configured (test paths). Without this, MockStore-based
+			// tests blow up because PostInit's Plugin.Register triggers
+			// UpsertOpDefinitionV2 calls the mock doesn't expect.
+			if cfg.RootDir == "" {
+				return (*Plugin)(nil), nil
+			}
 			client := delugeclient.GetClient()
 			if client == nil {
 				return (*Plugin)(nil), nil
