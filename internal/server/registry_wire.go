@@ -1,9 +1,10 @@
 // file: internal/server/registry_wire.go
-// version: 1.3.0
+// version: 1.4.0
 
 package server
 
 import (
+	"log"
 	"path/filepath"
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
@@ -15,9 +16,11 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -128,6 +131,51 @@ func init() {
 			return engine, nil
 		},
 	})
+
+	// itunes — the iTunes integration service. Registered here (rather
+	// than in internal/itunes/service/register.go) because the
+	// OrganizerFactory closure needs internal/organizer + internal/config,
+	// and itunesservice deliberately avoids importing internal/organizer
+	// (see internal/itunes/service/types.go BookOrganizer comment).
+	//
+	// Construction never returns an error in practice: itunesservice.New
+	// returns NewDisabled() when cfg.Enabled is false. The "Enabled: true"
+	// flag here mirrors the pre-container inline construction in NewServer
+	// — the per-feature toggles (AutoWriteBack, ITLWriteBackEnabled) come
+	// from AppConfig.
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:   "itunes",
+		Needs:  []string{"store", "config", "eventbus", "metafetch"},
+		Groups: []string{"core"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			store := serviceregistry.Get[database.Store](c, "store")
+			cfg := serviceregistry.Get[*config.Config](c, "config")
+			bus := serviceregistry.Get[*plugin.EventBus](c, "eventbus")
+			mf := serviceregistry.Get[*metafetch.Service](c, "metafetch")
+			svc, err := itunesservice.New(itunesservice.Deps{
+				Store: store,
+				Config: itunesservice.Config{
+					Enabled:             true,
+					LibraryReadPath:     cfg.ITunesLibraryReadPath,
+					LibraryWritePath:    cfg.ITunesLibraryWritePath,
+					AutoWriteBack:       cfg.ITunesAutoWriteBack,
+					ITLWriteBackEnabled: cfg.ITLWriteBackEnabled,
+				},
+				AudiobookRoot: cfg.RootDir,
+				ReportDir:     filepath.Join(cfg.RootDir, "reports"),
+				EventBus:      bus,
+				Metafetch:     mf,
+				OrganizerFactory: func() itunesservice.BookOrganizer {
+					return organizer.NewOrganizer(cfg)
+				},
+			})
+			if err != nil {
+				log.Printf("[WARN] iTunes service construction failed, falling back to disabled: %v", err)
+				return itunesservice.NewDisabled(), nil
+			}
+			return svc, nil
+		},
+	})
 }
 
 // wireServerFromContainer populates the typed service fields on *Server
@@ -186,4 +234,9 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	if engine, ok := serviceregistry.TryGet[*dedup.Engine](c, "dedup"); ok {
 		s.dedupEngine = engine
 	}
+
+	// itunesservice.Service — container-built since PLUGIN-DECOUPLE-CLOSURES
+	// (May 13, 2026). Replaces the prior inline itunesservice.New(...) call
+	// in NewServer. Always present (Build returns NewDisabled() on error).
+	s.itunesSvc = serviceregistry.Get[*itunesservice.Service](c, "itunes")
 }

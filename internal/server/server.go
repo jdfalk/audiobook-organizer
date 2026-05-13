@@ -403,43 +403,13 @@ func NewServer(store database.Store) *Server {
 		}
 	}
 
-	// Construct the iTunes service. Phase 2 M1 step 1 enables it via New()
-	// so the real TrackProvisioner gets wired into the import pipeline;
-	// remaining sub-components stay as empty-struct placeholders until
-	// they move in later M1 steps. Disabled fallback is preserved for
-	// construction failures or (future) test paths that explicitly opt out.
-	itunesCfg := itunesservice.Config{
-		Enabled:             true,
-		LibraryReadPath:     config.AppConfig.ITunesLibraryReadPath,
-		LibraryWritePath:    config.AppConfig.ITunesLibraryWritePath,
-		AutoWriteBack:       config.AppConfig.ITunesAutoWriteBack,
-		ITLWriteBackEnabled: config.AppConfig.ITLWriteBackEnabled,
-	}
-	itunesSvc, err := itunesservice.New(itunesservice.Deps{
-		Store:         resolvedStore,
-		Config:        itunesCfg,
-		AudiobookRoot: config.AppConfig.RootDir,
-		ReportDir:     filepath.Join(config.AppConfig.RootDir, "reports"),
-		// PLUGIN-DECOUPLE: publish BookImported via event bus instead of
-		// the pre-decouple OnBookCreated closure that captured *Server.
-		// dedup.Engine.PostInit subscribes to EventBookImported.
-		EventBus:  server.eventBus,
-		Metafetch: server.metadataFetchService,
-		OrganizerFactory: func() itunesservice.BookOrganizer {
-			return organizer.NewOrganizer(&config.AppConfig)
-		},
-	})
-	if err != nil {
-		log.Printf("[WARN] iTunes service construction failed, falling back to disabled: %v", err)
-		itunesSvc = itunesservice.NewDisabled()
-	}
-	server.itunesSvc = itunesSvc
-
-	// Register iTunes plugin (UOS-10)
-	// Guard on RootDir: tests don't configure AppConfig, so RootDir="" and the
-	// mock store has no UpsertOpDefinitionV2 expectations.
-	if config.AppConfig.RootDir != "" && itunesSvc != nil && itunesSvc.Enabled() {
-		itunesPlugin := itunesplug.New(itunesSvc, resolvedStore)
+	// iTunes service is container-built in registry_wire.go and wired into
+	// server.itunesSvc by wireServerFromContainer above. The plugin
+	// registration stays inline here because it depends on server.opRegistry
+	// (which is itself container-wired) and the RootDir guard mirrors the
+	// other plugin-registration guards in this block.
+	if config.AppConfig.RootDir != "" && server.itunesSvc != nil && server.itunesSvc.Enabled() {
+		itunesPlugin := itunesplug.New(server.itunesSvc, resolvedStore)
 		if err := itunesPlugin.Register(server.opRegistry); err != nil {
 			log.Printf("[server] iTunes plugin register: %v", err)
 		}
