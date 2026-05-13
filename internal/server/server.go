@@ -229,6 +229,13 @@ type Server struct {
 	// NewServer. Stashed so handlers/tests can pull services dynamically
 	// if needed (rare — most access is via the typed fields above).
 	container *serviceregistry.Container
+
+	// extraOpsRegistrar holds the ExtraOpsRegistrar for 13 scheduler ops
+	// that were extracted from scheduler_extra_ops.go (SERVER-THIN-RESIDUAL).
+	// Constructed early (before opRegistrars loop) with empty deps; deps are
+	// filled in after all services are wired so closures see correct values
+	// at run time.
+	extraOpsRegistrar *scheduler.ExtraOpsRegistrar
 }
 
 // ServerConfig holds server configuration
@@ -371,6 +378,18 @@ func NewServer(store database.Store) *Server {
 	server.opHub = opsregistry.NewEventHub()
 	server.opRegistry = opsregistry.New(resolvedStore, slog.Default(), 8, server.opHub)
 
+	// SERVER-THIN-RESIDUAL: build the ExtraOpsRegistrar before the opRegistrars
+	// loop so the 13 scheduler ops (scheduler_extra_ops.go shim) can delegate
+	// to it. Fields available from wireServerFromContainer are set now;
+	// aiScanStore, dedupEngine, and activityWriter are back-filled below after
+	// their lazy initialisation. Closures see the updated values at op run time.
+	server.extraOpsRegistrar = scheduler.NewExtraOpsRegistrar(resolvedStore, scheduler.ExtraOpsDeps{
+		DedupCache:           server.dedupCache,
+		OLService:            server.olService,
+		MetadataFetchService: server.metadataFetchService,
+		AudiobookService:     server.audiobookService,
+	})
+
 	// UOS-12: maintenance plugin — 26 ops migrated from scheduler_tasks.go.
 	// Guard on RootDir: tests don't configure AppConfig, so RootDir is ""
 	// and the mock store has no UpsertOpDefinitionV2 expectations.
@@ -462,6 +481,7 @@ func NewServer(store database.Store) *Server {
 			log.Printf("[WARN] Failed to init AI scan store: %v", err)
 		} else {
 			server.aiScanStore = aiScanStore
+			server.extraOpsRegistrar.Deps.AIScanStore = aiScanStore
 			aiParserInst := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 			if p, ok := aiParserInst.(*ai.OpenAIParser); ok {
 				server.pipelineManager = aiscan.NewPipelineManager(aiScanStore, database.GetGlobalStore(), p)
@@ -520,6 +540,7 @@ func NewServer(store database.Store) *Server {
 				server.dedupEngine.AuthorHighThreshold = config.AppConfig.DedupAuthorHighThreshold
 				server.dedupEngine.AuthorLowThreshold = config.AppConfig.DedupAuthorLowThreshold
 				server.dedupEngine.AutoMergeEnabled = config.AppConfig.DedupAutoMergeEnabled
+				server.extraOpsRegistrar.Deps.DedupEngine = server.dedupEngine
 
 				// Wire chromem-go ANN store if available.
 				chromemDir := dbDir
@@ -708,6 +729,8 @@ func NewServer(store database.Store) *Server {
 		aw := activity.NewWriter(server.activityService.Store(), 10000)
 		aw.Start(context.Background()) //nolint:errcheck
 		server.activityWriter = aw
+		// Back-fill activityWriter into extraOpsRegistrar now that it is available.
+		server.extraOpsRegistrar.Deps.ActivityWriter = aw
 		server.scanService.SetActivityWriter(aw)
 		log.SetOutput(aw)
 		if server.itunesSvc != nil && server.itunesSvc.Enabled() {
