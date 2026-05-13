@@ -431,16 +431,8 @@ func NewServer(store database.Store) *Server {
 	// server.activityService is now populated by wireServerFromContainer
 	// when config.DatabasePath is set (W2). Nothing to do here.
 
-	// Open metrics store alongside main DB (NutsDB, CGo-free).
-	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
-		metricsDir := filepath.Join(filepath.Dir(dbPath), "metrics.nutsdb")
-		metricsStore, err := database.NewNutsMetricsStore(metricsDir)
-		if err != nil {
-			log.Printf("[WARN] Failed to open metrics store: %v", err)
-		} else {
-			server.metricsStore = metricsStore
-		}
-	}
+	// metricsStore is container-built (registry_wire.go "metricsstore");
+	// wireServerFromContainer populates the field.
 
 	// One-shot migration from the legacy embeddings.db SQLite sidecar.
 	// Safe to call every startup: a flag key in PebbleDB prevents re-runs.

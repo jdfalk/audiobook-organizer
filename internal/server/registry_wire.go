@@ -1,5 +1,5 @@
 // file: internal/server/registry_wire.go
-// version: 1.5.0
+// version: 1.6.0
 
 package server
 
@@ -131,6 +131,29 @@ func init() {
 			engine.AuthorLowThreshold = cfg.DedupAuthorLowThreshold
 			engine.AutoMergeEnabled = cfg.DedupAutoMergeEnabled
 			return engine, nil
+		},
+	})
+
+	// metricsstore — NutsDB-backed cache-stats snapshot store. Lives at
+	// {dirname(DatabasePath)}/metrics.nutsdb. Returns nil + logs when
+	// DatabasePath is empty (test paths) or open fails — server code
+	// nil-checks before use.
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:   "metricsstore",
+		Needs:  []string{"config"},
+		Groups: []string{"core"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			cfg := serviceregistry.Get[*config.Config](c, "config")
+			if cfg.DatabasePath == "" {
+				return (*database.NutsMetricsStore)(nil), nil
+			}
+			dir := filepath.Join(filepath.Dir(cfg.DatabasePath), "metrics.nutsdb")
+			store, err := database.NewNutsMetricsStore(dir)
+			if err != nil {
+				log.Printf("[WARN] Failed to open metrics store: %v", err)
+				return (*database.NutsMetricsStore)(nil), nil
+			}
+			return store, nil
 		},
 	})
 
@@ -288,6 +311,9 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	}
 	if scanStore, ok := serviceregistry.TryGet[*database.AIScanStore](c, "aiscanstore"); ok && scanStore != nil {
 		s.aiScanStore = scanStore
+	}
+	if ms, ok := serviceregistry.TryGet[*database.NutsMetricsStore](c, "metricsstore"); ok && ms != nil {
+		s.metricsStore = ms
 	}
 	if pm, ok := serviceregistry.TryGet[*aiscan.PipelineManager](c, "pipelinemanager"); ok && pm != nil {
 		s.pipelineManager = pm
