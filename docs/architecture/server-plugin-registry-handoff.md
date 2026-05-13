@@ -1,5 +1,5 @@
 <!-- file: docs/architecture/server-plugin-registry-handoff.md -->
-<!-- version: 1.1.0 -->
+<!-- version: 1.2.0 -->
 <!-- last-edited: 2026-05-13 -->
 
 # SERVER-PLUGIN-REG — Handoff Brief
@@ -21,14 +21,16 @@ Production data lives on `172.16.2.30` (PebbleDB at
 `make deploy` after merging server-side changes** — `Makefile.local`
 builds, scp's, and restarts via systemd.
 
-## State as of 2026-05-13 (PM update)
+## State as of 2026-05-13 (PM2 update)
 
 - All 7 waves of the original SERVER-PLUGIN-REG plan landed.
+- **SERVER-LIFECYCLE-FLIP done** (PR #901): `Container.Start` /
+  `Container.Stop` drive lifecycle. Fixed previously-leaked
+  `updateScheduler.Stop`. One holdout: `searchindex` (see ticket #3).
 - **~45 services** registered across the 5 named groups: `core`, `ai`,
-  `scheduler`, `plugins`, `activity`. Audit any one with
-  `grep -rn 'Groups.*"core"' internal/ --include="*.go"`.
-- `NewServer` is **390 lines** (target: ≤50). Down from 968 historic /
-  462 at this morning's session start.
+  `scheduler`, `plugins`, `activity`.
+- `NewServer` is **388 lines** (target: ≤50). Down from 968 historic /
+  462 at this morning's session start. 11 PRs (#890-#901) shipped today.
 - 0 open PRs. `go vet ./...` clean. `go build` clean.
 - **PRs #890 — #899 (10 PRs)** were shipped today moving inline blocks
   into the container + PostInit hooks:
@@ -43,6 +45,8 @@ builds, scp's, and restarts via systemd.
   - #897 olservice + ISBN enrichment via metafetch.PostInit
   - #898 aiscanstore + pipelinemanager via container
   - #899 metricsstore via container
+  - #901 SERVER-LIFECYCLE-FLIP — Container.Start/Stop drive lifecycle;
+    search.IndexService exported
 - Pre-existing test failures to ignore: **SERVER-THIN-8** —
   `TestITunesImport_*`, `TestE2E_ITunesImportOrganizeWriteBack`,
   `TestOrganizeService_ViaHTTP`, `TestAddImportPathAutoScan`,
@@ -87,34 +91,40 @@ In dependency order. Estimated sizes assume one focused engineer.
   package-private helpers. Needs a multi-PR wave decomposing the `runX`
   helpers into standalone services before this can build for real.
 
-### 3. SERVER-LIFECYCLE-FLIP (remaining) — M
-Wire `Container.Start(ctx)` into `Server.Start` and `Container.Stop(ctx)`
-into `Server.Shutdown`.
+### 3. ~~SERVER-LIFECYCLE-FLIP~~ — DONE (PR #901)
 
-**Per-service blockers — most are now done:**
-- ~~`updatescheduler`~~ — DONE (PR #894; `appversion` Override; adapter
-  exposed via `Scheduler()` accessor).
-- ~~`activitywriter`~~ — DONE (PR #893; pulled from container, inline
-  parallel construction deleted).
-- `searchindex` — Container's `Start` would open Bleve; conflicts with
-  the inline open in `server_lifecycle.go:369`. The unexported
-  `bleveIndexService` needs an exported wrapper type (or rename it) so
-  external packages can fetch and call `Index()`. Then either:
-  (a) wireServerFromContainer Starts the service inline and pulls the
-  index, or (b) full lifecycle-flip Starts it via Container.Start.
+`Container.Start(s.bgCtx)` runs at the top of `Server.Start`;
+`Container.Stop(...)` is a tail-call at the end of `Server.Shutdown`.
+Five inline lifecycle calls removed:
 
-**Inline `Start()` calls still in NewServer that LIFECYCLE-FLIP removes:**
-- `server.updateScheduler.Start()` (line ~415)
-- `aw.Start(context.Background())` (activity writer, line ~568)
-- `server.itunesSvc.Batcher` lifecycle (Start is no-op; Stop is the
-  one called inline at `server_lifecycle.go:694`)
-- `s.opRegistry.Start(s.bgCtx)` + `s.opRegistry.Shutdown(regCtx)`
+| Removed | Driven by |
+|---|---|
+| `s.itunesSvc.Start(s.bgCtx)` | Container.Start |
+| `s.opRegistry.Start(s.bgCtx)` | Container.Start |
+| `server.updateScheduler.Start()` | Container.Start |
+| `aw.Start(context.Background())` | Container.Start |
+| `s.activityWriter.Stop(...)` | Container.Stop |
 
-**To do this safely:** call `Container.Start(ctx)` early in `Server.Start`,
-then audit each Starter to confirm it's not also started inline. Mirror
-for `Container.Stop` in `Server.Shutdown`. The post-PR-#896 state already
-has `WriteBackBatcher.Start/Stop` matching the registry interfaces, so
-no adapter wrap is needed.
+Fixed a previously-leaked `updateScheduler.Stop` (was never called →
+goroutine leak per restart cycle). `TestServerStartGracefulShutdown`
+now logs `"Auto-update scheduler stopped"` proving it fires.
+
+**One service intentionally still uses an inline path:** `searchindex`.
+`search.IndexService.Start/Stop` are no-ops; `OpenInline()` is called
+from `server_lifecycle.go` and `s.searchIndex.Close()` stays inline.
+Reason: folding the Bleve open into `Container.Start` exposes a
+pre-existing race between the `stripMovementAtoms` /
+`remuxMalformedM4BFiles` goroutines (which read `s.store`) and the
+`indexedStore` decorator install at `server_lifecycle.go:396`. Documented
+in `IndexService.Start` docstring. Fixing the underlying race (move
+`s.store = wrapped` to before the goroutines launch) unblocks the
+collapse — it's a separate, small PR.
+
+**Other inline Stops stay inline** because they need specific ordering
+relative to `bgCancel` / store close: `writeBackBatcher.Stop`,
+`opRegistry.Shutdown`, `itunesSvc.Shutdown`, `searchIndex.Close`,
+plugin teardown. Each is idempotent; the `Container.Stop` tail-call
+double-calls them safely.
 
 ### 4. W7.1 NEWSERVER-TRIM — M (in progress)
 **Status**: NewServer 462 → 390 lines (-72 net across PRs #890-#899).
