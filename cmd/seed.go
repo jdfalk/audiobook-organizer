@@ -91,12 +91,12 @@ func runSeed(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("--series must be > 0")
 	}
 
-	if err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite); err != nil {
+	store, err := initializeStore(config.AppConfig.DatabaseType, config.AppConfig.DatabasePath, config.AppConfig.EnableSQLite)
+	if err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
 	defer closeStore()
 
-	store := database.GetGlobalStore()
 	if store == nil {
 		return fmt.Errorf("database not initialized")
 	}

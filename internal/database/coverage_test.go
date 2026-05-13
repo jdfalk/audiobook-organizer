@@ -20,11 +20,11 @@ func TestInitializeStoreAndClose(t *testing.T) {
 		DB = origDB
 	}()
 
-	if err := InitializeStore("sqlite", filepath.Join(tempDir, "db.sqlite"), false); err == nil {
+	if _, err := InitializeStore("sqlite", filepath.Join(tempDir, "db.sqlite"), false); err == nil {
 		t.Fatal("expected error when sqlite is not enabled")
 	}
 
-	if err := InitializeStore("sqlite", filepath.Join(tempDir, "db.sqlite"), true); err != nil {
+	if _, err := InitializeStore("sqlite", filepath.Join(tempDir, "db.sqlite"), true); err != nil {
 		t.Fatalf("unexpected sqlite init error: %v", err)
 	}
 	if globalStore == nil {
@@ -37,7 +37,7 @@ func TestInitializeStoreAndClose(t *testing.T) {
 	DB = nil
 
 	pebbleDir := filepath.Join(tempDir, "pebble")
-	if err := InitializeStore("pebble", pebbleDir, false); err != nil {
+	if _, err := InitializeStore("pebble", pebbleDir, false); err != nil {
 		t.Fatalf("unexpected pebble init error: %v", err)
 	}
 	if err := CloseStore(); err != nil {
@@ -45,7 +45,7 @@ func TestInitializeStoreAndClose(t *testing.T) {
 	}
 	globalStore = nil
 
-	if err := InitializeStore("unknown", filepath.Join(tempDir, "bad"), false); err == nil {
+	if _, err := InitializeStore("unknown", filepath.Join(tempDir, "bad"), false); err == nil {
 		t.Fatal("expected error for unsupported database type")
 	}
 }

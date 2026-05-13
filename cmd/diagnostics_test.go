@@ -363,7 +363,7 @@ func TestEnsureDiagnosticsStoreError(t *testing.T) {
 	// Set invalid database type
 	config.AppConfig.DatabaseType = "invalid"
 
-	_, err := ensureDiagnosticsStore()
+	_, _, err := ensureDiagnosticsStore()
 	if err == nil {
 		t.Fatal("expected error for invalid database type")
 	}
@@ -379,7 +379,7 @@ func TestEnsureDiagnosticsStorePebble(t *testing.T) {
 	config.AppConfig.DatabaseType = "pebble"
 	config.AppConfig.DatabasePath = tempDir
 
-	cleanup, err := ensureDiagnosticsStore()
+	_, cleanup, err := ensureDiagnosticsStore()
 	if err != nil {
 		t.Fatalf("expected pebble store creation to succeed: %v", err)
 	}

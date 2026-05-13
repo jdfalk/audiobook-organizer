@@ -990,39 +990,46 @@ func SetGlobalStore(s Store) {
 }
 
 // InitializeStore initializes the database store based on configuration
-func InitializeStore(dbType, path string, enableSQLite bool) error {
+// and returns it. The package-level globalStore is also set for back-compat
+// with code paths that still use GetGlobalStore(); new code should prefer
+// the returned Store and pass it explicitly down the call chain
+// (SERVER-GLOBAL-STORE-AUDIT, in flight).
+func InitializeStore(dbType, path string, enableSQLite bool) (Store, error) {
+	var s Store
 	var err error
 
 	switch dbType {
 	case "sqlite", "sqlite3":
 		if !enableSQLite {
-			return fmt.Errorf("SQLite3 is not enabled. To use SQLite3, you must explicitly enable it with --enable-sqlite3-i-know-the-risks or set 'enable_sqlite3_i_know_the_risks: true' in your config file. PebbleDB is the recommended database for production use")
+			return nil, fmt.Errorf("SQLite3 is not enabled. To use SQLite3, you must explicitly enable it with --enable-sqlite3-i-know-the-risks or set 'enable_sqlite3_i_know_the_risks: true' in your config file. PebbleDB is the recommended database for production use")
 		}
-		globalStore, err = NewSQLiteStore(path)
+		s, err = NewSQLiteStore(path)
 		if err != nil {
-			return fmt.Errorf("failed to initialize SQLite store: %w", err)
+			return nil, fmt.Errorf("failed to initialize SQLite store: %w", err)
 		}
 	case "pebble", "":
 		// PebbleDB is the default
-		globalStore, err = NewPebbleStore(path)
+		s, err = NewPebbleStore(path)
 		if err != nil {
-			return fmt.Errorf("failed to initialize PebbleDB store: %w", err)
+			return nil, fmt.Errorf("failed to initialize PebbleDB store: %w", err)
 		}
 	default:
-		return fmt.Errorf("unsupported database type: %s (supported: pebble, sqlite)", dbType)
+		return nil, fmt.Errorf("unsupported database type: %s (supported: pebble, sqlite)", dbType)
 	}
 
+	globalStore = s
+
 	// Maintain backwards compatibility with the global DB variable for SQLite
-	if sqliteStore, ok := globalStore.(*SQLiteStore); ok {
+	if sqliteStore, ok := s.(*SQLiteStore); ok {
 		DB = sqliteStore.db
 	}
 
 	// Run migrations to ensure schema is up to date
-	if err := RunMigrations(globalStore); err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
+	if err := RunMigrations(s); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	return nil
+	return s, nil
 }
 
 // CloseStore closes the global store

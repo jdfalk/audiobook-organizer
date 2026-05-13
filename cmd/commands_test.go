@@ -35,7 +35,7 @@ func stubCommandDeps(t *testing.T) {
 	origDefaultCfg := getDefaultServerConfig
 	origStart := startServer
 
-	initializeStore = func(dbType, path string, enableSQLite bool) error {
+	initializeStore = func(dbType, path string, enableSQLite bool) (database.Store, error) {
 		// Command tests only need GlobalStore to be non-nil for the
 		// startup sequence to proceed. The only store method the
 		// startup path actually touches is GetAllImportPaths (in
@@ -46,7 +46,7 @@ func stubCommandDeps(t *testing.T) {
 		ms := mocks.NewMockStore(t)
 		ms.EXPECT().GetAllImportPaths().Return(nil, nil).Maybe()
 		database.SetGlobalStore(ms)
-		return nil
+		return ms, nil
 	}
 	closeStore = func() error {
 		database.SetGlobalStore(nil)
@@ -273,8 +273,8 @@ func TestStoreInitializationError(t *testing.T) {
 	config.AppConfig.DatabasePath = filepath.Join(tempDir, "db.sqlite")
 	config.AppConfig.EnableSQLite = true
 
-	initializeStore = func(dbType, path string, enableSQLite bool) error {
-		return fmt.Errorf("store init failed")
+	initializeStore = func(dbType, path string, enableSQLite bool) (database.Store, error) {
+		return nil, fmt.Errorf("store init failed")
 	}
 
 	if err := scanCmd.RunE(scanCmd, nil); err == nil {
