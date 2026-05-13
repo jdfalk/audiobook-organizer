@@ -116,6 +116,19 @@ func (s *Server) listImportPaths(c *gin.Context) {
 		folders = []database.ImportPath{}
 	}
 
+	// Refresh BookCount with the live value from the books table. The
+	// stored ImportPath.BookCount is only updated when an auto-scan
+	// completes (folder_autoscan_op.go) or when a path is first added
+	// (addImportPath, below); without this refresh a path can sit at
+	// "0 books found" indefinitely if the user added the path but
+	// never triggered a scan, or if a scan failed partway, or if books
+	// got created via a different path that happens to overlap.
+	for i := range folders {
+		if cnt, cerr := s.Store().CountBooksByPathPrefix(folders[i].Path); cerr == nil {
+			folders[i].BookCount = cnt
+		}
+	}
+
 	httputil.RespondWithOK(c, gin.H{"importPaths": folders, "count": len(folders)})
 }
 
