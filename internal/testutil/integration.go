@@ -14,6 +14,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
+	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -53,6 +54,10 @@ func SetupIntegration(t *testing.T) (*IntegrationEnv, func()) {
 	require.NoError(t, err)
 
 	database.SetGlobalStore(store)
+	// Reset scanner's package-local store so it falls through to the
+	// global we just set. Previous test runs in the same process may
+	// have left a stale pkgStore via scanner.SetStore from NewServer.
+	scanner.SetStore(nil)
 
 	hub := realtime.NewEventHub()
 	realtime.SetGlobalHub(hub)

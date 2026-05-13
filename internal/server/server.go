@@ -302,6 +302,11 @@ func NewServer(store database.Store) *Server {
 	if resolvedStore == nil {
 		resolvedStore = database.GetGlobalStore()
 	}
+	// Wire the scanner package's local store so its free helpers
+	// (createBookFilesForBook, saveBookToDatabase, ProcessBooksParallel
+	// inline DB calls) no longer reach for database.GetGlobalStore
+	// (SERVER-GLOBAL-STORE-AUDIT phase 7).
+	scanner.SetStore(resolvedStore)
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 	server := &Server{
 		store:                  store,
