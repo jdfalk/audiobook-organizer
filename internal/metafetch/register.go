@@ -1,5 +1,5 @@
 // file: internal/metafetch/register.go
-// version: 1.0.0
+// version: 1.1.0
 
 package metafetch
 
@@ -15,6 +15,15 @@ func init() {
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
 			return NewMetadataStateService(store), nil
+		},
+	})
+
+	serviceregistry.Register(serviceregistry.ServiceDef{
+		Name:  "metafetch",
+		Needs: []string{"store"},
+		Build: func(c *serviceregistry.Container) (any, error) {
+			store := serviceregistry.Get[database.Store](c, "store")
+			return NewService(store), nil
 		},
 	})
 }
