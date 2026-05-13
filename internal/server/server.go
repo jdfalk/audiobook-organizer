@@ -321,6 +321,8 @@ func NewServer(store database.Store) *Server {
 		"scan", "dashboard", "system", "configupdate", "metadatastate",
 		// W2 — cross-wired services
 		"metafetch", "merge", "organize", "quarantine", "eventbus",
+		// W3 — backend orchestration
+		"batchpoller",
 	}
 	// `activity` (+ `activitystore`) only registers when DatabasePath is
 	// set — the NutsDB sidecar can't open without a path. Match the
@@ -343,6 +345,11 @@ func NewServer(store database.Store) *Server {
 	}
 	wireServerFromContainer(server, regContainer)
 	server.container = regContainer
+
+	// Register batch poller handlers now that batchPoller is wired from container.
+	if server.batchPoller != nil {
+		server.registerBatchPollerHandlers()
+	}
 
 	// Propagate rootDir into the store so LibraryStats can split organized vs unorganized.
 	resolvedStore.SetRootDir(config.AppConfig.RootDir)
@@ -448,6 +455,7 @@ func NewServer(store database.Store) *Server {
 	}
 
 	// Wire AI scan store into main PebbleDB (aiscan: key namespace, no separate file).
+	// BatchPoller is now registered via serviceregistry (W3).
 	if ps, ok := database.GetGlobalStore().(*database.PebbleStore); ok {
 		aiScanStore, err := database.NewAIScanStoreFromDB(ps.DB())
 		if err != nil {
@@ -457,8 +465,6 @@ func NewServer(store database.Store) *Server {
 			aiParserInst := newAIParser(config.AppConfig.OpenAIAPIKey, config.AppConfig.EnableAIParsing)
 			if p, ok := aiParserInst.(*ai.OpenAIParser); ok {
 				server.pipelineManager = aiscan.NewPipelineManager(aiScanStore, database.GetGlobalStore(), p)
-				server.batchPoller = NewBatchPoller(database.GetGlobalStore(), p)
-				server.registerBatchPollerHandlers()
 			}
 		}
 	}
