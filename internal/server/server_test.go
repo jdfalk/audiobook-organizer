@@ -6,6 +6,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -63,7 +64,7 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 			server.fileIOPool.Stop()
 		}
 		if server.writeBackBatcher != nil {
-			server.writeBackBatcher.Stop()
+			_ = server.writeBackBatcher.Stop(context.Background())
 		}
 		if store != nil {
 			database.SetGlobalStore(nil)
@@ -93,7 +94,7 @@ func setupTestServerWithStore(t *testing.T, store database.Store) (*Server, func
 			server.fileIOPool.Stop()
 		}
 		if server.writeBackBatcher != nil {
-			server.writeBackBatcher.Stop()
+			_ = server.writeBackBatcher.Stop(context.Background())
 		}
 		// Don't close the store - caller is responsible for cleanup
 	}

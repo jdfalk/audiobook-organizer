@@ -520,17 +520,16 @@ func NewServer(store database.Store) *Server {
 	server.writeBackBatcher = server.itunesSvc.Batcher
 	server.fileIOPool = NewFileIOPool(4)
 
-	// Wire writeBackBatcher into services that need it
-	server.metadataFetchService.SetWriteBackBatcher(server.writeBackBatcher)
+	// writeBackBatcher fan-out into metafetch / merge / quarantine /
+	// audiobook now happens in those services' PostInit hooks (they pull
+	// "writebackbatcher" via TryGet on their local enqueuer interface).
+	// organizeService.SetWriteBackBatcher + ScanEnqueuer stay inline:
+	// OrganizeService lives in this package and ScanEnqueuer captures
+	// server.opRegistry — not yet a clean container service.
 	server.organizeService.SetWriteBackBatcher(server.writeBackBatcher)
 	server.organizeService.ScanEnqueuer = func(ctx context.Context) error {
 		_, err := server.opRegistry.EnqueueOp(ctx, "library.scan", nil)
 		return err
-	}
-	server.mergeService.SetWriteBackBatcher(server.writeBackBatcher)
-	server.quarantineSvc.SetWriteBackBatcher(server.writeBackBatcher)
-	if server.audiobookService != nil && server.writeBackBatcher != nil {
-		server.audiobookService.SetITunesEnqueuer(server.writeBackBatcher)
 	}
 
 	// Wire iTunes-specific organizer callbacks now that itunesSvc is ready.

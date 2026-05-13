@@ -65,5 +65,13 @@ func (mfs *Service) PostInit(ctx context.Context, c *serviceregistry.Container) 
 		mfs.SetActivityService(svc)
 	}
 
+	// iTunes write-back enqueuer — type-asserted via the local
+	// WriteBackEnqueuer interface so this file stays out of any
+	// internal/itunes/service import cycle (itunes/service imports
+	// metafetch).
+	if enq, ok := serviceregistry.TryGet[WriteBackEnqueuer](c, "writebackbatcher"); ok && enq != nil {
+		mfs.SetWriteBackBatcher(enq)
+	}
+
 	return nil
 }
