@@ -1,11 +1,74 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.64.0 -->
+<!-- version: 2.65.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-13 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Refactors
+
+#### May 13, 2026 — SERVER-PLUGIN-REG Waves 2.INT through 7: feature-complete migration
+
+Closes the SERVER-PLUGIN-REG migration in seven waves landed today. **All
+service registration scaffolding is now in place across the codebase.**
+Production code continues to flow through the existing inline NewServer
+construction; the registry-driven path is built in parallel and exercised
+by the W1 + W2 service field assignments via `wireServerFromContainer`.
+
+**Wave 2.INT (PR #869)** — wires the 5 W2 cross-wired services
+(`metafetch`, `merge`, `organize`, `quarantine`, `eventbus`) plus the
+conditional `activity` service into NewServer. Deletes 3 struct-literal
+entries + the conditional `if dbPath != "" { activityService = ... }`
+block + the inline `eventBus`/`quarantineSvc` construction.
+
+**Wave 3 (PRs #870–#876 + #877 fix-up)** — registers 7 Start/Stop
+services: `writebackbatcher`, `updatescheduler`, `activitywriter`,
+`searchindex`, `opregistry`, `batchpoller`, `librarywatcher`. Several
+needed adapter types or signature changes (notably `activity.Writer.Start/Stop`
+gained `context.Context` arguments). #877 fixed a stale test caller that
+slipped through the Writer signature change.
+
+**Wave 4 (PR #878)** — embedding/AI cluster: registers `embedclient`,
+`llmparser`, `embeddingstore`, `chromemstore`, `aijobsstore`, `dedup`,
+`metadatascorer`, `metadatallmscorer`. All conditional on config; Build
+funcs return typed nil when preconditions aren't met. The
+`internal/database → internal/config → internal/database` import cycle
+forced 4 of these registrations to live in `internal/server/registry_wire.go`
+rather than `internal/database/`.
+
+**Wave 5 (PR #879)** — UOS plugins: registers `dedupplugin`,
+`acoustidplugin`, `delugeplugin` with real Build funcs. `maintenanceplugin`
+and `itunesplugin` ship as documented stubs because their constructors
+take server-bound closures (`OnBookCreated → fireDedupOnImport`,
+`ServerDeps` carrying `*Server` references) that block clean container
+registration today.
+
+**Wave 6 (PR #880)** — extracts `internal/server/scheduler_extra_ops.go`
+(690 lines, 10 `*Server` methods) into `internal/scheduler/extra_ops.go`
+as methods on a new `*ExtraOpsRegistrar` with a typed `Deps` struct
+(7 fields including the original 5 plus `AudiobookService` and `Store`).
+Server keeps a thin shim because `schedulerExtraOpParams` is still
+consumed by `server_lifecycle.go` for resumed ops. **Closes SERVER-THIN-RESIDUAL.**
+
+**Wave 7 (this PR)** — final wrap-up:
+- All wave entries recorded above
+- TODO marks SERVER-PLUGIN-REG ✅ complete + SERVER-THIN-RESIDUAL ✅ complete
+- New follow-up tracked: **SERVER-GLOBAL-STORE-AUDIT** — ~120 production
+  `database.GetGlobalStore()` callers remain across `internal/scanner`,
+  `internal/audiobooks/helpers`, `internal/server/*`, etc. Removing those
+  in favor of explicit store parameters or container `Get` calls is its
+  own multi-PR sweep; deferred from W7 because the scope is too large
+  for a final-cleanup PR.
+
+What's NOT yet flipped: the registry container's `Start`/`Stop` phases
+aren't wired into Server lifecycle. Services are registered but the
+inline `NewServer` construction is still the runtime path. The Container
+builds parallel copies that are accessed via `wireServerFromContainer`
+for typed field assignments only. The lifecycle flip (Container.Start →
+service goroutines; Container.Stop → orderly drain) is captured as a
+separate follow-up: **SERVER-LIFECYCLE-FLIP**.
 
 ### Fixes
 
