@@ -471,11 +471,11 @@ func (s *Server) getAuthorBooks(c *gin.Context) {
 	for i, b := range books {
 		bookIDs[i] = b.ID
 	}
-	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := batchFetchBookAuthorsAndNarrators(bookIDs)
+	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := s.batchFetchBookAuthorsAndNarrators(bookIDs)
 	
 	enriched := make([]enrichedBookResponse, len(books))
 	for i := range books {
-		enriched[i] = enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
+		enriched[i] = s.enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
 	}
 	httputil.RespondWithOK(c, gin.H{"items": enriched, "count": len(enriched)})
 }
@@ -697,11 +697,11 @@ func (s *Server) getSeriesBooks(c *gin.Context) {
 	for i, b := range books {
 		bookIDs[i] = b.ID
 	}
-	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := batchFetchBookAuthorsAndNarrators(bookIDs)
+	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := s.batchFetchBookAuthorsAndNarrators(bookIDs)
 	
 	enriched := make([]enrichedBookResponse, len(books))
 	for i := range books {
-		enriched[i] = enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
+		enriched[i] = s.enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
 	}
 	httputil.RespondWithOK(c, gin.H{"items": enriched, "count": len(enriched)})
 }

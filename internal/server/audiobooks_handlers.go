@@ -320,7 +320,7 @@ func (s *Server) getAudiobook(c *gin.Context) {
 		return
 	}
 
-	httputil.RespondWithOK(c, enrichBookForResponseSingle(book))
+	httputil.RespondWithOK(c, s.enrichBookForResponseSingle(book))
 }
 
 // listAudiobookSegments returns file segments for a multi-file audiobook.
@@ -1332,7 +1332,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		s.writeBackBatcher.Enqueue(id)
 	}
 
-	httputil.RespondWithOK(c, enrichBookForResponseSingle(updatedBook))
+	httputil.RespondWithOK(c, s.enrichBookForResponseSingle(updatedBook))
 }
 
 func (s *Server) deleteAudiobook(c *gin.Context) {
