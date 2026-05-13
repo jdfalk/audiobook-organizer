@@ -44,7 +44,7 @@ import (
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
-	itunesplug "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
+	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
 	maintenanceplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
@@ -403,17 +403,10 @@ func NewServer(store database.Store) *Server {
 		}
 	}
 
-	// iTunes service is container-built in registry_wire.go and wired into
-	// server.itunesSvc by wireServerFromContainer above. The plugin
-	// registration stays inline here because it depends on server.opRegistry
-	// (which is itself container-wired) and the RootDir guard mirrors the
-	// other plugin-registration guards in this block.
-	if config.AppConfig.RootDir != "" && server.itunesSvc != nil && server.itunesSvc.Enabled() {
-		itunesPlugin := itunesplug.New(server.itunesSvc, resolvedStore)
-		if err := itunesPlugin.Register(server.opRegistry); err != nil {
-			log.Printf("[server] iTunes plugin register: %v", err)
-		}
-	}
+	// iTunes service + plugin are both container-built and registered via
+	// PostInit. See internal/server/registry_wire.go ("itunes") and
+	// internal/plugins/itunes/register.go ("itunesplugin"). No inline
+	// wiring is needed here.
 
 	// Initialize update scheduler
 	server.updateScheduler = updater.NewScheduler(server.updater, func() updater.SchedulerConfig {
