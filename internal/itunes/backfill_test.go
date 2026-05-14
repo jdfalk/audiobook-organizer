@@ -5,6 +5,7 @@
 package itunes
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -71,7 +72,7 @@ func (m *MockBackfillStore) SetSetting(key, value, dataType string, internal boo
 }
 
 func TestBackfillExternalIDsWithNilStore(t *testing.T) {
-	err := BackfillExternalIDs(nil)
+	err := BackfillExternalIDs(context.Background(), nil)
 	if err != nil {
 		t.Errorf("expected nil error for nil store, got %v", err)
 	}
@@ -86,7 +87,7 @@ func TestBackfillExternalIDsCollectsBookPIDs(t *testing.T) {
 		ITunesPersistentID:   &pidValue,
 	}
 
-	err := BackfillExternalIDs(mockStore)
+	err := BackfillExternalIDs(context.Background(), mockStore)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -101,7 +102,7 @@ func TestBackfillITunesTrackPIDsWithNoConfiguredPath(t *testing.T) {
 	mockStore := NewMockBackfillStore()
 
 	// With no configured path, should return 0 gracefully
-	count, err := BackfillITunesTrackPIDs(mockStore)
+	count, err := BackfillITunesTrackPIDs(context.Background(), mockStore)
 	if count != 0 {
 		t.Errorf("expected 0 registered PIDs with no configured path, got %d", count)
 	}

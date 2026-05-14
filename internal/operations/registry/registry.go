@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -34,6 +35,13 @@ type Registry struct {
 	logger          *slog.Logger
 	workers         int
 	abandoned       *abandonedTracker
+
+	// shuttingDown is flipped at the top of Shutdown so the abandoned-run
+	// watchdog in executeRun stops spawning replacement workers. Without
+	// this flag the watchdog respawns a worker right as bgCtx is being
+	// canceled — the new worker's runs then race against database.Close()
+	// and panic with "pebble: closed".
+	shuttingDown atomic.Bool
 
 	// Tunable intervals for testing. Zero means use defaults.
 	watchdogInterval time.Duration
@@ -324,6 +332,12 @@ func (r *Registry) ActiveDefs() []OperationDef {
 // as interrupted per their ResumePolicy and returns.
 func (r *Registry) Shutdown(ctx context.Context) error {
 	r.logger.Info("registry: shutting down")
+	// Flip the shutdown flag before canceling handles so the abandoned-run
+	// watchdog (in worker.go executeRun) refuses to spawn replacement
+	// workers. Without this, a replacement worker is born just as the
+	// embedded Pebble store is closing, and its next DB write panics
+	// with "pebble: closed".
+	r.shuttingDown.Store(true)
 
 	// Gather running ops.
 	r.mu.Lock()
