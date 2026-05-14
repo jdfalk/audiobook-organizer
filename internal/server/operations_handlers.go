@@ -361,25 +361,51 @@ func (s *Server) listStaleOperations(c *gin.Context) {
 	})
 }
 
-// getOperationLogs returns logs for a given operation
+// getOperationLogs returns logs for a given operation. UOS v2 ops persist
+// their log lines to op_logs_v2 via dbReporter; v1 ops used operation_logs.
+// We query v2 first (canonical for all currently-enqueued ops) and fall
+// back to v1 only if v2 has nothing — legacy rows from before the v2 cutover.
 func (s *Server) getOperationLogs(c *gin.Context) {
 	if s.Store() == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 	id := c.Param("id")
-	logs, err := s.Store().GetOperationLogs(id)
-	if err != nil {
-		httputil.InternalError(c, "failed to get operation logs", err)
-		return
-	}
-	// Optional tail parameter for last N log lines
+	limit := 1000
 	if tailStr := c.Query("tail"); tailStr != "" {
-		if n, convErr := strconv.Atoi(tailStr); convErr == nil && n > 0 && n < len(logs) {
-			logs = logs[len(logs)-n:]
+		if n, convErr := strconv.Atoi(tailStr); convErr == nil && n > 0 {
+			limit = n
 		}
 	}
-	httputil.RespondWithOK(c, gin.H{"items": logs, "count": len(logs)})
+	type logItem struct {
+		Level     string    `json:"level"`
+		Message   string    `json:"message"`
+		Attrs     string    `json:"attrs,omitempty"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	var items []logItem
+	if v2, ok := s.Store().(database.OpsV2Store); ok {
+		v2Logs, err := v2.GetOpLogsV2(id, limit)
+		if err != nil {
+			httputil.InternalError(c, "failed to get operation logs", err)
+			return
+		}
+		for _, l := range v2Logs {
+			items = append(items, logItem{Level: l.Level, Message: l.Message, Attrs: l.Attrs, CreatedAt: l.CreatedAt})
+		}
+	}
+	if len(items) == 0 {
+		v1Logs, err := s.Store().GetOperationLogs(id)
+		if err == nil {
+			for _, l := range v1Logs {
+				items = append(items, logItem{Level: l.Level, Message: l.Message, CreatedAt: l.CreatedAt})
+			}
+			if len(items) > limit {
+				items = items[len(items)-limit:]
+			}
+		}
+	}
+	httputil.RespondWithOK(c, gin.H{"items": items, "count": len(items)})
 }
 
 func (s *Server) getOperationResult(c *gin.Context) {
