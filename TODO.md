@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.29.0 -->
+<!-- version: 8.30.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-13 -->
+<!-- last-edited: 2026-05-14 -->
 
 # Project TODO
 
@@ -89,18 +89,17 @@ incrementally:
   Best done as a series of small PRs, one per package, replacing with explicit
   store params or container `Get` calls.
 
-- [ ] **PLUGIN-DECOUPLE-SERVER-CLOSURES** Decouple `itunesservice.Service` from
-  server-bound closures (`OnBookCreated`, `OrganizerFactory`) and decouple
-  `maintenance.Plugin`'s `ServerDeps` from `*Server`. These coupling points
-  blocked the W3.1 (writebackbatcher), W5.1 (maintenance), and W5.2 (itunes)
-  registrations from being non-stub. Once decoupled, those plugins can build
-  for real from the container.
+- [~] **PLUGIN-DECOUPLE-SERVER-CLOSURES** Decouple `itunesservice.Service` from
+  server-bound closures (`OnBookCreated`, `OrganizerFactory`). Deferred to
+  post-matcher work.
 
-  **Status (2026-05-13):** The maintenance plugin's empty stub registration
-  was deleted (PR forthcoming). The plugin registers inline from
-  `internal/server/server.go:~402` and that's the documented canonical
-  pattern until ServerDeps itself is broken up. itunesservice closures
-  remain to be decoupled.
+  **Maintenance plugin — done (PR #935).** The empty stub registration was
+  deleted; the plugin registers inline from `internal/server/server.go:~402`
+  and that is the documented canonical pattern until `ServerDeps` itself is
+  broken up. See `internal/plugins/maintenance/register.go` for the rationale.
+
+  **itunesservice — deferred.** Closures (`OnBookCreated`, `OrganizerFactory`)
+  remain coupled to `*Server`. Work is scoped but not yet started.
 
   Cleanest decoupling path: introduce a `BookCreated` event on the existing
   `eventbus` (now registered in the container). Dedup engine subscribes
