@@ -2407,6 +2407,14 @@ export interface SearchMetadataResponse {
   query: string;
   sources_tried?: string[];
   sources_failed?: Record<string, string>;
+  /** METADATA-CACHED-MATCHER: true when the response came from the
+   *  persistent metadata_cache:<id> Pebble row rather than a fresh
+   *  source chain run. */
+  from_cache?: boolean;
+  /** True when the cache row is within MetadataCacheTTL (30 days). */
+  is_fresh?: boolean;
+  /** When the cache row was written. */
+  fetched_at?: string;
 }
 
 export async function searchMetadata(
