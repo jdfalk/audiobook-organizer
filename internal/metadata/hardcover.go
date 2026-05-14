@@ -164,7 +164,8 @@ type hardcoverImage struct {
 // SearchByTitle searches Hardcover by title.
 func (c *HardcoverClient) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
 	if c.apiToken == "" {
-		log.Printf("[DEBUG] Hardcover: no API token configured, skipping")
+		// Silent — no token is a config state, not an event worth logging
+		// on every per-book fetch.
 		return nil, nil
 	}
 	return c.search(ctx, title)
@@ -174,7 +175,8 @@ func (c *HardcoverClient) SearchByTitle(ctx context.Context, title string) ([]Bo
 // the GraphQL search_books endpoint only accepts a single query string).
 func (c *HardcoverClient) SearchByTitleAndAuthor(ctx context.Context, title, author string) ([]BookMetadata, error) {
 	if c.apiToken == "" {
-		log.Printf("[DEBUG] Hardcover: no API token configured, skipping")
+		// Silent — no token is a config state, not an event worth logging
+		// on every per-book fetch.
 		return nil, nil
 	}
 	query := title + " " + author
