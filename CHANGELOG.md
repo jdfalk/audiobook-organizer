@@ -9,6 +9,21 @@
 
 ### Features
 
+#### May 13, 2026 — METADATA-CACHED-MATCHER cache invalidation completeness (PRs #941, #942, #944)
+
+Every write path that mutates a book's identity now drops the cached
+candidates so the next read fetches against current title/author.
+
+- **#941**: `fetchAudiobookMetadata` (fetch+apply) and
+  `revertAudiobookMetadata` invalidate after write.
+- **#942**: `undoLastApply` and `undoMetadataChange` invalidate after
+  successful field revert.
+- **#944**: `PebbleStore.UpdateBook` invalidates inside the same Pebble
+  batch when any of `title`, `author_id`, `series_id`, `isbn10`,
+  `isbn13`, or `asin` changes. Catches every other UpdateBook caller
+  (organize, dedup, batch-edit, deluge centralization, scanner
+  enrichment) without a handler audit.
+
 #### May 13, 2026 — METADATA-CACHED-MATCHER frontend wiring (PRs #927, #928, #929, #931, #937)
 
 Matcher frontend hooked up to the new cache. Backend invalidation

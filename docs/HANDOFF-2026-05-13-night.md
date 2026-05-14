@@ -60,8 +60,10 @@ musl-cross build env is missing `-lz`).
 | #940 | (merged) | docs(handoff): record PRs #938 + #939 | merged + deployed |
 | #941 | (merged) | feat(matcher): invalidate cache on fetch-apply + revert | merged + deployed |
 | #942 | (merged) | feat(matcher): invalidate cache on undoLastApply + undoMetadataChange | merged + deployed |
+| #943 | (merged) | docs(handoff): record PRs #940-#942 | merged + deployed |
+| #944 | (merged) | feat(pebble): invalidate metadata_cache when identity fields change | merged + deployed |
 
-CHANGELOG `## [Unreleased]` is up to date through PR #937. PRs #939-#942 are not yet in CHANGELOG — add them in the next PR.
+CHANGELOG `## [Unreleased]` is up to date through PR #937. PRs #939-#944 are not yet in CHANGELOG — add them in the next PR.
 
 ## Outstanding work, ranked by ROI
 
