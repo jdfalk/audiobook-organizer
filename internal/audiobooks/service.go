@@ -1,5 +1,5 @@
 // file: internal/audiobooks/service.go
-// version: 1.24.0
+// version: 1.25.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 package audiobooks
@@ -845,12 +845,54 @@ func splitMultipleNames(name string) []string {
 	return result
 }
 
-// EnrichAudiobooksWithNames adds author and series names to audiobook details
+// EnrichAudiobooksWithNames adds author and series names to audiobook details.
+// Batch-fetches authors and series by unique IDs to avoid N+1 DB lookups.
 func (svc *AudiobookService) EnrichAudiobooksWithNames(books []database.Book) []AudiobookDetail {
+	// Collect unique IDs that need DB lookups (skip pre-loaded objects).
+	authorIDs := make([]int, 0)
+	seriesIDs := make([]int, 0)
+	for i := range books {
+		b := &books[i]
+		if b.Author == nil && b.AuthorID != nil {
+			authorIDs = append(authorIDs, *b.AuthorID)
+		}
+		if b.Series == nil && b.SeriesID != nil {
+			seriesIDs = append(seriesIDs, *b.SeriesID)
+		}
+	}
+
+	var authorsMap map[int]*database.Author
+	var seriesMap map[int]*database.Series
+	if len(authorIDs) > 0 && svc.store != nil {
+		authorsMap, _ = svc.store.GetAuthorsByIDs(authorIDs)
+	}
+	if len(seriesIDs) > 0 && svc.store != nil {
+		seriesMap, _ = svc.store.GetSeriesByIDs(seriesIDs)
+	}
+
 	enrichedBooks := make([]AudiobookDetail, 0, len(books))
-	for _, book := range books {
-		authorName, seriesName := resolveAuthorAndSeriesNames(svc.store, &book)
-		detail := AudiobookDetail{Book: &book}
+	for i := range books {
+		b := &books[i]
+		detail := AudiobookDetail{Book: b}
+
+		authorName := ""
+		if b.Author != nil {
+			authorName = b.Author.Name
+		} else if b.AuthorID != nil && authorsMap != nil {
+			if a, ok := authorsMap[*b.AuthorID]; ok {
+				authorName = a.Name
+			}
+		}
+
+		seriesName := ""
+		if b.Series != nil {
+			seriesName = b.Series.Name
+		} else if b.SeriesID != nil && seriesMap != nil {
+			if s, ok := seriesMap[*b.SeriesID]; ok {
+				seriesName = s.Name
+			}
+		}
+
 		if authorName != "" {
 			detail.AuthorName = &authorName
 		}

@@ -1,5 +1,5 @@
 // file: internal/database/sqlite_store_books.go
-// version: 1.0.2
+// version: 1.0.3
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-05
 
@@ -192,6 +192,23 @@ func (s *SQLiteStore) GetAuthorByID(id int) (*Author, error) {
 		return nil, err
 	}
 	return &author, nil
+}
+
+func (s *SQLiteStore) GetAuthorsByIDs(ids []int) (map[int]*Author, error) {
+	result := make(map[int]*Author, len(ids))
+	for _, id := range ids {
+		if _, already := result[id]; already {
+			continue
+		}
+		a, err := s.GetAuthorByID(id)
+		if err != nil {
+			return nil, err
+		}
+		if a != nil {
+			result[id] = a
+		}
+	}
+	return result, nil
 }
 
 func (s *SQLiteStore) GetAuthorByName(name string) (*Author, error) {
@@ -420,6 +437,23 @@ func (s *SQLiteStore) GetSeriesByID(id int) (*Series, error) {
 		return nil, err
 	}
 	return &series, nil
+}
+
+func (s *SQLiteStore) GetSeriesByIDs(ids []int) (map[int]*Series, error) {
+	result := make(map[int]*Series, len(ids))
+	for _, id := range ids {
+		if _, already := result[id]; already {
+			continue
+		}
+		se, err := s.GetSeriesByID(id)
+		if err != nil {
+			return nil, err
+		}
+		if se != nil {
+			result[id] = se
+		}
+	}
+	return result, nil
 }
 
 func (s *SQLiteStore) GetSeriesByName(name string, authorID *int) (*Series, error) {
