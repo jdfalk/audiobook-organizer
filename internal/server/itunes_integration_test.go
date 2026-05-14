@@ -5,6 +5,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -51,6 +52,10 @@ func TestITunesImport_FullWorkflow(t *testing.T) {
 
 	// Import via HTTP handler
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":true}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -114,6 +119,10 @@ func TestITunesImport_OrganizeMode(t *testing.T) {
 	}, xmlPath)
 
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"organize","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -157,6 +166,10 @@ func TestITunesImport_SkipDuplicates(t *testing.T) {
 	}, xmlPath)
 
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	importOnce := func() int {
 		body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":true}`, xmlPath)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
@@ -202,6 +215,10 @@ func TestITunesWriteBack(t *testing.T) {
 
 	// Execute write-back via HTTP — ITL is not configured in test, so should return 400
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	body := fmt.Sprintf(`{"audiobook_ids":["%s"]}`, created.ID)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/write-back", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -231,6 +248,10 @@ func TestITunesValidate_Endpoint(t *testing.T) {
 	}, xmlPath)
 
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	body := fmt.Sprintf(`{"library_path":"%s"}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/validate", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

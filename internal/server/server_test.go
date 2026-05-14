@@ -58,8 +58,22 @@ func setupTestServer(t *testing.T) (*Server, func()) {
 	// Create server (NewServer creates hub, queue, batcher, fileIOPool internally)
 	server := NewServer(store)
 
+	// Start the operations registry's dispatcher + worker pool. Without
+	// this, ops enqueued by the test never execute (enqueued in the v2
+	// table but no worker is reading from r.nextRun). Tests previously
+	// timing out at 10s with "timeout waiting for operation" were
+	// hitting this — the registry's Start lives in Container.Start
+	// (lifecycle-flip) which setupTestServer doesn't call. Start it
+	// explicitly here so the registry processes queued runs.
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+	}
+
 	// Cleanup function
 	cleanup := func() {
+		if server.opRegistry != nil {
+			_ = server.opRegistry.Shutdown(context.Background())
+		}
 		if server.fileIOPool != nil {
 			server.fileIOPool.Stop()
 		}

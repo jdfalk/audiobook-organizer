@@ -48,7 +48,10 @@ func (p *Plugin) Register(r sdk.Registry) error {
 
 	defs := []sdk.OperationDef{
 		p.syncDef(),
-		p.importDef(),
+		// importDef is a stub — the canonical itunes.import op is
+		// registered by server.RegisterITunesImportOp (itunes_ops.go),
+		// which wires Importer.Execute. Registering the stub here would
+		// collide with the real one and route through a no-op subprocess.
 		p.pathReconciledDef(),
 		p.pathRepairDef(),
 		p.positionSyncDef(),

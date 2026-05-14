@@ -131,9 +131,22 @@ func FindRepoRoot(t *testing.T) string {
 }
 
 // WaitForOp polls until an operation completes or times out.
+//
+// Checks v2 first (operations enqueued via opRegistry.EnqueueOp land
+// in the operations_v2 table) and falls back to v1 for legacy paths.
+// Pass a database.Store (which embeds OpsV2Store) so v2 lookups work;
+// the parameter type stays OperationStore for source-compat.
 func WaitForOp(t *testing.T, store database.OperationStore, opID string, timeout time.Duration) {
 	t.Helper()
 	require.Eventually(t, func() bool {
+		if v2, ok := store.(database.OpsV2Store); ok {
+			if row, err := v2.GetOperationV2(opID); err == nil && row != nil {
+				switch row.Status {
+				case "completed", "failed", "canceled":
+					return true
+				}
+			}
+		}
 		op, err := store.GetOperationByID(opID)
 		return err == nil && op != nil && (op.Status == "completed" || op.Status == "failed")
 	}, timeout, 100*time.Millisecond)

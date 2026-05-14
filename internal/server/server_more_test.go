@@ -55,11 +55,22 @@ func copyFixtureToDir(t *testing.T, name, dir string) string {
 
 func waitForOperationStatus(t *testing.T, id string, timeout time.Duration) *database.Operation {
 	t.Helper()
+	if id == "" {
+		t.Fatal("waitForOperationStatus: empty op id (handler likely returned the v2 envelope this helper used to ignore)")
+	}
 
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		op, err := database.GetGlobalStore().GetOperationByID(id)
-		if err == nil && op != nil {
+		// v2 path first — ops enqueued via opRegistry.EnqueueOp land in
+		// operation_v2 (and never in the legacy ops table). Fall back
+		// to the legacy ops table for endpoints that still use v1 storage.
+		if row, err := database.GetGlobalStore().GetOperationV2(id); err == nil && row != nil {
+			switch row.Status {
+			case "completed", "failed", "canceled":
+				return &database.Operation{ID: row.ID, Status: row.Status}
+			}
+		}
+		if op, err := database.GetGlobalStore().GetOperationByID(id); err == nil && op != nil {
 			switch op.Status {
 			case "completed", "failed", "canceled":
 				return op
@@ -606,11 +617,20 @@ func TestStartScanOperation(t *testing.T) {
 	server.router.ServeHTTP(w, req)
 	require.Equal(t, http.StatusAccepted, w.Code)
 
+	// startScan returns {"op_id": "...", "id": "..."} (no `data` envelope).
+	// Read the flat field; the old `Data database.Operation` shape was a
+	// vestige of an earlier handler version and produced an empty ID,
+	// which is why this test was on the SERVER-THIN-8 baseline list.
 	var resp struct {
-		Data database.Operation `json:"data"`
+		OpID string `json:"op_id"`
+		ID   string `json:"id"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	waitForOperationStatus(t, resp.Data.ID, 10*time.Second)
+	opID := resp.OpID
+	if opID == "" {
+		opID = resp.ID
+	}
+	waitForOperationStatus(t, opID, 10*time.Second)
 }
 
 func TestStartOrganizeOperation(t *testing.T) {
@@ -640,10 +660,15 @@ func TestStartOrganizeOperation(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, w.Code)
 
 	var resp struct {
-		Data database.Operation `json:"data"`
+		OpID string `json:"op_id"`
+		ID   string `json:"id"`
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	waitForOperationStatus(t, resp.Data.ID, 10*time.Second)
+	opID := resp.OpID
+	if opID == "" {
+		opID = resp.ID
+	}
+	waitForOperationStatus(t, opID, 10*time.Second)
 	waitForQueueIdle(t, server, 10*time.Second)
 }
 
