@@ -48,7 +48,11 @@ musl-cross build env is missing `-lz`).
 | #927 | (merged) | feat(web): listCachedCandidates() API client | merged + deployed |
 | #928 | (merged) | feat(matcher): batch fetch writes cache; Resume Review consults cache first | merged + deployed |
 | #929 | (merged) | feat(web): MetadataSearchDialog Refresh button bypasses cache | merged + deployed |
-| #931 | (merged) | feat(web): rename Fetch & Review → Fetch Selected; Resume Review → Review | merged, deploy in flight |
+| #931 | (merged) | feat(web): rename Fetch & Review → Fetch Selected; Resume Review → Review | merged + deployed |
+| #932 | (merged) | docs: handoff update through matcher Task 11 | merged + deployed |
+| #933 | (merged) | fix(activity): tier-by-level so Activity Log shows info/warn/error entries | merged + deployed |
+| #934 | (merged) | chore(metadata): silence per-fetch Hardcover no-token log | merged + deployed |
+| #935 | (merged) | chore(plugins): delete empty maintenance plugin container stub | merged, deploy in flight |
 
 CHANGELOG `## [Unreleased]` already covers PRs #905-#920. PRs #921 and #922 are NOT yet in CHANGELOG — add them in the first PR you ship.
 
@@ -104,20 +108,18 @@ if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil 
 
 The actual decoupling (event-bus for `OnBookCreated`, explicit container deps for each of the 25 methods) is at least a 5-PR effort. The user knows this — the TODO entry calls it out. Just stop pretending the stub is in flight.
 
-### D. Investigate Activity Log entries — still 0 (USER REPORTED, NOT FIXED)
+### D. Activity Log entries — root cause found and fixed (PR #933)
 
-Even with `slog.SetDefault → MultiWriter(stderr, activityWriter)` deployed,
-the UI shows "0 entries" in the activity feed. The slog text-handler emits
-`time=... level=INFO msg="..."` lines; `internal/activity/writer.go:ParseLogLine`
-doesn't recognize that format and falls through to `source=server type=system`.
-Entries should be created with those defaults — investigate why none show:
+Root cause: every line `activity.Writer.Write` parsed was assigned
+`Tier: "debug"`. The Activity Log UI default has `debug` unchecked
+under tier filters, so `exclude_tiers=debug` got sent to the server
+and every persisted entry was filtered out before render.
 
-1. SSH to prod (`ssh jdfalk@172.16.2.30`), check the activity NutsDB buckets: `sudo ls -la /var/lib/audiobook-organizer/activity.nuts/`.
-2. The activity service writes via `writeBatch` (writer.go:187). Check whether `writeBatch` actually persists to nutsdb. Grep for the persistence call. Likely candidate: `activityStorer.WriteEntries`.
-3. Test locally: `make build && ./dist/audiobook-organizer-linux-amd64 --once-then-exit` — confirm that startup slog lines land in a fresh DB.
-4. If entries are written but UI shows 0, check `ActivityLog.tsx` filters — the screen has filters `audit/change/digest/debug/hide-no-op`. The `system` type isn't in the default included filters and may be invisible.
-
-The fastest user-visible win is option 4: ensure the default filter set includes `type=system` OR add a "show all" toggle. Search `STORAGE_KEYS.ACTIVITY_SOURCE_PREFS` and the filter rendering in `web/src/pages/ActivityLog.tsx`.
+Fix (PR #933): derive tier from level — `info`/`warn`/`error` → tier
+`change` (visible by default), `debug` stays `debug`. Slog and stdlib
+log lines should now appear in the feed without the user touching
+filters. **Verify after deploy:** open Activity Log on prod, expect
+non-empty entry list with registry/scanner/backfill records.
 
 ### E. Logs-takes-forever (USER REPORTED — partially fixed)
 
