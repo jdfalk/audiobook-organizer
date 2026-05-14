@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.31.0 -->
+<!-- version: 8.32.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-14 -->
 
@@ -324,12 +324,9 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### SEC — Filesystem / Security (4 tasks)
 
-- [ ] **SEC-1** `fix/browse-dir-allowlist` — Restrict BrowseDirectory to configured import paths
-  → [`2026-04-30-sec-1-browse-allowlist.md`](docs/superpowers/bot-tasks/2026-04-30-sec-1-browse-allowlist.md)
-- [ ] **SEC-2** `fix/auth-enabled-default` — Startup warning when auth is disabled
-  → [`2026-04-30-sec-2-auth-default.md`](docs/superpowers/bot-tasks/2026-04-30-sec-2-auth-default.md)
-- [ ] **SEC-3** `fix/rate-limit-default` — Startup warning when rate limiting is disabled
-  → [`2026-04-30-sec-3-rate-limit-default.md`](docs/superpowers/bot-tasks/2026-04-30-sec-3-rate-limit-default.md)
+- [x] **SEC-1** `fix/browse-dir-allowlist` — Done: `isAllowedPath` check in `fileops/service.go:BrowseDirectory`; returns `ErrPathNotAllowed`.
+- [x] **SEC-2** `fix/auth-enabled-default` — Done: `[WARN] authentication is disabled` log in `server_lifecycle.go:851`.
+- [x] **SEC-3** `fix/rate-limit-default` — Done: `[WARN] rate limiting is disabled` log in `server_lifecycle.go:854`.
 - [ ] **SEC-4** `fix/ratelimit-o1-cleanup` — Remove duplicate o1 rate-limit middleware
   → [`2026-04-30-sec-4-ratelimit-cleanup.md`](docs/superpowers/bot-tasks/2026-04-30-sec-4-ratelimit-cleanup.md)
 
@@ -378,31 +375,22 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### SRV — Server Response Optimization (2 tasks)
 
-- [ ] **SRV-1** `feat/server-gzip-compression` — Add gzip compression middleware
-  → [`2026-04-30-srv-1-gzip.md`](docs/superpowers/bot-tasks/2026-04-30-srv-1-gzip.md)
-- [ ] **SRV-2** `fix/sse-heartbeat` — Add SSE heartbeat to prevent proxy timeouts
-  → [`2026-04-30-srv-2-sse-heartbeat.md`](docs/superpowers/bot-tasks/2026-04-30-srv-2-sse-heartbeat.md)
+- [x] **SRV-1** `feat/server-gzip-compression` — Done: `gzip.Gzip(DefaultCompression)` middleware wired in `server.go` (excludes `/api/events`).
+- [x] **SRV-2** `fix/sse-heartbeat` — Done: `fmt.Fprintf(c.Writer, ": heartbeat\n\n")` in `operations_v2_handlers.go:237`.
 
 ### FE — Frontend Cleanup (10 tasks)
 
 - [ ] **FE-1** `refactor/library-filter-panel` — Extract FilterPanel from Library.tsx
   → [`2026-04-30-fe-1-filter-panel.md`](docs/superpowers/bot-tasks/2026-04-30-fe-1-filter-panel.md)
-- [ ] **FE-2** `refactor/library-book-grid` — Extract BookGrid from Library.tsx
-  → [`2026-04-30-fe-2-book-grid.md`](docs/superpowers/bot-tasks/2026-04-30-fe-2-book-grid.md)
-- [ ] **FE-3** `refactor/library-batch-toolbar` — Extract BatchToolbar from Library.tsx
-  → [`2026-04-30-fe-3-batch-toolbar.md`](docs/superpowers/bot-tasks/2026-04-30-fe-3-batch-toolbar.md)
+- [x] **FE-2** `refactor/library-book-grid` — Done: `LibraryBookGrid.tsx` extracted.
+- [x] **FE-3** `refactor/library-batch-toolbar` — Done: `LibraryToolbar.tsx` extracted.
 - [ ] **FE-4** `refactor/settings-general-tab` — Extract GeneralSettingsTab from Settings.tsx
   → [`2026-04-30-fe-4-settings-general.md`](docs/superpowers/bot-tasks/2026-04-30-fe-4-settings-general.md)
-- [ ] **FE-5** `refactor/settings-paths-tab` — Extract PathsSettingsTab from Settings.tsx
-  → [`2026-04-30-fe-5-settings-paths.md`](docs/superpowers/bot-tasks/2026-04-30-fe-5-settings-paths.md)
-- [ ] **FE-6** `refactor/settings-metadata-tab` — Extract MetadataSettingsTab from Settings.tsx
-  → [`2026-04-30-fe-6-settings-metadata.md`](docs/superpowers/bot-tasks/2026-04-30-fe-6-settings-metadata.md)
-- [ ] **FE-7** `fix/frontend-remove-console-logs` — Remove console.log from production code
-  → [`2026-04-30-fe-7-console-log.md`](docs/superpowers/bot-tasks/2026-04-30-fe-7-console-log.md)
-- [ ] **FE-8** `fix/frontend-error-boundaries` — Add error boundaries to page components
-  → [`2026-04-30-fe-8-error-boundaries.md`](docs/superpowers/bot-tasks/2026-04-30-fe-8-error-boundaries.md)
-- [ ] **FE-9** `fix/frontend-localstorage-keys` — Centralise localStorage keys as constants
-  → [`2026-04-30-fe-9-localstorage-keys.md`](docs/superpowers/bot-tasks/2026-04-30-fe-9-localstorage-keys.md)
+- [x] **FE-5** `refactor/settings-paths-tab` — Done: `PathsSettingsTab.tsx` extracted.
+- [x] **FE-6** `refactor/settings-metadata-tab` — Done: `MetadataSettingsTab.tsx` extracted.
+- [x] **FE-7** `fix/frontend-remove-console-logs` — Done: no `console.log` calls in production source; only `console.error`/`console.warn` in catch blocks (appropriate).
+- [x] **FE-8** `fix/frontend-error-boundaries` — Done: `ErrorBoundary` wraps every page route in `App.tsx`.
+- [x] **FE-9** `fix/frontend-localstorage-keys` — Done: `STORAGE_KEYS` constants exported from `lib/storageKeys.ts`.
 - [ ] **FE-10** `chore/frontend-coverage-thresholds` — Add Vitest coverage thresholds
   → [`2026-04-30-fe-10-coverage.md`](docs/superpowers/bot-tasks/2026-04-30-fe-10-coverage.md)
 
