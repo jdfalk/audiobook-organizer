@@ -1,11 +1,25 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.71.0 -->
+<!-- version: 2.72.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-14 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Performance
+
+#### May 14, 2026 — N1-1/3/4: Batch-fetch authors/series in EnrichAudiobooksWithNames
+
+Eliminated N+1 queries when enriching book listing results. Previously each
+book in a list caused individual `GetAuthorByID` and `GetSeriesByID` store
+calls; a 50-book page with 5 unique authors now triggers 2 bulk fetches
+instead of 100 per-item lookups.
+
+- Added `GetAuthorsByIDs` / `GetSeriesByIDs` to `AuthorReader` / `SeriesReader`
+  interfaces; implemented in `PebbleStore` and `SQLiteStore`
+- Rewrote `EnrichAudiobooksWithNames` to collect unique IDs → batch fetch → hydrate
+- Updated hand-written `MockStore` (v1.54.0) and regenerated all mockery mocks
 
 ### Fixes
 

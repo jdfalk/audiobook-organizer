@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.33.0 -->
+<!-- version: 8.34.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-14 -->
 
@@ -313,14 +313,10 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### N1 — N+1 Query Elimination (4 tasks)
 
-- [ ] **N1-1** `perf/batch-fetch-interface` — Add batch-fetch methods to Store interface
-  → [`2026-04-30-n1-1-batch-fetch-interface.md`](docs/superpowers/bot-tasks/2026-04-30-n1-1-batch-fetch-interface.md)
-- [ ] **N1-2** `perf/n1-sqlite-impl` — Implement batch-fetch in SQLiteStore
-  → [`2026-04-30-n1-2-sqlite-impl.md`](docs/superpowers/bot-tasks/2026-04-30-n1-2-sqlite-impl.md)
-- [ ] **N1-3** `perf/n1-pebble-impl` — Implement batch-fetch in PebbleStore
-  → [`2026-04-30-n1-3-pebble-impl.md`](docs/superpowers/bot-tasks/2026-04-30-n1-3-pebble-impl.md)
-- [ ] **N1-4** `perf/n1-enrich-response` — Wire batch fetch into enrichBookForResponse
-  → [`2026-04-30-n1-4-enrich-response.md`](docs/superpowers/bot-tasks/2026-04-30-n1-4-enrich-response.md)
+- [x] **N1-1** `perf/batch-fetch-interface` — Add batch-fetch methods to Store interface (`GetAuthorsByIDs`, `GetSeriesByIDs` added to AuthorReader/SeriesReader)
+- [~] **N1-2** `perf/n1-sqlite-impl` — SQLiteStore loop impl added for interface conformance (SQLite is legacy-only, no prod path)
+- [x] **N1-3** `perf/n1-pebble-impl` — PebbleStore `GetAuthorsByIDs` + `GetSeriesByIDs` implemented
+- [x] **N1-4** `perf/n1-enrich-response` — `EnrichAudiobooksWithNames` rewired to collect→batch→hydrate (PR #955)
 
 ### SEC — Filesystem / Security (4 tasks)
 
