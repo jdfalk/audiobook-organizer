@@ -1,5 +1,5 @@
 // file: internal/server/metadata_batch_candidates.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 // last-edited: 2026-05-11
 //
@@ -913,63 +913,3 @@ func (s *Server) handleListMetadataResults(c *gin.Context) {
 	})
 }
 
-// handleGetPendingReview implements POST /api/v1/metadata/pending-review.
-// Thin compatibility wrapper around latestMetadataResultsByBook that keeps
-// the MetadataReviewDialog working unchanged: it filters to status=matched,
-// creates an aggregate operation, copies the matched rows under the new
-// op ID, and returns the aggregate ID for the dialog to consume.
-func (s *Server) handleGetPendingReview(c *gin.Context) {
-	store := s.Store()
-
-	latest, counts, err := latestMetadataResultsByBook(store)
-	if err != nil {
-		httputil.InternalError(c, "failed to list operations", err)
-		return
-	}
-
-	var pending []database.OperationResult
-	for _, r := range latest {
-		if r.Status == "matched" {
-			pending = append(pending, r)
-		}
-	}
-
-	log.Printf("[INFO] pending-review: %d unique books fetched — status counts: %v, matched: %d",
-		len(latest), counts, len(pending))
-
-	if len(pending) == 0 {
-		httputil.RespondWithOK(c, gin.H{
-			"operation_id": "",
-			"total_books":  0,
-			"message":      "no books with pending metadata candidates",
-		})
-		return
-	}
-
-	// Create an aggregate operation record so MetadataReviewDialog can use its
-	// standard operationId-based flow (apply, reject, pagination).
-	newOpID := ulid.Make().String()
-	if _, err := store.CreateOperation(newOpID, "metadata_candidate_fetch", nil); err != nil {
-		httputil.InternalError(c, "failed to create aggregate operation", err)
-		return
-	}
-
-	// Copy the latest CandidateResult rows under the new operation ID.
-	for _, r := range pending {
-		_ = store.CreateOperationResult(&database.OperationResult{
-			OperationID: newOpID,
-			BookID:      r.BookID,
-			ResultJSON:  r.ResultJSON,
-			Status:      r.Status,
-		})
-	}
-
-	// Mark the aggregate op as completed immediately — all results are already loaded.
-	_ = store.UpdateOperationStatus(newOpID, "completed", len(pending), len(pending), "")
-
-	httputil.RespondWithOK(c, gin.H{
-		"operation_id": newOpID,
-		"total_books":  len(pending),
-		"message":      fmt.Sprintf("%d book(s) have pending metadata candidates", len(pending)),
-	})
-}

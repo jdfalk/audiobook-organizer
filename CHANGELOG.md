@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.67.0 -->
+<!-- version: 2.68.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-14 -->
 
@@ -8,6 +8,26 @@
 ## [Unreleased]
 
 ### Features
+
+#### May 14, 2026 — METADATA-CACHED-MATCHER: MetadataReviewDialog decoupled from operationId (Task 12)
+
+`MetadataReviewDialog` now reads entirely from the persistent metadata cache
+(`GET /audiobooks/metadata/cache/review`) instead of an ephemeral operation ID.
+The `operationId` prop is gone — the dialog opens directly from the Library
+"Resume Review" button without first creating an aggregate operation.
+
+New server endpoints added:
+- `GET /audiobooks/metadata/cache/review` — paginated `CandidateResult[]` list
+  sourced from the cache, with status "matched" / "no_match" / "applied"
+- `POST /audiobooks/metadata/batch-apply-cached` — applies the top cached
+  candidate for each book_id, replaces `batch-apply-candidates`
+- `POST /audiobooks/:id/clear-no-match` — clears `MetadataReviewStatus` back
+  to null (unreject), replaces the operation-scoped unreject endpoint
+
+Legacy endpoint removed: `POST /metadata/pending-review` and the
+`handleGetPendingReview` handler (created ephemeral aggregate operations).
+The `operationId` wiring in `LibraryDialogs.tsx` and `Library.tsx` is
+removed; `handleResumeReview` now just opens the dialog if cache has entries.
 
 #### May 13, 2026 — PERF-VERSIONS: Pebble version-group secondary index (PR #921)
 

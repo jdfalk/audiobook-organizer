@@ -1,5 +1,5 @@
 // file: web/src/components/library/LibraryDialogs.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: d4e5f6a7-b8c9-0123-def0-234567890123
 // last-edited: 2026-05-11
 
@@ -166,7 +166,6 @@ interface LibraryDialogsProps {
   // Metadata review dialog
   metadataReviewOpen: boolean;
   setMetadataReviewOpen: (open: boolean) => void;
-  metadataReviewOpId: string | null;
 
   // Version management
   versionManagingAudiobook: Audiobook | null;
@@ -295,7 +294,6 @@ export const LibraryDialogs = ({
   setBulkSearchOpen,
   metadataReviewOpen,
   setMetadataReviewOpen,
-  metadataReviewOpId,
   versionManagingAudiobook,
   versionManagementOpen,
   handleVersionManagementClose,
@@ -798,23 +796,10 @@ export const LibraryDialogs = ({
         user must click the x button or Done to close, which
         prevents accidentally blowing away a long review
         session. Reopening is instant because the data is
-        already loaded.
-
-        When the user explicitly closes, we KEEP the opId
-        alive so clicking "Resume Review" with the same
-        operation reopens the same dialog state without a
-        re-query. Clearing the opId happens only when the
-        user picks a DIFFERENT operation from the picker. */}
+        already loaded. */}
     <MetadataReviewDialog
       open={metadataReviewOpen}
-      operationId={metadataReviewOpId || ''}
-      onClose={() => {
-        setMetadataReviewOpen(false);
-        // Intentionally NOT clearing metadataReviewOpId so
-        // the dialog's internal state survives and reopen is
-        // instant. The opId is cleared when the user picks a
-        // new operation from the Resume Review picker.
-      }}
+      onClose={() => setMetadataReviewOpen(false)}
       onComplete={() => {
         loadAudiobooks();
         setSelectedAudiobooks([]);

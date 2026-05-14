@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.62.0
+// version: 1.63.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-05-11
 
@@ -221,9 +221,9 @@ export const Library = () => {
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [batchPlaylistOpen, setBatchPlaylistOpen] = useState(false);
   const [mergePrimaryId, setMergePrimaryId] = useState<string>('');
-  const [metadataReviewOpId, setMetadataReviewOpId] = useState<string | null>(
-    searchParams.get('reviewOp')
-  );
+  // pendingFetchOpId tracks the in-flight metadata fetch so we can
+  // auto-open the review dialog when it completes.
+  const [pendingFetchOpId, setPendingFetchOpId] = useState<string | null>(null);
   const [metadataReviewOpen, setMetadataReviewOpen] = useState(!!searchParams.get('reviewOp'));
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const sseStatusRef = useRef<EventSourceStatus['state'] | null>(null);
@@ -827,8 +827,8 @@ export const Library = () => {
   // Watch the operations store: open the review dialog when a metadata fetch op completes.
   const activeOperations = useOperationsStore((state) => state.activeOperations);
   useEffect(() => {
-    if (!metadataReviewOpId) return;
-    const op = activeOperations.find((o) => o.id === metadataReviewOpId);
+    if (!pendingFetchOpId) return;
+    const op = activeOperations.find((o) => o.id === pendingFetchOpId);
     if (!op) return;
     if (op.status === 'completed') {
       setMetadataReviewOpen(true);
@@ -836,7 +836,7 @@ export const Library = () => {
     } else if (op.status === 'failed') {
       toast('Metadata fetch failed.', 'error');
     }
-  }, [activeOperations, metadataReviewOpId, toast]);
+  }, [activeOperations, pendingFetchOpId, toast]);
 
   const handleEdit = useCallback((audiobook: Audiobook) => {
     setEditingAudiobook(audiobook);
@@ -1617,7 +1617,7 @@ export const Library = () => {
         toast('All selected books are already being fetched.', 'info');
         return;
       }
-      setMetadataReviewOpId(opId);
+      setPendingFetchOpId(opId);
       startOperationPolling(opId, 'metadata_candidate_fetch');
       toast(
         `Metadata fetch started for ${ids.length} book${ids.length !== 1 ? 's' : ''}. Click Review when complete to open candidates.`,
@@ -1646,31 +1646,12 @@ export const Library = () => {
   };
 
   const handleResumeReview = async () => {
-    // METADATA-CACHED-MATCHER: the cached-candidates endpoint is the
-    // canonical source for "anything pending review?". The legacy
-    // /metadata/pending-review endpoint is still wired for back-compat
-    // but produces an operation-scoped view; the cache produces a
-    // book-scoped view that survives across operations.
     try {
       const cached = await api.listCachedCandidates('pending');
       if (!cached.entries.length) {
-        // Fall back to the legacy operation-scoped lookup so users with
-        // pre-cache fetches (no metadata_cache:<id> rows yet) can still
-        // resume their last review.
-        const legacy = await api.getPendingReview();
-        if (!legacy.operation_id || legacy.total_books === 0) {
-          toast('No books with pending metadata candidates found. Click Fetch Selected to populate the cache.', 'info');
-          return;
-        }
-        setMetadataReviewOpId(legacy.operation_id);
-        setMetadataReviewOpen(true);
+        toast('No books with pending metadata candidates found. Click Fetch Selected to populate the cache.', 'info');
         return;
       }
-      // Cache hit — surface the most recent fetch's operation id so the
-      // existing dialog can render. Future: dialog should accept a
-      // book-id list directly (Task 12).
-      const legacy = await api.getPendingReview();
-      setMetadataReviewOpId(legacy.operation_id || '');
       setMetadataReviewOpen(true);
       toast(`${cached.entries.length} book${cached.entries.length === 1 ? '' : 's'} ready for review.`, 'info');
     } catch {
@@ -1875,7 +1856,6 @@ export const Library = () => {
           setBulkSearchOpen={setBulkSearchOpen}
           metadataReviewOpen={metadataReviewOpen}
           setMetadataReviewOpen={setMetadataReviewOpen}
-          metadataReviewOpId={metadataReviewOpId}
 
           versionManagingAudiobook={versionManagingAudiobook}
           versionManagementOpen={versionManagementOpen}
