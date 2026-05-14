@@ -119,8 +119,20 @@ func (w *Writer) sendEntry(line string) {
 	if _, skip := w.skipSources[source]; skip {
 		return
 	}
+	// Tier is derived from level. The Activity Log UI defaults to
+	// "debug tier excluded", so persisting every line at tier=debug
+	// meant the page always showed 0 entries even though writes were
+	// happening. info/warn/error → change so the user sees actual
+	// progress; debug stays debug for the firehose.
+	tier := "change"
+	switch level {
+	case "debug":
+		tier = "debug"
+	case "warn", "warning", "error":
+		tier = "change"
+	}
 	entry := database.ActivityEntry{
-		Tier:    "debug",
+		Tier:    tier,
 		Type:    "system",
 		Level:   level,
 		Source:  source,
