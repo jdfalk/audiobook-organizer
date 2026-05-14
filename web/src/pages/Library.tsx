@@ -1646,14 +1646,33 @@ export const Library = () => {
   };
 
   const handleResumeReview = async () => {
+    // METADATA-CACHED-MATCHER: the cached-candidates endpoint is the
+    // canonical source for "anything pending review?". The legacy
+    // /metadata/pending-review endpoint is still wired for back-compat
+    // but produces an operation-scoped view; the cache produces a
+    // book-scoped view that survives across operations.
     try {
-      const result = await api.getPendingReview();
-      if (!result.operation_id || result.total_books === 0) {
-        toast('No books with pending metadata candidates found. Start a Fetch & Review first.', 'info');
+      const cached = await api.listCachedCandidates('pending');
+      if (!cached.entries.length) {
+        // Fall back to the legacy operation-scoped lookup so users with
+        // pre-cache fetches (no metadata_cache:<id> rows yet) can still
+        // resume their last review.
+        const legacy = await api.getPendingReview();
+        if (!legacy.operation_id || legacy.total_books === 0) {
+          toast('No books with pending metadata candidates found. Start a Fetch & Review first.', 'info');
+          return;
+        }
+        setMetadataReviewOpId(legacy.operation_id);
+        setMetadataReviewOpen(true);
         return;
       }
-      setMetadataReviewOpId(result.operation_id);
+      // Cache hit — surface the most recent fetch's operation id so the
+      // existing dialog can render. Future: dialog should accept a
+      // book-id list directly (Task 12).
+      const legacy = await api.getPendingReview();
+      setMetadataReviewOpId(legacy.operation_id || '');
       setMetadataReviewOpen(true);
+      toast(`${cached.entries.length} book${cached.entries.length === 1 ? '' : 's'} ready for review.`, 'info');
     } catch {
       toast('Failed to load pending review', 'error');
     }

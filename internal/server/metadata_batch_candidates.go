@@ -210,7 +210,15 @@ func (s *Server) fetchCandidateForBook(
 		authorHint = append(authorHint, book.Author.Name)
 	}
 
-	resp, err := mfs.SearchMetadataForBook(bookID, book.Title, authorHint...)
+	// METADATA-CACHED-MATCHER: batch fetch always invalidates + writes
+	// the persistent cache for each book. FetchAndCache runs the same
+	// search chain and replaces the cache row in one call, so the
+	// per-book Review UI hits a fresh top-10 next render.
+	authorForHash := ""
+	if len(authorHint) > 0 {
+		authorForHash = authorHint[0]
+	}
+	entry, err := mfs.FetchAndCache(ctx, bookID, book.Title, authorForHash, "", "", metafetch.SearchOptions{})
 	if err != nil {
 		return CandidateResult{
 			Book:   bookInfo,
@@ -218,6 +226,16 @@ func (s *Server) fetchCandidateForBook(
 			Error:  fmt.Sprintf("search failed: %v", err),
 		}
 	}
+	// Decode cached []json.RawMessage back into MetadataCandidate
+	// for the OperationResult payload (back-compat with the progress UI).
+	results := make([]metafetch.MetadataCandidate, 0, len(entry.Candidates))
+	for _, raw := range entry.Candidates {
+		var c metafetch.MetadataCandidate
+		if jerr := json.Unmarshal(raw, &c); jerr == nil {
+			results = append(results, c)
+		}
+	}
+	resp := &metafetch.SearchMetadataResponse{Results: results, Query: book.Title}
 
 	if len(resp.Results) == 0 {
 		return CandidateResult{
