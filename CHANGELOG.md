@@ -69,6 +69,14 @@ Frontend wiring (Tasks 9-12 of the plan) deferred to the next session.
 
 ### Fixes
 
+#### May 14, 2026 — slog text parser + activity entry cleanup (PR #946)
+
+Activity entries previously surfaced the raw slog line as summary
+(`time=... level=INFO msg="..."`). Added a slog branch to
+`ParseLogLine` that extracts level and msg, then recurses on msg so
+wrapped `[INFO] source: ...` payloads parse through the standard
+branch and get a real source attached.
+
 #### May 13, 2026 — Log spam + Activity Log visibility (PRs #923, #933, #934, #935)
 
 - **#923**: Slog duplicate journal lines fixed (dropped
