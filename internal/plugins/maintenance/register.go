@@ -1,39 +1,35 @@
 // file: internal/plugins/maintenance/register.go
-// version: 1.0.0
+// version: 2.0.0
 
 // Service registry registration for the maintenance UOS plugin (W5).
 //
-// **Stub registration.** The maintenance plugin's constructor takes a
-// `ServerDeps` struct populated with multiple typed references to
-// *server.Server fields (scheduler, dedup engine, ai scan store,
-// activity writer, openlibrary service, ...). That coupling makes the
-// plugin unbuildable from the registry at present — every dep would
-// need to be registered first and the ServerDeps struct populated by
-// pulling them all from the container.
+// **Intentionally not registered.** The maintenance plugin's
+// constructor takes a 25-method `ServerDeps` interface that *only*
+// *server.Server implements. The interface aggregates scheduler hooks,
+// dedup engine handles, AI scan store, activity writer, OpenLibrary
+// service, plus a dozen other server-bound capabilities. Decomposing
+// it into container services would mean registering ~15 new services
+// with their own dependency wiring just so this one plugin can be
+// built indirectly — a refactor that would touch every service the
+// plugin reaches into.
 //
-// For now this Build returns nil so the plugin is "present" in the
-// container (consumers can TryGet) but inert. Inline NewServer
-// construction continues to be the production path.
+// The actual maintenance OperationDefs are registered inline from
+// `internal/server/server.go:~402`:
 //
-// SERVER-PLUGIN-REG W7 (or a follow-up sweep) needs to decouple
-// ServerDeps from *Server and register its constituent services in the
-// container before this plugin can build for real.
+//	if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil { ... }
+//
+// That call runs after `wireServerFromContainer` has populated all of
+// `*Server`'s fields, so `ServerDeps` is satisfied cleanly. The
+// inline pattern is the canonical registration site for this plugin
+// and won't move unless the ServerDeps interface itself is broken up.
+//
+// Earlier revisions of this file registered a typed-nil `*Plugin`
+// stub in the container so consumers could `TryGet` it. Nothing ever
+// consumed that nil value — it was a placeholder for a future where
+// the plugin builds from the container. Until that future arrives,
+// the empty registration is just noise; deleted.
 
 package maintenance
 
-import (
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
-)
-
-func init() {
-	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "maintenanceplugin",
-		Needs: []string{},
-		Groups: []string{"plugins"},
-		Build: func(c *serviceregistry.Container) (any, error) {
-			// Stub — see file header. Inline construction remains the
-			// production path until ServerDeps is decoupled from *Server.
-			return (*Plugin)(nil), nil
-		},
-	})
-}
+// No init() — the maintenance plugin registers from
+// internal/server/server.go directly. See file header.
