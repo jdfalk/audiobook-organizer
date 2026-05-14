@@ -145,6 +145,9 @@ export default function ActivityLog() {
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [expandedOpId, setExpandedOpId] = useState<string | null>(searchParams.get('op'));
   const [opLogs, setOpLogs] = useState<string[]>([]);
+  // opLogsLoaded distinguishes "haven't fetched yet" from "fetched, empty".
+  // Without this, an op with zero logs shows "Loading logs..." forever.
+  const [opLogsLoaded, setOpLogsLoaded] = useState(false);
 
   // Tree collapse state: set of parent op IDs that are collapsed.
   // Seeded on first render with ops: parents with ≥3 children start collapsed.
@@ -216,28 +219,43 @@ export default function ActivityLog() {
     }
   }, [activeOps]);
 
-  // Load logs for expanded operation
+  // Load logs for expanded operation. Polls every 3s for ops that are
+  // still running; for terminal ops (completed/failed/canceled/
+  // interrupted_*) a single fetch is enough.
   useEffect(() => {
     if (!expandedOpId) {
       setOpLogs([]);
+      setOpLogsLoaded(false);
       return;
     }
+    setOpLogsLoaded(false);
     let cancelled = false;
     const fetchLogs = async () => {
       try {
         const logs = await api.getOperationLogs(expandedOpId);
         if (!cancelled) {
           setOpLogs(logs.map((l: { message?: string }) => l.message || String(l)));
+          setOpLogsLoaded(true);
           setTimeout(() => opLogsRef.current?.scrollTo({ top: opLogsRef.current.scrollHeight }), 50);
         }
       } catch {
-        if (!cancelled) setOpLogs(['Failed to load logs']);
+        if (!cancelled) {
+          setOpLogs(['Failed to load logs']);
+          setOpLogsLoaded(true);
+        }
       }
     };
     fetchLogs();
+    // Only poll if the op is still active. For terminal ops, the
+    // log list won't change.
+    const op = activeOps.find((o) => o.id === expandedOpId);
+    const terminal = op && ['completed', 'failed', 'canceled', 'interrupted_dropped', 'interrupted_restart'].includes(op.status);
+    if (terminal) {
+      return () => { cancelled = true; };
+    }
     const interval = setInterval(fetchLogs, 3000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [expandedOpId]);
+  }, [expandedOpId, activeOps]);
 
   // Load sources
   const loadSources = useCallback(async () => {
@@ -779,6 +797,31 @@ export default function ActivityLog() {
                         <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
                           Waiting to start…
                         </Typography>
+                      ) : ['completed', 'failed', 'canceled', 'interrupted_dropped', 'interrupted_restart'].includes(op.status) ? (
+                        // Terminal ops: show a static full bar colored by
+                        // outcome. No animation. (Pre-fix the indeterminate
+                        // branch animated forever for completed ops without
+                        // total counts.)
+                        op.total > 0 ? (
+                          <Box>
+                            <LinearProgress
+                              variant="determinate"
+                              value={100}
+                              color={op.status === 'completed' ? 'success' : op.status === 'failed' ? 'error' : 'warning'}
+                              sx={{ height: 6, borderRadius: 1, mb: 0.5 }}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              {op.progress.toLocaleString()} / {op.total.toLocaleString()} ({pct}%)
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <LinearProgress
+                            variant="determinate"
+                            value={100}
+                            color={op.status === 'completed' ? 'success' : op.status === 'failed' ? 'error' : 'warning'}
+                            sx={{ height: 6, borderRadius: 1, mb: 0.5 }}
+                          />
+                        )
                       ) : op.total > 0 ? (
                         <Box>
                           <LinearProgress variant="determinate" value={pct} sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
@@ -787,6 +830,8 @@ export default function ActivityLog() {
                           </Typography>
                         </Box>
                       ) : (
+                        // Running op with no progress total: indeterminate
+                        // animation is correct.
                         <LinearProgress sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
                       )}
                       <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
@@ -817,8 +862,10 @@ export default function ActivityLog() {
                           }}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {opLogs.length === 0 ? (
+                          {!opLogsLoaded ? (
                             <Typography variant="caption" color="grey.500">Loading logs...</Typography>
+                          ) : opLogs.length === 0 ? (
+                            <Typography variant="caption" color="grey.500">No logs recorded for this operation.</Typography>
                           ) : (
                             opLogs.map((line, i) => (
                               <Box key={i} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{line}</Box>
