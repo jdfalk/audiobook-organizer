@@ -90,8 +90,8 @@ type audnexusAuthor struct {
 
 // SearchByTitle cannot search Audnexus by title alone (no such endpoint exists).
 // Returns empty results so the chain moves to the next source.
+// Silent — the chain logs at a higher level which sources it queried.
 func (c *AudnexusClient) SearchByTitle(ctx context.Context, title string) ([]BookMetadata, error) {
-	log.Printf("[DEBUG] Audnexus has no title search endpoint, skipping title-only search for %q", title)
 	return nil, nil
 }
 
@@ -128,7 +128,8 @@ func (c *AudnexusClient) SearchByTitleAndAuthor(ctx context.Context, title, auth
 	// checking known ASINs. Since Audnexus doesn't list an author's books,
 	// we can't enumerate them. Return the author info as partial metadata.
 	// In the future, this could be enhanced with an ASIN lookup if we have one.
-	log.Printf("[DEBUG] Audnexus found %d authors for %q, but no book title search available", len(authors), author)
+	// (Silenced — the chain's higher-level "not found" summary is enough.)
+	_ = authors
 	return nil, nil
 }
 

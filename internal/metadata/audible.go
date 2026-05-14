@@ -189,7 +189,15 @@ func (c *AudibleClient) searchCatalog(ctx context.Context, searchURL string) ([]
 		return nil, fmt.Errorf("failed to decode Audible response: %w", err)
 	}
 
-	log.Printf("[INFO] Audible API returned %d products", len(catalog.Products))
+	// Demote the per-query result-count line. With background batchers
+	// running it floods logs and the count alone is meaningless without
+	// the query string the caller used. Callers that care about the
+	// count log it themselves with the query context.
+	if len(catalog.Products) == 0 {
+		log.Printf("[DEBUG] audible: searchCatalog returned 0 products for %s", searchURL)
+	} else {
+		log.Printf("[DEBUG] audible: searchCatalog returned %d products for %s", len(catalog.Products), searchURL)
+	}
 
 	results := make([]BookMetadata, 0, len(catalog.Products))
 	for _, p := range catalog.Products {
