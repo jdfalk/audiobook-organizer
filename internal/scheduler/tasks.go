@@ -268,8 +268,13 @@ func (ts *TaskScheduler) registerAllTasks() {
 			return op, nil
 		},
 		IsEnabled:              func() bool { return ts.deps.HasMetadataFetchSvc() },
-		GetInterval:            func() time.Duration { return 0 },
-		RunOnStart:             func() bool { return true },
+		GetInterval:            func() time.Duration { return 6 * time.Hour },
+		// ISBN enrichment scans 100 books per run and frequently returns
+		// "nothing to enrich". Running it on every startup adds 0 value
+		// and clutters Active Operations. The maintenance window still
+		// picks it up periodically; the 6h interval keeps it from going
+		// completely silent.
+		RunOnStart:             func() bool { return false },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowMetadataRefresh },
 	})
 

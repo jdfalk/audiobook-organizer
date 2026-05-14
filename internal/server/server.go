@@ -7,7 +7,6 @@ package server
 
 import (
 	"context"
-	"io"
 	"log"
 	"log/slog"
 	"net/http"
@@ -29,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
+	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
@@ -37,25 +37,25 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
-	"github.com/jdfalk/audiobook-organizer/internal/importer"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
+
 	// Blank-import the plugin packages so their init() functions run and
 	// the plugins register themselves with the serviceregistry. The
 	// container's PostInit calls Plugin.Register(opRegistry) for each.
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/acoustid"
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/dedup"
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/deluge"
 	_ "github.com/jdfalk/audiobook-organizer/internal/plugins/itunes"
 	maintenanceplugin "github.com/jdfalk/audiobook-organizer/internal/plugins/maintenance"
-	"github.com/jdfalk/audiobook-organizer/internal/organizer"
-	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/quarantine"
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
-	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 	"github.com/jdfalk/audiobook-organizer/internal/sysinfo"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
@@ -323,8 +323,8 @@ func NewServer(store database.Store) *Server {
 		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
 		// olService, updater, updateScheduler are container-built;
 		// wireServerFromContainer populates the fields.
-		diagnosticsService:     diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
-		changelogService:       activity.NewChangelogService(resolvedStore),
+		diagnosticsService: diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
+		changelogService:   activity.NewChangelogService(resolvedStore),
 	}
 
 	// SERVER-PLUGIN-REG: build the service registry container.
@@ -569,7 +569,12 @@ func NewServer(store database.Store) *Server {
 			// scheduler runs. The text handler emits a key=value line
 			// per record that the activity writer's line parser routes
 			// into an ActivityEntry.
-			handler := slog.NewTextHandler(io.MultiWriter(os.Stderr, aw), &slog.HandlerOptions{Level: slog.LevelInfo})
+			// activity.Writer.Write already tees to os.Stdout before
+			// parsing, so writing to aw alone keeps systemd journal
+			// capture intact. Adding os.Stderr to a MultiWriter here
+			// produced duplicate journal lines (one via stderr, one
+			// via aw → stdout).
+			handler := slog.NewTextHandler(aw, &slog.HandlerOptions{Level: slog.LevelInfo})
 			slog.SetDefault(slog.New(handler))
 		}
 
