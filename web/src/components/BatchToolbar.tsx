@@ -60,16 +60,17 @@ export const BatchToolbar = ({
         color="primary"
         onClick={onFetchReviewClick}
         disabled={selectedAudiobooksLength < 2}
+        title="Fetch metadata candidates for selected books into the persistent cache. The Review button opens the dialog when results are ready."
       >
-        Fetch & Review
+        Fetch Selected
       </Button>
       <Button
         size="small"
         variant="outlined"
         onClick={onResumeReviewClick}
-        title="Pick a recent fetch operation to review — useful when multiple fetches completed without review or after a page reload"
+        title="Open the review dialog for books with cached candidates pending review"
       >
-        Resume Review
+        Review
       </Button>
       <Button size="small" variant="outlined" onClick={onSearchMetadataClick} disabled={!selectedCount}>
         Search Metadata
