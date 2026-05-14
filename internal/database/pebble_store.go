@@ -1925,11 +1925,69 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 		}
 	}
 
+	// METADATA-CACHED-MATCHER: invalidate cached candidates when any
+	// identity-bearing field (title, author, narrator, series, ISBN,
+	// ASIN) changes. The cache stored top-N matches for the prior
+	// identity; they may no longer apply. Done as a batch.Delete so
+	// the same transaction that updates the book row also clears the
+	// cache. Missing-key is a no-op in pebble.
+	if identityChanged(oldBook, book) {
+		_ = batch.Delete(metadataCacheKey(id), nil)
+	}
+
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return nil, err
 	}
 
 	return book, nil
+}
+
+// identityChanged reports whether any field that drives the metadata
+// cache key has changed between the two book snapshots. Limited to the
+// fields the search chain inspects.
+func identityChanged(oldBook, newBook *Book) bool {
+	if oldBook == nil || newBook == nil {
+		return true
+	}
+	if oldBook.Title != newBook.Title {
+		return true
+	}
+	if !intPtrEq(oldBook.AuthorID, newBook.AuthorID) {
+		return true
+	}
+	if !intPtrEq(oldBook.SeriesID, newBook.SeriesID) {
+		return true
+	}
+	if !strPtrEq(oldBook.ISBN10, newBook.ISBN10) {
+		return true
+	}
+	if !strPtrEq(oldBook.ISBN13, newBook.ISBN13) {
+		return true
+	}
+	if !strPtrEq(oldBook.ASIN, newBook.ASIN) {
+		return true
+	}
+	return false
+}
+
+func intPtrEq(a, b *int) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func strPtrEq(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 // UpdateBookRating updates only the user rating fields for the given book.
