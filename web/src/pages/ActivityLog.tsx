@@ -718,9 +718,18 @@ export default function ActivityLog() {
                   return false;
                 };
 
-                return activeOps
-                  .filter((op) => !isHiddenByCollapse(op))
-                  .map((op) => {
+                // Partition by status so finished jobs aren't mixed with
+                // running ones. Within each section the existing
+                // parent-child hierarchy still works.
+                const TERMINAL_STATUSES = ['completed', 'failed', 'canceled', 'interrupted_dropped', 'interrupted_restart'];
+                const visibleOps = activeOps.filter((op) => !isHiddenByCollapse(op));
+                const sections: { key: string; title: string; ops: typeof activeOps }[] = [
+                  { key: 'pending',   title: 'Pending',   ops: visibleOps.filter((o) => o.status === 'queued') },
+                  { key: 'active',    title: 'Active',    ops: visibleOps.filter((o) => o.status !== 'queued' && !TERMINAL_STATUSES.includes(o.status)) },
+                  { key: 'completed', title: 'Completed', ops: visibleOps.filter((o) => TERMINAL_STATUSES.includes(o.status)) },
+                ];
+
+                const renderOp = (op: typeof activeOps[0]) => {
                   const pct = op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
                   const depth = getDepth(op);
                   const indent = depth * 24; // 24px per level for indentation
@@ -875,7 +884,21 @@ export default function ActivityLog() {
                       </Collapse>
                     </Paper>
                   );
-                });
+                };
+
+                return sections
+                  .filter((s) => s.ops.length > 0)
+                  .map((section) => (
+                    <Box key={section.key} sx={{ mb: 1 }}>
+                      <Typography
+                        variant="overline"
+                        sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 0.5 }}
+                      >
+                        {section.title} ({section.ops.length})
+                      </Typography>
+                      <Stack spacing={1}>{section.ops.map(renderOp)}</Stack>
+                    </Box>
+                  ));
               })()}
             </Stack>
           )}
