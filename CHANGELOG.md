@@ -1,13 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.66.0 -->
+<!-- version: 2.67.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-13 -->
+<!-- last-edited: 2026-05-14 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Features
+
+#### May 13, 2026 — PERF-VERSIONS: Pebble version-group secondary index (PR #921)
+
+`/audiobooks/:id/versions` was doing a full-table scan (14.7 s on large
+libraries) because there was no index by version-group ID. Added a Pebble
+secondary index `book:versiongroup:<gid>:<book_id>` written in the same batch
+as the book record. A one-time backfill goroutine on startup populates existing
+rows. Version-group lookups now read from the index, dropping to < 50 ms.
 
 #### May 13, 2026 — METADATA-CACHED-MATCHER cache invalidation completeness (PRs #941, #942, #944)
 
@@ -76,6 +84,16 @@ Activity entries previously surfaced the raw slog line as summary
 `ParseLogLine` that extracts level and msg, then recurses on msg so
 wrapped `[INFO] source: ...` payloads parse through the standard
 branch and get a real source attached.
+
+#### May 13, 2026 — Fingerprint retry window + op-log test fix (PRs #922, #939)
+
+- **#922**: `FingerprintFailedAt` timestamp now stamped on every AcoustID
+  lookup failure. Subsequent backfill passes skip any book whose last failure
+  is within 7 days, preventing repeated storms against the AcoustID API for
+  files that consistently fail (no acoustic fingerprint, corrupt audio, etc.).
+- **#939**: `TestHandler_GetOperationLogs` updated to assert the v2 lookup
+  path before the v1 fallback — matching the production behavior introduced
+  in PR #920.
 
 #### May 13, 2026 — Log spam + Activity Log visibility (PRs #923, #933, #934, #935)
 
