@@ -96,6 +96,12 @@ incrementally:
   registrations from being non-stub. Once decoupled, those plugins can build
   for real from the container.
 
+  **Status (2026-05-13):** The maintenance plugin's empty stub registration
+  was deleted (PR forthcoming). The plugin registers inline from
+  `internal/server/server.go:~402` and that's the documented canonical
+  pattern until ServerDeps itself is broken up. itunesservice closures
+  remain to be decoupled.
+
   Cleanest decoupling path: introduce a `BookCreated` event on the existing
   `eventbus` (now registered in the container). Dedup engine subscribes
   with its own bg-context management. itunesservice publishes when
