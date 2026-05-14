@@ -193,6 +193,20 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 			// Goroutine is stuck. Classify as abandoned.
 			r.releaseRunHandle(qr.opID)
 			r.abandoned.increment(qr.plugin)
+			// During Shutdown, do NOT spawn a replacement worker — the
+			// pool is on its way out and a new worker would race against
+			// store close (pebble: closed panic). Just log and exit.
+			if r.shuttingDown.Load() {
+				r.logger.Info("registry: op goroutine abandoned during shutdown; not respawning",
+					"op_id", qr.opID, "plugin", qr.plugin)
+				// Still monitor the goroutine so the abandoned counter
+				// drains correctly if it eventually returns.
+				go func() {
+					<-done
+					r.abandoned.decrement(qr.plugin)
+				}()
+				return true
+			}
 			r.logger.Warn("registry: op goroutine abandoned; spawning replacement worker",
 				"op_id", qr.opID, "plugin", qr.plugin)
 			// Spawn a replacement so the pool doesn't shrink.

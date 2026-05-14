@@ -56,8 +56,10 @@ func (s *Server) backfillExternalIDs() {
 		return
 	}
 
-	// Delegate to the itunes domain package, passing an adapter for the store
-	if err := itunes.BackfillExternalIDs(&externalIDStoreAdapter{eidStore: eidStore, store: store}); err != nil {
+	// Delegate to the itunes domain package. s.bgCtx aborts the backfill
+	// on shutdown so it can't outlive the store and crash on
+	// "pebble: closed" in CreateExternalIDMapping.
+	if err := itunes.BackfillExternalIDs(s.bgCtx, &externalIDStoreAdapter{eidStore: eidStore, store: store}); err != nil {
 		log.Printf("[WARN] backfillExternalIDs: %v", err)
 	}
 }
