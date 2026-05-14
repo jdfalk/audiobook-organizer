@@ -1,5 +1,5 @@
 // file: internal/tagger/safe_write.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4a7e1c3b-9f02-4d85-b8e6-2f5a0d3c7b91
 // last-edited: 2026-05-01
 //
@@ -21,7 +21,7 @@ package tagger
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	taglib "go.senan.xyz/taglib"
@@ -129,13 +129,13 @@ func resolvePath(ctx context.Context, path string, deps SafeWriteDeps) (string, 
 	}
 
 	// Path is protected.
-	log.Printf("[INFO] safe_write: path %s is in a protected Deluge directory; importing to library before tag write", path)
+	slog.Info("safe_write: importing protected path before tag write", "path", path)
 
 	if deps.Importer == nil {
 		// Guard is incomplete — log a warning and proceed in-place rather than
 		// failing silently or corrupting a torrent file. This should not happen
 		// in production (both fields must be wired together).
-		log.Printf("[WARN] safe_write: LibraryImporter is nil for protected path %s; writing in-place (may affect seeding)", path)
+		slog.Warn("safe_write: LibraryImporter is nil for protected path; writing in-place", "path", path)
 		return path, nil
 	}
 
@@ -144,6 +144,6 @@ func resolvePath(ctx context.Context, path string, deps SafeWriteDeps) (string, 
 		return "", fmt.Errorf("import protected path %s: %w", path, err)
 	}
 
-	log.Printf("[INFO] safe_write: imported %s → %s before tag write", path, libraryPath)
+	slog.Info("safe_write: imported protected path before tag write", "src", path, "dest", libraryPath)
 	return libraryPath, nil
 }

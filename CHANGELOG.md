@@ -1,11 +1,25 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.70.0 -->
+<!-- version: 2.71.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-14 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixes
+
+#### May 14, 2026 — LOG-1/3/4: Convert log.Printf to slog in tagger, backup, scanner
+
+Replaced `log.Printf("[INFO]"` / `log.Printf("[WARN]"` with structured
+`slog.Info` / `slog.Warn` in:
+- `internal/tagger/tagger.go` — 7 calls (legacy series-tag stub functions)
+- `internal/tagger/safe_write.go` — 3 calls (Deluge-path pre-flight guard)
+- `internal/backup/backup.go` — 4 calls (cleanup, restore, unsupported type)
+- `internal/scanner/chapter_consolidation.go` — 1 call
+
+LOG-2 and LOG-4 verified already done (fileops has no log.Printf; scanner
+has no progress bar).
 
 ### Chores
 

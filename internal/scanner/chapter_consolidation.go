@@ -1,12 +1,12 @@
 // file: internal/scanner/chapter_consolidation.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f9a0b1c2-d3e4-5f60-a7b8-c9d0e1f2a3b4
 // last-edited: 2026-04-30
 
 package scanner
 
 import (
-	"log"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -132,8 +132,7 @@ func consolidateChapterGroups(files []string) []Book {
 		for i, c := range group {
 			paths[i] = c.path
 		}
-		log.Printf("[INFO] scanner: chapter consolidation: merging %d files for %q (avg %ds/file, total %ds) into one book",
-			len(group), key, avgSec, totalSec)
+		slog.Info("scanner: chapter consolidation merging files", "count", len(group), "key", key, "avg_sec_per_file", avgSec, "total_sec", totalSec)
 		books = append(books, Book{
 			FilePath:     paths[0],
 			Format:       strings.ToLower(filepath.Ext(paths[0])),

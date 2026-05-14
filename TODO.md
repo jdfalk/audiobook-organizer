@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.32.0 -->
+<!-- version: 8.33.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-14 -->
 
@@ -352,14 +352,10 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### LOG — Structured Logging (4 tasks)
 
-- [ ] **LOG-1** `fix/log-tagger-structured` — Replace fmt.Printf with structured logging in tagger
-  → [`2026-04-30-log-1-tagger.md`](docs/superpowers/bot-tasks/2026-04-30-log-1-tagger.md)
-- [ ] **LOG-2** `fix/log-fileops-structured` — Replace fmt.Printf in fileops
-  → [`2026-04-30-log-2-fileops.md`](docs/superpowers/bot-tasks/2026-04-30-log-2-fileops.md)
-- [ ] **LOG-3** `fix/log-backup-structured` — Replace fmt.Printf in backup
-  → [`2026-04-30-log-3-backup.md`](docs/superpowers/bot-tasks/2026-04-30-log-3-backup.md)
-- [ ] **LOG-4** `fix/scanner-remove-progressbar` — Remove terminal progress bar from scanner
-  → [`2026-04-30-log-4-progressbar.md`](docs/superpowers/bot-tasks/2026-04-30-log-4-progressbar.md)
+- [x] **LOG-1** `fix/log-tagger-structured` — Done: `tagger/tagger.go` and `tagger/safe_write.go` converted to `slog`.
+- [x] **LOG-2** `fix/log-fileops-structured` — Done: no `log.Printf` in `internal/fileops`.
+- [x] **LOG-3** `fix/log-backup-structured` — Done: `backup/backup.go` converted to `slog`.
+- [x] **LOG-4** `fix/scanner-remove-progressbar` — Done: no progress bar in scanner; `chapter_consolidation.go` converted to `slog`.
 
 ### PROJ — Query Projection (2 tasks)
 
