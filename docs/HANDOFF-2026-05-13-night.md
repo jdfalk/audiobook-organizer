@@ -57,8 +57,11 @@ musl-cross build env is missing `-lz`).
 | #937 | (merged) | feat(web): cache provenance badge in MetadataSearchDialog | merged + deployed |
 | #938 | (merged) | docs: CHANGELOG + HANDOFF refresh through PR #937 | merged + deployed |
 | #939 | (merged) | fix(test): TestHandler_GetOperationLogs expects v2 lookup before v1 | merged + deployed |
+| #940 | (merged) | docs(handoff): record PRs #938 + #939 | merged + deployed |
+| #941 | (merged) | feat(matcher): invalidate cache on fetch-apply + revert | merged + deployed |
+| #942 | (merged) | feat(matcher): invalidate cache on undoLastApply + undoMetadataChange | merged + deployed |
 
-CHANGELOG `## [Unreleased]` already covers PRs #905-#920. PRs #921 and #922 are NOT yet in CHANGELOG — add them in the first PR you ship.
+CHANGELOG `## [Unreleased]` is up to date through PR #937. PRs #939-#942 are not yet in CHANGELOG — add them in the next PR.
 
 ## Outstanding work, ranked by ROI
 
