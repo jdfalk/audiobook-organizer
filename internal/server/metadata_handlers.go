@@ -212,6 +212,11 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 		return
 	}
 
+	// METADATA-CACHED-MATCHER: fetch+apply rewrites book identity (title,
+	// author, etc), so the cached candidates are stale by definition.
+	// Invalidate so the next read fetches fresh.
+	_ = s.metadataFetchService.InvalidateCachedCandidates(id)
+
 	// Enqueue for iTunes auto write-back if metadata was updated
 	if s.writeBackBatcher != nil {
 		s.writeBackBatcher.Enqueue(id)
@@ -462,6 +467,11 @@ func (s *Server) revertAudiobookMetadata(c *gin.Context) {
 	if err != nil {
 		httputil.InternalError(c, "failed to revert metadata", err)
 		return
+	}
+	// METADATA-CACHED-MATCHER: revert changes book identity, so cached
+	// candidates may no longer match.
+	if s.metadataFetchService != nil {
+		_ = s.metadataFetchService.InvalidateCachedCandidates(id)
 	}
 	httputil.RespondWithOK(c, gin.H{"message": "Book reverted to version", "book": book})
 }
