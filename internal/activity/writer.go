@@ -239,6 +239,7 @@ func (w *Writer) Stop(ctx context.Context) error {
 //
 // Recognised formats:
 //   - GIN: "[GIN] YYYY/MM/DD - HH:MM:SS | STATUS | ..."
+//   - slog text: `time=... level=INFO msg="..."`
 //   - Go standard log: "YYYY/MM/DD HH:MM:SS file.go:NNN: [level] source: message"
 //   - Bare text: returned as-is with level=info, source=server.
 func ParseLogLine(line string) (level, source, message string) {
@@ -251,6 +252,42 @@ func ParseLogLine(line string) (level, source, message string) {
 			message = strings.TrimSpace(rest)
 		}
 		return "info", "gin", message
+	}
+
+	// slog TextHandler: time=... level=INFO msg="..." [attrs...]
+	// We only care about level + msg; drop time and attrs. After
+	// extracting msg, recurse so the wrapped "[INFO] source: message"
+	// payload parses through the standard [level] branch and gets a
+	// proper source.
+	if strings.HasPrefix(line, "time=") && strings.Contains(line, " level=") && strings.Contains(line, " msg=") {
+		lvl := "info"
+		if li := strings.Index(line, " level="); li >= 0 {
+			rest := line[li+len(" level="):]
+			if sp := strings.IndexByte(rest, ' '); sp > 0 {
+				lvl = strings.ToLower(rest[:sp])
+			}
+		}
+		mi := strings.Index(line, " msg=")
+		if mi >= 0 {
+			msg := line[mi+len(" msg="):]
+			// msg is quoted text; trim surrounding quotes and unescape \"
+			if len(msg) > 0 && msg[0] == '"' {
+				if end := strings.LastIndexByte(msg, '"'); end > 0 {
+					msg = msg[1:end]
+				}
+				msg = strings.ReplaceAll(msg, `\"`, `"`)
+			}
+			// Recurse: msg often starts with "[INFO] source: ..." in our
+			// code so the standard branch can extract a real source.
+			if msg != "" && msg != line {
+				rlvl, rsrc, rmsg := ParseLogLine(msg)
+				if rsrc != "server" || rlvl != "info" {
+					return rlvl, rsrc, rmsg
+				}
+				return lvl, "server", msg
+			}
+			return lvl, "server", msg
+		}
 	}
 
 	work := line
