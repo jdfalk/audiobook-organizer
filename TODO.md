@@ -68,26 +68,15 @@ the original W7 plan turned out to be substantially larger than a single
 final-cleanup PR. Splitting them out as their own tickets to be worked
 incrementally:
 
-- [ ] **SERVER-LIFECYCLE-FLIP** Wire `Container.Start(ctx)` / `Container.Stop(ctx)`
-  into Server.Start / Server.Shutdown. **Partially completed** in PR #882
-  (opRegistry/opHub/embeddingStore/dedupEngine now sourced from the container
-  via wireServerFromContainer; plugin op-defs registered via PostInit). The
-  remaining per-service work:
-  - `updatescheduler` — register.go uses hard-coded "dev" version; needs
-    `appVersion` string Override or a server-side Need.
-  - `searchindex` — Container's Start would open Bleve; conflicts with the
-    existing inline Bleve open in `server_lifecycle.go`. Needs either-or.
-  - `activitywriter` — inline `aw := activity.NewWriter(...)` in NewServer
-    still creates a parallel writer; the container's one is unused.
-  - `aiScanStore` + `pipelineManager` — not yet in the container; the AI
-    block at `server.go:~511` still constructs a parallel dedup engine
-    inline because the chromem hydrate goroutine wires off that instance.
+- [x] **SERVER-LIFECYCLE-FLIP** Wire `Container.Start(ctx)` / `Container.Stop(ctx)`
+  into Server.Start / Server.Shutdown. **Completed** across PRs #882–#951:
+  all sub-services (updatescheduler, searchindex, activitywriter, aiScanStore,
+  pipelineManager, dedupEngine) are container-driven. Verified in code.
 
-- [ ] **SERVER-GLOBAL-STORE-AUDIT** Remove ~120 production `database.GetGlobalStore()`
-  callers across `internal/scanner` (35), `internal/audiobooks/helpers` (14),
-  `internal/server/*` (~30), `internal/metafetch`, `internal/organizer`, etc.
-  Best done as a series of small PRs, one per package, replacing with explicit
-  store params or container `Get` calls.
+- [x] **SERVER-GLOBAL-STORE-AUDIT** Remove production `database.GetGlobalStore()`
+  callers. **Completed**: production code has 3 remaining calls, all of which
+  are intentional test-path fallbacks in `server.go:Store()`, `server.go:NewServer`,
+  and `scanner.go:getStore()`. No hot-path callers remain.
 
 - [~] **PLUGIN-DECOUPLE-SERVER-CLOSURES** Decouple `itunesservice.Service` from
   server-bound closures (`OnBookCreated`, `OrganizerFactory`). Deferred to
@@ -319,10 +308,8 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### MOCK — Mock/CI Gate (2 tasks)
 
-- [ ] **MOCK-1** `fix/regenerate-mocks` — Regenerate stale mockery mocks
-  → [`2026-04-30-mock-1-regenerate.md`](docs/superpowers/bot-tasks/2026-04-30-mock-1-regenerate.md)
-- [ ] **MOCK-2** `fix/mock-ci-gate` — Add `go generate` check to CI
-  → [`2026-04-30-mock-2-ci-gate.md`](docs/superpowers/bot-tasks/2026-04-30-mock-2-ci-gate.md)
+- [x] **MOCK-1** `fix/regenerate-mocks` — Mocks verified fresh via `mockery` run; no diff.
+- [x] **MOCK-2** `fix/mock-ci-gate` — CI gate already in `.github/workflows/ci.yml` (`mocks-check` job).
 
 ### N1 — N+1 Query Elimination (4 tasks)
 
@@ -348,18 +335,14 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### DB — Database Hygiene (6 tasks)
 
-- [ ] **DB-1** `fix/db-file-hash-index` — Add unique index on (file_hash, library_id)
-  → [`2026-04-30-db-1-file-hash-index.md`](docs/superpowers/bot-tasks/2026-04-30-db-1-file-hash-index.md)
-- [ ] **DB-2** `fix/db-begin-tx-sqlite` — Wrap SaveBook pipeline in SQLite transaction
-  → [`2026-04-30-db-2-begin-tx-sqlite.md`](docs/superpowers/bot-tasks/2026-04-30-db-2-begin-tx-sqlite.md)
-- [ ] **DB-3** `fix/db-begin-tx-activity` — Wrap activity store writes in transactions
-  → [`2026-04-30-db-3-begin-tx-activity.md`](docs/superpowers/bot-tasks/2026-04-30-db-3-begin-tx-activity.md)
-- [ ] **DB-4** `fix/pipeline-save-errors` — Return errors from pipeline save steps
-  → [`2026-04-30-db-4-pipeline-errors.md`](docs/superpowers/bot-tasks/2026-04-30-db-4-pipeline-errors.md)
-- [ ] **DB-5** `fix/db-time-parse-errors` — Handle time.Parse errors in row scanners
-  → [`2026-04-30-db-5-time-parse-errors.md`](docs/superpowers/bot-tasks/2026-04-30-db-5-time-parse-errors.md)
-- [ ] **DB-6** `fix/pebble-silent-errors` — Surface silent errors in PebbleDB writes
-  → [`2026-04-30-db-6-pebble-silent-errors.md`](docs/superpowers/bot-tasks/2026-04-30-db-6-pebble-silent-errors.md)
+- [~] **DB-1** `fix/db-file-hash-index` — SQLite-only; deferred until SQLite elimination.
+- [~] **DB-2** `fix/db-begin-tx-sqlite` — SQLite-only; deferred until SQLite elimination.
+- [~] **DB-3** `fix/db-begin-tx-activity` — SQLite/NutsDB; deferred pending NutsDB evaluation.
+- [x] **DB-4** `fix/pipeline-save-errors` — `acoustid_backfill.go` errors already propagated;
+  `server_lifecycle.go` discards are intentional best-effort (verified).
+- [~] **DB-5** `fix/db-time-parse-errors` — SQLite-only; deferred until SQLite elimination.
+- [x] **DB-6** `fix/pebble-silent-errors` — Added `slog.Warn` to `RecordPathChange` on
+  book create and `recomputeDurationMap` on segment create in `pebble_store.go`.
 
 ### CTX — Context Propagation (3 tasks)
 
