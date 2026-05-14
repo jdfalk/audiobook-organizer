@@ -53,6 +53,7 @@ type Store interface {
 	AIJobsStore
 	RejectedMetadataStore
 	OpsV2Store
+	MetadataCacheStore
 }
 
 // BookAlternativeTitle represents a variant name for a book — romaji

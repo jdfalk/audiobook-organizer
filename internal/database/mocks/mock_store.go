@@ -28825,6 +28825,57 @@ func (_c *MockStore_DeleteInvite_Call) RunAndReturn(run func(token string) error
 	return _c
 }
 
+// DeleteMetadataCache provides a mock function for the type MockStore
+func (_mock *MockStore) DeleteMetadataCache(bookID string) error {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteMetadataCache")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DeleteMetadataCache_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteMetadataCache'
+type MockStore_DeleteMetadataCache_Call struct {
+	*mock.Call
+}
+
+// DeleteMetadataCache is a helper method to define mock.On call
+//   - bookID string
+func (_e *MockStore_Expecter) DeleteMetadataCache(bookID interface{}) *MockStore_DeleteMetadataCache_Call {
+	return &MockStore_DeleteMetadataCache_Call{Call: _e.mock.On("DeleteMetadataCache", bookID)}
+}
+
+func (_c *MockStore_DeleteMetadataCache_Call) Run(run func(bookID string)) *MockStore_DeleteMetadataCache_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DeleteMetadataCache_Call) Return(err error) *MockStore_DeleteMetadataCache_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DeleteMetadataCache_Call) RunAndReturn(run func(bookID string) error) *MockStore_DeleteMetadataCache_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteMetadataFieldState provides a mock function for the type MockStore
 func (_mock *MockStore) DeleteMetadataFieldState(bookID string, field string) error {
 	ret := _mock.Called(bookID, field)
@@ -35160,6 +35211,68 @@ func (_c *MockStore_GetLibraryFingerprint_Call) RunAndReturn(run func(path strin
 	return _c
 }
 
+// GetMetadataCache provides a mock function for the type MockStore
+func (_mock *MockStore) GetMetadataCache(bookID string) (*database.MetadataCandidateCache, error) {
+	ret := _mock.Called(bookID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetMetadataCache")
+	}
+
+	var r0 *database.MetadataCandidateCache
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*database.MetadataCandidateCache, error)); ok {
+		return returnFunc(bookID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *database.MetadataCandidateCache); ok {
+		r0 = returnFunc(bookID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.MetadataCandidateCache)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(bookID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetMetadataCache_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetMetadataCache'
+type MockStore_GetMetadataCache_Call struct {
+	*mock.Call
+}
+
+// GetMetadataCache is a helper method to define mock.On call
+//   - bookID string
+func (_e *MockStore_Expecter) GetMetadataCache(bookID interface{}) *MockStore_GetMetadataCache_Call {
+	return &MockStore_GetMetadataCache_Call{Call: _e.mock.On("GetMetadataCache", bookID)}
+}
+
+func (_c *MockStore_GetMetadataCache_Call) Run(run func(bookID string)) *MockStore_GetMetadataCache_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetMetadataCache_Call) Return(metadataCandidateCache *database.MetadataCandidateCache, err error) *MockStore_GetMetadataCache_Call {
+	_c.Call.Return(metadataCandidateCache, err)
+	return _c
+}
+
+func (_c *MockStore_GetMetadataCache_Call) RunAndReturn(run func(bookID string) (*database.MetadataCandidateCache, error)) *MockStore_GetMetadataCache_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetMetadataChangeHistory provides a mock function for the type MockStore
 func (_mock *MockStore) GetMetadataChangeHistory(bookID string, field string, limit int) ([]database.MetadataChangeRecord, error) {
 	ret := _mock.Called(bookID, field, limit)
@@ -39578,6 +39691,61 @@ func (_c *MockStore_ListDirtyUserPlaylists_Call) RunAndReturn(run func() ([]data
 	return _c
 }
 
+// ListMetadataCacheKeys provides a mock function for the type MockStore
+func (_mock *MockStore) ListMetadataCacheKeys() ([]database.MetadataCacheSummary, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListMetadataCacheKeys")
+	}
+
+	var r0 []database.MetadataCacheSummary
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]database.MetadataCacheSummary, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []database.MetadataCacheSummary); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.MetadataCacheSummary)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListMetadataCacheKeys_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListMetadataCacheKeys'
+type MockStore_ListMetadataCacheKeys_Call struct {
+	*mock.Call
+}
+
+// ListMetadataCacheKeys is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListMetadataCacheKeys() *MockStore_ListMetadataCacheKeys_Call {
+	return &MockStore_ListMetadataCacheKeys_Call{Call: _e.mock.On("ListMetadataCacheKeys")}
+}
+
+func (_c *MockStore_ListMetadataCacheKeys_Call) Run(run func()) *MockStore_ListMetadataCacheKeys_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListMetadataCacheKeys_Call) Return(metadataCacheSummarys []database.MetadataCacheSummary, err error) *MockStore_ListMetadataCacheKeys_Call {
+	_c.Call.Return(metadataCacheSummarys, err)
+	return _c
+}
+
+func (_c *MockStore_ListMetadataCacheKeys_Call) RunAndReturn(run func() ([]database.MetadataCacheSummary, error)) *MockStore_ListMetadataCacheKeys_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListNarrators provides a mock function for the type MockStore
 func (_mock *MockStore) ListNarrators() ([]database.Narrator, error) {
 	ret := _mock.Called()
@@ -41570,6 +41738,57 @@ func (_c *MockStore_PruneSystemActivityLogs_Call) Return(n int, err error) *Mock
 }
 
 func (_c *MockStore_PruneSystemActivityLogs_Call) RunAndReturn(run func(olderThan time.Time) (int, error)) *MockStore_PruneSystemActivityLogs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PutMetadataCache provides a mock function for the type MockStore
+func (_mock *MockStore) PutMetadataCache(entry *database.MetadataCandidateCache) error {
+	ret := _mock.Called(entry)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PutMetadataCache")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*database.MetadataCandidateCache) error); ok {
+		r0 = returnFunc(entry)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_PutMetadataCache_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PutMetadataCache'
+type MockStore_PutMetadataCache_Call struct {
+	*mock.Call
+}
+
+// PutMetadataCache is a helper method to define mock.On call
+//   - entry *database.MetadataCandidateCache
+func (_e *MockStore_Expecter) PutMetadataCache(entry interface{}) *MockStore_PutMetadataCache_Call {
+	return &MockStore_PutMetadataCache_Call{Call: _e.mock.On("PutMetadataCache", entry)}
+}
+
+func (_c *MockStore_PutMetadataCache_Call) Run(run func(entry *database.MetadataCandidateCache)) *MockStore_PutMetadataCache_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *database.MetadataCandidateCache
+		if args[0] != nil {
+			arg0 = args[0].(*database.MetadataCandidateCache)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_PutMetadataCache_Call) Return(err error) *MockStore_PutMetadataCache_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_PutMetadataCache_Call) RunAndReturn(run func(entry *database.MetadataCandidateCache) error) *MockStore_PutMetadataCache_Call {
 	_c.Call.Return(run)
 	return _c
 }

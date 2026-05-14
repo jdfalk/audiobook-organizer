@@ -379,6 +379,37 @@ type MockStore struct {
 	// Lifecycle
 	CloseFunc func() error
 	ResetFunc func() error
+
+	// MetadataCacheStore (METADATA-CACHED-MATCHER)
+	GetMetadataCacheFunc      func(bookID string) (*MetadataCandidateCache, error)
+	PutMetadataCacheFunc      func(entry *MetadataCandidateCache) error
+	DeleteMetadataCacheFunc   func(bookID string) error
+	ListMetadataCacheKeysFunc func() ([]MetadataCacheSummary, error)
+}
+
+func (m *MockStore) GetMetadataCache(bookID string) (*MetadataCandidateCache, error) {
+	if m.GetMetadataCacheFunc != nil {
+		return m.GetMetadataCacheFunc(bookID)
+	}
+	return nil, nil
+}
+func (m *MockStore) PutMetadataCache(entry *MetadataCandidateCache) error {
+	if m.PutMetadataCacheFunc != nil {
+		return m.PutMetadataCacheFunc(entry)
+	}
+	return nil
+}
+func (m *MockStore) DeleteMetadataCache(bookID string) error {
+	if m.DeleteMetadataCacheFunc != nil {
+		return m.DeleteMetadataCacheFunc(bookID)
+	}
+	return nil
+}
+func (m *MockStore) ListMetadataCacheKeys() ([]MetadataCacheSummary, error) {
+	if m.ListMetadataCacheKeysFunc != nil {
+		return m.ListMetadataCacheKeysFunc()
+	}
+	return nil, nil
 }
 
 // Implement all Store interface methods
