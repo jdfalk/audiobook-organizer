@@ -7,6 +7,50 @@
 
 ## [Unreleased]
 
+### Fixes
+
+#### May 13, 2026 — Activity Log UX + op log persistence (PRs #919, #920)
+
+- **Active Operations now partitioned** into Pending / Active / Completed
+  sections so finished jobs don't sit visually mixed with running ones
+  and queued ops are distinct from in-flight work.
+- **Operation logs read from `op_logs_v2`** (the canonical v2 store
+  populated by `dbReporter`) instead of the legacy `operation_logs`
+  table — completed UOS v2 ops were always showing "No logs recorded
+  for this operation." V1 fallback retained for pre-cutover rows.
+- **Plugin SDK stub `itunes.import` def removed from Register list**.
+  Earlier the stub (`Isolate=true`, `Run=no-op`) won the registry race
+  and routed every iTunes import through a no-op subprocess. The
+  canonical `Isolate=false` op in `internal/server/itunes_ops.go` now
+  wires `Importer.Execute` as designed.
+- **Tests start the opRegistry worker pool**. Several integration tests
+  (TestITunesImport_*, TestE2E_ITunesImportOrganizeWriteBack,
+  TestOrganizeService_ViaHTTP, TestStartScanOperation, etc.) called
+  `NewServer(nil)` without `Container.Start`, so enqueued ops sat in
+  the queue forever. `testutil.WaitForOp` and `waitForOperationStatus`
+  now check the v2 ops table before falling back to v1.
+- **V2→V1 op-status bridge**: `folder_autoscan_op` and `itunes_ops`
+  call `UpdateOperationStatus` on the legacy v1 row at terminal status
+  so HTTP callers polling the `LegacyOpID` see completion.
+
+#### May 13, 2026 — Activity entries + completed-op animation + duplicate ops (PRs #905-918)
+
+- Pebble: closed panic on shutdown eliminated by ctx-aware
+  `BackfillExternalIDs` + `Registry.shuttingDown` atomic flag; watchdog
+  no longer respawns workers during shutdown.
+- Operations registry `EnqueueOp` deduplicates against active rows when
+  `ConcurrencyKey != ""`, blocking the cron+maintenance.window double
+  enqueue that produced "Purge ×2 / Temp File ×2" rows.
+- Activity Log: completed ops show static colored bar instead of
+  indeterminate animation; "Loading logs..." now distinct from
+  "fetched, empty"; terminal-status ops stop log-polling and hide
+  Cancel; op cards display `op.displayName || def_id || type`.
+- `slog.Default` routed to `MultiWriter(os.Stderr, activityWriter)` so
+  registry log lines reach the activity feed. (Coverage of slog text
+  format in `ParseLogLine` still needs validation — see TODO.)
+- `nutsdb` activity bucket-not-found handled (`ErrBucketNotFound` *and*
+  `ErrNotFoundBucket` plus `ErrRangeScan`).
+
 ### Refactors
 
 #### May 13, 2026 — SERVER-PLUGIN-REG W4.INT/W5.INT partial cleanup (PR #882)
