@@ -52,7 +52,9 @@ musl-cross build env is missing `-lz`).
 | #932 | (merged) | docs: handoff update through matcher Task 11 | merged + deployed |
 | #933 | (merged) | fix(activity): tier-by-level so Activity Log shows info/warn/error entries | merged + deployed |
 | #934 | (merged) | chore(metadata): silence per-fetch Hardcover no-token log | merged + deployed |
-| #935 | (merged) | chore(plugins): delete empty maintenance plugin container stub | merged, deploy in flight |
+| #935 | (merged) | chore(plugins): delete empty maintenance plugin container stub | merged + deployed |
+| #936 | (merged) | docs: handoff update for #933-#935 | merged + deployed |
+| #937 | (merged) | feat(web): cache provenance badge in MetadataSearchDialog | merged + deployed |
 
 CHANGELOG `## [Unreleased]` already covers PRs #905-#920. PRs #921 and #922 are NOT yet in CHANGELOG — add them in the first PR you ship.
 

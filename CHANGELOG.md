@@ -9,6 +9,31 @@
 
 ### Features
 
+#### May 13, 2026 — METADATA-CACHED-MATCHER frontend wiring (PRs #927, #928, #929, #931, #937)
+
+Matcher frontend hooked up to the new cache. Backend invalidation
+plumbed through batch fetch.
+
+- **#927**: `api.listCachedCandidates()` typed wrapper for the new
+  `GET /audiobooks/metadata/cached` endpoint.
+- **#928**: `fetchCandidateForBook` (batch fetch) now calls
+  `FetchAndCache` so every book touched by a batch fetch lands in
+  `metadata_cache:<id>`. `Library.handleResumeReview` consults
+  `listCachedCandidates('pending')` first, falls back to the legacy
+  operation-scoped endpoint for back-compat.
+- **#929**: Refresh icon in MetadataSearchDialog that posts
+  `?refresh=true`, bypassing the cache.
+- **#931**: Toolbar rename — "Fetch & Review" → "Fetch Selected",
+  "Resume Review" → "Review". Tooltips and toast copy updated. No
+  auto-open of the dialog on fetch.
+- **#937**: Cache provenance chip in the search dialog. Green for
+  fresh cache, amber for stale, blue for fresh fetch.
+
+Task 12 (MetadataReviewDialog operation_id → cache list refactor)
+deferred — the current Review flow keeps using the legacy
+`/metadata/pending-review` operation_id for the dialog's pagination
+contract. The user can match books today via Fetch Selected → Review.
+
 #### May 13, 2026 — METADATA-CACHED-MATCHER backend (PRs #924, #925)
 
 First two slices of the matcher consolidation per
@@ -28,6 +53,23 @@ First two slices of the matcher consolidation per
 Frontend wiring (Tasks 9-12 of the plan) deferred to the next session.
 
 ### Fixes
+
+#### May 13, 2026 — Log spam + Activity Log visibility (PRs #923, #933, #934, #935)
+
+- **#923**: Slog duplicate journal lines fixed (dropped
+  `MultiWriter(stderr, aw)`; aw already tees to stdout). Audnexus
+  per-fetch DEBUG spam silenced. Audible "0 products" demoted to
+  DEBUG with search URL context. ISBN enrichment defers to 6h
+  interval instead of running on every startup.
+- **#933**: Activity Log was showing 0 entries because every line
+  routed through `activity.Writer` got `Tier: "debug"` and the UI
+  default excludes the debug tier. Tier is now derived from level —
+  info/warn/error → change (visible), debug → debug.
+- **#934**: Per-fetch "Hardcover: no API token configured" line
+  silenced. Config state, not an event.
+- **#935**: Empty maintenance plugin container stub deleted —
+  inline registration in `internal/server/server.go:~402` is the
+  documented canonical path until `ServerDeps` is decomposed.
 
 #### May 13, 2026 — Activity Log UX + op log persistence (PRs #919, #920)
 
