@@ -197,6 +197,25 @@ func (r *Registry) EnqueueOp(ctx context.Context, defID string, params any, opts
 		return "", fmt.Errorf("registry: unknown defID %q", defID)
 	}
 
+	// Dedupe: if this defID has a non-empty ConcurrencyKey, and an op for
+	// the same defID is already queued or running, return the existing op
+	// id rather than enqueueing a duplicate. ConcurrencyKey serializes
+	// RUNS but doesn't dedupe QUEUE entries — without this guard, every
+	// cron tick piles up another row while the previous run is still in
+	// flight (symptom: Active Operations panel shows "Purge Soft-Deleted"
+	// twice from one cron schedule + one maintenance.window pass).
+	if def.ConcurrencyKey != "" {
+		if active, listErr := r.store.ListActiveOperationsV2(); listErr == nil {
+			for _, op := range active {
+				if op.DefID == defID {
+					r.logger.Info("registry: enqueue deduped — active op exists",
+						"op_id", op.ID, "def_id", defID, "status", op.Status)
+					return op.ID, nil
+				}
+			}
+		}
+	}
+
 	// Marshal params.
 	var rawParams json.RawMessage
 	if params != nil {
