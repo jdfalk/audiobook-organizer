@@ -1620,7 +1620,7 @@ export const Library = () => {
       setMetadataReviewOpId(opId);
       startOperationPolling(opId, 'metadata_candidate_fetch');
       toast(
-        `Metadata fetch started for ${ids.length} book${ids.length !== 1 ? 's' : ''} — watch the bell for progress.`,
+        `Metadata fetch started for ${ids.length} book${ids.length !== 1 ? 's' : ''}. Click Review when complete to open candidates.`,
         'info',
       );
     } catch { toast('Failed to start metadata fetch', 'error'); }
@@ -1659,7 +1659,7 @@ export const Library = () => {
         // resume their last review.
         const legacy = await api.getPendingReview();
         if (!legacy.operation_id || legacy.total_books === 0) {
-          toast('No books with pending metadata candidates found. Start a Fetch & Review first.', 'info');
+          toast('No books with pending metadata candidates found. Click Fetch Selected to populate the cache.', 'info');
           return;
         }
         setMetadataReviewOpId(legacy.operation_id);
