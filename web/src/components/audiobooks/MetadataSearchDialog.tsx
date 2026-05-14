@@ -100,6 +100,7 @@ export function MetadataSearchDialog({
   const [applying, setApplying] = useState(false);
   const [sourcesTried, setSourcesTried] = useState<string[]>([]);
   const [sourcesFailed, setSourcesFailed] = useState<Record<string, string>>({});
+  const [cacheBadge, setCacheBadge] = useState<{ fromCache: boolean; isFresh: boolean; fetchedAt?: string } | null>(null);
   const [previewCover, setPreviewCover] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [sortResults, setSortResults] = useState<'score' | 'source'>('score');
@@ -144,6 +145,19 @@ export function MetadataSearchDialog({
         setResults(resp.results || []);
         setSourcesTried(resp.sources_tried || []);
         setSourcesFailed(resp.sources_failed || {});
+        // METADATA-CACHED-MATCHER: surface cache provenance so the user
+        // knows whether they're looking at a cached or freshly-fetched
+        // set. from_cache=undefined for legacy alt-query searches that
+        // never touch the cache.
+        if (resp.from_cache !== undefined) {
+          setCacheBadge({
+            fromCache: !!resp.from_cache,
+            isFresh: resp.is_fresh !== false,
+            fetchedAt: resp.fetched_at,
+          });
+        } else {
+          setCacheBadge(null);
+        }
       } catch (err) {
         toast(
           err instanceof Error ? err.message : 'Search failed',
@@ -425,6 +439,22 @@ export function MetadataSearchDialog({
           </Typography>
         )}
 
+        {!loading && cacheBadge && (
+          <Box sx={{ mb: 1 }}>
+            <Chip
+              size="small"
+              color={cacheBadge.fromCache ? (cacheBadge.isFresh ? 'success' : 'warning') : 'info'}
+              label={
+                cacheBadge.fromCache
+                  ? cacheBadge.isFresh
+                    ? `Cached${cacheBadge.fetchedAt ? ` (${new Date(cacheBadge.fetchedAt).toLocaleString()})` : ''}`
+                    : `Cached — stale${cacheBadge.fetchedAt ? ` (${new Date(cacheBadge.fetchedAt).toLocaleString()})` : ''}, click Refresh for fresh results`
+                  : 'Fresh from sources'
+              }
+              title={cacheBadge.fromCache ? 'Click the Refresh icon to re-fetch from sources.' : 'Just fetched from every metadata source.'}
+            />
+          </Box>
+        )}
         {!loading && Object.keys(sourcesFailed).length > 0 && (
           <Box sx={{ mb: 2, p: 1.5, bgcolor: 'warning.main', borderRadius: 1, opacity: 0.85 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
