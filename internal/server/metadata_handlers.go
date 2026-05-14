@@ -230,6 +230,12 @@ func (s *Server) fetchAudiobookMetadata(c *gin.Context) {
 }
 
 // searchAudiobookMetadata handles POST /api/v1/audiobooks/:id/search-metadata.
+//
+// METADATA-CACHED-MATCHER: when the caller doesn't override the search
+// inputs, we consult the persistent per-book cache first. `?refresh=true`
+// forces a fresh fetch + cache replace. Explicit query/author/narrator/
+// series in the body always bypass the cache because they're an
+// alternative-search, not a re-read of the same query.
 func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 	id := c.Param("id")
 	if s.Store() == nil {
@@ -244,14 +250,51 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 		UseRerank bool   `json:"use_rerank"`
 	}
 	_ = c.ShouldBindJSON(&body)
+	refresh := c.Query("refresh") == "true"
 
-	// Cache metadata search results for 60s — external API calls are expensive.
-	// use_rerank is part of the cache key so a rerank result and a non-rerank
-	// result for the same search don't clobber each other.
+	// Persistent cache read: only when the caller is doing a plain
+	// per-book fetch (no alt-query) and didn't force refresh.
 	cacheKey := fmt.Sprintf("meta_search:%s:%s:%s:%s:%s:%t",
 		id, body.Query, body.Author, body.Narrator, body.Series, body.UseRerank)
-	if cached, ok := s.listCache.Get(cacheKey); ok {
-		httputil.RespondWithOK(c, cached)
+	plainFetch := body.Query == "" && body.Author == "" && body.Narrator == "" && body.Series == ""
+	if !refresh && plainFetch && s.metadataFetchService != nil {
+		if entry, fresh, err := s.metadataFetchService.GetCachedCandidates(id); err == nil && entry != nil {
+			results := decodeCachedCandidates(entry)
+			respH := gin.H{
+				"results":      results,
+				"query":        body.Query,
+				"from_cache":   true,
+				"is_fresh":     fresh,
+				"fetched_at":   entry.FetchedAt,
+			}
+			s.listCache.Set(cacheKey, respH)
+			httputil.RespondWithOK(c, respH)
+			return
+		}
+	}
+
+	// 60-second in-memory cache: still useful for back-to-back UI re-renders
+	// even after the persistent cache lands. Keyed identically.
+	if !refresh {
+		if cached, ok := s.listCache.Get(cacheKey); ok {
+			httputil.RespondWithOK(c, cached)
+			return
+		}
+	}
+
+	// Plain per-book fetches go through FetchAndCache so the persistent
+	// cache stays warm. Alt-query searches use the bare search path
+	// because they're exploring outside the canonical fetch.
+	if plainFetch && s.metadataFetchService != nil {
+		entry, err := s.metadataFetchService.FetchAndCache(c.Request.Context(), id, body.Query, body.Author, body.Narrator, body.Series, metafetch.SearchOptions{UseRerank: body.UseRerank})
+		if err != nil {
+			httputil.RespondWithError(c, 404, err.Error(), "NOT_FOUND")
+			return
+		}
+		results := decodeCachedCandidates(entry)
+		respH := gin.H{"results": results, "query": body.Query, "from_cache": false, "is_fresh": true, "fetched_at": entry.FetchedAt}
+		s.listCache.Set(cacheKey, respH)
+		httputil.RespondWithOK(c, respH)
 		return
 	}
 
@@ -263,10 +306,23 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 		httputil.RespondWithError(c, 404, err.Error(), "NOT_FOUND")
 		return
 	}
-	// Cache as gin.H wrapper
 	respH := gin.H{"results": resp.Results, "query": resp.Query, "sources_tried": resp.SourcesTried, "sources_failed": resp.SourcesFailed}
 	s.listCache.Set(cacheKey, respH)
 	httputil.RespondWithOK(c, resp)
+}
+
+// decodeCachedCandidates unwraps the persisted []json.RawMessage into
+// []metafetch.MetadataCandidate. Drops candidates that don't parse so
+// a single corrupt cache entry doesn't poison the whole response.
+func decodeCachedCandidates(entry *metafetch.MetadataCandidateCache) []metafetch.MetadataCandidate {
+	out := make([]metafetch.MetadataCandidate, 0, len(entry.Candidates))
+	for _, raw := range entry.Candidates {
+		var c metafetch.MetadataCandidate
+		if err := json.Unmarshal(raw, &c); err == nil {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // applyAudiobookMetadata handles POST /api/v1/audiobooks/:id/apply-metadata.
@@ -289,6 +345,13 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 	if err != nil {
 		httputil.InternalError(c, "failed to apply metadata", err)
 		return
+	}
+
+	// METADATA-CACHED-MATCHER: applying invalidates the cache so the
+	// next read goes through a fresh fetch chain that reflects the
+	// new title/author/etc.
+	if s.metadataFetchService != nil {
+		_ = s.metadataFetchService.InvalidateCachedCandidates(id)
 	}
 
 	// Kick off slow file I/O (cover embed, tags, rename) in background.
