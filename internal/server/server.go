@@ -7,7 +7,9 @@ package server
 
 import (
 	"context"
+	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -559,6 +561,16 @@ func NewServer(store database.Store) *Server {
 		if aw := server.activityWriter; aw != nil {
 			server.extraOpsRegistrar.Deps.ActivityWriter = aw
 			log.SetOutput(aw)
+			// Also route the slog default to a text handler writing to
+			// the activity writer (in addition to stderr). Without this,
+			// the operations registry — which uses slog.Default() —
+			// emits "starting run" / "run finished" lines to stderr
+			// only, and the Activity Log page shows nothing for
+			// scheduler runs. The text handler emits a key=value line
+			// per record that the activity writer's line parser routes
+			// into an ActivityEntry.
+			handler := slog.NewTextHandler(io.MultiWriter(os.Stderr, aw), &slog.HandlerOptions{Level: slog.LevelInfo})
+			slog.SetDefault(slog.New(handler))
 		}
 
 		// Task 15: iTunes sync → activity log
