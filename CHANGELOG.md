@@ -1,11 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.69.0 -->
+<!-- version: 2.70.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-14 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Chores
+
+#### May 14, 2026 — TODO audit: mark 14 already-completed items as done
+
+Verified in code and marked done in TODO.md:
+- SRV-1 (gzip), SRV-2 (SSE heartbeat)
+- SEC-1 (BrowseDirectory allowlist), SEC-2 (auth warn), SEC-3 (rate-limit warn)
+- FE-2 (LibraryBookGrid), FE-3 (LibraryToolbar), FE-5 (PathsSettingsTab),
+  FE-6 (MetadataSettingsTab), FE-7 (no console.log), FE-8 (ErrorBoundary), FE-9 (STORAGE_KEYS)
 
 ### Fixes
 
