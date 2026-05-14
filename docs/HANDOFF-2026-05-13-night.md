@@ -45,6 +45,10 @@ musl-cross build env is missing `-lz`).
 | #923 | (merged) | chore(logging+scheduler): silence per-pass spam; ISBN every 6h not on startup; slog duplicate-line fix | merged + deployed |
 | #924 | (merged) | feat(database): MetadataCacheStore interface, Pebble impl, SQLite/Mock stubs | merged + deployed |
 | #925 | (merged) | feat(server): metadata cache-first fetch + list endpoint + apply invalidation | merged + deployed |
+| #927 | (merged) | feat(web): listCachedCandidates() API client | merged + deployed |
+| #928 | (merged) | feat(matcher): batch fetch writes cache; Resume Review consults cache first | merged + deployed |
+| #929 | (merged) | feat(web): MetadataSearchDialog Refresh button bypasses cache | merged + deployed |
+| #931 | (merged) | feat(web): rename Fetch & Review → Fetch Selected; Resume Review → Review | merged, deploy in flight |
 
 CHANGELOG `## [Unreleased]` already covers PRs #905-#920. PRs #921 and #922 are NOT yet in CHANGELOG — add them in the first PR you ship.
 
@@ -66,13 +70,14 @@ index and fingerprint retry skip. Commit alongside whatever else you ship.
 - `GET /audiobooks/metadata/cached?status=pending|matched` returns the list for the Review popup.
 - `POST /audiobooks/:id/apply-metadata` calls `InvalidateCachedCandidates(id)`.
 
-**Frontend work remaining (Tasks 9-12 of the plan):**
-- Task 9: `web/src/services/api.ts` — add `listCachedCandidates()` typed wrapper for the new endpoint.
-- Task 10: `web/src/pages/BookDetail.tsx` — add a Refresh icon that posts `?refresh=true`; display the `from_cache` / `is_fresh` flags in the badge.
-- Task 11: `web/src/components/library/LibraryToolbar.tsx` + `web/src/pages/Library.tsx` — rename "Fetch & Review" → "Fetch Selected" (no auto-open dialog); add a separate "Review" badge button that opens the dialog over the cache list.
-- Task 12: `web/src/components/dialogs/MetadataReviewDialog.tsx` — switch data source from the legacy `/pending-review` to the new `/metadata/cached?status=pending` endpoint.
+**Frontend work — current state:**
+- ✅ Task 9 (PR #927): `api.listCachedCandidates()` typed wrapper added.
+- ✅ Task 10 partial (PR #929): `MetadataSearchDialog` got a Refresh icon next to Search that posts `?refresh=true`. Badge with `from_cache`/`is_fresh` flags in BookDetail is NOT yet done — the dialog has the controls; BookDetail itself doesn't visualize cache-freshness in any inline UI element.
+- ✅ Task 11 partial (PR #931): toolbar labels renamed to "Fetch Selected" + "Review", tooltips updated, toast copy refreshed. Auto-open removal is already correct (`handleFetchReview` only sets the opId, never `setMetadataReviewOpen(true)`).
+- ⚠️ Task 12 NOT DONE: `MetadataReviewDialog.tsx` still gets its data via `metadataReviewOpId` (operation-scoped). The Review button works because `handleResumeReview` falls back to `api.getPendingReview()` for the operation id when the cache has entries.
+  - To finish: change the dialog to accept a `bookIds: string[]` prop (or fetch via `listCachedCandidates('pending')` internally) and remove the `operation_id` requirement. After that switch lands, delete the server-side `handleGetPendingReview` handler and its route registration in `server_lifecycle.go`. The legacy route and `api.getPendingReview()` client wrapper remain in place to keep Review functional during this gap.
 
-The legacy `handleGetPendingReview` server route is **still in place** — I did NOT delete it (Task 7 step 3) to keep the frontend running unchanged until the dialog data source switch lands. Delete it as part of Task 12, not separately.
+The legacy `handleGetPendingReview` server route is **still in place** intentionally. Delete it as part of the Task 12 refactor, not separately.
 
 Follow the plan task-by-task. The plan was written by the same author as the current session — trust it.
 
