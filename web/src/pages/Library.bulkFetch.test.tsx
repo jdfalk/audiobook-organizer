@@ -91,7 +91,7 @@ describe('Library bulk metadata fetch', () => {
       </MemoryRouter>
     );
 
-    // Select both books so "Fetch & Review" becomes enabled (requires 2+)
+    // Select both books so "Fetch Selected" becomes enabled (requires 2+)
     const selectBoxes = await screen.findAllByRole('checkbox', {
       name: /select /i,
     });
@@ -105,7 +105,7 @@ describe('Library bulk metadata fetch', () => {
     });
 
     const fetchButton = await screen.findByRole('button', {
-      name: /fetch & review/i,
+      name: /fetch selected/i,
     });
     await waitFor(() => {
       expect(fetchButton).toBeEnabled();
