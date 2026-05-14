@@ -635,6 +635,68 @@ func (_c *MockAuthorReader_GetAuthorsByBookIDs_Call) RunAndReturn(run func(ctx c
 	return _c
 }
 
+// GetAuthorsByIDs provides a mock function for the type MockAuthorReader
+func (_mock *MockAuthorReader) GetAuthorsByIDs(ids []int) (map[int]*database.Author, error) {
+	ret := _mock.Called(ids)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAuthorsByIDs")
+	}
+
+	var r0 map[int]*database.Author
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func([]int) (map[int]*database.Author, error)); ok {
+		return returnFunc(ids)
+	}
+	if returnFunc, ok := ret.Get(0).(func([]int) map[int]*database.Author); ok {
+		r0 = returnFunc(ids)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[int]*database.Author)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func([]int) error); ok {
+		r1 = returnFunc(ids)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAuthorReader_GetAuthorsByIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAuthorsByIDs'
+type MockAuthorReader_GetAuthorsByIDs_Call struct {
+	*mock.Call
+}
+
+// GetAuthorsByIDs is a helper method to define mock.On call
+//   - ids []int
+func (_e *MockAuthorReader_Expecter) GetAuthorsByIDs(ids interface{}) *MockAuthorReader_GetAuthorsByIDs_Call {
+	return &MockAuthorReader_GetAuthorsByIDs_Call{Call: _e.mock.On("GetAuthorsByIDs", ids)}
+}
+
+func (_c *MockAuthorReader_GetAuthorsByIDs_Call) Run(run func(ids []int)) *MockAuthorReader_GetAuthorsByIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []int
+		if args[0] != nil {
+			arg0 = args[0].([]int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAuthorReader_GetAuthorsByIDs_Call) Return(intToAuthor map[int]*database.Author, err error) *MockAuthorReader_GetAuthorsByIDs_Call {
+	_c.Call.Return(intToAuthor, err)
+	return _c
+}
+
+func (_c *MockAuthorReader_GetAuthorsByIDs_Call) RunAndReturn(run func(ids []int) (map[int]*database.Author, error)) *MockAuthorReader_GetAuthorsByIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBookAuthors provides a mock function for the type MockAuthorReader
 func (_mock *MockAuthorReader) GetBookAuthors(bookID string) ([]database.BookAuthor, error) {
 	ret := _mock.Called(bookID)
@@ -2162,6 +2224,68 @@ func (_c *MockAuthorStore_GetAuthorsByBookIDs_Call) Return(stringToAuthors map[s
 }
 
 func (_c *MockAuthorStore_GetAuthorsByBookIDs_Call) RunAndReturn(run func(ctx context.Context, bookIDs []string) (map[string][]database.Author, error)) *MockAuthorStore_GetAuthorsByBookIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetAuthorsByIDs provides a mock function for the type MockAuthorStore
+func (_mock *MockAuthorStore) GetAuthorsByIDs(ids []int) (map[int]*database.Author, error) {
+	ret := _mock.Called(ids)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAuthorsByIDs")
+	}
+
+	var r0 map[int]*database.Author
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func([]int) (map[int]*database.Author, error)); ok {
+		return returnFunc(ids)
+	}
+	if returnFunc, ok := ret.Get(0).(func([]int) map[int]*database.Author); ok {
+		r0 = returnFunc(ids)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[int]*database.Author)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func([]int) error); ok {
+		r1 = returnFunc(ids)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAuthorStore_GetAuthorsByIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAuthorsByIDs'
+type MockAuthorStore_GetAuthorsByIDs_Call struct {
+	*mock.Call
+}
+
+// GetAuthorsByIDs is a helper method to define mock.On call
+//   - ids []int
+func (_e *MockAuthorStore_Expecter) GetAuthorsByIDs(ids interface{}) *MockAuthorStore_GetAuthorsByIDs_Call {
+	return &MockAuthorStore_GetAuthorsByIDs_Call{Call: _e.mock.On("GetAuthorsByIDs", ids)}
+}
+
+func (_c *MockAuthorStore_GetAuthorsByIDs_Call) Run(run func(ids []int)) *MockAuthorStore_GetAuthorsByIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []int
+		if args[0] != nil {
+			arg0 = args[0].([]int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAuthorStore_GetAuthorsByIDs_Call) Return(intToAuthor map[int]*database.Author, err error) *MockAuthorStore_GetAuthorsByIDs_Call {
+	_c.Call.Return(intToAuthor, err)
+	return _c
+}
+
+func (_c *MockAuthorStore_GetAuthorsByIDs_Call) RunAndReturn(run func(ids []int) (map[int]*database.Author, error)) *MockAuthorStore_GetAuthorsByIDs_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -21328,6 +21452,68 @@ func (_c *MockSeriesReader_GetSeriesByID_Call) RunAndReturn(run func(id int) (*d
 	return _c
 }
 
+// GetSeriesByIDs provides a mock function for the type MockSeriesReader
+func (_mock *MockSeriesReader) GetSeriesByIDs(ids []int) (map[int]*database.Series, error) {
+	ret := _mock.Called(ids)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSeriesByIDs")
+	}
+
+	var r0 map[int]*database.Series
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func([]int) (map[int]*database.Series, error)); ok {
+		return returnFunc(ids)
+	}
+	if returnFunc, ok := ret.Get(0).(func([]int) map[int]*database.Series); ok {
+		r0 = returnFunc(ids)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[int]*database.Series)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func([]int) error); ok {
+		r1 = returnFunc(ids)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSeriesReader_GetSeriesByIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSeriesByIDs'
+type MockSeriesReader_GetSeriesByIDs_Call struct {
+	*mock.Call
+}
+
+// GetSeriesByIDs is a helper method to define mock.On call
+//   - ids []int
+func (_e *MockSeriesReader_Expecter) GetSeriesByIDs(ids interface{}) *MockSeriesReader_GetSeriesByIDs_Call {
+	return &MockSeriesReader_GetSeriesByIDs_Call{Call: _e.mock.On("GetSeriesByIDs", ids)}
+}
+
+func (_c *MockSeriesReader_GetSeriesByIDs_Call) Run(run func(ids []int)) *MockSeriesReader_GetSeriesByIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []int
+		if args[0] != nil {
+			arg0 = args[0].([]int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSeriesReader_GetSeriesByIDs_Call) Return(intToSeries map[int]*database.Series, err error) *MockSeriesReader_GetSeriesByIDs_Call {
+	_c.Call.Return(intToSeries, err)
+	return _c
+}
+
+func (_c *MockSeriesReader_GetSeriesByIDs_Call) RunAndReturn(run func(ids []int) (map[int]*database.Series, error)) *MockSeriesReader_GetSeriesByIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetSeriesByName provides a mock function for the type MockSeriesReader
 func (_mock *MockSeriesReader) GetSeriesByName(name string, authorID *int) (*database.Series, error) {
 	ret := _mock.Called(name, authorID)
@@ -21968,6 +22154,68 @@ func (_c *MockSeriesStore_GetSeriesByID_Call) Return(series *database.Series, er
 }
 
 func (_c *MockSeriesStore_GetSeriesByID_Call) RunAndReturn(run func(id int) (*database.Series, error)) *MockSeriesStore_GetSeriesByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSeriesByIDs provides a mock function for the type MockSeriesStore
+func (_mock *MockSeriesStore) GetSeriesByIDs(ids []int) (map[int]*database.Series, error) {
+	ret := _mock.Called(ids)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSeriesByIDs")
+	}
+
+	var r0 map[int]*database.Series
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func([]int) (map[int]*database.Series, error)); ok {
+		return returnFunc(ids)
+	}
+	if returnFunc, ok := ret.Get(0).(func([]int) map[int]*database.Series); ok {
+		r0 = returnFunc(ids)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[int]*database.Series)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func([]int) error); ok {
+		r1 = returnFunc(ids)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSeriesStore_GetSeriesByIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSeriesByIDs'
+type MockSeriesStore_GetSeriesByIDs_Call struct {
+	*mock.Call
+}
+
+// GetSeriesByIDs is a helper method to define mock.On call
+//   - ids []int
+func (_e *MockSeriesStore_Expecter) GetSeriesByIDs(ids interface{}) *MockSeriesStore_GetSeriesByIDs_Call {
+	return &MockSeriesStore_GetSeriesByIDs_Call{Call: _e.mock.On("GetSeriesByIDs", ids)}
+}
+
+func (_c *MockSeriesStore_GetSeriesByIDs_Call) Run(run func(ids []int)) *MockSeriesStore_GetSeriesByIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []int
+		if args[0] != nil {
+			arg0 = args[0].([]int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSeriesStore_GetSeriesByIDs_Call) Return(intToSeries map[int]*database.Series, err error) *MockSeriesStore_GetSeriesByIDs_Call {
+	_c.Call.Return(intToSeries, err)
+	return _c
+}
+
+func (_c *MockSeriesStore_GetSeriesByIDs_Call) RunAndReturn(run func(ids []int) (map[int]*database.Series, error)) *MockSeriesStore_GetSeriesByIDs_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -31341,6 +31589,68 @@ func (_c *MockStore_GetAuthorsByBookIDs_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// GetAuthorsByIDs provides a mock function for the type MockStore
+func (_mock *MockStore) GetAuthorsByIDs(ids []int) (map[int]*database.Author, error) {
+	ret := _mock.Called(ids)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAuthorsByIDs")
+	}
+
+	var r0 map[int]*database.Author
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func([]int) (map[int]*database.Author, error)); ok {
+		return returnFunc(ids)
+	}
+	if returnFunc, ok := ret.Get(0).(func([]int) map[int]*database.Author); ok {
+		r0 = returnFunc(ids)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[int]*database.Author)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func([]int) error); ok {
+		r1 = returnFunc(ids)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetAuthorsByIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAuthorsByIDs'
+type MockStore_GetAuthorsByIDs_Call struct {
+	*mock.Call
+}
+
+// GetAuthorsByIDs is a helper method to define mock.On call
+//   - ids []int
+func (_e *MockStore_Expecter) GetAuthorsByIDs(ids interface{}) *MockStore_GetAuthorsByIDs_Call {
+	return &MockStore_GetAuthorsByIDs_Call{Call: _e.mock.On("GetAuthorsByIDs", ids)}
+}
+
+func (_c *MockStore_GetAuthorsByIDs_Call) Run(run func(ids []int)) *MockStore_GetAuthorsByIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []int
+		if args[0] != nil {
+			arg0 = args[0].([]int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetAuthorsByIDs_Call) Return(intToAuthor map[int]*database.Author, err error) *MockStore_GetAuthorsByIDs_Call {
+	_c.Call.Return(intToAuthor, err)
+	return _c
+}
+
+func (_c *MockStore_GetAuthorsByIDs_Call) RunAndReturn(run func(ids []int) (map[int]*database.Author, error)) *MockStore_GetAuthorsByIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAuthorsByTag provides a mock function for the type MockStore
 func (_mock *MockStore) GetAuthorsByTag(tag string) ([]int, error) {
 	ret := _mock.Called(tag)
@@ -37291,6 +37601,68 @@ func (_c *MockStore_GetSeriesByID_Call) Return(series *database.Series, err erro
 }
 
 func (_c *MockStore_GetSeriesByID_Call) RunAndReturn(run func(id int) (*database.Series, error)) *MockStore_GetSeriesByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSeriesByIDs provides a mock function for the type MockStore
+func (_mock *MockStore) GetSeriesByIDs(ids []int) (map[int]*database.Series, error) {
+	ret := _mock.Called(ids)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSeriesByIDs")
+	}
+
+	var r0 map[int]*database.Series
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func([]int) (map[int]*database.Series, error)); ok {
+		return returnFunc(ids)
+	}
+	if returnFunc, ok := ret.Get(0).(func([]int) map[int]*database.Series); ok {
+		r0 = returnFunc(ids)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[int]*database.Series)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func([]int) error); ok {
+		r1 = returnFunc(ids)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetSeriesByIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSeriesByIDs'
+type MockStore_GetSeriesByIDs_Call struct {
+	*mock.Call
+}
+
+// GetSeriesByIDs is a helper method to define mock.On call
+//   - ids []int
+func (_e *MockStore_Expecter) GetSeriesByIDs(ids interface{}) *MockStore_GetSeriesByIDs_Call {
+	return &MockStore_GetSeriesByIDs_Call{Call: _e.mock.On("GetSeriesByIDs", ids)}
+}
+
+func (_c *MockStore_GetSeriesByIDs_Call) Run(run func(ids []int)) *MockStore_GetSeriesByIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []int
+		if args[0] != nil {
+			arg0 = args[0].([]int)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetSeriesByIDs_Call) Return(intToSeries map[int]*database.Series, err error) *MockStore_GetSeriesByIDs_Call {
+	_c.Call.Return(intToSeries, err)
+	return _c
+}
+
+func (_c *MockStore_GetSeriesByIDs_Call) RunAndReturn(run func(ids []int) (map[int]*database.Series, error)) *MockStore_GetSeriesByIDs_Call {
 	_c.Call.Return(run)
 	return _c
 }

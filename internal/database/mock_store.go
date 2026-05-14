@@ -1,5 +1,5 @@
 // file: internal/database/mock_store.go
-// version: 1.52.0
+// version: 1.54.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 // last-edited: 2026-05-06
 
@@ -80,6 +80,8 @@ type MockStore struct {
 	DeleteAuthorFunc     func(id int) error
 	UpdateAuthorNameFunc func(id int, name string) error
 
+	GetAuthorsByIDsFunc     func(ids []int) (map[int]*Author, error)
+
 	// Author Alias methods
 	GetAuthorAliasesFunc    func(authorID int) ([]AuthorAlias, error)
 	GetAllAuthorAliasesFunc func() ([]AuthorAlias, error)
@@ -99,6 +101,7 @@ type MockStore struct {
 	CreateSeriesFunc    func(name string, authorID *int) (*Series, error)
 	DeleteSeriesFunc    func(id int) error
 	UpdateSeriesNameFunc func(id int, name string) error
+	GetSeriesByIDsFunc   func(ids []int) (map[int]*Series, error)
 
 	// Metadata
 	GetMetadataFieldStatesFunc   func(bookID string) ([]MetadataFieldState, error)
@@ -477,6 +480,13 @@ func (m *MockStore) GetAuthorByID(id int) (*Author, error) {
 	return nil, nil
 }
 
+func (m *MockStore) GetAuthorsByIDs(ids []int) (map[int]*Author, error) {
+	if m.GetAuthorsByIDsFunc != nil {
+		return m.GetAuthorsByIDsFunc(ids)
+	}
+	return map[int]*Author{}, nil
+}
+
 func (m *MockStore) GetAuthorByName(name string) (*Author, error) {
 	if m.GetAuthorByNameFunc != nil {
 		return m.GetAuthorByNameFunc(name)
@@ -552,6 +562,13 @@ func (m *MockStore) GetSeriesByID(id int) (*Series, error) {
 		return m.GetSeriesByIDFunc(id)
 	}
 	return nil, nil
+}
+
+func (m *MockStore) GetSeriesByIDs(ids []int) (map[int]*Series, error) {
+	if m.GetSeriesByIDsFunc != nil {
+		return m.GetSeriesByIDsFunc(ids)
+	}
+	return map[int]*Series{}, nil
 }
 
 func (m *MockStore) GetSeriesByName(name string, authorID *int) (*Series, error) {

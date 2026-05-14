@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.73.0
+// version: 1.74.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-05
 
@@ -310,6 +310,25 @@ func (p *PebbleStore) GetAuthorByID(id int) (*Author, error) {
 		return nil, err
 	}
 	return &author, nil
+}
+
+// GetAuthorsByIDs returns a map from authorID → *Author for the given IDs.
+// Deduplicates IDs before fetching; missing IDs are absent from the result map.
+func (p *PebbleStore) GetAuthorsByIDs(ids []int) (map[int]*Author, error) {
+	result := make(map[int]*Author, len(ids))
+	for _, id := range ids {
+		if _, already := result[id]; already {
+			continue
+		}
+		a, err := p.GetAuthorByID(id)
+		if err != nil {
+			return nil, err
+		}
+		if a != nil {
+			result[id] = a
+		}
+	}
+	return result, nil
 }
 
 func (p *PebbleStore) GetAuthorByName(name string) (*Author, error) {
@@ -707,6 +726,25 @@ func (p *PebbleStore) GetSeriesByID(id int) (*Series, error) {
 		return nil, err
 	}
 	return &series, nil
+}
+
+// GetSeriesByIDs returns a map from seriesID → *Series for the given IDs.
+// Deduplicates IDs before fetching; missing IDs are absent from the result map.
+func (p *PebbleStore) GetSeriesByIDs(ids []int) (map[int]*Series, error) {
+	result := make(map[int]*Series, len(ids))
+	for _, id := range ids {
+		if _, already := result[id]; already {
+			continue
+		}
+		s, err := p.GetSeriesByID(id)
+		if err != nil {
+			return nil, err
+		}
+		if s != nil {
+			result[id] = s
+		}
+	}
+	return result, nil
 }
 
 func (p *PebbleStore) GetSeriesByName(name string, authorID *int) (*Series, error) {

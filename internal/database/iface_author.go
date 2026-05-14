@@ -1,5 +1,5 @@
 // file: internal/database/iface_author.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 2e3b78c0-c989-48c0-a324-b88ea52b1ccd
 // last-edited: 2026-04-30
 
@@ -23,6 +23,9 @@ type AuthorReader interface {
 	// GetAuthorsByBookIDs returns a map from bookID → []Author for all given book IDs.
 	// Returns an empty map (not nil) if bookIDs is empty.
 	GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Author, error)
+	// GetAuthorsByIDs returns a map from authorID → *Author for the given IDs.
+	// Missing IDs are absent from the map. Returns empty map (not nil) for empty input.
+	GetAuthorsByIDs(ids []int) (map[int]*Author, error)
 }
 
 // AuthorWriter is the write-only author slice.
