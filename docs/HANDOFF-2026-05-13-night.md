@@ -55,6 +55,8 @@ musl-cross build env is missing `-lz`).
 | #935 | (merged) | chore(plugins): delete empty maintenance plugin container stub | merged + deployed |
 | #936 | (merged) | docs: handoff update for #933-#935 | merged + deployed |
 | #937 | (merged) | feat(web): cache provenance badge in MetadataSearchDialog | merged + deployed |
+| #938 | (merged) | docs: CHANGELOG + HANDOFF refresh through PR #937 | merged + deployed |
+| #939 | (merged) | fix(test): TestHandler_GetOperationLogs expects v2 lookup before v1 | merged + deployed |
 
 CHANGELOG `## [Unreleased]` already covers PRs #905-#920. PRs #921 and #922 are NOT yet in CHANGELOG — add them in the first PR you ship.
 
