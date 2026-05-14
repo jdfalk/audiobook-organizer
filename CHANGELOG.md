@@ -7,6 +7,26 @@
 
 ## [Unreleased]
 
+### Features
+
+#### May 13, 2026 — METADATA-CACHED-MATCHER backend (PRs #924, #925)
+
+First two slices of the matcher consolidation per
+`docs/architecture/metadata-cached-matcher-design.md`.
+
+- **#924 (storage)**: new `MetadataCacheStore` interface + `MetadataCandidateCache` /
+  `MetadataCacheSummary` value types. PebbleStore impl writes JSON blobs
+  under `metadata_cache:<book_id>` with 30-day TTL (`MetadataCacheTTL`).
+  SQLite/Mock stubs follow the Pebble-primary policy.
+- **#925 (handlers)**: `metafetch.Service` gains `GetCachedCandidates`,
+  `FetchAndCache`, `ListCachedSummaries`, `InvalidateCachedCandidates`.
+  `POST /audiobooks/:id/search-metadata` is now cache-first when called
+  without alt-query params; `?refresh=true` forces a fresh fetch + cache
+  replace. New `GET /audiobooks/metadata/cached?status=pending|matched`
+  endpoint powers the Review popup. Apply invalidates the cache.
+
+Frontend wiring (Tasks 9-12 of the plan) deferred to the next session.
+
 ### Fixes
 
 #### May 13, 2026 — Activity Log UX + op log persistence (PRs #919, #920)

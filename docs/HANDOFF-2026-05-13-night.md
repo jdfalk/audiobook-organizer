@@ -41,7 +41,10 @@ musl-cross build env is missing `-lz`).
 | #919 | (merged) | SERVER-THIN-8 test pass: opRegistry.Start in test setUp; v2 op lookup in waiters; v2→v1 status bridge | merged + deployed |
 | #920 | (merged) | Activity Log: split Active Ops into Pending/Active/Completed; getOperationLogs reads op_logs_v2 first | merged + deployed |
 | #921 | (merged) | PERF-VERSIONS: book:versiongroup:<gid>:<id> Pebble index + backfill goroutine | merged + deployed |
-| #922 | (open at handoff time) | fingerprint: stamp FingerprintFailedAt; skip 7-day retry window | merged, deploy in flight |
+| #922 | (merged) | fingerprint: stamp FingerprintFailedAt; skip 7-day retry window | merged + deployed |
+| #923 | (merged) | chore(logging+scheduler): silence per-pass spam; ISBN every 6h not on startup; slog duplicate-line fix | merged + deployed |
+| #924 | (merged) | feat(database): MetadataCacheStore interface, Pebble impl, SQLite/Mock stubs | merged + deployed |
+| #925 | (merged) | feat(server): metadata cache-first fetch + list endpoint + apply invalidation | merged + deployed |
 
 CHANGELOG `## [Unreleased]` already covers PRs #905-#920. PRs #921 and #922 are NOT yet in CHANGELOG — add them in the first PR you ship.
 
@@ -52,14 +55,26 @@ Edit `/Users/jdfalk/.worktrees/audiobook-organizer-next/CHANGELOG.md`. Under
 `## [Unreleased]` → `### Fixes`, append two bullets describing the version-group
 index and fingerprint retry skip. Commit alongside whatever else you ship.
 
-### B. METADATA-CACHED-MATCHER (#16, BIG — spec + plan committed)
+### B. METADATA-CACHED-MATCHER frontend (#16, **backend done**, frontend remaining)
 
-**Spec:** `docs/architecture/metadata-cached-matcher-design.md` (250 lines).
-**Plan:** `docs/architecture/metadata-cached-matcher-plan.md` (2167 lines, 14 tasks, fully TDD'd).
+**Spec:** `docs/architecture/metadata-cached-matcher-design.md`.
+**Plan:** `docs/architecture/metadata-cached-matcher-plan.md`.
 
-This is the user's headline feature. **Follow the plan task-by-task.** Each task lists files-to-touch, exact test code, exact production code, and exact commit commands. The plan was written by the same author as the current session — trust it.
+**Status:** Backend Tasks 1-8 shipped (PRs #924, #925). Cache works end-to-end:
+- `metafetch.Service.GetCachedCandidates(bookID)` / `FetchAndCache(...)` / `ListCachedSummaries(ctx)` / `InvalidateCachedCandidates(bookID)`.
+- `POST /audiobooks/:id/search-metadata` is cache-first when no alt-query is passed; `?refresh=true` forces fresh.
+- `GET /audiobooks/metadata/cached?status=pending|matched` returns the list for the Review popup.
+- `POST /audiobooks/:id/apply-metadata` calls `InvalidateCachedCandidates(id)`.
 
-Task 1 starts at line 80 of the plan. Each task ends with a `git commit` step using a HEREDOC; preserve the message format. Mid-task, prefer subagent dispatch via the `Task` tool with subagent_type `general-purpose` only if you need parallelism (the storage/service/handler layers are sequential).
+**Frontend work remaining (Tasks 9-12 of the plan):**
+- Task 9: `web/src/services/api.ts` — add `listCachedCandidates()` typed wrapper for the new endpoint.
+- Task 10: `web/src/pages/BookDetail.tsx` — add a Refresh icon that posts `?refresh=true`; display the `from_cache` / `is_fresh` flags in the badge.
+- Task 11: `web/src/components/library/LibraryToolbar.tsx` + `web/src/pages/Library.tsx` — rename "Fetch & Review" → "Fetch Selected" (no auto-open dialog); add a separate "Review" badge button that opens the dialog over the cache list.
+- Task 12: `web/src/components/dialogs/MetadataReviewDialog.tsx` — switch data source from the legacy `/pending-review` to the new `/metadata/cached?status=pending` endpoint.
+
+The legacy `handleGetPendingReview` server route is **still in place** — I did NOT delete it (Task 7 step 3) to keep the frontend running unchanged until the dialog data source switch lands. Delete it as part of Task 12, not separately.
+
+Follow the plan task-by-task. The plan was written by the same author as the current session — trust it.
 
 Skip-test list during `go test ./internal/server -short`: see plan section "Repo conventions to know" (line ~22-32).
 
