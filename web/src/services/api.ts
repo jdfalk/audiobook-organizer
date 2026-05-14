@@ -2448,7 +2448,10 @@ export async function searchMetadataForBook(
   author?: string,
   narrator?: string,
   series?: string,
-  useRerank?: boolean
+  useRerank?: boolean,
+  // METADATA-CACHED-MATCHER: pass refresh=true to bypass the persistent
+  // cache and force a fresh fetch chain. Default false (use cache).
+  refresh?: boolean,
 ): Promise<SearchMetadataResponse> {
   const body: {
     query: string;
@@ -2461,14 +2464,14 @@ export async function searchMetadataForBook(
   if (narrator) body.narrator = narrator;
   if (series) body.series = series;
   if (useRerank) body.use_rerank = true;
-  const response = await fetch(
-    `${API_BASE}/audiobooks/${bookId}/search-metadata`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }
-  );
+  const url = refresh
+    ? `${API_BASE}/audiobooks/${bookId}/search-metadata?refresh=true`
+    : `${API_BASE}/audiobooks/${bookId}/search-metadata`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to search metadata');
   }

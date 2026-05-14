@@ -25,6 +25,7 @@ import {
   Typography,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search.js';
+import RefreshIcon from '@mui/icons-material/Refresh.js';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess.js';
 import HeadphonesIcon from '@mui/icons-material/Headphones.js';
@@ -127,7 +128,7 @@ export function MetadataSearchDialog({
   }, [open, book?.id]);
 
   const doSearch = useCallback(
-    async (searchQuery: string, author?: string, narrator?: string, series?: string) => {
+    async (searchQuery: string, author?: string, narrator?: string, series?: string, refresh?: boolean) => {
       if (!book?.id) return;
       setLoading(true);
       try {
@@ -137,7 +138,8 @@ export function MetadataSearchDialog({
           author || undefined,
           narrator || undefined,
           series || undefined,
-          useRerank || undefined
+          useRerank || undefined,
+          refresh
         );
         setResults(resp.results || []);
         setSourcesTried(resp.sources_tried || []);
@@ -157,6 +159,11 @@ export function MetadataSearchDialog({
 
   const handleSearch = () => {
     doSearch(query, authorQuery, narratorQuery, seriesQuery);
+  };
+  // METADATA-CACHED-MATCHER: bypass the persistent cache so a user
+  // explicitly asking for fresh metadata re-runs every source.
+  const handleRefresh = () => {
+    doSearch(query, authorQuery, narratorQuery, seriesQuery, true);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -332,6 +339,13 @@ export function MetadataSearchDialog({
             ),
             endAdornment: (
               <InputAdornment position="end">
+                <IconButton
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  title="Bypass cache — re-fetch from all metadata sources"
+                >
+                  <RefreshIcon />
+                </IconButton>
                 <IconButton onClick={handleSearch} disabled={loading}>
                   <SearchIcon />
                 </IconButton>
