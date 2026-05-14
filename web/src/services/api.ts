@@ -3108,6 +3108,32 @@ export async function getPendingReview(): Promise<{ operation_id: string; total_
   return response.json();
 }
 
+// CachedMetadataEntry is one row from GET /audiobooks/metadata/cached.
+// METADATA-CACHED-MATCHER: this list is the source of truth for the
+// Review popup. Each entry includes book identity + cache freshness +
+// review status so the UI can render without a second round-trip.
+export interface CachedMetadataEntry {
+  book_id: string;
+  title: string;
+  fetched_at: string;
+  candidate_count: number;
+  is_fresh: boolean;
+  review_status: '' | 'pending' | 'matched' | 'no_match';
+}
+
+// listCachedCandidates returns the list of books that have a cached
+// metadata-candidate set, optionally filtered by review status.
+// METADATA-CACHED-MATCHER replacement for the legacy getPendingReview.
+export async function listCachedCandidates(
+  status?: 'pending' | 'matched',
+): Promise<{ entries: CachedMetadataEntry[]; total: number }> {
+  const qs = status ? `?status=${status}` : '';
+  const response = await fetch(`${API_BASE}/audiobooks/metadata/cached${qs}`);
+  if (!response.ok) throw await buildApiError(response, 'Failed to list cached candidates');
+  const data = await response.json();
+  return data.data ?? data;
+}
+
 // MetadataResultItem is one row in the unified metadata-results listing.
 // `result_json` is a JSON-encoded CandidateResult and is only populated
 // for statuses that have a stored fetch result (matched / no_match /
