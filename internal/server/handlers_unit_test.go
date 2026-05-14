@@ -170,6 +170,9 @@ func TestHandler_ListOperations_StoreError(t *testing.T) {
 func TestHandler_GetOperationLogs_Success(t *testing.T) {
 	srv, mockStore, router := setupHandlerTest(t)
 
+	// Handler queries v2 first (canonical for UOS v2 ops). Empty v2
+	// triggers the v1 fallback for legacy rows.
+	mockStore.EXPECT().GetOpLogsV2("op-1", 1000).Return(nil, nil)
 	logs := []database.OperationLog{
 		{ID: 1, OperationID: "op-1", Level: "info", Message: "started"},
 		{ID: 2, OperationID: "op-1", Level: "info", Message: "done"},
@@ -192,6 +195,7 @@ func TestHandler_GetOperationLogs_Success(t *testing.T) {
 func TestHandler_GetOperationLogs_WithTail(t *testing.T) {
 	srv, mockStore, router := setupHandlerTest(t)
 
+	mockStore.EXPECT().GetOpLogsV2("op-1", 1).Return(nil, nil)
 	logs := []database.OperationLog{
 		{ID: 1, OperationID: "op-1", Level: "info", Message: "first"},
 		{ID: 2, OperationID: "op-1", Level: "info", Message: "second"},
