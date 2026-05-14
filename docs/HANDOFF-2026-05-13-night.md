@@ -62,8 +62,12 @@ musl-cross build env is missing `-lz`).
 | #942 | (merged) | feat(matcher): invalidate cache on undoLastApply + undoMetadataChange | merged + deployed |
 | #943 | (merged) | docs(handoff): record PRs #940-#942 | merged + deployed |
 | #944 | (merged) | feat(pebble): invalidate metadata_cache when identity fields change | merged + deployed |
+| #945 | (merged) | docs: CHANGELOG + handoff through PR #944 | merged + deployed |
+| #946 | (merged) | feat(activity): parse slog TextHandler format so summaries are clean | merged + deployed |
 
-CHANGELOG `## [Unreleased]` is up to date through PR #937. PRs #939-#944 are not yet in CHANGELOG — add them in the next PR.
+CHANGELOG `## [Unreleased]` is up to date through PR #944. PR #946 (slog parser) is in the changelog under Fixes section.
+
+**Activity Log status (verified 2026-05-14 00:02):** API responding, 21k+ entries indexed, summaries now show clean message text (e.g. "Token expires in 10 minutes...") instead of raw slog format. Tier-by-level fix (#933) + slog parser (#946) together make the feed actually readable.
 
 ## Outstanding work, ranked by ROI
 
