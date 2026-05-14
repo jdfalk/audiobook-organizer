@@ -383,6 +383,23 @@ func (s *Server) Start(cfg ServerConfig) error {
 		s.backfillAcoustIDs()
 	}()
 
+	// PERF-VERSIONS: write the book:versiongroup:<gid>:<id> secondary
+	// index for every existing book once so /audiobooks/:id/versions
+	// stops full-scanning. Idempotent and gated by a sentinel key.
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		if err := s.bgCtx.Err(); err != nil {
+			return
+		}
+		type vgBackfiller interface{ BackfillVersionGroupIndex() error }
+		if b, ok := s.Store().(vgBackfiller); ok {
+			if err := b.BackfillVersionGroupIndex(); err != nil {
+				log.Printf("[WARN] versiongroup-backfill: %v", err)
+			}
+		}
+	}()
+
 	// Strip shwm/©mvi/©mvn atoms from audiobook files (one-time). These
 	// classical-music atoms crash Apple Devices for Windows at sync.
 	s.bgWG.Add(1)

@@ -1722,6 +1722,17 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 		}
 	}
 
+	// Version-group index (PERF-VERSIONS): O(N) full-scan in
+	// GetBooksByVersionGroup was costing ~15s on a 10K-book library.
+	// Indexed by group_id so the read can iterate only matching keys.
+	if book.VersionGroupID != nil && *book.VersionGroupID != "" {
+		vgKey := []byte(fmt.Sprintf("book:versiongroup:%s:%s", *book.VersionGroupID, book.ID))
+		if err := batch.Set(vgKey, []byte(book.ID), nil); err != nil {
+			batch.Close()
+			return nil, err
+		}
+	}
+
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return nil, err
 	}
@@ -1882,6 +1893,32 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 		if newAuthorID != -1 {
 			newAuthorKey := []byte(fmt.Sprintf("book:author:%d:%s", newAuthorID, id))
 			if err := batch.Set(newAuthorKey, []byte(id), nil); err != nil {
+				batch.Close()
+				return nil, err
+			}
+		}
+	}
+
+	// Update version-group index if changed (PERF-VERSIONS).
+	oldVG := ""
+	if oldBook.VersionGroupID != nil {
+		oldVG = *oldBook.VersionGroupID
+	}
+	newVG := ""
+	if book.VersionGroupID != nil {
+		newVG = *book.VersionGroupID
+	}
+	if oldVG != newVG {
+		if oldVG != "" {
+			oldVGKey := []byte(fmt.Sprintf("book:versiongroup:%s:%s", oldVG, id))
+			if err := batch.Delete(oldVGKey, nil); err != nil {
+				batch.Close()
+				return nil, err
+			}
+		}
+		if newVG != "" {
+			newVGKey := []byte(fmt.Sprintf("book:versiongroup:%s:%s", newVG, id))
+			if err := batch.Set(newVGKey, []byte(id), nil); err != nil {
 				batch.Close()
 				return nil, err
 			}
@@ -2132,6 +2169,15 @@ func (p *PebbleStore) DeleteBook(id string) error {
 	if book.AuthorID != nil {
 		authorKey := []byte(fmt.Sprintf("book:author:%d:%s", *book.AuthorID, id))
 		if err := batch.Delete(authorKey, nil); err != nil {
+			batch.Close()
+			return err
+		}
+	}
+
+	// Delete version-group index (PERF-VERSIONS).
+	if book.VersionGroupID != nil && *book.VersionGroupID != "" {
+		vgKey := []byte(fmt.Sprintf("book:versiongroup:%s:%s", *book.VersionGroupID, id))
+		if err := batch.Delete(vgKey, nil); err != nil {
 			batch.Close()
 			return err
 		}
@@ -2611,6 +2657,41 @@ func (p *PebbleStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Ti
 
 // GetBooksByVersionGroup returns all books in a version group
 func (p *PebbleStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
+	// Fast path: use the book:versiongroup:<gid>:<id> index added in
+	// PERF-VERSIONS so we touch O(|group|) keys instead of full-scanning
+	// the entire books table (was ~15s on 10K books).
+	prefix := []byte(fmt.Sprintf("book:versiongroup:%s:", groupID))
+	upper := append([]byte(nil), prefix...)
+	upper[len(upper)-1] = ';' // ':' + 1
+	idxIter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for idxIter.First(); idxIter.Valid(); idxIter.Next() {
+		ids = append(ids, string(idxIter.Value()))
+	}
+	idxIter.Close()
+
+	if len(ids) > 0 {
+		books := make([]Book, 0, len(ids))
+		for _, id := range ids {
+			b, err := p.GetBookByID(id)
+			if err != nil || b == nil {
+				continue
+			}
+			if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+				continue
+			}
+			books = append(books, *b)
+		}
+		sortVersions(books)
+		return books, nil
+	}
+
+	// Fallback: full scan for groups whose index hasn't been backfilled
+	// yet. The backfill goroutine writes index entries on startup; this
+	// path keeps the API correct in the meantime.
 	var books []Book
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
@@ -2622,10 +2703,10 @@ func (p *PebbleStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip index keys
 		key := string(iter.Key())
 		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
-			strings.Contains(key, ":author:") || strings.Contains(key, ":version:") {
+			strings.Contains(key, ":author:") || strings.Contains(key, ":version:") ||
+			strings.Contains(key, ":versiongroup:") {
 			continue
 		}
 
@@ -2643,7 +2724,12 @@ func (p *PebbleStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 		}
 	}
 
-	// Sort by primary version first, then by title
+	sortVersions(books)
+	return books, nil
+}
+
+// sortVersions orders books with the primary version first, then by title.
+func sortVersions(books []Book) {
 	sort.Slice(books, func(i, j int) bool {
 		if books[i].IsPrimaryVersion != nil && *books[i].IsPrimaryVersion {
 			return true
@@ -2653,8 +2739,6 @@ func (p *PebbleStore) GetBooksByVersionGroup(groupID string) ([]Book, error) {
 		}
 		return books[i].Title < books[j].Title
 	})
-
-	return books, nil
 }
 
 // GetBooksByMetadataSourceHash returns all books with the given metadata source hash.

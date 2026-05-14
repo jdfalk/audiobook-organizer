@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.28.0 -->
+<!-- version: 8.29.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-13 -->
 
@@ -109,9 +109,14 @@ incrementally:
   `internal/scheduler/extra_ops.go` as `*ExtraOpsRegistrar` (W6). All 13 ops moved;
   server shim delegates via `s.extraOpsRegistrar`.
 
-- [ ] **SERVER-THIN-8** Fix pre-existing iTunes/organize/scan timeout failures
-  (`TestITunesImport_*`, `TestOrganizeService_ViaHTTP`, `TestAddImportPathAutoScan`,
-  `TestStartScanOperation`, `TestStartOrganizeOperation` all timeout at 10–15s)
+- [x] **SERVER-THIN-8** Pre-existing iTunes/organize/scan timeout failures fixed
+  (PRs #919, #920 — 2026-05-13). Root causes: (a) test setup didn't start the
+  opRegistry worker pool so enqueued ops never ran; (b) plugin SDK's
+  `itunes.import` stub (Isolate=true, Run=no-op) won the registration race and
+  routed runs through a no-op subprocess; (c) handler returned legacy v1 op
+  id while v2 was the canonical record. Tests now Start the registry, the
+  stub is removed from the plugin Register list, and the v2→v1 status
+  bridge fires from `itunes_ops` and `folder_autoscan_op`.
 
 ---
 
