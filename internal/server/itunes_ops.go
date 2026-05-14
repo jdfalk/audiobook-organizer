@@ -56,7 +56,17 @@ func (s *Server) RegisterITunesImportOp(reg *opsregistry.Registry) error {
 				}
 			}
 			progress := registryProgressAdapter{r: reporter}
-			return s.itunesSvc.Importer.Execute(ctx, p.LegacyOpID, p.Request, operations.LoggerFromReporter(progress))
+			runErr := s.itunesSvc.Importer.Execute(ctx, p.LegacyOpID, p.Request, operations.LoggerFromReporter(progress))
+			// Bridge v2 run completion back to the legacy v1 row so HTTP
+			// callers that received legacy_op_id can poll completion.
+			if p.LegacyOpID != "" && s.Store() != nil {
+				if runErr != nil {
+					_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "failed", 0, 0, runErr.Error())
+				} else {
+					_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "completed", 0, 0, "iTunes import completed")
+				}
+			}
+			return runErr
 		},
 	})
 }

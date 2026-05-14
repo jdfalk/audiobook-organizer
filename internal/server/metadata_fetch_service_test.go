@@ -950,6 +950,9 @@ func TestWriteBackMetadataForBook_SingleFile(t *testing.T) {
 	mockStore.On("GetBookFiles", book.ID).Return([]database.BookFile{}, nil)
 	mockStore.On("GetBookFileByPath", book.FilePath).Return((*database.BookFile)(nil), nil)
 	mockStore.On("RecordMetadataChange", mock.AnythingOfType("*database.MetadataChangeRecord")).Return(nil)
+	// isProtectedPath (SERVER-GLOBAL-STORE-AUDIT phase 4) consults
+	// GetAllImportPaths via mfs.db before any write.
+	mockStore.On("GetAllImportPaths").Return([]database.ImportPath{}, nil).Maybe()
 
 	svc := metafetch.NewService(mockStore)
 	// WriteMetadataToFile will fail because the file doesn't exist, but the

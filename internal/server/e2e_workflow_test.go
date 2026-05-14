@@ -46,6 +46,10 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 	}, xmlPath)
 
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 
 	// Step 3: Import (non-organize mode)
 	importBody := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
@@ -81,11 +85,18 @@ func TestE2E_ITunesImportOrganizeWriteBack(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, w.Code)
 	var orgResp map[string]any
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &orgResp))
-	orgData := orgResp["data"].(map[string]any)
+	// Organize endpoint returns flat {id, op_id, ...}; tolerate {data: {...}}
+	// in case the envelope changes again.
+	orgData := orgResp
+	if d, ok := orgResp["data"].(map[string]any); ok {
+		orgData = d
+	}
 	opID = ""
 	if id, ok := orgData["id"].(string); ok {
 		opID = id
 	} else if id, ok := orgData["operation_id"].(string); ok {
+		opID = id
+	} else if id, ok := orgData["op_id"].(string); ok {
 		opID = id
 	}
 	require.NotEmpty(t, opID, "organize response should contain id")

@@ -144,6 +144,15 @@ func (s *Server) RegisterFolderAutoScanOp(reg *opsregistry.Registry) error {
 				}
 			}
 
+			// Bridge the v2 run completion back to the legacy v1
+			// Operation row so callers (e.g. POST /import-paths) that
+			// returned scan_operation_id = LegacyOpID can poll
+			// completion via the v1 ops endpoint. Without this the
+			// v1 row sticks in "queued" forever even though the work
+			// is done.
+			if p.LegacyOpID != "" && s.Store() != nil {
+				_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "completed", len(books), len(books), fmt.Sprintf("Auto-scan completed (%d books)", len(books)))
+			}
 			_ = progress.Log("info", fmt.Sprintf("Auto-scan completed. Total books: %d", len(books)), nil)
 			return nil
 		},

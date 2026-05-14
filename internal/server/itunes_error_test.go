@@ -5,6 +5,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -29,6 +30,10 @@ func TestITunesImport_CorruptXML(t *testing.T) {
 	require.NoError(t, os.WriteFile(xmlPath, []byte("this is not valid XML at all <broken"), 0644))
 
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -72,6 +77,10 @@ func TestITunesImport_EmptyXML(t *testing.T) {
 	testutil.GenerateITunesXML(t, []testutil.ITunesTestTrack{}, xmlPath)
 
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -113,6 +122,10 @@ func TestITunesImport_MissingFilesPartial(t *testing.T) {
 	}, xmlPath)
 
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -260,6 +273,10 @@ func TestITunesImport_RealTestLibrary(t *testing.T) {
 	// These won't exist, so books with missing files will be skipped during import
 
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	body := fmt.Sprintf(`{"library_path":"%s","import_mode":"import","skip_duplicates":false}`, xmlPath)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/itunes/import", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

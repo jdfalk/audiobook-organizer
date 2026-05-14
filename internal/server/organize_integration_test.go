@@ -5,6 +5,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -44,8 +45,15 @@ func TestOrganizeService_ViaHTTP(t *testing.T) {
 		Format:   "m4b",
 	}))
 
-	// Trigger organize via HTTP
+	// Trigger organize via HTTP. NewServer constructs the registry but
+	// doesn't Start its worker pool (Container.Start does that during
+	// Server.Start, which we don't call here). Start it explicitly so
+	// the enqueued op actually runs.
 	server := NewServer(nil)
+	if server.opRegistry != nil {
+		server.opRegistry.Start(context.Background())
+		t.Cleanup(func() { _ = server.opRegistry.Shutdown(context.Background()) })
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operations/organize", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
