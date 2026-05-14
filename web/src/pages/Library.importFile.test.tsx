@@ -71,7 +71,7 @@ vi.mock('../services/api', () => {
 describe('Library import dialog', () => {
   it('imports a selected file path', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Library />
       </MemoryRouter>
     );

@@ -62,7 +62,7 @@ beforeEach(() => {
 describe('App', () => {
   it('renders without crashing', async () => {
     render(
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ThemeProvider theme={theme}>
           <AuthProvider>
             <App />
@@ -76,7 +76,7 @@ describe('App', () => {
 
   it('renders navigation items', async () => {
     render(
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ThemeProvider theme={theme}>
           <AuthProvider>
             <App />
