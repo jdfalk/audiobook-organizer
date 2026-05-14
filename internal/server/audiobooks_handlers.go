@@ -827,6 +827,12 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 		log.Printf("[WARN] failed to record undo change for %s/%s: %v", id, field, err)
 	}
 
+	// METADATA-CACHED-MATCHER: undo of a metadata field rewrites book
+	// identity; invalidate cache.
+	if s.metadataFetchService != nil {
+		_ = s.metadataFetchService.InvalidateCachedCandidates(id)
+	}
+
 	httputil.RespondWithOK(c, gin.H{"message": "undo applied", "field": field, "reverted_to": latest.PreviousValue})
 }
 
@@ -923,6 +929,12 @@ func (s *Server) undoLastApply(c *gin.Context) {
 	// Re-write tags to files if write-back is enabled, restoring original values
 	if len(undoneFields) > 0 && s.writeBackBatcher != nil {
 		s.writeBackBatcher.Enqueue(id)
+	}
+
+	// METADATA-CACHED-MATCHER: undo restores the prior identity. Drop the
+	// cache so the next read fetches against the reverted title/author.
+	if len(undoneFields) > 0 && s.metadataFetchService != nil {
+		_ = s.metadataFetchService.InvalidateCachedCandidates(id)
 	}
 
 	httputil.RespondWithOK(c, gin.H{
