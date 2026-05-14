@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.72.0
+// version: 1.73.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-05
 
@@ -1738,12 +1738,14 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 	}
 
 	// Record the original import path so full provenance is preserved forever.
-	_ = p.RecordPathChange(&BookPathChange{
+	if err := p.RecordPathChange(&BookPathChange{
 		BookID:     book.ID,
 		OldPath:    "",
 		NewPath:    book.FilePath,
 		ChangeType: "import",
-	})
+	}); err != nil {
+		slog.Warn("pebble RecordPathChange on create", "book_id", book.ID, "error", err)
+	}
 
 	return book, nil
 }
@@ -5248,7 +5250,9 @@ func (p *PebbleStore) CreateBookSegment(bookNumericID int, segment *BookSegment)
 		return nil, err
 	}
 	// recompute duration map
-	_ = p.recomputeDurationMap(bookNumericID)
+	if err := p.recomputeDurationMap(bookNumericID); err != nil {
+		slog.Warn("pebble recomputeDurationMap on segment create", "book_id", bookNumericID, "error", err)
+	}
 	return segment, nil
 }
 

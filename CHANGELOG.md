@@ -1,11 +1,27 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.68.0 -->
+<!-- version: 2.69.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-14 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixes
+
+#### May 14, 2026 — DB-6: Surface silent errors in PebbleDB best-effort writes
+
+Added `slog.Warn` logging to two best-effort operations in `pebble_store.go`
+that were previously silently discarding errors:
+- `CreateBook`: path history record (`RecordPathChange`) now warns on failure
+- `CreateBookSegment`: duration-map recompute (`recomputeDurationMap`) now warns on failure
+
+The operations remain non-fatal (book creation and segment creation still
+succeed), but operators can now see these rare failures in logs.
+
+Also closed/verified as complete in TODO.md: SERVER-LIFECYCLE-FLIP,
+SERVER-GLOBAL-STORE-AUDIT, MOCK-1, MOCK-2, DB-4; deferred DB-1/2/3/5
+(SQLite-only, pending SQLite elimination).
 
 ### Features
 
