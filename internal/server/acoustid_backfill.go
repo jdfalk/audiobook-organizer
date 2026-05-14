@@ -37,6 +37,16 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	if f.AcoustIDSeg0 != "" && !force {
 		return fingerprintOutcomeSkipped
 	}
+	// Skip files that already failed recently. Without this we re-run
+	// ffmpeg on every unreadable MP3 in the library on every backfill
+	// pass — the log gets flooded with the same "Failed to find two
+	// consecutive MPEG audio frames" error per startup. Reattempt after
+	// 7 days in case the file was replaced. Force=true overrides.
+	if f.FingerprintFailedAt != nil && !force {
+		if time.Since(*f.FingerprintFailedAt) < 7*24*time.Hour {
+			return fingerprintOutcomeSkipped
+		}
+	}
 	if f.FilePath == "" || f.Missing {
 		return fingerprintOutcomeIneligible
 	}
@@ -50,6 +60,12 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	segs, err := fingerprint.FileSegments(f.FilePath, f.Duration)
 	if err != nil {
 		log.Printf("[WARN] fingerprint: %s: %v", f.FilePath, err)
+		// Stamp the failure so the next backfill pass skips this file
+		// instead of re-running ffmpeg on a known-bad input.
+		failedAt := time.Now()
+		marked := f
+		marked.FingerprintFailedAt = &failedAt
+		_ = store.UpdateBookFile(f.ID, &marked)
 		return fingerprintOutcomeFailed
 	}
 

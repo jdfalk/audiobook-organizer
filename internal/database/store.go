@@ -673,6 +673,12 @@ type BookFile struct {
 	AcoustIDSeg4 string `json:"acoustid_seg4,omitempty"`
 	AcoustIDSeg5 string `json:"acoustid_seg5,omitempty"`
 	AcoustIDSeg6 string `json:"acoustid_seg6,omitempty"`
+	// FingerprintFailedAt records when the last ffmpeg/fpcalc attempt
+	// failed (corrupt file, unsupported codec, etc.). Set by the
+	// fingerprint backfill so we don't loop forever retrying the same
+	// unreadable files. Force-rescan clears it. nil = never attempted
+	// or last attempt succeeded.
+	FingerprintFailedAt   *time.Time `json:"fingerprint_failed_at,omitempty"`
 	OrganizeMethod        string    `json:"organize_method,omitempty"` // "reflink", "hardlink", "copy", "symlink"
 	Missing            bool      `json:"missing"`
 	CreatedAt          time.Time `json:"created_at"`
