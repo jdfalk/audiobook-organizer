@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.25.0
+// version: 2.26.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-11
 
@@ -3032,7 +3032,7 @@ export interface CandidateBookInfo {
 export interface CandidateResult {
   book: CandidateBookInfo;
   candidate?: MetadataCandidate;
-  status: 'matched' | 'no_match' | 'error' | 'rejected';
+  status: 'matched' | 'no_match' | 'error' | 'rejected' | 'applied';
   error_message?: string;
 }
 
@@ -3143,6 +3143,51 @@ export async function listCachedCandidates(
   if (!response.ok) throw await buildApiError(response, 'Failed to list cached candidates');
   const data = await response.json();
   return data.data ?? data;
+}
+
+// getCachedReviewResults returns a paginated CandidateResult list sourced
+// from the persistent metadata cache. Replaces getOperationResults for the
+// MetadataReviewDialog. Status values: "matched" (pending review),
+// "no_match" (user rejected), "applied" (already applied).
+export async function getCachedReviewResults(
+  limit: number,
+  offset: number,
+): Promise<{
+  results: CandidateResult[];
+  total_count: number;
+  matched: number;
+  no_match: number;
+  errors: number;
+  total_applied?: number;
+}> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/metadata/cache/review?limit=${limit}&offset=${offset}`,
+  );
+  if (!response.ok) throw await buildApiError(response, 'Failed to load cached review results');
+  const data = await response.json();
+  return data.data ?? data;
+}
+
+// batchApplyFromCache applies the highest-scored cached candidate for each
+// book in book_ids. Cache-mode replacement for batchApplyCandidates.
+export async function batchApplyFromCache(bookIds: string[]): Promise<{ applied: number }> {
+  const response = await fetch(`${API_BASE}/audiobooks/metadata/batch-apply-cached`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ book_ids: bookIds }),
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to apply cached candidates');
+  const data = await response.json();
+  return data.data ?? data;
+}
+
+// clearMetadataNoMatch clears a book's MetadataReviewStatus back to null
+// so it re-surfaces in the Review dialog. Inverse of markNoMatch.
+export async function clearMetadataNoMatch(bookId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/clear-no-match`, {
+    method: 'POST',
+  });
+  if (!response.ok) throw await buildApiError(response, 'Failed to clear no-match status');
 }
 
 // MetadataResultItem is one row in the unified metadata-results listing.

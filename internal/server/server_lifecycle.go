@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.13.0
+// version: 1.14.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-11
 
@@ -1183,7 +1183,6 @@ func (s *Server) setupRoutes() {
 			protected.POST("/metadata/bulk-fetch", s.perm(auth.PermLibraryEditMetadata), s.bulkFetchMetadata)
 			protected.POST("/metadata/batch-fetch-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchFetchCandidates)
 			protected.GET("/metadata/recent-fetches", s.perm(auth.PermLibraryView), s.handleGetLatestMetadataFetch)
-			protected.POST("/metadata/pending-review", s.perm(auth.PermLibraryView), s.handleGetPendingReview)
 			// Unified metadata-results listing — preferred over /metadata/pending-review.
 			// Returns books with their latest fetch status + by_status counts; supports
 			// repeatable ?status= filtering for the Library page toggles + Resume Review.
@@ -1197,8 +1196,12 @@ func (s *Server) setupRoutes() {
 			// candidate set. Powers the Review popup without enumerating
 			// the operation log.
 			protected.GET("/audiobooks/metadata/cached", s.perm(auth.PermLibraryView), s.listCachedCandidates)
+			// Task 12: cache-sourced review list, batch-apply, and unreject.
+			protected.GET("/audiobooks/metadata/cache/review", s.perm(auth.PermLibraryView), s.getCacheReviewResults)
+			protected.POST("/audiobooks/metadata/batch-apply-cached", s.perm(auth.PermLibraryEditMetadata), s.batchApplyFromCache)
 			protected.POST("/audiobooks/:id/apply-metadata", s.perm(auth.PermLibraryEditMetadata), s.applyAudiobookMetadata)
 			protected.POST("/audiobooks/:id/mark-no-match", s.perm(auth.PermLibraryEditMetadata), s.markAudiobookNoMatch)
+			protected.POST("/audiobooks/:id/clear-no-match", s.perm(auth.PermLibraryEditMetadata), s.clearMetadataNoMatch)
 			protected.POST("/audiobooks/:id/revert-metadata", s.perm(auth.PermLibraryEditMetadata), s.revertAudiobookMetadata)
 			protected.GET("/audiobooks/:id/metadata-rejections", s.perm(auth.PermLibraryView), s.handleGetMetadataRejections)
 			protected.GET("/audiobooks/:id/similar", s.perm(auth.PermLibraryView), s.handleSimilarBooks)

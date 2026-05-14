@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/MetadataReviewDialog.tsx
-// version: 1.11.0
+// version: 1.12.0
 // guid: e7f8a9b0-c1d2-3e4f-5a6b-7c8d9e0f1a2b
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -35,7 +35,6 @@ import { STORAGE_KEYS } from '../../lib/storageKeys';
 
 interface MetadataReviewDialogProps {
   open: boolean;
-  operationId: string;
   onClose: () => void;
   onComplete: () => void;
   toast: (
@@ -143,7 +142,6 @@ function formatFileSize(bytes: number): string {
 
 export function MetadataReviewDialog({
   open,
-  operationId,
   onClose,
   onComplete,
   toast,
@@ -161,7 +159,7 @@ export function MetadataReviewDialog({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [summary, setSummary] = useState({ matched: 0, no_match: 0, errors: 0, total: 0 });
-  const [totalSummary, setTotalSummary] = useState<{ matched: number; no_match: number; errors: number } | null>(null);
+  const [totalSummary] = useState<{ matched: number; no_match: number; errors: number } | null>(null);
   const [previewCover, setPreviewCover] = useState<string | null>(null);
   // serverPage: which page to fetch from the API. Unified with the display page —
   // one paginator, one concept of "page".
@@ -196,23 +194,25 @@ export function MetadataReviewDialog({
   // exactly once when the dialog closes, rather than on every individual apply.
   const hasChangesRef = useRef(false);
 
-  // Fetch the current page from the server. Each page fetches exactly
-  // reviewPageSize items; all that pass client filters are rendered (no
-  // second level of pagination). One paginator, one concept of "page".
+  // Fetch the current page from the persistent metadata cache.
   useEffect(() => {
-    if (!open || !operationId) return;
+    if (!open) return;
     setLoading(true);
     const fetchId = ++fetchIdRef.current;
     const offset = (serverPage - 1) * reviewPageSize;
     api
-      .getOperationResults(operationId, reviewPageSize, offset)
+      .getCachedReviewResults(reviewPageSize, offset)
       .then((data) => {
         if (fetchId !== fetchIdRef.current) return; // stale — a newer fetch is in flight
         const pageResults = data.results || [];
 
         const pageStates = new Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>();
         for (const r of pageResults) {
-          if (r.status === 'rejected') {
+          // Pre-seed UI state from persisted server status so toggles
+          // (hideApplied, hideNoMatch) work correctly on first render.
+          if (r.status === 'applied') {
+            pageStates.set(r.book.id, 'applied');
+          } else if (r.status === 'no_match') {
             pageStates.set(r.book.id, 'rejected');
           }
         }
@@ -223,66 +223,29 @@ export function MetadataReviewDialog({
         });
 
         setResults(pageResults);
-        const tc = data.total_count ?? data.total ?? pageResults.length;
+        const tc = data.total_count ?? pageResults.length;
         setTotalCount(tc);
         setSummary({
           matched: data.matched ?? pageResults.filter((r) => r.status === 'matched').length,
           no_match: data.no_match ?? pageResults.filter((r) => r.status === 'no_match').length,
-          errors: data.errors ?? pageResults.filter((r) => r.status === 'error').length,
+          errors: data.errors ?? 0,
           total: tc,
         });
-        if (data.total_matched !== undefined) {
-          setTotalSummary({
-            matched: data.total_matched,
-            no_match: data.total_no_match ?? 0,
-            errors: data.total_errors ?? 0,
-          });
-        }
         setLoading(false);
       })
       .catch(() => {
         if (fetchId !== fetchIdRef.current) return;
         setLoading(false);
       });
-  }, [open, operationId, serverPage, reviewPageSize, refreshKey]);
+  }, [open, serverPage, reviewPageSize, refreshKey]);
 
-  // Poll for new results while the operation is still running.
-  // Fetches only limit=1 to get the updated total_count without
-  // downloading the full page again.
-  const [operationDone, setOperationDone] = useState(false);
-  const prevTotalRef = useRef(0);
-
+  // Reset page and un-groupings when the dialog opens.
   useEffect(() => {
-    if (!open || !operationId || loading || operationDone) return;
-    const interval = setInterval(async () => {
-      try {
-        const data = await api.getOperationResults(operationId, 1, 0);
-        const newTotal = data.total_count ?? data.total ?? 0;
-
-        if (newTotal > 0 && newTotal === prevTotalRef.current) {
-          setOperationDone(true);
-          return;
-        }
-        prevTotalRef.current = newTotal;
-
-        if (newTotal > totalCount) {
-          setTotalCount(newTotal);
-          setSummary((prev) => ({ ...prev, total: newTotal }));
-        }
-      } catch {
-        // Silent — polling failure is not fatal
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [open, operationId, loading, operationDone, totalCount]);
-
-  // Reset polling state, page, and un-groupings when the operation changes.
-  useEffect(() => {
-    setOperationDone(false);
-    prevTotalRef.current = 0;
-    setServerPage(1);
-    setUngroupedIds(new Set());
-  }, [operationId]);
+    if (open) {
+      setServerPage(1);
+      setUngroupedIds(new Set());
+    }
+  }, [open]);
 
   // Reset un-groupings when navigating to a new page (groups are per-page).
   useEffect(() => {
@@ -348,7 +311,7 @@ export function MetadataReviewDialog({
     applyQueueRef.current = [];
     if (ids.length === 0) return;
     try {
-      await api.batchApplyCandidates(operationId, ids);
+      await api.batchApplyFromCache(ids);
       hasChangesRef.current = true;
       toast(`Applied metadata to ${ids.length} book${ids.length > 1 ? 's' : ''}`, 'success', {
         label: 'Undo',
@@ -377,7 +340,7 @@ export function MetadataReviewDialog({
       });
       toast('Failed to apply', 'error');
     }
-  }, [operationId, toast]);
+  }, [toast]);
 
   const handleApplyOne = (bookId: string) => {
     // Optimistic UI update
@@ -392,7 +355,7 @@ export function MetadataReviewDialog({
     if (bookIds.length === 0) return;
     setApplying(true);
     try {
-      const { applied } = await api.batchApplyCandidates(operationId, bookIds);
+      const { applied } = await api.batchApplyFromCache(bookIds);
       const newStates = new Map(rowStates);
       bookIds.forEach((id) => newStates.set(id, 'applied'));
       setRowStates(newStates);
@@ -431,13 +394,13 @@ export function MetadataReviewDialog({
 
   const handleReject = async (bookId: string) => {
     try {
-      await api.batchRejectCandidates(operationId, [bookId]);
+      await api.markNoMatch(bookId);
       setRowStates((prev) => new Map(prev).set(bookId, 'rejected'));
       toast('Candidate rejected — will be excluded from future fetches', 'info', {
         label: 'Undo',
         onClick: async () => {
           try {
-            await api.batchUnrejectCandidates(operationId, [bookId]);
+            await api.clearMetadataNoMatch(bookId);
             setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
             toast('Rejection undone', 'success');
           } catch {
@@ -452,7 +415,7 @@ export function MetadataReviewDialog({
 
   const handleUnreject = async (bookId: string) => {
     try {
-      await api.batchUnrejectCandidates(operationId, [bookId]);
+      await api.clearMetadataNoMatch(bookId);
       setRowStates((prev) => new Map(prev).set(bookId, 'pending'));
       toast('Rejection undone', 'success');
     } catch {
@@ -579,7 +542,7 @@ export function MetadataReviewDialog({
 
     const handleRejectGroup = async () => {
       try {
-        await api.batchRejectCandidates(operationId, actionableIds);
+        await Promise.all(actionableIds.map((id) => api.markNoMatch(id)));
         setRowStates(prev => {
           const next = new Map(prev);
           actionableIds.forEach(id => next.set(id, 'rejected'));
