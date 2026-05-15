@@ -1,7 +1,7 @@
 <!-- file: CHANGELOG.md -->
 <!-- version: 2.75.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-14 -->
+<!-- last-edited: 2026-05-15 -->
 
 # Changelog
 
@@ -27,6 +27,23 @@ unaffected since those resolve to public IPs.
 - Confirmed SEC-AUDIT-7c done (scanner `MaxScanBufferBytes` cap, PR #768)
 - Confirmed SEC-AUDIT-7d done (`isPathWithinTarget` zipslip guard in `backup.go`)
 - Confirmed SEC-AUDIT-7e done (`argon2.IDKey` KDF already in `settings.go`)
+
+### Refactors
+
+#### May 15, 2026 — FE-1: Extract useLibraryFilters hook from Library.tsx
+
+Created `web/src/hooks/useLibraryFilters.ts` to own all filter-related state
+that previously lived inline in `Library.tsx`: `filterOpen`, `filters`,
+`selectedTags`, five `available*` arrays, two data-loading effects (facets +
+tags), and `handleFiltersChange` / `handleTagFilterChange` / `refreshTags` /
+`getActiveFilterCount`. `Library.tsx` now calls the hook and destructures the
+result, removing ~20 state declarations and 2 `useEffect` blocks.
+
+PROJ-1 and PROJ-2 were verified already done: `BookSummary` struct is defined
+in `internal/database/store.go`; `GetAllBookSummaries` is implemented in both
+`PebbleStore` and `SQLiteStore` (with a proper projected SQL query in SQLite),
+and the audiobooks service uses it for the default library-list path. Marked
+done in TODO.
 
 ### Chores
 

@@ -326,9 +326,9 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### PROJ — Query Projection (2 tasks)
 
-- [ ] **PROJ-1** `perf/book-summary-columns` — Define BookSummary DB struct
+- [x] **PROJ-1** `perf/book-summary-columns` — Done: `BookSummary` struct defined in `internal/database/store.go:269`; SQLite projected query uses `bookSummarySelectColumns` (excludes description, embeddings, heavy fields).
   → [`2026-04-30-proj-1-summary-columns.md`](docs/superpowers/bot-tasks/2026-04-30-proj-1-summary-columns.md)
-- [ ] **PROJ-2** `perf/book-list-summary-query` — Implement GetBookSummaries projected query
+- [x] **PROJ-2** `perf/book-list-summary-query` — Done: `GetAllBookSummaries` implemented in both `PebbleStore` and `SQLiteStore`; audiobooks service uses it for the default library list path.
   → [`2026-04-30-proj-2-list-query.md`](docs/superpowers/bot-tasks/2026-04-30-proj-2-list-query.md)
 
 ### SCAN — Scanner Efficiency (1 task)
@@ -343,7 +343,7 @@ Bot-tasks: `docs/superpowers/bot-tasks/2026-04-30-*.md`.
 
 ### FE — Frontend Cleanup (10 tasks)
 
-- [ ] **FE-1** `refactor/library-filter-panel` — Extract FilterPanel from Library.tsx
+- [x] **FE-1** `refactor/library-filter-panel` — Done: `useLibraryFilters` hook created (`web/src/hooks/useLibraryFilters.ts`); moves filter state, available-data loading, and handlers out of `Library.tsx`.
   → [`2026-04-30-fe-1-filter-panel.md`](docs/superpowers/bot-tasks/2026-04-30-fe-1-filter-panel.md)
 - [x] **FE-2** `refactor/library-book-grid` — Done: `LibraryBookGrid.tsx` extracted.
 - [x] **FE-3** `refactor/library-batch-toolbar` — Done: `LibraryToolbar.tsx` extracted.
