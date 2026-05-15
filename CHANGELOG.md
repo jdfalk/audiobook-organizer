@@ -1,11 +1,22 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.73.0 -->
+<!-- version: 2.74.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-14 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Security
+
+#### May 14, 2026 — SEC-AUDIT-7a/c/d/e: Structured logging + audit fixes
+
+- Converted all `log.Printf` in `maintenance_fixups.go` to structured `slog`
+  (resolves CodeQL clear-text logging alerts #530–#526; `cmd/root.go` uses
+  `fmt.Printf` for CLI stdout — not a logging sink, no change needed)
+- Confirmed SEC-AUDIT-7c done (scanner `MaxScanBufferBytes` cap, PR #768)
+- Confirmed SEC-AUDIT-7d done (`isPathWithinTarget` zipslip guard in `backup.go`)
+- Confirmed SEC-AUDIT-7e done (`argon2.IDKey` KDF already in `settings.go`)
 
 ### Chores
 
