@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.76.0 -->
+<!-- version: 2.77.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-15 -->
 
@@ -8,6 +8,19 @@
 ## [Unreleased]
 
 ### Fixes
+
+#### May 15, 2026 — Fix Audible JSON decode error + acoustid log label
+
+- `internal/metadata/audible.go`: Added `flexFloat64` type that implements
+  `UnmarshalJSON([]byte) error` to handle Audible API responses where
+  `display_average_rating` arrives as a JSON string (`"4.5"`) instead of a
+  number. `encoding/json/v2` is strict about types; the mismatch caused the
+  entire catalog response to fail to decode, returning 0 candidates for every
+  Audible search. Audible is the primary metadata source so this was a
+  near-total metadata-fetch outage.
+- `internal/server/acoustid_backfill.go`: Renamed `skipped` counter to
+  `alreadyImported` and updated the completion log key from `skipped=` to
+  `already_imported=` for clarity.
 
 #### May 15, 2026 — TEST-1: Fix test build failures from CTX-3 context threading
 

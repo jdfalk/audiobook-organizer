@@ -1,5 +1,5 @@
 // file: internal/metadata/audible.go
-// version: 1.5.1
+// version: 1.5.2
 // guid: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
 
 package metadata
@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -87,9 +88,40 @@ type audibleRating struct {
 	StoryDistribution   audibleRatingDistribution `json:"story_distribution"`
 }
 
+// flexFloat64 handles Audible API responses where numeric fields arrive as
+// either a JSON number (4.5) or a quoted string ("4.5"). encoding/json/v2
+// is strict about type mismatches so we implement the v1-compatible interface
+// (UnmarshalJSON([]byte)) which v2 also recognizes.
+type flexFloat64 float64
+
+func (f *flexFloat64) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	if data[0] == '"' {
+		// Quoted string — strip quotes and parse the number inside
+		s := string(data[1 : len(data)-1])
+		if s == "" {
+			return nil
+		}
+		n, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return fmt.Errorf("flexFloat64: cannot parse %q: %w", s, err)
+		}
+		*f = flexFloat64(n)
+		return nil
+	}
+	n, err := strconv.ParseFloat(string(data), 64)
+	if err != nil {
+		return fmt.Errorf("flexFloat64: cannot parse number %q: %w", data, err)
+	}
+	*f = flexFloat64(n)
+	return nil
+}
+
 type audibleRatingDistribution struct {
-	DisplayAverageRating float64 `json:"display_average_rating"`
-	NumRatings           int     `json:"num_ratings"`
+	DisplayAverageRating flexFloat64 `json:"display_average_rating"`
+	NumRatings           int         `json:"num_ratings"`
 }
 
 type audiblePerson struct {
@@ -278,9 +310,9 @@ func (c *AudibleClient) productToMetadata(p *audibleProduct) BookMetadata {
 
 	// Ratings: overall, narrator performance, story quality.
 	if p.Rating != nil {
-		meta.AudibleRatingOverall = p.Rating.OverallDistribution.DisplayAverageRating
-		meta.AudibleRatingPerformance = p.Rating.PerformanceDistribution.DisplayAverageRating
-		meta.AudibleRatingStory = p.Rating.StoryDistribution.DisplayAverageRating
+		meta.AudibleRatingOverall = float64(p.Rating.OverallDistribution.DisplayAverageRating)
+		meta.AudibleRatingPerformance = float64(p.Rating.PerformanceDistribution.DisplayAverageRating)
+		meta.AudibleRatingStory = float64(p.Rating.StoryDistribution.DisplayAverageRating)
 		meta.AudibleRatingCount = p.Rating.OverallDistribution.NumRatings
 		meta.AudibleNumReviews = p.Rating.NumReviews
 	}

@@ -1,7 +1,7 @@
 // file: internal/server/acoustid_backfill.go
-// version: 2.5.1
+// version: 2.5.2
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-05-12
+// last-edited: 2026-05-15
 
 package server
 
@@ -114,7 +114,7 @@ func (s *Server) backfillAcoustIDs() {
 		return
 	}
 
-	var fingerprinted, skipped, failed int
+	var fingerprinted, alreadyImported, failed int
 	ctx := context.Background()
 	for _, b := range books {
 		select {
@@ -134,7 +134,7 @@ func (s *Server) backfillAcoustIDs() {
 				bookModified = true
 				time.Sleep(fingerprintThrottle)
 			case fingerprintOutcomeSkipped:
-				skipped++
+				alreadyImported++
 			case fingerprintOutcomeFailed:
 				failed++
 			}
@@ -148,8 +148,8 @@ func (s *Server) backfillAcoustIDs() {
 		}
 	}
 
-	log.Printf("[INFO] acoustid backfill complete: fingerprinted=%d skipped=%d failed=%d",
-		fingerprinted, skipped, failed)
+	log.Printf("[INFO] acoustid backfill complete: fingerprinted=%d already_imported=%d failed=%d",
+		fingerprinted, alreadyImported, failed)
 }
 
 // AcoustIDLookupStore is the subset of the store needed for fingerprint lookups.
