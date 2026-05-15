@@ -1043,7 +1043,7 @@ Findings from the 2026-05-01 re-audit. See `docs/codebase-evaluation.md` §Re-Au
 
 ### High Priority
 
-- **TEST-1** Fix 11+ failing unit tests in `internal/server` after PROJ-1/PROJ-2 changed `GetAllBooks` → `GetAllBookSummaries`  
+- [x] **TEST-1** Done: actual failures were missing `context.Context` args from CTX-3 (not PROJ-1/2); fixed `internal/fileops/service_test.go` and `internal/server/service_layer_test.go` — both packages now pass.
   Spec: `docs/superpowers/bot-tasks/2026-05-01-test-1-fix-audiobook-service-tests.md`
 
 - **TEST-2** Fix `TestStoreAdditionalCoverageSQLite` failure in `internal/database` package  
