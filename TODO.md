@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.37.0 -->
+<!-- version: 8.37.1 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-14 -->
+<!-- last-edited: 2026-05-15 -->
 
 # Project TODO
 
@@ -233,7 +233,7 @@ incrementally:
 
 ### Phase 8: Warnings (4 alerts)
 
-- [ ] **SEC-AUDIT-8** Fix warning-level alerts (4 alerts: #379, #468, #160, #50)
+- [ ] **SEC-AUDIT-8** Fix warning-level alerts (4 alerts: #379, #468, #160, #50) — In progress: PR #970 (blocked: CI failing)
   - **Priority:** P2-P3
   - **Effort:** 3.5 hours
   - **Alerts:** Disabled cert check (#379), allocation overflow (#468), JS cert bypass (#160), incomplete sanitization (#50)
