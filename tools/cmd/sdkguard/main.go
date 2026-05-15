@@ -51,6 +51,9 @@ var allowedInternals = map[string]bool{
 	"github.com/jdfalk/audiobook-organizer/internal/util":                true,
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint":         true,
 	"github.com/jdfalk/audiobook-organizer/internal/matcher":             true,
+	// Added to allow pkg/plugin/sdk to reference the service registry backplane
+	// which is part of the SDK's supported stable surface.
+	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry":     true,
 }
 
 func main() {
