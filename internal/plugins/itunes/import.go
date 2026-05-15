@@ -1,7 +1,7 @@
 // file: internal/plugins/itunes/import.go
 // version: 1.0.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
-// last-edited: 2026-05-07
+// last-edited: 2026-05-15
 
 package itunes
 

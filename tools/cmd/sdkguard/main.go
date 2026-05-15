@@ -1,7 +1,7 @@
 // file: tools/cmd/sdkguard/main.go
 // version: 1.0.0
 // guid: e8f9a0b1-c2d3-4567-e890-f12345678901
-// last-edited: 2026-05-08
+// last-edited: 2026-05-15
 
 // Package main implements sdkguard, a CI tool that asserts pkg/plugin/sdk has
 // no unexpected internal/ dependencies.
