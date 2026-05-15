@@ -1,5 +1,6 @@
 // file: internal/mtls/provisioning.go
-// version: 1.0.0
+// version: 1.0.1
+// last-edited: 2026-05-15
 
 package mtls
 
@@ -135,6 +136,9 @@ func RunProvisioningClient(dir *Dir, addr string) error {
 		&net.Dialer{Timeout: 10 * time.Second},
 		"tcp",
 		addr,
+		// #nosec G402 -- bootstrap-only: InsecureSkipVerify is required during initial mTLS
+		// cert provisioning before a valid client cert exists. This code path only runs once
+		// per installation and is never used in normal operation.
 		&tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS13},
 	)
 	if err != nil {
