@@ -147,7 +147,7 @@ incrementally:
 
 ### Phase -1: CodeQL Custom Sanitizer Pack (Noise Reduction)
 
-- [ ] **SEC-AUDIT--1** Deploy CodeQL Models-as-Data pack for existing sanitizers
+- [x] **SEC-AUDIT--1** Deploy CodeQL Models-as-Data pack for existing sanitizers
   - **Priority:** P0 (Unblocks Phase 1-6 by reducing false positives)
   - **Effort:** 2 hours
   - **Alerts:** Expected to reduce path injection from 217 → ~120-140 (~77 FP reduction)
