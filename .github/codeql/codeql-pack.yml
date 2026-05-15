@@ -1,7 +1,7 @@
 # file: .github/codeql/codeql-pack.yml
-# version: 0.1.0
+# version: 0.1.1
 # guid: 4f3c6a0a-d88f-4bce-b464-23191b50832a
-# last-edited: 2026-05-03
+# last-edited: 2026-05-15
 
 name: audiobook-organizer/go-sanitizers
 version: 0.1.0
