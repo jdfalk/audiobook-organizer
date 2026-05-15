@@ -1,7 +1,7 @@
 // file: internal/fingerprint/book_signature_test.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 8f9e0a1b-2c3d-4e5f-6a7b-8c9d0e1f2a3b
-// last-edited: 2026-05-03
+// last-edited: 2026-05-15
 
 package fingerprint
 
@@ -315,5 +315,260 @@ func TestBookSignatureSimilarity_InvalidLength(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid book signature length") {
 		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// ─── Partial signature tests ──────────────────────────────────────────────────
+
+func TestEstimateSegmentCount_DurationBased(t *testing.T) {
+	// 600s audio, capped at SegmentSeconds (300) per segment → 300*7*8 = 16800
+	got := EstimateSegmentCount(600, 0, 0, 0)
+	want := SegmentSeconds * NumSegments * chromaprintRatePerSec
+	if got != want {
+		t.Errorf("duration=600: got %d, want %d", got, want)
+	}
+
+	// 60s audio: 60*7*8 = 3360
+	got = EstimateSegmentCount(60, 0, 0, 0)
+	want = 60 * NumSegments * chromaprintRatePerSec
+	if got != want {
+		t.Errorf("duration=60: got %d, want %d", got, want)
+	}
+}
+
+func TestEstimateSegmentCount_SizeBitrate(t *testing.T) {
+	// 50 MB at 128 kbps → duration = 50*1024*1024*8 / (128*1000) ≈ 3276s
+	// capped at 300s per seg → 300*7*8 = 16800
+	got := EstimateSegmentCount(0, 50*1024*1024, 128, 0)
+	want := SegmentSeconds * NumSegments * chromaprintRatePerSec
+	if got != want {
+		t.Errorf("size+bitrate: got %d, want %d", got, want)
+	}
+}
+
+func TestEstimateSegmentCount_PeerRatio(t *testing.T) {
+	// 10 MB at ratio 0.001 → 10*1024*1024 * 0.001 ≈ 10485
+	size := 10 * 1024 * 1024
+	got := EstimateSegmentCount(0, size, 0, 0.001)
+	want := int(float64(size) * 0.001)
+	if got != want {
+		t.Errorf("peer ratio: got %d, want %d", got, want)
+	}
+}
+
+func TestEstimateSegmentCount_Unknown(t *testing.T) {
+	if got := EstimateSegmentCount(0, 0, 0, 0); got != 0 {
+		t.Errorf("all-zero inputs: expected 0, got %d", got)
+	}
+}
+
+func makeFileInput(seed int64, count int) FileSegmentInput {
+	rng := rand.New(rand.NewSource(seed))
+	makeSegs := func() string {
+		vals := make([]uint32, count)
+		for i := range vals {
+			vals[i] = rng.Uint32()
+		}
+		return encodeUint32SliceToBase64(vals)
+	}
+	return FileSegmentInput{
+		Segments: FileSegmentData{
+			Seg0: makeSegs(), Seg1: makeSegs(), Seg2: makeSegs(),
+			Seg3: makeSegs(), Seg4: makeSegs(), Seg5: makeSegs(), Seg6: makeSegs(),
+		},
+	}
+}
+
+func TestSynthesizePartialBookSignature_AllReal(t *testing.T) {
+	files := []FileSegmentInput{
+		makeFileInput(1, 500),
+		makeFileInput(2, 500),
+		makeFileInput(3, 500),
+	}
+	sig, mask, coveragePct, preLen, err := SynthesizePartialBookSignature(files)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sig == "" || mask == "" {
+		t.Fatal("sig and mask must be non-empty")
+	}
+	if coveragePct != 100 {
+		t.Errorf("all-real coverage: got %d%%, want 100%%", coveragePct)
+	}
+	if preLen <= 0 {
+		t.Errorf("preLen must be positive, got %d", preLen)
+	}
+}
+
+func TestSynthesizePartialBookSignature_OneMissing(t *testing.T) {
+	files := []FileSegmentInput{
+		makeFileInput(10, 500),
+		{Missing: true, EstimatedLen: 3500},
+		makeFileInput(30, 500),
+	}
+	sig, mask, coveragePct, preLen, err := SynthesizePartialBookSignature(files)
+	if err != nil {
+		t.Fatalf("unexpected error with one missing file: %v", err)
+	}
+	if sig == "" || mask == "" {
+		t.Fatal("sig and mask must be non-empty")
+	}
+	// Real files: 2 × 7 × 500 = 7000 words. Missing: 3500. Total = 10500.
+	// Coverage = 7000/10500 ≈ 66%
+	if coveragePct <= 0 || coveragePct >= 100 {
+		t.Errorf("mixed coverage should be between 0 and 100, got %d", coveragePct)
+	}
+	t.Logf("one-missing coverage: %d%%, preLen: %d", coveragePct, preLen)
+}
+
+func TestSynthesizePartialBookSignature_AllMissing(t *testing.T) {
+	files := []FileSegmentInput{
+		{Missing: true, EstimatedLen: 1000},
+		{Missing: true, EstimatedLen: 1000},
+	}
+	_, _, _, _, err := SynthesizePartialBookSignature(files)
+	if err != ErrIncompleteFingerprint {
+		t.Errorf("all-missing: expected ErrIncompleteFingerprint, got %v", err)
+	}
+}
+
+func TestSynthesizePartialBookSignature_Empty(t *testing.T) {
+	_, _, _, _, err := SynthesizePartialBookSignature(nil)
+	if err != ErrIncompleteFingerprint {
+		t.Errorf("nil input: expected ErrIncompleteFingerprint, got %v", err)
+	}
+}
+
+func TestSynthesizePartialBookSignature_MatchesFullSignature(t *testing.T) {
+	// Partial synthesis of all-real files should produce the same sig as
+	// SynthesizeBookSignature on the same data.
+	f := makeFileInput(42, 200)
+	full, fullPre, err := SynthesizeBookSignature([]FileSegmentData{f.Segments})
+	if err != nil {
+		t.Fatalf("SynthesizeBookSignature: %v", err)
+	}
+	partial, _, _, partPre, err := SynthesizePartialBookSignature([]FileSegmentInput{f})
+	if err != nil {
+		t.Fatalf("SynthesizePartialBookSignature: %v", err)
+	}
+	if full != partial {
+		t.Error("all-real partial sig must equal full sig")
+	}
+	if fullPre != partPre {
+		t.Errorf("preLen mismatch: full=%d partial=%d", fullPre, partPre)
+	}
+}
+
+func TestEncodeMask_AllReal(t *testing.T) {
+	flags := make([]bool, BookSignatureFixedLength*2)
+	for i := range flags {
+		flags[i] = true
+	}
+	mask := EncodeMask(flags, len(flags), BookSignatureFixedLength)
+	bits, err := decodeMask(mask, BookSignatureFixedLength)
+	if err != nil {
+		t.Fatalf("decodeMask: %v", err)
+	}
+	for i, b := range bits {
+		if !b {
+			t.Errorf("bit %d should be 1 (real)", i)
+		}
+	}
+}
+
+func TestEncodeMask_AllFake(t *testing.T) {
+	flags := make([]bool, BookSignatureFixedLength*2) // all false
+	mask := EncodeMask(flags, len(flags), BookSignatureFixedLength)
+	bits, err := decodeMask(mask, BookSignatureFixedLength)
+	if err != nil {
+		t.Fatalf("decodeMask: %v", err)
+	}
+	for i, b := range bits {
+		if b {
+			t.Errorf("bit %d should be 0 (fake)", i)
+		}
+	}
+}
+
+func TestEncodeMask_FirstHalfReal(t *testing.T) {
+	// n = 2 × targetLen → windowSize = 2; first 4096 inputs real → first 2048 output bits real
+	n := BookSignatureFixedLength * 2 // 8192
+	flags := make([]bool, n)
+	for i := 0; i < n/2; i++ {
+		flags[i] = true
+	}
+	mask := EncodeMask(flags, n, BookSignatureFixedLength)
+	bits, err := decodeMask(mask, BookSignatureFixedLength)
+	if err != nil {
+		t.Fatalf("decodeMask: %v", err)
+	}
+	halfOut := BookSignatureFixedLength / 2
+	for i := 0; i < halfOut; i++ {
+		if !bits[i] {
+			t.Errorf("first-half bit %d should be 1", i)
+		}
+	}
+	for i := halfOut; i < BookSignatureFixedLength; i++ {
+		if bits[i] {
+			t.Errorf("second-half bit %d should be 0", i)
+		}
+	}
+}
+
+func TestDecodeMask_EmptyMeansAllReal(t *testing.T) {
+	bits, err := decodeMask("", BookSignatureFixedLength)
+	if err != nil {
+		t.Fatalf("decodeMask empty: %v", err)
+	}
+	for i, b := range bits {
+		if !b {
+			t.Errorf("bit %d should be 1 (empty mask = all real)", i)
+		}
+	}
+}
+
+func TestBookSignatureSimilarityMasked_NoMask(t *testing.T) {
+	// Without masks, should produce the same result as BookSignatureSimilarity
+	sig, _, _ := SynthesizeBookSignature([]FileSegmentData{makeFileInput(7, 300).Segments})
+	simUnmasked, err := BookSignatureSimilarity(sig, sig)
+	if err != nil {
+		t.Fatalf("BookSignatureSimilarity: %v", err)
+	}
+	simMasked, overlap, err := BookSignatureSimilarityMasked(sig, sig, "", "")
+	if err != nil {
+		t.Fatalf("BookSignatureSimilarityMasked: %v", err)
+	}
+	if simUnmasked != simMasked {
+		t.Errorf("masked (no mask) should equal unmasked: %f vs %f", simMasked, simUnmasked)
+	}
+	if overlap != BookSignatureFixedLength {
+		t.Errorf("no-mask overlap should be %d, got %d", BookSignatureFixedLength, overlap)
+	}
+}
+
+func TestBookSignatureSimilarityMasked_ZeroOverlap(t *testing.T) {
+	// Mask A covers first half, mask B covers second half — no overlap
+	nTotal := BookSignatureFixedLength * 4
+	flagsA := make([]bool, nTotal)
+	flagsB := make([]bool, nTotal)
+	for i := 0; i < nTotal/2; i++ {
+		flagsA[i] = true
+	}
+	for i := nTotal / 2; i < nTotal; i++ {
+		flagsB[i] = true
+	}
+	maskA := EncodeMask(flagsA, nTotal, BookSignatureFixedLength)
+	maskB := EncodeMask(flagsB, nTotal, BookSignatureFixedLength)
+
+	sig := encodeUint32SliceToBase64(make([]uint32, BookSignatureFixedLength))
+	sim, overlap, err := BookSignatureSimilarityMasked(sig, sig, maskA, maskB)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if overlap != 0 {
+		t.Errorf("expected 0 overlap, got %d", overlap)
+	}
+	if sim != 0 {
+		t.Errorf("expected 0 similarity with no overlap, got %f", sim)
 	}
 }

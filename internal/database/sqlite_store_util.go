@@ -437,6 +437,9 @@ func bookFileScan(row interface {
 	var fileHash, originalFileHash, postMetadataHash sql.NullString
 	var acoustidSeg0, acoustidSeg1, acoustidSeg2, acoustidSeg3, acoustidSeg4, acoustidSeg5, acoustidSeg6 sql.NullString
 	var missing int
+	var fingerprintFailedAt sql.NullTime
+	var organizeMethod sql.NullString
+	var fingerprintFailureReason, fingerprintFailureDetail, fingerprintDiagnosticJSON sql.NullString
 	err := row.Scan(
 		&f.ID, &f.BookID, &f.FilePath,
 		&originalFilename, &itunesPath, &itunesPID,
@@ -448,6 +451,8 @@ func bookFileScan(row interface {
 		&acoustidSeg0, &acoustidSeg1, &acoustidSeg2, &acoustidSeg3, &acoustidSeg4, &acoustidSeg5, &acoustidSeg6,
 		&missing, &f.CreatedAt, &f.UpdatedAt,
 		&delugeHash, &delugeOriginalPath, &importedFromDelugeAt,
+		&fingerprintFailedAt, &organizeMethod,
+		&fingerprintFailureReason, &fingerprintFailureDetail, &fingerprintDiagnosticJSON,
 	)
 	if err != nil {
 		return f, err
@@ -541,6 +546,25 @@ func bookFileScan(row interface {
 		t := importedFromDelugeAt.Time
 		f.ImportedFromDelugeAt = &t
 	}
+	if fingerprintFailedAt.Valid {
+		t := fingerprintFailedAt.Time
+		f.FingerprintFailedAt = &t
+	}
+	if organizeMethod.Valid {
+		f.OrganizeMethod = organizeMethod.String
+	}
+	if fingerprintFailureReason.Valid {
+		s := fingerprintFailureReason.String
+		f.FingerprintFailureReason = &s
+	}
+	if fingerprintFailureDetail.Valid {
+		s := fingerprintFailureDetail.String
+		f.FingerprintFailureDetail = &s
+	}
+	if fingerprintDiagnosticJSON.Valid {
+		s := fingerprintDiagnosticJSON.String
+		f.FingerprintDiagnosticJSON = &s
+	}
 	return f, nil
 }
 
@@ -566,6 +590,14 @@ func nullableInt64Val(n int64) sql.NullInt64 {
 		return sql.NullInt64{}
 	}
 	return sql.NullInt64{Int64: n, Valid: true}
+}
+
+// nullablePtrStringVal converts a *string to sql.NullString (nil = NULL).
+func nullablePtrStringVal(s *string) sql.NullString {
+	if s == nil || *s == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: *s, Valid: true}
 }
 
 // nullableTimeVal converts a *time.Time to sql.NullTime (nil pointer = NULL).

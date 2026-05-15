@@ -3047,7 +3047,9 @@ func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
 			acoustid_seg0=?, acoustid_seg1=?, acoustid_seg2=?, acoustid_seg3=?,
 			acoustid_seg4=?, acoustid_seg5=?, acoustid_seg6=?,
 			missing=?, updated_at=?,
-			deluge_hash=?, deluge_original_path=?, imported_from_deluge_at=?
+			deluge_hash=?, deluge_original_path=?, imported_from_deluge_at=?,
+			fingerprint_failed_at=?, organize_method=?,
+			fingerprint_failure_reason=?, fingerprint_failure_detail=?, fingerprint_diagnostic_json=?
 		WHERE id=?`,
 		file.BookID, file.FilePath,
 		nullableStringVal(file.OriginalFilename), nullableStringVal(file.ITunesPath), nullableStringVal(file.ITunesPersistentID),
@@ -3066,6 +3068,10 @@ func (s *SQLiteStore) UpdateBookFile(id string, file *BookFile) error {
 		missingInt, file.UpdatedAt,
 		nullableStringVal(file.DelugeHash), nullableStringVal(file.DelugeOriginalPath),
 		nullableTimeVal(file.ImportedFromDelugeAt),
+		nullableTimeVal(file.FingerprintFailedAt), nullableStringVal(file.OrganizeMethod),
+		nullablePtrStringVal(file.FingerprintFailureReason),
+		nullablePtrStringVal(file.FingerprintFailureDetail),
+		nullablePtrStringVal(file.FingerprintDiagnosticJSON),
 		id,
 	)
 	if err != nil {
@@ -3834,4 +3840,42 @@ func (s *SQLiteStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error)
 		}
 	}
 	return stats, nil
+}
+
+// GetFilesWithFingerprintFailures returns book_files where fingerprint_failed_at is set,
+// optionally filtered by reason. Returns the paginated slice and total matching count.
+func (s *SQLiteStore) GetFilesWithFingerprintFailures(reason string, limit, offset int) ([]BookFile, int64, error) {
+	whereExtra := ""
+	args := []interface{}{}
+	if reason != "" {
+		whereExtra = " AND fingerprint_failure_reason = ?"
+		args = append(args, reason)
+	}
+
+	var total int64
+	countQ := `SELECT COUNT(*) FROM book_files WHERE fingerprint_failed_at IS NOT NULL` + whereExtra
+	if err := s.db.QueryRow(countQ, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("GetFilesWithFingerprintFailures count: %w", err)
+	}
+
+	pageArgs := append(args, limit, offset)
+	pageQ := `SELECT ` + bookFileCols + ` FROM book_files WHERE fingerprint_failed_at IS NOT NULL` + whereExtra +
+		` ORDER BY fingerprint_failed_at DESC LIMIT ? OFFSET ?`
+	rows, err := s.db.Query(pageQ, pageArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("GetFilesWithFingerprintFailures query: %w", err)
+	}
+	defer rows.Close()
+	var files []BookFile
+	for rows.Next() {
+		f, err := bookFileScan(rows)
+		if err != nil {
+			return nil, 0, fmt.Errorf("GetFilesWithFingerprintFailures scan: %w", err)
+		}
+		files = append(files, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("GetFilesWithFingerprintFailures rows: %w", err)
+	}
+	return files, total, nil
 }

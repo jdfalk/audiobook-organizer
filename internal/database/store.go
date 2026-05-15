@@ -200,9 +200,11 @@ type Book struct {
 	// BookSigV1 is the base64-encoded down-sampled book signature (4096 uint32s).
 	// BookSigSegments is the pre-downsample segment count (for diagnostics).
 	// BookSigBuiltAt is when the signature was last synthesized.
-	BookSigV1        *string    `json:"book_sig_v1,omitempty"`
-	BookSigSegments  *int       `json:"book_sig_segments,omitempty"`
-	BookSigBuiltAt   *time.Time `json:"book_sig_built_at,omitempty"`
+	BookSigV1          *string    `json:"book_sig_v1,omitempty"`
+	BookSigSegments    *int       `json:"book_sig_segments,omitempty"`
+	BookSigBuiltAt     *time.Time `json:"book_sig_built_at,omitempty"`
+	BookSigV1Mask      *string    `json:"book_sig_v1_mask,omitempty"`      // 4096-bit coverage mask (base64)
+	BookSigCoveragePct *int       `json:"book_sig_coverage_pct,omitempty"` // 0–100; nil = full coverage
 	// ITunesSyncStatus tracks whether this book's metadata is in sync with the iTunes library.
 	// Values: "synced" (up-to-date in ITL), "dirty" (changed since last write-back),
 	// "unlinked" (no iTunes presence), "pending" (new, needs adding to iTunes),
@@ -679,7 +681,10 @@ type BookFile struct {
 	// fingerprint backfill so we don't loop forever retrying the same
 	// unreadable files. Force-rescan clears it. nil = never attempted
 	// or last attempt succeeded.
-	FingerprintFailedAt   *time.Time `json:"fingerprint_failed_at,omitempty"`
+	FingerprintFailedAt      *time.Time `json:"fingerprint_failed_at,omitempty"`
+	FingerprintFailureReason *string    `json:"fingerprint_failure_reason,omitempty"`  // e.g. "corrupt_audio"
+	FingerprintFailureDetail *string    `json:"fingerprint_failure_detail,omitempty"`  // short human-readable explanation
+	FingerprintDiagnosticJSON *string   `json:"fingerprint_diagnostic_json,omitempty"` // full FileDiagnostic JSON blob
 	OrganizeMethod        string    `json:"organize_method,omitempty"` // "reflink", "hardlink", "copy", "symlink"
 	Missing            bool      `json:"missing"`
 	CreatedAt          time.Time `json:"created_at"`

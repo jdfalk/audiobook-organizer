@@ -1279,6 +1279,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/diagnostics/submit-ai", s.perm(auth.PermSettingsManage), s.submitDiagnosticsAI)
 			protected.GET("/diagnostics/ai-results/:operationId", s.perm(auth.PermSettingsManage), s.getDiagnosticsAIResults)
 			protected.POST("/diagnostics/apply-suggestions", s.perm(auth.PermSettingsManage), s.applyDiagnosticsSuggestions)
+			protected.GET("/diagnostics/fingerprint-failures", s.perm(auth.PermSettingsManage), s.getFingerprintFailures)
 
 			// AI Jobs observability routes
 			protected.GET("/ai-jobs", s.perm(auth.PermSettingsManage), s.handleListAIJobs)

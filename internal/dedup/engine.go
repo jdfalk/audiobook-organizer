@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.19.0
+// version: 1.20.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-05-04
 
@@ -2072,8 +2072,12 @@ func bestSeg(f *database.BookFile) string {
 
 // BookSignatureScan walks all primary books and emits dedup_candidates based
 // on book-level fingerprint similarity (layer: "book_signature"). Books are
-// compared pairwise using BookSignatureSimilarity; pairs exceeding
+// compared pairwise using BookSignatureSimilarityMasked (falls back to
+// BookSignatureSimilarity when neither book has a mask); pairs exceeding
 // FuzzyMinSimilarity (0.80) are emitted as candidates.
+//
+// Pairs with fewer than 512 overlapping words (due to partial sig masks) are
+// skipped — not enough data for a reliable comparison.
 //
 // Skips books that don't have a synthesized book_sig_v1 yet (not backfilled).
 // Progress callback receives (done, total) book counts.
@@ -2126,19 +2130,33 @@ default:
 }
 
 sigA := *bookA.BookSigV1
+maskA := ""
+if bookA.BookSigV1Mask != nil {
+	maskA = *bookA.BookSigV1Mask
+}
 for j := i + 1; j < len(booksWithSig); j++ {
-bookB := booksWithSig[j]
-sigB := *bookB.BookSigV1
+	bookB := booksWithSig[j]
+	sigB := *bookB.BookSigV1
+	maskB := ""
+	if bookB.BookSigV1Mask != nil {
+		maskB = *bookB.BookSigV1Mask
+	}
 
-sim, err := fingerprint.BookSignatureSimilarity(sigA, sigB)
-if err != nil {
-log.Printf("[dedup] book signature scan: compare %s vs %s: %v", bookA.ID, bookB.ID, err)
-continue
-}
+	sim, overlap, err := fingerprint.BookSignatureSimilarityMasked(sigA, sigB, maskA, maskB)
+	if err != nil {
+		log.Printf("[dedup] book signature scan: compare %s vs %s: %v", bookA.ID, bookB.ID, err)
+		continue
+	}
+	// Skip pairs with insufficient overlap (partial sigs with non-overlapping missing sections).
+	const minOverlapWords = 512
+	if overlap < minOverlapWords {
+		log.Printf("[dedup] book signature scan: skip %s vs %s (overlap=%d < %d)", bookA.ID, bookB.ID, overlap, minOverlapWords)
+		continue
+	}
 
-if sim >= fingerprint.FuzzyMinSimilarity {
-emit(bookA.ID, bookB.ID, sim)
-}
+	if sim >= fingerprint.FuzzyMinSimilarity {
+		emit(bookA.ID, bookB.ID, sim)
+	}
 }
 
 if progress != nil {

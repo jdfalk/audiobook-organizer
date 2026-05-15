@@ -340,7 +340,8 @@ type MockStore struct {
 	GetBookBySegmentFileHashFunc func(hash string) (*Book, error)
 	SetBookFileHashFunc         func(id, hash string) error
 	GetBookFileHashStatsFunc    func() (*BookFileHashStats, error)
-	GetBookMetadataHashStatsFunc func() (*BookMetadataHashStats, error)
+	GetBookMetadataHashStatsFunc           func() (*BookMetadataHashStats, error)
+	GetFilesWithFingerprintFailuresFunc    func(reason string, limit, offset int) ([]BookFile, int64, error)
 
 	// Path history
 	RecordPathChangeFunc   func(change *BookPathChange) error
@@ -2361,6 +2362,13 @@ func (m *MockStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error) {
 		return m.GetBookMetadataHashStatsFunc()
 	}
 	return &BookMetadataHashStats{}, nil
+}
+
+func (m *MockStore) GetFilesWithFingerprintFailures(reason string, limit, offset int) ([]BookFile, int64, error) {
+	if m.GetFilesWithFingerprintFailuresFunc != nil {
+		return m.GetFilesWithFingerprintFailuresFunc(reason, limit, offset)
+	}
+	return nil, 0, nil
 }
 
 func (m *MockStore) CreateAIJob(job AIJob, payloadJSON []byte) error {
