@@ -1,7 +1,7 @@
 // file: internal/server/service_layer_test.go
-// version: 1.8.0
+// version: 1.9.0
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-05-11
+// last-edited: 2026-05-15
 
 package server
 
@@ -1509,7 +1509,7 @@ func TestServerHelpers_IntVal(t *testing.T) {
 func TestFilesystemService_CreateExclusion_EmptyPath(t *testing.T) {
 	svc := fileops.NewFilesystemService(nil)
 
-	err := svc.CreateExclusion("")
+	err := svc.CreateExclusion(context.Background(), "")
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -1526,7 +1526,7 @@ func TestFilesystemService_CreateExclusion_NotDirectory(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "not_a_dir.txt")
 	os.WriteFile(tmpFile, []byte("test"), 0644)
 
-	err := svc.CreateExclusion(tmpFile)
+	err := svc.CreateExclusion(context.Background(), tmpFile)
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
@@ -1539,7 +1539,7 @@ func TestFilesystemService_CreateExclusion_NotDirectory(t *testing.T) {
 func TestFilesystemService_RemoveExclusion_EmptyPath(t *testing.T) {
 	svc := fileops.NewFilesystemService(nil)
 
-	err := svc.RemoveExclusion("")
+	err := svc.RemoveExclusion(context.Background(), "")
 	if err == nil {
 		t.Error("expected error, got nil")
 	}

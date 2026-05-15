@@ -1,11 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.75.0 -->
+<!-- version: 2.76.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-15 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixes
+
+#### May 15, 2026 — TEST-1: Fix test build failures from CTX-3 context threading
+
+Added missing `context.Context` args to `BrowseDirectory`, `CreateExclusion`,
+and `RemoveExclusion` calls in `internal/fileops/service_test.go` and
+`internal/server/service_layer_test.go`. Both packages now compile and pass.
+The original TEST-1 description blamed PROJ-1/2; the real cause was the CTX-3
+context threading (PR #956).
 
 ### Security
 

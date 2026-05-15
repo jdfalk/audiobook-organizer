@@ -1,11 +1,12 @@
 // file: internal/fileops/service_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f
-// last-edited: 2026-05-01
+// last-edited: 2026-05-15
 
 package fileops
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +20,7 @@ func TestFilesystemService_BrowseDirectory_Empty(t *testing.T) {
 	mockStore.On("GetAllImportPaths").Return([]database.ImportPath{}, nil)
 	fs := NewFilesystemService(mockStore)
 
-	_, err := fs.BrowseDirectory("")
+	_, err := fs.BrowseDirectory(context.Background(), "")
 
 	if err == nil {
 		t.Error("expected error for empty path")
@@ -31,7 +32,7 @@ func TestFilesystemService_BrowseDirectory_InvalidPath(t *testing.T) {
 	mockStore.On("GetAllImportPaths").Return([]database.ImportPath{}, nil)
 	fs := NewFilesystemService(mockStore)
 
-	_, err := fs.BrowseDirectory("/nonexistent/path/that/does/not/exist")
+	_, err := fs.BrowseDirectory(context.Background(), "/nonexistent/path/that/does/not/exist")
 
 	if err == nil {
 		t.Error("expected error for nonexistent path")
@@ -48,7 +49,7 @@ func TestFilesystemService_CreateExclusion_Success(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	err = fs.CreateExclusion(tmpDir)
+	err = fs.CreateExclusion(context.Background(), tmpDir)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -69,7 +70,7 @@ func TestFilesystemService_RemoveExclusion_NotFound(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	err = fs.RemoveExclusion(tmpDir)
+	err = fs.RemoveExclusion(context.Background(), tmpDir)
 	if err == nil {
 		t.Error("expected error for nonexistent exclusion")
 	}
