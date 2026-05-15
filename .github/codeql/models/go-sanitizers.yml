@@ -1,0 +1,19 @@
+# file: .github/codeql/models/go-sanitizers.yml
+# version: 1.0.0
+# guid: 9d8c7b6a-5e4f-3d2c-1b0a-9e8f7d6c5b4a
+# last-edited: 2026-05-15
+# Declares project-specific path sanitizers so CodeQL stops flagging
+# code paths that already use SafeJoin / WithinRoot.
+extensions:
+  - addsTo:
+      pack: codeql/go-all
+      extensible: pathInjectionSanitizer
+    data:
+      # SafeJoin: return value is a sanitized path (path injection barrier)
+      - ["github.com/jdfalk/audiobook-organizer/internal/util", "SafeJoin", "ReturnValue"]
+  - addsTo:
+      pack: codeql/go-all
+      extensible: pathInjectionSanitizerGuard
+    data:
+      # WithinRoot: when this returns true, the path has been validated
+      - ["github.com/jdfalk/audiobook-organizer/internal/util", "WithinRoot", "true"]
