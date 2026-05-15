@@ -1,15 +1,16 @@
 // file: web/src/pages/Library.tsx
-// version: 1.63.0
+// version: 1.64.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
-// last-edited: 2026-05-11
+// last-edited: 2026-05-15
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { ViewMode } from '../components/audiobooks/SearchBar';
 import { useColumnConfig } from '../hooks/useColumnConfig';
+import { useLibraryFilters } from '../hooks/useLibraryFilters';
 import { useToast } from '../components/toast/ToastProvider';
-import type { Audiobook, FilterOptions } from '../types';
+import type { Audiobook } from '../types';
 import { SortField, SortOrder } from '../types';
 import { parseSearch, type ParsedSearch } from '../utils/searchParser';
 import * as api from '../services/api';
@@ -121,14 +122,6 @@ export const Library = () => {
       10
     )
   );
-  const initialFilters: FilterOptions = {
-    author: searchParams.get('author') || undefined,
-    series: searchParams.get('series') || undefined,
-    genre: searchParams.get('genre') || undefined,
-    language: searchParams.get('language') || undefined,
-    libraryState: searchParams.get('state') || undefined,
-  };
-
   const [audiobooks, setAudiobooks] = useState<Audiobook[]>([]);
   const [totalCount, setTotalCount] = useState(0); // Total matching books (server-reported, all pages)
   const [loading, setLoading] = useState(false);
@@ -137,8 +130,6 @@ export const Library = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [sortBy, setSortBy] = useState<SortField>(initialSortBy);
   const [sortOrder, setSortOrder] = useState<SortOrder>(initialSortOrder);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<FilterOptions>(initialFilters);
   const [page, setPage] = useState(initialPage);
   const [itemsPerPage, setItemsPerPage] = useState(initialItemsPerPage);
   const [totalPages, setTotalPages] = useState(1);
@@ -152,12 +143,23 @@ export const Library = () => {
   const [batchEditOpen, setBatchEditOpen] = useState(false);
   const [versionManagementOpen, setVersionManagementOpen] = useState(false);
   const [versionManagingAudiobook, setVersionManagingAudiobook] = useState<Audiobook | null>(null);
-  const [availableAuthors, setAvailableAuthors] = useState<string[]>([]);
-  const [availableSeries, setAvailableSeries] = useState<string[]>([]);
-  const [availableGenres, setAvailableGenres] = useState<string[]>([]);
-  const [availableLanguages, setAvailableLanguages] = useState<string[]>([]);
-  const [availableTags, setAvailableTags] = useState<Array<{ tag: string; count: number }>>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  const {
+    filterOpen,
+    setFilterOpen,
+    filters,
+    handleFiltersChange: baseHandleFiltersChange,
+    selectedTags,
+    setSelectedTags,
+    handleTagFilterChange,
+    refreshTags,
+    availableAuthors,
+    availableSeries,
+    availableGenres,
+    availableLanguages,
+    availableTags,
+    getActiveFilterCount,
+  } = useLibraryFilters({ searchParams, onFiltersChange: () => setPage(1) });
   const [parsedSearch, setParsedSearch] = useState<ParsedSearch>(() => parseSearch(initialSearch));
   const [bulkTagDialogOpen, setBulkTagDialogOpen] = useState(false);
   const [bulkRatingDialogOpen, setBulkRatingDialogOpen] = useState(false);
@@ -262,24 +264,6 @@ export const Library = () => {
   const [bulkOrganizeError, setBulkOrganizeError] = useState<OrganizeErrorState | null>(null);
   const bulkOrganizeSnapshotRef = useRef<Map<string, Audiobook>>(new Map());
 
-
-  // Fetch all available tags on mount
-  useEffect(() => {
-    api.listAllUserTags().then((tags) => setAvailableTags(tags ?? [])).catch((_err) => {
-      console.error('Failed to load tags:', _err);
-    });
-  }, []);
-
-  const handleTagFilterChange = useCallback((tags: string[]) => {
-    setSelectedTags(tags);
-    setFilters((prev) => ({ ...prev, tags: tags.length > 0 ? tags : undefined }));
-  }, []);
-
-  const refreshTags = useCallback(() => {
-    api.listAllUserTags().then((tags) => setAvailableTags(tags ?? [])).catch((_err) => {
-      console.error('Failed to refresh tags:', _err);
-    });
-  }, []);
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -786,25 +770,6 @@ export const Library = () => {
       setImportFileInProgress(false);
     }
   };
-
-  // Load facets (genres, languages) + author/series names once on mount for filter sidebar.
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [facets, authors, series] = await Promise.all([
-          api.getBookFacets(),
-          api.getAuthors(),
-          api.getSeries(),
-        ]);
-        setAvailableGenres(facets.genres);
-        setAvailableLanguages(facets.languages);
-        setAvailableAuthors(authors.map((a) => a.name).filter(Boolean).sort());
-        setAvailableSeries(series.map((s) => s.name).filter(Boolean).sort());
-      } catch (e) {
-        console.error('Failed to load filter facets', e);
-      }
-    })();
-  }, []);
 
   // Load audiobooks when filters change
   useEffect(() => {
@@ -1412,10 +1377,7 @@ export const Library = () => {
     }
   };
 
-  const handleFiltersChange = (newFilters: FilterOptions) => {
-    setFilters(newFilters);
-    setPage(1); // Reset to first page on filter change
-  };
+  const handleFiltersChange = baseHandleFiltersChange;
 
   const handleSortChange = (newSort: SortField) => {
     setSortBy(newSort);
@@ -1427,10 +1389,6 @@ export const Library = () => {
   const handleColumnSortChange = (sortKey: string, order: 'asc' | 'desc') => {
     setSortBy(sortKey as SortField);
     setSortOrder(order === 'asc' ? SortOrder.Ascending : SortOrder.Descending);
-  };
-
-  const getActiveFilterCount = () => {
-    return Object.values(filters).filter((v) => v !== undefined && v !== '').length;
   };
 
   const libraryBookCount =
