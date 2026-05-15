@@ -1,0 +1,61 @@
+# file: .github/workflows/cleanup-rc-releases.yml
+# version: 1.0.0
+# guid: b7c8d9e0-f1a2-3b4c-5d6e-7f8a9b0c1d2e
+# last-edited: 2026-05-15
+
+name: Cleanup Old RC Releases
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: cleanup-rc-${{ github.event.release.tag_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup-old-rcs:
+    name: Keep latest 3 RCs for released version
+    # Only run when a stable (non-prerelease) release is published
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old RC releases for this version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          # Strip any -rc.N suffix to get the base version (e.g. v0.216.6)
+          BASE="${TAG%%-rc.*}"
+          echo "Published release: $TAG  →  base version: $BASE"
+
+          # Fetch all RC releases for this version series, sorted newest-first by RC number
+          RELEASES=$(gh release list --repo "$REPO" --limit 200 \
+            --json tagName,isPrerelease \
+            --jq --arg base "$BASE" \
+            '[.[] | select(.isPrerelease and (.tagName | test("^" + $base + "-rc\\.[0-9]+$")))]
+             | sort_by(.tagName | gsub(".*-rc\\."; "") | tonumber)
+             | reverse
+             | .[].tagName')
+
+          echo "RC releases found (newest first):"
+          echo "$RELEASES"
+
+          KEEP=3
+          COUNT=0
+          while IFS= read -r tag; do
+            [[ -z "$tag" ]] && continue
+            COUNT=$((COUNT + 1))
+            if (( COUNT > KEEP )); then
+              echo "Deleting: $tag"
+              gh release delete "$tag" --repo "$REPO" --yes --cleanup-tag
+            else
+              echo "Keeping:  $tag  (${COUNT}/${KEEP})"
+            fi
+          done <<< "$RELEASES"
+
+          echo "Done. Kept ${KEEP} (or fewer) RCs, deleted $((COUNT > KEEP ? COUNT - KEEP : 0))."
