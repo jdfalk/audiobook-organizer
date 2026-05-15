@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.74.0 -->
+<!-- version: 2.75.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-14 -->
 
@@ -8,6 +8,16 @@
 ## [Unreleased]
 
 ### Security
+
+#### May 15, 2026 — SEC-AUDIT-7b: Block SSRF in DownloadCoverArt
+
+Added `safeCoverDialContext` to `metadata/cover.go` — a custom `DialContext`
+hook that resolves the target hostname and rejects connections to RFC1918
+private ranges (10/8, 172.16/12, 192.168/16), loopback (127/8, ::1),
+and link-local (169.254/16, fe80::/10). Also added scheme validation
+(rejects `file://`, `ftp://`, etc.). Tests added for both the SSRF block
+and the scheme block. Production cover downloads from metadata APIs are
+unaffected since those resolve to public IPs.
 
 #### May 14, 2026 — SEC-AUDIT-7a/c/d/e: Structured logging + audit fixes
 
