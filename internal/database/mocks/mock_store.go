@@ -14157,62 +14157,6 @@ func (_c *MockBookFileStore_GetBookMetadataHashStats_Call) RunAndReturn(run func
 	return _c
 }
 
-// GetFilesWithFingerprintFailures provides a mock function for the type MockBookFileStore
-func (_mock *MockBookFileStore) GetFilesWithFingerprintFailures(reason string, limit, offset int) ([]database.BookFile, int64, error) {
-	ret := _mock.Called(reason, limit, offset)
-	if len(ret) == 0 {
-		panic("no return value specified for GetFilesWithFingerprintFailures")
-	}
-	var r0 []database.BookFile
-	var r1 int64
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(string, int, int) ([]database.BookFile, int64, error)); ok {
-		return returnFunc(reason, limit, offset)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string, int, int) []database.BookFile); ok {
-		r0 = returnFunc(reason, limit, offset)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]database.BookFile)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(string, int, int) int64); ok {
-		r1 = returnFunc(reason, limit, offset)
-	} else {
-		r1 = ret.Get(1).(int64)
-	}
-	if returnFunc, ok := ret.Get(2).(func(string, int, int) error); ok {
-		r2 = returnFunc(reason, limit, offset)
-	} else {
-		r2 = ret.Error(2)
-	}
-	return r0, r1, r2
-}
-
-// MockBookFileStore_GetFilesWithFingerprintFailures_Call is a *mock.Call
-type MockBookFileStore_GetFilesWithFingerprintFailures_Call struct {
-	*mock.Call
-}
-
-func (_e *MockBookFileStore_Expecter) GetFilesWithFingerprintFailures(reason, limit, offset interface{}) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
-	return &MockBookFileStore_GetFilesWithFingerprintFailures_Call{Call: _e.mock.On("GetFilesWithFingerprintFailures", reason, limit, offset)}
-}
-
-func (_c *MockBookFileStore_GetFilesWithFingerprintFailures_Call) Run(run func(string, int, int)) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
-	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(int), args[2].(int)) })
-	return _c
-}
-
-func (_c *MockBookFileStore_GetFilesWithFingerprintFailures_Call) Return(files []database.BookFile, total int64, err error) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
-	_c.Call.Return(files, total, err)
-	return _c
-}
-
-func (_c *MockBookFileStore_GetFilesWithFingerprintFailures_Call) RunAndReturn(run func(string, int, int) ([]database.BookFile, int64, error)) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // GetDuplicateFilesByHash provides a mock function for the type MockBookFileStore
 func (_mock *MockBookFileStore) GetDuplicateFilesByHash(limit int) ([]database.DuplicateFileGroup, error) {
 	ret := _mock.Called(limit)
@@ -14271,6 +14215,86 @@ func (_c *MockBookFileStore_GetDuplicateFilesByHash_Call) Return(duplicateFileGr
 }
 
 func (_c *MockBookFileStore_GetDuplicateFilesByHash_Call) RunAndReturn(run func(limit int) ([]database.DuplicateFileGroup, error)) *MockBookFileStore_GetDuplicateFilesByHash_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetFilesWithFingerprintFailures provides a mock function for the type MockBookFileStore
+func (_mock *MockBookFileStore) GetFilesWithFingerprintFailures(reason string, limit int, offset int) ([]database.BookFile, int64, error) {
+	ret := _mock.Called(reason, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFilesWithFingerprintFailures")
+	}
+
+	var r0 []database.BookFile
+	var r1 int64
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) ([]database.BookFile, int64, error)); ok {
+		return returnFunc(reason, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) []database.BookFile); ok {
+		r0 = returnFunc(reason, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.BookFile)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, int, int) int64); ok {
+		r1 = returnFunc(reason, limit, offset)
+	} else {
+		r1 = ret.Get(1).(int64)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, int, int) error); ok {
+		r2 = returnFunc(reason, limit, offset)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockBookFileStore_GetFilesWithFingerprintFailures_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetFilesWithFingerprintFailures'
+type MockBookFileStore_GetFilesWithFingerprintFailures_Call struct {
+	*mock.Call
+}
+
+// GetFilesWithFingerprintFailures is a helper method to define mock.On call
+//   - reason string
+//   - limit int
+//   - offset int
+func (_e *MockBookFileStore_Expecter) GetFilesWithFingerprintFailures(reason interface{}, limit interface{}, offset interface{}) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
+	return &MockBookFileStore_GetFilesWithFingerprintFailures_Call{Call: _e.mock.On("GetFilesWithFingerprintFailures", reason, limit, offset)}
+}
+
+func (_c *MockBookFileStore_GetFilesWithFingerprintFailures_Call) Run(run func(reason string, limit int, offset int)) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookFileStore_GetFilesWithFingerprintFailures_Call) Return(bookFiles []database.BookFile, n int64, err error) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
+	_c.Call.Return(bookFiles, n, err)
+	return _c
+}
+
+func (_c *MockBookFileStore_GetFilesWithFingerprintFailures_Call) RunAndReturn(run func(reason string, limit int, offset int) ([]database.BookFile, int64, error)) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -34986,62 +35010,6 @@ func (_c *MockStore_GetDuplicateBooksByMetadata_Call) RunAndReturn(run func(thre
 }
 
 // GetDuplicateFilesByHash provides a mock function for the type MockStore
-// GetFilesWithFingerprintFailures provides a mock function for the type MockStore
-func (_mock *MockStore) GetFilesWithFingerprintFailures(reason string, limit, offset int) ([]database.BookFile, int64, error) {
-	ret := _mock.Called(reason, limit, offset)
-	if len(ret) == 0 {
-		panic("no return value specified for GetFilesWithFingerprintFailures")
-	}
-	var r0 []database.BookFile
-	var r1 int64
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(string, int, int) ([]database.BookFile, int64, error)); ok {
-		return returnFunc(reason, limit, offset)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string, int, int) []database.BookFile); ok {
-		r0 = returnFunc(reason, limit, offset)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]database.BookFile)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(string, int, int) int64); ok {
-		r1 = returnFunc(reason, limit, offset)
-	} else {
-		r1 = ret.Get(1).(int64)
-	}
-	if returnFunc, ok := ret.Get(2).(func(string, int, int) error); ok {
-		r2 = returnFunc(reason, limit, offset)
-	} else {
-		r2 = ret.Error(2)
-	}
-	return r0, r1, r2
-}
-
-// MockStore_GetFilesWithFingerprintFailures_Call is a *mock.Call
-type MockStore_GetFilesWithFingerprintFailures_Call struct {
-	*mock.Call
-}
-
-func (_e *MockStore_Expecter) GetFilesWithFingerprintFailures(reason, limit, offset interface{}) *MockStore_GetFilesWithFingerprintFailures_Call {
-	return &MockStore_GetFilesWithFingerprintFailures_Call{Call: _e.mock.On("GetFilesWithFingerprintFailures", reason, limit, offset)}
-}
-
-func (_c *MockStore_GetFilesWithFingerprintFailures_Call) Run(run func(string, int, int)) *MockStore_GetFilesWithFingerprintFailures_Call {
-	_c.Call.Run(func(args mock.Arguments) { run(args[0].(string), args[1].(int), args[2].(int)) })
-	return _c
-}
-
-func (_c *MockStore_GetFilesWithFingerprintFailures_Call) Return(files []database.BookFile, total int64, err error) *MockStore_GetFilesWithFingerprintFailures_Call {
-	_c.Call.Return(files, total, err)
-	return _c
-}
-
-func (_c *MockStore_GetFilesWithFingerprintFailures_Call) RunAndReturn(run func(string, int, int) ([]database.BookFile, int64, error)) *MockStore_GetFilesWithFingerprintFailures_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 func (_mock *MockStore) GetDuplicateFilesByHash(limit int) ([]database.DuplicateFileGroup, error) {
 	ret := _mock.Called(limit)
 
@@ -35161,6 +35129,86 @@ func (_c *MockStore_GetExternalIDsForBook_Call) Return(externalIDMappings []data
 }
 
 func (_c *MockStore_GetExternalIDsForBook_Call) RunAndReturn(run func(bookID string) ([]database.ExternalIDMapping, error)) *MockStore_GetExternalIDsForBook_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetFilesWithFingerprintFailures provides a mock function for the type MockStore
+func (_mock *MockStore) GetFilesWithFingerprintFailures(reason string, limit int, offset int) ([]database.BookFile, int64, error) {
+	ret := _mock.Called(reason, limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFilesWithFingerprintFailures")
+	}
+
+	var r0 []database.BookFile
+	var r1 int64
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) ([]database.BookFile, int64, error)); ok {
+		return returnFunc(reason, limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, int, int) []database.BookFile); ok {
+		r0 = returnFunc(reason, limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.BookFile)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, int, int) int64); ok {
+		r1 = returnFunc(reason, limit, offset)
+	} else {
+		r1 = ret.Get(1).(int64)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, int, int) error); ok {
+		r2 = returnFunc(reason, limit, offset)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockStore_GetFilesWithFingerprintFailures_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetFilesWithFingerprintFailures'
+type MockStore_GetFilesWithFingerprintFailures_Call struct {
+	*mock.Call
+}
+
+// GetFilesWithFingerprintFailures is a helper method to define mock.On call
+//   - reason string
+//   - limit int
+//   - offset int
+func (_e *MockStore_Expecter) GetFilesWithFingerprintFailures(reason interface{}, limit interface{}, offset interface{}) *MockStore_GetFilesWithFingerprintFailures_Call {
+	return &MockStore_GetFilesWithFingerprintFailures_Call{Call: _e.mock.On("GetFilesWithFingerprintFailures", reason, limit, offset)}
+}
+
+func (_c *MockStore_GetFilesWithFingerprintFailures_Call) Run(run func(reason string, limit int, offset int)) *MockStore_GetFilesWithFingerprintFailures_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetFilesWithFingerprintFailures_Call) Return(bookFiles []database.BookFile, n int64, err error) *MockStore_GetFilesWithFingerprintFailures_Call {
+	_c.Call.Return(bookFiles, n, err)
+	return _c
+}
+
+func (_c *MockStore_GetFilesWithFingerprintFailures_Call) RunAndReturn(run func(reason string, limit int, offset int) ([]database.BookFile, int64, error)) *MockStore_GetFilesWithFingerprintFailures_Call {
 	_c.Call.Return(run)
 	return _c
 }
