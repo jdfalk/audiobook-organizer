@@ -35,3 +35,6 @@ func (p *Plugin) runImport(ctx context.Context, _ json.RawMessage, reporter sdk.
 	// This should handle parameterized imports (genre, selection, etc.).
 	return nil
 }
+
+// Ensure methods are referenced so staticcheck doesn't flag them as unused (U1000).
+var _ = []interface{}{(*Plugin).importDef, (*Plugin).runImport}
