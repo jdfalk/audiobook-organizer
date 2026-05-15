@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.36.0 -->
+<!-- version: 8.37.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-14 -->
 
@@ -223,12 +223,7 @@ incrementally:
 
 - [x] **SEC-AUDIT-7a** Fix clear-text logging — Converted all `log.Printf` in `maintenance_fixups.go` to structured `slog.Info`/`slog.Warn` with named key-value attrs (PR #957). `cmd/root.go` uses `fmt.Printf` for CLI output, not a logging sink — no change needed (false positive).
 
-- [ ] **SEC-AUDIT-7b** Fix SSRF via URL validation (4 alerts: #587, #467, #458, #232)
-  - **Priority:** P1
-  - **Effort:** 4 hours
-  - **Files:** `internal/server/covers.go`, `internal/deluge/client.go`, `internal/plugins/webhook/plugin.go`, `internal/metadata/cover.go`
-  - **Action:** Whitelist allowed domains, block private IPs
-  - **Plan:** [`implementation-plan.md#task-72`](docs/security/audit-2026-05-03/implementation-plan.md#task-72-fix-request-forgery-4-alerts)
+- [x] **SEC-AUDIT-7b** Fix SSRF in `DownloadCoverArt` — Added `safeCoverDialContext` with RFC1918/loopback/link-local IP blocking and scheme validation (`http`/`https` only) to `metadata/cover.go` (PR #958). `server/covers.go` already had `IsAllowedCoverSource` domain allowlist. `deluge/client.go` + `plugins/webhook/plugin.go` connect to admin-configured endpoints (not SSRF-relevant).
 
 - [x] **SEC-AUDIT-7c** Fix uncontrolled allocation — `MaxScanBufferBytes` cap added to `scanner.go` in PR #768; buffer capped at `hashChunkSize` (1 MiB).
 
