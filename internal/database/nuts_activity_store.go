@@ -1,5 +1,5 @@
 // file: internal/database/nuts_activity_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-0003-cdef-000000000003
 
 package database
@@ -540,6 +540,14 @@ func (s *NutsActivityStore) CompactByDay(ctx context.Context, olderThan time.Tim
 			return result, fmt.Errorf("compact parse date: %w", err)
 		}
 
+		// Populate Details directly so it survives the ActivityEntry round-trip.
+		// The digestWithDetails workaround stored details under "digest_details"
+		// at the top level, which json.Unmarshal into ActivityEntry silently
+		// dropped — leaving details nil on every query.
+		var ddMap map[string]any
+		if mapErr := json.Unmarshal(detailsBytes, &ddMap); mapErr != nil {
+			return result, fmt.Errorf("compact unmarshal dd map: %w", mapErr)
+		}
 		digest := ActivityEntry{
 			ID:        s.counter.Add(1),
 			Timestamp: startOfDay,
@@ -548,24 +556,12 @@ func (s *NutsActivityStore) CompactByDay(ctx context.Context, olderThan time.Tim
 			Level:     "info",
 			Source:    "compaction",
 			Summary:   fmt.Sprintf("Daily digest for %s (%d entries)", dateKey, dd.OriginalCount),
-			Details:   map[string]any{"_raw": string(detailsBytes)},
+			Details:   ddMap,
 		}
-		// Store DigestDetails separately in details for proper JSON retrieval.
-		digest.Details = nil
 		digestKey := actTimeKey(startOfDay, ulid.Make().String())
 		digestBytes, err := json.Marshal(digest)
 		if err != nil {
 			return result, fmt.Errorf("compact marshal digest: %w", err)
-		}
-		// Re-inject details JSON inline.
-		type digestWithDetails struct {
-			ActivityEntry
-			DigestDetails json.RawMessage `json:"digest_details,omitempty"`
-		}
-		dwd := digestWithDetails{ActivityEntry: digest, DigestDetails: detailsBytes}
-		digestBytes, err = json.Marshal(dwd)
-		if err != nil {
-			return result, fmt.Errorf("compact marshal digest+details: %w", err)
 		}
 
 		var deletedCount int
@@ -741,6 +737,7 @@ func (s *NutsActivityStore) findExistingDigest(dateKey string) (DigestDetails, [
 		for i, v := range vals {
 			var row struct {
 				ActivityEntry
+				// Legacy field: digest details were stored here before the fix.
 				DigestDetails json.RawMessage `json:"digest_details,omitempty"`
 			}
 			if jsonErr := json.Unmarshal(v, &row); jsonErr != nil {
@@ -748,7 +745,13 @@ func (s *NutsActivityStore) findExistingDigest(dateKey string) (DigestDetails, [
 			}
 			if row.ActivityEntry.Type == "daily_digest" {
 				if row.DigestDetails != nil {
+					// Old format: digest_details at top level.
 					_ = json.Unmarshal(row.DigestDetails, &foundDD)
+				} else if row.ActivityEntry.Details != nil {
+					// New format: stored in the ActivityEntry.Details map.
+					if b, merr := json.Marshal(row.ActivityEntry.Details); merr == nil {
+						_ = json.Unmarshal(b, &foundDD)
+					}
 				}
 				foundKey = keys[i]
 				return nil // take the first one

@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.10.0
+// version: 2.11.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -176,7 +176,7 @@ export default function ActivityLog() {
   const [compactAnchor, setCompactAnchor] = useState<null | HTMLElement>(null);
   const [compacting, setCompacting] = useState(false);
   const [customCompactDays, setCustomCompactDays] = useState('');
-  const [expandedDigests, setExpandedDigests] = useState<Set<number>>(new Set());
+  const [expandedDigests, setExpandedDigests] = useState<Set<string>>(new Set());
 
   // Revert dialog
   const [revertEntry, setRevertEntry] = useState<ActivityEntry | null>(null);
@@ -1274,7 +1274,7 @@ export default function ActivityLog() {
                   );
                 }
                 if (entry.tier === 'digest') {
-                  const isExpanded = expandedDigests.has(Number(entry.id));
+                  const isExpanded = expandedDigests.has(String(entry.id));
                   const details = entry.details as {
                     date?: string;
                     original_count?: number;
@@ -1294,8 +1294,9 @@ export default function ActivityLog() {
                         onClick={() => {
                           setExpandedDigests((prev) => {
                             const next = new Set(prev);
-                            if (next.has(Number(entry.id))) next.delete(Number(entry.id));
-                            else next.add(Number(entry.id));
+                            const key = String(entry.id);
+                            if (next.has(key)) next.delete(key);
+                            else next.add(key);
                             return next;
                           });
                         }}
