@@ -1,6 +1,7 @@
 // file: internal/itunes/itl.go
-// version: 1.5.0
+// version: 1.5.1
 // guid: 7f2a8b3c-4d5e-6f01-a2b3-c4d5e6f7a8b9
+// last-edited: 2026-05-15
 
 package itunes
 
@@ -452,6 +453,10 @@ func parseHdfmHeader(data []byte) (*hdfmHeader, error) {
 	}
 
 	var remainder []byte
+	const maxITLFieldSize = uint32(256 * 1024 * 1024) // 256 MiB sanity cap
+	if headerLen > maxITLFieldSize {
+		return nil, fmt.Errorf("hdfm header length %d exceeds max %d", headerLen, maxITLFieldSize)
+	}
 	if off < int(headerLen) {
 		remainder = make([]byte, int(headerLen)-off)
 		copy(remainder, data[off:int(headerLen)])
