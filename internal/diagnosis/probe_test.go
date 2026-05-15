@@ -1,6 +1,7 @@
 // file: internal/diagnosis/probe_test.go
 // version: 1.0.0
 // guid: e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b
+// last-edited: 2026-05-15
 
 package diagnosis
 
