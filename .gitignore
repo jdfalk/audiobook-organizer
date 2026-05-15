@@ -282,11 +282,6 @@ docs/superpowers/
 !docs/superpowers/fleet-tasks/
 !docs/superpowers/fleet-tasks/*
 
-.claude/notes/
-.claude/state/
-.claude/worktrees/
-.claude/settings.local.json
-.claude/scheduled_tasks.lock
 .copilot/
 .aider*
 .cursor/
