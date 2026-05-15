@@ -11,21 +11,7 @@ import (
 	"testing"
 )
 
-// writeScript creates a small shell script in dir that prints output and exits code.
-func writeScript(t *testing.T, dir, name, output string, exitCode int) string {
-	t.Helper()
-	path := filepath.Join(dir, name)
-	code := exitCode
-	script := "#!/bin/sh\n"
-	if output != "" {
-		script += "printf '%s' " + "'" + output + "'" + "\n"
-	}
-	script += "exit " + string(rune('0'+code)) + "\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatalf("writeScript: %v", err)
-	}
-	return path
-}
+// writeScript removed — helper unused; removed to satisfy staticcheck U1000
 
 func TestClassify_EmptyFile(t *testing.T) {
 	d := FileDiagnostic{IsEmpty: true}
