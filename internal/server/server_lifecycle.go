@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.14.0
+// version: 1.15.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-11
+// last-edited: 2026-05-15
 
 package server
 
@@ -380,7 +380,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 	s.bgWG.Add(1)
 	go func() {
 		defer s.bgWG.Done()
-		s.backfillAcoustIDs()
+		s.backfillAcoustIDs(s.bgCtx)
 	}()
 
 	// PERF-VERSIONS: write the book:versiongroup:<gid>:<id> secondary
