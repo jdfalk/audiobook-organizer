@@ -69,7 +69,7 @@ func TestGoogleBooksClient_SearchByTitle(t *testing.T) {
 	if r.PublishYear != 1937 {
 		t.Errorf("expected year 1937, got %d", r.PublishYear)
 	}
-	if r.CoverURL != "http://example.com/cover.jpg" {
+	if r.CoverURL != "https://example.com/cover.jpg" {
 		t.Errorf("expected cover URL, got %q", r.CoverURL)
 	}
 }

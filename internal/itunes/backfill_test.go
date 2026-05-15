@@ -34,11 +34,19 @@ func (m *MockBackfillStore) GetAllBooks(limit, offset int) ([]database.Book, err
 	if m.hasError {
 		return nil, errMockFailure
 	}
-	var result []database.Book
+	var all []database.Book
 	for _, b := range m.books {
-		result = append(result, b)
+		all = append(all, b)
 	}
-	return result, nil
+	// Simulate pagination via limit/offset to allow backfill loop to terminate.
+	if offset >= len(all) {
+		return []database.Book{}, nil
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[offset:end], nil
 }
 
 func (m *MockBackfillStore) GetBookFiles(bookID string) ([]database.BookFile, error) {
