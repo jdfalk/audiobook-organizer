@@ -1,5 +1,6 @@
 // file: scripts/record_demo.js
-// version: 2.2.0
+// version: 2.2.1
+// last-edited: 2026-05-15
 // Playwright script to automatically record end-to-end demo with video - Phase 2 (Interactive)
 //
 // Phase 2 Approach:
@@ -21,11 +22,10 @@ const OUTPUT_DIR = process.env.OUTPUT_DIR || './demo_recordings';
 const DEMO_VIDEO_PATH = path.join(OUTPUT_DIR, 'audiobook-demo.webm');
 const SCREENSHOTS_DIR = path.join(OUTPUT_DIR, 'screenshots');
 
-// Create axios instance with HTTPS support for self-signed certificates
-const https = require('https');
-const axiosInstance = axios.create({
-  httpsAgent: new https.Agent({ rejectUnauthorized: false })
-});
+// Create axios instance. Do NOT disable TLS verification unconditionally.
+// For local development with self-signed certificates, set NODE_EXTRA_CA_CERTS to point
+// to a CA bundle containing the dev certificate(s).
+const axiosInstance = axios.create();
 
 // Ensure output directories exist
 if (!fs.existsSync(OUTPUT_DIR)) {
