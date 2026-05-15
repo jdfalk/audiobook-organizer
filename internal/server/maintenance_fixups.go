@@ -1,5 +1,5 @@
 // file: internal/server/maintenance_fixups.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 // last-edited: 2026-05-02
 
@@ -8,7 +8,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,7 +83,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 		}
 		entries, err := os.ReadDir(rootDir)
 		if err != nil {
-			log.Printf("[WARN] wipe: can't read root dir %q: %v", rootDir, err)
+			slog.Warn("wipe: can't read root dir", "path", rootDir, "error", err)
 		} else {
 			var count int64
 			for _, e := range entries {
@@ -96,10 +96,10 @@ func (s *Server) handleWipe(c *gin.Context) {
 					continue
 				}
 				fullPath := filepath.Join(rootDir, e.Name())
-				log.Printf("[INFO] wipe: organized_folders: %s %q", dryRunLabel(dryRun), fullPath)
+				slog.Info("wipe: organized_folders", "action", dryRunLabel(dryRun), "path", fullPath)
 				if !dryRun {
 					if err := os.RemoveAll(fullPath); err != nil {
-						log.Printf("[WARN] wipe: RemoveAll %q: %v", fullPath, err)
+						slog.Warn("wipe: RemoveAll failed", "path", fullPath, "error", err)
 					}
 				}
 				count++
@@ -118,13 +118,13 @@ func (s *Server) handleWipe(c *gin.Context) {
 		for {
 			books, err := store.GetAllBooks(batchSize, offset)
 			if err != nil {
-				log.Printf("[WARN] wipe: files: GetAllBooks: %v", err)
+				slog.Warn("wipe: files: GetAllBooks failed", "error", err)
 				break
 			}
 			for _, book := range books {
 				files, ferr := store.GetBookFiles(book.ID)
 				if ferr != nil {
-					log.Printf("[WARN] wipe: files: GetBookFiles %s: %v", book.ID, ferr)
+					slog.Warn("wipe: files: GetBookFiles failed", "book_id", book.ID, "error", ferr)
 					continue
 				}
 				for _, bf := range files {
@@ -135,10 +135,10 @@ func (s *Server) handleWipe(c *gin.Context) {
 					if !strings.HasPrefix(filepath.Clean(bf.FilePath), filepath.Clean(rootDir)) {
 						continue
 					}
-					log.Printf("[INFO] wipe: files: %s %q", dryRunLabel(dryRun), bf.FilePath)
+					slog.Info("wipe: files", "action", dryRunLabel(dryRun), "path", bf.FilePath)
 					if !dryRun {
 						if rerr := os.Remove(bf.FilePath); rerr != nil && !os.IsNotExist(rerr) {
-							log.Printf("[WARN] wipe: os.Remove %q: %v", bf.FilePath, rerr)
+							slog.Warn("wipe: os.Remove failed", "path", bf.FilePath, "error", rerr)
 						}
 					}
 					count++
@@ -158,7 +158,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["book_files"] {
 		n, err := wipeBookFiles(store, dryRun)
 		if err != nil {
-			log.Printf("[WARN] wipe: book_files: %v", err)
+			slog.Warn("wipe: book_files failed", "error", err)
 		}
 		results["book_files"] = n
 	}
@@ -167,7 +167,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["segments"] {
 		n, err := wipeSegments(store, dryRun)
 		if err != nil {
-			log.Printf("[WARN] wipe: segments: %v", err)
+			slog.Warn("wipe: segments failed", "error", err)
 		}
 		results["segments"] = n
 	}
@@ -176,7 +176,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["books"] {
 		n, err := wipeBooks(store, dryRun)
 		if err != nil {
-			log.Printf("[WARN] wipe: books: %v", err)
+			slog.Warn("wipe: books failed", "error", err)
 		}
 		results["books"] = n
 	}
@@ -185,7 +185,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["authors"] {
 		n, err := wipeAuthors(store, dryRun)
 		if err != nil {
-			log.Printf("[WARN] wipe: authors: %v", err)
+			slog.Warn("wipe: authors failed", "error", err)
 		}
 		results["authors"] = n
 	}
@@ -194,7 +194,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["series"] {
 		n, err := wipeSeries(store, dryRun)
 		if err != nil {
-			log.Printf("[WARN] wipe: series: %v", err)
+			slog.Warn("wipe: series failed", "error", err)
 		}
 		results["series"] = n
 	}
@@ -203,7 +203,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["external_ids"] {
 		n, err := wipeExternalIDs(store, dryRun)
 		if err != nil {
-			log.Printf("[WARN] wipe: external_ids: %v", err)
+			slog.Warn("wipe: external_ids failed", "error", err)
 		}
 		results["external_ids"] = n
 	}
@@ -213,15 +213,15 @@ func (s *Server) handleWipe(c *gin.Context) {
 		if s.activityService != nil {
 			n, err := wipeActivity(s.activityService, dryRun)
 			if err != nil {
-				log.Printf("[WARN] wipe: activity: %v", err)
+				slog.Warn("wipe: activity failed", "error", err)
 			}
 			results["activity"] = n
 		} else {
-			log.Printf("[INFO] wipe: activity: activityService not initialized, skipping")
+			slog.Info("wipe: activity: activityService not initialized, skipping")
 		}
 	}
 
-	log.Printf("[INFO] wipe: complete dry_run=%v targets=%v results=%v", dryRun, req.Targets, results)
+	slog.Info("wipe: complete", "dry_run", dryRun, "targets", req.Targets, "results", results)
 	httputil.RespondWithOK(c, struct {
 		DryRun  bool             `json:"dry_run"`
 		Results map[string]int64 `json:"results"`
@@ -260,7 +260,7 @@ func wipeBookFiles(store maintenanceStore, dryRun bool) (int64, error) {
 			}
 			for _, book := range books {
 				if err := store.DeleteBookFilesForBook(book.ID); err != nil {
-					log.Printf("[WARN] wipeBookFiles: DeleteBookFilesForBook %s: %v", book.ID, err)
+					slog.Warn("wipeBookFiles: DeleteBookFilesForBook failed", "book_id", book.ID, "error", err)
 				}
 				count++ // approximate
 			}

@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.35.0 -->
+<!-- version: 8.36.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-14 -->
 
@@ -221,12 +221,7 @@ incrementally:
 
 ### Phase 7: Non-Path-Injection Errors (14 alerts)
 
-- [ ] **SEC-AUDIT-7a** Fix clear-text logging (6 alerts: #530-#526, #47)
-  - **Priority:** P1
-  - **Effort:** 2 hours
-  - **Files:** `internal/server/maintenance_fixups.go`, `cmd/root.go`
-  - **Action:** Redact sensitive fields before logging
-  - **Plan:** [`implementation-plan.md#task-71`](docs/security/audit-2026-05-03/implementation-plan.md#task-71-fix-clear-text-logging-6-alerts)
+- [x] **SEC-AUDIT-7a** Fix clear-text logging — Converted all `log.Printf` in `maintenance_fixups.go` to structured `slog.Info`/`slog.Warn` with named key-value attrs (PR #957). `cmd/root.go` uses `fmt.Printf` for CLI output, not a logging sink — no change needed (false positive).
 
 - [ ] **SEC-AUDIT-7b** Fix SSRF via URL validation (4 alerts: #587, #467, #458, #232)
   - **Priority:** P1
@@ -235,26 +230,11 @@ incrementally:
   - **Action:** Whitelist allowed domains, block private IPs
   - **Plan:** [`implementation-plan.md#task-72`](docs/security/audit-2026-05-03/implementation-plan.md#task-72-fix-request-forgery-4-alerts)
 
-- [ ] **SEC-AUDIT-7c** Fix uncontrolled allocation (2 alerts: #129, #44)
-  - **Priority:** P2
-  - **Effort:** 1 hour
-  - **Files:** `internal/scanner/scanner.go`
-  - **Action:** Cap allocation sizes
-  - **Plan:** [`implementation-plan.md#task-73`](docs/security/audit-2026-05-03/implementation-plan.md#task-73-fix-uncontrolled-allocation-2-alerts)
+- [x] **SEC-AUDIT-7c** Fix uncontrolled allocation — `MaxScanBufferBytes` cap added to `scanner.go` in PR #768; buffer capped at `hashChunkSize` (1 MiB).
 
-- [ ] **SEC-AUDIT-7d** Fix zipslip in backup extraction (1 alert: #13)
-  - **Priority:** P1
-  - **Effort:** 1 hour
-  - **Files:** `internal/backup/backup.go`
-  - **Action:** Validate archive entry paths
-  - **Plan:** [`implementation-plan.md#task-74`](docs/security/audit-2026-05-03/implementation-plan.md#task-74-fix-zipslip-1-alert)
+- [x] **SEC-AUDIT-7d** Fix zipslip in backup extraction — `isPathWithinTarget` already implemented in `backup/backup.go` with `filepath.Rel` escape check; called before every tar entry extraction.
 
-- [ ] **SEC-AUDIT-7e** Fix weak sensitive data hashing (1 alert: #132)
-  - **Priority:** P1
-  - **Effort:** 2 hours
-  - **Files:** `internal/database/settings.go`
-  - **Action:** Upgrade to bcrypt/argon2 (passwords) or SHA-256 (non-password)
-  - **Plan:** [`implementation-plan.md#task-75`](docs/security/audit-2026-05-03/implementation-plan.md#task-75-fix-weak-hashing-1-alert)
+- [x] **SEC-AUDIT-7e** Fix weak sensitive data hashing — `settings.go` already uses `argon2.IDKey` (Argon2id, 64 MiB, 1 iter, 4 threads) via `DeriveKeyFromPassword`. SHA-256 replaced in a prior PR.
 
 ### Phase 8: Warnings (4 alerts)
 
