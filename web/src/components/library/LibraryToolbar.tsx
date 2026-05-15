@@ -1,7 +1,7 @@
 // file: web/src/components/library/LibraryToolbar.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
-// last-edited: 2026-05-11
+// last-edited: 2026-05-15
 
 import {
   Typography,
@@ -155,6 +155,7 @@ export const LibraryToolbar = ({
           <Button variant="outlined" size="small" startIcon={organizeRunning ? <CircularProgress size={16} /> : undefined} disabled={organizeRunning} onClick={onOrganizeLibrary}>{organizeRunning ? 'Organizing…' : 'Organize Library'}</Button>
           <Button variant="outlined" size="small" startIcon={activeScanOp !== null ? <CircularProgress size={16} /> : <RefreshIcon />} disabled={activeScanOp !== null} onClick={onFullRescan}>{activeScanOp !== null ? 'Scanning…' : 'Full Rescan'}</Button>
           <Button variant="outlined" size="small" onClick={onFetchAllUnmatched}>Fetch Unmatched</Button>
+          <Button variant="outlined" size="small" onClick={onResumeReview} title="Open review dialog for books with cached candidates pending review">Review Unmatched</Button>
           <Button startIcon={<DeleteSweepIcon />} onClick={onPurgeOpen} variant="outlined" size="small" color="secondary" disabled={softDeletedCount === 0}>Purge Deleted{softDeletedCount > 0 ? ` (${softDeletedCount})` : ''}</Button>
         </Stack>
       )}
