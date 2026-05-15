@@ -1,4 +1,4 @@
-# file: .github/codeql/models/go-sanitizers.yml
+# file: .github/codeql/models/go-sanitizers.model.yml
 # version: 1.0.0
 # guid: 9d8c7b6a-5e4f-3d2c-1b0a-9e8f7d6c5b4a
 # last-edited: 2026-05-15
