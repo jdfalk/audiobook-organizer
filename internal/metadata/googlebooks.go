@@ -1,5 +1,5 @@
 // file: internal/metadata/googlebooks.go
-// version: 1.3.1
+// version: 1.3.2
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-f2a3b4c5d6e7
 
 package metadata
@@ -147,7 +147,7 @@ func (c *GoogleBooksClient) search(ctx context.Context, escapedQuery string) ([]
 			}
 		}
 		if vi.ImageLinks != nil && vi.ImageLinks.Thumbnail != "" {
-			meta.CoverURL = vi.ImageLinks.Thumbnail
+			meta.CoverURL = strings.Replace(vi.ImageLinks.Thumbnail, "http://", "https://", 1)
 		}
 		if vi.AverageRating > 0 {
 			meta.GoogleRatingAverage = vi.AverageRating
