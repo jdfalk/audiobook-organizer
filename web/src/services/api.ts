@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.26.0
+// version: 2.27.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-11
 
@@ -1606,7 +1606,8 @@ export async function getOperationLogs(id: string): Promise<OperationLog[]> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to fetch operation logs');
   }
-  const data = await response.json();
+  const body = await response.json();
+  const data = body.data ?? body;
   return data.items || data.logs || [];
 }
 
