@@ -1,5 +1,5 @@
 // file: internal/server/filesystem_handlers.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: 565db679-19ba-4518-b63e-6892663be41b
 // last-edited: 2026-05-10
 //
@@ -12,7 +12,7 @@ package server
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -58,7 +58,7 @@ func (s *Server) getHomeDirectory(c *gin.Context) {
 
 func (s *Server) browseFilesystem(c *gin.Context) {
 	path := c.Query("path")
-	result, err := s.filesystemService.BrowseDirectory(path)
+	result, err := s.filesystemService.BrowseDirectory(c.Request.Context(), path)
 	if err != nil {
 		if errors.Is(err, fileops.ErrPathNotAllowed) {
 			httputil.RespondWithForbidden(c, err.Error())
@@ -78,7 +78,7 @@ func (s *Server) createExclusion(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
-	if err := s.filesystemService.CreateExclusion(req.Path); err != nil {
+	if err := s.filesystemService.CreateExclusion(c.Request.Context(), req.Path); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
@@ -93,7 +93,7 @@ func (s *Server) removeExclusion(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
-	if err := s.filesystemService.RemoveExclusion(req.Path); err != nil {
+	if err := s.filesystemService.RemoveExclusion(c.Request.Context(), req.Path); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
 		return
 	}
@@ -206,7 +206,7 @@ func (s *Server) addImportPath(c *gin.Context) {
 							}
 						}
 					} else if config.AppConfig.AutoOrganize && config.AppConfig.RootDir == "" {
-						log.Printf("auto-organize enabled but root_dir not set")
+						slog.Warn("auto-organize enabled but root_dir not set")
 					}
 				}
 				folder.BookCount = len(books)
