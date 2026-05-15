@@ -1,5 +1,5 @@
 // file: internal/metadata/audible_test.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b8c7d6e5-f4a3-2b1c-0d9e-8f7a6b5c4d3e
 
 package metadata
@@ -7,6 +7,7 @@ package metadata
 import (
 	json "encoding/json/v2"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -152,6 +153,60 @@ func TestAudibleClient_HTMLStripping(t *testing.T) {
 	}
 	if results[0].Description != "Hello world" {
 		t.Errorf("description: got %q, want 'Hello world'", results[0].Description)
+	}
+}
+
+// TestAudibleClient_StringRating covers the Audible API quirk where
+// display_average_rating is returned as a JSON string ("4.5") rather than a
+// JSON number. encoding/json/v2 is strict about types, so flexFloat64 is needed.
+func TestAudibleClient_StringRating(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate real Audible response with string-encoded rating
+		fmt.Fprint(w, `{
+			"products": [{
+				"asin": "B001",
+				"title": "Test Book",
+				"rating": {
+					"num_reviews": 500,
+					"overall_distribution": {
+						"display_average_rating": "4.5",
+						"num_ratings": 1200
+					},
+					"performance_distribution": {
+						"display_average_rating": "4.7",
+						"num_ratings": 1100
+					},
+					"story_distribution": {
+						"display_average_rating": "4.3",
+						"num_ratings": 1050
+					}
+				}
+			}],
+			"total_results": 1
+		}`)
+	}))
+	defer server.Close()
+
+	client := NewAudibleClientWithBaseURL(server.URL)
+	results, err := client.SearchByTitle(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("unexpected error with string-encoded rating: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	r := results[0]
+	if r.AudibleRatingOverall != 4.5 {
+		t.Errorf("overall rating: got %v, want 4.5", r.AudibleRatingOverall)
+	}
+	if r.AudibleRatingPerformance != 4.7 {
+		t.Errorf("performance rating: got %v, want 4.7", r.AudibleRatingPerformance)
+	}
+	if r.AudibleRatingStory != 4.3 {
+		t.Errorf("story rating: got %v, want 4.3", r.AudibleRatingStory)
+	}
+	if r.AudibleRatingCount != 1200 {
+		t.Errorf("rating count: got %d, want 1200", r.AudibleRatingCount)
 	}
 }
 
