@@ -242,7 +242,7 @@ incrementally:
 
 ### Phase 9: Dependabot
 
-- [ ] **SEC-AUDIT-9** Bump follow-redirects to 1.16.0+ (1 alert: #27, GHSA-r4q5-vmmm-2653)
+- [x] **SEC-AUDIT-9** Bump follow-redirects to 1.16.0+ (1 alert: #27, GHSA-r4q5-vmmm-2653)
   - **Priority:** P2
   - **Effort:** 0.5 hours
   - **Files:** `web/package-lock.json`
