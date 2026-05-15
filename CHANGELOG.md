@@ -1,11 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.72.0 -->
+<!-- version: 2.73.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-14 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Chores
+
+#### May 14, 2026 — CTX-3: Thread context into filesystem service handlers
+
+Added `ctx context.Context` to `FilesystemService.BrowseDirectory`,
+`CreateExclusion`, and `RemoveExclusion`; HTTP handlers now pass
+`c.Request.Context()` down. Also converted the stray `log.Printf` in
+`filesystem_handlers.go` to `slog.Warn`. CTX-1/2 were already done
+(verified). SEC-4 and FE-4 confirmed done via audit.
 
 ### Performance
 

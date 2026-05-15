@@ -1,11 +1,12 @@
 // file: internal/fileops/service.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
 // last-edited: 2026-05-01
 
 package fileops
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -80,7 +81,7 @@ type BrowseResult struct {
 	DiskInfo map[string]any `json:"disk_info"`
 }
 
-func (fs *FilesystemService) BrowseDirectory(path string) (*BrowseResult, error) {
+func (fs *FilesystemService) BrowseDirectory(_ context.Context, path string) (*BrowseResult, error) {
 	if path == "" {
 		return nil, fmt.Errorf("path is required")
 	}
@@ -153,7 +154,7 @@ func (fs *FilesystemService) BrowseDirectory(path string) (*BrowseResult, error)
 	}, nil
 }
 
-func (fs *FilesystemService) CreateExclusion(path string) error {
+func (fs *FilesystemService) CreateExclusion(_ context.Context, path string) error {
 	if path == "" {
 		return fmt.Errorf("path is required")
 	}
@@ -176,7 +177,7 @@ func (fs *FilesystemService) CreateExclusion(path string) error {
 	return os.WriteFile(excludeFile, []byte(""), 0644)
 }
 
-func (fs *FilesystemService) RemoveExclusion(path string) error {
+func (fs *FilesystemService) RemoveExclusion(_ context.Context, path string) error {
 	if path == "" {
 		return fmt.Errorf("path is required")
 	}
