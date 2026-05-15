@@ -279,6 +279,9 @@ docs/reports/
 # >>> jdfalk managed ignore block (sync-gitignore.py) >>>
 # AI agent scratch / state (may contain PII, machine paths, secrets)
 docs/superpowers/
+!docs/superpowers/fleet-tasks/
+!docs/superpowers/fleet-tasks/*
+
 .claude/notes/
 .claude/state/
 .claude/worktrees/
