@@ -1,6 +1,7 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.45.0
+// version: 1.45.1
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
+// last-edited: 2026-05-15
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -1873,15 +1874,121 @@ export function Settings() {
   const sanitizeImportPayload = (
     payload: Partial<api.Config>
   ): Partial<api.Config> => {
-    const cleaned = { ...payload };
-    delete cleaned.database_type;
-    delete cleaned.enable_sqlite;
-    if (
-      typeof cleaned.openai_api_key === 'string' &&
-      cleaned.openai_api_key.includes('***')
-    ) {
-      delete cleaned.openai_api_key;
+    const allowed = new Set([
+      'root_dir', 'playlist_dir', 'organization_strategy', 'scan_on_startup', 'auto_organize',
+      'folder_naming_pattern', 'file_naming_pattern', 'create_backups', 'supported_extensions',
+      'exclude_patterns', 'enable_disk_quota', 'disk_quota_percent', 'enable_user_quotas',
+      'default_user_quota_gb', 'auto_fetch_metadata', 'enable_ai_parsing',
+      'metadata_llm_scoring_enabled', 'openai_api_key', 'metadata_sources', 'language',
+      'concurrent_scans','memory_limit_type','cache_size','cache_invalidate_on_book_update',
+      'metadata_fetch_cache_ttl_days','memory_limit_percent','memory_limit_mb',
+      'purge_soft_deleted_after_days','purge_soft_deleted_delete_files','log_level','log_format',
+      'enable_json_logging','auto_update_enabled','auto_update_channel','auto_update_check_minutes',
+      'auto_update_window_start','auto_update_window_end','maintenance_window_enabled',
+      'maintenance_window_start','maintenance_window_end','path_format','segment_title_format',
+      'auto_rename_on_apply','auto_write_tags_on_apply','verify_after_write','protected_paths'
+    ]);
+
+    const cleaned: Partial<api.Config> = {};
+    if (!payload || typeof payload !== 'object') return cleaned;
+
+    for (const key of Object.keys(payload)) {
+      if (!allowed.has(key)) continue;
+      const val = (payload as any)[key];
+
+      switch (key) {
+        case 'root_dir':
+        case 'playlist_dir':
+        case 'organization_strategy':
+        case 'folder_naming_pattern':
+        case 'file_naming_pattern':
+        case 'language':
+        case 'memory_limit_type':
+        case 'log_level':
+        case 'log_format':
+        case 'auto_update_channel':
+        case 'path_format':
+        case 'segment_title_format':
+        case 'protected_paths':
+          if (typeof val === 'string') (cleaned as any)[key] = val;
+          break;
+
+        case 'supported_extensions':
+        case 'exclude_patterns':
+          if (Array.isArray(val)) (cleaned as any)[key] = val.filter((x) => typeof x === 'string');
+          break;
+
+        case 'metadata_sources':
+          if (Array.isArray(val)) {
+            const sanitizedSources = (val as any[]).map((s) => {
+              if (!s || typeof s !== 'object') return null;
+              const src: any = {};
+              if (typeof (s as any).id === 'string') src.id = (s as any).id;
+              if (typeof (s as any).name === 'string') src.name = (s as any).name;
+              src.enabled = Boolean((s as any).enabled);
+              src.priority = typeof (s as any).priority === 'number' ? (s as any).priority : 0;
+              src.requires_auth = Boolean((s as any).requires_auth ?? (s as any).requiresAuth);
+              src.credentials = {};
+              if ((s as any).credentials && typeof (s as any).credentials === 'object') {
+                for (const [ck, cv] of Object.entries((s as any).credentials)) {
+                  if (typeof cv === 'string') src.credentials[ck] = cv;
+                }
+              }
+              return src;
+            }).filter(Boolean);
+            (cleaned as any)[key] = sanitizedSources;
+          }
+          break;
+
+        case 'openai_api_key':
+          if (typeof val === 'string') {
+            if (!val.includes('***')) (cleaned as any).openai_api_key = val;
+          }
+          break;
+
+        // boolean flags
+        case 'scan_on_startup':
+        case 'auto_organize':
+        case 'create_backups':
+        case 'enable_disk_quota':
+        case 'enable_user_quotas':
+        case 'auto_fetch_metadata':
+        case 'enable_ai_parsing':
+        case 'metadata_llm_scoring_enabled':
+        case 'cache_invalidate_on_book_update':
+        case 'purge_soft_deleted_delete_files':
+        case 'enable_json_logging':
+        case 'auto_update_enabled':
+        case 'maintenance_window_enabled':
+        case 'auto_rename_on_apply':
+        case 'auto_write_tags_on_apply':
+        case 'verify_after_write':
+          (cleaned as any)[key] = Boolean(val);
+          break;
+
+        // numeric fields
+        case 'disk_quota_percent':
+        case 'default_user_quota_gb':
+        case 'concurrent_scans':
+        case 'cache_size':
+        case 'metadata_fetch_cache_ttl_days':
+        case 'memory_limit_percent':
+        case 'memory_limit_mb':
+        case 'purge_soft_deleted_after_days':
+        case 'auto_update_check_minutes':
+        case 'auto_update_window_start':
+        case 'auto_update_window_end':
+        case 'maintenance_window_start':
+        case 'maintenance_window_end':
+          if (typeof val === 'number') (cleaned as any)[key] = val;
+          else if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val))) (cleaned as any)[key] = Number(val);
+          break;
+
+        default:
+          break;
+      }
     }
+
     return cleaned;
   };
 
