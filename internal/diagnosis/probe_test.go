@@ -6,8 +6,6 @@ package diagnosis
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
