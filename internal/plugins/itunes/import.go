@@ -13,6 +13,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
+//nolint:unused // operation definition stub for plugin registration
 func (p *Plugin) importDef() sdk.OperationDef {
 	return sdk.OperationDef{
 		ID:               "itunes.import",
@@ -30,6 +31,7 @@ func (p *Plugin) importDef() sdk.OperationDef {
 	}
 }
 
+//nolint:unused // no-op run stub for future itunes.import operation
 func (p *Plugin) runImport(ctx context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
 	// TODO: Implement iTunes import operation.
 	// This should handle parameterized imports (genre, selection, etc.).

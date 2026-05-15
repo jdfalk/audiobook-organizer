@@ -233,7 +233,7 @@ incrementally:
 
 ### Phase 8: Warnings (4 alerts)
 
-- [ ] **SEC-AUDIT-8** Fix warning-level alerts (4 alerts: #379, #468, #160, #50)
+- [ ] **SEC-AUDIT-8** Fix warning-level alerts (4 alerts: #379, #468, #160, #50) — In progress: PR #970 (blocked: CI failing)
   - **Priority:** P2-P3
   - **Effort:** 3.5 hours
   - **Alerts:** Disabled cert check (#379), allocation overflow (#468), JS cert bypass (#160), incomplete sanitization (#50)
