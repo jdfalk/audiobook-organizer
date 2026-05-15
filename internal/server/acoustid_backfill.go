@@ -1,5 +1,5 @@
 // file: internal/server/acoustid_backfill.go
-// version: 2.5.2
+// version: 2.6.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-05-15
 
@@ -9,9 +9,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/diagnosis"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 )
 
@@ -60,11 +62,19 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	segs, err := fingerprint.FileSegments(f.FilePath, f.Duration)
 	if err != nil {
 		log.Printf("[WARN] fingerprint: %s: %v", f.FilePath, err)
-		// Stamp the failure so the next backfill pass skips this file
-		// instead of re-running ffmpeg on a known-bad input.
+		// Run the diagnosis cascade to record WHY this file fails.
+		ctx := context.Background()
+		diagResult := diagnosis.ProbeFile(ctx, f.FilePath)
+		reason, detail := diagnosis.Classify(diagResult, err.Error())
+		diagJSON := diagnosis.ToJSON(diagResult)
+
 		failedAt := time.Now()
 		marked := f
 		marked.FingerprintFailedAt = &failedAt
+		reasonStr := string(reason)
+		marked.FingerprintFailureReason = &reasonStr
+		marked.FingerprintFailureDetail = &detail
+		marked.FingerprintDiagnosticJSON = &diagJSON
 		_ = store.UpdateBookFile(f.ID, &marked)
 		return fingerprintOutcomeFailed
 	}
@@ -159,44 +169,71 @@ type AcoustIDLookupStore interface {
 
 // synthesizeBookSignatureForBook generates and persists the unified book signature
 // for a single book from its files' 7-segment chromaprint fingerprints.
+// Missing fingerprints are zero-padded (partial sig); the coverage mask is stored
+// alongside so that dedup comparisons can skip zero-padded regions.
 func synthesizeBookSignatureForBook(store database.Store, bookID string) error {
-files, err := store.GetBookFiles(bookID)
-if err != nil {
-return fmt.Errorf("get book files: %w", err)
-}
+	files, err := store.GetBookFiles(bookID)
+	if err != nil {
+		return fmt.Errorf("get book files: %w", err)
+	}
 
-// Sort files by sort_order or original_filename
-var orderedFiles []fingerprint.FileWithSegments
-for _, f := range files {
-orderedFiles = append(orderedFiles, fingerprint.FileWithSegments{
-SortOrder: f.TrackNumber,
-Filename:  f.OriginalFilename,
-Segments: fingerprint.FileSegmentData{
-Seg0: f.AcoustIDSeg0,
-Seg1: f.AcoustIDSeg1,
-Seg2: f.AcoustIDSeg2,
-Seg3: f.AcoustIDSeg3,
-Seg4: f.AcoustIDSeg4,
-Seg5: f.AcoustIDSeg5,
-Seg6: f.AcoustIDSeg6,
-},
-})
-}
-fingerprint.SortFilesByOrder(orderedFiles)
+	// Sort files by sort_order or original_filename.
+	orderedFiles := make([]fingerprint.FileWithSegments, 0, len(files))
+	for _, f := range files {
+		orderedFiles = append(orderedFiles, fingerprint.FileWithSegments{
+			SortOrder: f.TrackNumber,
+			Filename:  f.OriginalFilename,
+			Segments: fingerprint.FileSegmentData{
+				Seg0: f.AcoustIDSeg0,
+				Seg1: f.AcoustIDSeg1,
+				Seg2: f.AcoustIDSeg2,
+				Seg3: f.AcoustIDSeg3,
+				Seg4: f.AcoustIDSeg4,
+				Seg5: f.AcoustIDSeg5,
+				Seg6: f.AcoustIDSeg6,
+			},
+		})
+	}
+	fingerprint.SortFilesByOrder(orderedFiles)
 
-// Extract just the segments in order
-var segData []fingerprint.FileSegmentData
-for _, f := range orderedFiles {
-segData = append(segData, f.Segments)
-}
+	// Compute peer ratio (uint32s per byte) from files that have fingerprints,
+	// so missing files can get a calibrated length estimate.
+	peerRatio := peerSegmentRatio(files)
 
-sig, segCount, err := fingerprint.SynthesizeBookSignature(segData)
-if err != nil {
-if err == fingerprint.ErrIncompleteFingerprint {
-return nil
-}
-return fmt.Errorf("synthesize signature: %w", err)
-}
+	// Build FileSegmentInputs, estimating lengths for missing files.
+	inputs := make([]fingerprint.FileSegmentInput, 0, len(orderedFiles))
+	for i, fw := range orderedFiles {
+		missing := fw.Segments.Seg0 == ""
+		var estLen int
+		if missing {
+			f := files[i] // same order after SortFilesByOrder (indices align because we built from the same slice)
+			fileSize := 0
+			if fi, statErr := os.Stat(f.FilePath); statErr == nil {
+				fileSize = int(fi.Size())
+			}
+			estLen = fingerprint.EstimateSegmentCount(f.Duration, fileSize, f.BitrateKbps, peerRatio)
+		}
+		inputs = append(inputs, fingerprint.FileSegmentInput{
+			Segments:     fw.Segments,
+			Missing:      missing,
+			EstimatedLen: estLen,
+		})
+	}
+
+	const minCoverageForPartialSig = 50
+
+	sig, mask, coveragePct, segCount, err := fingerprint.SynthesizePartialBookSignature(inputs)
+	if err != nil {
+		if err == fingerprint.ErrIncompleteFingerprint {
+			return nil
+		}
+		return fmt.Errorf("synthesize signature: %w", err)
+	}
+
+	// Skip storing a partial sig with very low coverage — not reliable enough for dedup.
+	if coveragePct < minCoverageForPartialSig {
+		return nil
+	}
 
 	now := time.Now()
 	book, err := store.GetBookByID(bookID)
@@ -207,11 +244,40 @@ return fmt.Errorf("synthesize signature: %w", err)
 	book.BookSigV1 = &sig
 	book.BookSigSegments = &segCount
 	book.BookSigBuiltAt = &now
+	if mask != "" {
+		book.BookSigV1Mask = &mask
+	}
+	book.BookSigCoveragePct = &coveragePct
 
 	_, err = store.UpdateBook(book.ID, book)
 	if err != nil {
 		return fmt.Errorf("update book: %w", err)
 	}
-
 	return nil
+}
+
+// peerSegmentRatio returns the average uint32-per-byte ratio across all files
+// in the set that have both a fingerprint (non-empty seg0) and a known file size.
+// Returns 0 if no peers are available.
+func peerSegmentRatio(files []database.BookFile) float64 {
+	var totalWords, totalBytes int64
+	for _, f := range files {
+		if f.AcoustIDSeg0 == "" {
+			continue
+		}
+		fi, err := os.Stat(f.FilePath)
+		if err != nil || fi.Size() == 0 {
+			continue
+		}
+		// Each base64 segment encodes (len*3/4) bytes of uint32s.
+		// We use seg0 length as a proxy for word count (decoding would be more
+		// accurate but much more expensive in a hot path).
+		approxWords := int64(len(f.AcoustIDSeg0)) * 3 / (4 * 4) // base64 → bytes → uint32
+		totalWords += approxWords
+		totalBytes += fi.Size()
+	}
+	if totalBytes == 0 {
+		return 0
+	}
+	return float64(totalWords) / float64(totalBytes)
 }

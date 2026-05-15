@@ -83,7 +83,9 @@ file_size, bitrate_kbps, sample_rate_hz, channels, bit_depth, file_hash, origina
 post_metadata_hash,
 acoustid_seg0, acoustid_seg1, acoustid_seg2, acoustid_seg3, acoustid_seg4, acoustid_seg5, acoustid_seg6,
 missing, created_at, updated_at,
-deluge_hash, deluge_original_path, imported_from_deluge_at`
+deluge_hash, deluge_original_path, imported_from_deluge_at,
+fingerprint_failed_at, organize_method,
+fingerprint_failure_reason, fingerprint_failure_detail, fingerprint_diagnostic_json`
 
 type SQLiteStore struct {
 	db      *sql.DB

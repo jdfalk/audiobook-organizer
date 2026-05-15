@@ -1,7 +1,7 @@
 // file: internal/fingerprint/book_signature.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 7f8e9d0c-1b2a-3f4e-5d6c-7e8f9a0b1c2d
-// last-edited: 2026-05-03
+// last-edited: 2026-05-15
 
 package fingerprint
 
@@ -186,4 +186,239 @@ func SortFilesByOrder(files []FileWithSegments) {
 		}
 		return files[i].Filename < files[j].Filename
 	})
+}
+
+// ─── Partial signatures ───────────────────────────────────────────────────────
+
+// chromaprintRatePerSec is the approximate number of uint32 fingerprint values
+// produced per second of audio. Used only for segment length estimation on
+// missing files; exact value is not critical.
+const chromaprintRatePerSec = 8
+
+// FileSegmentInput is a single file's contribution to SynthesizePartialBookSignature.
+// Set Missing=true for files that failed fingerprinting; EstimatedLen is then used
+// to zero-pad the positional slot.
+type FileSegmentInput struct {
+	Segments     FileSegmentData
+	Missing      bool
+	EstimatedLen int // estimated uint32 count when Missing=true; 0 → use default
+}
+
+// EstimateSegmentCount returns an estimate of how many uint32 fingerprint words
+// a file would produce, using a cascade of available signals:
+//  1. durationSec > 0 → duration-based (most accurate)
+//  2. fileSizeBytes > 0 && bitrateKbps > 0 → infer duration from bitrate
+//  3. peerRatio > 0 → uint32-per-byte ratio observed in sibling files
+//
+// Returns 0 when none of the inputs can produce an estimate.
+func EstimateSegmentCount(durationSec, fileSizeBytes, bitrateKbps int, peerRatio float64) int {
+	if durationSec > 0 {
+		segDur := durationSec
+		if segDur > SegmentSeconds {
+			segDur = SegmentSeconds
+		}
+		return segDur * NumSegments * chromaprintRatePerSec
+	}
+	if fileSizeBytes > 0 && bitrateKbps > 0 {
+		estDur := (fileSizeBytes * 8) / (bitrateKbps * 1000)
+		if estDur > 0 {
+			segDur := estDur
+			if segDur > SegmentSeconds {
+				segDur = SegmentSeconds
+			}
+			return segDur * NumSegments * chromaprintRatePerSec
+		}
+	}
+	if fileSizeBytes > 0 && peerRatio > 0 {
+		return int(float64(fileSizeBytes) * peerRatio)
+	}
+	return 0
+}
+
+// defaultEstimatedLen is the fallback zero-pad length when EstimatedLen == 0
+// and we have no other information (300s × 7 segments × 8 uint32s/sec).
+const defaultEstimatedLen = SegmentSeconds * NumSegments * chromaprintRatePerSec
+
+// SynthesizePartialBookSignature builds a book_sig_v1 from a mix of real and
+// missing files. Missing files are represented by EstimatedLen zero-padded words,
+// preserving positional alignment for masked similarity comparisons.
+//
+// Returns ErrIncompleteFingerprint only when every file is missing or no real
+// fingerprint data could be decoded.
+//
+// Return values:
+//   - sig: base64-encoded 4096-word book signature (same format as SynthesizeBookSignature)
+//   - mask: base64-encoded 512-byte (4096-bit) coverage mask; bit i=1 means output
+//     word i was derived from real fingerprint data
+//   - coveragePct: integer percentage of pre-downsample words that are real [0–100]
+//   - preLen: total pre-downsample uint32 count (real + zero-padded)
+func SynthesizePartialBookSignature(files []FileSegmentInput) (sig, mask string, coveragePct, preLen int, err error) {
+	if len(files) == 0 {
+		return "", "", 0, 0, ErrIncompleteFingerprint
+	}
+
+	var allInts []uint32
+	var realFlags []bool
+	realCount := 0
+
+	for _, f := range files {
+		var words []uint32
+		isReal := false
+
+		if !f.Missing && f.Segments.Seg0 != "" {
+			segs := [NumSegments]string{
+				f.Segments.Seg0, f.Segments.Seg1, f.Segments.Seg2,
+				f.Segments.Seg3, f.Segments.Seg4, f.Segments.Seg5, f.Segments.Seg6,
+			}
+			for i, seg := range segs {
+				if seg == "" && i > 0 {
+					continue
+				}
+				decoded, decErr := decodeAnyFingerprint(seg)
+				if decErr != nil {
+					continue
+				}
+				words = append(words, decoded...)
+			}
+			isReal = len(words) > 0
+		}
+
+		if !isReal {
+			n := f.EstimatedLen
+			if n <= 0 {
+				n = defaultEstimatedLen
+			}
+			words = make([]uint32, n)
+		}
+
+		allInts = append(allInts, words...)
+		for range words {
+			realFlags = append(realFlags, isReal)
+		}
+		if isReal {
+			realCount += len(words)
+		}
+	}
+
+	if realCount == 0 {
+		return "", "", 0, 0, ErrIncompleteFingerprint
+	}
+
+	preLen = len(allInts)
+	coveragePct = int(float64(realCount) / float64(preLen) * 100)
+
+	downsampled := downsampleMaxPool(allInts, BookSignatureFixedLength)
+	sig = encodeUint32SliceToBase64(downsampled)
+	mask = EncodeMask(realFlags, preLen, BookSignatureFixedLength)
+	return sig, mask, coveragePct, preLen, nil
+}
+
+// EncodeMask converts a pre-downsample real-position bool slice to a
+// BookSignatureFixedLength-bit coverage mask using the same window logic as
+// downsampleMaxPool. Output bit i is 1 if any input in its window is real.
+// Returns a base64-encoded byte slice of ceil(targetLen/8) bytes.
+func EncodeMask(realPositions []bool, totalLen, targetLen int) string {
+	maskBytes := make([]byte, (targetLen+7)/8)
+	n := len(realPositions)
+	if n == 0 || totalLen == 0 {
+		return base64.StdEncoding.EncodeToString(maskBytes)
+	}
+	if n > totalLen {
+		n = totalLen
+	}
+
+	if n <= targetLen {
+		// 1:1 mapping — each output position i corresponds to input i
+		for i := 0; i < n; i++ {
+			if realPositions[i] {
+				maskBytes[i/8] |= 1 << uint(i%8)
+			}
+		}
+		return base64.StdEncoding.EncodeToString(maskBytes)
+	}
+
+	windowSize := (n + targetLen - 1) / targetLen
+	for i := 0; i < targetLen; i++ {
+		start := i * windowSize
+		if start >= n {
+			break
+		}
+		end := start + windowSize
+		if end > n {
+			end = n
+		}
+		for j := start; j < end; j++ {
+			if realPositions[j] {
+				maskBytes[i/8] |= 1 << uint(i%8)
+				break
+			}
+		}
+	}
+	return base64.StdEncoding.EncodeToString(maskBytes)
+}
+
+// decodeMask decodes a base64 mask string into a bool slice of length targetLen.
+// An empty string means all-real (all bits = 1).
+func decodeMask(mask string, targetLen int) ([]bool, error) {
+	out := make([]bool, targetLen)
+	if mask == "" {
+		for i := range out {
+			out[i] = true
+		}
+		return out, nil
+	}
+	b, err := base64.StdEncoding.DecodeString(mask)
+	if err != nil {
+		return nil, fmt.Errorf("decode mask: %w", err)
+	}
+	for i := 0; i < targetLen; i++ {
+		if i/8 < len(b) {
+			out[i] = (b[i/8]>>uint(i%8))&1 == 1
+		}
+	}
+	return out, nil
+}
+
+// BookSignatureSimilarityMasked compares two book signatures considering only
+// positions where both masks indicate real data. An empty/nil mask means all
+// positions are real (equivalent to BookSignatureSimilarity).
+//
+// Returns (similarity [0–1], overlapCount, error). Callers should treat results
+// with overlapCount < 512 as unreliable.
+func BookSignatureSimilarityMasked(a, b, maskA, maskB string) (float64, int, error) {
+	intsA, err := decodeBase64Uint32Slice(a)
+	if err != nil {
+		return 0, 0, fmt.Errorf("decode signature a: %w", err)
+	}
+	intsB, err := decodeBase64Uint32Slice(b)
+	if err != nil {
+		return 0, 0, fmt.Errorf("decode signature b: %w", err)
+	}
+	if len(intsA) != BookSignatureFixedLength || len(intsB) != BookSignatureFixedLength {
+		return 0, 0, fmt.Errorf("invalid signature length: expected %d, got %d and %d",
+			BookSignatureFixedLength, len(intsA), len(intsB))
+	}
+
+	mA, err := decodeMask(maskA, BookSignatureFixedLength)
+	if err != nil {
+		return 0, 0, fmt.Errorf("decode mask a: %w", err)
+	}
+	mB, err := decodeMask(maskB, BookSignatureFixedLength)
+	if err != nil {
+		return 0, 0, fmt.Errorf("decode mask b: %w", err)
+	}
+
+	var totalBitDiff, overlapCount int
+	for i := 0; i < BookSignatureFixedLength; i++ {
+		if !mA[i] || !mB[i] {
+			continue
+		}
+		overlapCount++
+		totalBitDiff += bits.OnesCount32(intsA[i] ^ intsB[i])
+	}
+
+	if overlapCount == 0 {
+		return 0, 0, nil
+	}
+	return 1.0 - float64(totalBitDiff)/float64(overlapCount*32), overlapCount, nil
 }

@@ -170,6 +170,9 @@ type BookFileStore interface {
 	// GetBookMetadataHashStats returns aggregate metadata_source_hash coverage
 	// across all books, including a per-library-path breakdown.
 	GetBookMetadataHashStats() (*BookMetadataHashStats, error)
+	// GetFilesWithFingerprintFailures returns book_files where FingerprintFailedAt is set,
+	// optionally filtered by reason. Returns the filtered page plus total matching count.
+	GetFilesWithFingerprintFailures(reason string, limit, offset int) ([]BookFile, int64, error)
 }
 
 // BookSegmentStore covers the deprecated segment surface, kept until

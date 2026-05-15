@@ -1,11 +1,53 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.77.0 -->
+<!-- version: 2.78.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-15 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Features
+
+#### May 15, 2026 — Partial book signatures + structured fingerprint diagnosis
+
+**Part A: Partial book signatures** (`internal/fingerprint/book_signature.go`)
+
+- Added `EstimateSegmentCount(durationSec, fileSizeBytes, bitrateKbps int, peerRatio float64) int` — cascading estimate for missing file slot sizes (duration → bitrate/size → peer ratio)
+- Added `FileSegmentInput` struct for mixed real/missing file inputs
+- Added `SynthesizePartialBookSignature([]FileSegmentInput) (sig, mask string, coveragePct, preLen int, err error)` — zero-pads missing files, returns a 4096-bit coverage mask so dedup comparisons exclude zero-padded regions; returns `ErrIncompleteFingerprint` only when ALL files are missing
+- Added `EncodeMask(realPositions []bool, totalLen, targetLen int) string` — maps pre-downsample real-position flags to output positions using same window formula as max-pool
+- Added `BookSignatureSimilarityMasked(a, b, maskA, maskB string) (float64, int, error)` — compares only positions where both masks indicate real data; empty mask = all-real (backward-compatible)
+- 16 new tests covering all new functions
+
+**Part B: Structured file diagnosis** (`internal/diagnosis/probe.go`, new package)
+
+- `ProbeFile(ctx, path) FileDiagnostic` — runs `file` → `ffprobe` → `mediainfo` cascade; tool availability cached via `sync.Once`; never returns error (failures recorded in `ProbeError`)
+- `Classify(d FileDiagnostic, fpcalcStderr string) (FailureReason, string)` — derives reason/detail from diagnostic data
+- `FileDiagnostic` struct with all fields from the three tools plus derived flags (`IsTruncated`, `HasActiveDRM`, `WasOriginallyDRM`)
+- 10 `FailureReason` constants: `empty_file`, `incomplete_download`, `wrong_format`, `corrupt_audio`, `active_drm`, `originally_drm`, `unsupported_codec`, `too_short`, `missing_file`, `fpcalc_error`
+- 17 tests covering all classification paths, flag derivation, and JSON roundtrip
+
+**Database changes** (`internal/database/`)
+
+- Added `BookSigV1Mask *string`, `BookSigCoveragePct *int` to `Book`
+- Added `FingerprintFailureReason *string`, `FingerprintFailureDetail *string`, `FingerprintDiagnosticJSON *string` to `BookFile`
+- Migration 060: adds 5 new nullable columns to `books` and `book_files`; also adds `fingerprint_failed_at` and `organize_method` which were in the struct but missing from the SQLite schema
+- Updated `bookFileCols`, `bookFileScan`, `UpdateBookFile` to include all fingerprint diagnosis columns
+- Added `GetFilesWithFingerprintFailures(reason, limit, offset)` to `BookFileStore` interface with implementations in `PebbleStore` and `SQLiteStore`
+
+**Backfill wiring** (`internal/server/acoustid_backfill.go`)
+
+- `fingerprintBookFile`: on failure, now runs `diagnosis.ProbeFile` + `diagnosis.Classify` and stores reason/detail/diagnostic JSON on the file record
+- `synthesizeBookSignatureForBook`: replaced `SynthesizeBookSignature` with `SynthesizePartialBookSignature`; estimates missing file lengths from file size, duration, and sibling peer ratio; skips storing if coverage < 50%; stores mask and coverage percentage
+
+**New endpoint** (`internal/server/fingerprint_diagnosis_handler.go`)
+
+- `GET /api/v1/diagnostics/fingerprint-failures?reason=&limit=&offset=` — returns `{total, by_reason, files}` with full `FileDiagnostic` JSON per file
+
+**Dedup** (`internal/dedup/engine.go`)
+
+- `BookSignatureScan` now uses `BookSignatureSimilarityMasked`; skips pairs with fewer than 512 overlapping words (unreliable partial sig comparison)
 
 ### Fixes
 

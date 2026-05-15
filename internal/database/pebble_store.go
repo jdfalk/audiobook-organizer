@@ -8583,6 +8583,35 @@ func (p *PebbleStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error)
 	}
 	return stats, nil
 }
+
+// GetFilesWithFingerprintFailures scans all book_files and returns those where
+// FingerprintFailedAt is set, optionally filtered to a specific reason string.
+func (p *PebbleStore) GetFilesWithFingerprintFailures(reason string, limit, offset int) ([]BookFile, int64, error) {
+	allFiles, err := p.GetAllBookFiles()
+	if err != nil {
+		return nil, 0, fmt.Errorf("GetFilesWithFingerprintFailures: %w", err)
+	}
+	var matched []BookFile
+	for _, f := range allFiles {
+		if f.FingerprintFailedAt == nil {
+			continue
+		}
+		if reason != "" && (f.FingerprintFailureReason == nil || *f.FingerprintFailureReason != reason) {
+			continue
+		}
+		matched = append(matched, f)
+	}
+	total := int64(len(matched))
+	if offset >= len(matched) {
+		return nil, total, nil
+	}
+	end := offset + limit
+	if limit <= 0 || end > len(matched) {
+		end = len(matched)
+	}
+	return matched[offset:end], total, nil
+}
+
 // GetAuthorsByBookIDs returns a map from bookID → []Author for all given book IDs.
 func (p *PebbleStore) GetAuthorsByBookIDs(ctx context.Context, bookIDs []string) (map[string][]Author, error) {
 	if len(bookIDs) == 0 {

@@ -395,6 +395,12 @@ var migrations = []Migration{
 		Up:          migration059Up,
 		Down:        migration059Down,
 	},
+	{
+		Version:     60,
+		Description: "Add partial book signature mask/coverage and file fingerprint diagnosis columns",
+		Up:          migration060Up,
+		Down:        nil,
+	},
 }
 
 // RunMigrations applies all pending migrations
@@ -2965,5 +2971,33 @@ func migration059Down(store Store) error {
 		}
 	}
 	slog.Info("- Removed UOS v2 core schema")
+	return nil
+}
+
+// migration060Up adds partial book-signature coverage columns to books and
+// structured fingerprint-failure diagnosis columns to book_files.
+func migration060Up(store Store) error {
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // Pebble needs no schema migrations
+	}
+	stmts := []string{
+		`ALTER TABLE books ADD COLUMN book_sig_v1_mask           TEXT`,
+		`ALTER TABLE books ADD COLUMN book_sig_coverage_pct      INTEGER`,
+		// fingerprint_failed_at and organize_method were in the struct but never added to SQLite schema
+		`ALTER TABLE book_files ADD COLUMN fingerprint_failed_at     DATETIME`,
+		`ALTER TABLE book_files ADD COLUMN organize_method            TEXT`,
+		// New diagnosis columns
+		`ALTER TABLE book_files ADD COLUMN fingerprint_failure_reason TEXT`,
+		`ALTER TABLE book_files ADD COLUMN fingerprint_failure_detail TEXT`,
+		`ALTER TABLE book_files ADD COLUMN fingerprint_diagnostic_json TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_book_files_fingerprint_failed ON book_files(fingerprint_failed_at) WHERE fingerprint_failed_at IS NOT NULL`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			slog.Warn("migration warning: migration 060", "error", err)
+		}
+	}
+	slog.Info("+ Added partial sig mask/coverage to books, diagnosis columns to book_files")
 	return nil
 }
