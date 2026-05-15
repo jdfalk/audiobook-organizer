@@ -1,5 +1,5 @@
 // file: internal/server/acoustid_backfill.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-05-15
 
@@ -107,7 +107,7 @@ const fingerprintThrottle = 10 * time.Millisecond
 // 7-segment fingerprints. Runs as a background goroutine after startup.
 // Safe to run repeatedly — skips files that already have seg0 set.
 // No-ops silently if neither fpcalc nor ffmpeg is installed.
-func (s *Server) backfillAcoustIDs() {
+func (s *Server) backfillAcoustIDs(ctx context.Context) {
 	if !fingerprint.Available() {
 		log.Println("[INFO] acoustid backfill: no fingerprint backend found, skipping")
 		return
@@ -125,7 +125,6 @@ func (s *Server) backfillAcoustIDs() {
 	}
 
 	var fingerprinted, alreadyImported, failed int
-	ctx := context.Background()
 	for _, b := range books {
 		select {
 		case <-ctx.Done():
