@@ -1,7 +1,7 @@
 // file: internal/deluge/import.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
-// last-edited: 2026-05-11
+// last-edited: 2026-05-15
 //
 // ImportToLibrary copies a Deluge-managed file into the library root,
 // updates the BookFile record, and optionally tells Deluge to move
@@ -19,6 +19,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 )
 
 // ImportToLibrary copies a file from a Deluge-managed path into the library root,
@@ -60,20 +61,27 @@ func ImportToLibrary(
 		return "", fmt.Errorf("ImportToLibrary: bookFile.FilePath is empty")
 	}
 
-	// Determine destination directory inside RootDir.
-	// If the source is already under RootDir, preserve relative structure.
-	// If it is outside, place it directly under RootDir using just the filename.
-	var destDir string
+	// Determine destination path inside RootDir, validating with safepath.
+	// If the source is under RootDir, preserve its relative structure. Otherwise
+	// place the file directly under RootDir.
 	rel, relErr := filepath.Rel(cfg.RootDir, filepath.Dir(src))
+
+	var destSP safepath.SafePath
 	if relErr == nil && !filepath.IsAbs(rel) && !isParentTraversal(rel) {
-		// Source is under RootDir (or a sub-path of it) — preserve structure.
-		destDir = filepath.Join(cfg.RootDir, rel)
+		// Source is under RootDir — preserve structure.
+		destSP, err = safepath.Join(cfg.RootDir, rel, filepath.Base(src))
+		if err != nil {
+			return "", fmt.Errorf("ImportToLibrary: invalid destination path: %w", err)
+		}
 	} else {
 		// Source is outside RootDir — place directly under RootDir.
-		destDir = cfg.RootDir
+		destSP, err = safepath.Join(cfg.RootDir, filepath.Base(src))
+		if err != nil {
+			return "", fmt.Errorf("ImportToLibrary: invalid destination path: %w", err)
+		}
 	}
 
-	dest := filepath.Join(destDir, filepath.Base(src))
+	dest := destSP.String()
 
 	// Do not copy if source and destination are the same path.
 	if src == dest {
@@ -82,6 +90,7 @@ func ImportToLibrary(
 	}
 
 	// Create destination directory if it does not exist.
+	destDir := filepath.Dir(dest)
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
 		return "", fmt.Errorf("ImportToLibrary: create dest dir %s: %w", destDir, err)
 	}

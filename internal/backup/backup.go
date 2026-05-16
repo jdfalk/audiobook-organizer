@@ -1,6 +1,7 @@
 // file: internal/backup/backup.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: 8f9e0a1b-2c3d-4e5f-6a7b-8c9d0e1f2a3b
+// last-edited: 2026-05-15
 
 package backup
 
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 )
 
 // BackupInfo contains information about a backup
@@ -307,9 +309,16 @@ func addToArchive(tarWriter *tar.Writer, path, dbType string) error {
 
 	if info.IsDir() {
 		// PebbleDB - archive entire directory
-		return filepath.Walk(path, func(file string, fi os.FileInfo, err error) error {
+		root := path
+		return filepath.Walk(root, func(file string, fi os.FileInfo, err error) error {
 			if err != nil {
 				return err
+			}
+
+			// Validate that the file really lies within the root directory.
+			sp, err := safepath.Validate(root, file)
+			if err != nil {
+				return fmt.Errorf("safepath validation failed for %q: %w", file, err)
 			}
 
 			// Create tar header
@@ -318,12 +327,19 @@ func addToArchive(tarWriter *tar.Writer, path, dbType string) error {
 				return err
 			}
 
-			// Use relative path in archive
-			relPath, err := filepath.Rel(filepath.Dir(path), file)
+			// Use a sanitized, relative path in the archive that does not contain
+			// any parent-traversal components.
+			relPath, err := filepath.Rel(root, sp.String())
 			if err != nil {
 				return err
 			}
-			header.Name = relPath
+			relPath = filepath.Clean(relPath)
+			if relPath == "." {
+				header.Name = filepath.ToSlash(filepath.Base(root))
+			} else {
+				// header.Name must use forward slashes per TAR spec
+				header.Name = filepath.ToSlash(filepath.Join(filepath.Base(root), relPath))
+			}
 
 			// Write header
 			if err := tarWriter.WriteHeader(header); err != nil {
