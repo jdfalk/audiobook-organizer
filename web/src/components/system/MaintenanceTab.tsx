@@ -1,7 +1,7 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.6.0
+// version: 1.6.1
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
-// last-edited: 2026-05-03
+// last-edited: 2026-05-16
 
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -512,6 +512,25 @@ function MetadataHashDuplicateCard() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // NEW: stats + backfill
+  const [stats, setStats] = useState<api.BookMetadataHashStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillOpID, setBackfillOpID] = useState<string | null>(null);
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      setStats(await api.getBookMetadataHashStats());
+    } catch {
+      // degrade silently if endpoint not available yet
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadStats(); }, [loadStats]);
+
   const handleScan = useCallback(async () => {
     setScanning(true);
     setError(null);
@@ -526,24 +545,94 @@ function MetadataHashDuplicateCard() {
     }
   }, []);
 
+  const handleBackfill = useCallback(async () => {
+    setBackfilling(true);
+    setError(null);
+    setBackfillOpID(null);
+    try {
+      const r = await api.backfillMetadataHashes(false);
+      // returns { operation_id }
+      setBackfillOpID(r.operation_id ?? null);
+      await loadStats();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Backfill failed');
+    } finally {
+      setBackfilling(false);
+    }
+  }, [loadStats]);
+
+  const pct = (n: number, d: number) => (d === 0 ? '—' : `${((n / d) * 100).toFixed(1)}%`);
+
+  const statusChip = (() => {
+    if (statsLoading) return <Chip size="small" label="Loading…" />;
+    if (!stats) return null;
+    if (stats.missing_metadata_hash === 0)
+      return <Chip size="small" color="success" label="✓ All hashed" />;
+    return <Chip size="small" color="warning" label={`${stats.missing_metadata_hash} missing hashes`} />;
+  })();
+
   return (
     <Card variant="outlined" sx={{ mb: 2 }}>
       <CardHeader
         title="Metadata Hash Duplicates"
         subheader="Books that share the same metadata source hash (same ASIN/ISBN from the same provider)."
-        action={
-          result != null && result.total_duplicate_books > 0 ? (
-            <Chip color="warning" label={`${result.total_duplicate_books} duplicates`} size="small" />
-          ) : result != null ? (
-            <Chip color="success" label="No duplicates" size="small" />
-          ) : null
-        }
+        action={statusChip}
       />
       <CardContent>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
             {error}
           </Alert>
+        )}
+
+        {/* Stats panel */}
+        {stats && (
+          <Box sx={{ mb: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>Metadata Hash Coverage</Typography>
+            <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Total books</Typography>
+                <Typography variant="body2" fontWeight="bold">{stats.total_books.toLocaleString()}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">With metadata hash</Typography>
+                <Typography variant="body2" fontWeight="bold">{stats.with_metadata_hash.toLocaleString()} ({pct(stats.with_metadata_hash, stats.total_books)})</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Missing metadata hash</Typography>
+                <Typography variant="body2" fontWeight="bold" color={stats.missing_metadata_hash > 0 ? 'warning.main' : 'success.main'}>
+                  {stats.missing_metadata_hash.toLocaleString()}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Has ASIN/ISBN</Typography>
+                <Typography variant="body2" fontWeight="bold">{stats.with_asin_or_isbn.toLocaleString()}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Missing hash but has ID</Typography>
+                <Typography variant="body2" fontWeight="bold">{stats.missing_hash_has_id.toLocaleString()}</Typography>
+              </Box>
+            </Stack>
+
+            {(stats.by_library?.length ?? 0) > 1 && (
+              <Box sx={{ mt: 1.5 }}>
+                <Typography variant="caption" color="text.secondary" display="block" gutterBottom>By Library</Typography>
+                {stats.by_library.map((lib) => (
+                  <Stack key={lib.path} direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                    <Typography variant="caption" sx={{ minWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lib.path}>
+                      {lib.path.split('/').pop() || lib.path}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {lib.with_metadata_hash}/{lib.total_books} hashed
+                    </Typography>
+                    {lib.missing_metadata_hash > 0 && (
+                      <Chip size="small" label={`${lib.missing_metadata_hash} missing`} color="warning" variant="outlined" />
+                    )}
+                  </Stack>
+                ))}
+              </Box>
+            )}
+          </Box>
         )}
 
         <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
@@ -555,7 +644,32 @@ function MetadataHashDuplicateCard() {
           >
             {scanning ? 'Scanning…' : 'Scan for Metadata Hash Duplicates'}
           </Button>
+
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={backfilling ? <CircularProgress size={14} /> : undefined}
+            disabled={backfilling || statsLoading}
+            onClick={handleBackfill}
+          >
+            {backfilling ? 'Starting…' : 'Backfill Missing Hashes'}
+          </Button>
+
+          <Button
+            size="small"
+            variant="text"
+            disabled={statsLoading}
+            onClick={() => void loadStats()}
+          >
+            Refresh Stats
+          </Button>
         </Stack>
+
+        {backfillOpID && (
+          <Alert severity="info" sx={{ mb: 2 }} onClose={() => setBackfillOpID(null)}>
+            Backfill job started — operation ID: <strong>{backfillOpID}</strong>
+          </Alert>
+        )}
 
         {result && result.groups.length > 0 && (
           <List dense disablePadding>
