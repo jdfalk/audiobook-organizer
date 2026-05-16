@@ -1,6 +1,7 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.9.0
+// version: 2.9.1
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
+// last-edited: 2026-05-16
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
 // operations, file/segment actions, tag read/write, cover art, path
@@ -44,13 +45,18 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	if sortOrder != "" && sortOrder != "asc" && sortOrder != "desc" {
 		sortOrder = "asc"
 	}
-	filters := ListFilters{
-		IsPrimaryVersion: httputil.ParseQueryBoolPtr(c, "is_primary_version"),
-		LibraryState:     httputil.ParseQueryString(c, "library_state"),
-		Tag:              httputil.ParseQueryString(c, "tag"),
-		SortBy:           httputil.ParseQueryString(c, "sort_by"),
-		SortOrder:        sortOrder,
-	}
+	tags := c.QueryArray("tags")
+		if len(tags) == 0 {
+			tags = c.QueryArray("tags[]")
+		}
+		filters := ListFilters{
+			IsPrimaryVersion: httputil.ParseQueryBoolPtr(c, "is_primary_version"),
+			LibraryState:     httputil.ParseQueryString(c, "library_state"),
+			Tag:              httputil.ParseQueryString(c, "tag"),
+			Tags:             tags,
+			SortBy:           httputil.ParseQueryString(c, "sort_by"),
+			SortOrder:        sortOrder,
+		}
 
 	// Parse field filters from JSON query param. Per-user filters
 	// (read_status / progress_pct / last_played) are split off so the
@@ -114,7 +120,7 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 
 	// Get total count for proper pagination
 	totalCount := len(enriched)
-	hasFilters := filters.IsPrimaryVersion != nil || filters.LibraryState != "" || filters.Tag != ""
+	hasFilters := filters.IsPrimaryVersion != nil || filters.LibraryState != "" || filters.Tag != "" || len(filters.Tags) > 0
 	if params.Search == "" && authorID == nil && seriesID == nil {
 		if hasFilters {
 			if tc, err := s.audiobookService.CountAudiobooksFiltered(c.Request.Context(), filters); err == nil {

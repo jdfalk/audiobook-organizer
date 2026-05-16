@@ -1,7 +1,7 @@
 // file: internal/operations/types.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: f1e2d3c4-b5a6-7890-abcd-ef1234567890
-// last-edited: 2026-05-11
+// last-edited: 2026-05-16
 //
 // SelectionSpec and related types for server-side bulk operation targeting.
 // A SelectionSpec describes which books an operation targets without requiring
@@ -25,6 +25,7 @@ type FilterSpec struct {
 	Search         string        `json:"search,omitempty"`
 	LibraryState   string        `json:"library_state,omitempty"`
 	Tag            string        `json:"tag,omitempty"`
+	Tags           []string      `json:"tags,omitempty"`
 	FieldFilters   []FieldFilter `json:"field_filters,omitempty"`
 	AuthorID       *int64        `json:"author_id,omitempty"`
 	SeriesID       *int64        `json:"series_id,omitempty"`

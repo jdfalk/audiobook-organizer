@@ -1,7 +1,7 @@
 // file: web/src/pages/Library.tsx
-// version: 1.64.0
+// version: 1.64.1
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
-// last-edited: 2026-05-15
+// last-edited: 2026-05-16
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -589,14 +589,22 @@ export const Library = () => {
   const handleSelectAllItems = useCallback(() => {
     const fieldFilters = buildFieldFilters();
     const searchText = parsedSearch ? parsedSearch.freeText : debouncedSearch;
-    const tagFilter =
-      selectedTags?.[0] ||
-      parsedSearch?.fieldFilters.find((f) => f.field === 'tag' && !f.negated)?.value;
+    let tagsForFilter: string[] | undefined;
+    if (selectedTags && selectedTags.length > 0) {
+      tagsForFilter = selectedTags;
+    } else {
+      const parsedTag = parsedSearch?.fieldFilters.find((f) => f.field === 'tag' && !f.negated)?.value;
+      if (parsedTag) tagsForFilter = [parsedTag];
+    }
     const libraryState = filters.libraryState === 'deleted' ? undefined : filters.libraryState;
 
     const filterSpec: api.SelectionSpec['filter'] = {};
     if (searchText) filterSpec.search = searchText;
-    if (tagFilter) filterSpec.tag = tagFilter;
+    if (tagsForFilter && tagsForFilter.length > 0) {
+      filterSpec.tags = tagsForFilter;
+      // back-compat single-tag field
+      filterSpec.tag = tagsForFilter[0];
+    }
     if (libraryState) filterSpec.library_state = libraryState;
     if (fieldFilters.length > 0) filterSpec.field_filters = fieldFilters;
 
@@ -614,9 +622,13 @@ export const Library = () => {
       const offset = (page - 1) * itemsPerPage;
       const fieldFilters = buildFieldFilters();
       const searchText = parsedSearch ? parsedSearch.freeText : debouncedSearch;
-      const tagFilter =
-        selectedTags?.[0] ||
-        parsedSearch?.fieldFilters.find((f) => f.field === 'tag' && !f.negated)?.value;
+      let tagsParam: string[] | undefined;
+      if (selectedTags && selectedTags.length > 0) {
+        tagsParam = selectedTags;
+      } else {
+        const parsedTag = parsedSearch?.fieldFilters.find((f) => f.field === 'tag' && !f.negated)?.value;
+        if (parsedTag) tagsParam = [parsedTag];
+      }
 
       // 'deleted' is a client-side concept (marked_for_deletion flag); send no library_state to server
       const libraryState = filters.libraryState === 'deleted' ? undefined : filters.libraryState;
@@ -627,7 +639,7 @@ export const Library = () => {
           : api.getBooks(itemsPerPage, offset, {
               sortBy,
               sortOrder,
-              tag: tagFilter,
+              tags: tagsParam,
               libraryState,
               filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
               showFailed: filters.showFailed,
