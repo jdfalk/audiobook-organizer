@@ -1,7 +1,7 @@
 // file: internal/database/store.go
-// version: 2.72.0
+// version: 2.73.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
-// last-edited: 2026-05-03
+// last-edited: 2026-05-16
 
 package database
 
@@ -978,6 +978,20 @@ type BookMetadataHashStatsByLib struct {
 	WithMetadataHash    int    `json:"with_metadata_hash"`
 	MissingMetadataHash int    `json:"missing_metadata_hash"`
 	MissingHashHasID    int    `json:"missing_hash_has_id"`
+}
+
+// AcoustIDStats describes AcoustID fingerprint coverage across all book files.
+type AcoustIDStats struct {
+	TotalFiles      int                    `json:"total_files"`
+	WithFingerprint int                    `json:"with_fingerprint"` // ≥1 segment populated
+	ByLibrary       []AcoustIDStatsByLibrary `json:"by_library"`
+}
+
+// AcoustIDStatsByLibrary breaks down fingerprint coverage for one library root.
+type AcoustIDStatsByLibrary struct {
+	LibraryRoot     string `json:"library_root"`
+	TotalFiles      int    `json:"total_files"`
+	WithFingerprint int    `json:"with_fingerprint"`
 }
 
 // Global store instance — use GetGlobalStore/SetGlobalStore for concurrent access.

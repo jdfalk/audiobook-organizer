@@ -1,7 +1,7 @@
 // file: internal/database/mock_store.go
-// version: 1.54.0
+// version: 1.55.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
-// last-edited: 2026-05-06
+// last-edited: 2026-05-16
 
 package database
 
@@ -343,6 +343,7 @@ type MockStore struct {
 	GetBookFileHashStatsFunc            func() (*BookFileHashStats, error)
 	GetBookMetadataHashStatsFunc        func() (*BookMetadataHashStats, error)
 	GetFilesWithFingerprintFailuresFunc func(reason string, limit, offset int) ([]BookFile, int64, error)
+	GetAcoustIDStatsFunc                func() (*AcoustIDStats, error)
 
 	// Path history
 	RecordPathChangeFunc   func(change *BookPathChange) error
@@ -2380,6 +2381,13 @@ func (m *MockStore) GetFilesWithFingerprintFailures(reason string, limit, offset
 		return m.GetFilesWithFingerprintFailuresFunc(reason, limit, offset)
 	}
 	return nil, 0, nil
+}
+
+func (m *MockStore) GetAcoustIDStats() (*AcoustIDStats, error) {
+	if m.GetAcoustIDStatsFunc != nil {
+		return m.GetAcoustIDStatsFunc()
+	}
+	return &AcoustIDStats{}, nil
 }
 
 func (m *MockStore) CreateAIJob(job AIJob, payloadJSON []byte) error {

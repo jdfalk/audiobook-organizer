@@ -1,5 +1,5 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.6.1
+// version: 1.7.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
 // last-edited: 2026-05-16
 
@@ -9,6 +9,7 @@ import {
   Box,
   Button,
   Card,
+  CardActions,
   CardContent,
   CardHeader,
   Chip,
@@ -504,6 +505,93 @@ function SHADuplicateCard() {
   );
 }
 
+// ─── AcoustIDFingerprintCard ──────────────────────────────────────────────────
+
+function AcoustIDFingerprintCard() {
+  const [stats, setStats] = useState<api.AcoustIDStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      setStats(await api.getAcoustIDStats());
+    } catch {
+      // degrade silently
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadStats(); }, [loadStats]);
+
+  const handleFingerprint = useCallback(async () => {
+    setTriggering(true);
+    setError(null);
+    try {
+      await api.runMaintenanceJob('backfill-file-hashes', false);
+      await loadStats();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to trigger fingerprint job');
+    } finally {
+      setTriggering(false);
+    }
+  }, [loadStats]);
+
+  const pct = stats && stats.total_files > 0
+    ? Math.round((stats.with_fingerprint / stats.total_files) * 100)
+    : 0;
+
+  return (
+    <Card sx={{ mb: 2 }}>
+      <CardHeader
+        title="AcoustID Fingerprint Coverage"
+        subheader="Files with at least one AcoustID fingerprint segment populated."
+        action={loading ? <CircularProgress size={20} sx={{ mt: 1, mr: 1 }} /> : null}
+      />
+      <CardContent>
+        {stats ? (
+          <>
+            <Typography variant="h4" gutterBottom>
+              {pct}%
+            </Typography>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {stats.with_fingerprint.toLocaleString()} / {stats.total_files.toLocaleString()} files fingerprinted
+            </Typography>
+            <Chip
+              label={pct === 100 ? '✓ Complete' : 'Partial coverage'}
+              color={pct === 100 ? 'success' : 'warning'}
+              size="small"
+            />
+          </>
+        ) : (
+          !loading && <Typography variant="body2" color="text.secondary">No data available</Typography>
+        )}
+        {error && (
+          <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+      </CardContent>
+      <CardActions>
+        <Button
+          onClick={handleFingerprint}
+          disabled={triggering}
+          variant="outlined"
+          size="small"
+          startIcon={triggering ? <CircularProgress size={14} /> : undefined}
+        >
+          {triggering ? 'Starting…' : 'Fingerprint Library'}
+        </Button>
+        <Button onClick={loadStats} size="small" disabled={loading}>
+          Refresh
+        </Button>
+      </CardActions>
+    </Card>
+  );
+}
+
 // ─── MetadataHashDuplicateCard ────────────────────────────────────────────────
 
 function MetadataHashDuplicateCard() {
@@ -876,6 +964,8 @@ export function MaintenanceTab() {
       <ChapterConsolidationCard />
 
       <SHADuplicateCard />
+
+      <AcoustIDFingerprintCard />
 
       <MetadataHashDuplicateCard />
 

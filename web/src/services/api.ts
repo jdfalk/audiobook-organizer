@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.27.2
+// version: 2.28.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-16
 
@@ -4904,6 +4904,21 @@ export async function getBookMetadataHashStats(): Promise<BookMetadataHashStats>
   }
   const body = await response.json();
   return body.data ?? body;
+}
+
+export interface AcoustIDStats {
+  total_files: number;
+  with_fingerprint: number;
+  by_library: { library_root: string; total_files: number; with_fingerprint: number }[];
+}
+
+export async function getAcoustIDStats(): Promise<AcoustIDStats> {
+  const response = await fetch(`${API_BASE}/maintenance/acoustid-stats`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch AcoustID stats');
+  }
+  const body = await response.json();
+  return body.data?.data ?? body.data ?? body;
 }
 
 export async function backfillMetadataHashes(dryRun = false): Promise<{ operation_id: string }> {

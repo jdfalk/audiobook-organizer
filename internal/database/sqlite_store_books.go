@@ -1,7 +1,7 @@
 // file: internal/database/sqlite_store_books.go
-// version: 1.0.3
+// version: 1.0.4
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-05
+// last-edited: 2026-05-16
 
 package database
 
@@ -3878,4 +3878,9 @@ func (s *SQLiteStore) GetFilesWithFingerprintFailures(reason string, limit, offs
 		return nil, 0, fmt.Errorf("GetFilesWithFingerprintFailures rows: %w", err)
 	}
 	return files, total, nil
+}
+
+// GetAcoustIDStats is not implemented for SQLite (PebbleDB is primary).
+func (s *SQLiteStore) GetAcoustIDStats() (*AcoustIDStats, error) {
+	return &AcoustIDStats{}, nil
 }
