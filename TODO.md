@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.37.0 -->
+<!-- version: 8.37.1 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-14 -->
+<!-- last-edited: 2026-05-15 -->
 
 # Project TODO
 
@@ -438,7 +438,7 @@ PR #520 wires Audible `runtime_length_min` into candidate scoring. Still needed:
 - [x] **RATE-2** Book detail UI: star rating widget (overall / story / performance + notes) — PR #552
 - [x] **RATE-3** Audible/Google ratings shown on MetadataReviewDialog candidate cards — PR #553
 - [x] **RATE-4** Library search/filter with numeric operators (>, <, >=, <=, ==, !=) for user_rating_* — PR #554
-- [ ] **RATE-5** Bulk rating view / quick-rate from list
+- [x] **RATE-5** Bulk rating view / quick-rate from list
 
 ---
 
