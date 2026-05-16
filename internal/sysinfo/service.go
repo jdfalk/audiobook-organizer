@@ -1,5 +1,5 @@
 // file: internal/sysinfo/service.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
 // last-edited: 2026-05-01
 
@@ -69,6 +69,7 @@ type SystemStatus struct {
 	PluginHealth        map[string]string    `json:"plugin_health,omitempty"`
 	AppUptimeSeconds    float64              `json:"app_uptime_seconds"`
 	SystemUptimeSeconds float64              `json:"system_uptime_seconds"`
+	BrokenFileCount     *int                 `json:"broken_file_count,omitempty"`
 }
 
 type SystemLibraryStatus struct {

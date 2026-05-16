@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 2.2.2
+// version: 2.2.3
 // last-edited: 2026-05-16
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
@@ -104,6 +104,28 @@ func (s *Server) getSystemStatus(c *gin.Context) {
 			}
 		}
 		status.PluginHealth = pluginHealth
+	}
+
+	// Attach broken file count — PebbleStore implements GetBrokenFileCount but it
+	// is not part of SystemServiceStore, so we probe via interface assertion here.
+	if s.Store() != nil {
+		bfc := func() (int, bool) {
+			if gf, ok := s.Store().(interface{ GetBrokenFileCount() (int, error) }); ok {
+				if cnt, err := gf.GetBrokenFileCount(); err == nil {
+					return cnt, true
+				}
+			} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+				if inner, ok2 := uw.Unwrap().(interface{ GetBrokenFileCount() (int, error) }); ok2 {
+					if cnt, err := inner.GetBrokenFileCount(); err == nil {
+						return cnt, true
+					}
+				}
+			}
+			return 0, false
+		}
+		if cnt, ok := bfc(); ok {
+			status.BrokenFileCount = &cnt
+		}
 	}
 
 	httputil.RespondWithOK(c, status)
