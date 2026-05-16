@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.19.0
+// version: 2.19.1
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-12
+// last-edited: 2026-05-16
 
 package server
 
@@ -528,6 +528,7 @@ func NewServer(store database.Store) *Server {
 	// during Phase 2 M1 step 1). Nil provisioner → ITL track provisioning
 	// is skipped (service is disabled or construction failed above).
 	server.importService.SetTrackProvisioner(server.itunesSvc.Provisioner)
+	server.importService.SetDedupEngine(server.dedupEngine)
 	// After M1 step 2, the batcher is owned by itunesservice.Service and
 	// Provisioner was wired with the real Enqueuer at Service.New() time.
 	// No SetEnqueuer hop needed.
