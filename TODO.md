@@ -116,7 +116,7 @@ incrementally:
 
 ## 🧹 Tech Debt Sweep — Deprecated Code & Warnings
 
-- [ ] **TECHDEBT-1** Audit and remove deprecated code across the entire codebase
+- [x] **TECHDEBT-1** Audit and remove deprecated code across the entire codebase
   - Backend: scan for `// Deprecated:` markers, dead code paths flagged in past evaluations, unused exported symbols, packages with replacement candidates already in use.
   - Frontend: ~~resolve **React Router v6 future-flag warnings**~~ (done — PR #949; `v7_startTransition` + `v7_relativeSplatPath` added to all BrowserRouter/MemoryRouter usages in main.tsx and all test files). Then upgrade-prep for v7 properly.
   - Frontend: audit `package.json` for deprecated transitive deps (`npm outdated`, `npm audit`), remove dead Material-UI v4-style imports if any remain, ~~kill `console.log` left in src~~ (verified clean — no console.log in production source files).
@@ -251,7 +251,7 @@ incrementally:
 
 ### Phase 10: Documentation
 
-- [ ] **SEC-AUDIT-10** Document path validation policy & add dismissal comments
+- [x] **SEC-AUDIT-10** Document path validation policy & add dismissal comments
   - **Priority:** P3
   - **Effort:** 1.5 hours
   - **Action:** Create `docs/security/path-validation-policy.md`, add comments to 13 dismissed alerts (#560-#547)
