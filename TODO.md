@@ -184,7 +184,7 @@ incrementally:
   - **Dependencies:** Phase 0
   - **Plan:** [`implementation-plan.md#phase-1`](docs/security/audit-2026-05-03/implementation-plan.md#phase-1-path-injection--foundation-build-validation-utilities)
 
-- [ ] **SEC-AUDIT-2** Fix path injection in fileops layer (9 alerts: #625-#620, #543, #542, #539, #538-#536)
+- [x] **SEC-AUDIT-2** Fix path injection in fileops layer (9 alerts: #625-#620, #543, #542, #539, #538-#536)
   - **Priority:** P0
   - **Effort:** 6 hours
   - **Files:** `internal/fileops/` (service.go, hash.go, write_tags_safe.go, safe_operations.go)

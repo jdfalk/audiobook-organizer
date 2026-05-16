@@ -1,7 +1,7 @@
 // file: internal/server/covers.go
-// version: 1.4.0
+// version: 1.4.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-11
+// last-edited: 2026-05-15
 //
 // HTTP handlers for cover proxy and local cover serving.
 // Business logic extracted to internal/covers.
@@ -18,6 +18,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/covers"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 )
 
 // handleCoverProxy proxies and caches cover images from external URLs.
@@ -35,7 +36,13 @@ func (s *Server) handleCoverProxy(c *gin.Context) {
 		return
 	}
 
-	cacheDir := filepath.Join(config.AppConfig.RootDir, ".covers")
+	cacheDirSP, err := safepath.Join(config.AppConfig.RootDir, ".covers")
+	if err != nil {
+		httputil.RespondWithInternalError(c, "invalid cache directory")
+		return
+	}
+	cacheDir := cacheDirSP.String()
+
 	cachePath, errMsg := covers.FetchAndCacheCover(coverURL, cacheDir)
 
 	if errMsg != "" {
@@ -66,7 +73,15 @@ func (s *Server) handleLocalCover(c *gin.Context) {
 		return
 	}
 
-	coverPath, err := covers.FindCoverFile(filename, config.AppConfig.RootDir)
+	// Validate cover path with safepath
+	coverSP, err := safepath.Join(config.AppConfig.RootDir, "covers", filename)
+	if err != nil {
+		httputil.RespondWithBadRequest(c, "invalid filename")
+		return
+	}
+	coverPath := coverSP.String()
+
+	coverPath, err = covers.FindCoverFile(filepath.Base(coverPath), config.AppConfig.RootDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			httputil.RespondWithNotFound(c, "cover", "")

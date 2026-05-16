@@ -1,7 +1,7 @@
 // file: internal/server/cover_history.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 6d4e5f3a-7b8c-4a70-b8c5-3d7e0f1b9a99
-// last-edited: 2026-05-11
+// last-edited: 2026-05-15
 //
 // HTTP handlers for cover art history browsing and restore.
 // Each time a book's cover is updated, the previous cover is saved
@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/covers"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 )
 
 // handleListCoverHistory returns the cover art history for a book.
@@ -59,8 +60,12 @@ func (s *Server) handleRestoreCover(c *gin.Context) {
 	}
 
 	// Validate file exists before restoring
-	histPath := filepath.Join(config.AppConfig.RootDir, "covers", "history", bookID, req.Filename)
-	if _, err := os.Stat(histPath); os.IsNotExist(err) {
+	histSP, err := safepath.Join(config.AppConfig.RootDir, "covers", "history", bookID, req.Filename)
+	if err != nil {
+		httputil.RespondWithNotFound(c, "cover file", "")
+		return
+	}
+	if _, err := os.Stat(histSP.String()); os.IsNotExist(err) {
 		httputil.RespondWithNotFound(c, "cover file", "")
 		return
 	}
