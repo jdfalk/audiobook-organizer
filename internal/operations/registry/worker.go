@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
 
 // ErrSubprocessNotImplemented is returned when a Run with Isolate=true is
@@ -114,6 +116,8 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 		}
 	}
 	runCtx, cancel := context.WithTimeout(parentCtx, timeout)
+	// Install a context-bound slog.Logger that tags every line with the operation id.
+	runCtx = logger.WithOperation(runCtx, qr.opID)
 	defer cancel()
 
 	// Register the handle.
