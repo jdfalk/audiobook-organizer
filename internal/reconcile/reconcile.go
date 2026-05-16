@@ -1,7 +1,7 @@
 // file: internal/reconcile/reconcile.go
 // version: 1.0.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
-// last-edited: 2026-05-05
+// last-edited: 2026-05-15
 
 package reconcile
 
@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -422,9 +423,11 @@ func FindUntrackedFiles(store Store, knownPaths map[string]bool) ([]string, erro
 	if config.AppConfig.ITunesLibraryReadPath != "" {
 		itunesMedia := filepath.Dir(config.AppConfig.ITunesLibraryReadPath)
 		// Walk up to find the iTunes Media/Audiobooks folder
-		audiobooks := filepath.Join(itunesMedia, "iTunes Media", "Audiobooks")
-		if _, err := os.Stat(audiobooks); err == nil {
-			dirs = append(dirs, audiobooks)
+		if sp, err := safepath.Join(itunesMedia, "iTunes Media", "Audiobooks"); err == nil {
+			audiobooks := sp.String()
+			if _, err := os.Stat(audiobooks); err == nil {
+				dirs = append(dirs, audiobooks)
+			}
 		}
 	}
 
