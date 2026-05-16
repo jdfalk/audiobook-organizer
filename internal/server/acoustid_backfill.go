@@ -136,7 +136,7 @@ func (s *Server) backfillAcoustIDs(ctx context.Context) {
 		}
 		bookModified := false
 		for _, f := range files {
-			switch fingerprintBookFile(store, f, false) {
+			switch fingerprintBookFile(ctx, store, f, false) {
 			case fingerprintOutcomeFingerprinted:
 				fingerprinted++
 				bookModified = true
