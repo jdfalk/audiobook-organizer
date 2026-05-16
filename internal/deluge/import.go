@@ -137,6 +137,20 @@ func reflinkCopy(src, dest string) error {
 	return reflinkCopyOS(src, dest)
 }
 
+// ReflinkOrCopy attempts a copy-on-write reflink then falls back to a
+// full io.Copy if the reflink path is unsupported. Exported so callers in
+// other packages (e.g., the deluge plugin) can reuse the same semantics.
+func ReflinkOrCopy(src, dest string) error {
+	if err := reflinkCopy(src, dest); err != nil {
+		// Attempt a plain io.Copy as a fallback. Return the copy error if that
+		// also fails.
+		if err2 := ioCopy(src, dest); err2 != nil {
+			return err2
+		}
+	}
+	return nil
+}
+
 // ioCopy copies src to dest using standard io.Copy (read all bytes, write all bytes).
 func ioCopy(src, dest string) error {
 	in, err := os.Open(src)
