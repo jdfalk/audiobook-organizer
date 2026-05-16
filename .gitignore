@@ -282,6 +282,8 @@ docs/reports/
 docs/superpowers/
 !docs/superpowers/fleet-tasks/
 !docs/superpowers/fleet-tasks/*
+!docs/superpowers/fleet-status/
+!docs/superpowers/fleet-status/*
 
 .copilot/
 .aider*
