@@ -18,12 +18,18 @@ func init() { maintenance.Register(&backfillMetadataSourceHashJob{}) }
 
 type backfillMetadataSourceHashJob struct{}
 
-func (j *backfillMetadataSourceHashJob) ID() string          { return "backfill-metadata-source-hash" }
+func (j *backfillMetadataSourceHashJob) ID() string       { return "backfill-metadata-source-hash" }
 func (j *backfillMetadataSourceHashJob) Name() string     { return "Backfill Metadata Source Hash" }
 func (j *backfillMetadataSourceHashJob) Category() string { return "files" }
-func (j *backfillMetadataSourceHashJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
-func (j *backfillMetadataSourceHashJob) Description() string { return "Compute MetadataSourceHash for books that have one missing" }
-func (j *backfillMetadataSourceHashJob) CanResume() bool     { return false }
+func (j *backfillMetadataSourceHashJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: false}
+}
+func (j *backfillMetadataSourceHashJob) Description() string {
+	return "Compute MetadataSourceHash for books that have one missing"
+}
+func (j *backfillMetadataSourceHashJob) CanResume() bool { return false }
 func (j *backfillMetadataSourceHashJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {

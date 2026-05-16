@@ -17,12 +17,18 @@ func init() { maintenance.Register(&scanDuplicateFilesJob{}) }
 
 type scanDuplicateFilesJob struct{}
 
-func (j *scanDuplicateFilesJob) ID() string          { return "scan-duplicate-files" }
+func (j *scanDuplicateFilesJob) ID() string       { return "scan-duplicate-files" }
 func (j *scanDuplicateFilesJob) Name() string     { return "Scan Duplicate Files" }
 func (j *scanDuplicateFilesJob) Category() string { return "dedup" }
-func (j *scanDuplicateFilesJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
-func (j *scanDuplicateFilesJob) Description() string { return "Scan for book files sharing the same hash" }
-func (j *scanDuplicateFilesJob) CanResume() bool     { return false }
+func (j *scanDuplicateFilesJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: false}
+}
+func (j *scanDuplicateFilesJob) Description() string {
+	return "Scan for book files sharing the same hash"
+}
+func (j *scanDuplicateFilesJob) CanResume() bool { return false }
 func (j *scanDuplicateFilesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, _ bool) error {
 	files, err := store.GetAllBookFiles()
 	if err != nil {

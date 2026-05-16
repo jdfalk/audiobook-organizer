@@ -28,8 +28,8 @@ import (
 //	dedup:p:<type>:<aID>:<bID>      → id16hex           (pair uniqueness index)
 //	dedup:seq                       → [8]byte LE int64  (auto-increment counter)
 const (
-	embVecPfx   = "emb:v:"
-	embCachePfx = "emb:c:"
+	embVecPfx    = "emb:v:"
+	embCachePfx  = "emb:c:"
 	dedupRecPfx  = "dedup:r:"
 	dedupPairPfx = "dedup:p:"
 	dedupSeqKey  = "dedup:seq"
@@ -343,7 +343,6 @@ func dedupRecKey(id int64) []byte {
 func dedupPairKey(entityType, aID, bID string) []byte {
 	return []byte(dedupPairPfx + entityType + ":" + aID + ":" + bID)
 }
-
 
 // nextID reads and increments the sequential counter. Must be called with s.mu held.
 // The new counter value is written into the supplied batch so counter + record land atomically.

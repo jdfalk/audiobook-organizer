@@ -5,8 +5,8 @@
 package metadata
 
 import (
-	json "encoding/json/v2"
 	"context"
+	json "encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"

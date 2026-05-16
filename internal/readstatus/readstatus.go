@@ -38,7 +38,10 @@ import (
 // updates user_book_state with fresh auto-computed fields. Returns
 // the new state (or a no-op unchanged state if there's nothing to
 // record — e.g. a user who's never touched this book).
-func RecomputeUserBookState(store interface { database.BookFileStore; database.UserPositionStore }, userID, bookID string) (*database.UserBookState, error) {
+func RecomputeUserBookState(store interface {
+	database.BookFileStore
+	database.UserPositionStore
+}, userID, bookID string) (*database.UserBookState, error) {
 	if store == nil || userID == "" || bookID == "" {
 		return nil, nil
 	}
@@ -131,7 +134,10 @@ func RecomputeUserBookState(store interface { database.BookFileStore; database.U
 // RecomputeUserBookState leaves it alone going forward. Passing
 // empty string reverts to auto — next Recompute call derives a
 // fresh status from positions.
-func SetManualStatus(store interface { database.BookFileStore; database.UserPositionStore }, userID, bookID, status string) (*database.UserBookState, error) {
+func SetManualStatus(store interface {
+	database.BookFileStore
+	database.UserPositionStore
+}, userID, bookID, status string) (*database.UserBookState, error) {
 	if store == nil {
 		return nil, nil
 	}

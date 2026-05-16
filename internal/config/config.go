@@ -157,16 +157,16 @@ type Config struct {
 	// Activity log retention (separate from operation log retention)
 	ActivityLogRetentionChangeDays int `json:"activity_log_retention_change_days"` // default 90
 	ActivityLogRetentionDebugDays  int `json:"activity_log_retention_debug_days"`  // default 30
-	ActivityLogCompactionDays int `json:"activity_log_compaction_days"` // default 14
+	ActivityLogCompactionDays      int `json:"activity_log_compaction_days"`       // default 14
 
 	// Embedding-based dedup
-	EmbeddingEnabled         bool    `json:"embedding_enabled"`              // default true
-	EmbeddingModel           string  `json:"embedding_model"`                // default "text-embedding-3-large"
-	DedupBookHighThreshold   float64 `json:"dedup_book_high_threshold"`      // default 0.95
-	DedupBookLowThreshold    float64 `json:"dedup_book_low_threshold"`       // default 0.85
-	DedupAuthorHighThreshold float64 `json:"dedup_author_high_threshold"`    // default 0.92
-	DedupAuthorLowThreshold  float64 `json:"dedup_author_low_threshold"`     // default 0.80
-	DedupAutoMergeEnabled    bool    `json:"dedup_auto_merge_enabled"`       // default true
+	EmbeddingEnabled         bool    `json:"embedding_enabled"`           // default true
+	EmbeddingModel           string  `json:"embedding_model"`             // default "text-embedding-3-large"
+	DedupBookHighThreshold   float64 `json:"dedup_book_high_threshold"`   // default 0.95
+	DedupBookLowThreshold    float64 `json:"dedup_book_low_threshold"`    // default 0.85
+	DedupAuthorHighThreshold float64 `json:"dedup_author_high_threshold"` // default 0.92
+	DedupAuthorLowThreshold  float64 `json:"dedup_author_low_threshold"`  // default 0.80
+	DedupAutoMergeEnabled    bool    `json:"dedup_auto_merge_enabled"`    // default true
 	// DedupLLMAutoMergeHighConfidence, when true, automatically
 	// applies a merge when the LLM review (Layer 3) returns a
 	// "duplicate" verdict with confidence "high". Opt-in because
@@ -220,8 +220,8 @@ type Config struct {
 	BasicAuthPassword string `json:"basic_auth_password"`
 
 	// Memory management
-	MemoryLimitType    string `json:"memory_limit_type"`    // 'items', 'percent', 'absolute'
-	CacheSize          int    `json:"cache_size"`           // number of items
+	MemoryLimitType string `json:"memory_limit_type"` // 'items', 'percent', 'absolute'
+	CacheSize       int    `json:"cache_size"`        // number of items
 	// CacheInvalidateOnBookUpdate controls whether updating a book's metadata
 	// invalidates the list/facets caches. Defaults to false so caches stay
 	// warm across metadata fetches and write-back operations.
@@ -230,8 +230,8 @@ type Config struct {
 	// fetch cache (Audible/Audnexus/etc. API results) is considered fresh.
 	// 0 means never expire. Default 7.
 	MetadataFetchCacheTTLDays int `json:"metadata_fetch_cache_ttl_days"`
-	MemoryLimitPercent int    `json:"memory_limit_percent"` // % of system memory
-	MemoryLimitMB      int    `json:"memory_limit_mb"`      // absolute MB
+	MemoryLimitPercent        int `json:"memory_limit_percent"` // % of system memory
+	MemoryLimitMB             int `json:"memory_limit_mb"`      // absolute MB
 
 	// Lifecycle / retention
 	PurgeSoftDeletedAfterDays   int  `json:"purge_soft_deleted_after_days"`
@@ -250,16 +250,16 @@ type Config struct {
 	ITunesLibraryReadPath  string          `json:"itunes_library_read_path"`  // path used for sync (XML or ITL)
 	ITunesPathMappings     []ITunesPathMap `json:"itunes_path_mappings"`      // Stored path mappings for write-back
 	ITunesAutoWriteBack    bool            `json:"itunes_auto_write_back"`    // Auto write-back on every edit (batched)
-	ITunesPathTrimEnabled  bool            `json:"itunes_path_trim_enabled"`   // Trim filenames to fit Windows MAX_PATH for iTunes compatibility
-	ITunesWindowsRootPath  string          `json:"itunes_windows_root_path"`   // Windows equivalent of RootDir, e.g. "W:\audiobook-organizer" (no trailing slash)
-	ITunesMediaRoot        string          `json:"itunes_media_root"`          // Local path to iTunes Media/Audiobooks, e.g. "/mnt/bigdata/books/itunes/iTunes Media/Audiobooks"
+	ITunesPathTrimEnabled  bool            `json:"itunes_path_trim_enabled"`  // Trim filenames to fit Windows MAX_PATH for iTunes compatibility
+	ITunesWindowsRootPath  string          `json:"itunes_windows_root_path"`  // Windows equivalent of RootDir, e.g. "W:\audiobook-organizer" (no trailing slash)
+	ITunesMediaRoot        string          `json:"itunes_media_root"`         // Local path to iTunes Media/Audiobooks, e.g. "/mnt/bigdata/books/itunes/iTunes Media/Audiobooks"
 
 	// Deluge integration
-	DelugeWebURL              string `json:"deluge_web_url"`               // e.g. "http://172.16.2.30:8112"
-	DelugeWebPassword         string `json:"deluge_web_password"`          // Web UI password (default: "deluge")
-	DelugeDiscoveryLabel      string `json:"deluge_discovery_label"`       // label to filter for discovery (e.g. "audiobooks")
-	DelugeDiscoveryEnabled    bool   `json:"deluge_discovery_enabled"`     // enable /discover endpoint (identify unimported torrents)
-	DelugeMoveEnabled         bool   `json:"deluge_move_enabled"`          // enable MoveStorage calls when books are reorganized
+	DelugeWebURL           string `json:"deluge_web_url"`           // e.g. "http://172.16.2.30:8112"
+	DelugeWebPassword      string `json:"deluge_web_password"`      // Web UI password (default: "deluge")
+	DelugeDiscoveryLabel   string `json:"deluge_discovery_label"`   // label to filter for discovery (e.g. "audiobooks")
+	DelugeDiscoveryEnabled bool   `json:"deluge_discovery_enabled"` // enable /discover endpoint (identify unimported torrents)
+	DelugeMoveEnabled      bool   `json:"deluge_move_enabled"`      // enable MoveStorage calls when books are reorganized
 	// ProtectedPaths is an explicit list of filesystem path prefixes that must
 	// never be edited in-place (tag writes, renames, deletes). These are merged
 	// with the Deluge save_path set at runtime. iTunes media paths belong here.
@@ -573,16 +573,16 @@ func InitConfig() {
 		ConcurrentScans:                  viper.GetInt("concurrent_scans"),
 		ChapterConsolidationThresholdMin: viper.GetInt("chapter_consolidation_threshold_min"),
 		OperationTimeoutMinutes:          viper.GetInt("operation_timeout_minutes"),
-		MinBookSizeBytes:        viper.GetInt64("min_book_size_bytes"),
-		APIRateLimitPerMinute:   viper.GetInt("api_rate_limit_per_minute"),
-		AuthRateLimitPerMinute:  viper.GetInt("auth_rate_limit_per_minute"),
-		JSONBodyLimitMB:         viper.GetInt("json_body_limit_mb"),
-		UploadBodyLimitMB:       viper.GetInt("upload_body_limit_mb"),
-		EnableAuth:              viper.GetBool("enable_auth"),
-		EnableRateLimit:         viper.GetBool("enable_rate_limit"),
-		BasicAuthEnabled:        viper.GetBool("basic_auth_enabled"),
-		BasicAuthUsername:       viper.GetString("basic_auth_username"),
-		BasicAuthPassword:       viper.GetString("basic_auth_password"),
+		MinBookSizeBytes:                 viper.GetInt64("min_book_size_bytes"),
+		APIRateLimitPerMinute:            viper.GetInt("api_rate_limit_per_minute"),
+		AuthRateLimitPerMinute:           viper.GetInt("auth_rate_limit_per_minute"),
+		JSONBodyLimitMB:                  viper.GetInt("json_body_limit_mb"),
+		UploadBodyLimitMB:                viper.GetInt("upload_body_limit_mb"),
+		EnableAuth:                       viper.GetBool("enable_auth"),
+		EnableRateLimit:                  viper.GetBool("enable_rate_limit"),
+		BasicAuthEnabled:                 viper.GetBool("basic_auth_enabled"),
+		BasicAuthUsername:                viper.GetString("basic_auth_username"),
+		BasicAuthPassword:                viper.GetString("basic_auth_password"),
 
 		// Memory management
 		MemoryLimitType:           viper.GetString("memory_limit_type"),
@@ -988,16 +988,16 @@ func ResetToDefaults() {
 		PurgeSoftDeletedDeleteFiles:    false,
 		ActivityLogRetentionChangeDays: 90,
 		ActivityLogRetentionDebugDays:  30,
-		ActivityLogCompactionDays: 14,
+		ActivityLogCompactionDays:      14,
 
 		// Embedding-based dedup
-		EmbeddingEnabled:         true,
-		EmbeddingModel:           "text-embedding-3-large",
-		DedupBookHighThreshold:   0.95,
-		DedupBookLowThreshold:    0.85,
-		DedupAuthorHighThreshold: 0.92,
-		DedupAuthorLowThreshold:  0.80,
-		DedupAutoMergeEnabled:    true,
+		EmbeddingEnabled:                true,
+		EmbeddingModel:                  "text-embedding-3-large",
+		DedupBookHighThreshold:          0.95,
+		DedupBookLowThreshold:           0.85,
+		DedupAuthorHighThreshold:        0.92,
+		DedupAuthorLowThreshold:         0.80,
+		DedupAutoMergeEnabled:           true,
 		DedupLLMAutoMergeHighConfidence: false,
 
 		// Metadata candidate scoring (PR1)

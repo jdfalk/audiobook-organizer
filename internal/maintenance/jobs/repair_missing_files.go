@@ -27,12 +27,18 @@ func init() { maintenance.Register(&repairMissingFilesJob{}) }
 
 type repairMissingFilesJob struct{}
 
-func (j *repairMissingFilesJob) ID() string          { return "repair-missing-files" }
-func (j *repairMissingFilesJob) Name() string        { return "Repair Missing Files" }
-func (j *repairMissingFilesJob) Category() string    { return "Files" }
-func (j *repairMissingFilesJob) Description() string { return "Tries to locate book_files whose stored path no longer exists and updates the DB record with the new path" }
-func (j *repairMissingFilesJob) DefaultParams() any  { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
-func (j *repairMissingFilesJob) CanResume() bool     { return true }
+func (j *repairMissingFilesJob) ID() string       { return "repair-missing-files" }
+func (j *repairMissingFilesJob) Name() string     { return "Repair Missing Files" }
+func (j *repairMissingFilesJob) Category() string { return "Files" }
+func (j *repairMissingFilesJob) Description() string {
+	return "Tries to locate book_files whose stored path no longer exists and updates the DB record with the new path"
+}
+func (j *repairMissingFilesJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: true}
+}
+func (j *repairMissingFilesJob) CanResume() bool { return true }
 
 func (j *repairMissingFilesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	opID := maintenance.OperationIDFromCtx(ctx)

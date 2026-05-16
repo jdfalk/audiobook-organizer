@@ -22,7 +22,7 @@ import (
 // Only UpdateBookFile is implemented; all others panic or return nil.
 type fakeStore struct {
 	database.Store // embed the interface so we don't need to implement all methods
-	updated *database.BookFile
+	updated        *database.BookFile
 }
 
 func (f *fakeStore) UpdateBookFile(id string, file *database.BookFile) error {

@@ -14,18 +14,18 @@ import (
 
 // MockBookStore is a test double for database.BookStore
 type MockBookStore struct {
-	books   map[string]*database.Book
-	getErr  error
-	setErr  error
-	delErr  error
-	delCnt  int
-	updCnt  int
+	books    map[string]*database.Book
+	getErr   error
+	setErr   error
+	delErr   error
+	delCnt   int
+	updCnt   int
 	updateFn func(id string, book *database.Book) error
 }
 
 func NewMockBookStore() *MockBookStore {
 	return &MockBookStore{
-		books:   make(map[string]*database.Book),
+		books: make(map[string]*database.Book),
 	}
 }
 
@@ -82,58 +82,90 @@ func (m *MockBookStore) DeleteBook(id string) error {
 }
 
 // Stub implementations for other BookStore methods not used by BatchService
-func (m *MockBookStore) GetAllBooks(limit, offset int) ([]database.Book, error)            { return nil, nil }
-func (m *MockBookStore) GetAllBookSummaries(limit, offset int) ([]database.BookSummary, error) { return nil, nil }
-func (m *MockBookStore) GetBookByFilePath(path string) (*database.Book, error)            { return nil, nil }
-func (m *MockBookStore) GetBookByITunesPersistentID(persistentID string) (*database.Book, error) { return nil, nil }
-func (m *MockBookStore) GetBookByFileHash(hash string) (*database.Book, error)            { return nil, nil }
-func (m *MockBookStore) GetBookByOriginalHash(hash string) (*database.Book, error)       { return nil, nil }
-func (m *MockBookStore) GetBookByOrganizedHash(hash string) (*database.Book, error)      { return nil, nil }
-func (m *MockBookStore) GetDuplicateBooks() ([][]database.Book, error)                   { return nil, nil }
-func (m *MockBookStore) GetFolderDuplicates() ([][]database.Book, error)                 { return nil, nil }
-func (m *MockBookStore) GetDuplicateBooksByMetadata(threshold float64) ([][]database.Book, error) { return nil, nil }
-func (m *MockBookStore) GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]database.Book, error) { return nil, nil }
-func (m *MockBookStore) GetBooksBySeriesID(seriesID int) ([]database.Book, error)        { return nil, nil }
-func (m *MockBookStore) GetBooksByAuthorID(authorID int) ([]database.Book, error)        { return nil, nil }
-func (m *MockBookStore) GetBooksByVersionGroup(groupID string) ([]database.Book, error)  { return nil, nil }
-func (m *MockBookStore) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) { return nil, nil }
-func (m *MockBookStore) SearchBooks(query string, limit, offset int) ([]database.Book, error) { return nil, nil }
-func (m *MockBookStore) CountBooks() (int, error)                                        { return len(m.books), nil }
-func (m *MockBookStore) GetDistinctGenres() ([]string, error)                            { return nil, nil }
-func (m *MockBookStore) GetDistinctLanguages() ([]string, error)                         { return nil, nil }
-func (m *MockBookStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]database.Book, error) { return nil, nil }
-func (m *MockBookStore) GetBookSnapshots(id string, limit int) ([]database.BookSnapshot, error) { return nil, nil }
-func (m *MockBookStore) GetBookAtVersion(id string, ts time.Time) (*database.Book, error) { return nil, nil }
-func (m *MockBookStore) GetBookTombstone(id string) (*database.Book, error)              { return nil, nil }
-func (m *MockBookStore) ListBookTombstones(limit int) ([]database.Book, error)           { return nil, nil }
-func (m *MockBookStore) GetITunesDirtyBooks() ([]database.Book, error)                   { return nil, nil }
-func (m *MockBookStore) GetITunesPurgePendingBooks() ([]database.Book, error)            { return nil, nil }
-func (m *MockBookStore) GetQuarantinedBooks(limit, offset int) ([]database.Book, error)  { return nil, nil }
-func (m *MockBookStore) CountQuarantinedBooks() (int, error)                             { return 0, nil }
-func (m *MockBookStore) CreateBook(book *database.Book) (*database.Book, error)          { return book, nil }
-func (m *MockBookStore) UpdateBookRating(id string, req database.UpdateBookRatingRequest) error { return nil }
-func (m *MockBookStore) SetLastWrittenAt(id string, t time.Time) error                   { return nil }
-func (m *MockBookStore) MarkITunesSynced(bookIDs []string) (int64, error)                { return int64(len(bookIDs)), nil }
-func (m *MockBookStore) RevertBookToVersion(id string, ts time.Time) (*database.Book, error) { return nil, nil }
-func (m *MockBookStore) PruneBookSnapshots(id string, keepCount int) (int, error)        { return 0, nil }
-func (m *MockBookStore) CreateBookTombstone(book *database.Book) error                   { return nil }
-func (m *MockBookStore) DeleteBookTombstone(id string) error                             { return nil }
-func (m *MockBookStore) GetScanFailCount(pathHash string) (int, error)                   { return 0, nil }
-func (m *MockBookStore) IncrScanFailCount(pathHash string) (int, error)                  { return 1, nil }
-func (m *MockBookStore) ResetScanFailCount(pathHash string) error                        { return nil }
-func (m *MockBookStore) MergeChapterBooks(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error { return nil }
-func (m *MockBookStore) GetMergeResultSummary(primaryID string) (*database.Book, error)  { return nil, nil }
-func (m *MockBookStore) AddBookTag(id, tag string) error                                 { return nil }
-func (m *MockBookStore) RemoveBookTag(id, tag string) error                              { return nil }
-func (m *MockBookStore) GetBookTags(id string) ([]string, error)                         { return nil, nil }
-func (m *MockBookStore) GetBooksWithTag(tag string) ([]string, error)                    { return nil, nil }
-func (m *MockBookStore) GetAllBookTags() ([]string, error)                               { return nil, nil }
-func (m *MockBookStore) AddBookUserTag(id, tag string) error                             { return nil }
-func (m *MockBookStore) RemoveBookUserTag(id, tag string) error                          { return nil }
-func (m *MockBookStore) GetBookUserTags(id string) ([]string, error)                     { return nil, nil }
-func (m *MockBookStore) GetBooksWithUserTag(tag string) ([]string, error)                { return nil, nil }
-func (m *MockBookStore) GetAllBookUserTags() ([]string, error)                           { return nil, nil }
-func (m *MockBookStore) AdjustRating(id string, delta int) (*database.Book, error)       { return nil, nil }
+func (m *MockBookStore) GetAllBooks(limit, offset int) ([]database.Book, error) { return nil, nil }
+func (m *MockBookStore) GetAllBookSummaries(limit, offset int) ([]database.BookSummary, error) {
+	return nil, nil
+}
+func (m *MockBookStore) GetBookByFilePath(path string) (*database.Book, error) { return nil, nil }
+func (m *MockBookStore) GetBookByITunesPersistentID(persistentID string) (*database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) GetBookByFileHash(hash string) (*database.Book, error)      { return nil, nil }
+func (m *MockBookStore) GetBookByOriginalHash(hash string) (*database.Book, error)  { return nil, nil }
+func (m *MockBookStore) GetBookByOrganizedHash(hash string) (*database.Book, error) { return nil, nil }
+func (m *MockBookStore) GetDuplicateBooks() ([][]database.Book, error)              { return nil, nil }
+func (m *MockBookStore) GetFolderDuplicates() ([][]database.Book, error)            { return nil, nil }
+func (m *MockBookStore) GetDuplicateBooksByMetadata(threshold float64) ([][]database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) GetBooksByTitleInDir(normalizedTitle, dirPath string) ([]database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) GetBooksBySeriesID(seriesID int) ([]database.Book, error) { return nil, nil }
+func (m *MockBookStore) GetBooksByAuthorID(authorID int) ([]database.Book, error) { return nil, nil }
+func (m *MockBookStore) GetBooksByVersionGroup(groupID string) ([]database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) GetBooksByMetadataSourceHash(hash string) ([]database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) SearchBooks(query string, limit, offset int) ([]database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) CountBooks() (int, error)                { return len(m.books), nil }
+func (m *MockBookStore) GetDistinctGenres() ([]string, error)    { return nil, nil }
+func (m *MockBookStore) GetDistinctLanguages() ([]string, error) { return nil, nil }
+func (m *MockBookStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) GetBookSnapshots(id string, limit int) ([]database.BookSnapshot, error) {
+	return nil, nil
+}
+func (m *MockBookStore) GetBookAtVersion(id string, ts time.Time) (*database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) GetBookTombstone(id string) (*database.Book, error)    { return nil, nil }
+func (m *MockBookStore) ListBookTombstones(limit int) ([]database.Book, error) { return nil, nil }
+func (m *MockBookStore) GetITunesDirtyBooks() ([]database.Book, error)         { return nil, nil }
+func (m *MockBookStore) GetITunesPurgePendingBooks() ([]database.Book, error)  { return nil, nil }
+func (m *MockBookStore) GetQuarantinedBooks(limit, offset int) ([]database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) CountQuarantinedBooks() (int, error)                    { return 0, nil }
+func (m *MockBookStore) CreateBook(book *database.Book) (*database.Book, error) { return book, nil }
+func (m *MockBookStore) UpdateBookRating(id string, req database.UpdateBookRatingRequest) error {
+	return nil
+}
+func (m *MockBookStore) SetLastWrittenAt(id string, t time.Time) error { return nil }
+func (m *MockBookStore) MarkITunesSynced(bookIDs []string) (int64, error) {
+	return int64(len(bookIDs)), nil
+}
+func (m *MockBookStore) RevertBookToVersion(id string, ts time.Time) (*database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) PruneBookSnapshots(id string, keepCount int) (int, error) { return 0, nil }
+func (m *MockBookStore) CreateBookTombstone(book *database.Book) error            { return nil }
+func (m *MockBookStore) DeleteBookTombstone(id string) error                      { return nil }
+func (m *MockBookStore) GetScanFailCount(pathHash string) (int, error)            { return 0, nil }
+func (m *MockBookStore) IncrScanFailCount(pathHash string) (int, error)           { return 1, nil }
+func (m *MockBookStore) ResetScanFailCount(pathHash string) error                 { return nil }
+func (m *MockBookStore) MergeChapterBooks(primaryID string, srcIDs []string, commonTitle string, totalDuration float64) error {
+	return nil
+}
+func (m *MockBookStore) GetMergeResultSummary(primaryID string) (*database.Book, error) {
+	return nil, nil
+}
+func (m *MockBookStore) AddBookTag(id, tag string) error                               { return nil }
+func (m *MockBookStore) RemoveBookTag(id, tag string) error                            { return nil }
+func (m *MockBookStore) GetBookTags(id string) ([]string, error)                       { return nil, nil }
+func (m *MockBookStore) GetBooksWithTag(tag string) ([]string, error)                  { return nil, nil }
+func (m *MockBookStore) GetAllBookTags() ([]string, error)                             { return nil, nil }
+func (m *MockBookStore) AddBookUserTag(id, tag string) error                           { return nil }
+func (m *MockBookStore) RemoveBookUserTag(id, tag string) error                        { return nil }
+func (m *MockBookStore) GetBookUserTags(id string) ([]string, error)                   { return nil, nil }
+func (m *MockBookStore) GetBooksWithUserTag(tag string) ([]string, error)              { return nil, nil }
+func (m *MockBookStore) GetAllBookUserTags() ([]string, error)                         { return nil, nil }
+func (m *MockBookStore) AdjustRating(id string, delta int) (*database.Book, error)     { return nil, nil }
 func (m *MockBookStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) error { return nil }
 
 // Helper to create a test book
@@ -350,13 +382,13 @@ func TestApplyUpdates_MultipleFields(t *testing.T) {
 	book := testBook("book1", "Original")
 
 	updates := map[string]any{
-		"title":       "New Title",
-		"author_id":   float64(42),
-		"series_id":   float64(7),
-		"narrator":    "John Doe",
-		"publisher":   "Test Pub",
-		"language":    "en",
-		"format":      "m4b",
+		"title":               "New Title",
+		"author_id":           float64(42),
+		"series_id":           float64(7),
+		"narrator":            "John Doe",
+		"publisher":           "Test Pub",
+		"language":            "en",
+		"format":              "m4b",
 		"marked_for_deletion": true,
 	}
 

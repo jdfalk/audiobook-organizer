@@ -19,8 +19,8 @@ import (
 
 type maintenanceJobOpParams struct {
 	LegacyOpID string `json:"legacy_op_id"`
-	JobID       string `json:"job_id"`
-	DryRun      bool   `json:"dry_run"`
+	JobID      string `json:"job_id"`
+	DryRun     bool   `json:"dry_run"`
 }
 
 // RegisterMaintenanceJobOp registers the "maintenance.job" OperationDef which runs

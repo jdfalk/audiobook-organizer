@@ -494,4 +494,3 @@ func (p *PebbleStore) GetOpLogsV2(opID string, limit int) ([]OpLogV2Row, error) 
 	}
 	return result, nil
 }
-

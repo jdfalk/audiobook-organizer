@@ -7,16 +7,16 @@ package metafetch
 
 import (
 	"fmt"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"log"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/fileops"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
 // writeBackMetadata writes enriched metadata back to audio file(s).
@@ -178,6 +178,7 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 		}
 	}
 }
+
 // metadataSourceTag turns a human-readable source name from
 // metadata.MetadataSource.Name() into a tag-safe slug under the
 // metadata:source:* namespace. Returns "" for empty inputs so
@@ -207,6 +208,7 @@ func MetadataSourceTag(name string) string {
 	slug = strings.ReplaceAll(slug, "-", "_")
 	return "metadata:source:" + slug
 }
+
 // metadataLanguageTag turns a language string from a metadata
 // source into a tag under the metadata:language:* namespace.
 // Accepts ISO 639-1 codes ("en"), ISO 639-2 codes ("eng"), and
@@ -263,6 +265,7 @@ func MetadataLanguageTag(lang string) string {
 	slug := strings.ReplaceAll(lang, " ", "_")
 	return "metadata:language:" + slug
 }
+
 // buildTagMap constructs the tag map shared by all write-back paths.
 // Includes all available metadata fields — standard and custom tags.
 func (mfs *Service) BuildTagMap(
@@ -286,6 +289,7 @@ func (mfs *Service) BuildTagMap(
 	}
 	return tagMap
 }
+
 // buildFullTagMap constructs a tag map with ALL available metadata from the book record,
 // including custom tags for fields that don't have standard audio tag equivalents.
 func (mfs *Service) BuildFullTagMap(
@@ -345,6 +349,7 @@ func (mfs *Service) BuildFullTagMap(
 
 	return tagMap
 }
+
 // filterUnchangedTags reads the current tags from filePath and removes any
 // entries from tagMap whose values already match, so only changed fields are
 // written back to the file.
@@ -356,8 +361,8 @@ func FilterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 	}
 
 	currentVals := map[string]string{
-		"title": current.Title,
-		"album": current.Album,
+		"title":  current.Title,
+		"album":  current.Album,
 		"artist": current.Artist,
 		// album_artist and composer both hold the narrator in our
 		// audiobook tag convention (album_artist > artist > composer
@@ -416,6 +421,7 @@ func FilterUnchangedTags(filePath string, tagMap map[string]interface{}) map[str
 	}
 	return filtered
 }
+
 // generateSegmentTitles computes and persists file titles for all book files of a book.
 func (mfs *Service) generateSegmentTitles(bookID string, bookTitle string) error {
 	bookFiles, err := mfs.db.GetBookFiles(bookID)
@@ -468,6 +474,7 @@ func (mfs *Service) generateSegmentTitles(bookID string, bookTitle string) error
 
 	return nil
 }
+
 // runApplyPipeline runs the file rename pipeline after metadata is applied.
 // For protected books (iTunes/import paths), it operates on the library copy
 // instead of the original to avoid moving source files.
@@ -633,6 +640,7 @@ func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 	clearCheckpoints(mfs.db, id)
 	return nil
 }
+
 // WriteBackMetadataForBook reads current DB metadata for the book, resolves authors and
 // narrators, writes comprehensive tags to all active audio file segments, and records a
 // history entry. It is called by POST /api/v1/audiobooks/:id/write-back.

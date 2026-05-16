@@ -30,12 +30,16 @@ type sct_params struct {
 	FixMode string `json:"fix_mode"` // "set_narrator" or "clear"
 }
 
-func (j *scanComposerTagsJob) ID() string          { return "scan-composer-tags" }
-func (j *scanComposerTagsJob) Name() string        { return "Scan Composer Tags" }
-func (j *scanComposerTagsJob) Category() string    { return "Scanning" }
-func (j *scanComposerTagsJob) Description() string { return "Bulk-scans COMPOSER tags on all audio files and optionally fixes them to match the narrator field" }
-func (j *scanComposerTagsJob) DefaultParams() any  { return &sct_params{DryRun: true, FixMode: "set_narrator"} }
-func (j *scanComposerTagsJob) CanResume() bool     { return true }
+func (j *scanComposerTagsJob) ID() string       { return "scan-composer-tags" }
+func (j *scanComposerTagsJob) Name() string     { return "Scan Composer Tags" }
+func (j *scanComposerTagsJob) Category() string { return "Scanning" }
+func (j *scanComposerTagsJob) Description() string {
+	return "Bulk-scans COMPOSER tags on all audio files and optionally fixes them to match the narrator field"
+}
+func (j *scanComposerTagsJob) DefaultParams() any {
+	return &sct_params{DryRun: true, FixMode: "set_narrator"}
+}
+func (j *scanComposerTagsJob) CanResume() bool { return true }
 
 func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	opID := maintenance.OperationIDFromCtx(ctx)

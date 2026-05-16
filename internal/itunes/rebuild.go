@@ -223,12 +223,12 @@ func resolveAuthorName(store RebuildStore, book *database.Book) string {
 // current ITL file without applying any changes. Returned by
 // the dry-run path so the user can review before committing.
 type ITLRebuildPreview struct {
-	TracksInITL  int `json:"tracks_in_itl"`
-	BooksInDB    int `json:"books_in_db"`
-	ToRemove     int `json:"to_remove"`
-	ToAdd        int `json:"to_add"`
-	ToUpdateMeta int `json:"to_update_metadata"`
-	ToUpdateLoc  int `json:"to_update_location"`
+	TracksInITL   int `json:"tracks_in_itl"`
+	BooksInDB     int `json:"books_in_db"`
+	ToRemove      int `json:"to_remove"`
+	ToAdd         int `json:"to_add"`
+	ToUpdateMeta  int `json:"to_update_metadata"`
+	ToUpdateLoc   int `json:"to_update_location"`
 	AlreadySynced int `json:"already_synced"`
 }
 

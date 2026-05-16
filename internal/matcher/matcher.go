@@ -15,12 +15,12 @@ import (
 
 // Common series indicators in file names
 var seriesPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)(.+?)\s+Book\s+(\d+)(?:\s*:|\s+-)\s+(.+)`),         // "Series Book 1: Title"
-	regexp.MustCompile(`(?i)(.+?)\s+Vol\.?\s+(\d+)(?:\s*:|\s+-)\s+(.+)`),       // "Series Vol. 1: Title" or "Series Vol 1: Title"
-	regexp.MustCompile(`(?i)(.+?)\s+Volume\s+(\d+)(?:\s*:|\s+-)\s+(.+)`),       // "Series Volume 1: Title"
-	regexp.MustCompile(`(?i)(.+?)\s+#(\d+)(?:\s*:|\s+-)\s+(.+)`),               // "Series #1: Title"
-	regexp.MustCompile(`(?i)(.+?)\s+(\d+)(?:\s*:|\s+-)\s+(.+)`),                // "Series 1: Title" or "Series 1 - Title"
-	regexp.MustCompile(`(?i)(.*?)\s+-\s+(.+)`),                                 // "Series - Title"
+	regexp.MustCompile(`(?i)(.+?)\s+Book\s+(\d+)(?:\s*:|\s+-)\s+(.+)`),   // "Series Book 1: Title"
+	regexp.MustCompile(`(?i)(.+?)\s+Vol\.?\s+(\d+)(?:\s*:|\s+-)\s+(.+)`), // "Series Vol. 1: Title" or "Series Vol 1: Title"
+	regexp.MustCompile(`(?i)(.+?)\s+Volume\s+(\d+)(?:\s*:|\s+-)\s+(.+)`), // "Series Volume 1: Title"
+	regexp.MustCompile(`(?i)(.+?)\s+#(\d+)(?:\s*:|\s+-)\s+(.+)`),         // "Series #1: Title"
+	regexp.MustCompile(`(?i)(.+?)\s+(\d+)(?:\s*:|\s+-)\s+(.+)`),          // "Series 1: Title" or "Series 1 - Title"
+	regexp.MustCompile(`(?i)(.*?)\s+-\s+(.+)`),                           // "Series - Title"
 }
 
 // seriesWords are common words indicating a series

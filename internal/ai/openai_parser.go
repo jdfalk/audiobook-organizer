@@ -168,9 +168,9 @@ Set confidence based on clarity of the filename structure.`
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(userPrompt),
 		},
-		Model:          shared.ChatModel(p.filenameParseModel()), // filename parsing uses FilenameParseModel
+		Model:               shared.ChatModel(p.filenameParseModel()), // filename parsing uses FilenameParseModel
 		MaxCompletionTokens: param.NewOpt[int64](500),
-		PromptCacheKey: param.NewOpt("audiobook-filename-parser-v1"),
+		PromptCacheKey:      param.NewOpt("audiobook-filename-parser-v1"),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
@@ -198,11 +198,11 @@ Set confidence based on clarity of the filename structure.`
 // AudiobookContext provides rich context for AI parsing beyond just a filename.
 type AudiobookContext struct {
 	FilePath      string `json:"file_path"`                // Full path including folder hierarchy
-	Title         string `json:"title,omitempty"`           // Existing title from DB
-	AuthorName    string `json:"author_name,omitempty"`     // Existing author from DB
-	Narrator      string `json:"narrator,omitempty"`        // Existing narrator from DB
-	FileCount     int    `json:"file_count,omitempty"`      // Number of files in the book
-	TotalDuration int    `json:"total_duration,omitempty"`  // Total duration in seconds
+	Title         string `json:"title,omitempty"`          // Existing title from DB
+	AuthorName    string `json:"author_name,omitempty"`    // Existing author from DB
+	Narrator      string `json:"narrator,omitempty"`       // Existing narrator from DB
+	FileCount     int    `json:"file_count,omitempty"`     // Number of files in the book
+	TotalDuration int    `json:"total_duration,omitempty"` // Total duration in seconds
 }
 
 // ParseAudiobook uses OpenAI to parse audiobook metadata from rich context
@@ -271,9 +271,9 @@ Set confidence based on how much context was available and how unambiguous it is
 			openai.SystemMessage(systemPrompt),
 			openai.UserMessage(userPrompt),
 		},
-		Model:          shared.ChatModel(p.filenameParseModel()), // audiobook context parsing uses FilenameParseModel
+		Model:               shared.ChatModel(p.filenameParseModel()), // audiobook context parsing uses FilenameParseModel
 		MaxCompletionTokens: param.NewOpt[int64](500),
-		PromptCacheKey: param.NewOpt("audiobook-context-parser-v1"),
+		PromptCacheKey:      param.NewOpt("audiobook-context-parser-v1"),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &jsonObjectFormat,
 		},
@@ -362,9 +362,9 @@ Set confidence based on clarity of the filename structure.`
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(userPrompt),
 			},
-			Model:          shared.ChatModel(p.filenameParseModel()), // batch filename parsing uses FilenameParseModel
+			Model:               shared.ChatModel(p.filenameParseModel()), // batch filename parsing uses FilenameParseModel
 			MaxCompletionTokens: param.NewOpt[int64](2000),
-			PromptCacheKey: param.NewOpt("audiobook-batch-parser-v1"),
+			PromptCacheKey:      param.NewOpt("audiobook-batch-parser-v1"),
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONObject: &jsonObjectFormat,
 			},
@@ -429,7 +429,7 @@ Set confidence based on how clearly the text is readable on the cover.`
 				openai.TextContentPart("Read the metadata from this audiobook cover image."),
 			}),
 		},
-		Model:          shared.ChatModel(p.coverArtModel()), // cover art parsing uses CoverArtModel
+		Model:               shared.ChatModel(p.coverArtModel()), // cover art parsing uses CoverArtModel
 		PromptCacheKey:      param.NewOpt("audiobook-cover-parser-v1"),
 		MaxCompletionTokens: param.NewOpt[int64](500),
 		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{

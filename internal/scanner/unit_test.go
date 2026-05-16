@@ -615,22 +615,22 @@ func TestPreserveExistingFields(t *testing.T) {
 	seqNum := 3
 
 	existing := &database.Book{
-		Narrator:            &narrator,
-		Publisher:           &publisher,
-		Language:            &lang,
-		PrintYear:           &year,
-		CoverURL:            &coverURL,
-		ISBN10:              &isbn10,
-		ISBN13:              &isbn13,
-		ASIN:                &asin,
-		Edition:             &edition,
-		Description:         &desc,
-		OpenLibraryID:       &olID,
-		HardcoverID:         &hcID,
-		GoogleBooksID:       &gbID,
-		ITunesPersistentID:  &itunesPID,
-		VersionNotes:        &versionNotes,
-		SeriesSequence:      &seqNum,
+		Narrator:           &narrator,
+		Publisher:          &publisher,
+		Language:           &lang,
+		PrintYear:          &year,
+		CoverURL:           &coverURL,
+		ISBN10:             &isbn10,
+		ISBN13:             &isbn13,
+		ASIN:               &asin,
+		Edition:            &edition,
+		Description:        &desc,
+		OpenLibraryID:      &olID,
+		HardcoverID:        &hcID,
+		GoogleBooksID:      &gbID,
+		ITunesPersistentID: &itunesPID,
+		VersionNotes:       &versionNotes,
+		SeriesSequence:     &seqNum,
 	}
 
 	scanned := &database.Book{} // all nil
@@ -737,7 +737,7 @@ func TestComputeHashFromReaderLargeFile(t *testing.T) {
 	require.NoError(t, err)
 
 	const targetSize = 101 * 1024 * 1024 // 101 MB
-	chunk := make([]byte, 1024*1024)      // 1 MB chunks
+	chunk := make([]byte, 1024*1024)     // 1 MB chunks
 	for i := 0; i < 101; i++ {
 		for j := range chunk {
 			chunk[j] = byte(i ^ j)

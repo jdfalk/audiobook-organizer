@@ -5,8 +5,8 @@
 package metadata
 
 import (
-	json "encoding/json/v2"
 	"context"
+	json "encoding/json/v2"
 	"fmt"
 	"log"
 	"net/http"
@@ -190,12 +190,12 @@ func (c *AudnexusClient) LookupByASIN(asin string) (*BookMetadata, error) {
 
 func (c *AudnexusClient) bookToMetadata(book *audnexusBook) *BookMetadata {
 	meta := &BookMetadata{
-		Title:       book.Title,
-		Publisher:   book.PublisherName,
-		Language:    book.Language,
-		CoverURL:    book.Image,
-		ISBN:        book.ISBN,
-		ASIN:        book.ASIN,
+		Title:     book.Title,
+		Publisher: book.PublisherName,
+		Language:  book.Language,
+		CoverURL:  book.Image,
+		ISBN:      book.ISBN,
+		ASIN:      book.ASIN,
 	}
 
 	// Use summary or description

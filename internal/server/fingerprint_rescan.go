@@ -77,9 +77,9 @@ func (s *Server) triggerFingerprintRescan(c *gin.Context) {
 
 	// Convert request to UOS operation params
 	params := map[string]interface{}{
-		"scope":     scope,
-		"book_ids":  req.BookIDs,
-		"force":     req.Force,
+		"scope":    scope,
+		"book_ids": req.BookIDs,
+		"force":    req.Force,
 	}
 	paramsJSON, err := json.Marshal(params)
 	if err != nil {

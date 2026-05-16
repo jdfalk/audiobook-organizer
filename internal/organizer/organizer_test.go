@@ -488,10 +488,10 @@ func TestExpandPattern_WithSeries(t *testing.T) {
 
 	seriesNum := 2
 	book := &database.Book{
-		Title:           "The Two Towers",
-		Author:          &database.Author{Name: "J.R.R. Tolkien"},
-		Series:          &database.Series{Name: "The Lord of the Rings"},
-		SeriesSequence:  &seriesNum,
+		Title:          "The Two Towers",
+		Author:         &database.Author{Name: "J.R.R. Tolkien"},
+		Series:         &database.Series{Name: "The Lord of the Rings"},
+		SeriesSequence: &seriesNum,
 	}
 
 	result, err := org.expandPattern("{author}/{series}/{series_number} - {title}", book)
@@ -511,18 +511,18 @@ func TestExpandPattern_WithAllFields(t *testing.T) {
 	printYear := 2020
 	bitrate := 128
 	book := &database.Book{
-		Title:      "Complete Book",
-		Author:     &database.Author{Name: "Author Name"},
-		Narrator:   stringPtr("Narrator Name"),
-		Publisher:  stringPtr("Publisher Name"),
-		Language:   stringPtr("English"),
-		Edition:    stringPtr("First"),
-		PrintYear:  &printYear,
-		ISBN10:     stringPtr("1234567890"),
-		ISBN13:     stringPtr("1234567890123"),
-		Bitrate:    &bitrate,
-		Codec:      stringPtr("AAC"),
-		Quality:    stringPtr("High"),
+		Title:     "Complete Book",
+		Author:    &database.Author{Name: "Author Name"},
+		Narrator:  stringPtr("Narrator Name"),
+		Publisher: stringPtr("Publisher Name"),
+		Language:  stringPtr("English"),
+		Edition:   stringPtr("First"),
+		PrintYear: &printYear,
+		ISBN10:    stringPtr("1234567890"),
+		ISBN13:    stringPtr("1234567890123"),
+		Bitrate:   &bitrate,
+		Codec:     stringPtr("AAC"),
+		Quality:   stringPtr("High"),
 	}
 
 	result, err := org.expandPattern("{author} - {title} ({year}) - {narrator}", book)

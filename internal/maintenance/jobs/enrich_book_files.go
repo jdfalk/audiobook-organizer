@@ -22,12 +22,18 @@ var trackNumRe = regexp.MustCompile(`^(\d+)[\s._\-]`)
 
 type enrichBookFilesJob struct{}
 
-func (j *enrichBookFilesJob) ID() string          { return "enrich-book-files" }
+func (j *enrichBookFilesJob) ID() string       { return "enrich-book-files" }
 func (j *enrichBookFilesJob) Name() string     { return "Enrich Book Files" }
 func (j *enrichBookFilesJob) Category() string { return "files" }
-func (j *enrichBookFilesJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
-func (j *enrichBookFilesJob) Description() string { return "Backfill track numbers for book_files from filenames" }
-func (j *enrichBookFilesJob) CanResume() bool     { return false }
+func (j *enrichBookFilesJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: false}
+}
+func (j *enrichBookFilesJob) Description() string {
+	return "Backfill track numbers for book_files from filenames"
+}
+func (j *enrichBookFilesJob) CanResume() bool { return false }
 func (j *enrichBookFilesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	files, err := store.GetAllBookFiles()
 	if err != nil {

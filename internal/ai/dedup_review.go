@@ -87,8 +87,8 @@ type DedupVerdictApplier interface {
 // It must include enough information to apply verdicts hours or days later,
 // after the in-memory byIndex map is gone.
 type dedupReviewPayload struct {
-	Inputs   []DedupPairInput `json:"inputs"`
-	ByIndex  map[int]int64    `json:"by_index"` // pair Index → DedupCandidate.ID
+	Inputs  []DedupPairInput `json:"inputs"`
+	ByIndex map[int]int64    `json:"by_index"` // pair Index → DedupCandidate.ID
 }
 
 var (

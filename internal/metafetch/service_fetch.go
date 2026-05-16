@@ -9,13 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"log"
 	"path/filepath"
 	"strings"
 	"time"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
 // queueISBNEnrichment starts a background goroutine to enrich ISBN/ASIN for a book
@@ -38,6 +38,7 @@ func (mfs *Service) queueISBNEnrichment(id string, book *database.Book) {
 		}
 	}(id)
 }
+
 // FetchMetadataForBook fetches and applies metadata for a single audiobook,
 // trying each configured source in priority order until one succeeds.
 func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, error) {
@@ -251,6 +252,7 @@ func (mfs *Service) FetchMetadataForBook(id string) (*FetchMetadataResponse, err
 	}
 	return nil, fmt.Errorf("no metadata found for '%s' from any source", book.Title)
 }
+
 // FetchMetadataForBookByTitle searches metadata sources using only the book's title,
 // suppressing the author name. This is useful when the current author is a production
 // company and we want to discover the real author from external sources.

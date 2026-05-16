@@ -88,17 +88,17 @@ func (f SmartField) String() string {
 type SmartOperator int
 
 const (
-	SmartOpIs            SmartOperator = 0x01
-	SmartOpIsNot         SmartOperator = 0x02
-	SmartOpContains      SmartOperator = 0x03
+	SmartOpIs             SmartOperator = 0x01
+	SmartOpIsNot          SmartOperator = 0x02
+	SmartOpContains       SmartOperator = 0x03
 	SmartOpDoesNotContain SmartOperator = 0x04
-	SmartOpStartsWith    SmartOperator = 0x05
-	SmartOpEndsWith      SmartOperator = 0x06
-	SmartOpGreaterThan   SmartOperator = 0x07
-	SmartOpLessThan      SmartOperator = 0x0B
-	SmartOpInRange       SmartOperator = 0x0D
-	SmartOpIsTrue        SmartOperator = 0x0F
-	SmartOpIsFalse       SmartOperator = 0x10
+	SmartOpStartsWith     SmartOperator = 0x05
+	SmartOpEndsWith       SmartOperator = 0x06
+	SmartOpGreaterThan    SmartOperator = 0x07
+	SmartOpLessThan       SmartOperator = 0x0B
+	SmartOpInRange        SmartOperator = 0x0D
+	SmartOpIsTrue         SmartOperator = 0x0F
+	SmartOpIsFalse        SmartOperator = 0x10
 )
 
 func (o SmartOperator) String() string {
@@ -132,7 +132,7 @@ func (o SmartOperator) String() string {
 
 // SmartCriteriaResult is the parsed output of a Smart Criteria blob.
 type SmartCriteriaResult struct {
-	Conjunction string      // "AND" or "OR"
+	Conjunction string // "AND" or "OR"
 	Rules       []SmartRule
 	RawLength   int
 }

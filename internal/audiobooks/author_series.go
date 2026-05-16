@@ -14,7 +14,6 @@ type authorSeriesStore interface {
 	database.SeriesReader
 }
 
-
 type AuthorSeriesService struct {
 	db authorSeriesStore
 }

@@ -24,13 +24,13 @@ import (
 
 // BatchJobInfo tracks a submitted batch job.
 type BatchJobInfo struct {
-	BatchID       string     `json:"batch_id"`
-	Config        TestConfig `json:"config"`
-	Mode          string     `json:"mode"`
-	NumChunks     int        `json:"num_chunks"`
-	NumRequests   int        `json:"num_requests"`
-	InputFileID   string     `json:"input_file_id"`
-	RunDir        string     `json:"run_dir"`
+	BatchID     string     `json:"batch_id"`
+	Config      TestConfig `json:"config"`
+	Mode        string     `json:"mode"`
+	NumChunks   int        `json:"num_chunks"`
+	NumRequests int        `json:"num_requests"`
+	InputFileID string     `json:"input_file_id"`
+	RunDir      string     `json:"run_dir"`
 }
 
 // submitBatchJobs submits all test configurations as OpenAI batch API jobs.

@@ -16,18 +16,18 @@ import (
 //nolint:unused // operation definition stub for plugin registration
 func (p *Plugin) importDef() sdk.OperationDef {
 	return sdk.OperationDef{
-		ID:               "itunes.import",
-		Plugin:           "itunes",
-		DisplayName:      "iTunes Library Import",
-		Description:      "Import audiobooks from the iTunes/Music library into the organizer.",
-		Isolate:          true,
-		ResumePolicy:     sdk.ResumeRestart,
-		DefaultPriority:  sdk.PriorityNormal,
-		Cancellable:      true,
-		Timeout:          240 * time.Minute,
-		ConcurrencyKey:   "itunes.import",
+		ID:                    "itunes.import",
+		Plugin:                "itunes",
+		DisplayName:           "iTunes Library Import",
+		Description:           "Import audiobooks from the iTunes/Music library into the organizer.",
+		Isolate:               true,
+		ResumePolicy:          sdk.ResumeRestart,
+		DefaultPriority:       sdk.PriorityNormal,
+		Cancellable:           true,
+		Timeout:               240 * time.Minute,
+		ConcurrencyKey:        "itunes.import",
 		MinCheckpointInterval: 30 * time.Second,
-		Run:              p.runImport,
+		Run:                   p.runImport,
 	}
 }
 

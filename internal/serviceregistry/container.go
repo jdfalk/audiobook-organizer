@@ -66,7 +66,8 @@ func (c *Container) IncludeAll() *Container {
 // at Resolve time (same semantics as Include). Chainable.
 //
 // Group membership is declared on ServiceDef.Groups. Audit a group with
-//   grep -rn 'Groups.*"<groupname>"' internal/ --include="*.go"
+//
+//	grep -rn 'Groups.*"<groupname>"' internal/ --include="*.go"
 //
 // Unknown group names are silently no-ops — they include zero services.
 // Callers that want to assert a group exists can check via Groups().

@@ -156,4 +156,3 @@ func saveDismissedDedupGroups(store database.Store, dismissed map[string]bool) {
 		log.Printf("[WARN] failed to save dismissed dedup groups: %v", err)
 	}
 }
-

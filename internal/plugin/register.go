@@ -11,8 +11,8 @@ func init() {
 	// eventbus: shared plugin event bus. Plugins and services publish here;
 	// the bus has no external dependencies, so it's a leaf.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "eventbus",
-		Needs: []string{},
+		Name:   "eventbus",
+		Needs:  []string{},
 		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			return NewEventBus(), nil

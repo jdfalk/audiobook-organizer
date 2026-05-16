@@ -30,36 +30,36 @@ type Library struct {
 
 // Track represents a single track/audiobook in the iTunes library
 type Track struct {
-	TrackID       int       `xml:"-"`
-	PersistentID  string    `xml:"-"`
-	Name          string    `xml:"-"`
-	Artist        string    `xml:"-"`
-	AlbumArtist   string    `xml:"-"`
-	Album         string    `xml:"-"`
-	Genre         string    `xml:"-"`
-	Kind          string    `xml:"-"`
-	Year          int       `xml:"-"`
-	Comments      string    `xml:"-"`
-	Location      string    `xml:"-"`
-	Size          int64     `xml:"-"`
-	TotalTime     int64     `xml:"-"` // milliseconds
-	DateAdded     time.Time `xml:"-"`
-	PlayCount     int       `xml:"-"`
-	PlayDate      int64     `xml:"-"` // Unix timestamp
-	Rating        int       `xml:"-"` // 0-100 scale
-	Bookmark      int64     `xml:"-"` // milliseconds
-	Bookmarkable  bool      `xml:"-"`
-	TrackNumber   int       `xml:"-"`
-	TrackCount    int       `xml:"-"`
-	DiscNumber    int       `xml:"-"`
-	DiscCount     int       `xml:"-"`
+	TrackID      int       `xml:"-"`
+	PersistentID string    `xml:"-"`
+	Name         string    `xml:"-"`
+	Artist       string    `xml:"-"`
+	AlbumArtist  string    `xml:"-"`
+	Album        string    `xml:"-"`
+	Genre        string    `xml:"-"`
+	Kind         string    `xml:"-"`
+	Year         int       `xml:"-"`
+	Comments     string    `xml:"-"`
+	Location     string    `xml:"-"`
+	Size         int64     `xml:"-"`
+	TotalTime    int64     `xml:"-"` // milliseconds
+	DateAdded    time.Time `xml:"-"`
+	PlayCount    int       `xml:"-"`
+	PlayDate     int64     `xml:"-"` // Unix timestamp
+	Rating       int       `xml:"-"` // 0-100 scale
+	Bookmark     int64     `xml:"-"` // milliseconds
+	Bookmarkable bool      `xml:"-"`
+	TrackNumber  int       `xml:"-"`
+	TrackCount   int       `xml:"-"`
+	DiscNumber   int       `xml:"-"`
+	DiscCount    int       `xml:"-"`
 }
 
 // Playlist represents an iTunes playlist
 type Playlist struct {
-	PlaylistID   int    `xml:"-"`
-	Name         string `xml:"-"`
-	TrackIDs     []int  `xml:"-"`
+	PlaylistID int    `xml:"-"`
+	Name       string `xml:"-"`
+	TrackIDs   []int  `xml:"-"`
 }
 
 // ParseLibrary parses an iTunes library file and returns a Library structure.
@@ -189,7 +189,7 @@ func FindLibraryFile() (string, error) {
 	if runtime.GOOS == "darwin" {
 		// macOS locations
 		searchPaths = []string{
-			filepath.Join(home, "Music", "Music", "Library.xml"),           // Modern Music.app
+			filepath.Join(home, "Music", "Music", "Library.xml"),               // Modern Music.app
 			filepath.Join(home, "Music", "iTunes", "iTunes Music Library.xml"), // Legacy iTunes
 		}
 	} else if runtime.GOOS == "windows" {

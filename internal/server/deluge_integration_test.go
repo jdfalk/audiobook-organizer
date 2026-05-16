@@ -310,7 +310,9 @@ func TestNotifyDelugeAfterUndo_Disabled(t *testing.T) {
 
 	var calledMoveStorage bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Method string `json:"method"` }
+		var req struct {
+			Method string `json:"method"`
+		}
 		json.NewDecoder(r.Body).Decode(&req)
 		if req.Method == "core.move_storage" {
 			calledMoveStorage = true
@@ -354,7 +356,9 @@ func TestNotifyDelugeAfterUndo_NoHash(t *testing.T) {
 
 	var calledMoveStorage bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Method string `json:"method"` }
+		var req struct {
+			Method string `json:"method"`
+		}
 		json.NewDecoder(r.Body).Decode(&req)
 		if req.Method == "core.move_storage" {
 			calledMoveStorage = true

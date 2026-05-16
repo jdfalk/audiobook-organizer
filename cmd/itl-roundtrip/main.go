@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	"os"
 )
 
 func main() {
@@ -22,10 +22,10 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Printf("Updated: %d\n", result.UpdatedCount)
-	
+
 	orig, _ := os.Stat(os.Args[1])
 	out, _ := os.Stat(os.Args[2])
-	fmt.Printf("Original: %d bytes\nOutput:   %d bytes\nDiff:     %d bytes (%.1f%%)\n", 
+	fmt.Printf("Original: %d bytes\nOutput:   %d bytes\nDiff:     %d bytes (%.1f%%)\n",
 		orig.Size(), out.Size(), orig.Size()-out.Size(),
 		float64(orig.Size()-out.Size())/float64(orig.Size())*100)
 }

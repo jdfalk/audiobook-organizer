@@ -234,7 +234,7 @@ func TestParse_WorkedExample(t *testing.T) {
 
 func TestParse_Errors(t *testing.T) {
 	bad := []string{
-		`(author:foo`,        // missing ')'
+		`(author:foo`,          // missing ')'
 		`author:"unterminated`, // unclosed quote
 		`author:[2000 2010]`,   // missing TO
 	}

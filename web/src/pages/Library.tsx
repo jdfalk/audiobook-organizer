@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.64.1
+// version: 1.64.2
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-05-16
 
@@ -643,6 +643,7 @@ export const Library = () => {
               libraryState,
               filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
               showFailed: filters.showFailed,
+              hasFileErrors: filters.hasFileErrors,
             }),
         api.getImportPaths(),
       ]);

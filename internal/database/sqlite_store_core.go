@@ -6,17 +6,17 @@
 package database
 
 import (
-"database/sql"
-"fmt"
-"log/slog"
-"strings"
-"time"
+	"database/sql"
+	"fmt"
+	"log/slog"
+	"strings"
+	"time"
 
-_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type rowScanner interface {
-Scan(dest ...interface{}) error
+	Scan(dest ...interface{}) error
 }
 
 const bookSelectColumns = `
@@ -553,48 +553,48 @@ func (s *SQLiteStore) deduplicateSeries() error {
 func (s *SQLiteStore) ensureExtendedBookColumns() error {
 	// Map of desired columns (name -> type)
 	columns := map[string]string{
-		"work_id":                "TEXT",
-		"narrator":               "TEXT",
-		"edition":                "TEXT",
-		"description":            "TEXT",
-		"language":               "TEXT",
-		"publisher":              "TEXT",
-		"isbn10":                 "TEXT",
-		"isbn13":                 "TEXT",
-		"asin":                   "TEXT",
-		"bitrate_kbps":           "INTEGER",
-		"codec":                  "TEXT",
-		"sample_rate_hz":         "INTEGER",
-		"channels":               "INTEGER",
-		"bit_depth":              "INTEGER",
-		"quality":                "TEXT",
-		"is_primary_version":     "BOOLEAN DEFAULT 1",
-		"version_group_id":       "TEXT",
-		"version_notes":          "TEXT",
-		"original_file_hash":     "TEXT",
-		"organized_file_hash":    "TEXT",
-		"library_state":          "TEXT DEFAULT 'imported'",
-		"quantity":               "INTEGER DEFAULT 1",
-		"marked_for_deletion":    "BOOLEAN DEFAULT 0",
-		"marked_for_deletion_at": "DATETIME",
-		"created_at":             "DATETIME DEFAULT CURRENT_TIMESTAMP",
-		"updated_at":             "DATETIME",
-		"cover_url":                    "TEXT",
-		"narrators_json":               "TEXT",
-		"audible_rating_overall":       "REAL",
-		"audible_rating_performance":   "REAL",
-		"audible_rating_story":         "REAL",
-		"audible_rating_count":         "INTEGER",
-		"audible_num_reviews":          "INTEGER",
-		"google_rating_average":        "REAL",
-		"google_rating_count":          "INTEGER",
-		"user_rating_overall":          "REAL",
-		"user_rating_story":            "REAL",
-		"user_rating_performance":      "REAL",
-		"user_rating_notes":            "TEXT",
-		"metadata_source_hash":         "TEXT",
-		"merged_into_book_id":          "TEXT",
-		"source_import_path":           "TEXT",
+		"work_id":                    "TEXT",
+		"narrator":                   "TEXT",
+		"edition":                    "TEXT",
+		"description":                "TEXT",
+		"language":                   "TEXT",
+		"publisher":                  "TEXT",
+		"isbn10":                     "TEXT",
+		"isbn13":                     "TEXT",
+		"asin":                       "TEXT",
+		"bitrate_kbps":               "INTEGER",
+		"codec":                      "TEXT",
+		"sample_rate_hz":             "INTEGER",
+		"channels":                   "INTEGER",
+		"bit_depth":                  "INTEGER",
+		"quality":                    "TEXT",
+		"is_primary_version":         "BOOLEAN DEFAULT 1",
+		"version_group_id":           "TEXT",
+		"version_notes":              "TEXT",
+		"original_file_hash":         "TEXT",
+		"organized_file_hash":        "TEXT",
+		"library_state":              "TEXT DEFAULT 'imported'",
+		"quantity":                   "INTEGER DEFAULT 1",
+		"marked_for_deletion":        "BOOLEAN DEFAULT 0",
+		"marked_for_deletion_at":     "DATETIME",
+		"created_at":                 "DATETIME DEFAULT CURRENT_TIMESTAMP",
+		"updated_at":                 "DATETIME",
+		"cover_url":                  "TEXT",
+		"narrators_json":             "TEXT",
+		"audible_rating_overall":     "REAL",
+		"audible_rating_performance": "REAL",
+		"audible_rating_story":       "REAL",
+		"audible_rating_count":       "INTEGER",
+		"audible_num_reviews":        "INTEGER",
+		"google_rating_average":      "REAL",
+		"google_rating_count":        "INTEGER",
+		"user_rating_overall":        "REAL",
+		"user_rating_story":          "REAL",
+		"user_rating_performance":    "REAL",
+		"user_rating_notes":          "TEXT",
+		"metadata_source_hash":       "TEXT",
+		"merged_into_book_id":        "TEXT",
+		"source_import_path":         "TEXT",
 	}
 
 	// Fetch existing columns
@@ -699,4 +699,3 @@ func (s *SQLiteStore) ensureExtendedBookFileColumns() error {
 func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
-

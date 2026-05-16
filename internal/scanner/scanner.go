@@ -149,25 +149,25 @@ func isExcludedPath(path string) bool {
 
 // Book represents an audiobook file
 type Book struct {
-	FilePath        string
-	Title           string
-	Author          string
-	Series          string
-	Position        int
-	Format          string
-	Duration        int
-	Narrator        string
-	Language        string
-	Publisher       string
-	BookOrganizerID string // Embedded AUDIOBOOK_ORGANIZER_ID for re-linking
-	ASIN            string
-	OpenLibraryID   string
-	HardcoverID     string
-	SegmentFiles    []string // For multi-file books grouped by album in mixed directories
-	GoogleBooksID      string
-	FileHash           string // Pre-computed hash from ProcessFile (avoids double-read)
-	LibraryState       string // If set, overrides the default "imported" state in saveBookToDatabase
-	SourceImportPath   string // Top-level import path this file was discovered in; set by scan_service
+	FilePath         string
+	Title            string
+	Author           string
+	Series           string
+	Position         int
+	Format           string
+	Duration         int
+	Narrator         string
+	Language         string
+	Publisher        string
+	BookOrganizerID  string // Embedded AUDIOBOOK_ORGANIZER_ID for re-linking
+	ASIN             string
+	OpenLibraryID    string
+	HardcoverID      string
+	SegmentFiles     []string // For multi-file books grouped by album in mixed directories
+	GoogleBooksID    string
+	FileHash         string // Pre-computed hash from ProcessFile (avoids double-read)
+	LibraryState     string // If set, overrides the default "imported" state in saveBookToDatabase
+	SourceImportPath string // Top-level import path this file was discovered in; set by scan_service
 }
 
 // ScanDirectory scans the given directory for audiobook files.

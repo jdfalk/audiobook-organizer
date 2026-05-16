@@ -68,7 +68,7 @@ func (f *fakeStoreForDedup) CreateAIJob(j database.AIJob, p []byte) error {
 	f.payloads[j.ID] = p
 	return nil
 }
-func (f *fakeStoreForDedup) GetAIJob(id string) (database.AIJob, error)           { return f.jobs[id], nil }
+func (f *fakeStoreForDedup) GetAIJob(id string) (database.AIJob, error) { return f.jobs[id], nil }
 func (f *fakeStoreForDedup) GetAIJobByBatchID(b string) (database.AIJob, error) {
 	for _, j := range f.jobs {
 		if j.BatchID == b {
@@ -209,8 +209,8 @@ func TestDedupReviewCallback_PerRowErrorsIsolated(t *testing.T) {
 
 	results := []aijobs.RowResult{
 		{CustomID: "job1-0", Content: string(goodVerdictJSON)}, // Success
-		{CustomID: "job1-1", Err: "api error"},                  // Error from OpenAI
-		{CustomID: "job1-2", Content: "not valid json"},         // Parse error
+		{CustomID: "job1-1", Err: "api error"},                 // Error from OpenAI
+		{CustomID: "job1-2", Content: "not valid json"},        // Parse error
 	}
 
 	oldApplier := dedupVerdictApplier

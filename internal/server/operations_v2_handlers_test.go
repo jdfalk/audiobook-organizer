@@ -31,8 +31,8 @@ import (
 // MockStore compile-time assertion stays satisfied.
 type fakeOpsV2Store struct {
 	database.MockStore // embed for all Store methods
-	ops  []database.OperationV2Row
-	logs []database.OpLogV2Row
+	ops                []database.OperationV2Row
+	logs               []database.OpLogV2Row
 }
 
 func (f *fakeOpsV2Store) ListOperationsV2Since(since time.Time, _ int) ([]database.OperationV2Row, error) {

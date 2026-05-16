@@ -10,8 +10,8 @@ import (
 
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "librarywatcher",
-		Needs: []string{"config"},
+		Name:   "librarywatcher",
+		Needs:  []string{"config"},
 		Groups: []string{"scheduler"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")

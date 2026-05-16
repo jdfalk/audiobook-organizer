@@ -16,7 +16,7 @@ import (
 
 const (
 	metricsTTL        uint32 = 30 * 24 * 3600 // 30 days in seconds
-	metricsIdxBucket         = "met:_idx"      // tracks known cache names
+	metricsIdxBucket         = "met:_idx"     // tracks known cache names
 	metricsKeyMaxTime        = "99999999999999999999"
 )
 

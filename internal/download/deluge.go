@@ -7,8 +7,8 @@ package download
 import (
 	"bytes"
 	"context"
-	json "encoding/json/v2"
 	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/http/cookiejar"
@@ -99,15 +99,15 @@ func (d *DelugeClient) Connect(ctx context.Context) error {
 }
 
 type delugeTorrent struct {
-	Name         string  `json:"name"`
-	SavePath     string  `json:"save_path"`
-	State        string  `json:"state"`
-	Progress     float64 `json:"progress"`
-	TotalUploaded int64  `json:"total_uploaded"`
-	TotalSize    int64   `json:"total_size"`
-	TimeAdded    float64 `json:"time_added"`
-	Paused       bool    `json:"paused"`
-	Files        []struct {
+	Name          string  `json:"name"`
+	SavePath      string  `json:"save_path"`
+	State         string  `json:"state"`
+	Progress      float64 `json:"progress"`
+	TotalUploaded int64   `json:"total_uploaded"`
+	TotalSize     int64   `json:"total_size"`
+	TimeAdded     float64 `json:"time_added"`
+	Paused        bool    `json:"paused"`
+	Files         []struct {
 		Path string `json:"path"`
 		Size int64  `json:"size"`
 	} `json:"files"`
@@ -131,15 +131,15 @@ func mapDelugeState(state string, paused bool) TorrentStatus {
 
 func delugeToTorrentInfo(id string, t delugeTorrent) TorrentInfo {
 	info := TorrentInfo{
-		ID:            id,
-		Name:          t.Name,
-		DownloadDir:   t.SavePath,
-		Status:        mapDelugeState(t.State, t.Paused),
-		Progress:      t.Progress / 100.0,
-		TotalUploaded: t.TotalUploaded,
+		ID:              id,
+		Name:            t.Name,
+		DownloadDir:     t.SavePath,
+		Status:          mapDelugeState(t.State, t.Paused),
+		Progress:        t.Progress / 100.0,
+		TotalUploaded:   t.TotalUploaded,
 		TotalDownloaded: t.TotalSize,
-		CreatedAt:     time.Unix(int64(t.TimeAdded), 0),
-		IsPaused:      t.Paused,
+		CreatedAt:       time.Unix(int64(t.TimeAdded), 0),
+		IsPaused:        t.Paused,
 	}
 	for _, f := range t.Files {
 		info.Files = append(info.Files, TorrentFile{Path: f.Path, Size: f.Size})

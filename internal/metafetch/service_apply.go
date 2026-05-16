@@ -8,16 +8,16 @@ package metafetch
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/oklog/ulid/v2"
 	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-	"github.com/oklog/ulid/v2"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"github.com/jdfalk/audiobook-organizer/internal/organizer"
 )
 
 func (mfs *Service) ApplyMetadataToBook(book *database.Book, meta metadata.BookMetadata) {
@@ -125,6 +125,7 @@ func (mfs *Service) ApplyMetadataToBook(book *database.Book, meta metadata.BookM
 		}
 	}
 }
+
 // RecordChangeHistory records metadata changes before they are applied.
 func (mfs *Service) RecordChangeHistory(book *database.Book, meta metadata.BookMetadata, sourceName string) {
 	now := time.Now()
@@ -200,6 +201,7 @@ func (mfs *Service) RecordChangeHistory(book *database.Book, meta metadata.BookM
 		}
 	}
 }
+
 // syncMetadataToLibraryCopy copies metadata fields from the original book to
 // the library copy so that both DB records stay in sync. This is needed because
 // ApplyMetadataCandidate only updates the original book's DB record, leaving
@@ -255,6 +257,7 @@ func (mfs *Service) syncMetadataToLibraryCopy(original, libCopy *database.Book) 
 		_ = mfs.db.SetBookNarrators(libCopy.ID, newNarrators)
 	}
 }
+
 // ensureLibraryCopy returns a book record with files in the library folder.
 // If the book is already in the library, returns it as-is. If the book is in a
 // protected path (iTunes/import), looks for an existing library version or
@@ -426,6 +429,7 @@ func (mfs *Service) persistFetchedMetadata(bookID string, meta metadata.BookMeta
 		}
 	}
 }
+
 // ApplyMetadataCandidate applies a user-selected metadata candidate to a book.
 // If fields is non-empty, only the listed fields are applied.
 func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidate, fields []string) (*FetchMetadataResponse, error) {
@@ -592,6 +596,7 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 		Source:  candidate.Source,
 	}, nil
 }
+
 // checkMetadataSourceHashDuplicates auto-flags any existing non-merged book
 // that shares the same metadata_source_hash as bookID (MATCH-4). The book
 // with the most book_files is kept as primary; all others get
@@ -650,6 +655,7 @@ func (mfs *Service) checkMetadataSourceHashDuplicates(bookID, hash string) {
 		}
 	}
 }
+
 // ApplyMetadataSystemTags writes the metadata:source:* and
 // metadata:language:* system tags for a book. Logs but doesn't
 // propagate errors — tagging is provenance metadata, not part
@@ -673,6 +679,7 @@ func (mfs *Service) ApplyMetadataSystemTags(bookID, sourceName, language string)
 		}
 	}
 }
+
 // MarkNoMatch marks a book as having no metadata match.
 func (mfs *Service) MarkNoMatch(id string) error {
 	book, err := mfs.db.GetBookByID(id)

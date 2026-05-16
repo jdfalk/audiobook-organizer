@@ -24,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
@@ -31,14 +32,13 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/realtime"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
 	"github.com/jdfalk/audiobook-organizer/internal/search"
-	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
+	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 	"github.com/jdfalk/audiobook-organizer/internal/transcode"
 	"github.com/jdfalk/audiobook-organizer/internal/watcher"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/net/http2"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 )
 
 func (s *Server) resumeInterruptedOperations() {

@@ -6,8 +6,8 @@ package metadata
 
 import (
 	"bytes"
-	json "encoding/json/v2"
 	"context"
+	json "encoding/json/v2"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,10 +24,10 @@ type HardcoverClient struct {
 	apiToken   string
 
 	// Simple rate limiter: 60 requests per minute
-	mu          sync.Mutex
-	requestLog  []time.Time
-	rateLimit   int
-	ratePeriod  time.Duration
+	mu         sync.Mutex
+	requestLog []time.Time
+	rateLimit  int
+	ratePeriod time.Duration
 }
 
 // NewHardcoverClient creates a new Hardcover API client with the given token.
@@ -223,7 +223,7 @@ func (c *HardcoverClient) SearchByContext(ctx *SearchContext) ([]BookMetadata, e
 	case ctx.ISBN10 != "":
 		return c.search(context.Background(), ctx.ISBN10)
 	case ctx.Title != "" && ctx.Author != "":
-		return c.search(context.Background(), ctx.Title + " " + ctx.Author)
+		return c.search(context.Background(), ctx.Title+" "+ctx.Author)
 	case ctx.Title != "":
 		return c.search(context.Background(), ctx.Title)
 	}

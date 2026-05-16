@@ -29,8 +29,8 @@ import (
 // folderAutoScanOpParams holds the parameters for a library.folder-auto-scan run.
 type folderAutoScanOpParams struct {
 	LegacyOpID string `json:"legacy_op_id"`
-	FolderPath  string `json:"folder_path"`
-	FolderID    int    `json:"folder_id"`
+	FolderPath string `json:"folder_path"`
+	FolderID   int    `json:"folder_id"`
 }
 
 // RegisterFolderAutoScanOp registers the "library.folder-auto-scan" OperationDef.

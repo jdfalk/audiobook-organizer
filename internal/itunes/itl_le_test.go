@@ -52,14 +52,14 @@ func testBuildMithLE(trackID int, pid [8]byte, size, totalTime int) []byte {
 	putUint32LE(buf, 16, uint32(trackID))
 	putUint32LE(buf, 36, uint32(size))
 	putUint32LE(buf, 40, uint32(totalTime))
-	putUint16LE(buf, 44, 3)  // TrackNumber
-	putUint16LE(buf, 48, 12) // TrackCount
-	putUint16LE(buf, 54, 2024) // Year
-	putUint16LE(buf, 58, 320)  // BitRate
+	putUint16LE(buf, 44, 3)     // TrackNumber
+	putUint16LE(buf, 48, 12)    // TrackCount
+	putUint16LE(buf, 54, 2024)  // Year
+	putUint16LE(buf, 58, 320)   // BitRate
 	putUint16LE(buf, 60, 44100) // SampleRate
-	putUint32LE(buf, 76, 5)    // PlayCount
-	putUint16LE(buf, 104, 1)   // DiscNumber
-	putUint16LE(buf, 106, 2)   // DiscCount
+	putUint32LE(buf, 76, 5)     // PlayCount
+	putUint16LE(buf, 104, 1)    // DiscNumber
+	putUint16LE(buf, 106, 2)    // DiscCount
 	buf[108] = 80               // Rating
 	copy(buf[128:136], pid[:])
 	return buf

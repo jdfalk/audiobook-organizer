@@ -17,12 +17,18 @@ func init() { maintenance.Register(&scanDurationMismatchJob{}) }
 
 type scanDurationMismatchJob struct{}
 
-func (j *scanDurationMismatchJob) ID() string          { return "scan-duration-mismatch" }
+func (j *scanDurationMismatchJob) ID() string       { return "scan-duration-mismatch" }
 func (j *scanDurationMismatchJob) Name() string     { return "Scan Duration Mismatch" }
 func (j *scanDurationMismatchJob) Category() string { return "files" }
-func (j *scanDurationMismatchJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
-func (j *scanDurationMismatchJob) Description() string { return "Report books whose local duration differs significantly from Audible runtime" }
-func (j *scanDurationMismatchJob) CanResume() bool     { return false }
+func (j *scanDurationMismatchJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: false}
+}
+func (j *scanDurationMismatchJob) Description() string {
+	return "Report books whose local duration differs significantly from Audible runtime"
+}
+func (j *scanDurationMismatchJob) CanResume() bool { return false }
 func (j *scanDurationMismatchJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, _ bool) error {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {

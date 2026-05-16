@@ -266,11 +266,11 @@ func (s *Server) searchAudiobookMetadata(c *gin.Context) {
 		if entry, fresh, err := s.metadataFetchService.GetCachedCandidates(id); err == nil && entry != nil {
 			results := decodeCachedCandidates(entry)
 			respH := gin.H{
-				"results":      results,
-				"query":        body.Query,
-				"from_cache":   true,
-				"is_fresh":     fresh,
-				"fetched_at":   entry.FetchedAt,
+				"results":    results,
+				"query":      body.Query,
+				"from_cache": true,
+				"is_fresh":   fresh,
+				"fetched_at": entry.FetchedAt,
 			}
 			s.listCache.Set(cacheKey, respH)
 			httputil.RespondWithOK(c, respH)
@@ -657,18 +657,18 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 		candidate := searchResp.Results[0]
 		// Convert MetadataCandidate to BookMetadata for field mapping
 		meta := metadata.BookMetadata{
-			Title:          candidate.Title,
-			Author:         candidate.Author,
-			Narrator:       candidate.Narrator,
-			Series:         candidate.Series,
-			SeriesPosition: candidate.SeriesPosition,
-			PublishYear:    candidate.Year,
-			Publisher:      candidate.Publisher,
-			ISBN:           candidate.ISBN,
-			CoverURL:       candidate.CoverURL,
-			Description:    candidate.Description,
-			Language:       candidate.Language,
-			DurationSec:    candidate.DurationSec,
+			Title:                    candidate.Title,
+			Author:                   candidate.Author,
+			Narrator:                 candidate.Narrator,
+			Series:                   candidate.Series,
+			SeriesPosition:           candidate.SeriesPosition,
+			PublishYear:              candidate.Year,
+			Publisher:                candidate.Publisher,
+			ISBN:                     candidate.ISBN,
+			CoverURL:                 candidate.CoverURL,
+			Description:              candidate.Description,
+			Language:                 candidate.Language,
+			DurationSec:              candidate.DurationSec,
 			AudibleRatingOverall:     candidate.AudibleRatingOverall,
 			AudibleRatingPerformance: 0, // not available from candidate
 			AudibleRatingStory:       0, // not available from candidate

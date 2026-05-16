@@ -1,6 +1,7 @@
 // file: web/src/types/index.ts
-// version: 1.12.0
+// version: 1.12.1
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
+// last-edited: 2026-05-16
 
 // Audiobook (Book) type
 export interface Audiobook {
@@ -162,6 +163,7 @@ export interface FilterOptions {
   sortBy?: SortField;
   sortOrder?: SortOrder;
   showFailed?: boolean;
+  hasFileErrors?: boolean;
 }
 
 // Pagination parameters

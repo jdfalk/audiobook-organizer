@@ -57,15 +57,15 @@ type opLogV2Response struct {
 
 // opDefResponse is the JSON shape returned by /op-defs.
 type opDefResponse struct {
-	ID          string   `json:"id"`
-	Plugin      string   `json:"plugin"`
-	DisplayName string   `json:"display_name"`
-	Description string   `json:"description"`
-	Cancellable bool     `json:"cancellable"`
-	Isolate     bool     `json:"isolate"`
-	ResumePolicy string  `json:"resume_policy"`
-	Triggers    []string `json:"triggers"`
-	DependsOn   []string `json:"depends_on"`
+	ID           string   `json:"id"`
+	Plugin       string   `json:"plugin"`
+	DisplayName  string   `json:"display_name"`
+	Description  string   `json:"description"`
+	Cancellable  bool     `json:"cancellable"`
+	Isolate      bool     `json:"isolate"`
+	ResumePolicy string   `json:"resume_policy"`
+	Triggers     []string `json:"triggers"`
+	DependsOn    []string `json:"depends_on"`
 }
 
 // handleGetOperationTimeline implements GET /api/v1/operations/timeline?since=15m.

@@ -21,9 +21,9 @@ import (
 
 // FingerprintRescanParams controls the scope and options of a fingerprint rescan operation.
 type FingerprintRescanParams struct {
-	Scope   string   `json:"scope,omitempty"`   // "missing" (default), "all", or "books"
+	Scope   string   `json:"scope,omitempty"`    // "missing" (default), "all", or "books"
 	BookIDs []string `json:"book_ids,omitempty"` // required when scope=="books"
-	Force   bool     `json:"force,omitempty"`   // ignore existing fingerprints and recompute
+	Force   bool     `json:"force,omitempty"`    // ignore existing fingerprints and recompute
 }
 
 const (

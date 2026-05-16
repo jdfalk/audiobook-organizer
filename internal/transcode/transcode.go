@@ -5,12 +5,12 @@
 package transcode
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"bufio"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -188,7 +188,10 @@ func BuildChapterMetadataWithProber(inputFiles []string, prober func(string) (fl
 }
 
 // Transcode converts audio files for a book into a single M4B.
-func Transcode(ctx context.Context, opts TranscodeOpts, store interface { database.BookReader; database.BookFileStore }, progress operations.ProgressReporter) (string, error) {
+func Transcode(ctx context.Context, opts TranscodeOpts, store interface {
+	database.BookReader
+	database.BookFileStore
+}, progress operations.ProgressReporter) (string, error) {
 	ffmpegPath, err := FindFFmpeg()
 	if err != nil {
 		return "", err

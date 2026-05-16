@@ -91,13 +91,13 @@ func buildMithLeForConvert(trackID int, pidLE [8]byte, size, totalTime int) []by
 	putUint32LE(buf, 16, uint32(trackID))
 	putUint32LE(buf, 36, uint32(size))
 	putUint32LE(buf, 40, uint32(totalTime))
-	putUint16LE(buf, 44, 1)     // TrackNumber
-	putUint16LE(buf, 48, 10)    // TrackCount
-	putUint16LE(buf, 54, 2023)  // Year
-	putUint16LE(buf, 104, 1)    // DiscNumber
-	putUint16LE(buf, 106, 3)    // DiscCount
-	buf[108] = 60               // Rating
-	putUint32LE(buf, 76, 7)     // PlayCount
+	putUint16LE(buf, 44, 1)    // TrackNumber
+	putUint16LE(buf, 48, 10)   // TrackCount
+	putUint16LE(buf, 54, 2023) // Year
+	putUint16LE(buf, 104, 1)   // DiscNumber
+	putUint16LE(buf, 106, 3)   // DiscCount
+	buf[108] = 60              // Rating
+	putUint32LE(buf, 76, 7)    // PlayCount
 	// DateAdded: Mac epoch + 1 second (non-zero)
 	putUint32LE(buf, 120, 1)
 	// PID stored in LE byte order

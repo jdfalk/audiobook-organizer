@@ -16,10 +16,10 @@ import (
 
 // ITLOperationSet holds all pending mutations to apply in one pass.
 type ITLOperationSet struct {
-	Removes         map[string]bool      // PID hex strings to remove
-	Adds            []ITLNewTrack        // New tracks to insert
-	LocationUpdates []ITLLocationUpdate  // Location changes for existing tracks
-	MetadataUpdates []ITLMetadataUpdate  // Metadata changes for existing tracks
+	Removes         map[string]bool     // PID hex strings to remove
+	Adds            []ITLNewTrack       // New tracks to insert
+	LocationUpdates []ITLLocationUpdate // Location changes for existing tracks
+	MetadataUpdates []ITLMetadataUpdate // Metadata changes for existing tracks
 }
 
 // IsEmpty returns true if there are no operations to apply.

@@ -121,7 +121,6 @@ func GenerateArgon2Salt() ([]byte, error) {
 	return salt, nil
 }
 
-
 // EncryptValue encrypts a plaintext value
 func EncryptValue(plaintext string) (string, error) {
 	if encryptionKey == nil {

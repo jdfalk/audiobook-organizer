@@ -60,8 +60,8 @@ func TestHandleImportCollisionPreview_NoCollisions(t *testing.T) {
 
 	var resp struct {
 		Collisions   []merge.CollisionCandidate `json:"collisions"`
-		Count        int                  `json:"count"`
-		HasCollision bool                 `json:"has_collision"`
+		Count        int                        `json:"count"`
+		HasCollision bool                       `json:"has_collision"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.HasCollision {

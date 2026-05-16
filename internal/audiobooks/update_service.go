@@ -32,9 +32,8 @@ type audiobookUpdateStore interface {
 	GetAllImportPaths() ([]database.ImportPath, error)
 }
 
-
 type AudiobookUpdateService struct {
-	db audiobookUpdateStore
+	db               audiobookUpdateStore
 	audiobookService *AudiobookService
 }
 

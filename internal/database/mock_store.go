@@ -80,7 +80,7 @@ type MockStore struct {
 	DeleteAuthorFunc     func(id int) error
 	UpdateAuthorNameFunc func(id int, name string) error
 
-	GetAuthorsByIDsFunc     func(ids []int) (map[int]*Author, error)
+	GetAuthorsByIDsFunc func(ids []int) (map[int]*Author, error)
 
 	// Author Alias methods
 	GetAuthorAliasesFunc    func(authorID int) ([]AuthorAlias, error)
@@ -95,11 +95,11 @@ type MockStore struct {
 	ResolveTombstoneChainsFunc func() (int, error)
 
 	// Series methods
-	GetAllSeriesFunc    func() ([]Series, error)
-	GetSeriesByIDFunc   func(id int) (*Series, error)
-	GetSeriesByNameFunc func(name string, authorID *int) (*Series, error)
-	CreateSeriesFunc    func(name string, authorID *int) (*Series, error)
-	DeleteSeriesFunc    func(id int) error
+	GetAllSeriesFunc     func() ([]Series, error)
+	GetSeriesByIDFunc    func(id int) (*Series, error)
+	GetSeriesByNameFunc  func(name string, authorID *int) (*Series, error)
+	CreateSeriesFunc     func(name string, authorID *int) (*Series, error)
+	DeleteSeriesFunc     func(id int) error
 	UpdateSeriesNameFunc func(id int, name string) error
 	GetSeriesByIDsFunc   func(ids []int) (map[int]*Series, error)
 
@@ -114,13 +114,13 @@ type MockStore struct {
 	GetBookChangeHistoryFunc     func(bookID string, limit int) ([]MetadataChangeRecord, error)
 
 	// Import Paths
-	GetAllImportPathsFunc         func() ([]ImportPath, error)
-	GetImportPathByIDFunc         func(id int) (*ImportPath, error)
-	GetImportPathByPathFunc       func(path string) (*ImportPath, error)
-	CreateImportPathFunc          func(path, name string) (*ImportPath, error)
-	UpdateImportPathFunc          func(id int, importPath *ImportPath) error
-	DeleteImportPathFunc          func(id int) error
-	CountBooksByPathPrefixFunc    func(prefix string) (int, error)
+	GetAllImportPathsFunc      func() ([]ImportPath, error)
+	GetImportPathByIDFunc      func(id int) (*ImportPath, error)
+	GetImportPathByPathFunc    func(path string) (*ImportPath, error)
+	CreateImportPathFunc       func(path, name string) (*ImportPath, error)
+	UpdateImportPathFunc       func(id int, importPath *ImportPath) error
+	DeleteImportPathFunc       func(id int) error
+	CountBooksByPathPrefixFunc func(prefix string) (int, error)
 
 	// Operations
 	CreateOperationFunc           func(id, opType string, folderPath *string) (*Operation, error)
@@ -154,14 +154,14 @@ type MockStore struct {
 	PruneSystemActivityLogsFunc func(olderThan time.Time) (int, error)
 
 	// AI jobs
-	CreateAIJobFunc          func(job AIJob, payloadJSON []byte) error
-	GetAIJobFunc             func(id string) (AIJob, error)
-	GetAIJobByBatchIDFunc    func(batchID string) (AIJob, error)
-	GetAIJobPayloadFunc      func(id string) ([]byte, error)
-	MarkAIJobSubmittedFunc   func(id, batchID string) error
-	MarkAIJobCompletedFunc   func(id, status string, successCount, errorCount int, rowErrors []AIJobRowError) error
-	MarkAIJobFailedFunc      func(id, errMsg string) error
-	ListAIJobsFunc           func(typeFilter, statusFilter string, limit, offset int) ([]AIJob, error)
+	CreateAIJobFunc        func(job AIJob, payloadJSON []byte) error
+	GetAIJobFunc           func(id string) (AIJob, error)
+	GetAIJobByBatchIDFunc  func(batchID string) (AIJob, error)
+	GetAIJobPayloadFunc    func(id string) ([]byte, error)
+	MarkAIJobSubmittedFunc func(id, batchID string) error
+	MarkAIJobCompletedFunc func(id, status string, successCount, errorCount int, rowErrors []AIJobRowError) error
+	MarkAIJobFailedFunc    func(id, errMsg string) error
+	ListAIJobsFunc         func(typeFilter, statusFilter string, limit, offset int) ([]AIJob, error)
 
 	// Metadata rejections
 	AddMetadataRejectionFunc     func(r MetadataRejection) error
@@ -232,14 +232,14 @@ type MockStore struct {
 	ListPurgedBookVersionsFunc      func() ([]BookVersion, error)
 
 	// User playlists (spec 3.4)
-	CreateUserPlaylistFunc          func(pl *UserPlaylist) (*UserPlaylist, error)
-	GetUserPlaylistFunc             func(id string) (*UserPlaylist, error)
-	GetUserPlaylistByNameFunc       func(name string) (*UserPlaylist, error)
-	GetUserPlaylistByITunesPIDFunc  func(pid string) (*UserPlaylist, error)
-	ListUserPlaylistsFunc           func(playlistType string, limit, offset int) ([]UserPlaylist, int, error)
-	UpdateUserPlaylistFunc          func(pl *UserPlaylist) error
-	DeleteUserPlaylistFunc          func(id string) error
-	ListDirtyUserPlaylistsFunc      func() ([]UserPlaylist, error)
+	CreateUserPlaylistFunc         func(pl *UserPlaylist) (*UserPlaylist, error)
+	GetUserPlaylistFunc            func(id string) (*UserPlaylist, error)
+	GetUserPlaylistByNameFunc      func(name string) (*UserPlaylist, error)
+	GetUserPlaylistByITunesPIDFunc func(pid string) (*UserPlaylist, error)
+	ListUserPlaylistsFunc          func(playlistType string, limit, offset int) ([]UserPlaylist, int, error)
+	UpdateUserPlaylistFunc         func(pl *UserPlaylist) error
+	DeleteUserPlaylistFunc         func(id string) error
+	ListDirtyUserPlaylistsFunc     func() ([]UserPlaylist, error)
 
 	// API keys
 	CreateAPIKeyFunc        func(key *APIKey) (*APIKey, error)
@@ -297,8 +297,8 @@ type MockStore struct {
 	ListBookTombstonesFunc  func(limit int) ([]Book, error)
 
 	// Version Management
-	GetBooksByVersionGroupFunc          func(groupID string) ([]Book, error)
-	GetBooksByMetadataSourceHashFunc    func(hash string) ([]Book, error)
+	GetBooksByVersionGroupFunc       func(groupID string) ([]Book, error)
+	GetBooksByMetadataSourceHashFunc func(hash string) ([]Book, error)
 
 	// iTunes Library Fingerprints
 	SaveLibraryFingerprintFunc func(path string, size int64, modTime time.Time, crc32 uint32) error
@@ -320,66 +320,66 @@ type MockStore struct {
 	BulkCreateExternalIDMappingsFunc func(mappings []ExternalIDMapping) error
 
 	// BookFile methods
-	CreateBookFileFunc          func(file *BookFile) error
-	GetAllBookFilesFunc         func() ([]BookFile, error)
-	UpdateBookFileFunc          func(id string, file *BookFile) error
-	UpdateBookFileHashesFunc    func(id, originalHash, postMetadataHash string) error
-	GetBookFilesFunc            func(bookID string) ([]BookFile, error)
-	GetBookFileByIDFunc         func(bookID, fileID string) (*BookFile, error)
-	GetBookFileByPIDFunc           func(itunesPID string) (*BookFile, error)
-	ClearITunesPIDFunc             func(itunesPID string) (bool, error)
-	GetBookFileByPathFunc          func(filePath string) (*BookFile, error)
-	MarkFileImportedFromDelugeFunc func(ctx context.Context, originalPath, libraryPath, torrentHash string) error
-	GetBookFileByAcoustIDFunc      func(fingerprint string) (*BookFile, error)
-	GetBookFileByAcoustIDFuzzyFunc func(fingerprint string, minSimilarity float64) (*BookFile, error)
-	DeleteBookFileFunc             func(id string) error
-	DeleteBookFilesForBookFunc  func(bookID string) error
-	UpsertBookFileFunc          func(file *BookFile) error
-	BatchUpsertBookFilesFunc    func(files []*BookFile) error
-	MoveBookFilesToBookFunc     func(fileIDs []string, sourceBookID, targetBookID string) error
-	GetDuplicateFilesByHashFunc func(limit int) ([]DuplicateFileGroup, error)
-	GetBookBySegmentFileHashFunc func(hash string) (*Book, error)
-	SetBookFileHashFunc         func(id, hash string) error
-	GetBookFileHashStatsFunc    func() (*BookFileHashStats, error)
-	GetBookMetadataHashStatsFunc           func() (*BookMetadataHashStats, error)
-	GetFilesWithFingerprintFailuresFunc    func(reason string, limit, offset int) ([]BookFile, int64, error)
+	CreateBookFileFunc                  func(file *BookFile) error
+	GetAllBookFilesFunc                 func() ([]BookFile, error)
+	UpdateBookFileFunc                  func(id string, file *BookFile) error
+	UpdateBookFileHashesFunc            func(id, originalHash, postMetadataHash string) error
+	GetBookFilesFunc                    func(bookID string) ([]BookFile, error)
+	GetBookFileByIDFunc                 func(bookID, fileID string) (*BookFile, error)
+	GetBookFileByPIDFunc                func(itunesPID string) (*BookFile, error)
+	ClearITunesPIDFunc                  func(itunesPID string) (bool, error)
+	GetBookFileByPathFunc               func(filePath string) (*BookFile, error)
+	MarkFileImportedFromDelugeFunc      func(ctx context.Context, originalPath, libraryPath, torrentHash string) error
+	GetBookFileByAcoustIDFunc           func(fingerprint string) (*BookFile, error)
+	GetBookFileByAcoustIDFuzzyFunc      func(fingerprint string, minSimilarity float64) (*BookFile, error)
+	DeleteBookFileFunc                  func(id string) error
+	DeleteBookFilesForBookFunc          func(bookID string) error
+	UpsertBookFileFunc                  func(file *BookFile) error
+	BatchUpsertBookFilesFunc            func(files []*BookFile) error
+	MoveBookFilesToBookFunc             func(fileIDs []string, sourceBookID, targetBookID string) error
+	GetDuplicateFilesByHashFunc         func(limit int) ([]DuplicateFileGroup, error)
+	GetBookBySegmentFileHashFunc        func(hash string) (*Book, error)
+	SetBookFileHashFunc                 func(id, hash string) error
+	GetBookFileHashStatsFunc            func() (*BookFileHashStats, error)
+	GetBookMetadataHashStatsFunc        func() (*BookMetadataHashStats, error)
+	GetFilesWithFingerprintFailuresFunc func(reason string, limit, offset int) ([]BookFile, int64, error)
 
 	// Path history
 	RecordPathChangeFunc   func(change *BookPathChange) error
 	GetBookPathHistoryFunc func(bookID string) ([]BookPathChange, error)
 
 	// Book Tags
-	AddBookTagFunc              func(bookID, tag string) error
-	AddBookTagWithSourceFunc    func(bookID, tag, source string) error
-	RemoveBookTagFunc           func(bookID, tag string) error
-	RemoveBookTagsByPrefixFunc  func(bookID, prefix, source string) error
-	GetBookTagsFunc             func(bookID string) ([]string, error)
-	GetBookTagsDetailedFunc     func(bookID string) ([]BookTag, error)
-	SetBookTagsFunc             func(bookID string, tags []string) error
-	ListAllTagsFunc             func() ([]TagWithCount, error)
-	GetBooksByTagFunc           func(tag string) ([]string, error)
+	AddBookTagFunc             func(bookID, tag string) error
+	AddBookTagWithSourceFunc   func(bookID, tag, source string) error
+	RemoveBookTagFunc          func(bookID, tag string) error
+	RemoveBookTagsByPrefixFunc func(bookID, prefix, source string) error
+	GetBookTagsFunc            func(bookID string) ([]string, error)
+	GetBookTagsDetailedFunc    func(bookID string) ([]BookTag, error)
+	SetBookTagsFunc            func(bookID string, tags []string) error
+	ListAllTagsFunc            func() ([]TagWithCount, error)
+	GetBooksByTagFunc          func(tag string) ([]string, error)
 
 	// Author Tags
-	AddAuthorTagFunc              func(authorID int, tag string) error
-	AddAuthorTagWithSourceFunc    func(authorID int, tag, source string) error
-	RemoveAuthorTagFunc           func(authorID int, tag string) error
-	RemoveAuthorTagsByPrefixFunc  func(authorID int, prefix, source string) error
-	GetAuthorTagsFunc             func(authorID int) ([]string, error)
-	GetAuthorTagsDetailedFunc     func(authorID int) ([]BookTag, error)
-	SetAuthorTagsFunc             func(authorID int, tags []string) error
-	ListAllAuthorTagsFunc         func() ([]TagWithCount, error)
-	GetAuthorsByTagFunc           func(tag string) ([]int, error)
+	AddAuthorTagFunc             func(authorID int, tag string) error
+	AddAuthorTagWithSourceFunc   func(authorID int, tag, source string) error
+	RemoveAuthorTagFunc          func(authorID int, tag string) error
+	RemoveAuthorTagsByPrefixFunc func(authorID int, prefix, source string) error
+	GetAuthorTagsFunc            func(authorID int) ([]string, error)
+	GetAuthorTagsDetailedFunc    func(authorID int) ([]BookTag, error)
+	SetAuthorTagsFunc            func(authorID int, tags []string) error
+	ListAllAuthorTagsFunc        func() ([]TagWithCount, error)
+	GetAuthorsByTagFunc          func(tag string) ([]int, error)
 
 	// Series Tags
-	AddSeriesTagFunc              func(seriesID int, tag string) error
-	AddSeriesTagWithSourceFunc    func(seriesID int, tag, source string) error
-	RemoveSeriesTagFunc           func(seriesID int, tag string) error
-	RemoveSeriesTagsByPrefixFunc  func(seriesID int, prefix, source string) error
-	GetSeriesTagsFunc             func(seriesID int) ([]string, error)
-	GetSeriesTagsDetailedFunc     func(seriesID int) ([]BookTag, error)
-	SetSeriesTagsFunc             func(seriesID int, tags []string) error
-	ListAllSeriesTagsFunc         func() ([]TagWithCount, error)
-	GetSeriesByTagFunc            func(tag string) ([]int, error)
+	AddSeriesTagFunc             func(seriesID int, tag string) error
+	AddSeriesTagWithSourceFunc   func(seriesID int, tag, source string) error
+	RemoveSeriesTagFunc          func(seriesID int, tag string) error
+	RemoveSeriesTagsByPrefixFunc func(seriesID int, prefix, source string) error
+	GetSeriesTagsFunc            func(seriesID int) ([]string, error)
+	GetSeriesTagsDetailedFunc    func(seriesID int) ([]BookTag, error)
+	SetSeriesTagsFunc            func(seriesID int, tags []string) error
+	ListAllSeriesTagsFunc        func() ([]TagWithCount, error)
+	GetSeriesByTagFunc           func(tag string) ([]int, error)
 
 	// Lifecycle
 	CloseFunc func() error
@@ -1806,7 +1806,9 @@ func (m *MockStore) PruneBookSnapshots(id string, keepCount int) (int, error) {
 	return 0, nil
 }
 
-func (m *MockStore) MarkITunesSynced(bookIDs []string) (int64, error) { return int64(len(bookIDs)), nil }
+func (m *MockStore) MarkITunesSynced(bookIDs []string) (int64, error) {
+	return int64(len(bookIDs)), nil
+}
 func (m *MockStore) GetITunesDirtyBooks() ([]Book, error)                  { return nil, nil }
 func (m *MockStore) GetITunesPurgePendingBooks() ([]Book, error)           { return nil, nil }
 func (m *MockStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) { return nil, nil }
@@ -1997,12 +1999,12 @@ func (m *MockStore) GetRemovedExternalIDs(source string) ([]ExternalIDMapping, e
 	return nil, nil
 }
 
-func (m *MockStore) SetRaw(key string, value []byte) error      { return nil }
-func (m *MockStore) GetRaw(key string) ([]byte, error)          { return nil, nil }
-func (m *MockStore) DeleteRaw(key string) error                 { return nil }
-func (m *MockStore) ScanPrefix(prefix string) ([]KVPair, error) { return nil, nil }
-func (m *MockStore) CountPrefix(prefix string) (int64, error)   { return 0, nil }
-func (m *MockStore) CreateOperationResult(result *OperationResult) error       { return nil }
+func (m *MockStore) SetRaw(key string, value []byte) error               { return nil }
+func (m *MockStore) GetRaw(key string) ([]byte, error)                   { return nil, nil }
+func (m *MockStore) DeleteRaw(key string) error                          { return nil }
+func (m *MockStore) ScanPrefix(prefix string) ([]KVPair, error)          { return nil, nil }
+func (m *MockStore) CountPrefix(prefix string) (int64, error)            { return 0, nil }
+func (m *MockStore) CreateOperationResult(result *OperationResult) error { return nil }
 func (m *MockStore) GetOperationResults(operationID string) ([]OperationResult, error) {
 	return nil, nil
 }
@@ -2013,10 +2015,10 @@ func (m *MockStore) GetRecentCompletedOperations(limit int) ([]Operation, error)
 	return nil, nil
 }
 
-func (m *MockStore) GetBookUserTags(bookID string) ([]string, error) { return nil, nil }
+func (m *MockStore) GetBookUserTags(bookID string) ([]string, error)    { return nil, nil }
 func (m *MockStore) SetBookUserTags(bookID string, tags []string) error { return nil }
-func (m *MockStore) AddBookUserTag(bookID string, tag string) error { return nil }
-func (m *MockStore) RemoveBookUserTag(bookID string, tag string) error { return nil }
+func (m *MockStore) AddBookUserTag(bookID string, tag string) error     { return nil }
+func (m *MockStore) RemoveBookUserTag(bookID string, tag string) error  { return nil }
 
 func (m *MockStore) GetBookAlternativeTitles(bookID string) ([]BookAlternativeTitle, error) {
 	return nil, nil
@@ -2480,11 +2482,11 @@ func (m *MockStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []string)
 }
 
 // OpsV2Store stub methods — permissive no-ops for tests that don't need v2 ops.
-func (m *MockStore) UpsertOpDefinitionV2(_ OpDefinitionV2Row) error       { return nil }
-func (m *MockStore) DeleteOrphanOpDefsV2(_ []string) error                { return nil }
-func (m *MockStore) InsertOperationV2(_ OperationV2Row) error              { return nil }
-func (m *MockStore) ListQueuedOperationsV2() ([]OperationV2Row, error)    { return nil, nil }
-func (m *MockStore) GetOperationV2(_ string) (*OperationV2Row, error)     { return nil, nil }
+func (m *MockStore) UpsertOpDefinitionV2(_ OpDefinitionV2Row) error    { return nil }
+func (m *MockStore) DeleteOrphanOpDefsV2(_ []string) error             { return nil }
+func (m *MockStore) InsertOperationV2(_ OperationV2Row) error          { return nil }
+func (m *MockStore) ListQueuedOperationsV2() ([]OperationV2Row, error) { return nil, nil }
+func (m *MockStore) GetOperationV2(_ string) (*OperationV2Row, error)  { return nil, nil }
 func (m *MockStore) UpdateOperationV2Status(_ string, _ string, _, _ *time.Time, _ *string) error {
 	return nil
 }

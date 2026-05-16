@@ -16,19 +16,19 @@ import (
 func (p *Plugin) positionSyncDef() sdk.OperationDef {
 	sched := "*/10 * * * *"
 	return sdk.OperationDef{
-		ID:               "itunes.position-sync",
-		Plugin:           "itunes",
-		DisplayName:      "iTunes Position Sync",
-		Description:      "Sync reading positions between iTunes bookmarks and the app.",
-		Schedule:         &sched,
-		Isolate:          false,
-		ResumePolicy:     sdk.ResumeRequeue,
-		DefaultPriority:  sdk.PriorityNormal,
-		Cancellable:      false,
-		Timeout:          30 * time.Minute,
-		ConcurrencyKey:   "itunes.position-sync",
+		ID:                    "itunes.position-sync",
+		Plugin:                "itunes",
+		DisplayName:           "iTunes Position Sync",
+		Description:           "Sync reading positions between iTunes bookmarks and the app.",
+		Schedule:              &sched,
+		Isolate:               false,
+		ResumePolicy:          sdk.ResumeRequeue,
+		DefaultPriority:       sdk.PriorityNormal,
+		Cancellable:           false,
+		Timeout:               30 * time.Minute,
+		ConcurrencyKey:        "itunes.position-sync",
 		MinCheckpointInterval: 0, // Use default
-		Run:              p.runPositionSync,
+		Run:                   p.runPositionSync,
 	}
 }
 

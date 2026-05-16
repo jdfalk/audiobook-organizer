@@ -17,12 +17,18 @@ func init() { maintenance.Register(&scanMetadataHashDupsJob{}) }
 
 type scanMetadataHashDupsJob struct{}
 
-func (j *scanMetadataHashDupsJob) ID() string          { return "scan-metadata-hash-dups" }
+func (j *scanMetadataHashDupsJob) ID() string       { return "scan-metadata-hash-dups" }
 func (j *scanMetadataHashDupsJob) Name() string     { return "Scan Metadata Hash Dups" }
 func (j *scanMetadataHashDupsJob) Category() string { return "dedup" }
-func (j *scanMetadataHashDupsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
-func (j *scanMetadataHashDupsJob) Description() string { return "Scan for books sharing the same metadata source hash" }
-func (j *scanMetadataHashDupsJob) CanResume() bool     { return false }
+func (j *scanMetadataHashDupsJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: false}
+}
+func (j *scanMetadataHashDupsJob) Description() string {
+	return "Scan for books sharing the same metadata source hash"
+}
+func (j *scanMetadataHashDupsJob) CanResume() bool { return false }
 func (j *scanMetadataHashDupsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, _ bool) error {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {

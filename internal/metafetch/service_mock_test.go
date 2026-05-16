@@ -317,10 +317,10 @@ func TestBuildCandidateBookInfo(t *testing.T) {
 			FilePath: "/path/to/book.m4b",
 			Format:   "m4b",
 			Author:   &database.Author{Name: "Test Author"},
-			CoverURL:   &coverURL,
-			Duration:   &duration,
-			FileSize:   &fileSize,
-			Language:   &language,
+			CoverURL: &coverURL,
+			Duration: &duration,
+			FileSize: &fileSize,
+			Language: &language,
 		}
 		store := &database.MockStore{}
 		store.GetBookFilesFunc = func(bookID string) ([]database.BookFile, error) {
@@ -563,18 +563,18 @@ func TestBuildFullTagMap(t *testing.T) {
 		seriesSeq := 3
 
 		book := &database.Book{
-			ID:            "book-1",
-			Language:      &lang,
-			Publisher:     &publisher,
-			Description:   &desc,
-			ISBN10:        &isbn10,
-			ISBN13:        &isbn13,
-			ASIN:          &asin,
-			OpenLibraryID: &olID,
-			HardcoverID:   &hcID,
-			GoogleBooksID: &gbID,
-			Edition:       &edition,
-			PrintYear:     &printYear,
+			ID:             "book-1",
+			Language:       &lang,
+			Publisher:      &publisher,
+			Description:    &desc,
+			ISBN10:         &isbn10,
+			ISBN13:         &isbn13,
+			ASIN:           &asin,
+			OpenLibraryID:  &olID,
+			HardcoverID:    &hcID,
+			GoogleBooksID:  &gbID,
+			Edition:        &edition,
+			PrintYear:      &printYear,
 			SeriesSequence: &seriesSeq,
 		}
 
@@ -951,19 +951,19 @@ func TestApplyMetadataToBook(t *testing.T) {
 			Title: "Unknown",
 		}
 		meta := metadata.BookMetadata{
-			Title:       "The Way of Kings",
-			Publisher:   "Tor Books",
-			Language:    "en",
-			PublishYear: 2010,
-			CoverURL:    "http://cover.jpg",
-			Narrator:    "Michael Kramer",
-			Author:      "Brandon Sanderson",
-			Series:      "Stormlight Archive",
+			Title:          "The Way of Kings",
+			Publisher:      "Tor Books",
+			Language:       "en",
+			PublishYear:    2010,
+			CoverURL:       "http://cover.jpg",
+			Narrator:       "Michael Kramer",
+			Author:         "Brandon Sanderson",
+			Series:         "Stormlight Archive",
 			SeriesPosition: "1",
-			ISBN:        "9781234567890",
-			ASIN:        "B01N5AZR76",
-			Description: "An epic fantasy",
-			Genre:       "Fantasy",
+			ISBN:           "9781234567890",
+			ASIN:           "B01N5AZR76",
+			Description:    "An epic fantasy",
+			Genre:          "Fantasy",
 		}
 
 		svc.ApplyMetadataToBook(book, meta)
@@ -1230,8 +1230,8 @@ func TestPickBestMatchFromScored_DurationBreaksTie(t *testing.T) {
 	// the book's duration; the other is 3 hours off. Duration should tip the winner.
 	bookDuration := 36000 // 10 hours
 	results := []metadata.BookMetadata{
-		{Title: "Mistborn", Author: "Brandon Sanderson", DurationSec: 36000},  // exact match
-		{Title: "Mistborn", Author: "Brandon Sanderson", DurationSec: 25200},  // 3 h off
+		{Title: "Mistborn", Author: "Brandon Sanderson", DurationSec: 36000}, // exact match
+		{Title: "Mistborn", Author: "Brandon Sanderson", DurationSec: 25200}, // 3 h off
 	}
 	scores := []float64{0.8, 0.8}
 	words := SignificantWords("Mistborn")
@@ -1528,15 +1528,15 @@ func TestComputeTargetPathsFromSegments(t *testing.T) {
 		title := "Track One"
 		segments := []database.BookSegment{
 			{
-				ID:          "s1",
-				BookID:      1,
-				FilePath:    "/old/path.m4b",
-				Format:      "m4b",
-				TrackNumber: &trackNum,
-				TotalTracks: &totalTracks,
-				FileHash:    &hash,
+				ID:           "s1",
+				BookID:       1,
+				FilePath:     "/old/path.m4b",
+				Format:       "m4b",
+				TrackNumber:  &trackNum,
+				TotalTracks:  &totalTracks,
+				FileHash:     &hash,
 				SegmentTitle: &title,
-				Active:      true,
+				Active:       true,
 			},
 		}
 		vars := FormatVars{Author: "Author", Title: "Book Title"}

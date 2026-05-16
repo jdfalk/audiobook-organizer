@@ -34,25 +34,25 @@ func TestBuildBookEmbeddingText(t *testing.T) {
 		name, title, author, narrator, series, seq, want string
 	}{
 		{
-			name: "series and sequence",
+			name:  "series and sequence",
 			title: "Words of Radiance", author: "Brandon Sanderson", narrator: "Michael Kramer",
 			series: "Stormlight Archive", seq: "2",
 			want: "Words of Radiance by Brandon Sanderson narrated by Michael Kramer (Stormlight Archive #2)",
 		},
 		{
-			name: "series only",
+			name:  "series only",
 			title: "Words of Radiance", author: "Brandon Sanderson", narrator: "",
 			series: "Stormlight Archive", seq: "",
 			want: "Words of Radiance by Brandon Sanderson (Stormlight Archive)",
 		},
 		{
-			name: "sequence only",
+			name:  "sequence only",
 			title: "Words of Radiance", author: "Brandon Sanderson", narrator: "",
 			series: "", seq: "2",
 			want: "Words of Radiance by Brandon Sanderson (#2)",
 		},
 		{
-			name: "neither falls back to base",
+			name:  "neither falls back to base",
 			title: "Dune", author: "Frank Herbert", narrator: "",
 			series: "", seq: "",
 			want: "Dune by Frank Herbert",

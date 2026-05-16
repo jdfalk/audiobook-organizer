@@ -25,12 +25,14 @@ type rmf_params struct {
 	OperationIDs []string `json:"fetch_op_ids"`
 }
 
-func (j *revertMetadataFetchJob) ID() string          { return "revert-metadata-fetch" }
-func (j *revertMetadataFetchJob) Name() string        { return "Revert Metadata Fetch" }
-func (j *revertMetadataFetchJob) Category() string    { return "Metadata" }
-func (j *revertMetadataFetchJob) Description() string { return "Rolls back DB changes made by one or more bulk-fetch-metadata operations" }
-func (j *revertMetadataFetchJob) DefaultParams() any  { return &rmf_params{OperationIDs: []string{}} }
-func (j *revertMetadataFetchJob) CanResume() bool     { return false }
+func (j *revertMetadataFetchJob) ID() string       { return "revert-metadata-fetch" }
+func (j *revertMetadataFetchJob) Name() string     { return "Revert Metadata Fetch" }
+func (j *revertMetadataFetchJob) Category() string { return "Metadata" }
+func (j *revertMetadataFetchJob) Description() string {
+	return "Rolls back DB changes made by one or more bulk-fetch-metadata operations"
+}
+func (j *revertMetadataFetchJob) DefaultParams() any { return &rmf_params{OperationIDs: []string{}} }
+func (j *revertMetadataFetchJob) CanResume() bool    { return false }
 
 func (j *revertMetadataFetchJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	opID := maintenance.OperationIDFromCtx(ctx)

@@ -90,9 +90,9 @@ func TestBackfillExternalIDsCollectsBookPIDs(t *testing.T) {
 	mockStore := NewMockBackfillStore()
 	pidValue := "test-pid-123"
 	mockStore.books["book1"] = database.Book{
-		ID:                   "book1",
-		Title:                "Test Book",
-		ITunesPersistentID:   &pidValue,
+		ID:                 "book1",
+		Title:              "Test Book",
+		ITunesPersistentID: &pidValue,
 	}
 
 	err := BackfillExternalIDs(context.Background(), mockStore)

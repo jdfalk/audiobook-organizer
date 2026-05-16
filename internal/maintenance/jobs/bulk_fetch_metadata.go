@@ -32,13 +32,15 @@ type bmf_params struct {
 	SkipCached    bool `json:"skip_cached"`
 }
 
-func (j *bulkFetchMetadataJob) ID() string          { return "bulk-fetch-metadata" }
-func (j *bulkFetchMetadataJob) Name() string        { return "Bulk Fetch Metadata" }
-func (j *bulkFetchMetadataJob) Category() string    { return "Metadata" }
-func (j *bulkFetchMetadataJob) Description() string { return "Fetches and caches metadata from all configured sources for every book in the library" }
-func (j *bulkFetchMetadataJob) DefaultParams() any  { return &bmf_params{} }
-func (j *bulkFetchMetadataJob) CanResume() bool     { return true }
-func (j *bulkFetchMetadataJob) Permission() string  { return string(auth.PermLibraryEditMetadata) }
+func (j *bulkFetchMetadataJob) ID() string       { return "bulk-fetch-metadata" }
+func (j *bulkFetchMetadataJob) Name() string     { return "Bulk Fetch Metadata" }
+func (j *bulkFetchMetadataJob) Category() string { return "Metadata" }
+func (j *bulkFetchMetadataJob) Description() string {
+	return "Fetches and caches metadata from all configured sources for every book in the library"
+}
+func (j *bulkFetchMetadataJob) DefaultParams() any { return &bmf_params{} }
+func (j *bulkFetchMetadataJob) CanResume() bool    { return true }
+func (j *bulkFetchMetadataJob) Permission() string { return string(auth.PermLibraryEditMetadata) }
 
 func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	opID := maintenance.OperationIDFromCtx(ctx)

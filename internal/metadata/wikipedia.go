@@ -5,9 +5,9 @@
 package metadata
 
 import (
-	json "encoding/json/v2"
 	"context"
 	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,9 +18,9 @@ import (
 // WikipediaClient fetches metadata from the MediaWiki API and Wikidata.
 // It serves as a last-resort metadata source for obscure titles.
 type WikipediaClient struct {
-	httpClient   *http.Client
-	baseURL      string
-	wikidataURL  string
+	httpClient  *http.Client
+	baseURL     string
+	wikidataURL string
 }
 
 // NewWikipediaClient creates a new Wikipedia/Wikidata metadata client.
@@ -88,7 +88,7 @@ type wikidataSnak struct {
 }
 
 type wikidataDataValue struct {
-	Type  string          `json:"type"`
+	Type  string         `json:"type"`
 	Value jsontext.Value `json:"value"`
 }
 

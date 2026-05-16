@@ -23,10 +23,10 @@ import (
 // It implements CapEventSubscriber: on Init it subscribes to the EventBus for
 // each event type listed in its config and fires HMAC-signed HTTP POSTs.
 type Plugin struct {
-	urls      []string
-	secret    string
-	events    []plugin.EventType
-	client    *http.Client
+	urls   []string
+	secret string
+	events []plugin.EventType
+	client *http.Client
 }
 
 func init() { plugin.Register(&Plugin{}) }

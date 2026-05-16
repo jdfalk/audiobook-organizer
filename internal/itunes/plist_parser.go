@@ -10,47 +10,47 @@ import (
 
 // plistLibrary represents the raw plist structure from iTunes
 type plistLibrary struct {
-	MajorVersion       int                       `plist:"Major Version"`
-	MinorVersion       int                       `plist:"Minor Version"`
-	ApplicationVersion string                    `plist:"Application Version"`
-	MusicFolder        string                    `plist:"Music Folder"`
-	Tracks             map[string]*plistTrack    `plist:"Tracks"`
-	Playlists          []*plistPlaylist          `plist:"Playlists"`
+	MajorVersion       int                    `plist:"Major Version"`
+	MinorVersion       int                    `plist:"Minor Version"`
+	ApplicationVersion string                 `plist:"Application Version"`
+	MusicFolder        string                 `plist:"Music Folder"`
+	Tracks             map[string]*plistTrack `plist:"Tracks"`
+	Playlists          []*plistPlaylist       `plist:"Playlists"`
 }
 
 // plistTrack represents a single track in the plist format
 type plistTrack struct {
-	TrackID       int       `plist:"Track ID"`
-	PersistentID  string    `plist:"Persistent ID"`
-	Name          string    `plist:"Name"`
-	Artist        string    `plist:"Artist"`
-	AlbumArtist   string    `plist:"Album Artist"`
-	Album         string    `plist:"Album"`
-	Genre         string    `plist:"Genre"`
-	Kind          string    `plist:"Kind"`
-	Year          int       `plist:"Year"`
-	Comments      string    `plist:"Comments"`
-	Location      string    `plist:"Location"`
-	Size          int64     `plist:"Size"`
-	TotalTime     int64     `plist:"Total Time"`     // milliseconds
-	DateAdded     time.Time `plist:"Date Added"`
-	PlayCount     int       `plist:"Play Count"`
-	PlayDate      int64     `plist:"Play Date"`      // Unix timestamp
-	PlayDateUTC   time.Time `plist:"Play Date UTC"`
-	Rating        int       `plist:"Rating"`         // 0-100 scale
-	Bookmark      int64     `plist:"Bookmark"`       // milliseconds
-	Bookmarkable  bool      `plist:"Bookmarkable"`
-	TrackNumber   int       `plist:"Track Number"`
-	TrackCount    int       `plist:"Track Count"`
-	DiscNumber    int       `plist:"Disc Number"`
-	DiscCount     int       `plist:"Disc Count"`
+	TrackID      int       `plist:"Track ID"`
+	PersistentID string    `plist:"Persistent ID"`
+	Name         string    `plist:"Name"`
+	Artist       string    `plist:"Artist"`
+	AlbumArtist  string    `plist:"Album Artist"`
+	Album        string    `plist:"Album"`
+	Genre        string    `plist:"Genre"`
+	Kind         string    `plist:"Kind"`
+	Year         int       `plist:"Year"`
+	Comments     string    `plist:"Comments"`
+	Location     string    `plist:"Location"`
+	Size         int64     `plist:"Size"`
+	TotalTime    int64     `plist:"Total Time"` // milliseconds
+	DateAdded    time.Time `plist:"Date Added"`
+	PlayCount    int       `plist:"Play Count"`
+	PlayDate     int64     `plist:"Play Date"` // Unix timestamp
+	PlayDateUTC  time.Time `plist:"Play Date UTC"`
+	Rating       int       `plist:"Rating"`   // 0-100 scale
+	Bookmark     int64     `plist:"Bookmark"` // milliseconds
+	Bookmarkable bool      `plist:"Bookmarkable"`
+	TrackNumber  int       `plist:"Track Number"`
+	TrackCount   int       `plist:"Track Count"`
+	DiscNumber   int       `plist:"Disc Number"`
+	DiscCount    int       `plist:"Disc Count"`
 }
 
 // plistPlaylist represents a playlist in the plist format
 type plistPlaylist struct {
-	Name          string                   `plist:"Name"`
-	PlaylistID    int                      `plist:"Playlist ID"`
-	PlaylistItems []*plistPlaylistItem     `plist:"Playlist Items"`
+	Name          string               `plist:"Name"`
+	PlaylistID    int                  `plist:"Playlist ID"`
+	PlaylistItems []*plistPlaylistItem `plist:"Playlist Items"`
 }
 
 // plistPlaylistItem represents a track reference in a playlist

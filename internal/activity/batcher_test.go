@@ -84,7 +84,7 @@ func TestActivityBatcher_EarlyFlush_ItemCount(t *testing.T) {
 		if e.Details["batched"] != true {
 			t.Errorf("expected batched entry, got %+v", e.Details)
 		}
-	case <-time.After(500*time.Millisecond):
+	case <-time.After(500 * time.Millisecond):
 		t.Fatal("expected early flush entry within 500ms, got none")
 	}
 }

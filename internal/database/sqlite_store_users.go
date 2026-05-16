@@ -6,13 +6,13 @@
 package database
 
 import (
-"database/sql"
-"encoding/json"
-"fmt"
-"strings"
-"time"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
 
-ulid "github.com/oklog/ulid/v2"
+	ulid "github.com/oklog/ulid/v2"
 )
 
 func (s *SQLiteStore) CreateUser(username, email, passwordHashAlgo, passwordHash string, roles []string, status string) (*User, error) {
@@ -245,24 +245,24 @@ func (s *SQLiteStore) GetUserPlaylistByITunesPID(pid string) (*UserPlaylist, err
 func (s *SQLiteStore) ListUserPlaylists(playlistType string, limit, offset int) ([]UserPlaylist, int, error) {
 	return nil, 0, nil
 }
-func (s *SQLiteStore) UpdateUserPlaylist(pl *UserPlaylist) error        { return nil }
-func (s *SQLiteStore) DeleteUserPlaylist(id string) error               { return nil }
-func (s *SQLiteStore) ListDirtyUserPlaylists() ([]UserPlaylist, error)  { return nil, nil }
+func (s *SQLiteStore) UpdateUserPlaylist(pl *UserPlaylist) error       { return nil }
+func (s *SQLiteStore) DeleteUserPlaylist(id string) error              { return nil }
+func (s *SQLiteStore) ListDirtyUserPlaylists() ([]UserPlaylist, error) { return nil, nil }
 
 // ---- API keys + Invites (SQLite no-op stubs) ----
 
-func (s *SQLiteStore) CreateAPIKey(key *APIKey) (*APIKey, error)                        { return key, nil }
-func (s *SQLiteStore) GetAPIKey(id string) (*APIKey, error)                             { return nil, nil }
-func (s *SQLiteStore) GetAPIKeyByHash(hash string) (*APIKey, error)                     { return nil, nil }
-func (s *SQLiteStore) ListAPIKeysForUser(userID string) ([]APIKey, error)               { return nil, nil }
-func (s *SQLiteStore) ListAllAPIKeys() ([]APIKey, error)                                { return nil, nil }
-func (s *SQLiteStore) RevokeAPIKey(id string) error                                     { return nil }
-func (s *SQLiteStore) SetAPIKeyStatus(id, status string, at time.Time) error            { return nil }
-func (s *SQLiteStore) TouchAPIKeyLastUsed(id string, at time.Time, ip string) error     { return nil }
-func (s *SQLiteStore) CreateInvite(invite *Invite) (*Invite, error)          { return invite, nil }
-func (s *SQLiteStore) GetInvite(token string) (*Invite, error)               { return nil, nil }
-func (s *SQLiteStore) ListActiveInvites() ([]Invite, error)                  { return nil, nil }
-func (s *SQLiteStore) DeleteInvite(token string) error                       { return nil }
+func (s *SQLiteStore) CreateAPIKey(key *APIKey) (*APIKey, error)                    { return key, nil }
+func (s *SQLiteStore) GetAPIKey(id string) (*APIKey, error)                         { return nil, nil }
+func (s *SQLiteStore) GetAPIKeyByHash(hash string) (*APIKey, error)                 { return nil, nil }
+func (s *SQLiteStore) ListAPIKeysForUser(userID string) ([]APIKey, error)           { return nil, nil }
+func (s *SQLiteStore) ListAllAPIKeys() ([]APIKey, error)                            { return nil, nil }
+func (s *SQLiteStore) RevokeAPIKey(id string) error                                 { return nil }
+func (s *SQLiteStore) SetAPIKeyStatus(id, status string, at time.Time) error        { return nil }
+func (s *SQLiteStore) TouchAPIKeyLastUsed(id string, at time.Time, ip string) error { return nil }
+func (s *SQLiteStore) CreateInvite(invite *Invite) (*Invite, error)                 { return invite, nil }
+func (s *SQLiteStore) GetInvite(token string) (*Invite, error)                      { return nil, nil }
+func (s *SQLiteStore) ListActiveInvites() ([]Invite, error)                         { return nil, nil }
+func (s *SQLiteStore) DeleteInvite(token string) error                              { return nil }
 func (s *SQLiteStore) ConsumeInvite(token, algo, hash string) (*User, error) {
 	return nil, fmt.Errorf("invites not supported on SQLite backend")
 }

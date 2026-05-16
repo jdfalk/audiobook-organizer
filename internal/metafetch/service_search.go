@@ -9,13 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"log"
 	"sort"
 	"strings"
 	"time"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
 // BuildSourceChain returns metadata sources ordered by config priority.
@@ -111,6 +111,7 @@ func (mfs *Service) BuildSourceChain() []metadata.MetadataSource {
 	}
 	return chain
 }
+
 // SearchMetadataForBook searches all configured metadata sources and returns
 // scored candidates for manual matching.
 // SearchMetadataForBook is the backward-compatible variadic entry point.
@@ -129,6 +130,7 @@ func (mfs *Service) SearchMetadataForBook(id string, query string, authorHint ..
 	}
 	return mfs.SearchMetadataForBookWithOptions(id, query, author, narrator, series, SearchOptions{})
 }
+
 // SearchMetadataForBookWithOptions is the canonical search entry point. The
 // old variadic signature wraps this and passes default options. All new call
 // sites should use this method directly so they can pass SearchOptions fields
@@ -447,18 +449,18 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				}
 				score *= durationScoreMultiplier(bookDurationSec, result.DurationSec)
 				candidates = append(candidates, MetadataCandidate{
-					Title:            result.Title,
-					Author:           result.Author,
-					Narrator:         result.Narrator,
-					Series:           result.Series,
-					SeriesPosition:   result.SeriesPosition,
-					Year:             result.PublishYear,
-					Publisher:        result.Publisher,
-					ISBN:             result.ISBN,
-					ASIN:             result.ASIN,
-					CoverURL:         result.CoverURL,
-					Description:      result.Description,
-					Language:         result.Language,
+					Title:                result.Title,
+					Author:               result.Author,
+					Narrator:             result.Narrator,
+					Series:               result.Series,
+					SeriesPosition:       result.SeriesPosition,
+					Year:                 result.PublishYear,
+					Publisher:            result.Publisher,
+					ISBN:                 result.ISBN,
+					ASIN:                 result.ASIN,
+					CoverURL:             result.CoverURL,
+					Description:          result.Description,
+					Language:             result.Language,
 					Source:               "Audnexus (Audible)",
 					Score:                score,
 					DurationSec:          result.DurationSec,

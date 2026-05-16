@@ -76,11 +76,11 @@ func TestDecodeAnyFingerprint_BrokenPadding(t *testing.T) {
 	}
 
 	cases := map[string]string{
-		"strip_padding":           strings.TrimRight(urlEncoded, "="),
-		"too_few_pad":             strings.TrimRight(urlEncoded, "=") + "=",   // 1 `=` when input needs 0/2
-		"too_many_pad":            urlEncoded + "==",                           // extra padding
-		"whitespace_in_middle":    urlEncoded[:10] + "\n  \t" + urlEncoded[10:],
-		"raw_url_with_extra_pad":  base64.RawURLEncoding.EncodeToString(payload) + "===",
+		"strip_padding":          strings.TrimRight(urlEncoded, "="),
+		"too_few_pad":            strings.TrimRight(urlEncoded, "=") + "=", // 1 `=` when input needs 0/2
+		"too_many_pad":           urlEncoded + "==",                        // extra padding
+		"whitespace_in_middle":   urlEncoded[:10] + "\n  \t" + urlEncoded[10:],
+		"raw_url_with_extra_pad": base64.RawURLEncoding.EncodeToString(payload) + "===",
 		// Append a stray byte so decoded length becomes 65 (4-byte header
 		// + 60 bytes payload + 1 stray). Pre-fix this fell to base62 and
 		// produced the misleading "invalid character '+' in fingerprint"

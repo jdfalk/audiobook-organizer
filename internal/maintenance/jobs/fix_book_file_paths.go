@@ -17,12 +17,18 @@ func init() { maintenance.Register(&fixBookFilePathsJob{}) }
 
 type fixBookFilePathsJob struct{}
 
-func (j *fixBookFilePathsJob) ID() string          { return "fix-book-file-paths" }
+func (j *fixBookFilePathsJob) ID() string       { return "fix-book-file-paths" }
 func (j *fixBookFilePathsJob) Name() string     { return "Fix Book File Paths" }
 func (j *fixBookFilePathsJob) Category() string { return "files" }
-func (j *fixBookFilePathsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
-func (j *fixBookFilePathsJob) Description() string { return "Mark book_files as missing when they no longer exist on disk" }
-func (j *fixBookFilePathsJob) CanResume() bool     { return false }
+func (j *fixBookFilePathsJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: true}
+}
+func (j *fixBookFilePathsJob) Description() string {
+	return "Mark book_files as missing when they no longer exist on disk"
+}
+func (j *fixBookFilePathsJob) CanResume() bool { return false }
 func (j *fixBookFilePathsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	files, err := store.GetAllBookFiles()
 	if err != nil {

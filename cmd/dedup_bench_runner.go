@@ -80,13 +80,13 @@ func executeBenchRun(
 
 	// Save the full request data
 	request := map[string]interface{}{
-		"model":          tc.Model,
-		"prompt_variant": tc.PromptVariant,
-		"temperature":    tc.Temperature,
-		"top_p":          tc.TopP,
-		"mode":           mode,
-		"system_prompt":  systemPrompt,
-		"num_chunks":     len(chunks),
+		"model":             tc.Model,
+		"prompt_variant":    tc.PromptVariant,
+		"temperature":       tc.Temperature,
+		"top_p":             tc.TopP,
+		"mode":              mode,
+		"system_prompt":     systemPrompt,
+		"num_chunks":        len(chunks),
 		"total_input_items": json.RawMessage(fmt.Sprintf("%d", countItems(inputJSON))),
 	}
 	if err := writeJSON(filepath.Join(outDir, "request.json"), request); err != nil {

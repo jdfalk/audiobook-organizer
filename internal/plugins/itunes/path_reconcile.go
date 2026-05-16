@@ -16,19 +16,19 @@ import (
 func (p *Plugin) pathReconciledDef() sdk.OperationDef {
 	sched := "0 4 * * *"
 	return sdk.OperationDef{
-		ID:               "itunes.path-reconcile",
-		Plugin:           "itunes",
-		DisplayName:      "iTunes Path Reconcile",
-		Description:      "Reconcile iTunes track paths after library reorganizations.",
-		Schedule:         &sched,
-		Isolate:          false,
-		ResumePolicy:     sdk.ResumeDrop,
-		DefaultPriority:  sdk.PriorityLow,
-		Cancellable:      true,
-		Timeout:          60 * time.Minute,
-		ConcurrencyKey:   "itunes.path-reconcile",
+		ID:                    "itunes.path-reconcile",
+		Plugin:                "itunes",
+		DisplayName:           "iTunes Path Reconcile",
+		Description:           "Reconcile iTunes track paths after library reorganizations.",
+		Schedule:              &sched,
+		Isolate:               false,
+		ResumePolicy:          sdk.ResumeDrop,
+		DefaultPriority:       sdk.PriorityLow,
+		Cancellable:           true,
+		Timeout:               60 * time.Minute,
+		ConcurrencyKey:        "itunes.path-reconcile",
 		MinCheckpointInterval: 30 * time.Second,
-		Run:              p.runPathReconcile,
+		Run:                   p.runPathReconcile,
 	}
 }
 

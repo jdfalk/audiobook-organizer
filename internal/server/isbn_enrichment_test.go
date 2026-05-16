@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 )
 
 // stubSource is a minimal MetadataSource for testing ISBN enrichment.

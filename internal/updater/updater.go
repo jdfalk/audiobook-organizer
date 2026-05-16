@@ -53,9 +53,9 @@ type githubRelease struct {
 
 // githubCommit is the subset of GitHub's commit API response we use.
 type githubCommit struct {
-	SHA    string `json:"sha"`
+	SHA     string `json:"sha"`
 	HTMLURL string `json:"html_url"`
-	Commit struct {
+	Commit  struct {
 		Message string `json:"message"`
 		Author  struct {
 			Date string `json:"date"`

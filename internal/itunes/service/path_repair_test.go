@@ -421,4 +421,3 @@ func TestRepair_XMLParseError(t *testing.T) {
 	_, err := r.repairWithResult(context.Background(), "op-bad", true, noopProgressRepair{})
 	require.Error(t, err)
 }
-

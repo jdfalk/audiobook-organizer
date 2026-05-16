@@ -58,7 +58,7 @@ func TestHandleListCoverHistory_Empty(t *testing.T) {
 
 	var resp struct {
 		Covers []covers.CoverHistoryEntry `json:"covers"`
-		Count  int                 `json:"count"`
+		Count  int                        `json:"count"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	if resp.Count != 0 {
@@ -90,7 +90,7 @@ func TestHandleListCoverHistory_WithCovers(t *testing.T) {
 	var envelope struct {
 		Data struct {
 			Covers []covers.CoverHistoryEntry `json:"covers"`
-			Count  int                 `json:"count"`
+			Count  int                        `json:"count"`
 		} `json:"data"`
 	}
 	json.Unmarshal(w.Body.Bytes(), &envelope)

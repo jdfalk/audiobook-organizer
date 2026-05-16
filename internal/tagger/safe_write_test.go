@@ -23,7 +23,7 @@ func (s *staticPathChecker) IsProtected(filePath string) bool {
 
 // recordingImporter records ImportPath calls and returns a configured result.
 type recordingImporter struct {
-	calls     []string
+	calls      []string
 	returnPath string
 	returnErr  error
 }

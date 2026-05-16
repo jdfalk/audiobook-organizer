@@ -6,11 +6,11 @@
 package metafetch
 
 import (
-"encoding/json"
-"regexp"
-"strconv"
-"strings"
-"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"encoding/json"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 func derefString(p *string) string {
@@ -29,6 +29,7 @@ func jsonEncodeString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
 // normalizeMetaSeries splits an embedded "Series Name, Book N" pattern
 // out of meta.Title or meta.Series into separate Series + SeriesPosition
 // fields. Audible/Audnexus sometimes return the series name with the
@@ -69,6 +70,7 @@ func NormalizeMetaSeries(meta *metadata.BookMetadata) {
 		meta.Title = parsedTitle
 	}
 }
+
 // parseSeriesFromTitle extracts series name, position, and title from strings like:
 //   - "(Long Earth 05) The Long Cosmos" -> series="Long Earth", pos="5", title="The Long Cosmos"
 //   - "(Series Name 3) Title" -> series="Series Name", pos="3", title="Title"
@@ -111,6 +113,7 @@ func ParseSeriesFromTitle(s string) (series, position, title string) {
 
 	return "", "", ""
 }
+
 // significantWords returns the deduplicated set of words longer than 2 chars
 // that are not stop-words, all lowercased.
 // SignificantWords extracts meaningful words from a string for title matching.
@@ -137,6 +140,7 @@ func SignificantWords(s string) map[string]bool {
 	}
 	return words
 }
+
 // isCompilation returns true when the title appears to be a box-set,
 // collection, omnibus, anthology, or other multi-title compilation.
 func isCompilation(title string) bool {

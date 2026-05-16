@@ -5,8 +5,8 @@
 package metadata
 
 import (
-	json "encoding/json/v2"
 	"context"
+	json "encoding/json/v2"
 	"fmt"
 	"log"
 	"net/http"
@@ -117,7 +117,7 @@ type BookMetadata struct {
 	Genre          string
 	Series         string
 	SeriesPosition string
-	DurationSec int // audio runtime in seconds (Audible: runtime_length_min × 60)
+	DurationSec    int // audio runtime in seconds (Audible: runtime_length_min × 60)
 
 	// Audible-specific ratings (1–5 scale). Performance and Story are
 	// audiobook-specific dimensions not available from other sources.

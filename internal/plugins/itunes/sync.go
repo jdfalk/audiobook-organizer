@@ -16,19 +16,19 @@ import (
 func (p *Plugin) syncDef() sdk.OperationDef {
 	sched := "*/30 * * * *"
 	return sdk.OperationDef{
-		ID:               "itunes.sync",
-		Plugin:           "itunes",
-		DisplayName:      "iTunes Library Sync",
-		Description:      "Sync audiobook metadata with the iTunes/Music library.",
-		Schedule:         &sched,
-		Isolate:          false,
-		ResumePolicy:     sdk.ResumeRestart,
-		DefaultPriority:  sdk.PriorityNormal,
-		Cancellable:      false,
-		Timeout:          120 * time.Minute,
-		ConcurrencyKey:   "itunes.sync",
+		ID:                    "itunes.sync",
+		Plugin:                "itunes",
+		DisplayName:           "iTunes Library Sync",
+		Description:           "Sync audiobook metadata with the iTunes/Music library.",
+		Schedule:              &sched,
+		Isolate:               false,
+		ResumePolicy:          sdk.ResumeRestart,
+		DefaultPriority:       sdk.PriorityNormal,
+		Cancellable:           false,
+		Timeout:               120 * time.Minute,
+		ConcurrencyKey:        "itunes.sync",
 		MinCheckpointInterval: 30 * time.Second,
-		Run:              p.runSync,
+		Run:                   p.runSync,
 	}
 }
 

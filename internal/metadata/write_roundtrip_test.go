@@ -403,9 +403,9 @@ func TestCustomTagConsistency_ProvenanceFieldsCoverMetadata(t *testing.T) {
 		"UsedFilenameFallback": true, // control flag
 		"BookOrganizerID":      true, // internal tracking, not user-facing provenance
 		"OrganizerTagVersion":  true, // internal tracking
-		"HardcoverID":         true, // external ID, tracked separately
-		"OpenLibraryID":       true, // external ID, tracked separately
-		"GoogleBooksID":       true, // external ID, tracked separately
+		"HardcoverID":          true, // external ID, tracked separately
+		"OpenLibraryID":        true, // external ID, tracked separately
+		"GoogleBooksID":        true, // external ID, tracked separately
 	}
 
 	metaFieldsInProvenance := map[string]bool{}
@@ -497,20 +497,20 @@ type mockTagMetadata struct {
 }
 
 func (m *mockTagMetadata) Format() tag.Format          { return tag.UnknownFormat }
-func (m *mockTagMetadata) FileType() tag.FileType       { return tag.UnknownFileType }
-func (m *mockTagMetadata) Title() string                { return m.title }
-func (m *mockTagMetadata) Album() string                { return m.album }
-func (m *mockTagMetadata) Artist() string               { return m.artist }
-func (m *mockTagMetadata) AlbumArtist() string          { return "" }
-func (m *mockTagMetadata) Composer() string             { return "" }
-func (m *mockTagMetadata) Genre() string                { return m.genre }
-func (m *mockTagMetadata) Year() int                    { return m.year }
-func (m *mockTagMetadata) Track() (int, int)            { return 0, 0 }
-func (m *mockTagMetadata) Disc() (int, int)             { return 0, 0 }
-func (m *mockTagMetadata) Picture() *tag.Picture        { return nil }
-func (m *mockTagMetadata) Comment() string              { return m.comment }
-func (m *mockTagMetadata) Lyrics() string               { return "" }
-func (m *mockTagMetadata) Raw() map[string]interface{}  { return m.raw }
+func (m *mockTagMetadata) FileType() tag.FileType      { return tag.UnknownFileType }
+func (m *mockTagMetadata) Title() string               { return m.title }
+func (m *mockTagMetadata) Album() string               { return m.album }
+func (m *mockTagMetadata) Artist() string              { return m.artist }
+func (m *mockTagMetadata) AlbumArtist() string         { return "" }
+func (m *mockTagMetadata) Composer() string            { return "" }
+func (m *mockTagMetadata) Genre() string               { return m.genre }
+func (m *mockTagMetadata) Year() int                   { return m.year }
+func (m *mockTagMetadata) Track() (int, int)           { return 0, 0 }
+func (m *mockTagMetadata) Disc() (int, int)            { return 0, 0 }
+func (m *mockTagMetadata) Picture() *tag.Picture       { return nil }
+func (m *mockTagMetadata) Comment() string             { return m.comment }
+func (m *mockTagMetadata) Lyrics() string              { return "" }
+func (m *mockTagMetadata) Raw() map[string]interface{} { return m.raw }
 
 // --- Compile-time interface check ---
 var _ tag.Metadata = (*mockTagMetadata)(nil)

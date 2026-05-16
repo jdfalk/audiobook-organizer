@@ -26,10 +26,10 @@ type SystemServiceStore interface {
 type LibrarySizesFn func(rootDir string, importFolders []database.ImportPath) (librarySize, importSize int64)
 
 type SystemService struct {
-	db          SystemServiceStore
-	version     string
-	libSizesFn  LibrarySizesFn
-	startTime   time.Time
+	db         SystemServiceStore
+	version    string
+	libSizesFn LibrarySizesFn
+	startTime  time.Time
 }
 
 // NewSystemService constructs a SystemService.
@@ -49,26 +49,26 @@ func NewSystemService(db SystemServiceStore, version string, libSizesFn LibraryS
 }
 
 type SystemStatus struct {
-	Status           string               `json:"status"`
-	Version          string               `json:"version"`
-	LibraryBookCount int                  `json:"library_book_count"`
-	ImportBookCount  int                  `json:"import_book_count"`
-	TotalBookCount   int                  `json:"total_book_count"`
-	TotalFileCount   int                  `json:"total_file_count"`
-	AuthorCount      int                  `json:"author_count"`
-	SeriesCount      int                  `json:"series_count"`
-	LibrarySizeBytes int64                `json:"library_size_bytes"`
-	ImportSizeBytes  int64                `json:"import_size_bytes"`
-	TotalSizeBytes   int64                `json:"total_size_bytes"`
-	RootDirectory    string               `json:"root_directory"`
-	Library          SystemLibraryStatus  `json:"library"`
-	ImportPaths      SystemImportStatus   `json:"import_paths"`
-	Memory           SystemMemoryStatus   `json:"memory"`
-	Runtime          SystemRuntimeStatus  `json:"runtime"`
-	Operations       SystemOperationsInfo `json:"operations"`
-	PluginHealth     map[string]string    `json:"plugin_health,omitempty"`
-	AppUptimeSeconds    float64           `json:"app_uptime_seconds"`
-	SystemUptimeSeconds float64           `json:"system_uptime_seconds"`
+	Status              string               `json:"status"`
+	Version             string               `json:"version"`
+	LibraryBookCount    int                  `json:"library_book_count"`
+	ImportBookCount     int                  `json:"import_book_count"`
+	TotalBookCount      int                  `json:"total_book_count"`
+	TotalFileCount      int                  `json:"total_file_count"`
+	AuthorCount         int                  `json:"author_count"`
+	SeriesCount         int                  `json:"series_count"`
+	LibrarySizeBytes    int64                `json:"library_size_bytes"`
+	ImportSizeBytes     int64                `json:"import_size_bytes"`
+	TotalSizeBytes      int64                `json:"total_size_bytes"`
+	RootDirectory       string               `json:"root_directory"`
+	Library             SystemLibraryStatus  `json:"library"`
+	ImportPaths         SystemImportStatus   `json:"import_paths"`
+	Memory              SystemMemoryStatus   `json:"memory"`
+	Runtime             SystemRuntimeStatus  `json:"runtime"`
+	Operations          SystemOperationsInfo `json:"operations"`
+	PluginHealth        map[string]string    `json:"plugin_health,omitempty"`
+	AppUptimeSeconds    float64              `json:"app_uptime_seconds"`
+	SystemUptimeSeconds float64              `json:"system_uptime_seconds"`
 }
 
 type SystemLibraryStatus struct {

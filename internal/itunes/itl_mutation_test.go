@@ -676,11 +676,11 @@ func TestMutation_UTF16Title(t *testing.T) {
 func TestMutation_Windows1252Artist(t *testing.T) {
 	// Latin characters with accents -> Windows-1252 encoding
 	spec := trackSpec{
-		TrackID: 1,
-		PID:     makePID(1),
+		TrackID:  1,
+		PID:      makePID(1),
 		Location: "/music/french.mp3",
-		Artist:  "Édith Piaf",
-		Name:    "La Vie en Rose",
+		Artist:   "Édith Piaf",
+		Name:     "La Vie en Rose",
 	}
 	data := buildSyntheticITLMultiTrack(t, "9.0.0", false, []trackSpec{spec})
 	lib := parseITLFromBytes(t, data)
@@ -696,7 +696,7 @@ func TestMutation_MixedEncodingsInSameTrack(t *testing.T) {
 		TrackID:  1,
 		PID:      makePID(1),
 		Location: "/music/mixed_encoding.mp3",
-		Name:     "東京ドリフト",         // UTF-16 (CJK)
+		Name:     "東京ドリフト",            // UTF-16 (CJK)
 		Artist:   "Müller & Associés", // Windows-1252 (accented)
 		Album:    "Plain Album",       // ASCII
 	}
@@ -1108,8 +1108,8 @@ func TestMutation_ExtensionRewriteMultiTrack(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lib.Tracks, 3)
 	assert.Equal(t, "/music/a.mp3", lib.Tracks[0].Location) // changed
-	assert.Equal(t, "/music/b.mp3", lib.Tracks[1].Location)  // unchanged
-	assert.Equal(t, "/music/c.mp3", lib.Tracks[2].Location)  // changed
+	assert.Equal(t, "/music/b.mp3", lib.Tracks[1].Location) // unchanged
+	assert.Equal(t, "/music/c.mp3", lib.Tracks[2].Location) // changed
 }
 
 // ===========================================================================

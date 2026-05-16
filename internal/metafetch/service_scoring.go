@@ -7,15 +7,15 @@ package metafetch
 
 import (
 	"context"
+	"github.com/jdfalk/audiobook-organizer/internal/ai"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"log"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"github.com/jdfalk/audiobook-organizer/internal/ai"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
 // isGarbageValue returns true if a string value is effectively useless metadata.
@@ -37,6 +37,7 @@ func IsGarbageValue(s string) bool {
 	}
 	return false
 }
+
 // isBetterValue returns true if newVal should replace oldVal.
 // Never replaces a good value with garbage.
 func IsBetterValue(oldVal, newVal string) bool {
@@ -49,6 +50,7 @@ func IsBetterValue(oldVal, newVal string) bool {
 	// Both are real values; allow the update (fetched data may be more accurate)
 	return true
 }
+
 // isBetterStringPtr returns true if newVal should replace the existing *string.
 func IsBetterStringPtr(oldPtr *string, newVal string) bool {
 	if IsGarbageValue(newVal) {
@@ -60,6 +62,7 @@ func IsBetterStringPtr(oldPtr *string, newVal string) bool {
 	// Both are real values; allow the update
 	return true
 }
+
 // computeF1Base returns just the F1 token-overlap portion of the score, with
 // no penalties or bonuses applied. It's the "base score" contribution from
 // the significantWords pathway, extracted so alternative scorers (embedding,
@@ -94,6 +97,7 @@ func computeF1Base(r metadata.BookMetadata, searchWords map[string]bool) float64
 	}
 	return 2 * recall * precision / (recall + precision)
 }
+
 // applyNonBaseAdjustments applies the compilation penalty, length penalty,
 // and rich-metadata bonus to a base score. These adjustments are meaningful
 // regardless of which scorer tier produced the base score and are applied
@@ -143,6 +147,7 @@ func ApplyNonBaseAdjustments(baseScore float64, r metadata.BookMetadata, baseWor
 
 	return score + bonus
 }
+
 // durationScoreMultiplier returns a score multiplier based on how closely the
 // candidate's runtime matches the book's known duration.
 //
@@ -188,6 +193,7 @@ func durationScoreMultiplier(bookDurationSec, candidateDurationSec int) float64 
 		return 0.50
 	}
 }
+
 // computeDurationScore returns an additive score component (in points) based on
 // how closely a candidate's runtime matches the book's known duration. Unlike
 // durationScoreMultiplier (which scales the overall score multiplicatively),
@@ -227,6 +233,7 @@ func computeDurationScore(bookDurationSec, candidateDurationSec int) float64 {
 		return 0
 	}
 }
+
 // pickBestMatchFromScored takes pre-computed base scores from any tier and
 // returns the single best-matching result above the tier-appropriate
 // threshold, applying the full stack of author/narrator/audiobook bonus
@@ -332,6 +339,7 @@ func pickBestMatchFromScored(
 	}
 	return nil
 }
+
 // scoreOneResult computes a quality score in [0, ~1.15] for a single result
 // against a set of search-title significant words. It preserves the
 // pre-refactor signature and behavior, composing computeF1Base and
@@ -343,6 +351,7 @@ func ScoreOneResult(r metadata.BookMetadata, searchWords map[string]bool) float6
 	}
 	return ApplyNonBaseAdjustments(base, r, len(searchWords))
 }
+
 // scoreBaseCandidates picks the highest-available base scorer tier and
 // returns one base score per input result, aligned to input order, along
 // with a short tier name for logs and UI badges ("embedding", "f1", ...).
@@ -402,6 +411,7 @@ func (mfs *Service) ScoreBaseCandidates(
 	}
 	return scores, "f1"
 }
+
 // bestTitleMatchForBook is the scorer-aware sibling of
 // bestTitleMatchWithContext. It routes through scoreBaseCandidates so
 // callers that have a *database.Book in hand (e.g. the automatic metadata
@@ -435,6 +445,7 @@ func (mfs *Service) bestTitleMatchForBook(
 	}
 	return pickBestMatchFromScored(results, baseScores, baseTier, searchWords, bookAuthor, bookNarrator, bookDurationSec)
 }
+
 // rerankTopK asks the LLM scorer to re-judge the ambiguous top candidates
 // after the base scorer has produced initial rankings. "Ambiguous" means
 // candidates whose Score lands within MetadataLLMRerankEpsilon of the best
@@ -536,6 +547,7 @@ func (mfs *Service) RerankTopK(
 	})
 	return candidates
 }
+
 // applySeriesPositionFilter rejects the top result if it claims a different
 // series position than the book's known position. If the result has no
 // SeriesPosition or the book has no known position, results pass through.
@@ -555,6 +567,7 @@ func ApplySeriesPositionFilter(
 	}
 	return results
 }
+
 // bestTitleMatch filters results to find the single best match for the given
 // title variants using precision+recall+penalty scoring.
 //
@@ -582,6 +595,7 @@ func BestTitleMatchWithContext(results []metadata.BookMetadata, bookAuthor, book
 
 	return pickBestMatchFromScored(results, baseScores, "f1", searchWords, bookAuthor, bookNarrator, 0)
 }
+
 var scoreTitleStop = map[string]bool{
 	"the": true, "and": true, "for": true, "with": true, "from": true,
 	"that": true, "this": true, "are": true, "was": true, "were": true,

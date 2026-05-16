@@ -1353,9 +1353,9 @@ func calculatePercent(current, total int) int {
 	return pct
 }
 
-func strPtr(s string) *string       { return &s }
-func intPtrLocal(v int) *int        { return &v }
-func int64PtrLocal(v int64) *int64  { return &v }
+func strPtr(s string) *string      { return &s }
+func intPtrLocal(v int) *int       { return &v }
+func int64PtrLocal(v int64) *int64 { return &v }
 
 func min(a, b int) int {
 	if a < b {

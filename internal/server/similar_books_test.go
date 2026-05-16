@@ -158,4 +158,3 @@ func TestHandleSimilarBooks_NoAuthorNoSeries(t *testing.T) {
 		t.Errorf("expected 0 results for book with no author/series, got %d", resp.Count)
 	}
 }
-

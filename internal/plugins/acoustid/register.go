@@ -21,8 +21,8 @@ import (
 
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "acoustidplugin",
-		Needs: []string{"store", "dedup", "embeddingstore"},
+		Name:   "acoustidplugin",
+		Needs:  []string{"store", "dedup", "embeddingstore"},
 		Groups: []string{"plugins"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			engine, _ := serviceregistry.TryGet[*dedupengine.Engine](c, "dedup")

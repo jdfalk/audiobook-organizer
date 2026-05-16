@@ -141,7 +141,7 @@ func isPathWithinTarget(targetPath, entryPath string) (bool, error) {
 	candidate = filepath.Clean(candidate)
 
 	// Verify the cleaned path is still within target
-	// Use filepath.Rel to compute relative path; if it escapes, Rel will return ".." 
+	// Use filepath.Rel to compute relative path; if it escapes, Rel will return ".."
 	rel, err := filepath.Rel(absTarget, candidate)
 	if err != nil {
 		return false, err

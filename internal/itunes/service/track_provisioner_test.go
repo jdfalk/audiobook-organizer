@@ -46,18 +46,18 @@ func TestProvisionAll_MultiSegment(t *testing.T) {
 	files := []database.BookFile{
 		{
 			ID: "seg1", BookID: "book-multi",
-			FilePath:    "/mnt/bigdata/books/audiobook-organizer/A/B/01.m4b",
-			Title:       "Part 1", TrackNumber: 1,
+			FilePath: "/mnt/bigdata/books/audiobook-organizer/A/B/01.m4b",
+			Title:    "Part 1", TrackNumber: 1,
 		},
 		{
 			ID: "seg2", BookID: "book-multi",
-			FilePath:    "/mnt/bigdata/books/audiobook-organizer/A/B/02.m4b",
-			Title:       "Part 2", TrackNumber: 2,
+			FilePath: "/mnt/bigdata/books/audiobook-organizer/A/B/02.m4b",
+			Title:    "Part 2", TrackNumber: 2,
 		},
 		{
 			ID: "seg3", BookID: "book-multi",
-			FilePath:    "/mnt/bigdata/books/audiobook-organizer/A/B/03.m4b",
-			Title:       "Part 3", TrackNumber: 3,
+			FilePath: "/mnt/bigdata/books/audiobook-organizer/A/B/03.m4b",
+			Title:    "Part 3", TrackNumber: 3,
 		},
 	}
 

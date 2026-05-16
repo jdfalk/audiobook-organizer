@@ -6,153 +6,157 @@
 package jobs
 
 import (
-"context"
-"fmt"
-"os"
-"path/filepath"
-"regexp"
-"sort"
-"strings"
-"unicode"
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"unicode"
 
-"github.com/jdfalk/audiobook-organizer/internal/config"
-"github.com/jdfalk/audiobook-organizer/internal/database"
-"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 )
 
 func init() { maintenance.Register(&cleanupOrganizeMess{}) }
 
 type cleanupOrganizeMess struct{}
 
-func (j *cleanupOrganizeMess) ID() string          { return "cleanup-organize-mess" }
+func (j *cleanupOrganizeMess) ID() string       { return "cleanup-organize-mess" }
 func (j *cleanupOrganizeMess) Name() string     { return "Cleanup Organize Mess" }
 func (j *cleanupOrganizeMess) Category() string { return "cleanup" }
-func (j *cleanupOrganizeMess) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
+func (j *cleanupOrganizeMess) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: true}
+}
 func (j *cleanupOrganizeMess) Description() string {
-return "Clean up leftover organize artifacts and garbage directories"
+	return "Clean up leftover organize artifacts and garbage directories"
 }
 func (j *cleanupOrganizeMess) CanResume() bool { return false }
 
 func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
-rootDir := config.AppConfig.RootDir
-if rootDir == "" {
-return fmt.Errorf("root_dir is not configured")
-}
-if _, err := os.Stat(rootDir); err != nil {
-return fmt.Errorf("root_dir not accessible: %w", err)
-}
+	rootDir := config.AppConfig.RootDir
+	if rootDir == "" {
+		return fmt.Errorf("root_dir is not configured")
+	}
+	if _, err := os.Stat(rootDir); err != nil {
+		return fmt.Errorf("root_dir not accessible: %w", err)
+	}
 
-var dirs []string
-walkErr := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-if err != nil {
-return nil
-}
-if !info.IsDir() {
-return nil
-}
-if path == rootDir {
-return nil
-}
-if strings.HasPrefix(filepath.Base(path), ".") {
-return filepath.SkipDir
-}
-dirs = append(dirs, path)
-return nil
-})
-if walkErr != nil {
-return fmt.Errorf("failed to walk root directory: %w", walkErr)
-}
+	var dirs []string
+	walkErr := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			return nil
+		}
+		if path == rootDir {
+			return nil
+		}
+		if strings.HasPrefix(filepath.Base(path), ".") {
+			return filepath.SkipDir
+		}
+		dirs = append(dirs, path)
+		return nil
+	})
+	if walkErr != nil {
+		return fmt.Errorf("failed to walk root directory: %w", walkErr)
+	}
 
-sort.Slice(dirs, func(i, j int) bool {
-return len(dirs[i]) > len(dirs[j])
-})
+	sort.Slice(dirs, func(i, j int) bool {
+		return len(dirs[i]) > len(dirs[j])
+	})
 
-reporter.SetTotal(len(dirs))
+	reporter.SetTotal(len(dirs))
 
-emptyRemoved := 0
-garbageFound := 0
+	emptyRemoved := 0
+	garbageFound := 0
 
-for _, dir := range dirs {
-select {
-case <-ctx.Done():
-return ctx.Err()
-default:
-}
+	for _, dir := range dirs {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 
-name := filepath.Base(dir)
-if reason := comIsGarbageDirectory(name); reason != "" {
-garbageFound++
-reporter.Log("warn", fmt.Sprintf("Garbage dir %q: %s", dir, reason), nil)
-}
+		name := filepath.Base(dir)
+		if reason := comIsGarbageDirectory(name); reason != "" {
+			garbageFound++
+			reporter.Log("warn", fmt.Sprintf("Garbage dir %q: %s", dir, reason), nil)
+		}
 
-empty, checkErr := comIsDirEmpty(dir)
-if checkErr != nil {
-reporter.Log("error", fmt.Sprintf("Stat error for %q: %v", dir, checkErr), nil)
-reporter.Increment()
-continue
-}
-if !empty {
-reporter.Increment()
-continue
-}
+		empty, checkErr := comIsDirEmpty(dir)
+		if checkErr != nil {
+			reporter.Log("error", fmt.Sprintf("Stat error for %q: %v", dir, checkErr), nil)
+			reporter.Increment()
+			continue
+		}
+		if !empty {
+			reporter.Increment()
+			continue
+		}
 
-if !dryRun {
-if removeErr := os.Remove(dir); removeErr != nil {
-reporter.Log("error", fmt.Sprintf("Failed to remove %q: %v", dir, removeErr), nil)
-} else {
-emptyRemoved++
-}
-} else {
-emptyRemoved++
-}
-reporter.Increment()
-}
+		if !dryRun {
+			if removeErr := os.Remove(dir); removeErr != nil {
+				reporter.Log("error", fmt.Sprintf("Failed to remove %q: %v", dir, removeErr), nil)
+			} else {
+				emptyRemoved++
+			}
+		} else {
+			emptyRemoved++
+		}
+		reporter.Increment()
+	}
 
-reporter.Log("info", fmt.Sprintf("Done: garbage_dirs=%d empty_removed=%d dryRun=%v", garbageFound, emptyRemoved, dryRun), nil)
-return nil
+	reporter.Log("info", fmt.Sprintf("Done: garbage_dirs=%d empty_removed=%d dryRun=%v", garbageFound, emptyRemoved, dryRun), nil)
+	return nil
 }
 
 func comIsDirEmpty(dir string) (bool, error) {
-entries, err := os.ReadDir(dir)
-if err != nil {
-return false, err
-}
-for _, e := range entries {
-if !strings.HasPrefix(e.Name(), ".") {
-return false, nil
-}
-}
-return true, nil
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, err
+	}
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), ".") {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func comIsGarbageDirectory(name string) string {
-if name == "" {
-return ""
-}
-chapterFragmentRe := regexp.MustCompile(`^\d{1,3}[_ ][_\-\s]`)
-if chapterFragmentRe.MatchString(name) {
-return "starts with chapter number fragment"
-}
-pureNumericRe := regexp.MustCompile(`^\d+$`)
-if pureNumericRe.MatchString(name) {
-return "purely numeric directory name"
-}
-doubleSegmentRe := regexp.MustCompile(` - \d{1,3} - `)
-if doubleSegmentRe.MatchString(name) {
-return "contains double-nested chapter segment pattern"
-}
-trimmed := strings.TrimSpace(name)
-if len([]rune(trimmed)) <= 2 && !comAllAlpha(trimmed) {
-return "suspiciously short non-alphabetic directory name"
-}
-return ""
+	if name == "" {
+		return ""
+	}
+	chapterFragmentRe := regexp.MustCompile(`^\d{1,3}[_ ][_\-\s]`)
+	if chapterFragmentRe.MatchString(name) {
+		return "starts with chapter number fragment"
+	}
+	pureNumericRe := regexp.MustCompile(`^\d+$`)
+	if pureNumericRe.MatchString(name) {
+		return "purely numeric directory name"
+	}
+	doubleSegmentRe := regexp.MustCompile(` - \d{1,3} - `)
+	if doubleSegmentRe.MatchString(name) {
+		return "contains double-nested chapter segment pattern"
+	}
+	trimmed := strings.TrimSpace(name)
+	if len([]rune(trimmed)) <= 2 && !comAllAlpha(trimmed) {
+		return "suspiciously short non-alphabetic directory name"
+	}
+	return ""
 }
 
 func comAllAlpha(s string) bool {
-for _, r := range s {
-if !unicode.IsLetter(r) {
-return false
-}
-}
-return len(s) > 0
+	for _, r := range s {
+		if !unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return len(s) > 0
 }

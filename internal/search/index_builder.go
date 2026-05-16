@@ -17,7 +17,12 @@ import (
 // BookToDoc resolves a Book's related rows through the Store and
 // returns the flat BookDocument for indexing. Missing relations are
 // silently skipped — the document is built best-effort.
-func BookToDoc(store interface { database.AuthorReader; database.BookReader; database.SeriesReader; database.TagStore }, book *database.Book) BookDocument {
+func BookToDoc(store interface {
+	database.AuthorReader
+	database.BookReader
+	database.SeriesReader
+	database.TagStore
+}, book *database.Book) BookDocument {
 	doc := BookDocument{
 		BookID: book.ID,
 		Type:   BookDocType,
@@ -105,7 +110,12 @@ func BookToDoc(store interface { database.AuthorReader; database.BookReader; dat
 // ReindexBookByID convenience: load the book + project + index.
 // Used by the update/create hook path; callers that already have a
 // Book struct should call BookToDoc + IndexBook directly.
-func ReindexBookByID(store interface { database.AuthorReader; database.BookReader; database.SeriesReader; database.TagStore }, idx *BleveIndex, bookID string) error {
+func ReindexBookByID(store interface {
+	database.AuthorReader
+	database.BookReader
+	database.SeriesReader
+	database.TagStore
+}, idx *BleveIndex, bookID string) error {
 	if store == nil || idx == nil {
 		return nil
 	}

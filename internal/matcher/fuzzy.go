@@ -147,4 +147,3 @@ func normalize(s string) string {
 	}
 	return strings.TrimSpace(b.String())
 }
-

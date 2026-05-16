@@ -5,8 +5,8 @@
 package metadata
 
 import (
-	json "encoding/json/v2"
 	"context"
+	json "encoding/json/v2"
 	"fmt"
 	"io"
 	"log"
@@ -62,30 +62,30 @@ type audibleProductResponse struct {
 }
 
 type audibleProduct struct {
-	ASIN                 string            `json:"asin"`
-	Title                string            `json:"title"`
-	Subtitle             string            `json:"subtitle"`
-	Authors              []audiblePerson   `json:"authors"`
-	Narrators            []audiblePerson   `json:"narrators"`
-	PublisherName        string            `json:"publisher_name"`
-	Language             string            `json:"language"`
-	IssueDate            string            `json:"issue_date"`
-	ReleaseDate          string            `json:"release_date"`
-	FormatType           string            `json:"format_type"`
-	MerchandisingSummary string            `json:"merchandising_summary"`
-	ProductImages        map[string]string `json:"product_images"`
-	Series               []audibleSeries   `json:"series"`
-	ContentDeliveryType  string            `json:"content_delivery_type"`
+	ASIN                 string                  `json:"asin"`
+	Title                string                  `json:"title"`
+	Subtitle             string                  `json:"subtitle"`
+	Authors              []audiblePerson         `json:"authors"`
+	Narrators            []audiblePerson         `json:"narrators"`
+	PublisherName        string                  `json:"publisher_name"`
+	Language             string                  `json:"language"`
+	IssueDate            string                  `json:"issue_date"`
+	ReleaseDate          string                  `json:"release_date"`
+	FormatType           string                  `json:"format_type"`
+	MerchandisingSummary string                  `json:"merchandising_summary"`
+	ProductImages        map[string]string       `json:"product_images"`
+	Series               []audibleSeries         `json:"series"`
+	ContentDeliveryType  string                  `json:"content_delivery_type"`
 	RuntimeLengthMin     *int                    `json:"runtime_length_min"` // nullable in API
 	Rating               *audibleRating          `json:"rating"`
 	CategoryLadders      []audibleCategoryLadder `json:"category_ladders"`
 }
 
 type audibleRating struct {
-	NumReviews          int                      `json:"num_reviews"`
-	OverallDistribution audibleRatingDistribution `json:"overall_distribution"`
+	NumReviews              int                       `json:"num_reviews"`
+	OverallDistribution     audibleRatingDistribution `json:"overall_distribution"`
 	PerformanceDistribution audibleRatingDistribution `json:"performance_distribution"`
-	StoryDistribution   audibleRatingDistribution `json:"story_distribution"`
+	StoryDistribution       audibleRatingDistribution `json:"story_distribution"`
 }
 
 // flexFloat64 handles Audible API responses where numeric fields arrive as

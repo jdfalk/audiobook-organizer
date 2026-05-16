@@ -48,11 +48,11 @@ func (s *Server) runEmbeddingBackfill() {
 	// scorer never touches. We now count each EmbedStatus into its own
 	// bucket and log a breakdown at the end.
 	var (
-		statEmbedded            int
-		statCached              int
-		statSkippedNonPrimary   int
-		statSkippedEmptyTitle   int
-		statErrors              int
+		statEmbedded          int
+		statCached            int
+		statSkippedNonPrimary int
+		statSkippedEmptyTitle int
+		statErrors            int
 	)
 	visited := 0
 	nextProgressAt := 500

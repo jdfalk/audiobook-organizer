@@ -33,26 +33,26 @@ import (
 
 // SyncDiagInfo is the per-test descriptor written next to each ITL.
 type SyncDiagInfo struct {
-	ID                       string   `json:"id"`
-	Hypothesis               string   `json:"hypothesis"`
-	Description              string   `json:"description"`
-	BaselineDerived          bool     `json:"baseline_derived"`
-	Mutations                []string `json:"mutations"`
-	ExpectedTrackDelta       int      `json:"expected_track_delta,omitempty"`
-	RequiresFormatResearch   bool     `json:"requires_format_research,omitempty"`
-	GeneratedAt              string   `json:"generated_at"`
-	BaselineSHA256First16    string   `json:"baseline_sha256_first16,omitempty"`
+	ID                     string   `json:"id"`
+	Hypothesis             string   `json:"hypothesis"`
+	Description            string   `json:"description"`
+	BaselineDerived        bool     `json:"baseline_derived"`
+	Mutations              []string `json:"mutations"`
+	ExpectedTrackDelta     int      `json:"expected_track_delta,omitempty"`
+	RequiresFormatResearch bool     `json:"requires_format_research,omitempty"`
+	GeneratedAt            string   `json:"generated_at"`
+	BaselineSHA256First16  string   `json:"baseline_sha256_first16,omitempty"`
 }
 
 // SyncDiagResult is appended by the Windows test harness — we ship an
 // empty stub so the user can see the schema.
 type SyncDiagResult struct {
-	ID                 string `json:"id"`
-	OpensInITunes      string `json:"opens_in_itunes"`     // yes|no|unknown
-	ITunesTrackCount   int    `json:"itunes_track_count"`  // -1 = not measured
-	AppleDevicesSync   string `json:"apple_devices_sync"`  // worked|failed|skipped|did-not-test
-	Notes              string `json:"notes"`
-	Timestamp          string `json:"timestamp"`
+	ID               string `json:"id"`
+	OpensInITunes    string `json:"opens_in_itunes"`    // yes|no|unknown
+	ITunesTrackCount int    `json:"itunes_track_count"` // -1 = not measured
+	AppleDevicesSync string `json:"apple_devices_sync"` // worked|failed|skipped|did-not-test
+	Notes            string `json:"notes"`
+	Timestamp        string `json:"timestamp"`
 }
 
 // GenerateSyncDiagnosticSuite emits the full set of test variants under
@@ -76,8 +76,8 @@ func GenerateSyncDiagnosticSuite(baselineITLPath, outputDir string) error {
 
 	type genFunc func(dir string) (SyncDiagInfo, error)
 	cases := []struct {
-		id   string
-		gen  genFunc
+		id  string
+		gen genFunc
 	}{
 		{"00-baseline-untouched", func(dir string) (SyncDiagInfo, error) {
 			return diagCopy(dir, baseline, "(none)",
@@ -244,9 +244,9 @@ func GenerateSyncDiagnosticSuite(baselineITLPath, outputDir string) error {
 				"H7,H10,H11,H12: populate Size/TotalTime/BitRate/SampleRate so sync "+
 					"can plan the transfer. AddTracksLE supports these via ITLNewTrack.",
 				ITLNewTrack{
-					Location:   realWindowsFile,
-					Name:       "Diag Test 35", Album: "Diag Album", Artist: "Diag Author",
-					Genre:      "Audiobook", Kind: "AAC audio file",
+					Location: realWindowsFile,
+					Name:     "Diag Test 35", Album: "Diag Album", Artist: "Diag Author",
+					Genre: "Audiobook", Kind: "AAC audio file",
 					Size:       250 * 1024 * 1024, // 250MB
 					TotalTime:  3600 * 1000,       // 1h in ms
 					BitRate:    64,
@@ -667,4 +667,3 @@ This folder contains {{N}} variant iTunes Library.itl files. Each
 - The 18-26 mhoh variants narrow which metadata field matters.
 - The 32-36 mith-field variants need follow-up format research.
 `
-

@@ -21,12 +21,18 @@ func init() { maintenance.Register(&cleanupEmptyFoldersJob{}) }
 
 type cleanupEmptyFoldersJob struct{}
 
-func (j *cleanupEmptyFoldersJob) ID() string          { return "cleanup-empty-folders" }
-func (j *cleanupEmptyFoldersJob) Name() string        { return "Cleanup Empty Folders" }
-func (j *cleanupEmptyFoldersJob) Category() string    { return "cleanup" }
-func (j *cleanupEmptyFoldersJob) DefaultParams() any  { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
-func (j *cleanupEmptyFoldersJob) Description() string { return "Remove empty directories from the library root (bottom-up walk, deepest first)" }
-func (j *cleanupEmptyFoldersJob) CanResume() bool     { return true }
+func (j *cleanupEmptyFoldersJob) ID() string       { return "cleanup-empty-folders" }
+func (j *cleanupEmptyFoldersJob) Name() string     { return "Cleanup Empty Folders" }
+func (j *cleanupEmptyFoldersJob) Category() string { return "cleanup" }
+func (j *cleanupEmptyFoldersJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: true}
+}
+func (j *cleanupEmptyFoldersJob) Description() string {
+	return "Remove empty directories from the library root (bottom-up walk, deepest first)"
+}
+func (j *cleanupEmptyFoldersJob) CanResume() bool { return true }
 
 func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	root := config.AppConfig.RootDir

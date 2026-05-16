@@ -30,7 +30,7 @@ func (f *fakeStore) CreateAIJob(j database.AIJob, p []byte) error {
 	f.payloads[j.ID] = p
 	return nil
 }
-func (f *fakeStore) GetAIJob(id string) (database.AIJob, error)           { return f.jobs[id], nil }
+func (f *fakeStore) GetAIJob(id string) (database.AIJob, error) { return f.jobs[id], nil }
 func (f *fakeStore) GetAIJobByBatchID(b string) (database.AIJob, error) {
 	for _, j := range f.jobs {
 		if j.BatchID == b {
@@ -111,8 +111,8 @@ func TestSubmit_HappyPath(t *testing.T) {
 
 	items := []string{"alpha", "beta", "gamma"}
 	jobID, err := Submit(context.Background(), deps, SubmitRequest{
-		Type: "test_feature",
-		ItemCount: len(items),
+		Type:        "test_feature",
+		ItemCount:   len(items),
 		PayloadJSON: mustMarshal(items),
 		Build: func(i int) (BatchRequest, error) {
 			return BatchRequest{Body: map[string]any{"item": items[i]}, MaxTokens: 100}, nil

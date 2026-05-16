@@ -230,8 +230,8 @@ func TestResolveAuthorName(t *testing.T) {
 			expected: "Direct Author",
 		},
 		{
-			name: "no author",
-			book: &database.Book{},
+			name:     "no author",
+			book:     &database.Book{},
 			expected: "",
 		},
 	}
@@ -277,4 +277,3 @@ func TestBuildNewTrackFromBookWithDefaults(t *testing.T) {
 		t.Errorf("expected TotalTime=0 (no duration), got %d", track.TotalTime)
 	}
 }
-

@@ -15,9 +15,12 @@ type fakeService struct {
 	stopped  bool
 }
 
-func (f *fakeService) PostInit(ctx context.Context, c *Container) error { f.postInit = true; return nil }
-func (f *fakeService) Start(ctx context.Context) error                  { f.started = true; return nil }
-func (f *fakeService) Stop(ctx context.Context) error                   { f.stopped = true; return nil }
+func (f *fakeService) PostInit(ctx context.Context, c *Container) error {
+	f.postInit = true
+	return nil
+}
+func (f *fakeService) Start(ctx context.Context) error { f.started = true; return nil }
+func (f *fakeService) Stop(ctx context.Context) error  { f.stopped = true; return nil }
 
 func TestContainer_Build_RunsInDepOrder(t *testing.T) {
 	ResetForTest()

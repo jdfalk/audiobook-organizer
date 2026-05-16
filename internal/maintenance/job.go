@@ -73,4 +73,4 @@ type MaintenanceJob interface {
 var store database.Store
 
 func InjectStore(s database.Store) { store = s }
-func GetStore() database.Store    { return store }
+func GetStore() database.Store     { return store }

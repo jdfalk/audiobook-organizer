@@ -88,7 +88,7 @@ func TestValidate_LibraryPathVariants(t *testing.T) {
 			name:        "path_is_directory",
 			libraryPath: os.TempDir(),
 			// os.Stat succeeds on a dir, so Validate will try to parse it — not ErrLibraryNotFound
-			wantErr: "validation failed",
+			wantErr:   "validation failed",
 			checkIsNF: false,
 		},
 	}

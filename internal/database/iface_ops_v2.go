@@ -28,30 +28,30 @@ type OpDefinitionV2Row struct {
 
 // OperationV2Row is a queued/running/terminal row from operations_v2.
 type OperationV2Row struct {
-	ID               string
-	DefID            string
-	Plugin           string
-	ParentID         *string
-	ActorUserID      *string
-	TraceID          string
-	SpanID           string
-	ParentSpanID     *string
-	Status           string
-	Priority         int
-	ProgressCurrent  int
-	ProgressTotal    int
-	ProgressMessage  string
-	CurrentPhase     *string
-	Params           string
-	ErrorMessage     *string
-	ResultData       *string
-	QueuedAt         time.Time
-	StartedAt        *time.Time
-	CompletedAt      *time.Time
-	LastProgressAt   *time.Time
-	LastCheckpointAt *time.Time
+	ID                string
+	DefID             string
+	Plugin            string
+	ParentID          *string
+	ActorUserID       *string
+	TraceID           string
+	SpanID            string
+	ParentSpanID      *string
+	Status            string
+	Priority          int
+	ProgressCurrent   int
+	ProgressTotal     int
+	ProgressMessage   string
+	CurrentPhase      *string
+	Params            string
+	ErrorMessage      *string
+	ResultData        *string
+	QueuedAt          time.Time
+	StartedAt         *time.Time
+	CompletedAt       *time.Time
+	LastProgressAt    *time.Time
+	LastCheckpointAt  *time.Time
 	HighWaterProgress int
-	ResumeCount      int
+	ResumeCount       int
 }
 
 // OpStrikeV2Row is a single row in op_strikes_v2.

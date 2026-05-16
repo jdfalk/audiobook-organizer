@@ -447,16 +447,16 @@ func createMinimalMP3(t *testing.T, dir string) string {
 	var buf bytes.Buffer
 
 	// ID3v2.3 header
-	buf.Write([]byte("ID3"))       // ID3 identifier
-	buf.Write([]byte{0x03, 0x00})  // Version 2.3.0
-	buf.Write([]byte{0x00})        // Flags
+	buf.Write([]byte("ID3"))                  // ID3 identifier
+	buf.Write([]byte{0x03, 0x00})             // Version 2.3.0
+	buf.Write([]byte{0x00})                   // Flags
 	buf.Write([]byte{0x00, 0x00, 0x00, 0x7F}) // Size (synchsafe integer)
 
 	// Minimal ID3v2 frame (TIT2 - Title)
-	buf.Write([]byte("TIT2"))      // Frame ID
+	buf.Write([]byte("TIT2"))                 // Frame ID
 	buf.Write([]byte{0x00, 0x00, 0x00, 0x0D}) // Size
-	buf.Write([]byte{0x00, 0x00})  // Flags
-	buf.Write([]byte{0x00})        // Encoding (ISO-8859-1)
+	buf.Write([]byte{0x00, 0x00})             // Flags
+	buf.Write([]byte{0x00})                   // Encoding (ISO-8859-1)
 	buf.Write([]byte("Test Title\x00"))
 
 	// MP3 frame header - 11 bits sync word (all set), MPEG-1, Layer III, no CRC
@@ -491,7 +491,7 @@ func createMinimalM4A(t *testing.T, dir string) string {
 	ftypSize := uint32(32)
 	binary.Write(&buf, binary.BigEndian, ftypSize)
 	buf.Write([]byte("ftyp"))
-	buf.Write([]byte("M4A ")) // Major brand
+	buf.Write([]byte("M4A "))                       // Major brand
 	binary.Write(&buf, binary.BigEndian, uint32(0)) // Minor version
 	buf.Write([]byte("M4A "))
 	buf.Write([]byte("mp42"))
@@ -596,22 +596,22 @@ func createMinimalOGG(t *testing.T, dir string) string {
 	var buf bytes.Buffer
 
 	// OGG page header
-	buf.Write([]byte("OggS"))     // Capture pattern
-	buf.WriteByte(0x00)           // Version
-	buf.WriteByte(0x02)           // Header type (beginning of stream)
-	buf.Write(make([]byte, 8))    // Granule position
+	buf.Write([]byte("OggS"))                          // Capture pattern
+	buf.WriteByte(0x00)                                // Version
+	buf.WriteByte(0x02)                                // Header type (beginning of stream)
+	buf.Write(make([]byte, 8))                         // Granule position
 	binary.Write(&buf, binary.LittleEndian, uint32(1)) // Serial number
 	binary.Write(&buf, binary.LittleEndian, uint32(0)) // Page sequence
 	binary.Write(&buf, binary.LittleEndian, uint32(0)) // Checksum (dummy)
-	buf.WriteByte(0x01)           // Number of segments
-	buf.WriteByte(0x1E)           // Segment size (30 bytes)
+	buf.WriteByte(0x01)                                // Number of segments
+	buf.WriteByte(0x1E)                                // Segment size (30 bytes)
 
 	// Vorbis identification header
-	buf.WriteByte(0x01)           // Packet type (identification)
-	buf.Write([]byte("vorbis"))  // Vorbis string
-	binary.Write(&buf, binary.LittleEndian, uint32(0)) // Vorbis version
-	buf.WriteByte(0x02)           // Channels (2)
-	binary.Write(&buf, binary.LittleEndian, uint32(44100)) // Sample rate
+	buf.WriteByte(0x01)                                     // Packet type (identification)
+	buf.Write([]byte("vorbis"))                             // Vorbis string
+	binary.Write(&buf, binary.LittleEndian, uint32(0))      // Vorbis version
+	buf.WriteByte(0x02)                                     // Channels (2)
+	binary.Write(&buf, binary.LittleEndian, uint32(44100))  // Sample rate
 	binary.Write(&buf, binary.LittleEndian, uint32(192000)) // Bitrate max
 	binary.Write(&buf, binary.LittleEndian, uint32(160000)) // Bitrate nominal
 	binary.Write(&buf, binary.LittleEndian, uint32(128000)) // Bitrate min
@@ -928,27 +928,27 @@ type mockMetadata struct {
 	raw      map[string]interface{}
 }
 
-func (m *mockMetadata) Format() tag.Format                 { return tag.ID3v2_4 }
-func (m *mockMetadata) FileType() tag.FileType             { return m.fileType }
-func (m *mockMetadata) Title() string                       { return "Test Title" }
-func (m *mockMetadata) Album() string                       { return "Test Album" }
-func (m *mockMetadata) Artist() string                      { return "Test Artist" }
-func (m *mockMetadata) AlbumArtist() string                 { return "Test Album Artist" }
-func (m *mockMetadata) Composer() string                    { return "Test Composer" }
-func (m *mockMetadata) Genre() string                       { return "Test Genre" }
-func (m *mockMetadata) Year() int                           { return 2024 }
-func (m *mockMetadata) Track() (int, int)                   { return 1, 10 }
-func (m *mockMetadata) Disc() (int, int)                    { return 1, 1 }
-func (m *mockMetadata) Picture() *tag.Picture               { return nil }
-func (m *mockMetadata) Lyrics() string                      { return "" }
-func (m *mockMetadata) Comment() string                     { return "" }
-func (m *mockMetadata) Raw() map[string]interface{}         { return m.raw }
+func (m *mockMetadata) Format() tag.Format          { return tag.ID3v2_4 }
+func (m *mockMetadata) FileType() tag.FileType      { return m.fileType }
+func (m *mockMetadata) Title() string               { return "Test Title" }
+func (m *mockMetadata) Album() string               { return "Test Album" }
+func (m *mockMetadata) Artist() string              { return "Test Artist" }
+func (m *mockMetadata) AlbumArtist() string         { return "Test Album Artist" }
+func (m *mockMetadata) Composer() string            { return "Test Composer" }
+func (m *mockMetadata) Genre() string               { return "Test Genre" }
+func (m *mockMetadata) Year() int                   { return 2024 }
+func (m *mockMetadata) Track() (int, int)           { return 1, 10 }
+func (m *mockMetadata) Disc() (int, int)            { return 1, 1 }
+func (m *mockMetadata) Picture() *tag.Picture       { return nil }
+func (m *mockMetadata) Lyrics() string              { return "" }
+func (m *mockMetadata) Comment() string             { return "" }
+func (m *mockMetadata) Raw() map[string]interface{} { return m.raw }
 
 func TestExtractMP3Info_WithMetadata(t *testing.T) {
 	tests := []struct {
-		name             string
-		raw              map[string]interface{}
-		expectedBitrate  int
+		name               string
+		raw                map[string]interface{}
+		expectedBitrate    int
 		expectedSampleRate int
 	}{
 		{
@@ -971,7 +971,7 @@ func TestExtractMP3Info_WithMetadata(t *testing.T) {
 		{
 			name:               "No metadata (defaults)",
 			raw:                map[string]interface{}{},
-			expectedBitrate:    192, // default
+			expectedBitrate:    192,   // default
 			expectedSampleRate: 44100, // default
 		},
 		{
@@ -980,7 +980,7 @@ func TestExtractMP3Info_WithMetadata(t *testing.T) {
 				"bitrate":     "invalid",
 				"sample_rate": "invalid",
 			},
-			expectedBitrate:    192, // default
+			expectedBitrate:    192,   // default
 			expectedSampleRate: 44100, // default
 		},
 	}
@@ -1016,9 +1016,9 @@ func TestExtractMP3Info_WithMetadata(t *testing.T) {
 
 func TestExtractM4AInfo_WithMetadata(t *testing.T) {
 	tests := []struct {
-		name             string
-		raw              map[string]interface{}
-		expectedBitrate  int
+		name               string
+		raw                map[string]interface{}
+		expectedBitrate    int
 		expectedSampleRate int
 	}{
 		{
@@ -1041,7 +1041,7 @@ func TestExtractM4AInfo_WithMetadata(t *testing.T) {
 		{
 			name:               "No metadata (defaults)",
 			raw:                map[string]interface{}{},
-			expectedBitrate:    128, // default
+			expectedBitrate:    128,   // default
 			expectedSampleRate: 44100, // default
 		},
 		{
@@ -1050,7 +1050,7 @@ func TestExtractM4AInfo_WithMetadata(t *testing.T) {
 				"bitrate":     3.14,
 				"sample_rate": "not a number",
 			},
-			expectedBitrate:    128, // default
+			expectedBitrate:    128,   // default
 			expectedSampleRate: 44100, // default
 		},
 	}
@@ -1086,11 +1086,11 @@ func TestExtractM4AInfo_WithMetadata(t *testing.T) {
 
 func TestExtractFLACInfo_WithMetadata(t *testing.T) {
 	tests := []struct {
-		name             string
-		raw              map[string]interface{}
+		name               string
+		raw                map[string]interface{}
 		expectedSampleRate int
-		expectedBitDepth int
-		expectedBitrate  int
+		expectedBitDepth   int
+		expectedBitrate    int
 	}{
 		{
 			name: "With sample rate and bit depth",
@@ -1108,7 +1108,7 @@ func TestExtractFLACInfo_WithMetadata(t *testing.T) {
 				"sample_rate": 48000,
 			},
 			expectedSampleRate: 48000,
-			expectedBitDepth:   16, // default
+			expectedBitDepth:   16,   // default
 			expectedBitrate:    1536, // (48000 * 16 * 2) / 1000
 		},
 		{
@@ -1165,9 +1165,9 @@ func TestExtractFLACInfo_WithMetadata(t *testing.T) {
 
 func TestExtractOGGInfo_WithMetadata(t *testing.T) {
 	tests := []struct {
-		name             string
-		raw              map[string]interface{}
-		expectedBitrate  int
+		name               string
+		raw                map[string]interface{}
+		expectedBitrate    int
 		expectedSampleRate int
 	}{
 		{
@@ -1190,7 +1190,7 @@ func TestExtractOGGInfo_WithMetadata(t *testing.T) {
 		{
 			name:               "No metadata (defaults)",
 			raw:                map[string]interface{}{},
-			expectedBitrate:    160, // default
+			expectedBitrate:    160,   // default
 			expectedSampleRate: 44100, // default
 		},
 		{
@@ -1199,7 +1199,7 @@ func TestExtractOGGInfo_WithMetadata(t *testing.T) {
 				"bitrate":     []byte{1, 2, 3},
 				"sample_rate": map[string]int{},
 			},
-			expectedBitrate:    160, // default
+			expectedBitrate:    160,   // default
 			expectedSampleRate: 44100, // default
 		},
 	}

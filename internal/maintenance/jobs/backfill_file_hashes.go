@@ -25,9 +25,8 @@ func (j *backfillFileHashesJob) Name() string        { return "Backfill File Has
 func (j *backfillFileHashesJob) Category() string    { return "files" }
 func (j *backfillFileHashesJob) DefaultParams() any  { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
 func (j *backfillFileHashesJob) Description() string { return "Compute and store file hashes for book_files missing them" }
-// Job now supports checkpoint-based resume after restart.
+// Job supports checkpoint-based resume after restart.
 func (j *backfillFileHashesJob) CanResume() bool { return true }
-
 func (j *backfillFileHashesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	files, err := store.GetAllBookFiles()
 	if err != nil {

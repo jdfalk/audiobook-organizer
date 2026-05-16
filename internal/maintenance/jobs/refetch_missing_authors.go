@@ -24,9 +24,9 @@ type rma_params struct {
 	DryRun bool `json:"dry_run"`
 }
 
-func (j *refetchMissingAuthorsJob) ID() string          { return "refetch-missing-authors" }
-func (j *refetchMissingAuthorsJob) Name() string        { return "Refetch Missing Authors" }
-func (j *refetchMissingAuthorsJob) Category() string    { return "library" }
+func (j *refetchMissingAuthorsJob) ID() string       { return "refetch-missing-authors" }
+func (j *refetchMissingAuthorsJob) Name() string     { return "Refetch Missing Authors" }
+func (j *refetchMissingAuthorsJob) Category() string { return "library" }
 func (j *refetchMissingAuthorsJob) Description() string {
 	return "Re-reads author info from file tags (album_artist > artist > composer) for books where the author field is empty."
 }

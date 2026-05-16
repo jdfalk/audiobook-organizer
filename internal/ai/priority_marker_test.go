@@ -21,11 +21,11 @@ func TestNoUnmarkedChatCompletionCallers(t *testing.T) {
 	// Allow-list: functions that currently call Chat.Completions.New synchronously.
 	// Each entry notes which Task will remove it during migration.
 	allowListedSyncCallers := map[string]string{
-		"ParseBatch":           "Task 2.2", // TODO: migrate to aijobs — requires scanner refactor (see TODO.md AI-BATCH-1)
-		"ParseCoverArt":        "Task 2.3", // TODO: defer to follow-up — resolveProductionAuthor loop coupling (see TODO.md AI-BATCH-2)
-		"reviewAuthorBatch":    "Task 2.3", // Out-of-scope — existing author-dedup flow
-		"discoverAuthorBatch":  "Task 2.3", // Out-of-scope — existing author-dedup flow
-		"scoreMetadataBatch":   "",         // PRIORITY: Interactive — user-waiting metadata search, stays sync
+		"ParseBatch":          "Task 2.2", // TODO: migrate to aijobs — requires scanner refactor (see TODO.md AI-BATCH-1)
+		"ParseCoverArt":       "Task 2.3", // TODO: defer to follow-up — resolveProductionAuthor loop coupling (see TODO.md AI-BATCH-2)
+		"reviewAuthorBatch":   "Task 2.3", // Out-of-scope — existing author-dedup flow
+		"discoverAuthorBatch": "Task 2.3", // Out-of-scope — existing author-dedup flow
+		"scoreMetadataBatch":  "",         // PRIORITY: Interactive — user-waiting metadata search, stays sync
 	}
 
 	// Walk the current directory (package ai) for .go files.

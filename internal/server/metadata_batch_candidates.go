@@ -912,4 +912,3 @@ func (s *Server) handleListMetadataResults(c *gin.Context) {
 		"offset":    pp.Offset,
 	})
 }
-

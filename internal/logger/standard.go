@@ -57,9 +57,9 @@ func (l *StandardLogger) Warn(msg string, args ...any)  { l.log(LevelWarn, msg, 
 func (l *StandardLogger) Error(msg string, args ...any) { l.log(LevelError, msg, args...) }
 
 func (l *StandardLogger) UpdateProgress(current, total int, message string) {}
-func (l *StandardLogger) RecordChange(change Change)                         {}
-func (l *StandardLogger) ChangeCounters() map[string]int                     { return nil }
-func (l *StandardLogger) IsCanceled() bool                                   { return false }
+func (l *StandardLogger) RecordChange(change Change)                        {}
+func (l *StandardLogger) ChangeCounters() map[string]int                    { return nil }
+func (l *StandardLogger) IsCanceled() bool                                  { return false }
 
 func (l *StandardLogger) With(subsystem string) Logger {
 	prefix := subsystem

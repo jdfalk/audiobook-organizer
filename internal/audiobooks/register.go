@@ -10,8 +10,8 @@ import (
 
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "audiobook",
-		Needs: []string{"store"},
+		Name:   "audiobook",
+		Needs:  []string{"store"},
 		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
@@ -19,8 +19,8 @@ func init() {
 		},
 	})
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "organize",
-		Needs: []string{"store"},
+		Name:   "organize",
+		Needs:  []string{"store"},
 		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")

@@ -22,13 +22,13 @@ type SelectionSpec struct {
 // When Filter is set on a SelectionSpec, the server resolves it to book IDs
 // at operation execution time with IsPrimaryVersion=true always applied.
 type FilterSpec struct {
-	Search         string        `json:"search,omitempty"`
-	LibraryState   string        `json:"library_state,omitempty"`
-	Tag            string        `json:"tag,omitempty"`
-	Tags           []string      `json:"tags,omitempty"`
-	FieldFilters   []FieldFilter `json:"field_filters,omitempty"`
-	AuthorID       *int64        `json:"author_id,omitempty"`
-	SeriesID       *int64        `json:"series_id,omitempty"`
+	Search       string        `json:"search,omitempty"`
+	LibraryState string        `json:"library_state,omitempty"`
+	Tag          string        `json:"tag,omitempty"`
+	Tags         []string      `json:"tags,omitempty"`
+	FieldFilters []FieldFilter `json:"field_filters,omitempty"`
+	AuthorID     *int64        `json:"author_id,omitempty"`
+	SeriesID     *int64        `json:"series_id,omitempty"`
 	// OnlyUnmatched restricts the resolved set to books that do not have a
 	// "matched" candidate in the most-recent metadata_candidate_fetch result.
 	// Applied server-side after the primary filter; requires DB access.

@@ -15,10 +15,10 @@ import (
 
 // Constants for phase names (forwarded from organizer).
 const (
-	phaseRename   = organizer.PhaseRename
-	phaseTags     = organizer.PhaseTags
-	phaseITunes   = organizer.PhaseITunes
-	checkpointPrefix = organizer.CheckpointPrefix
+	phaseRename       = organizer.PhaseRename
+	phaseTags         = organizer.PhaseTags
+	phaseITunes       = organizer.PhaseITunes
+	checkpointPrefix  = organizer.CheckpointPrefix
 	checkpointTTLDays = organizer.CheckpointTTLDays
 )
 

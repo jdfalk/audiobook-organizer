@@ -312,87 +312,87 @@ func TestPruneITLBackups_KeepZero(t *testing.T) {
 // a buggy cleanup-orphans call enqueued ~90 K removes and wiped the
 // user's iTunes library.
 func TestFlush_RefusesOverCap(t *testing.T) {
-dir := t.TempDir()
-itlPath := makeITL(t, dir, "library.itl", "x")
+	dir := t.TempDir()
+	itlPath := makeITL(t, dir, "library.itl", "x")
 
-applyCalls := 0
-withFakeITLHooks(t,
-func(string) error { return nil },
-func(in, out string, _ itunes.ITLOperationSet) (*itunes.ITLWriteBackResult, error) {
-applyCalls++
-data, _ := os.ReadFile(in)
-_ = os.WriteFile(out, data, 0o644)
-return &itunes.ITLWriteBackResult{UpdatedCount: 1, OutputPath: out}, nil
-},
-)
+	applyCalls := 0
+	withFakeITLHooks(t,
+		func(string) error { return nil },
+		func(in, out string, _ itunes.ITLOperationSet) (*itunes.ITLWriteBackResult, error) {
+			applyCalls++
+			data, _ := os.ReadFile(in)
+			_ = os.WriteFile(out, data, 0o644)
+			return &itunes.ITLWriteBackResult{UpdatedCount: 1, OutputPath: out}, nil
+		},
+	)
 
-b := &WriteBackBatcher{
-pendingBooks:        map[string]bool{},
-pendingRemoves:      map[string]bool{},
-autoWriteBack:       true,
-itlWriteBackEnabled: true,
-libraryWritePath:    itlPath,
-}
-for i := 0; i < MaxRemovesPerFlush+1; i++ {
-b.pendingRemoves[strings.Repeat("a", 16-len(itoaSafe(i)))+itoaSafe(i)] = true
-}
+	b := &WriteBackBatcher{
+		pendingBooks:        map[string]bool{},
+		pendingRemoves:      map[string]bool{},
+		autoWriteBack:       true,
+		itlWriteBackEnabled: true,
+		libraryWritePath:    itlPath,
+	}
+	for i := 0; i < MaxRemovesPerFlush+1; i++ {
+		b.pendingRemoves[strings.Repeat("a", 16-len(itoaSafe(i)))+itoaSafe(i)] = true
+	}
 
-b.flush()
+	b.flush()
 
-if applyCalls != 0 {
-t.Errorf("flush over-cap: expected 0 SafeWriteITL apply calls, got %d", applyCalls)
-}
+	if applyCalls != 0 {
+		t.Errorf("flush over-cap: expected 0 SafeWriteITL apply calls, got %d", applyCalls)
+	}
 }
 
 // itoaSafe is a tiny helper to build distinct PIDs without pulling
 // strconv into the test file's import set; keeps the regression
 // test free of unrelated dependencies.
 func itoaSafe(n int) string {
-if n == 0 {
-return "0"
-}
-out := ""
-for n > 0 {
-out = string(rune('0'+n%10)) + out
-n /= 10
-}
-return out
+	if n == 0 {
+		return "0"
+	}
+	out := ""
+	for n > 0 {
+		out = string(rune('0'+n%10)) + out
+		n /= 10
+	}
+	return out
 }
 
 // TestFlush_DryRunSkipsWrite verifies ITUNES_WRITEBACK_DRYRUN=true
 // short-circuits before SafeWriteITL. Critical: in dry-run mode no
 // file on disk may change.
 func TestFlush_DryRunSkipsWrite(t *testing.T) {
-dir := t.TempDir()
-itlPath := makeITL(t, dir, "library.itl", "untouched")
+	dir := t.TempDir()
+	itlPath := makeITL(t, dir, "library.itl", "untouched")
 
-applyCalls := 0
-withFakeITLHooks(t,
-func(string) error { return nil },
-func(in, out string, _ itunes.ITLOperationSet) (*itunes.ITLWriteBackResult, error) {
-applyCalls++
-data, _ := os.ReadFile(in)
-_ = os.WriteFile(out, append(data, '!'), 0o644)
-return &itunes.ITLWriteBackResult{UpdatedCount: 1, OutputPath: out}, nil
-},
-)
+	applyCalls := 0
+	withFakeITLHooks(t,
+		func(string) error { return nil },
+		func(in, out string, _ itunes.ITLOperationSet) (*itunes.ITLWriteBackResult, error) {
+			applyCalls++
+			data, _ := os.ReadFile(in)
+			_ = os.WriteFile(out, append(data, '!'), 0o644)
+			return &itunes.ITLWriteBackResult{UpdatedCount: 1, OutputPath: out}, nil
+		},
+	)
 
-t.Setenv("ITUNES_WRITEBACK_DRYRUN", "true")
+	t.Setenv("ITUNES_WRITEBACK_DRYRUN", "true")
 
-b := &WriteBackBatcher{
-pendingBooks:        map[string]bool{},
-pendingRemoves:      map[string]bool{"abcdef0123456789": true},
-autoWriteBack:       true,
-itlWriteBackEnabled: true,
-libraryWritePath:    itlPath,
-}
-b.flush()
+	b := &WriteBackBatcher{
+		pendingBooks:        map[string]bool{},
+		pendingRemoves:      map[string]bool{"abcdef0123456789": true},
+		autoWriteBack:       true,
+		itlWriteBackEnabled: true,
+		libraryWritePath:    itlPath,
+	}
+	b.flush()
 
-if applyCalls != 0 {
-t.Errorf("dry-run: expected 0 SafeWriteITL apply calls, got %d", applyCalls)
-}
-got, _ := os.ReadFile(itlPath)
-if string(got) != "untouched" {
-t.Errorf("dry-run modified the ITL file: got %q want %q", string(got), "untouched")
-}
+	if applyCalls != 0 {
+		t.Errorf("dry-run: expected 0 SafeWriteITL apply calls, got %d", applyCalls)
+	}
+	got, _ := os.ReadFile(itlPath)
+	if string(got) != "untouched" {
+		t.Errorf("dry-run modified the ITL file: got %q want %q", string(got), "untouched")
+	}
 }
