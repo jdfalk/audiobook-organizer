@@ -205,7 +205,7 @@ incrementally:
   - **Dependencies:** Phase 2
   - **Plan:** [`implementation-plan.md#phase-4`](docs/security/audit-2026-05-03/implementation-plan.md#phase-4-path-injection--itunestransferserver-core)
 
-- [ ] **SEC-AUDIT-5** Fix path injection in scanner/reconcile/OpenLibrary (15+ alerts: #618-#608)
+- [x] **SEC-AUDIT-5** Fix path injection in scanner/reconcile/OpenLibrary (15+ alerts: #618-#608)
   - **Priority:** P0
   - **Effort:** 5 hours
   - **Files:** `internal/scanner/service.go`, `internal/reconcile/reconcile.go`, `internal/server/openlibrary_service.go`, `internal/importer/service.go`
