@@ -12,7 +12,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -196,7 +195,7 @@ func (s *Server) uploadOLDump(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] OL dump uploaded: %s (%d bytes) -> %s", header.Filename, written, targetPath)
+	log.Printf("[INFO] OL dump uploaded: %s (%d bytes) -> %s", header.Filename, written, sp.String())
 	httputil.RespondWithOK(c, gin.H{
 		"message":  "dump file uploaded",
 		"type":     dumpType,
