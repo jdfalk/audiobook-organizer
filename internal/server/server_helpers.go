@@ -1,11 +1,12 @@
 // file: internal/server/server_helpers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 8a40b808-2bf2-4a35-893c-ad5e3351dbae
-// last-edited: 2026-05-01
+// last-edited: 2026-05-16
 
 package server
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,19 @@ import (
 
 func SetVersion(v string) {
 	appVersion = v
+}
+
+// validateAbsolutePath rejects non-absolute paths and paths containing traversal
+// sequences (e.g. "../../etc/passwd"). This is applied to all user-supplied
+// filesystem paths before they reach os.Stat / os.ReadDir / file-open calls.
+func validateAbsolutePath(path string) error {
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("path must be absolute")
+	}
+	if filepath.Clean(path) != path {
+		return fmt.Errorf("path must not contain traversal sequences")
+	}
+	return nil
 }
 
 // resetLibrarySizeCache resets the library size cache (for testing)

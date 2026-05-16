@@ -1,7 +1,7 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.8.0
+// version: 2.9.0
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
-// last-edited: 2026-05-10
+// last-edited: 2026-05-16
 
 // iTunes HTTP handlers. All business logic lives in internal/itunes/service.
 // Handlers that call s.itunesSvc.Importer.* guard with itunesEnabledOrError
@@ -278,6 +278,10 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		return
 	}
 
+	if err := validateAbsolutePath(req.LibraryPath); err != nil {
+		httputil.RespondWithBadRequest(c, "invalid library_path: "+err.Error())
+		return
+	}
 	if _, err := os.Stat(req.LibraryPath); os.IsNotExist(err) {
 		httputil.RespondWithBadRequest(c, "iTunes library file not found")
 		return
@@ -475,7 +479,12 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 	// directly. The actual write-back always targets the configured
 	// ITunesLibraryWritePath (.itl) regardless of this read path.
 	libraryPath := strings.TrimSpace(req.LibraryPath)
-	if libraryPath == "" {
+	if libraryPath != "" {
+		if err := validateAbsolutePath(libraryPath); err != nil {
+			httputil.RespondWithBadRequest(c, "invalid library_path: "+err.Error())
+			return
+		}
+	} else {
 		libraryPath = config.AppConfig.ITunesLibraryReadPath
 	}
 	if libraryPath == "" {
@@ -728,6 +737,10 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "path query parameter required")
 		return
 	}
+	if err := validateAbsolutePath(path); err != nil {
+		httputil.RespondWithBadRequest(c, "invalid path: "+err.Error())
+		return
+	}
 
 	if s.Store() == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
@@ -787,11 +800,16 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 	}
 
 	libraryPath := req.LibraryPath
-	if libraryPath == "" {
+	if libraryPath != "" {
+		if err := validateAbsolutePath(libraryPath); err != nil {
+			httputil.RespondWithBadRequest(c, "invalid library_path: "+err.Error())
+			return
+		}
+	} else {
 		libraryPath = config.AppConfig.ITunesLibraryReadPath
-	}
-	if libraryPath == "" {
-		libraryPath = s.itunesSvc.Importer.DiscoverLibraryPath()
+		if libraryPath == "" {
+			libraryPath = s.itunesSvc.Importer.DiscoverLibraryPath()
+		}
 	}
 	if libraryPath == "" {
 		httputil.RespondWithBadRequest(c, "no iTunes library path configured or provided")

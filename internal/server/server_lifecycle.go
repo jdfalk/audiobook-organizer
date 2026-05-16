@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.15.0
+// version: 1.16.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-15
+// last-edited: 2026-05-16
 
 package server
 
@@ -1138,6 +1138,7 @@ func (s *Server) setupRoutes() {
 			// Hash stats endpoints
 			protected.GET("/maintenance/book-file-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookFileHashStats)
 			protected.GET("/maintenance/book-metadata-hash-stats", s.perm(auth.PermSettingsManage), s.handleGetBookMetadataHashStats)
+			protected.GET("/maintenance/acoustid-stats", s.perm(auth.PermSettingsManage), s.handleGetAcoustIDStats)
 			// Unified maintenance job dispatcher
 			protected.GET("/maintenance/jobs", s.perm(auth.PermSettingsManage), s.listMaintenanceJobs)
 			protected.POST("/maintenance/jobs/:job_id", s.runMaintenanceJob)

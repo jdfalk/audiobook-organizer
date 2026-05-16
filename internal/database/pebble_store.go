@@ -8583,6 +8583,58 @@ func (p *PebbleStore) GetBookMetadataHashStats() (*BookMetadataHashStats, error)
 	return stats, nil
 }
 
+// GetAcoustIDStats returns fingerprint coverage across all book files, grouped by
+// library root (the parent book's source_import_path).
+func (p *PebbleStore) GetAcoustIDStats() (*AcoustIDStats, error) {
+	files, err := p.GetAllBookFiles()
+	if err != nil {
+		return nil, fmt.Errorf("GetAcoustIDStats: %w", err)
+	}
+
+	// Build bookID → source_import_path for library grouping.
+	allBooks, _ := p.GetAllBooks(0, 0)
+	bookLib := make(map[string]string, len(allBooks))
+	for _, b := range allBooks {
+		if b.SourceImportPath != nil && *b.SourceImportPath != "" {
+			bookLib[b.ID] = *b.SourceImportPath
+		}
+	}
+
+	byLib := make(map[string]*AcoustIDStatsByLibrary)
+	stats := &AcoustIDStats{}
+
+	for _, f := range files {
+		stats.TotalFiles++
+		hasFP := f.AcoustIDSeg0 != "" || f.AcoustIDSeg1 != "" || f.AcoustIDSeg2 != "" ||
+			f.AcoustIDSeg3 != "" || f.AcoustIDSeg4 != "" || f.AcoustIDSeg5 != "" || f.AcoustIDSeg6 != ""
+		if hasFP {
+			stats.WithFingerprint++
+		}
+
+		root := bookLib[f.BookID]
+		if root == "" {
+			root = "(unknown)"
+		}
+		lib := byLib[root]
+		if lib == nil {
+			lib = &AcoustIDStatsByLibrary{LibraryRoot: root}
+			byLib[root] = lib
+		}
+		lib.TotalFiles++
+		if hasFP {
+			lib.WithFingerprint++
+		}
+	}
+
+	for _, v := range byLib {
+		stats.ByLibrary = append(stats.ByLibrary, *v)
+	}
+	sort.Slice(stats.ByLibrary, func(i, j int) bool {
+		return stats.ByLibrary[i].LibraryRoot < stats.ByLibrary[j].LibraryRoot
+	})
+	return stats, nil
+}
+
 // GetFilesWithFingerprintFailures scans all book_files and returns those where
 // FingerprintFailedAt is set, optionally filtered to a specific reason string.
 func (p *PebbleStore) GetFilesWithFingerprintFailures(reason string, limit, offset int) ([]BookFile, int64, error) {

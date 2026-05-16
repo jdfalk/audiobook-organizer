@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_fixups.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
-// last-edited: 2026-05-02
+// last-edited: 2026-05-16
 
 package server
 
@@ -573,6 +573,24 @@ func (s *Server) handleGetBookMetadataHashStats(c *gin.Context) {
 	stats, err := store.GetBookMetadataHashStats()
 	if err != nil {
 		httputil.InternalError(c, "failed to get book metadata hash stats", err)
+		return
+	}
+	httputil.RespondWithOK(c, struct {
+		Data any `json:"data"`
+	}{Data: stats})
+}
+
+// handleGetAcoustIDStats returns AcoustID fingerprint coverage stats.
+// GET /api/v1/maintenance/acoustid-stats
+func (s *Server) handleGetAcoustIDStats(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		httputil.RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	stats, err := store.GetAcoustIDStats()
+	if err != nil {
+		httputil.InternalError(c, "failed to get acoustid stats", err)
 		return
 	}
 	httputil.RespondWithOK(c, struct {

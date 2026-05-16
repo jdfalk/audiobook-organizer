@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.9.2
+// version: 2.9.3
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-16
 //
@@ -626,6 +626,10 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 
 	if req.SegmentID != "" && req.NewPath != "" {
 		// Individual mode: update one file (SegmentID maps to file ID)
+		if err := validateAbsolutePath(req.NewPath); err != nil {
+			httputil.RespondWithBadRequest(c, "invalid new_path: "+err.Error())
+			return
+		}
 		for i, f := range files {
 			if f.ID == req.SegmentID {
 				if _, statErr := os.Stat(req.NewPath); os.IsNotExist(statErr) {
@@ -643,6 +647,10 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		}
 	} else if req.FolderPath != "" {
 		// Folder mode: scan folder and match files by name
+		if err := validateAbsolutePath(req.FolderPath); err != nil {
+			httputil.RespondWithBadRequest(c, "invalid folder_path: "+err.Error())
+			return
+		}
 		dirEntries, err := os.ReadDir(req.FolderPath)
 		if err != nil {
 			httputil.RespondWithBadRequest(c, fmt.Sprintf("cannot read folder: %v", err))
