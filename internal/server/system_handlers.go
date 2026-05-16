@@ -1,6 +1,6 @@
 // file: internal/server/system_handlers.go
-// version: 2.2.1
-// last-edited: 2026-05-01
+// version: 2.2.2
+// last-edited: 2026-05-16
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
 // System-level HTTP handlers split out of server.go: health, status,
@@ -21,11 +21,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/backup"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 )
 
@@ -34,6 +34,7 @@ func (s *Server) healthCheck(c *gin.Context) {
 	// Gather basic metrics; tolerate errors (don't fail health entirely)
 	var bookCount, authorCount, seriesCount, playlistCount int
 	var dbErr error
+	var brokenFileCount int
 	if s.Store() != nil {
 		if bc, err := s.Store().CountBooks(); err == nil {
 			bookCount = bc
@@ -51,6 +52,19 @@ func (s *Server) healthCheck(c *gin.Context) {
 			dbErr = err
 		}
 		// Playlist count intentionally omitted — no reliable counting method yet
+
+		// Try to read broken file count from underlying store (PebbleStore)
+		if gf, ok := s.Store().(interface{ GetBrokenFileCount() (int, error) }); ok {
+			if cnt, err := gf.GetBrokenFileCount(); err == nil {
+				brokenFileCount = cnt
+			}
+		} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+			if inner, ok2 := uw.Unwrap().(interface{ GetBrokenFileCount() (int, error) }); ok2 {
+				if cnt, err := inner.GetBrokenFileCount(); err == nil {
+					brokenFileCount = cnt
+				}
+			}
+		}
 	}
 	resp := gin.H{
 		"status":        "ok",
@@ -58,11 +72,13 @@ func (s *Server) healthCheck(c *gin.Context) {
 		"version":       appVersion,
 		"database_type": config.AppConfig.DatabaseType,
 		"metrics": gin.H{
-			"books":     bookCount,
-			"authors":   authorCount,
-			"series":    seriesCount,
-			"playlists": playlistCount,
+			"books":             bookCount,
+			"authors":           authorCount,
+			"series":            seriesCount,
+			"playlists":         playlistCount,
+			"broken_file_count": brokenFileCount,
 		},
+		"broken_file_count": brokenFileCount,
 	}
 	if dbErr != nil {
 		resp["partial_error"] = dbErr.Error()
@@ -489,6 +505,22 @@ func (s *Server) getDashboard(c *gin.Context) {
 		recentOps = []database.Operation{}
 	}
 
+	// Try to read broken file count from underlying store (PebbleStore)
+	brokenFileCount := 0
+	if s.Store() != nil {
+		if gf, ok := s.Store().(interface{ GetBrokenFileCount() (int, error) }); ok {
+			if cnt, err := gf.GetBrokenFileCount(); err == nil {
+				brokenFileCount = cnt
+			}
+		} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+			if inner, ok2 := uw.Unwrap().(interface{ GetBrokenFileCount() (int, error) }); ok2 {
+				if cnt, err := inner.GetBrokenFileCount(); err == nil {
+					brokenFileCount = cnt
+				}
+			}
+		}
+	}
+
 	httputil.RespondWithOK(c, gin.H{
 		"formatDistribution": stats.FormatDistribution,
 		"stateDistribution":  stats.StateDistribution,
@@ -498,6 +530,7 @@ func (s *Server) getDashboard(c *gin.Context) {
 		"totalDuration":      stats.TotalDuration,
 		"organizedBooks":     stats.OrganizedBooks,
 		"unorganizedBooks":   stats.UnorganizedBooks,
+		"broken_file_count":  brokenFileCount,
 	})
 }
 

@@ -6,8 +6,8 @@
 package database
 
 import (
-"database/sql"
-"time"
+	"database/sql"
+	"time"
 )
 
 func (s *SQLiteStore) AddPlaybackEvent(event *PlaybackEvent) error {

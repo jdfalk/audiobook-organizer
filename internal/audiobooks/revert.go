@@ -27,7 +27,6 @@ type revertServiceStore interface {
 	GetAllImportPaths() ([]database.ImportPath, error)
 }
 
-
 // RevertService handles reverting operations by undoing recorded changes.
 type RevertService struct {
 	db revertServiceStore

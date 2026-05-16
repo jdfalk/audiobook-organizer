@@ -23,7 +23,10 @@ const archiveRetentionDays = 30
 
 // SweepArchivedBooks removes soft-deleted books past the retention
 // window. Returns the count of books cleaned up.
-func SweepArchivedBooks(store interface{ database.BookStore; database.BookFileStore }) int {
+func SweepArchivedBooks(store interface {
+	database.BookStore
+	database.BookFileStore
+}) int {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {
 		log.Printf("[WARN] archive sweep: list books: %v", err)

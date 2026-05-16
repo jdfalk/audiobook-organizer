@@ -17,12 +17,18 @@ func init() { maintenance.Register(&fixLibraryStatesJob{}) }
 
 type fixLibraryStatesJob struct{}
 
-func (j *fixLibraryStatesJob) ID() string          { return "fix-library-states" }
+func (j *fixLibraryStatesJob) ID() string       { return "fix-library-states" }
 func (j *fixLibraryStatesJob) Name() string     { return "Fix Library States" }
 func (j *fixLibraryStatesJob) Category() string { return "library" }
-func (j *fixLibraryStatesJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
-func (j *fixLibraryStatesJob) Description() string { return "Reconcile library_state field based on filesystem presence" }
-func (j *fixLibraryStatesJob) CanResume() bool     { return false }
+func (j *fixLibraryStatesJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: true}
+}
+func (j *fixLibraryStatesJob) Description() string {
+	return "Reconcile library_state field based on filesystem presence"
+}
+func (j *fixLibraryStatesJob) CanResume() bool { return false }
 func (j *fixLibraryStatesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {

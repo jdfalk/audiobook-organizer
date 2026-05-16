@@ -26,19 +26,19 @@ type TestConfig struct {
 
 // BenchRunResult captures the outcome of a single test run.
 type BenchRunResult struct {
-	Config           TestConfig        `json:"config"`
-	Mode             string            `json:"mode"` // groups or full
-	DurationMs       int64             `json:"duration_ms"`
-	InputTokens      int64             `json:"input_tokens"`
-	OutputTokens     int64             `json:"output_tokens"`
-	CachedTokens     int64             `json:"cached_tokens"`
-	TotalTokens      int64             `json:"total_tokens"`
-	CostEstimate     float64           `json:"cost_estimate_usd"`
-	NumSuggestions   int               `json:"num_suggestions"`
-	ActionCounts     map[string]int    `json:"action_counts"`
-	ConfidenceCounts map[string]int    `json:"confidence_counts"`
-	Error            string            `json:"error,omitempty"`
-	NumChunks        int               `json:"num_chunks,omitempty"`
+	Config           TestConfig     `json:"config"`
+	Mode             string         `json:"mode"` // groups or full
+	DurationMs       int64          `json:"duration_ms"`
+	InputTokens      int64          `json:"input_tokens"`
+	OutputTokens     int64          `json:"output_tokens"`
+	CachedTokens     int64          `json:"cached_tokens"`
+	TotalTokens      int64          `json:"total_tokens"`
+	CostEstimate     float64        `json:"cost_estimate_usd"`
+	NumSuggestions   int            `json:"num_suggestions"`
+	ActionCounts     map[string]int `json:"action_counts"`
+	ConfidenceCounts map[string]int `json:"confidence_counts"`
+	Error            string         `json:"error,omitempty"`
+	NumChunks        int            `json:"num_chunks,omitempty"`
 }
 
 // BenchSummary is the cross-run comparison.

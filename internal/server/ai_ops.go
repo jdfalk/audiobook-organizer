@@ -23,8 +23,8 @@ import (
 
 // aiReviewOpParams holds the serializable parameters for the ai.author-review op.
 type aiReviewOpParams struct {
-	LegacyOpID  string                  `json:"legacy_op_id"`
-	Mode        string                  `json:"mode"`
+	LegacyOpID  string                   `json:"legacy_op_id"`
+	Mode        string                   `json:"mode"`
 	DedupGroups []dedup.AuthorDedupGroup `json:"dedup_groups,omitempty"`
 }
 
@@ -42,8 +42,8 @@ type aiMergeApplySuggestion struct {
 
 // aiMergeApplyOpParams holds the serializable parameters for the ai.author-merge-apply op.
 type aiMergeApplyOpParams struct {
-	LegacyOpID  string                    `json:"legacy_op_id"`
-	Suggestions []aiMergeApplySuggestion  `json:"suggestions"`
+	LegacyOpID  string                   `json:"legacy_op_id"`
+	Suggestions []aiMergeApplySuggestion `json:"suggestions"`
 }
 
 // RegisterAIAuthorReviewOp registers the "ai.author-review" v2 OperationDef.

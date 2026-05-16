@@ -13,13 +13,13 @@ import (
 
 // MockWorkStore is a mock implementation of database.WorkStore for testing
 type MockWorkStore struct {
-	works                   []database.Work
-	getWorkByIDFn           func(id string) (*database.Work, error)
-	getAllWorksFn           func() ([]database.Work, error)
-	createWorkFn            func(work *database.Work) (*database.Work, error)
-	updateWorkFn            func(id string, work *database.Work) (*database.Work, error)
-	deleteWorkFn            func(id string) error
-	getBooksByWorkIDFn      func(workID string) ([]database.Book, error)
+	works              []database.Work
+	getWorkByIDFn      func(id string) (*database.Work, error)
+	getAllWorksFn      func() ([]database.Work, error)
+	createWorkFn       func(work *database.Work) (*database.Work, error)
+	updateWorkFn       func(id string, work *database.Work) (*database.Work, error)
+	deleteWorkFn       func(id string) error
+	getBooksByWorkIDFn func(workID string) ([]database.Book, error)
 }
 
 func (m *MockWorkStore) GetWorkByID(id string) (*database.Work, error) {

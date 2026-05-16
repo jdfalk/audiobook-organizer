@@ -6,11 +6,11 @@
 package database
 
 import (
-"database/sql"
-"fmt"
-"time"
+	"database/sql"
+	"fmt"
+	"time"
 
-ulid "github.com/oklog/ulid/v2"
+	ulid "github.com/oklog/ulid/v2"
 )
 
 func (s *SQLiteStore) GetMetadataFieldStates(bookID string) ([]MetadataFieldState, error) {

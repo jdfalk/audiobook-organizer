@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
 
 // TestGetFileSize tests the getFileSize function
@@ -173,7 +173,7 @@ func TestLooksLikePersonNameEdgeCases(t *testing.T) {
 		{"three word name", "John Quincy Adams", true},
 		{"four word name", "Mary Anne Ella Smith", true},
 		{"five word name", "Too Many Words Here Name", true}, // Actually valid - has proper capitalization
-		{"single initial", "J.", false}, // Single initial alone doesn't have enough uppercase letters
+		{"single initial", "J.", false},                      // Single initial alone doesn't have enough uppercase letters
 		{"double initial with space", "J. K.", true},
 		{"double initial no space", "J.K.", false}, // Needs at least 2 uppercase with periods
 		{"triple initial", "J. R. R.", true},

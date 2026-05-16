@@ -18,12 +18,18 @@ func init() { maintenance.Register(&mergeChapterGroupsJob{}) }
 
 type mergeChapterGroupsJob struct{}
 
-func (j *mergeChapterGroupsJob) ID() string          { return "merge-chapter-groups" }
+func (j *mergeChapterGroupsJob) ID() string       { return "merge-chapter-groups" }
 func (j *mergeChapterGroupsJob) Name() string     { return "Merge Chapter Groups" }
 func (j *mergeChapterGroupsJob) Category() string { return "files" }
-func (j *mergeChapterGroupsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
-func (j *mergeChapterGroupsJob) Description() string { return "Merge multi-chapter book files into consolidated book records" }
-func (j *mergeChapterGroupsJob) CanResume() bool     { return false }
+func (j *mergeChapterGroupsJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: true}
+}
+func (j *mergeChapterGroupsJob) Description() string {
+	return "Merge multi-chapter book files into consolidated book records"
+}
+func (j *mergeChapterGroupsJob) CanResume() bool { return false }
 func (j *mergeChapterGroupsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {

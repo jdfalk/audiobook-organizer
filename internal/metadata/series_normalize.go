@@ -11,8 +11,8 @@ import (
 
 var (
 	reDashPositionTitle = regexp.MustCompile(`^(.+?)\s+-\s+(\d+)\s+-\s+.+$`)
-	reTrailingDigit = regexp.MustCompile(`^(.+?)\s+-\s+(\d{1,2})$`)
-	reTrailingOrdinal = regexp.MustCompile(`(?i)^(.+?)\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)$`)
+	reTrailingDigit     = regexp.MustCompile(`^(.+?)\s+-\s+(\d{1,2})$`)
+	reTrailingOrdinal   = regexp.MustCompile(`(?i)^(.+?)\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)$`)
 )
 
 var ordinalToDigit = map[string]string{

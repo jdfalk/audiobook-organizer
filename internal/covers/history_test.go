@@ -140,8 +140,8 @@ func TestRestoreCoverFilePathTraversal(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		filename        string
+		name              string
+		filename          string
 		wantPathTraversal bool // true = function should reject this input as path traversal
 	}{
 		{"valid filename succeeds", "cover.jpg", false},

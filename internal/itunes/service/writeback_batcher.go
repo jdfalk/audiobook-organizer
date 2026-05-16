@@ -72,10 +72,10 @@ type WriteBackBatcherConfig struct {
 // Phase 2 M1 it drags its deps along without re-importing internal/database
 // via the service-level Store composite.
 type WriteBackStore interface {
-	database.BookStore        // GetBookByID, MarkITunesSynced
-	database.AuthorReader     // GetAuthorByID
-	database.BookFileStore    // GetBookFiles
-	database.ExternalIDStore  // MarkExternalIDRemoved
+	database.BookStore       // GetBookByID, MarkITunesSynced
+	database.AuthorReader    // GetAuthorByID
+	database.BookFileStore   // GetBookFiles
+	database.ExternalIDStore // MarkExternalIDRemoved
 }
 
 // WriteBackBatcher collects ITL operations and flushes them in a single batch
@@ -111,7 +111,6 @@ type WriteBackBatcher struct {
 	// nil-guard.
 	store WriteBackStore
 }
-
 
 // NewWriteBackBatcher creates a batcher with the given debounce delay.
 func NewWriteBackBatcher(delay time.Duration, cfg WriteBackBatcherConfig, store WriteBackStore) *WriteBackBatcher {
@@ -414,8 +413,8 @@ func (b *WriteBackBatcher) flush() {
 // changes have broken it before, and mocking the two external
 // calls lets us test the logic in isolation.
 var (
-	itlValidateFn           = itunes.ValidateITL
-	itlApplyOperationsFn    = itunes.ApplyITLOperations
+	itlValidateFn        = itunes.ValidateITL
+	itlApplyOperationsFn = itunes.ApplyITLOperations
 )
 
 // SafeWriteITL performs a backup → write-temp → validate-temp →

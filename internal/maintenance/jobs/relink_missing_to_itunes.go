@@ -30,12 +30,18 @@ type relinkMissingToITunesJob struct {
 
 func (j *relinkMissingToITunesJob) InjectEnqueuer(e maintenance.WriteBackEnqueuer) { j.enqueuer = e }
 
-func (j *relinkMissingToITunesJob) ID() string          { return "relink-missing-to-itunes" }
-func (j *relinkMissingToITunesJob) Name() string        { return "Relink Missing to iTunes" }
-func (j *relinkMissingToITunesJob) Category() string    { return "iTunes" }
-func (j *relinkMissingToITunesJob) Description() string { return "Finds books whose path no longer exists on disk and searches the iTunes library to re-link them" }
-func (j *relinkMissingToITunesJob) DefaultParams() any  { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
-func (j *relinkMissingToITunesJob) CanResume() bool     { return false }
+func (j *relinkMissingToITunesJob) ID() string       { return "relink-missing-to-itunes" }
+func (j *relinkMissingToITunesJob) Name() string     { return "Relink Missing to iTunes" }
+func (j *relinkMissingToITunesJob) Category() string { return "iTunes" }
+func (j *relinkMissingToITunesJob) Description() string {
+	return "Finds books whose path no longer exists on disk and searches the iTunes library to re-link them"
+}
+func (j *relinkMissingToITunesJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: true}
+}
+func (j *relinkMissingToITunesJob) CanResume() bool { return false }
 
 func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	iTunesRoot := config.AppConfig.ITunesMediaRoot

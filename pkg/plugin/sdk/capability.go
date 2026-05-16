@@ -12,11 +12,11 @@ type Capability = registry.Capability
 
 // Capability constants.
 const (
-	CapLibraryRead    = registry.CapLibraryRead
-	CapLibraryWrite   = registry.CapLibraryWrite
-	CapFilesRead      = registry.CapFilesRead
-	CapFilesWrite     = registry.CapFilesWrite
-	CapFilesExecute   = registry.CapFilesExecute
+	CapLibraryRead  = registry.CapLibraryRead
+	CapLibraryWrite = registry.CapLibraryWrite
+	CapFilesRead    = registry.CapFilesRead
+	CapFilesWrite   = registry.CapFilesWrite
+	CapFilesExecute = registry.CapFilesExecute
 
 	CapNetworkOpenAI      = registry.CapNetworkOpenAI
 	CapNetworkAudible     = registry.CapNetworkAudible

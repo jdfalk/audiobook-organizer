@@ -46,9 +46,9 @@ func (s *Server) handleDelugeDiscover(c *gin.Context) {
 	}
 
 	httputil.RespondWithOK(c, struct {
-		Label      string                       `json:"label"`
+		Label      string                           `json:"label"`
 		Candidates []delugeclient.DiscoveredTorrent `json:"candidates"`
-		Count      int                          `json:"count"`
+		Count      int                              `json:"count"`
 	}{Label: label, Candidates: unimported, Count: len(unimported)})
 }
 

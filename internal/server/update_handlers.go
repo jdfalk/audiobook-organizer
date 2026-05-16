@@ -15,11 +15,11 @@ func (s *Server) getUpdateStatus(c *gin.Context) {
 	info := s.updater.LastCheck()
 	if info == nil {
 		httputil.RespondWithOK(c, struct {
-			CurrentVersion  string  `json:"current_version"`
-			LatestVersion   string  `json:"latest_version"`
-			Channel         string  `json:"channel"`
-			UpdateAvailable bool    `json:"update_available"`
-			LastChecked     any     `json:"last_checked"`
+			CurrentVersion  string `json:"current_version"`
+			LatestVersion   string `json:"latest_version"`
+			Channel         string `json:"channel"`
+			UpdateAvailable bool   `json:"update_available"`
+			LastChecked     any    `json:"last_checked"`
 		}{
 			CurrentVersion:  appVersion,
 			LatestVersion:   "",

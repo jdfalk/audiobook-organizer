@@ -97,10 +97,10 @@ type ITunesWriteBackResponse struct {
 //
 //   - ITunesPath               — what iTunes currently has, e.g. W:/foo/bar.m4b
 //   - ITunesPathTranslated     — local equivalent of ITunesPath after applying
-//                                forward path mappings (so users can stat it)
+//     forward path mappings (so users can stat it)
 //   - AOPath                   — where AO has the file on disk (book.FilePath)
 //   - AOITunesTranslatedPath   — what AO will write into the iTunes ITL when
-//                                write-back runs (ReverseRemapPath of AOPath)
+//     write-back runs (ReverseRemapPath of AOPath)
 //
 // PathDiffers is true iff AOITunesTranslatedPath != ITunesPath — i.e. the
 // thing AO wants to write does not match what iTunes already has.
@@ -456,7 +456,6 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	})
 }
 
-
 // handleITunesWriteBackPreview returns a comparison of local paths vs iTunes paths.
 func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 	if s.Store() == nil {
@@ -640,7 +639,6 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 		"count": total,
 	})
 }
-
 
 // handleITunesImportStatus returns the status of an iTunes import operation.
 func (s *Server) handleITunesImportStatus(c *gin.Context) {

@@ -18,7 +18,6 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/server"
 )
 
-
 func stubCommandDeps(t *testing.T) {
 	t.Helper()
 

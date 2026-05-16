@@ -12,8 +12,8 @@ import (
 
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "quarantine",
-		Needs: []string{"store", "config", "eventbus"},
+		Name:   "quarantine",
+		Needs:  []string{"store", "config", "eventbus"},
 		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")

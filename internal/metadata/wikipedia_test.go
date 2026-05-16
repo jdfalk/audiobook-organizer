@@ -5,9 +5,9 @@
 package metadata
 
 import (
-	json "encoding/json/v2"
 	"context"
 	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"

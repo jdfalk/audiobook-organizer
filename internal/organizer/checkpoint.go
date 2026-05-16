@@ -30,11 +30,11 @@ import (
 )
 
 const (
-	CheckpointPrefix   = "pipeline_checkpoint:"
-	PhaseRename        = "rename"
-	PhaseTags          = "tags"
-	PhaseITunes        = "itunes"
-	CheckpointTTLDays  = 7
+	CheckpointPrefix  = "pipeline_checkpoint:"
+	PhaseRename       = "rename"
+	PhaseTags         = "tags"
+	PhaseITunes       = "itunes"
+	CheckpointTTLDays = 7
 )
 
 // SetCheckpoint marks a phase as complete for a book.

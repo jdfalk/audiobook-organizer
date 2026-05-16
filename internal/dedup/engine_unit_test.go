@@ -75,9 +75,9 @@ func TestIsProductionCompany_EdgeCases(t *testing.T) {
 func TestAuthorNameScore_Preferences(t *testing.T) {
 	// Lower score = better canonical candidate
 	tests := []struct {
-		name       string
-		better     string // should have lower score
-		worse      string // should have higher score
+		name   string
+		better string // should have lower score
+		worse  string // should have higher score
 	}{
 		{"full name over initials", "James Corey", "J. Corey"},
 		{"no slash over slash", "David Kushner", "David Kushner/Wil Wheaton"},
@@ -213,7 +213,7 @@ func TestFindDuplicateAuthors_DirtyNamesSkipped(t *testing.T) {
 	authors := []database.Author{
 		{ID: 1, Name: "Brandon Sanderson"},
 		{ID: 2, Name: "Brandon Sanderson - Mistborn"}, // dirty: contains " - "
-		{ID: 3, Name: "Penguin Random House"},          // dirty: publisher prefix
+		{ID: 3, Name: "Penguin Random House"},         // dirty: publisher prefix
 	}
 	bookCountFn := func(id int) int { return 1 }
 

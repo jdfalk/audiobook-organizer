@@ -20,7 +20,6 @@ type changelogStore interface {
 	database.PathHistoryStore
 }
 
-
 // ChangeLogEntry represents a single entry in a book's changelog timeline.
 type ChangeLogEntry struct {
 	Timestamp time.Time      `json:"timestamp"`

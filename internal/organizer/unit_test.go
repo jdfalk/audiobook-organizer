@@ -773,8 +773,8 @@ func TestIsDirectoryPath(t *testing.T) {
 		{"m4b file", "/path/to/book.m4b", false},
 		{"mp3 file", "/path/to/book.mp3", false},
 		{"flac file", "/path/to/book.flac", false},
-		{"m4a file", "/path/to/book.M4A", false}, // case insensitive
-		{"non-audio extension", "/path/to/book.txt", false}, // will try stat
+		{"m4a file", "/path/to/book.M4A", false},                     // case insensitive
+		{"non-audio extension", "/path/to/book.txt", false},          // will try stat
 		{"no extension (nonexistent)", "/path/to/some_folder", true}, // no ext, doesn't exist
 	}
 	for _, tt := range tests {
@@ -1936,16 +1936,16 @@ func TestCleanupEmptyParents_NonEmpty(t *testing.T) {
 // noopLogger implements logger.Logger for tests
 type noopLogger struct{}
 
-func (l *noopLogger) Trace(string, ...any)                     {}
-func (l *noopLogger) Debug(string, ...any)                     {}
-func (l *noopLogger) Info(string, ...any)                      {}
-func (l *noopLogger) Warn(string, ...any)                      {}
-func (l *noopLogger) Error(string, ...any)                     {}
-func (l *noopLogger) UpdateProgress(int, int, string)          {}
-func (l *noopLogger) RecordChange(change logger.Change)        {}
-func (l *noopLogger) ChangeCounters() map[string]int           { return nil }
-func (l *noopLogger) IsCanceled() bool                         { return false }
-func (l *noopLogger) With(string) logger.Logger                { return l }
+func (l *noopLogger) Trace(string, ...any)              {}
+func (l *noopLogger) Debug(string, ...any)              {}
+func (l *noopLogger) Info(string, ...any)               {}
+func (l *noopLogger) Warn(string, ...any)               {}
+func (l *noopLogger) Error(string, ...any)              {}
+func (l *noopLogger) UpdateProgress(int, int, string)   {}
+func (l *noopLogger) RecordChange(change logger.Change) {}
+func (l *noopLogger) ChangeCounters() map[string]int    { return nil }
+func (l *noopLogger) IsCanceled() bool                  { return false }
+func (l *noopLogger) With(string) logger.Logger         { return l }
 
 // ---------------------------------------------------------------------------
 // bookNeedsReOrganize

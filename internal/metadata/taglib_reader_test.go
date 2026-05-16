@@ -66,9 +66,9 @@ func TestBuildMetadataFromTaglibMap(t *testing.T) {
 		{
 			name: "album_artist beats artist",
 			tags: map[string][]string{
-				"TITLE":        {"Foundation"},
-				"ARTIST":       {"Scott Brick"},  // narrator
-				"ALBUMARTIST":  {"Isaac Asimov"}, // author
+				"TITLE":       {"Foundation"},
+				"ARTIST":      {"Scott Brick"},  // narrator
+				"ALBUMARTIST": {"Isaac Asimov"}, // author
 			},
 			filePath: "/tmp/foundation.m4b",
 			check: func(t *testing.T, m Metadata) {
@@ -129,11 +129,11 @@ func TestBuildMetadataFromTaglibMap(t *testing.T) {
 		{
 			name: "AUDIOBOOK_ORGANIZER custom tags round-trip",
 			tags: map[string][]string{
-				"TITLE":                          {"Book"},
-				"ARTIST":                         {"Author"},
-				"AUDIOBOOK_ORGANIZER_BOOK_ID":    {"01KNDB000000000000000000"},
+				"TITLE":                           {"Book"},
+				"ARTIST":                          {"Author"},
+				"AUDIOBOOK_ORGANIZER_BOOK_ID":     {"01KNDB000000000000000000"},
 				"AUDIOBOOK_ORGANIZER_TAG_VERSION": {"3"},
-				"EDITION":                        {"Unabridged"},
+				"EDITION":                         {"Unabridged"},
 			},
 			filePath: "/tmp/book.m4b",
 			check: func(t *testing.T, m Metadata) {
@@ -216,8 +216,8 @@ func TestNormalizeISBN(t *testing.T) {
 		{"0553293354", "0553293354"},
 		{"0-553-29335-4", "0553293354"},
 		{"  978 0 553 29335 0  ", "9780553293350"},
-		{"12345", ""},                  // too short
-		{"12345678901234567", ""},      // too long
+		{"12345", ""},             // too short
+		{"12345678901234567", ""}, // too long
 		{"978055329335X", "978055329335X"},
 		{"garbage-string", ""},
 	}

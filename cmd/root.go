@@ -37,8 +37,8 @@ var metadataInspectFile string
 var (
 	initializeStore        = database.InitializeStore
 	closeStore             = database.CloseStore
-	scanDirectory          = scanner.ScanDirectory  // func(string, logger.Logger) ([]Book, error)
-	processBooks           = scanner.ProcessBooks   // func([]Book, logger.Logger) error
+	scanDirectory          = scanner.ScanDirectory // func(string, logger.Logger) ([]Book, error)
+	processBooks           = scanner.ProcessBooks  // func([]Book, logger.Logger) error
 	generatePlaylists      = playlist.GeneratePlaylistsForSeries
 	updateSeriesTags       = tagger.UpdateSeriesTags
 	initEncryption         = database.InitEncryption

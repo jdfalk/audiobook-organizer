@@ -188,7 +188,7 @@ Only include groups where you find actual duplicates or issues.`
 				{"role": "user", "content": userPrompt},
 			},
 			"max_completion_tokens": 16000,
-			"response_format":      map[string]string{"type": "json_object"},
+			"response_format":       map[string]string{"type": "json_object"},
 		},
 	}
 
@@ -352,7 +352,7 @@ Return ONLY valid JSON: {"suggestions": [{"group_index": N, "action": "merge|spl
 				{"role": "user", "content": userPrompt},
 			},
 			"max_completion_tokens": 32000,
-			"response_format":      map[string]string{"type": "json_object"},
+			"response_format":       map[string]string{"type": "json_object"},
 		},
 	}
 

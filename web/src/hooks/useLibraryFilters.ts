@@ -1,7 +1,7 @@
 // file: web/src/hooks/useLibraryFilters.ts
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-15
+// last-edited: 2026-05-16
 
 import { useState, useEffect, useCallback } from 'react';
 import type { FilterOptions } from '../types';
@@ -42,6 +42,7 @@ export function useLibraryFilters({
     genre: searchParams.get('genre') || undefined,
     language: searchParams.get('language') || undefined,
     libraryState: searchParams.get('state') || undefined,
+    hasFileErrors: (searchParams.get('has_file_errors') === 'true') || undefined,
   }));
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableAuthors, setAvailableAuthors] = useState<string[]>([]);

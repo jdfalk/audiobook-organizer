@@ -6,90 +6,94 @@
 package jobs
 
 import (
-"context"
-"fmt"
-"strings"
+	"context"
+	"fmt"
+	"strings"
 
-"github.com/jdfalk/audiobook-organizer/internal/database"
-"github.com/jdfalk/audiobook-organizer/internal/maintenance"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 )
 
 func init() { maintenance.Register(&fixAuthorNarratorSwapJob{}) }
 
 type fixAuthorNarratorSwapJob struct{}
 
-func (j *fixAuthorNarratorSwapJob) ID() string          { return "fix-author-narrator-swap" }
+func (j *fixAuthorNarratorSwapJob) ID() string       { return "fix-author-narrator-swap" }
 func (j *fixAuthorNarratorSwapJob) Name() string     { return "Fix Author/Narrator Swap" }
 func (j *fixAuthorNarratorSwapJob) Category() string { return "library" }
-func (j *fixAuthorNarratorSwapJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: true} }
+func (j *fixAuthorNarratorSwapJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: true}
+}
 func (j *fixAuthorNarratorSwapJob) Description() string {
-return "Fix books where author and narrator fields are swapped"
+	return "Fix books where author and narrator fields are swapped"
 }
 func (j *fixAuthorNarratorSwapJob) CanResume() bool { return false }
 
 func (j *fixAuthorNarratorSwapJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
-const batchSize = 500
-offset := 0
-var found, applied int
+	const batchSize = 500
+	offset := 0
+	var found, applied int
 
-for {
-batch, err := store.GetAllBooks(batchSize, offset)
-if err != nil {
-return fmt.Errorf("failed to list books: %w", err)
-}
-if len(batch) == 0 {
-break
-}
+	for {
+		batch, err := store.GetAllBooks(batchSize, offset)
+		if err != nil {
+			return fmt.Errorf("failed to list books: %w", err)
+		}
+		if len(batch) == 0 {
+			break
+		}
 
-reporter.SetTotal(offset + len(batch))
+		reporter.SetTotal(offset + len(batch))
 
-for i := range batch {
-select {
-case <-ctx.Done():
-return ctx.Err()
-default:
-}
+		for i := range batch {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 
-book := &batch[i]
-if book.AuthorID == nil || book.Narrator == nil || *book.Narrator == "" {
-reporter.Increment()
-continue
-}
+			book := &batch[i]
+			if book.AuthorID == nil || book.Narrator == nil || *book.Narrator == "" {
+				reporter.Increment()
+				continue
+			}
 
-author, aErr := store.GetAuthorByID(*book.AuthorID)
-if aErr != nil || author == nil {
-reporter.Increment()
-continue
-}
+			author, aErr := store.GetAuthorByID(*book.AuthorID)
+			if aErr != nil || author == nil {
+				reporter.Increment()
+				continue
+			}
 
-if !strings.EqualFold(author.Name, *book.Narrator) {
-reporter.Increment()
-continue
-}
+			if !strings.EqualFold(author.Name, *book.Narrator) {
+				reporter.Increment()
+				continue
+			}
 
-found++
-if !dryRun {
-current, getErr := store.GetBookByID(book.ID)
-if getErr != nil || current == nil {
-reporter.Log("error", fmt.Sprintf("Failed to fetch book %s: %v", book.ID, getErr), nil)
-} else {
-current.AuthorID = nil
-if _, updateErr := store.UpdateBook(book.ID, current); updateErr != nil {
-reporter.Log("error", fmt.Sprintf("Failed to update book %s: %v", book.ID, updateErr), nil)
-} else {
-applied++
-}
-}
-}
-reporter.Increment()
-}
+			found++
+			if !dryRun {
+				current, getErr := store.GetBookByID(book.ID)
+				if getErr != nil || current == nil {
+					reporter.Log("error", fmt.Sprintf("Failed to fetch book %s: %v", book.ID, getErr), nil)
+				} else {
+					current.AuthorID = nil
+					if _, updateErr := store.UpdateBook(book.ID, current); updateErr != nil {
+						reporter.Log("error", fmt.Sprintf("Failed to update book %s: %v", book.ID, updateErr), nil)
+					} else {
+						applied++
+					}
+				}
+			}
+			reporter.Increment()
+		}
 
-if len(batch) < batchSize {
-break
-}
-offset += batchSize
-}
+		if len(batch) < batchSize {
+			break
+		}
+		offset += batchSize
+	}
 
-reporter.Log("info", fmt.Sprintf("Done: found=%d applied=%d dryRun=%v", found, applied, dryRun), nil)
-return nil
+	reporter.Log("info", fmt.Sprintf("Done: found=%d applied=%d dryRun=%v", found, applied, dryRun), nil)
+	return nil
 }

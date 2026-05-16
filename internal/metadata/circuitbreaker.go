@@ -20,8 +20,8 @@ type CircuitState int
 
 const (
 	StateClosed   CircuitState = iota // Normal operation
-	StateOpen                        // Failing fast
-	StateHalfOpen                    // Allowing one probe
+	StateOpen                         // Failing fast
+	StateHalfOpen                     // Allowing one probe
 )
 
 // CircuitBreaker prevents cascading failures by stopping calls to a failing external service.

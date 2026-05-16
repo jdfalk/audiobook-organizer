@@ -47,7 +47,7 @@ import (
 type CachedMetadataEntry struct {
 	BookID    string            `json:"book_id"`
 	Source    string            `json:"source"`
-	Results   json.RawMessage   `json:"results"`         // []metadata.BookMetadata, left as RawMessage so this package doesn't need to import internal/metadata
+	Results   json.RawMessage   `json:"results"` // []metadata.BookMetadata, left as RawMessage so this package doesn't need to import internal/metadata
 	BestScore float64           `json:"best_score"`
 	CachedAt  time.Time         `json:"cached_at"`
 	Extra     map[string]string `json:"extra,omitempty"` // reserved for future use (language tag, TTL override, etc.)

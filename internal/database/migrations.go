@@ -2571,7 +2571,6 @@ func migration048Up(store Store) error {
 	return nil
 }
 
-
 // migration049Up adds acoustid_fingerprint and acoustid_duration columns to
 // book_files. These store AcoustID fingerprints (from fpcalc) for
 // content-based matching that survives metadata rewrites and file moves.
@@ -2766,21 +2765,21 @@ func migration055Up(store Store) error {
 // source book row has is_primary_version set to 0 and merged_into_book_id set to
 // the primary book's ID so the merge is auditable.
 func migration056Up(store Store) error {
-sqliteStore, ok := store.(*SQLiteStore)
-if !ok {
-return nil // PebbleDB: schema-free, field lives on struct
-}
-stmts := []string{
-`ALTER TABLE books ADD COLUMN merged_into_book_id TEXT`,
-`CREATE INDEX IF NOT EXISTS idx_books_merged_into ON books(merged_into_book_id) WHERE merged_into_book_id IS NOT NULL`,
-}
-for _, stmt := range stmts {
-if _, err := sqliteStore.db.Exec(stmt); err != nil {
-slog.Warn("migration warning: migration 056", "error", err)
-}
-}
-slog.Info("- Added merged_into_book_id to books, created index idx_books_merged_into")
-return nil
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: schema-free, field lives on struct
+	}
+	stmts := []string{
+		`ALTER TABLE books ADD COLUMN merged_into_book_id TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_books_merged_into ON books(merged_into_book_id) WHERE merged_into_book_id IS NOT NULL`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			slog.Warn("migration warning: migration 056", "error", err)
+		}
+	}
+	slog.Info("- Added merged_into_book_id to books, created index idx_books_merged_into")
+	return nil
 }
 
 // migration057Up adds a unique index on (file_hash, source_import_path) to prevent
@@ -2788,22 +2787,21 @@ return nil
 // The index is partial (WHERE file_hash IS NOT NULL) to avoid affecting existing rows
 // with NULL or empty hashes during migration.
 func migration057Up(store Store) error {
-sqliteStore, ok := store.(*SQLiteStore)
-if !ok {
-return nil // PebbleDB: schema-free, field lives on struct
+	sqliteStore, ok := store.(*SQLiteStore)
+	if !ok {
+		return nil // PebbleDB: schema-free, field lives on struct
+	}
+	stmts := []string{
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_audiobooks_file_hash_library ON books (file_hash, source_import_path) WHERE file_hash IS NOT NULL AND file_hash != ''`,
+	}
+	for _, stmt := range stmts {
+		if _, err := sqliteStore.db.Exec(stmt); err != nil {
+			slog.Warn("migration warning: migration 057", "error", err)
+		}
+	}
+	slog.Info("- Added unique index on (file_hash, source_import_path)")
+	return nil
 }
-stmts := []string{
-`CREATE UNIQUE INDEX IF NOT EXISTS idx_audiobooks_file_hash_library ON books (file_hash, source_import_path) WHERE file_hash IS NOT NULL AND file_hash != ''`,
-}
-for _, stmt := range stmts {
-if _, err := sqliteStore.db.Exec(stmt); err != nil {
-slog.Warn("migration warning: migration 057", "error", err)
-}
-}
-slog.Info("- Added unique index on (file_hash, source_import_path)")
-return nil
-}
-
 
 // migration058Up adds book signature columns for unified per-book audio fingerprint
 // (spec: 2026-05-03-unified-book-fingerprint.md). These columns synthesize a

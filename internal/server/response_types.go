@@ -78,4 +78,3 @@ type HealthResponse struct {
 	Uptime    int64  `json:"uptime_seconds"`
 	Timestamp int64  `json:"timestamp"`
 }
-

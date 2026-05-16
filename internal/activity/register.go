@@ -20,8 +20,8 @@ func init() {
 	// DatabasePath is unset — host code must Override "activitystore" with a
 	// pre-built instance in that case (test paths).
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "activitystore",
-		Needs: []string{"config"},
+		Name:   "activitystore",
+		Needs:  []string{"config"},
 		Groups: []string{"activity"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
@@ -34,8 +34,8 @@ func init() {
 	})
 
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "activity",
-		Needs: []string{"activitystore"},
+		Name:   "activity",
+		Needs:  []string{"activitystore"},
 		Groups: []string{"activity"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[*database.NutsActivityStore](c, "activitystore")
@@ -47,8 +47,8 @@ func init() {
 	// parsed entries into the activity store. Implements Starter and Stopper
 	// for lifecycle management. Depends on activity service for its store.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "activitywriter",
-		Needs: []string{"activity"},
+		Name:   "activitywriter",
+		Needs:  []string{"activity"},
 		Groups: []string{"activity"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			activitySvc := serviceregistry.Get[*Service](c, "activity")

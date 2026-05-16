@@ -17,12 +17,18 @@ func init() { maintenance.Register(&recomputeITunesPathsJob{}) }
 
 type recomputeITunesPathsJob struct{}
 
-func (j *recomputeITunesPathsJob) ID() string          { return "recompute-itunes-paths" }
+func (j *recomputeITunesPathsJob) ID() string       { return "recompute-itunes-paths" }
 func (j *recomputeITunesPathsJob) Name() string     { return "Recompute iTunes Paths" }
 func (j *recomputeITunesPathsJob) Category() string { return "itunes" }
-func (j *recomputeITunesPathsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
-func (j *recomputeITunesPathsJob) Description() string { return "Recompute iTunes path mapping for all book files" }
-func (j *recomputeITunesPathsJob) CanResume() bool     { return false }
+func (j *recomputeITunesPathsJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: false}
+}
+func (j *recomputeITunesPathsJob) Description() string {
+	return "Recompute iTunes path mapping for all book files"
+}
+func (j *recomputeITunesPathsJob) CanResume() bool { return false }
 func (j *recomputeITunesPathsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	files, err := store.GetAllBookFiles()
 	if err != nil {

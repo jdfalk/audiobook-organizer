@@ -28,9 +28,9 @@ const (
 
 // FolderMetadata holds metadata parsed from the directory hierarchy.
 type FolderMetadata struct {
-	Authors        []string        // Split on " & " and "; "
+	Authors        []string // Split on " & " and "; "
 	SeriesName     string
-	SeriesPosition int             // 0 if not found
+	SeriesPosition int // 0 if not found
 	Title          string
 	Narrator       string
 	AuthorConf     FieldConfidence
@@ -138,22 +138,22 @@ func splitPathSegments(path string) []string {
 
 	// Filter noise
 	skipSegments := map[string]bool{
-		"":            true,
-		".":           true,
-		"audiobooks":  true,
-		"audiobook":   true,
-		"books":       true,
-		"library":     true,
-		"media":       true,
-		"audio":       true,
-		"imports":     true,
-		"import":      true,
-		"downloads":   true,
-		"organized":   true,
-		"newbooks":    true,
-		"collection":  true,
-		"mnt":         true,
-		"bigdata":     true,
+		"":                    true,
+		".":                   true,
+		"audiobooks":          true,
+		"audiobook":           true,
+		"books":               true,
+		"library":             true,
+		"media":               true,
+		"audio":               true,
+		"imports":             true,
+		"import":              true,
+		"downloads":           true,
+		"organized":           true,
+		"newbooks":            true,
+		"collection":          true,
+		"mnt":                 true,
+		"bigdata":             true,
 		"audiobook-organizer": true,
 	}
 

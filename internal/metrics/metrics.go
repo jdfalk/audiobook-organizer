@@ -128,12 +128,14 @@ func SetMemoryAlloc(b uint64) { memoryAllocGauge.Set(float64(b)) }
 func SetGoroutines(n int)     { goroutinesGauge.Set(float64(n)) }
 
 // Cache helpers
-func RecordCacheHit(cache string)                    { cacheHits.WithLabelValues(cache).Inc() }
-func RecordCacheMiss(cache, reason string)           { cacheMisses.WithLabelValues(cache, reason).Inc() }
-func RecordCacheSet(cache string)                    { cacheSets.WithLabelValues(cache).Inc() }
-func RecordCacheInvalidation(cache, scope string)    { cacheInvalidations.WithLabelValues(cache, scope).Inc() }
-func RecordCacheEviction(cache, reason string)       { cacheEvictions.WithLabelValues(cache, reason).Inc() }
-func SetCacheSize(cache string, n int)               { cacheSize.WithLabelValues(cache).Set(float64(n)) }
+func RecordCacheHit(cache string)          { cacheHits.WithLabelValues(cache).Inc() }
+func RecordCacheMiss(cache, reason string) { cacheMisses.WithLabelValues(cache, reason).Inc() }
+func RecordCacheSet(cache string)          { cacheSets.WithLabelValues(cache).Inc() }
+func RecordCacheInvalidation(cache, scope string) {
+	cacheInvalidations.WithLabelValues(cache, scope).Inc()
+}
+func RecordCacheEviction(cache, reason string) { cacheEvictions.WithLabelValues(cache, reason).Inc() }
+func SetCacheSize(cache string, n int)         { cacheSize.WithLabelValues(cache).Set(float64(n)) }
 func ObserveCacheGetDuration(cache string, d time.Duration) {
 	cacheGetDuration.WithLabelValues(cache).Observe(d.Seconds())
 }

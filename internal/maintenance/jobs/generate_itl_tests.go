@@ -22,12 +22,14 @@ func init() { maintenance.Register(&generateITLTestsJob{}) }
 
 type generateITLTestsJob struct{}
 
-func (j *generateITLTestsJob) ID() string          { return "generate-itl-tests" }
-func (j *generateITLTestsJob) Name() string        { return "Generate ITL Tests" }
-func (j *generateITLTestsJob) Category() string    { return "Dev" }
-func (j *generateITLTestsJob) Description() string { return "Generates a suite of .itl test files for iTunes parser testing" }
-func (j *generateITLTestsJob) DefaultParams() any  { return nil }
-func (j *generateITLTestsJob) CanResume() bool     { return false }
+func (j *generateITLTestsJob) ID() string       { return "generate-itl-tests" }
+func (j *generateITLTestsJob) Name() string     { return "Generate ITL Tests" }
+func (j *generateITLTestsJob) Category() string { return "Dev" }
+func (j *generateITLTestsJob) Description() string {
+	return "Generates a suite of .itl test files for iTunes parser testing"
+}
+func (j *generateITLTestsJob) DefaultParams() any { return nil }
+func (j *generateITLTestsJob) CanResume() bool    { return false }
 
 func (j *generateITLTestsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	if config.AppConfig.RootDir == "" {

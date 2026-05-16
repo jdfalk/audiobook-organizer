@@ -13,12 +13,12 @@ import (
 
 func statsFor(books, files, authors, series, organized, unorganized int) *database.LibraryStats {
 	return &database.LibraryStats{
-		TotalBooks:       books,
-		TotalFiles:       files,
-		TotalAuthors:     authors,
-		TotalSeries:      series,
-		OrganizedBooks:   organized,
-		UnorganizedBooks: unorganized,
+		TotalBooks:         books,
+		TotalFiles:         files,
+		TotalAuthors:       authors,
+		TotalSeries:        series,
+		OrganizedBooks:     organized,
+		UnorganizedBooks:   unorganized,
 		StateDistribution:  map[string]int{},
 		FormatDistribution: map[string]int{},
 		BooksByImportPath:  map[int]int{},

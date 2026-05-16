@@ -6,8 +6,8 @@ package download
 
 import (
 	"context"
-	json "encoding/json/v2"
 	"encoding/json/jsontext"
+	json "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -190,7 +190,7 @@ func (s *SABnzbdClient) GetQueueStats(ctx context.Context, id string) (*UsenetSt
 // SetDownloadPath changes the download category/path for a job.
 func (s *SABnzbdClient) SetDownloadPath(ctx context.Context, id, newPath string) error {
 	_, err := s.apiCall(ctx, "change_complete_action", url.Values{
-		"value": {id},
+		"value":  {id},
 		"value2": {newPath},
 	})
 	return err

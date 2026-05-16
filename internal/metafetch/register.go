@@ -10,8 +10,8 @@ import (
 
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "metadatastate",
-		Needs: []string{"store"},
+		Name:   "metadatastate",
+		Needs:  []string{"store"},
 		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")
@@ -20,8 +20,8 @@ func init() {
 	})
 
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "metafetch",
-		Needs: []string{"store"},
+		Name:   "metafetch",
+		Needs:  []string{"store"},
 		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")

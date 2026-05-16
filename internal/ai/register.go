@@ -24,8 +24,8 @@ func init() {
 	// embedclient — OpenAI embedding client with optional cache.
 	// Conditional on: OpenAIAPIKey set AND EmbeddingEnabled true.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "embedclient",
-		Needs: []string{"config", "embeddingstore"},
+		Name:   "embedclient",
+		Needs:  []string{"config", "embeddingstore"},
 		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
@@ -44,8 +44,8 @@ func init() {
 	// llmparser — OpenAIParser used by dedup Layer 3 review + metadata
 	// LLM reranker. Conditional on OpenAIAPIKey set.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "llmparser",
-		Needs: []string{"config"},
+		Name:   "llmparser",
+		Needs:  []string{"config"},
 		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
@@ -59,8 +59,8 @@ func init() {
 	// metadatascorer — embedding-based metadata candidate scorer.
 	// Conditional on embedclient + embeddingstore both being available.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "metadatascorer",
-		Needs: []string{"config", "embedclient", "embeddingstore"},
+		Name:   "metadatascorer",
+		Needs:  []string{"config", "embedclient", "embeddingstore"},
 		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			cfg := serviceregistry.Get[*config.Config](c, "config")
@@ -79,8 +79,8 @@ func init() {
 	// metadatallmscorer — LLM-based metadata candidate rerank scorer.
 	// Conditional on llmparser being available.
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "metadatallmscorer",
-		Needs: []string{"llmparser"},
+		Name:   "metadatallmscorer",
+		Needs:  []string{"llmparser"},
 		Groups: []string{"ai"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			parser, _ := serviceregistry.TryGet[*OpenAIParser](c, "llmparser")

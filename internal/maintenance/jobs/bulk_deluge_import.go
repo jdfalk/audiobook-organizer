@@ -31,12 +31,14 @@ type bdi_params struct {
 	MaxBooks int  `json:"max_books,omitempty"`
 }
 
-func (j *bulkDelugeImportJob) ID() string          { return "bulk-deluge-import" }
-func (j *bulkDelugeImportJob) Name() string        { return "Bulk Deluge Import" }
-func (j *bulkDelugeImportJob) Category() string    { return "Import" }
-func (j *bulkDelugeImportJob) Description() string { return "Imports all book_files that have a deluge_hash but have not yet been copied into the library" }
-func (j *bulkDelugeImportJob) DefaultParams() any  { return &bdi_params{DryRun: true} }
-func (j *bulkDelugeImportJob) CanResume() bool     { return true }
+func (j *bulkDelugeImportJob) ID() string       { return "bulk-deluge-import" }
+func (j *bulkDelugeImportJob) Name() string     { return "Bulk Deluge Import" }
+func (j *bulkDelugeImportJob) Category() string { return "Import" }
+func (j *bulkDelugeImportJob) Description() string {
+	return "Imports all book_files that have a deluge_hash but have not yet been copied into the library"
+}
+func (j *bulkDelugeImportJob) DefaultParams() any { return &bdi_params{DryRun: true} }
+func (j *bulkDelugeImportJob) CanResume() bool    { return true }
 
 func (j *bulkDelugeImportJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	opID := maintenance.OperationIDFromCtx(ctx)

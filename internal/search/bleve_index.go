@@ -35,9 +35,9 @@ import (
 // the hot path. A mutex guards open/close transitions so shutdown
 // doesn't race with in-flight writes.
 type BleveIndex struct {
-	mu    sync.RWMutex
-	idx   bleve.Index
-	path  string
+	mu   sync.RWMutex
+	idx  bleve.Index
+	path string
 }
 
 // Open creates or opens the on-disk Bleve index at path using the

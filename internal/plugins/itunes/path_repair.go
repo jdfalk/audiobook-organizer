@@ -15,18 +15,18 @@ import (
 
 func (p *Plugin) pathRepairDef() sdk.OperationDef {
 	return sdk.OperationDef{
-		ID:               "itunes.path-repair",
-		Plugin:           "itunes",
-		DisplayName:      "iTunes Path Repair",
-		Description:      "Repair iTunes track paths that reference stale file locations.",
-		Isolate:          false,
-		ResumePolicy:     sdk.ResumeRestart,
-		DefaultPriority:  sdk.PriorityNormal,
-		Cancellable:      true,
-		Timeout:          120 * time.Minute,
-		ConcurrencyKey:   "itunes.path-repair",
+		ID:                    "itunes.path-repair",
+		Plugin:                "itunes",
+		DisplayName:           "iTunes Path Repair",
+		Description:           "Repair iTunes track paths that reference stale file locations.",
+		Isolate:               false,
+		ResumePolicy:          sdk.ResumeRestart,
+		DefaultPriority:       sdk.PriorityNormal,
+		Cancellable:           true,
+		Timeout:               120 * time.Minute,
+		ConcurrencyKey:        "itunes.path-repair",
 		MinCheckpointInterval: 30 * time.Second,
-		Run:              p.runPathRepair,
+		Run:                   p.runPathRepair,
 	}
 }
 

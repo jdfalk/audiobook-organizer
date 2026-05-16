@@ -222,8 +222,8 @@ func TestDiscoverLibraryPath_FromConfig(t *testing.T) {
 	isPrimary := true
 
 	book := database.Book{
-		ID:               "book-src",
-		IsPrimaryVersion: &isPrimary,
+		ID:                 "book-src",
+		IsPrimaryVersion:   &isPrimary,
 		ITunesImportSource: func() *string { s := source; return &s }(),
 	}
 

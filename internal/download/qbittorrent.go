@@ -61,17 +61,17 @@ func (q *QBittorrentClient) Connect(ctx context.Context) error {
 }
 
 type qbTorrent struct {
-	Hash          string  `json:"hash"`
-	Name          string  `json:"name"`
-	SavePath      string  `json:"save_path"`
-	State         string  `json:"state"`
-	Progress      float64 `json:"progress"`
-	Uploaded      int64   `json:"uploaded"`
-	Downloaded    int64   `json:"downloaded"`
-	AddedOn       int64   `json:"added_on"`
-	DlSpeed       int64   `json:"dlspeed"`
-	UpSpeed       int64   `json:"upspeed"`
-	ContentPath   string  `json:"content_path"`
+	Hash        string  `json:"hash"`
+	Name        string  `json:"name"`
+	SavePath    string  `json:"save_path"`
+	State       string  `json:"state"`
+	Progress    float64 `json:"progress"`
+	Uploaded    int64   `json:"uploaded"`
+	Downloaded  int64   `json:"downloaded"`
+	AddedOn     int64   `json:"added_on"`
+	DlSpeed     int64   `json:"dlspeed"`
+	UpSpeed     int64   `json:"upspeed"`
+	ContentPath string  `json:"content_path"`
 }
 
 func (q *QBittorrentClient) fetchTorrents(ctx context.Context, params url.Values) ([]qbTorrent, error) {

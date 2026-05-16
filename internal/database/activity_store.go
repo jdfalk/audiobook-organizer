@@ -231,13 +231,13 @@ func (s *ActivityStore) Query(f ActivityFilter) ([]ActivityEntry, int, error) {
 	var entries []ActivityEntry
 	for rows.Next() {
 		var (
-			e           ActivityEntry
-			ts          time.Time
-			opID        sql.NullString
-			bookID      sql.NullString
-			detailsRaw  sql.NullString
-			tagsRaw     sql.NullString
-			prunedAt    sql.NullTime
+			e          ActivityEntry
+			ts         time.Time
+			opID       sql.NullString
+			bookID     sql.NullString
+			detailsRaw sql.NullString
+			tagsRaw    sql.NullString
+			prunedAt   sql.NullTime
 		)
 		if err := rows.Scan(
 			&e.ID, &ts, &e.Tier, &e.Type, &e.Level, &e.Source,
@@ -476,10 +476,10 @@ func buildActivityWhere(f ActivityFilter) (string, []any) {
 		clause := "(tags = ? OR tags LIKE ? OR tags LIKE ? OR tags LIKE ?)"
 		clauses = append(clauses, clause)
 		args = append(args,
-			t,             // exact: "alpha"
-			t+",%",        // prefix: "alpha,..."
-			"%,"+t+",%",   // middle: "...,alpha,..."
-			"%,"+t,        // suffix: "...,alpha"
+			t,           // exact: "alpha"
+			t+",%",      // prefix: "alpha,..."
+			"%,"+t+",%", // middle: "...,alpha,..."
+			"%,"+t,      // suffix: "...,alpha"
 		)
 	}
 	if f.Search != "" {

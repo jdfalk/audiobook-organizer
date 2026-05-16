@@ -16,10 +16,10 @@ import (
 // ── stub progress reporter ────────────────────────────────────────────────────
 
 type stubProgress struct {
-	logs      []string
-	canceled  bool
-	lastPct   int
-	lastMsg   string
+	logs     []string
+	canceled bool
+	lastPct  int
+	lastMsg  string
 }
 
 func (sp *stubProgress) UpdateProgress(current, total int, message string) error {

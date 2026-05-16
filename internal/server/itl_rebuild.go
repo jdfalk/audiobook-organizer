@@ -17,8 +17,8 @@
 package server
 
 import (
-	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"fmt"
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"log"
 	"net/http"
 
@@ -60,8 +60,8 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 	dryRun := c.Query("dry_run") == "true"
 	if dryRun {
 		httputil.RespondWithOK(c, struct {
-			DryRun  bool                        `json:"dry_run"`
-			Preview *itunes.ITLRebuildPreview  `json:"preview"`
+			DryRun  bool                      `json:"dry_run"`
+			Preview *itunes.ITLRebuildPreview `json:"preview"`
 		}{DryRun: true, Preview: preview})
 		return
 	}

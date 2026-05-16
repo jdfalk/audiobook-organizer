@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-
 // Store defines the full database surface. Most services should depend
 // on a narrower sub-interface defined in iface_*.go; Store itself is
 // used by the server bootstrap and test fixtures that genuinely need
@@ -64,7 +63,7 @@ type BookAlternativeTitle struct {
 	ID        int64     `json:"id"`
 	BookID    string    `json:"book_id"`
 	Title     string    `json:"title"`
-	Source    string    `json:"source"`   // "user", "metadata_fetch", "auto_ampersand", etc.
+	Source    string    `json:"source"` // "user", "metadata_fetch", "auto_ampersand", etc.
 	Language  string    `json:"language,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -153,8 +152,8 @@ type Book struct {
 	ITunesBookmark     *int64     `json:"itunes_bookmark,omitempty"`
 	ITunesImportSource *string    `json:"itunes_import_source,omitempty"`
 	// Deprecated: use book_files.itunes_path instead. Will be removed in a future migration.
-	ITunesPath         *string    `json:"itunes_path,omitempty"`
-	OriginalFilename   *string    `json:"original_filename,omitempty"`
+	ITunesPath       *string `json:"itunes_path,omitempty"`
+	OriginalFilename *string `json:"original_filename,omitempty"`
 	// Media info fields
 	Bitrate    *int    `json:"bitrate_kbps,omitempty"`
 	Codec      *string `json:"codec,omitempty"`
@@ -179,7 +178,7 @@ type Book struct {
 	// QuarantineReason is set when a file is moved to .failed/. Non-nil means quarantined.
 	QuarantineReason *string    `json:"quarantine_reason,omitempty"`
 	QuarantinedAt    *time.Time `json:"quarantined_at,omitempty"`
-	CreatedAt           *time.Time `json:"created_at,omitempty"`
+	CreatedAt        *time.Time `json:"created_at,omitempty"`
 	// UpdatedAt is set on every DB write (system-level).
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 	// MetadataUpdatedAt is set only when user-visible metadata fields change.
@@ -269,30 +268,30 @@ type Book struct {
 // by avoiding unnecessary data transfer. Companion field to Book for read-only
 // projection use cases (PROJ-2 SQL query optimization).
 type BookSummary struct {
-	ID                  string     `json:"id"`
-	Title               string     `json:"title"`
-	AuthorID            *int       `json:"author_id,omitempty"`
-	SeriesID            *int       `json:"series_id,omitempty"`
-	SeriesSequence      *int       `json:"series_sequence,omitempty"`
-	FilePath            string     `json:"file_path"`
-	Format              string     `json:"format,omitempty"`
-	Duration            *int       `json:"duration,omitempty"`
-	OriginalFilename    *string    `json:"original_filename,omitempty"`
-	FileSize            *int64     `json:"file_size,omitempty"`
-	FileHash            *string    `json:"file_hash,omitempty"`
-	OriginalFileHash    *string    `json:"original_file_hash,omitempty"`
-	OrganizedFileHash   *string    `json:"organized_file_hash,omitempty"`
-	LibraryState        *string    `json:"library_state,omitempty"`
-	QuarantinedAt       *time.Time `json:"quarantined_at,omitempty"`
-	QuarantineReason    *string    `json:"quarantine_reason,omitempty"`
-	CoverURL            *string    `json:"cover_url,omitempty"`
-	Narrator            *string    `json:"narrator,omitempty"`
-	CreatedAt           *time.Time `json:"created_at,omitempty"`
-	UpdatedAt           *time.Time `json:"updated_at,omitempty"`
-	MetadataUpdatedAt   *time.Time `json:"metadata_updated_at,omitempty"`
-	IsPrimaryVersion    *bool      `json:"is_primary_version,omitempty"`
-	VersionGroupID      *string    `json:"version_group_id,omitempty"`
-	MetadataReviewStatus *string   `json:"metadata_review_status,omitempty"`
+	ID                   string     `json:"id"`
+	Title                string     `json:"title"`
+	AuthorID             *int       `json:"author_id,omitempty"`
+	SeriesID             *int       `json:"series_id,omitempty"`
+	SeriesSequence       *int       `json:"series_sequence,omitempty"`
+	FilePath             string     `json:"file_path"`
+	Format               string     `json:"format,omitempty"`
+	Duration             *int       `json:"duration,omitempty"`
+	OriginalFilename     *string    `json:"original_filename,omitempty"`
+	FileSize             *int64     `json:"file_size,omitempty"`
+	FileHash             *string    `json:"file_hash,omitempty"`
+	OriginalFileHash     *string    `json:"original_file_hash,omitempty"`
+	OrganizedFileHash    *string    `json:"organized_file_hash,omitempty"`
+	LibraryState         *string    `json:"library_state,omitempty"`
+	QuarantinedAt        *time.Time `json:"quarantined_at,omitempty"`
+	QuarantineReason     *string    `json:"quarantine_reason,omitempty"`
+	CoverURL             *string    `json:"cover_url,omitempty"`
+	Narrator             *string    `json:"narrator,omitempty"`
+	CreatedAt            *time.Time `json:"created_at,omitempty"`
+	UpdatedAt            *time.Time `json:"updated_at,omitempty"`
+	MetadataUpdatedAt    *time.Time `json:"metadata_updated_at,omitempty"`
+	IsPrimaryVersion     *bool      `json:"is_primary_version,omitempty"`
+	VersionGroupID       *string    `json:"version_group_id,omitempty"`
+	MetadataReviewStatus *string    `json:"metadata_review_status,omitempty"`
 }
 
 // MetadataProvenanceEntry represents the source breakdown for a metadata field.
@@ -356,7 +355,7 @@ type UserPlaylist struct {
 	// ITunesRawCriteriaB64 stores the original iTunes Smart
 	// Criteria blob for playlists imported from iTunes (migration
 	// audit trail). Empty for app-native playlists.
-	ITunesRawCriteriaB64 string `json:"itunes_raw_criteria_b64,omitempty"`
+	ITunesRawCriteriaB64 string    `json:"itunes_raw_criteria_b64,omitempty"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 	CreatedByUserID      string    `json:"created_by_user_id,omitempty"`
@@ -423,7 +422,7 @@ type OperationChange struct {
 	OperationID string     `json:"operation_id"`
 	UserID      string     `json:"user_id,omitempty"`
 	BookID      string     `json:"book_id"`
-	ChangeType  string     `json:"change_type"`  // "file_move", "metadata_update", "tag_write"
+	ChangeType  string     `json:"change_type"` // "file_move", "metadata_update", "tag_write"
 	FieldName   string     `json:"field_name"`
 	OldValue    string     `json:"old_value"`
 	NewValue    string     `json:"new_value"`
@@ -447,7 +446,7 @@ type OperationSummaryLog struct {
 	Type        string     `json:"type"`
 	Status      string     `json:"status"`
 	Progress    float64    `json:"progress"`
-	Result      *string    `json:"result,omitempty"`       // JSON-encoded result
+	Result      *string    `json:"result,omitempty"` // JSON-encoded result
 	Error       *string    `json:"error,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -511,19 +510,19 @@ type User struct {
 // data (paths, hashes, sizes) lives on BookFile rows scoped by
 // version_id; this struct carries only version-level metadata.
 type BookVersion struct {
-	ID                 string    `json:"id"`
-	BookID             string    `json:"book_id"`
-	Status             string    `json:"status"` // see BookVersionStatus* constants below
-	Format             string    `json:"format"` // m4b | mp3 | flac | ...
-	Source             string    `json:"source"` // deluge | manual | transcoded | imported
-	SourceOriginalPath string    `json:"source_original_path,omitempty"`
-	TorrentHash        string    `json:"torrent_hash,omitempty"` // infohash, fast-path fingerprint match
-	IngestDate         time.Time `json:"ingest_date"`
+	ID                 string     `json:"id"`
+	BookID             string     `json:"book_id"`
+	Status             string     `json:"status"` // see BookVersionStatus* constants below
+	Format             string     `json:"format"` // m4b | mp3 | flac | ...
+	Source             string     `json:"source"` // deluge | manual | transcoded | imported
+	SourceOriginalPath string     `json:"source_original_path,omitempty"`
+	TorrentHash        string     `json:"torrent_hash,omitempty"` // infohash, fast-path fingerprint match
+	IngestDate         time.Time  `json:"ingest_date"`
 	PurgedDate         *time.Time `json:"purged_date,omitempty"`
-	MetadataJSON       string    `json:"metadata_json,omitempty"` // source-specific catch-all
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
-	Version            int       `json:"version"`
+	MetadataJSON       string     `json:"metadata_json,omitempty"` // source-specific catch-all
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	Version            int        `json:"version"`
 }
 
 // BookVersionStatus values. See spec 3.1 for the full state
@@ -638,36 +637,36 @@ type BookSegment struct {
 // Replaces BookSegment with ULID string book_id, iTunes integration fields,
 // and comprehensive audio metadata.
 type BookFile struct {
-	ID                 string    `json:"id"`
-	BookID             string    `json:"book_id"`
+	ID     string `json:"id"`
+	BookID string `json:"book_id"`
 	// VersionID ties this file to a specific book_versions row when
 	// library centralization (spec 3.1) is rolled out. NULL until
 	// migration runs; after migration, every file belongs to exactly
 	// one version. Cascaded delete with book_versions.
-	VersionID          string    `json:"version_id,omitempty"`
-	FilePath           string    `json:"file_path"`
-	OriginalFilename   string    `json:"original_filename,omitempty"`
-	ITunesPath         string    `json:"itunes_path,omitempty"`
-	ITunesPersistentID string    `json:"itunes_persistent_id,omitempty"`
-	TrackNumber        int       `json:"track_number,omitempty"`
-	TrackCount         int       `json:"track_count,omitempty"`
-	DiscNumber         int       `json:"disc_number,omitempty"`
-	DiscCount          int       `json:"disc_count,omitempty"`
-	Title              string    `json:"title,omitempty"`
-	Format             string    `json:"format,omitempty"`
-	Codec              string    `json:"codec,omitempty"`
-	Duration           int       `json:"duration,omitempty"`
-	FileSize           int64     `json:"file_size,omitempty"`
-	BitrateKbps        int       `json:"bitrate_kbps,omitempty"`
-	SampleRateHz       int       `json:"sample_rate_hz,omitempty"`
-	Channels           int       `json:"channels,omitempty"`
-	BitDepth           int       `json:"bit_depth,omitempty"`
-	FileHash              string    `json:"file_hash,omitempty"`
-	OriginalFileHash      string    `json:"original_file_hash,omitempty"`
+	VersionID          string `json:"version_id,omitempty"`
+	FilePath           string `json:"file_path"`
+	OriginalFilename   string `json:"original_filename,omitempty"`
+	ITunesPath         string `json:"itunes_path,omitempty"`
+	ITunesPersistentID string `json:"itunes_persistent_id,omitempty"`
+	TrackNumber        int    `json:"track_number,omitempty"`
+	TrackCount         int    `json:"track_count,omitempty"`
+	DiscNumber         int    `json:"disc_number,omitempty"`
+	DiscCount          int    `json:"disc_count,omitempty"`
+	Title              string `json:"title,omitempty"`
+	Format             string `json:"format,omitempty"`
+	Codec              string `json:"codec,omitempty"`
+	Duration           int    `json:"duration,omitempty"`
+	FileSize           int64  `json:"file_size,omitempty"`
+	BitrateKbps        int    `json:"bitrate_kbps,omitempty"`
+	SampleRateHz       int    `json:"sample_rate_hz,omitempty"`
+	Channels           int    `json:"channels,omitempty"`
+	BitDepth           int    `json:"bit_depth,omitempty"`
+	FileHash           string `json:"file_hash,omitempty"`
+	OriginalFileHash   string `json:"original_file_hash,omitempty"`
 	// PostMetadataHash is the SHA-256 of the file immediately after a metadata
 	// tag write. It differs from OriginalFileHash because tag writes add/change
 	// bytes in the header. Store it so pre-write identity is always recoverable.
-	PostMetadataHash      string    `json:"post_metadata_hash,omitempty"`
+	PostMetadataHash string `json:"post_metadata_hash,omitempty"`
 	// 7 acoustic fingerprint segments. [0]=intro, [1-5]=body, [6]=outro.
 	AcoustIDSeg0 string `json:"acoustid_seg0,omitempty"`
 	AcoustIDSeg1 string `json:"acoustid_seg1,omitempty"`
@@ -681,14 +680,14 @@ type BookFile struct {
 	// fingerprint backfill so we don't loop forever retrying the same
 	// unreadable files. Force-rescan clears it. nil = never attempted
 	// or last attempt succeeded.
-	FingerprintFailedAt      *time.Time `json:"fingerprint_failed_at,omitempty"`
-	FingerprintFailureReason *string    `json:"fingerprint_failure_reason,omitempty"`  // e.g. "corrupt_audio"
-	FingerprintFailureDetail *string    `json:"fingerprint_failure_detail,omitempty"`  // short human-readable explanation
-	FingerprintDiagnosticJSON *string   `json:"fingerprint_diagnostic_json,omitempty"` // full FileDiagnostic JSON blob
-	OrganizeMethod        string    `json:"organize_method,omitempty"` // "reflink", "hardlink", "copy", "symlink"
-	Missing            bool      `json:"missing"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	FingerprintFailedAt       *time.Time `json:"fingerprint_failed_at,omitempty"`
+	FingerprintFailureReason  *string    `json:"fingerprint_failure_reason,omitempty"`  // e.g. "corrupt_audio"
+	FingerprintFailureDetail  *string    `json:"fingerprint_failure_detail,omitempty"`  // short human-readable explanation
+	FingerprintDiagnosticJSON *string    `json:"fingerprint_diagnostic_json,omitempty"` // full FileDiagnostic JSON blob
+	OrganizeMethod            string     `json:"organize_method,omitempty"`             // "reflink", "hardlink", "copy", "symlink"
+	Missing                   bool       `json:"missing"`
+	CreatedAt                 time.Time  `json:"created_at"`
+	UpdatedAt                 time.Time  `json:"updated_at"`
 	// Deluge integration fields (spec: deluge-protected-paths-design).
 	// DelugeHash is the torrent info-hash (40-char hex string).
 	// DelugeOriginalPath is the file path before copy-into-library.
@@ -716,15 +715,15 @@ type UserPosition struct {
 // pointer, cached listened-seconds and progress percent. Recomputed
 // when positions change; can be manually overridden (status_manual).
 type UserBookState struct {
-	UserID                string    `json:"user_id"`
-	BookID                string    `json:"book_id"`
-	Status                string    `json:"status"` // see UserBookStatus* constants
-	StatusManual          bool      `json:"status_manual"`
-	LastActivityAt        time.Time `json:"last_activity_at"`
-	LastSegmentID         string    `json:"last_segment_id,omitempty"`
-	TotalListenedSeconds  float64   `json:"total_listened_seconds,omitempty"`
-	ProgressPct           int       `json:"progress_pct"` // 0-100
-	UpdatedAt             time.Time `json:"updated_at"`
+	UserID               string    `json:"user_id"`
+	BookID               string    `json:"book_id"`
+	Status               string    `json:"status"` // see UserBookStatus* constants
+	StatusManual         bool      `json:"status_manual"`
+	LastActivityAt       time.Time `json:"last_activity_at"`
+	LastSegmentID        string    `json:"last_segment_id,omitempty"`
+	TotalListenedSeconds float64   `json:"total_listened_seconds,omitempty"`
+	ProgressPct          int       `json:"progress_pct"` // 0-100
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // UserBookStatus values. Auto-computed from UserPosition rows
@@ -798,7 +797,7 @@ type MetadataChangeRecord struct {
 	PreviousValue *string   `json:"previous_value,omitempty"` // JSON-encoded
 	NewValue      *string   `json:"new_value,omitempty"`      // JSON-encoded
 	ChangeType    string    `json:"change_type"`              // "fetched", "override", "clear", "undo", "bulk_update"
-	Source        string    `json:"source,omitempty"`          // e.g. "Open Library", "manual", "AI parsing"
+	Source        string    `json:"source,omitempty"`         // e.g. "Open Library", "manual", "AI parsing"
 	ChangedAt     time.Time `json:"changed_at"`
 }
 
@@ -837,8 +836,8 @@ type ExternalIDMapping struct {
 	TrackNumber *int       `json:"track_number,omitempty"`
 	FilePath    string     `json:"file_path,omitempty"`
 	Tombstoned  bool       `json:"tombstoned"`
-	Provenance  string     `json:"provenance,omitempty"`  // "itunes", "generated", "recycled"
-	RemovedAt   *time.Time `json:"removed_at,omitempty"`  // when we sent ITL remove; null = live
+	Provenance  string     `json:"provenance,omitempty"` // "itunes", "generated", "recycled"
+	RemovedAt   *time.Time `json:"removed_at,omitempty"` // when we sent ITL remove; null = live
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
@@ -909,16 +908,16 @@ type DashboardStats = LibraryStats
 // either by the user explicitly or automatically (below threshold, duration
 // mismatch, wrong language, etc.).
 type MetadataRejection struct {
-	ID               string    `json:"id"`
-	BookID           string    `json:"book_id"`
-	Source           string    `json:"source"`                      // "audible", "openlibrary", "googlebooks", etc.
-	CandidateASIN    string    `json:"candidate_asin,omitempty"`
-	CandidateISBN    string    `json:"candidate_isbn,omitempty"`
-	CandidateTitle   string    `json:"candidate_title,omitempty"`
-	CandidateAuthor  string    `json:"candidate_author,omitempty"`
-	RejectionReason  string    `json:"rejection_reason"`            // "user_rejected", "below_threshold", "duration_mismatch", "wrong_language", "skipped"
-	Score            float64   `json:"score,omitempty"`
-	RejectedAt       time.Time `json:"rejected_at"`
+	ID              string    `json:"id"`
+	BookID          string    `json:"book_id"`
+	Source          string    `json:"source"` // "audible", "openlibrary", "googlebooks", etc.
+	CandidateASIN   string    `json:"candidate_asin,omitempty"`
+	CandidateISBN   string    `json:"candidate_isbn,omitempty"`
+	CandidateTitle  string    `json:"candidate_title,omitempty"`
+	CandidateAuthor string    `json:"candidate_author,omitempty"`
+	RejectionReason string    `json:"rejection_reason"` // "user_rejected", "below_threshold", "duration_mismatch", "wrong_language", "skipped"
+	Score           float64   `json:"score,omitempty"`
+	RejectedAt      time.Time `json:"rejected_at"`
 }
 
 // DuplicateFileGroup is a set of book_file records that all share the same
@@ -936,8 +935,8 @@ type DuplicateFileInfo struct {
 	BookFileID string `json:"book_file_id"`
 	BookID     string `json:"book_id"`
 	BookTitle  string `json:"book_title"`
-	FilePath   string `json:"file_path"`  // book_files.file_path
-	BookPath   string `json:"book_path"`  // books.file_path (directory)
+	FilePath   string `json:"file_path"` // book_files.file_path
+	BookPath   string `json:"book_path"` // books.file_path (directory)
 	FileSize   int64  `json:"file_size_bytes"`
 }
 
@@ -950,7 +949,7 @@ type BookFileHashStats struct {
 	WithOriginalHash int                      `json:"with_original_hash"`
 	TotalBooks       int                      `json:"total_books"`
 	BooksWithNoFiles int                      `json:"books_with_no_files"`
-	ByLibrary        []BookFileHashStatsByLib  `json:"by_library"`
+	ByLibrary        []BookFileHashStatsByLib `json:"by_library"`
 }
 
 // BookFileHashStatsByLib breaks down hash coverage for one library root path.

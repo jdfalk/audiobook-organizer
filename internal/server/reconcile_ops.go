@@ -29,7 +29,7 @@ type reconcileScanOpParams struct {
 // reconcileApplyOpParams carries the v1 operation ID and the set of matches
 // to apply from the HTTP request body.
 type reconcileApplyOpParams struct {
-	LegacyOpID string                       `json:"legacy_op_id"`
+	LegacyOpID string                         `json:"legacy_op_id"`
 	Matches    []reconcile.ReconcileApplyItem `json:"matches"`
 }
 

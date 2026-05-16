@@ -198,7 +198,7 @@ func (r *dbReporter) flushLogs() {
 			OperationID: r.opID,
 			Level:       levelString(e.level),
 			Message:     e.message,
-			Attrs:        attrsToJSON(e.attrs),
+			Attrs:       attrsToJSON(e.attrs),
 			CreatedAt:   e.createdAt,
 		}
 	}

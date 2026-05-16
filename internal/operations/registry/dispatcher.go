@@ -104,12 +104,12 @@ func (r *Registry) dispatchCycle(ctx context.Context) {
 		r.mu.Unlock()
 
 		qr := &queuedRun{
-			opID:        row.ID,
-			defID:       row.DefID,
-			params:      json.RawMessage(row.Params),
-			priority:    Priority(row.Priority),
-			concurrKey:  def.ConcurrencyKey,
-			plugin:      def.Plugin,
+			opID:         row.ID,
+			defID:        row.DefID,
+			params:       json.RawMessage(row.Params),
+			priority:     Priority(row.Priority),
+			concurrKey:   def.ConcurrencyKey,
+			plugin:       def.Plugin,
 			resumePolicy: def.ResumePolicy,
 		}
 

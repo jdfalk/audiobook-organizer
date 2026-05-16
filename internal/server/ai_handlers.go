@@ -19,11 +19,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	ulid "github.com/oklog/ulid/v2"
@@ -590,7 +590,10 @@ func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.Pro
 }
 
 // aiReviewFullMode sends all authors to AI for duplicate discovery.
-func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store interface { database.AuthorStore; database.OperationStore }, opID string) error {
+func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store interface {
+	database.AuthorStore
+	database.OperationStore
+}, opID string) error {
 	_ = progress.Log("info", "Starting AI review (full mode) — discovering duplicates from all authors", nil)
 	_ = progress.UpdateProgress(0, 100, "Loading all authors...")
 

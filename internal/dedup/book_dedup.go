@@ -28,7 +28,7 @@ type BookDupGroup struct {
 
 // BookScanResult is the result of ScanBookDuplicates.
 type BookScanResult struct {
-	Groups         []BookDupGroup
+	Groups          []BookDupGroup
 	TotalDuplicates int
 }
 

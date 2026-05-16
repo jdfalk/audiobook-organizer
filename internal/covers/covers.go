@@ -20,9 +20,9 @@ import (
 
 // ProxyCoverRequest holds parameters for proxying a cover image.
 type ProxyCoverRequest struct {
-	URL       string
-	CacheDir  string
-	RootDir   string
+	URL      string
+	CacheDir string
+	RootDir  string
 }
 
 // ProxyCoverResult holds the result of a proxy operation.

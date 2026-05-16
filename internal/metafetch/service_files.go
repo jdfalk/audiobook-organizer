@@ -6,15 +6,15 @@
 package metafetch
 
 import (
+	"github.com/jdfalk/audiobook-organizer/internal/config"
+	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/fileops"
-	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
 func AudioFilesInDir(dir string) []string {
@@ -31,6 +31,7 @@ func AudioFilesInDir(dir string) []string {
 	}
 	return files
 }
+
 // backupFileBeforeWrite creates a timestamped .bak copy of a file before
 // writing tags — IF the WriteBackupBeforeTagWrite config flag is enabled.
 //
@@ -71,6 +72,7 @@ func backupFileBeforeWrite(filePath string) {
 	}
 	log.Printf("[DEBUG] backup before tag write: %s", backupPath)
 }
+
 // ApplyMetadataFileIO runs the slow file operations after metadata is applied:
 // cover embed, tag write-back, file rename. Cover download is done inline
 // in ApplyMetadataCandidate so the response includes the updated cover URL.
@@ -93,6 +95,7 @@ func (mfs *Service) ApplyMetadataFileIO(id string) {
 		}
 	}
 }
+
 // computeITunesPath converts a local file path to an iTunes file:// URL
 // using the configured path mappings (m.To = Linux prefix, m.From = Windows prefix).
 // Returns an empty string if no mapping matches.
@@ -109,6 +112,7 @@ func ComputeITunesPath(localPath string) string {
 	}
 	return ""
 }
+
 // removeEmptyDirs removes empty directories walking up from dir until reaching stopAt.
 func removeEmptyDirs(dir, stopAt string) {
 	for dir != stopAt && dir != "/" && dir != "." {
@@ -123,4 +127,5 @@ func removeEmptyDirs(dir, stopAt string) {
 		dir = filepath.Dir(dir)
 	}
 }
+
 var audioExtensions = []string{"*.m4b", "*.m4a", "*.mp3", "*.flac", "*.ogg", "*.opus", "*.wma", "*.aac"}

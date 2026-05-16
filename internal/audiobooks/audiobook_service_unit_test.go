@@ -406,7 +406,7 @@ func TestAudiobookService_GetDuplicateBooks_CountsCorrectly(t *testing.T) {
 
 	groups := [][]database.Book{
 		{{ID: "a"}, {ID: "b"}, {ID: "c"}}, // 2 duplicates
-		{{ID: "d"}, {ID: "e"}},             // 1 duplicate
+		{{ID: "d"}, {ID: "e"}},            // 1 duplicate
 	}
 	mockStore.EXPECT().GetDuplicateBooks().Return(groups, nil)
 	mockStore.EXPECT().GetFolderDuplicates().Return(nil, nil)

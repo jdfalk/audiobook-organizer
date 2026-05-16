@@ -20,12 +20,12 @@ import (
 )
 
 var (
-	crossvalResultsA string
-	crossvalModelA   string
-	crossvalModeA    string
+	crossvalResultsA  string
+	crossvalModelA    string
+	crossvalModeA     string
 	crossvalInputData string
-	crossvalModelB   string
-	crossvalVariant  string
+	crossvalModelB    string
+	crossvalVariant   string
 )
 
 var dedupBenchCrossvalCmd = &cobra.Command{
@@ -156,11 +156,11 @@ func runDedupBenchCrossval(cmd *cobra.Command, args []string) error {
 	}
 
 	_ = writeJSON(filepath.Join(runDir, "config.json"), map[string]interface{}{
-		"model_a":      crossvalModelA,
-		"mode_a":       crossvalModeA,
-		"model_b":      crossvalModelB,
-		"suggestions":  len(suggestionsA),
-		"variant":      crossvalVariant,
+		"model_a":     crossvalModelA,
+		"mode_a":      crossvalModeA,
+		"model_b":     crossvalModelB,
+		"suggestions": len(suggestionsA),
+		"variant":     crossvalVariant,
 	})
 
 	variants := resolveVariants(crossvalVariant)

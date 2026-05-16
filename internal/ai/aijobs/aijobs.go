@@ -55,11 +55,11 @@ type RowResult struct {
 }
 
 // CompletionCallback applies a batch's results. It must:
-//   1. Deserialize itemsJSON into its feature-specific item slice
-//   2. Match each result to an item by CustomID (the convention: "<prefix>-<index>")
-//   3. Apply the result (DB write, etc.), catching per-row errors into the returned slice
-//   4. Return (successCount, errorCount, rowErrors, fatalErr). A non-nil fatalErr means the
-//      whole batch could not be processed and the job row is marked failed.
+//  1. Deserialize itemsJSON into its feature-specific item slice
+//  2. Match each result to an item by CustomID (the convention: "<prefix>-<index>")
+//  3. Apply the result (DB write, etc.), catching per-row errors into the returned slice
+//  4. Return (successCount, errorCount, rowErrors, fatalErr). A non-nil fatalErr means the
+//     whole batch could not be processed and the job row is marked failed.
 type CompletionCallback func(ctx context.Context, itemsJSON []byte, results []RowResult) (successCount, errorCount int, rowErrors []database.AIJobRowError, fatalErr error)
 
 var (

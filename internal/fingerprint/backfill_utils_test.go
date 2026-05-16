@@ -16,7 +16,7 @@ func TestIsAudioFileWithValidExtensions(t *testing.T) {
 		{"/path/to/file.mp3", true},
 		{"/path/to/file.m4b", true},
 		{"/path/to/file.flac", true},
-		{"/path/to/file.MP3", true},  // case insensitive
+		{"/path/to/file.MP3", true}, // case insensitive
 		{"/path/to/file.txt", false},
 		{"/path/to/file.pdf", false},
 		{"", false},

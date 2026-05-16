@@ -451,7 +451,12 @@ func (s *Server) seriesPrune(c *gin.Context) {
 }
 
 // executeSeriesPrune performs the actual series prune logic (used by both HTTP handler and scheduler).
-func (s *Server) executeSeriesPrune(ctx context.Context, store interface { database.BookStore; database.AuthorStore; database.SeriesStore; database.OperationStore }, progress operations.ProgressReporter, operationID string) error {
+func (s *Server) executeSeriesPrune(ctx context.Context, store interface {
+	database.BookStore
+	database.AuthorStore
+	database.SeriesStore
+	database.OperationStore
+}, progress operations.ProgressReporter, operationID string) error {
 	_ = progress.Log("info", "Starting series auto-prune...", nil)
 
 	allSeries, err := store.GetAllSeries()

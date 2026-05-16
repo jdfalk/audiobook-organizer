@@ -35,7 +35,6 @@ func prefixEnd(prefix []byte) []byte {
 	return upper
 }
 
-
 // PebbleStore implements the Store interface using PebbleDB (LSM key-value store)
 //
 // Key Schema:
@@ -7250,9 +7249,9 @@ func (p *PebbleStore) GetBooksByTag(tag string) ([]string, error) {
 
 // pebbleTagKeyspace bundles the prefixes for one entity type.
 type pebbleTagKeyspace struct {
-	tagPrefix    string // e.g. "author_tag:"
-	indexPrefix  string // e.g. "author_tag_idx:"
-	entityLabel  string // for error messages / logging
+	tagPrefix   string // e.g. "author_tag:"
+	indexPrefix string // e.g. "author_tag_idx:"
+	entityLabel string // for error messages / logging
 }
 
 var (
@@ -8360,16 +8359,16 @@ func (p *PebbleStore) ListAIJobs(_, _ string, _, _ int) ([]AIJob, error) {
 // KeyCount returns the total number of keys stored in the PebbleDB instance
 // and the estimated on-disk byte size. Used by the DB health diagnostics endpoint.
 func (p *PebbleStore) KeyCount() (count int64, sizeBytes uint64, err error) {
-iter, iterErr := p.db.NewIter(nil)
-if iterErr != nil {
-return 0, 0, fmt.Errorf("pebble key count iterator: %w", iterErr)
-}
-defer iter.Close()
-for iter.First(); iter.Valid(); iter.Next() {
-count++
-}
-sizeBytes = p.db.Metrics().DiskSpaceUsage()
-return count, sizeBytes, nil
+	iter, iterErr := p.db.NewIter(nil)
+	if iterErr != nil {
+		return 0, 0, fmt.Errorf("pebble key count iterator: %w", iterErr)
+	}
+	defer iter.Close()
+	for iter.First(); iter.Valid(); iter.Next() {
+		count++
+	}
+	sizeBytes = p.db.Metrics().DiskSpaceUsage()
+	return count, sizeBytes, nil
 }
 
 // UpdateBookFileHashes updates the original_file_hash and post_metadata_hash

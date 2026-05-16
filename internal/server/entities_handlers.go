@@ -465,14 +465,14 @@ func (s *Server) getAuthorBooks(c *gin.Context) {
 		httputil.InternalError(c, "failed to get author books", err)
 		return
 	}
-	
+
 	// Pre-fetch authors and narrators for all books
 	bookIDs := make([]string, len(books))
 	for i, b := range books {
 		bookIDs[i] = b.ID
 	}
 	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := s.batchFetchBookAuthorsAndNarrators(bookIDs)
-	
+
 	enriched := make([]enrichedBookResponse, len(books))
 	for i := range books {
 		enriched[i] = s.enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)
@@ -691,14 +691,14 @@ func (s *Server) getSeriesBooks(c *gin.Context) {
 		httputil.InternalError(c, "failed to get series books", err)
 		return
 	}
-	
+
 	// Pre-fetch authors and narrators for all books
 	bookIDs := make([]string, len(books))
 	for i, b := range books {
 		bookIDs[i] = b.ID
 	}
 	bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID := s.batchFetchBookAuthorsAndNarrators(bookIDs)
-	
+
 	enriched := make([]enrichedBookResponse, len(books))
 	for i := range books {
 		enriched[i] = s.enrichBookForResponse(&books[i], bookAuthorsMap, authorsByID, bookNarratorsMap, narratorsByID)

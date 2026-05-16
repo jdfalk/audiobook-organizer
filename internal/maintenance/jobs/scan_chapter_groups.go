@@ -18,12 +18,18 @@ func init() { maintenance.Register(&scanChapterGroupsJob{}) }
 
 type scanChapterGroupsJob struct{}
 
-func (j *scanChapterGroupsJob) ID() string          { return "scan-chapter-groups" }
+func (j *scanChapterGroupsJob) ID() string       { return "scan-chapter-groups" }
 func (j *scanChapterGroupsJob) Name() string     { return "Scan Chapter Groups" }
 func (j *scanChapterGroupsJob) Category() string { return "files" }
-func (j *scanChapterGroupsJob) DefaultParams() any { return struct{ DryRun bool `json:"dry_run"` }{DryRun: false} }
-func (j *scanChapterGroupsJob) Description() string { return "Report books that look like multi-chapter parts of the same audiobook" }
-func (j *scanChapterGroupsJob) CanResume() bool     { return false }
+func (j *scanChapterGroupsJob) DefaultParams() any {
+	return struct {
+		DryRun bool `json:"dry_run"`
+	}{DryRun: false}
+}
+func (j *scanChapterGroupsJob) Description() string {
+	return "Report books that look like multi-chapter parts of the same audiobook"
+}
+func (j *scanChapterGroupsJob) CanResume() bool { return false }
 func (j *scanChapterGroupsJob) Run(ctx context.Context, store database.Store, reporter maintenance.ProgressReporter, _ bool) error {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {

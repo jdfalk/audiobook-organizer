@@ -15,10 +15,10 @@ import (
 
 // noopStore satisfies database.BookFileHashUpdater without any real DB.
 type noopStore struct {
-	called        bool
-	lastOriginal  string
-	lastPost      string
-	returnErr     error
+	called       bool
+	lastOriginal string
+	lastPost     string
+	returnErr    error
 }
 
 func (s *noopStore) UpdateBookFileHashes(fileID, originalHash, postHash string) error {

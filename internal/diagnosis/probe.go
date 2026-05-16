@@ -78,10 +78,10 @@ const (
 
 // tools caches which executables are available. Populated once.
 var (
-	toolsOnce  sync.Once
-	hasFFProbe bool
+	toolsOnce    sync.Once
+	hasFFProbe   bool
 	hasMediaInfo bool
-	hasFileCMD bool
+	hasFileCMD   bool
 )
 
 func initTools() {
@@ -98,9 +98,9 @@ func execExists(name string) bool {
 }
 
 const (
-	maxOutputBytes  = 4096
-	probeTimeout    = 15 * time.Second
-	detailMaxBytes  = 512
+	maxOutputBytes = 4096
+	probeTimeout   = 15 * time.Second
+	detailMaxBytes = 512
 )
 
 // ProbeFile runs the available tool cascade on path and returns a FileDiagnostic.

@@ -34,7 +34,7 @@ type CandidateBookInfo struct {
 
 // CandidateResult holds the metadata candidate search result for a single book.
 type CandidateResult struct {
-	Book      CandidateBookInfo `json:"book"`
+	Book      CandidateBookInfo  `json:"book"`
 	Candidate *MetadataCandidate `json:"candidate,omitempty"`
 	Status    string             `json:"status"` // "matched", "no_match", "error"
 	Error     string             `json:"error_message,omitempty"`

@@ -246,8 +246,8 @@ func TestConfigValidate(t *testing.T) {
 
 	t.Run("disk quota out of range", func(t *testing.T) {
 		c := &Config{
-			DatabaseType:    "pebble",
-			EnableDiskQuota: true,
+			DatabaseType:     "pebble",
+			EnableDiskQuota:  true,
 			DiskQuotaPercent: 0,
 		}
 		err := c.Validate()
@@ -933,10 +933,10 @@ func TestSaveConfigToFileUnit(t *testing.T) {
 	t.Run("writes config file", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		AppConfig = Config{
-			DatabasePath:  filepath.Join(tmpDir, "test.db"),
-			RootDir:       "/media",
-			OpenAIAPIKey:  "sk-test",
-			LogLevel:      "debug",
+			DatabasePath: filepath.Join(tmpDir, "test.db"),
+			RootDir:      "/media",
+			OpenAIAPIKey: "sk-test",
+			LogLevel:     "debug",
 		}
 		err := SaveConfigToFile()
 		assert.NoError(t, err)

@@ -215,9 +215,6 @@ func GenerateTestITLSuite(
 // chunks from the payload, and writes the result. This preserves the hdfm
 // header, msdh container structure, encryption, and compression.
 
-
-
-
 // writeITLFileRaw compresses, encrypts, and writes an ITL file.
 func writeITLFileRaw(outputPath string, hdr *hdfmHeader, payload []byte, compress bool) error {
 	var finalPayload []byte
@@ -455,7 +452,6 @@ func specialCharTracks(toWin func(string) string) []ITLNewTrack {
 	}
 }
 
-
 // genAddTracks adds N synthetic tracks to the real ITL using LE-aware insertion.
 func genAddTracks(dir, realITLPath string, n int, toWin func(string) string) error {
 	data, err := os.ReadFile(realITLPath)
@@ -605,10 +601,10 @@ func genLocationUpdate(dir, realITLPath string, bookFiles []database.BookFile, t
 	}
 
 	return writeTestInfo(dir, testInfo{
-		Name:              "14-location-update",
-		Description:       fmt.Sprintf("Production ITL with %d track locations updated via write-back path", len(updates)),
+		Name:               "14-location-update",
+		Description:        fmt.Sprintf("Production ITL with %d track locations updated via write-back path", len(updates)),
 		ExpectedTrackCount: 90900,
-		AllowMissingFiles: true,
+		AllowMissingFiles:  true,
 	})
 }
 
@@ -647,13 +643,11 @@ func writeTestInfo(dir string, info testInfo) error {
 // Helpers
 // ---------------------------------------------------------------------------
 
-
 // randomPID returns a cryptographically random 8-byte persistent ID.
 func randomPID() [8]byte {
 	var pid [8]byte
 	_, _ = rand.Read(pid[:])
 	return pid
 }
-
 
 // hexToPID is defined in itl.go — reuse that.

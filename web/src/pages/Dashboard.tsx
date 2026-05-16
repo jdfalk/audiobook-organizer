@@ -1,6 +1,7 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.14.0
+// version: 1.14.1
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
+// last-edited: 2026-05-16
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -75,6 +76,7 @@ export function Dashboard() {
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const [operations, setOperations] = useState<RecentOperation[] | null>(null);
   const [storageLoaded, setStorageLoaded] = useState(false);
+  const [brokenFileCount, setBrokenFileCount] = useState<number | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [organizeDialogOpen, setOrganizeDialogOpen] = useState(false);
   const [organizeInProgress, setOrganizeInProgress] = useState(false);
@@ -125,6 +127,9 @@ export function Dashboard() {
         disk_usage_percent: diskUsagePercent,
       });
       setStorageLoaded(true);
+
+      // Broken files count (may be undefined)
+      setBrokenFileCount((systemStatus as any).broken_file_count ?? null);
 
       // Convert recent operations
       const recentOps = (systemStatus.operations?.recent || [])
@@ -379,6 +384,19 @@ export function Dashboard() {
             loading={seriesLoading}
             icon={<MenuBookIcon sx={{ fontSize: 40 }} />}
             onClick={() => navigate('/series')}
+          />
+        </Grid>
+
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="Broken Files"
+            value={brokenFileCount ?? 0}
+            loading={brokenFileCount === null}
+            icon={<WarningIcon sx={{ fontSize: 40 }} />}
+            subtitle={brokenFileCount !== null ? 'books with broken files' : undefined}
+            onClick={() => navigate('/library?has_file_errors=true')}
+            iconColor={'warning.main'}
+            valueColor={brokenFileCount !== null && brokenFileCount > 0 ? 'warning.main' : undefined}
           />
         </Grid>
 

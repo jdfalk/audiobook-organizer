@@ -25,7 +25,6 @@ type Store interface {
 	database.OperationStore
 }
 
-
 // PipelineManager coordinates the multi-pass AI author dedup pipeline.
 type PipelineManager struct {
 	scanStore *database.AIScanStore

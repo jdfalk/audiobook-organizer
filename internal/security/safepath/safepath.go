@@ -13,7 +13,6 @@ import (
 // SafePath is an opaque type representing a path that has been validated to
 // lie within a known-safe root directory. Obtain one via Join or Validate;
 // never construct directly from a string.
-//
 type SafePath struct{ s string }
 
 // String returns the validated absolute path.

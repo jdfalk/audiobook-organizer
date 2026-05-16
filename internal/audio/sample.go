@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	SampleMaxDuration = 60  // seconds — hard cap per request
-	SampleDefault     = 30  // seconds — default clip length
+	SampleMaxDuration = 60 // seconds — hard cap per request
+	SampleDefault     = 30 // seconds — default clip length
 )
 
 // SampleRequest encapsulates parameters for audio sampling.
@@ -66,7 +66,7 @@ func ExtractSample(ctx context.Context, req *SampleRequest, write func([]byte) (
 		"-ss", strconv.Itoa(start), // seek before input (fast)
 		"-i", req.FilePath,
 		"-t", strconv.Itoa(dur),
-		"-vn",           // no video/cover stream
+		"-vn",                 // no video/cover stream
 		"-map_chapters", "-1", // strip chapters so mp3 muxer is happy
 		"-f", "mp3",
 		"-q:a", "5", // ~130 kbps VBR — fine for comparison

@@ -714,10 +714,10 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 		len(body.BookIDs), updated)
 
 	httputil.RespondWithOK(c, gin.H{
-		"status":              "merged",
-		"merged_books":        len(body.BookIDs),
-		"candidates_updated":  updated,
-		"result":              mergeResult,
+		"status":             "merged",
+		"merged_books":       len(body.BookIDs),
+		"candidates_updated": updated,
+		"result":             mergeResult,
 	})
 }
 
@@ -783,11 +783,11 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 
 // removeFromDedupCluster handles POST /api/v1/dedup/candidates/remove-from-cluster.
 //
-// Body: {
-//   "cluster_book_ids": [...],
-//   "remove_book_id": "X"      // singular, backwards-compat
-//   "remove_book_ids": [...]   // plural, preferred
-// }
+//	Body: {
+//	  "cluster_book_ids": [...],
+//	  "remove_book_id": "X"      // singular, backwards-compat
+//	  "remove_book_ids": [...]   // plural, preferred
+//	}
 //
 // Dismisses every pending candidate whose pair is one-side-in-remove-set
 // and other-side in (cluster \ remove-set). In other words: "these books
@@ -944,8 +944,8 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 	}
 
 	s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventDedupMerged, candidate.EntityAID, map[string]any{
-		"entity_b_id": candidate.EntityBID,
-		"entity_type": candidate.EntityType,
+		"entity_b_id":  candidate.EntityBID,
+		"entity_type":  candidate.EntityType,
 		"candidate_id": id,
 	}))
 

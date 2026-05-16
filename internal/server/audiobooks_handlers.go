@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.9.1
+// version: 2.9.2
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-16
 //
@@ -23,12 +23,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/batch"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
@@ -40,23 +40,81 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	authorID := httputil.ParseQueryIntPtr(c, "author_id")
 	seriesID := httputil.ParseQueryIntPtr(c, "series_id")
 
+	// If the client asked for books with file errors, handle that fast-path here.
+	if c.Query("has_file_errors") == "true" {
+		if s.Store() == nil {
+			httputil.RespondWithInternalError(c, "database not initialized")
+			return
+		}
+		var bookIDs []string
+		// Try direct method on store, fallback to Unwrap() if decorated
+		if lf, ok := s.Store().(interface{ ListBooksWithFileErrors() ([]string, error) }); ok {
+			ids, err := lf.ListBooksWithFileErrors()
+			if err != nil {
+				httputil.InternalError(c, "failed to list books with file errors", err)
+				return
+			}
+			bookIDs = ids
+		} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+			if inner, ok2 := uw.Unwrap().(interface{ ListBooksWithFileErrors() ([]string, error) }); ok2 {
+				ids, err := inner.ListBooksWithFileErrors()
+				if err != nil {
+					httputil.InternalError(c, "failed to list books with file errors", err)
+					return
+				}
+				bookIDs = ids
+			}
+		}
+
+		if bookIDs == nil {
+			// No implementation available — return empty set
+			httputil.RespondWithOK(c, gin.H{"items": []database.Book{}, "count": 0, "limit": params.Limit, "offset": params.Offset})
+			return
+		}
+
+		total := len(bookIDs)
+		start := params.Offset
+		if start < 0 {
+			start = 0
+		}
+		end := start + params.Limit
+		if params.Limit <= 0 || end > len(bookIDs) {
+			end = len(bookIDs)
+		}
+		if start > len(bookIDs) {
+			start = len(bookIDs)
+		}
+		selected := bookIDs[start:end]
+		books := make([]database.Book, 0, len(selected))
+		for _, id := range selected {
+			b, err := s.Store().GetBookByID(id)
+			if err != nil || b == nil {
+				continue
+			}
+			books = append(books, *b)
+		}
+		enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
+		httputil.RespondWithOK(c, gin.H{"items": enriched, "count": total, "limit": params.Limit, "offset": params.Offset})
+		return
+	}
+
 	// Parse optional filters
 	sortOrder := httputil.ParseQueryString(c, "sort_order")
 	if sortOrder != "" && sortOrder != "asc" && sortOrder != "desc" {
 		sortOrder = "asc"
 	}
 	tags := c.QueryArray("tags")
-		if len(tags) == 0 {
-			tags = c.QueryArray("tags[]")
-		}
-		filters := ListFilters{
-			IsPrimaryVersion: httputil.ParseQueryBoolPtr(c, "is_primary_version"),
-			LibraryState:     httputil.ParseQueryString(c, "library_state"),
-			Tag:              httputil.ParseQueryString(c, "tag"),
-			Tags:             tags,
-			SortBy:           httputil.ParseQueryString(c, "sort_by"),
-			SortOrder:        sortOrder,
-		}
+	if len(tags) == 0 {
+		tags = c.QueryArray("tags[]")
+	}
+	filters := ListFilters{
+		IsPrimaryVersion: httputil.ParseQueryBoolPtr(c, "is_primary_version"),
+		LibraryState:     httputil.ParseQueryString(c, "library_state"),
+		Tag:              httputil.ParseQueryString(c, "tag"),
+		Tags:             tags,
+		SortBy:           httputil.ParseQueryString(c, "sort_by"),
+		SortOrder:        sortOrder,
+	}
 
 	// Parse field filters from JSON query param. Per-user filters
 	// (read_status / progress_pct / last_played) are split off so the
@@ -139,7 +197,6 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	}
 	httputil.RespondWithOK(c, resp)
 }
-
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
 	params := httputil.ParsePaginationParams(c)

@@ -21,13 +21,13 @@ type BookDocument struct {
 	BookID string `json:"book_id"`
 
 	// Analyzed text (English stemmer + ASCII folding)
-	Title       string   `json:"title,omitempty"`
-	Author      string   `json:"author,omitempty"`
-	Narrator    string   `json:"narrator,omitempty"`
-	Series      string   `json:"series,omitempty"`
-	Publisher   string   `json:"publisher,omitempty"`
-	Description string   `json:"description,omitempty"`
-	FilePath    string   `json:"file_path,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Author      string `json:"author,omitempty"`
+	Narrator    string `json:"narrator,omitempty"`
+	Series      string `json:"series,omitempty"`
+	Publisher   string `json:"publisher,omitempty"`
+	Description string `json:"description,omitempty"`
+	FilePath    string `json:"file_path,omitempty"`
 
 	// Tag names flattened for multi-value match. Each tag is indexed
 	// as a keyword (case-insensitive exact). Search `tag:favorites`
@@ -35,23 +35,23 @@ type BookDocument struct {
 	Tags []string `json:"tags,omitempty"`
 
 	// Keyword (exact, case-insensitive) — no stemming
-	Format        string `json:"format,omitempty"`
-	Genre         string `json:"genre,omitempty"`
-	Language      string `json:"language,omitempty"`
-	LibraryState  string `json:"library_state,omitempty"`
-	ISBN10        string `json:"isbn10,omitempty"`
-	ISBN13        string `json:"isbn13,omitempty"`
-	ASIN          string `json:"asin,omitempty"`
+	Format       string `json:"format,omitempty"`
+	Genre        string `json:"genre,omitempty"`
+	Language     string `json:"language,omitempty"`
+	LibraryState string `json:"library_state,omitempty"`
+	ISBN10       string `json:"isbn10,omitempty"`
+	ISBN13       string `json:"isbn13,omitempty"`
+	ASIN         string `json:"asin,omitempty"`
 
 	// Numeric (for range queries: year:>2000, bitrate:<128, …)
-	Year           int `json:"year,omitempty"`
-	SeriesNumber   int `json:"series_number,omitempty"`
-	DurationSec    int `json:"duration_seconds,omitempty"`
-	BitrateKbps    int `json:"bitrate_kbps,omitempty"`
-	SampleRateHz   int `json:"sample_rate_hz,omitempty"`
-	Channels       int `json:"channels,omitempty"`
-	BitDepth       int `json:"bit_depth,omitempty"`
-	FileSizeBytes  int64 `json:"file_size_bytes,omitempty"`
+	Year          int   `json:"year,omitempty"`
+	SeriesNumber  int   `json:"series_number,omitempty"`
+	DurationSec   int   `json:"duration_seconds,omitempty"`
+	BitrateKbps   int   `json:"bitrate_kbps,omitempty"`
+	SampleRateHz  int   `json:"sample_rate_hz,omitempty"`
+	Channels      int   `json:"channels,omitempty"`
+	BitDepth      int   `json:"bit_depth,omitempty"`
+	FileSizeBytes int64 `json:"file_size_bytes,omitempty"`
 
 	// Boolean flags (for `has_cover:true`-style queries)
 	HasCover bool `json:"has_cover,omitempty"`

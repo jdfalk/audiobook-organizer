@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.27.1
+// version: 2.27.2
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-16
 
@@ -696,6 +696,7 @@ export async function getBooks(
     libraryState?: string;
     filters?: string;
     showFailed?: boolean;
+    hasFileErrors?: boolean;
   }
 ): Promise<BooksPage> {
   const params = new URLSearchParams();
@@ -713,6 +714,7 @@ export async function getBooks(
   if (options?.libraryState) params.set('library_state', options.libraryState);
   if (options?.filters) params.set('filters', options.filters);
   if (options?.showFailed) params.set('show_quarantined', 'true');
+  if (options?.hasFileErrors) params.set('has_file_errors', 'true');
   params.set('is_primary_version', 'true');
 
   const response = await fetch(`${API_BASE}/audiobooks?${params}`);

@@ -283,9 +283,9 @@ func TestSQLiteStore_GetBookFileByAcoustID(t *testing.T) {
 
 	bookID := createTestBook(t, store, "AcoustID Book", "/tmp/acoustid.m4b", nil, nil)
 	err := store.CreateBookFile(&BookFile{
-		BookID:      bookID,
-		FilePath:    "/tmp/acoustid_p1.m4b",
-		Format:      "m4b",
+		BookID:       bookID,
+		FilePath:     "/tmp/acoustid_p1.m4b",
+		Format:       "m4b",
 		AcoustIDSeg0: "fingerprint-seg0-abc",
 	})
 	require.NoError(t, err)
@@ -306,9 +306,9 @@ func TestSQLiteStore_GetBookFileByAcoustIDFuzzy(t *testing.T) {
 
 	bookID := createTestBook(t, store, "Fuzzy AcoustID Book", "/tmp/fuzzy.m4b", nil, nil)
 	err := store.CreateBookFile(&BookFile{
-		BookID:      bookID,
-		FilePath:    "/tmp/fuzzy_p1.m4b",
-		Format:      "m4b",
+		BookID:       bookID,
+		FilePath:     "/tmp/fuzzy_p1.m4b",
+		Format:       "m4b",
 		AcoustIDSeg0: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 	})
 	require.NoError(t, err)

@@ -1963,8 +1963,8 @@ func minLevenshteinBetweenForms(a, b []string) int {
 // segment triggered the match.
 //
 // Matching strategy per segment:
-//   1. Exact: O(1) index lookup. Similarity = 1.0.
-//   2. Fuzzy: Hamming distance scan. Similarity = actual bit-agreement fraction.
+//  1. Exact: O(1) index lookup. Similarity = 1.0.
+//  2. Fuzzy: Hamming distance scan. Similarity = actual bit-agreement fraction.
 //
 // The scan skips books whose files have no fingerprints yet (not yet backfilled).
 // Progress callback receives (done, total) book counts.
@@ -2082,88 +2082,88 @@ func bestSeg(f *database.BookFile) string {
 // Skips books that don't have a synthesized book_sig_v1 yet (not backfilled).
 // Progress callback receives (done, total) book counts.
 func (de *Engine) BookSignatureScan(ctx context.Context, progress func(done, total int)) error {
-books, err := de.getAllBooks()
-if err != nil {
-return fmt.Errorf("book signature scan: get all books: %w", err)
-}
-
-// Filter to books that have a book signature
-var booksWithSig []database.Book
-for _, b := range books {
-if b.BookSigV1 != nil && *b.BookSigV1 != "" {
-booksWithSig = append(booksWithSig, b)
-}
-}
-
-emitted := make(map[string]struct{})
-pairKey := func(a, b string) string {
-if a > b {
-a, b = b, a
-}
-return a + ":" + b
-}
-
-emit := func(bookAID, bookBID string, sim float64) {
-key := pairKey(bookAID, bookBID)
-if _, already := emitted[key]; already {
-return
-}
-emitted[key] = struct{}{}
-if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
-EntityType: "book",
-EntityAID:  bookAID,
-EntityBID:  bookBID,
-Layer:      "book_signature",
-Similarity: &sim,
-Status:     "pending",
-}); err != nil {
-log.Printf("[dedup] book signature scan: upsert candidate (%s, %s): %v", bookAID, bookBID, err)
-}
-}
-
-total := len(booksWithSig)
-for i, bookA := range booksWithSig {
-select {
-case <-ctx.Done():
-return ctx.Err()
-default:
-}
-
-sigA := *bookA.BookSigV1
-maskA := ""
-if bookA.BookSigV1Mask != nil {
-	maskA = *bookA.BookSigV1Mask
-}
-for j := i + 1; j < len(booksWithSig); j++ {
-	bookB := booksWithSig[j]
-	sigB := *bookB.BookSigV1
-	maskB := ""
-	if bookB.BookSigV1Mask != nil {
-		maskB = *bookB.BookSigV1Mask
-	}
-
-	sim, overlap, err := fingerprint.BookSignatureSimilarityMasked(sigA, sigB, maskA, maskB)
+	books, err := de.getAllBooks()
 	if err != nil {
-		log.Printf("[dedup] book signature scan: compare %s vs %s: %v", bookA.ID, bookB.ID, err)
-		continue
-	}
-	// Skip pairs with insufficient overlap (partial sigs with non-overlapping missing sections).
-	const minOverlapWords = 512
-	if overlap < minOverlapWords {
-		log.Printf("[dedup] book signature scan: skip %s vs %s (overlap=%d < %d)", bookA.ID, bookB.ID, overlap, minOverlapWords)
-		continue
+		return fmt.Errorf("book signature scan: get all books: %w", err)
 	}
 
-	if sim >= fingerprint.FuzzyMinSimilarity {
-		emit(bookA.ID, bookB.ID, sim)
+	// Filter to books that have a book signature
+	var booksWithSig []database.Book
+	for _, b := range books {
+		if b.BookSigV1 != nil && *b.BookSigV1 != "" {
+			booksWithSig = append(booksWithSig, b)
+		}
 	}
-}
 
-if progress != nil {
-progress(i+1, total)
-}
-}
+	emitted := make(map[string]struct{})
+	pairKey := func(a, b string) string {
+		if a > b {
+			a, b = b, a
+		}
+		return a + ":" + b
+	}
 
-log.Printf("[dedup] book signature scan complete: %d books scanned, %d candidate pair(s) emitted", total, len(emitted))
-return nil
+	emit := func(bookAID, bookBID string, sim float64) {
+		key := pairKey(bookAID, bookBID)
+		if _, already := emitted[key]; already {
+			return
+		}
+		emitted[key] = struct{}{}
+		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
+			EntityType: "book",
+			EntityAID:  bookAID,
+			EntityBID:  bookBID,
+			Layer:      "book_signature",
+			Similarity: &sim,
+			Status:     "pending",
+		}); err != nil {
+			log.Printf("[dedup] book signature scan: upsert candidate (%s, %s): %v", bookAID, bookBID, err)
+		}
+	}
+
+	total := len(booksWithSig)
+	for i, bookA := range booksWithSig {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		sigA := *bookA.BookSigV1
+		maskA := ""
+		if bookA.BookSigV1Mask != nil {
+			maskA = *bookA.BookSigV1Mask
+		}
+		for j := i + 1; j < len(booksWithSig); j++ {
+			bookB := booksWithSig[j]
+			sigB := *bookB.BookSigV1
+			maskB := ""
+			if bookB.BookSigV1Mask != nil {
+				maskB = *bookB.BookSigV1Mask
+			}
+
+			sim, overlap, err := fingerprint.BookSignatureSimilarityMasked(sigA, sigB, maskA, maskB)
+			if err != nil {
+				log.Printf("[dedup] book signature scan: compare %s vs %s: %v", bookA.ID, bookB.ID, err)
+				continue
+			}
+			// Skip pairs with insufficient overlap (partial sigs with non-overlapping missing sections).
+			const minOverlapWords = 512
+			if overlap < minOverlapWords {
+				log.Printf("[dedup] book signature scan: skip %s vs %s (overlap=%d < %d)", bookA.ID, bookB.ID, overlap, minOverlapWords)
+				continue
+			}
+
+			if sim >= fingerprint.FuzzyMinSimilarity {
+				emit(bookA.ID, bookB.ID, sim)
+			}
+		}
+
+		if progress != nil {
+			progress(i+1, total)
+		}
+	}
+
+	log.Printf("[dedup] book signature scan complete: %d books scanned, %d candidate pair(s) emitted", total, len(emitted))
+	return nil
 }

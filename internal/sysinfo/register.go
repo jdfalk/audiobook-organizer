@@ -10,8 +10,8 @@ import (
 
 func init() {
 	serviceregistry.Register(serviceregistry.ServiceDef{
-		Name:  "dashboard",
-		Needs: []string{"store"},
+		Name:   "dashboard",
+		Needs:  []string{"store"},
 		Groups: []string{"core"},
 		Build: func(c *serviceregistry.Container) (any, error) {
 			store := serviceregistry.Get[database.Store](c, "store")

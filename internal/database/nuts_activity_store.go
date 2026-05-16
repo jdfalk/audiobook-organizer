@@ -61,10 +61,9 @@ type NutsActivityStore struct {
 	counter atomic.Int64
 }
 
-
-func actBucket(tier string) string        { return "act:" + tier }
-func actOpBucket(opID string) string      { return "act:op:" + opID }
-func actBookBucket(bookID string) string  { return "act:bk:" + bookID }
+func actBucket(tier string) string       { return "act:" + tier }
+func actOpBucket(opID string) string     { return "act:op:" + opID }
+func actBookBucket(bookID string) string { return "act:bk:" + bookID }
 
 var actTiers = []string{"change", "debug", "audit", "digest"}
 

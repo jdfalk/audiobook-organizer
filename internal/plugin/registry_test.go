@@ -25,11 +25,11 @@ type testPlugin struct {
 	shutOrder  *[]string // tracks shutdown ordering
 }
 
-func (p *testPlugin) ID() string                              { return p.id }
-func (p *testPlugin) Name() string                            { return p.name }
-func (p *testPlugin) Version() string                         { return p.version }
-func (p *testPlugin) Capabilities() []Capability              { return p.caps }
-func (p *testPlugin) Init(_ context.Context, _ Deps) error    { p.initCalled = true; return p.initErr }
+func (p *testPlugin) ID() string                           { return p.id }
+func (p *testPlugin) Name() string                         { return p.name }
+func (p *testPlugin) Version() string                      { return p.version }
+func (p *testPlugin) Capabilities() []Capability           { return p.caps }
+func (p *testPlugin) Init(_ context.Context, _ Deps) error { p.initCalled = true; return p.initErr }
 func (p *testPlugin) Shutdown(_ context.Context) error {
 	p.shutCalled = true
 	if p.shutOrder != nil {

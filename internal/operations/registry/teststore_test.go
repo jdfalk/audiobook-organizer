@@ -409,4 +409,3 @@ func (f *fakeStore) GetOpLogsV2(opID string, limit int) ([]database.OpLogV2Row, 
 	}
 	return result, nil
 }
-

@@ -115,7 +115,10 @@ const SystemUserID = "_system"
 // SeedSystemUser creates the _system pseudo-user if absent.
 // It has no password and cannot log in — it exists solely as an
 // audit attribution target.
-func SeedSystemUser(store interface { database.UserStore; database.RoleStore }) error {
+func SeedSystemUser(store interface {
+	database.UserStore
+	database.RoleStore
+}) error {
 	if store == nil {
 		return nil
 	}
