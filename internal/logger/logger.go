@@ -1,12 +1,15 @@
 // file: internal/logger/logger.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f47ac10b-58cc-4372-a567-0e02b2c3d479
+// last-edited: 2026-05-15
 
 package logger
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"log/slog"
 )
 
 // Level represents a log severity level.
@@ -102,4 +105,23 @@ func logToStdout(subsystem string, level Level, msg string, args ...any) {
 	} else {
 		log.Printf("[%s] %s", level.String(), formatted)
 	}
+}
+
+// contextKey is a private type used as the key for storing a slog.Logger in a context.
+type contextKey struct{}
+
+// WithOperation returns a context carrying a slog.Logger that has the op_id attribute set.
+// Callers can retrieve the logger with FromContext(ctx) and use it for structured logging
+// so that log lines emitted within an operation are tagged with the operation id.
+func WithOperation(ctx context.Context, opID string) context.Context {
+	l := slog.Default().With("op_id", opID)
+	return context.WithValue(ctx, contextKey{}, l)
+}
+
+// FromContext returns the slog.Logger stored in ctx, or slog.Default() if none.
+func FromContext(ctx context.Context) *slog.Logger {
+	if l, ok := ctx.Value(contextKey{}).(*slog.Logger); ok && l != nil {
+		return l
+	}
+	return slog.Default()
 }

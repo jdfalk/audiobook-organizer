@@ -8,13 +8,13 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnosis"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
+	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
 
 // fingerprintFileOutcome is the result of attempting to fingerprint a single
@@ -35,7 +35,7 @@ const (
 //
 // Shared between the startup backfill and the on-demand rescan endpoint so
 // the two paths can never drift.
-func fingerprintBookFile(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
+func fingerprintBookFile(ctx context.Context, store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
 	if f.AcoustIDSeg0 != "" && !force {
 		return fingerprintOutcomeSkipped
 	}
@@ -61,9 +61,8 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 
 	segs, err := fingerprint.FileSegments(f.FilePath, f.Duration)
 	if err != nil {
-		log.Printf("[WARN] fingerprint: %s: %v", f.FilePath, err)
+		logger.FromContext(ctx).Warn("fingerprint: file failed", "file", f.FilePath, "error", err)
 		// Run the diagnosis cascade to record WHY this file fails.
-		ctx := context.Background()
 		diagResult := diagnosis.ProbeFile(ctx, f.FilePath)
 		reason, detail := diagnosis.Classify(diagResult, err.Error())
 		diagJSON := diagnosis.ToJSON(diagResult)
@@ -92,7 +91,7 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	updated.AcoustIDSeg5 = fingerprint.NormalizeFingerprint(segs[5])
 	updated.AcoustIDSeg6 = fingerprint.NormalizeFingerprint(segs[6])
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
-		log.Printf("[WARN] fingerprint: update %s: %v", f.ID, err)
+		logger.FromContext(ctx).Warn("fingerprint: update failed", "file_id", f.ID, "error", err)
 		return fingerprintOutcomeFailed
 	}
 	return fingerprintOutcomeFingerprinted
@@ -109,7 +108,7 @@ const fingerprintThrottle = 10 * time.Millisecond
 // No-ops silently if neither fpcalc nor ffmpeg is installed.
 func (s *Server) backfillAcoustIDs(ctx context.Context) {
 	if !fingerprint.Available() {
-		log.Println("[INFO] acoustid backfill: no fingerprint backend found, skipping")
+		logger.FromContext(ctx).Info("acoustid backfill: no fingerprint backend found, skipping")
 		return
 	}
 
@@ -120,7 +119,7 @@ func (s *Server) backfillAcoustIDs(ctx context.Context) {
 
 	books, err := store.GetAllBooks(100000, 0)
 	if err != nil {
-		log.Printf("[WARN] acoustid backfill: load books: %v", err)
+		logger.FromContext(ctx).Warn("acoustid backfill: load books failed", "error", err)
 		return
 	}
 
@@ -152,13 +151,12 @@ func (s *Server) backfillAcoustIDs(ctx context.Context) {
 		// After fingerprinting all files for this book, synthesize the book signature
 		if bookModified || b.BookSigV1 == nil {
 			if err := synthesizeBookSignatureForBook(store, b.ID); err != nil {
-				log.Printf("[WARN] acoustid backfill: synthesize book signature for %s: %v", b.ID, err)
+				logger.FromContext(ctx).Warn("acoustid backfill: synthesize book signature failed", "book_id", b.ID, "error", err)
 			}
 		}
 	}
 
-	log.Printf("[INFO] acoustid backfill complete: fingerprinted=%d already_imported=%d failed=%d",
-		fingerprinted, alreadyImported, failed)
+	logger.FromContext(ctx).Info("acoustid backfill complete", "fingerprinted", fingerprinted, "already_imported", alreadyImported, "failed", failed)
 }
 
 // AcoustIDLookupStore is the subset of the store needed for fingerprint lookups.
