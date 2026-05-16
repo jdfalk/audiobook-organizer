@@ -118,7 +118,7 @@ incrementally:
 
 - [ ] **TECHDEBT-1** Audit and remove deprecated code across the entire codebase
   - Backend: scan for `// Deprecated:` markers, dead code paths flagged in past evaluations, unused exported symbols, packages with replacement candidates already in use.
-  - Frontend: resolve **React Router v6 future-flag warnings** (`v7_startTransition`, `v7_relativeSplatPath`) — opt in via `<BrowserRouter future={{...}}>` (and matching `MemoryRouter` usage in tests). Then upgrade-prep for v7 properly.
+  - Frontend: ~~resolve **React Router v6 future-flag warnings**~~ (done — PR #949; `v7_startTransition` + `v7_relativeSplatPath` added to all BrowserRouter/MemoryRouter usages in main.tsx and all test files). Then upgrade-prep for v7 properly.
   - Frontend: audit `package.json` for deprecated transitive deps (`npm outdated`, `npm audit`), remove dead Material-UI v4-style imports if any remain, kill `console.log` left in src.
   - Go: `staticcheck`/`go vet` clean run; remove unused mocks; ~~replace `ioutil.*` with `io`/`os`~~ (verified clean — no `io/ioutil` imports remain); collapse redundant context plumbing flagged in `docs/codebase-evaluation.md`.
   - SQL: drop schema columns/tables marked deprecated in migration history once readers/writers are gone.
