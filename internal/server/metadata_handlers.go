@@ -1,7 +1,7 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.7.0
+// version: 3.7.1
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
-// last-edited: 2026-05-10
+// last-edited: 2026-05-16
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
 // search/apply/revert/no-match, bulk fetch and bulk writeback, the
@@ -1129,6 +1129,7 @@ func (s *Server) resolveFilterToBookIDs(ctx context.Context, f operations.Filter
 		IsPrimaryVersion: &trueVal,
 		LibraryState:     f.LibraryState,
 		Tag:              f.Tag,
+		Tags:             f.Tags,
 	}
 	for _, ff := range f.FieldFilters {
 		if IsPerUserField(ff.Field) {

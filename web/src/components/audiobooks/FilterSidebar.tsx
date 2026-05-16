@@ -198,6 +198,24 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
               <Typography variant="subtitle2" gutterBottom>
                 Tags
               </Typography>
+
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', maxHeight: 140, overflowY: 'auto', mb: 1 }}>
+                {availableTags.map((t) => (
+                  <Chip
+                    key={t.tag}
+                    label={`${t.tag} (${t.count})`}
+                    size="small"
+                    onClick={() => {
+                      const exists = selectedTags.includes(t.tag);
+                      const newTags = exists ? selectedTags.filter((x) => x !== t.tag) : [...selectedTags, t.tag];
+                      onTagsChange(newTags);
+                    }}
+                    color={selectedTags.includes(t.tag) ? 'primary' : undefined}
+                    variant={selectedTags.includes(t.tag) ? 'filled' : 'outlined'}
+                  />
+                ))}
+              </Box>
+
               <Autocomplete
                 multiple
                 size="small"

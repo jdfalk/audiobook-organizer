@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.27.0
+// version: 2.27.1
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-11
+// last-edited: 2026-05-16
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -692,6 +692,7 @@ export async function getBooks(
     sortBy?: string;
     sortOrder?: string;
     tag?: string;
+    tags?: string[];
     libraryState?: string;
     filters?: string;
     showFailed?: boolean;
@@ -702,7 +703,13 @@ export async function getBooks(
   params.set('offset', String(offset));
   if (options?.sortBy) params.set('sort_by', options.sortBy);
   if (options?.sortOrder) params.set('sort_order', options.sortOrder);
-  if (options?.tag) params.set('tag', options.tag);
+  if (options?.tags && options.tags.length > 0) {
+    for (const t of options.tags) {
+      params.append('tags[]', t);
+    }
+  } else if (options?.tag) {
+    params.set('tag', options.tag);
+  }
   if (options?.libraryState) params.set('library_state', options.libraryState);
   if (options?.filters) params.set('filters', options.filters);
   if (options?.showFailed) params.set('show_quarantined', 'true');
@@ -1489,6 +1496,7 @@ export interface SelectionSpec {
     search?: string;
     library_state?: string;
     tag?: string;
+    tags?: string[];
     field_filters?: Array<{ field: string; value: string; negated: boolean }>;
     author_id?: number;
     series_id?: number;

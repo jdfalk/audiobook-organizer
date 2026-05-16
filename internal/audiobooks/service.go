@@ -1,6 +1,7 @@
 // file: internal/audiobooks/service.go
-// version: 1.25.0
+// version: 1.25.1
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
+// last-edited: 2026-05-16
 
 package audiobooks
 
@@ -193,6 +194,7 @@ type ListFilters struct {
 	IsPrimaryVersion *bool
 	LibraryState     string
 	Tag              string
+	Tags             []string
 	SortBy           string        // column sort key
 	SortOrder        string        // "asc" or "desc"
 	FieldFilters     []FieldFilter // advanced field-specific filters (book-global)
@@ -658,7 +660,7 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	}
 	hasSorting := f.SortBy != ""
 	hasPerUser := len(f.PerUserFilters) > 0 && f.UserID != ""
-	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.FieldFilters) > 0 || hasPerUser || hasSorting
+	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.Tags) > 0 || len(f.FieldFilters) > 0 || hasPerUser || hasSorting
 
 	// When post-filters are active, fetch all and filter in memory
 	// (PebbleStore doesn't support query-level boolean/string filtering)
@@ -712,22 +714,46 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 
 	// Apply post-filters
 	if hasPostFilters {
-		// If tag filter is set, build a set of matching book IDs
+		// If tag filter is set, build a set of matching book IDs (intersection of all tags)
 		var tagBookIDs map[string]struct{}
-		if f.Tag != "" {
-			ids, tagErr := svc.store.GetBooksByTag(f.Tag)
-			if tagErr != nil {
-				return nil, tagErr
-			}
-			tagBookIDs = make(map[string]struct{}, len(ids))
-			for _, id := range ids {
-				tagBookIDs[id] = struct{}{}
+		tagsToMatch := f.Tags
+		if len(tagsToMatch) == 0 && f.Tag != "" {
+			tagsToMatch = []string{f.Tag}
+		}
+		if len(tagsToMatch) > 0 {
+			for _, tag := range tagsToMatch {
+				if tag == "" {
+					continue
+				}
+				ids, tagErr := svc.store.GetBooksByTag(tag)
+				if tagErr != nil {
+					return nil, tagErr
+				}
+				curSet := make(map[string]struct{}, len(ids))
+				for _, id := range ids {
+					curSet[id] = struct{}{}
+				}
+				if tagBookIDs == nil {
+					tagBookIDs = curSet
+				} else {
+					for id := range tagBookIDs {
+						if _, ok := curSet[id]; !ok {
+							delete(tagBookIDs, id)
+						}
+					}
+				}
+				if len(tagBookIDs) == 0 {
+					break
+				}
 			}
 		}
 
 		filtered := make([]database.Book, 0, len(books))
 		for _, b := range books {
-			if f.Tag != "" {
+			if len(tagsToMatch) > 0 {
+				if tagBookIDs == nil {
+					continue
+				}
 				if _, ok := tagBookIDs[b.ID]; !ok {
 					continue
 				}
@@ -807,6 +833,40 @@ func (svc *AudiobookService) CountAudiobooksFiltered(ctx context.Context, filter
 	if err != nil {
 		return 0, err
 	}
+	// Build tag intersection if tags are provided
+	tagsToMatch := filters.Tags
+	if len(tagsToMatch) == 0 && filters.Tag != "" {
+		tagsToMatch = []string{filters.Tag}
+	}
+	var tagBookIDs map[string]struct{}
+	if len(tagsToMatch) > 0 {
+		for _, tag := range tagsToMatch {
+			if tag == "" {
+				continue
+			}
+			ids, tagErr := svc.store.GetBooksByTag(tag)
+			if tagErr != nil {
+				return 0, tagErr
+			}
+			curSet := make(map[string]struct{}, len(ids))
+			for _, id := range ids {
+				curSet[id] = struct{}{}
+			}
+			if tagBookIDs == nil {
+				tagBookIDs = curSet
+			} else {
+				for id := range tagBookIDs {
+					if _, ok := curSet[id]; !ok {
+						delete(tagBookIDs, id)
+					}
+				}
+			}
+			if len(tagBookIDs) == 0 {
+				break
+			}
+		}
+	}
+
 	count := 0
 	for _, b := range books {
 		if filters.IsPrimaryVersion != nil {
@@ -821,6 +881,14 @@ func (svc *AudiobookService) CountAudiobooksFiltered(ctx context.Context, filter
 				bState = *b.LibraryState
 			}
 			if bState != filters.LibraryState {
+				continue
+			}
+		}
+		if len(tagsToMatch) > 0 {
+			if tagBookIDs == nil {
+				continue
+			}
+			if _, ok := tagBookIDs[b.ID]; !ok {
 				continue
 			}
 		}
