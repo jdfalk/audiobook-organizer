@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.37.1 -->
+<!-- version: 8.38.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-15 -->
+<!-- last-edited: 2026-05-16 -->
 
 # Project TODO
 
@@ -120,7 +120,7 @@ incrementally:
   - Backend: scan for `// Deprecated:` markers, dead code paths flagged in past evaluations, unused exported symbols, packages with replacement candidates already in use.
   - Frontend: resolve **React Router v6 future-flag warnings** (`v7_startTransition`, `v7_relativeSplatPath`) — opt in via `<BrowserRouter future={{...}}>` (and matching `MemoryRouter` usage in tests). Then upgrade-prep for v7 properly.
   - Frontend: audit `package.json` for deprecated transitive deps (`npm outdated`, `npm audit`), remove dead Material-UI v4-style imports if any remain, kill `console.log` left in src.
-  - Go: `staticcheck`/`go vet` clean run; remove unused mocks; replace `ioutil.*` with `io`/`os`; collapse redundant context plumbing flagged in `docs/codebase-evaluation.md`.
+  - Go: `staticcheck`/`go vet` clean run; remove unused mocks; ~~replace `ioutil.*` with `io`/`os`~~ (verified clean — no `io/ioutil` imports remain); collapse redundant context plumbing flagged in `docs/codebase-evaluation.md`.
   - SQL: drop schema columns/tables marked deprecated in migration history once readers/writers are gone.
   - Tests: replace `t.Skip` markers, remove `//nolint` that no longer apply, dedupe fixture builders.
   - Output: one PR per cluster (router warnings, backend deprecated APIs, frontend deps, dead code) so each can review/revert independently.
