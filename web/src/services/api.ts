@@ -4879,6 +4879,45 @@ export async function backfillFileHashes(dryRun = false): Promise<BackfillHashes
   return response.json();
 }
 
+// New: metadata hash stats + backfill
+export interface BookMetadataHashStats {
+  total_books: number;
+  with_metadata_hash: number;
+  missing_metadata_hash: number;
+  with_asin_or_isbn: number;
+  missing_hash_has_id: number;
+  by_library: BookMetadataHashStatsByLib[];
+}
+
+export interface BookMetadataHashStatsByLib {
+  path: string;
+  total_books: number;
+  with_metadata_hash: number;
+  missing_metadata_hash: number;
+  missing_hash_has_id: number;
+}
+
+export async function getBookMetadataHashStats(): Promise<BookMetadataHashStats> {
+  const response = await fetch(`${API_BASE}/maintenance/book-metadata-hash-stats`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch metadata hash stats');
+  }
+  const body = await response.json();
+  return body.data ?? body;
+}
+
+export async function backfillMetadataHashes(dryRun = false): Promise<{ operation_id: string }> {
+  const response = await fetch(`${API_BASE}/maintenance/jobs/${encodeURIComponent('backfill-metadata-source-hash')}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dry_run: dryRun }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start backfill metadata job');
+  }
+  return response.json();
+}
+
 
 // ── Unified Maintenance Jobs ──────────────────────────────────────────────────
 
