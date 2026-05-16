@@ -1,7 +1,7 @@
 // file: internal/importer/service.go
 // version: 1.0.1
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5b
-// last-edited: 2026-05-16
+// last-edited: 2026-05-15
 
 package importer
 
@@ -60,10 +60,16 @@ type ImportFileResponse struct {
 
 func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse, error) {
 	// Validate file exists and is supported
-	fileInfo, err := os.Stat(req.FilePath)
+	absPath, err := filepath.Abs(req.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("file not found or inaccessible: %w", err)
 	}
+	fileInfo, err := os.Stat(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("file not found or inaccessible: %w", err)
+	}
+	// Normalize to absolute path for downstream processing and DB storage
+	req.FilePath = absPath
 
 	if fileInfo.IsDir() {
 		return nil, fmt.Errorf("path is a directory, not a file")

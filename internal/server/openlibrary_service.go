@@ -1,6 +1,7 @@
 // file: internal/server/openlibrary_service.go
 // version: 2.9.0
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
+// last-edited: 2026-05-15
 
 package server
 
@@ -19,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/openlibrary"
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -45,12 +47,14 @@ func (s *Server) getOLStatus(c *gin.Context) {
 	if dumpDir != "" {
 		files := map[string]metafetch.UploadedFileInfo{}
 		for _, dumpType := range []string{"editions", "authors", "works"} {
-			path := filepath.Join(dumpDir, openlibrary.DumpFilename(dumpType))
-			if info, err := os.Stat(path); err == nil {
-				files[dumpType] = metafetch.UploadedFileInfo{
-					Filename: info.Name(),
-					Size:     info.Size(),
-					ModTime:  info.ModTime().UTC().Format("2006-01-02T15:04:05Z"),
+			if sp, err := safepath.Join(dumpDir, openlibrary.DumpFilename(dumpType)); err == nil {
+				path := sp.String()
+				if info, err := os.Stat(path); err == nil {
+					files[dumpType] = metafetch.UploadedFileInfo{
+						Filename: info.Name(),
+						Size:     info.Size(),
+						ModTime:  info.ModTime().UTC().Format("2006-01-02T15:04:05Z"),
+					}
 				}
 			}
 		}
@@ -174,8 +178,12 @@ func (s *Server) uploadOLDump(c *gin.Context) {
 		return
 	}
 
-	targetPath := filepath.Join(targetDir, openlibrary.DumpFilename(dumpType))
-	out, err := os.Create(targetPath)
+	sp, err := safepath.Join(targetDir, openlibrary.DumpFilename(dumpType))
+	if err != nil {
+		httputil.RespondWithInternalError(c, "invalid target path")
+		return
+	}
+	out, err := os.Create(sp.String())
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to create target file")
 		return
