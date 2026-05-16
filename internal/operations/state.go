@@ -70,6 +70,12 @@ type ComposerScanParams struct {
 	FixMode string `json:"fix_mode"` // "set_narrator" or "clear"
 }
 
+// BackfillFileHashesParams stores the immutable parameters for the backfill-file-hashes operation.
+// DryRun=true reports what would be written without updating DB rows.
+type BackfillFileHashesParams struct {
+	DryRun bool `json:"dry_run"`
+}
+
 // BulkMetadataFetchParams stores the immutable parameters for a bulk metadata fetch operation.
 // PreferAudible=true moves Audible to the front of the source chain.
 // SkipCached=true skips books that already have a valid (non-expired) cache entry.

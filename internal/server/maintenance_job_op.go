@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_job_op.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7f3a9c21-4b8e-4d56-a123-0e5f6c7d8e9f
-// last-edited: 2026-05-11
+// last-edited: 2026-05-16
 
 package server
 
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
@@ -51,7 +52,27 @@ func (s *Server) RegisterMaintenanceJobOp(reg *opsregistry.Registry) error {
 			ctx = maintenance.WithOperationID(ctx, p.LegacyOpID)
 			progress := registryProgressAdapter{r: reporter}
 			adapter := &maintenance.ProgressAdapter{Ops: progress}
-			return job.Run(ctx, store, adapter, p.DryRun)
+
+			// Execute the job synchronously in this Run closure.
+			runErr := job.Run(ctx, store, adapter, p.DryRun)
+
+			// Emit an activity summary if an activity writer is available and a legacy
+			// operation ID was provided. Prefer any saved OperationSummaryLog created
+			// by the job; fall back to the job name.
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				if sum, serr := store.GetOperationSummaryLog(p.LegacyOpID); serr == nil && sum != nil {
+					if sum.Result != nil {
+						activity.EmitInfo(s.activityWriter, p.LegacyOpID, job.ID(), job.ID(), *sum.Result, activity.AlwaysShow)
+					} else {
+						activity.EmitInfo(s.activityWriter, p.LegacyOpID, job.ID(), job.ID(), job.Name(), activity.AlwaysShow)
+					}
+				} else {
+					activity.EmitInfo(s.activityWriter, p.LegacyOpID, job.ID(), job.ID(), job.Name(), activity.AlwaysShow)
+				}
+			}
+
+			return runErr
 		},
 	})
 }
