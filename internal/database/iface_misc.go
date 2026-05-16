@@ -1,7 +1,7 @@
 // file: internal/database/iface_misc.go
-// version: 1.12.0
+// version: 1.12.1
 // guid: 473781a7-1a31-4914-b7c7-8efc91f9f7e6
-// last-edited: 2026-04-30
+// last-edited: 2026-05-15
 
 package database
 
@@ -150,6 +150,12 @@ type BookFileStore interface {
 	// UpdateBookFileHashes is a surgical update that records pre-write and post-write
 	// SHA-256 hashes without touching any other BookFile fields.
 	UpdateBookFileHashes(id, originalHash, postMetadataHash string) error
+	// MarkFileImportedFromDeluge records that a file has been imported from a
+	// Deluge download directory. originalPath is the source (download) path,
+	// libraryPath is the destination inside the organized library, and
+	// torrentHash is the Deluge info-hash (optional). Implementations SHOULD
+	// match by originalPath first, then fall back to matching by torrentHash.
+	MarkFileImportedFromDeluge(ctx context.Context, originalPath, libraryPath, torrentHash string) error
 	// GetDuplicateFilesByHash returns groups of book_files that share the same
 	// original_file_hash (non-empty). Each group has ≥2 entries and represents
 	// the same physical audio file in multiple locations.
