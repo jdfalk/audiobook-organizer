@@ -1,7 +1,7 @@
 // file: internal/fileops/service.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-05-01
+// last-edited: 2026-05-15
 
 package fileops
 
@@ -15,6 +15,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 )
 
 // ErrPathNotAllowed is returned by BrowseDirectory when the requested path
@@ -108,7 +109,12 @@ func (fs *FilesystemService) BrowseDirectory(_ context.Context, path string) (*B
 
 	items := []FileInfo{}
 	for _, entry := range entries {
-		fullPath := filepath.Join(absPath, entry.Name())
+		sp, err := safepath.Join(absPath, entry.Name())
+		if err != nil {
+			// Skip entries that resolve outside the allowed path
+			continue
+		}
+		fullPath := sp.String()
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -116,9 +122,11 @@ func (fs *FilesystemService) BrowseDirectory(_ context.Context, path string) (*B
 
 		excluded := false
 		if entry.IsDir() {
-			jabExcludePath := filepath.Join(fullPath, ".jabexclude")
-			if _, err := os.Stat(jabExcludePath); err == nil {
-				excluded = true
+			spExcl, err := safepath.Join(fullPath, ".jabexclude")
+			if err == nil {
+				if _, err := os.Stat(spExcl.String()); err == nil {
+					excluded = true
+				}
 			}
 		}
 
@@ -173,8 +181,11 @@ func (fs *FilesystemService) CreateExclusion(_ context.Context, path string) err
 		return fmt.Errorf("path must be a directory")
 	}
 
-	excludeFile := filepath.Join(absPath, ".jabexclude")
-	return os.WriteFile(excludeFile, []byte(""), 0644)
+	sp, err := safepath.Join(absPath, ".jabexclude")
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+	return os.WriteFile(sp.String(), []byte(""), 0644)
 }
 
 func (fs *FilesystemService) RemoveExclusion(_ context.Context, path string) error {
@@ -187,8 +198,11 @@ func (fs *FilesystemService) RemoveExclusion(_ context.Context, path string) err
 		return fmt.Errorf("invalid path: %w", err)
 	}
 
-	excludeFile := filepath.Join(absPath, ".jabexclude")
-	if err := os.Remove(excludeFile); err != nil {
+	sp, err := safepath.Join(absPath, ".jabexclude")
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+	if err := os.Remove(sp.String()); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("exclusion not found")
 		}

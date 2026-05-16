@@ -1,6 +1,7 @@
 // file: internal/fileops/hash.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d
+// last-edited: 2026-05-15
 
 package fileops
 

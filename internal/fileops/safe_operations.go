@@ -1,6 +1,7 @@
 // file: internal/fileops/safe_operations.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 8f7e6d5c-4b3a-2918-7f6e-5d4c3b2a1908
+// last-edited: 2026-05-15
 
 package fileops
 
@@ -12,6 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 )
 
 // OperationConfig configures safe file operation behavior
@@ -53,7 +56,11 @@ func NewFileOperation(originalPath, targetPath string, config OperationConfig) (
 	backupDir := config.BackupDir
 	if !filepath.IsAbs(backupDir) {
 		// Make it absolute relative to the target directory
-		backupDir = filepath.Join(filepath.Dir(targetPath), backupDir)
+		sp, err := safepath.Join(filepath.Dir(targetPath), backupDir)
+		if err != nil {
+			return nil, fmt.Errorf("invalid backup directory: %w", err)
+		}
+		backupDir = sp.String()
 	}
 	if err := os.MkdirAll(backupDir, 0775); err != nil {
 		return nil, fmt.Errorf("failed to create backup directory: %w", err)
@@ -62,7 +69,11 @@ func NewFileOperation(originalPath, targetPath string, config OperationConfig) (
 	// Generate backup path with timestamp
 	timestamp := time.Now().Format("20060102_150405")
 	backupName := fmt.Sprintf("%s.%s.backup", filepath.Base(targetPath), timestamp)
-	backupPath := filepath.Join(backupDir, backupName)
+	spBackupPath, err := safepath.Join(backupDir, backupName)
+	if err != nil {
+		return nil, fmt.Errorf("invalid backup path: %w", err)
+	}
+	backupPath := spBackupPath.String()
 
 	op := &FileOperation{
 		config:       config,
@@ -190,8 +201,11 @@ func (op *FileOperation) cleanupOldBackups() error {
 	baseName := filepath.Base(op.targetPath)
 
 	// Find all backups for this file
-	pattern := filepath.Join(backupDir, fmt.Sprintf("%s.*.backup", baseName))
-	matches, err := filepath.Glob(pattern)
+	patternSP, err := safepath.Join(backupDir, fmt.Sprintf("%s.*.backup", baseName))
+	if err != nil {
+		return err
+	}
+	matches, err := filepath.Glob(patternSP.String())
 	if err != nil {
 		return err
 	}
