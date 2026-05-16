@@ -1,3 +1,8 @@
+<!-- file: docs/superpowers/fleet-tasks/013-rate-5-bulk-rating.md -->
+<!-- version: 1.0.1 -->
+<!-- guid: f3a1b2c4-5d6e-7890-abcd-1234567890ab -->
+<!-- last-edited: 2026-05-15 -->
+
 # Task 013: RATE-5 — Bulk rating view / quick-rate from list
 
 **Depends on:** none
