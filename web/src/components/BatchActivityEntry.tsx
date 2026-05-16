@@ -1,5 +1,5 @@
 // file: web/src/components/BatchActivityEntry.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7e3a1f9c-4b82-4d5e-a6c8-2f0d8e7b3a91
 
 import React, { useState } from 'react';
@@ -12,6 +12,8 @@ import {
   TableRow,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight.js';
@@ -64,6 +66,8 @@ function formatTimestamp(ts: string): string {
 
 export function BatchActivityEntry({ entry, tierColor }: BatchActivityEntryProps) {
   const [expanded, setExpanded] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const details = entry.details as unknown as BatchDetails;
 
   // Safely cap rendered items at 200
@@ -132,8 +136,8 @@ export function BatchActivityEntry({ entry, tierColor }: BatchActivityEntryProps
         </TableCell>
 
         {/* 4. Summary (spans wider column) */}
-        <TableCell>
-          <Typography variant="body2" noWrap title={entry.summary}>
+        <TableCell sx={isMobile ? { wordBreak: 'break-word', minWidth: 0 } : {}}>
+          <Typography variant="body2" noWrap={!isMobile} title={entry.summary}>
             {entry.summary}
           </Typography>
         </TableCell>

@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.11.0
+// version: 2.12.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -1402,8 +1402,8 @@ export default function ActivityLog() {
                     <TableCell>
                       <Chip size="small" label={(entry.type || '').replace(/_/g, ' ')} />
                     </TableCell>
-                    <TableCell sx={{ maxWidth: isMobile ? 180 : 400 }}>
-                      <Typography variant="body2" noWrap title={entry.summary}>
+                    <TableCell sx={isMobile ? { wordBreak: 'break-word', minWidth: 0 } : { maxWidth: 400 }}>
+                      <Typography variant="body2" noWrap={!isMobile} title={entry.summary}>
                         {entry.summary}
                       </Typography>
                       {entry.operation_id && !operationId && (
