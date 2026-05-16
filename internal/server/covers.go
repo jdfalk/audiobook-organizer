@@ -42,7 +42,6 @@ func (s *Server) handleCoverProxy(c *gin.Context) {
 		return
 	}
 	cacheDir := cacheDirSP.String()
-
 	cachePath, errMsg := covers.FetchAndCacheCover(coverURL, cacheDir)
 
 	if errMsg != "" {
