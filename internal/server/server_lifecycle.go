@@ -1156,6 +1156,9 @@ func (s *Server) setupRoutes() {
 			protected.GET("/activity/sources", s.perm(auth.PermLibraryView), s.listActivitySources)
 			protected.POST("/activity/compact", s.perm(auth.PermSettingsManage), s.compactActivity)
 
+			// Policy routes
+			protected.GET("/policy/tags", s.perm(auth.PermLibraryView), s.handlePolicyTags)
+
 			// System routes
 			protected.GET("/system/status", s.perm(auth.PermSettingsManage), s.getSystemStatus)
 			protected.GET("/system/announcements", s.perm(auth.PermSettingsManage), s.getSystemAnnouncements)
