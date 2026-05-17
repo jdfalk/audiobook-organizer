@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.43.0 -->
+<!-- version: 8.44.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-17 -->
 
@@ -662,8 +662,8 @@ AcoustID segment fingerprints already exist in the schema (`acoustid_seg0`–`se
 - [ ] **ACOUSTID-STATS-1** `GetAcoustIDStats()` — count books/files with ≥1 fingerprint segment populated, by-library breakdown. Add to interface + SQLite + PebbleDB + mock.
 - [ ] **ACOUSTID-STATS-2** `GET /maintenance/acoustid-stats` handler + route.
 - [ ] **ACOUSTID-STATS-3** UI card on Maintenance tab (same tile style as SHA Duplicate Detection): shows coverage %, "Fingerprint Library" trigger button, status chip.
-- [ ] **ACOUSTID-DEDUP-1** Use fingerprint similarity to detect duplicates even when hashes differ (re-encodes, format conversions). Show in Maintenance as "Acoustic Duplicates" card.
-- [ ] **ACOUSTID-COMPARE-1** Manual comparison tool — given two book IDs or file IDs, compute/fetch their fingerprint segments and return a similarity score + per-segment breakdown. `POST /api/v1/books/{id}/compare-acoustid?other={id2}` (or file-level). UI: picker in book detail or Maintenance tab that lets you select any two books/files and shows:
+- [x] **ACOUSTID-DEDUP-1** Acoustic Duplicates tab in BookDedup — fingerprint-based candidate pairs with similarity scores (PR #998)
+- [x] **ACOUSTID-COMPARE-1** Manual two-book fingerprint comparison — `GET /api/v1/acoustid/compare?a=&b=` with per-segment Hamming distance; comparison panel in UI (PR #999)
   - Both books/files displayed side-by-side (title, author, cover, duration, format)
   - Overall similarity score (0–100%)
   - Per-segment diff: seg0 (intro), seg1–5 (body), seg6 (outro) — each segment shown as a colored match/mismatch bar with its individual score
@@ -689,7 +689,7 @@ since it was last edited on 2026-04-11).
 - [x] **1.10** Export dedup state as CSV/JSON (#231)
 - [x] **1.11** **Async embed via OpenAI Batch API for nightly re-scans** — `dedup.embed-async` UOS op (nightly cron 03:00) + `POST /api/v1/dedup/embed-async` on-demand trigger; batch poller handles result ingestion (PR #1003)
 - [ ] **1.12** **Tag operation log lines with the originating operation ID** — pipe `op.ID` into a context-bound logger, replace bare `log.Printf` inside operation funcs with op-scoped calls, and write each line into `operation_logs` so the Activity-page log view shows everything (ffmpeg warnings, fingerprint failures, etc.) instead of only the explicit `progress.Log()` calls. Spec: [`docs/superpowers/bot-tasks/2026-05-04-tag-operation-logs.md`](docs/superpowers/bot-tasks/2026-05-04-tag-operation-logs.md)
-- [ ] **1.13** **Broken-files dashboard card + repair pipeline** — persist per-file ffmpeg / fingerprint errors to a new `book_file_errors` table associated with the book, surface a dashboard card ("N books with broken files"), add a `has_file_errors` library facet, and wire a repair pipeline (remux / restore-from-version / mark-ignored / delete-and-rescan). Pairs with 1.12. Spec: [`docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md`](docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md)
+- [x] **1.13** **Broken-files dashboard card + repair pipeline** — `book_file_errors` table, dashboard card, `has_file_errors` library facet, repair pipeline (PR #986)
 - [x] **1.14** **Unified Operations System (UOS)** — COMPLETE 2026-05-11 (infra 2026-05-08, full migration 2026-05-11, final queue deletion PR #800). All 16 UOS tasks shipped across PRs #740–#759; v1→v2 `queue.Enqueue` migration completed across PRs #783–#798; BridgeQueue + OperationQueue + Queue interface fully deleted in PR #800. `scheduler_triggers.go` deleted; iTunes path ops and organizer scan decoupled from BridgeQueue via new `itunes_path_ops.go` and `ScanEnqueuer` callback. Single `Registry` owns every OperationDef; plugins register through `pkg/plugin/sdk`; subprocess isolation; explicit `ResumePolicy`; single SSE-fed frontend store. Human spec: [`docs/superpowers/specs/2026-05-04-unified-operations-system.md`](docs/superpowers/specs/2026-05-04-unified-operations-system.md).
   - [x] **UOS-01** Schema migrations for v2 tables (merged 2026-05-06)
   - [x] **UOS-02** Registry shell + dispatcher + in-process worker pool (PR #741, merged 2026-05-06)
@@ -754,7 +754,7 @@ since it was last edited on 2026-04-11).
   - ✅ **PKG-4c** `internal/quarantine/` — quarantine service extracted (#662)
   - ✅ **PKG-4d** `internal/writeback/` — writeback enqueuer/outbox extracted (#661)
   - ✅ **PKG-4e** `internal/fileops/` + `internal/sysinfo/` — filesystem/system services extracted (#664)
-- [ ] **4.12** Narrow extracted service dependencies to ISP sub-interfaces (**M**) — after 4.8 + 4.11, update extracted packages to accept narrow store interfaces (BookReader, etc.) instead of full database.Store
+- [x] **4.12** Narrow extracted service dependencies to ISP sub-interfaces (**M**) — PR #995
 - [ ] **4.13** Extract iTunes integration into `internal/itunes` (**L**) — decouple iTunes import/sync/writeback from Server lifecycle; currently ~3,900 LOC deeply coupled to Server, needs interface extraction and dependency injection redesign
   - [x] **4.13b** Unit tests for `internal/itunes/service/track_provisioner.go` — 11 tests: multi-segment, missing metadata, idempotency, UpsertBookFile error, managed/unmanaged paths, PID uniqueness, duration conversion, partial-failure best-effort. (`track_provisioner_test.go`, bot-task 4-13b)
   - [x] **4.13d** Error and edge-case tests for `internal/itunes/service/importer.go` (21 new tests; disabled-mode, corrupt ITL, concurrent sync, tombstoned PID, existing-PID link, SkipDuplicates, partial write, Sync GetAllBooks failure, cover-art missing, linkITunesMetadata, linkAsVersion, organizeOneBook nil/no-factory)
@@ -784,7 +784,7 @@ since it was last edited on 2026-04-11).
 Underlying tag plumbing shipped in #244. Most items below are follow-ons
 that layer on that foundation.
 
-- [ ] **7.1** Tag-based policies / preference inheritance (**L**) — depends on 7.2
+- [x] **7.1** Tag-based policies / preference inheritance (**L**) — PR #997
 - [x] **7.2** Language filter in metadata review (shipped v0.206.0, commit `df6c9bd`)
 - [x] **7.3** Metadata-apply tagging — source + language (shipped v0.206.0, commit `441fd43`)
 - [x] **7.4** Google Books → Audible auto-upgrade maintenance job (shipped v0.206.0, commit `24201d4`)
@@ -876,7 +876,7 @@ Full details: [`memory/project_bulk_metadata_review.md`](../../.claude/projects/
 - [ ] [hold] **ASYNC-W3-3** Convert `fix-book-file-paths` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w3-3-fix-book-file-paths.md)
 - [ ] [hold] **ASYNC-W3-4** Convert `refetch-missing-authors` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w3-4-refetch-missing-authors.md)
 - [ ] [hold] **ASYNC-W3-5** Convert `recompute-itunes-paths` — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-w3-5-recompute-itunes-paths.md)
-- [ ] [hold] **ASYNC-CLEAN-1** Remove 13 old synchronous routes (last, after all waves) — [`bot-task`](docs/superpowers/bot-tasks/2026-04-28-async-clean-1-remove-old-routes.md)
+- [x] **ASYNC-CLEAN-1** Remove old synchronous maintenance routes — done (server.go 6400→581 lines)
 
 ### Design Spec Already Written (but not yet planned)
 
