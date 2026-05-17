@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -88,12 +88,37 @@ func (s *Server) getOperationStatus(c *gin.Context) {
 		return
 	}
 	id := c.Param("id")
+
+	// Try v2 registry first; fall back to legacy table.
+	if v2, err := s.Store().GetOperationV2(id); err == nil && v2 != nil {
+		httputil.RespondWithOK(c, operationV2ToLegacy(v2))
+		return
+	}
+
 	op, err := s.Store().GetOperationByID(id)
 	if err != nil || op == nil {
 		httputil.RespondWithNotFound(c, "operation", id)
 		return
 	}
 	httputil.RespondWithOK(c, op)
+}
+
+// operationV2ToLegacy converts a v2 registry row to the legacy Operation shape
+// that the frontend's pollOperation helper expects (id, status, progress, etc.).
+func operationV2ToLegacy(v2 *database.OperationV2Row) database.Operation {
+	op := database.Operation{
+		ID:          v2.ID,
+		Type:        v2.DefID,
+		Status:      v2.Status,
+		Progress:    v2.ProgressCurrent,
+		Total:       v2.ProgressTotal,
+		Message:     v2.ProgressMessage,
+		CreatedAt:   v2.QueuedAt,
+		StartedAt:   v2.StartedAt,
+		CompletedAt: v2.CompletedAt,
+		ErrorMessage: v2.ErrorMessage,
+	}
+	return op
 }
 
 func (s *Server) cancelOperation(c *gin.Context) {

@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_ops.go
-// version: 2.1.0
+// version: 2.2.0
 // guid: 8b3e1f92-d4c7-4a6e-b5f0-2a7c9d1e3f45
 
 // duplicates_ops registers v2 OperationDefs for the 8 async dedup operations
@@ -76,10 +76,6 @@ func (s *Server) RegisterBookDedupScanOp(reg *opsregistry.Registry) error {
 				"duplicate_count": result.TotalDuplicates,
 			}
 			s.dedupCache.SetWithTTL("book-dedup-scan", cacheVal, 30*time.Minute)
-			if p.LegacyOpID != "" && s.Store() != nil {
-				_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "completed", len(result.Groups), len(result.Groups),
-					fmt.Sprintf("Found %d duplicate groups (%d duplicates)", len(result.Groups), result.TotalDuplicates))
-			}
 			return nil
 		},
 	})
@@ -179,10 +175,6 @@ func (s *Server) RegisterAuthorDedupScanOp(reg *opsregistry.Registry) error {
 			s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
 
 			_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups (after filtering reviewed)", len(groups)))
-			if p.LegacyOpID != "" && s.Store() != nil {
-				_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "completed", len(groups), len(groups),
-					fmt.Sprintf("Found %d duplicate author groups", len(groups)))
-			}
 			return nil
 		},
 	})
@@ -225,10 +217,6 @@ func (s *Server) RegisterSeriesDedupScanOp(reg *opsregistry.Registry) error {
 				"total_series": result.TotalSeries,
 			}
 			s.dedupCache.Set("series-duplicates", resp)
-			if p.LegacyOpID != "" && s.Store() != nil {
-				_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "completed", result.TotalSeries, result.TotalSeries,
-					fmt.Sprintf("Found %d duplicate groups (%d total series)", len(result.Groups), result.TotalSeries))
-			}
 			return nil
 		},
 	})

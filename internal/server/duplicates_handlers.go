@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_handlers.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
 // last-edited: 2026-05-02
 //
@@ -65,20 +65,13 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 		return
 	}
 
-	store := s.Store()
-	opID := ulid.Make().String()
-	op, err := store.CreateOperation(opID, "book-dedup-scan", nil)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.book-scan", bookDedupScanOpParams{})
 	if err != nil {
-		httputil.InternalError(c, "failed to create operation", err)
-		return
-	}
-
-	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.book-scan", bookDedupScanOpParams{LegacyOpID: op.ID}); err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	httputil.RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, gin.H{"id": opID, "type": "book-dedup-scan", "status": "queued"})
 }
 
 // mergeBookDuplicatesAsVersions merges a group of duplicate books into a version group.
@@ -211,20 +204,13 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	store := s.Store()
-	opID := ulid.Make().String()
-	op, err := store.CreateOperation(opID, "author-dedup-scan", nil)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.author-scan", authorDedupScanOpParams{})
 	if err != nil {
-		httputil.InternalError(c, "failed to create operation", err)
-		return
-	}
-
-	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.author-scan", authorDedupScanOpParams{LegacyOpID: op.ID}); err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	httputil.RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, gin.H{"id": opID, "type": "author-dedup-scan", "status": "queued"})
 }
 
 // filterReviewedAuthorGroups removes author dedup groups where all author IDs
@@ -295,20 +281,13 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 		return
 	}
 
-	store := s.Store()
-	opID := ulid.Make().String()
-	op, err := store.CreateOperation(opID, "series-dedup-scan", nil)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.series-scan", seriesDedupScanOpParams{})
 	if err != nil {
-		httputil.InternalError(c, "failed to create operation", err)
-		return
-	}
-
-	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.series-scan", seriesDedupScanOpParams{LegacyOpID: op.ID}); err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	httputil.RespondWithSuccess(c, 202, op)
+	httputil.RespondWithSuccess(c, 202, gin.H{"id": opID, "type": "series-dedup-scan", "status": "queued"})
 }
 
 // validateDedupEntry searches metadata sources (OpenLibrary, Audible, etc.) to validate
