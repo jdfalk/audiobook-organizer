@@ -1,7 +1,7 @@
 // file: internal/dedup/engine.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
-// last-edited: 2026-05-04
+// last-edited: 2026-05-17
 
 package dedup
 
@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -857,6 +858,15 @@ func (de *Engine) findSimilarBooks(ctx context.Context, bookID string) error {
 		if queryBook != nil && titlesDifferOnlyInDigits(normalizeTitle(queryBook.Title), normalizeTitle(otherBook.Title)) {
 			continue
 		}
+		// Drop candidates where both books share the same parent directory.
+		// Multi-file audiobooks split into chapters (011.mp3, 062.mp3, …)
+		// stored in the same folder produce identical text embeddings, causing
+		// 100% similarity scores between sibling chapter-books that are clearly
+		// not duplicates of each other.
+		if queryBook != nil && queryBook.FilePath != "" && otherBook.FilePath != "" &&
+			filepath.Dir(queryBook.FilePath) == filepath.Dir(otherBook.FilePath) {
+			continue
+		}
 		sim := float64(r.Similarity)
 		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
 			EntityType: "book",
@@ -1403,6 +1413,7 @@ func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 		versionGroupID string
 		seriesNumber   string
 		normTitle      string
+		filePath       string
 		missing        bool
 	}
 	cache := make(map[string]bookMeta, len(candidates)*2)
@@ -1428,6 +1439,7 @@ func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 		}
 		m.seriesNumber = seriesNumberOf(b)
 		m.normTitle = normalizeTitle(b.Title)
+		m.filePath = b.FilePath
 		cache[id] = m
 		return m
 	}
@@ -1465,6 +1477,10 @@ func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 			// meaning they're different volumes of a series whose marker
 			// the explicit regex didn't match. "Reclaiming Honor bk 6"
 			// vs "Reclaiming Honor bk 7" is the canonical example.
+			stale = true
+		case a.filePath != "" && b.filePath != "" && filepath.Dir(a.filePath) == filepath.Dir(b.filePath):
+			// Both books reside in the same directory — they are chapter-files
+			// of the same multi-file audiobook, not independent duplicates.
 			stale = true
 		}
 		if !stale {
