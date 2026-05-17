@@ -1768,6 +1768,110 @@ function EmbeddingDedupTab() {
   );
 }
 
+// ---- Acoustic Compare Panel ----
+// Manual two-book fingerprint comparison tool.
+function AcousticComparePanel() {
+  const [bookAID, setBookAID] = useState('');
+  const [bookBID, setBookBID] = useState('');
+  const [result, setResult] = useState<api.AcoustIDCompareResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCompare = async () => {
+    if (!bookAID.trim() || !bookBID.trim()) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const resp = await api.compareAcoustID(bookAID.trim(), bookBID.trim());
+      setResult(resp);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Comparison failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const segLabels: Record<string, string> = {
+    seg0: 'Intro', seg1: 'Body 1', seg2: 'Body 2',
+    seg3: 'Body 3', seg4: 'Body 4', seg5: 'Body 5', seg6: 'Outro',
+  };
+
+  return (
+    <Paper sx={{ p: 2 }}>
+      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>Compare Two Books</Typography>
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
+        <TextField
+          label="Book A ID"
+          size="small"
+          value={bookAID}
+          onChange={(e) => setBookAID(e.target.value)}
+          sx={{ width: 280 }}
+        />
+        <TextField
+          label="Book B ID"
+          size="small"
+          value={bookBID}
+          onChange={(e) => setBookBID(e.target.value)}
+          sx={{ width: 280 }}
+        />
+        <Button variant="contained" onClick={handleCompare} disabled={loading || !bookAID || !bookBID}>
+          {loading ? 'Comparing…' : 'Compare'}
+        </Button>
+      </Stack>
+      {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
+      {result && (
+        <Box>
+          <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+            <Chip
+              label={`${Math.round(result.overall_score * 100)}% similar`}
+              color={result.overall_score >= 0.85 ? 'error' : result.overall_score >= 0.6 ? 'warning' : 'default'}
+              icon={<GraphicEqIcon />}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {result.book_a.title} vs {result.book_b.title}
+            </Typography>
+          </Stack>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Segment</TableCell>
+                <TableCell>Book A hash</TableCell>
+                <TableCell>Book B hash</TableCell>
+                <TableCell align="center">Match</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {result.segment_scores.map((seg) => (
+                <TableRow key={seg.segment}
+                  sx={{ bgcolor: seg.match ? 'success.light' : seg.hash_a && seg.hash_b ? 'error.light' : undefined, opacity: 0.9 }}
+                >
+                  <TableCell><strong>{segLabels[seg.segment] ?? seg.segment}</strong></TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
+                    {seg.hash_a ? seg.hash_a.slice(0, 12) + '…' : <em>missing</em>}
+                  </TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
+                    {seg.hash_b ? seg.hash_b.slice(0, 12) + '…' : <em>missing</em>}
+                  </TableCell>
+                  <TableCell align="center">
+                    {!seg.hash_a || !seg.hash_b ? (
+                      <Chip label="n/a" size="small" />
+                    ) : seg.match ? (
+                      <Chip label="✓" size="small" color="success" />
+                    ) : (
+                      <Chip label="✗" size="small" color="error" />
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
+      )}
+    </Paper>
+  );
+}
+
 // ---- Acoustic Dedup Tab ----
 // Shows AcoustID-layer duplicate candidates (stored by engine.AcoustIDScan).
 // Triggers a new scan or displays existing results filtered by layer=acoustid.
@@ -1902,6 +2006,10 @@ function AcousticDedupTab() {
           />
         </Paper>
       )}
+
+      <Box sx={{ mt: 3 }}>
+        <AcousticComparePanel />
+      </Box>
     </Box>
   );
 }

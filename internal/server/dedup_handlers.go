@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.5.0
+// version: 2.6.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-08
 
@@ -1054,4 +1054,98 @@ func (s *Server) triggerBookSignatureScan(c *gin.Context) {
 		return
 	}
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
+}
+
+// AcoustIDSegmentComparison holds comparison data for one fingerprint segment.
+type AcoustIDSegmentComparison struct {
+	Segment string `json:"segment"` // "seg0" … "seg6"
+	HashA   string `json:"hash_a"`  // fingerprint hex or ""
+	HashB   string `json:"hash_b"`
+	Match   bool   `json:"match"`
+}
+
+// AcoustIDCompareResponse is the response body for the compare-acoustid endpoint.
+type AcoustIDCompareResponse struct {
+	BookA         database.Book               `json:"book_a"`
+	BookB         database.Book               `json:"book_b"`
+	OverallScore  float64                     `json:"overall_score"`  // 0.0–1.0
+	SegmentScores []AcoustIDSegmentComparison `json:"segment_scores"` // 7 entries
+}
+
+// handleCompareAcoustID handles POST /api/v1/books/:id/compare-acoustid?other=<bookID2>.
+// Computes per-segment fingerprint comparison between two books' primary files.
+func (s *Server) handleCompareAcoustID(c *gin.Context) {
+	idA := c.Param("id")
+	idB := c.Query("other")
+	if idB == "" {
+		httputil.RespondWithBadRequest(c, "missing ?other= query parameter")
+		return
+	}
+
+	bookA, err := s.Store().GetBookByID(idA)
+	if err != nil || bookA == nil {
+		httputil.RespondWithNotFound(c, "book", idA)
+		return
+	}
+	bookB, err := s.Store().GetBookByID(idB)
+	if err != nil || bookB == nil {
+		httputil.RespondWithNotFound(c, "book", idB)
+		return
+	}
+
+	filesA, _ := s.Store().GetBookFiles(idA)
+	filesB, _ := s.Store().GetBookFiles(idB)
+
+	primary := func(files []database.BookFile) *database.BookFile {
+		for i := range files {
+			if files[i].AcoustIDSeg0 != "" {
+				return &files[i]
+			}
+		}
+		if len(files) > 0 {
+			return &files[0]
+		}
+		return nil
+	}
+
+	fa := primary(filesA)
+	fb := primary(filesB)
+
+	segNames := []string{"seg0", "seg1", "seg2", "seg3", "seg4", "seg5", "seg6"}
+
+	segsA := []string{"", "", "", "", "", "", ""}
+	segsB := []string{"", "", "", "", "", "", ""}
+	if fa != nil {
+		segsA = []string{fa.AcoustIDSeg0, fa.AcoustIDSeg1, fa.AcoustIDSeg2, fa.AcoustIDSeg3, fa.AcoustIDSeg4, fa.AcoustIDSeg5, fa.AcoustIDSeg6}
+	}
+	if fb != nil {
+		segsB = []string{fb.AcoustIDSeg0, fb.AcoustIDSeg1, fb.AcoustIDSeg2, fb.AcoustIDSeg3, fb.AcoustIDSeg4, fb.AcoustIDSeg5, fb.AcoustIDSeg6}
+	}
+
+	var comparisons []AcoustIDSegmentComparison
+	var matching, total int
+	for i, name := range segNames {
+		a, b := segsA[i], segsB[i]
+		comp := AcoustIDSegmentComparison{Segment: name, HashA: a, HashB: b}
+		if a != "" && b != "" {
+			total++
+			comp.Match = a == b
+			if comp.Match {
+				matching++
+			}
+		}
+		comparisons = append(comparisons, comp)
+	}
+
+	overall := 0.0
+	if total > 0 {
+		overall = float64(matching) / float64(total)
+	}
+
+	httputil.RespondWithOK(c, AcoustIDCompareResponse{
+		BookA:         *bookA,
+		BookB:         *bookB,
+		OverallScore:  overall,
+		SegmentScores: comparisons,
+	})
 }
