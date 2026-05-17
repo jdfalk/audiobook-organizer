@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.23.0
+// version: 3.24.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 // last-edited: 2026-05-17
 
@@ -2274,7 +2274,7 @@ export function BookDedup() {
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ mb: 2 }}>Deduplication</Typography>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
         <Tab icon={<Badge color="default"><MenuBookIcon /></Badge>} label="Version Groups" iconPosition="start" />
         <Tab icon={<Badge color="default"><ContentCopyIcon /></Badge>} label="Duplicate Scan" iconPosition="start" />
         <Tab icon={<Badge color="default"><PersonIcon /></Badge>} label="Authors" iconPosition="start" />

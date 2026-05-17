@@ -1,5 +1,5 @@
 // file: web/src/pages/Playlists.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2b0c1d6e-3f4a-4a70-b8c5-3d7e0f1b9a99
 
 import { useCallback, useEffect, useState } from 'react';
@@ -73,7 +73,7 @@ export default function Playlists() {
         </Button>
       </Box>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 2 }}>
         <Tab label="All" value="all" />
         <Tab label="Static" value="static" />
         <Tab label="Smart" value="smart" />

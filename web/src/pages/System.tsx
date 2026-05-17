@@ -1,5 +1,5 @@
 // file: web/src/pages/System.tsx
-// version: 1.4.0
+// version: 1.5.0
 // guid: 7c8d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
 // last-edited: 2026-04-30
 
@@ -49,6 +49,9 @@ export function System() {
           value={tabValue}
           onChange={(_, newValue) => setTabValue(newValue)}
           aria-label="system tabs"
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
         >
           <Tab label="System Info" />
           <Tab label="Storage" />

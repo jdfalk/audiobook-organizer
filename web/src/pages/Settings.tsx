@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.45.1
+// version: 1.45.2
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 // last-edited: 2026-05-15
 
@@ -2122,6 +2122,9 @@ export function Settings() {
               window.history.replaceState(null, '', `#${TAB_KEYS[newValue]}`);
             }}
             aria-label="settings tabs"
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
           >
             <Tab label="Library" />
             <Tab label="iTunes Import" />

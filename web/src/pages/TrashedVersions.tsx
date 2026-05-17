@@ -1,5 +1,5 @@
 // file: web/src/pages/TrashedVersions.tsx
-// version: 1.1.0
+// version: 1.1.1
 // guid: 6f4a5b3c-7d8e-4a70-b8c5-3d7e0f1b9a99
 
 import { useCallback, useEffect, useState } from 'react';
@@ -135,7 +135,7 @@ export default function TrashedVersions() {
         />
       </Stack>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 2 }}>
         <Tab label="Trash" value="trash" />
         <Tab label="Purged" value="purged" />
       </Tabs>
