@@ -1,11 +1,19 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.79.0 -->
+<!-- version: 2.80.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-17 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Bug Fixes
+
+#### May 17, 2026 — BUG-SERIES-COUNT: Series dedup tab "Total series: 0" (PRs #1008, #1009)
+
+- **Root cause**: Dedup scan handlers (book, author, series) created a legacy `Operation` record for the frontend to poll, then enqueued a registry op — but `getOperationStatus` only read the legacy table. The registry op completed and set the cache, but the legacy record stayed "running" forever, so `pollOperation` looped indefinitely and `onComplete` was never called, leaving `totalSeries = 0` in the UI.
+- **PR #1008** (band-aid): Added `store.UpdateOperationStatus(p.LegacyOpID, "completed", ...)` after scan cache is set in all three scan ops.
+- **PR #1009** (proper fix): `getOperationStatus` now checks the v2 registry store first (falls through to legacy table). Scan handlers return the registry op ID directly — no legacy `Operation` row created. Added `TestHandler_GetOperationStatus_FoundV2` test. Adds `burndown-tasks/scripts/sync_todo_issues.py` + daily workflow.
 
 ### Features
 
