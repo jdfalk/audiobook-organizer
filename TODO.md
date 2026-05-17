@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.40.0 -->
+<!-- version: 8.41.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-17 -->
 
@@ -37,6 +37,8 @@ future agent) can scan the entire workspace in one page.
 - [ ] **BUG-SERIES-COUNT** Series dedup tab shows "Total series: 0" even when a scan just found 2442 duplicate groups. The count displayed in the tab header/description is not refreshed after scan completes. Investigate: likely the count is fetched on mount but not re-fetched after the scan op finishes.
 
 - [ ] **BUG-ACTIVITY-MISSING-OLD-LOGS** Activity log has no entries before 2026-05-12. Old logs were stored in a prior SQLite `system_activity_log` table and were never migrated to the current NutsDB/Pebble-backed activity store. Need to: (a) identify the old schema (`internal/database/sqlite_store_activity.go` `SystemActivityLog`), (b) write a one-time migration/backfill command that reads old rows and writes `ActivityEntry` records, (c) populate `Tags` from available fields during migration.
+
+- [ ] **BUG-OP-SPARSE-LOGS** Operations emit almost no log messages to the activity log — only a final result line. Every operation should emit at minimum: (1) start message with scope/count, (2) progress phase-change messages (e.g. "scanning", "comparing", "writing"), (3) per-item or per-batch progress every ~10%, (4) completion summary with counts (processed/skipped/errored), (5) any error/warn lines. Target 4–8 log lines per operation for short ops, more for long ones. Fix: audit every `op.Run(ctx)` handler in `internal/server/` and ensure `EmitInfo`/`LogBatch` calls are present at each phase. Use existing `activity.EmitInfo(w, opID, type, source, msg)` API.
 
 - [ ] **FEAT-ACTIVITY-RICH-TAGS** Activity log entries currently carry only a single generic `type` tag (e.g. "system", "metadata apply"). The `ActivityEntry.Tags []string` field already exists but is underutilised. Wanted: rich auto-applied multi-tag sets at write time:
   - `op:<op_id>` — tie every log line to its operation (already have `OperationID` field, should also be a tag)
