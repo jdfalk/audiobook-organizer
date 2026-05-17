@@ -1,5 +1,5 @@
 // file: internal/audiobooks/audiobook_service_unit_test.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-01
 
@@ -806,4 +806,70 @@ func TestGetAudiobooks_UserRatingFilter_LessThan(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, got, 1)
 	assert.Equal(t, "b1", got[0].ID)
+}
+
+// ---------------------------------------------------------------------------
+// UpdateAudiobook
+// ---------------------------------------------------------------------------
+
+func TestAudiobookService_UpdateAudiobook_NilStore(t *testing.T) {
+	svc := &AudiobookService{store: nil}
+	_, err := svc.UpdateAudiobook(context.Background(), "id1", &UpdateAudiobookRequest{
+		Updates: &AudiobookUpdate{Book: &database.Book{}},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "database not initialized")
+}
+
+func TestAudiobookService_UpdateAudiobook_NotFound(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	mockStore.EXPECT().GetBookByID("missing").Return(nil, nil)
+
+	_, err := svc.UpdateAudiobook(context.Background(), "missing", &UpdateAudiobookRequest{
+		Updates: &AudiobookUpdate{Book: &database.Book{}},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestAudiobookService_UpdateAudiobook_GetByIDError(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	storeErr := fmt.Errorf("db failure")
+	mockStore.EXPECT().GetBookByID("id1").Return(nil, storeErr)
+
+	_, err := svc.UpdateAudiobook(context.Background(), "id1", &UpdateAudiobookRequest{
+		Updates: &AudiobookUpdate{Book: &database.Book{}},
+	})
+	assert.ErrorIs(t, err, storeErr)
+}
+
+func TestAudiobookService_UpdateAudiobook_TitleUpdate(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	original := &database.Book{ID: "id1", Title: "Old Title"}
+	updated := &database.Book{ID: "id1", Title: "New Title"}
+
+	mockStore.EXPECT().GetBookByID("id1").Return(original, nil)
+	// loadMetadataState: GetMetadataFieldStates returns empty → falls back to legacy path
+	mockStore.EXPECT().GetMetadataFieldStates("id1").Return(nil, nil).Maybe()
+	// loadLegacyMetadataState calls GetUserPreference when GetMetadataFieldStates returns empty
+	mockStore.EXPECT().GetUserPreference(mock.Anything).Return(nil, nil).Maybe()
+	mockStore.EXPECT().UpdateBook("id1", mock.AnythingOfType("*database.Book")).Return(updated, nil)
+	mockStore.EXPECT().GetBookAuthors("id1").Return(nil, nil).Maybe()
+	mockStore.EXPECT().GetBookNarrators("id1").Return(nil, nil).Maybe()
+	mockStore.EXPECT().GetNarratorsByBookIDs(mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+	mockStore.EXPECT().GetAuthorsByBookIDs(mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+
+	result, err := svc.UpdateAudiobook(context.Background(), "id1", &UpdateAudiobookRequest{
+		Updates: &AudiobookUpdate{
+			Book: &database.Book{ID: "id1", Title: "New Title"},
+		},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, "New Title", result.Title)
 }
