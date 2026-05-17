@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.38.0 -->
+<!-- version: 8.39.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-16 -->
+<!-- last-edited: 2026-05-17 -->
 
 # Project TODO
 
@@ -25,6 +25,18 @@ future agent) can scan the entire workspace in one page.
 **Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
 **Latest shipped release:** v0.221.0 (2026-04-29) — PRs #507–#521; PRs #561–#563 merged 2026-04-30; PRs #570–#573 merged 2026-04-30
 **In flight:** User Ratings UI, ASYNC spec revision, iTunes relink unresolved cases (6,719 files)
+
+---
+
+## 🐛 Open Bugs — May 17, 2026
+
+- [ ] **BUG-DEDUP-SAMEDIR** Embedding dedup flags chapter files from the same directory as 100% duplicates. Multi-file audiobooks split into segments (e.g. `011.mp3`, `062.mp3`) share identical text embeddings and score 100% similar. Fix: add `filepath.Dir(A.FilePath) == filepath.Dir(B.FilePath)` guard in `internal/dedup/engine.go` emission loop (~line 840) and in `PurgeStaleCandidates` (~line 1446). The `bookMeta` struct needs a `filePath string` field.
+
+- [ ] **BUG-RECONCILE-OPID** Reconcile tab hits `GET /api/v1/operations/undefined/status` because the POST response wraps the op in `{data: {op_id: "..."}}` but the frontend was reading the raw body as an `Operation`. **Fix shipped in PR #1000** (`startReconcileScan` now extracts `.data` and normalizes `op_id → id`). Needs production deploy.
+
+- [ ] **BUG-SERIES-COUNT** Series dedup tab shows "Total series: 0" even when a scan just found 2442 duplicate groups. The count displayed in the tab header/description is not refreshed after scan completes. Investigate: likely the count is fetched on mount but not re-fetched after the scan op finishes.
+
+- [ ] **BUG-ACOUSTID-SCAN-OPID** "AcoustID scan queued (op: unknown)" toast because `triggerDedupAcoustID` was reading `raw.id` but backend returns `op_id`. **Fix shipped in PR #1000**. Needs production deploy.
 
 ---
 
