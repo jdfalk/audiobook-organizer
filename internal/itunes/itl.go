@@ -1,5 +1,5 @@
 // file: internal/itunes/itl.go
-// version: 1.5.1
+// version: 1.6.0
 // guid: 7f2a8b3c-4d5e-6f01-a2b3-c4d5e6f7a8b9
 // last-edited: 2026-05-15
 
@@ -979,6 +979,25 @@ func InsertITLPlaylist(inputPath, outputPath string, playlist ITLNewPlaylist) (*
 // writeITLFile handles compression, encryption, and writing of an ITL file.
 // Uses 0664 permissions and runs setfacl to restore a permissive ACL mask
 // so the file remains accessible via SMB to iTunes.
+// encodeITLPayload compresses, encrypts, and wraps payload in a new hdfm header,
+// returning the final ITL file bytes without writing to disk.
+// Used by the in-memory export path (BuildExportITL / Task 033).
+func encodeITLPayload(hdr *hdfmHeader, payload []byte, compress bool) ([]byte, error) {
+	var finalPayload []byte
+	if compress {
+		finalPayload = itlDeflate(payload)
+	} else {
+		finalPayload = payload
+	}
+	encrypted := itlEncrypt(hdr, finalPayload)
+	newFileLen := uint32(len(encrypted)) + hdr.headerLen
+	newHeader := buildHdfmHeader(hdr.version, hdr.headerRemainder, newFileLen, hdr.unknown)
+	out := make([]byte, 0, len(newHeader)+len(encrypted))
+	out = append(out, newHeader...)
+	out = append(out, encrypted...)
+	return out, nil
+}
+
 func writeITLFile(outputPath string, hdr *hdfmHeader, payload []byte, compress bool, count int) (*ITLWriteBackResult, error) {
 	var finalPayload []byte
 	if compress {

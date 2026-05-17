@@ -1,5 +1,5 @@
 // file: internal/itunes/itl_combined_mutate.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: f7a8b9c0-d1e2-3f4a-5b6c-7d8e9f0a1b2c
 //
 // Combined ITL mutation: applies removes, adds, and location patches in a
@@ -112,4 +112,47 @@ func ApplyITLOperations(inputPath, outputPath string, ops ITLOperationSet) (*ITL
 	}
 
 	return writeITLFile(outputPath, hdr, decompressed, wasCompressed, totalUpdated)
+}
+
+// ApplyITLOperationsInMemory applies the same mutations as ApplyITLOperations
+// but returns the resulting ITL bytes instead of writing to disk.
+// Used by the partial-export path (Task 033 / ARCH-6-4).
+func ApplyITLOperationsInMemory(inputPath string, ops ITLOperationSet) ([]byte, error) {
+	data, err := os.ReadFile(inputPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading ITL: %w", err)
+	}
+
+	hdr, err := parseHdfmHeader(data)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := data[hdr.headerLen:]
+	decrypted := itlDecrypt(hdr, payload)
+	decompressed, wasCompressed := itlInflate(decrypted)
+	isLE := detectLE(decompressed)
+
+	if len(ops.Removes) > 0 && isLE {
+		decompressed, _ = RemoveTracksByPIDLE(decompressed, ops.Removes)
+	}
+	if len(ops.Adds) > 0 && isLE {
+		decompressed = AddTracksLE(decompressed, ops.Adds)
+	}
+	if len(ops.LocationUpdates) > 0 {
+		updateMap := make(map[string]string, len(ops.LocationUpdates))
+		for _, u := range ops.LocationUpdates {
+			updateMap[strings.ToLower(u.PersistentID)] = u.NewLocation
+		}
+		if isLE {
+			decompressed, _ = rewriteChunksLE(decompressed, updateMap)
+		} else {
+			decompressed, _ = rewriteChunksBE(decompressed, updateMap)
+		}
+	}
+	if len(ops.MetadataUpdates) > 0 && isLE {
+		decompressed, _ = UpdateMetadataLE(decompressed, ops.MetadataUpdates)
+	}
+
+	return encodeITLPayload(hdr, decompressed, wasCompressed)
 }

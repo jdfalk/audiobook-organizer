@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.18.0
+// version: 1.19.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-16
 
@@ -1113,6 +1113,10 @@ func (s *Server) setupRoutes() {
 				// safeWriteITL call. Supports dry_run=true to
 				// preview without applying. Backlog 7.9.
 				itunesGroup.POST("/rebuild", s.perm(auth.PermLibraryEditMetadata), s.rebuildITLHandler)
+				// Full rebuild: strip all tracks, re-insert all DB books (7.9 nuclear path).
+				itunesGroup.POST("/rebuild-full", s.perm(auth.PermLibraryEditMetadata), s.rebuildITLFullHandler)
+				// Partial export: build ITL containing only specified book IDs (6.4 partial).
+				itunesGroup.POST("/export-partial", s.perm(auth.PermIntegrationsManage), s.exportITLPartialHandler)
 
 				// ITL file transfer (6.4)
 				itunesGroup.GET("/library/download", s.perm(auth.PermIntegrationsManage), s.itunesSvcGuard(func(c *gin.Context) { s.itunesSvc.Transfer.HandleDownload(c) }))
