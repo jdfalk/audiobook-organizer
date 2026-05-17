@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.42.0 -->
+<!-- version: 8.43.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-17 -->
 
@@ -687,7 +687,7 @@ since it was last edited on 2026-04-11).
 - [x] **1.8** Smarter "split cluster" with edge preview (#233)
 - [x] **1.9** Series-aware bulk merge (#232)
 - [x] **1.10** Export dedup state as CSV/JSON (#231)
-- [ ] **1.11** **Async embed via OpenAI Batch API for nightly re-scans** — submit FullScan as a single Batch job (`endpoint=/v1/embeddings`), 50% discount + 24h SLA, results routed via the existing universal batch poller. Sync path stays for interactive callers. Spec: [`docs/superpowers/bot-tasks/2026-05-04-async-embed-batch-api.md`](docs/superpowers/bot-tasks/2026-05-04-async-embed-batch-api.md)
+- [x] **1.11** **Async embed via OpenAI Batch API for nightly re-scans** — `dedup.embed-async` UOS op (nightly cron 03:00) + `POST /api/v1/dedup/embed-async` on-demand trigger; batch poller handles result ingestion (PR #1003)
 - [ ] **1.12** **Tag operation log lines with the originating operation ID** — pipe `op.ID` into a context-bound logger, replace bare `log.Printf` inside operation funcs with op-scoped calls, and write each line into `operation_logs` so the Activity-page log view shows everything (ffmpeg warnings, fingerprint failures, etc.) instead of only the explicit `progress.Log()` calls. Spec: [`docs/superpowers/bot-tasks/2026-05-04-tag-operation-logs.md`](docs/superpowers/bot-tasks/2026-05-04-tag-operation-logs.md)
 - [ ] **1.13** **Broken-files dashboard card + repair pipeline** — persist per-file ffmpeg / fingerprint errors to a new `book_file_errors` table associated with the book, surface a dashboard card ("N books with broken files"), add a `has_file_errors` library facet, and wire a repair pipeline (remux / restore-from-version / mark-ignored / delete-and-rescan). Pairs with 1.12. Spec: [`docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md`](docs/superpowers/bot-tasks/2026-05-04-broken-files-card-and-repair.md)
 - [x] **1.14** **Unified Operations System (UOS)** — COMPLETE 2026-05-11 (infra 2026-05-08, full migration 2026-05-11, final queue deletion PR #800). All 16 UOS tasks shipped across PRs #740–#759; v1→v2 `queue.Enqueue` migration completed across PRs #783–#798; BridgeQueue + OperationQueue + Queue interface fully deleted in PR #800. `scheduler_triggers.go` deleted; iTunes path ops and organizer scan decoupled from BridgeQueue via new `itunes_path_ops.go` and `ScanEnqueuer` callback. Single `Registry` owns every OperationDef; plugins register through `pkg/plugin/sdk`; subprocess isolation; explicit `ResumePolicy`; single SSE-fed frontend store. Human spec: [`docs/superpowers/specs/2026-05-04-unified-operations-system.md`](docs/superpowers/specs/2026-05-04-unified-operations-system.md).
@@ -707,7 +707,7 @@ since it was last edited on 2026-04-11).
   - [x] **UOS-14** Delete v1 OperationQueue + legacy endpoints (PR #756, merged 2026-05-08)
   - [x] **UOS-15** Promote pkg/plugin/sdk to stable public API + sdkguard CI (PR #755, merged 2026-05-08)
 - [ ] **1.15** **UOS amendment — `Reporter.SetCurrentItem(label)` for live "currently working on" ticker** — Sonarr/Radarr-style high-frequency current-item display under the progress bar. New SDK Reporter method that's purely ephemeral (in-memory on the registry's run handle, no DB write); SSE event `op.current_item` patches the frontend store; timeline endpoint returns the cached value so refresh / new tab / re-login re-hydrates. Survives refresh; survives a brief gap on server restart (next per-item iteration repopulates). If we ever want it to survive restart, retrofit is a single column add to `operations_v2` flushed at 30s cadence — explicit out of v1. Implementation footprint: amend §1 (Reporter) + §9 (timeline payload) + UOS-03/UOS-06 bot-tasks. Spec: [`docs/superpowers/bot-tasks/2026-05-05-uos-amendment-current-item.md`](docs/superpowers/bot-tasks/2026-05-05-uos-amendment-current-item.md).
-- [ ] **1.16** **Resizable + dynamically-sortable columns everywhere** — every page that renders a table (library, dedup, activity, iTunes write-back preview, metadata review, etc.) should have draggable column dividers and click-to-sort headers, persisted per-user. Today some pages have it, most don't, and the inconsistency is jarring. Build a single `<ResizableSortableTable>` component (or extend the existing `ConfigurableTable`); roll across pages in follow-ups. Acceptance: every column on every page resizes; every column on every page sorts; user-resized widths and sort states persist via `localStorage` keyed on page+column.
+- [~] **1.16** **Resizable + dynamically-sortable columns everywhere** — Library/Authors/Series/Works/TrashedVersions done (PR #1002). Remaining: dedup results, activity log, iTunes write-back preview, metadata review. Build a single `<ResizableSortableTable>` component (or extend existing `ConfigurableTable`); roll across remaining pages.
 - [ ] **1.17** **Replace "AO" / "audiobook-organizer" branding with a real product name + logo** — the placeholder "AO" leaks into UI labels (e.g. proposed "AO Path" column on the iTunes write-back dialog), service names, status panels, etc. Pick a product name + minimal logo, apply consistently. Out of scope until name is decided; this entry is the placeholder for the rename sweep.
 
 ### 2. Known Bugs — all closed in #227
@@ -777,7 +777,7 @@ since it was last edited on 2026-04-11).
 - [x] **6.1** Deluge `move_storage` integration (**M**) — #349
 - [x] **6.2** Audnexus + Hardcover full integration (#7daef15)
 - [x] **6.3** Tag writeback to iTunes via ITL updates (shipped previously)
-- [ ] **6.4** ITL upload / download / partial export (**M**) — tasks 1-3 + 5 done (download, upload+validate, backup list+restore, frontend panel); task 4 (partial export) depends on 7.9
+- [x] **6.4** ITL upload / download / partial export (**M**) — all tasks done; partial export via `POST /api/v1/itunes/export-partial` (PR #1004)
 
 ### 7. Tagging as Infrastructure — [section](docs/backlog-2026-04-10.md#7-tagging-as-infrastructure)
 
@@ -792,7 +792,7 @@ that layer on that foundation.
 - [x] **7.6** Persistent review dialog + concurrent review during fetch (shipped v0.206.0, commit `1d2bf53`)
 - [x] **7.7** Author and series tag HTTP endpoints (**M**) — #347; frontend UI remains
 - [x] **7.8** System tag UX — visual distinction user vs system (shipped v0.206.0, commit `4dda739`)
-- [ ] **7.9** Full iTunes library regenerate / rebuild (**L**) — diff-and-batch mode shipped (commit `286140d`); full rebuild-from-scratch mode remains
+- [x] **7.9** Full iTunes library regenerate / rebuild (**L**) — diff-and-batch + full rebuild-from-scratch both shipped; `POST /api/v1/itunes/rebuild-full` (PR #1004)
 - [x] **7.10** Archive sweep for soft-deleted books (**M**) — #342
 - [x] **7.11** Author/series merge — sync denormalized `book.AuthorID` (shipped v0.206.0, commit `f244824`)
 - [x] **7.12** Organize rewrites file tags on every run even when unchanged (shipped v0.206.0, commit `2d4ad01`)
