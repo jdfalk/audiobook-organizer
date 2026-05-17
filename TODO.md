@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.41.0 -->
+<!-- version: 8.42.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-17 -->
 
@@ -37,6 +37,16 @@ future agent) can scan the entire workspace in one page.
 - [ ] **BUG-SERIES-COUNT** Series dedup tab shows "Total series: 0" even when a scan just found 2442 duplicate groups. The count displayed in the tab header/description is not refreshed after scan completes. Investigate: likely the count is fetched on mount but not re-fetched after the scan op finishes.
 
 - [ ] **BUG-ACTIVITY-MISSING-OLD-LOGS** Activity log has no entries before 2026-05-12. Old logs were stored in a prior SQLite `system_activity_log` table and were never migrated to the current NutsDB/Pebble-backed activity store. Need to: (a) identify the old schema (`internal/database/sqlite_store_activity.go` `SystemActivityLog`), (b) write a one-time migration/backfill command that reads old rows and writes `ActivityEntry` records, (c) populate `Tags` from available fields during migration.
+
+- [ ] **INFRA-OPENTELEMETRY** Add OpenTelemetry instrumentation for metrics, spans, and traces. Goals: identify slow code paths, track operation durations end-to-end, surface DB query latency, HTTP handler latency, embedding/AI call latency, and dedup scan timing. Plan:
+  - Add `go.opentelemetry.io/otel` + SDK + exporters (OTLP gRPC to a local Jaeger/Tempo/Prometheus instance)
+  - Instrument HTTP layer: `otelgin` middleware on the Gin router for per-handler spans + request metrics
+  - Instrument DB: wrap Pebble + SQLite store methods with spans (`db.get`, `db.put`, `db.query`)
+  - Instrument operations: wrap each `op.Run(ctx)` to emit a root span with op_id as attribute
+  - Instrument AI calls: OpenAI embed/parse/batch requests as child spans with token counts
+  - Instrument dedup engine: spans for `FullScan`, `CheckBook`, `PurgeStaleCandidates` phases
+  - Add Prometheus metrics endpoint at `/metrics` for Grafana scraping (request rate, p99 latency, error rate, library size, op queue depth)
+  - Config: `OTEL_EXPORTER_OTLP_ENDPOINT` env var; disabled by default, no-op when unset
 
 - [ ] **BUG-OP-SPARSE-LOGS** Operations emit almost no log messages to the activity log — only a final result line. Every operation should emit at minimum: (1) start message with scope/count, (2) progress phase-change messages (e.g. "scanning", "comparing", "writing"), (3) per-item or per-batch progress every ~10%, (4) completion summary with counts (processed/skipped/errored), (5) any error/warn lines. Target 4–8 log lines per operation for short ops, more for long ones. Fix: audit every `op.Run(ctx)` handler in `internal/server/` and ensure `EmitInfo`/`LogBatch` calls are present at each phase. Use existing `activity.EmitInfo(w, opID, type, source, msg)` API.
 
@@ -112,17 +122,7 @@ incrementally:
   and that is the documented canonical pattern until `ServerDeps` itself is
   broken up. See `internal/plugins/maintenance/register.go` for the rationale.
 
-  **itunesservice — deferred.** Closures (`OnBookCreated`, `OrganizerFactory`)
-  remain coupled to `*Server`. Work is scoped but not yet started.
-
-  Cleanest decoupling path: introduce a `BookCreated` event on the existing
-  `eventbus` (now registered in the container). Dedup engine subscribes
-  with its own bg-context management. itunesservice publishes when
-  CreateBook succeeds. That removes the `OnBookCreated` closure entirely.
-  `OrganizerFactory` can move into itunesservice itself
-  (`organizer.NewOrganizer(&config.AppConfig)` doesn't actually need `*Server`).
-  Maintenance plugin's ServerDeps needs each field replaced with an
-  explicit container-resolved dep — substantial but mechanical.
+  **itunesservice — ✅ done (Task 032, verified 2026-05-17).** `OnBookCreated` closure replaced by `plugin.EventPublisher` (publishes `EventBookImported`); dedup engine subscribes via EventBus in `Engine.PostInit` (`internal/dedup/lifecycle.go`). `OrganizerFactory` remains as the sole closure by design — it's a lazy factory that injects the organizer without importing internal/organizer into itunesservice. No *Server captures remain. Wiring: `internal/server/registry_wire.go:~211–245`.
 
 - [x] **SERVER-THIN-RESIDUAL** `scheduler_extra_ops.go` residual extracted to
   `internal/scheduler/extra_ops.go` as `*ExtraOpsRegistrar` (W6). All 13 ops moved;
