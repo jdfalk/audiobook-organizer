@@ -1,5 +1,5 @@
 // file: internal/server/server.go
-// version: 2.19.1
+// version: 2.19.2
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
 // last-edited: 2026-05-16
 
@@ -516,10 +516,10 @@ func NewServer(store database.Store) *Server {
 
 	// Wire iTunes-specific organizer callbacks now that itunesSvc is ready.
 	if server.itunesSvc.Enabled() {
-		server.organizeService.DiscoverITunesLibraryPath = func(_ database.Store) string {
+		server.organizeService.DiscoverITunesLibraryPath = func() string {
 			return server.itunesSvc.Importer.DiscoverLibraryPath()
 		}
-		server.organizeService.ExecuteITunesSync = func(ctx context.Context, _ database.Store, log logger.Logger, libraryPath string) error {
+		server.organizeService.ExecuteITunesSync = func(ctx context.Context, log logger.Logger, libraryPath string) error {
 			return server.itunesSvc.Importer.Sync(ctx, libraryPath, nil, server.itunesActivityFn, log)
 		}
 	}

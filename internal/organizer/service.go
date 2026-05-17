@@ -1,5 +1,5 @@
 // file: internal/organizer/service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package organizer
@@ -23,6 +23,20 @@ import (
 	ulid "github.com/oklog/ulid/v2"
 )
 
+// Store is the narrow slice of database.Store required by this package.
+// Using sub-interfaces reduces coupling and makes the service testable with a mock.
+type Store interface {
+	database.BookStore
+	database.BookFileStore
+	database.OperationStore
+	database.AuthorStore
+	database.NarratorStore
+	database.MaintenanceStore
+}
+
+// Compile-time proof that PebbleStore satisfies organizer.Store.
+var _ Store = (*database.PebbleStore)(nil)
+
 // WriteBackEnqueuer is the interface for enqueuing iTunes write-back requests.
 // Implemented by the server's WriteBackBatcher.
 type WriteBackEnqueuer interface {
@@ -31,7 +45,7 @@ type WriteBackEnqueuer interface {
 
 // Service orchestrates the library organization operation.
 type Service struct {
-	db               database.Store
+	db               Store
 	organizeHooks    OrganizeHooks
 	writeBackBatcher WriteBackEnqueuer
 	// ScanEnqueuer enqueues a background library scan. Wired by the server
@@ -40,11 +54,11 @@ type Service struct {
 
 	// DiscoverITunesLibraryPath discovers the iTunes library path.
 	// Set by the server package after construction.
-	DiscoverITunesLibraryPath func(database.Store) string
+	DiscoverITunesLibraryPath func() string
 
 	// ExecuteITunesSync executes an iTunes library sync.
 	// Set by the server package after construction.
-	ExecuteITunesSync func(ctx context.Context, store database.Store, log logger.Logger, libraryPath string) error
+	ExecuteITunesSync func(ctx context.Context, log logger.Logger, libraryPath string) error
 
 	// ApplyOrganizedFileMetadata applies metadata from an organized file to a Book.
 	// Set by the server package after construction.
@@ -80,12 +94,12 @@ func (orgSvc *Service) newOrganizer() *Organizer {
 }
 
 // NewService creates a new Service.
-func NewService(db database.Store) *Service {
+func NewService(db Store) *Service {
 	return &Service{
 		db: db,
 		// Default no-ops for optional callbacks
-		DiscoverITunesLibraryPath: func(database.Store) string { return "" },
-		ExecuteITunesSync: func(ctx context.Context, store database.Store, log logger.Logger, libraryPath string) error {
+		DiscoverITunesLibraryPath: func() string { return "" },
+		ExecuteITunesSync: func(ctx context.Context, log logger.Logger, libraryPath string) error {
 			return nil
 		},
 		ApplyOrganizedFileMetadata: func(book *database.Book, newPath string) {},
@@ -235,7 +249,7 @@ func (orgSvc *Service) autoBackup(log logger.Logger) {
 }
 
 func (orgSvc *Service) syncITunesBeforeOrganize(ctx context.Context, log logger.Logger) {
-	libraryPath := orgSvc.DiscoverITunesLibraryPath(orgSvc.db)
+	libraryPath := orgSvc.DiscoverITunesLibraryPath()
 	if libraryPath == "" {
 		log.Info("Skipping iTunes sync: no library found")
 		return
@@ -243,7 +257,7 @@ func (orgSvc *Service) syncITunesBeforeOrganize(ctx context.Context, log logger.
 
 	log.Info("Running iTunes sync before organize: %s", libraryPath)
 
-	if err := orgSvc.ExecuteITunesSync(ctx, orgSvc.db, log, libraryPath); err != nil {
+	if err := orgSvc.ExecuteITunesSync(ctx, log, libraryPath); err != nil {
 		log.Warn("iTunes pre-sync failed (continuing with organize): %s", err.Error())
 		return
 	}
