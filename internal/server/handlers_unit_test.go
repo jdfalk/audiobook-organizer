@@ -1,5 +1,5 @@
 // file: internal/server/handlers_unit_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: f8a2d1c3-4b5e-6789-abcd-ef0123456789
 //
 // Unit tests for HTTP handlers using MockStore + httptest.
@@ -96,6 +96,8 @@ func TestHandler_GetOperationStatus_Found(t *testing.T) {
 	srv, mockStore, router := setupHandlerTest(t)
 
 	op := &database.Operation{ID: "op-123", Type: "scan", Status: "completed"}
+	// v2 check first (returns nil → falls through to legacy)
+	mockStore.EXPECT().GetOperationV2("op-123").Return(nil, errors.New("not found"))
 	mockStore.EXPECT().GetOperationByID("op-123").Return(op, nil)
 
 	router.GET("/operations/:id", srv.getOperationStatus)
@@ -111,9 +113,40 @@ func TestHandler_GetOperationStatus_Found(t *testing.T) {
 	assert.Equal(t, "op-123", data["id"])
 }
 
+func TestHandler_GetOperationStatus_FoundV2(t *testing.T) {
+	srv, mockStore, router := setupHandlerTest(t)
+
+	now := time.Now()
+	v2 := &database.OperationV2Row{
+		ID:              "v2-op-123",
+		DefID:           "dedup.series-scan",
+		Status:          "completed",
+		ProgressCurrent: 42,
+		ProgressTotal:   100,
+		ProgressMessage: "done",
+		QueuedAt:        now,
+		CompletedAt:     &now,
+	}
+	mockStore.EXPECT().GetOperationV2("v2-op-123").Return(v2, nil)
+
+	router.GET("/operations/:id", srv.getOperationStatus)
+
+	req := httptest.NewRequest("GET", "/operations/v2-op-123", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]any)
+	assert.Equal(t, "v2-op-123", data["id"])
+	assert.Equal(t, "completed", data["status"])
+}
+
 func TestHandler_GetOperationStatus_NotFound(t *testing.T) {
 	srv, mockStore, router := setupHandlerTest(t)
 
+	mockStore.EXPECT().GetOperationV2("nope").Return(nil, errors.New("not found"))
 	mockStore.EXPECT().GetOperationByID("nope").Return(nil, errors.New("not found"))
 
 	router.GET("/operations/:id", srv.getOperationStatus)
