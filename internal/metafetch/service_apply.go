@@ -1,5 +1,5 @@
 // file: internal/metafetch/service_apply.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6ca469ca-7d2e-4738-b6f1-ae09449ed9e4
 // last-edited: 2026-05-01
 
@@ -12,6 +12,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/organizer"
+	"github.com/jdfalk/audiobook-organizer/internal/policy"
 	"github.com/oklog/ulid/v2"
 	"log"
 	"path/filepath"
@@ -436,6 +437,13 @@ func (mfs *Service) ApplyMetadataCandidate(id string, candidate MetadataCandidat
 	book, err := mfs.db.GetBookByID(id)
 	if err != nil || book == nil {
 		return nil, fmt.Errorf("audiobook not found")
+	}
+
+	// Policy check: policy:no-metadata tag skips automated metadata application.
+	if tags, tagErr := mfs.db.GetBookTags(id); tagErr == nil {
+		if policy.EvaluatePolicy(tags).NoMetadataFetch {
+			return nil, fmt.Errorf("metadata application disabled by policy:no-metadata tag")
+		}
 	}
 
 	// Warn when the candidate runtime diverges significantly from the local

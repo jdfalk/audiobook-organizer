@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 2.2.3
+// version: 2.2.4
 // last-edited: 2026-05-16
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
@@ -27,6 +27,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
+	"github.com/jdfalk/audiobook-organizer/internal/policy"
 )
 
 // Handler functions (stubs for now)
@@ -694,4 +695,10 @@ func (s *Server) deleteUserPreference(c *gin.Context) {
 		return
 	}
 	httputil.RespondWithOK(c, gin.H{"message": "preference deleted"})
+}
+
+// handlePolicyTags returns the catalogue of recognised policy tags.
+// GET /api/v1/policy/tags
+func (s *Server) handlePolicyTags(c *gin.Context) {
+	httputil.RespondWithOK(c, policy.KnownPolicyTags())
 }

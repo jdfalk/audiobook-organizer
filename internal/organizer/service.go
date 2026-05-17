@@ -1,5 +1,5 @@
 // file: internal/organizer/service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: c3d4e5f6-a7b8-c9d0-e1f2-a3b4c5d6e7f8
 
 package organizer
@@ -20,6 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
+	"github.com/jdfalk/audiobook-organizer/internal/policy"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -32,6 +33,7 @@ type Store interface {
 	database.AuthorStore
 	database.NarratorStore
 	database.MaintenanceStore
+	database.TagStore
 }
 
 // Compile-time proof that PebbleStore satisfies organizer.Store.
@@ -501,6 +503,19 @@ func (orgSvc *Service) organizeBooks(ctx context.Context, booksToOrganize []data
 
 			for i := range jobs {
 				book := booksToOrganize[i]
+
+				// Policy check: skip books tagged policy:no-organize.
+				if tags, err := orgSvc.db.GetBookTags(book.ID); err == nil {
+					if policy.EvaluatePolicy(tags).NoOrganize {
+						log.Debug("organize: skipping book %s — policy:no-organize tag", book.ID)
+						statsMu.Lock()
+						stats.Skipped++
+						statsMu.Unlock()
+						atomic.AddInt64(&progressCounter, 1)
+						continue
+					}
+				}
+
 				oldPath := book.FilePath
 				isDir := false
 				if info, err := os.Stat(oldPath); err == nil && info.IsDir() {

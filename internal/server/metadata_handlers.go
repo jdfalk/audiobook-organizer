@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.7.1
+// version: 3.7.2
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 // last-edited: 2026-05-16
 //
@@ -37,6 +37,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
+	"github.com/jdfalk/audiobook-organizer/internal/policy"
 	ulid "github.com/oklog/ulid/v2"
 )
 
@@ -1588,6 +1589,14 @@ func (s *Server) runBulkWriteBack(
 			_ = progress.Log("info", fmt.Sprintf("book %s: skipping protected path", bookID), nil)
 			mu.Unlock()
 			continue
+		}
+		if tags, tagErr := store.GetBookTags(bookID); tagErr == nil {
+			if policy.EvaluatePolicy(tags).NoWriteback {
+				mu.Lock()
+				_ = progress.Log("info", fmt.Sprintf("book %s: skipping write-back (policy:no-writeback tag)", bookID), nil)
+				mu.Unlock()
+				continue
+			}
 		}
 		if doRename {
 			if renameErr := mfs.RunApplyPipelineRenameOnly(bookID, book); renameErr != nil {
