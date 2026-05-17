@@ -1,5 +1,5 @@
 // file: web/src/pages/Works.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4b5c6d7e-8f9a-0b1c-2d3e-4f5a6b7c8d9e
 
 import { useCallback, useEffect, useState } from 'react';
@@ -19,11 +19,43 @@ import {
   Typography,
 } from '@mui/material';
 import * as api from '../services/api';
+import {
+  useConfigurableTable,
+  ResizableHeaderCell,
+  ColumnPicker,
+  type ColumnDef,
+} from '../components/common/ConfigurableTable';
+
+const COLUMNS: ColumnDef<api.Work>[] = [
+  { key: 'title', label: 'Title', defaultWidth: 300, sortable: true, render: (w) => w.title || 'Untitled', sortValue: (w) => w.title ?? '' },
+  { key: 'id', label: 'Work ID', defaultWidth: 230, sortable: true, render: (w) => w.id, sortValue: (w) => w.id },
+  { key: 'author_id', label: 'Author ID', defaultWidth: 100, sortable: true, render: (w) => w.author_id ?? '—', sortValue: (w) => w.author_id ?? 0 },
+  { key: 'series_id', label: 'Series ID', defaultWidth: 100, sortable: true, render: (w) => w.series_id ?? '—', sortValue: (w) => w.series_id ?? 0 },
+  { key: 'alt_titles', label: 'Alternate Titles', defaultWidth: 120, sortable: true, render: (w) => w.alt_titles?.length ?? 0, sortValue: (w) => w.alt_titles?.length ?? 0 },
+];
 
 export function Works() {
   const [works, setWorks] = useState<api.Work[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const {
+    visibleColumns,
+    allColumns,
+    sortField,
+    sortDir,
+    columnWidths,
+    handleSort,
+    toggleColumn,
+    isColumnVisible,
+    startResize,
+    sortRows,
+    resetColumns,
+  } = useConfigurableTable<api.Work>({
+    storageKey: 'works',
+    columns: COLUMNS,
+    defaultSortField: 'title',
+  });
 
   const loadWorks = useCallback(async () => {
     setLoading(true);
@@ -68,14 +100,26 @@ export function Works() {
     );
   }
 
+  const sorted = sortRows(works);
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="h4" gutterBottom>
-        Works
-      </Typography>
-      <Typography variant="body2" color="text.secondary">
-        Logical title-level groupings across editions and narrations.
-      </Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Box>
+          <Typography variant="h4" gutterBottom>
+            Works
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Logical title-level groupings across editions and narrations.
+          </Typography>
+        </Box>
+        <ColumnPicker
+          columns={allColumns}
+          isVisible={isColumnVisible}
+          onToggle={toggleColumn}
+          onReset={resetColumns}
+        />
+      </Stack>
 
       {works.length === 0 ? (
         <Alert severity="info">
@@ -83,24 +127,36 @@ export function Works() {
         </Alert>
       ) : (
         <TableContainer component={Paper}>
-          <Table size="small">
+          <Table size="small" sx={{ tableLayout: 'fixed' }}>
             <TableHead>
               <TableRow>
-                <TableCell>Title</TableCell>
-                <TableCell>Work ID</TableCell>
-                <TableCell>Author ID</TableCell>
-                <TableCell>Series ID</TableCell>
-                <TableCell>Alternate Titles</TableCell>
+                {visibleColumns.map((col) => (
+                  <ResizableHeaderCell
+                    key={col.key}
+                    columnKey={col.key}
+                    label={col.label}
+                    width={columnWidths[col.key] ?? col.defaultWidth ?? 150}
+                    sortable={col.sortable}
+                    sortActive={sortField === col.key}
+                    sortDirection={sortDir}
+                    onSort={() => handleSort(col.key)}
+                    onStartResize={startResize}
+                  />
+                ))}
               </TableRow>
             </TableHead>
             <TableBody>
-              {works.map((work) => (
+              {sorted.map((work) => (
                 <TableRow key={work.id} hover>
-                  <TableCell>{work.title || 'Untitled'}</TableCell>
-                  <TableCell>{work.id}</TableCell>
-                  <TableCell>{work.author_id ?? '—'}</TableCell>
-                  <TableCell>{work.series_id ?? '—'}</TableCell>
-                  <TableCell>{work.alt_titles?.length ?? 0}</TableCell>
+                  {visibleColumns.map((col) => (
+                    <TableCell
+                      key={col.key}
+                      align={col.align}
+                      sx={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                      {col.render(work)}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))}
             </TableBody>
