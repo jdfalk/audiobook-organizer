@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.21.0
+// version: 3.22.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 // last-edited: 2026-05-04
 
@@ -39,6 +39,11 @@ import {
   TablePagination,
   Drawer,
   Switch,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
 } from '@mui/material';
 import MergeIcon from '@mui/icons-material/MergeType';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
@@ -63,6 +68,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { DedupBookTab } from '../components/dedup/DedupBookTab';
 import BuildIcon from '@mui/icons-material/Build';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import { BookDedupScanTab } from '../components/dedup/DedupAdvancedScanTab';
 import { AuthorDedupTab, RoleDetails } from '../components/dedup/DedupAuthorTab';
 import { SeriesDedupTab } from '../components/dedup/DedupSeriesTab';
@@ -1762,8 +1768,146 @@ function EmbeddingDedupTab() {
   );
 }
 
+// ---- Acoustic Dedup Tab ----
+// Shows AcoustID-layer duplicate candidates (stored by engine.AcoustIDScan).
+// Triggers a new scan or displays existing results filtered by layer=acoustid.
+function AcousticDedupTab() {
+  const navigate = useNavigate();
+  const [candidates, setCandidates] = useState<DedupCandidate[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 25;
+  const [bookNames, setBookNames] = useState<Map<string, string>>(new Map());
+
+  const loadCandidates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const resp = await api.getDedupCandidates({
+        layer: 'acoustid',
+        limit: rowsPerPage,
+        offset: page * rowsPerPage,
+      });
+      const cands = resp.candidates || [];
+      setCandidates(cands);
+      setTotal(resp.total || 0);
+
+      // Resolve book titles for display
+      const ids = new Set<string>();
+      for (const c of cands) { ids.add(c.entity_a_id); ids.add(c.entity_b_id); }
+      const names = new Map<string, string>();
+      await Promise.all(Array.from(ids).map(async (id) => {
+        try {
+          const book = await fetchBookCached(id);
+          if (book) names.set(id, book.title || id);
+        } catch { /* ignore */ }
+      }));
+      setBookNames(names);
+    } catch {
+      // handled by empty state
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
+
+  useEffect(() => { loadCandidates(); }, [loadCandidates]);
+
+  const handleScan = async () => {
+    setScanning(true);
+    setScanMsg(null);
+    try {
+      const op = await api.triggerDedupAcoustID();
+      setScanMsg(`AcoustID scan queued (op: ${op?.id ?? 'unknown'})`);
+      setTimeout(() => loadCandidates(), 5000);
+    } catch (err) {
+      setScanMsg(err instanceof Error ? err.message : 'Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const simPct = (c: DedupCandidate) =>
+    c.similarity != null ? `${Math.round(c.similarity * 100)}%` : '—';
+
+  return (
+    <Box>
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h6">Acoustic Duplicates</Typography>
+        <Tooltip title="Compare AcoustID fingerprint segments across all books. Catches re-encodes and format conversions that text matching would miss.">
+          <Button
+            variant="outlined"
+            startIcon={<GraphicEqIcon />}
+            onClick={handleScan}
+            disabled={scanning}
+          >
+            {scanning ? 'Scanning…' : 'Run AcoustID Scan'}
+          </Button>
+        </Tooltip>
+        <IconButton onClick={() => loadCandidates()} size="small"><RefreshIcon /></IconButton>
+      </Stack>
+
+      {scanMsg && <Alert severity="info" sx={{ mb: 2 }} onClose={() => setScanMsg(null)}>{scanMsg}</Alert>}
+
+      {loading ? (
+        <LinearProgress />
+      ) : candidates.length === 0 ? (
+        <Alert severity="info">No acoustic duplicate candidates found. Run a scan to detect fingerprint matches.</Alert>
+      ) : (
+        <Paper>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Book A</TableCell>
+                <TableCell>Book B</TableCell>
+                <TableCell align="right">Similarity</TableCell>
+                <TableCell>Status</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {candidates.map((c) => (
+                <TableRow key={c.id} hover>
+                  <TableCell>
+                    <Button size="small" onClick={() => navigate(`/books/${c.entity_a_id}`)}>
+                      {bookNames.get(c.entity_a_id) || c.entity_a_id}
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    <Button size="small" onClick={() => navigate(`/books/${c.entity_b_id}`)}>
+                      {bookNames.get(c.entity_b_id) || c.entity_b_id}
+                    </Button>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Chip
+                      label={simPct(c)}
+                      size="small"
+                      color={(c.similarity ?? 0) >= 0.9 ? 'error' : 'warning'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={c.status} size="small" variant="outlined" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <TablePagination
+            component="div"
+            count={total}
+            page={page}
+            onPageChange={(_, p) => setPage(p)}
+            rowsPerPage={rowsPerPage}
+            rowsPerPageOptions={[rowsPerPage]}
+          />
+        </Paper>
+      )}
+    </Box>
+  );
+}
+
 // ---- Main Dedup Page ----
-const TAB_NAMES = ['books', 'book-duplicates', 'authors', 'series', 'ai', 'reconcile', 'embedding'] as const;
+const TAB_NAMES = ['books', 'book-duplicates', 'authors', 'series', 'ai', 'reconcile', 'embedding', 'acoustic'] as const;
 
 export function BookDedup() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1789,6 +1933,7 @@ export function BookDedup() {
         <Tab icon={<Badge color="default"><AutoAwesomeIcon /></Badge>} label="AI Review" iconPosition="start" />
         <Tab icon={<Badge color="default"><BuildIcon /></Badge>} label="Reconcile" iconPosition="start" />
         <Tab icon={<Badge color="default"><FingerprintIcon /></Badge>} label="Embedding" iconPosition="start" />
+        <Tab icon={<Badge color="default"><GraphicEqIcon /></Badge>} label="Acoustic" iconPosition="start" />
       </Tabs>
 
       {tab === 0 && <DedupBookTab />}
@@ -1798,6 +1943,7 @@ export function BookDedup() {
       {tab === 4 && <AIReviewTab />}
       {tab === 5 && <ReconcileTab />}
       {tab === 6 && <EmbeddingDedupTab />}
+      {tab === 7 && <AcousticDedupTab />}
     </Box>
   );
 }
