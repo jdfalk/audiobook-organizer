@@ -1,6 +1,7 @@
 // file: internal/itunes/rebuild.go
-// version: 1.0.0
+// version: 2.0.0
 // guid: 3f2e1d0c-9b8a-7c6d-5e4f-3a2b1c0d9e8f
+// last-edited: 2026-05-17
 
 package itunes
 
@@ -237,4 +238,123 @@ type ITLRebuildResult struct {
 	Preview ITLRebuildPreview `json:"preview"`
 	Applied bool              `json:"applied"`
 	Error   string            `json:"error,omitempty"`
+}
+
+// RebuildITLFromDB removes ALL existing tracks from the ITL file and re-inserts
+// every primary-version, non-deleted book from the DB that has an iTunes PID.
+// This is the "nuclear" rebuild path for when incremental diff is impractical.
+// The existing ITL is used as a structural template so the container format,
+// compression, and encryption are preserved — only the track data is replaced.
+// The result is written to outputPath via ApplyITLOperations.
+func RebuildITLFromDB(store RebuildStore, itlPath, outputPath string) (*ITLRebuildResult, error) {
+	lib, err := ParseITL(itlPath)
+	if err != nil {
+		return nil, fmt.Errorf("parse ITL: %w", err)
+	}
+
+	// Collect ALL existing PIDs to remove.
+	removes := make(map[string]bool, len(lib.Tracks))
+	for i := range lib.Tracks {
+		pid := strings.ToUpper(pidToHex(lib.Tracks[i].PersistentID))
+		removes[pid] = true
+	}
+
+	// Collect all DB books to add back.
+	var adds []ITLNewTrack
+	const pageSize = 500
+	for offset := 0; ; offset += pageSize {
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil {
+			return nil, fmt.Errorf("get books page %d: %w", offset/pageSize, err)
+		}
+		if len(books) == 0 {
+			break
+		}
+		for i := range books {
+			b := &books[i]
+			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+				continue
+			}
+			if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+				continue
+			}
+			if b.ITunesPersistentID == nil || *b.ITunesPersistentID == "" {
+				continue
+			}
+			adds = append(adds, buildNewTrackFromBook(store, b))
+		}
+	}
+
+	preview := ITLRebuildPreview{
+		TracksInITL: len(lib.Tracks),
+		BooksInDB:   len(adds),
+		ToRemove:    len(removes),
+		ToAdd:       len(adds),
+	}
+
+	ops := ITLOperationSet{Removes: removes, Adds: adds}
+	if _, err := ApplyITLOperations(itlPath, outputPath, ops); err != nil {
+		return nil, fmt.Errorf("apply rebuild ops: %w", err)
+	}
+
+	return &ITLRebuildResult{Preview: preview, Applied: true}, nil
+}
+
+// BuildExportITL builds a partial ITL containing only the requested bookIDs.
+// It strips all tracks from the template ITL and inserts only the matching
+// DB books. The resulting bytes are returned (not written to disk); the caller
+// is responsible for sending them to the client.
+// If bookIDs is empty, all primary-version non-deleted books with PIDs are included.
+func BuildExportITL(store RebuildStore, templatePath string, bookIDs []string) ([]byte, error) {
+	// Collect the requested books from the store.
+	wantIDs := make(map[string]bool, len(bookIDs))
+	for _, id := range bookIDs {
+		wantIDs[id] = true
+	}
+
+	var adds []ITLNewTrack
+	const pageSize = 500
+	for offset := 0; ; offset += pageSize {
+		books, err := store.GetAllBooks(pageSize, offset)
+		if err != nil {
+			return nil, fmt.Errorf("get books page %d: %w", offset/pageSize, err)
+		}
+		if len(books) == 0 {
+			break
+		}
+		for i := range books {
+			b := &books[i]
+			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+				continue
+			}
+			if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+				continue
+			}
+			if b.ITunesPersistentID == nil || *b.ITunesPersistentID == "" {
+				continue
+			}
+			if len(wantIDs) > 0 && !wantIDs[b.ID] {
+				continue
+			}
+			adds = append(adds, buildNewTrackFromBook(store, b))
+		}
+	}
+
+	lib, err := ParseITL(templatePath)
+	if err != nil {
+		return nil, fmt.Errorf("parse template ITL: %w", err)
+	}
+
+	removes := make(map[string]bool, len(lib.Tracks))
+	for i := range lib.Tracks {
+		pid := strings.ToUpper(pidToHex(lib.Tracks[i].PersistentID))
+		removes[pid] = true
+	}
+
+	ops := ITLOperationSet{Removes: removes, Adds: adds}
+	result, err := ApplyITLOperationsInMemory(templatePath, ops)
+	if err != nil {
+		return nil, fmt.Errorf("build export ITL: %w", err)
+	}
+	return result, nil
 }

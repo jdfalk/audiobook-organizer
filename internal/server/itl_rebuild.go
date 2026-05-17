@@ -1,5 +1,5 @@
 // file: internal/server/itl_rebuild.go
-// version: 2.0.0
+// version: 3.0.0
 // guid: 8f7e6d5c-4b3a-2c1d-0e9f-8a7b6c5d4e3f
 // last-edited: 2026-05-11
 //
@@ -18,14 +18,16 @@ package server
 
 import (
 	"fmt"
-	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 	"log"
 	"net/http"
+	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
+	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
 )
 
 // ITLRebuildPreview summarizes the diff between the DB and the
@@ -91,4 +93,73 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 		Preview: *preview,
 		Applied: true,
 	})
+}
+
+// rebuildITLFullHandler handles POST /api/v1/itunes/rebuild-full.
+// Strips ALL tracks from the ITL and re-inserts every DB book with an iTunes PID.
+// This is the "nuclear" reset path — use rebuildITLHandler (incremental diff) first.
+// Query param: dry_run=true returns a preview without applying.
+func (s *Server) rebuildITLFullHandler(c *gin.Context) {
+	itlPath := config.AppConfig.ITunesLibraryWritePath
+	if itlPath == "" {
+		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath not configured")
+		return
+	}
+
+	dryRun := c.Query("dry_run") == "true"
+	store := s.Store()
+
+	if dryRun {
+		// Parse just to count tracks and books — don't apply.
+		lib, err := itunes.ParseITL(itlPath)
+		if err != nil {
+			httputil.RespondWithInternalError(c, fmt.Sprintf("parse ITL: %v", err))
+			return
+		}
+		preview := itunes.ITLRebuildPreview{
+			TracksInITL: len(lib.Tracks),
+		}
+		httputil.RespondWithOK(c, struct {
+			DryRun  bool                      `json:"dry_run"`
+			Preview itunes.ITLRebuildPreview  `json:"preview"`
+		}{DryRun: true, Preview: preview})
+		return
+	}
+
+	result, err := itunes.RebuildITLFromDB(store, itlPath, itlPath)
+	if err != nil {
+		httputil.RespondWithInternalError(c, fmt.Sprintf("full rebuild failed: %v", err))
+		return
+	}
+
+	log.Printf("[INFO] ITL full-rebuild: removed %d existing tracks, inserted %d DB books",
+		result.Preview.ToRemove, result.Preview.ToAdd)
+	httputil.RespondWithOK(c, result)
+}
+
+// exportITLPartialHandler handles POST /api/v1/itunes/export-partial.
+// Builds a partial ITL containing only the requested book IDs and returns
+// it as a downloadable file. Body: {"book_ids": ["id1", "id2", ...]}
+// If book_ids is empty or omitted, all primary-version books with PIDs are included.
+func (s *Server) exportITLPartialHandler(c *gin.Context) {
+	itlPath := config.AppConfig.ITunesLibraryWritePath
+	if itlPath == "" {
+		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath not configured")
+		return
+	}
+
+	var body struct {
+		BookIDs []string `json:"book_ids"`
+	}
+	_ = c.ShouldBindJSON(&body) // empty body = all books
+
+	data, err := itunes.BuildExportITL(s.Store(), itlPath, body.BookIDs)
+	if err != nil {
+		httputil.RespondWithInternalError(c, fmt.Sprintf("build export ITL: %v", err))
+		return
+	}
+
+	filename := "iTunes Library Export " + time.Now().Format("2006-01-02") + filepath.Ext(itlPath)
+	c.Header("Content-Disposition", `attachment; filename="`+filename+`"`)
+	c.Data(http.StatusOK, "application/octet-stream", data)
 }
