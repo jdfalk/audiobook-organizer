@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.16.0
+// version: 1.17.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-16
 
@@ -1011,6 +1011,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/scan", s.perm(auth.PermScanTrigger), s.triggerDedupScan)
 			protected.POST("/dedup/scan-llm", s.perm(auth.PermScanTrigger), s.triggerDedupLLM)
 			protected.POST("/dedup/scan-acoustid", s.perm(auth.PermScanTrigger), s.triggerDedupAcoustID)
+			protected.POST("/audiobooks/:id/compare-acoustid", s.perm(auth.PermLibraryView), s.handleCompareAcoustID)
 			protected.POST("/dedup/scan-book-signature", s.perm(auth.PermScanTrigger), s.triggerBookSignatureScan)
 			protected.POST("/dedup/fingerprint-rescan", s.perm(auth.PermScanTrigger), s.triggerFingerprintRescan)
 			protected.POST("/dedup/refresh", s.perm(auth.PermScanTrigger), s.triggerDedupRefresh)

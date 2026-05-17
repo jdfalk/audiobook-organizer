@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.28.0
+// version: 2.29.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-16
 
@@ -4558,6 +4558,32 @@ export async function triggerDedupAcoustID(): Promise<Operation> {
   }
   const responseData = await response.json();
   return responseData.data;
+}
+
+export interface AcoustIDSegmentComparison {
+  segment: string;
+  hash_a: string;
+  hash_b: string;
+  match: boolean;
+}
+
+export interface AcoustIDCompareResponse {
+  book_a: Book;
+  book_b: Book;
+  overall_score: number;
+  segment_scores: AcoustIDSegmentComparison[];
+}
+
+export async function compareAcoustID(bookAID: string, bookBID: string): Promise<AcoustIDCompareResponse> {
+  const response = await fetch(
+    `${API_BASE}/audiobooks/${encodeURIComponent(bookAID)}/compare-acoustid?other=${encodeURIComponent(bookBID)}`,
+    { method: 'POST' },
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to compare AcoustID fingerprints');
+  }
+  const responseData = await response.json();
+  return responseData.data ?? responseData;
 }
 
 export async function triggerDedupRefresh(): Promise<Operation> {
