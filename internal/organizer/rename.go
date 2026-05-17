@@ -1,5 +1,5 @@
 // file: internal/organizer/rename.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package organizer
@@ -20,7 +20,7 @@ import (
 
 // RenameService handles preview and execution of file rename + tag write operations.
 type RenameService struct {
-	db database.Store
+	db Store
 
 	// IsProtectedPath checks whether a file path is protected (e.g. import/iTunes).
 	// Set by the server package after construction.
@@ -41,7 +41,7 @@ type RenameService struct {
 }
 
 // NewRenameService creates a new RenameService.
-func NewRenameService(db database.Store) *RenameService {
+func NewRenameService(db Store) *RenameService {
 	return &RenameService{
 		db: db,
 		// Defaults that can be overridden by server package

@@ -1,5 +1,5 @@
 // file: internal/organizer/unit_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f90
 
 package organizer
@@ -1168,7 +1168,7 @@ func TestNewService(t *testing.T) {
 		t.Fatal("NewService returned nil")
 	}
 	// Verify defaults
-	if p := svc.DiscoverITunesLibraryPath(mockStore); p != "" {
+	if p := svc.DiscoverITunesLibraryPath(); p != "" {
 		t.Errorf("default DiscoverITunesLibraryPath should return empty, got %q", p)
 	}
 	if p := svc.ComputeITunesPath("/file"); p != "" {
