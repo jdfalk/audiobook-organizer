@@ -1,7 +1,7 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.78.0 -->
+<!-- version: 2.79.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-15 -->
+<!-- last-edited: 2026-05-17 -->
 
 # Changelog
 
@@ -9,7 +9,76 @@
 
 ### Features
 
-#### May 15, 2026 — Partial book signatures + structured fingerprint diagnosis
+#### May 17, 2026 — Full ITL rebuild + partial export (Tasks 033 + 035, PR #1004)
+
+- `itunes.RebuildITLFromDB(store, itlPath, outputPath)` — strips ALL existing tracks from the ITL and re-inserts every primary-version non-deleted DB book with an iTunes PID. Uses the existing ITL as a structural template so iTunes accepts the container format (Task 035 / backlog 7.9 nuclear path).
+- `itunes.BuildExportITL(store, templatePath, bookIDs)` — builds an ITL containing only the requested book IDs; returns bytes for download (Task 033 / backlog 6.4 partial export).
+- `itunes.ApplyITLOperationsInMemory` — in-memory sibling of `ApplyITLOperations`; returns `[]byte` instead of writing to disk.
+- `itunes.encodeITLPayload` — extracted compress+encrypt+header helper shared by file-write and in-memory paths.
+- `POST /api/v1/itunes/rebuild-full` — on-demand full rebuild; supports `dry_run=true` preview. Requires `PermLibraryEditMetadata`.
+- `POST /api/v1/itunes/export-partial` — body `{"book_ids": [...]}`, returns ITL file download. Requires `PermIntegrationsManage`.
+
+#### May 17, 2026 — Async embedding via OpenAI Batch API (Task 024 / OPS-1-11, PR #1003)
+
+- `dedup.embed-async` UOS operation — submits all un-embedded books to the OpenAI Batch API nightly (cron `0 3 * * *`). Results arrive within 24 h and are ingested automatically when the BatchPoller detects completion.
+- `internal/ai/embedding_batch.go` — `CreateEmbeddingBatch` and `DownloadEmbeddingBatchResults` on `EmbeddingClient`.
+- `internal/dedup/engine.go` — `EmbedBooksAsync` collects un-embedded primary books and submits a batch.
+- `POST /api/v1/dedup/embed-async` — on-demand trigger for the batch submission. Requires `PermScanTrigger`.
+
+#### May 17, 2026 — Resizable + sortable columns on Works and TrashedVersions (PR #1002)
+
+- Works and TrashedVersions pages now use `useConfigurableTable` with `ResizableHeaderCell` and `ColumnPicker`.
+- Column widths, sort state, and visibility persisted to `localStorage` per table.
+- Completes coverage for all static-table pages (Library/Authors/Series were already done).
+
+#### May 17, 2026 — Acoustic dedup UX redesign + metadata scoring (PR #1000)
+
+- Reconcile tab and AcoustID scan button: fixed `op: unknown` bug — `op_id` normalization in frontend `Operation` type now handles both `id` and `op_id` response fields.
+- Metadata quality scoring for merge conflict resolution; controls to select winner per field.
+- `POST /api/v1/dedup/acoustid-scan` and reconcile tab ops now return correct `op_id`.
+
+#### May 17, 2026 — AcoustID manual comparison tool (ACOUSTID-COMPARE-1, PR #999)
+
+- `GET /api/v1/acoustid/compare?a=<id>&b=<id>` — per-segment fingerprint comparison with Hamming distance and match flags.
+- New frontend comparison panel in the dedup workflow.
+
+#### May 17, 2026 — Acoustic Duplicates tab in BookDedup (ACOUSTID-DEDUP-1, PR #998)
+
+- New "Acoustic Duplicates" tab in the dedup UI backed by `GET /api/v1/dedup/acoustid-candidates`.
+- Displays candidate pairs with fingerprint similarity scores.
+
+#### May 17, 2026 — Tag-based book processing policies (7.1, PR #997)
+
+- `internal/policy` package — policy rules matched by tag, genre, or series pattern; determine organizer behavior (skip, manual-only, auto).
+- `POST /api/v1/policy` and `GET /api/v1/policy` endpoints.
+- Policy evaluation integrated into the organizer pipeline.
+
+#### May 17, 2026 — ISP narrow store interfaces (ARCH-4-12, PR #995)
+
+- Extracted narrow store interfaces (`BookReader`, `BookWriter`, etc.) so packages depend on only the methods they use.
+- Reduces compile-time coupling and makes testing easier.
+
+### Tests
+
+#### May 17, 2026 — UpdateAudiobook service-layer unit tests (ARCH-4-10, PR #996)
+
+- 12 new unit tests for `UpdateAudiobook` covering field update, version-group handling, and soft-delete edge cases.
+
+### Fixes
+
+#### May 17, 2026 — Filter same-directory chapter-files from embedding dedup (PR #1001)
+
+- `internal/dedup/engine.go` — added `filepath.Dir` guard in `CheckBook` emission loop and `PurgeStaleCandidates`: book pairs in the same directory are never emitted as dedup candidates. Eliminates false positives where chapter files (011.mp3, 062.mp3) of the same audiobook share identical text embeddings.
+
+#### May 16, 2026 — Fix broken_file_count in /system/status (PR #994)
+
+- `internal/sysinfo` — `broken_file_count` was computed but not included in the `SystemStatus` response. Now surfaced on the dashboard.
+
+#### May 16, 2026 — Wrap Summary column on mobile in activity log (PR #993)
+
+- CSS fix so the Summary column in the activity log table wraps text on small screens instead of overflowing.
+
+### May 15, 2026 — Partial book signatures + structured fingerprint diagnosis
 
 **Part A: Partial book signatures** (`internal/fingerprint/book_signature.go`)
 
