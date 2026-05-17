@@ -1,5 +1,5 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.6.0
+// version: 2.7.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-08
 
@@ -1036,6 +1036,21 @@ func (s *Server) triggerEmbedScan(c *gin.Context) {
 	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.embed-scan", nil)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue embed scan", err)
+		return
+	}
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
+}
+
+// triggerEmbedAsync handles POST /api/v1/dedup/embed-async.
+// Enqueues the nightly embed-async UOS op on demand.
+func (s *Server) triggerEmbedAsync(c *gin.Context) {
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
+		return
+	}
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.embed-async", nil)
+	if err != nil {
+		httputil.InternalError(c, "failed to enqueue embed-async", err)
 		return
 	}
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})

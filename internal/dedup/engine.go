@@ -1230,6 +1230,63 @@ func (de *Engine) EmbedAuthor(ctx context.Context, authorID int) error {
 	return nil
 }
 
+// EmbedBooksAsync submits all primary books that lack a current embedding to
+// the OpenAI Batch API (/v1/embeddings) for offline processing. The batch
+// completes within 24 hours; results are ingested by BatchPoller when the
+// "embed_async" batch type completes.
+//
+// Returns the OpenAI batch ID and the number of books submitted. Returns an
+// empty batchID (and count=0, err=nil) when all books are already embedded.
+func (de *Engine) EmbedBooksAsync(ctx context.Context) (batchID string, count int, err error) {
+	if de.embedClient == nil {
+		return "", 0, fmt.Errorf("no embedding client configured")
+	}
+
+	books, err := de.getAllBooks()
+	if err != nil {
+		return "", 0, fmt.Errorf("load books: %w", err)
+	}
+
+	var items []ai.EmbedBatchItem
+	for _, book := range books {
+		if !hasUsableTitle(book.Title) {
+			continue
+		}
+		authorName := ""
+		if book.AuthorID != nil {
+			if a, lookupErr := de.bookStore.GetAuthorByID(*book.AuthorID); lookupErr == nil && a != nil {
+				authorName = a.Name
+			}
+		}
+		seriesName := ""
+		if book.SeriesID != nil {
+			if s, lookupErr := de.bookStore.GetSeriesByID(*book.SeriesID); lookupErr == nil && s != nil {
+				seriesName = s.Name
+			}
+		}
+		text := ai.BuildBookEmbeddingText(book.Title, authorName, derefStr(book.Narrator), seriesName, seriesNumberOf(&book))
+		hash := ai.TextHash(text)
+
+		// Skip books that already have a current embedding.
+		existing, getErr := de.embedStore.Get("book", book.ID)
+		if getErr == nil && existing != nil && existing.TextHash == hash {
+			continue
+		}
+		items = append(items, ai.EmbedBatchItem{BookID: book.ID, Text: text})
+	}
+
+	if len(items) == 0 {
+		return "", 0, nil
+	}
+
+	id, err := de.embedClient.CreateEmbeddingBatch(ctx, items)
+	if err != nil {
+		return "", 0, fmt.Errorf("submit embedding batch: %w", err)
+	}
+	log.Printf("[INFO] dedup: submitted async embedding batch %s for %d books", id, len(items))
+	return id, len(items), nil
+}
+
 // mirrorAuthorToChromem writes an author embedding to the chromem index.
 // Best-effort; see mirrorBookToChromem for rationale.
 func (de *Engine) mirrorAuthorToChromem(ctx context.Context, authorID string, vec []float32) {

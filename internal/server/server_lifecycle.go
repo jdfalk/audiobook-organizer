@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.17.0
+// version: 1.18.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-16
 
@@ -1016,6 +1016,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/fingerprint-rescan", s.perm(auth.PermScanTrigger), s.triggerFingerprintRescan)
 			protected.POST("/dedup/refresh", s.perm(auth.PermScanTrigger), s.triggerDedupRefresh)
 			protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), s.triggerEmbedScan)
+			protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), s.triggerEmbedAsync)
 
 			// File system routes
 			protected.GET("/filesystem/home", s.perm(auth.PermSettingsManage), s.getHomeDirectory)
