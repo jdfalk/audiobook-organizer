@@ -3950,7 +3950,9 @@ export async function startReconcileScan(): Promise<Operation> {
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to start reconcile scan');
   }
-  return response.json();
+  const responseData = await response.json();
+  const raw = responseData.data ?? responseData;
+  return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
 }
 
 export interface LatestReconcileScan {
@@ -4557,7 +4559,23 @@ export async function triggerDedupAcoustID(): Promise<Operation> {
     throw await buildApiError(response, 'Failed to trigger AcoustID scan');
   }
   const responseData = await response.json();
-  return responseData.data;
+  const raw = responseData.data ?? {};
+  // Backend returns {op_id: "..."} — normalize to Operation shape.
+  return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
+}
+
+export async function triggerFingerprintBackfill(scope: 'missing' | 'all' = 'missing'): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/dedup/fingerprint-rescan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scope }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to trigger fingerprint backfill');
+  }
+  const responseData = await response.json();
+  const raw = responseData.data ?? {};
+  return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
 }
 
 export interface AcoustIDSegmentComparison {

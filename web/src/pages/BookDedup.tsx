@@ -1,7 +1,7 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.22.0
+// version: 3.23.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
-// last-edited: 2026-05-04
+// last-edited: 2026-05-17
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -44,6 +44,7 @@ import {
   TableRow,
   TableCell,
   TableBody,
+  Avatar,
 } from '@mui/material';
 import MergeIcon from '@mui/icons-material/MergeType';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
@@ -1770,12 +1771,89 @@ function EmbeddingDedupTab() {
 
 // ---- Acoustic Compare Panel ----
 // Manual two-book fingerprint comparison tool.
-function AcousticComparePanel() {
-  const [bookAID, setBookAID] = useState('');
-  const [bookBID, setBookBID] = useState('');
+function formatDuration(seconds: number): string {
+  if (!seconds) return '';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function bookCoverSrc(book: Book): string {
+  if (!book.cover_url) return '';
+  return book.cover_url.startsWith('/api/')
+    ? book.cover_url
+    : `/api/v1/covers/proxy?url=${encodeURIComponent(book.cover_url)}`;
+}
+
+function AcousticBookCard({ book, label }: { book: Book; label: string }) {
+  const navigate = useNavigate();
+  return (
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        {label}
+      </Typography>
+      <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} alignItems="flex-start">
+        <Avatar
+          src={bookCoverSrc(book)}
+          variant="rounded"
+          sx={{ width: 56, height: 72, flexShrink: 0, bgcolor: 'action.selected' }}
+        >
+          <GraphicEqIcon />
+        </Avatar>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+            onClick={() => navigate(`/books/${book.id}`)}
+            noWrap
+          >
+            {book.title || <em style={{ opacity: 0.5 }}>Untitled</em>}
+          </Typography>
+          {book.author_name && (
+            <Typography variant="caption" color="text.secondary" noWrap>{book.author_name}</Typography>
+          )}
+          {book.series_name && (
+            <Typography variant="caption" color="text.secondary" noWrap display="block">
+              {book.series_name}{book.series_position ? ` · Book ${book.series_position}` : ''}
+            </Typography>
+          )}
+          <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+            {book.format && <Chip label={book.format.toUpperCase()} size="small" />}
+            {book.duration && (
+              <Chip label={formatDuration(book.duration)} size="small" variant="outlined" />
+            )}
+          </Stack>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 0.5, wordBreak: 'break-all', fontSize: '0.65rem' }}
+          >
+            {book.file_path}
+          </Typography>
+        </Box>
+      </Stack>
+    </Box>
+  );
+}
+
+interface AcousticComparePanelProps {
+  initialA?: string;
+  initialB?: string;
+}
+
+function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticComparePanelProps) {
+  const [bookAID, setBookAID] = useState(initialA);
+  const [bookBID, setBookBID] = useState(initialB);
   const [result, setResult] = useState<api.AcoustIDCompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialA) setBookAID(initialA);
+    if (initialB) setBookBID(initialB);
+  }, [initialA, initialB]);
 
   const handleCompare = async () => {
     if (!bookAID.trim() || !bookBID.trim()) return;
@@ -1797,69 +1875,102 @@ function AcousticComparePanel() {
     seg3: 'Body 3', seg4: 'Body 4', seg5: 'Body 5', seg6: 'Outro',
   };
 
+  const hasAnySegments = result
+    ? result.segment_scores.some((s) => s.hash_a || s.hash_b)
+    : false;
+
   return (
     <Paper sx={{ p: 2 }}>
-      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>Compare Two Books</Typography>
+      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>Fingerprint Comparison</Typography>
       <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
         <TextField
           label="Book A ID"
           size="small"
           value={bookAID}
           onChange={(e) => setBookAID(e.target.value)}
-          sx={{ width: 280 }}
+          sx={{ flex: 1 }}
+          placeholder="Paste book ID…"
         />
         <TextField
           label="Book B ID"
           size="small"
           value={bookBID}
           onChange={(e) => setBookBID(e.target.value)}
-          sx={{ width: 280 }}
+          sx={{ flex: 1 }}
+          placeholder="Paste book ID…"
         />
-        <Button variant="contained" onClick={handleCompare} disabled={loading || !bookAID || !bookBID}>
+        <Button variant="contained" onClick={handleCompare} disabled={loading || !bookAID.trim() || !bookBID.trim()}>
           {loading ? 'Comparing…' : 'Compare'}
         </Button>
       </Stack>
+
       {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
+
       {result && (
         <Box>
-          <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
+          {/* Book cards side by side */}
+          <Stack direction="row" spacing={3} sx={{ mb: 2 }}>
+            <AcousticBookCard book={result.book_a as Book} label="Book A" />
+            <Divider orientation="vertical" flexItem />
+            <AcousticBookCard book={result.book_b as Book} label="Book B" />
+          </Stack>
+
+          {/* Similarity score */}
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
             <Chip
-              label={`${Math.round(result.overall_score * 100)}% similar`}
-              color={result.overall_score >= 0.85 ? 'error' : result.overall_score >= 0.6 ? 'warning' : 'default'}
+              label={hasAnySegments ? `${Math.round(result.overall_score * 100)}% match` : 'No fingerprint data'}
+              color={
+                !hasAnySegments ? 'default'
+                  : result.overall_score >= 0.85 ? 'error'
+                  : result.overall_score >= 0.6 ? 'warning'
+                  : 'default'
+              }
               icon={<GraphicEqIcon />}
             />
-            <Typography variant="body2" color="text.secondary">
-              {result.book_a.title} vs {result.book_b.title}
-            </Typography>
+            {!hasAnySegments && (
+              <Typography variant="caption" color="text.secondary">
+                Run "Fingerprint Books" first to populate segment data
+              </Typography>
+            )}
           </Stack>
+
+          {/* Segment table */}
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Segment</TableCell>
-                <TableCell>Book A hash</TableCell>
-                <TableCell>Book B hash</TableCell>
+                <TableCell>Book A fingerprint</TableCell>
+                <TableCell>Book B fingerprint</TableCell>
                 <TableCell align="center">Match</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {result.segment_scores.map((seg) => (
-                <TableRow key={seg.segment}
-                  sx={{ bgcolor: seg.match ? 'success.light' : seg.hash_a && seg.hash_b ? 'error.light' : undefined, opacity: 0.9 }}
+                <TableRow
+                  key={seg.segment}
+                  sx={{
+                    bgcolor: seg.match
+                      ? 'success.light'
+                      : seg.hash_a && seg.hash_b
+                      ? 'error.light'
+                      : undefined,
+                    opacity: 0.9,
+                  }}
                 >
                   <TableCell><strong>{segLabels[seg.segment] ?? seg.segment}</strong></TableCell>
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
-                    {seg.hash_a ? seg.hash_a.slice(0, 12) + '…' : <em>missing</em>}
+                    {seg.hash_a ? seg.hash_a.slice(0, 16) + '…' : <em style={{ opacity: 0.4 }}>not fingerprinted</em>}
                   </TableCell>
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
-                    {seg.hash_b ? seg.hash_b.slice(0, 12) + '…' : <em>missing</em>}
+                    {seg.hash_b ? seg.hash_b.slice(0, 16) + '…' : <em style={{ opacity: 0.4 }}>not fingerprinted</em>}
                   </TableCell>
                   <TableCell align="center">
                     {!seg.hash_a || !seg.hash_b ? (
-                      <Chip label="n/a" size="small" />
+                      <Chip label="n/a" size="small" variant="outlined" />
                     ) : seg.match ? (
-                      <Chip label="✓" size="small" color="success" />
+                      <Chip label="✓ match" size="small" color="success" />
                     ) : (
-                      <Chip label="✗" size="small" color="error" />
+                      <Chip label="✗ differ" size="small" color="error" />
                     )}
                   </TableCell>
                 </TableRow>
@@ -1872,19 +1983,52 @@ function AcousticComparePanel() {
   );
 }
 
+// metadataQuality scores a Book's metadata completeness (0–10).
+// Higher = more complete / reliable source.
+function metadataQuality(book: Book | undefined): number {
+  if (!book) return 0;
+  let score = 0;
+  const title = book.title ?? '';
+  // Title sanity: not empty, not literal "TITLE", not looks like a ULID/UUID
+  const isGarbageTitle =
+    !title ||
+    title.toUpperCase() === 'TITLE' ||
+    /^[0-9A-Z]{26}$/.test(title.trim());
+  if (!isGarbageTitle) score += 2;
+  if (book.asin) score += 3;
+  if (book.isbn13 || book.isbn) score += 2;
+  if (book.cover_url) score += 1;
+  if (book.narrator) score += 0.5;
+  if (book.description) score += 0.5;
+  if (book.publisher) score += 0.5;
+  return score;
+}
+
+function qualityChip(score: number) {
+  if (score >= 6) return <Chip label="Rich metadata" size="small" color="success" variant="outlined" />;
+  if (score >= 3) return <Chip label="Partial metadata" size="small" color="warning" variant="outlined" />;
+  return <Chip label="Poor metadata" size="small" color="error" variant="outlined" />;
+}
+
 // ---- Acoustic Dedup Tab ----
-// Shows AcoustID-layer duplicate candidates (stored by engine.AcoustIDScan).
-// Triggers a new scan or displays existing results filtered by layer=acoustid.
 function AcousticDedupTab() {
   const navigate = useNavigate();
   const [candidates, setCandidates] = useState<DedupCandidate[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
-  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [fingerprinting, setFingerprinting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const rowsPerPage = 25;
-  const [bookNames, setBookNames] = useState<Map<string, string>>(new Map());
+  const [bookCache, setBookCache] = useState<Map<string, Book>>(new Map());
+  const [resolving, setResolving] = useState<Set<number>>(new Set());
+  const [compareA, setCompareA] = useState('');
+  const [compareB, setCompareB] = useState('');
+  const comparePanelRef = useCallback((el: HTMLDivElement | null) => {
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+  const [showComparePanel, setShowComparePanel] = useState(false);
 
   const loadCandidates = useCallback(async () => {
     setLoading(true);
@@ -1898,17 +2042,16 @@ function AcousticDedupTab() {
       setCandidates(cands);
       setTotal(resp.total || 0);
 
-      // Resolve book titles for display
       const ids = new Set<string>();
       for (const c of cands) { ids.add(c.entity_a_id); ids.add(c.entity_b_id); }
-      const names = new Map<string, string>();
+      const cache = new Map<string, Book>();
       await Promise.all(Array.from(ids).map(async (id) => {
         try {
           const book = await fetchBookCached(id);
-          if (book) names.set(id, book.title || id);
+          if (book) cache.set(id, book);
         } catch { /* ignore */ }
       }));
-      setBookNames(names);
+      setBookCache(cache);
     } catch {
       // handled by empty state
     } finally {
@@ -1918,46 +2061,100 @@ function AcousticDedupTab() {
 
   useEffect(() => { loadCandidates(); }, [loadCandidates]);
 
+  const handleFingerprint = async () => {
+    setFingerprinting(true);
+    setStatusMsg(null);
+    try {
+      const op = await api.triggerFingerprintBackfill('missing');
+      setStatusMsg(`Fingerprinting queued — see bell icon for progress (op ${op.id.slice(-6)})`);
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : 'Fingerprint job failed to start');
+    } finally {
+      setFingerprinting(false);
+    }
+  };
+
   const handleScan = async () => {
     setScanning(true);
-    setScanMsg(null);
+    setStatusMsg(null);
     try {
       const op = await api.triggerDedupAcoustID();
-      setScanMsg(`AcoustID scan queued (op: ${op?.id ?? 'unknown'})`);
+      setStatusMsg(`Duplicate scan queued — see bell icon for progress (op ${op.id.slice(-6)})`);
       setTimeout(() => loadCandidates(), 5000);
     } catch (err) {
-      setScanMsg(err instanceof Error ? err.message : 'Scan failed');
+      setStatusMsg(err instanceof Error ? err.message : 'Scan failed to start');
     } finally {
       setScanning(false);
+    }
+  };
+
+  const handleMerge = async (candidateId: number, keepId: string, discardId: string) => {
+    setResolving((s) => new Set(s).add(candidateId));
+    try {
+      await api.mergeBooks(keepId, [discardId]);
+      await api.mergeDedupCandidate(candidateId);
+      setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : 'Merge failed');
+    } finally {
+      setResolving((s) => { const next = new Set(s); next.delete(candidateId); return next; });
+    }
+  };
+
+  const handleDismiss = async (candidateId: number) => {
+    setResolving((s) => new Set(s).add(candidateId));
+    try {
+      await api.dismissDedupCandidate(candidateId);
+      setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : 'Dismiss failed');
+    } finally {
+      setResolving((s) => { const next = new Set(s); next.delete(candidateId); return next; });
     }
   };
 
   const simPct = (c: DedupCandidate) =>
     c.similarity != null ? `${Math.round(c.similarity * 100)}%` : '—';
 
+  const bookTitle = (id: string) => {
+    const b = bookCache.get(id);
+    if (!b) return <em style={{ opacity: 0.5 }}>{id.slice(-8)}</em>;
+    const title = b.title;
+    const isGarbage = !title || title.toUpperCase() === 'TITLE' || /^[0-9A-Z]{26}$/.test(title.trim());
+    if (isGarbage) return <em style={{ color: 'orange' }}>{title || '(no title)'}</em>;
+    return title;
+  };
+
   return (
     <Box>
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
         <Typography variant="h6">Acoustic Duplicates</Typography>
-        <Tooltip title="Compare AcoustID fingerprint segments across all books. Catches re-encodes and format conversions that text matching would miss.">
-          <Button
-            variant="outlined"
-            startIcon={<GraphicEqIcon />}
-            onClick={handleScan}
-            disabled={scanning}
-          >
-            {scanning ? 'Scanning…' : 'Run AcoustID Scan'}
+
+        <Tooltip title="Read every audio file and compute 7-segment chromaprint fingerprints. Required before duplicate scanning. Runs overnight; safe to trigger manually for new files.">
+          <Button variant="outlined" startIcon={<FingerprintIcon />} onClick={handleFingerprint} disabled={fingerprinting}>
+            {fingerprinting ? 'Queuing…' : 'Fingerprint Books'}
           </Button>
         </Tooltip>
-        <IconButton onClick={() => loadCandidates()} size="small"><RefreshIcon /></IconButton>
+
+        <Tooltip title="Compare already-stored fingerprints across all books to find audio-level duplicate pairs. Fast — no file I/O.">
+          <Button variant="outlined" startIcon={<GraphicEqIcon />} onClick={handleScan} disabled={scanning}>
+            {scanning ? 'Queuing…' : 'Find Acoustic Duplicates'}
+          </Button>
+        </Tooltip>
+
+        <IconButton onClick={() => loadCandidates()} size="small" title="Refresh"><RefreshIcon /></IconButton>
       </Stack>
 
-      {scanMsg && <Alert severity="info" sx={{ mb: 2 }} onClose={() => setScanMsg(null)}>{scanMsg}</Alert>}
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+        Workflow: <strong>Fingerprint Books</strong> (reads audio, ~hours) → <strong>Find Acoustic Duplicates</strong> (compares hashes, seconds). Merge direction: prefer the book with richer metadata (ASIN/ISBN → cover → sane title).
+      </Typography>
+
+      {statusMsg && <Alert severity="info" sx={{ mb: 2 }} onClose={() => setStatusMsg(null)}>{statusMsg}</Alert>}
 
       {loading ? (
         <LinearProgress />
       ) : candidates.length === 0 ? (
-        <Alert severity="info">No acoustic duplicate candidates found. Run a scan to detect fingerprint matches.</Alert>
+        <Alert severity="info">No acoustic duplicate candidates found. Run "Fingerprint Books" then "Find Acoustic Duplicates".</Alert>
       ) : (
         <Paper>
           <Table size="small">
@@ -1965,35 +2162,79 @@ function AcousticDedupTab() {
               <TableRow>
                 <TableCell>Book A</TableCell>
                 <TableCell>Book B</TableCell>
-                <TableCell align="right">Similarity</TableCell>
-                <TableCell>Status</TableCell>
+                <TableCell align="center">Similarity</TableCell>
+                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {candidates.map((c) => (
-                <TableRow key={c.id} hover>
-                  <TableCell>
-                    <Button size="small" onClick={() => navigate(`/books/${c.entity_a_id}`)}>
-                      {bookNames.get(c.entity_a_id) || c.entity_a_id}
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button size="small" onClick={() => navigate(`/books/${c.entity_b_id}`)}>
-                      {bookNames.get(c.entity_b_id) || c.entity_b_id}
-                    </Button>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Chip
-                      label={simPct(c)}
-                      size="small"
-                      color={(c.similarity ?? 0) >= 0.9 ? 'error' : 'warning'}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={c.status} size="small" variant="outlined" />
-                  </TableCell>
-                </TableRow>
-              ))}
+              {candidates.map((c) => {
+                const bookA = bookCache.get(c.entity_a_id);
+                const bookB = bookCache.get(c.entity_b_id);
+                const qA = metadataQuality(bookA);
+                const qB = metadataQuality(bookB);
+                const recommendA = qA > qB;
+                const recommendB = qB > qA;
+                const busy = resolving.has(c.id);
+                return (
+                  <TableRow key={c.id} hover sx={{ opacity: busy ? 0.5 : 1 }}>
+                    <TableCell>
+                      <Stack spacing={0.5}>
+                        <Button size="small" sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                          onClick={() => navigate(`/books/${c.entity_a_id}`)}>
+                          {bookTitle(c.entity_a_id)}
+                        </Button>
+                        <Stack direction="row" spacing={0.5}>
+                          {qualityChip(qA)}
+                          {recommendA && <Chip label="★ Recommended keep" size="small" color="primary" />}
+                        </Stack>
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Stack spacing={0.5}>
+                        <Button size="small" sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                          onClick={() => navigate(`/books/${c.entity_b_id}`)}>
+                          {bookTitle(c.entity_b_id)}
+                        </Button>
+                        <Stack direction="row" spacing={0.5}>
+                          {qualityChip(qB)}
+                          {recommendB && <Chip label="★ Recommended keep" size="small" color="primary" />}
+                        </Stack>
+                      </Stack>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip label={simPct(c)} size="small" color={(c.similarity ?? 0) >= 0.9 ? 'error' : 'warning'} />
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        <Tooltip title="Keep Book A, merge B into it">
+                          <Button size="small" variant={recommendA ? 'contained' : 'outlined'} color="primary"
+                            disabled={busy} onClick={() => handleMerge(c.id, c.entity_a_id, c.entity_b_id)}>
+                            Keep A
+                          </Button>
+                        </Tooltip>
+                        <Tooltip title="Keep Book B, merge A into it">
+                          <Button size="small" variant={recommendB ? 'contained' : 'outlined'} color="primary"
+                            disabled={busy} onClick={() => handleMerge(c.id, c.entity_b_id, c.entity_a_id)}>
+                            Keep B
+                          </Button>
+                        </Tooltip>
+                        <Tooltip title="Compare fingerprint segments side-by-side">
+                          <Button size="small" variant="outlined" startIcon={<GraphicEqIcon />}
+                            onClick={() => { setCompareA(c.entity_a_id); setCompareB(c.entity_b_id); setShowComparePanel(true); }}>
+                            Compare
+                          </Button>
+                        </Tooltip>
+                        <Tooltip title="Not a duplicate — dismiss">
+                          <Button size="small" variant="text" color="inherit" disabled={busy}
+                            onClick={() => handleDismiss(c.id)}>
+                            Dismiss
+                          </Button>
+                        </Tooltip>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           <TablePagination
@@ -2007,8 +2248,8 @@ function AcousticDedupTab() {
         </Paper>
       )}
 
-      <Box sx={{ mt: 3 }}>
-        <AcousticComparePanel />
+      <Box sx={{ mt: 3 }} ref={showComparePanel ? comparePanelRef : undefined}>
+        <AcousticComparePanel initialA={compareA} initialB={compareB} />
       </Box>
     </Box>
   );
