@@ -46,6 +46,7 @@ func (p *Plugin) Register(r sdk.Registry) error {
 
 	ops := []sdk.OperationDef{
 		p.embedScanDef(),
+		p.embedAsyncDef(),
 		p.fullScanDef(),
 		p.llmReviewDef(),
 		p.bookSignatureScanDef(),

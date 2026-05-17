@@ -1,5 +1,5 @@
 // file: internal/server/batch_poller.go
-// version: 1.4.0
+// version: 1.5.0
 // guid: f8a1b2c3-d4e5-6789-abcd-0123456789ab
 
 package server
@@ -204,6 +204,34 @@ func (s *Server) registerBatchPollerHandlers() {
 			return fmt.Errorf("aijobs: store does not implement AIJobsStore")
 		}
 		return aijobs.Dispatch(ctx, store, batchID, results)
+	})
+
+	s.batchPoller.RegisterHandler("embed_async", func(ctx context.Context, batchID, outputFileID string) error {
+		if outputFileID == "" {
+			return fmt.Errorf("embed_async: no output file for batch %s", batchID)
+		}
+		if s.embedClient == nil || s.embeddingStore == nil {
+			return fmt.Errorf("embed_async: embedding client or store not available")
+		}
+		results, err := s.embedClient.DownloadEmbeddingBatchResults(ctx, outputFileID)
+		if err != nil {
+			return fmt.Errorf("embed_async: download results for batch %s: %w", batchID, err)
+		}
+		stored := 0
+		for _, r := range results {
+			if err := s.embeddingStore.Upsert(database.Embedding{
+				EntityType: "book",
+				EntityID:   r.BookID,
+				Vector:     r.Vector,
+				Model:      "text-embedding-3-large",
+			}); err != nil {
+				log.Printf("[WARN] embed_async: upsert book %s: %v", r.BookID, err)
+			} else {
+				stored++
+			}
+		}
+		log.Printf("[INFO] embed_async: stored %d/%d embeddings from batch %s", stored, len(results), batchID)
+		return nil
 	})
 }
 

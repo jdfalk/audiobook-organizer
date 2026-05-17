@@ -308,6 +308,9 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	if embStore, ok := serviceregistry.TryGet[*database.EmbeddingStore](c, "embeddingstore"); ok {
 		s.embeddingStore = embStore
 	}
+	if ec, ok := serviceregistry.TryGet[*ai.EmbeddingClient](c, "embedclient"); ok {
+		s.embedClient = ec
+	}
 	if engine, ok := serviceregistry.TryGet[*dedup.Engine](c, "dedup"); ok {
 		s.dedupEngine = engine
 	}

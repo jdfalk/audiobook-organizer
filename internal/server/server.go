@@ -180,6 +180,7 @@ type Server struct {
 	changelogService       *activity.ChangelogService
 	activityService        *activity.Service
 	embeddingStore         *database.EmbeddingStore
+	embedClient            *ai.EmbeddingClient
 	metricsStore           database.MetricsStorer
 	dedupEngine            *dedup.Engine
 	activityWriter         *activity.Writer
