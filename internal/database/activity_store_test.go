@@ -1,5 +1,5 @@
 // file: internal/database/activity_store_test.go
-// version: 1.1.1
+// version: 1.2.0
 // guid: f3a1b2c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 package database
@@ -367,4 +367,89 @@ func TestActivityStore_GetDistinctSources(t *testing.T) {
 		assert.Equal(t, "gin", sources[0].Source)
 		assert.Equal(t, 1, sources[0].Count)
 	})
+}
+
+// TestMigrateSystemActivityLogs verifies legacy system_activity_log rows are migrated.
+func TestMigrateSystemActivityLogs(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create main SQLiteStore and manually create old system_activity_log table.
+	mainDBPath := filepath.Join(dir, "main.db")
+	mainStore, err := NewSQLiteStore(mainDBPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = mainStore.Close() })
+
+	// Create the old system_activity_log table manually (for test).
+	_, err = mainStore.db.Exec(`CREATE TABLE IF NOT EXISTS system_activity_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT,
+		source TEXT NOT NULL,
+		level TEXT NOT NULL DEFAULT 'info',
+		message TEXT NOT NULL,
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	require.NoError(t, err)
+
+	// Insert a few old system_activity_log rows.
+	now := time.Now().UTC()
+	oldRows := []struct {
+		source, level, message string
+		createdAt              time.Time
+	}{
+		{"itunes", "info", "iTunes scan started", now.Add(-100 * time.Hour)},
+		{"reconcile", "warning", "Found 5 missing files", now.Add(-50 * time.Hour)},
+		{"maintenance", "error", "Backup failed: disk full", now.Add(-24 * time.Hour)},
+	}
+
+	for _, row := range oldRows {
+		err := mainStore.AddSystemActivityLog(row.source, row.level, row.message)
+		require.NoError(t, err)
+	}
+
+	// Create ActivityStore (separate database).
+	actDBPath := filepath.Join(dir, "activity.db")
+	actStore, err := NewActivityStore(actDBPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = actStore.Close() })
+
+	// Run migration.
+	count, err := actStore.MigrateSystemActivityLogs(mainStore)
+	require.NoError(t, err)
+	assert.Equal(t, 3, count, "should migrate 3 rows")
+
+	// Verify migrated entries are in activity_log with correct fields.
+	entries, total, err := actStore.Query(ActivityFilter{
+		Tags: []string{"legacy"},
+		Limit: 100,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 3, total, "should find 3 entries with 'legacy' tag")
+	assert.Len(t, entries, 3)
+
+	// Verify all entries have the correct structure (order is newest-first).
+	sourcesSeen := make(map[string]bool)
+	for _, e := range entries {
+		assert.Equal(t, "system", e.Tier, "all should have tier='system'")
+		assert.Equal(t, "system_log", e.Type, "all should have type='system_log'")
+		assert.NotEmpty(t, e.Summary, "summary should be populated from old message field")
+		assert.Equal(t, []string{"legacy", "system_activity_log"}, e.Tags)
+		sourcesSeen[e.Source] = true
+	}
+	// Verify all three sources are present.
+	assert.Contains(t, sourcesSeen, "itunes")
+	assert.Contains(t, sourcesSeen, "reconcile")
+	assert.Contains(t, sourcesSeen, "maintenance")
+
+	// Verify migration is idempotent: running again returns 0.
+	count2, err := actStore.MigrateSystemActivityLogs(mainStore)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count2, "second migration should be no-op")
+
+	// Verify no duplicate entries were created.
+	entries2, total2, err := actStore.Query(ActivityFilter{
+		Tags: []string{"legacy"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 3, total2, "still exactly 3 legacy entries")
+	assert.Len(t, entries2, 3)
 }
