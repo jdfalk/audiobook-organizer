@@ -1,11 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.81.0 -->
+<!-- version: 2.82.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-18 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Security
+
+#### May 18, 2026 — Path injection fixes: iTunes/audiobook relocate handlers (SEC-AUDIT-4, PR #1016)
+
+- Added `CleanAbsolutePath` to `internal/security/pathvalidation` — returns the cleaned path string so CodeQL taint tracking sees a sanitised value, not the original tainted input.
+- Replaced `validateAbsolutePath(path)` (error-only, taint persists) with `cleanPath, err := pathvalidation.CleanAbsolutePath(path)` + used `cleanPath` in all file ops in `audiobooks_handlers.go` (relocateBookFiles) and `itunes_handlers.go` (iTunes import, write-back preview, library status, sync).
+- `server_helpers.go` `validateAbsolutePath` now delegates to `CleanAbsolutePath` (kept for test compatibility).
+- Both CodeQL model files updated to register all `pathvalidation.*` and `safepath.*` functions as `path-injection` barriers.
+- Addresses CodeQL alerts #627, #603, #619, #588.
 
 ### Features
 

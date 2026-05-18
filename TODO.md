@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.46.0 -->
+<!-- version: 8.47.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-18 -->
 
@@ -223,7 +223,7 @@ incrementally:
   - **Dependencies:** Phase 2
   - **Plan:** [`implementation-plan.md#phase-3`](docs/security/audit-2026-05-03/implementation-plan.md#phase-3-path-injection--server-handlers-covers)
 
-- [ ] **SEC-AUDIT-4** Fix path injection in iTunes/transfer/audiobook handlers (20+ alerts: #627-#603, #619-#588)
+- [x] **SEC-AUDIT-4** Fix path injection in iTunes/transfer/audiobook handlers (20+ alerts: #627-#603, #619-#588) — PR #1016
   - **Priority:** P0
   - **Effort:** 6 hours
   - **Files:** `internal/server/itunes_handlers.go`, `internal/itunes/service/transfer.go`, `internal/server/audiobooks_handlers.go`, `internal/audiobooks/service.go`, `internal/server/server.go`
