@@ -1,7 +1,7 @@
 // file: internal/covers/covers.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c3d4e5f6-7890-abcd-ef12-34567890abcd
-// last-edited: 2026-05-11
+// last-edited: 2026-05-18
 //
 // Cover service logic for proxy caching and validation.
 // Business logic extracted from internal/server/covers.go.
@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 )
 
 // ProxyCoverRequest holds parameters for proxying a cover image.
@@ -105,14 +107,14 @@ func FetchAndCacheCover(coverURL, cacheDir string) (string, string) {
 
 // FindCoverFile searches for a cover file in standard directories.
 func FindCoverFile(filename string, rootDir string) (string, error) {
-	dirs := []string{
-		filepath.Join(rootDir, ".covers"),
-		filepath.Join(rootDir, "covers"),
-	}
-	for _, dir := range dirs {
-		coverPath := filepath.Join(dir, filename)
-		if _, err := os.Stat(coverPath); err == nil {
-			return coverPath, nil
+	roots := []string{".covers", "covers"}
+	for _, sub := range roots {
+		sp, err := safepath.Join(rootDir, sub, filename)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(sp.String()); err == nil {
+			return sp.String(), nil
 		}
 	}
 	return "", os.ErrNotExist

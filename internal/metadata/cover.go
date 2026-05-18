@@ -1,5 +1,5 @@
 // file: internal/metadata/cover.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 4efaa7b8-e29a-47f3-84f7-39b46bfc9a01
 
 package metadata
@@ -169,8 +169,13 @@ func downloadCoverArtWithClient(client *http.Client, coverURL string, destDir st
 
 // CoverPathForBook returns the local cover file path if it exists, empty string otherwise.
 func CoverPathForBook(destDir string, bookID string) string {
+	// filepath.Base strips any directory traversal from the bookID segment.
+	safeID := filepath.Base(bookID)
+	if safeID == "." || safeID == "/" {
+		return ""
+	}
 	coversDir := filepath.Join(destDir, "covers")
-	matches, _ := filepath.Glob(filepath.Join(coversDir, bookID+".*"))
+	matches, _ := filepath.Glob(filepath.Join(coversDir, safeID+".*"))
 	for _, m := range matches {
 		ext := strings.ToLower(filepath.Ext(m))
 		if ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp" || ext == ".gif" {
