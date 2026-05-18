@@ -281,14 +281,6 @@ func wireServerFromContainer(s *Server, c *serviceregistry.Container) {
 	// tests that don't configure a DB path still build.
 	if svc, ok := serviceregistry.TryGet[*activity.Service](c, "activity"); ok {
 		s.activityService = svc
-		// Migrate legacy system_activity_log entries (one-time, idempotent).
-		// Do this before activityWriter starts so all entries are in the unified store.
-		mainSQLiteStore := serviceregistry.Get[*database.SQLiteStore](c, "database")
-		if count, err := svc.Store().MigrateSystemActivityLogs(mainSQLiteStore); err != nil {
-			log.Printf("[WARN] Failed to migrate system_activity_log: %v", err)
-		} else if count > 0 {
-			log.Printf("[INFO] Migrated %d legacy activity log entries", count)
-		}
 	}
 	// activitywriter is in the "activity" group (same conditional). NewServer
 	// drives Start inline today; SERVER-LIFECYCLE-FLIP will hand that off to

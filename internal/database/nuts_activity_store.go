@@ -1,5 +1,5 @@
 // file: internal/database/nuts_activity_store.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: c3d4e5f6-a7b8-0003-cdef-000000000003
 
 package database
@@ -594,6 +594,12 @@ func (s *NutsActivityStore) CompactByDay(ctx context.Context, olderThan time.Tim
 		result.EntriesDeleted += deletedCount
 	}
 	return result, nil
+}
+
+// MigrateSystemActivityLogs is a no-op for NutsActivityStore since it's not backed by SQLite.
+// It returns 0 entries migrated (they're already in the unified store).
+func (s *NutsActivityStore) MigrateSystemActivityLogs() (int, error) {
+	return 0, nil
 }
 
 // ── internal helpers ──────────────────────────────────────────────────────────
