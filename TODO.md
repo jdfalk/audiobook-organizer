@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.47.0 -->
+<!-- version: 8.48.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-18 -->
 
@@ -237,7 +237,7 @@ incrementally:
   - **Dependencies:** Phase 2
   - **Plan:** [`implementation-plan.md#phase-5`](docs/security/audit-2026-05-03/implementation-plan.md#phase-5-path-injection--scannerreconcileopenlibrary)
 
-- [ ] **SEC-AUDIT-6** Fix path injection in backup/Deluge/remaining (10+ alerts: #541, #535-#534, others)
+- [x] **SEC-AUDIT-6** Fix path injection in backup/Deluge/remaining (10+ alerts: #541, #535-#534, others) — PR #1018
   - **Priority:** P0
   - **Effort:** 3 hours
   - **Files:** `internal/backup/backup.go`, `internal/server/deluge_import_unix.go`

@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.82.0 -->
+<!-- version: 2.83.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-18 -->
 
@@ -8,6 +8,16 @@
 ## [Unreleased]
 
 ### Security
+
+#### May 18, 2026 — CodeQL GOEXPERIMENT at job level (PR #1017)
+
+- Moved `GOEXPERIMENT=jsonv2` from build-step `env:` to job-level `env:` in `.github/workflows/codeql.yml` so CodeQL's internal Go extractor also sees it, eliminating the "encoding/json/v2 could not be imported" warning.
+
+#### May 18, 2026 — Path injection fixes: backup restore + backup filename handlers (SEC-AUDIT-6, PR #1018)
+
+- `backup.go` `RestoreBackup`: replaced `isPathWithinTarget` + `filepath.Join` with `safepath.Join` so CodeQL sees the sanitised return value flowing into file ops (eliminates zipslip path-injection alerts #541, #535, #534). Absolute archive entry names have leading slashes stripped before `Join`.
+- `system_handlers.go` `restoreBackup`: use `pathvalidation.SanitizeFilename` on `BackupFilename`, `pathvalidation.CleanAbsolutePath` on user-supplied `TargetPath`.
+- `system_handlers.go` `deleteBackup`: replace `filepath.Base` with `pathvalidation.SanitizeFilename`.
 
 #### May 18, 2026 — Path injection fixes: iTunes/audiobook relocate handlers (SEC-AUDIT-4, PR #1016)
 
