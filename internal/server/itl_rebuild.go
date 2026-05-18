@@ -1,7 +1,7 @@
 // file: internal/server/itl_rebuild.go
-// version: 3.0.0
+// version: 3.1.0
 // guid: 8f7e6d5c-4b3a-2c1d-0e9f-8a7b6c5d4e3f
-// last-edited: 2026-05-11
+// last-edited: 2026-05-18
 //
 // iTunes library rebuild service: diffs the current DB state
 // against the current ITL file and computes the minimal set of
@@ -28,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
+	"github.com/jdfalk/audiobook-organizer/internal/security/pathvalidation"
 )
 
 // ITLRebuildPreview summarizes the diff between the DB and the
@@ -46,9 +47,14 @@ type ITLRebuildResult = itunes.ITLRebuildResult
 // Query param: dry_run=true returns the diff preview without
 // applying. Otherwise applies the diff via itunesservice.SafeWriteITL.
 func (s *Server) rebuildITLHandler(c *gin.Context) {
-	itlPath := config.AppConfig.ITunesLibraryWritePath
-	if itlPath == "" {
+	rawPath := config.AppConfig.ITunesLibraryWritePath
+	if rawPath == "" {
 		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath not configured")
+		return
+	}
+	itlPath, err := pathvalidation.CleanAbsolutePath(rawPath)
+	if err != nil {
+		httputil.RespondWithInternalError(c, "invalid ITunesLibraryWritePath in config")
 		return
 	}
 
@@ -100,9 +106,14 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 // This is the "nuclear" reset path — use rebuildITLHandler (incremental diff) first.
 // Query param: dry_run=true returns a preview without applying.
 func (s *Server) rebuildITLFullHandler(c *gin.Context) {
-	itlPath := config.AppConfig.ITunesLibraryWritePath
-	if itlPath == "" {
+	rawPath := config.AppConfig.ITunesLibraryWritePath
+	if rawPath == "" {
 		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath not configured")
+		return
+	}
+	itlPath, err := pathvalidation.CleanAbsolutePath(rawPath)
+	if err != nil {
+		httputil.RespondWithInternalError(c, "invalid ITunesLibraryWritePath in config")
 		return
 	}
 
@@ -142,9 +153,14 @@ func (s *Server) rebuildITLFullHandler(c *gin.Context) {
 // it as a downloadable file. Body: {"book_ids": ["id1", "id2", ...]}
 // If book_ids is empty or omitted, all primary-version books with PIDs are included.
 func (s *Server) exportITLPartialHandler(c *gin.Context) {
-	itlPath := config.AppConfig.ITunesLibraryWritePath
-	if itlPath == "" {
+	rawPath := config.AppConfig.ITunesLibraryWritePath
+	if rawPath == "" {
 		httputil.RespondWithBadRequest(c, "ITunesLibraryWritePath not configured")
+		return
+	}
+	itlPath, err := pathvalidation.CleanAbsolutePath(rawPath)
+	if err != nil {
+		httputil.RespondWithInternalError(c, "invalid ITunesLibraryWritePath in config")
 		return
 	}
 
