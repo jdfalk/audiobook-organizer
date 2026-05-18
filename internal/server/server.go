@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.19.2
+// version: 2.19.3
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-16
+// last-edited: 2026-05-18
 
 package server
 
@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/aiscan"
@@ -291,6 +292,8 @@ func NewServer(store database.Store) *Server {
 	router.Use(corsMiddleware())
 	router.Use(servermiddleware.BasicAuth())
 	router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{"/api/events"})))
+	// OpenTelemetry instrumentation: create per-handler spans and record metrics
+	router.Use(otelgin.Middleware("audiobook-organizer"))
 
 	// Register metrics (idempotent)
 	metrics.Register()
