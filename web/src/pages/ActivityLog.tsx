@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.13.0
+// version: 2.14.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -131,6 +131,7 @@ export default function ActivityLog() {
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
   const [hideNoOp, setHideNoOp] = useState(true);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   // Mobile filter collapse
   const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -300,6 +301,7 @@ export default function ActivityLog() {
         exclude_sources: excludeStr,
         exclude_tiers: excludeTiersStr,
         exclude_tags: hideNoOp ? 'no-op' : undefined,
+        tags: tagFilter.length > 0 ? tagFilter.join(',') : undefined,
       });
 
       setEntries(result.entries || []);
@@ -313,7 +315,7 @@ export default function ActivityLog() {
       setRefreshing(false);
       setLastUpdated(new Date());
     }
-  }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp]);
+  }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp, tagFilter]);
 
   // Initial load + polling for active ops (3s when Activity page is mounted or bell is open)
   useEffect(() => {
@@ -329,7 +331,7 @@ export default function ActivityLog() {
     setPage(1);
     loadFeed(1);
     loadSources();
-  }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp, loadFeed, loadSources]);
+  }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp, tagFilter, loadFeed, loadSources]);
 
   // Load feed on page or pageSize change
   useEffect(() => {
@@ -1032,6 +1034,49 @@ export default function ActivityLog() {
 
                 {/* Sources */}
                 {sourcesButton(true)}
+
+                {/* Tag filter chips */}
+                <Box>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 500 }}>
+                    Outcome
+                  </Typography>
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                    {['outcome:ok', 'outcome:warn', 'outcome:error', 'outcome:skip'].map((tag) => (
+                      <Chip
+                        key={tag}
+                        label={tag.split(':')[1]}
+                        size="small"
+                        variant={tagFilter.includes(tag) ? 'filled' : 'outlined'}
+                        onClick={() => {
+                          setTagFilter((prev) =>
+                            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                          );
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+
+                <Box>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.5, fontWeight: 500 }}>
+                    Action
+                  </Typography>
+                  <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                    {['action:metadata-apply', 'action:tag-write', 'action:import', 'action:scan', 'action:dedup', 'action:organizer', 'action:purge'].map((tag) => (
+                      <Chip
+                        key={tag}
+                        label={tag.split(':')[1]}
+                        size="small"
+                        variant={tagFilter.includes(tag) ? 'filled' : 'outlined'}
+                        onClick={() => {
+                          setTagFilter((prev) =>
+                            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                          );
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
 
                 {/* Compact button */}
                 <Button
