@@ -1,11 +1,24 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.80.0 -->
+<!-- version: 2.81.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-17 -->
+<!-- last-edited: 2026-05-18 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Features
+
+#### May 18, 2026 — Activity feed events for all async operations (BUG-OP-SPARSE-LOGS, PR #1014)
+
+- Added `activity.EmitInfo` calls to 14 v2 operation Run handlers that previously logged only to the op card but never surfaced a completion summary in the main activity feed.
+- Affected ops: `itunes.import`, `itunes.sync`, `reconcile.scan`, `reconcile.apply`, `library.folder-auto-scan`, `library.bulk-write-back`, `dedup.book-scan`, `dedup.book-merge`, `dedup.author-scan`, `dedup.series-scan`, `dedup.series-dedup`, `dedup.series-merge`, `dedup.series-prune`, `dedup.series-normalize`.
+- Updated `scanBookDuplicates`, `refreshDuplicateAuthors`, `refreshSeriesDuplicates` handlers to create a legacy v1 operation record and pass `LegacyOpID`, enabling activity events for scan completions.
+
+#### May 18, 2026 — Silent background refresh on activity log (PR #1011)
+
+- Auto-refresh interval now calls `loadFeed(page, true)` (silent mode) instead of `loadFeed(page)`, preventing table DOM unmount and scroll-to-top on every 5–30 s tick.
+- Added `LinearProgress` bar (`position: absolute` at top of feed Paper) as a non-disruptive in-place refresh indicator.
 
 ### Bug Fixes
 

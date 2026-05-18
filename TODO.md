@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.45.0 -->
+<!-- version: 8.46.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-17 -->
+<!-- last-edited: 2026-05-18 -->
 
 # Project TODO
 
@@ -48,7 +48,7 @@ future agent) can scan the entire workspace in one page.
   - Add Prometheus metrics endpoint at `/metrics` for Grafana scraping (request rate, p99 latency, error rate, library size, op queue depth)
   - Config: `OTEL_EXPORTER_OTLP_ENDPOINT` env var; disabled by default, no-op when unset
 
-- [ ] **BUG-OP-SPARSE-LOGS** Operations emit almost no log messages to the activity log — only a final result line. Every operation should emit at minimum: (1) start message with scope/count, (2) progress phase-change messages (e.g. "scanning", "comparing", "writing"), (3) per-item or per-batch progress every ~10%, (4) completion summary with counts (processed/skipped/errored), (5) any error/warn lines. Target 4–8 log lines per operation for short ops, more for long ones. Fix: audit every `op.Run(ctx)` handler in `internal/server/` and ensure `EmitInfo`/`LogBatch` calls are present at each phase. Use existing `activity.EmitInfo(w, opID, type, source, msg)` API.
+- [x] **BUG-OP-SPARSE-LOGS** (PR #1014) Operations emit almost no log messages to the activity log — only a final result line. Every operation should emit at minimum: (1) start message with scope/count, (2) progress phase-change messages (e.g. "scanning", "comparing", "writing"), (3) per-item or per-batch progress every ~10%, (4) completion summary with counts (processed/skipped/errored), (5) any error/warn lines. Target 4–8 log lines per operation for short ops, more for long ones. Fix: audit every `op.Run(ctx)` handler in `internal/server/` and ensure `EmitInfo`/`LogBatch` calls are present at each phase. Use existing `activity.EmitInfo(w, opID, type, source, msg)` API.
 
 - [ ] **FEAT-ACTIVITY-RICH-TAGS** Activity log entries currently carry only a single generic `type` tag (e.g. "system", "metadata apply"). The `ActivityEntry.Tags []string` field already exists but is underutilised. Wanted: rich auto-applied multi-tag sets at write time:
   - `op:<op_id>` — tie every log line to its operation (already have `OperationID` field, should also be a tag)
@@ -188,7 +188,7 @@ incrementally:
 
 ### Phase 0: Unblock Govulncheck
 
-- [ ] **SEC-AUDIT-0** Enable govulncheck for `GOEXPERIMENT=jsonv2` builds
+- [x] **SEC-AUDIT-0** (PR #1012) Enable govulncheck for `GOEXPERIMENT=jsonv2` builds
   - **Priority:** P0 (Blocker)
   - **Effort:** 1 hour
   - **Alerts:** N/A (unblocks Go vuln detection)
