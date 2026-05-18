@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.49.0 -->
+<!-- version: 8.50.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-18 -->
 
@@ -36,7 +36,7 @@ future agent) can scan the entire workspace in one page.
 
 - [x] **BUG-SERIES-COUNT** Series dedup tab shows "Total series: 0" even when a scan just found 2442 duplicate groups. ✅ Fixed PRs #1008 (band-aid: UpdateOperationStatus on scan complete) + #1009 (proper fix: getOperationStatus falls through to v2 registry; scan handlers no longer create legacy ops).
 
-- [ ] **BUG-ACTIVITY-MISSING-OLD-LOGS** Activity log has no entries before 2026-05-12. Old logs were stored in a prior SQLite `system_activity_log` table and were never migrated to the current NutsDB/Pebble-backed activity store. Need to: (a) identify the old schema (`internal/database/sqlite_store_activity.go` `SystemActivityLog`), (b) write a one-time migration/backfill command that reads old rows and writes `ActivityEntry` records, (c) populate `Tags` from available fields during migration.
+- [x] **BUG-ACTIVITY-MISSING-OLD-LOGS** ✅ Fixed in PR #1020. Activity log now backfills old `system_activity_log` entries (pre-May 12) on server startup. Migration is idempotent and includes test coverage (`TestMigrateSystemActivityLogs`). Field mapping: `created_at → timestamp`, `message → summary`, `tier="system"`, `type="system_log"`, `tags=["legacy", "system_activity_log"]`.
 
 - [ ] **INFRA-OPENTELEMETRY** Add OpenTelemetry instrumentation for metrics, spans, and traces. Goals: identify slow code paths, track operation durations end-to-end, surface DB query latency, HTTP handler latency, embedding/AI call latency, and dedup scan timing. Plan:
   - Add `go.opentelemetry.io/otel` + SDK + exporters (OTLP gRPC to a local Jaeger/Tempo/Prometheus instance)

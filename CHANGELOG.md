@@ -42,6 +42,15 @@
 
 ### Bug Fixes
 
+#### May 18, 2026 — BUG-ACTIVITY-MISSING-OLD-LOGS: Backfill legacy system activity log (PR #1020)
+
+- Added one-time migration that runs on server startup to backfill old `system_activity_log` table entries (pre-May 12) into the current Pebble-backed `ActivityStore`.
+- Implemented `MigrateSystemActivityLogs(mainSQLiteStore)` in `activity_store.go` — reads all old rows, maps fields (`created_at → timestamp`, `message → summary`), inserts as ActivityEntry with `tier="system"`, `type="system_log"`, `tags=["legacy", "system_activity_log"]`.
+- Migration is idempotent: checks for marker entry on each run and skips if already completed.
+- Integrated into `registry_wire.go` server init (before ActivityWriter starts) to ensure all entries are in the unified store on startup.
+- Added `TestMigrateSystemActivityLogs` test with old row insertion, migration execution, idempotency check, and field mapping verification.
+- Recovers ~4 months of activity history lost during schema transition.
+
 #### May 17, 2026 — BUG-SERIES-COUNT: Series dedup tab "Total series: 0" (PRs #1008, #1009)
 
 - **Root cause**: Dedup scan handlers (book, author, series) created a legacy `Operation` record for the frontend to poll, then enqueued a registry op — but `getOperationStatus` only read the legacy table. The registry op completed and set the cache, but the legacy record stayed "running" forever, so `pollOperation` looped indefinitely and `onComplete` was never called, leaving `totalSeries = 0` in the UI.
