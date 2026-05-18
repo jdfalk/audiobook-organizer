@@ -164,7 +164,7 @@ func (s *ActivityStore) Close() error {
 // Reads from mainSQLiteStore (the old database), transforms each row to ActivityEntry schema,
 // and inserts. Idempotent: checks for migration marker entry to avoid re-running.
 // Returns count of migrated rows, or 0 if already done.
-func (s *ActivityStore) MigrateSystemActivityLogs(mainSQLiteStore *SQLiteStore) (int, error) {
+func (s *ActivityStore) MigrateSystemActivityLogs() (int, error) {
 	// Check if already migrated
 	var count int
 	err := s.db.QueryRow(
@@ -179,10 +179,41 @@ func (s *ActivityStore) MigrateSystemActivityLogs(mainSQLiteStore *SQLiteStore) 
 		return 0, nil
 	}
 
-	// Read all old system_activity_log rows
-	oldLogs, err := mainSQLiteStore.GetAllSystemActivityLogRows()
+	// Read all old system_activity_log rows from the same database
+	query := "SELECT id, source, level, message, created_at FROM system_activity_log ORDER BY created_at ASC"
+	rows, err := s.db.Query(query)
 	if err != nil {
-		return 0, fmt.Errorf("activity_store: read old system_activity_log: %w", err)
+		// Table might not exist — that's OK, migration is a no-op
+		if strings.Contains(err.Error(), "no such table") {
+			log.Printf("[activity] system_activity_log table not found (no legacy logs)")
+			return 0, nil
+		}
+		return 0, fmt.Errorf("activity_store: query system_activity_log: %w", err)
+	}
+	defer rows.Close()
+
+	var oldLogs []struct {
+		ID        int64
+		Source    string
+		Level     string
+		Message   string
+		CreatedAt time.Time
+	}
+	for rows.Next() {
+		var l struct {
+			ID        int64
+			Source    string
+			Level     string
+			Message   string
+			CreatedAt time.Time
+		}
+		if err := rows.Scan(&l.ID, &l.Source, &l.Level, &l.Message, &l.CreatedAt); err != nil {
+			return 0, fmt.Errorf("activity_store: scan system_activity_log row: %w", err)
+		}
+		oldLogs = append(oldLogs, l)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("activity_store: scan system_activity_log: %w", err)
 	}
 
 	if len(oldLogs) == 0 {

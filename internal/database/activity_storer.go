@@ -1,5 +1,5 @@
 // file: internal/database/activity_storer.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-0001-abcd-000000000001
 
 package database
@@ -19,6 +19,7 @@ type ActivityStorer interface {
 	GetDistinctSources(ActivityFilter) ([]SourceCount, error)
 	WipeAllActivity() (int64, error)
 	CompactByDay(ctx context.Context, olderThan time.Time) (CompactResult, error)
+	MigrateSystemActivityLogs() (int, error)
 	Close() error
 }
 
