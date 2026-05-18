@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.12.0
+// version: 2.13.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -167,6 +167,8 @@ export default function ActivityLog() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(false);
+  // Silent background refresh — updates data without destroying the table DOM
+  const [refreshing, setRefreshing] = useState(false);
 
   // Auto-refresh
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -270,9 +272,14 @@ export default function ActivityLog() {
     }
   }, [sinceFilter, untilFilter]);
 
-  // Load activity feed
-  const loadFeed = useCallback(async (p: number) => {
-    setLoading(true);
+  // Load activity feed. Pass silent=true for background refreshes to avoid
+  // replacing the table with a spinner (which resets scroll position).
+  const loadFeed = useCallback(async (p: number, silent = false) => {
+    if (silent) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const excludeStr = excludedSources.size > 0 ? [...excludedSources].join(',') : undefined;
 
@@ -303,6 +310,7 @@ export default function ActivityLog() {
       setTotal(0);
     } finally {
       setLoading(false);
+      setRefreshing(false);
       setLastUpdated(new Date());
     }
   }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp]);
@@ -328,13 +336,14 @@ export default function ActivityLog() {
     loadFeed(page);
   }, [page, pageSize, loadFeed]);
 
-  // Auto-refresh feed — 5s when active ops exist, 30s when idle
+  // Auto-refresh feed — 5s when active ops exist, 30s when idle.
+  // Uses silent=true so the table stays in the DOM and scroll position is preserved.
   const refreshInterval = activeOps.length > 0 ? 5000 : 30000;
   useEffect(() => {
     if (feedIntervalRef.current) window.clearInterval(feedIntervalRef.current);
     if (autoRefresh) {
       feedIntervalRef.current = window.setInterval(() => {
-        loadFeed(page);
+        loadFeed(page, true);
         loadSources();
       }, refreshInterval);
     }
@@ -1233,7 +1242,11 @@ export default function ActivityLog() {
       )}
 
       {/* Activity Feed */}
-      <Paper>
+      <Paper sx={{ position: 'relative' }}>
+        {/* Unobtrusive top-edge indicator for background refreshes */}
+        {refreshing && (
+          <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, borderRadius: '4px 4px 0 0' }} />
+        )}
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress />
