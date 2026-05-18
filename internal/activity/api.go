@@ -1,5 +1,5 @@
 // file: internal/activity/api.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
@@ -107,6 +107,109 @@ func WithTags(base []string, extra ...string) []string {
 	out := make([]string, len(base), len(base)+len(extra))
 	copy(out, base)
 	return append(out, extra...)
+}
+
+// typeToAction maps Type values to action verb tags.
+func typeToAction(typeStr string) string {
+	switch typeStr {
+	case "metadata_apply", "metadata-apply":
+		return "metadata-apply"
+	case "tag_write", "tag-write":
+		return "tag-write"
+	case "rename":
+		return "write-back"
+	case "itunes_sync":
+		return "import"
+	case "scan", "tag-scan", "embedded-tag-load", "scan-file-processed":
+		return "scan"
+	case "purge-deleted":
+		return "purge"
+	case "isbn-enrich":
+		return "metadata-apply"
+	case "missing-file-repair", "path-repair":
+		return "organizer"
+	case "maintenance-window", "temp-file-cleanup":
+		return "maintenance"
+	case "cover-update":
+		return "cover-update"
+	case "fingerprint":
+		return "fingerprint"
+	case "dedup":
+		return "dedup"
+	case "reconcile":
+		return "reconcile"
+	case "merge":
+		return "merge"
+	default:
+		return ""
+	}
+}
+
+// EnrichTags auto-derives structured tags from entry fields and appends them.
+// Idempotent: existing tags prevent duplicates. Derived tags:
+//   - op:<operation_id> — ties to operation
+//   - book:<book_id> — ties to specific book
+//   - outcome:ok|warn|error|skip — from Level
+//   - source:<subsystem> — from Source
+//   - action:<verb> — from Type via typeToAction map
+//   - scope:book — if BookID non-empty (simple heuristic)
+func EnrichTags(e *database.ActivityEntry) {
+	if e == nil {
+		return
+	}
+	seen := make(map[string]bool)
+	for _, t := range e.Tags {
+		seen[t] = true
+	}
+
+	var derived []string
+
+	// op: tag
+	if e.OperationID != "" && !seen["op:"+e.OperationID] {
+		derived = append(derived, "op:"+e.OperationID)
+	}
+
+	// book: tag
+	if e.BookID != "" && !seen["book:"+e.BookID] {
+		derived = append(derived, "book:"+e.BookID)
+	}
+
+	// outcome: tag from Level
+	outcome := "outcome:ok"
+	switch e.Level {
+	case "warning":
+		outcome = "outcome:warn"
+	case "error":
+		outcome = "outcome:error"
+	case "skip":
+		outcome = "outcome:skip"
+	}
+	if !seen[outcome] {
+		derived = append(derived, outcome)
+	}
+
+	// source: tag from Source
+	if e.Source != "" {
+		src := "source:" + e.Source
+		if !seen[src] {
+			derived = append(derived, src)
+		}
+	}
+
+	// action: tag from Type
+	if action := typeToAction(e.Type); action != "" {
+		a := "action:" + action
+		if !seen[a] {
+			derived = append(derived, a)
+		}
+	}
+
+	// scope: tag (simple heuristic — book if BookID present)
+	if e.BookID != "" && !seen["scope:book"] {
+		derived = append(derived, "scope:book")
+	}
+
+	e.Tags = append(e.Tags, derived...)
 }
 
 // FlushOperation immediately flushes all pending batches whose OperationID
