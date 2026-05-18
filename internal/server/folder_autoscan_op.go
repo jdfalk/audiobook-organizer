@@ -1,5 +1,5 @@
 // file: internal/server/folder_autoscan_op.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7b3e9f2a-4c1d-4e85-a6b8-2f0d5c8e1a93
 // last-edited: 2026-05-10
 //
@@ -18,6 +18,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
@@ -150,10 +151,15 @@ func (s *Server) RegisterFolderAutoScanOp(reg *opsregistry.Registry) error {
 			// completion via the v1 ops endpoint. Without this the
 			// v1 row sticks in "queued" forever even though the work
 			// is done.
+			summary := fmt.Sprintf("Auto-scan completed (%d books found)", len(books))
 			if p.LegacyOpID != "" && s.Store() != nil {
-				_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "completed", len(books), len(books), fmt.Sprintf("Auto-scan completed (%d books)", len(books)))
+				_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "completed", len(books), len(books), summary)
 			}
 			_ = progress.Log("info", fmt.Sprintf("Auto-scan completed. Total books: %d", len(books)), nil)
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "library.folder-auto-scan", "library", summary, activity.AlwaysShow)
+			}
 			return nil
 		},
 	})

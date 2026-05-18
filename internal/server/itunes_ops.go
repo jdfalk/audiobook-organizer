@@ -1,5 +1,5 @@
 // file: internal/server/itunes_ops.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 4b7e9f2a-1c3d-4e5f-8a9b-0c1d2e3f4a5b
 
 // itunes_ops registers v2 OperationDefs for iTunes import and sync.
@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
@@ -65,6 +66,14 @@ func (s *Server) RegisterITunesImportOp(reg *opsregistry.Registry) error {
 				} else {
 					_ = s.Store().UpdateOperationStatus(p.LegacyOpID, "completed", 0, 0, "iTunes import completed")
 				}
+				if s.activityWriter != nil {
+					activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+					summary := "iTunes import completed"
+					if runErr != nil {
+						summary = fmt.Sprintf("iTunes import failed: %v", runErr)
+					}
+					activity.EmitInfo(s.activityWriter, p.LegacyOpID, "itunes.import", "itunes", summary, activity.AlwaysShow)
+				}
 			}
 			return runErr
 		},
@@ -94,7 +103,16 @@ func (s *Server) RegisterITunesSyncOp(reg *opsregistry.Registry) error {
 				}
 			}
 			progress := registryProgressAdapter{r: reporter}
-			return s.itunesSvc.Importer.Sync(ctx, p.LibraryPath, p.PathMappings, s.itunesActivityFn, operations.LoggerFromReporter(progress))
+			syncErr := s.itunesSvc.Importer.Sync(ctx, p.LibraryPath, p.PathMappings, s.itunesActivityFn, operations.LoggerFromReporter(progress))
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				summary := "iTunes sync completed"
+				if syncErr != nil {
+					summary = fmt.Sprintf("iTunes sync failed: %v", syncErr)
+				}
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "itunes.sync", "itunes", summary, activity.AlwaysShow)
+			}
+			return syncErr
 		},
 	})
 }
