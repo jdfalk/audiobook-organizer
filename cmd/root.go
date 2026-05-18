@@ -5,6 +5,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -21,6 +22,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
 	"github.com/jdfalk/audiobook-organizer/internal/server"
 	"github.com/jdfalk/audiobook-organizer/internal/tagger"
+	"github.com/jdfalk/audiobook-organizer/internal/telemetry"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -237,6 +239,14 @@ var serveCmd = &cobra.Command{
 		defer closeStore()
 
 		fmt.Printf("Using database: %s (%s)\n", config.AppConfig.DatabasePath, config.AppConfig.DatabaseType)
+
+		// Initialize OpenTelemetry (optional; disabled if OTEL_EXPORTER_OTLP_ENDPOINT not set)
+		otelCfg := telemetry.LoadConfig("audiobook-organizer")
+		otelShutdown, err := telemetry.InitOTEL(context.Background(), otelCfg)
+		if err != nil {
+			return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
+		}
+		defer otelShutdown(context.Background())
 
 		// Initialize encryption for settings (generates key if needed)
 		dbDir := filepath.Dir(config.AppConfig.DatabasePath)
