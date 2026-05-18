@@ -562,6 +562,27 @@ func (s *SQLiteStore) GetSystemActivityLogs(source string, limit int) ([]SystemA
 	return logs, rows.Err()
 }
 
+// GetAllSystemActivityLogRows retrieves all system activity log entries, ordered by created_at ASC.
+// Used for one-time migration to the unified ActivityStore.
+func (s *SQLiteStore) GetAllSystemActivityLogRows() ([]SystemActivityLog, error) {
+	query := "SELECT id, source, level, message, created_at FROM system_activity_log ORDER BY created_at ASC"
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []SystemActivityLog
+	for rows.Next() {
+		var l SystemActivityLog
+		if err := rows.Scan(&l.ID, &l.Source, &l.Level, &l.Message, &l.CreatedAt); err != nil {
+			return nil, err
+		}
+		logs = append(logs, l)
+	}
+	return logs, rows.Err()
+}
+
 // PruneOperationLogs deletes operation log entries older than the given time.
 func (s *SQLiteStore) PruneOperationLogs(olderThan time.Time) (int, error) {
 	result, err := s.db.Exec("DELETE FROM operation_logs WHERE created_at < ?", olderThan)
