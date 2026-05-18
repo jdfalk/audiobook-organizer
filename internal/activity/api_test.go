@@ -152,3 +152,116 @@ func TestFlushOperation_OnlyFlushesMatchingOp(t *testing.T) {
 		t.Error("expected op2 to remain pending after FlushOperation(op1)")
 	}
 }
+
+// TestEnrichTags verifies that EnrichTags correctly derives and appends tags.
+func TestEnrichTags(t *testing.T) {
+	tests := []struct {
+		name    string
+		entry   database.ActivityEntry
+		wantTags []string
+	}{
+		{
+			name: "op tag from OperationID",
+			entry: database.ActivityEntry{
+				OperationID: "op-123",
+				Level:       "info",
+				Source:      "scanner",
+				Type:        "scan",
+			},
+			wantTags: []string{"op:op-123", "outcome:ok", "source:scanner", "action:scan"},
+		},
+		{
+			name: "book and scope tags from BookID",
+			entry: database.ActivityEntry{
+				BookID: "book-456",
+				Level:  "info",
+				Source: "metafetch",
+				Type:   "metadata-apply",
+			},
+			wantTags: []string{"book:book-456", "scope:book", "outcome:ok", "source:metafetch", "action:metadata-apply"},
+		},
+		{
+			name: "outcome:warn from warning level",
+			entry: database.ActivityEntry{
+				Level:  "warning",
+				Source: "itunes",
+				Type:   "itunes_sync",
+			},
+			wantTags: []string{"outcome:warn", "source:itunes", "action:import"},
+		},
+		{
+			name: "outcome:error from error level",
+			entry: database.ActivityEntry{
+				Level:  "error",
+				Source: "dedup",
+				Type:   "dedup",
+			},
+			wantTags: []string{"outcome:error", "source:dedup", "action:dedup"},
+		},
+		{
+			name: "idempotency: existing tags not duplicated",
+			entry: database.ActivityEntry{
+				OperationID: "op-789",
+				Level:       "info",
+				Source:      "scanner",
+				Type:        "scan",
+				Tags:        []string{"op:op-789"}, // Already has this tag
+			},
+			wantTags: []string{"op:op-789", "outcome:ok", "source:scanner", "action:scan"},
+		},
+		{
+			name: "all fields populated",
+			entry: database.ActivityEntry{
+				OperationID: "op-full",
+				BookID:      "book-789",
+				Level:       "error",
+				Source:      "maintenance-window",
+				Type:        "maintenance-window",
+			},
+			wantTags: []string{"op:op-full", "book:book-789", "scope:book", "outcome:error", "source:maintenance-window", "action:maintenance"},
+		},
+		{
+			name: "unknown type maps to no action tag",
+			entry: database.ActivityEntry{
+				Level:  "info",
+				Source: "unknown",
+				Type:   "unknown_type",
+			},
+			wantTags: []string{"outcome:ok", "source:unknown"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := tt.entry
+			EnrichTags(&entry)
+
+			// Verify all expected tags are present
+			tagMap := make(map[string]bool)
+			for _, tag := range entry.Tags {
+				tagMap[tag] = true
+			}
+
+			for _, wantTag := range tt.wantTags {
+				if !tagMap[wantTag] {
+					t.Errorf("expected tag %q not found in %v", wantTag, entry.Tags)
+				}
+			}
+
+			// Verify no unexpected tags (exact match)
+			if len(entry.Tags) != len(tt.wantTags) {
+				t.Errorf("expected %d tags, got %d: %v", len(tt.wantTags), len(entry.Tags), entry.Tags)
+			}
+		})
+	}
+}
+
+// TestEnrichTags_NilEntry verifies that EnrichTags handles nil gracefully.
+func TestEnrichTags_NilEntry(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("EnrichTags(nil) panicked: %v", r)
+		}
+	}()
+	EnrichTags(nil)
+}
