@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.83.0 -->
+<!-- version: 2.84.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-18 -->
 
@@ -28,6 +28,15 @@
 - Addresses CodeQL alerts #627, #603, #619, #588.
 
 ### Features
+
+#### May 18, 2026 — Rich activity log tagging with auto-enrichment (FEAT-ACTIVITY-RICH-TAGS, PR #1021)
+
+- Activity entries now auto-enrich with structured tags at write time via `EnrichTags()` in `internal/activity/api.go`.
+- Derived tags: `op:<operation_id>`, `book:<book_id>`, `outcome:ok|warn|error|skip`, `source:<subsystem>`, `action:<verb>`, `scope:book`.
+- Idempotent enrichment: existing tags prevent duplicates via seen-map.
+- `Service.Record()` calls `EnrichTags()` before store write — no call-site changes needed.
+- Frontend: Multi-select tag chip filter UI in ActivityLog.tsx (Outcome and Action presets). Tags passed to API with AND semantics.
+- Tests: Comprehensive `TestEnrichTags` with 7 subtests covering all tag types, idempotency, and nil handling.
 
 #### May 18, 2026 — Activity feed events for all async operations (BUG-OP-SPARSE-LOGS, PR #1014)
 

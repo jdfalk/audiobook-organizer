@@ -50,14 +50,17 @@ future agent) can scan the entire workspace in one page.
 
 - [x] **BUG-OP-SPARSE-LOGS** (PR #1014) Operations emit almost no log messages to the activity log — only a final result line. Every operation should emit at minimum: (1) start message with scope/count, (2) progress phase-change messages (e.g. "scanning", "comparing", "writing"), (3) per-item or per-batch progress every ~10%, (4) completion summary with counts (processed/skipped/errored), (5) any error/warn lines. Target 4–8 log lines per operation for short ops, more for long ones. Fix: audit every `op.Run(ctx)` handler in `internal/server/` and ensure `EmitInfo`/`LogBatch` calls are present at each phase. Use existing `activity.EmitInfo(w, opID, type, source, msg)` API.
 
-- [ ] **FEAT-ACTIVITY-RICH-TAGS** Activity log entries currently carry only a single generic `type` tag (e.g. "system", "metadata apply"). The `ActivityEntry.Tags []string` field already exists but is underutilised. Wanted: rich auto-applied multi-tag sets at write time:
-  - `op:<op_id>` — tie every log line to its operation (already have `OperationID` field, should also be a tag)
-  - `book:<book_id>` — tie to specific book
-  - `action:<verb>` — `merge`, `write-back`, `metadata-apply`, `import`, `reconcile`, `fingerprint`, `dedup`, `organizer`, `purge`, `tag-write`, `cover-update`
-  - `outcome:ok` / `outcome:error` / `outcome:skip` / `outcome:warn`
-  - `source:<subsystem>` — `itunes`, `acoustid`, `openai`, `openlibrary`, `scanner`, `scheduler`
-  - `scope:<book|author|series|file|library>` — entity type affected
-  - All writers in `internal/activity/` need to apply these automatically from context fields already present (`OperationID`, `BookID`, `Level`, `Type`, `Source`). Frontend filter UI should support multi-select tag chips. The count displayed in the tab header/description is not refreshed after scan completes. Investigate: likely the count is fetched on mount but not re-fetched after the scan op finishes.
+- [x] **FEAT-ACTIVITY-RICH-TAGS** ✅ Implemented in PR #1021. Activity log entries now auto-enrich with structured tags at write time:
+  - `op:<op_id>` — ties every log line to its operation
+  - `book:<book_id>` — ties to specific book
+  - `action:<verb>` — metadata-apply, tag-write, import, reconcile, fingerprint, dedup, organizer, purge, cover-update, maintenance, write-back, scan
+  - `outcome:ok|warn|error|skip` — derived from Level field
+  - `source:<subsystem>` — itunes, acoustid, openai, openlibrary, scanner, scheduler, etc.
+  - `scope:book` — entity type affected (simple heuristic)
+  - Backend: `EnrichTags()` in `internal/activity/api.go`, called from `Service.Record()` before store write. No call-site changes needed.
+  - Frontend: multi-select tag chip filter UI in ActivityLog.tsx with Outcome and Action preset filters. Tags passed to API with AND semantics.
+  - Tests: comprehensive TestEnrichTags with 7 subtests + idempotency + nil handling. All passing.
+  - Note: Count refresh after scan is a separate timing issue (auto-refresh interval changes from 5s to 30s when op completes); can address separately if needed.
 
 - [x] **BUG-ACOUSTID-SCAN-OPID** "AcoustID scan queued (op: unknown)" toast ✅ Fixed PR #1000. Deploy pending. because `triggerDedupAcoustID` was reading `raw.id` but backend returns `op_id`. **Fix shipped in PR #1000**. Needs production deploy.
 

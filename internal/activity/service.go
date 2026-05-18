@@ -1,5 +1,5 @@
 // file: internal/activity/service.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package activity
@@ -22,9 +22,12 @@ func NewService(store database.ActivityStorer) *Service {
 	return &Service{store: store}
 }
 
-// Record inserts an activity entry into the store. The entry ID is discarded;
-// callers that need it should call the store directly.
+// Record inserts an activity entry into the store. Automatically enriches entry
+// with derived tags (op:, book:, outcome:, source:, action:, scope:) before
+// storing. The entry ID is discarded; callers that need it should call the
+// store directly.
 func (s *Service) Record(entry database.ActivityEntry) error {
+	EnrichTags(&entry)
 	_, err := s.store.Record(entry)
 	return err
 }

@@ -1,5 +1,5 @@
 // file: internal/database/activity_store_test.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: f3a1b2c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 package database
@@ -373,14 +373,14 @@ func TestActivityStore_GetDistinctSources(t *testing.T) {
 func TestMigrateSystemActivityLogs(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create main SQLiteStore and manually create old system_activity_log table.
-	mainDBPath := filepath.Join(dir, "main.db")
-	mainStore, err := NewSQLiteStore(mainDBPath)
+	// Create ActivityStore database.
+	actDBPath := filepath.Join(dir, "activity.db")
+	actStore, err := NewActivityStore(actDBPath)
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = mainStore.Close() })
+	t.Cleanup(func() { _ = actStore.Close() })
 
-	// Create the old system_activity_log table manually (for test).
-	_, err = mainStore.db.Exec(`CREATE TABLE IF NOT EXISTS system_activity_log (
+	// Manually create old system_activity_log table in the same database.
+	_, err = actStore.db.Exec(`CREATE TABLE IF NOT EXISTS system_activity_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id TEXT,
 		source TEXT NOT NULL,
@@ -402,18 +402,15 @@ func TestMigrateSystemActivityLogs(t *testing.T) {
 	}
 
 	for _, row := range oldRows {
-		err := mainStore.AddSystemActivityLog(row.source, row.level, row.message)
+		_, err := actStore.db.Exec(`
+			INSERT INTO system_activity_log (source, level, message, created_at)
+			VALUES (?, ?, ?, ?)`,
+			row.source, row.level, row.message, row.createdAt)
 		require.NoError(t, err)
 	}
 
-	// Create ActivityStore (separate database).
-	actDBPath := filepath.Join(dir, "activity.db")
-	actStore, err := NewActivityStore(actDBPath)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = actStore.Close() })
-
 	// Run migration.
-	count, err := actStore.MigrateSystemActivityLogs(mainStore)
+	count, err := actStore.MigrateSystemActivityLogs()
 	require.NoError(t, err)
 	assert.Equal(t, 3, count, "should migrate 3 rows")
 
@@ -441,7 +438,7 @@ func TestMigrateSystemActivityLogs(t *testing.T) {
 	assert.Contains(t, sourcesSeen, "maintenance")
 
 	// Verify migration is idempotent: running again returns 0.
-	count2, err := actStore.MigrateSystemActivityLogs(mainStore)
+	count2, err := actStore.MigrateSystemActivityLogs()
 	require.NoError(t, err)
 	assert.Equal(t, 0, count2, "second migration should be no-op")
 
