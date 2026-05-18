@@ -1,7 +1,7 @@
 // file: internal/security/pathvalidation/pathvalidation.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 3a8f5c2b-7d4e-4a19-9f6b-1c0e2d3a5b7c
-// last-edited: 2026-05-09
+// last-edited: 2026-05-18
 
 // Package pathvalidation provides centralized path validation utilities to
 // prevent path traversal and injection vulnerabilities. It is the foundation
@@ -31,6 +31,9 @@ import (
 	"strings"
 	"unicode"
 )
+
+// ErrNotAbsolute is returned when an absolute path is required but the input is relative.
+var ErrNotAbsolute = errors.New("path must be absolute")
 
 // ErrPathTraversal is returned when a path escapes its declared root.
 var ErrPathTraversal = errors.New("path traversal detected: path escapes root")
@@ -229,6 +232,29 @@ func resolveExistingPrefix(path string) string {
 		suffix = filepath.Join(filepath.Base(clean), suffix)
 		clean = parent
 	}
+}
+
+// CleanAbsolutePath validates that path is an absolute filesystem path with no
+// traversal sequences and returns the cleaned canonical form. Use this for
+// paths that must be absolute (admin-configured paths, user-supplied library
+// locations) before passing them to filesystem operations.
+//
+// Returns ErrNotAbsolute if path is not absolute.
+// Returns ErrPathTraversal if filepath.Clean would alter the path (e.g. it
+// contains "..").
+//
+// The returned string is safe to use in file operations; it comes from this
+// function's return value, not directly from user input, so taint analysis
+// tools correctly treat it as sanitized.
+func CleanAbsolutePath(path string) (string, error) {
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("%w: %q", ErrNotAbsolute, path)
+	}
+	cleaned := filepath.Clean(path)
+	if cleaned != path {
+		return "", fmt.Errorf("%w: path %q contains traversal sequences", ErrPathTraversal, path)
+	}
+	return cleaned, nil
 }
 
 // isWithinRoot reports whether path is equal to root or is directly contained

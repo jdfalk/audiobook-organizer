@@ -1,7 +1,7 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.9.0
+// version: 2.9.1
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
-// last-edited: 2026-05-16
+// last-edited: 2026-05-18
 
 // iTunes HTTP handlers. All business logic lives in internal/itunes/service.
 // Handlers that call s.itunesSvc.Importer.* guard with itunesEnabledOrError
@@ -24,6 +24,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	itunesservice "github.com/jdfalk/audiobook-organizer/internal/itunes/service"
+	"github.com/jdfalk/audiobook-organizer/internal/security/pathvalidation"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -278,17 +279,18 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		return
 	}
 
-	if err := validateAbsolutePath(req.LibraryPath); err != nil {
+	cleanLibPath, err := pathvalidation.CleanAbsolutePath(req.LibraryPath)
+	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid library_path: "+err.Error())
 		return
 	}
-	if _, err := os.Stat(req.LibraryPath); os.IsNotExist(err) {
+	if _, err := os.Stat(cleanLibPath); os.IsNotExist(err) {
 		httputil.RespondWithBadRequest(c, "iTunes library file not found")
 		return
 	}
 
 	opID := ulid.Make().String()
-	op, err := s.Store().CreateOperation(opID, "itunes_import", &req.LibraryPath)
+	op, err := s.Store().CreateOperation(opID, "itunes_import", &cleanLibPath)
 	if err != nil {
 		httputil.InternalError(c, "failed to create operation", err)
 		return
@@ -299,7 +301,7 @@ func (s *Server) handleITunesImport(c *gin.Context) {
 		svcMappings[i] = itunesservice.PathMapping{From: m.From, To: m.To}
 	}
 	svcReq := itunesservice.ImportRequest{
-		LibraryPath:      req.LibraryPath,
+		LibraryPath:      cleanLibPath,
 		ImportMode:       req.ImportMode,
 		PreserveLocation: req.PreserveLocation,
 		ImportPlaylists:  req.ImportPlaylists,
@@ -480,10 +482,12 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 	// ITunesLibraryWritePath (.itl) regardless of this read path.
 	libraryPath := strings.TrimSpace(req.LibraryPath)
 	if libraryPath != "" {
-		if err := validateAbsolutePath(libraryPath); err != nil {
+		cleanLibPath, err := pathvalidation.CleanAbsolutePath(libraryPath)
+		if err != nil {
 			httputil.RespondWithBadRequest(c, "invalid library_path: "+err.Error())
 			return
 		}
+		libraryPath = cleanLibPath
 	} else {
 		libraryPath = config.AppConfig.ITunesLibraryReadPath
 	}
@@ -737,7 +741,8 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 		httputil.RespondWithBadRequest(c, "path query parameter required")
 		return
 	}
-	if err := validateAbsolutePath(path); err != nil {
+	cleanPath, err := pathvalidation.CleanAbsolutePath(path)
+	if err != nil {
 		httputil.RespondWithBadRequest(c, "invalid path: "+err.Error())
 		return
 	}
@@ -747,18 +752,18 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 		return
 	}
 
-	rec, err := s.Store().GetLibraryFingerprint(path)
+	rec, err := s.Store().GetLibraryFingerprint(cleanPath)
 	if err != nil {
 		httputil.InternalError(c, "failed to get library fingerprint", err)
 		return
 	}
 
-	stat, statErr := os.Stat(path)
+	stat, statErr := os.Stat(cleanPath)
 	fileExists := statErr == nil
 
 	if rec == nil {
 		httputil.RespondWithOK(c, gin.H{
-			"path":        path,
+			"path":        cleanPath,
 			"exists":      fileExists,
 			"last_synced": nil,
 			"changed":     fileExists,
@@ -772,7 +777,7 @@ func (s *Server) handleITunesLibraryStatus(c *gin.Context) {
 	}
 
 	httputil.RespondWithOK(c, gin.H{
-		"path":        path,
+		"path":        cleanPath,
 		"exists":      fileExists,
 		"last_synced": rec.ModTime,
 		"size":        rec.Size,
@@ -801,10 +806,12 @@ func (s *Server) handleITunesSync(c *gin.Context) {
 
 	libraryPath := req.LibraryPath
 	if libraryPath != "" {
-		if err := validateAbsolutePath(libraryPath); err != nil {
+		cleanLibPath, err := pathvalidation.CleanAbsolutePath(libraryPath)
+		if err != nil {
 			httputil.RespondWithBadRequest(c, "invalid library_path: "+err.Error())
 			return
 		}
+		libraryPath = cleanLibPath
 	} else {
 		libraryPath = config.AppConfig.ITunesLibraryReadPath
 		if libraryPath == "" {

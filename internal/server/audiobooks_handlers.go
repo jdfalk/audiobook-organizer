@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.9.4
+// version: 2.9.5
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-18
 //
@@ -631,17 +631,18 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 
 	if req.SegmentID != "" && req.NewPath != "" {
 		// Individual mode: update one file (SegmentID maps to file ID)
-		if err := validateAbsolutePath(req.NewPath); err != nil {
+		cleanNewPath, err := pathvalidation.CleanAbsolutePath(req.NewPath)
+		if err != nil {
 			httputil.RespondWithBadRequest(c, "invalid new_path: "+err.Error())
 			return
 		}
 		for i, f := range files {
 			if f.ID == req.SegmentID {
-				if _, statErr := os.Stat(req.NewPath); os.IsNotExist(statErr) {
+				if _, statErr := os.Stat(cleanNewPath); os.IsNotExist(statErr) {
 					httputil.RespondWithBadRequest(c, "new path does not exist on disk")
 					return
 				}
-				files[i].FilePath = req.NewPath
+				files[i].FilePath = cleanNewPath
 				if err := s.Store().UpdateBookFile(files[i].ID, &files[i]); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("update file %s: %v", f.ID, err))
 				} else {
@@ -652,11 +653,12 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		}
 	} else if req.FolderPath != "" {
 		// Folder mode: scan folder and match files by name
-		if err := validateAbsolutePath(req.FolderPath); err != nil {
+		cleanFolderPath, err := pathvalidation.CleanAbsolutePath(req.FolderPath)
+		if err != nil {
 			httputil.RespondWithBadRequest(c, "invalid folder_path: "+err.Error())
 			return
 		}
-		dirEntries, err := os.ReadDir(req.FolderPath)
+		dirEntries, err := os.ReadDir(cleanFolderPath)
 		if err != nil {
 			httputil.RespondWithBadRequest(c, fmt.Sprintf("cannot read folder: %v", err))
 			return
@@ -666,7 +668,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 		fileMap := make(map[string]string)
 		for _, de := range dirEntries {
 			if !de.IsDir() {
-				fileMap[de.Name()] = filepath.Join(req.FolderPath, de.Name())
+				fileMap[de.Name()] = filepath.Join(cleanFolderPath, de.Name())
 			}
 		}
 
