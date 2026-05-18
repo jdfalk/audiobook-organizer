@@ -1,7 +1,7 @@
 // file: internal/dedup/engine.go
-// version: 1.21.0
+// version: 1.21.1
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
-// last-edited: 2026-05-17
+// last-edited: 2026-05-18
 
 package dedup
 
@@ -15,6 +15,9 @@ import (
 	"strings"
 	"sync"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -22,6 +25,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
 )
+
+var dedupTracer = otel.Tracer("audiobook-organizer/dedup")
 
 // Engine orchestrates a 3-layer dedup system:
 //   - Layer 1: Exact matching (free, instant) — same file hash, ISBN/ASIN, or near-identical titles
@@ -185,15 +190,29 @@ func (de *Engine) HydrateChromem(ctx context.Context) (booksHydrated, authorsHyd
 // Honors ctx cancellation so the dedup-on-import hook can bail immediately
 // when the server is shutting down, rather than racing Pebble close.
 func (de *Engine) CheckBook(ctx context.Context, bookID string) (bool, error) {
+	_, span := dedupTracer.Start(ctx, "dedup.check_book",
+		trace.WithAttributes(
+			attribute.String("book_id", bookID),
+		))
+	defer span.End()
+
 	if err := ctx.Err(); err != nil {
+		span.RecordError(err)
+		span.SetAttributes(attribute.Bool("error", true))
 		return false, err
 	}
 	book, err := de.bookStore.GetBookByID(bookID)
 	if err != nil {
-		return false, fmt.Errorf("get book %s: %w", bookID, err)
+		err := fmt.Errorf("get book %s: %w", bookID, err)
+		span.RecordError(err)
+		span.SetAttributes(attribute.Bool("error", true))
+		return false, err
 	}
 	if book == nil {
-		return false, fmt.Errorf("book %s not found", bookID)
+		err := fmt.Errorf("book %s not found", bookID)
+		span.RecordError(err)
+		span.SetAttributes(attribute.Bool("error", true), attribute.Bool("not_found", true))
+		return false, err
 	}
 
 	// Resolve author name
@@ -211,6 +230,7 @@ func (de *Engine) CheckBook(ctx context.Context, bookID string) (bool, error) {
 		log.Printf("dedup: file hash check error for %s: %v", bookID, err)
 	}
 	if merged {
+		span.SetAttributes(attribute.Bool("merged", true))
 		return true, nil
 	}
 
@@ -1324,9 +1344,15 @@ func (de *Engine) deleteBookFromChromem(ctx context.Context, bookID string) {
 // bucket with the hash/ISBN/near-title-match candidates that were always
 // there but never surfaced.
 func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) error {
+	_, span := dedupTracer.Start(ctx, "dedup.full_scan")
+	defer span.End()
+
 	books, err := de.getAllBooks()
 	if err != nil {
-		return fmt.Errorf("get all books: %w", err)
+		err := fmt.Errorf("get all books: %w", err)
+		span.RecordError(err)
+		span.SetAttributes(attribute.Bool("error", true))
+		return err
 	}
 
 	// Embedding chunk size — picked so the OpenAI request comfortably fits
@@ -1337,6 +1363,7 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 	const embedChunkSize = 64
 
 	total := len(books)
+	span.SetAttributes(attribute.Int("total_books", total))
 	chunkIDs := make([]string, 0, embedChunkSize)
 	chunkStart := 0
 
@@ -1430,7 +1457,11 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 // Re-scan so the candidate table stays clean after the Layer 1 + Layer 2
 // rules tighten.
 func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
+	_, span := dedupTracer.Start(ctx, "dedup.purge_stale_candidates")
+	defer span.End()
+
 	if de.embedStore == nil || de.bookStore == nil {
+		span.SetAttributes(attribute.Bool("no_stores", true))
 		return 0, nil
 	}
 
@@ -1459,7 +1490,10 @@ func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 		Limit:      100000,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("list candidates: %w", err)
+		err := fmt.Errorf("list candidates: %w", err)
+		span.RecordError(err)
+		span.SetAttributes(attribute.Bool("error", true))
+		return 0, err
 	}
 
 	// Memoise book lookups so a book referenced by many candidates is only
@@ -1549,6 +1583,7 @@ func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 		}
 		deleted++
 	}
+	span.SetAttributes(attribute.Int("candidates_deleted", deleted))
 	return deleted, nil
 }
 
