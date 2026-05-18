@@ -1,7 +1,7 @@
 // file: internal/operations/registry/worker.go
-// version: 2.2.0
+// version: 2.2.1
 // guid: b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e
-// last-edited: 2026-05-08
+// last-edited: 2026-05-18
 
 package registry
 
@@ -13,8 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 )
+
+var operationTracer = otel.Tracer("audiobook-organizer/operations")
 
 // ErrSubprocessNotImplemented is returned when a Run with Isolate=true is
 // dispatched. Subprocess execution lands in UOS-03.
@@ -292,5 +297,20 @@ func (r *Registry) safeRun(ctx context.Context, def OperationDef, params json.Ra
 			r.logger.Error("registry: op panicked", "def_id", def.ID, "panic", rec)
 		}
 	}()
-	return def.Run(ctx, params, rep)
+
+	// Create a root span for this operation execution.
+	_, span := operationTracer.Start(ctx, "operation.run",
+		trace.WithAttributes(
+			attribute.String("operation_id", def.ID),
+			attribute.String("operation_name", def.DisplayName),
+			attribute.String("plugin", def.Plugin),
+		))
+	defer span.End()
+
+	runErr = def.Run(ctx, params, rep)
+	if runErr != nil {
+		span.RecordError(runErr)
+		span.SetAttributes(attribute.Bool("error", true))
+	}
+	return runErr
 }
