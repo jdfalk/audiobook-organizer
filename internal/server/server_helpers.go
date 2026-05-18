@@ -1,18 +1,18 @@
 // file: internal/server/server_helpers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8a40b808-2bf2-4a35-893c-ad5e3351dbae
-// last-edited: 2026-05-16
+// last-edited: 2026-05-18
 
 package server
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/security/pathvalidation"
 )
 
 func SetVersion(v string) {
@@ -20,16 +20,11 @@ func SetVersion(v string) {
 }
 
 // validateAbsolutePath rejects non-absolute paths and paths containing traversal
-// sequences (e.g. "../../etc/passwd"). This is applied to all user-supplied
-// filesystem paths before they reach os.Stat / os.ReadDir / file-open calls.
+// sequences. Delegates to pathvalidation.CleanAbsolutePath; kept for callers
+// that only need an error signal and don't use the cleaned return value.
 func validateAbsolutePath(path string) error {
-	if !filepath.IsAbs(path) {
-		return fmt.Errorf("path must be absolute")
-	}
-	if filepath.Clean(path) != path {
-		return fmt.Errorf("path must not contain traversal sequences")
-	}
-	return nil
+	_, err := pathvalidation.CleanAbsolutePath(path)
+	return err
 }
 
 // resetLibrarySizeCache resets the library size cache (for testing)
