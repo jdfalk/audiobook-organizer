@@ -1,7 +1,7 @@
 // file: internal/server/duplicates_handlers.go
-// version: 3.1.0
+// version: 3.2.0
 // guid: 47a3e3fb-f5cf-4970-a2fc-d2ef481368c9
-// last-edited: 2026-05-02
+// last-edited: 2026-05-18
 //
 // SQL-backed duplicate detection handlers split out of server.go:
 // find, list, merge, skip, dismiss, pair-level actions, and series
@@ -65,13 +65,21 @@ func (s *Server) scanBookDuplicates(c *gin.Context) {
 		return
 	}
 
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.book-scan", bookDedupScanOpParams{})
+	store := s.Store()
+	legacyID := ulid.Make().String()
+	detail := "book-dedup-scan"
+	op, err := store.CreateOperation(legacyID, "book-dedup-scan", &detail)
 	if err != nil {
+		httputil.InternalError(c, "failed to create operation", err)
+		return
+	}
+
+	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.book-scan", bookDedupScanOpParams{LegacyOpID: op.ID}); err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	httputil.RespondWithSuccess(c, 202, gin.H{"id": opID, "type": "book-dedup-scan", "status": "queued"})
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // mergeBookDuplicatesAsVersions merges a group of duplicate books into a version group.
@@ -204,13 +212,21 @@ func (s *Server) refreshDuplicateAuthors(c *gin.Context) {
 		return
 	}
 
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.author-scan", authorDedupScanOpParams{})
+	store := s.Store()
+	legacyID := ulid.Make().String()
+	detail := "author-dedup-scan"
+	op, err := store.CreateOperation(legacyID, "author-dedup-scan", &detail)
 	if err != nil {
+		httputil.InternalError(c, "failed to create operation", err)
+		return
+	}
+
+	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.author-scan", authorDedupScanOpParams{LegacyOpID: op.ID}); err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	httputil.RespondWithSuccess(c, 202, gin.H{"id": opID, "type": "author-dedup-scan", "status": "queued"})
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // filterReviewedAuthorGroups removes author dedup groups where all author IDs
@@ -281,13 +297,21 @@ func (s *Server) refreshSeriesDuplicates(c *gin.Context) {
 		return
 	}
 
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.series-scan", seriesDedupScanOpParams{})
+	store := s.Store()
+	legacyID := ulid.Make().String()
+	detail := "series-dedup-scan"
+	op, err := store.CreateOperation(legacyID, "series-dedup-scan", &detail)
 	if err != nil {
+		httputil.InternalError(c, "failed to create operation", err)
+		return
+	}
+
+	if _, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.series-scan", seriesDedupScanOpParams{LegacyOpID: op.ID}); err != nil {
 		httputil.InternalError(c, "failed to enqueue operation", err)
 		return
 	}
 
-	httputil.RespondWithSuccess(c, 202, gin.H{"id": opID, "type": "series-dedup-scan", "status": "queued"})
+	httputil.RespondWithSuccess(c, 202, op)
 }
 
 // validateDedupEntry searches metadata sources (OpenLibrary, Audible, etc.) to validate

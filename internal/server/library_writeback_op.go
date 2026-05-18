@@ -1,5 +1,5 @@
 // file: internal/server/library_writeback_op.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 package server
@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	ulid "github.com/oklog/ulid/v2"
@@ -50,7 +52,16 @@ func (s *Server) RegisterBulkWriteBackOp(reg *opsregistry.Registry) error {
 			}
 			opID := ulid.Make().String()
 			progress := registryProgressAdapter{r: reporter}
-			return s.runBulkWriteBack(ctx, opID, p.BookIDs, p.Rename, 0, progress)
+			runErr := s.runBulkWriteBack(ctx, opID, p.BookIDs, p.Rename, 0, progress)
+			if s.activityWriter != nil {
+				activity.FlushOperation(s.activityWriter, opID)
+				summary := fmt.Sprintf("Bulk tag write-back completed for %d books", len(p.BookIDs))
+				if runErr != nil {
+					summary = fmt.Sprintf("Bulk tag write-back failed: %v", runErr)
+				}
+				activity.EmitInfo(s.activityWriter, opID, "library.bulk-write-back", "library", summary, activity.AlwaysShow)
+			}
+			return runErr
 		},
 	})
 }

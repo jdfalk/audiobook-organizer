@@ -1,5 +1,5 @@
 // file: internal/server/duplicates_ops.go
-// version: 2.2.0
+// version: 2.3.0
 // guid: 8b3e1f92-d4c7-4a6e-b5f0-2a7c9d1e3f45
 
 // duplicates_ops registers v2 OperationDefs for the 8 async dedup operations
@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
@@ -76,6 +77,12 @@ func (s *Server) RegisterBookDedupScanOp(reg *opsregistry.Registry) error {
 				"duplicate_count": result.TotalDuplicates,
 			}
 			s.dedupCache.SetWithTTL("book-dedup-scan", cacheVal, 30*time.Minute)
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.book-scan", "dedup",
+					fmt.Sprintf("Book duplicate scan found %d groups (%d duplicates)", len(result.Groups), result.TotalDuplicates),
+					activity.AlwaysShow)
+			}
 			return nil
 		},
 	})
@@ -112,6 +119,12 @@ func (s *Server) RegisterBookMergeOp(reg *opsregistry.Registry) error {
 				return err
 			}
 			s.dedupCache.InvalidateAll()
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.book-merge", "dedup",
+					fmt.Sprintf("Book merge completed: merged %d books into %s", len(p.MergeIDs), p.KeepID),
+					activity.AlwaysShow)
+			}
 			return nil
 		},
 	})
@@ -175,6 +188,12 @@ func (s *Server) RegisterAuthorDedupScanOp(reg *opsregistry.Registry) error {
 			s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
 
 			_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups (after filtering reviewed)", len(groups)))
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.author-scan", "dedup",
+					fmt.Sprintf("Author duplicate scan found %d groups", len(groups)),
+					activity.AlwaysShow)
+			}
 			return nil
 		},
 	})
@@ -217,6 +236,12 @@ func (s *Server) RegisterSeriesDedupScanOp(reg *opsregistry.Registry) error {
 				"total_series": result.TotalSeries,
 			}
 			s.dedupCache.Set("series-duplicates", resp)
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.series-scan", "dedup",
+					fmt.Sprintf("Series duplicate scan found %d groups (of %d total series)", len(result.Groups), result.TotalSeries),
+					activity.AlwaysShow)
+			}
 			return nil
 		},
 	})
@@ -253,6 +278,11 @@ func (s *Server) RegisterSeriesDedupOp(reg *opsregistry.Registry) error {
 				return err
 			}
 			s.dedupCache.InvalidateAll()
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.series-dedup", "dedup",
+					"Series deduplication completed", activity.AlwaysShow)
+			}
 			return nil
 		},
 	})
@@ -285,7 +315,16 @@ func (s *Server) RegisterSeriesPruneOp(reg *opsregistry.Registry) error {
 				return fmt.Errorf("dedup.series-prune: database not initialized")
 			}
 			progress := registryProgressAdapter{r: reporter}
-			return s.executeSeriesPrune(ctx, store, progress, p.LegacyOpID)
+			runErr := s.executeSeriesPrune(ctx, store, progress, p.LegacyOpID)
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				summary := "Series prune completed"
+				if runErr != nil {
+					summary = fmt.Sprintf("Series prune failed: %v", runErr)
+				}
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.series-prune", "dedup", summary, activity.AlwaysShow)
+			}
+			return runErr
 		},
 	})
 }
@@ -321,6 +360,12 @@ func (s *Server) RegisterSeriesMergeOp(reg *opsregistry.Registry) error {
 				return err
 			}
 			s.dedupCache.InvalidateAll()
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.series-merge", "dedup",
+					fmt.Sprintf("Series merge completed: merged %d series into series %d", len(p.MergeIDs), p.KeepID),
+					activity.AlwaysShow)
+			}
 			return nil
 		},
 	})
@@ -392,6 +437,12 @@ func (s *Server) RegisterSeriesNormalizeOp(reg *opsregistry.Registry) error {
 			}
 
 			_ = progress.Log("info", "Series normalization complete.", nil)
+			if s.activityWriter != nil && opID != "" {
+				activity.FlushOperation(s.activityWriter, opID)
+				activity.EmitInfo(s.activityWriter, opID, "dedup.series-normalize", "dedup",
+					fmt.Sprintf("Series normalization completed for %d affected books", len(affectedBookIDs)),
+					activity.AlwaysShow)
+			}
 			return nil
 		},
 	})

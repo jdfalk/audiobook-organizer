@@ -1,5 +1,5 @@
 // file: internal/server/reconcile_ops.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5c2d8f41-a3e7-4b19-8d60-9f1e2c3a4b5d
 
 // reconcile_ops registers the v2 OperationDefs for the reconcile scan and
@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
@@ -58,7 +59,16 @@ func (s *Server) RegisterReconcileScanOpV2(reg *opsregistry.Registry) error {
 				return fmt.Errorf("reconcile.scan: database not initialized")
 			}
 			progress := registryProgressAdapter{r: reporter}
-			return reconcile.RunReconcileScan(store, ctx, p.LegacyOpID, progress)
+			runErr := reconcile.RunReconcileScan(store, ctx, p.LegacyOpID, progress)
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				summary := "Reconcile scan completed"
+				if runErr != nil {
+					summary = fmt.Sprintf("Reconcile scan failed: %v", runErr)
+				}
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "reconcile.scan", "reconcile", summary, activity.AlwaysShow)
+			}
+			return runErr
 		},
 	})
 }
@@ -89,7 +99,16 @@ func (s *Server) RegisterReconcileApplyOp(reg *opsregistry.Registry) error {
 			}
 			progress := registryProgressAdapter{r: reporter}
 			log := operations.LoggerFromReporter(progress)
-			return reconcile.ExecuteReconcile(ctx, store, p.LegacyOpID, p.Matches, log)
+			runErr := reconcile.ExecuteReconcile(ctx, store, p.LegacyOpID, p.Matches, log)
+			if s.activityWriter != nil && p.LegacyOpID != "" {
+				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
+				summary := fmt.Sprintf("Reconcile apply completed: %d matches applied", len(p.Matches))
+				if runErr != nil {
+					summary = fmt.Sprintf("Reconcile apply failed: %v", runErr)
+				}
+				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "reconcile.apply", "reconcile", summary, activity.AlwaysShow)
+			}
+			return runErr
 		},
 	})
 }
