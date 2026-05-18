@@ -1,5 +1,5 @@
 // file: internal/server/registry_wire.go
-// version: 1.7.0
+// version: 1.7.1
 
 package server
 
