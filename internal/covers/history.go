@@ -1,7 +1,7 @@
 // file: internal/covers/history.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d4e5f6a7-8901-bcde-f123-4567890abcde
-// last-edited: 2026-05-11
+// last-edited: 2026-05-18
 //
 // Cover history management for browsing and restoring previous cover versions.
 // Business logic extracted from internal/server/cover_history.go.
@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/security/safepath"
 )
 
 // CoverHistoryEntry represents one saved cover version.
@@ -25,9 +27,12 @@ type CoverHistoryEntry struct {
 
 // ListCoverHistory returns all cover versions for a book, sorted by modification time (newest first).
 func ListCoverHistory(bookID, rootDir string) ([]CoverHistoryEntry, error) {
-	histDir := filepath.Join(rootDir, "covers", "history", bookID)
+	histDirSP, err := safepath.Join(rootDir, "covers", "history", bookID)
+	if err != nil {
+		return []CoverHistoryEntry{}, nil
+	}
 
-	entries, err := os.ReadDir(histDir)
+	entries, err := os.ReadDir(histDirSP.String())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []CoverHistoryEntry{}, nil
@@ -35,7 +40,7 @@ func ListCoverHistory(bookID, rootDir string) ([]CoverHistoryEntry, error) {
 		return nil, err
 	}
 
-	var covers []CoverHistoryEntry
+	var result []CoverHistoryEntry
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -49,7 +54,7 @@ func ListCoverHistory(bookID, rootDir string) ([]CoverHistoryEntry, error) {
 		if err != nil {
 			continue
 		}
-		covers = append(covers, CoverHistoryEntry{
+		result = append(result, CoverHistoryEntry{
 			Filename:  name,
 			URL:       "/api/v1/covers/local/" + name,
 			SizeBytes: info.Size(),
@@ -57,37 +62,40 @@ func ListCoverHistory(bookID, rootDir string) ([]CoverHistoryEntry, error) {
 		})
 	}
 
-	sort.Slice(covers, func(i, j int) bool {
-		return covers[i].ModTime > covers[j].ModTime
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].ModTime > result[j].ModTime
 	})
 
-	return covers, nil
+	return result, nil
 }
 
 // RestoreCoverFile copies a historical cover to the current cover location.
 func RestoreCoverFile(bookID, filename, rootDir string) (string, error) {
-	// Prevent path traversal
-	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || strings.Contains(filename, "..") {
+	// Reject filenames that cross directory boundaries before path construction.
+	if strings.ContainsAny(filename, "/\\") || strings.Contains(filename, "..") {
 		return "", os.ErrInvalid
 	}
-
-	srcPath := filepath.Join(rootDir, "covers", "history", bookID, filename)
-	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+	srcSP, err := safepath.Join(rootDir, "covers", "history", bookID, filename)
+	if err != nil {
+		return "", os.ErrInvalid
+	}
+	if _, err := os.Stat(srcSP.String()); os.IsNotExist(err) {
 		return "", os.ErrNotExist
 	}
 
-	// Copy the history file to the current cover location
-	dstDir := filepath.Join(rootDir, "covers")
 	ext := filepath.Ext(filename)
-	dstPath := filepath.Join(dstDir, bookID+ext)
+	dstSP, err := safepath.Join(rootDir, "covers", bookID+ext)
+	if err != nil {
+		return "", os.ErrInvalid
+	}
 
-	src, err := os.ReadFile(srcPath)
+	src, err := os.ReadFile(srcSP.String())
 	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(dstPath, src, 0o644); err != nil {
+	if err := os.WriteFile(dstSP.String(), src, 0o644); err != nil {
 		return "", err
 	}
 
-	return dstPath, nil
+	return dstSP.String(), nil
 }

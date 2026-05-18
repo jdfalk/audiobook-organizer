@@ -1,7 +1,7 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.9.3
+// version: 2.9.4
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
-// last-edited: 2026-05-16
+// last-edited: 2026-05-18
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
 // operations, file/segment actions, tag read/write, cover art, path
@@ -31,6 +31,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
+	"github.com/jdfalk/audiobook-organizer/internal/security/pathvalidation"
 	servermiddleware "github.com/jdfalk/audiobook-organizer/internal/server/middleware"
 )
 
@@ -357,7 +358,11 @@ func (s *Server) audiobookFacets(c *gin.Context) {
 }
 
 func (s *Server) serveAudiobookCover(c *gin.Context) {
-	id := c.Param("id")
+	id := pathvalidation.SanitizeFilename(c.Param("id"))
+	if id == "" {
+		httputil.RespondWithBadRequest(c, "invalid book id")
+		return
+	}
 	if config.AppConfig.RootDir == "" {
 		httputil.RespondWithInternalError(c, "root_dir not configured")
 		return
