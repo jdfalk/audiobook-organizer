@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.48.0 -->
+<!-- version: 8.49.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-18 -->
 
@@ -216,7 +216,7 @@ incrementally:
   - **Dependencies:** Phase 1
   - **Plan:** [`implementation-plan.md#phase-2`](docs/security/audit-2026-05-03/implementation-plan.md#phase-2-path-injection--apply-validation-file-operations-core)
 
-- [ ] **SEC-AUDIT-3** Fix path injection in cover handlers (9 alerts: #602-#594)
+- [x] **SEC-AUDIT-3** Fix path injection in cover handlers (9 alerts: #602-#594) — PR #1015
   - **Priority:** P0
   - **Effort:** 3 hours
   - **Files:** `internal/server/covers.go`, `internal/server/cover_history.go`
@@ -258,7 +258,7 @@ incrementally:
 
 ### Phase 8: Warnings (4 alerts)
 
-- [ ] **SEC-AUDIT-8** Fix warning-level alerts (4 alerts: #379, #468, #160, #50) — In progress: PR #970 (blocked: CI failing)
+- [x] **SEC-AUDIT-8** Fix warning-level alerts (4 alerts: #379, #468, #160, #50) — PR #970
   - **Priority:** P2-P3
   - **Effort:** 3.5 hours
   - **Alerts:** Disabled cert check (#379), allocation overflow (#468), JS cert bypass (#160), incomplete sanitization (#50)
