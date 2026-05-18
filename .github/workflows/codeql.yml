@@ -1,10 +1,12 @@
 # file: .github/workflows/codeql.yml
-# version: 1.1.1
+# version: 1.2.0
 # guid: 4e7a1b2c-3d5f-6e8a-9b0c-1d2e3f4a5b6c
-# last-edited: 2026-05-15
+# last-edited: 2026-05-18
 #
 # Overrides GitHub's dynamic default CodeQL workflow so GOEXPERIMENT is set.
-# GOEXPERIMENT=jsonv2 is required by the project's JSON handling.
+# GOEXPERIMENT=jsonv2 is required by the project's JSON handling; it must be
+# set at the job level so CodeQL's internal extractor (run by analyze action)
+# also sees it, not just the explicit go build step.
 # Custom sanitizer pack in .github/codeql/ reduces false-positive path-injection alerts.
 
 name: CodeQL
@@ -28,6 +30,8 @@ jobs:
     name: Analyze (go)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      GOEXPERIMENT: jsonv2
 
     steps:
       - name: Checkout
@@ -49,8 +53,6 @@ jobs:
 
       - name: Build for CodeQL
         run: go build ./...
-        env:
-          GOEXPERIMENT: jsonv2
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
