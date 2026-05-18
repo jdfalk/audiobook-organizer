@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.8.1
+// version: 1.9.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -158,6 +158,116 @@ func NewActivityStore(dbPath string) (*ActivityStore, error) {
 // Close shuts down the underlying database connection.
 func (s *ActivityStore) Close() error {
 	return s.db.Close()
+}
+
+// MigrateSystemActivityLogs backfills old SQLite system_activity_log entries to the unified store.
+// Reads from mainSQLiteStore (the old database), transforms each row to ActivityEntry schema,
+// and inserts. Idempotent: checks for migration marker entry to avoid re-running.
+// Returns count of migrated rows, or 0 if already done.
+func (s *ActivityStore) MigrateSystemActivityLogs(mainSQLiteStore *SQLiteStore) (int, error) {
+	// Check if already migrated
+	var count int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM activity_log WHERE tier = 'system' AND type = 'migration_complete' AND tags LIKE '%migration%'`,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("activity_store: check migration marker: %w", err)
+	}
+	if count > 0 {
+		// Already migrated
+		log.Printf("[activity] system_activity_log migration already complete")
+		return 0, nil
+	}
+
+	// Read all old system_activity_log rows
+	oldLogs, err := mainSQLiteStore.GetAllSystemActivityLogRows()
+	if err != nil {
+		return 0, fmt.Errorf("activity_store: read old system_activity_log: %w", err)
+	}
+
+	if len(oldLogs) == 0 {
+		log.Printf("[activity] no old system_activity_log rows found")
+		// Write marker anyway so we don't check again
+		_, _ = s.Record(ActivityEntry{
+			Tier:    "system",
+			Type:    "migration_complete",
+			Summary: "Migrated 0 system_activity_log rows (none found)",
+			Tags:    []string{"migration"},
+		})
+		return 0, nil
+	}
+
+	// Insert in a transaction to ensure atomicity
+	tx, err := s.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return 0, fmt.Errorf("activity_store: begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	insertedCount := 0
+	for _, old := range oldLogs {
+		// Map old schema to new ActivityEntry
+		// timestamp ← created_at
+		// tier ← "system"
+		// type ← "system_log"
+		// level ← level (pass through)
+		// source ← source (pass through)
+		// summary ← message
+		// details ← nil
+		// tags ← ["legacy", "system_activity_log"]
+		entry := ActivityEntry{
+			Timestamp: old.CreatedAt,
+			Tier:      "system",
+			Type:      "system_log",
+			Level:     old.Level,
+			Source:    old.Source,
+			Summary:   old.Message,
+			Tags:      []string{"legacy", "system_activity_log"},
+		}
+
+		tagsStr := strings.Join(entry.Tags, ",")
+		_, err := tx.Exec(`
+			INSERT INTO activity_log
+				(timestamp, tier, type, level, source, summary, tags)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			entry.Timestamp.UTC(),
+			entry.Tier,
+			entry.Type,
+			entry.Level,
+			entry.Source,
+			entry.Summary,
+			tagsStr,
+		)
+		if err != nil {
+			return 0, fmt.Errorf("activity_store: insert migrated row: %w", err)
+		}
+		insertedCount++
+	}
+
+	// Write marker entry
+	markerStr := fmt.Sprintf("Migrated %d system_activity_log rows from legacy store", insertedCount)
+	_, err = tx.Exec(`
+		INSERT INTO activity_log
+			(timestamp, tier, type, level, source, summary, tags)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		time.Now().UTC(),
+		"system",
+		"migration_complete",
+		"info",
+		"activity_store",
+		markerStr,
+		"migration",
+	)
+	if err != nil {
+		return 0, fmt.Errorf("activity_store: insert migration marker: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("activity_store: commit migration: %w", err)
+	}
+
+	log.Printf("[activity] migrated %d system_activity_log rows", insertedCount)
+	return insertedCount, nil
 }
 
 // Record inserts an ActivityEntry and returns its auto-assigned ID.
