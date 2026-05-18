@@ -1,6 +1,6 @@
 // file: internal/server/system_handlers.go
-// version: 2.2.4
-// last-edited: 2026-05-16
+// version: 2.2.5
+// last-edited: 2026-05-18
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
 // System-level HTTP handlers split out of server.go: health, status,
@@ -28,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/jdfalk/audiobook-organizer/internal/policy"
+	"github.com/jdfalk/audiobook-organizer/internal/security/pathvalidation"
 )
 
 // Handler functions (stubs for now)
@@ -466,11 +467,19 @@ func (s *Server) restoreBackup(c *gin.Context) {
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && !filepath.IsAbs(backupConfig.BackupDir) {
 		backupConfig.BackupDir = filepath.Join(filepath.Dir(dbPath), backupConfig.BackupDir)
 	}
-	backupPath := filepath.Join(backupConfig.BackupDir, req.BackupFilename)
+	safeFilename := pathvalidation.SanitizeFilename(req.BackupFilename)
+	backupPath := filepath.Join(backupConfig.BackupDir, safeFilename)
 
 	// Use current database path as target if not specified
-	targetPath := req.TargetPath
-	if targetPath == "" {
+	var targetPath string
+	if req.TargetPath != "" {
+		cleanTarget, err := pathvalidation.CleanAbsolutePath(req.TargetPath)
+		if err != nil {
+			httputil.RespondWithBadRequest(c, "invalid target_path: "+err.Error())
+			return
+		}
+		targetPath = cleanTarget
+	} else {
 		targetPath = filepath.Dir(config.AppConfig.DatabasePath)
 	}
 
@@ -497,8 +506,7 @@ func (s *Server) deleteBackup(c *gin.Context) {
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" && !filepath.IsAbs(backupConfig.BackupDir) {
 		backupConfig.BackupDir = filepath.Join(filepath.Dir(dbPath), backupConfig.BackupDir)
 	}
-	// Sanitize filename to prevent path traversal
-	filename = filepath.Base(filename)
+	filename = pathvalidation.SanitizeFilename(filename)
 	backupPath := filepath.Join(backupConfig.BackupDir, filename)
 
 	if err := backup.DeleteBackup(backupPath); err != nil {

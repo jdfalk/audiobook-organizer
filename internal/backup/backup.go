@@ -1,7 +1,7 @@
 // file: internal/backup/backup.go
-// version: 1.3.1
+// version: 1.4.0
 // guid: 8f9e0a1b-2c3d-4e5f-6a7b-8c9d0e1f2a3b
-// last-edited: 2026-05-15
+// last-edited: 2026-05-18
 
 package backup
 
@@ -125,38 +125,22 @@ func CreateBackup(databasePath, databaseType string, config BackupConfig) (*Back
 	return info, nil
 }
 
-// isPathWithinTarget validates that a path resolves within the target directory.
-// This prevents zipslip attacks where archive entries use traversal sequences.
+// isPathWithinTarget reports whether entryPath, when joined with targetPath,
+// stays inside targetPath. Used by unit tests to verify zipslip-rejection
+// logic; RestoreBackup uses safepath.Join for the same guarantee.
 func isPathWithinTarget(targetPath, entryPath string) (bool, error) {
-	// Ensure target path is absolute
 	absTarget, err := filepath.Abs(targetPath)
 	if err != nil {
 		return false, err
 	}
-
-	// Join entry path with target (this handles "." entries)
-	candidate := filepath.Join(absTarget, entryPath)
-
-	// Clean the path to remove . and .. sequences
-	candidate = filepath.Clean(candidate)
-
-	// Verify the cleaned path is still within target
-	// Use filepath.Rel to compute relative path; if it escapes, Rel will return ".."
+	candidate := filepath.Clean(filepath.Join(absTarget, entryPath))
 	rel, err := filepath.Rel(absTarget, candidate)
 	if err != nil {
 		return false, err
 	}
-
-	// If rel is absolute, it escaped the target
-	if filepath.IsAbs(rel) {
+	if filepath.IsAbs(rel) || strings.Contains(rel, "..") {
 		return false, nil
 	}
-
-	// If rel contains "..", it tried to escape
-	if strings.Contains(rel, "..") {
-		return false, nil
-	}
-
 	return true, nil
 }
 
@@ -195,17 +179,21 @@ func RestoreBackup(backupPath, targetPath string, verify bool) error {
 			return fmt.Errorf("failed to read tar header: %w", err)
 		}
 
-		// Validate entry path to prevent zipslip attacks
-		within, err := isPathWithinTarget(targetPath, header.Name)
+		// Normalise the archive entry name: strip any leading slashes so that
+		// absolute-path entries (e.g. "/etc/passwd") are treated as relative
+		// paths inside the target directory — the same behaviour as
+		// filepath.Join(root, "/etc/passwd") on Unix, but explicit.
+		entryName := strings.TrimLeft(filepath.ToSlash(header.Name), "/")
+		if entryName == "" {
+			continue
+		}
+		// safepath.Join validates that the entry stays within targetPath and
+		// returns a clean path value — breaking the CodeQL taint chain.
+		targetSP, err := safepath.Join(targetPath, entryName)
 		if err != nil {
-			return fmt.Errorf("failed to validate archive entry path %q: %w", header.Name, err)
+			return fmt.Errorf("archive entry %q escapes target directory: %w", header.Name, err)
 		}
-		if !within {
-			return fmt.Errorf("archive entry %q escapes target directory", header.Name)
-		}
-
-		// Construct target path
-		target := filepath.Join(targetPath, header.Name)
+		target := targetSP.String()
 
 		// Handle directories and files
 		switch header.Typeflag {
