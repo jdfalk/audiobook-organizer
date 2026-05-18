@@ -1,5 +1,5 @@
 // file: internal/database/activity_store_test.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: f3a1b2c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 package database
