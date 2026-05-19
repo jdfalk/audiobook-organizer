@@ -1,5 +1,5 @@
 // file: internal/metafetch/service_files.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 969b284a-5657-442b-beba-275e325e000b
 // last-edited: 2026-05-01
 
@@ -9,7 +9,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -66,11 +66,11 @@ func backupFileBeforeWrite(filePath string) {
 	if err := os.Link(filePath, backupPath); err != nil {
 		// Hardlink failed — fall back to copy
 		if err := fileops.SafeCopy(filePath, backupPath, fileops.OperationConfig{}); err != nil {
-			log.Printf("[WARN] backup before tag write failed: %s: %v", filePath, err)
+						slog.Warn("backup before tag write failed: :", "path", filePath, "error", err)
 			return
 		}
 	}
-	log.Printf("[DEBUG] backup before tag write: %s", backupPath)
+		slog.Debug("backup before tag write:", "path", backupPath)
 }
 
 // ApplyMetadataFileIO runs the slow file operations after metadata is applied:
@@ -91,7 +91,7 @@ func (mfs *Service) ApplyMetadataFileIO(id string) {
 	// Run file rename + tag write pipeline
 	if config.AppConfig.AutoRenameOnApply || config.AppConfig.AutoWriteTagsOnApply {
 		if err := mfs.runApplyPipeline(id, book); err != nil {
-			log.Printf("[WARN] apply pipeline failed for %s: %v", id, err)
+						slog.Warn("apply pipeline failed for :", "id", id, "error", err)
 		}
 	}
 }
@@ -123,7 +123,7 @@ func removeEmptyDirs(dir, stopAt string) {
 		if err := os.Remove(dir); err != nil {
 			break
 		}
-		log.Printf("[INFO] removed empty directory: %s", dir)
+				slog.Info("removed empty directory:", "value", dir)
 		dir = filepath.Dir(dir)
 	}
 }

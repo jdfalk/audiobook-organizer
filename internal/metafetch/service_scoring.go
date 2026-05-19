@@ -1,5 +1,5 @@
 // file: internal/metafetch/service_scoring.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: d2226468-bed1-4989-93f3-b0bc3a344424
 // last-edited: 2026-05-01
 
@@ -11,7 +11,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"log"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strconv"
@@ -396,11 +396,9 @@ func (mfs *Service) ScoreBaseCandidates(
 			return scores, mfs.metadataScorer.Name()
 		}
 		if err != nil {
-			log.Printf("[WARN] metadata-scorer %s failed, falling back to F1: %v",
-				mfs.metadataScorer.Name(), err)
+						slog.Warn("metadata-scorer  failed, falling back to F1:", "name", mfs.metadataScorer.Name(), "error", err)
 		} else {
-			log.Printf("[WARN] metadata-scorer %s returned %d scores for %d results, falling back to F1",
-				mfs.metadataScorer.Name(), len(scores), len(results))
+						slog.Warn("metadata-scorer  returned  scores for  results, falling back to F1", "name", mfs.metadataScorer.Name(), "count", len(scores), "count", len(results))
 		}
 	}
 
@@ -488,14 +486,12 @@ func (mfs *Service) RerankTopK(
 	}
 	if ambiguousEnd < 2 {
 		// Only one candidate within epsilon — nothing to resolve.
-		log.Printf("[DEBUG] metadata-search: rerank skipped — only 1 candidate within %.3f of best (%.3f)",
-			epsilon, bestScore)
+				slog.Debug("metadata-search: rerank skipped — only 1 candidate within %.3f of best (%.3f)", "value", epsilon, "value", bestScore)
 		return candidates
 	}
 
 	topCands := candidates[:ambiguousEnd]
-	log.Printf("[DEBUG] metadata-search: rerank firing on top %d candidates (epsilon=%.3f, bestScore=%.3f)",
-		len(topCands), epsilon, bestScore)
+		slog.Debug("metadata-search: rerank firing on top  candidates (epsilon=%.3f, bestScore=%.3f)", "count", len(topCands), "value", epsilon, "value", bestScore)
 
 	// Resolve the book's author name for the query payload.
 	authorName := ""
@@ -523,10 +519,9 @@ func (mfs *Service) RerankTopK(
 	llmScores, err := mfs.llmScorer.Score(ctx, query, llmCands)
 	if err != nil || len(llmScores) != len(topCands) {
 		if err != nil {
-			log.Printf("[WARN] metadata-search: rerank LLM call failed, keeping base scores: %v", err)
+						slog.Warn("metadata-search: rerank LLM call failed, keeping base scores:", "error", err)
 		} else {
-			log.Printf("[WARN] metadata-search: rerank returned %d scores for %d candidates, keeping base scores",
-				len(llmScores), len(topCands))
+						slog.Warn("metadata-search: rerank returned  scores for  candidates, keeping base scores", "count", len(llmScores), "count", len(topCands))
 		}
 		return candidates
 	}
@@ -561,8 +556,7 @@ func ApplySeriesPositionFilter(
 	wantPos := strconv.Itoa(knownPosition)
 	best := results[0]
 	if best.SeriesPosition != "" && best.SeriesPosition != wantPos {
-		log.Printf("[DEBUG] scorer: rejecting result %q (series position %q != expected %q)",
-			best.Title, best.SeriesPosition, wantPos)
+				slog.Debug("scorer: rejecting result  (series position  != expected )", "value", best.Title, "value", best.SeriesPosition, "value", wantPos)
 		return nil
 	}
 	return results

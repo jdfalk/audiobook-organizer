@@ -1,5 +1,5 @@
 // file: internal/metafetch/helpers.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package metafetch
@@ -7,7 +7,7 @@ package metafetch
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -245,7 +245,7 @@ func (mfs *Service) loadMetadataState(bookID string) (map[string]metadataFieldSt
 	}
 
 	if err := mfs.saveMetadataState(bookID, legacy); err != nil {
-		log.Printf("[WARN] failed to migrate legacy metadata state for %s: %v", bookID, err)
+				slog.Warn("failed to migrate legacy metadata state for :", "id", bookID, "error", err)
 	}
 	return legacy, nil
 }
