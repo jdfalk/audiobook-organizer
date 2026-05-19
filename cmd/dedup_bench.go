@@ -1,5 +1,5 @@
 // file: cmd/dedup_bench.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 //go:build bench
@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -94,17 +94,17 @@ func runDedupBench(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	log.Printf("Dedup bench output: %s", runDir)
+	slog.Info("Dedup bench output", "directory", runDir)
 
 	// Extract author data
 	var authorData *AuthorData
 	var err error
 
 	if benchServerURL != "" {
-		log.Printf("Fetching authors from remote server: %s", benchServerURL)
+		slog.Info("Fetching authors from server", "server", benchServerURL)
 		authorData, err = fetchAuthorsFromServer(benchServerURL)
 	} else {
-		log.Println("Fetching authors from local database")
+		slog.Info("Fetching authors from local database")
 		store, initErr := initializeStore(
 			config.AppConfig.DatabaseType,
 			config.AppConfig.DatabasePath,
@@ -131,10 +131,10 @@ func runDedupBench(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	log.Printf("Extracted %d authors, %d heuristic groups", len(authorData.Authors), len(groups))
+	slog.Info("Extracted author data", "authors", len(authorData.Authors), "groups", len(groups))
 
 	if benchDryRun {
-		log.Println("Dry run — data extracted, skipping API calls")
+		slog.Info("Dry run — data extracted, skipping API calls")
 		return nil
 	}
 
@@ -153,8 +153,8 @@ func runDedupBench(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		log.Printf("Submitted %d batch jobs. Check results later with:", len(jobs))
-		log.Printf("  ./audiobook-organizer dedup-bench check %s", runDir)
+		slog.Info("Submitted batch jobs", "count", len(jobs))
+		slog.Info("Check results", "command", "dedup-bench check " + runDir)
 		return nil
 	}
 
@@ -162,12 +162,11 @@ func runDedupBench(cmd *cobra.Command, args []string) error {
 	var allResults []BenchRunResult
 	for i, tc := range configs {
 		for _, mode := range modes {
-			log.Printf("[%d/%d] Running: model=%s prompt=%s temp=%.1f mode=%s",
-				i+1, len(configs), tc.Model, tc.PromptVariant, tc.Temperature, mode)
+			slog.Info("Running benchmark", "step", i+1, "total", len(configs), "model", tc.Model, "prompt", tc.PromptVariant, "temp", tc.Temperature, "mode", mode)
 
 			result, runErr := executeBenchRun(cmd.Context(), apiKey, tc, authorData, groups, mode, runDir, benchChunkSize)
 			if runErr != nil {
-				log.Printf("  ERROR: %v", runErr)
+				slog.Error("benchmark run failed", "error", runErr)
 				result = &BenchRunResult{
 					Config: tc,
 					Mode:   mode,
@@ -187,8 +186,8 @@ func runDedupBench(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	log.Printf("Benchmark complete. Results in %s", runDir)
-	log.Printf("View report: cat %s/summary.md", runDir)
+	slog.Info("Benchmark complete", "directory", runDir)
+	slog.Info("View report", "command", "cat " + runDir + "/summary.md")
 	return nil
 }
 
@@ -230,27 +229,26 @@ func runDedupBenchCheck(cmd *cobra.Command, args []string) error {
 	for _, job := range jobs {
 		batch, err := client.Batches.Get(cmd.Context(), job.BatchID)
 		if err != nil {
-			log.Printf("ERROR checking batch %s: %v", job.BatchID, err)
+			slog.Error("Error checking batch", "batch_id", job.BatchID, "error", err)
 			failed++
 			continue
 		}
 
 		status := string(batch.Status)
-		log.Printf("Batch %s (%s %s %s): %s",
-			job.BatchID, job.Config.Model, job.Config.PromptVariant, job.Mode, status)
+		slog.Info("Batch status", "batch_id", job.BatchID, "model", job.Config.Model, "variant", job.Config.PromptVariant, "mode", job.Mode, "status", status)
 
 		if status == "completed" {
 			completed++
 
 			// Download results
 			if batch.OutputFileID == "" {
-				log.Printf("  No output file ID")
+				slog.Warn("No output file ID")
 				continue
 			}
 
 			result, err := downloadBatchResult(cmd.Context(), &client, batch.OutputFileID, job)
 			if err != nil {
-				log.Printf("  ERROR downloading results: %v", err)
+				slog.Error("Error downloading results", "error", err)
 				continue
 			}
 			allResults = append(allResults, *result)
@@ -260,7 +258,7 @@ func runDedupBenchCheck(cmd *cobra.Command, args []string) error {
 			if len(batch.Errors.Data) > 0 {
 				errMsg = batch.Errors.Data[0].Message
 			}
-			log.Printf("  Failed: %s", errMsg)
+			slog.Error("Batch failed", "reason", errMsg)
 			allResults = append(allResults, BenchRunResult{
 				Config: job.Config,
 				Mode:   job.Mode,
@@ -269,12 +267,12 @@ func runDedupBenchCheck(cmd *cobra.Command, args []string) error {
 		} else {
 			pending++
 			if batch.RequestCounts.Completed > 0 || batch.RequestCounts.Total > 0 {
-				log.Printf("  Progress: %d/%d completed", batch.RequestCounts.Completed, batch.RequestCounts.Total)
+				slog.Info("Batch progress", "completed", batch.RequestCounts.Completed, "total", batch.RequestCounts.Total)
 			}
 		}
 	}
 
-	log.Printf("Status: %d completed, %d failed, %d pending", completed, failed, pending)
+	slog.Info("Batch check summary", "completed", completed, "failed", failed, "pending", pending)
 
 	if completed > 0 {
 		// Load author/group counts from saved data
@@ -300,11 +298,11 @@ func runDedupBenchCheck(cmd *cobra.Command, args []string) error {
 		if err := writeSummaryMarkdown(filepath.Join(runDir, "summary.md"), summary); err != nil {
 			return err
 		}
-		log.Printf("Summary updated: %s/summary.md", runDir)
+		slog.Info("Summary updated", "file", runDir + "/summary.md")
 	}
 
 	if pending > 0 {
-		log.Printf("Run this command again later to check remaining jobs")
+		slog.Info("Run this command again later to check remaining jobs")
 	}
 
 	return nil
@@ -405,7 +403,7 @@ func downloadBatchResult(ctx context.Context, client *openai.Client, outputFileI
 
 	_ = writeJSON(filepath.Join(job.RunDir, "stats.json"), result)
 
-	log.Printf("  Downloaded: %d suggestions, ~$%.4f", numSuggestions, costEstimate)
+	slog.Info("Downloaded batch results", "suggestions", numSuggestions, "cost_usd", costEstimate)
 	return result, nil
 }
 
@@ -457,7 +455,7 @@ func fetchAuthorsFromServer(serverURL string) (*AuthorData, error) {
 		return nil, fmt.Errorf("decode authors: %w", err)
 	}
 
-	log.Printf("Fetched %d authors from server", authorList.Count)
+	slog.Info("Fetched authors", "count", authorList.Count)
 
 	// Fetch audiobooks with pagination
 	bookCounts := map[int]int{}
@@ -468,7 +466,7 @@ func fetchAuthorsFromServer(serverURL string) (*AuthorData, error) {
 		url := fmt.Sprintf("%s/api/v1/audiobooks?limit=%d&offset=%d", serverURL, pageSize, offset)
 		booksResp, err := httpClient.Get(url)
 		if err != nil {
-			log.Printf("Warning: couldn't fetch books (offset %d): %v", offset, err)
+			slog.Warn("Could not fetch books", "offset", offset, "error", err)
 			break
 		}
 
@@ -479,7 +477,7 @@ func fetchAuthorsFromServer(serverURL string) (*AuthorData, error) {
 		decErr := json.NewDecoder(booksResp.Body).Decode(&page)
 		booksResp.Body.Close()
 		if decErr != nil {
-			log.Printf("Warning: couldn't decode books (offset %d): %v", offset, decErr)
+			slog.Warn("Could not decode books", "offset", offset, "error", decErr)
 			break
 		}
 
@@ -497,14 +495,13 @@ func fetchAuthorsFromServer(serverURL string) (*AuthorData, error) {
 			}
 		}
 
-		log.Printf("Fetched %d books (offset %d)", len(page.Items), offset)
+		slog.Info("Fetched books page", "count", len(page.Items), "offset", offset)
 		if len(page.Items) < pageSize {
 			break
 		}
 		offset += pageSize
 	}
-	log.Printf("Total: %d author-book mappings, %d authors with sample titles",
-		len(bookCounts), len(sampleBooks))
+	slog.Info("Book fetch complete", "mappings", len(bookCounts), "authors_with_samples", len(sampleBooks))
 
 	return &AuthorData{
 		Authors:     authorList.Items,

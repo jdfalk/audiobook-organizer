@@ -1,5 +1,5 @@
 // file: cmd/pebble-inject-skip/main.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-e1f2a3b4c5d6
 //
 // One-shot tool: writes transcode skip flags directly into PebbleDB.
@@ -10,7 +10,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -25,13 +25,13 @@ type Setting struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("usage: pebble-inject-skip <pebble-db-path>")
+		slog.Error("usage: pebble-inject-skip <pebble-db-path>"); os.Exit(1)
 	}
 	dbPath := os.Args[1]
 
 	db, err := pebble.Open(dbPath, &pebble.Options{})
 	if err != nil {
-		log.Fatalf("open pebble: %v", err)
+		slog.Error("open pebble failed", "error", err); os.Exit(1)
 	}
 	defer db.Close()
 
@@ -44,11 +44,11 @@ func main() {
 		s := Setting{Key: k, Value: "true", Type: "bool", IsSecret: false}
 		val, err := json.Marshal(s)
 		if err != nil {
-			log.Fatalf("marshal %s: %v", k, err)
+			slog.Error("marshal failed", "key", k, "error", err); os.Exit(1)
 		}
 		dbKey := "setting:" + k
 		if err := db.Set([]byte(dbKey), val, pebble.Sync); err != nil {
-			log.Fatalf("set %s: %v", dbKey, err)
+			slog.Error("set failed", "key", dbKey, "error", err); os.Exit(1)
 		}
 		fmt.Printf("SET %s = %s\n", dbKey, val)
 	}
