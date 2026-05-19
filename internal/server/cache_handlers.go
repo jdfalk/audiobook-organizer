@@ -7,7 +7,7 @@ package server
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -388,10 +388,10 @@ func (s *Server) runCacheStatsSnapshotter(shutdown <-chan struct{}) {
 				continue
 			}
 			if err := s.metricsStore.RecordCacheStatsSnapshots(snaps); err != nil {
-				log.Printf("cache snapshotter: record failed: %v", err)
+				slog.Warn("cache snapshotter: record failed: %v", err)
 			}
 			if _, err := s.metricsStore.PruneCacheStatsHistory(now.Add(-retention)); err != nil {
-				log.Printf("cache snapshotter: prune failed: %v", err)
+				slog.Warn("cache snapshotter: prune failed: %v", err)
 			}
 		}
 	}

@@ -6,7 +6,7 @@
 package server
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
@@ -52,7 +52,7 @@ func (s *Server) backfillExternalIDs() {
 
 	eidStore := asExternalIDStore(store)
 	if eidStore == nil {
-		log.Printf("[DEBUG] backfillExternalIDs: store does not implement ExternalIDStore, skipping")
+		slog.Debug("backfillExternalIDs: store does not implement ExternalIDStore, skipping")
 		return
 	}
 
@@ -60,7 +60,7 @@ func (s *Server) backfillExternalIDs() {
 	// on shutdown so it can't outlive the store and crash on
 	// "pebble: closed" in CreateExternalIDMapping.
 	if err := itunes.BackfillExternalIDs(s.bgCtx, &externalIDStoreAdapter{eidStore: eidStore, store: store}); err != nil {
-		log.Printf("[WARN] backfillExternalIDs: %v", err)
+		slog.Warn("backfillExternalIDs: %v", err)
 	}
 }
 

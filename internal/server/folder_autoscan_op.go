@@ -14,7 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -124,7 +124,7 @@ func (s *Server) RegisterFolderAutoScanOp(reg *opsregistry.Registry) error {
 							continue
 						}
 						if _, err := s.dedupEngine.CheckBook(ctx, dbBook.ID); err != nil {
-							log.Printf("[WARN] dedup check failed for scanned book %s: %v", dbBook.ID, err)
+							slog.Warn("dedup check failed for scanned book %s: %v", dbBook.ID, err)
 						}
 					}
 				}()

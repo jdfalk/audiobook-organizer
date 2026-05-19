@@ -1,7 +1,7 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.7.2
+// version: 3.7.3
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
-// last-edited: 2026-05-16
+// last-edited: 2026-05-19
 //
 // Metadata HTTP handlers split out of server.go: per-book fetch/
 // search/apply/revert/no-match, bulk fetch and bulk writeback, the
@@ -15,7 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"strings"
@@ -23,7 +23,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"log/slog"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
@@ -379,7 +378,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 			mfs.ApplyMetadataFileIO(bookID)
 			if shouldWriteBack {
 				if _, wbErr := mfs.WriteBackMetadataForBook(bookID); wbErr != nil {
-					log.Printf("[WARN] background write-back for %s: %v", bookID, wbErr)
+					slog.Warn("background write-back for %s: %v", bookID, wbErr)
 				}
 			}
 		})
@@ -421,7 +420,7 @@ func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 		RejectedAt:      time.Now(),
 	}
 	if rerr := s.Store().AddMetadataRejection(rejection); rerr != nil {
-		log.Printf("[WARN] markAudiobookNoMatch: could not record rejection for %s: %v", id, rerr)
+		slog.Warn("markAudiobookNoMatch: could not record rejection for %s: %v", id, rerr)
 	}
 	httputil.RespondWithOK(c, gin.H{"message": "Book marked as no match"})
 }
@@ -545,7 +544,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	doRename := (body.Rename != nil && *body.Rename) || config.AppConfig.AutoRenameOnApply
 	if doRename && len(body.SegmentIDs) == 0 {
 		if err := s.metadataFetchService.RunApplyPipelineRenameOnly(id, book); err != nil {
-			log.Printf("[WARN] rename failed for book %s: %v", id, err)
+			slog.Warn("rename failed for book %s: %v", id, err)
 		} else {
 			renamed = 1
 		}
@@ -852,7 +851,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 		if len(fetchedValues) > 0 {
 			if err := s.updateFetchedMetadataState(bookID, fetchedValues); err != nil {
-				log.Printf("[WARN] bulkFetchMetadata: failed to persist fetched metadata state for %s: %v", bookID, err)
+				slog.Warn("bulkFetchMetadata: failed to persist fetched metadata state for %s: %v", bookID, err)
 			}
 		}
 
@@ -957,8 +956,7 @@ func (s *Server) runBulkMetadataFetchAll(
 
 	totalBooks := len(existingResults) + len(work)
 	alreadyDone := len(existingResults)
-	log.Printf("[INFO] bulk-metadata-fetch %s: %d books total, %d already cached, %d to fetch",
-		opID, totalBooks, alreadyDone, len(work))
+	slog.Info("bulk-metadata-fetch %s: %d books total, %d already cached, %d to fetch", 		opID, totalBooks, alreadyDone, len(work))
 	_ = progress.UpdateProgress(alreadyDone, totalBooks,
 		fmt.Sprintf("resuming: %d/%d already cached", alreadyDone, totalBooks))
 
@@ -1078,8 +1076,7 @@ func (s *Server) runBulkMetadataFetchAll(
 	finalCount := atomic.LoadInt64(&completed)
 	_ = progress.UpdateProgress(int(finalCount), totalBooks,
 		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
-	log.Printf("[INFO] bulk-metadata-fetch %s: done %d books — cached:%d not_found:%d",
-		opID, finalCount, found, notFound)
+	slog.Info("bulk-metadata-fetch %s: done %d books — cached:%d not_found:%d", 		opID, finalCount, found, notFound)
 	return nil
 }
 
@@ -1296,8 +1293,7 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 
 	alreadyDone := len(existingResults)
 	totalBooks := alreadyDone + len(work)
-	log.Printf("[INFO] bulk-metadata-fetch-ids %s: %d total, %d done, %d to fetch",
-		opID, totalBooks, alreadyDone, len(work))
+	slog.Info("bulk-metadata-fetch-ids %s: %d total, %d done, %d to fetch", 		opID, totalBooks, alreadyDone, len(work))
 	_ = progress.UpdateProgress(alreadyDone, totalBooks,
 		fmt.Sprintf("resuming: %d/%d already done", alreadyDone, totalBooks))
 
@@ -1384,8 +1380,7 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 	finalCount := atomic.LoadInt64(&completed)
 	_ = progress.UpdateProgress(int(finalCount), totalBooks,
 		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
-	log.Printf("[INFO] bulk-metadata-fetch-ids %s: done %d books — cached:%d not_found:%d",
-		opID, finalCount, found, notFound)
+	slog.Info("bulk-metadata-fetch-ids %s: done %d books — cached:%d not_found:%d", 		opID, finalCount, found, notFound)
 	return nil
 }
 

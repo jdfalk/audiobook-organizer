@@ -12,7 +12,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -40,7 +40,7 @@ func (s *Server) setupBenchRoutes(protected *gin.RouterGroup) {
 		bench.POST("/pass2", s.benchPass2)
 		bench.POST("/crossval", s.benchCrossval)
 	}
-	log.Println("Bench experiment routes enabled")
+	slog.Info("Bench experiment routes enabled")
 }
 
 // benchStatus returns the status of all OpenAI batch jobs.
@@ -142,11 +142,11 @@ func (s *Server) benchSubmit(c *gin.Context) {
 	// Run in background
 	go func() {
 		ctx := context.Background()
-		log.Printf("[bench] Starting run: models=%v mode=%s server=%s", req.Models, req.Mode, serverURL)
+		slog.Info("bench: Starting run: models=%v mode=%s server=%s", req.Models, req.Mode, serverURL)
 
 		authorData, err := benchFetchAuthors(serverURL)
 		if err != nil {
-			log.Printf("[bench] ERROR fetching authors: %v", err)
+			slog.Info("bench: ERROR fetching authors: %v", err)
 			return
 		}
 
@@ -156,7 +156,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 		_ = benchWriteJSON(filepath.Join(runDir, "authors.json"), authorData.Authors)
 		_ = benchWriteJSON(filepath.Join(runDir, "groups.json"), groups)
 
-		log.Printf("[bench] %d authors, %d groups", len(authorData.Authors), len(groups))
+		slog.Info("bench: %d authors, %d groups", len(authorData.Authors), len(groups))
 
 		configs := benchBuildConfigs(req.Models)
 		modes := benchResolveModes(req.Mode)
@@ -202,7 +202,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 					job, err := benchSubmitBatchJob(ctx, client, tc, mode, systemPrompt, prefix+string(chunk), maxTokens,
 						fmt.Sprintf("%s_%s_t%.1f_%s_chunk%d", tc.Model, tc.Prompt, tc.Temperature, mode, ci), chunkDir)
 					if err != nil {
-						log.Printf("[bench] ERROR submitting %s: %v", dirName, err)
+						slog.Info("bench: ERROR submitting %s: %v", dirName, err)
 						continue
 					}
 					jobs = append(jobs, job)
@@ -211,7 +211,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 		}
 
 		_ = benchWriteJSON(filepath.Join(runDir, "batch_jobs.json"), jobs)
-		log.Printf("[bench] Submitted %d batch jobs to %s", len(jobs), runDir)
+		slog.Info("bench: Submitted %d batch jobs to %s", len(jobs), runDir)
 	}()
 
 	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{

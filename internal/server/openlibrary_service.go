@@ -9,7 +9,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -98,7 +98,7 @@ func (s *Server) startOLDownload(c *gin.Context) {
 
 	params := olDownloadOpParams{LegacyOpID: opID, Types: req.Types, TargetDir: targetDir}
 	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "openlibrary.download", params); enqErr != nil {
-		log.Printf("[WARN] Failed to enqueue OL download, running directly: %v", enqErr)
+		slog.Warn("Failed to enqueue OL download, running directly: %v", enqErr)
 		go func() {
 			for _, dumpType := range req.Types {
 				_ = openlibrary.DownloadDump(dumpType, targetDir, tracker)
@@ -136,7 +136,7 @@ func (s *Server) startOLImport(c *gin.Context) {
 
 	importParams := olImportOpParams{LegacyOpID: opID, Types: req.Types, TargetDir: targetDir}
 	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "openlibrary.import", importParams); enqErr != nil {
-		log.Printf("[WARN] Failed to enqueue OL import, running directly: %v", enqErr)
+		slog.Warn("Failed to enqueue OL import, running directly: %v", enqErr)
 		go func() {
 			_ = svc.Import(context.Background(), nil, targetDir, req.Types)
 		}()
@@ -146,9 +146,9 @@ func (s *Server) startOLImport(c *gin.Context) {
 }
 
 func (s *Server) uploadOLDump(c *gin.Context) {
-	log.Printf("[DEBUG] uploadOLDump: Content-Type=%s, ContentLength=%d", c.ContentType(), c.Request.ContentLength)
+	slog.Debug("uploadOLDump: Content-Type=%s, ContentLength=%d", c.ContentType(), c.Request.ContentLength)
 	dumpType := c.PostForm("type")
-	log.Printf("[DEBUG] uploadOLDump: dumpType=%q", dumpType)
+	slog.Debug("uploadOLDump: dumpType=%q", dumpType)
 	if !metafetch.ValidDumpTypes[dumpType] {
 		httputil.RespondWithBadRequest(c, "type must be one of: editions, authors, works")
 		return
@@ -195,7 +195,7 @@ func (s *Server) uploadOLDump(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] OL dump uploaded: %s (%d bytes) -> %s", header.Filename, written, sp.String())
+	slog.Info("OL dump uploaded: %s (%d bytes) -> %s", header.Filename, written, sp.String())
 	httputil.RespondWithOK(c, gin.H{
 		"message":  "dump file uploaded",
 		"type":     dumpType,

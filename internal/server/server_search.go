@@ -7,7 +7,7 @@ package server
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -47,7 +47,7 @@ func (s *Server) buildSearchIndexIfEmpty() {
 	}
 	count, err := s.searchIndex.DocCount()
 	if err != nil {
-		log.Printf("[WARN] search index DocCount: %v", err)
+		slog.Warn("search index DocCount: %v", err)
 		return
 	}
 	if count > 0 {
@@ -57,7 +57,7 @@ func (s *Server) buildSearchIndexIfEmpty() {
 	if store == nil {
 		return
 	}
-	log.Printf("[INFO] Search index empty — starting full backfill")
+	slog.Info("Search index empty — starting full backfill")
 	start := time.Now()
 	indexed := 0
 	const pageSize = 500
@@ -65,13 +65,13 @@ func (s *Server) buildSearchIndexIfEmpty() {
 	for {
 		select {
 		case <-s.bgCtx.Done():
-			log.Printf("[INFO] Search backfill canceled at %d books (bgCtx)", indexed)
+			slog.Info("Search backfill canceled at %d books (bgCtx)", indexed)
 			return
 		default:
 		}
 		books, err := store.GetAllBooks(pageSize, offset)
 		if err != nil {
-			log.Printf("[WARN] search backfill GetAllBooks: %v", err)
+			slog.Warn("search backfill GetAllBooks: %v", err)
 			return
 		}
 		if len(books) == 0 {
@@ -80,13 +80,13 @@ func (s *Server) buildSearchIndexIfEmpty() {
 		for i := range books {
 			select {
 			case <-s.bgCtx.Done():
-				log.Printf("[INFO] Search backfill canceled at %d books", indexed)
+				slog.Info("Search backfill canceled at %d books", indexed)
 				return
 			default:
 			}
 			doc := search.BookToDoc(store, &books[i])
 			if err := s.searchIndex.IndexBook(doc); err != nil {
-				log.Printf("[WARN] search backfill index %s: %v", books[i].ID, err)
+				slog.Warn("search backfill index %s: %v", books[i].ID, err)
 				continue
 			}
 			indexed++
@@ -96,7 +96,7 @@ func (s *Server) buildSearchIndexIfEmpty() {
 			break
 		}
 	}
-	log.Printf("[INFO] Search backfill complete: %d books in %s", indexed, time.Since(start))
+	slog.Info("Search backfill complete: %d books in %s", indexed, time.Since(start))
 }
 
 // IndexBookByID reads a book (plus its related rows) and upserts
@@ -153,7 +153,7 @@ func (h *serverOrganizeHooks) OnCollision(currentBookID, occupantPath string) {
 		defer h.server.bgWG.Done()
 		occupant, err := h.server.store.GetBookByFilePath(occupantPath)
 		if err != nil {
-			log.Printf("[WARN] organize-collision hook: lookup %s failed: %v", occupantPath, err)
+			slog.Warn("organize-collision hook: lookup %s failed: %v", occupantPath, err)
 			return
 		}
 		if occupant == nil || occupant.ID == currentBookID {
@@ -168,12 +168,10 @@ func (h *serverOrganizeHooks) OnCollision(currentBookID, occupantPath string) {
 			Similarity: &sim,
 			Status:     "pending",
 		}); err != nil {
-			log.Printf("[WARN] organize-collision hook: upsert candidate %s/%s failed: %v",
-				currentBookID, occupant.ID, err)
+			slog.Warn("organize-collision hook: upsert candidate %s/%s failed: %v", 				currentBookID, occupant.ID, err)
 			return
 		}
-		log.Printf("[INFO] organize-collision: created dedup candidate between %s and %s (occupant of %s)",
-			currentBookID, occupant.ID, occupantPath)
+		slog.Info("organize-collision: created dedup candidate between %s and %s (occupant of %s)", 			currentBookID, occupant.ID, occupantPath)
 	}()
 }
 
@@ -201,7 +199,7 @@ func (s *Server) fireDedupOnImport(bookID string) {
 	go func() {
 		defer s.bgWG.Done()
 		if _, err := s.dedupEngine.CheckBook(s.bgCtx, bookID); err != nil {
-			log.Printf("[WARN] dedup-on-import CheckBook(%s): %v", bookID, err)
+			slog.Warn("dedup-on-import CheckBook(%s): %v", bookID, err)
 		}
 	}()
 }

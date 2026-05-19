@@ -8,7 +8,7 @@
 package server
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
@@ -43,7 +43,7 @@ func (s *Server) handleTrashVersion(c *gin.Context) {
 
 	if wasActive {
 		if err := versions.AutoPromoteAlt(s.Store(), bookID); err != nil {
-			log.Printf("[WARN] auto-promote after trash: %v", err)
+			slog.Warn("auto-promote after trash: %v", err)
 		}
 	}
 

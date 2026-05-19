@@ -6,7 +6,7 @@
 package server
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -159,8 +159,7 @@ func (s *Server) createAPIKey(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[APIKEY] created: id=%s user=%s name=%s scopes=%v expires=%v",
-		created.ID, targetUserID, created.Name, created.Scopes, created.ExpiresAt)
+	slog.Info("apikey: created: id=%s user=%s name=%s scopes=%v expires=%v", 		created.ID, targetUserID, created.Name, created.Scopes, created.ExpiresAt)
 
 	resp := createAPIKeyResponse{
 		ID:        created.ID,
@@ -296,7 +295,7 @@ func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[APIKEY] status change: id=%s user=%s status=%s", id, caller.ID, req.Status)
+	slog.Info("apikey: status change: id=%s user=%s status=%s", id, caller.ID, req.Status)
 
 	updated, err := s.Store().GetAPIKey(id)
 	if err != nil || updated == nil {
@@ -334,6 +333,6 @@ func (s *Server) revokeAPIKey(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[APIKEY] revoked: id=%s user=%s name=%s", id, caller.ID, key.Name)
+	slog.Info("apikey: revoked: id=%s user=%s name=%s", id, caller.ID, key.Name)
 	httputil.RespondWithNoContent(c)
 }

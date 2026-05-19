@@ -11,7 +11,7 @@ package server
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
@@ -345,7 +345,7 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 
 		created, createErr := s.Store().CreateBook(newBook)
 		if createErr != nil {
-			log.Printf("[WARN] splitSegmentsToBooks: failed to create book for file %s: %v", fileID, createErr)
+			slog.Warn("splitSegmentsToBooks: failed to create book for file %s: %v", fileID, createErr)
 			continue
 		}
 

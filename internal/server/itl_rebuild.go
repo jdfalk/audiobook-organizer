@@ -18,7 +18,7 @@ package server
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -92,8 +92,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] ITL rebuild: removed %d, added %d, updated-meta %d, updated-loc %d",
-		preview.ToRemove, preview.ToAdd, preview.ToUpdateMeta, preview.ToUpdateLoc)
+	slog.Info("ITL rebuild: removed %d, added %d, updated-meta %d, updated-loc %d", 		preview.ToRemove, preview.ToAdd, preview.ToUpdateMeta, preview.ToUpdateLoc)
 
 	httputil.RespondWithOK(c, itunes.ITLRebuildResult{
 		Preview: *preview,
@@ -143,8 +142,7 @@ func (s *Server) rebuildITLFullHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] ITL full-rebuild: removed %d existing tracks, inserted %d DB books",
-		result.Preview.ToRemove, result.Preview.ToAdd)
+	slog.Info("ITL full-rebuild: removed %d existing tracks, inserted %d DB books", 		result.Preview.ToRemove, result.Preview.ToAdd)
 	httputil.RespondWithOK(c, result)
 }
 
