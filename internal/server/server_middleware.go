@@ -1,13 +1,14 @@
 // file: internal/server/server_middleware.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 6a093405-441a-4c14-a9c5-46326ea767c1
-// last-edited: 2026-05-10
+// last-edited: 2026-05-19
 
 package server
 
 import (
+	"log/slog"
 	"encoding/json"
-	"log"
+
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -149,10 +150,10 @@ func saveDismissedDedupGroups(store database.Store, dismissed map[string]bool) {
 	}
 	data, err := json.Marshal(keys)
 	if err != nil {
-		log.Printf("[WARN] failed to marshal dismissed dedup groups: %v", err)
+		slog.Warn("failed to marshal dismissed dedup groups: %v", err)
 		return
 	}
 	if err := store.SetUserPreference("dedup_dismissed_groups", string(data)); err != nil {
-		log.Printf("[WARN] failed to save dismissed dedup groups: %v", err)
+		slog.Warn("failed to save dismissed dedup groups: %v", err)
 	}
 }

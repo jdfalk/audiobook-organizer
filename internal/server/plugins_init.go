@@ -1,12 +1,14 @@
 // file: internal/server/plugins_init.go
-// version: 1.1.0
+// version: 1.1.2
 // guid: a2b3c4d5-e6f7-8a9b-0c1d-2e3f4a5b6c7d
+// last-edited: 2026-05-19
 
 package server
 
 import (
+	"log/slog"
 	"context"
-	"log"
+
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
@@ -42,6 +44,6 @@ func (s *Server) initPlugins(ctx context.Context) {
 	pluginGroup := s.router.Group("/api/v1/plugins")
 
 	if err := s.pluginRegistry.InitAllScoped(ctx, baseDeps, pluginGroup, pluginConfigs); err != nil {
-		log.Printf("[WARN] plugin initialization error: %v", err)
+		slog.Warn("plugin initialization error: %v", err)
 	}
 }
