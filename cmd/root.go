@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -513,11 +513,11 @@ func setupFileLogging() (*os.File, error) {
 
 	// Create multi-writer to write to both file and stdout
 	multiWriter := io.MultiWriter(os.Stdout, file)
-	log.SetOutput(multiWriter)
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	handler := slog.NewTextHandler(multiWriter, &slog.HandlerOptions{Level: slog.LevelDebug})
+	slog.SetDefault(slog.New(handler))
 
-	log.Printf("=== Audiobook Organizer Started ===")
-	log.Printf("Log file: %s", logFile)
+	slog.Info("=== Audiobook Organizer Started ===")
+	slog.Info("log file", "path", logFile)
 
 	return file, nil
 }
