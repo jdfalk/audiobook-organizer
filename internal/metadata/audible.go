@@ -1,5 +1,5 @@
 // file: internal/metadata/audible.go
-// version: 1.5.2
+// version: 1.5.3
 // guid: a9b8c7d6-e5f4-3a2b-1c0d-9e8f7a6b5c4d
 
 package metadata

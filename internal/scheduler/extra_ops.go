@@ -1,5 +1,5 @@
 // file: internal/scheduler/extra_ops.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a9b8c7d6-e5f4-3210-fedc-ba9876543210
 
 // extra_ops registers OperationDefs for 13 scheduler tasks that previously
@@ -764,18 +764,18 @@ func (r *ExtraOpsRegistrar) runAutoPurgeSoftDeleted(ctx context.Context, opID st
 		return
 	}
 	if r.Store == nil {
-		log.Printf("[DEBUG] Auto-purge skipped: database not initialized")
+		slog.Debug("Auto-purge skipped: database not initialized")
 		return
 	}
 	if r.Deps.AudiobookService == nil {
-		log.Printf("[DEBUG] Auto-purge skipped: audiobook service not initialized")
+		slog.Debug("Auto-purge skipped: audiobook service not initialized")
 		return
 	}
 
 	days := config.AppConfig.PurgeSoftDeletedAfterDays
 	result, err := r.Deps.AudiobookService.PurgeSoftDeletedBooks(ctx, config.AppConfig.PurgeSoftDeletedDeleteFiles, &days)
 	if err != nil {
-		log.Printf("[WARN] Auto-purge failed: %v", err)
+		slog.Warn("Auto-purge failed", "error", err)
 		return
 	}
 

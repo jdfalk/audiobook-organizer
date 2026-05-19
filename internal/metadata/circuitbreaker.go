@@ -1,5 +1,5 @@
 // file: internal/metadata/circuitbreaker.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: e2f3a4b5-c6d7-8901-ef23-456789abcdef
 
 package metadata

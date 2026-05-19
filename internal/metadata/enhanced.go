@@ -1,5 +1,5 @@
 // file: internal/metadata/enhanced.go
-// version: 1.9.0
+// version: 1.9.1
 // guid: 7e8d9c0b-1a2f-3e4d-5c6b-7a8d9c0b1a2f
 
 package metadata

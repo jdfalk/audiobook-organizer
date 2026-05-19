@@ -1,5 +1,5 @@
 // file: internal/scheduler/tasks.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 9b4c7e21-a5f3-4d08-b2e6-3c8d1f7a0e54
 // last-edited: 2026-05-11
 
@@ -10,6 +10,7 @@
 package scheduler
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"log"
@@ -665,7 +666,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			}
 			processed, err := ts.deps.PollBatches(context.Background())
 			if err != nil {
-				log.Printf("[WARN] batch_poller: %v", err)
+				slog.Warn("batch_poller", "error", err)
 			}
 			if processed > 0 {
 				log.Printf("[INFO] batch_poller: processed %d completed batches", processed)

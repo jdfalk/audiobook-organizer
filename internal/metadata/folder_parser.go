@@ -1,5 +1,5 @@
 // file: internal/metadata/folder_parser.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: f1e2d3c4-b5a6-7890-abcd-ef1234567890
 
 package metadata

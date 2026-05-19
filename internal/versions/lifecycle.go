@@ -1,5 +1,5 @@
 // file: internal/versions/lifecycle.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: 5a3b4c0d-6e7f-4a70-b8c5-3d7e0f1b9a99
 //
 // Version lifecycle operations (spec 3.1 task 6).
@@ -16,6 +16,7 @@
 package versions
 
 import (
+	"log/slog"
 	"fmt"
 	"log"
 	"os"
@@ -98,7 +99,7 @@ func PurgeVersion(store database.Store, ver *database.BookVersion) error {
 func CleanupTrashedVersions(store database.Store) (purged int) {
 	trashed, err := store.ListTrashedBookVersions()
 	if err != nil {
-		log.Printf("[WARN] list trashed versions: %v", err)
+		slog.Warn("list trashed versions", "error", err)
 		return 0
 	}
 

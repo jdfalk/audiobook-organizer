@@ -1,5 +1,5 @@
 // file: internal/metadata/hardcover.go
-// version: 1.2.1
+// version: 1.2.2
 // guid: e7e02554-8931-49ba-9528-d3d51279da1d
 
 package metadata

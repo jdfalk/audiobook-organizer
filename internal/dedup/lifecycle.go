@@ -1,5 +1,5 @@
 // file: internal/dedup/lifecycle.go
-// version: 1.0.0
+// version: 1.0.1
 
 // Lifecycle methods on *dedup.Engine that the serviceregistry container
 // picks up via interface satisfaction. PostInit subscribes to lifecycle

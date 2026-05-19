@@ -1,5 +1,5 @@
 // file: internal/scheduler/scheduler.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 3f7a9c21-b4d8-4e05-a6f2-8c1d0e3b7a94
 // last-edited: 2026-05-11
 
@@ -9,6 +9,7 @@
 package scheduler
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"log"
@@ -190,9 +191,9 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 				select {
 				case <-ticker.C:
 					if IsInMaintenanceWindow() && !ts.hasRunToday() {
-						log.Printf("[INFO] Maintenance window open — starting maintenance run")
+						slog.Info("Maintenance window open — starting maintenance run")
 						if err := ts.RunMaintenanceWindow(context.Background()); err != nil {
-							log.Printf("[WARN] Maintenance window failed: %v", err)
+							slog.Warn("Maintenance window failed", "error", err)
 						}
 					}
 				case <-shutdown:
