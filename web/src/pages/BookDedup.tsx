@@ -77,6 +77,9 @@ import { ReconcileTab } from '../components/dedup/DedupReconcileTab';
 import { cleanDisplayTitle } from '../components/dedup/dedupHelpers';
 import { CoverLightbox } from '../components/CoverLightbox';
 
+// ULID pattern: 26-character alphanumeric (0-9, A-Z only)
+const ULID_PATTERN = /^[0-9A-Z]{26}$/;
+
 // ---- Book Dedup Tab ----
 // Moved to web/src/components/dedup/DedupBookTab.tsx
 
@@ -1880,12 +1883,11 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
     if (initialB) setBookBID(initialB);
   }, [initialA, initialB]);
 
-  // Validate ULID format: 26-character alphanumeric (0-9, A-Z only)
+  // Validate ULID format
   const validateBookID = (id: string): string | null => {
-    const ulidPattern = /^[0-9A-Z]{26}$/;
     const trimmed = id.trim();
     if (!trimmed) return 'Book ID is required';
-    if (!ulidPattern.test(trimmed)) {
+    if (!ULID_PATTERN.test(trimmed)) {
       return 'Invalid book ID format. Must be 26-character alphanumeric (0-9, A-Z only).';
     }
     return null;
@@ -1923,6 +1925,16 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
     ? result.segment_scores.some((s) => s.hash_a || s.hash_b)
     : false;
 
+  const handleBookAIDChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBookAID(e.target.value);
+    setIdAError(null);
+  };
+
+  const handleBookBIDChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBookBID(e.target.value);
+    setIdBError(null);
+  };
+
   return (
     <Paper sx={{ p: 2 }}>
       <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>Fingerprint Comparison</Typography>
@@ -1931,7 +1943,7 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
           label="Book A ID"
           size="small"
           value={bookAID}
-          onChange={(e) => setBookAID(e.target.value)}
+          onChange={handleBookAIDChange}
           error={idAError !== null}
           helperText={idAError}
           sx={{ flex: 1 }}
@@ -1941,7 +1953,7 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
           label="Book B ID"
           size="small"
           value={bookBID}
-          onChange={(e) => setBookBID(e.target.value)}
+          onChange={handleBookBIDChange}
           error={idBError !== null}
           helperText={idBError}
           sx={{ flex: 1 }}
