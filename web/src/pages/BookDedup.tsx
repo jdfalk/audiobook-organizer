@@ -44,6 +44,7 @@ import {
   TableRow,
   TableCell,
   TableBody,
+  Avatar,
 } from '@mui/material';
 import MergeIcon from '@mui/icons-material/MergeType';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
@@ -1823,6 +1824,27 @@ export function AcousticBookMetadata({ book, filePath }: { book: Book; filePath?
           {filePath}
         </Typography>
       )}
+    </Box>
+  );
+}
+
+// Legacy function for backward compatibility (if used elsewhere)
+export function AcousticBookCard({ book, label }: { book: Book; label: string }) {
+  return (
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        {label}
+      </Typography>
+      <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} alignItems="flex-start">
+        <Avatar
+          src={bookCoverSrc(book)}
+          variant="rounded"
+          sx={{ width: 56, height: 72, flexShrink: 0, bgcolor: 'action.selected' }}
+        >
+          <GraphicEqIcon />
+        </Avatar>
+        <AcousticBookMetadata book={book} filePath={book.file_path} />
+      </Stack>
     </Box>
   );
 }
