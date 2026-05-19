@@ -1,3 +1,7 @@
+// file: web/src/components/CoverLightbox.tsx
+// version: 1.0.0
+// guid: 7f8e9a0b-1c2d-3e4f-5a6b-7c8d9e0f1a2b
+
 import { Modal, Box, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
