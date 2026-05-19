@@ -7,7 +7,7 @@ package server
 import (
 	"context"
 	"io/fs"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -33,20 +33,20 @@ func (s *Server) stripMovementAtoms() {
 	}
 
 	if setting, err := store.GetSetting(movementAtomCleanupKey); err == nil && setting != nil && setting.Value == "true" {
-		log.Printf("[INFO] Movement atom cleanup already completed, skipping")
+		slog.Info("Movement atom cleanup already completed, skipping")
 		return
 	}
 
 	root := config.AppConfig.RootDir
 	if root == "" {
-		log.Printf("[WARN] stripMovementAtoms: RootDir not configured, skipping")
+		slog.Warn("stripMovementAtoms: RootDir not configured, skipping")
 		return
 	}
 
 	// Build safe-write deps from server state so protected paths are guarded.
 	deps := s.safeWriteDeps()
 
-	log.Printf("[INFO] Starting movement atom cleanup under %s …", root)
+	slog.Info("Starting movement atom cleanup under %s …", root)
 	stripped, clean, failed := 0, 0, 0
 
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
@@ -61,7 +61,7 @@ func (s *Server) stripMovementAtoms() {
 		changed, err := removeMovementAtomsFromFile(path, deps)
 		switch {
 		case err != nil:
-			log.Printf("[WARN] movement atom cleanup: %s: %v", path, err)
+			slog.Warn("movement atom cleanup: %s: %v", path, err)
 			failed++
 		case changed:
 			stripped++
@@ -71,7 +71,7 @@ func (s *Server) stripMovementAtoms() {
 		return nil
 	})
 
-	log.Printf("[INFO] Movement atom cleanup: %d stripped, %d already clean, %d errors", stripped, clean, failed)
+	slog.Info("Movement atom cleanup: %d stripped, %d already clean, %d errors", stripped, clean, failed)
 	_ = store.SetSetting(movementAtomCleanupKey, "true", "bool", false)
 }
 

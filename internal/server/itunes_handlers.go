@@ -1,7 +1,7 @@
 // file: internal/server/itunes_handlers.go
-// version: 2.9.1
+// version: 2.9.2
 // guid: 7f2e1a4c-8b3d-4e5f-9a1b-2c3d4e5f6a7b
-// last-edited: 2026-05-18
+// last-edited: 2026-05-19
 
 // iTunes HTTP handlers. All business logic lives in internal/itunes/service.
 // Handlers that call s.itunesSvc.Importer.* guard with itunesEnabledOrError
@@ -12,7 +12,7 @@ package server
 import (
 	"errors"
 	"fmt"
-	stdlog "log"
+	stdlog "log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -374,18 +374,18 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
 	if itlErr != nil {
-		stdlog.Printf("[WARN] ITL write-back failed: %v", itlErr)
+		stdlog.Warn("ITL write-back failed: %v", itlErr)
 		httputil.RespondWithInternalError(c, fmt.Sprintf("ITL write-back failed: %v", itlErr))
 		return
 	}
 
 	if renameErr := itunes.RenameITLFile(itlPath+".tmp", itlPath); renameErr != nil {
-		stdlog.Printf("[WARN] ITL rename failed: %v", renameErr)
+		stdlog.Warn("ITL rename failed: %v", renameErr)
 		httputil.RespondWithInternalError(c, fmt.Sprintf("ITL rename failed: %v", renameErr))
 		return
 	}
 
-	stdlog.Printf("[INFO] ITL write-back: updated %d tracks", itlResult.UpdatedCount)
+	stdlog.Info("ITL write-back: updated %d tracks", itlResult.UpdatedCount)
 	httputil.RespondWithOK(c, ITunesWriteBackResponse{
 		Success:      true,
 		UpdatedCount: itlResult.UpdatedCount,
@@ -447,10 +447,10 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	}
 
 	itunesservice.RecordITLReadTime()
-	stdlog.Printf("[INFO] Bulk ITL write-back: updated %d tracks out of %d candidates", itlResult.UpdatedCount, len(itlUpdates))
+	stdlog.Info("Bulk ITL write-back: updated %d tracks out of %d candidates", itlResult.UpdatedCount, len(itlUpdates))
 
 	if n, markErr := s.Store().MarkITunesSynced(writtenBookIDs); markErr == nil && n > 0 {
-		stdlog.Printf("[INFO] Marked %d books as iTunes-synced after write-back", n)
+		stdlog.Info("Marked %d books as iTunes-synced after write-back", n)
 	}
 
 	httputil.RespondWithOK(c, gin.H{

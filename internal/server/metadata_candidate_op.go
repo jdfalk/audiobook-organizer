@@ -12,7 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -100,7 +100,7 @@ func (s *Server) RegisterMetadataCandidateFetchOp(reg *opsregistry.Registry) err
 						result := s.fetchCandidateForBook(ctx, mfs, store, limiter, opID, bookID)
 						resultJSON, err := json.Marshal(result)
 						if err != nil {
-							log.Printf("[WARN] metadata-candidate-fetch: marshal result for book %s: %v", bookID, err)
+							slog.Warn("metadata-candidate-fetch: marshal result for book %s: %v", bookID, err)
 							continue
 						}
 						if err := store.CreateOperationResult(&database.OperationResult{
@@ -109,7 +109,7 @@ func (s *Server) RegisterMetadataCandidateFetchOp(reg *opsregistry.Registry) err
 							ResultJSON:  string(resultJSON),
 							Status:      result.Status,
 						}); err != nil {
-							log.Printf("[WARN] metadata-candidate-fetch: store result for book %s: %v", bookID, err)
+							slog.Warn("metadata-candidate-fetch: store result for book %s: %v", bookID, err)
 						}
 						done := atomic.AddInt64(&completed, 1)
 						_ = progress.UpdateProgress(int(done), totalBooks, fmt.Sprintf("fetched %d/%d", done, totalBooks))
@@ -126,8 +126,7 @@ func (s *Server) RegisterMetadataCandidateFetchOp(reg *opsregistry.Registry) err
 			}
 			_ = store.UpdateOperationStatus(opID, finalStatus, int(finalCount), totalBooks, finalStatus)
 			_ = progress.UpdateProgress(int(finalCount), totalBooks, "completed")
-			log.Printf("[INFO] metadata-candidate-fetch %s: done — %d/%d books, status=%s",
-				opID, finalCount, totalBooks, finalStatus)
+			slog.Info("metadata-candidate-fetch %s: done — %d/%d books, status=%s", 				opID, finalCount, totalBooks, finalStatus)
 			return nil
 		},
 	})

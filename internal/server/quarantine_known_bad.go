@@ -5,7 +5,7 @@
 package server
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/remux"
 )
@@ -27,7 +27,7 @@ func (s *Server) quarantineKnownBadFiles() {
 
 	books, err := store.GetAllBooks(20000, 0)
 	if err != nil {
-		log.Printf("[WARN] quarantineKnownBadFiles: GetAllBooks: %v", err)
+		slog.Warn("quarantineKnownBadFiles: GetAllBooks: %v", err)
 		return
 	}
 
@@ -42,13 +42,13 @@ func (s *Server) quarantineKnownBadFiles() {
 			continue
 		}
 		if err := s.quarantineSvc.QuarantineBook(b.ID, "taglib permanently unreadable after transcode attempt"); err != nil {
-			log.Printf("[WARN] quarantineKnownBadFiles: quarantine %s: %v", b.FilePath, err)
+			slog.Warn("quarantineKnownBadFiles: quarantine %s: %v", b.FilePath, err)
 			continue
 		}
-		log.Printf("[INFO] quarantineKnownBadFiles: quarantined %s", b.FilePath)
+		slog.Info("quarantineKnownBadFiles: quarantined %s", b.FilePath)
 		quarantined++
 	}
 
-	log.Printf("[INFO] quarantineKnownBadFiles: quarantined %d books", quarantined)
+	slog.Info("quarantineKnownBadFiles: quarantined %d books", quarantined)
 	_ = store.SetSetting(quarantineKnownBadKey, "true", "bool", false)
 }

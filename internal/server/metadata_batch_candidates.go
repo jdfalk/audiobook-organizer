@@ -12,7 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -328,7 +328,7 @@ func (s *Server) handleGetOperationResults(c *gin.Context) {
 	for _, r := range pageRaw {
 		var cr CandidateResult
 		if err := json.Unmarshal([]byte(r.ResultJSON), &cr); err != nil {
-			log.Printf("[WARN] failed to unmarshal result for book %s in op %s: %v", r.BookID, opID, err)
+			slog.Warn("failed to unmarshal result for book %s in op %s: %v", r.BookID, opID, err)
 			continue
 		}
 		candidateResults = append(candidateResults, cr)
@@ -423,7 +423,7 @@ func (s *Server) handleGetLatestMetadataFetch(c *gin.Context) {
 		}
 		results, err := store.GetOperationResults(op.ID)
 		if err != nil {
-			log.Printf("[WARN] list-metadata-fetches: get results for %s: %v", op.ID, err)
+			slog.Warn("list-metadata-fetches: get results for %s: %v", op.ID, err)
 			continue
 		}
 		if len(results) == 0 {
@@ -537,7 +537,7 @@ func (s *Server) handleBatchApplyCandidates(c *gin.Context) {
 			pool.Submit(bid, func() {
 				mfs.ApplyMetadataFileIO(bid)
 				if _, err := mfs.WriteBackMetadataForBook(bid); err != nil {
-					log.Printf("[WARN] write-back failed for %s: %v", bid, err)
+					slog.Warn("write-back failed for %s: %v", bid, err)
 				}
 				if s.writeBackBatcher != nil {
 					s.writeBackBatcher.Enqueue(bid)
@@ -702,14 +702,14 @@ func (s *Server) resumeInterruptedMetadataFetch() {
 		// Load the original book IDs from saved params
 		paramsJSON, err := store.GetOperationParams(op.ID)
 		if err != nil || len(paramsJSON) == 0 {
-			log.Printf("[WARN] no saved params for interrupted metadata fetch %s, marking failed", op.ID)
+			slog.Warn("no saved params for interrupted metadata fetch %s, marking failed", op.ID)
 			_ = store.UpdateOperationStatus(op.ID, "failed", op.Progress, op.Total, "interrupted, no params to resume")
 			continue
 		}
 
 		var allBookIDs []string
 		if err := json.Unmarshal(paramsJSON, &allBookIDs); err != nil {
-			log.Printf("[WARN] invalid params for interrupted metadata fetch %s: %v", op.ID, err)
+			slog.Warn("invalid params for interrupted metadata fetch %s: %v", op.ID, err)
 			_ = store.UpdateOperationStatus(op.ID, "failed", op.Progress, op.Total, "interrupted, invalid params")
 			continue
 		}
@@ -730,12 +730,12 @@ func (s *Server) resumeInterruptedMetadataFetch() {
 		}
 
 		if len(remaining) == 0 {
-			log.Printf("[INFO] interrupted metadata fetch %s has all results, marking completed", op.ID)
+			slog.Info("interrupted metadata fetch %s has all results, marking completed", op.ID)
 			_ = store.UpdateOperationStatus(op.ID, "completed", len(allBookIDs), len(allBookIDs), "recovered — all books fetched")
 			continue
 		}
 
-		log.Printf("[INFO] resuming metadata fetch %s: %d/%d books remaining", op.ID, len(remaining), len(allBookIDs))
+		slog.Info("resuming metadata fetch %s: %d/%d books remaining", op.ID, len(remaining), len(allBookIDs))
 
 		// Re-enqueue the remaining books via v2 opRegistry as a continuation of the
 		// same v1 operation. The Run func in metadata_candidate_op.go handles all
@@ -756,7 +756,7 @@ func (s *Server) resumeInterruptedMetadataFetch() {
 			AlreadyDone: alreadyDone,
 		}
 		if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "metadata.candidate-fetch", resumeParams); enqErr != nil {
-			log.Printf("[WARN] failed to re-enqueue metadata fetch %s: %v", opID, enqErr)
+			slog.Warn("failed to re-enqueue metadata fetch %s: %v", opID, enqErr)
 			_ = store.UpdateOperationStatus(opID, "failed", alreadyDone, totalBooks, "failed to resume")
 		}
 	}

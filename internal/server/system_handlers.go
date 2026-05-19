@@ -13,7 +13,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -283,15 +283,15 @@ func (s *Server) factoryReset(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[INFO] Factory reset initiated")
+	slog.Info("Factory reset initiated")
 
 	// Reset database (books, authors, series, settings)
 	if err := s.Store().Reset(); err != nil {
-		log.Printf("[ERROR] Factory reset: database reset failed: %v", err)
+		slog.Error("Factory reset: database reset failed: %v", err)
 		httputil.InternalError(c, "failed to reset database", err)
 		return
 	}
-	log.Printf("[INFO] Factory reset: database cleared")
+	slog.Info("Factory reset: database cleared")
 
 	// Delete OL data (pebble store + dump files)
 	if s.olService != nil {
@@ -305,9 +305,9 @@ func (s *Server) factoryReset(c *gin.Context) {
 		targetDir := metafetch.GetOLDumpDir()
 		if targetDir != "" {
 			if err := os.RemoveAll(targetDir); err != nil {
-				log.Printf("[WARN] Factory reset: failed to remove OL data dir: %v", err)
+				slog.Warn("Factory reset: failed to remove OL data dir: %v", err)
 			} else {
-				log.Printf("[INFO] Factory reset: OL data deleted")
+				slog.Info("Factory reset: OL data deleted")
 			}
 		}
 	}
@@ -320,10 +320,10 @@ func (s *Server) factoryReset(c *gin.Context) {
 			for _, entry := range entries {
 				entryPath := filepath.Join(libraryDir, entry.Name())
 				if err := os.RemoveAll(entryPath); err != nil {
-					log.Printf("[WARN] Factory reset: failed to remove %s: %v", entryPath, err)
+					slog.Warn("Factory reset: failed to remove %s: %v", entryPath, err)
 				}
 			}
-			log.Printf("[INFO] Factory reset: library folder cleared (%s)", libraryDir)
+			slog.Info("Factory reset: library folder cleared (%s)", libraryDir)
 		}
 	}
 
@@ -332,14 +332,14 @@ func (s *Server) factoryReset(c *gin.Context) {
 	config.AppConfig.RootDir = ""
 	config.AppConfig.SetupComplete = false
 	if err := config.SaveConfigToDatabase(s.Store()); err != nil {
-		log.Printf("[WARN] Factory reset: failed to persist config: %v", err)
+		slog.Warn("Factory reset: failed to persist config: %v", err)
 	}
 
 	// Reset caches
 	resetLibrarySizeCache()
 	s.Store().InvalidateLibraryStats()
 
-	log.Printf("[INFO] Factory reset complete")
+	slog.Info("Factory reset complete")
 	httputil.RespondWithOK(c, gin.H{"message": "factory reset complete"})
 }
 

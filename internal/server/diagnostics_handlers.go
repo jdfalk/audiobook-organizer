@@ -1,6 +1,6 @@
 // file: internal/server/diagnostics_handlers.go
-// version: 3.2.0
-// last-edited: 2026-05-10
+// version: 3.2.1
+// last-edited: 2026-05-19
 // guid: a2b3c4d5-e6f7-4890-ab12-cd34ef56gh78
 
 package server
@@ -10,7 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -247,7 +247,7 @@ func (s *Server) submitDiagnosticsAI(c *gin.Context) {
 			})
 			_ = store.UpdateOperationResultData(opID, string(resultJSON))
 			_ = store.UpdateOperationStatus(opID, "running", 80, 100, fmt.Sprintf("Batch %s submitted, awaiting completion", batchID))
-			log.Printf("[INFO] diagnostics_ai: batch %s submitted with %d requests", batchID, requestCount)
+			slog.Info("diagnostics_ai: batch %s submitted with %d requests", batchID, requestCount)
 		} else {
 			// Fallback: store JSONL metadata without actual submission
 			resultJSON, _ := json.Marshal(map[string]interface{}{
@@ -465,7 +465,7 @@ func (s *Server) applyDiagnosticsSuggestions(c *gin.Context) {
 		if applyErr != nil {
 			failed++
 			errors = append(errors, fmt.Sprintf("suggestion %s: %v", suggestion.ID, applyErr))
-			log.Printf("[WARN] Failed to apply diagnostics suggestion %s: %v", suggestion.ID, applyErr)
+			slog.Warn("Failed to apply diagnostics suggestion %s: %v", suggestion.ID, applyErr)
 		} else {
 			applied++
 		}
@@ -531,7 +531,7 @@ func (s *Server) getDBHealth(c *gin.Context) {
 	case *database.SQLiteStore:
 		tables, err := st.TableRowCounts()
 		if err != nil {
-			log.Printf("[WARN] db-health: sqlite table counts: %v", err)
+			slog.Warn("db-health: sqlite table counts: %v", err)
 		}
 		resp.SQLite = &dbHealthSQLite{
 			Tables:    tables,
@@ -539,14 +539,14 @@ func (s *Server) getDBHealth(c *gin.Context) {
 		}
 		prefixes, pErr := st.GetBookPathPrefixes(20)
 		if pErr != nil {
-			log.Printf("[WARN] db-health: book path prefixes: %v", pErr)
+			slog.Warn("db-health: book path prefixes: %v", pErr)
 		} else {
 			resp.BookPathPrefixes = prefixes
 		}
 	case *database.PebbleStore:
 		keyCount, sizeBytes, err := st.KeyCount()
 		if err != nil {
-			log.Printf("[WARN] db-health: pebble key count: %v", err)
+			slog.Warn("db-health: pebble key count: %v", err)
 		}
 		resp.Pebble = &dbHealthPebble{
 			KeyCount:  keyCount,
@@ -558,7 +558,7 @@ func (s *Server) getDBHealth(c *gin.Context) {
 	if s.embeddingStore != nil {
 		estats, err := s.embeddingStore.HealthStats()
 		if err != nil {
-			log.Printf("[WARN] db-health: embedding stats: %v", err)
+			slog.Warn("db-health: embedding stats: %v", err)
 		}
 		resp.Embeddings = dbHealthEmbeddings{
 			VectorCount: estats.VectorCount,
@@ -570,7 +570,7 @@ func (s *Server) getDBHealth(c *gin.Context) {
 	if s.aiScanStore != nil {
 		astats, err := s.aiScanStore.HealthStats()
 		if err != nil {
-			log.Printf("[WARN] db-health: ai scan stats: %v", err)
+			slog.Warn("db-health: ai scan stats: %v", err)
 		}
 		resp.AiScans = dbHealthAiScans{
 			JobCount:     astats.JobCount,
@@ -582,7 +582,7 @@ func (s *Server) getDBHealth(c *gin.Context) {
 	// Metadata fetch cache — works against whatever backend is active.
 	totalEntries, err := database.CountCachedMetadataFetches(store)
 	if err != nil {
-		log.Printf("[WARN] db-health: metadata cache count: %v", err)
+		slog.Warn("db-health: metadata cache count: %v", err)
 	}
 	ttlDays := config.AppConfig.MetadataFetchCacheTTLDays
 

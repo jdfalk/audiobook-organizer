@@ -14,7 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -135,7 +135,7 @@ func (s *Server) cancelOperation(c *gin.Context) {
 		for _, scan := range scans {
 			if scan.OperationID == id {
 				if err := s.pipelineManager.CancelScan(scan.ID); err != nil {
-					log.Printf("[cancelOperation] AI scan %d cancel warning: %v", scan.ID, err)
+					slog.Info("canceloperation: AI scan %d cancel warning: %v", scan.ID, err)
 				}
 				httputil.RespondWithNoContent(c)
 				return
@@ -327,7 +327,7 @@ func (s *Server) setInternalFlag(c *gin.Context) {
 		httputil.InternalError(c, "failed to set flag", err)
 		return
 	}
-	log.Printf("[INFO] setInternalFlag: %s = %q", req.Key, req.Value)
+	slog.Info("setInternalFlag: %s = %q", req.Key, req.Value)
 	httputil.RespondWithOK(c, gin.H{"key": req.Key, "value": req.Value})
 }
 
@@ -650,7 +650,7 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 	// Persist to database
 	if s.Store() != nil {
 		if err := config.SaveConfigToDatabase(s.Store()); err != nil {
-			log.Printf("[WARN] Failed to save task config: %v", err)
+			slog.Warn("Failed to save task config: %v", err)
 		}
 	}
 

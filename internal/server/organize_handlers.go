@@ -11,7 +11,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -72,7 +72,7 @@ func (s *Server) applyRename(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := s.Store().CreateOperation(opID, "rename", stringPtr(id))
 	if err != nil {
-		log.Printf("[ERROR] rename: failed to create operation: %v", err)
+		slog.Error("rename: failed to create operation: %v", err)
 		httputil.RespondWithInternalError(c, "failed to create operation record")
 		return
 	}
@@ -136,7 +136,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 	opID := ulid.Make().String()
 	op, err := s.Store().CreateOperation(opID, "organize", stringPtr(id))
 	if err != nil {
-		log.Printf("[ERROR] organize: failed to create operation: %v", err)
+		slog.Error("organize: failed to create operation: %v", err)
 		httputil.RespondWithInternalError(c, "failed to create operation record")
 		return
 	}
@@ -206,7 +206,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 		book.LastOrganizeOperationID = &opID
 		book.LastOrganizedAt = &now
 		if _, updateErr := s.Store().UpdateBook(book.ID, book); updateErr != nil {
-			log.Printf("[WARN] organize: failed to stamp book %s: %v", book.ID, updateErr)
+			slog.Warn("organize: failed to stamp book %s: %v", book.ID, updateErr)
 		}
 		_ = s.Store().CreateOperationChange(&database.OperationChange{
 			ID:          ulid.Make().String(),
@@ -243,7 +243,7 @@ func (s *Server) organizeBook(c *gin.Context) {
 	createdBook.LastOrganizeOperationID = &opID
 	createdBook.LastOrganizedAt = &now
 	if _, updateErr := s.Store().UpdateBook(createdBook.ID, createdBook); updateErr != nil {
-		log.Printf("[WARN] organize: failed to stamp organized book %s: %v", createdBook.ID, updateErr)
+		slog.Warn("organize: failed to stamp organized book %s: %v", createdBook.ID, updateErr)
 	}
 
 	// Notify Deluge that the file moved so the torrent client keeps

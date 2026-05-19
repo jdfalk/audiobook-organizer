@@ -8,7 +8,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -102,7 +102,7 @@ func (s *Server) loadMetadataState(bookID string) (map[string]metafetch.Metadata
 	}
 
 	if err := s.saveMetadataState(bookID, legacy); err != nil {
-		log.Printf("[WARN] failed to migrate legacy metadata state for %s: %v", bookID, err)
+		slog.Warn("failed to migrate legacy metadata state for %s: %v", bookID, err)
 	}
 	return legacy, nil
 }

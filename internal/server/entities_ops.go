@@ -13,7 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -149,7 +149,7 @@ func (s *Server) RegisterAuthorMergeOp(reg *opsregistry.Registry) error {
 						newID := keepID
 						current.AuthorID = &newID
 						if _, upErr := store.UpdateBook(book.ID, current); upErr != nil {
-							log.Printf("[WARN] author merge: failed to sync denormalized AuthorID on book %s: %v", book.ID, upErr)
+							slog.Warn("author merge: failed to sync denormalized AuthorID on book %s: %v", book.ID, upErr)
 						}
 					}
 				}

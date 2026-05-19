@@ -16,7 +16,7 @@
 package server
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
@@ -89,7 +89,7 @@ func (s *Server) enqueueIndex(bookID string, del bool) {
 	select {
 	case s.indexQueue <- indexRequest{bookID: bookID, delete: del}:
 	default:
-		log.Printf("[WARN] search index queue full, dropped %s (delete=%v)", bookID, del)
+		slog.Warn("search index queue full, dropped %s (delete=%v)", bookID, del)
 	}
 }
 
@@ -117,12 +117,12 @@ func (s *Server) runIndexWorker() {
 	for req := range s.indexQueue {
 		if req.delete {
 			if err := s.DeleteIndexedBook(req.bookID); err != nil {
-				log.Printf("[WARN] delete index %s: %v", req.bookID, err)
+				slog.Warn("delete index %s: %v", req.bookID, err)
 			}
 			continue
 		}
 		if err := s.IndexBookByID(req.bookID); err != nil {
-			log.Printf("[WARN] index %s: %v", req.bookID, err)
+			slog.Warn("index %s: %v", req.bookID, err)
 		}
 	}
 }

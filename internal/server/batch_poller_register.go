@@ -4,7 +4,7 @@
 package server
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -22,14 +22,14 @@ func init() {
 
 			// Pre-condition: OpenAI API key and AI parsing must be enabled
 			if cfg.OpenAIAPIKey == "" || !cfg.EnableAIParsing {
-				log.Printf("[INFO] batchpoller: skipping (OpenAI disabled or API key not set)")
+				slog.Info("batchpoller: skipping (OpenAI disabled or API key not set)")
 				return nil, nil
 			}
 
 			// Create the OpenAI parser instance and BatchPoller
 			parser := ai.NewOpenAIParser(cfg, cfg.OpenAIAPIKey, cfg.EnableAIParsing)
 			poller := NewBatchPoller(store, parser)
-			log.Printf("[INFO] batchpoller: initialized")
+			slog.Info("batchpoller: initialized")
 			return poller, nil
 		},
 	})

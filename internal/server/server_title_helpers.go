@@ -7,7 +7,7 @@ package server
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -253,11 +253,9 @@ func (s *Server) reassignExternalIDsForFiles(sourceBookID, targetBookID string, 
 
 		m.BookID = targetBookID
 		if createErr := eidStore.CreateExternalIDMapping(&m); createErr != nil {
-			log.Printf("[WARN] reassignExternalIDsForFiles: failed to reassign %s:%s to %s: %v",
-				m.Source, m.ExternalID, targetBookID, createErr)
+			slog.Warn("reassignExternalIDsForFiles: failed to reassign %s:%s to %s: %v", 				m.Source, m.ExternalID, targetBookID, createErr)
 		}
 	}
 
-	log.Printf("[INFO] reassigned %d external ID mapping(s) from book %s to %s",
-		len(toMove), sourceBookID, targetBookID)
+	slog.Info("reassigned %d external ID mapping(s) from book %s to %s", 		len(toMove), sourceBookID, targetBookID)
 }

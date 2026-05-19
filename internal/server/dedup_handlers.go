@@ -1,7 +1,7 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.7.0
+// version: 2.7.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-08
+// last-edited: 2026-05-19
 
 package server
 
@@ -9,7 +9,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -197,7 +197,7 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 		enc := json.NewEncoder(c.Writer)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(gin.H{"count": len(rows), "candidates": rows}); err != nil {
-			log.Printf("[dedup] export json encode: %v", err)
+			slog.Info("dedup: export json encode: %v", err)
 		}
 		return
 	}
@@ -240,7 +240,7 @@ func (s *Server) exportDedupCandidates(c *gin.Context) {
 			cand.UpdatedAt.Format(time.RFC3339),
 		})
 	}
-	log.Printf("[dedup] export: wrote %d candidate rows as %s", len(candidates), format)
+	slog.Info("dedup: export: wrote %d candidate rows as %s", len(candidates), format)
 }
 
 // series-aware dedup helpers below. These exist to support "merge
@@ -495,15 +495,14 @@ func (s *Server) mergeDedupCandidateSeries(c *gin.Context) {
 				continue
 			}
 			if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
-				log.Printf("[dedup] series merge: status update %d: %v", cand.ID, err)
+				slog.Info("dedup: series merge: status update %d: %v", cand.ID, err)
 				continue
 			}
 			candidatesUpdated++
 		}
 	}
 
-	log.Printf("[dedup] series merge: series=%d clusters_merged=%d books_merged=%d candidates_updated=%d failures=%d",
-		body.SeriesID, mergedClusters, mergedBooks, candidatesUpdated, len(failures))
+	slog.Info("dedup: series merge: series=%d clusters_merged=%d books_merged=%d candidates_updated=%d failures=%d", 		body.SeriesID, mergedClusters, mergedBooks, candidatesUpdated, len(failures))
 
 	httputil.RespondWithOK(c, gin.H{
 		"series_id":          body.SeriesID,
@@ -603,20 +602,19 @@ func (s *Server) bulkMergeDedupCandidates(c *gin.Context) {
 		_, mergeErr := s.mergeService.MergeBooks([]string{cand.EntityAID, cand.EntityBID}, "")
 		if mergeErr != nil {
 			failures = append(failures, failure{CandidateID: cand.ID, Reason: mergeErr.Error()})
-			log.Printf("[dedup] bulk merge candidate %d failed: %v", cand.ID, mergeErr)
+			slog.Info("dedup: bulk merge candidate %d failed: %v", cand.ID, mergeErr)
 			continue
 		}
 		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
 			// The books were merged on the server side, but we couldn't
 			// update the candidate row — log it and count as merged
 			// since the destructive action already happened.
-			log.Printf("[dedup] bulk merge candidate %d merged but status update failed: %v", cand.ID, err)
+			slog.Info("dedup: bulk merge candidate %d merged but status update failed: %v", cand.ID, err)
 		}
 		merged++
 	}
 
-	log.Printf("[dedup] bulk merge complete: %d merged, %d failed out of %d matched",
-		merged, len(failures), total)
+	slog.Info("dedup: bulk merge complete: %d merged, %d failed out of %d matched", 		merged, len(failures), total)
 
 	httputil.RespondWithOK(c, gin.H{
 		"attempted": total,
@@ -695,7 +693,7 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 	})
 	updated := 0
 	if listErr != nil {
-		log.Printf("[dedup] cluster merge: list candidates failed: %v", listErr)
+		slog.Info("dedup: cluster merge: list candidates failed: %v", listErr)
 	} else {
 		for _, cand := range candidates {
 			_, aIn := inCluster[cand.EntityAID]
@@ -704,14 +702,13 @@ func (s *Server) mergeDedupCluster(c *gin.Context) {
 				continue
 			}
 			if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "merged"); err != nil {
-				log.Printf("[dedup] cluster merge: status update %d: %v", cand.ID, err)
+				slog.Info("dedup: cluster merge: status update %d: %v", cand.ID, err)
 				continue
 			}
 			updated++
 		}
 	}
-	log.Printf("[dedup] cluster merge: merged %d books, marked %d candidate row(s) as merged",
-		len(body.BookIDs), updated)
+	slog.Info("dedup: cluster merge: merged %d books, marked %d candidate row(s) as merged", 		len(body.BookIDs), updated)
 
 	httputil.RespondWithOK(c, gin.H{
 		"status":             "merged",
@@ -767,13 +764,12 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 			continue
 		}
 		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
-			log.Printf("[dedup] cluster dismiss: status update %d: %v", cand.ID, err)
+			slog.Info("dedup: cluster dismiss: status update %d: %v", cand.ID, err)
 			continue
 		}
 		dismissed++
 	}
-	log.Printf("[dedup] cluster dismiss: dismissed %d candidate row(s) across %d books",
-		dismissed, len(body.BookIDs))
+	slog.Info("dedup: cluster dismiss: dismissed %d candidate row(s) across %d books", 		dismissed, len(body.BookIDs))
 
 	httputil.RespondWithOK(c, gin.H{
 		"status":    "dismissed",
@@ -889,13 +885,12 @@ func (s *Server) removeFromDedupCluster(c *gin.Context) {
 		}
 
 		if err := s.embeddingStore.UpdateCandidateStatus(cand.ID, "dismissed"); err != nil {
-			log.Printf("[dedup] remove-from-cluster: status update %d: %v", cand.ID, err)
+			slog.Info("dedup: remove-from-cluster: status update %d: %v", cand.ID, err)
 			continue
 		}
 		dismissed++
 	}
-	log.Printf("[dedup] remove-from-cluster: dismissed %d edge(s), removed %d book(s) from cluster of %d",
-		dismissed, len(removeSet), len(body.ClusterBookIDs))
+	slog.Info("dedup: remove-from-cluster: dismissed %d edge(s), removed %d book(s) from cluster of %d", 		dismissed, len(removeSet), len(body.ClusterBookIDs))
 
 	httputil.RespondWithOK(c, gin.H{
 		"status":    "removed",

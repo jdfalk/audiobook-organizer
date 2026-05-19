@@ -14,7 +14,7 @@ package server
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -134,7 +134,7 @@ func (s *Server) getCacheReviewResults(c *gin.Context) {
 		}
 		var cand metafetch.MetadataCandidate
 		if err := json.Unmarshal(entry.Candidates[0], &cand); err != nil {
-			log.Printf("[WARN] getCacheReviewResults: decode candidate for %s: %v", sum.BookID, err)
+			slog.Warn("getCacheReviewResults: decode candidate for %s: %v", sum.BookID, err)
 			continue
 		}
 
@@ -194,16 +194,16 @@ func (s *Server) batchApplyFromCache(c *gin.Context) {
 	for _, bookID := range body.BookIDs {
 		entry, _, err := s.metadataFetchService.GetCachedCandidates(bookID)
 		if err != nil || entry == nil || len(entry.Candidates) == 0 {
-			log.Printf("[WARN] batchApplyFromCache: no cached candidates for %s", bookID)
+			slog.Warn("batchApplyFromCache: no cached candidates for %s", bookID)
 			continue
 		}
 		var cand metafetch.MetadataCandidate
 		if err := json.Unmarshal(entry.Candidates[0], &cand); err != nil {
-			log.Printf("[WARN] batchApplyFromCache: decode candidate for %s: %v", bookID, err)
+			slog.Warn("batchApplyFromCache: decode candidate for %s: %v", bookID, err)
 			continue
 		}
 		if _, err := s.metadataFetchService.ApplyMetadataCandidate(bookID, cand, nil); err != nil {
-			log.Printf("[WARN] batchApplyFromCache: apply for %s: %v", bookID, err)
+			slog.Warn("batchApplyFromCache: apply for %s: %v", bookID, err)
 			continue
 		}
 		_ = s.metadataFetchService.InvalidateCachedCandidates(bookID)
