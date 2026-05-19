@@ -1,10 +1,11 @@
 // file: internal/server/registry_wire.go
-// version: 1.7.1
+// version: 1.7.3
 
 package server
 
 import (
-	"log"
+
+	"log/slog"
 	"path/filepath"
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
@@ -150,7 +151,7 @@ func init() {
 			dir := filepath.Join(filepath.Dir(cfg.DatabasePath), "metrics.nutsdb")
 			store, err := database.NewNutsMetricsStore(dir)
 			if err != nil {
-				log.Printf("[WARN] Failed to open metrics store: %v", err)
+				slog.Warn("Failed to open metrics store: %v", err)
 				return (*database.NutsMetricsStore)(nil), nil
 			}
 			return store, nil
@@ -172,7 +173,7 @@ func init() {
 			}
 			s, err := database.NewAIScanStoreFromDB(ps.DB())
 			if err != nil {
-				log.Printf("[WARN] Failed to init AI scan store: %v", err)
+				slog.Warn("Failed to init AI scan store: %v", err)
 				return (*database.AIScanStore)(nil), nil
 			}
 			return s, nil
@@ -237,7 +238,7 @@ func init() {
 				},
 			})
 			if err != nil {
-				log.Printf("[WARN] iTunes service construction failed, falling back to disabled: %v", err)
+				slog.Warn("iTunes service construction failed, falling back to disabled: %v", err)
 				return itunesservice.NewDisabled(), nil
 			}
 			return svc, nil

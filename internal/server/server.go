@@ -1,12 +1,13 @@
 // file: internal/server/server.go
-// version: 2.19.3
+// version: 2.19.4
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-18
+// last-edited: 2026-05-19
 
 package server
 
 import (
 	"context"
+
 	"log"
 	"log/slog"
 	"net/http"
@@ -352,13 +353,13 @@ func NewServer(store database.Store) *Server {
 		regContainer.IncludeGroup("activity")
 	}
 	if err := regContainer.Resolve(); err != nil {
-		log.Fatalf("[server] serviceregistry resolve: %v", err)
+		slog.Error("serviceregistry resolve: %v", "err", err); os.Exit(1)
 	}
 	if err := regContainer.Build(regCtx); err != nil {
-		log.Fatalf("[server] serviceregistry build: %v", err)
+		slog.Error("serviceregistry build: %v", "err", err); os.Exit(1)
 	}
 	if err := regContainer.PostInit(regCtx); err != nil {
-		log.Fatalf("[server] serviceregistry postinit: %v", err)
+		slog.Error("serviceregistry postinit: %v", "err", err); os.Exit(1)
 	}
 	wireServerFromContainer(server, regContainer)
 	server.container = regContainer
@@ -404,13 +405,13 @@ func NewServer(store database.Store) *Server {
 	// and the mock store has no UpsertOpDefinitionV2 expectations.
 	if config.AppConfig.RootDir != "" {
 		if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
-			log.Printf("[server] maintenance plugin register: %v", err)
+			slog.Warn("maintenance plugin register: %v", "err", err)
 		}
 		// Iterate all op registrars. Each file calls addOpRegistrar in its init()
 		// so new ops never require touching this block.
 		for _, reg := range opRegistrars {
 			if err := reg(server, server.opRegistry); err != nil {
-				log.Printf("[server] op registrar: %v", err)
+				slog.Warn("op registrar: %v", "err", err)
 			}
 		}
 	}
@@ -453,7 +454,7 @@ func NewServer(store database.Store) *Server {
 		// GetGlobalStore() lookup here (SERVER-GLOBAL-STORE-AUDIT).
 		if ps, ok := resolvedStore.(*database.PebbleStore); ok {
 			if migrateErr := database.MigrateEmbeddingsFromSQLite(ps.DB(), filepath.Join(dbDir, "embeddings.db")); migrateErr != nil {
-				log.Printf("[WARN] embeddings.db migration error (continuing): %v", migrateErr)
+				slog.Warn("embeddings.db migration error (continuing): %v", migrateErr)
 			}
 		}
 	}
@@ -474,7 +475,7 @@ func NewServer(store database.Store) *Server {
 	// it requires further decoupling — tracked under SERVER-LIFECYCLE-FLIP.
 	if server.dedupEngine != nil {
 		server.organizeService.SetOrganizeHooks(&serverOrganizeHooks{server: server})
-		log.Println("[INFO] Organize collision hook wired via OrganizeService")
+		slog.Info("Organize collision hook wired via OrganizeService")
 	}
 
 	// Start embedding backfill if dedup engine is ready. Tracked via
@@ -540,12 +541,12 @@ func NewServer(store database.Store) *Server {
 	// Register file-op recovery handler (uses server closure instead of globalServer)
 	RegisterFileOpRecovery("apply_metadata", func(bookID string) {
 		if server.metadataFetchService == nil {
-			log.Printf("[WARN] no server instance for apply_metadata recovery of book %s", bookID)
+			slog.Warn("no server instance for apply_metadata recovery of book %s", bookID)
 			return
 		}
 		server.metadataFetchService.ApplyMetadataFileIO(bookID)
 		if _, err := server.metadataFetchService.WriteBackMetadataForBook(bookID); err != nil {
-			log.Printf("[WARN] recovery write-back for %s: %v", bookID, err)
+			slog.Warn("recovery write-back for %s: %v", bookID, err)
 		}
 		if server.writeBackBatcher != nil {
 			server.writeBackBatcher.Enqueue(bookID)
@@ -602,7 +603,7 @@ func NewServer(store database.Store) *Server {
 			Source:  "server",
 			Summary: "Server started, activity log initialized",
 		})
-		log.Println("[INFO] Activity log service initialized and recording")
+		slog.Info("Activity log service initialized and recording")
 	}
 
 	// Wire post-scan auto-quarantine hook.
@@ -663,7 +664,7 @@ func NewServer(store database.Store) *Server {
 	{
 		dc := deluge.GetClient()
 		server.protectedPathCache = deluge.NewProtectedPathCache(dc, config.AppConfig.ProtectedPaths)
-		log.Printf("[INFO] ProtectedPathCache initialized (%d static extra paths)", len(config.AppConfig.ProtectedPaths))
+		slog.Info("ProtectedPathCache initialized (%d static extra paths)", len(config.AppConfig.ProtectedPaths))
 
 		// Wire the pre-flight safe-write guard into the metadata package so that
 		// all taglib writes (metadata apply, single-tag patch) check for Deluge-
@@ -675,11 +676,11 @@ func NewServer(store database.Store) *Server {
 			Importer:       importer,
 		}
 		metadata.SetSafeWriteDeps(deps)
-		log.Printf("[INFO] metadata.SetSafeWriteDeps wired (Deluge pre-flight guard active)")
+		slog.Info("metadata.SetSafeWriteDeps wired (Deluge pre-flight guard active)")
 
 		// Also wire into the metafetch service so cover-art embeds use the guard.
 		server.metadataFetchService.SetSafeWriteDeps(deps)
-		log.Printf("[INFO] metafetch.Service.SetSafeWriteDeps wired (cover embed guard active)")
+		slog.Info("metafetch.Service.SetSafeWriteDeps wired (cover embed guard active)")
 
 		// Register the Deluge plugin (UOS-11).
 		// Guard on RootDir: tests don't configure AppConfig, so RootDir="" and the

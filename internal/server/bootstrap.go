@@ -1,18 +1,19 @@
 // file: internal/server/bootstrap.go
-// version: 1.5.0
+// version: 1.5.1
 // guid: 3e7c9a12-4f6b-4d8e-b5a1-2c8f0e3d9b47
-// last-edited: 2026-05-01
+// last-edited: 2026-05-19
 
 package server
 
 import (
+	"log/slog"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"log"
+
 	"net/http"
 	"os"
 	"path/filepath"
@@ -74,11 +75,11 @@ func InitBootstrapToken(store SettingsReadWriter, dataDir string) error {
 
 	tokenPath := BootstrapTokenPath(dataDir)
 	if err := os.WriteFile(tokenPath, []byte(raw+"\n"), 0600); err != nil {
-		log.Printf("[BOOTSTRAP] WARNING: could not write token file %s: %v", tokenPath, err)
+		slog.Info("WARNING: could not write token file %s: %v", tokenPath, err)
 	}
 
-	log.Printf("[BOOTSTRAP] Emergency access token: %s", raw)
-	log.Printf("[BOOTSTRAP] Token expires in 10 minutes. POST /api/v1/auth/bootstrap to exchange for an API key. Restart required to generate a new token.")
+	slog.Info("Emergency access token: %s", raw)
+	slog.Info("Token expires in 10 minutes. POST /api/v1/auth/bootstrap to exchange for an API key. Restart required to generate a new token.")
 	return nil
 }
 
@@ -102,7 +103,7 @@ func ConsumeBootstrapToken(store SettingsReadWriter, dataDir, plaintext string) 
 		var expUnix int64
 		fmt.Sscanf(expSetting.Value, "%d", &expUnix)
 		if expUnix > 0 && time.Now().Unix() > expUnix {
-			log.Printf("[BOOTSTRAP] Token exchange attempted but token has expired (restart required to generate a new one)")
+			slog.Info("Token exchange attempted but token has expired (restart required to generate a new one)")
 			_ = store.DeleteSetting(bootstrapTokenKey)
 			_ = store.DeleteSetting(bootstrapExpiresKey)
 			_ = os.Remove(BootstrapTokenPath(dataDir))
@@ -219,14 +220,14 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	// doesn't burn the one-time token.
 	adminUser, generatedPassword, err := findOrCreateAdminUser(store)
 	if err != nil || adminUser == nil {
-		log.Printf("[BOOTSTRAP] find/create admin error ip=%s err=%v", ip, err)
+		slog.Info("find/create admin error ip=%s err=%v", ip, err)
 		httputil.RespondWithInternalError(c, "failed to find or create admin user")
 		return
 	}
 
 	valid, err := ConsumeBootstrapToken(store, dataDir, req.Token)
 	if err != nil {
-		log.Printf("[BOOTSTRAP] consume error ip=%s err=%v", ip, err)
+		slog.Info("consume error ip=%s err=%v", ip, err)
 		httputil.RespondWithInternalError(c, "internal error")
 		return
 	}
@@ -243,7 +244,7 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 
 	raw, hash, err := database.GenerateAPIKeyToken()
 	if err != nil {
-		log.Printf("[BOOTSTRAP] generate api key error ip=%s err=%v", ip, err)
+		slog.Info("generate api key error ip=%s err=%v", ip, err)
 		httputil.RespondWithInternalError(c, "failed to generate API key")
 		return
 	}
@@ -263,12 +264,12 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 
 	created, err := store.CreateAPIKey(key)
 	if err != nil {
-		log.Printf("[BOOTSTRAP] create api key error user=%s ip=%s err=%v", adminUser.ID, ip, err)
+		slog.Info("create api key error user=%s ip=%s err=%v", adminUser.ID, ip, err)
 		httputil.RespondWithInternalError(c, "failed to create API key")
 		return
 	}
 
-	log.Printf("[BOOTSTRAP] Token consumed: new API key created user=%s key_id=%s ip=%s", adminUser.Username, created.ID, ip)
+	slog.Info("Token consumed: new API key created user=%s key_id=%s ip=%s", adminUser.Username, created.ID, ip)
 
 	type bootstrapResp struct {
 		APIKey            string   `json:"api_key"`
@@ -291,7 +292,7 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	if generatedPassword != "" {
 		rsp.GeneratedPassword = generatedPassword
 		rsp.PasswordMessage = "Admin account created. Change this password after logging in."
-		log.Printf("[BOOTSTRAP] Created admin user=%s — save the generated_password from this response", adminUser.Username)
+		slog.Info("Created admin user=%s — save the generated_password from this response", adminUser.Username)
 	}
 	httputil.RespondWithOK(c, rsp)
 }
@@ -341,7 +342,7 @@ func findOrCreateAdminUser(store database.Store) (*database.User, string, error)
 	if err != nil {
 		return nil, "", fmt.Errorf("create admin user: %w", err)
 	}
-	log.Printf("[BOOTSTRAP] No admin found — created user=admin with generated password")
+	slog.Info("No admin found — created user=admin with generated password")
 	return u, password, nil
 }
 

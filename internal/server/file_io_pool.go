@@ -1,6 +1,7 @@
 // file: internal/server/file_io_pool.go
-// version: 2.3.0
+// version: 2.3.2
 // guid: c4d5e6f7-a8b9-0c1d-2e3f-4a5b6c7d8e9f
+// last-edited: 2026-05-19
 //
 // Bounded worker pool for file I/O operations (cover embed, tag write,
 // rename). Tracks pending jobs in PebbleDB so they survive restarts.
@@ -12,8 +13,9 @@
 package server
 
 import (
+	"log/slog"
 	"encoding/json"
-	"log"
+
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -110,7 +112,7 @@ func NewFileIOPool(workers int) *FileIOPool {
 		p.wg.Add(1)
 		go p.worker(i)
 	}
-	log.Printf("[INFO] file I/O pool started with %d workers, buffer 500", workers)
+	slog.Info("file I/O pool started with %d workers, buffer 500", workers)
 	return p
 }
 
@@ -120,7 +122,7 @@ func (p *FileIOPool) worker(id int) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("[ERROR] file I/O worker %d panicked on book %s (op=%s): %v", id, job.bookID, job.opType, r)
+					slog.Error("file I/O worker %d panicked on book %s (op=%s): %v", id, job.bookID, job.opType, r)
 				}
 			}()
 			job.fn()
@@ -138,7 +140,7 @@ func (p *FileIOPool) Submit(bookID string, fn func()) {
 // SubmitTyped queues a file I/O job with a specific operation type.
 func (p *FileIOPool) SubmitTyped(bookID, opType string, fn func()) {
 	if atomic.LoadInt32(&p.stopped) == 1 {
-		log.Printf("[WARN] file I/O pool stopped, dropping job for book %s (op=%s)", bookID, opType)
+		slog.Warn("file I/O pool stopped, dropping job for book %s (op=%s)", bookID, opType)
 		return
 	}
 	job := FileIOJob{BookID: bookID, OpType: opType, CreatedAt: time.Now()}
@@ -149,7 +151,7 @@ func (p *FileIOPool) SubmitTyped(bookID, opType string, fn func()) {
 	case p.ch <- fileIOJobEntry{bookID: bookID, opType: opType, fn: fn}:
 	default:
 		p.overflow <- struct{}{}
-		log.Printf("[WARN] file I/O pool buffer full, running overflow for book %s (op=%s)", bookID, opType)
+		slog.Warn("file I/O pool buffer full, running overflow for book %s (op=%s)", bookID, opType)
 		go func() {
 			defer func() { <-p.overflow }()
 			fn()
@@ -210,9 +212,9 @@ func (p *FileIOPool) Stop() {
 
 	select {
 	case <-done:
-		log.Printf("[INFO] file I/O pool stopped, all jobs complete")
+		slog.Info("file I/O pool stopped, all jobs complete")
 	case <-time.After(30 * time.Second):
-		log.Printf("[WARN] file I/O pool shutdown timed out after 30s, %d jobs may be incomplete", p.Pending())
+		slog.Warn("file I/O pool shutdown timed out after 30s, %d jobs may be incomplete", p.Pending())
 	}
 }
 
@@ -222,12 +224,12 @@ func InitFileIOPool() {
 	RegisterFileOpRecovery("apply_metadata", func(bookID string) {
 		srv := globalServer
 		if srv == nil || srv.metadataFetchService == nil {
-			log.Printf("[WARN] no server instance for apply_metadata recovery of book %s", bookID)
+			slog.Warn("no server instance for apply_metadata recovery of book %s", bookID)
 			return
 		}
 		srv.metadataFetchService.ApplyMetadataFileIO(bookID)
 		if _, err := srv.metadataFetchService.WriteBackMetadataForBook(bookID); err != nil {
-			log.Printf("[WARN] recovery write-back for %s: %v", bookID, err)
+			slog.Warn("recovery write-back for %s: %v", bookID, err)
 		}
 		if srv.writeBackBatcher != nil {
 			srv.writeBackBatcher.Enqueue(bookID)
@@ -303,7 +305,7 @@ func recoverInterruptedFileOps(pool *FileIOPool) {
 		return
 	}
 
-	log.Printf("[INFO] recovering %d interrupted file I/O operations", len(keys))
+	slog.Info("recovering %d interrupted file I/O operations", len(keys))
 
 	for _, kv := range keys {
 		var job FileIOJob
@@ -333,14 +335,14 @@ func recoverInterruptedFileOps(pool *FileIOPool) {
 
 		fn, ok := lookupFileOpRecovery(job.OpType)
 		if !ok {
-			log.Printf("[WARN] no recovery handler for op type %q (book %s), removing stale key", job.OpType, job.BookID)
+			slog.Warn("no recovery handler for op type %q (book %s), removing stale key", job.OpType, job.BookID)
 			_ = store.DeleteRaw(kv.Key)
 			continue
 		}
 
 		bookID := job.BookID
 		opType := job.OpType
-		log.Printf("[INFO] re-queuing file I/O for book %s (type=%s, started=%s)", bookID, opType, job.CreatedAt.Format(time.RFC3339))
+		slog.Info("re-queuing file I/O for book %s (type=%s, started=%s)", bookID, opType, job.CreatedAt.Format(time.RFC3339))
 		if pool != nil {
 			pool.SubmitTyped(bookID, opType, func() { fn(bookID) })
 		}
