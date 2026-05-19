@@ -1,5 +1,5 @@
 // file: internal/realtime/events.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: 9e8d7f6a-5c4b-3a21-0f9e-8d7c6b5a4392
 
 package realtime
@@ -7,7 +7,7 @@ package realtime
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+"log/slog"
 	"sync"
 	"time"
 
@@ -55,7 +55,7 @@ func (c *Client) Subscribe(operationID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Operations[operationID] = true
-	log.Printf("Client %s subscribed to operation %s", c.ID, operationID)
+ slog.Info("Client %s subscribed to operation %s", "value0", c.ID, "operationID", operationID)
 }
 
 // Unsubscribe unsubscribes the client from an operation
@@ -63,7 +63,7 @@ func (c *Client) Unsubscribe(operationID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.Operations, operationID)
-	log.Printf("Client %s unsubscribed from operation %s", c.ID, operationID)
+ slog.Info("Client %s unsubscribed from operation %s", "value0", c.ID, "operationID", operationID)
 }
 
 // IsSubscribed checks if client is subscribed to an operation
@@ -91,7 +91,7 @@ func (h *EventHub) RegisterClient(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.clients[client.ID] = client
-	log.Printf("Client %s registered, total clients: %d", client.ID, len(h.clients))
+ slog.Info("Client %s registered, total clients: %d", "value0", client.ID, "value1", len(h.clients))
 }
 
 // UnregisterClient removes a client
@@ -105,7 +105,7 @@ func (h *EventHub) UnregisterClient(clientID string) {
 		close(client.Channel)
 		client.mu.Unlock()
 		delete(h.clients, clientID)
-		log.Printf("Client %s unregistered, remaining clients: %d", clientID, len(h.clients))
+  slog.Info("Client %s unregistered, remaining clients: %d", "clientID", clientID, "value1", len(h.clients))
 	}
 }
 
@@ -133,7 +133,7 @@ func (h *EventHub) Broadcast(event *Event) {
 			case client.Channel <- event:
 				count++
 			default:
-				log.Printf("Warning: Client %s channel full, dropping event", client.ID)
+    slog.Info("Warning: Client %s channel full, dropping event", "value0", client.ID)
 			}
 		}
 	}
@@ -256,20 +256,20 @@ func (h *EventHub) HandleSSE(c *gin.Context) {
 	for {
 		select {
 		case <-c.Request.Context().Done():
-			log.Printf("Client %s connection closed", clientID)
+   slog.Info("Client %s connection closed", "clientID", clientID)
 			return
 		case event := <-client.Channel:
 			// Marshal event to JSON
 			data, err := json.Marshal(event)
 			if err != nil {
-				log.Printf("Error marshaling event: %v", err)
+    slog.Info("Error marshaling event: %v", "err", err)
 				continue
 			}
 
 			// Write SSE format: data: {json}\n\n
 			_, err = c.Writer.Write([]byte(fmt.Sprintf("data: %s\n\n", data)))
 			if err != nil {
-				log.Printf("Error writing to client %s: %v", clientID, err)
+    slog.Info("Error writing to client %s: %v", "clientID", clientID, "err", err)
 				return
 			}
 
@@ -280,7 +280,7 @@ func (h *EventHub) HandleSSE(c *gin.Context) {
 			// Comments are ignored by clients but prevent proxy timeouts
 			_, err := c.Writer.Write([]byte(": ping\n\n"))
 			if err != nil {
-				log.Printf("Error writing heartbeat to client %s: %v", clientID, err)
+    slog.Info("Error writing heartbeat to client %s: %v", "clientID", clientID, "err", err)
 				return
 			}
 			c.Writer.Flush()
@@ -325,9 +325,9 @@ func InitializeEventHub() {
 	globalHubMu.Lock()
 	defer globalHubMu.Unlock()
 	if GlobalHub != nil {
-		log.Println("Warning: event hub already initialized")
+  slog.Info("Warning: event hub already initialized")
 		return
 	}
 	GlobalHub = NewEventHub()
-	log.Println("Event hub initialized")
+ slog.Info("Event hub initialized")
 }

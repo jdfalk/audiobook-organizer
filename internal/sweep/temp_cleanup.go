@@ -1,12 +1,12 @@
 // file: internal/sweep/temp_cleanup.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: f7e6d5c4-b3a2-1908-7654-321fedcba987
 
 package sweep
 
 import (
 	"io/fs"
-	"log"
+"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +32,7 @@ func CleanupOrphanedTempFiles(root string, w *activity.Writer, opID string) int 
 		name := filepath.Base(path)
 		if isOrphanedTempFile(name) {
 			if rmErr := os.Remove(path); rmErr != nil {
-				log.Printf("[WARN] temp file cleanup: could not remove %s: %v", path, rmErr)
+    slog.Warn("temp file cleanup: could not remove %s: %v", "path", path, "rmErr", rmErr)
 			} else {
 				removed++
 				activity.LogBatch(w, opID, "temp-file-cleanup", "temp-file-cleanup",

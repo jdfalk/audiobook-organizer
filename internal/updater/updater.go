@@ -1,5 +1,5 @@
 // file: internal/updater/updater.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 package updater
@@ -8,7 +8,7 @@ import (
 	json "encoding/json/v2"
 	"fmt"
 	"io"
-	"log"
+"log/slog"
 	"net/http"
 	"os"
 	"runtime"
@@ -221,7 +221,7 @@ func (u *Updater) DownloadAndReplace(info *UpdateInfo) error {
 		return err
 	}
 
-	log.Printf("[INFO] Downloading update from %s", assetURL)
+ slog.Info("Downloading update from %s", "assetURL", assetURL)
 
 	// Get current executable path
 	execPath, err := os.Executable()
@@ -278,7 +278,7 @@ func (u *Updater) DownloadAndReplace(info *UpdateInfo) error {
 	// Clean up old binary (best effort)
 	os.Remove(oldPath)
 
-	log.Printf("[INFO] Update applied successfully: %s -> %s", info.CurrentVersion, info.LatestVersion)
+ slog.Info("Update applied successfully: %s -> %s", "value0", info.CurrentVersion, "value1", info.LatestVersion)
 	return nil
 }
 
@@ -328,7 +328,7 @@ func (u *Updater) findAssetURL(info *UpdateInfo) (string, error) {
 // RestartSelf exits the process so that systemd (or similar) can restart it
 // with the new binary.
 func (u *Updater) RestartSelf() error {
-	log.Printf("[INFO] Exiting for restart with updated binary")
+ slog.Info("Exiting for restart with updated binary")
 	os.Exit(0)
 	return nil // unreachable
 }

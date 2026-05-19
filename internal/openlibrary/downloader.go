@@ -1,5 +1,5 @@
 // file: internal/openlibrary/downloader.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package openlibrary
@@ -7,7 +7,7 @@ package openlibrary
 import (
 	"fmt"
 	"io"
-	"log"
+"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -99,13 +99,13 @@ func DownloadDump(dumpType string, targetDir string, tracker *DownloadTracker) e
 	var lastErr error
 	for _, baseURL := range DumpSources {
 		sourceURL := fmt.Sprintf("%s/%s", baseURL, filename)
-		log.Printf("[INFO] Trying OL dump download from: %s", sourceURL)
+  slog.Info("Trying OL dump download from: %s", "sourceURL", sourceURL)
 
 		err := downloadFromURL(dumpType, sourceURL, targetPath, tracker)
 		if err == nil {
 			return nil
 		}
-		log.Printf("[WARN] Download from %s failed: %v, trying next source", sourceURL, err)
+  slog.Warn("Download from %s failed: %v, trying next source", "sourceURL", sourceURL, "err", err)
 		lastErr = err
 	}
 
