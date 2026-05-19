@@ -1,5 +1,5 @@
 // file: internal/plugins/acoustid/backfill.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: f6a7b8c9-d0e1-2345-def0-123456789abc
 // last-edited: 2026-05-06
 
@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -200,7 +200,7 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 
 	segs, err := fingerprint.FileSegments(f.FilePath, f.Duration)
 	if err != nil {
-		log.Printf("[WARN] fingerprint: %s: %v", f.FilePath, err)
+		slog.Warn("fingerprint", "path", f.FilePath, "err", err)
 		return fingerprintOutcomeFailed
 	}
 
@@ -214,7 +214,7 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	updated.AcoustIDSeg5 = fingerprint.NormalizeFingerprint(segs[5])
 	updated.AcoustIDSeg6 = fingerprint.NormalizeFingerprint(segs[6])
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
-		log.Printf("[WARN] fingerprint: update %s: %v", f.ID, err)
+		slog.Warn("fingerprint: update", "id", f.ID, "err", err)
 		return fingerprintOutcomeFailed
 	}
 	return fingerprintOutcomeFingerprinted

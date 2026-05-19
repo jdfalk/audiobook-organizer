@@ -1,5 +1,5 @@
 // file: internal/plugins/maintenance/batch_poller.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c9d0e1f2-a3b4-5678-2345-890123456789
 // last-edited: 2026-05-07
 
@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"time"
 
@@ -42,11 +41,11 @@ func (p *Plugin) runBatchPoller(ctx context.Context, _ json.RawMessage, reporter
 	}
 	processed, err := p.deps.PollBatch(ctx)
 	if err != nil {
-		log.Printf("[WARN] batch-poller: %v", err)
+		slog.Warn("batch-poller", "err", err)
 	}
 	if processed > 0 {
 		msg := fmt.Sprintf("Processed %d completed batches", processed)
-		log.Printf("[INFO] batch-poller: %s", msg)
+		slog.Info("batch-poller", "msg", msg)
 		_ = reporter.Log(slog.LevelInfo, msg)
 	}
 	return nil

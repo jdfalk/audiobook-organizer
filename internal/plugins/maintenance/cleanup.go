@@ -1,5 +1,5 @@
 // file: internal/plugins/maintenance/cleanup.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c3d4e5f6-a7b8-9012-cdef-234567890123
 // last-edited: 2026-05-07
 
@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -152,7 +151,7 @@ func (p *Plugin) runCleanupActivityLog(ctx context.Context, _ json.RawMessage, r
 	}
 	msg := fmt.Sprintf("Activity log cleanup: compacted %d, summarized %d, pruned %d",
 		compacted, summarized, pruned)
-	log.Printf("[INFO] %s", msg)
+	slog.Info(msg)
 	_ = reporter.Log(slog.LevelInfo, msg)
 	return nil
 }
@@ -237,10 +236,10 @@ func (p *Plugin) runCleanupOldBackups(ctx context.Context, _ json.RawMessage, re
 			age := time.Since(info.ModTime())
 			if age > maxAge {
 				if rmErr := os.Remove(path); rmErr != nil {
-					log.Printf("[WARN] failed to remove old backup: %s: %v", path, rmErr)
+					slog.Warn("failed to remove old backup", "path", path, "err", rmErr)
 				} else {
 					removed++
-					log.Printf("[INFO] cleaned up old backup: %s (age: %s)", path, age.Round(time.Hour))
+					slog.Info("cleaned up old backup", "path", path, "age", age.Round(time.Hour))
 				}
 			}
 		}

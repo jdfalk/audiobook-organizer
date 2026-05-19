@@ -1,5 +1,5 @@
 // file: internal/plugins/deluge/centralization.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-05-07
 
@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -174,7 +174,7 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 				reporter.Logger().Warn("deluge move_storage failed", "hash", bf.DelugeHash, "error", moveErr)
 				// Non-fatal: continue processing.
 			} else {
-				log.Printf("[INFO] deluge move_storage %s -> %s succeeded", bf.DelugeHash, filepath.Dir(dest))
+				slog.Info("deluge move_storage succeeded", "hash", bf.DelugeHash, "dir", filepath.Dir(dest))
 			}
 		}
 

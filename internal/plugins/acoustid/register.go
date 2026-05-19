@@ -1,5 +1,5 @@
 // file: internal/plugins/acoustid/register.go
-// version: 1.1.0
+// version: 1.1.1
 
 // Service registry registration for the acoustid UOS plugin (W5/W7).
 //
@@ -11,7 +11,7 @@ package acoustid
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	dedupengine "github.com/jdfalk/audiobook-organizer/internal/dedup"
@@ -42,7 +42,7 @@ func (p *Plugin) PostInit(ctx context.Context, c *serviceregistry.Container) err
 	}
 	wrapper, ok := serviceregistry.TryGet[*opsregistry.RegistryWrapper](c, "opregistry")
 	if !ok || wrapper == nil {
-		log.Printf("[plugins/acoustid] PostInit: opregistry not available, skipping op-def registration")
+		slog.Warn("PostInit: opregistry not available, skipping op-def registration")
 		return nil
 	}
 	return p.Register(wrapper.Registry)

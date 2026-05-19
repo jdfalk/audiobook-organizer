@@ -1,5 +1,5 @@
 // file: internal/httputil/respond.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-01
 
@@ -8,7 +8,7 @@
 package httputil
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -76,7 +76,7 @@ func RespondWithServiceUnavailable(c *gin.Context, message string) {
 // Use this when you have a concrete error value to log but only want to expose
 // a generic message to the client.
 func InternalError(c *gin.Context, msg string, err error) {
-	log.Printf("[ERROR] %s: %v", msg, err)
+	slog.Error(msg, "err", err)
 	RespondWithInternalError(c, msg)
 }
 
@@ -115,9 +115,9 @@ func logErrorWithContext(c *gin.Context, statusCode int, message string) {
 	method := c.Request.Method
 	path := c.Request.URL.Path
 	clientIP := c.ClientIP()
-	level := "WARNING"
 	if statusCode >= 500 {
-		level = "ERROR"
+		slog.Error("http request", "method", method, "path", path, "status", statusCode, "message", message, "clientIP", clientIP)
+	} else {
+		slog.Warn("http request", "method", method, "path", path, "status", statusCode, "message", message, "clientIP", clientIP)
 	}
-	log.Printf("[%s] %s %s %d - %s (from %s)", level, method, path, statusCode, message, clientIP)
 }

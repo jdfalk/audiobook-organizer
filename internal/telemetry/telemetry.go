@@ -1,12 +1,12 @@
 // file: internal/telemetry/telemetry.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e
 
 package telemetry
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -46,7 +46,7 @@ func InitOTEL(ctx context.Context, cfg *Config) (func(context.Context) error, er
 	meterProvider := metric.NewMeterProvider(metric.WithReader(prometheusExporter))
 	otel.SetMeterProvider(meterProvider)
 
-	log.Printf("[INFO] OpenTelemetry initialized (endpoint: %s)", cfg.ExporterEndpoint)
+	slog.Info("OpenTelemetry initialized", "endpoint", cfg.ExporterEndpoint)
 
 	// Return shutdown function that closes both exporters.
 	return func(shutdownCtx context.Context) error {

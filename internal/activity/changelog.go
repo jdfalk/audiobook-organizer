@@ -6,7 +6,7 @@ package activity
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"time"
 
@@ -54,7 +54,7 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	// 1. Path history → rename entries
 	pathHistory, err := svc.db.GetBookPathHistory(bookID)
 	if err != nil {
-		log.Printf("[WARN] changelog: GetBookPathHistory %s: %v", bookID, err)
+		slog.Warn("changelog: GetBookPathHistory", "bookID", bookID, "err", err)
 	} else {
 		for _, ph := range pathHistory {
 			entries = append(entries, ChangeLogEntry{
@@ -73,7 +73,7 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	// 2. Metadata change history → metadata_apply and tag_write entries
 	metaHistory, err := svc.db.GetBookChangeHistory(bookID, 100)
 	if err != nil {
-		log.Printf("[WARN] changelog: GetBookChangeHistory %s: %v", bookID, err)
+		slog.Warn("changelog: GetBookChangeHistory", "bookID", bookID, "err", err)
 	} else {
 		for _, mh := range metaHistory {
 			entryType := "metadata_apply"
@@ -108,7 +108,7 @@ func (svc *ChangelogService) GetBookChangelog(bookID string) ([]ChangeLogEntry, 
 	// 3. Operation changes → import and transcode entries
 	opChanges, err := svc.db.GetBookChanges(bookID)
 	if err != nil {
-		log.Printf("[WARN] changelog: GetBookChanges %s: %v", bookID, err)
+		slog.Warn("changelog: GetBookChanges", "bookID", bookID, "err", err)
 	} else {
 		for _, oc := range opChanges {
 			entryType := "import"
