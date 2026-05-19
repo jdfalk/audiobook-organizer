@@ -1,8 +1,8 @@
-// file: internal/activity/legacy_tag_enrichment_test.go
+// file: internal/database/legacy_migration_test.go
 // version: 1.0.0
 // guid: b2c3d4e5-f6a7-2345-bcde-f0123456789a
 
-package activity
+package database
 
 import (
 	"sort"
@@ -119,7 +119,7 @@ func TestEnrichLegacyLogTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := EnrichLegacyLogTags(tt.message, tt.source, tt.level)
+			result := enrichLegacyLogTags(tt.message, tt.source, tt.level)
 
 			// Sort for deterministic comparison
 			sort.Strings(result)
@@ -141,7 +141,7 @@ func TestEnrichLegacyLogTags(t *testing.T) {
 
 func TestEnrichLegacyLogTags_NoDuplicates(t *testing.T) {
 	// Edge case: message with multiple matching patterns shouldn't duplicate tags
-	result := EnrichLegacyLogTags("Compacted compaction entries", "maintenance", "info")
+	result := enrichLegacyLogTags("Compacted compaction entries", "maintenance", "info")
 
 	tagCount := make(map[string]int)
 	for _, tag := range result {

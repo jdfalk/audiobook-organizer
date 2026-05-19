@@ -1,17 +1,17 @@
-// file: internal/activity/legacy_tag_enrichment.go
+// file: internal/database/legacy_migration.go
 // version: 1.0.0
 // guid: a1b2c3d4-e5f6-1234-abcd-ef0123456789
 
-package activity
+package database
 
 import (
 	"strings"
 )
 
-// EnrichLegacyLogTags derives intelligent tags from legacy system_activity_log entries.
+// enrichLegacyLogTags derives intelligent tags from legacy system_activity_log entries.
 // Analyzes message content and level to infer action, outcome, source, and tier tags.
 // Returns a de-duplicated list of tags that describe what the log entry represents.
-func EnrichLegacyLogTags(message, source, level string) []string {
+func enrichLegacyLogTags(message, source, level string) []string {
 	seen := make(map[string]bool)
 	var tags []string
 

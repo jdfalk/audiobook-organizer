@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.9.1
+// version: 1.9.2
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -245,7 +245,7 @@ func (s *ActivityStore) MigrateSystemActivityLogs() (int, error) {
 		// source ← source (pass through)
 		// summary ← message
 		// details ← nil
-		// tags ← ["legacy", "system_activity_log"]
+		// tags ← intelligently derived from message patterns, level, and source
 		entry := ActivityEntry{
 			Timestamp: old.CreatedAt,
 			Tier:      "system",
@@ -253,7 +253,7 @@ func (s *ActivityStore) MigrateSystemActivityLogs() (int, error) {
 			Level:     old.Level,
 			Source:    old.Source,
 			Summary:   old.Message,
-			Tags:      []string{"legacy", "system_activity_log"},
+			Tags:      enrichLegacyLogTags(old.Message, old.Source, old.Level),
 		}
 
 		tagsStr := strings.Join(entry.Tags, ",")
