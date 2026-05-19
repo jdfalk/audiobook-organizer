@@ -1,13 +1,13 @@
 // file: internal/config/update_service.go
-// version: 3.0.0
+// version: 3.0.1
 // guid: f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1
 
 package config
 
 import (
+	"log/slog"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -86,7 +86,7 @@ func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]a
 	// Apply secrets explicitly — they need masking/debug logging and must not
 	// flow through the JSON round-trip to avoid plaintext exposure.
 	if val, ok := payloadString(payload, "openai_api_key"); ok {
-		log.Printf("[DEBUG] UpdateConfig: updating OpenAI API key (len=%d)", len(val))
+		slog.Debug("UpdateConfig: updating OpenAI API key (len=%d)", len(val))
 		AppConfig.OpenAIAPIKey = val
 	}
 	if val, ok := payloadString(payload, "google_books_api_key"); ok {
@@ -123,14 +123,14 @@ func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]a
 	AppConfig.SetupComplete = AppConfig.RootDir != ""
 
 	if err := SaveConfigToDatabase(us.DB); err != nil {
-		log.Printf("ERROR: failed to persist config: %v", err)
+		slog.Error("failed to persist config: %v", err)
 		return http.StatusInternalServerError, map[string]any{
 			"error":   "failed to save configuration",
 			"details": err.Error(),
 		}
 	}
 
-	log.Printf("Configuration saved successfully")
+	slog.Info("Configuration saved successfully")
 
 	return http.StatusOK, map[string]any{
 		"message": "configuration updated and saved to database",

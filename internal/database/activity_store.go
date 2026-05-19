@@ -1,15 +1,15 @@
 // file: internal/database/activity_store.go
-// version: 1.9.2
+// version: 1.9.3
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
 
 import (
+	"log/slog"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -175,7 +175,7 @@ func (s *ActivityStore) MigrateSystemActivityLogs() (int, error) {
 	}
 	if count > 0 {
 		// Already migrated
-		log.Printf("[activity] system_activity_log migration already complete")
+		slog.Info("[activity] system_activity_log migration already complete")
 		return 0, nil
 	}
 
@@ -185,7 +185,7 @@ func (s *ActivityStore) MigrateSystemActivityLogs() (int, error) {
 	if err != nil {
 		// Table might not exist — that's OK, migration is a no-op
 		if strings.Contains(err.Error(), "no such table") {
-			log.Printf("[activity] system_activity_log table not found (no legacy logs)")
+			slog.Info("[activity] system_activity_log table not found (no legacy logs)")
 			return 0, nil
 		}
 		return 0, fmt.Errorf("activity_store: query system_activity_log: %w", err)
@@ -217,7 +217,7 @@ func (s *ActivityStore) MigrateSystemActivityLogs() (int, error) {
 	}
 
 	if len(oldLogs) == 0 {
-		log.Printf("[activity] no old system_activity_log rows found")
+		slog.Info("[activity] no old system_activity_log rows found")
 		// Write marker anyway so we don't check again
 		_, _ = s.Record(ActivityEntry{
 			Tier:    "system",
@@ -297,7 +297,7 @@ func (s *ActivityStore) MigrateSystemActivityLogs() (int, error) {
 		return 0, fmt.Errorf("activity_store: commit migration: %w", err)
 	}
 
-	log.Printf("[activity] migrated %d system_activity_log rows", insertedCount)
+	slog.Info("[activity] migrated %d system_activity_log rows", insertedCount)
 	return insertedCount, nil
 }
 
@@ -483,7 +483,7 @@ func (s *ActivityStore) Summarize(ctx context.Context, olderThan time.Time, tier
 		)
 		if txErr != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				log.Printf("Summarize rollback on insert: %v", rbErr)
+				slog.Info("Summarize rollback on insert: %v", rbErr)
 			}
 			return totalDeleted, fmt.Errorf("activity_store: summarize insert: %w", txErr)
 		}
@@ -507,7 +507,7 @@ func (s *ActivityStore) Summarize(ctx context.Context, olderThan time.Time, tier
 		}
 		if txErr != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				log.Printf("Summarize rollback on delete: %v", rbErr)
+				slog.Info("Summarize rollback on delete: %v", rbErr)
 			}
 			return totalDeleted, fmt.Errorf("activity_store: summarize delete: %w", txErr)
 		}
@@ -849,7 +849,7 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 			LIMIT 1`, dateKey).Scan(&existingID, &existingDetailsJSON)
 		if err != nil && err != sql.ErrNoRows {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				log.Printf("CompactByDay rollback on check digest: %v", rbErr)
+				slog.Info("CompactByDay rollback on check digest: %v", rbErr)
 			}
 			return result, fmt.Errorf("activity_store: compact check digest: %w", err)
 		}
@@ -886,7 +886,7 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 			merged, mErr := json.Marshal(dd)
 			if mErr != nil {
 				if rbErr := tx.Rollback(); rbErr != nil {
-					log.Printf("CompactByDay rollback on remarshal: %v", rbErr)
+					slog.Info("CompactByDay rollback on remarshal: %v", rbErr)
 				}
 				return result, fmt.Errorf("activity_store: compact remarshal merged digest: %w", mErr)
 			}
@@ -895,7 +895,7 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 			// Delete the old digest row — we'll insert the combined one below.
 			if _, delErr := tx.ExecContext(ctx, `DELETE FROM activity_log WHERE id = ?`, existingID); delErr != nil {
 				if rbErr := tx.Rollback(); rbErr != nil {
-					log.Printf("CompactByDay rollback on delete old digest: %v", rbErr)
+					slog.Info("CompactByDay rollback on delete old digest: %v", rbErr)
 				}
 				return result, fmt.Errorf("activity_store: compact delete old digest: %w", delErr)
 			}
@@ -910,7 +910,7 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 		)
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				log.Printf("CompactByDay rollback on insert digest: %v", rbErr)
+				slog.Info("CompactByDay rollback on insert digest: %v", rbErr)
 			}
 			return result, fmt.Errorf("activity_store: compact insert digest: %w", err)
 		}
@@ -932,7 +932,7 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 			delRes, delErr := tx.ExecContext(ctx, "DELETE FROM activity_log WHERE id IN ("+placeholders+")", args...)
 			if delErr != nil {
 				if rbErr := tx.Rollback(); rbErr != nil {
-					log.Printf("CompactByDay rollback on delete originals: %v", rbErr)
+					slog.Info("CompactByDay rollback on delete originals: %v", rbErr)
 				}
 				return result, fmt.Errorf("activity_store: compact delete: %w", delErr)
 			}
