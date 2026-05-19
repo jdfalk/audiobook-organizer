@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/merge_chapter_groups.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000020-0000-0000-0000-000000000020
 // last-edited: 2026-05-01
 
@@ -12,7 +12,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&mergeChapterGroupsJob{}) }
 
@@ -54,14 +54,14 @@ func (j *mergeChapterGroupsJob) Run(ctx context.Context, store database.Store, r
 		if !dryRun {
 			if merr := store.MergeChapterBooks(primaryID, srcIDs, g.CommonTitle, g.TotalDuration); merr != nil {
 				msg := merr.Error()
-				reporter.Log("error", "merge-chapter-groups: MergeChapterBooks failed", &msg)
+				slog.Error("merge-chapter-groups: MergeChapterBooks failed", "details", msg)
 				continue
 			}
 		}
 		merged++
 		detail := fmt.Sprintf("primary=%s srcs=%v title=%q", primaryID, srcIDs, g.CommonTitle)
-		reporter.Log("info", "merged chapter group", &detail)
+		slog.Info("merged chapter group", "details", detail)
 	}
-	reporter.Log("info", fmt.Sprintf("merge-chapter-groups complete: %d merged", merged), nil)
+	slog.Info(fmt.Sprintf("merge-chapter-groups complete: %d merged", merged))
 	return nil
 }

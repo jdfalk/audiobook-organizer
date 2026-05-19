@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/recompute_itunes_paths.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000013-0000-0000-0000-000000000013
 // last-edited: 2026-05-01
 
@@ -11,7 +11,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&recomputeITunesPathsJob{}) }
 
@@ -50,13 +50,13 @@ func (j *recomputeITunesPathsJob) Run(ctx context.Context, store database.Store,
 			bf.ITunesPath = want
 			if uerr := store.UpdateBookFile(bf.ID, &bf); uerr != nil {
 				msg := uerr.Error()
-				reporter.Log("error", "recompute-itunes-paths: UpdateBookFile failed", &msg)
+				slog.Error("recompute-itunes-paths: UpdateBookFile failed", "details", msg)
 				continue
 			}
 		}
 		updated++
 	}
 	_ = updated
-	reporter.Log("info", "recompute-itunes-paths complete", nil)
+	slog.Info("recompute-itunes-paths complete")
 	return nil
 }

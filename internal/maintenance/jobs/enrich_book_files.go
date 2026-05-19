@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/enrich_book_files.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000009-0000-0000-0000-000000000009
 // last-edited: 2026-05-01
 
@@ -14,7 +14,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&enrichBookFilesJob{}) }
 
@@ -63,13 +63,13 @@ func (j *enrichBookFilesJob) Run(ctx context.Context, store database.Store, repo
 			bf.TrackNumber = n
 			if uerr := store.UpdateBookFile(bf.ID, &bf); uerr != nil {
 				msg := uerr.Error()
-				reporter.Log("error", "enrich-book-files: UpdateBookFile failed", &msg)
+				slog.Error("enrich-book-files: UpdateBookFile failed", "details", msg)
 				continue
 			}
 		}
 		updated++
 	}
 	_ = updated
-	reporter.Log("info", "enrich-book-files complete", nil)
+	slog.Info("enrich-book-files complete")
 	return nil
 }

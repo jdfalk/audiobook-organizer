@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/scan_chapter_groups.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000019-0000-0000-0000-000000000019
 // last-edited: 2026-05-01
 
@@ -12,7 +12,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&scanChapterGroupsJob{}) }
 
@@ -43,8 +43,8 @@ func (j *scanChapterGroupsJob) Run(ctx context.Context, store database.Store, re
 	for _, g := range groups {
 		reporter.Increment()
 		detail := fmt.Sprintf("title=%q files=%d duration=%.0fs ids=%v", g.CommonTitle, g.FileCount, g.TotalDuration, g.BookIDs)
-		reporter.Log("info", "chapter group detected", &detail)
+		slog.Info("chapter group detected", "details", detail)
 	}
-	reporter.Log("info", fmt.Sprintf("scan-chapter-groups complete: %d groups", len(groups)), nil)
+	slog.Info(fmt.Sprintf("scan-chapter-groups complete: %d groups", len(groups)))
 	return nil
 }

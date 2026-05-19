@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/scan_composer_tags.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: d9e5f3c4-6a7b-8c9d-0e1f-2a3b4c5d6e7f
 // last-edited: 2026-04-28
 
@@ -19,7 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&scanComposerTagsJob{}) }
 
@@ -131,7 +131,7 @@ func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, rep
 	}
 
 	if len(workItems) == 0 {
-		reporter.Log("info", "all files already processed", nil)
+		slog.Info("all files already processed")
 		return nil
 	}
 
@@ -221,7 +221,7 @@ func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, rep
 
 	finalCount := atomic.LoadInt64(&completed)
 	log.Printf("[INFO] scan-composer-tags %s: finished %d/%d files", opID, finalCount, totalFiles)
-	reporter.Log("info", fmt.Sprintf("scan complete: processed %d/%d files", finalCount, totalFiles), nil)
+	slog.Info(fmt.Sprintf("scan complete: processed %d/%d files", finalCount, totalFiles))
 	return nil
 }
 

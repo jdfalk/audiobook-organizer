@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/scan_duration_mismatch.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000018-0000-0000-0000-000000000018
 // last-edited: 2026-05-01
 
@@ -11,7 +11,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&scanDurationMismatchJob{}) }
 
@@ -53,9 +53,9 @@ func (j *scanDurationMismatchJob) Run(ctx context.Context, store database.Store,
 		if delta > 120 {
 			mismatches++
 			detail := fmt.Sprintf("local=%ds audible=%ds delta=%ds", *b.Duration, audibleSec, delta)
-			reporter.Log("warn", "duration mismatch: "+b.Title, &detail)
+			slog.Warn("duration mismatch: "+b.Title, "details", detail)
 		}
 	}
-	reporter.Log("info", fmt.Sprintf("scan-duration-mismatch complete: %d mismatches", mismatches), nil)
+	slog.Info(fmt.Sprintf("scan-duration-mismatch complete: %d mismatches", mismatches))
 	return nil
 }

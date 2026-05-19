@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/fix_library_states.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000008-0000-0000-0000-000000000008
 // last-edited: 2026-05-01
 
@@ -11,7 +11,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&fixLibraryStatesJob{}) }
 
@@ -59,7 +59,7 @@ func (j *fixLibraryStatesJob) Run(ctx context.Context, store database.Store, rep
 			updated.LibraryState = &wantState
 			if _, uerr := store.UpdateBook(book.ID, &updated); uerr != nil {
 				msg := uerr.Error()
-				reporter.Log("error", "fix-library-states: UpdateBook failed", &msg)
+				slog.Error("fix-library-states: UpdateBook failed", "details", msg)
 			} else {
 				fixed++
 			}
@@ -68,6 +68,6 @@ func (j *fixLibraryStatesJob) Run(ctx context.Context, store database.Store, rep
 		}
 	}
 	_ = fixed
-	reporter.Log("info", "fix-library-states complete", nil)
+	slog.Info("fix-library-states complete")
 	return nil
 }

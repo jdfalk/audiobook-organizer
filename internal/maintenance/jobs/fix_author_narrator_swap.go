@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/fix_author_narrator_swap.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: a1000003-0000-0000-0000-000000000003
 // last-edited: 2026-05-01
 
@@ -12,7 +12,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&fixAuthorNarratorSwapJob{}) }
 
@@ -75,11 +75,11 @@ func (j *fixAuthorNarratorSwapJob) Run(ctx context.Context, store database.Store
 			if !dryRun {
 				current, getErr := store.GetBookByID(book.ID)
 				if getErr != nil || current == nil {
-					reporter.Log("error", fmt.Sprintf("Failed to fetch book %s: %v", book.ID, getErr), nil)
+					slog.Error(fmt.Sprintf("Failed to fetch book %s: %v", book.ID, getErr))
 				} else {
 					current.AuthorID = nil
 					if _, updateErr := store.UpdateBook(book.ID, current); updateErr != nil {
-						reporter.Log("error", fmt.Sprintf("Failed to update book %s: %v", book.ID, updateErr), nil)
+						slog.Error(fmt.Sprintf("Failed to update book %s: %v", book.ID, updateErr))
 					} else {
 						applied++
 					}
@@ -94,6 +94,6 @@ func (j *fixAuthorNarratorSwapJob) Run(ctx context.Context, store database.Store
 		offset += batchSize
 	}
 
-	reporter.Log("info", fmt.Sprintf("Done: found=%d applied=%d dryRun=%v", found, applied, dryRun), nil)
+	slog.Info(fmt.Sprintf("Done: found=%d applied=%d dryRun=%v", found, applied, dryRun))
 	return nil
 }

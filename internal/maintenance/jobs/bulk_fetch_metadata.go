@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/bulk_fetch_metadata.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: b3c9d7e8-0f1a-2b3c-4d5e-6f7a8b9c0d1e
 // last-edited: 2026-05-05
 
@@ -21,7 +21,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&bulkFetchMetadataJob{}) }
 
@@ -138,7 +138,7 @@ func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, re
 	}
 
 	if len(work) == 0 {
-		reporter.Log("info", "all books already cached", nil)
+		slog.Info("all books already cached")
 		return nil
 	}
 
@@ -237,7 +237,7 @@ func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, re
 	finalCount := atomic.LoadInt64(&completed)
 	log.Printf("[INFO] bulk-fetch-metadata %s: done %d books — cached:%d not_found:%d",
 		opID, finalCount, found, notFound)
-	reporter.Log("info", fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound), nil)
+	slog.Info(fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
 	return nil
 }
 

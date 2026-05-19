@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/fix_book_file_paths.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000011-0000-0000-0000-000000000011
 // last-edited: 2026-05-01
 
@@ -11,7 +11,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&fixBookFilePathsJob{}) }
 
@@ -50,7 +50,7 @@ func (j *fixBookFilePathsJob) Run(ctx context.Context, store database.Store, rep
 				bf.Missing = true
 				if uerr := store.UpdateBookFile(bf.ID, &bf); uerr != nil {
 					msg := uerr.Error()
-					reporter.Log("error", "fix-book-file-paths: UpdateBookFile failed", &msg)
+					slog.Error("fix-book-file-paths: UpdateBookFile failed", "details", msg)
 					continue
 				}
 			}
@@ -58,6 +58,6 @@ func (j *fixBookFilePathsJob) Run(ctx context.Context, store database.Store, rep
 		}
 	}
 	_ = marked
-	reporter.Log("info", "fix-book-file-paths complete", nil)
+	slog.Info("fix-book-file-paths complete")
 	return nil
 }

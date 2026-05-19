@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/backfill_book_files.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000005-0000-0000-0000-000000000005
 // last-edited: 2026-05-01
 
@@ -13,7 +13,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	ulid "github.com/oklog/ulid/v2"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&backfillBookFilesJob{}) }
 
@@ -62,7 +62,7 @@ func (j *backfillBookFilesJob) Run(ctx context.Context, store database.Store, re
 			if !dryRun {
 				if cerr := store.CreateBookFile(bf); cerr != nil {
 					msg := cerr.Error()
-					reporter.Log("error", "failed to create book file", &msg)
+					slog.Error("failed to create book file", "details", msg)
 					continue
 				}
 			}
@@ -70,6 +70,6 @@ func (j *backfillBookFilesJob) Run(ctx context.Context, store database.Store, re
 		}
 	}
 	_ = created
-	reporter.Log("info", "backfill-book-files complete", nil)
+	slog.Info("backfill-book-files complete")
 	return nil
 }
