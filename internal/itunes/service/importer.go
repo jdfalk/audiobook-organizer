@@ -1,5 +1,5 @@
 // file: internal/itunes/service/importer.go
-// version: 1.0.3
+// version: 1.0.4
 // guid: 2b8e5f1a-4c7d-4e9f-b3a0-6d8c2e7a4f1b
 
 package itunesservice
@@ -7,7 +7,7 @@ package itunesservice
 import (
 	"context"
 	"fmt"
-	stdlog "log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -993,7 +993,7 @@ func (imp *Importer) organizeOneBook(book *database.Book, log logger.Logger) err
 func (imp *Importer) applyOrganizedFileMetadata(book *database.Book, newPath string) {
 	hash, err := scanner.ComputeFileHash(newPath)
 	if err != nil {
-		stdlog.Printf("[WARN] failed to compute organized hash for %s: %v", newPath, err)
+		slog.Warn("failed to compute organized hash", "path", newPath, "error", err)
 	} else if hash != "" {
 		book.FileHash = strPtr(hash)
 		book.OrganizedFileHash = strPtr(hash)
@@ -1157,7 +1157,7 @@ func (imp *Importer) buildBookFromAlbumGroup(group albumGroup, libraryPath strin
 	}
 
 	if len(group.tracks) > 1 {
-		stdlog.Printf("iTunes import: grouped %d tracks into album %q", len(group.tracks), title)
+		slog.Info("iTunes import: grouped tracks", "count", len(group.tracks), "album", title)
 	}
 	return book, nil
 }
