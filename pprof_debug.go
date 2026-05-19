@@ -3,16 +3,16 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 )
 
 func init() {
 	go func() {
-		log.Println("[INFO] pprof available at http://localhost:6060/debug/pprof/")
+		slog.Info("pprof available", "addr", "http://localhost:6060/debug/pprof/")
 		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-			log.Printf("[WARN] pprof server failed: %v", err)
+			slog.Warn("pprof server failed", "error", err)
 		}
 	}()
 }

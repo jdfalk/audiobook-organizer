@@ -8,7 +8,6 @@ package logger
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 )
 
@@ -97,13 +96,25 @@ type Logger interface {
 var _ Logger = (*StandardLogger)(nil)
 var _ Logger = (*OperationLogger)(nil)
 
-// logToStdout formats and prints a log line to stdout.
+// logToStdout formats and prints a log line to stdout using slog.
 func logToStdout(subsystem string, level Level, msg string, args ...any) {
 	formatted := fmt.Sprintf(msg, args...)
+	l := slog.Default()
+	msgWithSubsystem := formatted
 	if subsystem != "" {
-		log.Printf("[%s] %s: %s", level.String(), subsystem, formatted)
-	} else {
-		log.Printf("[%s] %s", level.String(), formatted)
+		msgWithSubsystem = fmt.Sprintf("%s: %s", subsystem, formatted)
+	}
+	switch level {
+	case LevelTrace, LevelDebug:
+		l.Debug(msgWithSubsystem)
+	case LevelInfo:
+		l.Info(msgWithSubsystem)
+	case LevelWarn:
+		l.Warn(msgWithSubsystem)
+	case LevelError:
+		l.Error(msgWithSubsystem)
+	default:
+		l.Info(msgWithSubsystem)
 	}
 }
 
