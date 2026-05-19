@@ -1,5 +1,5 @@
 // file: internal/metadata/openlibrary.go
-// version: 1.8.1
+// version: 1.8.2
 // guid: 1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d
 
 package metadata

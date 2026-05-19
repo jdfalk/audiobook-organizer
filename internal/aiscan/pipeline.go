@@ -1,5 +1,5 @@
 // file: internal/aiscan/pipeline.go
-// version: 3.1.1
+// version: 3.1.2
 // guid: b8c4d0e2-5f6a-7b8c-9d0e-1f2a3b4c5d6e
 // last-edited: 2026-05-05
 

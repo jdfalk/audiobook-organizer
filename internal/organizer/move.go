@@ -1,5 +1,5 @@
 // file: internal/organizer/move.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package organizer

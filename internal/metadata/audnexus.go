@@ -1,5 +1,5 @@
 // file: internal/metadata/audnexus.go
-// version: 2.3.1
+// version: 2.3.2
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-a3b4c5d6e7f8
 
 package metadata

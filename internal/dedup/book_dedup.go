@@ -1,5 +1,5 @@
 // file: internal/dedup/book_dedup.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
 
 // Package dedup: book_dedup.go contains the extracted execution logic for the
@@ -9,9 +9,9 @@
 package dedup
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -67,7 +67,7 @@ func ScanBookDuplicates(
 	report(30, "Finding folder-based duplicates...")
 	folderGroups, err := store.GetFolderDuplicates()
 	if err != nil {
-		log.Printf("[WARN] folder dedup failed: %v", err)
+		slog.Warn("folder dedup failed", "error", err)
 		folderGroups = nil
 	}
 
@@ -75,7 +75,7 @@ func ScanBookDuplicates(
 	report(50, "Finding metadata-based duplicates...")
 	metadataGroups, err := store.GetDuplicateBooksByMetadata(0.85)
 	if err != nil {
-		log.Printf("[WARN] metadata dedup failed: %v", err)
+		slog.Warn("metadata dedup failed", "error", err)
 		metadataGroups = nil
 	}
 

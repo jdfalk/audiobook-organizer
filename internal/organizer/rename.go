@@ -1,10 +1,11 @@
 // file: internal/organizer/rename.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 
 package organizer
 
 import (
+	"log/slog"
 	"fmt"
 	"io"
 	"log"
@@ -431,7 +432,7 @@ func (rs *RenameService) copyAndDelete(src, dst string) error {
 
 	// Remove source only after successful copy
 	if err := os.Remove(src); err != nil {
-		log.Printf("[WARN] rename: failed to remove source after copy: %v", err)
+		slog.Warn("rename: failed to remove source after copy", "error", err)
 	}
 	return nil
 }

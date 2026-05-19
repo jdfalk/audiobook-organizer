@@ -1,5 +1,5 @@
 // file: internal/versions/ingest.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 3e1f2a9b-4c5d-4a70-b8c5-3d7e0f1b9a99
 //
 // Version creation on ingest (spec 3.1 task 5).

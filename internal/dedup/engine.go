@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.21.1
+// version: 1.21.2
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-05-18
 
