@@ -1,11 +1,11 @@
 // file: internal/watcher/watcher.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: b2c3d4e5-f6a7-8901-bcde-f23456789012
 
 package watcher
 
 import (
-	"log"
+"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,7 +120,7 @@ func (w *Watcher) addRecursive(root string) error {
 		}
 		if d.IsDir() {
 			if watchErr := w.fsWatcher.Add(path); watchErr != nil {
-				log.Printf("[WARN] watcher: cannot watch %s: %v", path, watchErr)
+    slog.Warn("watcher: cannot watch %s: %v", "path", path, "watchErr", watchErr)
 			}
 		}
 		return nil
@@ -143,7 +143,7 @@ func (w *Watcher) eventLoop() {
 			if !ok {
 				return
 			}
-			log.Printf("[ERROR] watcher: %v", err)
+   slog.Error("watcher: %v", "err", err)
 		}
 	}
 }
@@ -189,7 +189,7 @@ func (w *Watcher) scheduleScan() {
 		w.timer = nil
 		w.mu.Unlock()
 
-		log.Printf("[INFO] watcher: triggering callback for %s", w.rootDir)
+  slog.Info("watcher: triggering callback for %s", "value0", w.rootDir)
 		if w.callback != nil {
 			w.callback(w.rootDir)
 		}

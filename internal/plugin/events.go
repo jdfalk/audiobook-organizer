@@ -1,11 +1,11 @@
 // file: internal/plugin/events.go
-// version: 1.2.0
+// version: 1.2.1
 
 package plugin
 
 import (
 	"context"
-	"log"
+"log/slog"
 	"sync"
 	"time"
 )
@@ -90,11 +90,11 @@ func (b *EventBus) Publish(ctx context.Context, event Event) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("[ERROR] plugin event handler panicked for %s: %v", event.Type, r)
+     slog.Error("plugin event handler panicked for %s: %v", "value0", event.Type, "r", r)
 				}
 			}()
 			if err := h(ctx, event); err != nil {
-				log.Printf("[WARN] plugin event handler error for %s: %v", event.Type, err)
+    slog.Warn("plugin event handler error for %s: %v", "value0", event.Type, "err", err)
 			}
 		}()
 	}

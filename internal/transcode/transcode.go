@@ -1,5 +1,5 @@
 // file: internal/transcode/transcode.go
-// version: 1.5.0
+// version: 1.5.1
 // guid: f8a1b2c3-d4e5-6789-abcd-ef0123456789
 
 package transcode
@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -248,7 +248,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store interface {
 		if !success {
 			for _, f := range tempFiles {
 				if err := os.Remove(f); err == nil {
-					log.Printf("[INFO] transcode: cleaned up temp file: %s", f)
+     slog.Info("transcode: cleaned up temp file: %s", "f", f)
 				}
 			}
 		}
@@ -362,7 +362,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store interface {
 
 		chapterFile, err := BuildChapterMetadata(inputFiles)
 		if err != nil {
-			log.Printf("[WARN] transcode: failed to build chapter metadata, skipping: %v", err)
+   slog.Warn("transcode: failed to build chapter metadata, skipping: %v", "err", err)
 		} else {
 			defer os.Remove(chapterFile)
 
@@ -380,7 +380,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store interface {
 			chapterCmd := exec.CommandContext(ctx, ffmpegPath, chapterArgs...)
 			chOut, err := chapterCmd.CombinedOutput()
 			if err != nil {
-				log.Printf("[WARN] transcode: chapter muxing failed, using unchaptered output: %v\noutput: %s", err, string(chOut))
+    slog.Warn("transcode: chapter muxing failed, using unchaptered output: %v\noutput: %s", "err", err, "value1", string(chOut))
 			} else {
 				os.Remove(tmpOutput)
 				tmpOutput = chapteredOutput
@@ -408,7 +408,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store interface {
 			}
 			coverCmd := exec.CommandContext(ctx, ffmpegPath, coverArgs...)
 			if coverOut, err := coverCmd.CombinedOutput(); err != nil {
-				log.Printf("[WARN] transcode: cover art embedding failed: %v\noutput: %s", err, string(coverOut))
+    slog.Warn("transcode: cover art embedding failed: %v\noutput: %s", "err", err, "value1", string(coverOut))
 			} else {
 				os.Remove(tmpOutput)
 				tmpOutput = coverOutput
@@ -425,7 +425,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store interface {
 	progress.UpdateProgress(5, 5, "Complete")
 	progress.Log("info", fmt.Sprintf("Transcode complete: %s → %s", book.FilePath, outputPath), nil)
 
-	log.Printf("[INFO] transcode: completed %s → %s", book.FilePath, outputPath)
+ slog.Info("transcode: completed %s → %s", "value0", book.FilePath, "outputPath", outputPath)
 	return outputPath, nil
 }
 
@@ -463,7 +463,7 @@ func CleanupStaleTempFiles(rootDir string, maxAge time.Duration) int {
 		if strings.Contains(name, "-transcode.tmp") || strings.HasSuffix(name, ".ch.m4b") {
 			if time.Since(info.ModTime()) > maxAge {
 				if err := os.Remove(path); err == nil {
-					log.Printf("[INFO] transcode: cleaned up stale temp file: %s (age: %s)", path, time.Since(info.ModTime()).Round(time.Minute))
+     slog.Info("transcode: cleaned up stale temp file: %s (age: %s)", "path", path, "value1", time.Since(info.ModTime()).Round(time.Minute))
 					cleaned++
 				}
 			}
@@ -480,13 +480,13 @@ func StartCleanupTicker(rootDir string, interval, maxAge time.Duration) func() {
 	go func() {
 		// Run once immediately on start
 		if n := CleanupStaleTempFiles(rootDir, maxAge); n > 0 {
-			log.Printf("[INFO] transcode: startup cleanup removed %d stale temp files", n)
+   slog.Info("transcode: startup cleanup removed %d stale temp files", "n", n)
 		}
 		for {
 			select {
 			case <-ticker.C:
 				if n := CleanupStaleTempFiles(rootDir, maxAge); n > 0 {
-					log.Printf("[INFO] transcode: periodic cleanup removed %d stale temp files", n)
+     slog.Info("transcode: periodic cleanup removed %d stale temp files", "n", n)
 				}
 			case <-done:
 				ticker.Stop()

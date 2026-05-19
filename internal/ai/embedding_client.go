@@ -1,5 +1,5 @@
 // file: internal/ai/embedding_client.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package ai
@@ -9,7 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
+"log/slog"
 	"os"
 	"time"
 
@@ -127,7 +127,7 @@ func (c *EmbeddingClient) EmbedBatch(ctx context.Context, texts []string) ([][]f
 			vec, err := c.cache.GetCachedEmbedding(hash, c.model)
 			if err != nil {
 				// Cache read failure — treat as miss, log once.
-				log.Printf("[WARN] embedding cache get failed (hash=%s): %v", hash[:8], err)
+    slog.Warn("embedding cache get failed (hash=%s): %v", "value0", hash[:8], "err", err)
 			}
 			if err == nil && vec != nil {
 				results[i] = vec
@@ -147,13 +147,12 @@ func (c *EmbeddingClient) EmbedBatch(ctx context.Context, texts []string) ([][]f
 
 	// All cache hits? Return without touching the API at all.
 	if len(missTexts) == 0 {
-		log.Printf("[DEBUG] embedding cache: %d/%d hits, 0 API calls", hits, len(texts))
+  slog.Debug("embedding cache: %d/%d hits, 0 API calls", "hits", hits, "value1", len(texts))
 		return results, nil
 	}
 
 	if c.cache != nil {
-		log.Printf("[DEBUG] embedding cache: %d/%d hits, %d misses sent to API",
-			hits, len(texts), len(missTexts))
+  slog.Debug("embedding cache: %d/%d hits, %d misses sent to API", "hits", hits, "value1", len(texts), "value2", len(missTexts))
 	}
 
 	apiResults, err := c.rawEmbed(ctx, missTexts)
@@ -173,8 +172,7 @@ func (c *EmbeddingClient) EmbedBatch(ctx context.Context, texts []string) ([][]f
 		if c.cache != nil {
 			hash := TextHash(missTexts[j])
 			if putErr := c.cache.PutCachedEmbedding(hash, c.model, vec); putErr != nil {
-				log.Printf("[WARN] embedding cache put failed (hash=%s): %v",
-					hash[:8], putErr)
+    slog.Warn("embedding cache put failed (hash=%s): %v", "value0", hash[:8], "putErr", putErr)
 			}
 		}
 	}

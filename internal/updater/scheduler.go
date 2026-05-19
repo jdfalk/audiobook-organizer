@@ -1,11 +1,11 @@
 // file: internal/updater/scheduler.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 package updater
 
 import (
-	"log"
+"log/slog"
 	"time"
 )
 
@@ -39,7 +39,7 @@ func NewScheduler(u *Updater, configGetter func() SchedulerConfig) *Scheduler {
 func (s *Scheduler) Start() {
 	cfg := s.config()
 	if !cfg.Enabled {
-		log.Printf("[INFO] Auto-update scheduler disabled")
+  slog.Info("Auto-update scheduler disabled")
 		return
 	}
 
@@ -49,8 +49,7 @@ func (s *Scheduler) Start() {
 	}
 	s.ticker = time.NewTicker(interval)
 
-	log.Printf("[INFO] Auto-update scheduler started: checking every %d minutes on %q channel, window %02d:00-%02d:00",
-		cfg.CheckMins, cfg.Channel, cfg.WindowStart, cfg.WindowEnd)
+ slog.Info("Auto-update scheduler started: checking every %d minutes on %q channel, window %02d:00-%02d:00", "value0", cfg.CheckMins)
 
 	go s.loop()
 }
@@ -61,7 +60,7 @@ func (s *Scheduler) Stop() {
 		s.ticker.Stop()
 	}
 	close(s.stopCh)
-	log.Printf("[INFO] Auto-update scheduler stopped")
+ slog.Info("Auto-update scheduler stopped")
 }
 
 func (s *Scheduler) loop() {
@@ -83,29 +82,27 @@ func (s *Scheduler) tick() {
 
 	info, err := s.updater.CheckForUpdate(cfg.Channel)
 	if err != nil {
-		log.Printf("[WARN] Auto-update check failed: %v", err)
+  slog.Warn("Auto-update check failed: %v", "err", err)
 		return
 	}
 
 	if !info.UpdateAvailable {
-		log.Printf("[DEBUG] Auto-update check: no update available (current=%s, latest=%s)",
-			info.CurrentVersion, info.LatestVersion)
+  slog.Debug("Auto-update check: no update available (current=%s, latest=%s)", "value0", info.CurrentVersion, "value1", info.LatestVersion)
 		return
 	}
 
-	log.Printf("[INFO] Update available: %s -> %s (%s)", info.CurrentVersion, info.LatestVersion, info.Channel)
+ slog.Info("Update available: %s -> %s (%s)", "value0", info.CurrentVersion, "value1", info.LatestVersion, "value2", info.Channel)
 
 	// Check if current hour is within the update window
 	hour := time.Now().Hour()
 	if !inWindow(hour, cfg.WindowStart, cfg.WindowEnd) {
-		log.Printf("[INFO] Update available but outside update window (%02d:00-%02d:00, current hour: %02d)",
-			cfg.WindowStart, cfg.WindowEnd, hour)
+  slog.Info("Update available but outside update window (%02d:00-%02d:00, current hour: %02d)")
 		return
 	}
 
-	log.Printf("[INFO] Applying update within window...")
+ slog.Info("Applying update within window...")
 	if err := s.updater.DownloadAndReplace(info); err != nil {
-		log.Printf("[ERROR] Failed to apply update: %v", err)
+  slog.Error("Failed to apply update: %v", "err", err)
 		return
 	}
 

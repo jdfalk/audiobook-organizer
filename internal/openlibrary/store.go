@@ -1,5 +1,5 @@
 // file: internal/openlibrary/store.go
-// version: 2.3.0
+// version: 2.3.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 
 package openlibrary
@@ -10,7 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+"log/slog"
 	"os"
 	"runtime"
 	"strings"
@@ -33,7 +33,7 @@ func NewOLStore(path string) (*OLStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open OL store: %w", err)
 	}
-	log.Printf("[INFO] OL PebbleDB opened at %s (format version: %s)", path, db.FormatMajorVersion())
+ slog.Info("OL PebbleDB opened at %s (format version: %s)", "path", path, "value1", db.FormatMajorVersion())
 	return &OLStore{db: db}, nil
 }
 
@@ -117,9 +117,9 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 		}
 		if prev.LinesProcessed > 0 && prev.ImportProgress < 1.0 && prev.FileSize == fileSize {
 			skipLines = prev.LinesProcessed
-			log.Printf("[INFO] Resuming %s import from line %d", dumpType, skipLines)
+   slog.Info("Resuming %s import from line %d", "dumpType", dumpType, "skipLines", skipLines)
 		} else if prev.ImportProgress >= 1.0 && prev.FileSize == fileSize {
-			log.Printf("[INFO] %s import already complete (%d records), skipping", dumpType, prev.RecordCount)
+   slog.Info("%s import already complete (%d records), skipping", "dumpType", dumpType, "value1", prev.RecordCount)
 			if progress != nil {
 				progress(int(prev.RecordCount))
 			}
@@ -149,7 +149,7 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 			lineNum++
 			if lineNum <= skipLines {
 				if lineNum%500000 == 0 {
-					log.Printf("[INFO] Skipping %s lines for resume: %d / %d", dumpType, lineNum, skipLines)
+     slog.Info("Skipping %s lines for resume: %d / %d", "dumpType", dumpType, "lineNum", lineNum, "skipLines", skipLines)
 				}
 				continue
 			}

@@ -1,12 +1,12 @@
 // file: internal/plugin/registry.go
-// version: 1.2.0
+// version: 1.2.1
 
 package plugin
 
 import (
 	"context"
 	"fmt"
-	"log"
+"log/slog"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -31,11 +31,11 @@ func Register(p Plugin) {
 	globalRegistry.mu.Lock()
 	defer globalRegistry.mu.Unlock()
 	if _, exists := globalRegistry.plugins[p.ID()]; exists {
-		log.Printf("[WARN] plugin %q already registered, skipping duplicate", p.ID())
+  slog.Warn("plugin %q already registered, skipping duplicate")
 		return
 	}
 	globalRegistry.plugins[p.ID()] = p
-	log.Printf("[INFO] plugin registered: %s (%s) v%s", p.Name(), p.ID(), p.Version())
+ slog.Info("plugin registered: %s (%s) v%s", "value0", p.Name(), "value1", p.ID(), "value2", p.Version())
 }
 
 // Global returns the global registry.
@@ -118,7 +118,7 @@ func (r *Registry) InitAllScoped(ctx context.Context, baseDeps Deps, parentGroup
 	r.initOrder = nil
 	for id, p := range r.plugins {
 		if !r.enabled[id] {
-			log.Printf("[INFO] plugin %s: disabled, skipping init", id)
+   slog.Info("plugin %s: disabled, skipping init", "id", id)
 			continue
 		}
 
@@ -136,7 +136,7 @@ func (r *Registry) InitAllScoped(ctx context.Context, baseDeps Deps, parentGroup
 			return fmt.Errorf("plugin %s init failed: %w", id, err)
 		}
 		r.initOrder = append(r.initOrder, id)
-		log.Printf("[INFO] plugin %s: initialized", id)
+  slog.Info("plugin %s: initialized", "id", id)
 	}
 	return nil
 }
@@ -150,9 +150,9 @@ func (r *Registry) ShutdownAll(ctx context.Context) {
 		id := r.initOrder[i]
 		if p, ok := r.plugins[id]; ok {
 			if err := p.Shutdown(ctx); err != nil {
-				log.Printf("[WARN] plugin %s shutdown error: %v", id, err)
+    slog.Warn("plugin %s shutdown error: %v", "id", id, "err", err)
 			} else {
-				log.Printf("[INFO] plugin %s: shut down", id)
+    slog.Info("plugin %s: shut down", "id", id)
 			}
 		}
 	}

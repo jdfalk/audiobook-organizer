@@ -1,5 +1,5 @@
 // file: internal/ai/aijobs/aijobs.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: 8231e2ae-fa34-4594-80fd-f0f9dc60bc3b
 
 package aijobs
@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+"log/slog"
 	"sync"
 	"time"
 
@@ -146,7 +146,7 @@ func Submit(ctx context.Context, deps Deps, req SubmitRequest) (string, error) {
 	if err := deps.Store.MarkAIJobSubmitted(jobID, batchID); err != nil {
 		return jobID, fmt.Errorf("aijobs.Submit: mark submitted: %w", err)
 	}
-	log.Printf("[INFO] aijobs: submitted job %s type=%s batch=%s items=%d", jobID, req.Type, batchID, req.ItemCount)
+ slog.Info("aijobs: submitted job %s type=%s batch=%s items=%d", "jobID", jobID, "value1", req.Type, "batchID", batchID, "value3", req.ItemCount)
 	return jobID, nil
 }
 
@@ -199,6 +199,6 @@ func Dispatch(ctx context.Context, store database.AIJobsStore, batchID string, r
 	if err := store.MarkAIJobCompleted(job.ID, status, successCount, errorCount, rowErrors); err != nil {
 		return fmt.Errorf("aijobs.Dispatch: mark completed: %w", err)
 	}
-	log.Printf("[INFO] aijobs: dispatched job %s type=%s success=%d errors=%d", job.ID, job.Type, successCount, errorCount)
+ slog.Info("aijobs: dispatched job %s type=%s success=%d errors=%d", "value0", job.ID, "value1", job.Type, "successCount", successCount, "errorCount", errorCount)
 	return nil
 }

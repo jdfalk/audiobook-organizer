@@ -1,12 +1,12 @@
 // file: internal/sweep/sweeper.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-4789-abcd-ef2345678901
 
 package sweep
 
 import (
 	"fmt"
-	"log"
+"log/slog"
 	"os"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -43,7 +43,7 @@ func SweepTombstones(store database.BookStore) (*SweeperResult, error) {
 
 		if existing != nil {
 			// Book still exists — purge didn't complete. Delete the orphan tombstone.
-			log.Printf("[INFO] sweeper: tombstone %s has live book record, removing tombstone", tomb.ID)
+   slog.Info("sweeper: tombstone %s has live book record, removing tombstone", "value0", tomb.ID)
 			_ = store.DeleteBookTombstone(tomb.ID)
 			result.TombstonesCleaned++
 			continue
@@ -57,7 +57,7 @@ func SweepTombstones(store database.BookStore) (*SweeperResult, error) {
 					result.Errors = append(result.Errors, fmt.Sprintf("tombstone %s: failed to delete orphaned file %s: %v", tomb.ID, tomb.FilePath, err))
 					continue
 				}
-				log.Printf("[INFO] sweeper: deleted orphaned file %s (tombstone %s)", tomb.FilePath, tomb.ID)
+    slog.Info("sweeper: deleted orphaned file %s (tombstone %s)", "value0", tomb.FilePath, "value1", tomb.ID)
 			}
 			// File gone or just deleted — clean up tombstone
 		}
@@ -95,6 +95,6 @@ func AuditFileConsistency(store database.BookStore) (*SweeperResult, error) {
 		}
 	}
 
-	log.Printf("[INFO] sweeper: audit complete — %d books checked, %d missing files", len(books), len(result.MissingFiles))
+ slog.Info("sweeper: audit complete — %d books checked, %d missing files", "value0", len(books), "value1", len(result.MissingFiles))
 	return result, nil
 }

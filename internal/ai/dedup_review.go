@@ -1,5 +1,5 @@
 // file: internal/ai/dedup_review.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: b2e7c3d1-4a58-4f96-9e0b-7d3a1c8f5b24
 
 package ai
@@ -8,8 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-
+"log/slog"
 	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
@@ -175,7 +174,7 @@ func dedupReviewCallback(ctx context.Context, itemsJSON []byte, results []aijobs
 	for pairIdx, candID := range payload.ByIndex {
 		c, ok := dedupVerdictApplier.LookupCandidate(candID)
 		if !ok {
-			log.Printf("dedup_review: candidate %d (pair %d) not found — skipping", candID, pairIdx)
+   slog.Info("dedup_review: candidate %d (pair %d) not found — skipping", "candID", candID, "pairIdx", pairIdx)
 			continue
 		}
 		byIndex[pairIdx] = c
@@ -216,7 +215,7 @@ func dedupReviewCallback(ctx context.Context, itemsJSON []byte, results []aijobs
 	}
 
 	applied := dedupVerdictApplier.ApplyVerdicts(allVerdicts, byIndex)
-	log.Printf("[INFO] dedup_review callback: applied %d verdicts (from %d successful rows, %d errors)", applied, successCount, errorCount)
+ slog.Info("dedup_review callback: applied %d verdicts (from %d successful rows, %d errors)", "applied", applied, "successCount", successCount, "errorCount", errorCount)
 
 	return successCount, errorCount, rowErrors, nil
 }
