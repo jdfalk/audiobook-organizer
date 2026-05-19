@@ -6,7 +6,7 @@ package organizer
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -67,15 +67,15 @@ func MoveBookFile(store database.Store, bookID, oldPath, newPath string, extraUp
 
 	if _, err := store.UpdateBook(bookID, update); err != nil {
 		// ROLLBACK: Move file back to original location
-		log.Printf("[ERROR] file_move: DB update failed for %s, rolling back file move: %v", bookID, err)
+		slog.Error("file_move: DB update failed for %s, rolling back file move: %v", bookID, err)
 		if rbErr := os.Rename(newPath, oldPath); rbErr != nil {
 			// Critical: file is at new location but DB points to old location
-			log.Printf("[CRITICAL] file_move: rollback failed! File at %s, DB expects %s: %v", newPath, oldPath, rbErr)
+			slog.Error("file_move: rollback failed! File at %s, DB expects %s: %v", newPath, oldPath, rbErr)
 			return fmt.Errorf("DB update failed and rollback failed: file at %s, DB expects %s: %w", newPath, oldPath, err)
 		}
 		return fmt.Errorf("DB update failed (file rolled back): %w", err)
 	}
 
-	log.Printf("[INFO] file_move: moved %s → %s for book %s", oldPath, newPath, bookID)
+	slog.Info("file_move: moved %s → %s for book %s", oldPath, newPath, bookID)
 	return nil
 }

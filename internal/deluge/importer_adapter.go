@@ -13,7 +13,7 @@ package deluge
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -57,7 +57,7 @@ func (a *LibraryImporterAdapter) ImportPath(ctx context.Context, srcPath string)
 		// File is protected but has no DB record yet. This can happen during
 		// scan/ingest before the record is committed. Log and skip — the write
 		// proceeds in-place rather than failing the entire operation.
-		log.Printf("[WARN] LibraryImporterAdapter: no BookFile record found for protected path %s; writing in-place", srcPath)
+		slog.Warn("LibraryImporterAdapter: no BookFile record found for protected path %s; writing in-place", srcPath)
 		return srcPath, nil
 	}
 

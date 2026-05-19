@@ -10,10 +10,9 @@
 package scheduler
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -119,7 +118,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 			// Transcode requires specific params — cannot be triggered from the scheduler
 			// without book_id. Mark the operation as failed immediately.
 			_ = store.UpdateOperationError(op.ID, "transcode requires parameters — use the operations API directly")
-			log.Printf("[WARN] transcode task triggered from scheduler (%s) without params — use the operations API", source)
+			slog.Warn("transcode task triggered from scheduler (%s) without params — use the operations API", source)
 			return op, nil
 		},
 		IsEnabled:              func() bool { return true },
@@ -669,7 +668,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				slog.Warn("batch_poller", "error", err)
 			}
 			if processed > 0 {
-				log.Printf("[INFO] batch_poller: processed %d completed batches", processed)
+				slog.Info("batch_poller: processed %d completed batches", processed)
 			}
 			return nil, nil
 		},

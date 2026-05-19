@@ -7,7 +7,7 @@ package metadata
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -85,13 +85,13 @@ func (cb *CircuitBreaker) RecordFailure() {
 
 	if cb.state == StateHalfOpen {
 		cb.state = StateOpen
-		log.Printf("[WARN] circuit breaker: %s probe failed, reopened", cb.sourceName)
+		slog.Warn("circuit breaker: %s probe failed, reopened", cb.sourceName)
 		return
 	}
 
 	if cb.failures >= cb.threshold {
 		cb.state = StateOpen
-		log.Printf("[WARN] circuit breaker: %s opened after %d consecutive failures", cb.sourceName, cb.failures)
+		slog.Warn("circuit breaker: %s opened after %d consecutive failures", cb.sourceName, cb.failures)
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	json "encoding/json/v2"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -226,9 +226,9 @@ func (c *AudibleClient) searchCatalog(ctx context.Context, searchURL string) ([]
 	// the query string the caller used. Callers that care about the
 	// count log it themselves with the query context.
 	if len(catalog.Products) == 0 {
-		log.Printf("[DEBUG] audible: searchCatalog returned 0 products for %s", searchURL)
+		slog.Debug("audible: searchCatalog returned 0 products for %s", searchURL)
 	} else {
-		log.Printf("[DEBUG] audible: searchCatalog returned %d products for %s", len(catalog.Products), searchURL)
+		slog.Debug("audible: searchCatalog returned %d products for %s", len(catalog.Products), searchURL)
 	}
 
 	results := make([]BookMetadata, 0, len(catalog.Products))

@@ -18,7 +18,7 @@ package itunesservice
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -136,7 +136,7 @@ func (p *TrackProvisioner) Provision(book *database.Book, bookFile *database.Boo
 		})
 	}
 
-	log.Printf("[INFO] Provisioned ITL track: book=%s pid=%s path=%s", book.ID, pid, itunesPath)
+	slog.Info("Provisioned ITL track: book=%s pid=%s path=%s", book.ID, pid, itunesPath)
 	return nil
 }
 
@@ -151,7 +151,7 @@ func (p *TrackProvisioner) ProvisionAll(book *database.Book) error {
 	}
 	for i := range files {
 		if err := p.Provision(book, &files[i]); err != nil {
-			log.Printf("[WARN] Failed to provision ITL track for file %s: %v", files[i].ID, err)
+			slog.Warn("Failed to provision ITL track for file %s: %v", files[i].ID, err)
 		}
 	}
 	return nil

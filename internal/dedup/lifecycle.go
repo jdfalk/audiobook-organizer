@@ -14,7 +14,7 @@ package dedup
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -58,25 +58,25 @@ func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) er
 	// Step 1 — event bus subscription
 	if bus, ok := serviceregistry.TryGet[*plugin.EventBus](c, "eventbus"); ok && bus != nil {
 		bus.Subscribe(plugin.EventBookImported, de.onBookImported)
-		log.Printf("[dedup] PostInit: subscribed to EventBookImported")
+		slog.Info("[dedup] PostInit: subscribed to EventBookImported")
 	} else {
-		log.Printf("[dedup] PostInit: eventbus not available, skipping dedup-on-import subscription")
+		slog.Info("[dedup] PostInit: eventbus not available, skipping dedup-on-import subscription")
 	}
 
 	// Step 2 — chromem store + hydrate
 	if chromemStore, ok := serviceregistry.TryGet[*database.ChromemEmbeddingStore](c, "chromemstore"); ok && chromemStore != nil {
 		de.SetChromemStore(chromemStore)
-		log.Println("[INFO] chromem-go ANN store active for dedup Layer 2")
+		slog.Info("[INFO] chromem-go ANN store active for dedup Layer 2")
 		// Hydrate asynchronously on the engine's bg-context.
 		go func() {
 			hCtx, cancel := context.WithTimeout(bgCtx, 30*time.Minute)
 			defer cancel()
 			books, authors, err := de.HydrateChromem(hCtx)
 			if err != nil {
-				log.Printf("[WARN] chromem hydrate finished with error: %v (books=%d authors=%d)", err, books, authors)
+				slog.Warn("chromem hydrate finished with error: %v (books=%d authors=%d)", err, books, authors)
 				return
 			}
-			log.Printf("[INFO] chromem hydrate complete: books=%d authors=%d", books, authors)
+			slog.Info("chromem hydrate complete: books=%d authors=%d", books, authors)
 		}()
 	}
 
@@ -84,7 +84,7 @@ func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) er
 	if jobs, ok := serviceregistry.TryGet[database.AIJobsStore](c, "aijobsstore"); ok && jobs != nil {
 		de.SetAIJobsStore(jobs)
 		ai.SetDedupVerdictApplier(de)
-		log.Println("[INFO] Dedup async review (aijobs) wired")
+		slog.Info("[INFO] Dedup async review (aijobs) wired")
 	}
 
 	return nil
@@ -106,7 +106,7 @@ func (de *Engine) onBookImported(_ context.Context, evt plugin.Event) error {
 		bgCtx = context.Background()
 	}
 	if _, err := de.CheckBook(bgCtx, evt.BookID); err != nil {
-		log.Printf("[WARN] dedup-on-import CheckBook(%s): %v", evt.BookID, err)
+		slog.Warn("dedup-on-import CheckBook(%s): %v", evt.BookID, err)
 	}
 	return nil
 }

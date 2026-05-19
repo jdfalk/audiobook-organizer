@@ -23,7 +23,7 @@ package itunesservice
 
 import (
 	"github.com/jdfalk/audiobook-organizer/internal/readstatus"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -71,7 +71,7 @@ func (p *PositionSync) Sync() (pulled, pushed int) {
 func (p *PositionSync) pullBookmarks() int {
 	books, err := p.store.GetAllBooks(0, 0)
 	if err != nil {
-		log.Printf("[WARN] itunes position sync: list books: %v", err)
+		slog.Warn("itunes position sync: list books: %v", err)
 		return 0
 	}
 
@@ -98,13 +98,13 @@ func (p *PositionSync) pullBookmarks() int {
 
 		bookmarkSeconds := float64(*book.ITunesBookmark) / 1000.0
 		if err := p.store.SetUserPosition(adminUserID, book.ID, segmentID, bookmarkSeconds); err != nil {
-			log.Printf("[WARN] seed position for %s: %v", book.ID, err)
+			slog.Warn("seed position for %s: %v", book.ID, err)
 			continue
 		}
 
 		// Recompute the derived book state from the seeded position.
 		if _, err := readstatus.RecomputeUserBookState(p.store, adminUserID, book.ID); err != nil {
-			log.Printf("[WARN] recompute state for %s after bookmark seed: %v", book.ID, err)
+			slog.Warn("recompute state for %s after bookmark seed: %v", book.ID, err)
 		}
 		seeded++
 	}
@@ -119,7 +119,7 @@ func (p *PositionSync) pullBookmarks() int {
 			continue
 		}
 		if _, err := readstatus.SetManualStatus(p.store, adminUserID, book.ID, database.UserBookStatusFinished); err != nil {
-			log.Printf("[WARN] seed finished for %s: %v", book.ID, err)
+			slog.Warn("seed finished for %s: %v", book.ID, err)
 			continue
 		}
 		seeded++
@@ -141,7 +141,7 @@ func (p *PositionSync) pushPositions() int {
 	cutoff := time.Now().Add(-24 * time.Hour)
 	positions, err := p.store.ListUserPositionsSince(adminUserID, cutoff)
 	if err != nil {
-		log.Printf("[WARN] itunes position push: list positions: %v", err)
+		slog.Warn("itunes position push: list positions: %v", err)
 		return 0
 	}
 
@@ -166,7 +166,7 @@ func (p *PositionSync) pushPositions() int {
 		bookmarkMs := int64(pos.PositionSeconds * 1000)
 		book.ITunesBookmark = &bookmarkMs
 		if _, err := p.store.UpdateBook(book.ID, book); err != nil {
-			log.Printf("[WARN] update bookmark for %s: %v", book.ID, err)
+			slog.Warn("update bookmark for %s: %v", book.ID, err)
 			continue
 		}
 		p.enqueuer.Enqueue(book.ID)
@@ -185,7 +185,7 @@ func (p *PositionSync) pushPositions() int {
 			book.ITunesPlayCount = &newPC
 			book.ITunesLastPlayed = &now
 			if _, err := p.store.UpdateBook(book.ID, book); err != nil {
-				log.Printf("[WARN] bump play count for %s: %v", book.ID, err)
+				slog.Warn("bump play count for %s: %v", book.ID, err)
 			}
 		}
 	}

@@ -8,7 +8,7 @@ import (
 	"context"
 	json "encoding/json/v2"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -146,7 +146,7 @@ func (c *OpenLibraryClient) SearchByTitle(ctx context.Context, title string) ([]
 			for i := range editions {
 				results = append(results, editionToMetadata(&editions[i], c.olStore))
 			}
-			log.Printf("[DEBUG] SearchByTitle: found %d results from local dump for %q", len(results), title)
+			slog.Debug("SearchByTitle: found %d results from local dump for %q", len(results), title)
 			return results, nil
 		}
 	}
@@ -280,7 +280,7 @@ func (c *OpenLibraryClient) GetBookByISBN(ctx context.Context, isbn string) (*Bo
 		ed, err := c.olStore.LookupByISBN(isbn)
 		if err == nil && ed != nil {
 			meta := editionToMetadata(ed, c.olStore)
-			log.Printf("[DEBUG] GetBookByISBN: found ISBN %s in local dump", isbn)
+			slog.Debug("GetBookByISBN: found ISBN %s in local dump", isbn)
 			return &meta, nil
 		}
 	}

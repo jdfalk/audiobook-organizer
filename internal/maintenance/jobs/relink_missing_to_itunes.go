@@ -8,7 +8,7 @@ package jobs
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,7 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/util"
-	"log/slog")
+)
 
 func init() { maintenance.Register(&relinkMissingToITunesJob{}) }
 
@@ -108,7 +108,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		case 1:
 			newFP := filepath.Clean(matches[0])
 			if !util.WithinRoot(newFP, iTunesRoot) {
-				log.Printf("[WARN] relink-missing-to-itunes: match %q outside iTunesRoot, skipping", newFP)
+				slog.Warn("relink-missing-to-itunes: match %q outside iTunesRoot, skipping", newFP)
 				unresolved++
 				break
 			}
@@ -117,7 +117,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 				fi, _ := os.Stat(newFP)
 				book.FilePath = newFP
 				if _, upErr := store.UpdateBook(book.ID, book); upErr != nil {
-					log.Printf("[WARN] relink-missing-to-itunes: UpdateBook %s: %v", book.ID, upErr)
+					slog.Warn("relink-missing-to-itunes: UpdateBook %s: %v", book.ID, upErr)
 					relinked--
 					unresolved++
 					break
@@ -132,7 +132,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 			if best != "" {
 				best = filepath.Clean(best)
 				if !util.WithinRoot(best, iTunesRoot) {
-					log.Printf("[WARN] relink-missing-to-itunes: best match %q outside iTunesRoot, skipping", best)
+					slog.Warn("relink-missing-to-itunes: best match %q outside iTunesRoot, skipping", best)
 					unresolved++
 					break
 				}
@@ -141,7 +141,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 					fi, _ := os.Stat(best)
 					book.FilePath = best
 					if _, upErr := store.UpdateBook(book.ID, book); upErr != nil {
-						log.Printf("[WARN] relink-missing-to-itunes: UpdateBook %s: %v", book.ID, upErr)
+						slog.Warn("relink-missing-to-itunes: UpdateBook %s: %v", book.ID, upErr)
 						relinked--
 						unresolved++
 						break
@@ -157,7 +157,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		}
 	}
 
-	log.Printf("[INFO] relink-missing-to-itunes: relinked=%d ambiguous=%d unresolved=%d skipped=%d",
+	slog.Info("relink-missing-to-itunes: relinked=%d ambiguous=%d unresolved=%d skipped=%d",
 		relinked, ambiguous, unresolved, skipped)
 	slog.Info(fmt.Sprintf("relinked=%d ambiguous=%d unresolved=%d skipped=%d", relinked, ambiguous, unresolved, skipped))
 	return nil

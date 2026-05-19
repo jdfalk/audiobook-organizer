@@ -12,7 +12,7 @@ package deluge
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -51,7 +51,7 @@ func ImportToLibrary(
 
 	// Idempotency guard: already imported.
 	if bookFile.ImportedFromDelugeAt != nil {
-		log.Printf("[INFO] ImportToLibrary: %s already imported at %s, skipping",
+		slog.Info("ImportToLibrary: %s already imported at %s, skipping",
 			bookFile.FilePath, bookFile.ImportedFromDelugeAt.Format(time.RFC3339))
 		return bookFile.FilePath, nil
 	}
@@ -85,7 +85,7 @@ func ImportToLibrary(
 
 	// Do not copy if source and destination are the same path.
 	if src == dest {
-		log.Printf("[INFO] ImportToLibrary: source and dest are the same (%s), skipping copy", src)
+		slog.Info("ImportToLibrary: source and dest are the same (%s), skipping copy", src)
 		return src, nil
 	}
 
@@ -99,7 +99,7 @@ func ImportToLibrary(
 	// Falls back to io.Copy on any error.
 	copyErr := reflinkCopy(src, dest)
 	if copyErr != nil {
-		log.Printf("[DEBUG] ImportToLibrary: reflink failed (%v), falling back to io.Copy", copyErr)
+		slog.Debug("ImportToLibrary: reflink failed (%v), falling back to io.Copy", copyErr)
 		if err := ioCopy(src, dest); err != nil {
 			return "", fmt.Errorf("ImportToLibrary: copy %s -> %s: %w", src, dest, err)
 		}
@@ -117,17 +117,17 @@ func ImportToLibrary(
 		return dest, fmt.Errorf("ImportToLibrary: UpdateBookFile %s: %w", bookFile.ID, err)
 	}
 
-	log.Printf("[INFO] ImportToLibrary: copied %s -> %s", src, dest)
+	slog.Info("ImportToLibrary: copied %s -> %s", src, dest)
 
 	// Best-effort: tell Deluge to move the torrent storage.
 	if cfg.DelugeMoveEnabled && bookFile.DelugeHash != "" && delugeClient != nil {
 		moveErr := delugeClient.MoveStorage([]string{bookFile.DelugeHash}, filepath.Dir(dest))
 		if moveErr != nil {
-			log.Printf("[WARN] ImportToLibrary: MoveStorage for hash %s failed (non-fatal): %v",
+			slog.Warn("ImportToLibrary: MoveStorage for hash %s failed (non-fatal): %v",
 				bookFile.DelugeHash, moveErr)
 			// Do NOT return this error. MoveStorage is best-effort.
 		} else {
-			log.Printf("[INFO] ImportToLibrary: MoveStorage for hash %s -> %s succeeded",
+			slog.Info("ImportToLibrary: MoveStorage for hash %s -> %s succeeded",
 				bookFile.DelugeHash, filepath.Dir(dest))
 		}
 	}

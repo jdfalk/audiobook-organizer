@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
@@ -21,7 +21,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"log/slog")
+)
 
 func init() { maintenance.Register(&bulkFetchMetadataJob{}) }
 
@@ -129,7 +129,7 @@ func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, re
 
 	totalBooks := len(existingResults) + len(work)
 	alreadyDone := len(existingResults)
-	log.Printf("[INFO] bulk-fetch-metadata %s: %d books total, %d already cached, %d to fetch",
+	slog.Info("bulk-fetch-metadata %s: %d books total, %d already cached, %d to fetch",
 		opID, totalBooks, alreadyDone, len(work))
 
 	reporter.SetTotal(totalBooks)
@@ -235,7 +235,7 @@ func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, re
 	}
 
 	finalCount := atomic.LoadInt64(&completed)
-	log.Printf("[INFO] bulk-fetch-metadata %s: done %d books — cached:%d not_found:%d",
+	slog.Info("bulk-fetch-metadata %s: done %d books — cached:%d not_found:%d",
 		opID, finalCount, found, notFound)
 	slog.Info(fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
 	return nil
@@ -283,12 +283,12 @@ func bmf_buildSourceChain() []metadata.MetadataSource {
 			if token != "" {
 				rawSource = metadata.NewHardcoverClient(token)
 			} else {
-				log.Printf("[WARN] Hardcover source enabled but no API token configured")
+				slog.Warn("Hardcover source enabled but no API token configured")
 			}
 		case "wikipedia":
 			rawSource = metadata.NewWikipediaClient()
 		default:
-			log.Printf("[WARN] Unknown metadata source: %s", src.ID)
+			slog.Warn("Unknown metadata source: %s", src.ID)
 		}
 		if rawSource != nil {
 			chain = append(chain, metadata.NewProtectedSource(rawSource, 5, 30*time.Second))

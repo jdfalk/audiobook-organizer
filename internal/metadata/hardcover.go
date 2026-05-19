@@ -9,7 +9,7 @@ import (
 	"context"
 	json "encoding/json/v2"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -272,7 +272,7 @@ func (c *HardcoverClient) search(ctx context.Context, query string) ([]BookMetad
 		// so a schema change surfaces clearly instead of producing
 		// silently-empty results.
 		for _, e := range gqlResp.Errors {
-			log.Printf("[WARN] Hardcover GraphQL error: %s", e.Message)
+			slog.Warn("Hardcover GraphQL error: %s", e.Message)
 		}
 		return nil, fmt.Errorf("hardcover GraphQL error: %s", gqlResp.Errors[0].Message)
 	}

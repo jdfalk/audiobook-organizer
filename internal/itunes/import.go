@@ -8,7 +8,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -223,7 +223,7 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 		DuplicateHashes: make(map[string][]string),
 	}
 
-	log.Printf("iTunes validate: parsed %d total tracks, filtering audiobooks...", len(library.Tracks))
+	slog.Info("iTunes validate: parsed %d total tracks, filtering audiobooks...", len(library.Tracks))
 
 	// Pass 1: Filter audiobooks and decode paths (fast, single-threaded)
 	var checks []trackCheck
@@ -256,7 +256,7 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 	result.AudiobookCount = len(uniqueAlbums)
 
 	debugLog := config.AppConfig.LogLevel == "debug"
-	log.Printf("iTunes validate: %d audiobook tracks (%d unique books) found, checking file existence with 32 workers (debug=%v)...", len(checks), result.AudiobookCount, debugLog)
+	slog.Debug("iTunes validate: %d audiobook tracks (%d unique books) found, checking file existence with 32 workers (debug=%v)...", len(checks), result.AudiobookCount, debugLog)
 
 	// Pass 2: Parallel os.Stat checks
 	type statResult struct {
@@ -278,7 +278,7 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 				tc := checks[idx]
 				if !tc.decodeOK {
 					if debugLog {
-						log.Printf("  [%d] DECODE_ERR: %q (raw: %s)", idx, tc.name, tc.rawLoc)
+						slog.Info("  [%d] DECODE_ERR: %q (raw: %s)", idx, tc.name, tc.rawLoc)
 					}
 					results <- statResult{idx: idx, found: false}
 					continue
@@ -287,9 +287,9 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 				found := err == nil
 				if debugLog {
 					if found {
-						log.Printf("  [%d] FOUND: %q → %s", idx, tc.name, tc.path)
+						slog.Info("  [%d] FOUND: %q → %s", idx, tc.name, tc.path)
 					} else {
-						log.Printf("  [%d] MISSING: %q → %s", idx, tc.name, tc.path)
+						slog.Info("  [%d] MISSING: %q → %s", idx, tc.name, tc.path)
 					}
 				}
 				results <- statResult{idx: idx, found: found}
@@ -314,7 +314,7 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 	for sr := range results {
 		processed++
 		if processed%10000 == 0 {
-			log.Printf("iTunes validate: checked %d/%d audiobooks (%d found, %d missing)...",
+			slog.Info("iTunes validate: checked %d/%d audiobooks (%d found, %d missing)...",
 				processed, len(checks), result.FilesFound, result.FilesMissing)
 		}
 		tc := checks[sr.idx]
@@ -324,7 +324,7 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 		} else if sr.found {
 			result.FilesFound++
 			if firstFound {
-				log.Printf("iTunes validate: first file found: %q (%s)", tc.name, tc.path)
+				slog.Info("iTunes validate: first file found: %q (%s)", tc.name, tc.path)
 				firstFound = false
 			}
 		} else {

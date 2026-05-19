@@ -6,7 +6,7 @@ package itunes
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -41,13 +41,13 @@ func BackfillExternalIDs(ctx context.Context, store ExternalIDBackfillStore) err
 
 	// Check if backfill has already been performed (v4 = includes BookFile-level PIDs)
 	// Note: in actual usage, would need to check via store.GetSetting
-	log.Printf("[INFO] Starting external ID backfill v4...")
+	slog.Info("Starting external ID backfill v4...")
 
 	offset := 0
 	backfilled := 0
 	for {
 		if err := ctx.Err(); err != nil {
-			log.Printf("[INFO] external ID backfill canceled at offset %d after %d mappings: %v", offset, backfilled, err)
+			slog.Info("external ID backfill canceled at offset %d after %d mappings: %v", offset, backfilled, err)
 			return nil
 		}
 		books, err := store.GetAllBooks(10000, offset)
@@ -56,7 +56,7 @@ func BackfillExternalIDs(ctx context.Context, store ExternalIDBackfillStore) err
 		}
 		for _, book := range books {
 			if err := ctx.Err(); err != nil {
-				log.Printf("[INFO] external ID backfill canceled mid-batch after %d mappings: %v", backfilled, err)
+				slog.Info("external ID backfill canceled mid-batch after %d mappings: %v", backfilled, err)
 				return nil
 			}
 			// Book-level PID
@@ -91,21 +91,21 @@ func BackfillExternalIDs(ctx context.Context, store ExternalIDBackfillStore) err
 	}
 
 	if err := ctx.Err(); err != nil {
-		log.Printf("[INFO] external ID backfill canceled before track-PID pass: %v", err)
+		slog.Info("external ID backfill canceled before track-PID pass: %v", err)
 		return nil
 	}
-	log.Printf("[INFO] Backfilled %d external ID mappings from book + file records", backfilled)
+	slog.Info("Backfilled %d external ID mappings from book + file records", backfilled)
 
 	// Backfill ALL track-level PIDs from the iTunes XML
 	itunesBackfilled, _ := BackfillITunesTrackPIDs(ctx, store)
 	if itunesBackfilled > 0 {
-		log.Printf("[INFO] Backfilled %d track-level PIDs from iTunes XML", itunesBackfilled)
+		slog.Info("Backfilled %d track-level PIDs from iTunes XML", itunesBackfilled)
 	}
 
 	// Only mark as done AFTER everything completes successfully (and not canceled)
 	if err := ctx.Err(); err == nil {
 		_ = store.SetSetting("external_id_backfill_v4_done", "true", "bool", false)
-		log.Printf("[INFO] External ID backfill v4 complete")
+		slog.Info("External ID backfill v4 complete")
 	}
 	return nil
 }
@@ -122,17 +122,17 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 	}
 	xmlPath := config.AppConfig.ITunesLibraryReadPath
 	if xmlPath == "" {
-		log.Printf("[INFO] BackfillITunesTrackPIDs: no iTunes XML path configured, skipping")
+		slog.Info("BackfillITunesTrackPIDs: no iTunes XML path configured, skipping")
 		return 0, nil
 	}
 
-	log.Printf("[INFO] BackfillITunesTrackPIDs: parsing iTunes XML at %s", xmlPath)
+	slog.Info("BackfillITunesTrackPIDs: parsing iTunes XML at %s", xmlPath)
 	lib, err := ParseLibrary(xmlPath)
 	if err != nil {
-		log.Printf("[WARN] BackfillITunesTrackPIDs: failed to parse iTunes XML: %v", err)
+		slog.Warn("BackfillITunesTrackPIDs: failed to parse iTunes XML: %v", err)
 		return 0, err
 	}
-	log.Printf("[INFO] BackfillITunesTrackPIDs: parsed %d tracks", len(lib.Tracks))
+	slog.Info("BackfillITunesTrackPIDs: parsed %d tracks", len(lib.Tracks))
 
 	// Group tracks by album
 	type albumGroup struct {
@@ -160,14 +160,14 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 	}
 
 	// Build PID→book_id index from existing books
-	log.Printf("[INFO] BackfillITunesTrackPIDs: loading book index...")
+	slog.Info("BackfillITunesTrackPIDs: loading book index...")
 	pidToBook := make(map[string]string)
 	titleToBook := make(map[string]string) // lowercase title → book_id
 	totalBooks := 0
 	offset := 0
 	for {
 		if err := ctx.Err(); err != nil {
-			log.Printf("[INFO] BackfillITunesTrackPIDs canceled mid-index at offset %d", offset)
+			slog.Info("BackfillITunesTrackPIDs canceled mid-index at offset %d", offset)
 			return 0, nil
 		}
 		books, err := store.GetAllBooks(10000, offset)
@@ -183,7 +183,7 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 		totalBooks += len(books)
 		offset += 10000
 	}
-	log.Printf("[INFO] BackfillITunesTrackPIDs: loaded %d books (%d PIDs, %d titles)", totalBooks, len(pidToBook), len(titleToBook))
+	slog.Info("BackfillITunesTrackPIDs: loaded %d books (%d PIDs, %d titles)", totalBooks, len(pidToBook), len(titleToBook))
 
 	// For each album, find our book and register all track PIDs
 	registered := 0
@@ -191,7 +191,7 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 
 	for _, ag := range albums {
 		if err := ctx.Err(); err != nil {
-			log.Printf("[INFO] BackfillITunesTrackPIDs canceled mid-album pass after %d PIDs", registered)
+			slog.Info("BackfillITunesTrackPIDs canceled mid-album pass after %d PIDs", registered)
 			return registered, nil
 		}
 		// Find our book: match by any track PID first, then by title

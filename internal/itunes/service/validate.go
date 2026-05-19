@@ -7,7 +7,7 @@ package itunesservice
 import (
 	"errors"
 	"fmt"
-	stdlog "log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -25,7 +25,7 @@ func Validate(req ValidateRequest) (ValidateResponse, error) {
 		return ValidateResponse{}, ErrLibraryNotFound
 	}
 
-	stdlog.Printf("iTunes validate: library=%s, mappings=%d", req.LibraryPath, len(req.PathMappings))
+	slog.Info("iTunes validate: library=%s, mappings=%d", req.LibraryPath, len(req.PathMappings))
 
 	mappings := make([]itunes.PathMapping, len(req.PathMappings))
 	for i, m := range req.PathMappings {
@@ -55,7 +55,7 @@ func Validate(req ValidateRequest) (ValidateResponse, error) {
 		missingPaths = missingPaths[:100]
 	}
 
-	stdlog.Printf("iTunes validate complete: %d audiobooks, %d found, %d missing, prefixes=%v",
+	slog.Info("iTunes validate complete: %d audiobooks, %d found, %d missing, prefixes=%v",
 		result.AudiobookTracks, result.FilesFound, result.FilesMissing, result.PathPrefixes)
 
 	return ValidateResponse{
@@ -79,7 +79,7 @@ func TestMapping(req TestMappingRequest) (TestMappingResponse, error) {
 		return TestMappingResponse{}, fmt.Errorf("failed to parse library: %w", err)
 	}
 
-	stdlog.Printf("iTunes test-mapping: from=%q to=%q", req.From, req.To)
+	slog.Info("iTunes test-mapping: from=%q to=%q", req.From, req.To)
 	mapping := itunes.PathMapping{From: req.From, To: req.To}
 	opts := itunes.ImportOptions{PathMappings: []itunes.PathMapping{mapping}}
 
@@ -99,12 +99,12 @@ func TestMapping(req TestMappingRequest) (TestMappingResponse, error) {
 		location := opts.RemapPath(track.Location)
 		path, err := itunes.DecodeLocation(location)
 		if err != nil {
-			stdlog.Printf("  [%d/20] decode error for %q: %v", response.Tested, track.Name, err)
+			slog.Info("  [%d/20] decode error for %q: %v", response.Tested, track.Name, err)
 			continue
 		}
 		if _, err := os.Stat(path); err == nil {
 			response.Found++
-			stdlog.Printf("  [%d/20] FOUND: %q → %s", response.Tested, track.Name, path)
+			slog.Info("  [%d/20] FOUND: %q → %s", response.Tested, track.Name, path)
 			if len(response.Examples) < 3 {
 				response.Examples = append(response.Examples, TestMappingItem{
 					Title: track.Name,
@@ -112,10 +112,10 @@ func TestMapping(req TestMappingRequest) (TestMappingResponse, error) {
 				})
 			}
 		} else {
-			stdlog.Printf("  [%d/20] MISSING: %q → %s", response.Tested, track.Name, path)
+			slog.Info("  [%d/20] MISSING: %q → %s", response.Tested, track.Name, path)
 		}
 	}
 
-	stdlog.Printf("iTunes test-mapping: tested=%d found=%d examples=%d", response.Tested, response.Found, len(response.Examples))
+	slog.Info("iTunes test-mapping: tested=%d found=%d examples=%d", response.Tested, response.Found, len(response.Examples))
 	return response, nil
 }
