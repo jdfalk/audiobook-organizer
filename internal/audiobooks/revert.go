@@ -1,12 +1,12 @@
 // file: internal/audiobooks/revert.go
-// version: 1.2.1
+// version: 1.2.2
 // guid: d4e5f6a7-b8c9-d0e1-f2a3-b4c5d6e7f8a9
 
 package audiobooks
 
 import (
+	"log/slog"
 	"fmt"
-	"log"
 	"os"
 	"reflect"
 
@@ -61,7 +61,7 @@ func (rs *RevertService) RevertOperation(operationID string) error {
 		c := changes[i]
 		if err := rs.revertChange(c); err != nil {
 			errors = append(errors, fmt.Sprintf("change %s: %v", c.ID, err))
-			log.Printf("[WARN] revert failed for change %s: %v", c.ID, err)
+			slog.Warn("revert failed for change %s: %v", c.ID, err)
 		}
 	}
 
@@ -99,7 +99,7 @@ func (rs *RevertService) revertChange(c *database.OperationChange) error {
 func (rs *RevertService) revertFileMove(c *database.OperationChange) error {
 	// Check file exists at new location
 	if _, err := os.Stat(c.NewValue); os.IsNotExist(err) {
-		log.Printf("[WARN] file no longer at %s, skipping revert", c.NewValue)
+		slog.Warn("file no longer at %s, skipping revert", c.NewValue)
 		return nil
 	}
 
@@ -187,12 +187,12 @@ func (rs *RevertService) revertTagWrite(c *database.OperationChange) error {
 	}
 
 	if _, statErr := os.Stat(book.FilePath); os.IsNotExist(statErr) {
-		log.Printf("[WARN] file %s not found, skipping tag revert", book.FilePath)
+		slog.Warn("file %s not found, skipping tag revert", book.FilePath)
 		return nil
 	}
 
 	if isProtectedPath(rs.db, book.FilePath) {
-		log.Printf("[INFO] skipping tag revert for protected path: %s", book.FilePath)
+		slog.Info("skipping tag revert for protected path: %s", book.FilePath)
 		return nil
 	}
 

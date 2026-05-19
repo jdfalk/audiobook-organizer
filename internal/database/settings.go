@@ -1,10 +1,11 @@
 // file: internal/database/settings.go
-// version: 1.1.1
+// version: 1.1.2
 // guid: 8a7b6c5d-4e3f-2a1b-0c9d-8e7f6a5b4c3d
 
 package database
 
 import (
+	"log/slog"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -12,7 +13,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -327,7 +327,7 @@ func (s *SQLiteStore) GetAllSettings() ([]Setting, error) {
 		var isSecret any
 
 		if err := rows.Scan(&setting.Key, &setting.Value, &setting.Type, &isSecret); err != nil {
-			log.Printf("Warning: Failed to scan setting row: %v", err)
+			slog.Warn("Failed to scan setting row: %v", err)
 			continue
 		}
 

@@ -1,5 +1,5 @@
 // file: internal/database/embedding_store_migrate.go
-// version: 1.0.0
+// version: 1.0.1
 // last-edited: 2026-05-11
 // guid: a3c1f2e8-b947-4d6a-9e5c-0f1a8b7c3d2e
 //
@@ -16,9 +16,9 @@
 package database
 
 import (
+	"log/slog"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -47,7 +47,7 @@ func MigrateEmbeddingsFromSQLite(db *pebble.DB, sqlitePath string) error {
 		return markMigrated(db)
 	}
 
-	log.Printf("[INFO] Migrating embeddings.db → PebbleDB from %s", sqlitePath)
+	slog.Info("Migrating embeddings.db → PebbleDB from %s", sqlitePath)
 	start := time.Now()
 
 	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=off&mode=ro", sqlitePath)
@@ -73,7 +73,7 @@ func MigrateEmbeddingsFromSQLite(db *pebble.DB, sqlitePath string) error {
 		return err
 	}
 
-	log.Printf("[INFO] Embeddings migration complete in %s: vectors=%d cache=%d candidates=%d",
+	slog.Info("Embeddings migration complete in %s: vectors=%d cache=%d candidates=%d",
 		time.Since(start).Round(time.Millisecond), vectors, cache, candidates)
 	return nil
 }
@@ -98,7 +98,7 @@ FROM embeddings ORDER BY created_at`)
 			updatedAtS string
 		)
 		if err := rows.Scan(&entityType, &entityID, &textHash, &vectorBlob, &model, &createdAtS, &updatedAtS); err != nil {
-			log.Printf("[WARN] migrate embeddings: scan row: %v", err)
+			slog.Warn("migrate embeddings: scan row: %v", err)
 			continue
 		}
 
@@ -115,7 +115,7 @@ FROM embeddings ORDER BY created_at`)
 				h = textHash
 			}
 			if err := store.PutCachedEmbedding(h, m, vec); err != nil {
-				log.Printf("[WARN] migrate embeddings: put cache %s: %v", entityID, err)
+				slog.Warn("migrate embeddings: put cache %s: %v", entityID, err)
 				continue
 			}
 			cache++
@@ -129,7 +129,7 @@ FROM embeddings ORDER BY created_at`)
 				UpdatedAt: updatedAt.UnixNano(),
 			}
 			if err := store.setJSON(key, rec); err != nil {
-				log.Printf("[WARN] migrate embeddings: write vector %s:%s: %v", entityType, entityID, err)
+				slog.Warn("migrate embeddings: write vector %s:%s: %v", entityType, entityID, err)
 				continue
 			}
 			vectors++
@@ -164,7 +164,7 @@ FROM dedup_candidates ORDER BY id`)
 		)
 		if err := rows.Scan(&entityType, &entityAID, &entityBID, &layer,
 			&sim, &verdict, &reason, &status, &createdAtS, &updatedAtS); err != nil {
-			log.Printf("[WARN] migrate dedup_candidates: scan row: %v", err)
+			slog.Warn("migrate dedup_candidates: scan row: %v", err)
 			continue
 		}
 
@@ -189,7 +189,7 @@ FROM dedup_candidates ORDER BY id`)
 		}
 
 		if err := store.UpsertCandidate(c); err != nil {
-			log.Printf("[WARN] migrate dedup_candidates: upsert %s %s/%s: %v", entityType, entityAID, entityBID, err)
+			slog.Warn("migrate dedup_candidates: upsert %s %s/%s: %v", entityType, entityAID, entityBID, err)
 			continue
 		}
 		n++

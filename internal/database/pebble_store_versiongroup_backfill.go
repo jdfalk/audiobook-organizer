@@ -1,4 +1,5 @@
 // file: internal/database/pebble_store_versiongroup_backfill.go
+// version: 1.0.1
 // PERF-VERSIONS: one-time backfill that writes the
 // book:versiongroup:<gid>:<id> secondary index for every existing book
 // that has a VersionGroupID. Without this, /audiobooks/:id/versions
@@ -8,9 +9,9 @@
 package database
 
 import (
+	"log/slog"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -75,6 +76,6 @@ func (p *PebbleStore) BackfillVersionGroupIndex() error {
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return err
 	}
-	log.Printf("[INFO] versiongroup-backfill: scanned=%d indexed=%d", scanned, indexed)
+	slog.Info("versiongroup-backfill: scanned=%d indexed=%d", scanned, indexed)
 	return nil
 }

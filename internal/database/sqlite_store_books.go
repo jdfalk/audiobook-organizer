@@ -1,15 +1,15 @@
 // file: internal/database/sqlite_store_books.go
-// version: 1.0.4
+// version: 1.0.5
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 // last-edited: 2026-05-16
 
 package database
 
 import (
+	"log/slog"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1386,7 +1386,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				log.Printf("CreateBook rollback: %v", rbErr)
+				slog.Info("CreateBook rollback: %v", rbErr)
 			}
 		}
 	}()
@@ -1737,7 +1737,7 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				log.Printf("DeleteBook rollback: %v", rbErr)
+				slog.Info("DeleteBook rollback: %v", rbErr)
 			}
 		}
 	}()

@@ -1,13 +1,13 @@
 // file: internal/config/persistence.go
-// version: 1.18.0
+// version: 1.18.1
 // guid: 9c8d7e6f-5a4b-3c2d-1e0f-9a8b7c6d5e4f
 
 package config
 
 import (
+	"log/slog"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -46,7 +46,7 @@ func LoadConfigFromFile() error {
 
 	var fileConfig map[string]any
 	if err := yaml.Unmarshal(data, &fileConfig); err != nil {
-		log.Printf("Warning: Failed to parse config file %s: %v", path, err)
+		slog.Warn("Failed to parse config file %s: %v", path, err)
 		return nil
 	}
 
@@ -66,7 +66,7 @@ func LoadConfigFromFile() error {
 			if val, ok := fileConfig[key].(string); ok && val != "" {
 				*ptr = val
 				applied++
-				log.Printf("[INFO] Loaded %s from config file", key)
+				slog.Info("Loaded %s from config file", key)
 			}
 		}
 	}
@@ -75,12 +75,12 @@ func LoadConfigFromFile() error {
 		if val, ok := fileConfig["enable_ai_parsing"].(bool); ok && val {
 			AppConfig.EnableAIParsing = true
 			applied++
-			log.Printf("[INFO] Loaded enable_ai_parsing from config file")
+			slog.Info("Loaded enable_ai_parsing from config file")
 		}
 	}
 
 	if applied > 0 {
-		log.Printf("Applied %d settings from config file %s", applied, path)
+		slog.Info("Applied %d settings from config file %s", applied, path)
 	}
 	return nil
 }
@@ -135,7 +135,7 @@ func SaveConfigToFile() error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	log.Printf("Configuration saved to file: %s", path)
+	slog.Info("Configuration saved to file: %s", path)
 	return nil
 }
 
@@ -152,11 +152,11 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 		return fmt.Errorf("store is nil")
 	}
 
-	log.Println("Loading configuration from database...")
+	slog.Info("Loading configuration from database...")
 
 	settings, err := store.GetAllSettings()
 	if err != nil {
-		log.Printf("Note: Could not load settings from database: %v", err)
+		slog.Info("Note: Could not load settings from database: %v", err)
 		return nil
 	}
 
@@ -180,9 +180,9 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 			AppConfig = loaded
 			AppConfig.DatabaseType = savedDBType
 			blobFound = true
-			log.Printf("[INFO] Loaded config from blob (%d bytes)", len(blob.Value))
+			slog.Info("Loaded config from blob (%d bytes)", len(blob.Value))
 		} else {
-			log.Printf("[WARN] Failed to parse config_blob: %v — falling back to individual keys", err)
+			slog.Warn("Failed to parse config_blob: %v — falling back to individual keys", err)
 		}
 	}
 
@@ -194,15 +194,15 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 		}
 		decrypted, err := database.DecryptValue(setting.Value)
 		if err != nil {
-			log.Printf("WARNING: Failed to decrypt setting %q — will try config file fallback. (error: %v)",
+			slog.Info("WARNING: Failed to decrypt setting %q — will try config file fallback. (error: %v)",
 				setting.Key, err)
 			corruptSecrets = append(corruptSecrets, setting.Key)
 			continue
 		}
 		if err := applySetting(setting.Key, decrypted, setting.Type); err != nil {
-			log.Printf("Warning: Failed to apply secret setting %s: %v", setting.Key, err)
+			slog.Warn("Failed to apply secret setting %s: %v", setting.Key, err)
 		}
-		log.Printf("[DEBUG] LoadConfigFromDatabase: found setting %s (isSecret=true, valueLen=%d)",
+		slog.Debug("LoadConfigFromDatabase: found setting %s (isSecret=true, valueLen=%d)",
 			setting.Key, len(decrypted))
 	}
 
@@ -214,22 +214,22 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 				continue // blob already handled; secrets handled above
 			}
 			if err := applySetting(setting.Key, setting.Value, setting.Type); err != nil {
-				log.Printf("Warning: Failed to apply setting %s: %v", setting.Key, err)
+				slog.Warn("Failed to apply setting %s: %v", setting.Key, err)
 				continue
 			}
 			applied++
 		}
-		log.Printf("Applied %d settings from database (legacy individual keys)", applied)
+		slog.Info("Applied %d settings from database (legacy individual keys)", applied)
 	}
 
 	// Fall back to config file for anything not yet loaded (e.g. corrupted secrets)
 	if err := LoadConfigFromFile(); err != nil {
-		log.Printf("Warning: Config file fallback failed: %v", err)
+		slog.Warn("Config file fallback failed: %v", err)
 	}
 
 	// Re-encrypt secrets that failed to decrypt but were recovered from the config file
 	if len(corruptSecrets) > 0 {
-		log.Printf("[INFO] Re-encrypting %d corrupt secret(s) recovered from config file...", len(corruptSecrets))
+		slog.Info("Re-encrypting %d corrupt secret(s) recovered from config file...", len(corruptSecrets))
 		for _, key := range corruptSecrets {
 			var plaintext string
 			switch key {
@@ -244,21 +244,21 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 			}
 			if plaintext != "" {
 				if err := store.SetSetting(key, plaintext, "string", true); err != nil {
-					log.Printf("[WARN] Failed to re-encrypt setting %q: %v", key, err)
+					slog.Warn("Failed to re-encrypt setting %q: %v", key, err)
 				} else {
-					log.Printf("[INFO] Re-encrypted setting %q successfully", key)
+					slog.Info("Re-encrypted setting %q successfully", key)
 				}
 			} else {
 				if err := store.DeleteSetting(key); err != nil {
-					log.Printf("[WARN] Could not clear corrupt secret %q from DB: %v", key, err)
+					slog.Warn("Could not clear corrupt secret %q from DB: %v", key, err)
 				} else {
-					log.Printf("[INFO] Cleared corrupt secret %q — re-enter via Settings", key)
+					slog.Info("Cleared corrupt secret %q — re-enter via Settings", key)
 				}
 			}
 		}
 	}
 
-	log.Printf("[DEBUG] After config load: EnableAIParsing=%v, OpenAIAPIKey length=%d",
+	slog.Debug("After config load: EnableAIParsing=%v, OpenAIAPIKey length=%d",
 		AppConfig.EnableAIParsing, len(AppConfig.OpenAIAPIKey))
 
 	// Migrate auto-update window → maintenance window (idempotent)
@@ -294,7 +294,7 @@ func MigrateMaintenanceWindow(store database.SettingsStore) {
 	}
 
 	_ = store.SetSetting("maintenance_window_migrated", "true", "bool", false)
-	log.Printf("[INFO] Maintenance window migration complete (start=%d, end=%d)",
+	slog.Info("Maintenance window migration complete (start=%d, end=%d)",
 		AppConfig.MaintenanceWindowStart, AppConfig.MaintenanceWindowEnd)
 }
 
@@ -708,7 +708,7 @@ func SaveConfigToDatabase(store database.SettingsStore) error {
 		return fmt.Errorf("store is nil")
 	}
 
-	log.Println("Saving configuration to database...")
+	slog.Info("Saving configuration to database...")
 
 	// Build a safe copy with secrets zeroed — they are saved separately (encrypted).
 	safeConfig := AppConfig
@@ -742,20 +742,20 @@ func SaveConfigToDatabase(store database.SettingsStore) error {
 		if s.value == "" {
 			existing, err := store.GetSetting(s.key)
 			if err == nil && existing != nil && existing.Value != "" {
-				log.Printf("[DEBUG] Preserving existing secret %s (current value empty)", s.key)
+				slog.Debug("Preserving existing secret %s (current value empty)", s.key)
 				continue
 			}
 		}
 		if err := store.SetSetting(s.key, s.value, "string", true); err != nil {
-			log.Printf("Warning: Failed to save secret %s: %v", s.key, err)
+			slog.Warn("Failed to save secret %s: %v", s.key, err)
 		}
 	}
 
-	log.Printf("Configuration saved to database (blob + %d secrets)", len(secrets))
+	slog.Info("Configuration saved to database (blob + %d secrets)", len(secrets))
 
 	// Also save to config file as a reliable fallback
 	if err := SaveConfigToFile(); err != nil {
-		log.Printf("Warning: Failed to save config file: %v", err)
+		slog.Warn("Failed to save config file: %v", err)
 	}
 
 	return nil
@@ -773,7 +773,7 @@ func SyncConfigFromEnv() {
 	if viper.IsSet("openai_api_key") {
 		if val := viper.GetString("openai_api_key"); val != "" {
 			AppConfig.OpenAIAPIKey = val
-			log.Printf("[DEBUG] SyncConfigFromEnv: overriding OpenAI API key from env/config (length: %d)", len(val))
+			slog.Debug("SyncConfigFromEnv: overriding OpenAI API key from env/config (length: %d)", len(val))
 		}
 	}
 	if viper.IsSet("google_books_api_key") {

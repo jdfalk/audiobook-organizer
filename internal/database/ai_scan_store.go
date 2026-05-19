@@ -1,15 +1,15 @@
 // file: internal/database/ai_scan_store.go
-// version: 2.0.0
+// version: 2.0.1
 // last-edited: 2026-05-11
 // guid: a7b3c9d1-4e5f-6a7b-8c9d-0e1f2a3b4c5d
 
 package database
 
 import (
+	"log/slog"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -102,7 +102,7 @@ func NewAIScanStore(path string) (*AIScanStore, error) {
 		return nil, err
 	}
 
-	log.Printf("[INFO] AI Scan DB opened at %s", path)
+	slog.Info("AI Scan DB opened at %s", path)
 	return store, nil
 }
 
