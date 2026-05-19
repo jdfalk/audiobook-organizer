@@ -13491,6 +13491,61 @@ func (_c *MockBookFileStore_DeleteBookFilesForBook_Call) RunAndReturn(run func(b
 	return _c
 }
 
+// GetAcoustIDStats provides a mock function for the type MockBookFileStore
+func (_mock *MockBookFileStore) GetAcoustIDStats() (*database.AcoustIDStats, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAcoustIDStats")
+	}
+
+	var r0 *database.AcoustIDStats
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (*database.AcoustIDStats, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() *database.AcoustIDStats); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.AcoustIDStats)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookFileStore_GetAcoustIDStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAcoustIDStats'
+type MockBookFileStore_GetAcoustIDStats_Call struct {
+	*mock.Call
+}
+
+// GetAcoustIDStats is a helper method to define mock.On call
+func (_e *MockBookFileStore_Expecter) GetAcoustIDStats() *MockBookFileStore_GetAcoustIDStats_Call {
+	return &MockBookFileStore_GetAcoustIDStats_Call{Call: _e.mock.On("GetAcoustIDStats")}
+}
+
+func (_c *MockBookFileStore_GetAcoustIDStats_Call) Run(run func()) *MockBookFileStore_GetAcoustIDStats_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockBookFileStore_GetAcoustIDStats_Call) Return(acoustIDStats *database.AcoustIDStats, err error) *MockBookFileStore_GetAcoustIDStats_Call {
+	_c.Call.Return(acoustIDStats, err)
+	return _c
+}
+
+func (_c *MockBookFileStore_GetAcoustIDStats_Call) RunAndReturn(run func() (*database.AcoustIDStats, error)) *MockBookFileStore_GetAcoustIDStats_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAllBookFiles provides a mock function for the type MockBookFileStore
 func (_mock *MockBookFileStore) GetAllBookFiles() ([]database.BookFile, error) {
 	ret := _mock.Called()
@@ -14295,54 +14350,6 @@ func (_c *MockBookFileStore_GetFilesWithFingerprintFailures_Call) Return(bookFil
 }
 
 func (_c *MockBookFileStore_GetFilesWithFingerprintFailures_Call) RunAndReturn(run func(reason string, limit int, offset int) ([]database.BookFile, int64, error)) *MockBookFileStore_GetFilesWithFingerprintFailures_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetAcoustIDStats provides a mock function for the type MockBookFileStore
-func (_mock *MockBookFileStore) GetAcoustIDStats() (*database.AcoustIDStats, error) {
-	ret := _mock.Called()
-	if len(ret) == 0 {
-		panic("no return value specified for GetAcoustIDStats")
-	}
-	var r0 *database.AcoustIDStats
-	if returnFunc, ok := ret.Get(0).(func() *database.AcoustIDStats); ok {
-		r0 = returnFunc()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*database.AcoustIDStats)
-		}
-	}
-	var r1 error
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockBookFileStore_GetAcoustIDStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAcoustIDStats'
-type MockBookFileStore_GetAcoustIDStats_Call struct {
-	*mock.Call
-}
-
-// GetAcoustIDStats is a helper method to define mock.On call
-func (_e *MockBookFileStore_Expecter) GetAcoustIDStats() *MockBookFileStore_GetAcoustIDStats_Call {
-	return &MockBookFileStore_GetAcoustIDStats_Call{Call: _e.mock.On("GetAcoustIDStats")}
-}
-
-func (_c *MockBookFileStore_GetAcoustIDStats_Call) Run(run func()) *MockBookFileStore_GetAcoustIDStats_Call {
-	_c.Call.Run(func(args mock.Arguments) { run() })
-	return _c
-}
-
-func (_c *MockBookFileStore_GetAcoustIDStats_Call) Return(acoustIDStats *database.AcoustIDStats, err error) *MockBookFileStore_GetAcoustIDStats_Call {
-	_c.Call.Return(acoustIDStats, err)
-	return _c
-}
-
-func (_c *MockBookFileStore_GetAcoustIDStats_Call) RunAndReturn(run func() (*database.AcoustIDStats, error)) *MockBookFileStore_GetAcoustIDStats_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -30373,6 +30380,61 @@ func (_c *MockStore_GetAPIKeyByHash_Call) RunAndReturn(run func(hash string) (*d
 	return _c
 }
 
+// GetAcoustIDStats provides a mock function for the type MockStore
+func (_mock *MockStore) GetAcoustIDStats() (*database.AcoustIDStats, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetAcoustIDStats")
+	}
+
+	var r0 *database.AcoustIDStats
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (*database.AcoustIDStats, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() *database.AcoustIDStats); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*database.AcoustIDStats)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetAcoustIDStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAcoustIDStats'
+type MockStore_GetAcoustIDStats_Call struct {
+	*mock.Call
+}
+
+// GetAcoustIDStats is a helper method to define mock.On call
+func (_e *MockStore_Expecter) GetAcoustIDStats() *MockStore_GetAcoustIDStats_Call {
+	return &MockStore_GetAcoustIDStats_Call{Call: _e.mock.On("GetAcoustIDStats")}
+}
+
+func (_c *MockStore_GetAcoustIDStats_Call) Run(run func()) *MockStore_GetAcoustIDStats_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_GetAcoustIDStats_Call) Return(acoustIDStats *database.AcoustIDStats, err error) *MockStore_GetAcoustIDStats_Call {
+	_c.Call.Return(acoustIDStats, err)
+	return _c
+}
+
+func (_c *MockStore_GetAcoustIDStats_Call) RunAndReturn(run func() (*database.AcoustIDStats, error)) *MockStore_GetAcoustIDStats_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetActiveVersionForBook provides a mock function for the type MockStore
 func (_mock *MockStore) GetActiveVersionForBook(bookID string) (*database.BookVersion, error) {
 	ret := _mock.Called(bookID)
@@ -35326,54 +35388,6 @@ func (_c *MockStore_GetFilesWithFingerprintFailures_Call) Return(bookFiles []dat
 }
 
 func (_c *MockStore_GetFilesWithFingerprintFailures_Call) RunAndReturn(run func(reason string, limit int, offset int) ([]database.BookFile, int64, error)) *MockStore_GetFilesWithFingerprintFailures_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetAcoustIDStats provides a mock function for the type MockStore
-func (_mock *MockStore) GetAcoustIDStats() (*database.AcoustIDStats, error) {
-	ret := _mock.Called()
-	if len(ret) == 0 {
-		panic("no return value specified for GetAcoustIDStats")
-	}
-	var r0 *database.AcoustIDStats
-	if returnFunc, ok := ret.Get(0).(func() *database.AcoustIDStats); ok {
-		r0 = returnFunc()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*database.AcoustIDStats)
-		}
-	}
-	var r1 error
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockStore_GetAcoustIDStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetAcoustIDStats'
-type MockStore_GetAcoustIDStats_Call struct {
-	*mock.Call
-}
-
-// GetAcoustIDStats is a helper method to define mock.On call
-func (_e *MockStore_Expecter) GetAcoustIDStats() *MockStore_GetAcoustIDStats_Call {
-	return &MockStore_GetAcoustIDStats_Call{Call: _e.mock.On("GetAcoustIDStats")}
-}
-
-func (_c *MockStore_GetAcoustIDStats_Call) Run(run func()) *MockStore_GetAcoustIDStats_Call {
-	_c.Call.Run(func(args mock.Arguments) { run() })
-	return _c
-}
-
-func (_c *MockStore_GetAcoustIDStats_Call) Return(acoustIDStats *database.AcoustIDStats, err error) *MockStore_GetAcoustIDStats_Call {
-	_c.Call.Return(acoustIDStats, err)
-	return _c
-}
-
-func (_c *MockStore_GetAcoustIDStats_Call) RunAndReturn(run func() (*database.AcoustIDStats, error)) *MockStore_GetAcoustIDStats_Call {
 	_c.Call.Return(run)
 	return _c
 }
