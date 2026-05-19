@@ -6,7 +6,7 @@ package itunes
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -57,13 +57,13 @@ func (w *LibraryWatcher) loop() {
 				w.changed = true
 				w.changedAt = time.Now()
 				w.mu.Unlock()
-				log.Printf("iTunes library file changed: %s (op: %s)", w.path, event.Op)
+				slog.Info("iTunes library file changed: %s (op: %s)", w.path, event.Op)
 			}
 		case err, ok := <-w.watcher.Errors:
 			if !ok {
 				return
 			}
-			log.Printf("iTunes library watcher error: %v", err)
+			slog.Error("iTunes library watcher error: %v", err)
 		case <-w.stop:
 			return
 		}

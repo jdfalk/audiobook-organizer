@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -20,7 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/util"
-	"log/slog")
+)
 
 func init() { maintenance.Register(&bulkDelugeImportJob{}) }
 
@@ -65,7 +65,7 @@ func (j *bulkDelugeImportJob) Run(ctx context.Context, store database.Store, rep
 	}
 
 	total := len(pending)
-	log.Printf("[INFO] bulk-deluge-import %s: %d files pending (dry_run=%v)", opID, total, dryRun)
+	slog.Info("bulk-deluge-import %s: %d files pending (dry_run=%v)", opID, total, dryRun)
 	reporter.SetTotal(total)
 
 	imported, failed := 0, 0
@@ -90,7 +90,7 @@ func (j *bulkDelugeImportJob) Run(ctx context.Context, store database.Store, rep
 		} else {
 			newPath, importErr := bdi_importToLibrary(&config.AppConfig, client, store, f)
 			if importErr != nil {
-				log.Printf("[WARN] bulk-deluge-import %s: %s: %v", opID, f.FilePath, importErr)
+				slog.Warn("bulk-deluge-import %s: %s: %v", opID, f.FilePath, importErr)
 				resultJSON, _ := json.Marshal(map[string]any{"path": f.FilePath, "error": importErr.Error()})
 				if opID != "" {
 					_ = store.CreateOperationResult(&database.OperationResult{
@@ -117,7 +117,7 @@ func (j *bulkDelugeImportJob) Run(ctx context.Context, store database.Store, rep
 		reporter.Increment()
 	}
 
-	log.Printf("[INFO] bulk-deluge-import %s: done. imported=%d failed=%d", opID, imported, failed)
+	slog.Info("bulk-deluge-import %s: done. imported=%d failed=%d", opID, imported, failed)
 	slog.Info(fmt.Sprintf("imported=%d failed=%d total=%d", imported, failed, total))
 	return nil
 }
@@ -145,7 +145,7 @@ func bdi_buildDelugeClient() *deluge.Client {
 	}
 	c, err := deluge.New(url, pass)
 	if err != nil {
-		log.Printf("[WARN] bulk-deluge-import: failed to create deluge client: %v", err)
+		slog.Warn("bulk-deluge-import: failed to create deluge client: %v", err)
 		return nil
 	}
 	return c
@@ -157,7 +157,7 @@ func bdi_importToLibrary(cfg *config.Config, delugeClient *deluge.Client, store 
 		return "", fmt.Errorf("bdi_importToLibrary: bookFile is nil")
 	}
 	if bookFile.ImportedFromDelugeAt != nil {
-		log.Printf("[INFO] bdi_importToLibrary: %s already imported, skipping", bookFile.FilePath)
+		slog.Info("bdi_importToLibrary: %s already imported, skipping", bookFile.FilePath)
 		return bookFile.FilePath, nil
 	}
 	src := filepath.Clean(bookFile.FilePath)
@@ -182,7 +182,7 @@ func bdi_importToLibrary(cfg *config.Config, delugeClient *deluge.Client, store 
 		return "", fmt.Errorf("bdi_importToLibrary: unsafe dest path: %w", destErr)
 	}
 	if src == dest {
-		log.Printf("[INFO] bdi_importToLibrary: source and dest are the same (%s), skipping copy", src)
+		slog.Info("bdi_importToLibrary: source and dest are the same (%s), skipping copy", src)
 		return src, nil
 	}
 
@@ -203,12 +203,12 @@ func bdi_importToLibrary(cfg *config.Config, delugeClient *deluge.Client, store 
 		return dest, fmt.Errorf("bdi_importToLibrary: UpdateBookFile %s: %w", bookFile.ID, err)
 	}
 
-	log.Printf("[INFO] bdi_importToLibrary: copied %s -> %s", src, dest)
+	slog.Info("bdi_importToLibrary: copied %s -> %s", src, dest)
 
 	if cfg.DelugeMoveEnabled && bookFile.DelugeHash != "" && delugeClient != nil {
 		moveErr := delugeClient.MoveStorage([]string{bookFile.DelugeHash}, filepath.Dir(dest))
 		if moveErr != nil {
-			log.Printf("[WARN] bdi_importToLibrary: MoveStorage for hash %s failed (non-fatal): %v",
+			slog.Warn("bdi_importToLibrary: MoveStorage for hash %s failed (non-fatal): %v",
 				bookFile.DelugeHash, moveErr)
 		}
 	}

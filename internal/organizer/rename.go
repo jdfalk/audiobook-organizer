@@ -5,10 +5,9 @@
 package organizer
 
 import (
-	"log/slog"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,7 +150,7 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 		if err := rs.hardlinkOrCopy(oldPath, proposedPath); err != nil {
 			return nil, fmt.Errorf("failed to copy protected file to library: %w", err)
 		}
-		log.Printf("[INFO] rename: copied protected file %s → %s (source untouched)", oldPath, proposedPath)
+		slog.Info("rename: copied protected file %s → %s (source untouched)", oldPath, proposedPath)
 		tagWriteTarget = proposedPath // Write tags to the copy, not the original
 	}
 
@@ -168,11 +167,11 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 	if len(tagMeta) > 0 && !rs.IsProtectedPath(tagWriteTarget) {
 		filtered := rs.FilterUnchangedTags(tagWriteTarget, tagMeta)
 		if len(filtered) == 0 {
-			log.Printf("[DEBUG] rename: all tags match, skipping write for %s", tagWriteTarget)
+			slog.Debug("rename: all tags match, skipping write for %s", tagWriteTarget)
 		} else {
 			opConfig := fileops.OperationConfig{VerifyChecksums: true}
 			if err := enhanced.WriteMetadataToFile(tagWriteTarget, filtered, opConfig); err != nil {
-				log.Printf("[WARN] rename: tag write failed for %s: %v", bookID, err)
+				slog.Warn("rename: tag write failed for %s: %v", bookID, err)
 				// Tag write failure is non-fatal; continue with rename
 			} else {
 				tagsWritten = len(filtered)
@@ -193,7 +192,7 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 			}
 		}
 	} else if rs.IsProtectedPath(tagWriteTarget) {
-		log.Printf("[INFO] rename: skipping tag write for protected path %s", tagWriteTarget)
+		slog.Info("rename: skipping tag write for protected path %s", tagWriteTarget)
 	}
 
 	// Step 2: Move/rename file if path differs and we haven't already handled it
@@ -227,10 +226,10 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 		book.FilePath = proposedPath
 		book.LibraryState = stringPtr("organized")
 		if _, err := rs.db.UpdateBook(bookID, book); err != nil {
-			log.Printf("[ERROR] rename: DB update failed for %s, rolling back: %v", bookID, err)
+			slog.Error("rename: DB update failed for %s, rolling back: %v", bookID, err)
 			if !sourceIsProtected {
 				if rbErr := rs.moveFile(proposedPath, oldPath); rbErr != nil {
-					log.Printf("[CRITICAL] rename: rollback failed! File at %s, DB expects %s: %v", proposedPath, oldPath, rbErr)
+					slog.Error("rename: rollback failed! File at %s, DB expects %s: %v", proposedPath, oldPath, rbErr)
 					return nil, fmt.Errorf("DB update failed and rollback failed: %w", err)
 				}
 			} else {
@@ -247,7 +246,7 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 					bf.FilePath = proposedPath
 					bf.ITunesPath = rs.ComputeITunesPath(proposedPath)
 					if ufErr := rs.db.UpdateBookFile(bf.ID, &bf); ufErr != nil {
-						log.Printf("[WARN] rename: failed to update book_file %s path: %v", bf.ID, ufErr)
+						slog.Warn("rename: failed to update book_file %s path: %v", bf.ID, ufErr)
 					}
 				}
 			}

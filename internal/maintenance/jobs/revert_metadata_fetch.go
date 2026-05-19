@@ -9,14 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-
-	"log/slog")
+)
 
 func init() { maintenance.Register(&revertMetadataFetchJob{}) }
 
@@ -87,7 +86,7 @@ func (j *revertMetadataFetchJob) Run(ctx context.Context, store database.Store, 
 		}
 	}
 
-	log.Printf("[INFO] revert-metadata-fetch: reverting %d books, changes after %s",
+	slog.Info("revert-metadata-fetch: reverting %d books, changes after %s",
 		len(bookIDSet), revertAfter.Format(time.RFC3339))
 	reporter.SetTotal(len(bookIDSet))
 
@@ -194,7 +193,7 @@ func (j *revertMetadataFetchJob) Run(ctx context.Context, store database.Store, 
 		if didChange {
 			if !dryRun {
 				if _, uerr := store.UpdateBook(bookID, book); uerr != nil {
-					log.Printf("[WARN] revert-metadata-fetch: UpdateBook %s: %v", bookID, uerr)
+					slog.Warn("revert-metadata-fetch: UpdateBook %s: %v", bookID, uerr)
 					errors++
 				} else {
 					reverted++
@@ -207,7 +206,7 @@ func (j *revertMetadataFetchJob) Run(ctx context.Context, store database.Store, 
 		}
 	}
 
-	log.Printf("[INFO] revert-metadata-fetch: done — reverted:%d skipped:%d errors:%d", reverted, skipped, errors)
+	slog.Info("revert-metadata-fetch: done — reverted:%d skipped:%d errors:%d", reverted, skipped, errors)
 	summary := fmt.Sprintf("Reverted %d books (skipped: %d, errors: %d)", reverted, skipped, errors)
 	slog.Info(summary)
 	return nil

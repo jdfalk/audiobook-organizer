@@ -23,7 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
@@ -72,7 +72,7 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 
 		parsed, err := itunes.ParseSmartCriteria(pl.SmartCriteria)
 		if err != nil {
-			log.Printf("[WARN] parse smart criteria for %q (PID %s): %v", pl.Title, pid, err)
+			slog.Warn("parse smart criteria for %q (PID %s): %v", pl.Title, pid, err)
 			skipped++
 			continue
 		}
@@ -89,7 +89,7 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 			Description:          fmt.Sprintf("Imported from iTunes smart playlist %q", pl.Title),
 		})
 		if err != nil {
-			log.Printf("[WARN] create playlist %q: %v", pl.Title, err)
+			slog.Warn("create playlist %q: %v", pl.Title, err)
 			skipped++
 			continue
 		}
@@ -109,7 +109,7 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 func (p *PlaylistSync) PushDirty() int {
 	dirties, err := p.store.ListDirtyUserPlaylists()
 	if err != nil {
-		log.Printf("[WARN] list dirty playlists: %v", err)
+		slog.Warn("list dirty playlists: %v", err)
 		return 0
 	}
 
@@ -134,7 +134,7 @@ func (p *PlaylistSync) PushDirty() int {
 
 		pl.Dirty = false
 		if err := p.store.UpdateUserPlaylist(pl); err != nil {
-			log.Printf("[WARN] clear dirty for %s: %v", pl.ID, err)
+			slog.Warn("clear dirty for %s: %v", pl.ID, err)
 			continue
 		}
 		pushed++

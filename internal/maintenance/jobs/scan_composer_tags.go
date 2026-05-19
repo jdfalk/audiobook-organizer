@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +19,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"log/slog")
+)
 
 func init() { maintenance.Register(&scanComposerTagsJob{}) }
 
@@ -122,7 +122,7 @@ func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, rep
 
 	totalFiles := len(existingResults) + len(workItems)
 	alreadyDone := len(existingResults)
-	log.Printf("[INFO] scan-composer-tags %s: %d files total, %d already done, %d to process",
+	slog.Info("scan-composer-tags %s: %d files total, %d already done, %d to process",
 		opID, totalFiles, alreadyDone, len(workItems))
 
 	reporter.SetTotal(totalFiles)
@@ -191,10 +191,10 @@ func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, rep
 					if !dryRun && category != "ok" && willWrite != composer {
 						if writeErr := metadata.WriteSingleTag(w.filePath, "COMPOSER", willWrite); writeErr != nil {
 							r.Error = writeErr.Error()
-							log.Printf("[WARN] scan-composer-tags %s: write failed %s: %v", opID, w.filePath, writeErr)
+							slog.Warn("scan-composer-tags %s: write failed %s: %v", opID, w.filePath, writeErr)
 						} else {
 							r.Applied = true
-							log.Printf("[INFO] scan-composer-tags %s: COMPOSER %q→%q %s", opID, composer, willWrite, w.filePath)
+							slog.Info("scan-composer-tags %s: COMPOSER %q→%q %s", opID, composer, willWrite, w.filePath)
 						}
 					}
 				}
@@ -220,7 +220,7 @@ func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, rep
 	wg.Wait()
 
 	finalCount := atomic.LoadInt64(&completed)
-	log.Printf("[INFO] scan-composer-tags %s: finished %d/%d files", opID, finalCount, totalFiles)
+	slog.Info("scan-composer-tags %s: finished %d/%d files", opID, finalCount, totalFiles)
 	slog.Info(fmt.Sprintf("scan complete: processed %d/%d files", finalCount, totalFiles))
 	return nil
 }

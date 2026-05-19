@@ -16,7 +16,7 @@ package deluge
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"sync"
 
@@ -59,7 +59,7 @@ func GetClient() *Client {
 	}
 	c, err := New(url, pass)
 	if err != nil {
-		log.Printf("[WARN] failed to create deluge client: %v", err)
+		slog.Warn("failed to create deluge client: %v", err)
 		return nil
 	}
 	globalDelugeClient = c
@@ -94,7 +94,7 @@ func NotifyDelugeMoveStorage(torrentHash, newPath string) {
 		return
 	}
 	if !config.AppConfig.DelugeMoveEnabled {
-		log.Printf("[INFO] deluge move_storage skipped (deluge_move_enabled=false): %s → %s", torrentHash, newPath)
+		slog.Info("deluge move_storage skipped (deluge_move_enabled=false): %s → %s", torrentHash, newPath)
 		return
 	}
 	c := GetClient()
@@ -104,9 +104,9 @@ func NotifyDelugeMoveStorage(torrentHash, newPath string) {
 	// Deluge expects the parent directory, not the file path.
 	dir := filepath.Dir(newPath)
 	if err := c.MoveStorage([]string{torrentHash}, dir); err != nil {
-		log.Printf("[WARN] deluge move_storage %s → %s: %v", torrentHash, dir, err)
+		slog.Warn("deluge move_storage %s → %s: %v", torrentHash, dir, err)
 	} else {
-		log.Printf("[INFO] deluge move_storage %s → %s", torrentHash, dir)
+		slog.Info("deluge move_storage %s → %s", torrentHash, dir)
 	}
 }
 
@@ -126,7 +126,7 @@ func NotifyDelugeAfterOrganize(store interface {
 }, bookID, newPath string) {
 	versions, err := store.GetBookVersionsByBookID(bookID)
 	if err != nil {
-		log.Printf("[WARN] deluge-organize: failed to load versions for book %s: %v", bookID, err)
+		slog.Warn("deluge-organize: failed to load versions for book %s: %v", bookID, err)
 		return
 	}
 	for _, v := range versions {

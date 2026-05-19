@@ -8,7 +8,7 @@ package jobs
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -17,7 +17,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"log/slog")
+)
 
 func init() { maintenance.Register(&dedupBooksJob{}) }
 
@@ -347,20 +347,20 @@ func ddMergeDuplicateBook(store database.Store, keeper *database.Book, dup *data
 			f := &files[i]
 			f.BookID = keeper.ID
 			if upErr := store.UpsertBookFile(f); upErr != nil {
-				log.Printf("[WARN] dedup-books: UpsertBookFile %s -> keeper %s: %v", f.ID, keeper.ID, upErr)
+				slog.Warn("dedup-books: UpsertBookFile %s -> keeper %s: %v", f.ID, keeper.ID, upErr)
 			}
 		}
 	}
 
 	if reassignErr := store.ReassignExternalIDs(dup.ID, keeper.ID); reassignErr != nil {
-		log.Printf("[WARN] dedup-books: ReassignExternalIDs %s -> %s: %v", dup.ID, keeper.ID, reassignErr)
+		slog.Warn("dedup-books: ReassignExternalIDs %s -> %s: %v", dup.ID, keeper.ID, reassignErr)
 	}
 
 	if enqueuer != nil && len(dupPIDs) > 0 {
 		for _, pid := range dupPIDs {
 			enqueuer.EnqueueRemove(pid)
 		}
-		log.Printf("[INFO] dedup-books: queued %d ITL removals for dup %s", len(dupPIDs), dup.ID)
+		slog.Info("dedup-books: queued %d ITL removals for dup %s", len(dupPIDs), dup.ID)
 	}
 
 	tags, tagsErr := store.GetBookUserTags(dup.ID)
@@ -472,7 +472,7 @@ func ddSoftDeleteBook(store database.Store, bookID string) error {
 	current.MarkedForDeletion = &t
 	current.MarkedForDeletionAt = &now
 	if _, upErr := store.UpdateBook(bookID, current); upErr != nil {
-		log.Printf("[WARN] dedup-books: soft-delete failed for %s (%v), falling back to hard delete", bookID, upErr)
+		slog.Warn("dedup-books: soft-delete failed for %s (%v), falling back to hard delete", bookID, upErr)
 		return store.DeleteBook(bookID)
 	}
 	return nil

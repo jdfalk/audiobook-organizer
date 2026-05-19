@@ -19,7 +19,7 @@ package itunesservice
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -268,7 +268,7 @@ func (b *WriteBackBatcher) flush() {
 	// is expected to investigate. Adds and metadata updates are also
 	// skipped to avoid an inconsistent state mid-incident.
 	if len(removes) > MaxRemovesPerFlush {
-		log.Printf("[ERROR] iTunes write-back: REFUSING flush — %d pending removes exceeds MaxRemovesPerFlush=%d. "+
+		slog.Error("iTunes write-back: REFUSING flush — %d pending removes exceeds MaxRemovesPerFlush=%d. "+
 			"Dropped %d removes, %d adds, %d location-updates without writing. "+
 			"This is a safety circuit-breaker; investigate what enqueued so many removes before re-enabling writes.",
 			len(removes), MaxRemovesPerFlush, len(removes), len(adds), len(bookIDs))
@@ -279,13 +279,13 @@ func (b *WriteBackBatcher) flush() {
 
 	store := b.store
 	if store == nil {
-		log.Printf("[WARN] iTunes write-back: no database store")
+		slog.Warn("iTunes write-back: no database store")
 		return
 	}
 
 	itlEnabled, writePath := b.flushEnabled()
 	if !itlEnabled || writePath == "" {
-		log.Printf("[WARN] iTunes write-back: ITL write-back not configured")
+		slog.Warn("iTunes write-back: ITL write-back not configured")
 		return
 	}
 
@@ -374,22 +374,22 @@ func (b *WriteBackBatcher) flush() {
 		return
 	}
 
-	log.Printf("[INFO] iTunes write-back: flushing %d location updates, %d metadata updates, %d adds, %d removes",
+	slog.Info("iTunes write-back: flushing %d location updates, %d metadata updates, %d adds, %d removes",
 		len(locationUpdates), len(metadataUpdates), len(adds), len(removes))
 
 	if dryRun {
-		log.Printf("[INFO] iTunes write-back: DRY-RUN active (ITUNES_WRITEBACK_DRYRUN=true) — no file written. "+
+		slog.Info("iTunes write-back: DRY-RUN active (ITUNES_WRITEBACK_DRYRUN=true) — no file written. "+
 			"Would have written %d location updates, %d metadata updates, %d adds, %d removes to %s",
 			len(locationUpdates), len(metadataUpdates), len(adds), len(removes), writePath)
 		for pid := range removes {
-			log.Printf("[INFO] iTunes write-back DRY-RUN: would remove PID %s", pid)
+			slog.Info("iTunes write-back DRY-RUN: would remove PID %s", pid)
 		}
 		return
 	}
 
 	itlPath := writePath // from b.flushEnabled() above
 	if err := SafeWriteITL(itlPath, ops); err != nil {
-		log.Printf("[WARN] iTunes write-back failed: %v", err)
+		slog.Warn("iTunes write-back failed: %v", err)
 		return
 	}
 
@@ -399,9 +399,9 @@ func (b *WriteBackBatcher) flush() {
 	// IDs whose PIDs weren't found in the DB, those stay unmarked.
 	if len(bookIDs) > 0 {
 		if n, markErr := store.MarkITunesSynced(bookIDs); markErr != nil {
-			log.Printf("[WARN] iTunes write-back: MarkITunesSynced failed: %v", markErr)
+			slog.Warn("iTunes write-back: MarkITunesSynced failed: %v", markErr)
 		} else if n > 0 {
-			log.Printf("[INFO] iTunes write-back: marked %d books as iTunes-synced", n)
+			slog.Info("iTunes write-back: marked %d books as iTunes-synced", n)
 		}
 	}
 }
@@ -450,11 +450,11 @@ func SafeWriteITL(itlPath string, ops itunes.ITLOperationSet) error {
 		// A failing backup isn't fatal for the write — the user can
 		// still recover from the next successful run — but we log
 		// prominently so they know the safety net was missing.
-		log.Printf("[WARN] iTunes write-back: backup failed (%v); proceeding without a rollback anchor", backupErr)
+		slog.Warn("iTunes write-back: backup failed (%v); proceeding without a rollback anchor", backupErr)
 		backupPath = ""
 	} else {
 		if pruneErr := pruneITLBackups(itlPath, itlBackupRetention); pruneErr != nil {
-			log.Printf("[WARN] iTunes write-back: backup prune failed: %v", pruneErr)
+			slog.Warn("iTunes write-back: backup prune failed: %v", pruneErr)
 		}
 	}
 
@@ -484,18 +484,18 @@ func SafeWriteITL(itlPath string, ops itunes.ITLOperationSet) error {
 	// failures or weird permission issues the rename can land but
 	// the result is still corrupt. Catch that and roll back.
 	if err := itlValidateFn(itlPath); err != nil {
-		log.Printf("[ERROR] iTunes write-back: post-rename validation failed (%v)", err)
+		slog.Error("iTunes write-back: post-rename validation failed (%v)", err)
 		if backupPath != "" {
 			if rbErr := copyFileContents(backupPath, itlPath); rbErr != nil {
 				return fmt.Errorf("post-rename validation failed AND backup restore failed: validation=%v restore=%v", err, rbErr)
 			}
-			log.Printf("[INFO] iTunes write-back: restored from backup %s after corrupted write", backupPath)
+			slog.Info("iTunes write-back: restored from backup %s after corrupted write", backupPath)
 			return fmt.Errorf("post-rename validation failed (restored from backup): %w", err)
 		}
 		return fmt.Errorf("post-rename validation failed (no backup available): %w", err)
 	}
 
-	log.Printf("[INFO] iTunes write-back: %d operations applied and validated", result.UpdatedCount)
+	slog.Info("iTunes write-back: %d operations applied and validated", result.UpdatedCount)
 	return nil
 }
 
@@ -564,7 +564,7 @@ func pruneITLBackups(itlPath string, keep int) error {
 	toRemove := backups[:len(backups)-keep]
 	for _, p := range toRemove {
 		if err := os.Remove(p); err != nil {
-			log.Printf("[WARN] iTunes write-back: prune %s: %v", p, err)
+			slog.Warn("iTunes write-back: prune %s: %v", p, err)
 		}
 	}
 	return nil

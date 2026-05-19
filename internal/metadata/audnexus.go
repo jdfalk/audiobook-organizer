@@ -8,7 +8,7 @@ import (
 	"context"
 	json "encoding/json/v2"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -179,7 +179,7 @@ func (c *AudnexusClient) LookupByASIN(asin string) (*BookMetadata, error) {
 				continue
 			}
 			resp.Body.Close()
-			log.Printf("[DEBUG] Audnexus found ASIN %s in region %q", asin, region)
+			slog.Debug("Audnexus found ASIN %s in region %q", asin, region)
 			return c.bookToMetadata(&book), nil
 		}
 		resp.Body.Close()

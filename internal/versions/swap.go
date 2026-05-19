@@ -19,7 +19,6 @@ import (
 	"log/slog"
 	"context"
 	"fmt"
-	"log"
 	"path/filepath"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -120,7 +119,7 @@ func RunVersionSwap(
 		if i < len(newFromPaths) {
 			bf.FilePath = newFromPaths[i]
 			if err := store.UpdateBookFile(bf.ID, &bf); err != nil {
-				log.Printf("[WARN] update from-file path %s: %v", bf.ID, err)
+				slog.Warn("update from-file path %s: %v", bf.ID, err)
 			}
 		}
 	}
@@ -129,7 +128,7 @@ func RunVersionSwap(
 		if i < len(newToPaths) {
 			bf.FilePath = newToPaths[i]
 			if err := store.UpdateBookFile(bf.ID, &bf); err != nil {
-				log.Printf("[WARN] update to-file path %s: %v", bf.ID, err)
+				slog.Warn("update to-file path %s: %v", bf.ID, err)
 			}
 		}
 	}
@@ -216,6 +215,6 @@ func ResumeVersionSwaps(ctx context.Context, store database.Store) {
 	// This is a best-effort scan. If the store doesn't support listing
 	// by status, we skip — the UI can surface the broken state and
 	// let the user manually re-trigger.
-	log.Println("[INFO] Checking for interrupted version swaps...")
+	slog.Info("[INFO] Checking for interrupted version swaps...")
 	// TODO: implement full scan when ListBookVersionsByStatus is available
 }

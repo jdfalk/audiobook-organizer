@@ -8,13 +8,13 @@ package jobs
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"log/slog")
+)
 
 func init() { maintenance.Register(&refetchMissingAuthorsJob{}) }
 
@@ -50,7 +50,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 		}
 	}
 
-	log.Printf("[INFO] refetch-missing-authors %s: %d/%d books have no author",
+	slog.Info("refetch-missing-authors %s: %d/%d books have no author",
 		opID, len(books), len(allBooks))
 
 	// Load all book files upfront to avoid N+1 queries.
@@ -84,7 +84,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 		reporter.Increment()
 
 		if i%100 == 0 && i > 0 {
-			log.Printf("[INFO] refetch-missing-authors %s: progress %d/%d (filled=%d, skipped=%d, errors=%d)",
+			slog.Info("refetch-missing-authors %s: progress %d/%d (filled=%d, skipped=%d, errors=%d)",
 				opID, i, len(books), filled, skipped, errors)
 		}
 
@@ -163,7 +163,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 				errors++
 				continue
 			}
-			log.Printf("[INFO] refetch-missing-authors %s: created author %q (id=%d)", opID, authorName, author.ID)
+			slog.Info("refetch-missing-authors %s: created author %q (id=%d)", opID, authorName, author.ID)
 		}
 
 		b.AuthorID = &author.ID
@@ -173,14 +173,14 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 			continue
 		}
 
-		log.Printf("[INFO] refetch-missing-authors %s: set author %q on book %s (%s)", opID, authorName, b.ID, b.Title)
+		slog.Info("refetch-missing-authors %s: set author %q on book %s (%s)", opID, authorName, b.ID, b.Title)
 		filled++
 	}
 
 	summary := fmt.Sprintf("refetch-missing-authors complete: total=%d filled=%d skipped=%d errors=%d dryRun=%v",
 		len(books), filled, skipped, errors, dryRun)
 	slog.Info(summary)
-	log.Printf("[INFO] %s %s", opID, summary)
+	slog.Info("%s %s", opID, summary)
 	return nil
 }
 

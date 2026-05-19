@@ -20,7 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -76,7 +76,7 @@ func CreateIngestVersion(store database.Store, params IngestVersionParams) (*dat
 	// Compute file hash and update the BookFile row.
 	hash, hashErr := HashFile(params.FilePath)
 	if hashErr != nil {
-		log.Printf("[WARN] hash %s: %v", params.FilePath, hashErr)
+		slog.Warn("hash %s: %v", params.FilePath, hashErr)
 	} else {
 		files, _ := store.GetBookFiles(params.BookID)
 		for _, f := range files {
@@ -84,7 +84,7 @@ func CreateIngestVersion(store database.Store, params IngestVersionParams) (*dat
 				f.FileHash = hash
 				f.VersionID = ver.ID
 				if updateErr := store.UpdateBookFile(f.ID, &f); updateErr != nil {
-					log.Printf("[WARN] update file hash %s: %v", f.ID, updateErr)
+					slog.Warn("update file hash %s: %v", f.ID, updateErr)
 				}
 				break
 			}

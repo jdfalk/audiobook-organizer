@@ -9,10 +9,9 @@
 package scheduler
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -143,11 +142,11 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 		if task.RunOnStart != nil && task.RunOnStart() && task.IsEnabled() {
 			taskName := name
 			go func() {
-				log.Printf("[INFO] Running startup task: %s", taskName)
+				slog.Info("Running startup task: %s", taskName)
 				if op, err := ts.RunTask(taskName); err != nil {
-					log.Printf("[WARN] Startup task %s failed: %v", taskName, err)
+					slog.Warn("Startup task %s failed: %v", taskName, err)
 				} else if op != nil {
-					log.Printf("[INFO] Startup task %s started: operation %s", taskName, op.ID)
+					slog.Info("Startup task %s started: operation %s", taskName, op.ID)
 				}
 			}()
 		}
@@ -165,16 +164,16 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 					select {
 					case <-ticker.C:
 						if op, err := ts.RunTask(taskName); err != nil {
-							log.Printf("[WARN] Scheduled task %s failed: %v", taskName, err)
+							slog.Warn("Scheduled task %s failed: %v", taskName, err)
 						} else if op != nil {
-							log.Printf("[INFO] Scheduled task %s started: operation %s", taskName, op.ID)
+							slog.Info("Scheduled task %s started: operation %s", taskName, op.ID)
 						}
 					case <-shutdown:
 						return
 					}
 				}
 			}()
-			log.Printf("[INFO] Scheduled task %s: interval=%v", taskName, interval)
+			slog.Info("Scheduled task %s: interval=%v", taskName, interval)
 		}
 	}
 
@@ -185,7 +184,7 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 			defer wg.Done()
 			ticker := time.NewTicker(60 * time.Second)
 			defer ticker.Stop()
-			log.Printf("[INFO] Maintenance window enabled: %d:00 - %d:00",
+			slog.Info("Maintenance window enabled: %d:00 - %d:00",
 				config.AppConfig.MaintenanceWindowStart, config.AppConfig.MaintenanceWindowEnd)
 			for {
 				select {
