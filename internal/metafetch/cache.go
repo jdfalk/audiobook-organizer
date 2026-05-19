@@ -1,5 +1,5 @@
 // file: internal/metafetch/cache.go
-// version: 1.0.0
+// version: 1.1.0
 //
 // Cache-layer on top of metafetch.Service. The persisted record type
 // lives in internal/database (MetadataCandidateCache) — re-exported
@@ -15,7 +15,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -90,7 +90,7 @@ func (mfs *Service) FetchAndCache(ctx context.Context, bookID, query, author, na
 		if err := mfs.db.PutMetadataCache(entry); err != nil {
 			// Cache failure should not break the user's fetch; log and
 			// continue (callers can still consume the in-memory entry).
-			log.Printf("[WARN] metafetch: FetchAndCache write %s: %v", bookID, err)
+						slog.Warn("metafetch: FetchAndCache write :", "id", bookID, "error", err)
 			return entry, nil
 		}
 	}

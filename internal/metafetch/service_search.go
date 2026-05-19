@@ -1,5 +1,5 @@
 // file: internal/metafetch/service_search.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: bcba782a-8ed4-4285-be91-2af3eddc90e3
 // last-edited: 2026-05-05
 
@@ -12,7 +12,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -98,12 +98,12 @@ func (mfs *Service) BuildSourceChain() []metadata.MetadataSource {
 			if token != "" {
 				rawSource = metadata.NewHardcoverClient(token)
 			} else {
-				log.Printf("[WARN] Hardcover source enabled but no API token configured")
+								slog.Warn("Hardcover source enabled but no API token configured")
 			}
 		case "wikipedia":
 			rawSource = metadata.NewWikipediaClient()
 		default:
-			log.Printf("[WARN] Unknown metadata source: %s", src.ID)
+						slog.Warn("Unknown metadata source:", "id", src.ID)
 		}
 		if rawSource != nil {
 			chain = append(chain, metadata.NewProtectedSource(rawSource, 5, 30*time.Second))
@@ -239,8 +239,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 			if jerr := json.Unmarshal(cached.Results, &cachedResults); jerr == nil {
 				allResults = cachedResults
 				cacheHit = true
-				log.Printf("[DEBUG] metadata-search: cache HIT for (%s, %s) — %d results, age=%s",
-					id, src.Name(), len(cachedResults), time.Since(cached.CachedAt).Round(time.Second))
+								slog.Debug("metadata-search: cache HIT for ( ) —  results, age=", "id", id, "name", src.Name(), "count", len(cachedResults), "value", time.Since(cached.CachedAt).Round(time.Second))
 			}
 		}
 
@@ -251,7 +250,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 					allResults = append(allResults, results...)
 				} else {
 					lastErr = serr
-					log.Printf("[DEBUG] metadata-search: %s SearchByTitleAndAuthor(%q, %q) error: %v", src.Name(), searchTitle, searchAuthor, serr)
+										slog.Debug("metadata-search:  SearchByTitleAndAuthor( ) error:", "name", src.Name(), "value", searchTitle, "value", searchAuthor, "error", serr)
 				}
 			}
 
@@ -262,7 +261,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				if results, serr := src.SearchByTitleAndAuthor(context.Background(), searchTitle, bookNarrator); serr == nil {
 					allResults = append(allResults, results...)
 				} else {
-					log.Printf("[DEBUG] metadata-search: %s narrator-as-author fallback(%q, %q) error: %v", src.Name(), searchTitle, bookNarrator, serr)
+										slog.Debug("metadata-search:  narrator-as-author fallback( ) error:", "name", src.Name(), "value", searchTitle, "value", bookNarrator, "error", serr)
 				}
 			}
 
@@ -271,7 +270,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				allResults = append(allResults, results...)
 			} else {
 				lastErr = serr
-				log.Printf("[DEBUG] metadata-search: %s SearchByTitle(%q) error: %v", src.Name(), searchTitle, serr)
+								slog.Debug("metadata-search:  SearchByTitle() error:", "name", src.Name(), "value", searchTitle, "error", serr)
 			}
 			// SearchByTitle with original title if different
 			if searchTitle != book.Title {
@@ -287,7 +286,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				sourcesFailed[src.Name()] = lastErr.Error()
 			}
 
-			log.Printf("[DEBUG] metadata-search: %s returned %d raw results for %q", src.Name(), len(allResults), searchTitle)
+						slog.Debug("metadata-search:  returned  raw results for", "name", src.Name(), "count", len(allResults), "value", searchTitle)
 
 			// Write to cache on a successful non-empty fetch.
 			// Empty and error cases are not cached so they can
@@ -296,14 +295,14 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 			if len(allResults) > 0 {
 				if blob, merr := json.Marshal(allResults); merr == nil {
 					if perr := database.PutCachedMetadataFetch(mfs.db, id, src.Name(), blob, 0); perr != nil {
-						log.Printf("[WARN] metadata-search: cache put failed for (%s, %s): %v", id, src.Name(), perr)
+												slog.Warn("metadata-search: cache put failed for ( ):", "id", id, "name", src.Name(), "error", perr)
 					}
 				}
 			}
 		}
 
 		baseScores, baseTier := mfs.ScoreBaseCandidates(context.Background(), book, allResults, searchWords)
-		log.Printf("[DEBUG] metadata-search: scored %d results from %s with tier %s", len(allResults), src.Name(), baseTier)
+				slog.Debug("metadata-search: scored  results from  with tier", "count", len(allResults), "name", src.Name(), "value", baseTier)
 
 		for i, r := range allResults {
 			key := strings.ToLower(r.Title + "|" + r.Author)
@@ -332,8 +331,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				minScore = config.AppConfig.MetadataEmbeddingMinScore
 			}
 			if score <= minScore {
-				log.Printf("[DEBUG] metadata-search: adjusted score=%.3f (tier=%s) below threshold for %q by %q from %s",
-					score, baseTier, r.Title, r.Author, src.Name())
+								slog.Debug("metadata-search: adjusted score=%.3f (tier=) below threshold for  by  from", "value", score, "value", baseTier, "value", r.Title, "value", r.Author, "name", src.Name())
 				continue
 			}
 
@@ -429,7 +427,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 		audibleClient := metadata.NewAudibleClient()
 		result, err := audibleClient.LookupByASIN(asinToLookup)
 		if err != nil || result == nil {
-			log.Printf("[DEBUG] metadata-search: Audible API lookup for %q failed, trying Audnexus: %v", asinToLookup, err)
+						slog.Debug("metadata-search: Audible API lookup for  failed, trying Audnexus:", "value", asinToLookup, "error", err)
 			audnexus := metadata.NewAudnexusClient()
 			result, err = audnexus.LookupByASIN(asinToLookup)
 		}
@@ -475,7 +473,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 				})
 			}
 		} else {
-			log.Printf("[DEBUG] metadata-search: ASIN lookup for %q failed: %v", asinToLookup, err)
+						slog.Debug("metadata-search: ASIN lookup for  failed:", "value", asinToLookup, "error", err)
 		}
 	}
 
@@ -533,7 +531,7 @@ func (mfs *Service) SearchMetadataForBookWithOptions(
 		candidates = mfs.RerankTopK(context.Background(), book, candidates)
 	}
 
-	log.Printf("[DEBUG] metadata-search: returning %d candidates for %q (search words: %v)", len(candidates), searchTitle, searchWords)
+		slog.Debug("metadata-search: returning  candidates for  (search words: )", "id", len(candidates), "value", searchTitle, "value", searchWords)
 
 	return &SearchMetadataResponse{
 		Results:       candidates,

@@ -1,12 +1,12 @@
 // file: internal/metafetch/isbn.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 34290bd0-745e-4509-ad2d-e237785bb7ef
 
 package metafetch
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
@@ -65,7 +65,7 @@ func (s *ISBNService) EnrichBookISBN(bookID string) (bool, error) {
 			if _, err := s.db.UpdateBook(bookID, book); err != nil {
 				return false, err
 			}
-			log.Printf("[INFO] ISBN enrichment: found %s for %q (%s)", isbn, title, src.Name())
+						slog.Info("ISBN enrichment: found  for  ()", "value", isbn, "value", title, "name", src.Name())
 			updated = true
 			break
 		}
@@ -85,7 +85,7 @@ func (s *ISBNService) EnrichBookISBN(bookID string) (bool, error) {
 			if _, err := s.db.UpdateBook(bookID, book); err != nil {
 				return updated, err
 			}
-			log.Printf("[INFO] ASIN enrichment: found %s for %q", asin, title)
+						slog.Info("ASIN enrichment: found  for", "value", asin, "value", title)
 			updated = true
 			break
 		}
@@ -131,7 +131,7 @@ func (s *ISBNService) EnrichMissingISBNs(ctx context.Context, limit int, w *acti
 			checked++
 			found, err := s.EnrichBookISBN(books[i].ID)
 			if err != nil {
-				log.Printf("[WARN] ISBN enrichment failed for %s during batch scan: %v", books[i].ID, err)
+								slog.Warn("ISBN enrichment failed for  during batch scan:", "id", books[i].ID, "error", err)
 			} else if found {
 				updated++
 				activity.LogBatch(w, opID, "isbn-enrich", "isbn-enrichment",

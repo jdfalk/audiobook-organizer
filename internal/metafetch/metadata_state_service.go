@@ -1,5 +1,5 @@
 // file: internal/metafetch/metadata_state_service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 
 package metafetch
@@ -7,7 +7,7 @@ package metafetch
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -68,7 +68,7 @@ func (mss *MetadataStateService) LoadMetadataState(bookID string) (map[string]me
 
 	// Migrate legacy state
 	if err := mss.SaveMetadataState(bookID, legacy); err != nil {
-		log.Printf("[WARN] failed to migrate legacy metadata state for %s: %v", bookID, err)
+				slog.Warn("failed to migrate legacy metadata state for :", "id", bookID, "error", err)
 	}
 
 	return legacy, nil
@@ -147,7 +147,7 @@ func (mss *MetadataStateService) recordChange(bookID, field, changeType, source 
 		ChangedAt:     time.Now(),
 	}
 	if err := mss.db.RecordMetadataChange(record); err != nil {
-		log.Printf("[WARN] failed to record metadata change for %s/%s: %v", bookID, field, err)
+				slog.Warn("failed to record metadata change for /:", "id", bookID, "field", field, "error", err)
 	}
 }
 

@@ -1,5 +1,5 @@
 // file: internal/metafetch/service.go
-// version: 5.0.0
+// version: 5.1.0
 // guid: e5f6a7b8-c9d0-e1f2-a3b4-c5d6e7f8a9b0
 // last-edited: 2026-05-01
 
@@ -9,7 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -140,7 +140,7 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 	if mfs.isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
 		if libCopy == nil {
-			log.Printf("[WARN] cannot embed cover: no library copy for protected book %s", book.ID)
+						slog.Warn("cannot embed cover: no library copy for protected book", "id", book.ID)
 			return
 		}
 		book = libCopy
@@ -155,7 +155,7 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 		// Multi-file book
 		bookFiles, err := mfs.db.GetBookFiles(book.ID)
 		if err != nil {
-			log.Printf("[WARN] failed to list book files for cover embedding on book %s: %v", book.ID, err)
+						slog.Warn("failed to list book files for cover embedding on book :", "id", book.ID, "error", err)
 			return
 		}
 		for _, bf := range bookFiles {
@@ -185,7 +185,7 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 		if len(existingData) > 0 {
 			existingHash := fmt.Sprintf("%x", sha256.Sum256(existingData))[:12]
 			if newHash == existingHash {
-				log.Printf("[DEBUG] cover art unchanged for book %s, skipping embed", book.ID)
+								slog.Debug("cover art unchanged for book , skipping embed", "id", book.ID)
 				return
 			}
 		}
@@ -200,13 +200,13 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 	embedded := 0
 	for _, f := range files {
 		if err := tagger.EmbedCoverArtSafe(context.Background(), f, coverPath, mfs.safeWriteDeps); err != nil {
-			log.Printf("[WARN] cover art embedding failed for %s: %v", f, err)
+						slog.Warn("cover art embedding failed for :", "value", f, "error", err)
 		} else {
 			embedded++
 		}
 	}
 	if embedded > 0 {
-		log.Printf("[INFO] cover art embedded into %d file(s) for book %s", embedded, book.ID)
+				slog.Info("cover art embedded into  file(s) for book", "count", embedded, "id", book.ID)
 	}
 }
 
@@ -236,7 +236,7 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 	// Check if we already have this exact image archived (by hash)
 	dedupDir := filepath.Join(config.AppConfig.RootDir, "covers", "dedup")
 	if err := os.MkdirAll(dedupDir, 0775); err != nil {
-		log.Printf("[WARN] failed to create cover dedup dir: %v", err)
+				slog.Warn("failed to create cover dedup dir:", "error", err)
 		return
 	}
 
@@ -244,7 +244,7 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 	if _, err := os.Stat(dedupPath); err != nil {
 		// New unique image — save to dedup store
 		if err := os.WriteFile(dedupPath, data, 0664); err != nil {
-			log.Printf("[WARN] failed to write dedup cover for %s: %v", bookID, err)
+						slog.Warn("failed to write dedup cover for :", "id", bookID, "error", err)
 			return
 		}
 	}
@@ -252,7 +252,7 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 	// Create a history entry that references the dedup hash instead of storing a copy
 	historyDir := filepath.Join(config.AppConfig.RootDir, "covers", "history", bookID)
 	if err := os.MkdirAll(historyDir, 0775); err != nil {
-		log.Printf("[WARN] failed to create cover history dir: %v", err)
+				slog.Warn("failed to create cover history dir:", "error", err)
 		return
 	}
 
@@ -264,12 +264,12 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 		if err := os.Link(dedupPath, archivePath); err != nil {
 			// Hardlink also failed — just copy
 			if err := os.WriteFile(archivePath, data, 0664); err != nil {
-				log.Printf("[WARN] failed to archive old cover for %s: %v", bookID, err)
+								slog.Warn("failed to archive old cover for :", "id", bookID, "error", err)
 				return
 			}
 		}
 	}
-	log.Printf("[INFO] archived old cover art: %s (hash=%s)", archivePath, coverHash[:12])
+		slog.Info("archived old cover art:  (hash=)", "path", archivePath, "hash", coverHash[:12])
 
 	// Record in metadata change history so it appears in the changelog
 	now := time.Now()
@@ -283,7 +283,7 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 		ChangedAt:  now,
 	}
 	if err := mfs.db.RecordMetadataChange(record); err != nil {
-		log.Printf("[WARN] failed to record cover archive history for %s: %v", bookID, err)
+				slog.Warn("failed to record cover archive history for :", "id", bookID, "error", err)
 	}
 	// Dual-write to unified activity log
 	if mfs.activityService != nil {
@@ -439,15 +439,15 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 				bookFiles[0].FilePath = entry.TargetPath
 			}
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
-				log.Printf("[WARN] failed to update book path for %s: %v", id, err)
+								slog.Warn("failed to update book path for :", "id", id, "error", err)
 			} else {
-				log.Printf("[INFO] renamed single-file book %s: %s", id, entry.TargetPath)
+								slog.Info("renamed single-file book :", "id", id, "path", entry.TargetPath)
 			}
 		} else if bf, ok := bfMap[entry.SegmentID]; ok {
 			bf.FilePath = entry.TargetPath
 			bf.ITunesPath = ComputeITunesPath(entry.TargetPath)
 			if err := mfs.db.UpdateBookFile(bf.ID, bf); err != nil {
-				log.Printf("[WARN] failed to update book_file path for %s: %v", bf.ID, err)
+								slog.Warn("failed to update book_file path for :", "id", bf.ID, "error", err)
 			}
 		}
 		// Record path change for each successful rename
@@ -479,9 +479,9 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 		if newBookPath != book.FilePath {
 			book.FilePath = newBookPath
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
-				log.Printf("[WARN] failed to update book path for %s: %v", id, err)
+								slog.Warn("failed to update book path for :", "id", id, "error", err)
 			} else {
-				log.Printf("[INFO] renamed book files for %s: %s", id, newBookPath)
+								slog.Info("renamed book files for :", "id", id, "path", newBookPath)
 			}
 		}
 	}
@@ -493,7 +493,7 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 				bookFiles[i].ITunesPath = itunesPath
 				if !strings.HasPrefix(bookFiles[i].ID, "virtual-") {
 					if err := mfs.db.UpdateBookFile(bookFiles[i].ID, &bookFiles[i]); err != nil {
-						log.Printf("[WARN] failed to update itunes_path for book file %s: %v", bookFiles[i].ID, err)
+												slog.Warn("failed to update itunes_path for book file :", "id", bookFiles[i].ID, "error", err)
 					}
 				}
 			}
@@ -512,7 +512,7 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 	if mfs.dedupEngine != nil {
 		go func() {
 			if _, err := mfs.dedupEngine.CheckBook(context.Background(), id); err != nil {
-				log.Printf("[WARN] dedup re-check failed for book %s after metadata apply: %v", id, err)
+								slog.Warn("dedup re-check failed for book  after metadata apply:", "id", id, "error", err)
 			}
 		}()
 	}

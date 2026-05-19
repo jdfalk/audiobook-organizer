@@ -1,5 +1,5 @@
 // file: internal/metafetch/lifecycle.go
-// version: 1.2.0
+// version: 1.3.0
 
 // Lifecycle methods on *metafetch.Service that the serviceregistry
 // container picks up via interface satisfaction. PostInit wires the
@@ -11,7 +11,7 @@ package metafetch
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -45,13 +45,13 @@ func (mfs *Service) PostInit(ctx context.Context, c *serviceregistry.Container) 
 	// Dedup engine wiring — engine is config-gated, may be nil
 	if engine, ok := serviceregistry.TryGet[*dedup.Engine](c, "dedup"); ok && engine != nil {
 		mfs.SetDedupEngine(engine)
-		log.Printf("[metafetch] PostInit: SetDedupEngine wired")
+		slog.Info("PostInit: SetDedupEngine wired")
 	}
 
 	// Embedding scorer — config-gated on MetadataEmbeddingScoringEnabled
 	if scorer, ok := serviceregistry.TryGet[*ai.EmbeddingScorer](c, "metadatascorer"); ok && scorer != nil {
 		mfs.SetMetadataScorer(scorer)
-		log.Println("[INFO] Metadata candidate scoring: embedding tier enabled")
+		slog.Info("Metadata candidate scoring: embedding tier enabled")
 	}
 
 	// LLM rerank scorer — wired unconditionally when llmparser is
