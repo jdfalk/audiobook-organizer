@@ -1786,8 +1786,49 @@ function bookCoverSrc(book: Book): string {
     : `/api/v1/covers/proxy?url=${encodeURIComponent(book.cover_url)}`;
 }
 
-function AcousticBookCard({ book, label }: { book: Book; label: string }) {
+// Helper function to render book metadata (reusable in AcousticComparePanel)
+export function AcousticBookMetadata({ book, filePath }: { book: Book; filePath?: string }) {
   const navigate = useNavigate();
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography
+        variant="body2"
+        fontWeight={600}
+        sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+        onClick={() => navigate(`/books/${book.id}`)}
+        noWrap
+      >
+        {book.title || <em style={{ opacity: 0.5 }}>Untitled</em>}
+      </Typography>
+      {book.author_name && (
+        <Typography variant="caption" color="text.secondary" noWrap>
+          {book.author_name}
+        </Typography>
+      )}
+      {book.series_name && (
+        <Typography variant="caption" color="text.secondary" noWrap display="block">
+          {book.series_name}{book.series_position ? ` · Book ${book.series_position}` : ''}
+        </Typography>
+      )}
+      <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+        {book.format && <Chip label={book.format.toUpperCase()} size="small" />}
+        {book.duration && <Chip label={formatDuration(book.duration)} size="small" variant="outlined" />}
+      </Stack>
+      {filePath && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mt: 0.5, wordBreak: 'break-all', fontSize: '0.65rem', fontFamily: 'monospace' }}
+        >
+          {filePath}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+// Legacy function for backward compatibility (if used elsewhere)
+function AcousticBookCard({ book, label }: { book: Book; label: string }) {
   return (
     <Box sx={{ flex: 1, minWidth: 0 }}>
       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -1801,38 +1842,7 @@ function AcousticBookCard({ book, label }: { book: Book; label: string }) {
         >
           <GraphicEqIcon />
         </Avatar>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-            onClick={() => navigate(`/books/${book.id}`)}
-            noWrap
-          >
-            {book.title || <em style={{ opacity: 0.5 }}>Untitled</em>}
-          </Typography>
-          {book.author_name && (
-            <Typography variant="caption" color="text.secondary" noWrap>{book.author_name}</Typography>
-          )}
-          {book.series_name && (
-            <Typography variant="caption" color="text.secondary" noWrap display="block">
-              {book.series_name}{book.series_position ? ` · Book ${book.series_position}` : ''}
-            </Typography>
-          )}
-          <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
-            {book.format && <Chip label={book.format.toUpperCase()} size="small" />}
-            {book.duration && (
-              <Chip label={formatDuration(book.duration)} size="small" variant="outlined" />
-            )}
-          </Stack>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ display: 'block', mt: 0.5, wordBreak: 'break-all', fontSize: '0.65rem' }}
-          >
-            {book.file_path}
-          </Typography>
-        </Box>
+        <AcousticBookMetadata book={book} filePath={book.file_path} />
       </Stack>
     </Box>
   );
