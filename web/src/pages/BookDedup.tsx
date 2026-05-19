@@ -1862,6 +1862,8 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
   const [error, setError] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [idAError, setIdAError] = useState<string | null>(null);
+  const [idBError, setIdBError] = useState<string | null>(null);
 
   const handleOpenCoverLightbox = (src: string | null) => {
     setLightboxSrc(src);
@@ -1878,8 +1880,27 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
     if (initialB) setBookBID(initialB);
   }, [initialA, initialB]);
 
+  // Validate ULID format: 26-character alphanumeric (0-9, A-Z only)
+  const validateBookID = (id: string): string | null => {
+    const ulidPattern = /^[0-9A-Z]{26}$/;
+    const trimmed = id.trim();
+    if (!trimmed) return 'Book ID is required';
+    if (!ulidPattern.test(trimmed)) {
+      return 'Invalid book ID format. Must be 26-character alphanumeric (0-9, A-Z only).';
+    }
+    return null;
+  };
+
   const handleCompare = async () => {
-    if (!bookAID.trim() || !bookBID.trim()) return;
+    // Validate both IDs
+    const aError = validateBookID(bookAID);
+    const bError = validateBookID(bookBID);
+
+    setIdAError(aError);
+    setIdBError(bError);
+
+    if (aError || bError) return;
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -1905,12 +1926,14 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
   return (
     <Paper sx={{ p: 2 }}>
       <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>Fingerprint Comparison</Typography>
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="flex-start">
         <TextField
           label="Book A ID"
           size="small"
           value={bookAID}
           onChange={(e) => setBookAID(e.target.value)}
+          error={idAError !== null}
+          helperText={idAError}
           sx={{ flex: 1 }}
           placeholder="Paste book ID…"
         />
@@ -1919,10 +1942,12 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
           size="small"
           value={bookBID}
           onChange={(e) => setBookBID(e.target.value)}
+          error={idBError !== null}
+          helperText={idBError}
           sx={{ flex: 1 }}
           placeholder="Paste book ID…"
         />
-        <Button variant="contained" onClick={handleCompare} disabled={loading || !bookAID.trim() || !bookBID.trim()}>
+        <Button variant="contained" onClick={handleCompare} disabled={loading || !bookAID.trim() || !bookBID.trim()} sx={{ mt: 0.5 }}>
           {loading ? 'Comparing…' : 'Compare'}
         </Button>
       </Stack>
