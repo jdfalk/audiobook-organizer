@@ -1,7 +1,7 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.24.0
+// version: 3.25.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
-// last-edited: 2026-05-17
+// last-edited: 2026-05-19
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -44,7 +44,6 @@ import {
   TableRow,
   TableCell,
   TableBody,
-  Avatar,
 } from '@mui/material';
 import MergeIcon from '@mui/icons-material/MergeType';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
@@ -75,6 +74,7 @@ import { AuthorDedupTab, RoleDetails } from '../components/dedup/DedupAuthorTab'
 import { SeriesDedupTab } from '../components/dedup/DedupSeriesTab';
 import { ReconcileTab } from '../components/dedup/DedupReconcileTab';
 import { cleanDisplayTitle } from '../components/dedup/dedupHelpers';
+import { CoverLightbox } from '../components/CoverLightbox';
 
 // ---- Book Dedup Tab ----
 // Moved to web/src/components/dedup/DedupBookTab.tsx
@@ -1827,27 +1827,6 @@ export function AcousticBookMetadata({ book, filePath }: { book: Book; filePath?
   );
 }
 
-// Legacy function for backward compatibility (if used elsewhere)
-function AcousticBookCard({ book, label }: { book: Book; label: string }) {
-  return (
-    <Box sx={{ flex: 1, minWidth: 0 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-        {label}
-      </Typography>
-      <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} alignItems="flex-start">
-        <Avatar
-          src={bookCoverSrc(book)}
-          variant="rounded"
-          sx={{ width: 56, height: 72, flexShrink: 0, bgcolor: 'action.selected' }}
-        >
-          <GraphicEqIcon />
-        </Avatar>
-        <AcousticBookMetadata book={book} filePath={book.file_path} />
-      </Stack>
-    </Box>
-  );
-}
-
 interface AcousticComparePanelProps {
   initialA?: string;
   initialB?: string;
@@ -1859,6 +1838,18 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
   const [result, setResult] = useState<api.AcoustIDCompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  const handleOpenCoverLightbox = (src: string | null) => {
+    setLightboxSrc(src);
+    setLightboxOpen(true);
+  };
+
+  const handleCloseLightbox = () => {
+    setLightboxOpen(false);
+    setLightboxSrc(null);
+  };
 
   useEffect(() => {
     if (initialA) setBookAID(initialA);
@@ -1918,12 +1909,83 @@ function AcousticComparePanel({ initialA = '', initialB = '' }: AcousticCompareP
 
       {result && (
         <Box>
-          {/* Book cards side by side */}
-          <Stack direction="row" spacing={3} sx={{ mb: 2 }}>
-            <AcousticBookCard book={result.book_a as Book} label="Book A" />
+          {/* Cover images and metadata side by side */}
+          <Stack direction="row" spacing={3} sx={{ mb: 3 }}>
+            {/* Book A */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Book A
+              </Typography>
+              {/* Cover image (clickable) */}
+              <Box
+                onClick={() => handleOpenCoverLightbox(bookCoverSrc(result.book_a as Book))}
+                sx={{
+                  width: 180,
+                  height: 240,
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  cursor: result.book_a?.cover_url ? 'pointer' : 'default',
+                  bgcolor: 'action.disabledBackground',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  '&:hover': result.book_a?.cover_url ? { opacity: 0.8, boxShadow: 3 } : {},
+                  transition: 'all 0.2s',
+                }}
+              >
+                {result.book_a?.cover_url ? (
+                  <img
+                    src={bookCoverSrc(result.book_a as Book)}
+                    alt={result.book_a?.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <GraphicEqIcon sx={{ fontSize: 60, opacity: 0.3 }} />
+                )}
+              </Box>
+              {/* Metadata */}
+              <AcousticBookMetadata book={result.book_a as Book} filePath={(result.book_a as any)?.file_path} />
+            </Box>
+
             <Divider orientation="vertical" flexItem />
-            <AcousticBookCard book={result.book_b as Book} label="Book B" />
+
+            {/* Book B (same structure as Book A) */}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Book B
+              </Typography>
+              <Box
+                onClick={() => handleOpenCoverLightbox(bookCoverSrc(result.book_b as Book))}
+                sx={{
+                  width: 180,
+                  height: 240,
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  cursor: result.book_b?.cover_url ? 'pointer' : 'default',
+                  bgcolor: 'action.disabledBackground',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  '&:hover': result.book_b?.cover_url ? { opacity: 0.8, boxShadow: 3 } : {},
+                  transition: 'all 0.2s',
+                }}
+              >
+                {result.book_b?.cover_url ? (
+                  <img
+                    src={bookCoverSrc(result.book_b as Book)}
+                    alt={result.book_b?.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <GraphicEqIcon sx={{ fontSize: 60, opacity: 0.3 }} />
+                )}
+              </Box>
+              <AcousticBookMetadata book={result.book_b as Book} filePath={(result.book_b as any)?.file_path} />
+            </Box>
           </Stack>
+
+          {/* Lightbox modal */}
+          <CoverLightbox open={lightboxOpen} src={lightboxSrc} onClose={handleCloseLightbox} />
 
           {/* Similarity score */}
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
