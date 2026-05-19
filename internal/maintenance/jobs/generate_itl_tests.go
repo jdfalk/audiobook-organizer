@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/generate_itl_tests.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: b7e3f1a2-4c5d-6e7f-8a9b-0c1d2e3f4a5b
 // last-edited: 2026-05-01
 
@@ -16,7 +16,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/util"
-)
+
+	"log/slog")
 
 func init() { maintenance.Register(&generateITLTestsJob{}) }
 
@@ -55,11 +56,11 @@ func (j *generateITLTestsJob) Run(ctx context.Context, store database.Store, rep
 	}
 
 	msg := fmt.Sprintf("found %d books and %d book_files", len(allBooks), len(allBookFiles))
-	reporter.Log("info", msg, nil)
+	slog.Info(msg)
 
 	if dryRun {
 		dry := fmt.Sprintf("dry-run: would generate ITL test suite in %s", outputDir)
-		reporter.Log("info", dry, nil)
+		slog.Info(dry)
 		return nil
 	}
 
@@ -74,6 +75,6 @@ func (j *generateITLTestsJob) Run(ctx context.Context, store database.Store, rep
 
 	done := fmt.Sprintf("Generated ITL test suite in %s with %d books and %d book_files",
 		outputDir, len(allBooks), len(allBookFiles))
-	reporter.Log("info", done, nil)
+	slog.Info(done)
 	return nil
 }

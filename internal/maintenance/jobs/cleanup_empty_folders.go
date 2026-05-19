@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/cleanup_empty_folders.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: a1000006-0000-0000-0000-000000000006
 // last-edited: 2026-05-05
 
@@ -15,7 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&cleanupEmptyFoldersJob{}) }
 
@@ -37,7 +37,7 @@ func (j *cleanupEmptyFoldersJob) CanResume() bool { return true }
 func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	root := config.AppConfig.RootDir
 	if root == "" {
-		reporter.Log("warn", "cleanup-empty-folders: RootDir not configured", nil)
+		slog.Warn("cleanup-empty-folders: RootDir not configured")
 		return nil
 	}
 
@@ -58,7 +58,7 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 	sort.Slice(dirs, func(i, k int) bool { return len(dirs[i]) > len(dirs[k]) })
 
 	reporter.SetTotal(len(dirs))
-	reporter.Log("info", fmt.Sprintf("cleanup-empty-folders: found %d directories to check (dry_run=%v)", len(dirs), dryRun), nil)
+	slog.Info(fmt.Sprintf("cleanup-empty-folders: found %d directories to check (dry_run=%v)", len(dirs), dryRun))
 
 	removed := 0
 	for _, dir := range dirs {
@@ -68,7 +68,7 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			reporter.Log("error", fmt.Sprintf("cleanup-empty-folders: failed to read %s: %v", dir, err), nil)
+			slog.Error(fmt.Sprintf("cleanup-empty-folders: failed to read %s: %v", dir, err))
 			reporter.Increment()
 			continue
 		}
@@ -79,18 +79,18 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 		}
 
 		if dryRun {
-			reporter.Log("info", fmt.Sprintf("[dry] would remove empty dir: %s", dir), nil)
+			slog.Info(fmt.Sprintf("[dry] would remove empty dir: %s", dir))
 		} else {
 			if err := os.Remove(dir); err != nil {
-				reporter.Log("error", fmt.Sprintf("cleanup-empty-folders: failed to remove %s: %v", dir, err), nil)
+				slog.Error(fmt.Sprintf("cleanup-empty-folders: failed to remove %s: %v", dir, err))
 			} else {
-				reporter.Log("info", fmt.Sprintf("removed empty dir: %s", dir), nil)
+				slog.Info(fmt.Sprintf("removed empty dir: %s", dir))
 				removed++
 			}
 		}
 		reporter.Increment()
 	}
 
-	reporter.Log("info", fmt.Sprintf("cleanup-empty-folders: complete — checked %d dirs, removed %d (dry_run=%v)", len(dirs), removed, dryRun), nil)
+	slog.Info(fmt.Sprintf("cleanup-empty-folders: complete — checked %d dirs, removed %d (dry_run=%v)", len(dirs), removed, dryRun))
 	return nil
 }

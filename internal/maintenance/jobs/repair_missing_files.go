@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/repair_missing_files.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: f1a7b5e6-8c9d-0e1f-2a3b-4c5d6e7f8a90
 // last-edited: 2026-05-01
 
@@ -21,7 +21,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/itunes"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/util"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&repairMissingFilesJob{}) }
 
@@ -111,7 +111,7 @@ func (j *repairMissingFilesJob) Run(ctx context.Context, store database.Store, r
 	}
 
 	if len(work) == 0 {
-		reporter.Log("info", "all files already processed", nil)
+		slog.Info("all files already processed")
 		return nil
 	}
 
@@ -142,7 +142,7 @@ func (j *repairMissingFilesJob) Run(ctx context.Context, store database.Store, r
 	var idxMu sync.Mutex
 	buildIdx := func() {
 		idxOnce.Do(func() {
-			reporter.Log("info", "building filename index…", nil)
+			slog.Info("building filename index…")
 			idx := make(map[string][]string, 200000)
 			for _, root := range searchRoots {
 				_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
@@ -210,7 +210,7 @@ func (j *repairMissingFilesJob) Run(ctx context.Context, store database.Store, r
 
 	finalCount := atomic.LoadInt64(&completed)
 	msg := fmt.Sprintf("Repaired %d of %d missing files", finalCount, totalFiles)
-	reporter.Log("info", msg, nil)
+	slog.Info(msg)
 	log.Printf("[INFO] repair-missing-files %s: finished %d/%d files", opID, finalCount, totalFiles)
 	return nil
 }

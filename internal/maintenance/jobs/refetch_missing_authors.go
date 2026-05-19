@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/refetch_missing_authors.go
-// version: 2.0.0
+// version: 2.0.1
 // guid: a1000012-0000-0000-0000-000000000012
 // last-edited: 2026-05-05
 
@@ -14,7 +14,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&refetchMissingAuthorsJob{}) }
 
@@ -106,7 +106,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 		}
 
 		if audioPath == "" {
-			reporter.Log("warn", fmt.Sprintf("no audio file for book %s (%s), skipping", b.ID, b.Title), nil)
+			slog.Warn(fmt.Sprintf("no audio file for book %s (%s), skipping", b.ID, b.Title))
 			skipped++
 			continue
 		}
@@ -115,7 +115,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 		// Tag priority: ALBUMARTIST > ARTIST > COMPOSER (composer = narrator in audiobooks).
 		tags, readErr := metadata.ReadRawTags(audioPath)
 		if readErr != nil {
-			reporter.Log("error", fmt.Sprintf("failed to read tags for %s: %v", audioPath, readErr), nil)
+			slog.Error(fmt.Sprintf("failed to read tags for %s: %v", audioPath, readErr))
 			errors++
 			continue
 		}
@@ -143,13 +143,13 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 		}
 
 		if authorName == "" {
-			reporter.Log("warn", fmt.Sprintf("no author found in tags for book %s (%s)", b.ID, b.Title), nil)
+			slog.Warn(fmt.Sprintf("no author found in tags for book %s (%s)", b.ID, b.Title))
 			skipped++
 			continue
 		}
 
 		if dryRun {
-			reporter.Log("info", fmt.Sprintf("[dry] would set author %q for book %s (%s)", authorName, b.ID, b.Title), nil)
+			slog.Info(fmt.Sprintf("[dry] would set author %q for book %s (%s)", authorName, b.ID, b.Title))
 			filled++
 			continue
 		}
@@ -159,7 +159,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 		if err != nil || author == nil {
 			author, err = store.CreateAuthor(authorName)
 			if err != nil {
-				reporter.Log("error", fmt.Sprintf("failed to create author %q for book %s: %v", authorName, b.ID, err), nil)
+				slog.Error(fmt.Sprintf("failed to create author %q for book %s: %v", authorName, b.ID, err))
 				errors++
 				continue
 			}
@@ -168,7 +168,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 
 		b.AuthorID = &author.ID
 		if _, err := store.UpdateBook(b.ID, b); err != nil {
-			reporter.Log("error", fmt.Sprintf("failed to update book %s: %v", b.ID, err), nil)
+			slog.Error(fmt.Sprintf("failed to update book %s: %v", b.ID, err))
 			errors++
 			continue
 		}
@@ -179,7 +179,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 
 	summary := fmt.Sprintf("refetch-missing-authors complete: total=%d filled=%d skipped=%d errors=%d dryRun=%v",
 		len(books), filled, skipped, errors, dryRun)
-	reporter.Log("info", summary, nil)
+	slog.Info(summary)
 	log.Printf("[INFO] %s %s", opID, summary)
 	return nil
 }

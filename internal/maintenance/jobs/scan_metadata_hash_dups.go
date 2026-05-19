@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/scan_metadata_hash_dups.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000017-0000-0000-0000-000000000017
 // last-edited: 2026-05-01
 
@@ -11,7 +11,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&scanMetadataHashDupsJob{}) }
 
@@ -51,9 +51,9 @@ func (j *scanMetadataHashDupsJob) Run(ctx context.Context, store database.Store,
 		if len(ids) > 1 {
 			dups++
 			detail := fmt.Sprintf("book_ids=%v", ids)
-			reporter.Log("warn", "metadata hash duplicate group", &detail)
+			slog.Warn("metadata hash duplicate group", "details", detail)
 		}
 	}
-	reporter.Log("info", fmt.Sprintf("scan-metadata-hash-dups complete: %d duplicate groups", dups), nil)
+	slog.Info(fmt.Sprintf("scan-metadata-hash-dups complete: %d duplicate groups", dups))
 	return nil
 }

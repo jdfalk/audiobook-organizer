@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/bulk_deluge_import.go
-// version: 1.2.0
+// version: 1.2.1
 // guid: a2b8c6d7-9e0f-1a2b-3c4d-5e6f7a8b9c0d
 // last-edited: 2026-05-01
 
@@ -20,7 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/util"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&bulkDelugeImportJob{}) }
 
@@ -118,7 +118,7 @@ func (j *bulkDelugeImportJob) Run(ctx context.Context, store database.Store, rep
 	}
 
 	log.Printf("[INFO] bulk-deluge-import %s: done. imported=%d failed=%d", opID, imported, failed)
-	reporter.Log("info", fmt.Sprintf("imported=%d failed=%d total=%d", imported, failed, total), nil)
+	slog.Info(fmt.Sprintf("imported=%d failed=%d total=%d", imported, failed, total))
 	return nil
 }
 

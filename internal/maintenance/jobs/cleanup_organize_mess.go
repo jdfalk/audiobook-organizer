@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/cleanup_organize_mess.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: a1000007-0000-0000-0000-000000000007
 // last-edited: 2026-05-01
 
@@ -18,7 +18,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&cleanupOrganizeMess{}) }
 
@@ -86,12 +86,12 @@ func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporte
 		name := filepath.Base(dir)
 		if reason := comIsGarbageDirectory(name); reason != "" {
 			garbageFound++
-			reporter.Log("warn", fmt.Sprintf("Garbage dir %q: %s", dir, reason), nil)
+			slog.Warn(fmt.Sprintf("Garbage dir %q: %s", dir, reason))
 		}
 
 		empty, checkErr := comIsDirEmpty(dir)
 		if checkErr != nil {
-			reporter.Log("error", fmt.Sprintf("Stat error for %q: %v", dir, checkErr), nil)
+			slog.Error(fmt.Sprintf("Stat error for %q: %v", dir, checkErr))
 			reporter.Increment()
 			continue
 		}
@@ -102,7 +102,7 @@ func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporte
 
 		if !dryRun {
 			if removeErr := os.Remove(dir); removeErr != nil {
-				reporter.Log("error", fmt.Sprintf("Failed to remove %q: %v", dir, removeErr), nil)
+				slog.Error(fmt.Sprintf("Failed to remove %q: %v", dir, removeErr))
 			} else {
 				emptyRemoved++
 			}
@@ -112,7 +112,7 @@ func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporte
 		reporter.Increment()
 	}
 
-	reporter.Log("info", fmt.Sprintf("Done: garbage_dirs=%d empty_removed=%d dryRun=%v", garbageFound, emptyRemoved, dryRun), nil)
+	slog.Info(fmt.Sprintf("Done: garbage_dirs=%d empty_removed=%d dryRun=%v", garbageFound, emptyRemoved, dryRun))
 	return nil
 }
 

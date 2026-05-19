@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/backfill_metadata_source_hash.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000015-0000-0000-0000-000000000015
 // last-edited: 2026-05-01
 
@@ -12,7 +12,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&backfillMetadataSourceHashJob{}) }
 
@@ -58,14 +58,14 @@ func (j *backfillMetadataSourceHashJob) Run(ctx context.Context, store database.
 			updBook.MetadataSourceHash = &hash
 			if _, uerr := store.UpdateBook(book.ID, &updBook); uerr != nil {
 				msg := uerr.Error()
-				reporter.Log("error", "backfill-metadata-source-hash: UpdateBook failed", &msg)
+				slog.Error("backfill-metadata-source-hash: UpdateBook failed", "details", msg)
 				continue
 			}
 		}
 		updated++
 	}
 	_ = updated
-	reporter.Log("info", "backfill-metadata-source-hash complete", nil)
+	slog.Info("backfill-metadata-source-hash complete")
 	return nil
 }
 

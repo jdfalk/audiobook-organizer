@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/relink_missing_to_itunes.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: e0f6a4d5-7b8c-9d0e-1f2a-3b4c5d6e7f80
 // last-edited: 2026-05-05
 
@@ -20,7 +20,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/util"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&relinkMissingToITunesJob{}) }
 
@@ -159,9 +159,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 
 	log.Printf("[INFO] relink-missing-to-itunes: relinked=%d ambiguous=%d unresolved=%d skipped=%d",
 		relinked, ambiguous, unresolved, skipped)
-	reporter.Log("info",
-		fmt.Sprintf("relinked=%d ambiguous=%d unresolved=%d skipped=%d", relinked, ambiguous, unresolved, skipped),
-		nil)
+	slog.Info(fmt.Sprintf("relinked=%d ambiguous=%d unresolved=%d skipped=%d", relinked, ambiguous, unresolved, skipped))
 	return nil
 }
 

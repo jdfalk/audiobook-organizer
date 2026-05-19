@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/fix_version_groups.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: a1000004-0000-0000-0000-000000000004
 // last-edited: 2026-05-01
 
@@ -17,7 +17,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/metafetch"
 	"github.com/oklog/ulid/v2"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&fixVersionGroupsJob{}) }
 
@@ -82,7 +82,7 @@ func (j *fixVersionGroupsJob) Run(ctx context.Context, store database.Store, rep
 
 		if !dryRun {
 			if applyErr := vgUnlinkOutliers(store, outliers); applyErr != nil {
-				reporter.Log("error", fmt.Sprintf("Failed to unlink outliers in group %s: %v", groupID, applyErr), nil)
+				slog.Error(fmt.Sprintf("Failed to unlink outliers in group %s: %v", groupID, applyErr))
 				mismatchErrors++
 			} else {
 				mismatchFixed++
@@ -118,7 +118,7 @@ func (j *fixVersionGroupsJob) Run(ctx context.Context, store database.Store, rep
 		suggested := vgBestMatchSubdir(b.FilePath, b.Title)
 		if !dryRun && suggested != "" {
 			if fixErr := vgFixAuthorDirPath(store, b, suggested); fixErr != nil {
-				reporter.Log("error", fmt.Sprintf("Failed to fix author-dir path for book %s: %v", b.ID, fixErr), nil)
+				slog.Error(fmt.Sprintf("Failed to fix author-dir path for book %s: %v", b.ID, fixErr))
 				authorDirErrors++
 			} else {
 				authorDirFixed++
@@ -128,8 +128,7 @@ func (j *fixVersionGroupsJob) Run(ctx context.Context, store database.Store, rep
 		}
 	}
 
-	reporter.Log("info", fmt.Sprintf("Done: mismatch_fixed=%d mismatch_errors=%d author_dir_fixed=%d author_dir_errors=%d dryRun=%v",
-		mismatchFixed, mismatchErrors, authorDirFixed, authorDirErrors, dryRun), nil)
+	slog.Info(fmt.Sprintf("Done: mismatch_fixed=%d mismatch_errors=%d author_dir_fixed=%d author_dir_errors=%d dryRun=%v", mismatchFixed, mismatchErrors, authorDirFixed, authorDirErrors, dryRun))
 	return nil
 }
 

@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/revert_metadata_fetch.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c8d4e2b3-5f6a-7b8c-9d0e-1f2a3b4c5d6e
 // last-edited: 2026-04-28
 
@@ -15,7 +15,8 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+
+	"log/slog")
 
 func init() { maintenance.Register(&revertMetadataFetchJob{}) }
 
@@ -208,6 +209,6 @@ func (j *revertMetadataFetchJob) Run(ctx context.Context, store database.Store, 
 
 	log.Printf("[INFO] revert-metadata-fetch: done — reverted:%d skipped:%d errors:%d", reverted, skipped, errors)
 	summary := fmt.Sprintf("Reverted %d books (skipped: %d, errors: %d)", reverted, skipped, errors)
-	reporter.Log("info", summary, nil)
+	slog.Info(summary)
 	return nil
 }

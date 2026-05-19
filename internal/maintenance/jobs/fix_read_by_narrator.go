@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/fix_read_by_narrator.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: a1000001-0000-0000-0000-000000000001
 // last-edited: 2026-05-01
 
@@ -13,7 +13,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&fixReadByNarratorJob{}) }
 
@@ -78,7 +78,7 @@ func (j *fixReadByNarratorJob) Run(ctx context.Context, store database.Store, re
 		found++
 		if !dryRun {
 			if applyErr := rbnrApplyFix(store, book, fix); applyErr != nil {
-				reporter.Log("error", fmt.Sprintf("Failed to fix book %s: %v", book.ID, applyErr), nil)
+				slog.Error(fmt.Sprintf("Failed to fix book %s: %v", book.ID, applyErr))
 			} else {
 				applied++
 			}
@@ -86,7 +86,7 @@ func (j *fixReadByNarratorJob) Run(ctx context.Context, store database.Store, re
 		reporter.Increment()
 	}
 
-	reporter.Log("info", fmt.Sprintf("Done: found=%d applied=%d dryRun=%v", found, applied, dryRun), nil)
+	slog.Info(fmt.Sprintf("Done: found=%d applied=%d dryRun=%v", found, applied, dryRun))
 	return nil
 }
 

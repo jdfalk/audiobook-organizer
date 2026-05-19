@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/cleanup_backups.go
-// version: 1.1.0
+// version: 1.1.1
 // guid: a1000021-0000-0000-0000-000000000021
 // last-edited: 2026-05-01
 
@@ -14,7 +14,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&cleanupBackupsJob{}) }
 
@@ -37,7 +37,7 @@ func (j *cleanupBackupsJob) CanResume() bool { return false }
 func (j *cleanupBackupsJob) Run(ctx context.Context, _ database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	root := config.AppConfig.RootDir
 	if root == "" {
-		reporter.Log("warn", "cleanup-backups: RootDir not configured", nil)
+		slog.Warn("cleanup-backups: RootDir not configured")
 		return nil
 	}
 	removed := 0
@@ -57,11 +57,11 @@ func (j *cleanupBackupsJob) Run(ctx context.Context, _ database.Store, reporter 
 			}
 		} else {
 			removed++
-			reporter.Log("info", "would remove: "+path, nil)
+			slog.Info("would remove: "+path)
 		}
 		return nil
 	})
 	_ = removed
-	reporter.Log("info", "cleanup-backups complete", nil)
+	slog.Info("cleanup-backups complete")
 	return err
 }

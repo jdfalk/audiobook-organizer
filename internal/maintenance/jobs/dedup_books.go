@@ -1,5 +1,5 @@
 // file: internal/maintenance/jobs/dedup_books.go
-// version: 2.1.0
+// version: 2.1.1
 // guid: a1000010-0000-0000-0000-000000000010
 // last-edited: 2026-05-01
 
@@ -17,7 +17,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-)
+	"log/slog")
 
 func init() { maintenance.Register(&dedupBooksJob{}) }
 
@@ -64,7 +64,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 		}
 		if !dryRun {
 			if delErr := ddSoftDeleteBook(store, book.ID); delErr != nil {
-				reporter.Log("error", fmt.Sprintf("phase1 delete %s: %v", book.ID, delErr), nil)
+				slog.Error(fmt.Sprintf("phase1 delete %s: %v", book.ID, delErr))
 				continue
 			}
 		}
@@ -104,7 +104,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 			}
 			dup := &live[i]
 			if mergeErr := ddMergeDuplicateBook(store, keeper, dup, dryRun, j.enqueuer); mergeErr != nil {
-				reporter.Log("error", fmt.Sprintf("phase2 merge %s->%s fp=%s: %v", dup.ID, keeper.ID, fp, mergeErr), nil)
+				slog.Error(fmt.Sprintf("phase2 merge %s->%s fp=%s: %v", dup.ID, keeper.ID, fp, mergeErr))
 				continue
 			}
 			deletedIDs[dup.ID] = true
@@ -171,7 +171,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 			}
 			dup := &live[i]
 			if mergeErr := ddMergeDuplicateBook(store, keeper, dup, dryRun, j.enqueuer); mergeErr != nil {
-				reporter.Log("error", fmt.Sprintf("phase3 merge %s->%s: %v", dup.ID, keeper.ID, mergeErr), nil)
+				slog.Error(fmt.Sprintf("phase3 merge %s->%s: %v", dup.ID, keeper.ID, mergeErr))
 				continue
 			}
 			deletedIDs[dup.ID] = true
@@ -216,7 +216,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 				current.VersionGroupID = nil
 				current.IsPrimaryVersion = nil
 				if _, upErr := store.UpdateBook(dupID, current); upErr != nil {
-					reporter.Log("error", fmt.Sprintf("phase4 unlink vg %s from book %s: %v", vgID, dupID, upErr), nil)
+					slog.Error(fmt.Sprintf("phase4 unlink vg %s from book %s: %v", vgID, dupID, upErr))
 					continue
 				}
 				phase4++
@@ -230,9 +230,9 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 		reporter.Increment()
 	}
 
-	reporter.Log("info", fmt.Sprintf(
+	slog.Info(fmt.Sprintf(
 		"Done: phase1_junk=%d phase2_path=%d phase3_title=%d phase4_vg=%d dryRun=%v",
-		phase1, phase2, phase3, phase4, dryRun), nil)
+		phase1, phase2, phase3, phase4, dryRun))
 	return nil
 }
 
