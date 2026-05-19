@@ -1,5 +1,5 @@
 // file: internal/metabatch/upgrade.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-3a4b5c6d7e8f
 // last-edited: 2026-05-11
 //
@@ -23,7 +23,7 @@ package metabatch
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -84,10 +84,10 @@ func (s *MetadataUpgradeService) RunUpgrade(ctx context.Context, limit int) (*Up
 		tag := "metadata:source:" + sourceSlug
 		bookIDs, err := s.DB.GetBooksByTag(tag)
 		if err != nil {
-			log.Printf("[WARN] metadata-upgrade: GetBooksByTag(%s): %v", tag, err)
+			slog.Warn("metadata-upgrade: GetBooksByTag", "tag", tag, "err", err)
 			continue
 		}
-		log.Printf("[INFO] metadata-upgrade: found %d books tagged %s", len(bookIDs), tag)
+		slog.Info("metadata-upgrade: found books tagged", "count", len(bookIDs), "tag", tag)
 
 		for _, bookID := range bookIDs {
 			if ctx.Err() != nil {
@@ -100,7 +100,7 @@ func (s *MetadataUpgradeService) RunUpgrade(ctx context.Context, limit int) (*Up
 
 			upgraded, upgradeErr := s.tryUpgradeBook(ctx, bookID, sourceSlug)
 			if upgradeErr != nil {
-				log.Printf("[WARN] metadata-upgrade: book %s: %v", bookID, upgradeErr)
+				slog.Warn("metadata-upgrade: book", "id", bookID, "err", upgradeErr)
 				result.Errors++
 				continue
 			}
@@ -173,7 +173,6 @@ func (s *MetadataUpgradeService) tryUpgradeBook(ctx context.Context, bookID, cur
 		return false, fmt.Errorf("apply failed: %w", applyErr)
 	}
 
-	log.Printf("[INFO] metadata-upgrade: upgraded %s from %s → %s (score=%.2f, title=%q)",
-		bookID, currentSourceSlug, bestCandidate.Source, bestCandidate.Score, bestCandidate.Title)
+	slog.Info("metadata-upgrade: upgraded", "id", bookID, "from", currentSourceSlug, "to", bestCandidate.Source, "score", bestCandidate.Score, "title", bestCandidate.Title)
 	return true, nil
 }

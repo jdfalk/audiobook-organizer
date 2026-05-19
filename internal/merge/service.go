@@ -1,12 +1,12 @@
 // file: internal/merge/service.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: 7d736d2d-e0df-40bd-9f4b-0a07bc2eb6ae
 
 package merge
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -186,7 +186,7 @@ func (ms *Service) MergeBooks(bookIDs []string, primaryID string) (*Result, erro
 		// (b) Reassign external IDs to the winner.
 		if eidStore != nil {
 			if err := eidStore.ReassignExternalIDs(book.ID, resolvedPrimaryID); err != nil {
-				log.Printf("[WARN] merge: ReassignExternalIDs %s → %s: %v", book.ID, resolvedPrimaryID, err)
+				slog.Warn("merge: ReassignExternalIDs", "from", book.ID, "to", resolvedPrimaryID, "err", err)
 			}
 		}
 
@@ -198,14 +198,14 @@ func (ms *Service) MergeBooks(bookIDs []string, primaryID string) (*Result, erro
 			for _, pid := range dupPIDs {
 				ms.writeBackBatcher.EnqueueRemove(pid)
 			}
-			log.Printf("[INFO] merge: queued %d ITL removals for loser %s", len(dupPIDs), book.ID)
+			slog.Info("merge: queued ITL removals for loser", "count", len(dupPIDs), "id", book.ID)
 		}
 
 		// (d) Soft-delete the loser. If UpdateBook fails inside
 		// SoftDeleteBook it falls back to hard delete, so we
 		// never leave a zombie non-primary row behind.
 		if err := SoftDeleteBook(ms.db, book.ID); err != nil {
-			log.Printf("[WARN] merge: soft-delete %s: %v", book.ID, err)
+			slog.Warn("merge: soft-delete", "id", book.ID, "err", err)
 		}
 	}
 
@@ -234,7 +234,7 @@ func SoftDeleteBook(store database.Store, bookID string) error {
 
 	if _, upErr := store.UpdateBook(bookID, current); upErr != nil {
 		// Fall back to hard delete.
-		log.Printf("[WARN] dedup-books: soft-delete failed for %s (%v), falling back to hard delete", bookID, upErr)
+		slog.Warn("dedup-books: soft-delete failed, falling back to hard delete", "id", bookID, "err", upErr)
 		return store.DeleteBook(bookID)
 	}
 	return nil

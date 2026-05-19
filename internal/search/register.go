@@ -1,5 +1,5 @@
 // file: internal/search/register.go
-// version: 3.0.0
+// version: 3.0.1
 // guid: 7b4e2c1a-9f3d-4a82-b6e5-1d0c8f5a3e72
 //
 // Registers the BleveIndex as the "searchindex" service. IndexService
@@ -15,7 +15,7 @@ package search
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -42,18 +42,18 @@ func (b *IndexService) Start(_ context.Context) error {
 		return nil
 	}
 	if b.cfg == nil || b.cfg.DatabasePath == "" {
-		log.Printf("[INFO] searchindex: DatabasePath not configured, running without search")
+		slog.Info("searchindex: DatabasePath not configured, running without search")
 		return nil
 	}
 	indexPath := filepath.Join(filepath.Dir(b.cfg.DatabasePath), "library.bleve")
 	idx, err := Open(indexPath)
 	if err != nil {
-		log.Printf("[WARN] Failed to open search index: %v", err)
+		slog.Warn("Failed to open search index", "err", err)
 		return nil
 	}
 	b.idx = idx
 	b.path = indexPath
-	log.Printf("[INFO] Search index opened at %s", indexPath)
+	slog.Info("Search index opened", "path", indexPath)
 	return nil
 }
 
@@ -68,10 +68,10 @@ func (b *IndexService) Stop(_ context.Context) error {
 	err := b.idx.Close()
 	b.idx = nil
 	if err != nil {
-		log.Printf("[WARN] Failed to close search index: %v", err)
+		slog.Warn("Failed to close search index", "err", err)
 		return err
 	}
-	log.Println("[INFO] Search index closed")
+	slog.Info("Search index closed")
 	return nil
 }
 

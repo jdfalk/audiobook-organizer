@@ -1,5 +1,5 @@
 // file: internal/writeback/outbox.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 5c3d4e2f-6a7b-4a70-b8c5-3d7e0f1b9a99
 // last-edited: 2026-05-01
 //
@@ -16,7 +16,7 @@
 package writeback
 
 import (
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -102,7 +102,7 @@ func (o *WriteBackOutbox) ReplayOrphans(batcher Enqueuer) int {
 	}
 
 	if replayed > 0 {
-		log.Printf("[INFO] Write-back outbox: replayed %d orphaned items", replayed)
+		slog.Info("Write-back outbox: replayed orphaned items", "count", replayed)
 	}
 	return replayed
 }
@@ -113,7 +113,7 @@ func (o *WriteBackOutbox) ReplayOrphans(batcher Enqueuer) int {
 func EnqueueWithOutbox(outbox *WriteBackOutbox, batcher Enqueuer, bookID string) {
 	if outbox != nil {
 		if err := outbox.Enqueue(bookID); err != nil {
-			log.Printf("[WARN] outbox enqueue %s: %v", bookID, err)
+			slog.Warn("outbox enqueue failed", "bookID", bookID, "err", err)
 		}
 	}
 	if batcher != nil {

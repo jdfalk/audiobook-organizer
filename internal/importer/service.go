@@ -1,5 +1,5 @@
 // file: internal/importer/service.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5b
 // last-edited: 2026-05-15
 
@@ -8,7 +8,7 @@ package importer
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -190,14 +190,14 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 		BookID: created.ID, FilePath: created.FilePath,
 		Format: created.Format, Source: "imported",
 	}); verErr != nil {
-		log.Printf("[WARN] create ingest version for %s: %v", created.ID, verErr)
+		slog.Warn("create ingest version", "id", created.ID, "err", verErr)
 	}
 
 	// Provision ITL track via the injected iTunes service.
 	// Nil provisioner → iTunes disabled or not wired; book is still created.
 	if is.provisioner != nil {
 		if err := is.provisioner.ProvisionAll(created); err != nil {
-			log.Printf("[WARN] ITL track provisioning failed for %s: %v", created.ID, err)
+			slog.Warn("ITL track provisioning failed", "id", created.ID, "err", err)
 		}
 	}
 
@@ -206,7 +206,7 @@ func (is *ImportService) ImportFile(req *ImportFileRequest) (*ImportFileResponse
 	if is.dedupEngine != nil {
 		go func(id string) {
 			if _, err := is.dedupEngine.CheckBook(context.Background(), id); err != nil {
-				log.Printf("[WARN] dedup-on-import CheckBook(%s): %v", id, err)
+				slog.Warn("dedup-on-import CheckBook", "id", id, "err", err)
 			}
 		}(created.ID)
 	}
