@@ -425,17 +425,38 @@ func TestMigrateSystemActivityLogs(t *testing.T) {
 
 	// Verify all entries have the correct structure (order is newest-first).
 	sourcesSeen := make(map[string]bool)
+	tagsSeen := make(map[string][]string)
 	for _, e := range entries {
 		assert.Equal(t, "system", e.Tier, "all should have tier='system'")
 		assert.Equal(t, "system_log", e.Type, "all should have type='system_log'")
 		assert.NotEmpty(t, e.Summary, "summary should be populated from old message field")
-		assert.Equal(t, []string{"legacy", "system_activity_log"}, e.Tags)
+		// Verify enriched tags: all should have "legacy" and ideally action/outcome tags
+		assert.Contains(t, e.Tags, "legacy", "all should have legacy tag")
+		assert.Greater(t, len(e.Tags), 1, "should have more than just legacy tag (enriched)")
 		sourcesSeen[e.Source] = true
+		tagsSeen[e.Source] = e.Tags
 	}
 	// Verify all three sources are present.
 	assert.Contains(t, sourcesSeen, "itunes")
 	assert.Contains(t, sourcesSeen, "reconcile")
 	assert.Contains(t, sourcesSeen, "maintenance")
+
+	// Verify intelligent tag enrichment: maintenance/error should have outcome:error, warning should have outcome:warn
+	for src, tags := range tagsSeen {
+		switch src {
+		case "maintenance":
+			// Error level → outcome:error
+			assert.Contains(t, tags, "outcome:error", "maintenance error should have outcome:error tag")
+		case "reconcile":
+			// Warning level → outcome:warn
+			assert.Contains(t, tags, "outcome:warn", "reconcile warning should have outcome:warn tag")
+		case "itunes":
+			// Info level → outcome:ok
+			assert.Contains(t, tags, "outcome:ok", "itunes info should have outcome:ok tag")
+			// Source should be tagged
+			assert.Contains(t, tags, "source:itunes", "should have source tag")
+		}
+	}
 
 	// Verify migration is idempotent: running again returns 0.
 	count2, err := actStore.MigrateSystemActivityLogs()
