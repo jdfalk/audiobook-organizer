@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 2.2.5
+// version: 2.2.6
 // last-edited: 2026-05-18
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
