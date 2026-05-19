@@ -1,5 +1,5 @@
 // file: cmd/dedup_bench_batch.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: f6a7b8c9-d0e1-2345-fabc-678901234567
 
 //go:build bench
@@ -11,7 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,8 +55,7 @@ func submitBatchJobs(
 
 	for _, tc := range configs {
 		for _, mode := range modes {
-			log.Printf("Submitting batch: model=%s prompt=%s temp=%.1f mode=%s",
-				tc.Model, tc.PromptVariant, tc.Temperature, mode)
+			slog.Info("Submitting batch", "model", tc.Model, "prompt", tc.PromptVariant, "temp", tc.Temperature, "mode", mode)
 
 			// Create run output directory
 			dirName := fmt.Sprintf("%s_%s_t%.1f_%s", tc.Model, tc.PromptVariant, tc.Temperature, mode)
@@ -152,7 +151,7 @@ func submitBatchJobs(
 				Purpose: openai.FilePurposeBatch,
 			})
 			if err != nil {
-				log.Printf("  ERROR uploading file: %v", err)
+				slog.Error("uploading file failed", "error", err)
 				_ = writeJSON(filepath.Join(outDir, "error.json"), map[string]string{"error": err.Error()})
 				continue
 			}
@@ -164,7 +163,7 @@ func submitBatchJobs(
 				CompletionWindow: openai.BatchNewParamsCompletionWindow24h,
 			})
 			if err != nil {
-				log.Printf("  ERROR creating batch: %v", err)
+				slog.Error("creating batch failed", "error", err)
 				_ = writeJSON(filepath.Join(outDir, "error.json"), map[string]string{"error": err.Error()})
 				continue
 			}
@@ -182,7 +181,7 @@ func submitBatchJobs(
 
 			_ = writeJSON(filepath.Join(outDir, "batch_info.json"), job)
 
-			log.Printf("  Submitted batch %s (%d requests, file %s)", batch.ID, len(chunks), file.ID)
+			slog.Info("Submitted batch", "batch_id", batch.ID, "requests", len(chunks), "file_id", file.ID)
 		}
 	}
 

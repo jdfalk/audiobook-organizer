@@ -1,5 +1,5 @@
 // file: cmd/dedup_bench_pass2.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 2b3c4d5e-6f7a-8901-bcde-222222222222
 
 //go:build bench
@@ -12,7 +12,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -86,7 +86,7 @@ func runDedupBenchPass2(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("load results: %w", err)
 	}
-	log.Printf("Loaded %d first-pass suggestions", len(suggestions))
+	slog.Info("Loaded first-pass suggestions", "count", len(suggestions))
 
 	// Filter uncertain
 	thresholds := map[string]bool{"low": true}
@@ -100,10 +100,10 @@ func runDedupBenchPass2(cmd *cobra.Command, args []string) error {
 			uncertain = append(uncertain, s)
 		}
 	}
-	log.Printf("Found %d uncertain suggestions (%s and below)", len(uncertain), pass2Threshold)
+	slog.Info("Found uncertain suggestions", "count", len(uncertain), "threshold", pass2Threshold)
 
 	if len(uncertain) == 0 {
-		log.Println("No uncertain suggestions to enrich.")
+		slog.Info("No uncertain suggestions to enrich")
 		return nil
 	}
 
@@ -121,7 +121,7 @@ func runDedupBenchPass2(cmd *cobra.Command, args []string) error {
 	authorIDs := collectAuthorIDsFromGroups(uncertain, groups)
 
 	// Fetch book data
-	log.Printf("Fetching books for %d authors from %s...", len(authorIDs), benchServerURL)
+	slog.Info("Fetching books for authors", "count", len(authorIDs), "server", benchServerURL)
 	booksByAuthor, err := fetchBooksForAuthorIDs(benchServerURL, authorIDs)
 	if err != nil {
 		return fmt.Errorf("fetch books: %w", err)
@@ -402,7 +402,7 @@ func submitSingleBatch(ctx context.Context, apiKey, model, systemPrompt, userPro
 	}}
 	_ = writeJSON(filepath.Join(runDir, "batch_jobs.json"), jobInfo)
 
-	log.Printf("Submitted batch %s", batch.ID)
-	log.Printf("Check: ./audiobook-organizer dedup-bench check %s", runDir)
+	slog.Info("Submitted batch", "batch_id", batch.ID)
+	slog.Info("Check results later", "command", "dedup-bench check " + runDir)
 	return nil
 }

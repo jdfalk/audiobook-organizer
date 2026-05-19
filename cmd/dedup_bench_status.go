@@ -1,5 +1,5 @@
 // file: cmd/dedup_bench_status.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 1a2b3c4d-5e6f-7890-abcd-111111111111
 
 //go:build bench
@@ -8,7 +8,7 @@ package cmd
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
@@ -70,6 +70,6 @@ func runDedupBenchStatus(cmd *cobra.Command, args []string) error {
 		fmt.Printf("%-24s %-14s %6d %6d %6d\n", b.ID[:24], status, ok, fail, total)
 	}
 
-	log.Printf("\nSummary: %d completed, %d failed, %d pending", completed, failed, pending)
+	slog.Info("Status summary", "completed", completed, "failed", failed, "pending", pending)
 	return nil
 }

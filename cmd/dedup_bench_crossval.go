@@ -1,5 +1,5 @@
 // file: cmd/dedup_bench_crossval.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: 3c4d5e6f-7a8b-9012-cdef-333333333333
 
 //go:build bench
@@ -9,7 +9,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,7 +101,7 @@ func runDedupBenchCrossval(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("load results: %w", err)
 	}
-	log.Printf("Loaded %d suggestions from %s", len(suggestionsA), crossvalModelA)
+	slog.Info("Loaded suggestions", "count", len(suggestionsA), "model", crossvalModelA)
 
 	suggestionsText, _ := json.Marshal(suggestionsA)
 
@@ -113,7 +113,7 @@ func runDedupBenchCrossval(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("read input data: %w", err)
 		}
 		inputText = string(data)
-		log.Printf("Loaded original input data (%d bytes)", len(data))
+		slog.Info("Loaded original input data", "bytes", len(data))
 	}
 
 	// Fetch book evidence for uncertain items
@@ -196,16 +196,16 @@ func runDedupBenchCrossval(cmd *cobra.Command, args []string) error {
 			userPrompt = strings.Join(parts, "")
 		}
 
-		log.Printf("[%s] %s reviewing %s: ~%d input tokens", variant, crossvalModelB, crossvalModelA, len(userPrompt)/4)
+		slog.Info("Reviewing suggestions", "variant", variant, "model", crossvalModelB, "reviewed_model", crossvalModelA, "tokens", len(userPrompt)/4)
 
 		customID := fmt.Sprintf("crossval_%s_%s", label, ts)
 		if err := submitSingleBatch(cmd.Context(), apiKey, crossvalModelB, systemPrompt, userPrompt, customID, outDir); err != nil {
-			log.Printf("  ERROR: %v", err)
+			slog.Error("batch submission failed", "error", err)
 			continue
 		}
 	}
 
-	log.Printf("Check: ./audiobook-organizer dedup-bench check %s", runDir)
+	slog.Info("Check results later", "command", "dedup-bench check " + runDir)
 	return nil
 }
 

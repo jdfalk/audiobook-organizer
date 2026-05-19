@@ -1,5 +1,5 @@
 // file: cmd/dedup_bench_runner.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: d4e5f6a7-b8c9-0123-defa-456789012345
 
 //go:build bench
@@ -10,7 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,7 +76,7 @@ func executeBenchRun(
 
 	// For large datasets, chunk the input
 	chunks := chunkInput(inputJSON, chunkSize, mode)
-	log.Printf("  Input size: %d bytes, %d chunk(s)", len(inputJSON), len(chunks))
+	slog.Info("Input size", "bytes", len(inputJSON), "chunks", len(chunks))
 
 	// Save the full request data
 	request := map[string]interface{}{
@@ -112,7 +112,7 @@ func executeBenchRun(
 
 	for ci, chunk := range chunks {
 		if len(chunks) > 1 {
-			log.Printf("  Chunk %d/%d (%d bytes)", ci+1, len(chunks), len(chunk))
+			slog.Info("Processing chunk", "number", ci+1, "total", len(chunks), "bytes", len(chunk))
 		}
 
 		userPrompt := userPromptPrefix + string(chunk)
@@ -187,7 +187,7 @@ func executeBenchRun(
 				Suggestions []json.RawMessage `json:"suggestions"`
 			}
 			if err := json.Unmarshal([]byte(content), &parsed); err != nil {
-				log.Printf("  Warning: failed to parse suggestions from chunk %d: %v", ci, err)
+				slog.Warn("Failed to parse suggestions", "chunk", ci, "error", err)
 				_ = writeJSON(filepath.Join(outDir, fmt.Sprintf("chunk_%d_parse_error.json", ci)), map[string]string{
 					"error": err.Error(),
 					"raw":   content,
@@ -197,8 +197,7 @@ func executeBenchRun(
 			}
 		}
 
-		log.Printf("  Chunk %d: %dms, in=%d out=%d",
-			ci, elapsed.Milliseconds(), completion.Usage.PromptTokens, completion.Usage.CompletionTokens)
+		slog.Info("Chunk processed", "number", ci, "duration_ms", elapsed.Milliseconds(), "input_tokens", completion.Usage.PromptTokens, "output_tokens", completion.Usage.CompletionTokens)
 
 		// Brief pause between chunks
 		if ci < len(chunks)-1 {
@@ -248,8 +247,7 @@ func executeBenchRun(
 		return nil, err
 	}
 
-	log.Printf("  Done: %dms, %d suggestions, ~$%.4f",
-		totalElapsed.Milliseconds(), len(allSuggestionsRaw), costEstimate)
+	slog.Info("Run complete", "duration_ms", totalElapsed.Milliseconds(), "suggestions", len(allSuggestionsRaw), "cost_usd", costEstimate)
 
 	return result, nil
 }
