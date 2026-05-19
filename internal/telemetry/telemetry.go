@@ -6,7 +6,9 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/url"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -21,6 +23,16 @@ func InitOTEL(ctx context.Context, cfg *Config) (func(context.Context) error, er
 	if !cfg.Enabled {
 		// No-op mode: endpoint not configured
 		return func(context.Context) error { return nil }, nil
+	}
+
+	// Validate endpoint format: must be a valid gRPC endpoint (host:port, dns://, or http(s)://)
+	parsedURL, err := url.Parse(cfg.ExporterEndpoint)
+	if err != nil {
+		return nil, err
+	}
+	// Allow hostnames with ports, or valid URL schemes for gRPC (http, https, dns)
+	if parsedURL.Scheme != "" && parsedURL.Scheme != "http" && parsedURL.Scheme != "https" && parsedURL.Scheme != "dns" {
+		return nil, fmt.Errorf("invalid endpoint scheme %q: must be http, https, dns, or omitted for host:port", parsedURL.Scheme)
 	}
 
 	// Initialize OTLP trace exporter.
