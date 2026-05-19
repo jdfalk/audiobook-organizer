@@ -2,8 +2,7 @@
 // version: 1.0.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
 import { CoverLightbox } from '../CoverLightbox';
 
