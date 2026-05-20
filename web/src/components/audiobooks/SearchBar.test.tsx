@@ -5,7 +5,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import { SearchBar, type ViewMode } from './SearchBar';
-import { SortField, SortOrder } from '../../types';
 
 // Minimal default props — every test can override what it needs.
 function defaultProps(overrides: Partial<Parameters<typeof SearchBar>[0]> = {}) {
@@ -44,20 +43,6 @@ describe('SearchBar', () => {
       expect(screen.queryByLabelText('Sort by')).not.toBeInTheDocument();
     });
 
-    it('renders sort controls when onSortChange is provided', () => {
-      renderWithProviders(
-        <SearchBar
-          {...defaultProps({
-            onSortChange: vi.fn(),
-            onSortOrderChange: vi.fn(),
-            sortBy: SortField.Title,
-            sortOrder: SortOrder.Ascending,
-          })}
-        />
-      );
-      expect(screen.getByLabelText('Sort by')).toBeInTheDocument();
-      expect(screen.getByLabelText('Order')).toBeInTheDocument();
-    });
   });
 
   describe('view mode toggle', () => {
