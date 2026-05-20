@@ -1,7 +1,7 @@
 // file: internal/audiobooks/service.go
-// version: 1.26.0
+// version: 1.27.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 package audiobooks
 
@@ -961,9 +961,59 @@ func splitMultipleNames(name string) []string {
 	return result
 }
 
+// aggregateFileMetadata calculates total duration and file size from files for each book.
+// Uses a single GetAllBookFiles call to avoid N+1 queries.
+func (svc *AudiobookService) aggregateFileMetadata(books []database.Book) {
+	if svc.store == nil || len(books) == 0 {
+		return
+	}
+
+	// Build set of book IDs for fast lookup
+	bookIDMap := make(map[string]int)
+	for i, b := range books {
+		bookIDMap[b.ID] = i
+	}
+
+	// Fetch all book files once
+	allFiles, err := svc.store.GetAllBookFiles()
+	if err != nil {
+		slog.Warn("aggregateFileMetadata: GetAllBookFiles failed", "err", err)
+		return
+	}
+
+	// Aggregate duration and size by book ID
+	aggregates := make(map[string]struct {
+		totalDuration int
+		totalSize    int64
+	})
+
+	for _, f := range allFiles {
+		if f.Missing {
+			continue // Skip missing files
+		}
+		idx, ok := bookIDMap[f.BookID]
+		if !ok {
+			continue // Skip files not in our book list
+		}
+
+		agg := aggregates[f.BookID]
+		agg.totalDuration += f.Duration / 1000 // Convert ms to seconds
+		agg.totalSize += f.FileSize
+		aggregates[f.BookID] = agg
+
+		// Update the book's aggregates
+		books[idx].Duration = &agg.totalDuration
+		books[idx].FileSize = &agg.totalSize
+	}
+}
+
 // EnrichAudiobooksWithNames adds author and series names to audiobook details.
+// Also aggregates duration and file size from individual files.
 // Batch-fetches authors and series by unique IDs to avoid N+1 DB lookups.
 func (svc *AudiobookService) EnrichAudiobooksWithNames(books []database.Book) []AudiobookDetail {
+	// Aggregate file metadata for all books at once (avoids N+1)
+	svc.aggregateFileMetadata(books)
+
 	// Collect unique IDs that need DB lookups (skip pre-loaded objects).
 	authorIDs := make([]int, 0)
 	seriesIDs := make([]int, 0)
