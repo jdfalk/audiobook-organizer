@@ -5032,3 +5032,14 @@ export async function runMaintenanceJob(jobId: string, dryRun = false): Promise<
   }
   return response.json();
 }
+
+export async function startOptimize(): Promise<{ operation_id: string }> {
+  const response = await fetch(`${API_BASE}/operations/optimize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start optimize operation');
+  }
+  return response.json();
+}
