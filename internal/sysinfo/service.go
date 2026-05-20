@@ -1,7 +1,7 @@
 // file: internal/sysinfo/service.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3
-// last-edited: 2026-05-01
+// last-edited: 2026-05-20
 
 package sysinfo
 
@@ -150,6 +150,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 	}
 	totalSize := librarySize + importSize
 
+	brokenFiles := dbStats.BrokenFiles
 	status := &SystemStatus{
 		Status:           "running",
 		Version:          ss.version,
@@ -159,6 +160,7 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 		TotalFileCount:   dbStats.TotalFiles,
 		AuthorCount:      dbStats.TotalAuthors,
 		SeriesCount:      dbStats.TotalSeries,
+		BrokenFileCount:  &brokenFiles,
 		LibrarySizeBytes: librarySize,
 		ImportSizeBytes:  importSize,
 		TotalSizeBytes:   totalSize,

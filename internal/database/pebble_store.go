@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.74.0
+// version: 1.75.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-05
+// last-edited: 2026-05-20
 
 package database
 
@@ -90,10 +90,14 @@ func (p *PebbleStore) SetRootDir(rootDir string) {
 
 // InvalidateLibraryStats drops the cached stats:library key so the next
 // GetDashboardStats call triggers a fresh full recompute.
+// NoSync is intentional: a crash before the delete flushes leaves a stale
+// cache that expires within statsLibraryTTL — identical to the pre-cache
+// behaviour. The benefit is avoiding a sync flush on every book/file mutation.
 func (p *PebbleStore) InvalidateLibraryStats() {
-	if err := p.db.Delete([]byte(statsLibraryKey), pebble.Sync); err != nil {
-		slog.Error("pebble Delete stats:library", "error", err)
+	if err := p.db.Delete([]byte(statsLibraryKey), pebble.NoSync); err != nil {
+		slog.Warn("pebble Delete stats:library", "error", err)
 	}
+	slog.Debug("library_counts marked dirty", "reason", "invalidated")
 }
 
 func (p *PebbleStore) readCachedLibraryStats() *LibraryStats {
@@ -1784,6 +1788,7 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 		slog.Warn("pebble RecordPathChange on create", "book_id", book.ID, "error", err)
 	}
 
+	p.InvalidateLibraryStats()
 	return book, nil
 }
 
@@ -1978,6 +1983,7 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 		return nil, err
 	}
 
+	p.InvalidateLibraryStats()
 	return book, nil
 }
 
@@ -2298,7 +2304,11 @@ func (p *PebbleStore) DeleteBook(id string) error {
 		}
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	p.InvalidateLibraryStats()
+	return nil
 }
 
 func (p *PebbleStore) SearchBooks(query string, limit, offset int) ([]Book, error) {
@@ -2573,13 +2583,29 @@ func (p *PebbleStore) GetBookSizesByLocation(rootDir string) (librarySize, impor
 // computeLibraryStats which does two range scans and writes the result back.
 func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
 	if cached := p.readCachedLibraryStats(); cached != nil {
+		slog.Info("library_counts cache hit",
+			"total_books", cached.TotalBooks,
+			"organized_books", cached.OrganizedBooks,
+			"unorganized_books", cached.UnorganizedBooks,
+			"broken_files", cached.BrokenFiles,
+			"age_seconds", time.Since(cached.ComputedAt).Seconds(),
+		)
 		return cached, nil
 	}
+	start := time.Now()
 	stats, err := p.computeLibraryStats()
 	if err != nil {
 		return nil, err
 	}
 	p.writeCachedLibraryStats(stats)
+	slog.Info("library_counts cache recomputed",
+		"total_books", stats.TotalBooks,
+		"organized_books", stats.OrganizedBooks,
+		"unorganized_books", stats.UnorganizedBooks,
+		"broken_files", stats.BrokenFiles,
+		"duration_ms", time.Since(start).Milliseconds(),
+		"reason", "missing_or_expired",
+	)
 	return stats, nil
 }
 
@@ -2701,6 +2727,12 @@ func (p *PebbleStore) computeLibraryStats() (*LibraryStats, error) {
 	}
 	if sc, err := p.CountSeries(); err == nil {
 		stats.TotalSeries = sc
+	}
+
+	// Pass 3: book_file_errors_by_book: key-only scan — count distinct books with errors.
+	// Reuses the secondary index written by RecordFileError so no JSON deserialization needed.
+	if booksWithErrors, err := p.ListBooksWithFileErrors(); err == nil {
+		stats.BrokenFiles = len(booksWithErrors)
 	}
 
 	return stats, nil
@@ -7718,7 +7750,11 @@ func (s *PebbleStore) CreateBookFile(file *BookFile) error {
 		return err
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	s.InvalidateLibraryStats()
+	return nil
 }
 
 // UpdateBookFile replaces an existing BookFile, cleaning up stale secondary
@@ -7761,7 +7797,11 @@ func (s *PebbleStore) UpdateBookFile(id string, file *BookFile) error {
 		return err
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	s.InvalidateLibraryStats()
+	return nil
 }
 
 // GetBookFiles returns all BookFile records for the given bookID by iterating
@@ -8037,7 +8077,11 @@ func (s *PebbleStore) DeleteBookFile(id string) error {
 		return err
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	s.InvalidateLibraryStats()
+	return nil
 }
 
 // DeleteBookFilesForBook removes all BookFile records for a given bookID,
@@ -8066,7 +8110,11 @@ func (s *PebbleStore) DeleteBookFilesForBook(bookID string) error {
 		}
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	s.InvalidateLibraryStats()
+	return nil
 }
 
 // UpsertBookFile creates or updates a BookFile. Lookup order:
@@ -8180,7 +8228,11 @@ func (s *PebbleStore) BatchUpsertBookFiles(files []*BookFile) error {
 		}
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	s.InvalidateLibraryStats()
+	return nil
 }
 
 // GetBookFileByID returns a single BookFile by bookID and fileID.

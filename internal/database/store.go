@@ -1,7 +1,7 @@
 // file: internal/database/store.go
-// version: 2.75.0
+// version: 2.76.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 package database
 
@@ -905,6 +905,11 @@ type LibraryStats struct {
 	SizeByImportPath   map[int]int64  `json:"size_by_import_path"`
 	StateDistribution  map[string]int `json:"state_distribution"`
 	FormatDistribution map[string]int `json:"format_distribution"`
+	// BrokenFiles is the number of distinct books that have at least one recorded
+	// file error (from the book_file_errors_by_book: index). Populated alongside
+	// TotalBooks/TotalFiles in computeLibraryStats so all three counts share a
+	// single cache entry and invalidation path.
+	BrokenFiles        int            `json:"broken_files"`
 	ComputedAt         time.Time      `json:"computed_at"`
 }
 
