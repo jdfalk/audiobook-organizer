@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.7.0
+// version: 2.7.1
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-20
 
@@ -653,8 +653,9 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                             <Box
                               key={file.id}
                               sx={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
+                                display: 'grid',
+                                gridTemplateColumns: '1fr auto',
+                                gap: 1,
                                 alignItems: 'center',
                                 p: 1.5,
                                 bgcolor: '#fff',
@@ -662,16 +663,16 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                                 border: '1px solid #e0e0e0',
                               }}
                             >
-                              <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
                                   {file.original_filename || file.file_path.split('/').pop() || 'Unknown'}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary" noWrap>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', wordBreak: 'break-word' }}>
                                   {file.file_path}
                                 </Typography>
                               </Box>
 
-                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ml: 1 }}>
+                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
                                 <Chip
                                   icon={getFingerprinterStatusIcon(file)}
                                   label={hasFingerprint(file) ? '✓ Fingerprinted' : '✗ Not Fingerprinted'}

@@ -1,7 +1,7 @@
 // file: web/src/components/bookdetail/BookDetailVersionGroup.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: f6a7b8c9-d0e1-2345-fabc-456789012345
-// last-edited: 2026-05-02
+// last-edited: 2026-05-20
 
 import {
   Alert,
@@ -35,7 +35,7 @@ import { TagComparison } from '../TagComparison';
 import { formatDuration, formatBytes, formatTagValue } from './bookDetailUtils';
 import { useNavigate } from 'react-router-dom';
 
-const SEGMENT_PREVIEW_COUNT = 5;
+const SEGMENT_PREVIEW_COUNT = 50;
 const OVERALL_METADATA_FIELDS = [
   { key: 'title', label: 'Title' },
   { key: 'author_name', label: 'Author' },

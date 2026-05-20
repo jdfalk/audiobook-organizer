@@ -81,6 +81,10 @@ future agent) can scan the entire workspace in one page.
 - [x] **SLOG-W11** Repair W10's incomplete printf → kv conversion: 674 format-string fixes + 134 malformed-message cleanups (PRs #1036, #1037).
 - [x] **SLOG-W10** Wave 10 — migrated 265 log.Printf calls across 38 files to slog (PR #1036).
 
+### Library UI follow-ups
+
+- [ ] **User-saved quick filters.** Let users save the current filter set as a named preset and surface it in the header kebab menu alongside the six built-in counts. Persist per-user (settings table), include in `/library/quick-queries` payload, edit/delete from a "Manage" submenu.
+
 ### Remaining slog work (low priority)
 
 - [ ] Wire OpContext into long-tail async ops: `runBulkWriteBack`, ISBN enrichment goroutine, iTunes sync ops, batch poller, scanner deep paths.
