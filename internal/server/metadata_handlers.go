@@ -1,5 +1,5 @@
 // file: internal/server/metadata_handlers.go
-// version: 3.7.3
+// version: 3.7.4
 // guid: 0299d0b0-b697-4386-a1ca-47c8bcc390de
 // last-edited: 2026-05-19
 //
@@ -22,6 +22,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/logging"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
@@ -898,10 +900,20 @@ func (s *Server) runBulkMetadataFetchAll(
 	store database.Store,
 	progress operations.ProgressReporter,
 ) error {
+	// Create operation context for structured logging
+	op := &logging.OpContext{
+		ID:     opID,
+		Type:   "metadata-fetch",
+		Status: "pending",
+	}
+	ctx = logging.WithOp(ctx, op)
+
 	_ = progress.UpdateProgress(0, 0, "loading books")
 
 	allBooks, err := store.GetAllBooks(0, 0)
 	if err != nil {
+		op.SetStatus("failed")
+		logging.Error(ctx, "failed to load all books", "err", err)
 		return fmt.Errorf("GetAllBooks: %w", err)
 	}
 
@@ -955,7 +967,12 @@ func (s *Server) runBulkMetadataFetchAll(
 
 	totalBooks := len(existingResults) + len(work)
 	alreadyDone := len(existingResults)
-	slog.Info("bulk-metadata-fetch books total, already cached, to fetch", "opID", opID, "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
+	logging.Info(ctx, "bulk-metadata-fetch books total, already cached, to fetch", "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
+
+	// Track affected books in operation context
+	for i := range work {
+		op.AddEntity("books", work[i].book.ID)
+	}
 	_ = progress.UpdateProgress(alreadyDone, totalBooks,
 		fmt.Sprintf("resuming: %d/%d already cached", alreadyDone, totalBooks))
 
@@ -1075,7 +1092,8 @@ func (s *Server) runBulkMetadataFetchAll(
 	finalCount := atomic.LoadInt64(&completed)
 	_ = progress.UpdateProgress(int(finalCount), totalBooks,
 		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
-	slog.Info("bulk-metadata-fetch done books — cached not_found", "opID", opID, "finalCount", finalCount, "found", found, "notFound", notFound)
+	op.SetStatus("success")
+	logging.Info(ctx, "bulk-metadata-fetch complete", "finalCount", finalCount, "found", found, "notFound", notFound)
 	return nil
 }
 
@@ -1242,6 +1260,16 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 	store database.Store,
 	progress operations.ProgressReporter,
 ) error {
+	// Create operation context for structured logging
+	op := &logging.OpContext{
+		ID:     opID,
+		Type:   "metadata-fetch-ids",
+		Status: "pending",
+	}
+	ctx = logging.WithOp(ctx, op)
+	// Track requested books in operation context
+	op.AddEntity("books", bookIDs...)
+
 	_ = progress.UpdateProgress(0, len(bookIDs), "loading books")
 
 	maxAge := time.Duration(config.AppConfig.MetadataFetchCacheTTLDays) * 24 * time.Hour
@@ -1292,7 +1320,7 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 
 	alreadyDone := len(existingResults)
 	totalBooks := alreadyDone + len(work)
-	slog.Info("bulk-metadata-fetch-ids total, done, to fetch", "opID", opID, "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
+	logging.Info(ctx, "bulk-metadata-fetch-ids total, done, to fetch", "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
 	_ = progress.UpdateProgress(alreadyDone, totalBooks,
 		fmt.Sprintf("resuming: %d/%d already done", alreadyDone, totalBooks))
 
@@ -1379,7 +1407,8 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 	finalCount := atomic.LoadInt64(&completed)
 	_ = progress.UpdateProgress(int(finalCount), totalBooks,
 		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
-	slog.Info("bulk-metadata-fetch-ids done books — cached not_found", "opID", opID, "finalCount", finalCount, "found", found, "notFound", notFound)
+	op.SetStatus("success")
+	logging.Info(ctx, "bulk-metadata-fetch-ids complete", "finalCount", finalCount, "found", found, "notFound", notFound)
 	return nil
 }
 
