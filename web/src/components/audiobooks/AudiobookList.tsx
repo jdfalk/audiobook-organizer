@@ -239,7 +239,7 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
     setLoadingFiles((prev) => ({ ...prev, [bookId]: true }));
     setFetchErrors((prev) => ({ ...prev, [bookId]: null }));
     try {
-      const result = await api.getBookFiles(bookId, controller.signal);
+      const result = await api.getBookFiles(bookId, { signal: controller.signal });
       setFilesCache((prev) => ({ ...prev, [bookId]: result.files }));
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
