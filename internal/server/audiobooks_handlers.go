@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.9.6
+// version: 2.10.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-19
 //
@@ -28,6 +28,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fileops"
+	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
@@ -176,6 +177,32 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 
 	// Enrich with author and series names
 	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
+
+	// Compute and populate fingerprinting fields for each book
+	for i, book := range enriched {
+		// Fetch files for this book
+		files, err := s.Store().GetBookFiles(book.ID)
+		if err != nil {
+			// If we can't fetch files, leave fingerprinting fields as zero/nil
+			continue
+		}
+
+		// Convert BookFile slice to FileWithFingerprint interface slice
+		fpFiles := make([]fingerprint.FileWithFingerprint, len(files))
+		for j := range files {
+			fpFiles[j] = &files[j]
+		}
+
+		// Compute fingerprinting fields using the calculator
+		status, fpCount, coverage, lastFp := fingerprint.ComputeFingerprintFields(fpFiles)
+
+		// Populate the Book struct fields added in Task 1
+		enriched[i].FingerprintStatus = status
+		enriched[i].FingerprintedFileCount = fpCount
+		enriched[i].TotalFileCount = len(files)
+		enriched[i].CoveragePercent = coverage
+		enriched[i].LastFingerprintedAt = lastFp
+	}
 
 	// Get total count for proper pagination
 	totalCount := len(enriched)
