@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.31.0
+// version: 2.32.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -1042,9 +1042,10 @@ export async function getBookSegments(bookId: string): Promise<BookSegment[]> {
 }
 
 export async function getBookFiles(
-  bookId: string
+  bookId: string,
+  signal?: AbortSignal
 ): Promise<{ files: BookFile[]; count: number }> {
-  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/files`);
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/files`, { signal });
   if (!response.ok)
     throw new Error(`Failed to fetch book files: ${response.status}`);
   const body = await response.json();

@@ -1,7 +1,7 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.3.0
+// version: 2.4.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -23,6 +23,7 @@ import {
   Collapse,
   Switch,
   FormControlLabel,
+  Button,
 } from '@mui/material';
 import {
   MoreVert as MoreVertIcon,
@@ -77,9 +78,14 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   const activeColumns = columns ?? fallbackColumns;
 
   const [anchorEls, setAnchorEls] = React.useState<Record<string, HTMLElement | null>>({});
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  // Fix #1: use Record instead of Set for proper React equality comparisons
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [filesCache, setFilesCache] = useState<Record<string, BookFile[]>>({});
-  const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set());
+  const [loadingFiles, setLoadingFiles] = useState<Record<string, boolean>>({});
+  // Fix #6: track per-book fetch errors to show retry UI
+  const [fetchErrors, setFetchErrors] = useState<Record<string, string | null>>({});
+  // Fix #2: per-book AbortControllers to cancel in-flight fetches on collapse
+  const abortControllersRef = useRef<Record<string, AbortController>>({});
 
   // --- Resize state (non-React for perf during drag) ---
   const resizingRef = useRef<{
@@ -203,51 +209,65 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
     return raw != null ? String(raw) : '--';
   };
 
-  const toggleExpandRow = async (bookId: string) => {
+  const toggleExpandRow = (bookId: string) => {
     setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(bookId)) {
-        next.delete(bookId);
+      const isCurrentlyExpanded = !!prev[bookId];
+      if (isCurrentlyExpanded) {
+        // Fix #2: abort any in-flight fetch for this book
+        abortControllersRef.current[bookId]?.abort();
+        delete abortControllersRef.current[bookId];
+        // Fix #3: clean up cache, errors, and loading state on collapse
+        setFilesCache((fc) => { const n = { ...fc }; delete n[bookId]; return n; });
+        setFetchErrors((fe) => { const n = { ...fe }; delete n[bookId]; return n; });
+        setLoadingFiles((lf) => { const n = { ...lf }; delete n[bookId]; return n; });
+        return { ...prev, [bookId]: false };
       } else {
-        next.add(bookId);
-        // Fetch files if not cached
-        if (!filesCache[bookId] && !loadingFiles.has(bookId)) {
+        // Fetch files if not already loading
+        if (!loadingFiles[bookId]) {
           fetchFiles(bookId);
         }
+        return { ...prev, [bookId]: true };
       }
-      return next;
     });
   };
 
   const fetchFiles = async (bookId: string) => {
-    setLoadingFiles((prev) => new Set(prev).add(bookId));
+    // Fix #2: create a fresh AbortController for this fetch
+    const controller = new AbortController();
+    abortControllersRef.current[bookId] = controller;
+
+    setLoadingFiles((prev) => ({ ...prev, [bookId]: true }));
+    setFetchErrors((prev) => ({ ...prev, [bookId]: null }));
     try {
-      const result = await api.getBookFiles(bookId);
-      setFilesCache((prev) => ({
-        ...prev,
-        [bookId]: result.files,
-      }));
+      const result = await api.getBookFiles(bookId, controller.signal);
+      setFilesCache((prev) => ({ ...prev, [bookId]: result.files }));
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Fetch was cancelled by collapse — do not update state
+        return;
+      }
+      const msg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Failed to fetch files for book ${bookId}:`, error);
-      setFilesCache((prev) => ({
-        ...prev,
-        [bookId]: [],
-      }));
+      // Fix #6: surface the error so the UI can show a Retry button
+      setFetchErrors((prev) => ({ ...prev, [bookId]: msg }));
     } finally {
-      setLoadingFiles((prev) => {
-        const next = new Set(prev);
-        next.delete(bookId);
-        return next;
-      });
+      setLoadingFiles((prev) => ({ ...prev, [bookId]: false }));
+      delete abortControllersRef.current[bookId];
     }
   };
 
+  // Fix #4: check all 7 acoustid segments, not just seg0
+  const hasFingerprint = (file: BookFile): boolean =>
+    !!(file.acoustid_seg0 || file.acoustid_seg1 || file.acoustid_seg2 ||
+       file.acoustid_seg3 || file.acoustid_seg4 || file.acoustid_seg5 ||
+       file.acoustid_seg6);
+
   const getFingerprinterStatusColor = (file: BookFile): 'success' | 'default' => {
-    return file.acoustid_seg0 ? 'success' : 'default';
+    return hasFingerprint(file) ? 'success' : 'default';
   };
 
   const getFingerprinterStatusIcon = (file: BookFile): React.ReactElement => {
-    return file.acoustid_seg0 ? (
+    return hasFingerprint(file) ? (
       <CheckCircleIcon sx={{ fontSize: 16 }} />
     ) : (
       <CancelIcon sx={{ fontSize: 16 }} />
@@ -374,9 +394,11 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
         </TableHead>
         <TableBody>
           {audiobooks.map((audiobook) => {
-            const isExpanded = expandedRows.has(audiobook.id);
+            // Fix #1: Record-based lookups instead of Set.has()
+            const isExpanded = !!expandedRows[audiobook.id];
             const files = filesCache[audiobook.id] ?? [];
-            const isLoadingFiles = loadingFiles.has(audiobook.id);
+            const isLoadingFiles = !!loadingFiles[audiobook.id];
+            const fetchError = fetchErrors[audiobook.id] ?? null;
 
             return (
               <React.Fragment key={audiobook.id}>
@@ -387,8 +409,11 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                 >
                   {/* Expand cell */}
                   <TableCell padding="checkbox" sx={{ width: 50 }}>
+                    {/* Fix #5: accessibility attributes for expand button */}
                     <IconButton
                       size="small"
+                      aria-label={`${isExpanded ? 'Collapse' : 'Expand'} files for ${audiobook.title}`}
+                      aria-expanded={isExpanded}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleExpandRow(audiobook.id);
@@ -476,6 +501,16 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                         <Box display="flex" justifyContent="center" p={2}>
                           <CircularProgress size={24} />
                         </Box>
+                      ) : fetchError ? (
+                        // Fix #6: show error UI with Retry button instead of silent spinner/empty list
+                        <Box display="flex" alignItems="center" gap={1} p={1}>
+                          <Typography variant="body2" color="error">
+                            Failed to load files: {fetchError}
+                          </Typography>
+                          <Button size="small" variant="outlined" color="error" onClick={() => fetchFiles(audiobook.id)}>
+                            Retry
+                          </Button>
+                        </Box>
                       ) : files.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">
                           No files found
@@ -507,7 +542,7 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ml: 1 }}>
                                 <Chip
                                   icon={getFingerprinterStatusIcon(file)}
-                                  label={file.acoustid_seg0 ? '✓ Fingerprinted' : '✗ Not Fingerprinted'}
+                                  label={hasFingerprint(file) ? '✓ Fingerprinted' : '✗ Not Fingerprinted'}
                                   color={getFingerprinterStatusColor(file)}
                                   variant="outlined"
                                   size="small"

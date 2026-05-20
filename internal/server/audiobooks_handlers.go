@@ -1,7 +1,7 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.13.0
+// version: 2.14.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 //
 // Audiobook HTTP handlers split out of server.go: book CRUD, batch
 // operations, file/segment actions, tag read/write, cover art, path
@@ -460,10 +460,10 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 		files = []database.BookFile{}
 	}
 
-	// Convert BookFile to legacy segment JSON shape with file_exists
+	// Convert BookFile to legacy segment JSON shape with file_exists.
+	// Fix #7: use f.Missing from the database instead of synchronous os.Stat().
 	result := make([]gin.H, 0, len(files))
 	for _, f := range files {
-		_, statErr := os.Stat(f.FilePath)
 		result = append(result, gin.H{
 			"id":               f.ID,
 			"book_id":          int(crc32.ChecksumIEEE([]byte(f.BookID))),
@@ -479,7 +479,7 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 			"superseded_by":    nil,
 			"created_at":       f.CreatedAt,
 			"updated_at":       f.UpdatedAt,
-			"file_exists":      statErr == nil,
+			"file_exists":      !f.Missing,
 		})
 	}
 
@@ -501,9 +501,9 @@ func (s *Server) listBookFiles(c *gin.Context) {
 	if files == nil {
 		files = []database.BookFile{}
 	}
+	// Fix #7: use f.Missing from the database instead of synchronous os.Stat().
 	results := make([]gin.H, 0, len(files))
 	for _, f := range files {
-		_, statErr := os.Stat(f.FilePath)
 		results = append(results, gin.H{
 			"id":                   f.ID,
 			"book_id":              f.BookID,
@@ -535,13 +535,13 @@ func (s *Server) listBookFiles(c *gin.Context) {
 			"acoustid_seg4": f.AcoustIDSeg4,
 			"acoustid_seg5": f.AcoustIDSeg5,
 			"acoustid_seg6": f.AcoustIDSeg6,
-			"fingerprint_failed_at":      f.FingerprintFailedAt,
-			"fingerprint_failure_reason": f.FingerprintFailureReason,
-			"fingerprint_failure_detail": f.FingerprintFailureDetail,
+			"fingerprint_failed_at":       f.FingerprintFailedAt,
+			"fingerprint_failure_reason":  f.FingerprintFailureReason,
+			"fingerprint_failure_detail":  f.FingerprintFailureDetail,
 			"fingerprint_diagnostic_json": f.FingerprintDiagnosticJSON,
 			"organize_method": f.OrganizeMethod,
 			"missing":         f.Missing,
-			"file_exists":     statErr == nil,
+			"file_exists":     !f.Missing,
 			"created_at":      f.CreatedAt,
 			"updated_at":      f.UpdatedAt,
 		})
