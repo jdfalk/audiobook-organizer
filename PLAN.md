@@ -1,103 +1,131 @@
-# Enhance Legacy Activity Log Migration with Smart Tag Derivation
+# Structured Logging Migration – Wave 11 (Format String Fix)
+
+**Branch:** `feat/slog-w11`
+**Scope:** Fix all format string issues in slog calls (674 calls across 119 files)
+**Status:** Planning (awaiting approval)
 
 ## Goal
-Improve the existing legacy SQLite `system_activity_log` migration to apply intelligent, multi-tag enrichment based on log content rather than generic ["legacy"] tags. Distinguish between compacted and non-compacted logs, infer action/outcome/source tags from message patterns, and apply the same tag-derivation logic used in the unified activity system.
 
-## Current State
-- Migration already exists in `internal/database/activity_store.go:MigrateSystemActivityLogs()`
-- Currently applies generic tags: `["legacy", "system_activity_log"]` to all entries
-- No distinction between log types or intelligent tag inference
+Fix the format string corruption introduced in W10. The W10 conversion was mechanical (just swapping `log.Printf` → `slog.Info`), but didn't account for slog's requirement for structured key-value pairs instead of printf-style format strings.
 
-## Affected files
+Production logs now show: `msg="Startup task %s started: operation %s" !BADKEY=taskID !BADKEY=opID`
 
-- `internal/database/activity_store.go` — refactor `MigrateSystemActivityLogs()` to call new `enrichLegacyLogTags()` helper
-- `internal/activity/legacy_tag_enrichment.go` — new file with `enrichLegacyLogTags(message, source, level) []string` function
-- `internal/activity/legacy_tag_enrichment_test.go` — test cases covering message patterns → tag mappings
-- `internal/database/activity_store_test.go` — update existing migration test to verify enriched tags
+This wave converts all format strings to proper key-value format.
 
-## Steps
+## Problem Statement
 
-### Step 1: Implement tag derivation logic
-In new file `internal/activity/legacy_tag_enrichment.go`, create `enrichLegacyLogTags(message, source, level string) []string` that:
+**Current State (W10 output):**
+```go
+slog.Info("Startup task %s started: operation %s", taskID, opID)
+// Produces: msg="Startup task %s started: operation %s" !BADKEY=taskID !BADKEY=opID
+```
 
-**Detect log type (compacted vs regular):**
-- If message contains "Compacted" or "Daily compaction" → add `tier:maintenance`, `action:compact`
-- If message contains "Purged" or "deleted" → add `action:purge`
-- If message contains "scanned" or "Scan" → add `action:scan`
-- If message contains "metadata" or "Metadata" → add `action:metadata-apply`
-- If message contains "ISBN" → add `action:metadata-apply`
+**Desired State (W11 output):**
+```go
+slog.Info("Startup task started", "task", taskID, "op", opID)
+// Produces: msg="Startup task started" task=taskID op=opID
+```
 
-**Derive outcome tags:**
-- `level: "warning"` → `outcome:warn`
-- `level: "error"` → `outcome:error`
-- `level: "info"` → `outcome:ok`
+## Scope
 
-**Derive source tags:**
-- If source non-empty → `source:<source>`
+- **674 slog calls** across 119 files with format strings (`%s`, `%d`, `%v`, `%f`)
+- Affects: internal/, cmd/ packages
+- Pattern categories:
+  1. Single format string arg: `slog.Info("msg: %s", val)` → `slog.Info("msg", "key", val)`
+  2. Multiple format string args: `slog.Info("msg %s %d", val1, val2)` → `slog.Info("msg", "key1", val1, "key2", val2)`
+  3. Mixed (format string + KV): `slog.Error("msg %v", val, "existing", "kv")` → needs careful parsing
 
-**Always include:**
-- `legacy` — identifies as migrated legacy entry
+## Conversion Strategy
 
-**Return:** De-duplicated list of derived tags
+### Approach
 
-### Step 2: Update MigrateSystemActivityLogs()
-Modify the migration loop to call `enrichLegacyLogTags(old.Message, old.Source, old.Level)` instead of hardcoding `["legacy", "system_activity_log"]`.
+Build a Go program (`w11-fix-format-strings.go`) that:
 
-Keep the migration-complete marker as-is (uses `type: "migration_complete"`, `tags: ["migration"]`).
+1. **Identifies problematic patterns** via regex matching `slog\.(Info|Warn|Error|Debug)\([^)]*%[sdvf]`
+2. **Extracts components**:
+   - Method name (Info, Warn, Error, Debug)
+   - Message string with format specifiers
+   - Format args (the positional values after the message)
+   - Any trailing key-value pairs
+3. **Generates key names** automatically (auto-increment: key0, key1, key2 or smarter naming based on context)
+4. **Reconstructs the call** with structured format
 
-### Step 3: Add comprehensive tests
-In `legacy_tag_enrichment_test.go`:
-- Test message patterns → expected tag mappings
-- Test level → outcome:* mapping
-- Test source presence → source:* tag
-- Test de-duplication (no duplicate tags returned)
-- Test edge cases (empty message, unknown level, etc.)
+### Rules for Key Naming
 
-In `activity_store_test.go`:
-- Update existing `TestMigrateSystemActivityLogs` to verify a few sample entries have sensible tags (not just `["legacy", "system_activity_log"]`)
+When format string has positional args, generate keys intelligently:
+- If a variable name is available (e.g., `taskID`), use it: `"task", taskID`
+- If a function call (e.g., `len(items)`), use generic: `"count", len(items)`
+- If a complex expression, use generic: `"value0"`, `"value1"`, etc.
 
-### Step 4: Verify and measure
-- Run `go test ./internal/activity/... ./internal/database/... -v`
-- Spot-check results: does a "Compacted" message get `action:compact, tier:maintenance, legacy`? Does a "warning" level get `outcome:warn`?
-- No behavioral change for production: migration is still idempotent, doesn't re-run
+Examples:
+```go
+// Input: slog.Info("file %s processed", filepath)
+// Output: slog.Info("file processed", "filepath", filepath)
 
-## Test strategy
+// Input: slog.Info("total: %d bytes, %d items", totalBytes, itemCount)
+// Output: slog.Info("total", "totalBytes", totalBytes, "itemCount", itemCount)
 
-- **Unit tests:** `go test ./internal/activity/... -run TestEnrichLegacyLogTags -v`
-  - Verify each message pattern → tag derivation works
-  - Verify level → outcome mapping
-  - Verify de-duplication
-  - Verify edge cases (empty/nil inputs)
+// Input: slog.Error("error: %v", err)
+// Output: slog.Error("error", "err", err)
+```
 
-- **Integration smoke test:** `go test ./internal/database/... -run TestMigrateSystemActivityLogs -v`
-  - Create mock legacy logs with diverse messages
-  - Run migration
-  - Verify entries have enriched tags (not just generic ["legacy"])
-  - Verify idempotency (second run doesn't create duplicates)
+## Execution Steps
 
-- **Success criteria:**
-  - All legacy entries have meaningful derived tags reflecting log content
-  - No generic catch-all tags — each tag should explain *what happened*
-  - Compacted/maintenance logs have `tier:maintenance` or `action:compact`
-  - Warning/error logs have outcome tags
-  - All tests pass
-  - No performance regression (tag enrichment is O(string search) — negligible)
+1. **Build converter** — write `w11-fix-format-strings.go`
+   - Parse slog calls with format strings
+   - Extract method, message, args
+   - Generate key names
+   - Output fixed calls
 
-## Rollback
+2. **Test converter** on a single file first (e.g., `settings.go`)
 
-- `git revert` the commits
-- Re-run migration: entries already migrated keep their old tags (can clean up via future admin API)
-- No schema changes — rollback is safe
+3. **Apply to all 119 files**
+   - Run converter on all internal/cmd files
+   - Manual review of high-risk files (database, itunes, metadata)
 
-## Message Pattern Reference (Examples)
+4. **Verify** 
+   ```bash
+   grep -rn 'slog\.\(Info\|Warn\|Error\|Debug\).*%[sdvf]' internal cmd
+   # Should return 0 results
+   ```
 
-| Message Pattern | Suggested Tags |
-|---|---|
-| "Compacted X entries" | `action:compact`, `tier:maintenance`, `legacy` |
-| "Daily compaction" | `action:compact`, `tier:maintenance`, `legacy` |
-| "Purged X deleted books" | `action:purge`, `legacy` |
-| "Scanned Y files" | `action:scan`, `legacy` |
-| "Applied metadata" | `action:metadata-apply`, `legacy` |
-| "ISBN enriched" | `action:metadata-apply`, `legacy` |
+5. **Run tests**
+   ```bash
+   make ci
+   ```
 
-(Start with these; expand based on actual legacy log content discovery)
+6. **Commit**
+   ```bash
+   git commit -m "fix(slog): W11 format string to key-value conversion (674 calls)"
+   ```
+
+7. **Ship**
+   ```bash
+   /ship
+   ```
+
+## Risk Assessment
+
+**Low Risk**
+- All changes are mechanical (format string → KV transformation)
+- No behavioral changes (just log output format)
+- Easy to verify: grep for `%[sdvf]` patterns post-conversion
+
+## Timeline Estimate
+
+- **Converter development:** ~30 min
+- **Single file test:** ~5 min
+- **Batch apply:** ~10 min (automated)
+- **Testing:** ~15 min (make ci)
+- **Ship:** ~5 min (/ship)
+- **Total:** ~1.5 hours
+
+## Rollback Plan
+
+If issues arise post-commit:
+- Revert commit: `git revert <commit-hash>`
+- Rollback via `/ship` (auto-merge revert)
+
+---
+
+**Approval Required:** Proceed with W11 conversion? [y/n]

@@ -89,7 +89,7 @@ func (s *Server) enqueueIndex(bookID string, del bool) {
 	select {
 	case s.indexQueue <- indexRequest{bookID: bookID, delete: del}:
 	default:
-		slog.Warn("search index queue full, dropped %s (delete=%v)", bookID, del)
+		slog.Warn("search index queue full, dropped  (delete=)", "bookID", bookID, "del", del)
 	}
 }
 
@@ -117,12 +117,12 @@ func (s *Server) runIndexWorker() {
 	for req := range s.indexQueue {
 		if req.delete {
 			if err := s.DeleteIndexedBook(req.bookID); err != nil {
-				slog.Warn("delete index %s: %v", req.bookID, err)
+				slog.Warn("delete index :", "req", req.bookID, "err", err)
 			}
 			continue
 		}
 		if err := s.IndexBookByID(req.bookID); err != nil {
-			slog.Warn("index %s: %v", req.bookID, err)
+			slog.Warn("index :", "req", req.bookID, "err", err)
 		}
 	}
 }

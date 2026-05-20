@@ -18,7 +18,6 @@ import (
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/aiscan"
@@ -41,6 +40,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/metrics"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	// Blank-import the plugin packages so their init() functions run and
 	// the plugins register themselves with the serviceregistry. The
@@ -353,13 +353,16 @@ func NewServer(store database.Store) *Server {
 		regContainer.IncludeGroup("activity")
 	}
 	if err := regContainer.Resolve(); err != nil {
-		slog.Error("serviceregistry resolve: %v", "err", err); os.Exit(1)
+		slog.Error("serviceregistry resolve:", "value0", "err", err)
+		os.Exit(1)
 	}
 	if err := regContainer.Build(regCtx); err != nil {
-		slog.Error("serviceregistry build: %v", "err", err); os.Exit(1)
+		slog.Error("serviceregistry build:", "value0", "err", err)
+		os.Exit(1)
 	}
 	if err := regContainer.PostInit(regCtx); err != nil {
-		slog.Error("serviceregistry postinit: %v", "err", err); os.Exit(1)
+		slog.Error("serviceregistry postinit:", "value0", "err", err)
+		os.Exit(1)
 	}
 	wireServerFromContainer(server, regContainer)
 	server.container = regContainer
@@ -405,13 +408,13 @@ func NewServer(store database.Store) *Server {
 	// and the mock store has no UpsertOpDefinitionV2 expectations.
 	if config.AppConfig.RootDir != "" {
 		if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
-			slog.Warn("maintenance plugin register: %v", "err", err)
+			slog.Warn("maintenance plugin register:", "value0", "err", err)
 		}
 		// Iterate all op registrars. Each file calls addOpRegistrar in its init()
 		// so new ops never require touching this block.
 		for _, reg := range opRegistrars {
 			if err := reg(server, server.opRegistry); err != nil {
-				slog.Warn("op registrar: %v", "err", err)
+				slog.Warn("op registrar:", "value0", "err", err)
 			}
 		}
 	}
@@ -454,7 +457,7 @@ func NewServer(store database.Store) *Server {
 		// GetGlobalStore() lookup here (SERVER-GLOBAL-STORE-AUDIT).
 		if ps, ok := resolvedStore.(*database.PebbleStore); ok {
 			if migrateErr := database.MigrateEmbeddingsFromSQLite(ps.DB(), filepath.Join(dbDir, "embeddings.db")); migrateErr != nil {
-				slog.Warn("embeddings.db migration error (continuing): %v", migrateErr)
+				slog.Warn("embeddings.db migration error (continuing):", "migrateErr", migrateErr)
 			}
 		}
 	}
@@ -541,12 +544,12 @@ func NewServer(store database.Store) *Server {
 	// Register file-op recovery handler (uses server closure instead of globalServer)
 	RegisterFileOpRecovery("apply_metadata", func(bookID string) {
 		if server.metadataFetchService == nil {
-			slog.Warn("no server instance for apply_metadata recovery of book %s", bookID)
+			slog.Warn("no server instance for apply_metadata recovery of book", "bookID", bookID)
 			return
 		}
 		server.metadataFetchService.ApplyMetadataFileIO(bookID)
 		if _, err := server.metadataFetchService.WriteBackMetadataForBook(bookID); err != nil {
-			slog.Warn("recovery write-back for %s: %v", bookID, err)
+			slog.Warn("recovery write-back for :", "bookID", bookID, "err", err)
 		}
 		if server.writeBackBatcher != nil {
 			server.writeBackBatcher.Enqueue(bookID)
@@ -664,7 +667,7 @@ func NewServer(store database.Store) *Server {
 	{
 		dc := deluge.GetClient()
 		server.protectedPathCache = deluge.NewProtectedPathCache(dc, config.AppConfig.ProtectedPaths)
-		slog.Info("ProtectedPathCache initialized (%d static extra paths)", len(config.AppConfig.ProtectedPaths))
+		slog.Info("ProtectedPathCache initialized ( static extra paths)", "count", len(config.AppConfig.ProtectedPaths))
 
 		// Wire the pre-flight safe-write guard into the metadata package so that
 		// all taglib writes (metadata apply, single-tag patch) check for Deluge-

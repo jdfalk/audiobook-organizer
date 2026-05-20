@@ -89,7 +89,7 @@ func (c *ProtectedPathCache) refresh() {
 	if err != nil {
 		// Deluge unreachable — keep stale data, do not update lastRefresh
 		// so the next call will try again.
-		slog.Warn("ProtectedPathCache: failed to refresh from Deluge: %v (using stale data)", err)
+		slog.Warn("ProtectedPathCache: failed to refresh from Deluge:  (using stale data)", "err", err)
 		return
 	}
 
@@ -119,5 +119,5 @@ func (c *ProtectedPathCache) refresh() {
 
 	c.paths = fresh
 	c.lastRefresh = time.Now()
-	slog.Debug("ProtectedPathCache: refreshed %d protected path prefixes", len(c.paths))
+	slog.Debug("ProtectedPathCache: refreshed  protected path prefixes", "count", len(c.paths))
 }

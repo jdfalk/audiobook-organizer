@@ -122,8 +122,7 @@ func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, rep
 
 	totalFiles := len(existingResults) + len(workItems)
 	alreadyDone := len(existingResults)
-	slog.Info("scan-composer-tags %s: %d files total, %d already done, %d to process",
-		opID, totalFiles, alreadyDone, len(workItems))
+	slog.Info("scan-composer-tags :  files total,  already done,  to process", "opID", opID, "totalFiles", totalFiles, "alreadyDone", alreadyDone, "workItems_count", len(workItems))
 
 	reporter.SetTotal(totalFiles)
 	for i := 0; i < alreadyDone; i++ {
@@ -191,10 +190,10 @@ func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, rep
 					if !dryRun && category != "ok" && willWrite != composer {
 						if writeErr := metadata.WriteSingleTag(w.filePath, "COMPOSER", willWrite); writeErr != nil {
 							r.Error = writeErr.Error()
-							slog.Warn("scan-composer-tags %s: write failed %s: %v", opID, w.filePath, writeErr)
+							slog.Warn("scan-composer-tags : write failed :", "opID", opID, "w", w.filePath, "writeErr", writeErr)
 						} else {
 							r.Applied = true
-							slog.Info("scan-composer-tags %s: COMPOSER %q→%q %s", opID, composer, willWrite, w.filePath)
+							slog.Info("scan-composer-tags : COMPOSER %q→%q", "opID", opID, "composer", composer, willWrite, w.filePath)
 						}
 					}
 				}
@@ -220,8 +219,8 @@ func (j *scanComposerTagsJob) Run(ctx context.Context, store database.Store, rep
 	wg.Wait()
 
 	finalCount := atomic.LoadInt64(&completed)
-	slog.Info("scan-composer-tags %s: finished %d/%d files", opID, finalCount, totalFiles)
-	slog.Info(fmt.Sprintf("scan complete: processed %d/%d files", finalCount, totalFiles))
+	slog.Info("scan-composer-tags : finished / files", "opID", opID, "finalCount", finalCount, "totalFiles", totalFiles)
+	slog.Info("scan complete: processed / files", "finalCount", finalCount, "totalFiles", totalFiles)
 	return nil
 }
 

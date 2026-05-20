@@ -70,7 +70,7 @@ func BuildLibraryIndex(store BookLister) LibraryIndex {
 	}
 	books, err := store.GetAllBooks(100000, 0)
 	if err != nil {
-		slog.Warn("deluge discovery: failed to load books: %v", err)
+		slog.Warn("deluge discovery: failed to load books:", "err", err)
 		return idx
 	}
 	for _, b := range books {
@@ -183,7 +183,7 @@ func IsContentFingerprintTracked(store ContentFingerprintStore, contentPath stri
 
 	segs, err := fingerprint.FileSegments(firstAudio, 0)
 	if err != nil {
-		slog.Warn("deluge discovery: fingerprint %s: %v", firstAudio, err)
+		slog.Warn("deluge discovery: fingerprint :", "firstAudio", firstAudio, "err", err)
 		return false
 	}
 	// Use the intro segment (seg[0]) for exact and fuzzy lookups.
@@ -251,7 +251,7 @@ func IsContentHashTracked(contentPath string, lookup func(string) bool) bool {
 		}
 		hash, hashErr := SHA256File(path)
 		if hashErr != nil {
-			slog.Warn("deluge discovery: sha256 %s: %v", path, hashErr)
+			slog.Warn("deluge discovery: sha256 :", "path", path, "hashErr", hashErr)
 			return nil
 		}
 		if lookup(hash) {

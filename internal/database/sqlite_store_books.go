@@ -6,10 +6,10 @@
 package database
 
 import (
-	"log/slog"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -1386,7 +1386,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.Info("CreateBook rollback: %v", rbErr)
+				slog.Info("CreateBook rollback:", "rbErr", rbErr)
 			}
 		}
 	}()
@@ -1737,7 +1737,7 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.Info("DeleteBook rollback: %v", rbErr)
+				slog.Info("DeleteBook rollback:", "rbErr", rbErr)
 			}
 		}
 	}()

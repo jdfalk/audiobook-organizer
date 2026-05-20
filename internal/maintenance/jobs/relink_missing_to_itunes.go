@@ -117,7 +117,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 				fi, _ := os.Stat(newFP)
 				book.FilePath = newFP
 				if _, upErr := store.UpdateBook(book.ID, book); upErr != nil {
-					slog.Warn("relink-missing-to-itunes: UpdateBook %s: %v", book.ID, upErr)
+					slog.Warn("relink-missing-to-itunes: UpdateBook :", "book", book.ID, "upErr", upErr)
 					relinked--
 					unresolved++
 					break
@@ -141,7 +141,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 					fi, _ := os.Stat(best)
 					book.FilePath = best
 					if _, upErr := store.UpdateBook(book.ID, book); upErr != nil {
-						slog.Warn("relink-missing-to-itunes: UpdateBook %s: %v", book.ID, upErr)
+						slog.Warn("relink-missing-to-itunes: UpdateBook :", "book", book.ID, "upErr", upErr)
 						relinked--
 						unresolved++
 						break
@@ -157,9 +157,8 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		}
 	}
 
-	slog.Info("relink-missing-to-itunes: relinked=%d ambiguous=%d unresolved=%d skipped=%d",
-		relinked, ambiguous, unresolved, skipped)
-	slog.Info(fmt.Sprintf("relinked=%d ambiguous=%d unresolved=%d skipped=%d", relinked, ambiguous, unresolved, skipped))
+	slog.Info("relink-missing-to-itunes: relinked= ambiguous= unresolved= skipped=", "relinked", relinked, "ambiguous", ambiguous, "unresolved", unresolved, "skipped", skipped)
+	slog.Info("relinked= ambiguous= unresolved= skipped=", "relinked", relinked, "ambiguous", ambiguous, "unresolved", unresolved, "skipped", skipped)
 	return nil
 }
 

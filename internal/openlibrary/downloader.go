@@ -7,7 +7,7 @@ package openlibrary
 import (
 	"fmt"
 	"io"
-"log/slog"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -99,13 +99,13 @@ func DownloadDump(dumpType string, targetDir string, tracker *DownloadTracker) e
 	var lastErr error
 	for _, baseURL := range DumpSources {
 		sourceURL := fmt.Sprintf("%s/%s", baseURL, filename)
-  slog.Info("Trying OL dump download from: %s", "sourceURL", sourceURL)
+		slog.Info("Trying OL dump download from:", "value0", "sourceURL", sourceURL)
 
 		err := downloadFromURL(dumpType, sourceURL, targetPath, tracker)
 		if err == nil {
 			return nil
 		}
-  slog.Warn("Download from %s failed: %v, trying next source", "sourceURL", sourceURL, "err", err)
+		slog.Warn("Download from  failed: , trying next source", "value0", "sourceURL", "sourceURL", sourceURL, "err", err)
 		lastErr = err
 	}
 

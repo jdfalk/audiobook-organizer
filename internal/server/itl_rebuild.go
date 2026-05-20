@@ -92,7 +92,7 @@ func (s *Server) rebuildITLHandler(c *gin.Context) {
 		return
 	}
 
-	slog.Info("ITL rebuild: removed %d, added %d, updated-meta %d, updated-loc %d", 		preview.ToRemove, preview.ToAdd, preview.ToUpdateMeta, preview.ToUpdateLoc)
+	slog.Info("ITL rebuild: removed , added , updated-meta , updated-loc", "preview", preview.ToRemove, "preview", preview.ToAdd, "preview", preview.ToUpdateMeta, "preview", preview.ToUpdateLoc)
 
 	httputil.RespondWithOK(c, itunes.ITLRebuildResult{
 		Preview: *preview,
@@ -130,8 +130,8 @@ func (s *Server) rebuildITLFullHandler(c *gin.Context) {
 			TracksInITL: len(lib.Tracks),
 		}
 		httputil.RespondWithOK(c, struct {
-			DryRun  bool                      `json:"dry_run"`
-			Preview itunes.ITLRebuildPreview  `json:"preview"`
+			DryRun  bool                     `json:"dry_run"`
+			Preview itunes.ITLRebuildPreview `json:"preview"`
 		}{DryRun: true, Preview: preview})
 		return
 	}
@@ -142,7 +142,7 @@ func (s *Server) rebuildITLFullHandler(c *gin.Context) {
 		return
 	}
 
-	slog.Info("ITL full-rebuild: removed %d existing tracks, inserted %d DB books", 		result.Preview.ToRemove, result.Preview.ToAdd)
+	slog.Info("ITL full-rebuild: removed  existing tracks, inserted  DB books", "value0", result.Preview.ToRemove, "value1", result.Preview.ToAdd)
 	httputil.RespondWithOK(c, result)
 }
 

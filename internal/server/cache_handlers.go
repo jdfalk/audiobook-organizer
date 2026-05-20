@@ -388,10 +388,10 @@ func (s *Server) runCacheStatsSnapshotter(shutdown <-chan struct{}) {
 				continue
 			}
 			if err := s.metricsStore.RecordCacheStatsSnapshots(snaps); err != nil {
-				slog.Warn("cache snapshotter: record failed: %v", err)
+				slog.Warn("cache snapshotter: record failed:", "err", err)
 			}
 			if _, err := s.metricsStore.PruneCacheStatsHistory(now.Add(-retention)); err != nil {
-				slog.Warn("cache snapshotter: prune failed: %v", err)
+				slog.Warn("cache snapshotter: prune failed:", "err", err)
 			}
 		}
 	}

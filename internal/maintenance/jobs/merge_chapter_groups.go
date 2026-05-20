@@ -12,7 +12,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
-	"log/slog")
+	"log/slog"
+)
 
 func init() { maintenance.Register(&mergeChapterGroupsJob{}) }
 
@@ -62,6 +63,6 @@ func (j *mergeChapterGroupsJob) Run(ctx context.Context, store database.Store, r
 		detail := fmt.Sprintf("primary=%s srcs=%v title=%q", primaryID, srcIDs, g.CommonTitle)
 		slog.Info("merged chapter group", "details", detail)
 	}
-	slog.Info(fmt.Sprintf("merge-chapter-groups complete: %d merged", merged))
+	slog.Info("merge-chapter-groups complete:  merged", "merged", merged)
 	return nil
 }

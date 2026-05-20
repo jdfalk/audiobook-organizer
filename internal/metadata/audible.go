@@ -226,9 +226,9 @@ func (c *AudibleClient) searchCatalog(ctx context.Context, searchURL string) ([]
 	// the query string the caller used. Callers that care about the
 	// count log it themselves with the query context.
 	if len(catalog.Products) == 0 {
-		slog.Debug("audible: searchCatalog returned 0 products for %s", searchURL)
+		slog.Debug("audible: searchCatalog returned 0 products for", "searchURL", searchURL)
 	} else {
-		slog.Debug("audible: searchCatalog returned %d products for %s", len(catalog.Products), searchURL)
+		slog.Debug("audible: searchCatalog returned  products for", "count", len(catalog.Products), "searchURL", searchURL)
 	}
 
 	results := make([]BookMetadata, 0, len(catalog.Products))

@@ -15,15 +15,15 @@ import (
 	"strings"
 	"sync"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 	"github.com/jdfalk/audiobook-organizer/internal/merge"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var dedupTracer = otel.Tracer("audiobook-organizer/dedup")
@@ -110,7 +110,7 @@ func (de *Engine) SetAIJobsStore(store database.AIJobsStore) {
 func (de *Engine) LookupCandidate(id int64) (database.DedupCandidate, bool) {
 	c, err := de.embedStore.GetCandidateByID(id)
 	if err != nil {
-		slog.Error("dedup: LookupCandidate(%d) error: %v", id, err)
+		slog.Error("dedup: LookupCandidate() error:", "id", id, "err", err)
 		return database.DedupCandidate{}, false
 	}
 	if c == nil {
@@ -227,7 +227,7 @@ func (de *Engine) CheckBook(ctx context.Context, bookID string) (bool, error) {
 	// --- Layer 1: Exact matching ---
 	merged, err := de.checkExactFileHash(book, authorName)
 	if err != nil {
-		slog.Error("dedup: file hash check error for %s: %v", bookID, err)
+		slog.Error("dedup: file hash check error for :", "bookID", bookID, "err", err)
 	}
 	if merged {
 		span.SetAttributes(attribute.Bool("merged", true))
@@ -235,28 +235,28 @@ func (de *Engine) CheckBook(ctx context.Context, bookID string) (bool, error) {
 	}
 
 	if err := de.checkExactISBN(book); err != nil {
-		slog.Error("dedup: ISBN check error for %s: %v", bookID, err)
+		slog.Error("dedup: ISBN check error for :", "bookID", bookID, "err", err)
 	}
 
 	if err := de.checkExactMetadataSourceHash(book); err != nil {
-		slog.Error("dedup: metadata-source-hash check error for %s: %v", bookID, err)
+		slog.Error("dedup: metadata-source-hash check error for :", "bookID", bookID, "err", err)
 	}
 
 	if err := de.checkExactTitle(book, authorName); err != nil {
-		slog.Error("dedup: title check error for %s: %v", bookID, err)
+		slog.Error("dedup: title check error for :", "bookID", bookID, "err", err)
 	}
 
 	if err := de.checkDurationMatch(book); err != nil {
-		slog.Error("dedup: duration check error for %s: %v", bookID, err)
+		slog.Error("dedup: duration check error for :", "bookID", bookID, "err", err)
 	}
 
 	// --- Layer 2: Embedding similarity ---
 	if de.embedClient != nil {
 		if _, err := de.EmbedBook(ctx, bookID); err != nil {
-			slog.Error("dedup: embed book error for %s: %v", bookID, err)
+			slog.Error("dedup: embed book error for :", "bookID", bookID, "err", err)
 		} else {
 			if err := de.findSimilarBooks(ctx, bookID); err != nil {
-				slog.Error("dedup: similarity search error for %s: %v", bookID, err)
+				slog.Error("dedup: similarity search error for :", "bookID", bookID, "err", err)
 			}
 		}
 	}
@@ -322,7 +322,7 @@ func (de *Engine) handleFileHashMatch(book, other *database.Book, authorName str
 		if err != nil {
 			return false, fmt.Errorf("auto-merge failed: %w", err)
 		}
-		slog.Info("dedup: auto-merged book %s into %s (file hash match)", book.ID, other.ID)
+		slog.Info("dedup: auto-merged book  into  (file hash match)", "book", book.ID, "other", other.ID)
 		return true, nil
 	}
 
@@ -384,7 +384,7 @@ func (de *Engine) checkExactISBN(book *database.Book) error {
 					Similarity: &sim,
 					Status:     "pending",
 				}); err != nil {
-					slog.Error("dedup: upsert ISBN candidate error: %v", err)
+					slog.Error("dedup: upsert ISBN candidate error:", "err", err)
 				}
 			}
 		}
@@ -423,7 +423,7 @@ func (de *Engine) checkExactMetadataSourceHash(book *database.Book) error {
 			Similarity: &sim,
 			Status:     "pending",
 		}); err != nil {
-			slog.Error("dedup: upsert metadata-hash candidate error (book %s ↔ %s): %v", book.ID, other.ID, err)
+			slog.Error("dedup: upsert metadata-hash candidate error (book  ↔ ):", "book", book.ID, "other", other.ID, "err", err)
 		}
 	}
 	return nil
@@ -510,7 +510,7 @@ func (de *Engine) checkExactTitle(book *database.Book, authorName string) error 
 			Similarity: &sim,
 			Status:     "pending",
 		}); err != nil {
-			slog.Error("dedup: upsert title candidate error: %v", err)
+			slog.Error("dedup: upsert title candidate error:", "err", err)
 		}
 	}
 	return nil
@@ -638,7 +638,7 @@ func (de *Engine) checkDurationMatch(book *database.Book) error {
 				Similarity: &sim,
 				Status:     "pending",
 			}); err != nil {
-				slog.Error("dedup: duration candidate upsert error: %v", err)
+				slog.Error("dedup: duration candidate upsert error:", "err", err)
 				continue
 			}
 			// Tag both sides so users can filter "books the
@@ -896,7 +896,7 @@ func (de *Engine) findSimilarBooks(ctx context.Context, bookID string) error {
 			Similarity: &sim,
 			Status:     "pending",
 		}); err != nil {
-			slog.Error("dedup: upsert embedding candidate error: %v", err)
+			slog.Error("dedup: upsert embedding candidate error:", "err", err)
 		}
 	}
 	return nil
@@ -956,7 +956,7 @@ func (de *Engine) CheckAuthor(ctx context.Context, authorID int) error {
 			Similarity: &sim,
 			Status:     "pending",
 		}); err != nil {
-			slog.Error("dedup: upsert author candidate error: %v", err)
+			slog.Error("dedup: upsert author candidate error:", "err", err)
 		}
 	}
 	return nil
@@ -1059,7 +1059,7 @@ func (de *Engine) prepBookEmbed(ctx context.Context, bookID string) (
 
 	if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
 		if delErr := de.embedStore.Delete("book", bookID); delErr != nil {
-			slog.Info("dedup: delete stale embedding for non-primary %s: %v", bookID, delErr)
+			slog.Info("dedup: delete stale embedding for non-primary :", "bookID", bookID, "delErr", delErr)
 		}
 		de.deleteBookFromChromem(ctx, bookID)
 		return book, "", "", EmbedStatusSkippedNonPrimary, true, nil
@@ -1067,7 +1067,7 @@ func (de *Engine) prepBookEmbed(ctx context.Context, bookID string) (
 
 	if !hasUsableTitle(book.Title) {
 		if delErr := de.embedStore.Delete("book", bookID); delErr != nil {
-			slog.Info("dedup: delete stale embedding for empty-title %s: %v", bookID, delErr)
+			slog.Info("dedup: delete stale embedding for empty-title :", "bookID", bookID, "delErr", delErr)
 		}
 		de.deleteBookFromChromem(ctx, bookID)
 		return book, "", "", EmbedStatusSkippedEmptyTitle, true, nil
@@ -1132,7 +1132,7 @@ func (de *Engine) EmbedBooks(ctx context.Context, bookIDs []string) (map[string]
 		}
 		book, text, hash, status, terminal, err := de.prepBookEmbed(ctx, id)
 		if err != nil {
-			slog.Info("dedup: prep embed for %s: %v", id, err)
+			slog.Info("dedup: prep embed for :", "id", id, "err", err)
 			continue
 		}
 		if terminal {
@@ -1167,7 +1167,7 @@ func (de *Engine) EmbedBooks(ctx context.Context, bookIDs []string) (map[string]
 			Vector:     vecs[i],
 			Model:      "text-embedding-3-large",
 		}); upErr != nil {
-			slog.Info("dedup: upsert embedding for %s: %v", p.id, upErr)
+			slog.Info("dedup: upsert embedding for :", "p", p.id, "upErr", upErr)
 			continue
 		}
 		de.mirrorBookToChromem(ctx, p.book, vecs[i])
@@ -1202,7 +1202,7 @@ func (de *Engine) mirrorBookToChromem(ctx context.Context, book *database.Book, 
 		meta["series_sequence"] = seq
 	}
 	if err := de.chromemStore.Upsert(ctx, "book", book.ID, vec, meta); err != nil {
-		slog.Warn("dedup: chromem upsert book %s: %v", book.ID, err)
+		slog.Warn("dedup: chromem upsert book :", "book", book.ID, "err", err)
 	}
 }
 
@@ -1303,7 +1303,7 @@ func (de *Engine) EmbedBooksAsync(ctx context.Context) (batchID string, count in
 	if err != nil {
 		return "", 0, fmt.Errorf("submit embedding batch: %w", err)
 	}
-	slog.Info("dedup: submitted async embedding batch %s for %d books", id, len(items))
+	slog.Info("dedup: submitted async embedding batch  for  books", "id", id, "items_count", len(items))
 	return id, len(items), nil
 }
 
@@ -1314,7 +1314,7 @@ func (de *Engine) mirrorAuthorToChromem(ctx context.Context, authorID string, ve
 		return
 	}
 	if err := de.chromemStore.Upsert(ctx, "author", authorID, vec, nil); err != nil {
-		slog.Warn("dedup: chromem upsert author %s: %v", authorID, err)
+		slog.Warn("dedup: chromem upsert author :", "authorID", authorID, "err", err)
 	}
 }
 
@@ -1330,7 +1330,7 @@ func (de *Engine) deleteBookFromChromem(ctx context.Context, bookID string) {
 		return
 	}
 	if err := de.chromemStore.Delete(ctx, "book", bookID); err != nil {
-		slog.Warn("dedup: chromem delete book %s: %v", bookID, err)
+		slog.Warn("dedup: chromem delete book :", "bookID", bookID, "err", err)
 	}
 }
 
@@ -1373,8 +1373,7 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 		}
 		statuses, err := de.EmbedBooks(ctx, chunkIDs)
 		if err != nil {
-			slog.Error("dedup: full scan embed batch error (start=%d size=%d): %v",
-				chunkStart, len(chunkIDs), err)
+			slog.Error("dedup: full scan embed batch error (start= size=):", "chunkStart", chunkStart, "chunkIDs_count", len(chunkIDs), "err", err)
 		}
 		for _, id := range chunkIDs {
 			st, ok := statuses[id]
@@ -1383,7 +1382,7 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 			}
 			if st == EmbedStatusEmbedded || st == EmbedStatusCached {
 				if simErr := de.findSimilarBooks(ctx, id); simErr != nil {
-					slog.Error("dedup: full scan similarity error for %s: %v", id, simErr)
+					slog.Error("dedup: full scan similarity error for :", "id", id, "simErr", simErr)
 				}
 			}
 		}
@@ -1411,16 +1410,16 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 		// duration match). Cheap and synchronous, no API calls — runs
 		// inline regardless of embed batching.
 		if _, err := de.checkExactFileHash(&book, authorName); err != nil {
-			slog.Error("dedup: full scan hash check error for %s: %v", book.ID, err)
+			slog.Error("dedup: full scan hash check error for :", "book", book.ID, "err", err)
 		}
 		if err := de.checkExactISBN(&book); err != nil {
-			slog.Error("dedup: full scan ISBN check error for %s: %v", book.ID, err)
+			slog.Error("dedup: full scan ISBN check error for :", "book", book.ID, "err", err)
 		}
 		if err := de.checkExactTitle(&book, authorName); err != nil {
-			slog.Error("dedup: full scan title check error for %s: %v", book.ID, err)
+			slog.Error("dedup: full scan title check error for :", "book", book.ID, "err", err)
 		}
 		if err := de.checkDurationMatch(&book); err != nil {
-			slog.Error("dedup: full scan duration check error for %s: %v", book.ID, err)
+			slog.Error("dedup: full scan duration check error for :", "book", book.ID, "err", err)
 		}
 
 		// Layer 2 embedding: accumulate IDs and flush in batches to keep
@@ -1471,10 +1470,9 @@ func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 	// twice (once as (A,B), once as (B,A)) and maybe delete one copy
 	// based on one rule and leave the other copy to cause confusion.
 	if rewritten, deleted, err := de.embedStore.CanonicalizeCandidates(); err != nil {
-		slog.Info("dedup: canonicalize candidates: %v", err)
+		slog.Info("dedup: canonicalize candidates:", "err", err)
 	} else if rewritten > 0 || deleted > 0 {
-		slog.Info("dedup: canonicalized %d candidate pair(s), deleted %d duplicate(s)",
-			rewritten, deleted)
+		slog.Info("dedup: canonicalized  candidate pair(s), deleted  duplicate(s)", "rewritten", rewritten, "deleted", deleted)
 	}
 
 	// CRITICAL: Only purge PENDING candidates. Merged and dismissed rows
@@ -1578,7 +1576,7 @@ func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 			continue
 		}
 		if err := de.embedStore.DeleteCandidate(c.ID); err != nil {
-			slog.Info("dedup: purge stale candidate %d: %v", c.ID, err)
+			slog.Info("dedup: purge stale candidate :", "c", c.ID, "err", err)
 			continue
 		}
 		deleted++
@@ -1650,7 +1648,7 @@ func (de *Engine) RunLLMReview(ctx context.Context) error {
 		slog.Info("dedup: LLM review found no pending ambiguous candidates")
 		return nil
 	}
-	slog.Info("dedup: LLM review starting — %d pair(s) queued", len(allCandidates))
+	slog.Info("dedup: LLM review starting —  pair(s) queued", "allCandidates_count", len(allCandidates))
 
 	// Build inputs alongside an index→candidate map for verdict routing.
 	inputs := make([]ai.DedupPairInput, 0, len(allCandidates))
@@ -1658,7 +1656,7 @@ func (de *Engine) RunLLMReview(ctx context.Context) error {
 	for i, c := range allCandidates {
 		input, ok := de.buildPairInput(i, c)
 		if !ok {
-			slog.Info("dedup: skipping candidate %d — could not load entities", c.ID)
+			slog.Info("dedup: skipping candidate  — could not load entities", "c", c.ID)
 			continue
 		}
 		inputs = append(inputs, input)
@@ -1691,7 +1689,7 @@ func (de *Engine) RunLLMReview(ctx context.Context) error {
 		return fmt.Errorf("submit dedup review job: %w", err)
 	}
 	subBatchCount := (len(inputs) + 24) / 25
-	slog.Info("dedup: LLM review job submitted — %s (%d pair(s), %d row(s))", jobID, len(inputs), subBatchCount)
+	slog.Info("dedup: LLM review job submitted —  ( pair(s),  row(s))", "jobID", jobID, "inputs_count", len(inputs), "subBatchCount", subBatchCount)
 	return nil
 }
 
@@ -1807,7 +1805,7 @@ func (de *Engine) ApplyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]
 	for _, v := range verdicts {
 		candidate, ok := byIndex[v.Index]
 		if !ok {
-			slog.Info("dedup: LLM returned unknown index %d", v.Index)
+			slog.Info("dedup: LLM returned unknown index", "v", v.Index)
 			continue
 		}
 		verdict := "not_duplicate"
@@ -1819,7 +1817,7 @@ func (de *Engine) ApplyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]
 			reason = fmt.Sprintf("[%s] %s", v.Confidence, reason)
 		}
 		if err := de.embedStore.UpdateCandidateLLM(candidate.ID, verdict, reason); err != nil {
-			slog.Error("dedup: failed to update candidate %d: %v", candidate.ID, err)
+			slog.Error("dedup: failed to update candidate :", "candidate", candidate.ID, "err", err)
 			continue
 		}
 		applied++
@@ -1842,7 +1840,7 @@ func (de *Engine) ApplyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]
 			continue
 		}
 		if de.mergeService == nil {
-			slog.Info("dedup: LLM auto-merge skipped for candidate %d — mergeService unavailable", candidate.ID)
+			slog.Info("dedup: LLM auto-merge skipped for candidate  — mergeService unavailable", "candidate", candidate.ID)
 			continue
 		}
 
@@ -1851,15 +1849,14 @@ func (de *Engine) ApplyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]
 			"", // auto-pick primary via bookIsBetter
 		)
 		if mergeErr != nil {
-			slog.Error("dedup: LLM auto-merge failed for candidate %d (%s + %s): %v",
-				candidate.ID, candidate.EntityAID, candidate.EntityBID, mergeErr)
+			slog.Error("dedup: LLM auto-merge failed for candidate  ( + ):", "candidate", candidate.ID, "candidate", candidate.EntityAID, "candidate", candidate.EntityBID, "mergeErr", mergeErr)
 			continue
 		}
 
 		// Mark candidate as merged in the dedup store so it
 		// drops off the pending/review tab.
 		if err := de.embedStore.UpdateCandidateStatus(candidate.ID, "merged"); err != nil {
-			slog.Error("dedup: failed to mark candidate %d merged: %v", candidate.ID, err)
+			slog.Error("dedup: failed to mark candidate  merged:", "candidate", candidate.ID, "err", err)
 		}
 
 		// Tag the surviving book with the auto-merge provenance.
@@ -1874,16 +1871,15 @@ func (de *Engine) ApplyVerdicts(verdicts []ai.DedupPairVerdict, byIndex map[int]
 				"dedup:merge-survivor:llm-auto",
 				"system",
 			); tagErr != nil {
-				slog.Error("dedup: failed to tag auto-merged survivor %s: %v", result.PrimaryID, tagErr)
+				slog.Error("dedup: failed to tag auto-merged survivor :", "result", result.PrimaryID, "tagErr", tagErr)
 			}
 		}
 
 		autoMerged++
-		slog.Info("dedup: LLM auto-merged candidate %d (%s + %s) — reason: %s",
-			candidate.ID, candidate.EntityAID, candidate.EntityBID, reason)
+		slog.Info("dedup: LLM auto-merged candidate  ( + ) — reason:", "candidate", candidate.ID, "candidate", candidate.EntityAID, "candidate", candidate.EntityBID, "reason", reason)
 	}
 	if autoMerged > 0 {
-		slog.Info("dedup: LLM auto-merge fired on %d high-confidence pair(s)", autoMerged)
+		slog.Info("dedup: LLM auto-merge fired on  high-confidence pair(s)", "autoMerged", autoMerged)
 	}
 	return applied
 }
@@ -2032,7 +2028,7 @@ func (de *Engine) allNormalizedTitleForms(book *database.Book) []string {
 				forms = append(forms, norm)
 			}
 		} else {
-			slog.Info("dedup: alt title lookup for %s: %v", book.ID, err)
+			slog.Info("dedup: alt title lookup for :", "book", book.ID, "err", err)
 		}
 	}
 	return forms
@@ -2107,7 +2103,7 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 			Similarity: &sim,
 			Status:     "pending",
 		}); err != nil {
-			slog.Info("[dedup] acoustid scan: upsert candidate (%s, %s): %v", bookAID, bookBID, err)
+			slog.Info("[dedup] acoustid scan: upsert candidate (, ):", "bookAID", bookAID, "bookBID", bookBID, "err", err)
 		}
 	}
 
@@ -2121,7 +2117,7 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 
 		files, err := de.bookStore.GetBookFiles(book.ID)
 		if err != nil {
-			slog.Info("[dedup] acoustid scan: get files for %s: %v", book.ID, err)
+			slog.Info("[dedup] acoustid scan: get files for :", "book", book.ID, "err", err)
 			continue
 		}
 
@@ -2157,7 +2153,7 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 		}
 	}
 
-	slog.Info("[dedup] acoustid scan complete: %d books scanned, %d candidate pair(s) emitted", total, len(emitted))
+	slog.Info("[dedup] acoustid scan complete:  books scanned,  candidate pair(s) emitted", "total", total, "emitted_count", len(emitted))
 	return nil
 }
 
@@ -2225,7 +2221,7 @@ func (de *Engine) BookSignatureScan(ctx context.Context, progress func(done, tot
 			Similarity: &sim,
 			Status:     "pending",
 		}); err != nil {
-			slog.Info("[dedup] book signature scan: upsert candidate (%s, %s): %v", bookAID, bookBID, err)
+			slog.Info("[dedup] book signature scan: upsert candidate (, ):", "bookAID", bookAID, "bookBID", bookBID, "err", err)
 		}
 	}
 
@@ -2252,13 +2248,13 @@ func (de *Engine) BookSignatureScan(ctx context.Context, progress func(done, tot
 
 			sim, overlap, err := fingerprint.BookSignatureSimilarityMasked(sigA, sigB, maskA, maskB)
 			if err != nil {
-				slog.Info("[dedup] book signature scan: compare %s vs %s: %v", bookA.ID, bookB.ID, err)
+				slog.Info("[dedup] book signature scan: compare  vs :", "bookA", bookA.ID, "bookB", bookB.ID, "err", err)
 				continue
 			}
 			// Skip pairs with insufficient overlap (partial sigs with non-overlapping missing sections).
 			const minOverlapWords = 512
 			if overlap < minOverlapWords {
-				slog.Info("[dedup] book signature scan: skip %s vs %s (overlap=%d < %d)", bookA.ID, bookB.ID, overlap, minOverlapWords)
+				slog.Info("[dedup] book signature scan: skip  vs  (overlap= < )", "bookA", bookA.ID, "bookB", bookB.ID, "overlap", overlap, "minOverlapWords", minOverlapWords)
 				continue
 			}
 
@@ -2272,6 +2268,6 @@ func (de *Engine) BookSignatureScan(ctx context.Context, progress func(done, tot
 		}
 	}
 
-	slog.Info("[dedup] book signature scan complete: %d books scanned, %d candidate pair(s) emitted", total, len(emitted))
+	slog.Info("[dedup] book signature scan complete:  books scanned,  candidate pair(s) emitted", "total", total, "emitted_count", len(emitted))
 	return nil
 }

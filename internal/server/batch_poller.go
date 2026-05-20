@@ -74,7 +74,7 @@ func (bp *BatchPoller) Poll(ctx context.Context) (int, error) {
 
 		handler, ok := bp.handlers[b.Type]
 		if !ok {
-			slog.Warn("batch_poller: no handler for type %q (batch %s)", b.Type, b.ID)
+			slog.Warn("batch_poller: no handler for type %q (batch )", "b", b.Type, b.ID)
 			// Mark as processed so we don't warn repeatedly
 			bp.mu.Lock()
 			bp.processedBatches[b.ID] = true
@@ -83,14 +83,14 @@ func (bp *BatchPoller) Poll(ctx context.Context) (int, error) {
 		}
 
 		if err := handler(ctx, b.ID, b.OutputFileID); err != nil {
-			slog.Error("batch_poller: handler for %s batch %s failed: %v", b.Type, b.ID, err)
+			slog.Error("batch_poller: handler for  batch  failed:", "b", b.Type, "b", b.ID, "err", err)
 			// Do NOT mark as processed — retry on next poll
 		} else {
 			bp.mu.Lock()
 			bp.processedBatches[b.ID] = true
 			bp.mu.Unlock()
 			processed++
-			slog.Info("batch_poller: processed %s batch %s", b.Type, b.ID)
+			slog.Info("batch_poller: processed  batch", "b", b.Type, "b", b.ID)
 		}
 	}
 	return processed, nil
@@ -126,7 +126,7 @@ func (s *Server) registerBatchPollerHandlers() {
 		if err != nil {
 			return fmt.Errorf("download author_dedup results: %w", err)
 		}
-		slog.Info("batch_poller: author_dedup batch %s yielded %d suggestions", batchID, len(discoveries))
+		slog.Info("batch_poller: author_dedup batch  yielded  suggestions", "batchID", batchID, "discoveries_count", len(discoveries))
 		// Store results in any operation referencing this batch
 		s.storeBatchResultForOperation(batchID, map[string]any{
 			"mode":        "batch-full",
@@ -145,7 +145,7 @@ func (s *Server) registerBatchPollerHandlers() {
 		if err != nil {
 			return fmt.Errorf("download author_review results: %w", err)
 		}
-		slog.Info("batch_poller: author_review batch %s yielded %d suggestions", batchID, len(suggestions))
+		slog.Info("batch_poller: author_review batch  yielded  suggestions", "batchID", batchID, "suggestions_count", len(suggestions))
 		s.storeBatchResultForOperation(batchID, map[string]any{
 			"mode":        "batch-groups",
 			"suggestions": suggestions,
@@ -163,7 +163,7 @@ func (s *Server) registerBatchPollerHandlers() {
 		if err != nil {
 			return fmt.Errorf("download diagnostics results: %w", err)
 		}
-		slog.Info("batch_poller: diagnostics batch %s yielded %d results", batchID, len(rawResults))
+		slog.Info("batch_poller: diagnostics batch  yielded  results", "batchID", batchID, "rawResults_count", len(rawResults))
 		s.storeBatchResultForOperation(batchID, map[string]any{
 			"raw_responses": rawResults,
 			"batch_id":      batchID,
@@ -225,12 +225,12 @@ func (s *Server) registerBatchPollerHandlers() {
 				Vector:     r.Vector,
 				Model:      "text-embedding-3-large",
 			}); err != nil {
-				slog.Warn("embed_async: upsert book %s: %v", r.BookID, err)
+				slog.Warn("embed_async: upsert book :", "r", r.BookID, "err", err)
 			} else {
 				stored++
 			}
 		}
-		slog.Info("embed_async: stored %d/%d embeddings from batch %s", stored, len(results), batchID)
+		slog.Info("embed_async: stored / embeddings from batch", "stored", stored, "results_count", len(results), "batchID", batchID)
 		return nil
 	})
 }
@@ -243,14 +243,14 @@ func (s *Server) storeBatchResultForOperation(batchID string, payload map[string
 		store = s.Store()
 	}
 	if store == nil {
-		slog.Warn("batch_poller: no store available to save batch %s results", batchID)
+		slog.Warn("batch_poller: no store available to save batch  results", "batchID", batchID)
 		return
 	}
 
 	// Search recent operations for ones referencing this batch ID
 	ops, _, err := store.ListOperations(100, 0)
 	if err != nil {
-		slog.Warn("batch_poller: failed to list operations: %v", err)
+		slog.Warn("batch_poller: failed to list operations:", "err", err)
 		return
 	}
 
@@ -266,17 +266,17 @@ func (s *Server) storeBatchResultForOperation(batchID string, payload map[string
 		if existingBatchID, ok := existing["batch_id"].(string); ok && existingBatchID == batchID {
 			resultJSON, jErr := json.Marshal(payload)
 			if jErr != nil {
-				slog.Warn("batch_poller: failed to marshal results for batch %s: %v", batchID, jErr)
+				slog.Warn("batch_poller: failed to marshal results for batch :", "batchID", batchID, "jErr", jErr)
 				continue
 			}
 			if err := store.UpdateOperationResultData(op.ID, string(resultJSON)); err != nil {
-				slog.Warn("batch_poller: failed to update operation %s: %v", op.ID, err)
+				slog.Warn("batch_poller: failed to update operation :", "op", op.ID, "err", err)
 			} else {
 				_ = store.UpdateOperationStatus(op.ID, "completed", 100, 100, "Batch results received")
-				slog.Info("batch_poller: updated operation %s with batch %s results", op.ID, batchID)
+				slog.Info("batch_poller: updated operation  with batch  results", "op", op.ID, "batchID", batchID)
 			}
 			return
 		}
 	}
-	slog.Info("batch_poller: no operation found referencing batch %s", batchID)
+	slog.Info("batch_poller: no operation found referencing batch", "batchID", batchID)
 }

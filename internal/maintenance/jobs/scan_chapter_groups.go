@@ -12,7 +12,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
-	"log/slog")
+	"log/slog"
+)
 
 func init() { maintenance.Register(&scanChapterGroupsJob{}) }
 
@@ -45,6 +46,6 @@ func (j *scanChapterGroupsJob) Run(ctx context.Context, store database.Store, re
 		detail := fmt.Sprintf("title=%q files=%d duration=%.0fs ids=%v", g.CommonTitle, g.FileCount, g.TotalDuration, g.BookIDs)
 		slog.Info("chapter group detected", "details", detail)
 	}
-	slog.Info(fmt.Sprintf("scan-chapter-groups complete: %d groups", len(groups)))
+	slog.Info("scan-chapter-groups complete:  groups", "groups_count", len(groups))
 	return nil
 }

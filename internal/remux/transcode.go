@@ -8,7 +8,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
-"log/slog"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,18 +47,18 @@ func (t *Transcoder) TranscodeMalformedFiles() {
 	}
 
 	if setting, err := t.store.GetSetting(TranscodeKey); err == nil && setting != nil && setting.Value == "true" {
-  slog.Info("Malformed M4B transcode already completed, skipping")
+		slog.Info("Malformed M4B transcode already completed, skipping")
 		return
 	}
 
 	root := config.AppConfig.RootDir
 	if root == "" {
-  slog.Warn("TranscodeMalformedFiles: RootDir not configured, skipping")
+		slog.Warn("TranscodeMalformedFiles: RootDir not configured, skipping")
 		return
 	}
 
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
-  slog.Warn("TranscodeMalformedFiles: ffmpeg not found, skipping")
+		slog.Warn("TranscodeMalformedFiles: ffmpeg not found, skipping")
 		return
 	}
 
@@ -72,11 +72,11 @@ func (t *Transcoder) TranscodeMalformedFiles() {
 		k := TranscodeSkipKey(p)
 		if skip, _ := t.store.GetSetting(k); skip == nil {
 			_ = t.store.SetSetting(k, "true", "bool", false)
-   slog.Info("malformed M4B transcode: pre-marked permanently unfixable: %s", "p", p)
+			slog.Info("malformed M4B transcode: pre-marked permanently unfixable:", "value0", "p", p)
 		}
 	}
 
- slog.Info("Starting malformed M4B transcode scan under %s …", "root", root)
+	slog.Info("Starting malformed M4B transcode scan under  …", "value0", "root", root)
 	transcoded, clean, failed, skipped := 0, 0, 0, 0
 
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
@@ -99,7 +99,7 @@ func (t *Transcoder) TranscodeMalformedFiles() {
 
 		// Skip files that have already been confirmed permanently unfixable.
 		if skip, err := t.store.GetSetting(TranscodeSkipKey(path)); err == nil && skip != nil && skip.Value == "true" {
-   slog.Info("malformed M4B transcode: skipping known-unfixable %s", "path", path)
+			slog.Info("malformed M4B transcode: skipping known-unfixable", "value0", "path", path)
 			skipped++
 			failed++
 			return nil
@@ -107,7 +107,7 @@ func (t *Transcoder) TranscodeMalformedFiles() {
 
 		// taglib failed — attempt full AAC transcode.
 		if err := TranscodeFile(path); err != nil {
-   slog.Warn("malformed M4B transcode failed for %s: %v", "path", path, "err", err)
+			slog.Warn("malformed M4B transcode failed for :", "value0", "path", "path", path, "err", err)
 			_ = t.store.SetSetting(TranscodeSkipKey(path), "true", "bool", false)
 			failed++
 			return nil
@@ -115,18 +115,18 @@ func (t *Transcoder) TranscodeMalformedFiles() {
 
 		// Verify the output is now readable.
 		if _, err := taglib.ReadTags(path); err != nil {
-   slog.Warn("malformed M4B transcode produced unreadable file for %s: %v", "path", path, "err", err)
+			slog.Warn("malformed M4B transcode produced unreadable file for :", "value0", "path", "path", path, "err", err)
 			_ = t.store.SetSetting(TranscodeSkipKey(path), "true", "bool", false)
 			failed++
 			return nil
 		}
 
-  slog.Info("malformed M4B transcoded: %s", "path", path)
+		slog.Info("malformed M4B transcoded:", "value0", "path", path)
 		transcoded++
 		return nil
 	})
 
- slog.Info("Malformed M4B transcode: %d transcoded, %d already readable, %d failed (%d permanently skipped)", "transcoded", transcoded, "clean", clean, "failed", failed, "skipped", skipped)
+	slog.Info("Malformed M4B transcode:  transcoded,  already readable,  failed ( permanently skipped)", "value0", "transcoded", "transcoded", transcoded, "value2", "clean", "clean", clean, "failed", failed, "skipped", skipped)
 	_ = t.store.SetSetting(TranscodeKey, "true", "bool", false)
 }
 

@@ -8,7 +8,7 @@ import (
 	json "encoding/json/v2"
 	"fmt"
 	"io"
-"log/slog"
+	"log/slog"
 	"net/http"
 	"os"
 	"runtime"
@@ -221,7 +221,7 @@ func (u *Updater) DownloadAndReplace(info *UpdateInfo) error {
 		return err
 	}
 
- slog.Info("Downloading update from %s", "assetURL", assetURL)
+	slog.Info("Downloading update from", "value0", "assetURL", assetURL)
 
 	// Get current executable path
 	execPath, err := os.Executable()
@@ -278,7 +278,7 @@ func (u *Updater) DownloadAndReplace(info *UpdateInfo) error {
 	// Clean up old binary (best effort)
 	os.Remove(oldPath)
 
- slog.Info("Update applied successfully: %s -> %s", "value0", info.CurrentVersion, "value1", info.LatestVersion)
+	slog.Info("Update applied successfully:  ->", "value0", "value0", "info", info.CurrentVersion, "value1", info.LatestVersion)
 	return nil
 }
 
@@ -328,7 +328,7 @@ func (u *Updater) findAssetURL(info *UpdateInfo) (string, error) {
 // RestartSelf exits the process so that systemd (or similar) can restart it
 // with the new binary.
 func (u *Updater) RestartSelf() error {
- slog.Info("Exiting for restart with updated binary")
+	slog.Info("Exiting for restart with updated binary")
 	os.Exit(0)
 	return nil // unreachable
 }

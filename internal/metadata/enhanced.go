@@ -336,7 +336,7 @@ func writeM4BMetadata(filePath string, metadata map[string]interface{}, config f
 		return fmt.Errorf("AtomicParsley not found in PATH (install: brew install atomicparsley): %w", err)
 	}
 
-	slog.Warn("writeM4BMetadata: using AtomicParsley CLI fallback for %s; native taglib writer is preferred for full tag support", filePath)
+	slog.Warn("writeM4BMetadata: using AtomicParsley CLI fallback for ; native taglib writer is preferred for full tag support", "filePath", filePath)
 
 	// Create backup using safe copy with config
 	backupPath := filePath + ".backup"

@@ -57,13 +57,13 @@ func (w *LibraryWatcher) loop() {
 				w.changed = true
 				w.changedAt = time.Now()
 				w.mu.Unlock()
-				slog.Info("iTunes library file changed: %s (op: %s)", w.path, event.Op)
+				slog.Info("iTunes library file changed:  (op: )", "w", w.path, "event", event.Op)
 			}
 		case err, ok := <-w.watcher.Errors:
 			if !ok {
 				return
 			}
-			slog.Error("iTunes library watcher error: %v", err)
+			slog.Error("iTunes library watcher error:", "err", err)
 		case <-w.stop:
 			return
 		}

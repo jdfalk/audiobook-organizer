@@ -14,7 +14,8 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"log/slog")
+	"log/slog"
+)
 
 func init() { maintenance.Register(&cleanupSeriesJob{}) }
 
@@ -77,7 +78,7 @@ func (j *cleanupSeriesJob) Run(ctx context.Context, store database.Store, report
 		singleFound++
 		if !dryRun {
 			if applyErr := csUnlinkAndDeleteSeries(store, &book, ser.ID); applyErr != nil {
-				slog.Error(fmt.Sprintf("Failed to remove 1-book series %d (%q): %v", ser.ID, ser.Name, applyErr))
+				slog.Error("Failed to remove 1-book series  (%q):", "ser", ser.ID, "ser", ser.Name, applyErr)
 			} else {
 				deletedIDs[ser.ID] = true
 				singleApplied++
@@ -120,14 +121,14 @@ func (j *cleanupSeriesJob) Run(ctx context.Context, store database.Store, report
 
 		if !dryRun {
 			if mergeErr := csMergeSeriesGroup(store, keeper.ID, mergeIDs); mergeErr != nil {
-				slog.Error(fmt.Sprintf("Failed to merge series group %q: %v", normName, mergeErr))
+				slog.Error("Failed to merge series group %q:", "normName", normName, mergeErr)
 			} else {
 				dupApplied++
 			}
 		}
 	}
 
-	slog.Info(fmt.Sprintf("Done: single_found=%d single_applied=%d dup_groups_found=%d dup_applied=%d dryRun=%v", singleFound, singleApplied, dupFound, dupApplied, dryRun))
+	slog.Info("Done: single_found= single_applied= dup_groups_found= dup_applied= dryRun=", "singleFound", singleFound, "singleApplied", singleApplied, "dupFound", dupFound, "dupApplied", dupApplied, "dryRun", dryRun)
 	return nil
 }
 

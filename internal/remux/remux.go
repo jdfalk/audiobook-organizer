@@ -7,7 +7,7 @@ package remux
 import (
 	"fmt"
 	"io/fs"
-"log/slog"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,22 +47,22 @@ func (r *Remuxer) RemuxMalformedFiles() {
 	}
 
 	if setting, err := r.store.GetSetting(RemuxKey); err == nil && setting != nil && setting.Value == "true" {
-  slog.Info("Malformed M4B remux already completed, skipping")
+		slog.Info("Malformed M4B remux already completed, skipping")
 		return
 	}
 
 	root := config.AppConfig.RootDir
 	if root == "" {
-  slog.Warn("RemuxMalformedFiles: RootDir not configured, skipping")
+		slog.Warn("RemuxMalformedFiles: RootDir not configured, skipping")
 		return
 	}
 
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
-  slog.Warn("RemuxMalformedFiles: ffmpeg not found, skipping")
+		slog.Warn("RemuxMalformedFiles: ffmpeg not found, skipping")
 		return
 	}
 
- slog.Info("Starting malformed M4B remux scan under %s …", "root", root)
+	slog.Info("Starting malformed M4B remux scan under  …", "value0", "root", root)
 	remuxed, clean, failed := 0, 0, 0
 
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
@@ -86,24 +86,24 @@ func (r *Remuxer) RemuxMalformedFiles() {
 
 		// taglib failed — attempt to remux with ffmpeg.
 		if err := RemuxFile(path); err != nil {
-   slog.Warn("malformed M4B remux failed for %s: %v", "path", path, "err", err)
+			slog.Warn("malformed M4B remux failed for :", "value0", "path", "path", path, "err", err)
 			failed++
 			return nil
 		}
 
 		// Verify the output is now readable.
 		if _, err := taglib.ReadTags(path); err != nil {
-   slog.Warn("malformed M4B remux produced unreadable file for %s: %v", "path", path, "err", err)
+			slog.Warn("malformed M4B remux produced unreadable file for :", "value0", "path", "path", path, "err", err)
 			failed++
 			return nil
 		}
 
-  slog.Info("malformed M4B remuxed: %s", "path", path)
+		slog.Info("malformed M4B remuxed:", "value0", "path", path)
 		remuxed++
 		return nil
 	})
 
- slog.Info("Malformed M4B remux: %d remuxed, %d already readable, %d failed", "remuxed", remuxed, "clean", clean, "failed", failed)
+	slog.Info("Malformed M4B remux:  remuxed,  already readable,  failed", "value0", "remuxed", "remuxed", remuxed, "value2", "clean", clean, "failed", failed)
 	_ = r.store.SetSetting(RemuxKey, "true", "bool", false)
 }
 

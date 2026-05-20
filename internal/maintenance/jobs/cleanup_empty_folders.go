@@ -15,7 +15,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"log/slog")
+	"log/slog"
+)
 
 func init() { maintenance.Register(&cleanupEmptyFoldersJob{}) }
 
@@ -58,7 +59,7 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 	sort.Slice(dirs, func(i, k int) bool { return len(dirs[i]) > len(dirs[k]) })
 
 	reporter.SetTotal(len(dirs))
-	slog.Info(fmt.Sprintf("cleanup-empty-folders: found %d directories to check (dry_run=%v)", len(dirs), dryRun))
+	slog.Info("cleanup-empty-folders: found  directories to check (dry_run=)", "dirs_count", len(dirs), "dryRun", dryRun)
 
 	removed := 0
 	for _, dir := range dirs {
@@ -68,7 +69,7 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			slog.Error(fmt.Sprintf("cleanup-empty-folders: failed to read %s: %v", dir, err))
+			slog.Error("cleanup-empty-folders: failed to read :", "dir", dir, "err", err)
 			reporter.Increment()
 			continue
 		}
@@ -79,18 +80,18 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 		}
 
 		if dryRun {
-			slog.Info(fmt.Sprintf("[dry] would remove empty dir: %s", dir))
+			slog.Info("[dry] would remove empty dir:", "dir", dir)
 		} else {
 			if err := os.Remove(dir); err != nil {
-				slog.Error(fmt.Sprintf("cleanup-empty-folders: failed to remove %s: %v", dir, err))
+				slog.Error("cleanup-empty-folders: failed to remove :", "dir", dir, "err", err)
 			} else {
-				slog.Info(fmt.Sprintf("removed empty dir: %s", dir))
+				slog.Info("removed empty dir:", "dir", dir)
 				removed++
 			}
 		}
 		reporter.Increment()
 	}
 
-	slog.Info(fmt.Sprintf("cleanup-empty-folders: complete — checked %d dirs, removed %d (dry_run=%v)", len(dirs), removed, dryRun))
+	slog.Info("cleanup-empty-folders: complete — checked  dirs, removed  (dry_run=)", "dirs_count", len(dirs), "removed", removed, "dryRun", dryRun)
 	return nil
 }

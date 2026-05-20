@@ -170,7 +170,7 @@ func handleAPIKeyAuth(c *gin.Context, store interface {
 	hash := database.HashAPIKeyToken(rawToken)
 	key, err := store.GetAPIKeyByHash(hash)
 	if err != nil {
-		slog.Info("lookup error: hash=%s err=%v", hash[:8], err)
+		slog.Info("lookup error: hash= err=", "value0", hash[:8], "err", err)
 		httputil.RespondWithInternalError(c, "internal error")
 		c.Abort()
 		return
@@ -215,7 +215,7 @@ func handleAPIKeyAuth(c *gin.Context, store interface {
 	ip := c.ClientIP()
 	go func() {
 		if touchErr := store.TouchAPIKeyLastUsed(key.ID, time.Now(), ip); touchErr != nil {
-			slog.Info("touch error: id=%s err=%v", key.ID, touchErr)
+			slog.Info("touch error: id= err=", "key", key.ID, "touchErr", touchErr)
 		}
 	}()
 

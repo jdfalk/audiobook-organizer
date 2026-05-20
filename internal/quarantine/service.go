@@ -9,7 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-"log/slog"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -122,7 +122,7 @@ func (qs *QuarantineService) QuarantineBook(bookID, reason string) error {
 	if _, err := qs.store.UpdateBook(bookID, book); err != nil {
 		// Rollback: move file back before returning the error.
 		if rollbackErr := os.Rename(dest, oldPath); rollbackErr != nil {
-   slog.Error("QuarantineBook: DB update failed and file rollback failed: %v (original: %v)", "rollbackErr", rollbackErr, "err", err)
+			slog.Error("QuarantineBook: DB update failed and file rollback failed:  (original: )", "value0", "rollbackErr", "rollbackErr", rollbackErr, "err", err)
 		}
 		return fmt.Errorf("update book: %w", err)
 	}
@@ -134,7 +134,7 @@ func (qs *QuarantineService) QuarantineBook(bookID, reason string) error {
 		ChangeType: "quarantine",
 	})
 
- slog.Info("QuarantineBook: %s → %s (%s)", "oldPath", oldPath, "dest", dest, "reason", reason)
+	slog.Info("QuarantineBook:  →  ()", "value0", "oldPath", "oldPath", oldPath, "value2", "dest", dest, "reason", reason)
 
 	qs.events.Publish(context.Background(), plugin.NewEvent(plugin.EventBookQuarantined, bookID, map[string]any{
 		"title":          book.Title,
@@ -197,7 +197,7 @@ func (qs *QuarantineService) UnquarantineBook(bookID string) error {
 	if _, err := qs.store.UpdateBook(bookID, book); err != nil {
 		// Rollback: move file back to quarantine location.
 		if rollbackErr := os.Rename(origPath, quarPath); rollbackErr != nil {
-   slog.Error("UnquarantineBook: DB update failed and file rollback failed: %v (original: %v)", "rollbackErr", rollbackErr, "err", err)
+			slog.Error("UnquarantineBook: DB update failed and file rollback failed:  (original: )", "value0", "rollbackErr", "rollbackErr", rollbackErr, "err", err)
 		}
 		return fmt.Errorf("update book: %w", err)
 	}
@@ -209,7 +209,7 @@ func (qs *QuarantineService) UnquarantineBook(bookID string) error {
 		ChangeType: "unquarantine",
 	})
 
- slog.Info("UnquarantineBook: %s → %s", "quarPath", quarPath, "origPath", origPath)
+	slog.Info("UnquarantineBook:  →", "value0", "quarPath", "quarPath", quarPath, "origPath", origPath)
 
 	qs.events.Publish(context.Background(), plugin.NewEvent(plugin.EventBookUnquarantined, bookID, map[string]any{
 		"file_path":       origPath,
@@ -239,7 +239,7 @@ func (qs *QuarantineService) AutoQuarantineFailedScans() {
 			}
 			n, _ := qs.store.GetScanFailCount(scanFailKey(b.FilePath))
 			if n >= scanFailThreshold {
-    slog.Info("auto-quarantine: %s (fail count %d)", "value0", b.FilePath, "n", n)
+				slog.Info("auto-quarantine:  (fail count )", "value0", "value0", "b", b.FilePath, "n", n)
 				_ = qs.QuarantineBook(b.ID, fmt.Sprintf("taglib failed to read file after %d consecutive scan attempts", n))
 			}
 		}
@@ -266,14 +266,14 @@ func (qs *QuarantineService) ProcessITunesPurgePending() {
 			continue
 		}
 		qs.batcher.EnqueueRemove(*b.ITunesPersistentID)
-  slog.Info("ProcessITunesPurgePending: queued ITL removal for %s (book %s)", "value0", *b.ITunesPersistentID, "value1", b.ID)
+		slog.Info("ProcessITunesPurgePending: queued ITL removal for  (book )", "value0", "value0", "value1", *b.ITunesPersistentID, "value1", b.ID)
 
 		// Clear iTunes linkage so the book is no longer tied to iTunes.
 		cleared := "unlinked"
 		b.ITunesSyncStatus = &cleared
 		b.ITunesPersistentID = nil
 		if _, err := qs.store.UpdateBook(b.ID, &b); err != nil {
-   slog.Warn("ProcessITunesPurgePending: UpdateBook %s: %v", "value0", b.ID, "err", err)
+			slog.Warn("ProcessITunesPurgePending: UpdateBook :", "value0", "value0", "b", b.ID, "err", err)
 		}
 	}
 }

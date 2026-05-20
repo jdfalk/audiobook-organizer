@@ -6,9 +6,8 @@
 package server
 
 import (
-	"log/slog"
 	"context"
-
+	"log/slog"
 
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
@@ -44,6 +43,6 @@ func (s *Server) initPlugins(ctx context.Context) {
 	pluginGroup := s.router.Group("/api/v1/plugins")
 
 	if err := s.pluginRegistry.InitAllScoped(ctx, baseDeps, pluginGroup, pluginConfigs); err != nil {
-		slog.Warn("plugin initialization error: %v", err)
+		slog.Warn("plugin initialization error:", "err", err)
 	}
 }

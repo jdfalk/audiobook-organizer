@@ -8,9 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-"log/slog"
 	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"log/slog"
 )
 
 // DedupEntity describes one side of a duplicate-pair candidate for LLM review.
@@ -174,7 +174,7 @@ func dedupReviewCallback(ctx context.Context, itemsJSON []byte, results []aijobs
 	for pairIdx, candID := range payload.ByIndex {
 		c, ok := dedupVerdictApplier.LookupCandidate(candID)
 		if !ok {
-   slog.Info("dedup_review: candidate %d (pair %d) not found — skipping", "candID", candID, "pairIdx", pairIdx)
+			slog.Info("dedup_review: candidate  (pair ) not found — skipping", "value0", "candID", "candID", candID, "pairIdx", pairIdx)
 			continue
 		}
 		byIndex[pairIdx] = c
@@ -215,7 +215,7 @@ func dedupReviewCallback(ctx context.Context, itemsJSON []byte, results []aijobs
 	}
 
 	applied := dedupVerdictApplier.ApplyVerdicts(allVerdicts, byIndex)
- slog.Info("dedup_review callback: applied %d verdicts (from %d successful rows, %d errors)", "applied", applied, "successCount", successCount, "errorCount", errorCount)
+	slog.Info("dedup_review callback: applied  verdicts (from  successful rows,  errors)", "value0", "applied", "applied", applied, "value2", "successCount", successCount, "errorCount", errorCount)
 
 	return successCount, errorCount, rowErrors, nil
 }
