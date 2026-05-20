@@ -8,6 +8,13 @@
 This is an **audiobook organizer** — Go backend + React/TypeScript frontend.
 All AI agent instructions live in `.github/`. This file is the entry point.
 
+⚠️ **CRITICAL: ALWAYS USE GIT WORKTREES**
+- **NEVER commit directly to main in the primary working tree**
+- Check `git worktree list` before any edits
+- If in main checkout: `git worktree add ../<repo>-<branch> -b <branch>`
+- Make changes in the worktree, push, create PR, merge via rebase/FF
+- This is non-negotiable — no exceptions
+
 ## Quick Start
 
 - **Architecture & workflows:** [.github/copilot-instructions.md](.github/copilot-instructions.md)
