@@ -1,7 +1,7 @@
 // file: internal/plugins/maintenance/plugin.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: b2c3d4e5-f6a7-8901-bcde-123456789012
-// last-edited: 2026-05-12
+// last-edited: 2026-05-19
 
 package maintenance
 
@@ -28,7 +28,7 @@ func (p *Plugin) Name() string { return "Maintenance" }
 // Version implements sdk.Plugin.
 func (p *Plugin) Version() string { return "1.0.0" }
 
-// Register registers all 26 maintenance OperationDefs with the UOS registry.
+// Register registers all maintenance OperationDefs with the UOS registry.
 func (p *Plugin) Register(r sdk.Registry) error {
 	defs := []sdk.OperationDef{
 		// --- cleanup ---
@@ -74,6 +74,9 @@ func (p *Plugin) Register(r sdk.Registry) error {
 		p.movementAtomCleanupDef(),
 		p.malformedM4BRemuxDef(),
 		p.malformedM4BTranscodeDef(),
+
+		// --- optimize sweep ---
+		p.optimizeDef(),
 	}
 	for _, d := range defs {
 		if err := r.RegisterOp(d); err != nil {

@@ -1045,6 +1045,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/operations/scan", s.perm(auth.PermScanTrigger), s.startScan)
 			protected.POST("/operations/organize", s.perm(auth.PermScanTrigger), s.startOrganize)
 			protected.POST("/operations/transcode", s.perm(auth.PermScanTrigger), s.startTranscode)
+			protected.POST("/operations/optimize", s.perm(auth.PermScanTrigger), s.startOptimize)
 
 			// UOS-06: operations v2 SSE + timeline + introspection endpoints
 			protected.GET("/operations/timeline", s.perm(auth.PermLibraryView), s.handleGetOperationTimeline)
