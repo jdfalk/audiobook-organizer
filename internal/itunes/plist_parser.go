@@ -1,8 +1,17 @@
+// file: internal/itunes/plist_parser.go
+// version: 1.2.0
+// guid: d1f3e5c7-a9b1-c3d5-e7f9-1a3b5c7d9e1f
+
 package itunes
 
 import (
+	"context"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"howett.net/plist"
@@ -221,4 +230,284 @@ func writePlist(library *Library, path string) error {
 	}
 
 	return nil
+}
+
+// StreamingParseLibrary reads an iTunes plist XML file and yields tracks via callback.
+// Unlike ParseLibrary which loads the entire file into memory, this streams through
+// the XML and calls onTrack for each track found. This prevents the 53GB memory spike
+// on large iTunes libraries (88K+ tracks). Context cancellation is respected.
+func StreamingParseLibrary(ctx context.Context, path string, onTrack func(*Track) error) (int, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, fmt.Errorf("failed to open iTunes library file: %w", err)
+	}
+	defer file.Close()
+
+	decoder := xml.NewDecoder(file)
+	count := 0
+	inTracksDict := false
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return count, nil // Cancellation is not an error, just stop
+		}
+
+		token, err := decoder.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return count, fmt.Errorf("XML decode error: %w", err)
+		}
+
+		// Look for the <key>Tracks</key><dict> section
+		if keyToken, ok := token.(xml.CharData); ok {
+			if inTracksDict && string(keyToken) == "Tracks" {
+				// Next token should be the opening <dict>
+				token, err := decoder.Token()
+				if err != nil {
+					return count, fmt.Errorf("failed to read Tracks dict: %w", err)
+				}
+				if _, ok := token.(xml.StartElement); ok {
+					// Now parse track dicts
+					count, err = parseStreamingTracks(ctx, decoder, onTrack)
+					return count, err
+				}
+			}
+		}
+
+		// Look for root plist dict
+		if startElem, ok := token.(xml.StartElement); ok {
+			if startElem.Name.Local == "dict" && !inTracksDict {
+				inTracksDict = true
+			}
+		}
+	}
+
+	return count, nil
+}
+
+// parseStreamingTracks reads track dict entries and yields them via callback
+func parseStreamingTracks(ctx context.Context, decoder *xml.Decoder, onTrack func(*Track) error) (int, error) {
+	count := 0
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return count, nil
+		}
+
+		token, err := decoder.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return count, err
+		}
+
+		startElem, ok := token.(xml.StartElement)
+		if !ok {
+			// Look for </dict> to end the Tracks section
+			endElem, ok := token.(xml.EndElement)
+			if ok && endElem.Name.Local == "dict" {
+				break
+			}
+			continue
+		}
+
+		// Each track is a <key>id</key><dict>...fields...</dict> pair
+		if startElem.Name.Local == "key" {
+			// Read the track ID
+			var trackID string
+			if err := decoder.DecodeElement(&trackID, &startElem); err != nil {
+				continue
+			}
+
+			// Next should be the track's <dict> element
+			token, err := decoder.Token()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				continue
+			}
+
+			dictElem, ok := token.(xml.StartElement)
+			if !ok || dictElem.Name.Local != "dict" {
+				continue
+			}
+
+			// Parse the track dict
+			track, err := parseStreamingTrackDict(decoder)
+			if err != nil {
+				continue
+			}
+
+			// Callback with the track
+			if err := onTrack(track); err != nil {
+				return count, err
+			}
+			count++
+
+			// Log progress every 10K tracks
+			if count%10000 == 0 {
+				// Progress logging happens at caller level
+			}
+		}
+	}
+
+	return count, nil
+}
+
+// parseStreamingTrackDict unmarshals a single track from its dict element
+func parseStreamingTrackDict(decoder *xml.Decoder) (*Track, error) {
+	trackData := make(map[string]string)
+	var currentKey string
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+
+		switch elem := token.(type) {
+		case xml.StartElement:
+			if elem.Name.Local == "key" {
+				var key string
+				if err := decoder.DecodeElement(&key, &elem); err == nil {
+					currentKey = key
+				}
+			} else if elem.Name.Local == "string" {
+				var val string
+				if err := decoder.DecodeElement(&val, &elem); err == nil {
+					trackData[currentKey] = val
+				}
+			} else if elem.Name.Local == "integer" {
+				var val int
+				if err := decoder.DecodeElement(&val, &elem); err == nil {
+					trackData[currentKey] = strconv.Itoa(val)
+				}
+			} else if elem.Name.Local == "real" {
+				var val float64
+				if err := decoder.DecodeElement(&val, &elem); err == nil {
+					trackData[currentKey] = fmt.Sprintf("%f", val)
+				}
+			} else if elem.Name.Local == "true" {
+				trackData[currentKey] = "true"
+			} else if elem.Name.Local == "false" {
+				trackData[currentKey] = "false"
+			} else if elem.Name.Local == "date" {
+				var val time.Time
+				if err := decoder.DecodeElement(&val, &elem); err == nil {
+					trackData[currentKey] = val.Format(time.RFC3339)
+				}
+			}
+
+		case xml.EndElement:
+			if elem.Name.Local == "dict" {
+				// End of track dict, convert to Track struct
+				return buildTrackFromDict(trackData), nil
+			}
+		}
+	}
+}
+
+// buildTrackFromDict converts parsed dict data to a Track struct
+func buildTrackFromDict(data map[string]string) *Track {
+	track := &Track{}
+
+	if v := data["Track ID"]; v != "" {
+		if id, err := strconv.Atoi(v); err == nil {
+			track.TrackID = id
+		}
+	}
+	track.PersistentID = data["Persistent ID"]
+	track.Name = data["Name"]
+	track.Artist = data["Artist"]
+	track.AlbumArtist = data["Album Artist"]
+	track.Album = data["Album"]
+	track.Genre = data["Genre"]
+	track.Kind = data["Kind"]
+
+	if v := data["Year"]; v != "" {
+		if year, err := strconv.Atoi(v); err == nil {
+			track.Year = year
+		}
+	}
+
+	track.Comments = data["Comments"]
+	track.Location = data["Location"]
+
+	if v := data["Size"]; v != "" {
+		if size, err := strconv.ParseInt(v, 10, 64); err == nil && size >= 0 {
+			track.Size = size
+		}
+	}
+
+	if v := data["Total Time"]; v != "" {
+		if t, err := strconv.ParseInt(v, 10, 64); err == nil {
+			track.TotalTime = t
+		}
+	}
+
+	if v := data["Date Added"]; v != "" {
+		if dt, err := time.Parse(time.RFC3339, v); err == nil {
+			track.DateAdded = dt
+		}
+	}
+
+	if v := data["Play Count"]; v != "" {
+		if pc, err := strconv.Atoi(v); err == nil {
+			track.PlayCount = pc
+		}
+	}
+
+	if v := data["Play Date"]; v != "" {
+		if pd, err := strconv.ParseInt(v, 10, 64); err == nil {
+			track.PlayDate = pd
+		}
+	}
+
+	if v := data["Rating"]; v != "" {
+		if r, err := strconv.Atoi(v); err == nil {
+			track.Rating = r
+		}
+	}
+
+	if v := data["Bookmark"]; v != "" {
+		if bm, err := strconv.ParseInt(v, 10, 64); err == nil {
+			track.Bookmark = bm
+		}
+	}
+
+	track.Bookmarkable = strings.ToLower(data["Bookmarkable"]) == "true"
+
+	if v := data["Track Number"]; v != "" {
+		if tn, err := strconv.Atoi(v); err == nil {
+			track.TrackNumber = tn
+		}
+	}
+
+	if v := data["Track Count"]; v != "" {
+		if tc, err := strconv.Atoi(v); err == nil {
+			track.TrackCount = tc
+		}
+	}
+
+	if v := data["Disc Number"]; v != "" {
+		if dn, err := strconv.Atoi(v); err == nil {
+			track.DiscNumber = dn
+		}
+	}
+
+	if v := data["Disc Count"]; v != "" {
+		if dc, err := strconv.Atoi(v); err == nil {
+			track.DiscCount = dc
+		}
+	}
+
+	return track
 }

@@ -1,5 +1,5 @@
 // file: internal/itunes/backfill.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: b8c9d0e1-f2a3-b4c5-d6e7-f8a9b0c1d2e3
 
 package itunes
@@ -114,8 +114,8 @@ func BackfillExternalIDs(ctx context.Context, store ExternalIDBackfillStore) err
 // for existing books. This catches the multi-track albums where only the first
 // track's PID was stored on the book record.
 //
-// ctx aborts the inner book-scan + album-build loops; passing
-// context.Background is safe.
+// Uses streaming XML parser to avoid loading the entire library into memory.
+// ctx aborts the stream and book index operations; passing context.Background is safe.
 func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore) (int, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -127,39 +127,8 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 	}
 
 	slog.Info("BackfillITunesTrackPIDs parsing iTunes XML at", "xmlPath", xmlPath)
-	lib, err := ParseLibrary(xmlPath)
-	if err != nil {
-		slog.Warn("BackfillITunesTrackPIDs failed to parse iTunes XML", "err", err)
-		return 0, err
-	}
-	slog.Info("BackfillITunesTrackPIDs parsed tracks", "count", len(lib.Tracks))
 
-	// Group tracks by album
-	type albumGroup struct {
-		artist string
-		tracks []*Track
-	}
-	albums := make(map[string]*albumGroup)
-	for _, track := range lib.Tracks {
-		album := track.Album
-		if album == "" {
-			album = track.Name
-		}
-		if album == "" {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(album))
-		if _, ok := albums[key]; !ok {
-			artist := track.AlbumArtist
-			if artist == "" {
-				artist = track.Artist
-			}
-			albums[key] = &albumGroup{artist: artist}
-		}
-		albums[key].tracks = append(albums[key].tracks, track)
-	}
-
-	// Build PID→book_id index from existing books
+	// Build PID→book_id index from existing books (loaded once, kept in memory)
 	slog.Info("BackfillITunesTrackPIDs loading book index...")
 	pidToBook := make(map[string]string)
 	titleToBook := make(map[string]string) // lowercase title → book_id
@@ -185,63 +154,119 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 	}
 	slog.Info("BackfillITunesTrackPIDs loaded books ( PIDs, titles)", "totalBooks", totalBooks, "pidToBook_count", len(pidToBook), "titleToBook_count", len(titleToBook))
 
-	// For each album, find our book and register all track PIDs
+	// Stream-parse tracks and register PIDs
 	registered := 0
 	var batch []database.ExternalIDMapping
+	var currentAlbum string
+	var currentAlbumTracks []*Track
 
-	for _, ag := range albums {
-		if err := ctx.Err(); err != nil {
-			slog.Info("BackfillITunesTrackPIDs canceled mid-album pass after PIDs", "registered", registered)
-			return registered, nil
+	trackedCount := 0
+	_, err := StreamingParseLibrary(ctx, xmlPath, func(track *Track) error {
+		trackedCount++
+		if trackedCount%10000 == 0 {
+			slog.Info("BackfillITunesTrackPIDs streaming progress", "tracks_processed", trackedCount)
 		}
-		// Find our book: match by any track PID first, then by title
-		var bookID string
-		for _, t := range ag.tracks {
-			if bid, ok := pidToBook[t.PersistentID]; ok {
-				bookID = bid
-				break
-			}
+
+		// Group tracks by album as we stream them
+		album := track.Album
+		if album == "" {
+			album = track.Name
 		}
-		if bookID == "" {
-			// Try title match
-			for _, t := range ag.tracks {
-				album := strings.ToLower(strings.TrimSpace(t.Album))
-				if bid, ok := titleToBook[album]; ok {
-					bookID = bid
-					break
+		if album == "" {
+			return nil
+		}
+
+		albumKey := strings.ToLower(strings.TrimSpace(album))
+
+		// If we've switched to a new album, process the previous album's tracks
+		if currentAlbum != albumKey && len(currentAlbumTracks) > 0 {
+			if bookID := findAlbumBook(currentAlbumTracks, pidToBook, titleToBook); bookID != "" {
+				// Register all track PIDs for this album's book
+				for _, t := range currentAlbumTracks {
+					if t.PersistentID == "" {
+						continue
+					}
+					trackNum := t.TrackNumber
+					batch = append(batch, database.ExternalIDMapping{
+						Source:      "itunes",
+						ExternalID:  t.PersistentID,
+						BookID:      bookID,
+						TrackNumber: &trackNum,
+					})
+					registered++
+
+					// Flush in batches of 5000
+					if len(batch) >= 5000 {
+						if batchErr := store.BulkCreateExternalIDMappings(batch); batchErr != nil {
+							slog.Warn("BackfillITunesTrackPIDs failed to write batch", "err", batchErr)
+						}
+						batch = batch[:0]
+					}
 				}
 			}
-		}
-		if bookID == "" {
-			continue // No matching book found
+
+			// Reset for new album
+			currentAlbumTracks = currentAlbumTracks[:0]
 		}
 
-		// Register all track PIDs for this book
-		for _, t := range ag.tracks {
-			if t.PersistentID == "" {
-				continue
+		// Accumulate track for current album
+		currentAlbum = albumKey
+		currentAlbumTracks = append(currentAlbumTracks, track)
+
+		return nil
+	})
+
+	if err != nil {
+		slog.Warn("BackfillITunesTrackPIDs failed to parse iTunes XML", "err", err)
+		return registered, err
+	}
+
+	// Process final album batch
+	if len(currentAlbumTracks) > 0 {
+		if bookID := findAlbumBook(currentAlbumTracks, pidToBook, titleToBook); bookID != "" {
+			for _, t := range currentAlbumTracks {
+				if t.PersistentID == "" {
+					continue
+				}
+				trackNum := t.TrackNumber
+				batch = append(batch, database.ExternalIDMapping{
+					Source:      "itunes",
+					ExternalID:  t.PersistentID,
+					BookID:      bookID,
+					TrackNumber: &trackNum,
+				})
+				registered++
 			}
-			trackNum := t.TrackNumber
-			batch = append(batch, database.ExternalIDMapping{
-				Source:      "itunes",
-				ExternalID:  t.PersistentID,
-				BookID:      bookID,
-				TrackNumber: &trackNum,
-			})
-			registered++
-		}
-
-		// Flush in batches of 5000
-		if len(batch) >= 5000 {
-			_ = store.BulkCreateExternalIDMappings(batch)
-			batch = batch[:0]
 		}
 	}
 
-	// Flush remaining
+	// Flush remaining batch
 	if len(batch) > 0 {
-		_ = store.BulkCreateExternalIDMappings(batch)
+		if batchErr := store.BulkCreateExternalIDMappings(batch); batchErr != nil {
+			slog.Warn("BackfillITunesTrackPIDs failed to write final batch", "err", batchErr)
+		}
 	}
 
+	slog.Info("BackfillITunesTrackPIDs completed stream parsing", "tracks_processed", trackedCount, "registered", registered)
 	return registered, nil
+}
+
+// findAlbumBook locates a book for an album's tracks using PID matching or title matching
+func findAlbumBook(tracks []*Track, pidToBook, titleToBook map[string]string) string {
+	// First try PID matching
+	for _, t := range tracks {
+		if bid, ok := pidToBook[t.PersistentID]; ok {
+			return bid
+		}
+	}
+
+	// Then try title matching
+	for _, t := range tracks {
+		album := strings.ToLower(strings.TrimSpace(t.Album))
+		if bid, ok := titleToBook[album]; ok {
+			return bid
+		}
+	}
+
+	return ""
 }
