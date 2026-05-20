@@ -621,7 +621,7 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
 
             {/* Expanded files rows */}
             {isExpanded && (
-              <TableRow sx={{ bgcolor: '#f9f9f9' }}>
+              <TableRow sx={{ bgcolor: 'background.default' }}>
                 <TableCell colSpan={hasSelection ? activeColumns.length + 3 : activeColumns.length + 2} sx={{ p: 0 }}>
                   <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                     <Box sx={{ p: 2 }}>
@@ -658,9 +658,10 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                                 gap: 1,
                                 alignItems: 'center',
                                 p: 1.5,
-                                bgcolor: '#fff',
+                                bgcolor: 'background.paper',
                                 borderRadius: 1,
-                                border: '1px solid #e0e0e0',
+                                border: '1px solid',
+                                borderColor: 'divider',
                               }}
                             >
                               <Box sx={{ minWidth: 0 }}>
