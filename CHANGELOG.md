@@ -1,11 +1,28 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.84.0 -->
+<!-- version: 2.85.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-18 -->
+<!-- last-edited: 2026-05-20 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Features
+
+#### May 20, 2026 — Per-operation activity panel (PR #1049)
+
+- New `OperationActivityPanel` React component fetches `/api/v1/operations/:id/activity` and renders the entries for a single operation: status banner, level-colored rows, collapsible details, 3s polling for non-terminal ops.
+- Mounted in `OperationsIndicator` (notifications bell): in-flight ops gain an article-icon button; terminal ops open the panel on click. Reusable anywhere — drop into BookDetail, Diagnostics, etc.
+- `web/src/services/activityApi.ts`: `fetchOperationActivity(opID, limit?)` + types.
+- Vitest coverage: empty / loaded / error states (3 new tests).
+
+#### May 20, 2026 — Operation context logging end-to-end (W12, PR #1047)
+
+- `internal/logging.OpContext`: struct holding operation ID, type, status, and entity refs, propagated via `context.Context`. `logging.Info/Warn/Error/Debug(ctx, msg, ...attrs)` auto-prepend `opID`, `opType`, `opStatus`, `entities` to every slog record.
+- Wired into 12 operations: bulk metadata-fetch (all + by-IDs), 8 dedup ops (book-scan/merge, author-scan, series-scan/dedup/prune/merge/normalize), library scan, library organize, library transcode.
+- New endpoint: `GET /api/v1/operations/:id/activity` (PermLibraryView) returns activity entries scoped to one opID, ASC order, default 1000 limit. Backed by existing `ActivityFilter.OperationID` — no schema migration.
+- New test: `TestEndToEndLoggingFlow` captures real slog JSON output and asserts attribute propagation.
+- Cleanup: restored `reporter.Log()` calls in 3 maintenance jobs that W11 inadvertently dropped (`backfill-file-hashes`, `cleanup-organize-mess`, `fix-author-narrator-swap`). Fixed ~30 leftover slog KV-pair errors across 8+ files. `go vet ./...` now clean across the whole module.
 
 ### Security
 
