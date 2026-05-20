@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.9.0
+// version: 3.10.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useState } from 'react';
@@ -10,6 +10,9 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   LinearProgress,
@@ -21,6 +24,9 @@ import NotificationsIcon from '@mui/icons-material/Notifications.js';
 import CancelIcon from '@mui/icons-material/Cancel.js';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew.js';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty.js';
+import ArticleIcon from '@mui/icons-material/Article.js';
+import CloseIcon from '@mui/icons-material/Close.js';
+import { OperationActivityPanel } from '../OperationActivityPanel';
 import {
   useOperationsStore,
   type ActiveOperation,
@@ -110,6 +116,7 @@ export function OperationsIndicator() {
   const alertOperations = useOperationsStore((state) => state.alertOperations);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
+  const [activityOpId, setActivityOpId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Active ops are now discovered exclusively via SSE (op.created) and
@@ -279,6 +286,18 @@ export function OperationsIndicator() {
                         {elapsed}
                       </Typography>
                     )}
+                    <Tooltip title="View activity">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActivityOpId(op.id);
+                        }}
+                        sx={{ p: 0.25 }}
+                      >
+                        <ArticleIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </Tooltip>
                     <Tooltip title="Cancel">
                       <IconButton
                         size="small"
@@ -382,8 +401,7 @@ export function OperationsIndicator() {
             <Box
               key={`recent-${op.id}`}
               onClick={() => {
-                setAnchorEl(null);
-                navigate(`/activity?op=${op.id}`);
+                setActivityOpId(op.id);
               }}
               sx={{
                 px: 2,
@@ -468,6 +486,29 @@ export function OperationsIndicator() {
           ))}
         </Box>
       </Popover>
+
+      {/* Per-operation activity dialog — surfaces the focused
+          /api/v1/operations/:id/activity feed without navigating away. */}
+      <Dialog
+        open={activityOpId !== null}
+        onClose={() => setActivityOpId(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ pr: 6 }}>
+          Operation Activity
+          <IconButton
+            aria-label="Close"
+            onClick={() => setActivityOpId(null)}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {activityOpId && <OperationActivityPanel operationId={activityOpId} />}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
