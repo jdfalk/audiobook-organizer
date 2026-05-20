@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.76.0
+// version: 1.77.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-20
 
@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -69,15 +70,26 @@ func prefixEnd(prefix []byte) []byte {
 // - author_tombstone:<old_id>        -> canonical_id (merged author redirect)
 
 type PebbleStore struct {
-	db        *pebble.DB
-	counterMu sync.Mutex // protects nextID read-modify-write
-	opsMu     sync.Mutex // serializes v2 op CAS operations (SetOperationV2StatusIfQueued)
-	opsLogSeq int64      // monotonic counter for log key uniqueness; accessed via atomic
-	rootDir   string     // organized library root; set via SetRootDir after config load
+	db                       *pebble.DB
+	counterMu                sync.Mutex // protects nextID read-modify-write
+	opsMu                    sync.Mutex // serializes v2 op CAS operations (SetOperationV2StatusIfQueued)
+	opsLogSeq                int64      // monotonic counter for log key uniqueness; accessed via atomic
+	rootDir                  string     // organized library root; set via SetRootDir after config load
+	libraryCountsRecomputeMu sync.Mutex // gates recompute to prevent stampede when N callers see dirty cache
 }
 
 const statsLibraryKey = "stats:library"
 const statsLibraryTTL = 10 * time.Minute
+const defaultLibraryCountsMinIntervalSeconds = 600 // 10 minutes
+
+func getLibraryCountsMinIntervalSeconds() int {
+	if s := os.Getenv("LIBRARY_COUNTS_CACHE_MIN_INTERVAL_SECONDS"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v >= 0 {
+			return v
+		}
+	}
+	return defaultLibraryCountsMinIntervalSeconds
+}
 
 // SetRootDir updates the organized-library root used when computing LibraryStats
 // and invalidates the cache so the next GetDashboardStats recomputes with the new path.
@@ -2585,19 +2597,46 @@ func (p *PebbleStore) GetBookSizesByLocation(rootDir string) (librarySize, impor
 }
 
 // GetDashboardStats returns LibraryStats, serving from the PebbleDB cache when fresh.
-// Cache miss (first call, TTL expiry, or explicit InvalidateLibraryStats) triggers
-// computeLibraryStats which does two range scans and writes the result back.
+// Even if the cache is marked dirty via InvalidateLibraryStats, returns the cached value
+// if it was recomputed within the min-interval (default 10 minutes) to prevent thrashing
+// during background operations like fingerprinting.
+//
+// Only when a cache miss (TTL expiry, or recent compute + dirty but outside min-interval)
+// requires recompute, a per-process mutex gates the work to prevent concurrent stampedes.
 func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
+	// Fast path: check if cached value exists and is recent (within min-interval)
 	if cached := p.readCachedLibraryStats(); cached != nil {
-		slog.Info("library_counts cache hit",
-			"total_books", cached.TotalBooks,
-			"organized_books", cached.OrganizedBooks,
-			"unorganized_books", cached.UnorganizedBooks,
-			"broken_files", cached.BrokenFiles,
-			"age_seconds", time.Since(cached.ComputedAt).Seconds(),
-		)
-		return cached, nil
+		ageSec := time.Since(cached.ComputedAt).Seconds()
+		minIntervalSec := float64(getLibraryCountsMinIntervalSeconds())
+		if ageSec < minIntervalSec {
+			slog.Debug("library_counts cache hit (within min interval)",
+				"age_seconds", ageSec,
+				"min_interval_seconds", minIntervalSec,
+			)
+			return cached, nil
+		}
+		// Cached but outside min-interval; allow recompute (fall through)
 	}
+
+	// Slow path: recompute needed. Gate with mutex to prevent stampede when N
+	// concurrent callers all see dirty cache simultaneously.
+	p.libraryCountsRecomputeMu.Lock()
+	defer p.libraryCountsRecomputeMu.Unlock()
+
+	// Double-check: another goroutine may have just recomputed while we waited for the lock
+	if cached := p.readCachedLibraryStats(); cached != nil {
+		ageSec := time.Since(cached.ComputedAt).Seconds()
+		minIntervalSec := float64(getLibraryCountsMinIntervalSeconds())
+		if ageSec < minIntervalSec {
+			slog.Debug("library_counts cache hit (within min interval, after lock wait)",
+				"age_seconds", ageSec,
+				"min_interval_seconds", minIntervalSec,
+			)
+			return cached, nil
+		}
+	}
+
+	// Perform recompute
 	start := time.Now()
 	stats, err := p.computeLibraryStats()
 	if err != nil {
@@ -2610,7 +2649,7 @@ func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
 		"unorganized_books", stats.UnorganizedBooks,
 		"broken_files", stats.BrokenFiles,
 		"duration_ms", time.Since(start).Milliseconds(),
-		"reason", "missing_or_expired",
+		"reason", "expired",
 	)
 	return stats, nil
 }
