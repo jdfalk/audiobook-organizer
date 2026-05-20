@@ -1,5 +1,5 @@
 // file: internal/organizer/path_format.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a7b3c1d2-e4f5-6789-abcd-ef0123456789
 
 package organizer
@@ -123,6 +123,14 @@ func FormatPath(format string, vars FormatVars) string {
 	}
 	result = strings.Trim(result, "/")
 
+	// Collapse redundant "X - X" duplication in the final segment only.
+	// This catches cases where series name equals title (e.g., "Cobra Outlaw - Cobra Outlaw").
+	pathParts := strings.Split(result, "/")
+	if len(pathParts) > 0 {
+		pathParts[len(pathParts)-1] = collapseRedundantDup(pathParts[len(pathParts)-1])
+		result = strings.Join(pathParts, "/")
+	}
+
 	return result
 }
 
@@ -160,4 +168,21 @@ func SanitizePathComponent(s string) string {
 		s = strings.ReplaceAll(s, "  ", " ")
 	}
 	return strings.TrimSpace(s)
+}
+
+// collapseRedundantDup strips "X - X" → "X" in a single path segment,
+// case-insensitive, whitespace-normalized. Handles only 2-part duplicates.
+// Idempotent.
+func collapseRedundantDup(segment string) string {
+	parts := strings.Split(segment, " - ")
+	if len(parts) != 2 {
+		return segment
+	}
+	norm := func(s string) string {
+		return strings.ToLower(strings.Join(strings.Fields(s), " "))
+	}
+	if norm(parts[0]) == norm(parts[1]) {
+		return strings.TrimSpace(parts[0])
+	}
+	return segment
 }
