@@ -221,9 +221,9 @@ export function OperationActivityPanel({
   useEffect(() => {
     if (op && TERMINAL_STATUSES.has(op.status)) return;
     if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = window.setInterval(load, 3000);
+    intervalRef.current = setInterval(load, 3000);
     return () => {
-      if (intervalRef.current) window.clearInterval(intervalRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [load, op]);
 

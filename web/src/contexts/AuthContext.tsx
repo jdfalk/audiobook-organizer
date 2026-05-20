@@ -58,11 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         if (attempt > 0) {
-          await new Promise((r) => {
-            const timeout = setTimeout(r, RETRY_DELAY_MS);
-            // No memory leak here since we return and the promise resolves.
-            // The timeout will complete before the component unmounts in normal flow.
-          });
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
         }
         if (!isMountedRef.current) return;
         const status = await api.getAuthStatus();

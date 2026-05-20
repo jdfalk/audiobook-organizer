@@ -194,7 +194,7 @@ export const BookDetail = () => {
     let cancelled = false;
     setLinkSearchLoading(true);
     let timer: ReturnType<typeof setTimeout> | null = null;
-    timer = window.setTimeout(async () => {
+    timer = setTimeout(async () => {
       try {
         const results = await api.searchBooks(q, 10);
         if (!cancelled) setLinkSearchResults(results.filter(r => r.id !== book?.id && !versions.some(v => v.id === r.id)));
