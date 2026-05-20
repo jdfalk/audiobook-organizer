@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.15.0
+// version: 2.16.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-20
 //
@@ -96,6 +96,96 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 			books = append(books, *b)
 		}
 		enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
+		httputil.RespondWithOK(c, gin.H{"items": enriched, "count": total, "limit": params.Limit, "offset": params.Offset})
+		return
+	}
+
+	// Quick-query boolean params fast-path: missing_covers, in_import_path, no_isbn,
+	// duplicates_flagged. Replicates the has_file_errors pattern — scan ALL matching
+	// book IDs first, slice for pagination, then fetch each book individually.
+	// This ensures totalCount and page offsets are correct regardless of page size.
+	quickQueryID := ""
+	switch {
+	case c.Query("missing_covers") == "true":
+		quickQueryID = "missing_covers"
+	case c.Query("in_import_path") == "true":
+		quickQueryID = "in_import_path"
+	case c.Query("no_isbn") == "true":
+		quickQueryID = "no_isbn"
+	case c.Query("duplicates_flagged") == "true":
+		quickQueryID = "duplicates_flagged"
+	}
+	if quickQueryID != "" {
+		var bookIDs []string
+		if qqStore, ok := s.Store().(interface {
+			GetAllBookIDsForQuickQuery(id string) ([]string, error)
+		}); ok {
+			ids, err := qqStore.GetAllBookIDsForQuickQuery(quickQueryID)
+			if err != nil {
+				httputil.InternalError(c, "failed to list books for quick query", err)
+				return
+			}
+			bookIDs = ids
+		} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+			if inner, ok2 := uw.Unwrap().(interface {
+				GetAllBookIDsForQuickQuery(id string) ([]string, error)
+			}); ok2 {
+				ids, err := inner.GetAllBookIDsForQuickQuery(quickQueryID)
+				if err != nil {
+					httputil.InternalError(c, "failed to list books for quick query", err)
+					return
+				}
+				bookIDs = ids
+			}
+		}
+
+		if bookIDs == nil {
+			// Store doesn't support this method — return empty set.
+			httputil.RespondWithOK(c, gin.H{"items": []AudiobookDetail{}, "count": 0, "limit": params.Limit, "offset": params.Offset})
+			return
+		}
+
+		total := len(bookIDs)
+		start := params.Offset
+		if start < 0 {
+			start = 0
+		}
+		end := start + params.Limit
+		if params.Limit <= 0 || end > len(bookIDs) {
+			end = len(bookIDs)
+		}
+		if start > len(bookIDs) {
+			start = len(bookIDs)
+		}
+		selected := bookIDs[start:end]
+		books := make([]database.Book, 0, len(selected))
+		for _, id := range selected {
+			b, err := s.Store().GetBookByID(id)
+			if err != nil || b == nil {
+				continue
+			}
+			books = append(books, *b)
+		}
+		enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
+
+		// Compute fingerprinting fields for the selected books.
+		for i, book := range enriched {
+			files, err := s.Store().GetBookFiles(book.ID)
+			if err != nil {
+				continue
+			}
+			fpFiles := make([]fingerprint.FileWithFingerprint, len(files))
+			for j := range files {
+				fpFiles[j] = &files[j]
+			}
+			status, fpCount, coverage, lastFp := fingerprint.ComputeFingerprintFields(fpFiles)
+			enriched[i].FingerprintStatus = status
+			enriched[i].FingerprintedFileCount = fpCount
+			enriched[i].TotalFileCount = len(files)
+			enriched[i].CoveragePercent = coverage
+			enriched[i].LastFingerprintedAt = lastFp
+		}
+
 		httputil.RespondWithOK(c, gin.H{"items": enriched, "count": total, "limit": params.Limit, "offset": params.Offset})
 		return
 	}
@@ -220,10 +310,6 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		enriched[i].CoveragePercent = coverage
 		enriched[i].LastFingerprintedAt = lastFp
 	}
-
-	// Apply quick-query preset filters (missing_covers, in_import_path, no_isbn, duplicates_flagged).
-	// These are post-fetch because they require enriched book fields (e.g. FingerprintStatus).
-	enriched = s.applyQuickQueryFiltersDetail(c, enriched)
 
 	// Get total count for proper pagination
 	totalCount := len(enriched)
@@ -1621,84 +1707,3 @@ func (s *Server) getBookChanges(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"changes": changes})
 }
 
-// applyQuickQueryFiltersDetail applies the four "quick query" preset filters that are
-// expressed as boolean URL params: missing_covers, in_import_path, no_isbn, and
-// duplicates_flagged. Returns the filtered slice (unmodified if no params are set).
-// Called after fingerprinting enrichment so all book fields are populated.
-func (s *Server) applyQuickQueryFiltersDetail(c *gin.Context, books []AudiobookDetail) []AudiobookDetail {
-	missingCovers := c.Query("missing_covers") == "true"
-	inImportPath := c.Query("in_import_path") == "true"
-	noIsbn := c.Query("no_isbn") == "true"
-	duplicatesFlagged := c.Query("duplicates_flagged") == "true"
-
-	if !missingCovers && !inImportPath && !noIsbn && !duplicatesFlagged {
-		return books
-	}
-
-	// Load import paths once if needed.
-	var importPaths []database.ImportPath
-	if inImportPath {
-		importPaths, _ = s.Store().GetAllImportPaths()
-	}
-
-	// Build flagged-book set once if needed.
-	flaggedBookIDs := map[string]struct{}{}
-	if duplicatesFlagged && s.embeddingStore != nil {
-		candidates, _, _ := s.embeddingStore.ListCandidates(database.CandidateFilter{
-			EntityType: "book",
-			Status:     "pending",
-			Limit:      100000,
-		})
-		for _, cand := range candidates {
-			flaggedBookIDs[cand.EntityAID] = struct{}{}
-			flaggedBookIDs[cand.EntityBID] = struct{}{}
-		}
-	}
-
-	result := books[:0]
-	for _, detail := range books {
-		if detail.Book == nil {
-			continue
-		}
-		b := detail.Book
-		keep := true
-
-		if missingCovers && keep {
-			if b.CoverURL != nil && *b.CoverURL != "" {
-				keep = false
-			}
-		}
-
-		if inImportPath && keep {
-			matched := false
-			for _, ip := range importPaths {
-				if strings.HasPrefix(b.FilePath, ip.Path) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				keep = false
-			}
-		}
-
-		if noIsbn && keep {
-			isbn10Empty := b.ISBN10 == nil || *b.ISBN10 == ""
-			isbn13Empty := b.ISBN13 == nil || *b.ISBN13 == ""
-			if !isbn10Empty || !isbn13Empty {
-				keep = false
-			}
-		}
-
-		if duplicatesFlagged && keep {
-			if _, ok := flaggedBookIDs[b.ID]; !ok {
-				keep = false
-			}
-		}
-
-		if keep {
-			result = append(result, detail)
-		}
-	}
-	return result
-}

@@ -1,5 +1,5 @@
 // file: internal/database/pebble_quick_queries.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7f3a1b2c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
 // last-edited: 2026-05-20
 
@@ -281,6 +281,124 @@ func (p *PebbleStore) computeDuplicatesFlaggedCount() (int, error) {
 	elapsed := time.Since(start).Milliseconds()
 	slog.Info("quick_query cache recomputed", "id", "duplicates_flagged", "count", len(flagged), "duration_ms", elapsed)
 	return len(flagged), nil
+}
+
+// GetAllBookIDsForQuickQuery returns the IDs of all non-deleted, primary-version
+// books that match the given quick-query id. Supported ids:
+// "missing_covers", "no_fingerprints", "in_import_path", "no_isbn", "duplicates_flagged".
+// "broken_files" is handled by a separate code-path (ListBooksWithFileErrors) and
+// is not supported here; an empty slice is returned for unknown ids.
+//
+// This is used by the listAudiobooks fast-path so that pagination operates on the
+// full matching-ID slice rather than a single page of books.
+func (p *PebbleStore) GetAllBookIDsForQuickQuery(id string) ([]string, error) {
+	start := time.Now()
+
+	if id == "duplicates_flagged" {
+		ids, err := p.getAllBookIDsDuplicatesFlagged()
+		slog.Info("quick_query id scan", "id", id, "count", len(ids), "duration_ms", time.Since(start).Milliseconds())
+		return ids, err
+	}
+
+	// Load import paths once for in_import_path query.
+	var importPaths []ImportPath
+	if id == "in_import_path" {
+		importPaths, _ = p.GetAllImportPaths()
+	}
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var ids []string
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		// Primary versions only (consistent with LibraryStats and computeQuickQueryCount).
+		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+			continue
+		}
+
+		switch id {
+		case "missing_covers":
+			if b.CoverURL == nil || *b.CoverURL == "" {
+				ids = append(ids, b.ID)
+			}
+		case "no_fingerprints":
+			if b.FingerprintStatus == "" || b.FingerprintStatus == "none" {
+				ids = append(ids, b.ID)
+			}
+		case "in_import_path":
+			for _, ip := range importPaths {
+				if strings.HasPrefix(b.FilePath, ip.Path) {
+					ids = append(ids, b.ID)
+					break
+				}
+			}
+		case "no_isbn":
+			isbn10 := b.ISBN10 == nil || *b.ISBN10 == ""
+			isbn13 := b.ISBN13 == nil || *b.ISBN13 == ""
+			if isbn10 && isbn13 {
+				ids = append(ids, b.ID)
+			}
+		}
+	}
+
+	slog.Info("quick_query id scan", "id", id, "count", len(ids), "duration_ms", time.Since(start).Milliseconds())
+	return ids, nil
+}
+
+// getAllBookIDsDuplicatesFlagged returns IDs of books in a "pending" dedup candidate.
+func (p *PebbleStore) getAllBookIDsDuplicatesFlagged() ([]string, error) {
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("dedup_candidate:"),
+		UpperBound: []byte("dedup_candidate;"),
+	})
+	if err != nil {
+		return nil, nil //nolint:nilerr // no candidates table yet
+	}
+	defer iter.Close()
+
+	type candRec struct {
+		EntityType string `json:"entity_type"`
+		EntityAID  string `json:"entity_a_id"`
+		EntityBID  string `json:"entity_b_id"`
+		Status     string `json:"status"`
+	}
+
+	flagged := make(map[string]struct{})
+	for iter.First(); iter.Valid(); iter.Next() {
+		var rec candRec
+		if err := json.Unmarshal(iter.Value(), &rec); err != nil {
+			continue
+		}
+		if rec.EntityType != "book" || rec.Status != "pending" {
+			continue
+		}
+		flagged[rec.EntityAID] = struct{}{}
+		flagged[rec.EntityBID] = struct{}{}
+	}
+
+	ids := make([]string, 0, len(flagged))
+	for id := range flagged {
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // GetQuickQueryCounts returns the six preset quick-query results. Each entry's count

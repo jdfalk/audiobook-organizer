@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.87.0 -->
+<!-- version: 2.88.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-20 -->
 
@@ -8,6 +8,13 @@
 ## [Unreleased]
 
 ### Fixes
+
+#### May 20, 2026 — Quick-query filter pagination fix
+
+- Quick-query boolean params (`missing_covers`, `in_import_path`, `no_isbn`, `duplicates_flagged`) were previously applied post-pagination: `GetAudiobooks` fetched 20 books, then filtered in-place, resulting in at most 20 results per page and a wrong `totalCount`.
+- Replaced post-pagination filter with a fast-path that mirrors the existing `has_file_errors` pattern: `GetAllBookIDsForQuickQuery(id)` scans all matching book IDs upfront, slices the ID array for pagination, then fetches only those books. `totalCount` now reflects the true matching-book count.
+- `duplicates_flagged` fast-path uses `getAllBookIDsDuplicatesFlagged` (extracted from the duplicated dedup-candidate scan already in `computeDuplicatesFlaggedCount`).
+- Removed the now-unused `applyQuickQueryFiltersDetail` helper from `audiobooks_handlers.go`.
 
 #### May 20, 2026 — Activity Log: tag system entries with outcome/source/action/lifecycle
 
