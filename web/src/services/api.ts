@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.30.0
+// version: 2.31.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-19
 
@@ -1049,6 +1049,22 @@ export async function getBookFiles(
     throw new Error(`Failed to fetch book files: ${response.status}`);
   const body = await response.json();
   return body.data;
+}
+
+export async function patchBookFile(
+  bookId: string,
+  fileId: string,
+  patch: { skip_scan?: boolean }
+): Promise<BookFile> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/files/${fileId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to update file');
+  }
+  return response.json();
 }
 
 export async function getSegmentTags(

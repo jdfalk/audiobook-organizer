@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.2.0
+// version: 2.3.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-19
 
@@ -21,6 +21,8 @@ import {
   Checkbox,
   Chip,
   Collapse,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import {
   MoreVert as MoreVertIcon,
@@ -116,6 +118,15 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
 
   const handleRowClick = (audiobook: Audiobook) => {
     onClick?.(audiobook);
+  };
+
+  const handleFileUpdate = (bookId: string, updatedFile: BookFile) => {
+    setFilesCache((prev) => ({
+      ...prev,
+      [bookId]: (prev[bookId] || []).map((f) =>
+        f.id === updatedFile.id ? updatedFile : f
+      ),
+    }));
   };
 
   const handleSortClick = useCallback(
@@ -500,6 +511,27 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                                   color={getFingerprinterStatusColor(file)}
                                   variant="outlined"
                                   size="small"
+                                />
+                                <FormControlLabel
+                                  control={
+                                    <Switch
+                                      size="small"
+                                      checked={!!file.skip_scan}
+                                      onChange={async (e) => {
+                                        const newValue = e.target.checked;
+                                        try {
+                                          const updated = await api.patchBookFile(audiobook.id, file.id, {
+                                            skip_scan: newValue,
+                                          });
+                                          handleFileUpdate(audiobook.id, updated);
+                                        } catch (err) {
+                                          console.error('Failed to update skip_scan:', err);
+                                        }
+                                      }}
+                                    />
+                                  }
+                                  label="Skip"
+                                  sx={{ ml: 0.5 }}
                                 />
                                 <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80, textAlign: 'right' }}>
                                   {formatFileSize(file.file_size)}
