@@ -1,5 +1,5 @@
 // file: internal/activity/service.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 package activity
@@ -58,6 +58,13 @@ func (s *Service) CompactByDay(ctx context.Context, olderThan time.Time) (databa
 // narrowed by the given filter's tier/level/since/until/search fields.
 func (s *Service) GetDistinctSources(filter database.ActivityFilter) ([]database.SourceCount, error) {
 	return s.store.GetDistinctSources(filter)
+}
+
+// RecompactDigests re-derives type, tier, and tags on all stored daily-digest
+// entries that were compacted before tag enrichment was added (2026-05-20).
+// Returns the count of digests touched and skipped.
+func (s *Service) RecompactDigests(ctx context.Context) (database.RecompactResult, error) {
+	return s.store.RecompactDigests(ctx)
 }
 
 // Store returns the underlying ActivityStorer (e.g. for close or direct access).

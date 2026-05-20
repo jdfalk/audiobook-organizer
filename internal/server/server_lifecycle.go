@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.21.0
+// version: 1.22.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-20
 
@@ -1159,6 +1159,7 @@ func (s *Server) setupRoutes() {
 			{
 				adminOnly.POST("/maintenance/wipe", s.handleWipe)
 				adminOnly.GET("/cache/stats/keys", s.handleCacheKeysIntrospection)
+				adminOnly.POST("/admin/recompact-digests", s.recompactDigests)
 			}
 
 			// Unified activity log

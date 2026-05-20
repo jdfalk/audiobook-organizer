@@ -1,7 +1,7 @@
 // file: internal/server/activity_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 package server
 
@@ -217,6 +217,26 @@ func (s *Server) listOperationActivity(c *gin.Context) {
 		Entries     []database.ActivityEntry `json:"entries"`
 		Total       int                      `json:"total"`
 	}{OperationID: opID, Entries: entries, Total: total})
+}
+
+// recompactDigests handles POST /api/v1/admin/recompact-digests.
+//
+// One-shot endpoint that re-derives type, tier, and tags on every stored
+// daily-digest entry whose items were compacted before 2026-05-20.
+// Returns { touched, skipped }. Safe to call multiple times (idempotent).
+func (s *Server) recompactDigests(c *gin.Context) {
+	if s.activityService == nil {
+		httputil.RespondWithInternalError(c, "activity log not available")
+		return
+	}
+
+	result, err := s.activityService.RecompactDigests(c.Request.Context())
+	if err != nil {
+		httputil.InternalError(c, "recompact digests failed", err)
+		return
+	}
+
+	httputil.RespondWithOK(c, result)
 }
 
 // compactActivity handles POST /api/v1/activity/compact.

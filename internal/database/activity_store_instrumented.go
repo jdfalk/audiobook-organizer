@@ -1,5 +1,5 @@
 // file: internal/database/activity_store_instrumented.go
-// version: 1.0.0
+// version: 1.0.1
 // guid: b2c3d4e5-f6a7-0002-bcde-000000000002
 
 package database
@@ -171,6 +171,23 @@ func (i *InstrumentedActivityStorer) MigrateSystemActivityLogs() (int, error) {
 	}
 	span.SetAttributes(attribute.Int("entries_migrated", count))
 	return count, nil
+}
+
+// RecompactDigests traces the RecompactDigests operation.
+func (i *InstrumentedActivityStorer) RecompactDigests(ctx context.Context) (RecompactResult, error) {
+	_, span := tracer.Start(ctx, "activity_store.recompact_digests")
+	defer span.End()
+
+	result, err := i.store.RecompactDigests(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetAttributes(attribute.Bool("error", true))
+		return RecompactResult{}, err
+	}
+	span.SetAttributes(
+		attribute.Int("touched", result.Touched),
+		attribute.Int("skipped", result.Skipped))
+	return result, nil
 }
 
 // Close traces the Close operation.

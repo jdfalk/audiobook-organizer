@@ -1,11 +1,12 @@
 // file: internal/database/activity_store_test.go
-// version: 1.2.1
+// version: 1.3.0
 // guid: f3a1b2c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c
 
 package database
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -486,4 +487,110 @@ func TestMigrateSystemActivityLogs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, total2, "still exactly 3 legacy entries")
 	assert.Len(t, entries2, 3)
+}
+
+// TestActivityStore_RecompactDigests verifies that legacy digest items (type=system_log,
+// empty tags) are re-derived on the first call, and subsequent calls return 0 touched.
+func TestActivityStore_RecompactDigests(t *testing.T) {
+	s := newTestActivityStore(t)
+	ctx := context.Background()
+
+	// Build a legacy-style DigestDetails with items that have system_log type and no tags.
+	legacyDigest := DigestDetails{
+		Date:          "2026-05-12",
+		OriginalCount: 3,
+		Counts:        map[string]int{"system_log": 3},
+		Items: []DigestItem{
+			{Type: "system_log", Summary: "Scan completed: 100 files scanned"},
+			{Type: "system_log", Summary: "Metadata applied to book XYZ"},
+			{Type: "system_log", Summary: "iTunes sync finished"},
+		},
+	}
+	detailsBytes, err := json.Marshal(legacyDigest)
+	require.NoError(t, err)
+
+	// Insert as a digest row directly (mimicking old CompactByDay output).
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO activity_log
+			(timestamp, tier, type, level, source, summary, details, compacted)
+		VALUES ('2026-05-12 00:00:00', 'digest', 'daily_digest', 'info', 'compaction', 'Daily digest for 2026-05-12 (3 entries)', ?, 1)`,
+		string(detailsBytes),
+	)
+	require.NoError(t, err)
+
+	// First call: should touch the one digest.
+	result, err := s.RecompactDigests(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Touched, "one legacy digest should be touched")
+	assert.Equal(t, 0, result.Skipped)
+
+	// Fetch the updated digest to verify re-derivation.
+	rows, err := s.db.QueryContext(ctx, `SELECT details FROM activity_log WHERE tier = 'digest' AND type = 'daily_digest'`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var updatedDetailsStr string
+	require.True(t, rows.Next(), "digest row should exist")
+	require.NoError(t, rows.Scan(&updatedDetailsStr))
+
+	var updated DigestDetails
+	require.NoError(t, json.Unmarshal([]byte(updatedDetailsStr), &updated))
+
+	// All items should now have non-system_log types.
+	for _, item := range updated.Items {
+		assert.NotEqual(t, "system_log", item.Type,
+			"item %q should have derived type, got %q", item.Summary, item.Type)
+		assert.NotEmpty(t, item.Tags, "item %q should have tags after recompact", item.Summary)
+	}
+
+	// Counts should have multiple keys (not just system_log).
+	assert.Greater(t, len(updated.Counts), 0, "counts should be non-empty")
+	_, hasSystemLogOnly := updated.Counts["system_log"]
+	if hasSystemLogOnly {
+		assert.Greater(t, len(updated.Counts), 1,
+			"counts should not be only system_log after recompact")
+	}
+
+	// TagCounts should now have action entries.
+	assert.NotEmpty(t, updated.TagCounts, "tag_counts should be populated after recompact")
+
+	// Second call: idempotent — 0 touched.
+	result2, err := s.RecompactDigests(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result2.Touched, "second recompact should be idempotent (0 touched)")
+	assert.Equal(t, 1, result2.Skipped, "second recompact should skip the already-processed digest")
+}
+
+// TestActivityStore_RecompactDigests_AlreadyProcessed verifies that a digest with
+// proper type and tags is not re-processed.
+func TestActivityStore_RecompactDigests_AlreadyProcessed(t *testing.T) {
+	s := newTestActivityStore(t)
+	ctx := context.Background()
+
+	// Build a "already-processed" digest (non-system_log type, non-empty tags).
+	goodDigest := DigestDetails{
+		Date:          "2026-05-18",
+		OriginalCount: 2,
+		Counts:        map[string]int{"scan_completed": 1, "metadata_apply": 1},
+		TagCounts:     map[string]map[string]int{"action": {"scan": 1, "metadata-apply": 1}},
+		Items: []DigestItem{
+			{Type: "scan_completed", Tags: []string{"legacy", "action:scan"}, Summary: "Scan completed: 50 files"},
+			{Type: "metadata_apply", Tags: []string{"legacy", "action:metadata-apply"}, Summary: "Metadata applied"},
+		},
+	}
+	detailsBytes, err := json.Marshal(goodDigest)
+	require.NoError(t, err)
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO activity_log
+			(timestamp, tier, type, level, source, summary, details, compacted)
+		VALUES ('2026-05-18 00:00:00', 'digest', 'daily_digest', 'info', 'compaction', 'Daily digest for 2026-05-18 (2 entries)', ?, 1)`,
+		string(detailsBytes),
+	)
+	require.NoError(t, err)
+
+	result, err := s.RecompactDigests(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Touched, "already-processed digest should be skipped")
+	assert.Equal(t, 1, result.Skipped)
 }

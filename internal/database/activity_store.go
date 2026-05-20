@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.11.0
+// version: 1.12.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -1077,4 +1077,162 @@ func detailNumber(details map[string]any, key string) int {
 	default:
 		return 0
 	}
+}
+
+// RecompactResult holds the outcome of a RecompactDigests operation.
+type RecompactResult struct {
+	Touched int `json:"touched"`
+	Skipped int `json:"skipped"`
+}
+
+// RecompactDigests re-derives type, tier, and tags on every stored daily-digest
+// entry whose items were compacted before 2026-05-20 (when CompactByDay started
+// preserving proper types/tags). For each digest row (tier='digest'):
+//
+//  1. Items that already have a non-system type AND non-empty tags are skipped
+//     (already processed — idempotent guard).
+//  2. For each remaining item: call deriveTypeFromMessage(summary, source) to
+//     get a proper type/tier, and enrichLegacyLogTags to get tags.
+//  3. Rebuild Counts and TagCounts from the updated items.
+//  4. Save the updated digest back in-place (UPDATE details + summary).
+//
+// Returns the number of digest rows touched and skipped.
+func (s *ActivityStore) RecompactDigests(ctx context.Context) (RecompactResult, error) {
+	var result RecompactResult
+
+	// 1. Fetch all digest rows.
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, details FROM activity_log
+		WHERE tier = 'digest' AND type = 'daily_digest'
+		ORDER BY timestamp ASC`)
+	if err != nil {
+		return result, fmt.Errorf("activity_store: recompact query digests: %w", err)
+	}
+
+	type digestRow struct {
+		id      int64
+		details string
+	}
+	var digestRows []digestRow
+	for rows.Next() {
+		var dr digestRow
+		var detailsRaw sql.NullString
+		if err := rows.Scan(&dr.id, &detailsRaw); err != nil {
+			rows.Close()
+			return result, fmt.Errorf("activity_store: recompact scan digest: %w", err)
+		}
+		if detailsRaw.Valid {
+			dr.details = detailsRaw.String
+		}
+		digestRows = append(digestRows, dr)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return result, fmt.Errorf("activity_store: recompact rows: %w", err)
+	}
+
+	slog.Info("[activity] recompact: starting digest re-derivation",
+		"digest_count", len(digestRows))
+
+	// 2. Process each digest.
+	for _, dr := range digestRows {
+		if dr.details == "" {
+			result.Skipped++
+			continue
+		}
+
+		var dd DigestDetails
+		if err := json.Unmarshal([]byte(dr.details), &dd); err != nil {
+			slog.Warn("[activity] recompact: failed to parse digest details, skipping",
+				"id", dr.id, "err", err)
+			result.Skipped++
+			continue
+		}
+
+		// Check if any items need updating.
+		needsUpdate := false
+		for _, item := range dd.Items {
+			if isLegacyItem(item) {
+				needsUpdate = true
+				break
+			}
+		}
+		if !needsUpdate {
+			result.Skipped++
+			continue
+		}
+
+		// Re-derive type, tier, and tags on each legacy item.
+		for i, item := range dd.Items {
+			if !isLegacyItem(item) {
+				continue
+			}
+			// Source isn't stored on DigestItem directly; use empty string as fallback.
+			derivedType, derivedTier := deriveTypeFromMessage(item.Summary, "")
+			derivedTags := enrichLegacyLogTags(item.Summary, "", "info")
+			dd.Items[i].Type = derivedType
+			dd.Items[i].Tier = derivedTier
+			dd.Items[i].Tags = derivedTags
+		}
+
+		// Rebuild Counts from updated items.
+		newCounts := make(map[string]int)
+		for _, item := range dd.Items {
+			newCounts[item.Type]++
+		}
+		dd.Counts = newCounts
+
+		// Rebuild TagCounts from updated items.
+		newTagCounts := make(map[string]map[string]int)
+		for _, item := range dd.Items {
+			for _, tag := range item.Tags {
+				colonIdx := strings.Index(tag, ":")
+				if colonIdx < 1 {
+					continue
+				}
+				ns := tag[:colonIdx]
+				val := tag[colonIdx+1:]
+				if ns != "action" && ns != "source" {
+					continue
+				}
+				if newTagCounts[ns] == nil {
+					newTagCounts[ns] = make(map[string]int)
+				}
+				newTagCounts[ns][val]++
+			}
+		}
+		if len(newTagCounts) > 0 {
+			dd.TagCounts = newTagCounts
+		}
+
+		// Re-marshal and save.
+		updatedBytes, err := json.Marshal(dd)
+		if err != nil {
+			return result, fmt.Errorf("activity_store: recompact marshal digest id=%d: %w", dr.id, err)
+		}
+
+		newSummary := fmt.Sprintf("Daily digest for %s (%d entries)", dd.Date, dd.OriginalCount)
+		_, err = s.db.ExecContext(ctx, `
+			UPDATE activity_log SET details = ?, summary = ? WHERE id = ?`,
+			string(updatedBytes), newSummary, dr.id,
+		)
+		if err != nil {
+			return result, fmt.Errorf("activity_store: recompact update digest id=%d: %w", dr.id, err)
+		}
+
+		slog.Info("[activity] recompact: updated digest",
+			"id", dr.id, "date", dd.Date, "items", len(dd.Items))
+		result.Touched++
+	}
+
+	slog.Info("[activity] recompact: complete",
+		"touched", result.Touched, "skipped", result.Skipped)
+	return result, nil
+}
+
+// isLegacyItem returns true if a DigestItem needs re-derivation.
+// An item needs update if its type is the generic "system_log" or "system" fallback
+// OR if it has no tags (i.e. was compacted before tag enrichment was added).
+func isLegacyItem(item DigestItem) bool {
+	return (item.Type == "system_log" || item.Type == "system") || len(item.Tags) == 0
 }

@@ -7,6 +7,15 @@
 
 ## [Unreleased]
 
+### Features
+
+#### May 20, 2026 — Recompact old digests with derived types and tags
+
+- Added `ActivityStore.RecompactDigests(ctx)` — walks every stored daily-digest row, re-derives `type`/`tier`/`tags` on items that were compacted before 2026-05-20 (when those fields were added), and rebuilds `Counts` + `TagCounts`. Idempotent: items already with non-system type and non-empty tags are skipped.
+- Added `NutsActivityStore.RecompactDigests` no-op stub and `InstrumentedActivityStorer.RecompactDigests` traced wrapper to satisfy the `ActivityStorer` interface.
+- Added `POST /api/v1/admin/recompact-digests` endpoint (admin-only) returning `{ touched, skipped }`.
+- Tests: `TestActivityStore_RecompactDigests` and `TestActivityStore_RecompactDigests_AlreadyProcessed` verify re-derivation and idempotency.
+
 ### Fixes
 
 #### May 20, 2026 — iTunes backfill streaming parser (PR #1061)
