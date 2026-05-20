@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.30.0
+// version: 2.31.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-19
 
@@ -5013,6 +5013,17 @@ export async function runMaintenanceJob(jobId: string, dryRun = false): Promise<
   });
   if (!response.ok) {
     throw await buildApiError(response, `Failed to run maintenance job "${jobId}"`);
+  }
+  return response.json();
+}
+
+export async function startOptimize(): Promise<{ operation_id: string }> {
+  const response = await fetch(`${API_BASE}/operations/optimize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to start optimize operation');
   }
   return response.json();
 }

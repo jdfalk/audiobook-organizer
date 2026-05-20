@@ -1,7 +1,7 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.7.0
+// version: 1.8.0
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
-// last-edited: 2026-05-16
+// last-edited: 2026-05-19
 
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -29,6 +29,61 @@ import {
 import PlayArrowIcon from '@mui/icons-material/PlayArrow.js';
 import * as api from '../../services/api';
 import { useOperationsStore } from '../../stores/useOperationsStore';
+
+// ─── OptimizeLibraryCard ────────────────────────────────────────────────────
+
+function OptimizeLibraryCard() {
+  const [optimizeRunning, setOptimizeRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const startPolling = useOperationsStore((state) => state.startPolling);
+
+  const handleOptimize = async () => {
+    setOptimizeRunning(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const result = await api.startOptimize();
+      setSuccessMsg(`Optimize started (op ${result.operation_id})`);
+      startPolling(result.operation_id, 'library.optimize');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start optimize');
+    } finally {
+      setOptimizeRunning(false);
+    }
+  };
+
+  return (
+    <Card sx={{ mb: 3, p: 2, borderLeft: '4px solid', borderColor: 'primary.main' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h6">⚡ Optimize Library</Typography>
+          <Typography variant="body2" color="textSecondary">
+            Run cleanup, fingerprint missing, dedup scan, and ID backfill in order.
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleOptimize}
+          disabled={optimizeRunning}
+        >
+          {optimizeRunning ? 'Running...' : 'Run Optimize'}
+        </Button>
+      </Box>
+      {error && (
+        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      {successMsg && (
+        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccessMsg(null)}>
+          {successMsg}
+        </Alert>
+      )}
+    </Card>
+  );
+}
 
 // ─── MaintenanceWindowCard ───────────────────────────────────────────────────
 
@@ -952,6 +1007,8 @@ export function MaintenanceTab() {
 
   return (
     <Box>
+      <OptimizeLibraryCard />
+
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Configure and manually trigger background tasks. Tasks marked "Maint. Window" run
         automatically during the scheduled maintenance window.
