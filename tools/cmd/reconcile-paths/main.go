@@ -1,16 +1,17 @@
 // file: tools/cmd/reconcile-paths/main.go
-// version: 1.0.0
+// version: 1.1.0
 // last-edited: 2026-05-20
 //
 // reconcile-paths is a READ-ONLY dry-run CLI tool that identifies audiobooks
 // whose FilePath no longer exists on disk and finds their candidate location
-// via the "Title - Title" doubled-folder pattern.
+// via the "Title - Title" doubled-folder pattern, single-file variants, and
+// author-root normalized-name fallback.
 //
 // No DB writes. No file moves. Output is a CSV report only.
 //
 // Usage:
 //
-//	reconcile-paths [-api URL] [-key KEY] [-out FILE] [-limit N] [-page-size N] [-verbose]
+//	reconcile-paths [-api URL] [-key KEY] [-out FILE] [-limit N] [-page-size N] [-page-delay-ms N] [-verbose]
 //
 // SSH mode (dev box → prod):
 //
@@ -32,6 +33,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+	"unicode"
 )
 
 // audioExt lists extensions to check for single-file books.
@@ -39,6 +42,12 @@ var audioExt = []string{".m4b", ".mp3", ".m4a", ".ogg", ".flac", ".aac", ".opus"
 
 // sshBatchSize controls how many paths are checked in a single ssh invocation.
 const sshBatchSize = 50
+
+// noiseWords are common audiobook terms stripped during name normalization.
+var noiseWords = map[string]bool{
+	"the": true, "a": true, "an": true, "of": true, "and": true, "or": true,
+	"in": true, "on": true, "at": true, "by": true, "to": true, "for": true,
+}
 
 // ----- API response types (mirrors internal/audiobooks types) -----
 
@@ -84,6 +93,7 @@ func main() {
 	limit := flag.Int("limit", 0, "Max books to inspect (0 = all)")
 	apiKey := flag.String("key", "", "API key (or set AUDIOBOOK_API_KEY env)")
 	pageSize := flag.Int("page-size", 200, "Pagination page size")
+	pageDelayMs := flag.Int("page-delay-ms", 100, "Delay in milliseconds between page fetches (0 to disable)")
 	verbose := flag.Bool("verbose", false, "Verbose progress logging")
 	stdout := flag.Bool("stdout", false, "Write CSV to stdout instead of -out file")
 	flag.Parse()
@@ -106,7 +116,7 @@ func main() {
 	client := &http.Client{Transport: transport}
 
 	// Fetch all books.
-	books, err := fetchAllBooks(client, *apiURL, key, *pageSize, *limit, *verbose)
+	books, err := fetchAllBooks(client, *apiURL, key, *pageSize, *limit, *pageDelayMs, *verbose)
 	if err != nil {
 		log.Fatalf("fetch books: %v", err)
 	}
@@ -148,24 +158,28 @@ func main() {
 	// Summary.
 	doubledFolderCount := 0
 	singleFileCount := 0
+	authorRootCount := 0
 	for _, r := range records {
 		if r.candidateKind == "doubled-folder" {
 			doubledFolderCount++
+		} else if r.candidateKind == "P3:author_root_match" {
+			authorRootCount++
 		} else {
 			singleFileCount++
 		}
 	}
 	fmt.Fprintf(os.Stderr, "\n=== SUMMARY ===\n")
-	fmt.Fprintf(os.Stderr, "Total books inspected:    %d\n", len(books))
-	fmt.Fprintf(os.Stderr, "Missing on disk:          %d\n", len(missing))
-	fmt.Fprintf(os.Stderr, "Matched (doubled-folder): %d\n", doubledFolderCount)
-	fmt.Fprintf(os.Stderr, "Matched (single-file):    %d\n", singleFileCount)
-	fmt.Fprintf(os.Stderr, "No match found:           %d\n", noMatch)
+	fmt.Fprintf(os.Stderr, "Total books inspected:      %d\n", len(books))
+	fmt.Fprintf(os.Stderr, "Missing on disk:            %d\n", len(missing))
+	fmt.Fprintf(os.Stderr, "Matched (doubled-folder):   %d\n", doubledFolderCount)
+	fmt.Fprintf(os.Stderr, "Matched (single-file):      %d\n", singleFileCount)
+	fmt.Fprintf(os.Stderr, "Matched (author-root):      %d\n", authorRootCount)
+	fmt.Fprintf(os.Stderr, "No match found:             %d\n", noMatch)
 }
 
 // ----- API pagination -----
 
-func fetchAllBooks(client *http.Client, apiURL, key string, pageSize, limit int, verbose bool) ([]book, error) {
+func fetchAllBooks(client *http.Client, apiURL, key string, pageSize, limit, pageDelayMs int, verbose bool) ([]book, error) {
 	var all []book
 	offset := 0
 	for {
@@ -211,6 +225,11 @@ func fetchAllBooks(client *http.Client, apiURL, key string, pageSize, limit int,
 			break
 		}
 		offset += len(items)
+
+		// Rate-limit subsequent page fetches to avoid overwhelming the server.
+		if pageDelayMs > 0 {
+			time.Sleep(time.Duration(pageDelayMs) * time.Millisecond)
+		}
 	}
 	return all, nil
 }
@@ -368,10 +387,194 @@ func findCandidate(b book, sshHost string, verbose bool) (matchRecord, bool) {
 		}
 	}
 
+	// 3. Author-root fallback: list author root directory and match by normalized name.
+	authorRoot := filepath.Dir(parent)
+	if authorRoot != parent { // Ensure we have a parent level to recurse into.
+		rec := findAuthorRootMatch(b, authorRoot, sshHost, verbose)
+		if rec != nil {
+			return *rec, true
+		}
+	}
+
 	if verbose {
 		log.Printf("NO MATCH: %s %q (db_path=%s)", b.ID, title, b.FilePath)
 	}
 	return matchRecord{}, false
+}
+
+// findAuthorRootMatch scans the author root directory for a normalized-name match.
+func findAuthorRootMatch(b book, authorRoot, sshHost string, verbose bool) *matchRecord {
+	title := b.Title
+	expectedLeaf := filepath.Base(filepath.Dir(b.FilePath))
+	expectedNorm := normalizeName(expectedLeaf)
+
+	// List children of author root.
+	children := listDirChildren(authorRoot, sshHost, verbose)
+	if len(children) == 0 {
+		return nil
+	}
+
+	for _, child := range children {
+		childNorm := normalizeName(child)
+
+		// Check for exact or strong substring match (80%+ character overlap).
+		if childNorm == expectedNorm || isStrongMatch(childNorm, expectedNorm) {
+			candidatePath := filepath.Join(authorRoot, child)
+			audioCount := countAudioFilesRecursive(candidatePath, sshHost)
+
+			if verbose {
+				log.Printf("MATCH P3:author_root_match: %s %q → %s (%d audio files)",
+					b.ID, title, candidatePath, audioCount)
+			}
+			return &matchRecord{
+				bookID:        b.ID,
+				title:         title,
+				dbPath:        b.FilePath,
+				candidatePath: candidatePath,
+				candidateKind: "P3:author_root_match",
+				audioCount:    audioCount,
+			}
+		}
+	}
+
+	return nil
+}
+
+// normalizeName strips case, collapses whitespace, removes punctuation, and drops noise words.
+func normalizeName(name string) string {
+	// Convert to lowercase.
+	name = strings.ToLower(name)
+
+	// Replace punctuation with spaces (keep only letters, digits, spaces).
+	var sb strings.Builder
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteRune(' ')
+		}
+	}
+	name = sb.String()
+
+	// Collapse multiple spaces.
+	name = strings.Join(strings.Fields(name), " ")
+
+	// Remove noise words.
+	words := strings.Fields(name)
+	var filtered []string
+	for _, w := range words {
+		if !noiseWords[w] {
+			filtered = append(filtered, w)
+		}
+	}
+	return strings.Join(filtered, " ")
+}
+
+// isStrongMatch returns true if one string contains the other with 80%+ char overlap.
+func isStrongMatch(a, b string) bool {
+	if a == b {
+		return true
+	}
+	// Check containment.
+	if strings.Contains(a, b) || strings.Contains(b, a) {
+		shorter := a
+		if len(b) < len(a) {
+			shorter = b
+		}
+		if len(shorter) == 0 {
+			return false
+		}
+		overlapRatio := float64(len(shorter)) / float64(len(a)+len(b)-len(shorter))
+		return overlapRatio >= 0.8
+	}
+	return false
+}
+
+// listDirChildren returns immediate child folder names in a directory.
+func listDirChildren(dir, sshHost string, verbose bool) []string {
+	if sshHost != "" {
+		return listDirChildrenSSH(dir, sshHost, verbose)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if verbose {
+			log.Printf("WARN: cannot list %s: %v", dir, err)
+		}
+		return nil
+	}
+
+	var children []string
+	for _, e := range entries {
+		if e.IsDir() {
+			children = append(children, e.Name())
+		}
+	}
+	return children
+}
+
+// listDirChildrenSSH retrieves directory children via SSH.
+func listDirChildrenSSH(dir, host string, verbose bool) []string {
+	safe := strings.ReplaceAll(dir, "'", "'\\''")
+	script := fmt.Sprintf("ls -1d '%s'/*/ 2>/dev/null | xargs -I {} basename {}", safe)
+	cmd := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", host, script)
+	out, err := cmd.Output()
+	if err != nil {
+		if verbose {
+			log.Printf("WARN: ssh list dir error for %s: %v", dir, err)
+		}
+		return nil
+	}
+
+	var children []string
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		name := strings.TrimSpace(scanner.Text())
+		if name != "" {
+			children = append(children, name)
+		}
+	}
+	return children
+}
+
+// countAudioFilesRecursive counts audio files recursively in a directory tree.
+func countAudioFilesRecursive(dir, sshHost string) int {
+	if sshHost != "" {
+		return countAudioFilesRecursiveSSH(dir, sshHost)
+	}
+
+	count := 0
+	filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		for _, ae := range audioExt {
+			if ext == ae {
+				count++
+				break
+			}
+		}
+		return nil
+	})
+	return count
+}
+
+// countAudioFilesRecursiveSSH counts audio files recursively via SSH.
+func countAudioFilesRecursiveSSH(dir, host string) int {
+	safe := strings.ReplaceAll(dir, "'", "'\\''")
+	script := fmt.Sprintf("find '%s' -type f \\( -iname '*.m4b' -o -iname '*.mp3' -o -iname '*.m4a' -o -iname '*.ogg' -o -iname '*.flac' -o -iname '*.aac' -o -iname '*.opus' \\) 2>/dev/null | wc -l", safe)
+	cmd := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", host, script)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+	n := 0
+	fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &n)
+	return n
 }
 
 // countAudioFiles counts audio files in a directory (local or SSH).
