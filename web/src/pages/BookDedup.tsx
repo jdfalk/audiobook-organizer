@@ -908,7 +908,13 @@ function EmbeddingDedupTab() {
     try {
       const op = await api.triggerDedupAcoustID();
       setScanMsg(trackOp(op, 'AcoustID scan'));
-      setTimeout(() => { loadCandidates(); loadStats(); }, 3000);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          loadCandidates();
+          loadStats();
+        }
+      }, 3000);
     } catch (err) {
       setScanMsg(err instanceof Error ? err.message : 'AcoustID scan failed');
     } finally {
@@ -2191,6 +2197,8 @@ function AcousticDedupTab() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
   const [showComparePanel, setShowComparePanel] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
 
   const loadCandidates = useCallback(async () => {
     setLoading(true);
@@ -2223,6 +2231,17 @@ function AcousticDedupTab() {
 
   useEffect(() => { loadCandidates(); }, [loadCandidates]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const handleFingerprint = async () => {
     setFingerprinting(true);
     setStatusMsg(null);
@@ -2242,7 +2261,12 @@ function AcousticDedupTab() {
     try {
       const op = await api.triggerDedupAcoustID();
       setStatusMsg(`Duplicate scan queued — see bell icon for progress (op ${op.id.slice(-6)})`);
-      setTimeout(() => loadCandidates(), 5000);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          loadCandidates();
+        }
+      }, 5000);
     } catch (err) {
       setStatusMsg(err instanceof Error ? err.message : 'Scan failed to start');
     } finally {

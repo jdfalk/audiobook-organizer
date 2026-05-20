@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.15.0
+// version: 2.15.1
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -249,13 +249,14 @@ export default function ActivityLog() {
     }
     setOpLogsLoaded(false);
     let cancelled = false;
+    let scrollTimeoutId: ReturnType<typeof setTimeout> | null = null;
     const fetchLogs = async () => {
       try {
         const logs = await api.getOperationLogs(expandedOpId);
         if (!cancelled) {
           setOpLogs(logs.map((l: { message?: string }) => l.message || String(l)));
           setOpLogsLoaded(true);
-          setTimeout(() => opLogsRef.current?.scrollTo({ top: opLogsRef.current.scrollHeight }), 50);
+          scrollTimeoutId = setTimeout(() => opLogsRef.current?.scrollTo({ top: opLogsRef.current.scrollHeight }), 50);
         }
       } catch {
         if (!cancelled) {
@@ -270,10 +271,17 @@ export default function ActivityLog() {
     const op = activeOps.find((o) => o.id === expandedOpId);
     const terminal = op && ['completed', 'failed', 'canceled', 'interrupted_dropped', 'interrupted_restart'].includes(op.status);
     if (terminal) {
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+        if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+      };
     }
     const interval = setInterval(fetchLogs, 3000);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+    };
   }, [expandedOpId, activeOps]);
 
   // Load sources

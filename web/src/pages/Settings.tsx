@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.45.3
+// version: 1.45.4
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 // last-edited: 2026-05-20
 
@@ -1103,7 +1103,7 @@ export function Settings() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
-  // Cleanup save timeout on unmount
+  // Cleanup save timeout + scan intervals on unmount
   useEffect(() => {
     return () => {
       isUnmountedRef.current = true;
@@ -1111,6 +1111,11 @@ export function Settings() {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      // Clear all active scan intervals
+      Object.values(scanIntervalsRef.current).forEach((interval) => {
+        window.clearInterval(interval);
+      });
+      scanIntervalsRef.current = {};
     };
   }, []);
 
