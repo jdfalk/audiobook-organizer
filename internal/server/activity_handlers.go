@@ -1,11 +1,12 @@
 // file: internal/server/activity_handlers.go
-// version: 2.2.1
+// version: 2.3.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
-// last-edited: 2026-05-10
+// last-edited: 2026-05-19
 
 package server
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -164,6 +165,58 @@ func (s *Server) listActivitySources(c *gin.Context) {
 	httputil.RespondWithOK(c, struct {
 		Sources []database.SourceCount `json:"sources"`
 	}{Sources: sources})
+}
+
+// listOperationActivity handles GET /api/v1/operations/:id/activity.
+//
+// Returns all activity log entries for the given operation ID, ordered by
+// timestamp ASC (oldest first) so the response reads as a chronological
+// transcript of the operation. Supports an optional `limit` query parameter
+// (default 1000, max 10000).
+func (s *Server) listOperationActivity(c *gin.Context) {
+	if s.activityService == nil {
+		httputil.RespondWithInternalError(c, "activity log not available")
+		return
+	}
+	opID := strings.TrimSpace(c.Param("id"))
+	if opID == "" {
+		httputil.RespondWithBadRequest(c, "operation id required")
+		return
+	}
+
+	limit := 1000
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			if n > 10000 {
+				n = 10000
+			}
+			limit = n
+		}
+	}
+
+	filter := database.ActivityFilter{
+		OperationID: opID,
+		Limit:       limit,
+	}
+	entries, total, err := s.activityService.Query(filter)
+	if err != nil {
+		httputil.InternalError(c, "failed to query activity log", err)
+		return
+	}
+
+	// Query returns entries newest-first; reverse for ASC chronological order.
+	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+		entries[i], entries[j] = entries[j], entries[i]
+	}
+
+	if entries == nil {
+		entries = []database.ActivityEntry{}
+	}
+	httputil.RespondWithOK(c, struct {
+		OperationID string                   `json:"operation_id"`
+		Entries     []database.ActivityEntry `json:"entries"`
+		Total       int                      `json:"total"`
+	}{OperationID: opID, Entries: entries, Total: total})
 }
 
 // compactActivity handles POST /api/v1/activity/compact.

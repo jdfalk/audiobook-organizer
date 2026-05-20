@@ -1060,6 +1060,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/operations/:id/results", s.perm(auth.PermLibraryView), s.handleGetOperationResults)
 			protected.GET("/operations/:id/status", s.perm(auth.PermLibraryView), s.getOperationStatus)
 			protected.GET("/operations/:id/logs", s.perm(auth.PermLibraryView), s.getOperationLogs)
+			protected.GET("/operations/:id/activity", s.perm(auth.PermLibraryView), s.listOperationActivity)
 			protected.GET("/operations/:id/result", s.perm(auth.PermLibraryView), s.getOperationResult)
 			protected.DELETE("/operations/:id", s.perm(auth.PermSettingsManage), s.cancelOperation)
 			protected.POST("/operations/clear-stale", s.perm(auth.PermSettingsManage), s.clearStaleOperations)
