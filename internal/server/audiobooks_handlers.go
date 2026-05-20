@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.11.0
+// version: 2.12.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-19
 //
@@ -525,10 +525,25 @@ func (s *Server) listBookFiles(c *gin.Context) {
 			"channels":             f.Channels,
 			"bit_depth":            f.BitDepth,
 			"file_hash":            f.FileHash,
-			"missing":              f.Missing,
-			"file_exists":          statErr == nil,
-			"created_at":           f.CreatedAt,
-			"updated_at":           f.UpdatedAt,
+			"original_file_hash":   f.OriginalFileHash,
+			"post_metadata_hash":   f.PostMetadataHash,
+			// Acoustic fingerprint segments (0=intro, 1-5=body, 6=outro)
+			"acoustid_seg0": f.AcoustIDSeg0,
+			"acoustid_seg1": f.AcoustIDSeg1,
+			"acoustid_seg2": f.AcoustIDSeg2,
+			"acoustid_seg3": f.AcoustIDSeg3,
+			"acoustid_seg4": f.AcoustIDSeg4,
+			"acoustid_seg5": f.AcoustIDSeg5,
+			"acoustid_seg6": f.AcoustIDSeg6,
+			"fingerprint_failed_at":      f.FingerprintFailedAt,
+			"fingerprint_failure_reason": f.FingerprintFailureReason,
+			"fingerprint_failure_detail": f.FingerprintFailureDetail,
+			"fingerprint_diagnostic_json": f.FingerprintDiagnosticJSON,
+			"organize_method": f.OrganizeMethod,
+			"missing":         f.Missing,
+			"file_exists":     statErr == nil,
+			"created_at":      f.CreatedAt,
+			"updated_at":      f.UpdatedAt,
 		})
 	}
 	httputil.RespondWithOK(c, gin.H{"files": results, "count": len(results)})

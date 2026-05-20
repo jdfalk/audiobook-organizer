@@ -1,8 +1,9 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.1.0
+// version: 2.2.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
+// last-edited: 2026-05-19
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Table,
   TableBody,
@@ -18,6 +19,8 @@ import {
   Box,
   CircularProgress,
   Checkbox,
+  Chip,
+  Collapse,
 } from '@mui/material';
 import {
   MoreVert as MoreVertIcon,
@@ -25,9 +28,14 @@ import {
   Delete as DeleteIcon,
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
-import type { Audiobook } from '../../types';
+import type { Audiobook, BookFile } from '../../types';
 import { type ColumnDefinition, getDefaultVisibleColumns } from '../../config/columnDefinitions';
+import * as api from '../../services/api';
 
 interface AudiobookListProps {
   audiobooks: Audiobook[];
@@ -67,6 +75,9 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   const activeColumns = columns ?? fallbackColumns;
 
   const [anchorEls, setAnchorEls] = React.useState<Record<string, HTMLElement | null>>({});
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [filesCache, setFilesCache] = useState<Record<string, BookFile[]>>({});
+  const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set());
 
   // --- Resize state (non-React for perf during drag) ---
   const resizingRef = useRef<{
@@ -181,6 +192,62 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
     return raw != null ? String(raw) : '--';
   };
 
+  const toggleExpandRow = async (bookId: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(bookId)) {
+        next.delete(bookId);
+      } else {
+        next.add(bookId);
+        // Fetch files if not cached
+        if (!filesCache[bookId] && !loadingFiles.has(bookId)) {
+          fetchFiles(bookId);
+        }
+      }
+      return next;
+    });
+  };
+
+  const fetchFiles = async (bookId: string) => {
+    setLoadingFiles((prev) => new Set(prev).add(bookId));
+    try {
+      const result = await api.getBookFiles(bookId);
+      setFilesCache((prev) => ({
+        ...prev,
+        [bookId]: result.files,
+      }));
+    } catch (error) {
+      console.error(`Failed to fetch files for book ${bookId}:`, error);
+      setFilesCache((prev) => ({
+        ...prev,
+        [bookId]: [],
+      }));
+    } finally {
+      setLoadingFiles((prev) => {
+        const next = new Set(prev);
+        next.delete(bookId);
+        return next;
+      });
+    }
+  };
+
+  const getFingerprinterStatusColor = (file: BookFile): 'success' | 'default' => {
+    return file.acoustid_seg0 ? 'success' : 'default';
+  };
+
+  const getFingerprinterStatusIcon = (file: BookFile): React.ReactElement => {
+    return file.acoustid_seg0 ? (
+      <CheckCircleIcon sx={{ fontSize: 16 }} />
+    ) : (
+      <CancelIcon sx={{ fontSize: 16 }} />
+    );
+  };
+
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes) return '--';
+    return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -214,6 +281,9 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
       <Table sx={{ tableLayout: 'fixed' }}>
         <TableHead>
           <TableRow>
+            {/* Expand column */}
+            <TableCell width={50} padding="checkbox" />
+
             {/* Checkbox column */}
             {hasSelection && (
               <TableCell width={50} padding="checkbox">
@@ -292,31 +362,49 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
           </TableRow>
         </TableHead>
         <TableBody>
-          {audiobooks.map((audiobook) => (
-            <TableRow
-              key={audiobook.id}
-              hover
-              onClick={() => handleRowClick(audiobook)}
-              sx={{ cursor: onClick ? 'pointer' : 'default', contentVisibility: 'auto', containIntrinsicSize: '1px 52px' }}
-            >
-              {/* Checkbox cell */}
-              {hasSelection && (
-                <TableCell padding="checkbox">
-                  {onToggleSelect && (
-                    <Checkbox
-                      checked={selectedIds?.has(audiobook.id) || false}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onToggleSelect(audiobook, event as unknown as React.MouseEvent);
+          {audiobooks.map((audiobook) => {
+            const isExpanded = expandedRows.has(audiobook.id);
+            const files = filesCache[audiobook.id] ?? [];
+            const isLoadingFiles = loadingFiles.has(audiobook.id);
+
+            return (
+              <React.Fragment key={audiobook.id}>
+                <TableRow
+                  hover
+                  onClick={() => handleRowClick(audiobook)}
+                  sx={{ cursor: onClick ? 'pointer' : 'default', contentVisibility: 'auto', containIntrinsicSize: '1px 52px' }}
+                >
+                  {/* Expand cell */}
+                  <TableCell padding="checkbox" sx={{ width: 50 }}>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpandRow(audiobook.id);
                       }}
-                      onChange={() => {}}
-                      inputProps={{
-                        'aria-label': `Select ${audiobook.title || 'audiobook'}`,
-                      }}
-                    />
+                    >
+                      {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </IconButton>
+                  </TableCell>
+
+                  {/* Checkbox cell */}
+                  {hasSelection && (
+                    <TableCell padding="checkbox">
+                      {onToggleSelect && (
+                        <Checkbox
+                          checked={selectedIds?.has(audiobook.id) || false}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleSelect(audiobook, event as unknown as React.MouseEvent);
+                          }}
+                          onChange={() => {}}
+                          inputProps={{
+                            'aria-label': `Select ${audiobook.title || 'audiobook'}`,
+                          }}
+                        />
+                      )}
+                    </TableCell>
                   )}
-                </TableCell>
-              )}
 
               {/* Dynamic data cells */}
               {activeColumns.map((col) => (
@@ -362,7 +450,73 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                 </TableCell>
               )}
             </TableRow>
-          ))}
+
+            {/* Expanded files rows */}
+            {isExpanded && (
+              <TableRow sx={{ bgcolor: '#f9f9f9' }}>
+                <TableCell colSpan={hasSelection ? activeColumns.length + 3 : activeColumns.length + 2} sx={{ p: 0 }}>
+                  <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                    <Box sx={{ p: 2 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
+                        Files ({audiobook.total_file_count || 0})
+                      </Typography>
+
+                      {isLoadingFiles ? (
+                        <Box display="flex" justifyContent="center" p={2}>
+                          <CircularProgress size={24} />
+                        </Box>
+                      ) : files.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          No files found
+                        </Typography>
+                      ) : (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          {files.map((file) => (
+                            <Box
+                              key={file.id}
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                p: 1.5,
+                                bgcolor: '#fff',
+                                borderRadius: 1,
+                                border: '1px solid #e0e0e0',
+                              }}
+                            >
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+                                  {file.original_filename || file.file_path.split('/').pop() || 'Unknown'}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" noWrap>
+                                  {file.file_path}
+                                </Typography>
+                              </Box>
+
+                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ml: 1 }}>
+                                <Chip
+                                  icon={getFingerprinterStatusIcon(file)}
+                                  label={file.acoustid_seg0 ? '✓ Fingerprinted' : '✗ Not Fingerprinted'}
+                                  color={getFingerprinterStatusColor(file)}
+                                  variant="outlined"
+                                  size="small"
+                                />
+                                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80, textAlign: 'right' }}>
+                                  {formatFileSize(file.file_size)}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          ))}
+                        </Box>
+                      )}
+                    </Box>
+                  </Collapse>
+                </TableCell>
+              </TableRow>
+            )}
+          </React.Fragment>
+          );
+          })}
         </TableBody>
       </Table>
     </TableContainer>

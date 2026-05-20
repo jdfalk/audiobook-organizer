@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.14.0
+// version: 1.15.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 // last-edited: 2026-05-19
 
@@ -189,4 +189,46 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   has_more: boolean;
+}
+
+// BookFile type (file-level representation with fingerprinting fields)
+export interface BookFile {
+  id: string;
+  book_id: string;
+  file_path: string;
+  original_filename?: string;
+  itunes_path?: string;
+  itunes_persistent_id?: string;
+  track_number?: number;
+  track_count?: number;
+  disc_number?: number;
+  disc_count?: number;
+  title?: string;
+  format?: string;
+  codec?: string;
+  duration?: number;
+  file_size?: number;
+  bitrate_kbps?: number;
+  sample_rate_hz?: number;
+  channels?: number;
+  bit_depth?: number;
+  file_hash?: string;
+  original_file_hash?: string;
+  post_metadata_hash?: string;
+  // Acoustic fingerprint segments (0=intro, 1-5=body, 6=outro)
+  acoustid_seg0?: string;
+  acoustid_seg1?: string;
+  acoustid_seg2?: string;
+  acoustid_seg3?: string;
+  acoustid_seg4?: string;
+  acoustid_seg5?: string;
+  acoustid_seg6?: string;
+  fingerprint_failed_at?: string | null;
+  fingerprint_failure_reason?: string | null;
+  fingerprint_failure_detail?: string | null;
+  fingerprint_diagnostic_json?: string | null;
+  organize_method?: string;
+  missing: boolean;
+  created_at: string;
+  updated_at: string;
 }
