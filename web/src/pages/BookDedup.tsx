@@ -1,9 +1,9 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.25.0
+// version: 3.25.1
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import {
@@ -614,6 +614,8 @@ function EmbeddingDedupTab() {
   const [pageMerging, setPageMerging] = useState(false);
   const [bulkMerging, setBulkMerging] = useState(false);
   const [compareCluster, setCompareCluster] = useState<{ a: SampleBook; b: SampleBook } | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
 
   // Load stats
   const loadStats = useCallback(async () => {
@@ -672,6 +674,17 @@ function EmbeddingDedupTab() {
 
   useEffect(() => { loadStats(); }, [loadStats]);
   useEffect(() => { loadCandidates(); }, [loadCandidates]);
+
+  // Cleanup scan/LLM timeouts on unmount
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Open the Merge Series dialog, which fetches the list of series
   // with pending cluster candidates and lets the user fire a
@@ -849,7 +862,16 @@ function EmbeddingDedupTab() {
     try {
       const op = await api.triggerDedupScan();
       setScanMsg(trackOp(op, 'Dedup scan'));
-      setTimeout(() => { loadCandidates(); loadStats(); }, 2000);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          loadCandidates();
+          loadStats();
+        }
+        timeoutRef.current = null;
+      }, 2000);
     } catch (err) {
       setScanMsg(err instanceof Error ? err.message : 'Scan failed');
     } finally {
@@ -863,7 +885,16 @@ function EmbeddingDedupTab() {
     try {
       const op = await api.triggerDedupLLM();
       setScanMsg(trackOp(op, 'AI review'));
-      setTimeout(() => { loadCandidates(); loadStats(); }, 3000);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          loadCandidates();
+          loadStats();
+        }
+        timeoutRef.current = null;
+      }, 3000);
     } catch (err) {
       setScanMsg(err instanceof Error ? err.message : 'AI review failed');
     } finally {
