@@ -1,8 +1,8 @@
 // file: web/src/components/OperationActivityPanel.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: f7a1e2c3-9b4d-4e5a-8c6f-1d3b5a7e9c0f
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Box,
   Chip,
@@ -176,24 +176,40 @@ export function OperationActivityPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isUnmountedRef = useRef(false);
 
   const op = useOperationsStore((state) =>
     state.activeOperations.find((o) => o.id === operationId),
   );
 
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
   const load = useCallback(async () => {
+    if (isUnmountedRef.current) return;
     setLoading(true);
     setError(null);
     try {
       const data = await fetchOperationActivity(operationId, limit);
-      setEntries(data.entries ?? []);
-      setTotal(data.total ?? (data.entries?.length ?? 0));
+      if (!isUnmountedRef.current) {
+        setEntries(data.entries ?? []);
+        setTotal(data.total ?? (data.entries?.length ?? 0));
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setEntries([]);
-      setTotal(0);
+      if (!isUnmountedRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+        setEntries([]);
+        setTotal(0);
+      }
     } finally {
-      setLoading(false);
+      if (!isUnmountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [operationId, limit]);
 
@@ -204,8 +220,11 @@ export function OperationActivityPanel({
   // Poll for non-terminal ops every 3s — terminal ops do not need refresh.
   useEffect(() => {
     if (op && TERMINAL_STATUSES.has(op.status)) return;
-    const id = window.setInterval(load, 3000);
-    return () => window.clearInterval(id);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = window.setInterval(load, 3000);
+    return () => {
+      if (intervalRef.current) window.clearInterval(intervalRef.current);
+    };
   }, [load, op]);
 
   const status = op?.status ?? inferStatusFromEntries(entries);

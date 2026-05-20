@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 3.4.0
+// version: 3.5.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -199,7 +199,9 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
     });
 
     // Trigger a server load shortly after to catch any v2 op registration.
-    setTimeout(() => get().loadFromServer(), 1500);
+    const loadTimer = setTimeout(() => get().loadFromServer(), 1500);
+    // Store for potential cleanup if needed
+    return () => clearTimeout(loadTimer);
   },
 
   beginOptimistic: (type: string) => {
@@ -261,7 +263,9 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
     // Server refresh to pick up the real v2 op metadata (display name,
     // notify_level, progress totals). No additional toast — the "starting…"
     // notification already fired from beginOptimistic.
-    setTimeout(() => get().loadFromServer(), 1500);
+    const refreshTimer = setTimeout(() => get().loadFromServer(), 1500);
+    // Store for potential cleanup if needed
+    return () => clearTimeout(refreshTimer);
   },
 
   removeOperation: (operationId: string) => {

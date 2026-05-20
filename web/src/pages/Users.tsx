@@ -1,8 +1,8 @@
 // file: web/src/pages/Users.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: 4d2e3f1a-5b6c-4a70-b8c5-3d7e0f1b9a99
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Box,
   Button,
@@ -57,6 +57,9 @@ export default function Users() {
   const [error, setError] = useState('');
   const [copiedToken, setCopiedToken] = useState('');
 
+  // Ref for token reset timeout
+  const copiedTokenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const load = useCallback(async () => {
     try {
       const [uResp, iResp] = await Promise.all([
@@ -95,7 +98,17 @@ export default function Users() {
   const handleCopyToken = useCallback((token: string) => {
     navigator.clipboard.writeText(token).catch(() => {});
     setCopiedToken(token);
-    setTimeout(() => setCopiedToken(''), 3000);
+    if (copiedTokenTimeoutRef.current) clearTimeout(copiedTokenTimeoutRef.current);
+    copiedTokenTimeoutRef.current = setTimeout(() => setCopiedToken(''), 3000);
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copiedTokenTimeoutRef.current) {
+        clearTimeout(copiedTokenTimeoutRef.current);
+      }
+    };
   }, []);
 
   return (

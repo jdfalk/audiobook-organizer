@@ -1,5 +1,5 @@
 // file: web/src/hooks/useKeyboardShortcuts.ts
-// version: 1.0.0
+// version: 1.0.1
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 import { useEffect, useCallback, useRef } from 'react';
@@ -35,6 +35,13 @@ export function useKeyboardShortcuts({ onShowHelp }: UseKeyboardShortcutsOptions
   const navigate = useNavigate();
   const pendingKey = useRef<string | null>(null);
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+    };
+  }, []);
 
   const clearPending = useCallback(() => {
     pendingKey.current = null;
@@ -80,7 +87,9 @@ export function useKeyboardShortcuts({ onShowHelp }: UseKeyboardShortcutsOptions
       if (e.key === 'g') {
         e.preventDefault();
         pendingKey.current = 'g';
-        pendingTimer.current = setTimeout(clearPending, 1000);
+        if (!isUnmountedRef.current) {
+          pendingTimer.current = setTimeout(clearPending, 1000);
+        }
         return;
       }
 

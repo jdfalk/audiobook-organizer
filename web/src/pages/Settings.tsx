@@ -1,5 +1,5 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.45.4
+// version: 1.45.5
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
 // last-edited: 2026-05-20
 
@@ -1411,6 +1411,10 @@ export function Settings() {
 
     let scanned = 0;
     const increment = Math.max(1, Math.ceil(total / 10));
+    // Clear any existing interval for this folder
+    if (scanIntervalsRef.current[folder.id]) {
+      window.clearInterval(scanIntervalsRef.current[folder.id]);
+    }
     const interval = window.setInterval(() => {
       scanned += increment;
       setScanStatuses((prev) => ({

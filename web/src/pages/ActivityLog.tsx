@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.15.1
+// version: 2.15.2
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -344,9 +344,11 @@ export default function ActivityLog() {
   // Initial load + polling for active ops (3s when Activity page is mounted or bell is open)
   useEffect(() => {
     loadActiveOpsFromServer();
+    if (opsIntervalRef.current) window.clearInterval(opsIntervalRef.current);
     opsIntervalRef.current = window.setInterval(loadActiveOpsFromServer, 3000);
     return () => {
       if (opsIntervalRef.current) window.clearInterval(opsIntervalRef.current);
+      opsIntervalRef.current = null;
     };
   }, [loadActiveOpsFromServer]);
 
@@ -375,6 +377,7 @@ export default function ActivityLog() {
     }
     return () => {
       if (feedIntervalRef.current) window.clearInterval(feedIntervalRef.current);
+      feedIntervalRef.current = null;
     };
   }, [autoRefresh, page, refreshInterval, loadFeed, loadSources]);
 
@@ -387,8 +390,8 @@ export default function ActivityLog() {
     };
     if (sourcesOpen) {
       document.addEventListener('mousedown', handler);
+      return () => document.removeEventListener('mousedown', handler);
     }
-    return () => document.removeEventListener('mousedown', handler);
   }, [sourcesOpen]);
 
   const handleRefresh = () => {

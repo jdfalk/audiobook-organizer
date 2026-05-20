@@ -1,5 +1,5 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.8.1
+// version: 1.8.2
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
 // last-edited: 2026-05-20
 
@@ -947,6 +947,7 @@ export function MaintenanceTab() {
   const [runningTask, setRunningTask] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isUnmountedRef = useRef(false);
 
   const fetchTasks = useCallback(async () => {
@@ -963,8 +964,13 @@ export function MaintenanceTab() {
 
   useEffect(() => {
     fetchTasks();
-    const interval = setInterval(fetchTasks, 10000);
-    return () => clearInterval(interval);
+    intervalRef.current = setInterval(fetchTasks, 10000);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
   }, [fetchTasks]);
 
   // Cleanup timeouts on unmount

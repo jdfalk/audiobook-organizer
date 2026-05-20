@@ -1,5 +1,5 @@
 // file: web/src/hooks/useUnsavedChangesBlocker.ts
-// version: 1.1.0
+// version: 1.1.1
 // guid: e3f4a5b6-c7d8-9e0f-1a2b-3c4d5e6f7a8b
 
 import { useEffect, useCallback, useRef, useState } from 'react';
@@ -19,6 +19,7 @@ export function useUnsavedChangesBlocker(shouldBlock: boolean): Blocker {
   const [blocked, setBlocked] = useState(false);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const proceedingRef = useRef(false);
+  const proceedingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -79,12 +80,22 @@ export function useUnsavedChangesBlocker(shouldBlock: boolean): Blocker {
       setBlocked(false);
       setPendingPath(null);
       // Navigate after state cleanup
-      setTimeout(() => {
+      if (proceedingTimerRef.current) clearTimeout(proceedingTimerRef.current);
+      proceedingTimerRef.current = setTimeout(() => {
         navigate(path);
         proceedingRef.current = false;
       }, 0);
     }
   }, [pendingPath, navigate]);
+
+  // Cleanup setTimeout on unmount
+  useEffect(() => {
+    return () => {
+      if (proceedingTimerRef.current) {
+        clearTimeout(proceedingTimerRef.current);
+      }
+    };
+  }, []);
 
   const reset = useCallback(() => {
     setBlocked(false);

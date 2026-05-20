@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.90.0 -->
+<!-- version: 2.91.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-20 -->
 
@@ -8,6 +8,15 @@
 ## [Unreleased]
 
 ### Fixes
+
+#### May 20, 2026 — Fix 41 React memory leaks across 25 components
+
+- Systematically eliminated memory leaks in React components caused by untracked `setTimeout`/`setInterval` (30 issues), unremoved event listeners (7 issues), and recursive polling without cancellation (4 issues).
+- **Pattern fix for timers:** Added `useRef` tracking for timer handles, `isUnmountedRef` guard flag, cleanup `useEffect` that clears timers and guards all setState calls to prevent updates on unmounted components.
+- **Pattern fix for event listeners:** Added explicit `removeEventListener` calls in `useEffect` cleanup functions for `mousemove`, `mouseup`, `mousedown`, and `progress` events.
+- **Pattern fix for polling:** Added cancellation flags and explicit cleanup to prevent timer leaks in recursive polling patterns (Library.tsx import path polling, ITunesImport status polling).
+- **Files fixed:** App.tsx, AIJobsPanel, CacheStatsPanel, OperationActivityPanel, TagComparison, VersionManagement, ConfigurableTable, ITunesImport, MaintenanceTab, AuthContext, useKeyboardShortcuts, usePendingFileOps, useUnsavedChangesBlocker, ActivityLog, BookDedup, BookDetail, Dashboard, Library, Settings, Users, api.ts, eventSourceManager, useAppStore, useOperationsStore, operationPolling.
+- All components tested with memory leak scanner (check-memory-leaks.py) which now reports 0 issues in these patterns.
 
 #### May 20, 2026 — iTunes backfill streaming parser (PR #1061)
 

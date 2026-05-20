@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.67.0
+// version: 1.68.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-05-20
 
@@ -423,7 +423,9 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       setDebouncedSearch(searchQuery);
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [searchQuery]);
 
   const isInitialMount = useRef(true);
@@ -746,14 +748,21 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
   }, [activeOrganizeOp?.status, loadAudiobooks]);
 
   // Auto-refresh books every 10s while a scan is active
+  const isUnmountedRef = useRef(false);
   useEffect(() => {
+    isUnmountedRef.current = false;
     if (!activeScanOp || activeScanOp.status === 'completed' || activeScanOp.status === 'failed') {
       return;
     }
     const interval = window.setInterval(() => {
-      loadAudiobooks();
+      if (!isUnmountedRef.current) {
+        loadAudiobooks();
+      }
     }, 10000);
-    return () => window.clearInterval(interval);
+    return () => {
+      isUnmountedRef.current = true;
+      window.clearInterval(interval);
+    };
   }, [activeScanOp, loadAudiobooks]);
 
   const handleManualImport = () => {
@@ -1483,34 +1492,42 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
         const pollInterval = 2000;
         let attempts = 0;
         const maxAttempts = 150; // ~5 minutes
+        const pollTimerRef: { current: NodeJS.Timeout | null } = { current: null };
+        const isUnmountedPollRef = { current: false };
+
         const poll = async () => {
+          if (isUnmountedPollRef.current) return;
           try {
             const op = await api.getOperationStatus(opId);
+            if (isUnmountedPollRef.current) return;
             if (op.status === 'completed' || op.status === 'failed' || op.status === 'canceled') {
               // Refresh folder list to get updated book counts
               const folders = await api.getImportPaths();
-              setImportPaths(
-                folders.map((f) => ({
-                  id: f.id,
-                  path: f.path,
-                  status: 'idle',
-                  book_count: f.book_count,
-                }))
-              );
+              if (!isUnmountedPollRef.current) {
+                setImportPaths(
+                  folders.map((f) => ({
+                    id: f.id,
+                    path: f.path,
+                    status: 'idle',
+                    book_count: f.book_count,
+                  }))
+                );
+              }
               return; // stop polling
             }
             attempts++;
-            if (attempts < maxAttempts) {
-              setTimeout(poll, pollInterval);
+            if (attempts < maxAttempts && !isUnmountedPollRef.current) {
+              pollTimerRef.current = setTimeout(poll, pollInterval);
             }
           } catch (_e) {
+            if (isUnmountedPollRef.current) return;
             attempts++;
             if (attempts < maxAttempts) {
-              setTimeout(poll, pollInterval);
+              pollTimerRef.current = setTimeout(poll, pollInterval);
             }
           }
         };
-        setTimeout(poll, pollInterval);
+        pollTimerRef.current = setTimeout(poll, pollInterval);
       }
     } catch (error) {
       console.error('Failed to add import path:', error);

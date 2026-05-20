@@ -1,8 +1,8 @@
 // file: web/src/components/audiobooks/VersionManagement.tsx
-// version: 1.1.2
+// version: 1.1.3
 // guid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -103,6 +103,7 @@ export function VersionManagement({
     setSearchLoading(true);
     setSearchError(null);
     const timer = window.setTimeout(async () => {
+      if (cancelled) return;
       try {
         const results = await api.searchBooks(query, 10);
         if (!cancelled) {
@@ -121,7 +122,7 @@ export function VersionManagement({
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      clearTimeout(timer);
     };
   }, [linkDialogOpen, searchQuery]);
 

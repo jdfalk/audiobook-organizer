@@ -1,9 +1,9 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.14.1
+// version: 1.14.2
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
 // last-edited: 2026-05-16
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnnouncementBanner } from '../components/AnnouncementBanner';
 import {
@@ -82,6 +82,9 @@ export function Dashboard() {
   const [organizeInProgress, setOrganizeInProgress] = useState(false);
   const [syncITunesFirst, setSyncITunesFirst] = useState(true);
   const [scanInProgress, setScanInProgress] = useState(false);
+
+  // Ref for auto-refresh interval
+  const autoRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadStats = useCallback(async () => {
     try {
@@ -198,14 +201,26 @@ export function Dashboard() {
   // Auto-refresh every 15s while a scan is active
   useEffect(() => {
     const hasActiveScan = operations?.some((op) => op.status === 'running');
-    if (!hasActiveScan) return;
-    const interval = setInterval(() => {
+    if (!hasActiveScan) {
+      if (autoRefreshIntervalRef.current) {
+        clearInterval(autoRefreshIntervalRef.current);
+        autoRefreshIntervalRef.current = null;
+      }
+      return;
+    }
+    if (autoRefreshIntervalRef.current) clearInterval(autoRefreshIntervalRef.current);
+    autoRefreshIntervalRef.current = setInterval(() => {
       loadStats();
       loadAuthors();
       loadSeries();
       loadImportedCount();
     }, 15000);
-    return () => clearInterval(interval);
+    return () => {
+      if (autoRefreshIntervalRef.current) {
+        clearInterval(autoRefreshIntervalRef.current);
+        autoRefreshIntervalRef.current = null;
+      }
+    };
   }, [operations, loadStats, loadAuthors, loadSeries, loadImportedCount]);
 
   const handleScanAll = async () => {

@@ -1,8 +1,8 @@
 // file: web/src/components/AIJobsPanel.tsx
-// version: 1.0.0
+// version: 1.0.1
 // guid: 4a7b8c9d-0e1f-2a3b-4c5d-6e7f8a9b0c1d
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   Box, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
@@ -37,25 +37,36 @@ const formatTime = (s?: string): string => {
 export function AIJobsPanel() {
   const [jobs, setJobs] = useState<api.AIJob[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isUnmountedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      if (isUnmountedRef.current) return;
       try {
         const data = await api.listAIJobs({ limit: 50 });
-        if (!cancelled) {
+        if (!cancelled && !isUnmountedRef.current) {
           setJobs(data);
           setError(null);
         }
       } catch (e: unknown) {
-        if (!cancelled) setError(String(e));
+        if (!cancelled && !isUnmountedRef.current) setError(String(e));
       }
     };
     void load();
-    const iv = setInterval(load, POLL_INTERVAL_MS);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(load, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
-      clearInterval(iv);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 

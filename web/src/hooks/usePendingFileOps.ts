@@ -1,5 +1,5 @@
 // file: web/src/hooks/usePendingFileOps.ts
-// version: 1.0.0
+// version: 1.0.1
 // guid: 8f4a2b9c-5e1d-4f70-a8c3-2b6e9d1a0f45
 
 import { useEffect, useRef, useState } from 'react';
@@ -32,6 +32,13 @@ export function usePendingFileOps(options: UsePendingFileOpsOptions = {}): UsePe
   const { toast } = useToast();
   const previousCountRef = useRef<number>(0);
   const initialLoadRef = useRef<boolean>(true);
+  const isUnmountedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!enabled) {
@@ -44,7 +51,7 @@ export function usePendingFileOps(options: UsePendingFileOpsOptions = {}): UsePe
     const poll = async () => {
       try {
         const resp = await fetchPendingFileOps();
-        if (cancelled) return;
+        if (cancelled || isUnmountedRef.current) return;
         setOperations(resp.operations || []);
         setLoading(false);
 

@@ -1,5 +1,5 @@
 // file: web/src/components/TagComparison.tsx
-// version: 1.4.0
+// version: 1.4.1
 // guid: cfed2692-76f6-47b0-bc84-cc2a4075e554
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -157,6 +157,12 @@ export const TagComparison = ({ bookId, versions, refreshKey, snapshotTimestamp,
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+
+    // Cleanup on unmount via useEffect pattern
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
   };
 
   const resizeHandle = (colIndex: number) => (
