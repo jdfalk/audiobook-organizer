@@ -1,5 +1,5 @@
 // file: internal/activity/api.go
-// version: 1.7.0
+// version: 1.8.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
@@ -263,7 +263,52 @@ func EnrichTags(e *database.ActivityEntry) {
 		}
 	}
 
+	// component: tag — identifies the specific subsystem. Prefer an
+	// explicit "component" value stored in Details (set by the slog parser
+	// when it extracts a component= attr from a structured log line), then
+	// fall back to a static source→component mapping for well-known sources.
+	// We intentionally skip emitting component: when no mapping exists so
+	// we don't produce misleading tags for generic "server" entries.
+	if comp := componentFromEntry(e); comp != "" {
+		tag := "component:" + comp
+		if !seen[tag] {
+			derived = append(derived, tag)
+		}
+	}
+
 	e.Tags = append(e.Tags, derived...)
+}
+
+// sourceToComponent maps well-known Source values to component names.
+// This is the last-resort fallback when no explicit "component" attr was
+// emitted and the source path derivation in ParseLogLineFull didn't match.
+var sourceToComponent = map[string]string{
+	"scanner":     "scanner",
+	"itunes":      "itunes_sync",
+	"acoustid":    "acoustid",
+	"dedup":       "dedup",
+	"isbn":        "isbn_enrich",
+	"scheduler":   "scheduler",
+	"maintenance": "maintenance",
+}
+
+// componentFromEntry derives the component name for an ActivityEntry.
+// Priority: Details["component"] > Details["subsystem"] > sourceToComponent[Source].
+// Returns "" when no component can be reliably inferred.
+func componentFromEntry(e *database.ActivityEntry) string {
+	if e.Details != nil {
+		for _, key := range []string{"component", "subsystem"} {
+			if v, ok := e.Details[key]; ok {
+				if s, ok := v.(string); ok && s != "" {
+					return s
+				}
+			}
+		}
+	}
+	if comp, ok := sourceToComponent[e.Source]; ok {
+		return comp
+	}
+	return ""
 }
 
 // FlushOperation immediately flushes all pending batches whose OperationID

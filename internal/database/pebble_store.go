@@ -2610,6 +2610,7 @@ func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
 		minIntervalSec := float64(getLibraryCountsMinIntervalSeconds())
 		if ageSec < minIntervalSec {
 			slog.Debug("library_counts cache hit (within min interval)",
+				"component", "library_counts_cache",
 				"age_seconds", ageSec,
 				"min_interval_seconds", minIntervalSec,
 			)
@@ -2629,6 +2630,7 @@ func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
 		minIntervalSec := float64(getLibraryCountsMinIntervalSeconds())
 		if ageSec < minIntervalSec {
 			slog.Debug("library_counts cache hit (within min interval, after lock wait)",
+				"component", "library_counts_cache",
 				"age_seconds", ageSec,
 				"min_interval_seconds", minIntervalSec,
 			)
@@ -2644,6 +2646,7 @@ func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
 	}
 	p.writeCachedLibraryStats(stats)
 	slog.Info("library_counts cache recomputed",
+		"component", "library_counts_cache",
 		"total_books", stats.TotalBooks,
 		"organized_books", stats.OrganizedBooks,
 		"unorganized_books", stats.UnorganizedBooks,

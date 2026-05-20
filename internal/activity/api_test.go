@@ -1,10 +1,11 @@
 // file: internal/activity/api_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b2e7f4a1-6c9d-4e3b-8f0a-1d5c7e2b9f4a
 
 package activity
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -168,7 +169,7 @@ func TestEnrichTags(t *testing.T) {
 				Source:      "scanner",
 				Type:        "scan",
 			},
-			wantTags: []string{"op:op-123", "outcome:ok", "source:scanner", "action:scan"},
+			wantTags: []string{"op:op-123", "outcome:ok", "source:scanner", "action:scan", "component:scanner"},
 		},
 		{
 			name: "book and scope tags from BookID",
@@ -187,7 +188,7 @@ func TestEnrichTags(t *testing.T) {
 				Source: "itunes",
 				Type:   "itunes_sync",
 			},
-			wantTags: []string{"outcome:warn", "source:itunes", "action:import"},
+			wantTags: []string{"outcome:warn", "source:itunes", "action:import", "component:itunes_sync"},
 		},
 		{
 			name: "outcome:error from error level",
@@ -196,7 +197,7 @@ func TestEnrichTags(t *testing.T) {
 				Source: "dedup",
 				Type:   "dedup",
 			},
-			wantTags: []string{"outcome:error", "source:dedup", "action:dedup"},
+			wantTags: []string{"outcome:error", "source:dedup", "action:dedup", "component:dedup"},
 		},
 		{
 			name: "idempotency: existing tags not duplicated",
@@ -207,7 +208,7 @@ func TestEnrichTags(t *testing.T) {
 				Type:        "scan",
 				Tags:        []string{"op:op-789"}, // Already has this tag
 			},
-			wantTags: []string{"op:op-789", "outcome:ok", "source:scanner", "action:scan"},
+			wantTags: []string{"op:op-789", "outcome:ok", "source:scanner", "action:scan", "component:scanner"},
 		},
 		{
 			name: "all fields populated",
@@ -306,4 +307,123 @@ func TestEnrichTags_NilEntry(t *testing.T) {
 		}
 	}()
 	EnrichTags(nil)
+}
+
+// TestEnrichTags_ComponentFromDetails verifies that a "component" key in
+// Details produces a component: tag without disturbing other tags.
+func TestEnrichTags_ComponentFromDetails(t *testing.T) {
+	e := database.ActivityEntry{
+		Level:   "info",
+		Source:  "server",
+		Type:    "system",
+		Details: map[string]any{"component": "library_counts_cache"},
+	}
+	EnrichTags(&e)
+
+	found := false
+	for _, tag := range e.Tags {
+		if tag == "component:library_counts_cache" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected component:library_counts_cache in %v", e.Tags)
+	}
+}
+
+// TestEnrichTags_ComponentFromSourceMapping verifies that a well-known source
+// value produces a component: tag via the sourceToComponent mapping.
+func TestEnrichTags_ComponentFromSourceMapping(t *testing.T) {
+	e := database.ActivityEntry{
+		Level:  "info",
+		Source: "scanner",
+		Type:   "system",
+	}
+	EnrichTags(&e)
+
+	found := false
+	for _, tag := range e.Tags {
+		if tag == "component:scanner" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected component:scanner in %v", e.Tags)
+	}
+}
+
+// TestEnrichTags_NoComponentForGenericSource verifies that a source with no
+// mapping does not produce a component: tag.
+func TestEnrichTags_NoComponentForGenericSource(t *testing.T) {
+	e := database.ActivityEntry{
+		Level:  "info",
+		Source: "server",
+		Type:   "system",
+		Summary: "generic message",
+	}
+	EnrichTags(&e)
+
+	for _, tag := range e.Tags {
+		if strings.HasPrefix(tag, "component:") {
+			t.Errorf("unexpected component tag on generic server entry: %q in %v", tag, e.Tags)
+		}
+	}
+}
+
+// TestEnrichTags_OpIDFromOperationID verifies that a non-empty OperationID
+// produces an op: tag (this was already supported; guard against regression).
+func TestEnrichTags_OpIDFromOperationID(t *testing.T) {
+	e := database.ActivityEntry{
+		Level:       "info",
+		Source:      "scanner",
+		Type:        "scan",
+		OperationID: "01JTEST",
+	}
+	EnrichTags(&e)
+
+	found := false
+	for _, tag := range e.Tags {
+		if tag == "op:01JTEST" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected op:01JTEST in %v", e.Tags)
+	}
+}
+
+// TestParseLogLineFull_SlogOpID verifies that ParseLogLineFull extracts op_id
+// from a slog text-format line and returns it in ParsedLogLine.OpID.
+func TestParseLogLineFull_SlogOpID(t *testing.T) {
+	line := `time=2026-05-20T00:00:00Z level=INFO msg="scan started" op_id=01JTEST component=acoustid`
+	p := ParseLogLineFull(line)
+	if p.OpID != "01JTEST" {
+		t.Errorf("expected OpID=01JTEST, got %q (full: %+v)", p.OpID, p)
+	}
+}
+
+// TestParseLogLineFull_SlogComponent verifies that ParseLogLineFull extracts
+// the component attr from a slog text-format line.
+func TestParseLogLineFull_SlogComponent(t *testing.T) {
+	line := `time=2026-05-20T00:00:00Z level=INFO msg="cache hit" component=library_counts_cache total_books=100`
+	p := ParseLogLineFull(line)
+	if p.Component != "library_counts_cache" {
+		t.Errorf("expected Component=library_counts_cache, got %q (full: %+v)", p.Component, p)
+	}
+}
+
+// TestParseLogLineFull_NoOpNoComponent verifies that a plain non-slog line
+// produces empty OpID and Component (no regression on existing behaviour).
+func TestParseLogLineFull_NoOpNoComponent(t *testing.T) {
+	line := `2026/05/20 00:00:00 main.go:42: [INFO] server: HTTP server started`
+	p := ParseLogLineFull(line)
+	if p.OpID != "" {
+		t.Errorf("expected empty OpID for non-slog line, got %q", p.OpID)
+	}
+	if p.Component != "" {
+		t.Errorf("expected empty Component for non-slog line, got %q", p.Component)
+	}
+	if p.Source != "server" {
+		t.Errorf("expected source=server, got %q", p.Source)
+	}
 }
