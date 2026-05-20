@@ -209,6 +209,12 @@ oplint:
 	@go run ./tools/cmd/oplint ./internal/plugins/...
 	@echo "✅ Plugin import lint passed"
 
+## reconcile-paths: Build the reconcile-paths dry-run CSV tool
+reconcile-paths:
+	@echo "Building reconcile-paths tool..."
+	@go build -o bin/reconcile-paths ./tools/cmd/reconcile-paths/
+	@echo "Built: bin/reconcile-paths"
+
 ## sdkguard: Assert pkg/plugin/sdk has no unexpected internal/ dependencies
 sdkguard:
 	@echo "🔍 Running SDK guard (asserting no new internal/ deps in pkg/plugin/sdk)..."
