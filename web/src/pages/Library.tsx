@@ -1,7 +1,7 @@
 // file: web/src/pages/Library.tsx
-// version: 1.66.0
+// version: 1.66.1
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -269,7 +269,17 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
   const duplicateResolverRef = useRef<((action: DuplicateAction) => void) | null>(null);
   const [bulkOrganizeError, setBulkOrganizeError] = useState<OrganizeErrorState | null>(null);
   const bulkOrganizeSnapshotRef = useRef<Map<string, Audiobook>>(new Map());
+  const pollingCleanupRef = useRef<(() => void) | null>(null);
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingCleanupRef.current) {
+        pollingCleanupRef.current();
+        pollingCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   // SSE subscription for live operation progress & logs + historical hydration
   useEffect(() => {
@@ -1502,7 +1512,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
   };
 
   const startPolling = (opId: string, type: 'scan' | 'organize') => {
-    pollOperation(
+    const cleanup = pollOperation(
       opId,
       { intervalMs: 2000 },
       (op) => {
@@ -1526,12 +1536,16 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
           setActiveOrganizeOp(op);
         }
         loadAudiobooks();
+        pollingCleanupRef.current = null; // Clear when operation completes
       },
       (err) => {
         console.warn('Polling error', err);
         if (type === 'organize') setOrganizeRunning(false);
+        pollingCleanupRef.current = null; // Clear on error
       }
     );
+    // Store cleanup function so it can be called on unmount
+    pollingCleanupRef.current = cleanup;
   };
 
   const handleScanImportPath = async (id: number) => {

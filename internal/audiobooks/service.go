@@ -1,5 +1,5 @@
 // file: internal/audiobooks/service.go
-// version: 1.27.0
+// version: 1.27.1
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 // last-edited: 2026-05-20
 
@@ -981,29 +981,35 @@ func (svc *AudiobookService) aggregateFileMetadata(books []database.Book) {
 		return
 	}
 
-	// Aggregate duration and size by book ID
-	aggregates := make(map[string]struct {
+	// Allocate aggregate structs upfront so we can safely take pointers to their fields
+	aggregates := make(map[string]*struct {
 		totalDuration int
 		totalSize    int64
 	})
+	for _, b := range books {
+		aggregates[b.ID] = &struct {
+			totalDuration int
+			totalSize    int64
+		}{}
+	}
 
 	for _, f := range allFiles {
 		if f.Missing {
 			continue // Skip missing files
 		}
-		idx, ok := bookIDMap[f.BookID]
+		agg, ok := aggregates[f.BookID]
 		if !ok {
 			continue // Skip files not in our book list
 		}
 
-		agg := aggregates[f.BookID]
 		agg.totalDuration += f.Duration / 1000 // Convert ms to seconds
 		agg.totalSize += f.FileSize
-		aggregates[f.BookID] = agg
 
-		// Update the book's aggregates
-		books[idx].Duration = &agg.totalDuration
-		books[idx].FileSize = &agg.totalSize
+		// Update the book's aggregates with pointers to the aggregated values
+		if idx, ok := bookIDMap[f.BookID]; ok {
+			books[idx].Duration = &agg.totalDuration
+			books[idx].FileSize = &agg.totalSize
+		}
 	}
 }
 
