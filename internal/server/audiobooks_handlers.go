@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.12.0
+// version: 2.13.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-19
 //
@@ -547,6 +547,51 @@ func (s *Server) listBookFiles(c *gin.Context) {
 		})
 	}
 	httputil.RespondWithOK(c, gin.H{"files": results, "count": len(results)})
+}
+
+// patchBookFile updates a BookFile (currently only SkipScan).
+// PATCH /api/v1/audiobooks/:id/files/:file_id
+func (s *Server) patchBookFile(c *gin.Context) {
+	bookID := c.Param("id")
+	fileID := c.Param("file_id")
+
+	if s.Store() == nil {
+		httputil.RespondWithInternalError(c, "database not initialized")
+		return
+	}
+
+	var body struct {
+		SkipScan *bool `json:"skip_scan"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		httputil.RespondWithBadRequest(c, "invalid request body")
+		return
+	}
+
+	file, err := s.Store().GetBookFileByID(bookID, fileID)
+	if err != nil {
+		httputil.InternalError(c, "failed to get book file", err)
+		return
+	}
+	if file == nil {
+		httputil.RespondWithNotFound(c, "book file", fileID)
+		return
+	}
+
+	if body.SkipScan != nil {
+		file.SkipScan = *body.SkipScan
+		slog.Info("file skip_scan toggled",
+			"book_id", bookID,
+			"file_id", fileID,
+			"skip_scan", *body.SkipScan,
+		)
+	}
+
+	if err := s.Store().UpsertBookFile(file); err != nil {
+		httputil.InternalError(c, "failed to update book file", err)
+		return
+	}
+	httputil.RespondWithOK(c, file)
 }
 
 // extractTrackInfo parses track/disk numbers from segment filenames and updates segments.
