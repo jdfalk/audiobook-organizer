@@ -1781,6 +1781,8 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
           columnWidths={columnWidths}
           handleColumnSortChange={handleColumnSortChange}
           resizeColumn={resizeColumn}
+          visibleColumnIds={visibleColumnIds}
+          onToggleColumn={toggleColumn}
           softDeletedCount={softDeletedCount}
           softDeletedBooks={softDeletedBooks}
           softDeletedLoading={softDeletedLoading}

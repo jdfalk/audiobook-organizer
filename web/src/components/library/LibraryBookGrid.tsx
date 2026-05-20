@@ -81,6 +81,8 @@ interface LibraryBookGridProps {
   columnWidths: Record<string, number>;
   handleColumnSortChange: (key: string, order: 'asc' | 'desc') => void;
   resizeColumn: (id: string, width: number) => void;
+  visibleColumnIds?: string[];
+  onToggleColumn?: (columnId: string) => void;
   softDeletedCount: number;
   softDeletedBooks: Audiobook[];
   softDeletedLoading: boolean;
@@ -149,6 +151,8 @@ export const LibraryBookGrid = ({
   columnWidths,
   handleColumnSortChange,
   resizeColumn,
+  visibleColumnIds,
+  onToggleColumn,
   softDeletedCount,
   softDeletedBooks,
   softDeletedLoading,
@@ -355,6 +359,8 @@ export const LibraryBookGrid = ({
             onSortChange={handleColumnSortChange}
             onColumnResize={resizeColumn}
             onSelectAll={handleToggleSelectAllOnPage}
+            visibleColumnIds={visibleColumnIds}
+            onToggleColumn={onToggleColumn}
           />
         )}
 
