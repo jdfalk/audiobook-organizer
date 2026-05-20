@@ -1,5 +1,5 @@
 // file: web/src/components/BookGrid.tsx
-// version: 1.1.0
+// version: 1.2.0
 // guid: 6e7f8a9b-0c1d-2e3f-4a5b-6c7d8e9f0a1b
 // last-edited: 2026-05-20
 
@@ -11,7 +11,7 @@ import {
 import { AudiobookGrid } from './audiobooks/AudiobookGrid';
 import { AudiobookList } from './audiobooks/AudiobookList';
 import { ViewMode } from './audiobooks/SearchBar';
-import type { Audiobook, SortOrder as SortOrderType } from '../types';
+import type { Audiobook, FilterOptions, SortOrder as SortOrderType } from '../types';
 import { SortOrder } from '../types';
 import type { ColumnDefinition } from '../config/columnDefinitions';
 
@@ -40,6 +40,7 @@ interface BookGridProps {
   onSelectAll?: () => void;
   visibleColumnIds?: string[];
   onToggleColumn?: (columnId: string) => void;
+  onFiltersChange?: (filters: FilterOptions) => void;
 }
 
 export const BookGrid: React.FC<BookGridProps> = ({
@@ -67,6 +68,7 @@ export const BookGrid: React.FC<BookGridProps> = ({
   onSelectAll,
   visibleColumnIds,
   onToggleColumn,
+  onFiltersChange,
 }) => {
   return (
     <>
@@ -113,6 +115,7 @@ export const BookGrid: React.FC<BookGridProps> = ({
           onColumnResize={onColumnResize}
           visibleColumnIds={visibleColumnIds}
           onToggleColumn={onToggleColumn}
+          onFiltersChange={onFiltersChange}
         />
       )}
     </>

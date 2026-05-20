@@ -1,7 +1,7 @@
 // file: web/src/types/index.ts
-// version: 1.16.0
+// version: 1.17.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 // Audiobook (Book) type
 export interface Audiobook {
@@ -174,6 +174,19 @@ export interface FilterOptions {
   fingerprintStatus?: "complete" | "partial" | "none";
   coveragePercentMin?: number;
   coveragePercentMax?: number;
+  // Quick-filter presets (from header kebab menu)
+  missingCovers?: boolean;
+  inImportPath?: boolean;
+  noIsbn?: boolean;
+  duplicatesFlagged?: boolean;
+}
+
+// QuickQuery is one entry returned by GET /api/v1/library/quick-queries.
+export interface QuickQuery {
+  id: string;
+  label: string;
+  count: number;
+  filter: Partial<FilterOptions>;
 }
 
 // Pagination parameters

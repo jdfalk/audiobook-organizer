@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.14.0
+// version: 2.15.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-20
 //
@@ -220,6 +220,10 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		enriched[i].CoveragePercent = coverage
 		enriched[i].LastFingerprintedAt = lastFp
 	}
+
+	// Apply quick-query preset filters (missing_covers, in_import_path, no_isbn, duplicates_flagged).
+	// These are post-fetch because they require enriched book fields (e.g. FingerprintStatus).
+	enriched = s.applyQuickQueryFiltersDetail(c, enriched)
 
 	// Get total count for proper pagination
 	totalCount := len(enriched)
@@ -1615,4 +1619,86 @@ func (s *Server) getBookChanges(c *gin.Context) {
 		return
 	}
 	httputil.RespondWithOK(c, gin.H{"changes": changes})
+}
+
+// applyQuickQueryFiltersDetail applies the four "quick query" preset filters that are
+// expressed as boolean URL params: missing_covers, in_import_path, no_isbn, and
+// duplicates_flagged. Returns the filtered slice (unmodified if no params are set).
+// Called after fingerprinting enrichment so all book fields are populated.
+func (s *Server) applyQuickQueryFiltersDetail(c *gin.Context, books []AudiobookDetail) []AudiobookDetail {
+	missingCovers := c.Query("missing_covers") == "true"
+	inImportPath := c.Query("in_import_path") == "true"
+	noIsbn := c.Query("no_isbn") == "true"
+	duplicatesFlagged := c.Query("duplicates_flagged") == "true"
+
+	if !missingCovers && !inImportPath && !noIsbn && !duplicatesFlagged {
+		return books
+	}
+
+	// Load import paths once if needed.
+	var importPaths []database.ImportPath
+	if inImportPath {
+		importPaths, _ = s.Store().GetAllImportPaths()
+	}
+
+	// Build flagged-book set once if needed.
+	flaggedBookIDs := map[string]struct{}{}
+	if duplicatesFlagged && s.embeddingStore != nil {
+		candidates, _, _ := s.embeddingStore.ListCandidates(database.CandidateFilter{
+			EntityType: "book",
+			Status:     "pending",
+			Limit:      100000,
+		})
+		for _, cand := range candidates {
+			flaggedBookIDs[cand.EntityAID] = struct{}{}
+			flaggedBookIDs[cand.EntityBID] = struct{}{}
+		}
+	}
+
+	result := books[:0]
+	for _, detail := range books {
+		if detail.Book == nil {
+			continue
+		}
+		b := detail.Book
+		keep := true
+
+		if missingCovers && keep {
+			if b.CoverURL != nil && *b.CoverURL != "" {
+				keep = false
+			}
+		}
+
+		if inImportPath && keep {
+			matched := false
+			for _, ip := range importPaths {
+				if strings.HasPrefix(b.FilePath, ip.Path) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				keep = false
+			}
+		}
+
+		if noIsbn && keep {
+			isbn10Empty := b.ISBN10 == nil || *b.ISBN10 == ""
+			isbn13Empty := b.ISBN13 == nil || *b.ISBN13 == ""
+			if !isbn10Empty || !isbn13Empty {
+				keep = false
+			}
+		}
+
+		if duplicatesFlagged && keep {
+			if _, ok := flaggedBookIDs[b.ID]; !ok {
+				keep = false
+			}
+		}
+
+		if keep {
+			result = append(result, detail)
+		}
+	}
+	return result
 }

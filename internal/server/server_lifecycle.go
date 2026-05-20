@@ -1,7 +1,7 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.20.0
+// version: 1.21.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 package server
 
@@ -1201,6 +1201,7 @@ func (s *Server) setupRoutes() {
 			// Returns books with their latest fetch status + by_status counts; supports
 			// repeatable ?status= filtering for the Library page toggles + Resume Review.
 			protected.GET("/library/metadata-results", s.perm(auth.PermLibraryView), s.handleListMetadataResults)
+			protected.GET("/library/quick-queries", s.perm(auth.PermLibraryView), s.getQuickQueries)
 			protected.POST("/metadata/batch-apply-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleBatchApplyCandidates)
 			protected.POST("/metadata/batch-reject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleRejectCandidates)
 			protected.POST("/metadata/batch-unreject-candidates", s.perm(auth.PermLibraryEditMetadata), s.handleUnrejectCandidates)

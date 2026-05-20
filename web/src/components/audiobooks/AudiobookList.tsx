@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.5.0
+// version: 2.6.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-20
 
@@ -24,6 +24,7 @@ import {
   Switch,
   FormControlLabel,
   Button,
+  Divider,
 } from '@mui/material';
 import {
   MoreVert as MoreVertIcon,
@@ -36,9 +37,10 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
 } from '@mui/icons-material';
-import type { Audiobook, BookFile } from '../../types';
+import type { Audiobook, BookFile, FilterOptions } from '../../types';
 import { type ColumnDefinition, getDefaultVisibleColumns } from '../../config/columnDefinitions';
 import * as api from '../../services/api';
+import type { QuickQueryItem } from '../../services/api';
 
 interface AudiobookListProps {
   audiobooks: Audiobook[];
@@ -57,6 +59,8 @@ interface AudiobookListProps {
   onColumnResize?: (columnId: string, width: number) => void;
   visibleColumnIds?: string[];
   onToggleColumn?: (columnId: string) => void;
+  /** Called when a quick filter preset is clicked — applies the preset's filter. */
+  onFiltersChange?: (filters: FilterOptions) => void;
 }
 
 const fallbackColumns = getDefaultVisibleColumns();
@@ -78,11 +82,15 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   onColumnResize,
   visibleColumnIds,
   onToggleColumn,
+  onFiltersChange,
 }) => {
   const activeColumns = columns ?? fallbackColumns;
 
   const [anchorEls, setAnchorEls] = React.useState<Record<string, HTMLElement | null>>({});
   const [headerMenuAnchor, setHeaderMenuAnchor] = React.useState<HTMLElement | null>(null);
+  // Quick-query preset counts, loaded lazily when the header menu opens.
+  const [quickQueries, setQuickQueries] = useState<QuickQueryItem[]>([]);
+  const [quickQueriesLoaded, setQuickQueriesLoaded] = useState(false);
   // Fix #1: use Record instead of Set for proper React equality comparisons
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [filesCache, setFilesCache] = useState<Record<string, BookFile[]>>({});
@@ -120,6 +128,18 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   const handleHeaderMenuClick = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
     setHeaderMenuAnchor(event.currentTarget);
+    // Lazy-load quick-query counts on first open (or re-open after close).
+    // Session-level cache: once loaded, counts stay until the component unmounts.
+    if (!quickQueriesLoaded) {
+      api.getQuickQueries()
+        .then((items) => {
+          setQuickQueries(items);
+          setQuickQueriesLoaded(true);
+        })
+        .catch(() => {
+          // Non-fatal: quick filters just won't show counts.
+        });
+    }
   };
 
   const handleHeaderMenuClose = () => {
@@ -416,6 +436,45 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                 open={Boolean(headerMenuAnchor)}
                 onClose={handleHeaderMenuClose}
               >
+                {/* Quick Filters section */}
+                {onFiltersChange && (
+                  <>
+                    <MenuItem disabled sx={{ py: 0.5 }}>
+                      <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                        Quick Filters
+                      </Typography>
+                    </MenuItem>
+                    {quickQueries.length === 0 && !quickQueriesLoaded && (
+                      <MenuItem disabled>
+                        <Typography variant="body2" color="text.disabled">Loading...</Typography>
+                      </MenuItem>
+                    )}
+                    {quickQueries.map((q) => (
+                      q.count > 0 ? (
+                        <MenuItem
+                          key={q.id}
+                          onClick={() => {
+                            onFiltersChange(q.filter as FilterOptions);
+                            handleHeaderMenuClose();
+                          }}
+                          sx={{ pl: 3 }}
+                        >
+                          <Typography variant="body2">
+                            {q.label} ({q.count.toLocaleString()})
+                          </Typography>
+                        </MenuItem>
+                      ) : (
+                        <MenuItem key={q.id} disabled sx={{ pl: 3 }}>
+                          <Typography variant="body2" color="text.disabled">
+                            {q.label} (0)
+                          </Typography>
+                        </MenuItem>
+                      )
+                    ))}
+                    <Divider />
+                  </>
+                )}
+
                 {/* Column visibility toggle */}
                 {onToggleColumn && visibleColumnIds && (
                   <>

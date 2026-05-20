@@ -1,5 +1,5 @@
 // file: internal/server/system_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // last-edited: 2026-05-20
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
@@ -690,4 +690,43 @@ func (s *Server) deleteUserPreference(c *gin.Context) {
 // GET /api/v1/policy/tags
 func (s *Server) handlePolicyTags(c *gin.Context) {
 	httputil.RespondWithOK(c, policy.KnownPolicyTags())
+}
+
+// getQuickQueries returns the six preset quick-filter counts for the Library
+// header kebab menu. Counts are served from the per-query PebbleDB cache when
+// fresh; stale or dirty entries are recomputed inline. broken_files reuses the
+// existing stats:library cache so it never incurs an extra scan.
+// GET /api/v1/library/quick-queries
+func (s *Server) getQuickQueries(c *gin.Context) {
+	if s.Store() == nil {
+		httputil.RespondWithInternalError(c, "database not initialized")
+		return
+	}
+
+	type quickQueryGetter interface {
+		GetQuickQueryCounts() ([]database.QuickQueryResult, error)
+	}
+
+	var getter quickQueryGetter
+	if g, ok := s.Store().(quickQueryGetter); ok {
+		getter = g
+	} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+		if g, ok2 := uw.Unwrap().(quickQueryGetter); ok2 {
+			getter = g
+		}
+	}
+
+	if getter == nil {
+		// Store implementation does not support quick queries (e.g. SQLite in tests).
+		httputil.RespondWithOK(c, gin.H{"queries": []interface{}{}})
+		return
+	}
+
+	results, err := getter.GetQuickQueryCounts()
+	if err != nil {
+		httputil.RespondWithInternalError(c, "failed to compute quick-query counts")
+		return
+	}
+
+	httputil.RespondWithOK(c, gin.H{"queries": results})
 }
