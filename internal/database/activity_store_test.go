@@ -424,18 +424,34 @@ func TestMigrateSystemActivityLogs(t *testing.T) {
 	assert.Len(t, entries, 3)
 
 	// Verify all entries have the correct structure (order is newest-first).
+	// Note: type and tier are now derived from message content via deriveTypeFromMessage
+	// rather than hardcoded to "system_log"/"system", so we check for non-empty values only.
 	sourcesSeen := make(map[string]bool)
 	tagsSeen := make(map[string][]string)
+	typesSeen := make(map[string]string)
 	for _, e := range entries {
-		assert.Equal(t, "system", e.Tier, "all should have tier='system'")
-		assert.Equal(t, "system_log", e.Type, "all should have type='system_log'")
+		assert.NotEmpty(t, e.Tier, "tier should be set")
+		assert.NotEmpty(t, e.Type, "type should be derived from message")
 		assert.NotEmpty(t, e.Summary, "summary should be populated from old message field")
 		// Verify enriched tags: all should have "legacy" and ideally action/outcome tags
 		assert.Contains(t, e.Tags, "legacy", "all should have legacy tag")
 		assert.Greater(t, len(e.Tags), 1, "should have more than just legacy tag (enriched)")
 		sourcesSeen[e.Source] = true
 		tagsSeen[e.Source] = e.Tags
+		typesSeen[e.Source] = e.Type
 	}
+	// iTunes scan started → scan_started
+	assert.Equal(t, "scan_started", typesSeen["itunes"], "itunes scan message should be classified as scan_started")
+	// iTunes is matched before server check, so tier should be "itunes_sync" or "audit".
+	// Actually "iTunes scan started" matches scan before itunes pattern check → scan_started/audit.
+	assert.Equal(t, "audit", func() string {
+		for _, e := range entries {
+			if e.Source == "itunes" {
+				return e.Tier
+			}
+		}
+		return ""
+	}(), "itunes scan started should have audit tier")
 	// Verify all three sources are present.
 	assert.Contains(t, sourcesSeen, "itunes")
 	assert.Contains(t, sourcesSeen, "reconcile")
