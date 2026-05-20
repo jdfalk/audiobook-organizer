@@ -1,5 +1,5 @@
 // file: web/src/utils/activityTagColors.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f
 
 /**
@@ -16,6 +16,7 @@
  *   outcome:skip → default (gray)
  *   op:*         → info (teal)
  *   book:*       → orange (custom sx)
+ *   component:*  → secondary-light (indigo-ish custom sx)
  *   scope:*      → default (gray)
  *   lifecycle:*  → default (gray)
  *   anything else→ default (gray)
@@ -64,6 +65,12 @@ export function tagChipProps(tag: string): TagChipProps {
       return {
         color: 'default',
         sx: { bgcolor: '#ffb74d', color: '#000' },
+        label: val,
+      };
+    case 'component':
+      return {
+        color: 'default',
+        sx: { bgcolor: '#7986cb', color: '#fff' },
         label: val,
       };
     case 'scope':

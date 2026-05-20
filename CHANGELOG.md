@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.90.0 -->
+<!-- version: 2.91.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-20 -->
 
@@ -15,6 +15,16 @@
 - Added `NutsActivityStore.RecompactDigests` no-op stub and `InstrumentedActivityStorer.RecompactDigests` traced wrapper to satisfy the `ActivityStorer` interface.
 - Added `POST /api/v1/admin/recompact-digests` endpoint (admin-only) returning `{ touched, skipped }`.
 - Tests: `TestActivityStore_RecompactDigests` and `TestActivityStore_RecompactDigests_AlreadyProcessed` verify re-derivation and idempotency.
+
+#### May 20, 2026 — Activity log: op_id + component tags on slog entries (PR #1075)
+
+- `ParseLogLineFull()` added to `internal/activity/writer.go` — extracts `op_id`/`operation_id`/`opID` and `component`/`subsystem`/`pkg` attributes from slog text-format log lines. `ParseLogLine` remains a thin wrapper for backward compatibility.
+- `sendEntry()` now sets `entry.OperationID` from the extracted `op_id` attr, so W12 operation-context log lines get `op:<id>` tags automatically. `component` attr is propagated via `entry.Details["component"]`.
+- `EnrichTags()` in `api.go` adds a `component:<subsystem>` tag: prefers `Details["component"]`/`"subsystem"`, falls back to `sourceToComponent` map for well-known sources (scanner, itunes, acoustid, dedup, isbn, scheduler, maintenance).
+- `componentFromEntry()` helper and `sourceToComponent` map added to `api.go`.
+- `pebble_store.go` `GetDashboardStats()`: adds `"component", "library_counts_cache"` attr to all three library_counts slog calls so those spam entries get a recognizable tag.
+- `activityTagColors.ts`: adds `component:*` → indigo chip (`#7986cb` bg, white text) to the `tagChipProps()` color map.
+- 8 new tests in `api_test.go` covering component-from-details, component-from-source-mapping, no-component-for-server, op-id regression, and `ParseLogLineFull` with/without op_id/component.
 
 ### Fixes
 

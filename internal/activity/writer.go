@@ -1,5 +1,5 @@
 // file: internal/activity/writer.go
-// version: 1.5.0
+// version: 1.6.0
 // guid: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f
 
 package activity
@@ -115,8 +115,8 @@ func (w *Writer) sendEntry(line string) {
 	if w.closed.Load() {
 		return
 	}
-	level, source, message := ParseLogLine(line)
-	if _, skip := w.skipSources[source]; skip {
+	parsed := ParseLogLineFull(line)
+	if _, skip := w.skipSources[parsed.Source]; skip {
 		return
 	}
 	// Tier is derived from level. The Activity Log UI defaults to
@@ -125,18 +125,24 @@ func (w *Writer) sendEntry(line string) {
 	// happening. info/warn/error → change so the user sees actual
 	// progress; debug stays debug for the firehose.
 	tier := "change"
-	switch level {
+	switch parsed.Level {
 	case "debug":
 		tier = "debug"
 	case "warn", "warning", "error":
 		tier = "change"
 	}
 	entry := database.ActivityEntry{
-		Tier:    tier,
-		Type:    "system",
-		Level:   level,
-		Source:  source,
-		Summary: message,
+		Tier:        tier,
+		Type:        "system",
+		Level:       parsed.Level,
+		Source:      parsed.Source,
+		Summary:     parsed.Message,
+		OperationID: parsed.OpID,
+	}
+	// Propagate component into Details so EnrichTags can produce
+	// a component: tag without requiring a DB schema change.
+	if parsed.Component != "" {
+		entry.Details = map[string]any{"component": parsed.Component}
 	}
 	if isBatchable(entry) {
 		w.batcher.Submit(BatchKey{
@@ -149,8 +155,8 @@ func (w *Writer) sendEntry(line string) {
 	select {
 	case w.ch <- entry:
 	default:
-		if level != "debug" {
-			w.stdout.Write([]byte("[WARN] activity channel full, dropped: " + message + "\n")) //nolint:errcheck
+		if parsed.Level != "debug" {
+			w.stdout.Write([]byte("[WARN] activity channel full, dropped: " + parsed.Message + "\n")) //nolint:errcheck
 		}
 	}
 }
@@ -241,6 +247,101 @@ func (w *Writer) Stop(ctx context.Context) error {
 
 // ── log line parser ───────────────────────────────────────────────────────────
 
+// ParsedLogLine holds all fields extracted from a single log line.
+type ParsedLogLine struct {
+	Level     string // "info", "warn", "error", "debug"
+	Source    string // subsystem name, e.g. "scanner", "server"
+	Message   string // human-readable message text
+	OpID      string // operation_id / op_id slog attribute, if present
+	Component string // component / subsystem slog attribute or source-path derived name
+}
+
+// ParseLogLineFull extracts all structured fields from a single log line,
+// including op_id and component attributes when the line is in slog text format.
+// ParseLogLine is a thin wrapper for callers that only need level/source/message.
+func ParseLogLineFull(line string) ParsedLogLine {
+	p := ParsedLogLine{}
+	p.Level, p.Source, p.Message = parseLogLineCore(line)
+
+	// For slog text lines, also extract op_id, component, and subsystem attrs.
+	if strings.HasPrefix(line, "time=") && strings.Contains(line, " level=") && strings.Contains(line, " msg=") {
+		p.OpID = extractSlogAttr(line, "op_id", "operation_id", "opID")
+		p.Component = extractSlogAttr(line, "component", "subsystem", "pkg")
+	}
+
+	// If no explicit component, derive one from the source path field when the
+	// slog Source attr includes a file path (e.g., "internal/plugins/acoustid/scan.go").
+	if p.Component == "" {
+		p.Component = deriveComponentFromSource(p.Source)
+	}
+	return p
+}
+
+// extractSlogAttr scans the slog key=value attrs in a text-format log line for
+// any of the supplied key names and returns the first matching value. Values may
+// be quoted or bare. Returns "" if none match.
+func extractSlogAttr(line string, keys ...string) string {
+	for _, key := range keys {
+		needle := " " + key + "="
+		idx := strings.Index(line, needle)
+		if idx < 0 {
+			continue
+		}
+		rest := line[idx+len(needle):]
+		if rest == "" {
+			continue
+		}
+		if rest[0] == '"' {
+			// Quoted value: find the closing quote (skip escaped quotes).
+			i := 1
+			for i < len(rest) {
+				if rest[i] == '\\' {
+					i += 2
+					continue
+				}
+				if rest[i] == '"' {
+					return rest[1:i]
+				}
+				i++
+			}
+			continue
+		}
+		// Bare value: ends at next space.
+		if sp := strings.IndexByte(rest, ' '); sp > 0 {
+			return rest[:sp]
+		}
+		return rest
+	}
+	return ""
+}
+
+// deriveComponentFromSource maps known source file path segments to a
+// component name. Returns "" when no known prefix matches, so we don't
+// emit a misleading tag for unrecognised sources.
+func deriveComponentFromSource(source string) string {
+	lower := strings.ToLower(source)
+	switch {
+	case strings.Contains(lower, "acoustid") || strings.Contains(lower, "acousticid"):
+		return "acoustid"
+	case strings.Contains(lower, "itunes"):
+		return "itunes_sync"
+	case strings.Contains(lower, "scanner"):
+		return "scanner"
+	case strings.Contains(lower, "dedup"):
+		return "dedup"
+	case strings.Contains(lower, "isbn"):
+		return "isbn_enrich"
+	case strings.Contains(lower, "embed"):
+		return "embedding"
+	case strings.Contains(lower, "scheduler"):
+		return "scheduler"
+	case strings.Contains(lower, "maintenance"):
+		return "maintenance"
+	default:
+		return ""
+	}
+}
+
 // ParseLogLine extracts (level, source, message) from a single log line.
 //
 // Recognised formats:
@@ -249,6 +350,11 @@ func (w *Writer) Stop(ctx context.Context) error {
 //   - Go standard log: "YYYY/MM/DD HH:MM:SS file.go:NNN: [level] source: message"
 //   - Bare text: returned as-is with level=info, source=server.
 func ParseLogLine(line string) (level, source, message string) {
+	p := ParseLogLineFull(line)
+	return p.Level, p.Source, p.Message
+}
+
+func parseLogLineCore(line string) (level, source, message string) {
 	// GIN logs: [GIN] YYYY/MM/DD - HH:MM:SS | STATUS | ...
 	if strings.HasPrefix(line, "[GIN]") {
 		rest := line[5:]
