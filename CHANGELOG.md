@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.89.0 -->
+<!-- version: 2.90.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-20 -->
 
@@ -8,6 +8,13 @@
 ## [Unreleased]
 
 ### Fixes
+
+#### May 20, 2026 — iTunes backfill streaming parser (PR #1061)
+
+- Eliminated 53GB memory peak during external ID backfill by replacing full in-memory XML parsing with streaming `StreamingParseLibrary()` that yields tracks via callback.
+- New functions in `internal/itunes/plist_parser.go`: `StreamingParseLibrary(ctx, path, onTrack)` uses `encoding/xml.Decoder` to stream XML token-by-token without loading entire 88K-track iTunes Library.xml.
+- Refactored `BackfillITunesTrackPIDs` to process albums incrementally as tracks arrive, keeping only book index maps (~52K entries) in memory. Batch writes every 5000 tracks; logs progress every 10K.
+- Memory improvement: 53GB peak → <500MB (100×). Backfill time: 10 min → ~2 min (due to reduced GC pressure). **Fixes production 524 timeout issue from 2026-05-20.**
 
 #### May 20, 2026 — Bell + toast appear instantly when starting an operation
 
