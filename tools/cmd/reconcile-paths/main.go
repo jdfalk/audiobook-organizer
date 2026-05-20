@@ -206,7 +206,8 @@ func fetchAllBooks(client *http.Client, apiURL, key string, pageSize, limit int,
 			all = all[:limit]
 			break
 		}
-		if len(items) < pageSize || len(all) >= count {
+		// Server may cap page size below requested value; trust count and stop only when empty or count reached.
+		if len(items) == 0 || (count > 0 && len(all) >= count) {
 			break
 		}
 		offset += len(items)

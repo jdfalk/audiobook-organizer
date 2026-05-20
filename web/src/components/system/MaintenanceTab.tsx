@@ -1,9 +1,9 @@
 // file: web/src/components/system/MaintenanceTab.tsx
-// version: 1.8.0
+// version: 1.8.1
 // guid: c3d4e5f6-a7b8-9012-cdef-345678901234
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Alert,
   Box,
@@ -94,6 +94,8 @@ function MaintenanceWindowCard() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -106,6 +108,17 @@ function MaintenanceWindowCard() {
   }, []);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -128,7 +141,17 @@ function MaintenanceWindowCard() {
     try {
       await api.runMaintenanceWindow();
       setSuccessMsg('Maintenance window triggered');
-      setTimeout(loadStatus, 1000);
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      // Schedule load with cleanup protection
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          loadStatus();
+        }
+        timeoutRef.current = null;
+      }, 1000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to trigger');
     }
@@ -923,6 +946,8 @@ export function MaintenanceTab() {
   const [error, setError] = useState<string | null>(null);
   const [runningTask, setRunningTask] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -942,13 +967,34 @@ export function MaintenanceTab() {
     return () => clearInterval(interval);
   }, [fetchTasks]);
 
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const handleRun = async (name: string) => {
     setRunningTask(name);
     setSuccessMsg(null);
     try {
       await api.runTask(name);
       setSuccessMsg(`Task "${name}" started`);
-      setTimeout(fetchTasks, 1000);
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      // Schedule fetch with cleanup protection
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          fetchTasks();
+        }
+        timeoutRef.current = null;
+      }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run task');
     } finally {
