@@ -1,5 +1,5 @@
 // file: internal/server/metadata_cached_handlers.go
-// version: 1.1.0
+// version: 1.2.0
 //
 // METADATA-CACHED-MATCHER: handlers for the persistent metadata-cache
 // query surface (Task 8). Adds GET /audiobooks/metadata/cached, the
@@ -15,6 +15,7 @@ package server
 import (
 	"encoding/json"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -98,7 +99,17 @@ func (s *Server) getCacheReviewResults(c *gin.Context) {
 		httputil.RespondWithInternalError(c, "metadata service not initialized")
 		return
 	}
-	pp := httputil.ParsePaginationParams(c)
+	// Parse limit/offset directly rather than via ParsePaginationParams —
+	// the review dialog needs to request the full set in one call
+	// (limit=0 means "no cap"), which the shared parser clamps to ≤500.
+	limit := httputil.ParseQueryInt(c, "limit", 0)
+	offset := httputil.ParseQueryInt(c, "offset", 0)
+	if limit < 0 {
+		limit = 0
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	summaries, err := s.metadataFetchService.ListCachedSummaries(c.Request.Context())
 	if err != nil {
@@ -107,23 +118,68 @@ func (s *Server) getCacheReviewResults(c *gin.Context) {
 	}
 
 	total := len(summaries)
-	start := pp.Offset
-	if start > total {
-		start = total
+
+	// Pre-resolve each summary's reviewStatus so we can sort matched-first
+	// before slicing. Without this the client sees pending matched rows
+	// scattered across pages in cache-insertion order.
+	type entryWithStatus struct {
+		sum    metafetch.MetadataCacheSummary
+		status string // "matched" | "no_match" | "applied"
 	}
-	end := total
-	if pp.Limit > 0 {
-		end = start + pp.Limit
-		if end > total {
-			end = total
+	prepared := make([]entryWithStatus, 0, total)
+	for _, sum := range summaries {
+		book, err := s.Store().GetBookByID(sum.BookID)
+		if err != nil || book == nil {
+			continue
+		}
+		st := "matched"
+		if book.MetadataReviewStatus != nil {
+			switch *book.MetadataReviewStatus {
+			case "no_match":
+				st = "no_match"
+			case "matched":
+				st = "applied"
+			}
+		}
+		prepared = append(prepared, entryWithStatus{sum: sum, status: st})
+	}
+	// Stable sort: matched (pending review) first, then no_match, then applied.
+	statusRank := map[string]int{"matched": 0, "no_match": 1, "applied": 2}
+	sort.SliceStable(prepared, func(i, j int) bool {
+		return statusRank[prepared[i].status] < statusRank[prepared[j].status]
+	})
+
+	// limit=0 means "return all rows" — the client now paginates locally.
+	start := offset
+	if start > len(prepared) {
+		start = len(prepared)
+	}
+	end := len(prepared)
+	if limit > 0 {
+		end = start + limit
+		if end > len(prepared) {
+			end = len(prepared)
 		}
 	}
-	page := summaries[start:end]
+	page := prepared[start:end]
+
+	// Global counts over the full prepared set so the UI can show accurate
+	// totals even when paginating a subset.
+	var matched, noMatch, applied int
+	for _, p := range prepared {
+		switch p.status {
+		case "no_match":
+			noMatch++
+		case "applied":
+			applied++
+		default:
+			matched++
+		}
+	}
 
 	results := make([]CandidateResult, 0, len(page))
-	var matched, noMatch, applied int
-
-	for _, sum := range page {
+	for _, p := range page {
+		sum := p.sum
 		book, err := s.Store().GetBookByID(sum.BookID)
 		if err != nil || book == nil {
 			continue
@@ -138,27 +194,10 @@ func (s *Server) getCacheReviewResults(c *gin.Context) {
 			continue
 		}
 
-		var reviewStatus string
-		if book.MetadataReviewStatus != nil {
-			reviewStatus = *book.MetadataReviewStatus
-		}
-
-		status := "matched"
-		switch reviewStatus {
-		case "no_match":
-			status = "no_match"
-			noMatch++
-		case "matched":
-			status = "applied"
-			applied++
-		default:
-			matched++
-		}
-
 		results = append(results, CandidateResult{
 			Book:      metabatch.BuildCandidateBookInfo(s.Store(), book),
 			Candidate: &cand,
-			Status:    status,
+			Status:    p.status,
 		})
 	}
 

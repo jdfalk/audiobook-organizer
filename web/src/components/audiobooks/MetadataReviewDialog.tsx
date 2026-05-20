@@ -194,40 +194,39 @@ export function MetadataReviewDialog({
   // exactly once when the dialog closes, rather than on every individual apply.
   const hasChangesRef = useRef(false);
 
-  // Fetch the current page from the persistent metadata cache.
+  // Fetch the entire cached review set once. The dialog now paginates,
+  // filters, and sorts purely client-side — refetching only on manual
+  // refresh or dialog reopen. limit=0 tells the server "return all rows."
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     const fetchId = ++fetchIdRef.current;
-    const offset = (serverPage - 1) * reviewPageSize;
     api
-      .getCachedReviewResults(reviewPageSize, offset)
+      .getCachedReviewResults(0, 0)
       .then((data) => {
         if (fetchId !== fetchIdRef.current) return; // stale — a newer fetch is in flight
-        const pageResults = data.results || [];
+        const allResults = data.results || [];
 
-        const pageStates = new Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>();
-        for (const r of pageResults) {
-          // Pre-seed UI state from persisted server status so toggles
-          // (hideApplied, hideNoMatch) work correctly on first render.
+        const seedStates = new Map<string, 'pending' | 'applied' | 'rejected' | 'skipped'>();
+        for (const r of allResults) {
           if (r.status === 'applied') {
-            pageStates.set(r.book.id, 'applied');
+            seedStates.set(r.book.id, 'applied');
           } else if (r.status === 'no_match') {
-            pageStates.set(r.book.id, 'rejected');
+            seedStates.set(r.book.id, 'rejected');
           }
         }
         setRowStates((prev) => {
           const merged = new Map(prev);
-          pageStates.forEach((v, k) => { if (!merged.has(k)) merged.set(k, v); });
+          seedStates.forEach((v, k) => { if (!merged.has(k)) merged.set(k, v); });
           return merged;
         });
 
-        setResults(pageResults);
-        const tc = data.total_count ?? pageResults.length;
+        setResults(allResults);
+        const tc = data.total_count ?? allResults.length;
         setTotalCount(tc);
         setSummary({
-          matched: data.matched ?? pageResults.filter((r) => r.status === 'matched').length,
-          no_match: data.no_match ?? pageResults.filter((r) => r.status === 'no_match').length,
+          matched: data.matched ?? allResults.filter((r) => r.status === 'matched').length,
+          no_match: data.no_match ?? allResults.filter((r) => r.status === 'no_match').length,
           errors: data.errors ?? 0,
           total: tc,
         });
@@ -237,7 +236,7 @@ export function MetadataReviewDialog({
         if (fetchId !== fetchIdRef.current) return;
         setLoading(false);
       });
-  }, [open, serverPage, reviewPageSize, refreshKey]);
+  }, [open, refreshKey]);
 
   // Reset page and un-groupings when the dialog opens.
   useEffect(() => {
@@ -426,10 +425,12 @@ export function MetadataReviewDialog({
   const handleUngroup = (bookId: string) =>
     setUngroupedIds((prev) => new Set(prev).add(bookId));
 
-  // All filtered items from the current server page are rendered directly —
-  // no second display-page layer. The single paginator navigates server pages.
-  const pageResults = filteredResults;
-  const totalPages = Math.max(1, Math.ceil(totalCount / reviewPageSize));
+  // Paginate the filtered set client-side. Because the server returned every
+  // cached row and sorted pending-matched first, page 1 reliably fills with
+  // the most relevant rows without any auto-advance dance.
+  const totalPages = Math.max(1, Math.ceil(filteredResults.length / reviewPageSize));
+  const pageStart = (serverPage - 1) * reviewPageSize;
+  const pageResults = filteredResults.slice(pageStart, pageStart + reviewPageSize);
 
   // Group books that were assigned the same candidate metadata. Key priority:
   // asin (most specific) → isbn13/isbn → source+title+author (normalized fallback).
@@ -460,13 +461,13 @@ export function MetadataReviewDialog({
   const groupedBookIds = new Set<string>();
   for (const g of multiGroups.values()) g.results.forEach(r => groupedBookIds.add(r.book.id));
 
-  // Auto-advance: if every item on this page is filtered out (all applied/hidden)
-  // and there are more pages, silently move to the next one so the list stays full.
+  // Clamp the current page when filters shrink the result set below the
+  // current page index. Previously the dialog auto-advanced through empty
+  // server pages; with client-side pagination there is no empty page to
+  // skip — we just clamp instead.
   useEffect(() => {
-    if (!loading && filteredResults.length === 0 && results.length > 0 && serverPage < totalPages) {
-      setServerPage((p) => p + 1);
-    }
-  }, [filteredResults.length, results.length, loading, serverPage, totalPages]);
+    if (serverPage > totalPages) setServerPage(totalPages);
+  }, [serverPage, totalPages]);
 
   const titleFilteredPendingIds = filteredResults
     .filter(
@@ -1437,8 +1438,8 @@ export function MetadataReviewDialog({
                 <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
                   <Typography variant="caption" color="text.secondary">
                     {filteredResults.length < results.length
-                      ? `${filteredResults.length} visible of ${results.length} on page ${serverPage} · ${totalCount} total`
-                      : `${filteredResults.length} on page ${serverPage} · ${totalCount} total`}
+                      ? `${pageResults.length} on page ${serverPage} of ${totalPages} · ${filteredResults.length} visible of ${totalCount} total`
+                      : `${pageResults.length} on page ${serverPage} of ${totalPages} · ${totalCount} total`}
                   </Typography>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Pagination
