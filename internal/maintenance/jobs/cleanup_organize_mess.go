@@ -88,11 +88,15 @@ func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporte
 		if reason := comIsGarbageDirectory(name); reason != "" {
 			garbageFound++
 			slog.Warn("Garbage dir found", "dir", dir, "reason", reason)
+			msg := fmt.Sprintf("Garbage directory: %s (%s)", dir, reason)
+			reporter.Log("warn", msg, nil)
 		}
 
 		empty, checkErr := comIsDirEmpty(dir)
 		if checkErr != nil {
+			msg := checkErr.Error()
 			slog.Error("Stat error", "dir", dir, "err", checkErr)
+			reporter.Log("error", "Failed to check directory: "+dir, &msg)
 			reporter.Increment()
 			continue
 		}
@@ -103,7 +107,9 @@ func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporte
 
 		if !dryRun {
 			if removeErr := os.Remove(dir); removeErr != nil {
+				msg := removeErr.Error()
 				slog.Error("Failed to remove", "dir", dir, "err", removeErr)
+				reporter.Log("error", "Failed to remove empty directory: "+dir, &msg)
 			} else {
 				emptyRemoved++
 			}

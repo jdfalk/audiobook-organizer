@@ -73,14 +73,20 @@ func (j *fixAuthorNarratorSwapJob) Run(ctx context.Context, store database.Store
 			}
 
 			found++
+			msg := fmt.Sprintf("Author/narrator swap detected: %s = %s", author.Name, *book.Narrator)
+			reporter.Log("warn", msg, nil)
 			if !dryRun {
 				current, getErr := store.GetBookByID(book.ID)
 				if getErr != nil || current == nil {
+					errMsg := fmt.Sprintf("%v", getErr)
 					slog.Error("Failed to fetch book", "book", book.ID, "getErr", getErr)
+					reporter.Log("error", "Failed to fetch book for swap fix: "+book.ID, &errMsg)
 				} else {
 					current.AuthorID = nil
 					if _, updateErr := store.UpdateBook(book.ID, current); updateErr != nil {
+						errMsg := updateErr.Error()
 						slog.Error("Failed to update book", "book", book.ID, "updateErr", updateErr)
+						reporter.Log("error", "Failed to update book after swap fix: "+book.ID, &errMsg)
 					} else {
 						applied++
 					}
