@@ -26,6 +26,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/dedup"
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
+	"github.com/jdfalk/audiobook-organizer/internal/logging"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 )
 
@@ -63,11 +65,24 @@ func (s *Server) RegisterBookDedupScanOp(reg *opsregistry.Registry) error {
 			if store == nil {
 				return fmt.Errorf("dedup.book-scan: database not initialized")
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     p.LegacyOpID,
+				Type:   "dedup.book-scan",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
 			progress := registryProgressAdapter{r: reporter}
 			dismissed := loadDismissedDedupGroups(store)
 
+			logging.Info(ctx, "book duplicate scan starting")
+
 			result, err := dedup.ScanBookDuplicates(ctx, store, dismissed, progress)
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "book duplicate scan failed", "err", err)
 				return err
 			}
 
@@ -77,6 +92,10 @@ func (s *Server) RegisterBookDedupScanOp(reg *opsregistry.Registry) error {
 				"duplicate_count": result.TotalDuplicates,
 			}
 			s.dedupCache.SetWithTTL("book-dedup-scan", cacheVal, 30*time.Minute)
+
+			op.SetStatus("success")
+			logging.Info(ctx, "book duplicate scan complete", "groups", len(result.Groups), "duplicates", result.TotalDuplicates)
+
 			if s.activityWriter != nil && p.LegacyOpID != "" {
 				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
 				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.book-scan", "dedup",
@@ -112,13 +131,32 @@ func (s *Server) RegisterBookMergeOp(reg *opsregistry.Registry) error {
 			if store == nil {
 				return fmt.Errorf("dedup.book-merge: database not initialized")
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     p.LegacyOpID,
+				Type:   "dedup.book-merge",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
 			progress := registryProgressAdapter{r: reporter}
+
+			op.AddEntity("books", p.KeepID)
+			op.AddEntity("books", p.MergeIDs...)
+			logging.Info(ctx, "book merge starting", "keep_id", p.KeepID, "merge_count", len(p.MergeIDs))
 
 			_, err := dedup.MergeBooks(ctx, store, p.LegacyOpID, p.KeepID, p.MergeIDs, progress)
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "book merge failed", "err", err)
 				return err
 			}
+
 			s.dedupCache.InvalidateAll()
+			op.SetStatus("success")
+			logging.Info(ctx, "book merge complete", "kept_id", p.KeepID, "merged_count", len(p.MergeIDs))
+
 			if s.activityWriter != nil && p.LegacyOpID != "" {
 				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
 				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.book-merge", "dedup",
@@ -157,18 +195,33 @@ func (s *Server) RegisterAuthorDedupScanOp(reg *opsregistry.Registry) error {
 			if store == nil {
 				return fmt.Errorf("dedup.author-scan: database not initialized")
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     p.LegacyOpID,
+				Type:   "dedup.author-scan",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
 			progress := registryProgressAdapter{r: reporter}
 
+			logging.Info(ctx, "author duplicate scan starting")
 			_ = progress.UpdateProgress(0, 100, "Fetching authors...")
 
 			authors, err := store.GetAllAuthors()
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "author scan failed to fetch authors", "err", err)
 				return err
 			}
+			logging.Info(ctx, "authors loaded", "count", len(authors))
 			_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Loaded %d authors, fetching book counts...", len(authors)))
 
 			bookCounts, err := store.GetAllAuthorBookCounts()
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "author scan failed to fetch book counts", "err", err)
 				return err
 			}
 			bookCountFn := func(authorID int) int { return bookCounts[authorID] }
@@ -184,10 +237,20 @@ func (s *Server) RegisterAuthorDedupScanOp(reg *opsregistry.Registry) error {
 			// Filter out groups already reviewed by AI scans (server-owned state).
 			groups = s.filterReviewedAuthorGroups(groups)
 
+			for _, g := range groups {
+				op.AddEntity("authors", strconv.Itoa(g.Canonical.ID))
+				for _, v := range g.Variants {
+					op.AddEntity("authors", strconv.Itoa(v.ID))
+				}
+			}
+
 			result := gin.H{"groups": groups, "count": len(groups)}
 			s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
 
+			op.SetStatus("success")
 			_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups (after filtering reviewed)", len(groups)))
+			logging.Info(ctx, "author duplicate scan complete", "groups", len(groups))
+
 			if s.activityWriter != nil && p.LegacyOpID != "" {
 				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
 				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.author-scan", "dedup",
@@ -223,11 +286,30 @@ func (s *Server) RegisterSeriesDedupScanOp(reg *opsregistry.Registry) error {
 			if store == nil {
 				return fmt.Errorf("dedup.series-scan: database not initialized")
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     p.LegacyOpID,
+				Type:   "dedup.series-scan",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
 			progress := registryProgressAdapter{r: reporter}
+
+			logging.Info(ctx, "series duplicate scan starting")
 
 			result, err := dedup.ScanSeriesDuplicates(ctx, store, progress)
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "series duplicate scan failed", "err", err)
 				return err
+			}
+
+			for _, g := range result.Groups {
+				for _, sw := range g.Series {
+					op.AddEntity("series", strconv.Itoa(sw.ID))
+				}
 			}
 
 			resp := gin.H{
@@ -236,6 +318,10 @@ func (s *Server) RegisterSeriesDedupScanOp(reg *opsregistry.Registry) error {
 				"total_series": result.TotalSeries,
 			}
 			s.dedupCache.Set("series-duplicates", resp)
+
+			op.SetStatus("success")
+			logging.Info(ctx, "series duplicate scan complete", "groups", len(result.Groups), "total_series", result.TotalSeries)
+
 			if s.activityWriter != nil && p.LegacyOpID != "" {
 				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
 				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.series-scan", "dedup",
@@ -271,13 +357,30 @@ func (s *Server) RegisterSeriesDedupOp(reg *opsregistry.Registry) error {
 			if store == nil {
 				return fmt.Errorf("dedup.series-dedup: database not initialized")
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     p.LegacyOpID,
+				Type:   "dedup.series-dedup",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
 			progress := registryProgressAdapter{r: reporter}
+
+			logging.Info(ctx, "series deduplication starting")
 
 			_, err := dedup.DedupSeries(ctx, store, progress)
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "series deduplication failed", "err", err)
 				return err
 			}
+
 			s.dedupCache.InvalidateAll()
+			op.SetStatus("success")
+			logging.Info(ctx, "series deduplication complete")
+
 			if s.activityWriter != nil && p.LegacyOpID != "" {
 				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
 				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.series-dedup", "dedup",
@@ -314,8 +417,28 @@ func (s *Server) RegisterSeriesPruneOp(reg *opsregistry.Registry) error {
 			if store == nil {
 				return fmt.Errorf("dedup.series-prune: database not initialized")
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     p.LegacyOpID,
+				Type:   "dedup.series-prune",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
 			progress := registryProgressAdapter{r: reporter}
+
+			logging.Info(ctx, "series prune starting")
 			runErr := s.executeSeriesPrune(ctx, store, progress, p.LegacyOpID)
+
+			if runErr != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "series prune failed", "err", runErr)
+			} else {
+				op.SetStatus("success")
+				logging.Info(ctx, "series prune complete")
+			}
+
 			if s.activityWriter != nil && p.LegacyOpID != "" {
 				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
 				summary := "Series prune completed"
@@ -353,13 +476,34 @@ func (s *Server) RegisterSeriesMergeOp(reg *opsregistry.Registry) error {
 			if store == nil {
 				return fmt.Errorf("dedup.series-merge: database not initialized")
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     p.LegacyOpID,
+				Type:   "dedup.series-merge",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
 			progress := registryProgressAdapter{r: reporter}
+
+			op.AddEntity("series", strconv.Itoa(p.KeepID))
+			for _, mid := range p.MergeIDs {
+				op.AddEntity("series", strconv.Itoa(mid))
+			}
+			logging.Info(ctx, "series merge starting", "keep_id", p.KeepID, "merge_count", len(p.MergeIDs))
 
 			_, err := dedup.MergeSeries(ctx, store, p.LegacyOpID, p.KeepID, p.MergeIDs, p.CustomName, progress)
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "series merge failed", "err", err)
 				return err
 			}
+
 			s.dedupCache.InvalidateAll()
+			op.SetStatus("success")
+			logging.Info(ctx, "series merge complete", "kept_id", p.KeepID, "merged_count", len(p.MergeIDs))
+
 			if s.activityWriter != nil && p.LegacyOpID != "" {
 				activity.FlushOperation(s.activityWriter, p.LegacyOpID)
 				activity.EmitInfo(s.activityWriter, p.LegacyOpID, "dedup.series-merge", "dedup",
@@ -397,9 +541,19 @@ func (s *Server) RegisterSeriesNormalizeOp(reg *opsregistry.Registry) error {
 			if store == nil {
 				return fmt.Errorf("dedup.series-normalize: database not initialized")
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     p.LegacyOpID,
+				Type:   "dedup.series-normalize",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
 			progress := registryProgressAdapter{r: reporter}
 			opID := p.LegacyOpID
 
+			logging.Info(ctx, "series normalization starting")
 			_ = progress.Log("info", "Starting series name normalization...", nil)
 
 			enqueueWB := func(bookID string) {
@@ -410,14 +564,23 @@ func (s *Server) RegisterSeriesNormalizeOp(reg *opsregistry.Registry) error {
 
 			affectedBookIDs, opErr := executeSeriesNormalizeCore(ctx, store, enqueueWB)
 			if opErr != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "series normalization failed", "err", opErr)
 				return opErr
 			}
 
+			for _, bookID := range affectedBookIDs {
+				op.AddEntity("books", bookID)
+			}
+
+			logging.Info(ctx, "series normalization normalize complete, now organizing", "affected_books", len(affectedBookIDs))
 			_ = progress.Log("info", fmt.Sprintf("Renamed/merged series; organizing %d affected books...", len(affectedBookIDs)), nil)
 
 			log2 := logger.NewWithActivityLog("series-normalize", store)
 			for _, bookID := range affectedBookIDs {
 				if ctx.Err() != nil {
+					op.SetStatus("failed")
+					logging.Error(ctx, "series normalization cancelled", "err", ctx.Err())
 					return ctx.Err()
 				}
 				book, bErr := store.GetBookByID(bookID)
@@ -430,13 +593,18 @@ func (s *Server) RegisterSeriesNormalizeOp(reg *opsregistry.Registry) error {
 			}
 
 			if len(affectedBookIDs) > 0 {
+				logging.Info(ctx, "writing tags for affected books", "count", len(affectedBookIDs))
 				_ = progress.Log("info", fmt.Sprintf("Writing tags for %d affected books...", len(affectedBookIDs)), nil)
 				if wbErr := s.runBulkWriteBack(ctx, opID, affectedBookIDs, false, 0, progress); wbErr != nil {
+					logging.Warn(ctx, "tag write-back incomplete", "err", wbErr)
 					_ = progress.Log("warn", fmt.Sprintf("tag write-back incomplete: %v", wbErr), nil)
 				}
 			}
 
+			op.SetStatus("success")
+			logging.Info(ctx, "series normalization complete", "affected_books", len(affectedBookIDs))
 			_ = progress.Log("info", "Series normalization complete.", nil)
+
 			if s.activityWriter != nil && opID != "" {
 				activity.FlushOperation(s.activityWriter, opID)
 				activity.EmitInfo(s.activityWriter, opID, "dedup.series-normalize", "dedup",
