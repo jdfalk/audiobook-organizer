@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.50.0 -->
+<!-- version: 8.51.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-18 -->
+<!-- last-edited: 2026-05-20 -->
 
 # Project TODO
 
@@ -29,6 +29,8 @@ future agent) can scan the entire workspace in one page.
 ---
 
 ## 🐛 Open Bugs — May 17, 2026
+
+- [ ] **BUG-STORAGE-PCT-WRONG** (2026-05-20) Dashboard/system UI shows ~100% disk usage when actual usage is far lower. Either the wrong volume is being statfs'd (e.g. a small container overlay mount instead of the data volume) or the math is inverted (free vs used swapped). Check `internal/sysinfo/` and any disk-usage handler in `internal/server/`. Fix: validate against actual `df -h` on the data path (`/mnt/bigdata/books` and `/var/lib/audiobook-organizer/`) and pick the correct mountpoint. Add a test that compares parsed bytes back to a known reference.
 
 - [x] **BUG-DEDUP-SAMEDIR** Embedding dedup flags chapter files from the same directory as 100% duplicates. ✅ Fixed PR #1001. Multi-file audiobooks split into segments (e.g. `011.mp3`, `062.mp3`) share identical text embeddings and score 100% similar. Fix: add `filepath.Dir(A.FilePath) == filepath.Dir(B.FilePath)` guard in `internal/dedup/engine.go` emission loop (~line 840) and in `PurgeStaleCandidates` (~line 1446). The `bookMeta` struct needs a `filePath string` field.
 
