@@ -1,7 +1,7 @@
 // file: web/src/services/api.ts
-// version: 2.29.0
+// version: 2.30.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-16
+// last-edited: 2026-05-19
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
@@ -697,6 +697,9 @@ export async function getBooks(
     filters?: string;
     showFailed?: boolean;
     hasFileErrors?: boolean;
+    fingerprintStatus?: "complete" | "partial" | "none";
+    coveragePercentMin?: number;
+    coveragePercentMax?: number;
   }
 ): Promise<BooksPage> {
   const params = new URLSearchParams();
@@ -715,6 +718,9 @@ export async function getBooks(
   if (options?.filters) params.set('filters', options.filters);
   if (options?.showFailed) params.set('show_quarantined', 'true');
   if (options?.hasFileErrors) params.set('has_file_errors', 'true');
+  if (options?.fingerprintStatus) params.set('fingerprint_status', options.fingerprintStatus);
+  if (options?.coveragePercentMin !== undefined) params.set('coverage_percent_min', String(options.coveragePercentMin));
+  if (options?.coveragePercentMax !== undefined) params.set('coverage_percent_max', String(options.coveragePercentMax));
   params.set('is_primary_version', 'true');
 
   const response = await fetch(`${API_BASE}/audiobooks?${params}`);

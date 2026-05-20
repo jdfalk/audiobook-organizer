@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/FilterSidebar.tsx
-// version: 1.5.1
+// version: 1.6.0
 // guid: 2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b
 
 import React from 'react';
@@ -19,6 +19,7 @@ import {
   Switch,
   Autocomplete,
   TextField,
+  Slider,
 } from '@mui/material';
 import { FilterList as FilterListIcon } from '@mui/icons-material';
 import type { FilterOptions } from '../../types';
@@ -50,7 +51,7 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
   selectedTags = [],
   onTagsChange,
 }) => {
-  const handleFilterChange = (key: keyof FilterOptions, value: string) => {
+  const handleFilterChange = (key: keyof FilterOptions, value: string | number | boolean) => {
     onFiltersChange({ ...filters, [key]: value || undefined });
   };
 
@@ -300,6 +301,58 @@ export const FilterSidebar: React.FC<FilterSidebarProps> = ({
               </Box>
             }
           />
+
+          <Divider />
+          <Typography variant="subtitle2" gutterBottom>
+            Fingerprinting
+          </Typography>
+
+          <FormControl fullWidth>
+            <InputLabel id="filter-fingerprint-status-label">Fingerprint Status</InputLabel>
+            <Select
+              labelId="filter-fingerprint-status-label"
+              value={filters.fingerprintStatus || ''}
+              onChange={(e) =>
+                onFiltersChange({
+                  ...filters,
+                  fingerprintStatus: (e.target.value as "complete" | "partial" | "none") || undefined,
+                })
+              }
+              label="Fingerprint Status"
+            >
+              <MenuItem value="">
+                <em>Any Status</em>
+              </MenuItem>
+              <MenuItem value="complete">Complete</MenuItem>
+              <MenuItem value="partial">Partial</MenuItem>
+              <MenuItem value="none">None</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Box sx={{ mt: 2 }}>
+            <Box display="flex" justifyContent="space-between" mb={1}>
+              <Typography variant="body2">Coverage %</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {filters.coveragePercentMin ?? 0}% - {filters.coveragePercentMax ?? 100}%
+              </Typography>
+            </Box>
+            <Slider
+              value={[filters.coveragePercentMin ?? 0, filters.coveragePercentMax ?? 100]}
+              onChange={(_e, value) => {
+                if (Array.isArray(value)) {
+                  const [min, max] = value;
+                  onFiltersChange({
+                    ...filters,
+                    coveragePercentMin: min > 0 ? min : undefined,
+                    coveragePercentMax: max < 100 ? max : undefined,
+                  });
+                }
+              }}
+              min={0}
+              max={100}
+              step={1}
+            />
+          </Box>
 
         </Stack>
       </Box>

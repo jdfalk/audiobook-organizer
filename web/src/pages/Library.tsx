@@ -648,6 +648,9 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
               filters: fieldFilters.length > 0 ? JSON.stringify(fieldFilters) : undefined,
               showFailed: filters.showFailed,
               hasFileErrors: filters.hasFileErrors,
+              fingerprintStatus: filters.fingerprintStatus,
+              coveragePercentMin: filters.coveragePercentMin,
+              coveragePercentMax: filters.coveragePercentMax,
             }),
         api.getImportPaths(),
       ]);

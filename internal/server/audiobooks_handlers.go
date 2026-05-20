@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.10.0
+// version: 2.11.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-19
 //
@@ -109,13 +109,30 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	if len(tags) == 0 {
 		tags = c.QueryArray("tags[]")
 	}
+
+	// Parse fingerprinting filters
+	var coveragePercentMin, coveragePercentMax *int
+	if minStr := c.Query("coverage_percent_min"); minStr != "" {
+		if minVal, err := strconv.Atoi(minStr); err == nil && minVal >= 0 && minVal <= 100 {
+			coveragePercentMin = &minVal
+		}
+	}
+	if maxStr := c.Query("coverage_percent_max"); maxStr != "" {
+		if maxVal, err := strconv.Atoi(maxStr); err == nil && maxVal >= 0 && maxVal <= 100 {
+			coveragePercentMax = &maxVal
+		}
+	}
+
 	filters := ListFilters{
-		IsPrimaryVersion: httputil.ParseQueryBoolPtr(c, "is_primary_version"),
-		LibraryState:     httputil.ParseQueryString(c, "library_state"),
-		Tag:              httputil.ParseQueryString(c, "tag"),
-		Tags:             tags,
-		SortBy:           httputil.ParseQueryString(c, "sort_by"),
-		SortOrder:        sortOrder,
+		IsPrimaryVersion:   httputil.ParseQueryBoolPtr(c, "is_primary_version"),
+		LibraryState:       httputil.ParseQueryString(c, "library_state"),
+		Tag:                httputil.ParseQueryString(c, "tag"),
+		Tags:               tags,
+		SortBy:             httputil.ParseQueryString(c, "sort_by"),
+		SortOrder:          sortOrder,
+		FingerprintStatus:  httputil.ParseQueryString(c, "fingerprint_status"),
+		CoveragePercentMin: coveragePercentMin,
+		CoveragePercentMax: coveragePercentMax,
 	}
 
 	// Parse field filters from JSON query param. Per-user filters

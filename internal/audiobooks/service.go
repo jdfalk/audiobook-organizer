@@ -1,7 +1,7 @@
 // file: internal/audiobooks/service.go
-// version: 1.25.2
+// version: 1.26.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
-// last-edited: 2026-05-16
+// last-edited: 2026-05-19
 
 package audiobooks
 
@@ -200,6 +200,10 @@ type ListFilters struct {
 	FieldFilters     []FieldFilter // advanced field-specific filters (book-global)
 	PerUserFilters   []FieldFilter // per-user filters (read_status, progress_pct, last_played)
 	UserID           string        // caller's user ID; required for PerUserFilters
+	// Fingerprinting filters
+	FingerprintStatus  string // "none", "partial", "complete", or "" for any
+	CoveragePercentMin *int   // minimum coverage percentage (inclusive)
+	CoveragePercentMax *int   // maximum coverage percentage (inclusive)
 }
 
 // PerUserFieldNames is the set of search fields whose values come from
@@ -660,7 +664,8 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	}
 	hasSorting := f.SortBy != ""
 	hasPerUser := len(f.PerUserFilters) > 0 && f.UserID != ""
-	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.Tags) > 0 || len(f.FieldFilters) > 0 || hasPerUser || hasSorting
+	hasFingerprintingFilters := f.FingerprintStatus != "" || f.CoveragePercentMin != nil || f.CoveragePercentMax != nil
+	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.Tags) > 0 || len(f.FieldFilters) > 0 || hasPerUser || hasSorting || hasFingerprintingFilters
 
 	// When post-filters are active, fetch all and filter in memory
 	// (PebbleStore doesn't support query-level boolean/string filtering)
@@ -787,6 +792,33 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 			filtered = fieldFiltered
 		}
 
+		// Apply fingerprinting filters
+		if hasFingerprintingFilters {
+			fpFiltered := make([]database.Book, 0, len(filtered))
+			for _, b := range filtered {
+				if f.FingerprintStatus != "" {
+					// Filter by fingerprint status
+					if b.FingerprintStatus != f.FingerprintStatus {
+						continue
+					}
+				}
+				if f.CoveragePercentMin != nil {
+					// Filter by minimum coverage percentage
+					if b.CoveragePercent < *f.CoveragePercentMin {
+						continue
+					}
+				}
+				if f.CoveragePercentMax != nil {
+					// Filter by maximum coverage percentage
+					if b.CoveragePercent > *f.CoveragePercentMax {
+						continue
+					}
+				}
+				fpFiltered = append(fpFiltered, b)
+			}
+			filtered = fpFiltered
+		}
+
 		// Apply per-user filters (read_status / progress_pct / last_played).
 		// Requires a caller user ID; without one we skip rather than
 		// silently dropping every book.
@@ -889,6 +921,22 @@ func (svc *AudiobookService) CountAudiobooksFiltered(ctx context.Context, filter
 				continue
 			}
 			if _, ok := tagBookIDs[b.ID]; !ok {
+				continue
+			}
+		}
+		// Apply fingerprinting filters
+		if filters.FingerprintStatus != "" {
+			if b.FingerprintStatus != filters.FingerprintStatus {
+				continue
+			}
+		}
+		if filters.CoveragePercentMin != nil {
+			if b.CoveragePercent < *filters.CoveragePercentMin {
+				continue
+			}
+		}
+		if filters.CoveragePercentMax != nil {
+			if b.CoveragePercent > *filters.CoveragePercentMax {
 				continue
 			}
 		}

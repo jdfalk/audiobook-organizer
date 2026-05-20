@@ -1,7 +1,7 @@
 // file: web/src/hooks/useLibraryFilters.ts
-// version: 1.0.1
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-16
+// last-edited: 2026-05-19
 
 import { useState, useEffect, useCallback } from 'react';
 import type { FilterOptions } from '../types';
@@ -43,6 +43,9 @@ export function useLibraryFilters({
     language: searchParams.get('language') || undefined,
     libraryState: searchParams.get('state') || undefined,
     hasFileErrors: (searchParams.get('has_file_errors') === 'true') || undefined,
+    fingerprintStatus: (searchParams.get('fingerprint_status') as "complete" | "partial" | "none" | null) || undefined,
+    coveragePercentMin: searchParams.get('coverage_percent_min') ? parseInt(searchParams.get('coverage_percent_min')!, 10) : undefined,
+    coveragePercentMax: searchParams.get('coverage_percent_max') ? parseInt(searchParams.get('coverage_percent_max')!, 10) : undefined,
   }));
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [availableAuthors, setAvailableAuthors] = useState<string[]>([]);

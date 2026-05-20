@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.13.0
+// version: 1.14.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 // last-edited: 2026-05-19
 
@@ -171,6 +171,9 @@ export interface FilterOptions {
   sortOrder?: SortOrder;
   showFailed?: boolean;
   hasFileErrors?: boolean;
+  fingerprintStatus?: "complete" | "partial" | "none";
+  coveragePercentMin?: number;
+  coveragePercentMax?: number;
 }
 
 // Pagination parameters
