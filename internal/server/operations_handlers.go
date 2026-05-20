@@ -327,7 +327,7 @@ func (s *Server) setInternalFlag(c *gin.Context) {
 		httputil.InternalError(c, "failed to set flag", err)
 		return
 	}
-	slog.Info("setInternalFlag %q", "req", req.Key, req.Value)
+	slog.Info("setInternalFlag", "key", req.Key, "value", req.Value)
 	httputil.RespondWithOK(c, gin.H{"key": req.Key, "value": req.Value})
 }
 

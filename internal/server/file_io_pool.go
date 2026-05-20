@@ -335,7 +335,7 @@ func recoverInterruptedFileOps(pool *FileIOPool) {
 
 		fn, ok := lookupFileOpRecovery(job.OpType)
 		if !ok {
-			slog.Warn("no recovery handler for op type %q (book ), removing stale key", "job", job.OpType, job.BookID)
+			slog.Warn("no recovery handler for op type %q (book ), removing stale key", "opType", job.OpType, "bookID", job.BookID)
 			_ = store.DeleteRaw(kv.Key)
 			continue
 		}

@@ -278,9 +278,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 			if cfg.HTTP3Port != "" {
 				protocols = "HTTPS/HTTP2 (HTTP/3 on UDP port " + cfg.HTTP3Port + ")"
 			}
-			slog.Info("Starting server on", "protocols", protocols, "value1", s.httpServer.Addr)
+			slog.Info("Starting server on", "protocols", protocols, "addr", s.httpServer.Addr)
 			if err := s.httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
-				slog.Error("Failed to start HTTPS server", "value0", "err", err)
+				slog.Error("Failed to start HTTPS server", "err", err)
 			}
 		}()
 
@@ -292,9 +292,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 				TLSConfig: tlsConfig,
 			}
 			go func() {
-				slog.Info("Starting HTTP/3 (QUIC) server on UDP", "cfg", cfg.Host, "cfg", cfg.HTTP3Port)
+				slog.Info("Starting HTTP/3 (QUIC) server on UDP", "host", cfg.Host, "port", cfg.HTTP3Port)
 				if err := s.http3Server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil {
-					slog.Error("Failed to start HTTP/3 server", "value0", "err", err)
+					slog.Error("Failed to start HTTP/3 server", "err", err)
 				}
 			}()
 		}
@@ -316,7 +316,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 				}
 				target += r.URL.RequestURI()
 
-				slog.Debug("HTTP->HTTPS redirect ->", "value0", r.URL.String(), "target", target)
+				slog.Debug("HTTP->HTTPS redirect", "url", r.URL.String(), "target", target)
 				http.Redirect(w, r, target, http.StatusMovedPermanently)
 			})
 
@@ -333,9 +333,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 	} else {
 		// Start HTTP/1.1 server without TLS
 		go func() {
-			slog.Info("Starting HTTP/1.1 server on (use --tls-cert and --tls-key for HTTP/2, add --http3-port for HTTP/3)", "value0", s.httpServer.Addr)
+			slog.Info("Starting HTTP/1.1 server on (use --tls-cert and --tls-key for HTTP/2, add --http3-port for HTTP/3)", "addr", s.httpServer.Addr)
 			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				slog.Error("Failed to start server", "value0", "err", err)
+				slog.Error("Failed to start server", "err", err)
 			}
 		}()
 	}
