@@ -23,6 +23,7 @@ import {
 } from '../services/eventSourceManager';
 import { pollOperation } from '../utils/operationPolling';
 import { useOperationsStore } from '../stores/useOperationsStore';
+import { withOptimisticOperation } from '../utils/withOptimisticOperation';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { LibraryToolbar } from '../components/library/LibraryToolbar';
 import { LibraryBookGrid } from '../components/library/LibraryBookGrid';
@@ -105,7 +106,6 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const startOperationPolling = useOperationsStore((state) => state.startPolling);
   const initialSearch = searchParams.get('search') ?? '';
   const initialViewMode = (searchParams.get('view') as ViewMode) || ('grid' as ViewMode);
   const initialSortBy = ((): SortField => {
@@ -1124,11 +1124,11 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
 
     setBulkWriteBackInProgress(true);
     try {
-      const result = await api.batchWriteBackMetadata(ids, bulkWriteBackRename, bulkWriteBackForce);
-      if (result.operation_id) {
-        startOperationPolling(result.operation_id, 'batch_save_to_files');
-      }
+      const result = await withOptimisticOperation('batch_save_to_files', () =>
+        api.batchWriteBackMetadata(ids, bulkWriteBackRename, bulkWriteBackForce),
+      );
       toast(`Saving ${ids.length} books to files…`, 'success');
+      void result;
       setBulkWriteBackDialogOpen(false);
       setCrossPageFilter(null);
       setSelectedAudiobooks([]);
@@ -1541,7 +1541,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       const path = pathEntry?.path;
       if (!path) return;
       setImportPaths((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'scanning' } : p)));
-      const op = await api.startScan(path);
+      const op = await withOptimisticOperation('scan', () => api.startScan(path));
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to scan import path:', error);
@@ -1555,7 +1555,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
     try {
       // Mark all paths scanning
       setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'scanning' })));
-      const op = await api.startScan(); // no folder path -> scan all
+      const op = await withOptimisticOperation('scan', () => api.startScan()); // no folder path -> scan all
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to start full scan:', error);
@@ -1569,7 +1569,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       // Mark all paths scanning
       setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'scanning' })));
       // Force full rescan with database path updates
-      const op = await api.startScan(undefined, undefined, true);
+      const op = await withOptimisticOperation('scan', () => api.startScan(undefined, undefined, true));
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to start full rescan:', error);
@@ -1582,9 +1582,10 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       return;
     }
     try {
-      const op = await api.triggerFingerprintBackfill('all');
+      const op = await withOptimisticOperation('fingerprint-rescan', () =>
+        api.triggerFingerprintBackfill('all'),
+      );
       toast(`Fingerprint rescan started. Operation ID: ${op.id}`, 'success');
-      startOperationPolling(op.id, 'fingerprint-rescan');
     } catch (error) {
       console.error('Failed to trigger fingerprint rescan:', error);
       toast('Failed to start fingerprint rescan', 'error');
@@ -1593,9 +1594,10 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
 
   const handleFingerprintRescanMissing = async () => {
     try {
-      const op = await api.triggerFingerprintBackfill('missing');
+      const op = await withOptimisticOperation('fingerprint-rescan', () =>
+        api.triggerFingerprintBackfill('missing'),
+      );
       toast(`Fingerprint rescan started. Operation ID: ${op.id}`, 'success');
-      startOperationPolling(op.id, 'fingerprint-rescan');
     } catch (error) {
       console.error('Failed to trigger fingerprint rescan:', error);
       toast('Failed to start fingerprint rescan', 'error');
@@ -1605,7 +1607,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
   const handleOrganizeLibrary = async () => {
     try {
       setOrganizeRunning(true);
-      const op = await api.startOrganize();
+      const op = await withOptimisticOperation('organize', () => api.startOrganize());
       startPolling(op.id, 'organize');
     } catch (e) {
       console.error('Failed to start organize', e);
@@ -1616,14 +1618,15 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
   const handleFetchReview = async () => {
     try {
       const ids = effectiveSelectedIds;
-      const resp = await api.batchFetchCandidates({ book_ids: ids });
+      const resp = await withOptimisticOperation('metadata_candidate_fetch', () =>
+        api.batchFetchCandidates({ book_ids: ids }),
+      );
       const opId = resp.operation_id;
       if (!opId) {
         toast('All selected books are already being fetched.', 'info');
         return;
       }
       setPendingFetchOpId(opId);
-      startOperationPolling(opId, 'metadata_candidate_fetch');
       toast(
         `Metadata fetch started for ${ids.length} book${ids.length !== 1 ? 's' : ''}. Click Review when complete to open candidates.`,
         'info',
@@ -1633,14 +1636,16 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
 
   const handleFetchAllUnmatched = async () => {
     try {
-      const resp = await api.batchFetchCandidates({
-        selection: { filter: { only_unmatched: true } },
-      });
+      // Insert the bell placeholder BEFORE the round-trip — server-side
+      // selection of "all unmatched" is slow on big libraries and the
+      // user previously got zero feedback while it ran.
+      const resp = await withOptimisticOperation('metadata_candidate_fetch', () =>
+        api.batchFetchCandidates({ selection: { filter: { only_unmatched: true } } }),
+      );
       if (!resp.operation_id) {
         toast(resp.message ?? 'All books already have matched candidates.', 'info');
         return;
       }
-      startOperationPolling(resp.operation_id, 'metadata_candidate_fetch');
       toast(
         `Fetching metadata for ${resp.book_count ?? 'unmatched'} books — check the operations list for progress.`,
         'info',
