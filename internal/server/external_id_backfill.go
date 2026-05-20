@@ -52,7 +52,7 @@ func (s *Server) backfillExternalIDs() {
 
 	eidStore := asExternalIDStore(store)
 	if eidStore == nil {
-		slog.Debug("backfillExternalIDs: store does not implement ExternalIDStore, skipping")
+		slog.Debug("backfillExternalIDs store does not implement ExternalIDStore, skipping")
 		return
 	}
 
@@ -60,7 +60,7 @@ func (s *Server) backfillExternalIDs() {
 	// on shutdown so it can't outlive the store and crash on
 	// "pebble: closed" in CreateExternalIDMapping.
 	if err := itunes.BackfillExternalIDs(s.bgCtx, &externalIDStoreAdapter{eidStore: eidStore, store: store}); err != nil {
-		slog.Warn("backfillExternalIDs:", "err", err)
+		slog.Warn("backfillExternalIDs", "err", err)
 	}
 }
 

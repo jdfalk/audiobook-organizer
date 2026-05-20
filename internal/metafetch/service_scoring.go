@@ -396,9 +396,9 @@ func (mfs *Service) ScoreBaseCandidates(
 			return scores, mfs.metadataScorer.Name()
 		}
 		if err != nil {
-						slog.Warn("metadata-scorer  failed, falling back to F1:", "name", mfs.metadataScorer.Name(), "error", err)
+						slog.Warn("metadata-scorer failed, falling back to F1", "name", mfs.metadataScorer.Name(), "error", err)
 		} else {
-						slog.Warn("metadata-scorer  returned  scores for  results, falling back to F1", "name", mfs.metadataScorer.Name(), "count", len(scores), "count", len(results))
+						slog.Warn("metadata-scorer returned scores for results, falling back to F1", "name", mfs.metadataScorer.Name(), "count", len(scores), "count", len(results))
 		}
 	}
 
@@ -486,12 +486,12 @@ func (mfs *Service) RerankTopK(
 	}
 	if ambiguousEnd < 2 {
 		// Only one candidate within epsilon — nothing to resolve.
-				slog.Debug("metadata-search: rerank skipped — only 1 candidate within %.3f of best (%.3f)", "value", epsilon, "value", bestScore)
+				slog.Debug("metadata-search rerank skipped — only 1 candidate within %.3f of best (%.3f)", "value", epsilon, "value", bestScore)
 		return candidates
 	}
 
 	topCands := candidates[:ambiguousEnd]
-		slog.Debug("metadata-search: rerank firing on top  candidates (epsilon=%.3f, bestScore=%.3f)", "count", len(topCands), "value", epsilon, "value", bestScore)
+		slog.Debug("metadata-search rerank firing on top candidates (epsilon%.3f, bestScore%.3f)", "count", len(topCands), "value", epsilon, "value", bestScore)
 
 	// Resolve the book's author name for the query payload.
 	authorName := ""
@@ -519,9 +519,9 @@ func (mfs *Service) RerankTopK(
 	llmScores, err := mfs.llmScorer.Score(ctx, query, llmCands)
 	if err != nil || len(llmScores) != len(topCands) {
 		if err != nil {
-						slog.Warn("metadata-search: rerank LLM call failed, keeping base scores:", "error", err)
+						slog.Warn("metadata-search rerank LLM call failed, keeping base scores", "error", err)
 		} else {
-						slog.Warn("metadata-search: rerank returned  scores for  candidates, keeping base scores", "count", len(llmScores), "count", len(topCands))
+						slog.Warn("metadata-search rerank returned scores for candidates, keeping base scores", "count", len(llmScores), "count", len(topCands))
 		}
 		return candidates
 	}
@@ -556,7 +556,7 @@ func ApplySeriesPositionFilter(
 	wantPos := strconv.Itoa(knownPosition)
 	best := results[0]
 	if best.SeriesPosition != "" && best.SeriesPosition != wantPos {
-				slog.Debug("scorer: rejecting result  (series position  != expected )", "value", best.Title, "value", best.SeriesPosition, "value", wantPos)
+				slog.Debug("scorer rejecting result (series position ! expected )", "value", best.Title, "value", best.SeriesPosition, "value", wantPos)
 		return nil
 	}
 	return results

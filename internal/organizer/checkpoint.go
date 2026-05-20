@@ -71,6 +71,6 @@ func CleanupStaleCheckpoints(store database.Store) int {
 	//
 	// A future optimization: track active pipeline book IDs in a
 	// set and clean up only those.
-	slog.Info("Pipeline checkpoint cleanup: stale checkpoints are harmless (self-healing)")
+	slog.Info("Pipeline checkpoint cleanup stale checkpoints are harmless (self-healing)")
 	return 0
 }

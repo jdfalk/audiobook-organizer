@@ -37,7 +37,7 @@ func (j *cleanupBackupsJob) CanResume() bool { return false }
 func (j *cleanupBackupsJob) Run(ctx context.Context, _ database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	root := config.AppConfig.RootDir
 	if root == "" {
-		slog.Warn("cleanup-backups: RootDir not configured")
+		slog.Warn("cleanup-backups RootDir not configured")
 		return nil
 	}
 	removed := 0
@@ -57,7 +57,7 @@ func (j *cleanupBackupsJob) Run(ctx context.Context, _ database.Store, reporter 
 			}
 		} else {
 			removed++
-			slog.Info("would remove: "+path)
+			slog.Info("would remove"+path)
 		}
 		return nil
 	})

@@ -278,7 +278,7 @@ func (u *Updater) DownloadAndReplace(info *UpdateInfo) error {
 	// Clean up old binary (best effort)
 	os.Remove(oldPath)
 
-	slog.Info("Update applied successfully:  ->", "value0", "value0", "info", info.CurrentVersion, "value1", info.LatestVersion)
+	slog.Info("Update applied successfully ->", "value0", "value0", "info", info.CurrentVersion, "value1", info.LatestVersion)
 	return nil
 }
 

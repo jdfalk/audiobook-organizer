@@ -668,7 +668,7 @@ func (ts *TaskScheduler) registerAllTasks() {
 				slog.Warn("batch_poller", "error", err)
 			}
 			if processed > 0 {
-				slog.Info("batch_poller: processed  completed batches", "processed", processed)
+				slog.Info("batch_poller processed completed batches", "processed", processed)
 			}
 			return nil, nil
 		},

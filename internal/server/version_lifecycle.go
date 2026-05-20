@@ -43,7 +43,7 @@ func (s *Server) handleTrashVersion(c *gin.Context) {
 
 	if wasActive {
 		if err := versions.AutoPromoteAlt(s.Store(), bookID); err != nil {
-			slog.Warn("auto-promote after trash:", "err", err)
+			slog.Warn("auto-promote after trash", "err", err)
 		}
 	}
 

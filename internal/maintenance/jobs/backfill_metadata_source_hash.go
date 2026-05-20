@@ -58,7 +58,7 @@ func (j *backfillMetadataSourceHashJob) Run(ctx context.Context, store database.
 			updBook.MetadataSourceHash = &hash
 			if _, uerr := store.UpdateBook(book.ID, &updBook); uerr != nil {
 				msg := uerr.Error()
-				slog.Error("backfill-metadata-source-hash: UpdateBook failed", "details", msg)
+				slog.Error("backfill-metadata-source-hash UpdateBook failed", "details", msg)
 				continue
 			}
 		}

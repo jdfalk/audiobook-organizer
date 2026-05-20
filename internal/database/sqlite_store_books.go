@@ -1386,7 +1386,7 @@ func (s *SQLiteStore) CreateBook(book *Book) (*Book, error) {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.Info("CreateBook rollback:", "rbErr", rbErr)
+				slog.Info("CreateBook rollback", "rbErr", rbErr)
 			}
 		}
 	}()
@@ -1737,7 +1737,7 @@ func (s *SQLiteStore) DeleteBook(id string) error {
 	defer func() {
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				slog.Info("DeleteBook rollback:", "rbErr", rbErr)
+				slog.Info("DeleteBook rollback", "rbErr", rbErr)
 			}
 		}
 	}()

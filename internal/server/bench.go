@@ -142,11 +142,11 @@ func (s *Server) benchSubmit(c *gin.Context) {
 	// Run in background
 	go func() {
 		ctx := context.Background()
-		slog.Info("bench: Starting run: models= mode= server=", "req", req.Models, "req", req.Mode, "serverURL", serverURL)
+		slog.Info("bench Starting run models mode server", "req", req.Models, "req", req.Mode, "serverURL", serverURL)
 
 		authorData, err := benchFetchAuthors(serverURL)
 		if err != nil {
-			slog.Info("bench: ERROR fetching authors:", "err", err)
+			slog.Info("bench ERROR fetching authors", "err", err)
 			return
 		}
 
@@ -156,7 +156,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 		_ = benchWriteJSON(filepath.Join(runDir, "authors.json"), authorData.Authors)
 		_ = benchWriteJSON(filepath.Join(runDir, "groups.json"), groups)
 
-		slog.Info("bench:  authors,  groups", "count", len(authorData.Authors), "groups_count", len(groups))
+		slog.Info("bench authors, groups", "count", len(authorData.Authors), "groups_count", len(groups))
 
 		configs := benchBuildConfigs(req.Models)
 		modes := benchResolveModes(req.Mode)
@@ -202,7 +202,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 					job, err := benchSubmitBatchJob(ctx, client, tc, mode, systemPrompt, prefix+string(chunk), maxTokens,
 						fmt.Sprintf("%s_%s_t%.1f_%s_chunk%d", tc.Model, tc.Prompt, tc.Temperature, mode, ci), chunkDir)
 					if err != nil {
-						slog.Info("bench: ERROR submitting :", "dirName", dirName, "err", err)
+						slog.Info("bench ERROR submitting", "dirName", dirName, "err", err)
 						continue
 					}
 					jobs = append(jobs, job)
@@ -211,7 +211,7 @@ func (s *Server) benchSubmit(c *gin.Context) {
 		}
 
 		_ = benchWriteJSON(filepath.Join(runDir, "batch_jobs.json"), jobs)
-		slog.Info("bench: Submitted  batch jobs to", "jobs_count", len(jobs), "runDir", runDir)
+		slog.Info("bench Submitted batch jobs to", "jobs_count", len(jobs), "runDir", runDir)
 	}()
 
 	httputil.RespondWithSuccess(c, http.StatusAccepted, gin.H{

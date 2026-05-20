@@ -35,7 +35,7 @@ func Register(p Plugin) {
 		return
 	}
 	globalRegistry.plugins[p.ID()] = p
-	slog.Info("plugin registered:  () v", "value0", "value0", "p", p.Name(), "value2", "value1", p.ID(), "value2", p.Version())
+	slog.Info("plugin registered () v", "value0", "value0", "p", p.Name(), "value2", "value1", p.ID(), "value2", p.Version())
 }
 
 // Global returns the global registry.
@@ -118,7 +118,7 @@ func (r *Registry) InitAllScoped(ctx context.Context, baseDeps Deps, parentGroup
 	r.initOrder = nil
 	for id, p := range r.plugins {
 		if !r.enabled[id] {
-			slog.Info("plugin : disabled, skipping init", "value0", "id", id)
+			slog.Info("plugin disabled, skipping init", "value0", "id", id)
 			continue
 		}
 
@@ -136,7 +136,7 @@ func (r *Registry) InitAllScoped(ctx context.Context, baseDeps Deps, parentGroup
 			return fmt.Errorf("plugin %s init failed: %w", id, err)
 		}
 		r.initOrder = append(r.initOrder, id)
-		slog.Info("plugin : initialized", "value0", "id", id)
+		slog.Info("plugin initialized", "value0", "id", id)
 	}
 	return nil
 }
@@ -150,9 +150,9 @@ func (r *Registry) ShutdownAll(ctx context.Context) {
 		id := r.initOrder[i]
 		if p, ok := r.plugins[id]; ok {
 			if err := p.Shutdown(ctx); err != nil {
-				slog.Warn("plugin  shutdown error:", "value0", "id", "id", id, "err", err)
+				slog.Warn("plugin shutdown error", "value0", "id", "id", id, "err", err)
 			} else {
-				slog.Info("plugin : shut down", "value0", "id", id)
+				slog.Info("plugin shut down", "value0", "id", id)
 			}
 		}
 	}

@@ -79,7 +79,7 @@ func (j *fixReadByNarratorJob) Run(ctx context.Context, store database.Store, re
 		found++
 		if !dryRun {
 			if applyErr := rbnrApplyFix(store, book, fix); applyErr != nil {
-				slog.Error("Failed to fix book :", "book", book.ID, "applyErr", applyErr)
+				slog.Error("Failed to fix book", "book", book.ID, "applyErr", applyErr)
 			} else {
 				applied++
 			}
@@ -87,7 +87,7 @@ func (j *fixReadByNarratorJob) Run(ctx context.Context, store database.Store, re
 		reporter.Increment()
 	}
 
-	slog.Info("Done: found= applied= dryRun=", "found", found, "applied", applied, "dryRun", dryRun)
+	slog.Info("Done found applied dryRun", "found", found, "applied", applied, "dryRun", dryRun)
 	return nil
 }
 

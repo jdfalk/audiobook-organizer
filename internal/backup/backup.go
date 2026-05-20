@@ -119,7 +119,7 @@ func CreateBackup(databasePath, databaseType string, config BackupConfig) (*Back
 	// Clean up old backups
 	if err := cleanupOldBackups(config.BackupDir, config.MaxBackups); err != nil {
 		// Log error but don't fail the backup
-		slog.Warn("backup: failed to clean up old backups", "error", err)
+		slog.Warn("backup failed to clean up old backups", "error", err)
 	}
 
 	return info, nil
@@ -149,7 +149,7 @@ func RestoreBackup(backupPath, targetPath string, verify bool) error {
 	// Verify checksum if requested
 	if verify {
 		// TODO: Store checksums in metadata file and verify
-		slog.Info("backup: checksum verification not yet implemented")
+		slog.Info("backup checksum verification not yet implemented")
 	}
 
 	// Open backup file
@@ -226,7 +226,7 @@ func RestoreBackup(backupPath, targetPath string, verify bool) error {
 				return fmt.Errorf("failed to set permissions on %s: %w", target, err)
 			}
 		default:
-			slog.Warn("backup: unsupported file type", "type", header.Typeflag, "name", header.Name)
+			slog.Warn("backup unsupported file type", "type", header.Typeflag, "name", header.Name)
 		}
 	}
 
@@ -413,7 +413,7 @@ func cleanupOldBackups(backupDir string, maxBackups int) error {
 	deleteCount := len(backups) - maxBackups
 	for i := 0; i < deleteCount; i++ {
 		if err := os.Remove(backups[i].Path); err != nil {
-			slog.Warn("backup: failed to delete old backup", "filename", backups[i].Filename, "error", err)
+			slog.Warn("backup failed to delete old backup", "filename", backups[i].Filename, "error", err)
 		}
 	}
 

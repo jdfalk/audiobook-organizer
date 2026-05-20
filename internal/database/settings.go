@@ -327,7 +327,7 @@ func (s *SQLiteStore) GetAllSettings() ([]Setting, error) {
 		var isSecret any
 
 		if err := rows.Scan(&setting.Key, &setting.Value, &setting.Type, &isSecret); err != nil {
-			slog.Warn("Failed to scan setting row:", "err", err)
+			slog.Warn("Failed to scan setting row", "err", err)
 			continue
 		}
 

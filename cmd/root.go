@@ -516,7 +516,7 @@ func setupFileLogging() (*os.File, error) {
 	handler := slog.NewTextHandler(multiWriter, &slog.HandlerOptions{Level: slog.LevelDebug})
 	slog.SetDefault(slog.New(handler))
 
-	slog.Info("=== Audiobook Organizer Started ===")
+	slog.Info("Audiobook Organizer Started")
 	slog.Info("log file", "path", logFile)
 
 	return file, nil

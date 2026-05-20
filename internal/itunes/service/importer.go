@@ -1157,7 +1157,7 @@ func (imp *Importer) buildBookFromAlbumGroup(group albumGroup, libraryPath strin
 	}
 
 	if len(group.tracks) > 1 {
-		slog.Info("iTunes import: grouped tracks", "count", len(group.tracks), "album", title)
+		slog.Info("iTunes import grouped tracks", "count", len(group.tracks), "album", title)
 	}
 	return book, nil
 }

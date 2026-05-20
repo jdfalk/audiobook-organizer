@@ -90,11 +90,11 @@ func (b *EventBus) Publish(ctx context.Context, event Event) {
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					slog.Error("plugin event handler panicked for :", "value0", "value0", "event", event.Type, "r", r)
+					slog.Error("plugin event handler panicked for", "value0", "value0", "event", event.Type, "r", r)
 				}
 			}()
 			if err := h(ctx, event); err != nil {
-				slog.Warn("plugin event handler error for :", "value0", "value0", "event", event.Type, "err", err)
+				slog.Warn("plugin event handler error for", "value0", "value0", "event", event.Type, "err", err)
 			}
 		}()
 	}

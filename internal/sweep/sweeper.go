@@ -43,7 +43,7 @@ func SweepTombstones(store database.BookStore) (*SweeperResult, error) {
 
 		if existing != nil {
 			// Book still exists — purge didn't complete. Delete the orphan tombstone.
-			slog.Info("sweeper: tombstone  has live book record, removing tombstone", "value0", "value0", tomb.ID)
+			slog.Info("sweeper tombstone has live book record, removing tombstone", "value0", "value0", tomb.ID)
 			_ = store.DeleteBookTombstone(tomb.ID)
 			result.TombstonesCleaned++
 			continue
@@ -57,7 +57,7 @@ func SweepTombstones(store database.BookStore) (*SweeperResult, error) {
 					result.Errors = append(result.Errors, fmt.Sprintf("tombstone %s: failed to delete orphaned file %s: %v", tomb.ID, tomb.FilePath, err))
 					continue
 				}
-				slog.Info("sweeper: deleted orphaned file  (tombstone )", "value0", "value0", "tomb", tomb.FilePath, "value1", tomb.ID)
+				slog.Info("sweeper deleted orphaned file (tombstone )", "value0", "value0", "tomb", tomb.FilePath, "value1", tomb.ID)
 			}
 			// File gone or just deleted — clean up tombstone
 		}
@@ -95,6 +95,6 @@ func AuditFileConsistency(store database.BookStore) (*SweeperResult, error) {
 		}
 	}
 
-	slog.Info("sweeper: audit complete —  books checked,  missing files", "value0", "value0", "books_count", len(books), "value1", len(result.MissingFiles))
+	slog.Info("sweeper audit complete — books checked, missing files", "value0", "value0", "books_count", len(books), "value1", len(result.MissingFiles))
 	return result, nil
 }

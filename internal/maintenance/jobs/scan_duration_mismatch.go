@@ -54,9 +54,9 @@ func (j *scanDurationMismatchJob) Run(ctx context.Context, store database.Store,
 		if delta > 120 {
 			mismatches++
 			detail := fmt.Sprintf("local=%ds audible=%ds delta=%ds", *b.Duration, audibleSec, delta)
-			slog.Warn("duration mismatch: "+b.Title, "details", detail)
+			slog.Warn("duration mismatch"+b.Title, "details", detail)
 		}
 	}
-	slog.Info("scan-duration-mismatch complete:  mismatches", "mismatches", mismatches)
+	slog.Info("scan-duration-mismatch complete mismatches", "mismatches", mismatches)
 	return nil
 }

@@ -75,10 +75,10 @@ func InitBootstrapToken(store SettingsReadWriter, dataDir string) error {
 
 	tokenPath := BootstrapTokenPath(dataDir)
 	if err := os.WriteFile(tokenPath, []byte(raw+"\n"), 0600); err != nil {
-		slog.Info("WARNING: could not write token file :", "tokenPath", tokenPath, "err", err)
+		slog.Info("WARNING could not write token file", "tokenPath", tokenPath, "err", err)
 	}
 
-	slog.Info("Emergency access token:", "raw", raw)
+	slog.Info("Emergency access token", "raw", raw)
 	slog.Info("Token expires in 10 minutes. POST /api/v1/auth/bootstrap to exchange for an API key. Restart required to generate a new token.")
 	return nil
 }
@@ -220,14 +220,14 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	// doesn't burn the one-time token.
 	adminUser, generatedPassword, err := findOrCreateAdminUser(store)
 	if err != nil || adminUser == nil {
-		slog.Info("find/create admin error ip= err=", "ip", ip, "err", err)
+		slog.Info("find/create admin error ip err", "ip", ip, "err", err)
 		httputil.RespondWithInternalError(c, "failed to find or create admin user")
 		return
 	}
 
 	valid, err := ConsumeBootstrapToken(store, dataDir, req.Token)
 	if err != nil {
-		slog.Info("consume error ip= err=", "ip", ip, "err", err)
+		slog.Info("consume error ip err", "ip", ip, "err", err)
 		httputil.RespondWithInternalError(c, "internal error")
 		return
 	}
@@ -244,7 +244,7 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 
 	raw, hash, err := database.GenerateAPIKeyToken()
 	if err != nil {
-		slog.Info("generate api key error ip= err=", "ip", ip, "err", err)
+		slog.Info("generate api key error ip err", "ip", ip, "err", err)
 		httputil.RespondWithInternalError(c, "failed to generate API key")
 		return
 	}
@@ -264,12 +264,12 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 
 	created, err := store.CreateAPIKey(key)
 	if err != nil {
-		slog.Info("create api key error user= ip= err=", "adminUser", adminUser.ID, "ip", ip, "err", err)
+		slog.Info("create api key error user ip err", "adminUser", adminUser.ID, "ip", ip, "err", err)
 		httputil.RespondWithInternalError(c, "failed to create API key")
 		return
 	}
 
-	slog.Info("Token consumed: new API key created user= key_id= ip=", "adminUser", adminUser.Username, "created", created.ID, "ip", ip)
+	slog.Info("Token consumed new API key created user key_id ip", "adminUser", adminUser.Username, "created", created.ID, "ip", ip)
 
 	type bootstrapResp struct {
 		APIKey            string   `json:"api_key"`
@@ -292,7 +292,7 @@ func (s *Server) handleBootstrap(c *gin.Context) {
 	if generatedPassword != "" {
 		rsp.GeneratedPassword = generatedPassword
 		rsp.PasswordMessage = "Admin account created. Change this password after logging in."
-		slog.Info("Created admin user= — save the generated_password from this response", "adminUser", adminUser.Username)
+		slog.Info("Created admin user — save the generated_password from this response", "adminUser", adminUser.Username)
 	}
 	httputil.RespondWithOK(c, rsp)
 }
@@ -342,7 +342,7 @@ func findOrCreateAdminUser(store database.Store) (*database.User, string, error)
 	if err != nil {
 		return nil, "", fmt.Errorf("create admin user: %w", err)
 	}
-	slog.Info("No admin found — created user=admin with generated password")
+	slog.Info("No admin found — created useradmin with generated password")
 	return u, password, nil
 }
 

@@ -45,13 +45,13 @@ func (mfs *Service) PostInit(ctx context.Context, c *serviceregistry.Container) 
 	// Dedup engine wiring — engine is config-gated, may be nil
 	if engine, ok := serviceregistry.TryGet[*dedup.Engine](c, "dedup"); ok && engine != nil {
 		mfs.SetDedupEngine(engine)
-		slog.Info("PostInit: SetDedupEngine wired")
+		slog.Info("PostInit SetDedupEngine wired")
 	}
 
 	// Embedding scorer — config-gated on MetadataEmbeddingScoringEnabled
 	if scorer, ok := serviceregistry.TryGet[*ai.EmbeddingScorer](c, "metadatascorer"); ok && scorer != nil {
 		mfs.SetMetadataScorer(scorer)
-		slog.Info("Metadata candidate scoring: embedding tier enabled")
+		slog.Info("Metadata candidate scoring embedding tier enabled")
 	}
 
 	// LLM rerank scorer — wired unconditionally when llmparser is

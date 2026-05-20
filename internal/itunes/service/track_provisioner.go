@@ -136,7 +136,7 @@ func (p *TrackProvisioner) Provision(book *database.Book, bookFile *database.Boo
 		})
 	}
 
-	slog.Info("Provisioned ITL track: book= pid= path=", "book", book.ID, "pid", pid, "itunesPath", itunesPath)
+	slog.Info("Provisioned ITL track book pid path", "book", book.ID, "pid", pid, "itunesPath", itunesPath)
 	return nil
 }
 
@@ -151,7 +151,7 @@ func (p *TrackProvisioner) ProvisionAll(book *database.Book) error {
 	}
 	for i := range files {
 		if err := p.Provision(book, &files[i]); err != nil {
-			slog.Warn("Failed to provision ITL track for file :", "value0", files[i].ID, "err", err)
+			slog.Warn("Failed to provision ITL track for file", "value0", files[i].ID, "err", err)
 		}
 	}
 	return nil

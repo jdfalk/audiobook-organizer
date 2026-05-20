@@ -63,7 +63,7 @@ func (j *enrichBookFilesJob) Run(ctx context.Context, store database.Store, repo
 			bf.TrackNumber = n
 			if uerr := store.UpdateBookFile(bf.ID, &bf); uerr != nil {
 				msg := uerr.Error()
-				slog.Error("enrich-book-files: UpdateBookFile failed", "details", msg)
+				slog.Error("enrich-book-files UpdateBookFile failed", "details", msg)
 				continue
 			}
 		}

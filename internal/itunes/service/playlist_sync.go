@@ -72,7 +72,7 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 
 		parsed, err := itunes.ParseSmartCriteria(pl.SmartCriteria)
 		if err != nil {
-			slog.Warn("parse smart criteria for %q (PID ):", "pl", pl.Title, "pid", pid, err)
+			slog.Warn("parse smart criteria for %q (PID )", "pl", pl.Title, "pid", pid, err)
 			skipped++
 			continue
 		}
@@ -89,7 +89,7 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 			Description:          fmt.Sprintf("Imported from iTunes smart playlist %q", pl.Title),
 		})
 		if err != nil {
-			slog.Warn("create playlist %q:", "pl", pl.Title, err)
+			slog.Warn("create playlist %q", "pl", pl.Title, err)
 			skipped++
 			continue
 		}
@@ -109,7 +109,7 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 func (p *PlaylistSync) PushDirty() int {
 	dirties, err := p.store.ListDirtyUserPlaylists()
 	if err != nil {
-		slog.Warn("list dirty playlists:", "err", err)
+		slog.Warn("list dirty playlists", "err", err)
 		return 0
 	}
 
@@ -134,7 +134,7 @@ func (p *PlaylistSync) PushDirty() int {
 
 		pl.Dirty = false
 		if err := p.store.UpdateUserPlaylist(pl); err != nil {
-			slog.Warn("clear dirty for :", "pl", pl.ID, "err", err)
+			slog.Warn("clear dirty for", "pl", pl.ID, "err", err)
 			continue
 		}
 		pushed++

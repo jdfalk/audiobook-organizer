@@ -72,7 +72,7 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 	// CRITICAL: Never write metadata to files in protected paths (import paths,
 	// iTunes Media folders). Only write to files in our organized library.
 	if mfs.isProtectedPath(book.FilePath) {
-				slog.Info("skipping write-back for protected path:", "path", book.FilePath)
+				slog.Info("skipping write-back for protected path", "path", book.FilePath)
 		return
 	}
 
@@ -103,14 +103,14 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 				continue
 			}
 			if mfs.isProtectedPath(bf.FilePath) {
-								slog.Info("skipping write-back for protected file:", "path", bf.FilePath)
+								slog.Info("skipping write-back for protected file", "path", bf.FilePath)
 				continue
 			}
 			backupFileBeforeWrite(bf.FilePath)
 			if _, _, err := fileops.WriteTagsSafe(bf.FilePath, func(tmpPath string) error {
 				return metadata.WriteMetadataToFile(tmpPath, tagMap, opConfig)
 			}, fileops.WriteTagsSafeOptions{BookFileID: bf.ID, Store: mfs.db}); err != nil {
-								slog.Warn("write-back failed for file :", "path", bf.FilePath, "error", err)
+								slog.Warn("write-back failed for file", "path", bf.FilePath, "error", err)
 			}
 		}
 	} else {
@@ -118,27 +118,27 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 		// If book.FilePath is a directory (multi-file book with no segment records),
 		// glob for audio files inside and write to each one individually.
 		tagMap := mfs.BuildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
-				slog.Debug("write-back: full tag map has  entries for", "count", len(tagMap), "path", book.FilePath)
+				slog.Debug("write-back full tag map has entries for", "count", len(tagMap), "path", book.FilePath)
 		for k, v := range tagMap {
-						slog.Debug("write-back:    =", "value", k, "value", v)
+						slog.Debug("write-back", "value", k, "value", v)
 		}
 
 		dirFiles := AudioFilesInDir(book.FilePath)
 		if len(dirFiles) > 0 {
 			// book.FilePath is a directory — write to each audio file found inside.
-						slog.Info("write-back:  is a directory; writing to  audio file(s) inside", "path", book.FilePath, "file", len(dirFiles))
+						slog.Info("write-back is a directory; writing to audio file(s) inside", "path", book.FilePath, "file", len(dirFiles))
 			wroteAny := false
 			for _, f := range dirFiles {
 				fm := FilterUnchangedTags(f, tagMap)
 				if len(fm) == 0 {
-										slog.Debug("write-back: all tags match, skipping", "value", f)
+										slog.Debug("write-back all tags match, skipping", "value", f)
 					continue
 				}
 				backupFileBeforeWrite(f)
 				if _, _, err := fileops.WriteTagsSafe(f, func(tmpPath string) error {
 					return metadata.WriteMetadataToFile(tmpPath, fm, opConfig)
 				}, fileops.WriteTagsSafeOptions{}); err != nil {
-										slog.Warn("write-back failed for :", "value", f, "error", err)
+										slog.Warn("write-back failed for", "value", f, "error", err)
 				} else {
 										slog.Info("wrote metadata back to", "value", f)
 					wroteAny = true
@@ -146,15 +146,15 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 			}
 			if wroteAny {
 				if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
-										slog.Warn("failed to stamp last_written_at for book :", "id", book.ID, "error", err)
+										slog.Warn("failed to stamp last_written_at for book", "id", book.ID, "error", err)
 				}
 				_ = mfs.db.MarkNeedsRescan(book.ID)
 			}
 		} else {
 			tagMap = FilterUnchangedTags(book.FilePath, tagMap)
-						slog.Debug("write-back: after filter,  entries remain", "count", len(tagMap))
+						slog.Debug("write-back after filter, entries remain", "count", len(tagMap))
 			if len(tagMap) == 0 {
-								slog.Debug("write-back: all tags match, skipping write for", "path", book.FilePath)
+								slog.Debug("write-back all tags match, skipping write for", "path", book.FilePath)
 				return
 			}
 			backupFileBeforeWrite(book.FilePath)
@@ -165,12 +165,12 @@ func (mfs *Service) writeBackMetadata(book *database.Book, meta metadata.BookMet
 			if _, _, err := fileops.WriteTagsSafe(book.FilePath, func(tmpPath string) error {
 				return metadata.WriteMetadataToFile(tmpPath, tagMap, opConfig)
 			}, wtsOptsPath); err != nil {
-								slog.Warn("write-back failed for :", "path", book.FilePath, "error", err)
+								slog.Warn("write-back failed for", "path", book.FilePath, "error", err)
 			} else {
 								slog.Info("wrote metadata back to", "path", book.FilePath)
 				// Stamp last_written_at after successful write-back.
 				if err := mfs.db.SetLastWrittenAt(book.ID, time.Now()); err != nil {
-										slog.Warn("failed to stamp last_written_at for book :", "id", book.ID, "error", err)
+										slog.Warn("failed to stamp last_written_at for book", "id", book.ID, "error", err)
 				}
 				// Flag for rescan so the next incremental scan re-reads the updated tags.
 				_ = mfs.db.MarkNeedsRescan(book.ID)
@@ -468,7 +468,7 @@ func (mfs *Service) generateSegmentTitles(bookID string, bookTitle string) error
 		bookFiles[i].Title = title
 
 		if err := mfs.db.UpdateBookFile(bookFiles[i].ID, &bookFiles[i]); err != nil {
-						slog.Warn("failed to update book file title for :", "id", bookFiles[i].ID, "error", err)
+						slog.Warn("failed to update book file title for", "id", bookFiles[i].ID, "error", err)
 		}
 	}
 
@@ -483,10 +483,10 @@ func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 	if mfs.isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
 		if libCopy == nil {
-						slog.Warn("runApplyPipeline: no library copy for protected book , skipping", "id", id)
+						slog.Warn("runApplyPipeline no library copy for protected book , skipping", "id", id)
 			return nil
 		}
-				slog.Info("runApplyPipeline: using library copy  for protected book", "id", libCopy.ID, "id", id)
+				slog.Info("runApplyPipeline using library copy for protected book", "id", libCopy.ID, "id", id)
 		id = libCopy.ID
 		book = libCopy
 	}
@@ -563,7 +563,7 @@ func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 				bf.FilePath = entry.TargetPath
 				bf.ITunesPath = ComputeITunesPath(entry.TargetPath)
 				if err := mfs.db.UpdateBookFile(bf.ID, bf); err != nil {
-										slog.Warn("failed to update book_file path for :", "id", bf.ID, "error", err)
+										slog.Warn("failed to update book_file path for", "id", bf.ID, "error", err)
 				}
 			}
 			// Record path change for each successful rename
@@ -596,9 +596,9 @@ func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 			if newBookPath != book.FilePath {
 				book.FilePath = newBookPath
 				if _, err := mfs.db.UpdateBook(id, book); err != nil {
-										slog.Warn("failed to update book path for :", "id", id, "error", err)
+										slog.Warn("failed to update book path for", "id", id, "error", err)
 				} else {
-										slog.Info("updated book path for :", "id", id, "path", newBookPath)
+										slog.Info("updated book path for", "id", id, "path", newBookPath)
 				}
 			}
 		}
@@ -611,7 +611,7 @@ func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 			if itunesPath := ComputeITunesPath(bookFiles[i].FilePath); itunesPath != "" {
 				bookFiles[i].ITunesPath = itunesPath
 				if err := mfs.db.UpdateBookFile(bookFiles[i].ID, &bookFiles[i]); err != nil {
-										slog.Warn("failed to update itunes_path for book file :", "id", bookFiles[i].ID, "error", err)
+										slog.Warn("failed to update itunes_path for book file", "id", bookFiles[i].ID, "error", err)
 				}
 			}
 		}
@@ -620,9 +620,9 @@ func (mfs *Service) runApplyPipeline(id string, book *database.Book) error {
 	// Write metadata tags to audio files
 	if config.AppConfig.AutoWriteTagsOnApply && !hasCheckpoint(mfs.db, id, phaseTags) {
 		if written, err := mfs.WriteBackMetadataForBook(id); err != nil {
-						slog.Warn("tag writing failed for book :", "id", id, "error", err)
+						slog.Warn("tag writing failed for book", "id", id, "error", err)
 		} else {
-						slog.Info("wrote metadata tags to  file(s) for book", "value", written, "id", id)
+						slog.Info("wrote metadata tags to file(s) for book", "value", written, "id", id)
 			setCheckpoint(mfs.db, id, phaseTags)
 		}
 	}
@@ -759,11 +759,11 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 			tagMap := mfs.BuildFullTagMap(book, bookTitle, segTitle, artistStr, narratorStr, year, trackStr)
 			tagMap = FilterUnchangedTags(bf.FilePath, tagMap)
 			if len(tagMap) == 0 {
-								slog.Debug("write-back: file  tags already match, skipping", "path", bf.FilePath)
+								slog.Debug("write-back file tags already match, skipping", "path", bf.FilePath)
 				continue
 			}
 			if mfs.isProtectedPath(bf.FilePath) {
-								slog.Debug("skipping write-back for protected file:", "path", bf.FilePath)
+								slog.Debug("skipping write-back for protected file", "path", bf.FilePath)
 				skippedProtected++
 				continue
 			}
@@ -771,7 +771,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 			if _, _, err := fileops.WriteTagsSafe(bf.FilePath, func(tmpPath string) error {
 				return metadata.WriteMetadataToFile(tmpPath, tagMap, opConfig)
 			}, fileops.WriteTagsSafeOptions{BookFileID: bf.ID, Store: mfs.db}); err != nil {
-								slog.Warn("write-back failed for file :", "path", bf.FilePath, "error", err)
+								slog.Warn("write-back failed for file", "path", bf.FilePath, "error", err)
 			} else {
 				writtenCount++
 			}
@@ -781,7 +781,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 		// If book.FilePath is a directory (multi-file book with no file records),
 		// glob for audio files inside and write to each one individually.
 		if mfs.isProtectedPath(book.FilePath) {
-						slog.Debug("skipping write-back for protected path:", "path", book.FilePath)
+						slog.Debug("skipping write-back for protected path", "path", book.FilePath)
 			skippedProtected++
 		} else {
 			fullTagMap := mfs.BuildFullTagMap(book, bookTitle, bookTitle, artistStr, narratorStr, year, "")
@@ -795,16 +795,16 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 			dirFiles := AudioFilesInDir(book.FilePath)
 			if len(dirFiles) > 0 {
 				// book.FilePath is a directory — write to each audio file found inside.
-								slog.Info("write-back:  is a directory; writing to  audio file(s) inside", "path", book.FilePath, "file", len(dirFiles))
+								slog.Info("write-back is a directory; writing to audio file(s) inside", "path", book.FilePath, "file", len(dirFiles))
 				for _, f := range dirFiles {
 					if mfs.isProtectedPath(f) {
-												slog.Debug("skipping write-back for protected file:", "value", f)
+												slog.Debug("skipping write-back for protected file", "value", f)
 						skippedProtected++
 						continue
 					}
 					fm := FilterUnchangedTags(f, fullTagMap)
 					if len(fm) == 0 {
-												slog.Debug("write-back: all tags match, skipping", "value", f)
+												slog.Debug("write-back all tags match, skipping", "value", f)
 						continue
 					}
 					backupFileBeforeWrite(f)
@@ -815,7 +815,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 					if _, _, err := fileops.WriteTagsSafe(f, func(tmpPath string) error {
 						return metadata.WriteMetadataToFile(tmpPath, fm, opConfig)
 					}, wtsOpts); err != nil {
-												slog.Warn("write-back failed for :", "value", f, "error", err)
+												slog.Warn("write-back failed for", "value", f, "error", err)
 					} else {
 												slog.Info("wrote metadata back to", "value", f)
 						writtenCount++
@@ -824,7 +824,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 			} else {
 				fm := FilterUnchangedTags(book.FilePath, fullTagMap)
 				if len(fm) == 0 {
-										slog.Debug("write-back: all tags match, skipping", "path", book.FilePath)
+										slog.Debug("write-back all tags match, skipping", "path", book.FilePath)
 				} else {
 					backupFileBeforeWrite(book.FilePath)
 					var wtsOpts fileops.WriteTagsSafeOptions
@@ -834,7 +834,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 					if _, _, err := fileops.WriteTagsSafe(book.FilePath, func(tmpPath string) error {
 						return metadata.WriteMetadataToFile(tmpPath, fm, opConfig)
 					}, wtsOpts); err != nil {
-												slog.Warn("write-back failed for :", "path", book.FilePath, "error", err)
+												slog.Warn("write-back failed for", "path", book.FilePath, "error", err)
 					} else {
 						writtenCount++
 					}
@@ -866,10 +866,10 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 				if _, _, err := fileops.WriteTagsSafe(sib.FilePath, func(tmpPath string) error {
 					return metadata.WriteMetadataToFile(tmpPath, tagMap, opConfig)
 				}, fileops.WriteTagsSafeOptions{}); err != nil {
-										slog.Warn("write-back failed for version-linked :", "path", sib.FilePath, "error", err)
+										slog.Warn("write-back failed for version-linked", "path", sib.FilePath, "error", err)
 				} else {
 					writtenCount++
-										slog.Info("wrote metadata to version-linked copy:", "path", sib.FilePath)
+										slog.Info("wrote metadata to version-linked copy", "path", sib.FilePath)
 				}
 			}
 		}
@@ -888,7 +888,7 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 		ChangedAt:  now,
 	}
 	if err := mfs.db.RecordMetadataChange(record); err != nil {
-				slog.Warn("failed to record write-back history for :", "id", book.ID, "error", err)
+				slog.Warn("failed to record write-back history for", "id", book.ID, "error", err)
 	}
 	// Dual-write to unified activity log (Task 16: tag_write)
 	if mfs.activityService != nil && writtenCount > 0 {
@@ -905,14 +905,14 @@ func (mfs *Service) WriteBackMetadataForBook(id string, segmentFilter ...[]strin
 	// Stamp last_written_at
 	if writtenCount > 0 {
 		if err := mfs.db.SetLastWrittenAt(book.ID, now); err != nil {
-						slog.Warn("failed to stamp last_written_at for book :", "id", book.ID, "error", err)
+						slog.Warn("failed to stamp last_written_at for book", "id", book.ID, "error", err)
 		}
 		// Flag for rescan so the next incremental scan re-reads the updated tags.
 		_ = mfs.db.MarkNeedsRescan(book.ID)
 	}
 
 	if skippedProtected > 0 {
-				slog.Info("write-back for book : wrote  file(s), skipped  protected path(s)", "id", book.ID, "count", writtenCount-skippedProtected, "value", skippedProtected)
+				slog.Info("write-back for book wrote file(s), skipped protected path(s)", "id", book.ID, "count", writtenCount-skippedProtected, "value", skippedProtected)
 	}
 
 	return writtenCount, nil

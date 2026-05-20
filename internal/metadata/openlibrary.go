@@ -146,7 +146,7 @@ func (c *OpenLibraryClient) SearchByTitle(ctx context.Context, title string) ([]
 			for i := range editions {
 				results = append(results, editionToMetadata(&editions[i], c.olStore))
 			}
-			slog.Debug("SearchByTitle: found  results from local dump for %q", "results_count", len(results), title)
+			slog.Debug("SearchByTitle found results from local dump for %q", "results_count", len(results), title)
 			return results, nil
 		}
 	}
@@ -280,7 +280,7 @@ func (c *OpenLibraryClient) GetBookByISBN(ctx context.Context, isbn string) (*Bo
 		ed, err := c.olStore.LookupByISBN(isbn)
 		if err == nil && ed != nil {
 			meta := editionToMetadata(ed, c.olStore)
-			slog.Debug("GetBookByISBN: found ISBN  in local dump", "isbn", isbn)
+			slog.Debug("GetBookByISBN found ISBN in local dump", "isbn", isbn)
 			return &meta, nil
 		}
 	}

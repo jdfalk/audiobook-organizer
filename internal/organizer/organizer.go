@@ -561,7 +561,7 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 
 		// Verify dstPath stays inside targetDir (defense against crafted filenames)
 		if err := ensureUnderRoot(dstPath, targetDir); err != nil {
-			slog.Warn("organizeFile: skipping unsafe destination", "error", err)
+			slog.Warn("organizeFile skipping unsafe destination", "error", err)
 			continue
 		}
 
@@ -579,7 +579,7 @@ func (o *Organizer) OrganizeBookDirectory(book *database.Book, segmentPaths []st
 		if _, err := o.organizeFile(srcPath, dstPath); err != nil {
 			// Skip missing source files instead of aborting the entire book
 			if os.IsNotExist(err) || strings.Contains(err.Error(), "no such file") {
-				slog.Warn("organizeFile: skipping missing source file", "path", srcPath)
+				slog.Warn("organizeFile skipping missing source file", "path", srcPath)
 				continue
 			}
 			// Handle race: another worker may have created the file between our stat and copy
@@ -602,18 +602,18 @@ func (o *Organizer) organizeFile(src, dst string) (string, error) {
 
 	if strategy == "auto" {
 		if err := o.reflinkFile(src, dst); err == nil {
-			slog.Debug("organizeFile: reflink succeeded", "src", filepath.Base(src), "dst", filepath.Base(dst))
+			slog.Debug("organizeFile reflink succeeded", "src", filepath.Base(src), "dst", filepath.Base(dst))
 			return "reflink", nil
 		} else {
-			slog.Warn("organizeFile: reflink failed", "file", filepath.Base(src), "error", err)
+			slog.Warn("organizeFile reflink failed", "file", filepath.Base(src), "error", err)
 		}
 		if err := o.hardlinkFile(src, dst); err == nil {
-			slog.Debug("organizeFile: hardlink succeeded", "src", filepath.Base(src), "dst", filepath.Base(dst))
+			slog.Debug("organizeFile hardlink succeeded", "src", filepath.Base(src), "dst", filepath.Base(dst))
 			return "hardlink", nil
 		} else {
-			slog.Warn("organizeFile: hardlink failed", "file", filepath.Base(src), "error", err)
+			slog.Warn("organizeFile hardlink failed", "file", filepath.Base(src), "error", err)
 		}
-		slog.Warn("organizeFile: falling back to copy", "file", filepath.Base(src))
+		slog.Warn("organizeFile falling back to copy", "file", filepath.Base(src))
 		strategy = "copy"
 	}
 

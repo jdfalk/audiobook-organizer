@@ -42,7 +42,7 @@ func (b *IndexService) Start(_ context.Context) error {
 		return nil
 	}
 	if b.cfg == nil || b.cfg.DatabasePath == "" {
-		slog.Info("searchindex: DatabasePath not configured, running without search")
+		slog.Info("searchindex DatabasePath not configured, running without search")
 		return nil
 	}
 	indexPath := filepath.Join(filepath.Dir(b.cfg.DatabasePath), "library.bleve")

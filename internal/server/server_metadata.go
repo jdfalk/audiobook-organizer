@@ -102,7 +102,7 @@ func (s *Server) loadMetadataState(bookID string) (map[string]metafetch.Metadata
 	}
 
 	if err := s.saveMetadataState(bookID, legacy); err != nil {
-		slog.Warn("failed to migrate legacy metadata state for :", "bookID", bookID, "err", err)
+		slog.Warn("failed to migrate legacy metadata state for", "bookID", bookID, "err", err)
 	}
 	return legacy, nil
 }

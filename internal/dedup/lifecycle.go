@@ -58,9 +58,9 @@ func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) er
 	// Step 1 — event bus subscription
 	if bus, ok := serviceregistry.TryGet[*plugin.EventBus](c, "eventbus"); ok && bus != nil {
 		bus.Subscribe(plugin.EventBookImported, de.onBookImported)
-		slog.Info("[dedup] PostInit: subscribed to EventBookImported")
+		slog.Info("[dedup] PostInit subscribed to EventBookImported")
 	} else {
-		slog.Info("[dedup] PostInit: eventbus not available, skipping dedup-on-import subscription")
+		slog.Info("[dedup] PostInit eventbus not available, skipping dedup-on-import subscription")
 	}
 
 	// Step 2 — chromem store + hydrate
@@ -73,10 +73,10 @@ func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) er
 			defer cancel()
 			books, authors, err := de.HydrateChromem(hCtx)
 			if err != nil {
-				slog.Warn("chromem hydrate finished with error:  (books= authors=)", "err", err, "books", books, "authors", authors)
+				slog.Warn("chromem hydrate finished with error", "err", err, "books", books, "authors", authors)
 				return
 			}
-			slog.Info("chromem hydrate complete: books= authors=", "books", books, "authors", authors)
+			slog.Info("chromem hydrate complete", "books", books, "authors", authors)
 		}()
 	}
 
@@ -106,7 +106,7 @@ func (de *Engine) onBookImported(_ context.Context, evt plugin.Event) error {
 		bgCtx = context.Background()
 	}
 	if _, err := de.CheckBook(bgCtx, evt.BookID); err != nil {
-		slog.Warn("dedup-on-import CheckBook():", "evt", evt.BookID, "err", err)
+		slog.Warn("dedup-on-import CheckBook()", "evt", evt.BookID, "err", err)
 	}
 	return nil
 }

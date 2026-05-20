@@ -86,7 +86,7 @@ func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]a
 	// Apply secrets explicitly — they need masking/debug logging and must not
 	// flow through the JSON round-trip to avoid plaintext exposure.
 	if val, ok := payloadString(payload, "openai_api_key"); ok {
-		slog.Debug("UpdateConfig: updating OpenAI API key (len=)", "val_count", len(val))
+		slog.Debug("UpdateConfig updating OpenAI API key (len)", "val_count", len(val))
 		AppConfig.OpenAIAPIKey = val
 	}
 	if val, ok := payloadString(payload, "google_books_api_key"); ok {
@@ -123,7 +123,7 @@ func (us *UpdateService) UpdateConfig(payload map[string]any) (int, map[string]a
 	AppConfig.SetupComplete = AppConfig.RootDir != ""
 
 	if err := SaveConfigToDatabase(us.DB); err != nil {
-		slog.Error("failed to persist config:", "err", err)
+		slog.Error("failed to persist config", "err", err)
 		return http.StatusInternalServerError, map[string]any{
 			"error":   "failed to save configuration",
 			"details": err.Error(),

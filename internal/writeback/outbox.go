@@ -102,7 +102,7 @@ func (o *WriteBackOutbox) ReplayOrphans(batcher Enqueuer) int {
 	}
 
 	if replayed > 0 {
-		slog.Info("Write-back outbox: replayed orphaned items", "count", replayed)
+		slog.Info("Write-back outbox replayed orphaned items", "count", replayed)
 	}
 	return replayed
 }

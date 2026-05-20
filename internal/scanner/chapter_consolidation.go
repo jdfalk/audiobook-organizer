@@ -132,7 +132,7 @@ func consolidateChapterGroups(files []string) []Book {
 		for i, c := range group {
 			paths[i] = c.path
 		}
-		slog.Info("scanner: chapter consolidation merging files", "count", len(group), "key", key, "avg_sec_per_file", avgSec, "total_sec", totalSec)
+		slog.Info("scanner chapter consolidation merging files", "count", len(group), "key", key, "avg_sec_per_file", avgSec, "total_sec", totalSec)
 		books = append(books, Book{
 			FilePath:     paths[0],
 			Format:       strings.ToLower(filepath.Ext(paths[0])),

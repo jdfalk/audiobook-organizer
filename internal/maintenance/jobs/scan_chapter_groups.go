@@ -46,6 +46,6 @@ func (j *scanChapterGroupsJob) Run(ctx context.Context, store database.Store, re
 		detail := fmt.Sprintf("title=%q files=%d duration=%.0fs ids=%v", g.CommonTitle, g.FileCount, g.TotalDuration, g.BookIDs)
 		slog.Info("chapter group detected", "details", detail)
 	}
-	slog.Info("scan-chapter-groups complete:  groups", "groups_count", len(groups))
+	slog.Info("scan-chapter-groups complete groups", "groups_count", len(groups))
 	return nil
 }

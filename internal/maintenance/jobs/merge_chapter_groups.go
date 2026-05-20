@@ -55,7 +55,7 @@ func (j *mergeChapterGroupsJob) Run(ctx context.Context, store database.Store, r
 		if !dryRun {
 			if merr := store.MergeChapterBooks(primaryID, srcIDs, g.CommonTitle, g.TotalDuration); merr != nil {
 				msg := merr.Error()
-				slog.Error("merge-chapter-groups: MergeChapterBooks failed", "details", msg)
+				slog.Error("merge-chapter-groups MergeChapterBooks failed", "details", msg)
 				continue
 			}
 		}
@@ -63,6 +63,6 @@ func (j *mergeChapterGroupsJob) Run(ctx context.Context, store database.Store, r
 		detail := fmt.Sprintf("primary=%s srcs=%v title=%q", primaryID, srcIDs, g.CommonTitle)
 		slog.Info("merged chapter group", "details", detail)
 	}
-	slog.Info("merge-chapter-groups complete:  merged", "merged", merged)
+	slog.Info("merge-chapter-groups complete merged", "merged", merged)
 	return nil
 }

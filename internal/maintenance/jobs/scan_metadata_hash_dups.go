@@ -55,6 +55,6 @@ func (j *scanMetadataHashDupsJob) Run(ctx context.Context, store database.Store,
 			slog.Warn("metadata hash duplicate group", "details", detail)
 		}
 	}
-	slog.Info("scan-metadata-hash-dups complete:  duplicate groups", "dups", dups)
+	slog.Info("scan-metadata-hash-dups complete duplicate groups", "dups", dups)
 	return nil
 }

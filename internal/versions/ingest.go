@@ -76,7 +76,7 @@ func CreateIngestVersion(store database.Store, params IngestVersionParams) (*dat
 	// Compute file hash and update the BookFile row.
 	hash, hashErr := HashFile(params.FilePath)
 	if hashErr != nil {
-		slog.Warn("hash :", "params", params.FilePath, "hashErr", hashErr)
+		slog.Warn("hash", "params", params.FilePath, "hashErr", hashErr)
 	} else {
 		files, _ := store.GetBookFiles(params.BookID)
 		for _, f := range files {
@@ -84,7 +84,7 @@ func CreateIngestVersion(store database.Store, params IngestVersionParams) (*dat
 				f.FileHash = hash
 				f.VersionID = ver.ID
 				if updateErr := store.UpdateBookFile(f.ID, &f); updateErr != nil {
-					slog.Warn("update file hash :", "f", f.ID, "updateErr", updateErr)
+					slog.Warn("update file hash", "f", f.ID, "updateErr", updateErr)
 				}
 				break
 			}

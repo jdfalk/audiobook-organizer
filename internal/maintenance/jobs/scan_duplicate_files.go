@@ -55,6 +55,6 @@ func (j *scanDuplicateFilesJob) Run(ctx context.Context, store database.Store, r
 			slog.Warn("duplicate files detected", "details", detail)
 		}
 	}
-	slog.Info("scan-duplicate-files complete:  duplicate groups", "dups", dups)
+	slog.Info("scan-duplicate-files complete duplicate groups", "dups", dups)
 	return nil
 }

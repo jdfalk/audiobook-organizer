@@ -83,7 +83,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 		}
 		entries, err := os.ReadDir(rootDir)
 		if err != nil {
-			slog.Warn("wipe: can't read root dir", "path", rootDir, "error", err)
+			slog.Warn("wipe can't read root dir", "path", rootDir, "error", err)
 		} else {
 			var count int64
 			for _, e := range entries {
@@ -96,10 +96,10 @@ func (s *Server) handleWipe(c *gin.Context) {
 					continue
 				}
 				fullPath := filepath.Join(rootDir, e.Name())
-				slog.Info("wipe: organized_folders", "action", dryRunLabel(dryRun), "path", fullPath)
+				slog.Info("wipe organized_folders", "action", dryRunLabel(dryRun), "path", fullPath)
 				if !dryRun {
 					if err := os.RemoveAll(fullPath); err != nil {
-						slog.Warn("wipe: RemoveAll failed", "path", fullPath, "error", err)
+						slog.Warn("wipe RemoveAll failed", "path", fullPath, "error", err)
 					}
 				}
 				count++
@@ -118,13 +118,13 @@ func (s *Server) handleWipe(c *gin.Context) {
 		for {
 			books, err := store.GetAllBooks(batchSize, offset)
 			if err != nil {
-				slog.Warn("wipe: files: GetAllBooks failed", "error", err)
+				slog.Warn("wipe files GetAllBooks failed", "error", err)
 				break
 			}
 			for _, book := range books {
 				files, ferr := store.GetBookFiles(book.ID)
 				if ferr != nil {
-					slog.Warn("wipe: files: GetBookFiles failed", "book_id", book.ID, "error", ferr)
+					slog.Warn("wipe files GetBookFiles failed", "book_id", book.ID, "error", ferr)
 					continue
 				}
 				for _, bf := range files {
@@ -135,10 +135,10 @@ func (s *Server) handleWipe(c *gin.Context) {
 					if !strings.HasPrefix(filepath.Clean(bf.FilePath), filepath.Clean(rootDir)) {
 						continue
 					}
-					slog.Info("wipe: files", "action", dryRunLabel(dryRun), "path", bf.FilePath)
+					slog.Info("wipe files", "action", dryRunLabel(dryRun), "path", bf.FilePath)
 					if !dryRun {
 						if rerr := os.Remove(bf.FilePath); rerr != nil && !os.IsNotExist(rerr) {
-							slog.Warn("wipe: os.Remove failed", "path", bf.FilePath, "error", rerr)
+							slog.Warn("wipe os.Remove failed", "path", bf.FilePath, "error", rerr)
 						}
 					}
 					count++
@@ -158,7 +158,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["book_files"] {
 		n, err := wipeBookFiles(store, dryRun)
 		if err != nil {
-			slog.Warn("wipe: book_files failed", "error", err)
+			slog.Warn("wipe book_files failed", "error", err)
 		}
 		results["book_files"] = n
 	}
@@ -167,7 +167,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["segments"] {
 		n, err := wipeSegments(store, dryRun)
 		if err != nil {
-			slog.Warn("wipe: segments failed", "error", err)
+			slog.Warn("wipe segments failed", "error", err)
 		}
 		results["segments"] = n
 	}
@@ -176,7 +176,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["books"] {
 		n, err := wipeBooks(store, dryRun)
 		if err != nil {
-			slog.Warn("wipe: books failed", "error", err)
+			slog.Warn("wipe books failed", "error", err)
 		}
 		results["books"] = n
 	}
@@ -185,7 +185,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["authors"] {
 		n, err := wipeAuthors(store, dryRun)
 		if err != nil {
-			slog.Warn("wipe: authors failed", "error", err)
+			slog.Warn("wipe authors failed", "error", err)
 		}
 		results["authors"] = n
 	}
@@ -194,7 +194,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["series"] {
 		n, err := wipeSeries(store, dryRun)
 		if err != nil {
-			slog.Warn("wipe: series failed", "error", err)
+			slog.Warn("wipe series failed", "error", err)
 		}
 		results["series"] = n
 	}
@@ -203,7 +203,7 @@ func (s *Server) handleWipe(c *gin.Context) {
 	if targetSet["external_ids"] {
 		n, err := wipeExternalIDs(store, dryRun)
 		if err != nil {
-			slog.Warn("wipe: external_ids failed", "error", err)
+			slog.Warn("wipe external_ids failed", "error", err)
 		}
 		results["external_ids"] = n
 	}
@@ -213,15 +213,15 @@ func (s *Server) handleWipe(c *gin.Context) {
 		if s.activityService != nil {
 			n, err := wipeActivity(s.activityService, dryRun)
 			if err != nil {
-				slog.Warn("wipe: activity failed", "error", err)
+				slog.Warn("wipe activity failed", "error", err)
 			}
 			results["activity"] = n
 		} else {
-			slog.Info("wipe: activity: activityService not initialized, skipping")
+			slog.Info("wipe activity activityService not initialized, skipping")
 		}
 	}
 
-	slog.Info("wipe: complete", "dry_run", dryRun, "targets", req.Targets, "results", results)
+	slog.Info("wipe complete", "dry_run", dryRun, "targets", req.Targets, "results", results)
 	httputil.RespondWithOK(c, struct {
 		DryRun  bool             `json:"dry_run"`
 		Results map[string]int64 `json:"results"`
@@ -260,7 +260,7 @@ func wipeBookFiles(store maintenanceStore, dryRun bool) (int64, error) {
 			}
 			for _, book := range books {
 				if err := store.DeleteBookFilesForBook(book.ID); err != nil {
-					slog.Warn("wipeBookFiles: DeleteBookFilesForBook failed", "book_id", book.ID, "error", err)
+					slog.Warn("wipeBookFiles DeleteBookFilesForBook failed", "book_id", book.ID, "error", err)
 				}
 				count++ // approximate
 			}

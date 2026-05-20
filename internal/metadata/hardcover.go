@@ -272,7 +272,7 @@ func (c *HardcoverClient) search(ctx context.Context, query string) ([]BookMetad
 		// so a schema change surfaces clearly instead of producing
 		// silently-empty results.
 		for _, e := range gqlResp.Errors {
-			slog.Warn("Hardcover GraphQL error:", "e", e.Message)
+			slog.Warn("Hardcover GraphQL error", "e", e.Message)
 		}
 		return nil, fmt.Errorf("hardcover GraphQL error: %s", gqlResp.Errors[0].Message)
 	}

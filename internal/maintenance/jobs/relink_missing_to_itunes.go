@@ -108,7 +108,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		case 1:
 			newFP := filepath.Clean(matches[0])
 			if !util.WithinRoot(newFP, iTunesRoot) {
-				slog.Warn("relink-missing-to-itunes: match %q outside iTunesRoot, skipping", newFP)
+				slog.Warn("relink-missing-to-itunes match %q outside iTunesRoot, skipping", newFP)
 				unresolved++
 				break
 			}
@@ -117,7 +117,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 				fi, _ := os.Stat(newFP)
 				book.FilePath = newFP
 				if _, upErr := store.UpdateBook(book.ID, book); upErr != nil {
-					slog.Warn("relink-missing-to-itunes: UpdateBook :", "book", book.ID, "upErr", upErr)
+					slog.Warn("relink-missing-to-itunes UpdateBook", "book", book.ID, "upErr", upErr)
 					relinked--
 					unresolved++
 					break
@@ -132,7 +132,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 			if best != "" {
 				best = filepath.Clean(best)
 				if !util.WithinRoot(best, iTunesRoot) {
-					slog.Warn("relink-missing-to-itunes: best match %q outside iTunesRoot, skipping", best)
+					slog.Warn("relink-missing-to-itunes best match %q outside iTunesRoot, skipping", best)
 					unresolved++
 					break
 				}
@@ -141,7 +141,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 					fi, _ := os.Stat(best)
 					book.FilePath = best
 					if _, upErr := store.UpdateBook(book.ID, book); upErr != nil {
-						slog.Warn("relink-missing-to-itunes: UpdateBook :", "book", book.ID, "upErr", upErr)
+						slog.Warn("relink-missing-to-itunes UpdateBook", "book", book.ID, "upErr", upErr)
 						relinked--
 						unresolved++
 						break
@@ -157,8 +157,8 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		}
 	}
 
-	slog.Info("relink-missing-to-itunes: relinked= ambiguous= unresolved= skipped=", "relinked", relinked, "ambiguous", ambiguous, "unresolved", unresolved, "skipped", skipped)
-	slog.Info("relinked= ambiguous= unresolved= skipped=", "relinked", relinked, "ambiguous", ambiguous, "unresolved", unresolved, "skipped", skipped)
+	slog.Info("relink-missing-to-itunes relinked ambiguous unresolved skipped", "relinked", relinked, "ambiguous", ambiguous, "unresolved", unresolved, "skipped", skipped)
+	slog.Info("relinked ambiguous unresolved skipped", "relinked", relinked, "ambiguous", ambiguous, "unresolved", unresolved, "skipped", skipped)
 	return nil
 }
 

@@ -76,11 +76,11 @@ func (j *fixAuthorNarratorSwapJob) Run(ctx context.Context, store database.Store
 			if !dryRun {
 				current, getErr := store.GetBookByID(book.ID)
 				if getErr != nil || current == nil {
-					slog.Error("Failed to fetch book :", "book", book.ID, "getErr", getErr)
+					slog.Error("Failed to fetch book", "book", book.ID, "getErr", getErr)
 				} else {
 					current.AuthorID = nil
 					if _, updateErr := store.UpdateBook(book.ID, current); updateErr != nil {
-						slog.Error("Failed to update book :", "book", book.ID, "updateErr", updateErr)
+						slog.Error("Failed to update book", "book", book.ID, "updateErr", updateErr)
 					} else {
 						applied++
 					}
@@ -95,6 +95,6 @@ func (j *fixAuthorNarratorSwapJob) Run(ctx context.Context, store database.Store
 		offset += batchSize
 	}
 
-	slog.Info("Done: found= applied= dryRun=", "found", found, "applied", applied, "dryRun", dryRun)
+	slog.Info("Done found applied dryRun", "found", found, "applied", applied, "dryRun", dryRun)
 	return nil
 }

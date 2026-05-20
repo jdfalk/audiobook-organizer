@@ -61,7 +61,7 @@ func (rs *RevertService) RevertOperation(operationID string) error {
 		c := changes[i]
 		if err := rs.revertChange(c); err != nil {
 			errors = append(errors, fmt.Sprintf("change %s: %v", c.ID, err))
-			slog.Warn("revert failed for change :", "c", c.ID, "err", err)
+			slog.Warn("revert failed for change", "c", c.ID, "err", err)
 		}
 	}
 
@@ -187,12 +187,12 @@ func (rs *RevertService) revertTagWrite(c *database.OperationChange) error {
 	}
 
 	if _, statErr := os.Stat(book.FilePath); os.IsNotExist(statErr) {
-		slog.Warn("file  not found, skipping tag revert", "book", book.FilePath)
+		slog.Warn("file not found, skipping tag revert", "book", book.FilePath)
 		return nil
 	}
 
 	if isProtectedPath(rs.db, book.FilePath) {
-		slog.Info("skipping tag revert for protected path:", "book", book.FilePath)
+		slog.Info("skipping tag revert for protected path", "book", book.FilePath)
 		return nil
 	}
 

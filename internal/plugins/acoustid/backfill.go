@@ -214,7 +214,7 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	updated.AcoustIDSeg5 = fingerprint.NormalizeFingerprint(segs[5])
 	updated.AcoustIDSeg6 = fingerprint.NormalizeFingerprint(segs[6])
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
-		slog.Warn("fingerprint: update", "id", f.ID, "err", err)
+		slog.Warn("fingerprint update", "id", f.ID, "err", err)
 		return fingerprintOutcomeFailed
 	}
 	return fingerprintOutcomeFingerprinted

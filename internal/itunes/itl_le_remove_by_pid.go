@@ -60,7 +60,7 @@ func RemoveTracksByPIDLE(data []byte, pids map[string]bool) ([]byte, int) {
 	if masterAfter == nil {
 		// Couldn't re-locate master — bail conservatively and abort
 		// the whole removal so we never produce a half-cleaned ITL.
-		slog.Error("RemoveTracksByPIDLE: could not re-locate master after mith splice — aborting remove")
+		slog.Error("RemoveTracksByPIDLE could not re-locate master after mith splice — aborting remove")
 		return data, 0
 	}
 

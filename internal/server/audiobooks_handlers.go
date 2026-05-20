@@ -247,20 +247,20 @@ func (s *Server) runAutoPurgeSoftDeleted(opID string) {
 		return
 	}
 	if s.Store() == nil {
-		slog.Debug("Auto-purge skipped: database not initialized")
+		slog.Debug("Auto-purge skipped database not initialized")
 		return
 	}
 
 	days := config.AppConfig.PurgeSoftDeletedAfterDays
 	result, err := s.audiobookService.PurgeSoftDeletedBooks(context.Background(), config.AppConfig.PurgeSoftDeletedDeleteFiles, &days)
 	if err != nil {
-		slog.Warn("Auto-purge failed:", "err", err)
+		slog.Warn("Auto-purge failed", "err", err)
 		return
 	}
 
 	msg := fmt.Sprintf("Purged %d/%d soft-deleted books (%d files deleted, %d errors)",
 		result.Purged, result.Attempted, result.FilesDeleted, len(result.Errors))
-	slog.Info("Auto-purge:", "msg", msg)
+	slog.Info("Auto-purge", "msg", msg)
 	activity.EmitInfo(s.activityWriter, opID, "purge-deleted", "purge-deleted", msg,
 		activity.TagsIf(result.Purged == 0, activity.NoOpTag)...)
 	for _, e := range result.Errors {
@@ -302,15 +302,15 @@ func (s *Server) warmFacetsCache() {
 	if s.Store() == nil {
 		return
 	}
-	slog.Info("facets: pre-warming genres/languages cache")
+	slog.Info("facets pre-warming genres/languages cache")
 	genres, err := s.Store().GetDistinctGenres()
 	if err != nil {
-		slog.Info("facets: genre warm-up failed:", "err", err)
+		slog.Info("facets genre warm-up failed", "err", err)
 		return
 	}
 	languages, err := s.Store().GetDistinctLanguages()
 	if err != nil {
-		slog.Info("facets: language warm-up failed:", "err", err)
+		slog.Info("facets language warm-up failed", "err", err)
 		return
 	}
 	if genres == nil {
@@ -320,7 +320,7 @@ func (s *Server) warmFacetsCache() {
 		languages = []string{}
 	}
 	s.facetsCache.Set(facetsCacheKey, gin.H{"genres": genres, "languages": languages})
-	slog.Info("facets: cache warm:  genres,  languages", "genres_count", len(genres), "languages_count", len(languages))
+	slog.Info("facets cache warm genres, languages", "genres_count", len(genres), "languages_count", len(languages))
 }
 
 // audiobookFacets handles GET /api/v1/audiobooks/facets.
@@ -568,7 +568,7 @@ func (s *Server) extractTrackInfo(c *gin.Context) {
 			files[i].TrackCount = *info.TotalTracks
 		}
 		if err := s.Store().UpdateBookFile(files[i].ID, &files[i]); err != nil {
-			slog.Warn("failed to update book file  track info:", "value0", files[i].ID, "err", err)
+			slog.Warn("failed to update book file track info", "value0", files[i].ID, "err", err)
 			continue
 		}
 		updated++
@@ -692,7 +692,7 @@ func (s *Server) relocateBookFiles(c *gin.Context) {
 	if result.Updated > 0 && len(files) > 0 {
 		book.FilePath = files[0].FilePath
 		if _, err := s.Store().UpdateBook(book.ID, book); err != nil {
-			slog.Warn("failed to update book file_path:", "err", err)
+			slog.Warn("failed to update book file_path", "err", err)
 		}
 	}
 
@@ -902,7 +902,7 @@ func (s *Server) undoMetadataChange(c *gin.Context) {
 		ChangedAt:     time.Now(),
 	}
 	if err := s.Store().RecordMetadataChange(undoRecord); err != nil {
-		slog.Warn("failed to record undo change for /:", "id", id, "field", field, "err", err)
+		slog.Warn("failed to record undo change for /", "id", id, "field", field, "err", err)
 	}
 
 	// METADATA-CACHED-MATCHER: undo of a metadata field rewrites book
@@ -976,13 +976,13 @@ func (s *Server) undoLastApply(c *gin.Context) {
 				prevValue = *rec.PreviousValue
 			}
 			if setErr := s.metadataStateService.SetOverride(id, rec.Field, prevValue, false); setErr != nil {
-				slog.Warn("undo-last-apply: failed to revert  for :", "rec", rec.Field, "id", id, "setErr", setErr)
+				slog.Warn("undo-last-apply failed to revert for", "rec", rec.Field, "id", id, "setErr", setErr)
 				continue
 			}
 		} else {
 			if clrErr := s.metadataStateService.ClearOverride(id, rec.Field); clrErr != nil {
 				if !strings.Contains(clrErr.Error(), "not found") {
-					slog.Warn("undo-last-apply: failed to clear  for :", "rec", rec.Field, "id", id, "clrErr", clrErr)
+					slog.Warn("undo-last-apply failed to clear for", "rec", rec.Field, "id", id, "clrErr", clrErr)
 					continue
 				}
 			}
@@ -1000,7 +1000,7 @@ func (s *Server) undoLastApply(c *gin.Context) {
 			ChangedAt:     time.Now(),
 		}
 		if recErr := s.Store().RecordMetadataChange(undoRec); recErr != nil {
-			slog.Warn("undo-last-apply: failed to record undo for /:", "id", id, "rec", rec.Field, "recErr", recErr)
+			slog.Warn("undo-last-apply failed to record undo for /", "id", id, "rec", rec.Field, "recErr", recErr)
 		}
 	}
 
@@ -1349,7 +1349,7 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 				ChangedAt:     now,
 			}
 			if err := s.Store().RecordMetadataChange(record); err != nil {
-				slog.Warn("failed to record manual metadata change for .:", "id", id, "c", c.field, "err", err)
+				slog.Warn("failed to record manual metadata change for .", "id", id, "c", c.field, "err", err)
 			}
 		}
 	}
@@ -1402,15 +1402,15 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		}
 		if len(tagMap) > 0 {
 			if s.isProtectedPath(updatedBook.FilePath) {
-				slog.Info("skipping write-back for protected path:", "updatedBook", updatedBook.FilePath)
+				slog.Info("skipping write-back for protected path", "updatedBook", updatedBook.FilePath)
 			} else {
 				opConfig := fileops.OperationConfig{VerifyChecksums: true}
 				if writeErr := metadata.WriteMetadataToFile(updatedBook.FilePath, tagMap, opConfig); writeErr != nil {
-					slog.Warn("write-back failed for :", "updatedBook", updatedBook.FilePath, "writeErr", writeErr)
+					slog.Warn("write-back failed for", "updatedBook", updatedBook.FilePath, "writeErr", writeErr)
 				} else {
 					// Stamp last_written_at after successful write-back.
 					if stampErr := s.Store().SetLastWrittenAt(updatedBook.ID, time.Now()); stampErr != nil {
-						slog.Warn("failed to stamp last_written_at for book :", "updatedBook", updatedBook.ID, "stampErr", stampErr)
+						slog.Warn("failed to stamp last_written_at for book", "updatedBook", updatedBook.ID, "stampErr", stampErr)
 					}
 				}
 			}

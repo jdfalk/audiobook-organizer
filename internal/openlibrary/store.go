@@ -33,7 +33,7 @@ func NewOLStore(path string) (*OLStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open OL store: %w", err)
 	}
-	slog.Info("OL PebbleDB opened at  (format version: )", "value0", "path", "path", path, "value1", db.FormatMajorVersion())
+	slog.Info("OL PebbleDB opened at (format version )", "value0", "path", "path", path, "value1", db.FormatMajorVersion())
 	return &OLStore{db: db}, nil
 }
 
@@ -117,7 +117,7 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 		}
 		if prev.LinesProcessed > 0 && prev.ImportProgress < 1.0 && prev.FileSize == fileSize {
 			skipLines = prev.LinesProcessed
-			slog.Info("Resuming  import from line", "value0", "dumpType", "dumpType", dumpType, "skipLines", skipLines)
+			slog.Info("Resuming import from line", "value0", "dumpType", "dumpType", dumpType, "skipLines", skipLines)
 		} else if prev.ImportProgress >= 1.0 && prev.FileSize == fileSize {
 			slog.Info("import already complete ( records), skipping", "value0", "dumpType", "dumpType", dumpType, "value1", prev.RecordCount)
 			if progress != nil {
@@ -149,7 +149,7 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 			lineNum++
 			if lineNum <= skipLines {
 				if lineNum%500000 == 0 {
-					slog.Info("Skipping  lines for resume:  /", "value0", "dumpType", "dumpType", dumpType, "value2", "lineNum", lineNum, "skipLines", skipLines)
+					slog.Info("Skipping lines for resume /", "value0", "dumpType", "dumpType", dumpType, "value2", "lineNum", lineNum, "skipLines", skipLines)
 				}
 				continue
 			}

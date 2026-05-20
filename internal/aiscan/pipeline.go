@@ -63,9 +63,9 @@ func (pm *PipelineManager) CancelScan(scanID int) error {
 	for _, p := range phases {
 		if p.Status == "submitted" && p.BatchID != "" {
 			if err := pm.parser.CancelBatch(context.Background(), p.BatchID); err != nil {
-				slog.Warn("[AI Pipeline] Scan : warning: failed to cancel batch :", "scanID", scanID, "p", p.BatchID, "err", err)
+				slog.Warn("[AI Pipeline] Scan warning failed to cancel batch", "scanID", scanID, "p", p.BatchID, "err", err)
 			} else {
-				slog.Info("[AI Pipeline] Scan : canceled batch", "scanID", scanID, "p", p.BatchID)
+				slog.Info("[AI Pipeline] Scan canceled batch", "scanID", scanID, "p", p.BatchID)
 			}
 		}
 	}
@@ -148,7 +148,7 @@ func (pm *PipelineManager) StartScan(ctx context.Context, mode string) (*databas
 	opID := ulid.Make().String()
 	detail := fmt.Sprintf("AI scan #%d (%s mode, %d authors)", scan.ID, mode, len(authors))
 	if _, err := pm.mainStore.CreateOperation(opID, "ai-author-scan", &detail); err != nil {
-		slog.Warn("[AI Pipeline] Warning: failed to create operation record:", "err", err)
+		slog.Warn("[AI Pipeline] Warning failed to create operation record", "err", err)
 	} else {
 		scan.OperationID = opID
 		// Re-save scan with operation ID
@@ -187,7 +187,7 @@ func (pm *PipelineManager) StartScan(ctx context.Context, mode string) (*databas
 func (pm *PipelineManager) OnPhaseComplete(ctx context.Context, scanID int, completedPhase string) {
 	phases, err := pm.scanStore.GetPhases(scanID)
 	if err != nil {
-		slog.Error("[AI Pipeline] Error getting phases for scan :", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Error getting phases for scan", "scanID", scanID, "err", err)
 		return
 	}
 	phaseStates := map[string]string{}
@@ -225,12 +225,12 @@ func (pm *PipelineManager) OnPhaseComplete(ctx context.Context, scanID int, comp
 
 // failPhase marks a phase and the overall scan as failed, and updates the operation record.
 func (pm *PipelineManager) failPhase(scanID int, phaseType string, err error) {
-	slog.Info("[AI Pipeline] Scan :  failed:", "scanID", scanID, "phaseType", phaseType, "err", err)
+	slog.Info("[AI Pipeline] Scan failed", "scanID", scanID, "phaseType", phaseType, "err", err)
 	if updateErr := pm.scanStore.UpdatePhaseStatus(scanID, phaseType, "failed", ""); updateErr != nil {
-		slog.Error("[AI Pipeline] Scan : error updating  status:", "scanID", scanID, "phaseType", phaseType, "updateErr", updateErr)
+		slog.Error("[AI Pipeline] Scan error updating status", "scanID", scanID, "phaseType", phaseType, "updateErr", updateErr)
 	}
 	if updateErr := pm.scanStore.UpdateScanStatus(scanID, "failed"); updateErr != nil {
-		slog.Error("[AI Pipeline] Scan : error updating scan status:", "scanID", scanID, "updateErr", updateErr)
+		slog.Error("[AI Pipeline] Scan error updating scan status", "scanID", scanID, "updateErr", updateErr)
 	}
 
 	// Update operation record
@@ -373,9 +373,9 @@ func fullSuggestionsToScanSuggestions(suggestions []ai.AuthorDiscoverySuggestion
 // Phase implementations
 
 func (pm *PipelineManager) runGroupsScanRealtime(ctx context.Context, scanID int, authors []database.Author) {
-	slog.Info("[AI Pipeline] Scan : starting groups scan (realtime)", "scanID", scanID)
+	slog.Info("[AI Pipeline] Scan starting groups scan (realtime)", "scanID", scanID)
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, "groups_scan", "processing", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating groups_scan status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating groups_scan status", "scanID", scanID, "err", err)
 		return
 	}
 
@@ -387,12 +387,12 @@ func (pm *PipelineManager) runGroupsScanRealtime(ctx context.Context, scanID int
 	}
 
 	if len(inputs) == 0 {
-		slog.Info("[AI Pipeline] Scan : no duplicate groups found, skipping groups scan", "scanID", scanID)
+		slog.Info("[AI Pipeline] Scan no duplicate groups found, skipping groups scan", "scanID", scanID)
 		// Save empty results
 		emptySuggestions, _ := json.Marshal([]database.ScanSuggestion{})
 		_ = pm.scanStore.SavePhaseData(scanID, "groups_scan", nil, nil, emptySuggestions)
 		if err := pm.scanStore.UpdatePhaseStatus(scanID, "groups_scan", "complete", ""); err != nil {
-			slog.Error("[AI Pipeline] Scan : error updating groups_scan status:", "scanID", scanID, "err", err)
+			slog.Error("[AI Pipeline] Scan error updating groups_scan status", "scanID", scanID, "err", err)
 			return
 		}
 		pm.OnPhaseComplete(ctx, scanID, "groups_scan")
@@ -422,28 +422,28 @@ func (pm *PipelineManager) runGroupsScanRealtime(ctx context.Context, scanID int
 		return
 	}
 
-	slog.Info("[AI Pipeline] Scan : groups scan complete —  suggestions from  groups", "scanID", scanID, "scanSuggestions_count", len(scanSuggestions), "inputs_count", len(inputs))
+	slog.Info("[AI Pipeline] Scan groups scan complete — suggestions from groups", "scanID", scanID, "scanSuggestions_count", len(scanSuggestions), "inputs_count", len(inputs))
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, "groups_scan", "complete", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating groups_scan status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating groups_scan status", "scanID", scanID, "err", err)
 		return
 	}
 	pm.OnPhaseComplete(ctx, scanID, "groups_scan")
 }
 
 func (pm *PipelineManager) runFullScanRealtime(ctx context.Context, scanID int, authors []database.Author) {
-	slog.Info("[AI Pipeline] Scan : starting full scan (realtime)", "scanID", scanID)
+	slog.Info("[AI Pipeline] Scan starting full scan (realtime)", "scanID", scanID)
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, "full_scan", "processing", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating full_scan status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating full_scan status", "scanID", scanID, "err", err)
 		return
 	}
 
 	inputs := pm.buildFullInput(authors)
 	if len(inputs) == 0 {
-		slog.Info("[AI Pipeline] Scan : no authors found, skipping full scan", "scanID", scanID)
+		slog.Info("[AI Pipeline] Scan no authors found, skipping full scan", "scanID", scanID)
 		emptySuggestions, _ := json.Marshal([]database.ScanSuggestion{})
 		_ = pm.scanStore.SavePhaseData(scanID, "full_scan", nil, nil, emptySuggestions)
 		if err := pm.scanStore.UpdatePhaseStatus(scanID, "full_scan", "complete", ""); err != nil {
-			slog.Error("[AI Pipeline] Scan : error updating full_scan status:", "scanID", scanID, "err", err)
+			slog.Error("[AI Pipeline] Scan error updating full_scan status", "scanID", scanID, "err", err)
 			return
 		}
 		pm.OnPhaseComplete(ctx, scanID, "full_scan")
@@ -485,16 +485,16 @@ func (pm *PipelineManager) runFullScanRealtime(ctx context.Context, scanID int, 
 		return
 	}
 
-	slog.Info("[AI Pipeline] Scan : full scan complete —  suggestions from  authors", "scanID", scanID, "scanSuggestions_count", len(scanSuggestions), "inputs_count", len(inputs))
+	slog.Info("[AI Pipeline] Scan full scan complete — suggestions from authors", "scanID", scanID, "scanSuggestions_count", len(scanSuggestions), "inputs_count", len(inputs))
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, "full_scan", "complete", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating full_scan status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating full_scan status", "scanID", scanID, "err", err)
 		return
 	}
 	pm.OnPhaseComplete(ctx, scanID, "full_scan")
 }
 
 func (pm *PipelineManager) runGroupsScanBatch(ctx context.Context, scanID int, authors []database.Author) {
-	slog.Info("[AI Pipeline] Scan : starting groups scan (batch)", "scanID", scanID)
+	slog.Info("[AI Pipeline] Scan starting groups scan (batch)", "scanID", scanID)
 
 	inputs, _, err := pm.buildGroupsInput(authors)
 	if err != nil {
@@ -503,11 +503,11 @@ func (pm *PipelineManager) runGroupsScanBatch(ctx context.Context, scanID int, a
 	}
 
 	if len(inputs) == 0 {
-		slog.Info("[AI Pipeline] Scan : no duplicate groups found, marking groups scan complete", "scanID", scanID)
+		slog.Info("[AI Pipeline] Scan no duplicate groups found, marking groups scan complete", "scanID", scanID)
 		emptySuggestions, _ := json.Marshal([]database.ScanSuggestion{})
 		_ = pm.scanStore.SavePhaseData(scanID, "groups_scan", nil, nil, emptySuggestions)
 		if err := pm.scanStore.UpdatePhaseStatus(scanID, "groups_scan", "complete", ""); err != nil {
-			slog.Error("[AI Pipeline] Scan : error updating groups_scan status:", "scanID", scanID, "err", err)
+			slog.Error("[AI Pipeline] Scan error updating groups_scan status", "scanID", scanID, "err", err)
 		}
 		pm.OnPhaseComplete(ctx, scanID, "groups_scan")
 		return
@@ -524,23 +524,23 @@ func (pm *PipelineManager) runGroupsScanBatch(ctx context.Context, scanID int, a
 		return
 	}
 
-	slog.Info("[AI Pipeline] Scan : groups batch submitted — batch_id=", "scanID", scanID, "batchID", batchID)
+	slog.Info("[AI Pipeline] Scan groups batch submitted — batch_id", "scanID", scanID, "batchID", batchID)
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, "groups_scan", "submitted", batchID); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating groups_scan status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating groups_scan status", "scanID", scanID, "err", err)
 	}
 	// Scheduler will poll for completion
 }
 
 func (pm *PipelineManager) runFullScanBatch(ctx context.Context, scanID int, authors []database.Author) {
-	slog.Info("[AI Pipeline] Scan : starting full scan (batch)", "scanID", scanID)
+	slog.Info("[AI Pipeline] Scan starting full scan (batch)", "scanID", scanID)
 
 	inputs := pm.buildFullInput(authors)
 	if len(inputs) == 0 {
-		slog.Info("[AI Pipeline] Scan : no authors found, marking full scan complete", "scanID", scanID)
+		slog.Info("[AI Pipeline] Scan no authors found, marking full scan complete", "scanID", scanID)
 		emptySuggestions, _ := json.Marshal([]database.ScanSuggestion{})
 		_ = pm.scanStore.SavePhaseData(scanID, "full_scan", nil, nil, emptySuggestions)
 		if err := pm.scanStore.UpdatePhaseStatus(scanID, "full_scan", "complete", ""); err != nil {
-			slog.Error("[AI Pipeline] Scan : error updating full_scan status:", "scanID", scanID, "err", err)
+			slog.Error("[AI Pipeline] Scan error updating full_scan status", "scanID", scanID, "err", err)
 		}
 		pm.OnPhaseComplete(ctx, scanID, "full_scan")
 		return
@@ -557,21 +557,21 @@ func (pm *PipelineManager) runFullScanBatch(ctx context.Context, scanID int, aut
 		return
 	}
 
-	slog.Info("[AI Pipeline] Scan : full batch submitted — batch_id=", "scanID", scanID, "batchID", batchID)
+	slog.Info("[AI Pipeline] Scan full batch submitted — batch_id", "scanID", scanID, "batchID", batchID)
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, "full_scan", "submitted", batchID); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating full_scan status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating full_scan status", "scanID", scanID, "err", err)
 	}
 	// Scheduler will poll for completion
 }
 
 func (pm *PipelineManager) runEnrichment(ctx context.Context, scanID int, sourcePhase, enrichPhase string) {
-	slog.Info("[AI Pipeline] Scan : starting enrichment for", "scanID", scanID, "sourcePhase", sourcePhase)
+	slog.Info("[AI Pipeline] Scan starting enrichment for", "scanID", scanID, "sourcePhase", sourcePhase)
 	if _, err := pm.scanStore.CreatePhase(scanID, enrichPhase, ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error creating  phase:", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
+		slog.Error("[AI Pipeline] Scan error creating phase", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
 		return
 	}
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, enrichPhase, "processing", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating  status:", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating status", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
 		return
 	}
 
@@ -599,12 +599,12 @@ func (pm *PipelineManager) runEnrichment(ctx context.Context, scanID int, source
 	}
 
 	if len(uncertain) == 0 {
-		slog.Info("[AI Pipeline] Scan : no uncertain suggestions in , skipping enrichment", "scanID", scanID, "sourcePhase", sourcePhase)
+		slog.Info("[AI Pipeline] Scan no uncertain suggestions in , skipping enrichment", "scanID", scanID, "sourcePhase", sourcePhase)
 		// Save original suggestions as enriched (unchanged)
 		suggestionsJSON, _ := json.Marshal(suggestions)
 		_ = pm.scanStore.SavePhaseData(scanID, enrichPhase, nil, nil, suggestionsJSON)
 		if err := pm.scanStore.UpdatePhaseStatus(scanID, enrichPhase, "complete", ""); err != nil {
-			slog.Error("[AI Pipeline] Scan : error updating  status:", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
+			slog.Error("[AI Pipeline] Scan error updating status", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
 			return
 		}
 		pm.OnPhaseComplete(ctx, scanID, enrichPhase)
@@ -678,11 +678,11 @@ func (pm *PipelineManager) runEnrichment(ctx context.Context, scanID int, source
 		discoveries, err := pm.parser.DiscoverAuthorDuplicates(ctx, deduped)
 		if err != nil {
 			// Enrichment failure is non-fatal — use original suggestions
-			slog.Info("[AI Pipeline] Scan : enrichment AI call failed for :  — using original suggestions", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
+			slog.Info("[AI Pipeline] Scan enrichment AI call failed for — using original suggestions", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
 			suggestionsJSON, _ := json.Marshal(suggestions)
 			_ = pm.scanStore.SavePhaseData(scanID, enrichPhase, enrichInputJSON, nil, suggestionsJSON)
 			if err := pm.scanStore.UpdatePhaseStatus(scanID, enrichPhase, "complete", ""); err != nil {
-				slog.Error("[AI Pipeline] Scan : error updating  status:", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
+				slog.Error("[AI Pipeline] Scan error updating status", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
 				return
 			}
 			pm.OnPhaseComplete(ctx, scanID, enrichPhase)
@@ -725,22 +725,22 @@ func (pm *PipelineManager) runEnrichment(ctx context.Context, scanID int, source
 		_ = pm.scanStore.SavePhaseData(scanID, enrichPhase, nil, nil, suggestionsJSON)
 	}
 
-	slog.Info("[AI Pipeline] Scan : enrichment complete for", "scanID", scanID, "enrichPhase", enrichPhase)
+	slog.Info("[AI Pipeline] Scan enrichment complete for", "scanID", scanID, "enrichPhase", enrichPhase)
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, enrichPhase, "complete", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating  status:", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating status", "scanID", scanID, "enrichPhase", enrichPhase, "err", err)
 		return
 	}
 	pm.OnPhaseComplete(ctx, scanID, enrichPhase)
 }
 
 func (pm *PipelineManager) runCrossValidation(ctx context.Context, scanID int) {
-	slog.Info("[AI Pipeline] Scan : starting cross-validation", "scanID", scanID)
+	slog.Info("[AI Pipeline] Scan starting cross-validation", "scanID", scanID)
 	if _, err := pm.scanStore.CreatePhase(scanID, "cross_validate", "local"); err != nil {
-		slog.Error("[AI Pipeline] Scan : error creating cross_validate phase:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error creating cross_validate phase", "scanID", scanID, "err", err)
 		return
 	}
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, "cross_validate", "processing", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating cross_validate status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating cross_validate status", "scanID", scanID, "err", err)
 		return
 	}
 
@@ -754,17 +754,17 @@ func (pm *PipelineManager) runCrossValidation(ctx context.Context, scanID int) {
 	// Save results
 	for i := range results {
 		if err := pm.scanStore.SaveScanResult(&results[i]); err != nil {
-			slog.Error("[AI Pipeline] Scan : error saving result:", "scanID", scanID, "err", err)
+			slog.Error("[AI Pipeline] Scan error saving result", "scanID", scanID, "err", err)
 		}
 	}
 
-	slog.Info("[AI Pipeline] Scan : cross-validation complete —  results", "scanID", scanID, "results_count", len(results))
+	slog.Info("[AI Pipeline] Scan cross-validation complete — results", "scanID", scanID, "results_count", len(results))
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, "cross_validate", "complete", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating cross_validate status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating cross_validate status", "scanID", scanID, "err", err)
 		return
 	}
 	if err := pm.scanStore.UpdateScanStatus(scanID, "complete"); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating scan status:", "scanID", scanID, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating scan status", "scanID", scanID, "err", err)
 	}
 
 	// Update operation record
@@ -809,7 +809,7 @@ func (pm *PipelineManager) PollBatchPhases(ctx context.Context) {
 	// Get all scans that are in "scanning" status
 	scans, err := pm.scanStore.ListScans()
 	if err != nil {
-		slog.Error("[AI Pipeline] Error listing scans for batch polling:", "err", err)
+		slog.Error("[AI Pipeline] Error listing scans for batch polling", "err", err)
 		return
 	}
 
@@ -833,7 +833,7 @@ func (pm *PipelineManager) PollBatchPhases(ctx context.Context) {
 
 			status, outputFileID, err := pm.parser.CheckBatchStatus(ctx, phase.BatchID)
 			if err != nil {
-				slog.Error("[AI Pipeline] Scan : error polling batch :", "scan", scan.ID, "phase", phase.BatchID, "err", err)
+				slog.Error("[AI Pipeline] Scan error polling batch", "scan", scan.ID, "phase", phase.BatchID, "err", err)
 				continue
 			}
 
@@ -844,7 +844,7 @@ func (pm *PipelineManager) PollBatchPhases(ctx context.Context) {
 				pm.failPhase(scan.ID, phase.PhaseType, fmt.Errorf("batch %s: %s", phase.BatchID, status))
 			default:
 				// Still processing — do nothing
-				slog.Info("[AI Pipeline] Scan : batch  status:", "scan", scan.ID, "phase", phase.BatchID, "status", status)
+				slog.Info("[AI Pipeline] Scan batch status", "scan", scan.ID, "phase", phase.BatchID, "status", status)
 			}
 		}
 	}
@@ -852,7 +852,7 @@ func (pm *PipelineManager) PollBatchPhases(ctx context.Context) {
 
 // handleBatchComplete downloads and processes results for a completed batch phase.
 func (pm *PipelineManager) handleBatchComplete(ctx context.Context, scanID int, phase database.ScanPhase, outputFileID string) {
-	slog.Info("[AI Pipeline] Scan : batch  completed, downloading results", "scanID", scanID, "phase", phase.BatchID)
+	slog.Info("[AI Pipeline] Scan batch completed, downloading results", "scanID", scanID, "phase", phase.BatchID)
 
 	switch phase.PhaseType {
 	case "groups_scan":
@@ -894,9 +894,9 @@ func (pm *PipelineManager) handleBatchComplete(ctx context.Context, scanID int, 
 		_ = pm.scanStore.SavePhaseData(scanID, phase.PhaseType, phase.InputData, outputJSON, suggestionsJSON)
 	}
 
-	slog.Info("[AI Pipeline] Scan :  batch results processed", "scanID", scanID, "phase", phase.PhaseType)
+	slog.Info("[AI Pipeline] Scan batch results processed", "scanID", scanID, "phase", phase.PhaseType)
 	if err := pm.scanStore.UpdatePhaseStatus(scanID, phase.PhaseType, "complete", ""); err != nil {
-		slog.Error("[AI Pipeline] Scan : error updating  status:", "scanID", scanID, "phase", phase.PhaseType, "err", err)
+		slog.Error("[AI Pipeline] Scan error updating status", "scanID", scanID, "phase", phase.PhaseType, "err", err)
 		return
 	}
 	pm.OnPhaseComplete(ctx, scanID, phase.PhaseType)

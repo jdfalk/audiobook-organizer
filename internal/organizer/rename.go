@@ -150,7 +150,7 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 		if err := rs.hardlinkOrCopy(oldPath, proposedPath); err != nil {
 			return nil, fmt.Errorf("failed to copy protected file to library: %w", err)
 		}
-		slog.Info("rename: copied protected file  →  (source untouched)", "oldPath", oldPath, "proposedPath", proposedPath)
+		slog.Info("rename copied protected file → (source untouched)", "oldPath", oldPath, "proposedPath", proposedPath)
 		tagWriteTarget = proposedPath // Write tags to the copy, not the original
 	}
 
@@ -167,11 +167,11 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 	if len(tagMeta) > 0 && !rs.IsProtectedPath(tagWriteTarget) {
 		filtered := rs.FilterUnchangedTags(tagWriteTarget, tagMeta)
 		if len(filtered) == 0 {
-			slog.Debug("rename: all tags match, skipping write for", "tagWriteTarget", tagWriteTarget)
+			slog.Debug("rename all tags match, skipping write for", "tagWriteTarget", tagWriteTarget)
 		} else {
 			opConfig := fileops.OperationConfig{VerifyChecksums: true}
 			if err := enhanced.WriteMetadataToFile(tagWriteTarget, filtered, opConfig); err != nil {
-				slog.Warn("rename: tag write failed for :", "bookID", bookID, "err", err)
+				slog.Warn("rename tag write failed for", "bookID", bookID, "err", err)
 				// Tag write failure is non-fatal; continue with rename
 			} else {
 				tagsWritten = len(filtered)
@@ -192,7 +192,7 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 			}
 		}
 	} else if rs.IsProtectedPath(tagWriteTarget) {
-		slog.Info("rename: skipping tag write for protected path", "tagWriteTarget", tagWriteTarget)
+		slog.Info("rename skipping tag write for protected path", "tagWriteTarget", tagWriteTarget)
 	}
 
 	// Step 2: Move/rename file if path differs and we haven't already handled it
@@ -226,10 +226,10 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 		book.FilePath = proposedPath
 		book.LibraryState = stringPtr("organized")
 		if _, err := rs.db.UpdateBook(bookID, book); err != nil {
-			slog.Error("rename: DB update failed for , rolling back:", "bookID", bookID, "err", err)
+			slog.Error("rename DB update failed for , rolling back", "bookID", bookID, "err", err)
 			if !sourceIsProtected {
 				if rbErr := rs.moveFile(proposedPath, oldPath); rbErr != nil {
-					slog.Error("rename: rollback failed! File at , DB expects :", "proposedPath", proposedPath, "oldPath", oldPath, "rbErr", rbErr)
+					slog.Error("rename rollback failed! File at , DB expects", "proposedPath", proposedPath, "oldPath", oldPath, "rbErr", rbErr)
 					return nil, fmt.Errorf("DB update failed and rollback failed: %w", err)
 				}
 			} else {
@@ -246,7 +246,7 @@ func (rs *RenameService) ApplyRename(bookID, operationID string) (*RenameApplyRe
 					bf.FilePath = proposedPath
 					bf.ITunesPath = rs.ComputeITunesPath(proposedPath)
 					if ufErr := rs.db.UpdateBookFile(bf.ID, &bf); ufErr != nil {
-						slog.Warn("rename: failed to update book_file  path:", "bf", bf.ID, "ufErr", ufErr)
+						slog.Warn("rename failed to update book_file path", "bf", bf.ID, "ufErr", ufErr)
 					}
 				}
 			}
@@ -431,7 +431,7 @@ func (rs *RenameService) copyAndDelete(src, dst string) error {
 
 	// Remove source only after successful copy
 	if err := os.Remove(src); err != nil {
-		slog.Warn("rename: failed to remove source after copy", "error", err)
+		slog.Warn("rename failed to remove source after copy", "error", err)
 	}
 	return nil
 }

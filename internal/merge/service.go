@@ -186,7 +186,7 @@ func (ms *Service) MergeBooks(bookIDs []string, primaryID string) (*Result, erro
 		// (b) Reassign external IDs to the winner.
 		if eidStore != nil {
 			if err := eidStore.ReassignExternalIDs(book.ID, resolvedPrimaryID); err != nil {
-				slog.Warn("merge: ReassignExternalIDs", "from", book.ID, "to", resolvedPrimaryID, "err", err)
+				slog.Warn("merge ReassignExternalIDs", "from", book.ID, "to", resolvedPrimaryID, "err", err)
 			}
 		}
 
@@ -198,14 +198,14 @@ func (ms *Service) MergeBooks(bookIDs []string, primaryID string) (*Result, erro
 			for _, pid := range dupPIDs {
 				ms.writeBackBatcher.EnqueueRemove(pid)
 			}
-			slog.Info("merge: queued ITL removals for loser", "count", len(dupPIDs), "id", book.ID)
+			slog.Info("merge queued ITL removals for loser", "count", len(dupPIDs), "id", book.ID)
 		}
 
 		// (d) Soft-delete the loser. If UpdateBook fails inside
 		// SoftDeleteBook it falls back to hard delete, so we
 		// never leave a zombie non-primary row behind.
 		if err := SoftDeleteBook(ms.db, book.ID); err != nil {
-			slog.Warn("merge: soft-delete", "id", book.ID, "err", err)
+			slog.Warn("merge soft-delete", "id", book.ID, "err", err)
 		}
 	}
 
@@ -234,7 +234,7 @@ func SoftDeleteBook(store database.Store, bookID string) error {
 
 	if _, upErr := store.UpdateBook(bookID, current); upErr != nil {
 		// Fall back to hard delete.
-		slog.Warn("dedup-books: soft-delete failed, falling back to hard delete", "id", bookID, "err", upErr)
+		slog.Warn("dedup-books soft-delete failed, falling back to hard delete", "id", bookID, "err", upErr)
 		return store.DeleteBook(bookID)
 	}
 	return nil

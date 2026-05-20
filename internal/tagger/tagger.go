@@ -27,7 +27,7 @@ func UpdateSeriesTags() error {
 	}
 	defer rows.Close()
 
-	slog.Info("tagger: updating audio file tags with series information")
+	slog.Info("tagger updating audio file tags with series information")
 	count := 0
 
 	for rows.Next() {
@@ -46,14 +46,14 @@ func UpdateSeriesTags() error {
 
 		// Update the file tags
 		if err := updateFileTags(filePath, title, seriesTag); err != nil {
-			slog.Warn("tagger: could not update tags", "path", filePath, "error", err)
+			slog.Warn("tagger could not update tags", "path", filePath, "error", err)
 			continue
 		}
 
 		count++
 	}
 
-	slog.Info("tagger: updated tags", "count", count)
+	slog.Info("tagger updated tags", "count", count)
 	return nil
 }
 
@@ -91,7 +91,7 @@ func updateM4BTags(filePath, seriesTag string) error {
 	// return cmd.Run()
 
 	// Placeholder implementation
-	slog.Info("tagger: would update M4B tags", "path", filePath, "series", seriesTag)
+	slog.Info("tagger would update M4B tags", "path", filePath, "series", seriesTag)
 	return nil
 }
 
@@ -102,7 +102,7 @@ func updateMP3Tags(filePath, seriesTag string) error {
 	// return cmd.Run()
 
 	// Placeholder implementation
-	slog.Info("tagger: would update MP3 tags", "path", filePath, "series", seriesTag)
+	slog.Info("tagger would update MP3 tags", "path", filePath, "series", seriesTag)
 	return nil
 }
 
@@ -113,6 +113,6 @@ func updateFLACTags(filePath, seriesTag string) error {
 	// return cmd.Run()
 
 	// Placeholder implementation
-	slog.Info("tagger: would update FLAC tags", "path", filePath, "series", seriesTag)
+	slog.Info("tagger would update FLAC tags", "path", filePath, "series", seriesTag)
 	return nil
 }

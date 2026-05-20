@@ -38,7 +38,7 @@ func (j *cleanupEmptyFoldersJob) CanResume() bool { return true }
 func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, reporter maintenance.ProgressReporter, dryRun bool) error {
 	root := config.AppConfig.RootDir
 	if root == "" {
-		slog.Warn("cleanup-empty-folders: RootDir not configured")
+		slog.Warn("cleanup-empty-folders RootDir not configured")
 		return nil
 	}
 
@@ -59,7 +59,7 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 	sort.Slice(dirs, func(i, k int) bool { return len(dirs[i]) > len(dirs[k]) })
 
 	reporter.SetTotal(len(dirs))
-	slog.Info("cleanup-empty-folders: found  directories to check (dry_run=)", "dirs_count", len(dirs), "dryRun", dryRun)
+	slog.Info("cleanup-empty-folders found directories to check (dry_run)", "dirs_count", len(dirs), "dryRun", dryRun)
 
 	removed := 0
 	for _, dir := range dirs {
@@ -69,7 +69,7 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			slog.Error("cleanup-empty-folders: failed to read :", "dir", dir, "err", err)
+			slog.Error("cleanup-empty-folders failed to read", "dir", dir, "err", err)
 			reporter.Increment()
 			continue
 		}
@@ -80,18 +80,18 @@ func (j *cleanupEmptyFoldersJob) Run(ctx context.Context, _ database.Store, repo
 		}
 
 		if dryRun {
-			slog.Info("[dry] would remove empty dir:", "dir", dir)
+			slog.Info("[dry] would remove empty dir", "dir", dir)
 		} else {
 			if err := os.Remove(dir); err != nil {
-				slog.Error("cleanup-empty-folders: failed to remove :", "dir", dir, "err", err)
+				slog.Error("cleanup-empty-folders failed to remove", "dir", dir, "err", err)
 			} else {
-				slog.Info("removed empty dir:", "dir", dir)
+				slog.Info("removed empty dir", "dir", dir)
 				removed++
 			}
 		}
 		reporter.Increment()
 	}
 
-	slog.Info("cleanup-empty-folders: complete — checked  dirs, removed  (dry_run=)", "dirs_count", len(dirs), "removed", removed, "dryRun", dryRun)
+	slog.Info("cleanup-empty-folders complete — checked dirs, removed (dry_run)", "dirs_count", len(dirs), "removed", removed, "dryRun", dryRun)
 	return nil
 }

@@ -25,7 +25,7 @@ type Setting struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		slog.Error("usage: pebble-inject-skip <pebble-db-path>"); os.Exit(1)
+		slog.Error("usage pebble-inject-skip <pebble-db-path>"); os.Exit(1)
 	}
 	dbPath := os.Args[1]
 

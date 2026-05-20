@@ -87,12 +87,12 @@ func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporte
 		name := filepath.Base(dir)
 		if reason := comIsGarbageDirectory(name); reason != "" {
 			garbageFound++
-			slog.Warn("Garbage dir %q:", "dir", dir, reason)
+			slog.Warn("Garbage dir %q", "dir", dir, reason)
 		}
 
 		empty, checkErr := comIsDirEmpty(dir)
 		if checkErr != nil {
-			slog.Error("Stat error for %q:", "dir", dir, checkErr)
+			slog.Error("Stat error for %q", "dir", dir, checkErr)
 			reporter.Increment()
 			continue
 		}
@@ -103,7 +103,7 @@ func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporte
 
 		if !dryRun {
 			if removeErr := os.Remove(dir); removeErr != nil {
-				slog.Error("Failed to remove %q:", "dir", dir, removeErr)
+				slog.Error("Failed to remove %q", "dir", dir, removeErr)
 			} else {
 				emptyRemoved++
 			}
@@ -113,7 +113,7 @@ func (j *cleanupOrganizeMess) Run(ctx context.Context, _ database.Store, reporte
 		reporter.Increment()
 	}
 
-	slog.Info("Done: garbage_dirs= empty_removed= dryRun=", "garbageFound", garbageFound, "emptyRemoved", emptyRemoved, "dryRun", dryRun)
+	slog.Info("Done garbage_dirs empty_removed dryRun", "garbageFound", garbageFound, "emptyRemoved", emptyRemoved, "dryRun", dryRun)
 	return nil
 }
 

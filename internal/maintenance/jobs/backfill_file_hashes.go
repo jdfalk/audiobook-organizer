@@ -59,13 +59,13 @@ func (j *backfillFileHashesJob) Run(ctx context.Context, store database.Store, r
 		hash, herr := scanner.ComputeFileHash(bf.FilePath)
 		if herr != nil {
 			msg := herr.Error()
-			slog.Warn("backfill-file-hashes: hash failed for "+bf.FilePath, "details", msg)
+			slog.Warn("backfill-file-hashes hash failed for"+bf.FilePath, "details", msg)
 			continue
 		}
 		if !dryRun {
 			if serr := store.SetBookFileHash(bf.ID, hash); serr != nil {
 				msg := serr.Error()
-				slog.Error("backfill-file-hashes: SetBookFileHash failed", "details", msg)
+				slog.Error("backfill-file-hashes SetBookFileHash failed", "details", msg)
 				continue
 			}
 		}

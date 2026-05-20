@@ -91,7 +91,7 @@ func (j *relinkReportJob) Run(ctx context.Context, store database.Store, reporte
 			}
 		}
 		if authorName == "" {
-			slog.Warn("No author for missing book  (%q)", "book", book.ID, book.Title)
+			slog.Warn("No author for missing book (%q)", "book", book.ID, book.Title)
 			unresolved++
 			reporter.Increment()
 			continue
@@ -104,11 +104,11 @@ func (j *relinkReportJob) Run(ctx context.Context, store database.Store, reporte
 			unresolved++
 		case 1:
 			resolved++
-			slog.Info("Relinkable: book= title=%q ->", "book", book.ID, "book", book.Title, matches[0])
+			slog.Info("Relinkable book title%q ->", "book", book.ID, "book", book.Title, matches[0])
 		default:
 			if best := rrDisambiguate(matches, authorName, book.Title); best != "" {
 				resolved++
-				slog.Info("Relinkable: book= title=%q ->", "book", book.ID, "book", book.Title, best)
+				slog.Info("Relinkable book title%q ->", "book", book.ID, "book", book.Title, best)
 			} else {
 				unresolved++
 			}
@@ -116,7 +116,7 @@ func (j *relinkReportJob) Run(ctx context.Context, store database.Store, reporte
 		reporter.Increment()
 	}
 
-	slog.Info("Done: resolved= unresolved= skipped=", "resolved", resolved, "unresolved", unresolved, "skipped", skipped)
+	slog.Info("Done resolved unresolved skipped", "resolved", resolved, "unresolved", unresolved, "skipped", skipped)
 	return nil
 }
 

@@ -377,7 +377,7 @@ func (s *Server) applyAudiobookMetadata(c *gin.Context) {
 			mfs.ApplyMetadataFileIO(bookID)
 			if shouldWriteBack {
 				if _, wbErr := mfs.WriteBackMetadataForBook(bookID); wbErr != nil {
-					slog.Warn("background write-back for :", "bookID", bookID, "wbErr", wbErr)
+					slog.Warn("background write-back for", "bookID", bookID, "wbErr", wbErr)
 				}
 			}
 		})
@@ -419,7 +419,7 @@ func (s *Server) markAudiobookNoMatch(c *gin.Context) {
 		RejectedAt:      time.Now(),
 	}
 	if rerr := s.Store().AddMetadataRejection(rejection); rerr != nil {
-		slog.Warn("markAudiobookNoMatch: could not record rejection for :", "id", id, "rerr", rerr)
+		slog.Warn("markAudiobookNoMatch could not record rejection for", "id", id, "rerr", rerr)
 	}
 	httputil.RespondWithOK(c, gin.H{"message": "Book marked as no match"})
 }
@@ -543,7 +543,7 @@ func (s *Server) writeBackAudiobookMetadata(c *gin.Context) {
 	doRename := (body.Rename != nil && *body.Rename) || config.AppConfig.AutoRenameOnApply
 	if doRename && len(body.SegmentIDs) == 0 {
 		if err := s.metadataFetchService.RunApplyPipelineRenameOnly(id, book); err != nil {
-			slog.Warn("rename failed for book :", "id", id, "err", err)
+			slog.Warn("rename failed for book", "id", id, "err", err)
 		} else {
 			renamed = 1
 		}
@@ -850,7 +850,7 @@ func (s *Server) bulkFetchMetadata(c *gin.Context) {
 
 		if len(fetchedValues) > 0 {
 			if err := s.updateFetchedMetadataState(bookID, fetchedValues); err != nil {
-				slog.Warn("bulkFetchMetadata: failed to persist fetched metadata state for :", "bookID", bookID, "err", err)
+				slog.Warn("bulkFetchMetadata failed to persist fetched metadata state for", "bookID", bookID, "err", err)
 			}
 		}
 
@@ -955,7 +955,7 @@ func (s *Server) runBulkMetadataFetchAll(
 
 	totalBooks := len(existingResults) + len(work)
 	alreadyDone := len(existingResults)
-	slog.Info("bulk-metadata-fetch :  books total,  already cached,  to fetch", "opID", opID, "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
+	slog.Info("bulk-metadata-fetch books total, already cached, to fetch", "opID", opID, "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
 	_ = progress.UpdateProgress(alreadyDone, totalBooks,
 		fmt.Sprintf("resuming: %d/%d already cached", alreadyDone, totalBooks))
 
@@ -1075,7 +1075,7 @@ func (s *Server) runBulkMetadataFetchAll(
 	finalCount := atomic.LoadInt64(&completed)
 	_ = progress.UpdateProgress(int(finalCount), totalBooks,
 		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
-	slog.Info("bulk-metadata-fetch : done  books — cached: not_found:", "opID", opID, "finalCount", finalCount, "found", found, "notFound", notFound)
+	slog.Info("bulk-metadata-fetch done books — cached not_found", "opID", opID, "finalCount", finalCount, "found", found, "notFound", notFound)
 	return nil
 }
 
@@ -1292,7 +1292,7 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 
 	alreadyDone := len(existingResults)
 	totalBooks := alreadyDone + len(work)
-	slog.Info("bulk-metadata-fetch-ids :  total,  done,  to fetch", "opID", opID, "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
+	slog.Info("bulk-metadata-fetch-ids total, done, to fetch", "opID", opID, "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
 	_ = progress.UpdateProgress(alreadyDone, totalBooks,
 		fmt.Sprintf("resuming: %d/%d already done", alreadyDone, totalBooks))
 
@@ -1379,7 +1379,7 @@ func (s *Server) runBulkMetadataFetchForBookIDs(
 	finalCount := atomic.LoadInt64(&completed)
 	_ = progress.UpdateProgress(int(finalCount), totalBooks,
 		fmt.Sprintf("complete — cached:%d not_found:%d", found, notFound))
-	slog.Info("bulk-metadata-fetch-ids : done  books — cached: not_found:", "opID", opID, "finalCount", finalCount, "found", found, "notFound", notFound)
+	slog.Info("bulk-metadata-fetch-ids done books — cached not_found", "opID", opID, "finalCount", finalCount, "found", found, "notFound", notFound)
 	return nil
 }
 

@@ -67,15 +67,15 @@ func MoveBookFile(store database.Store, bookID, oldPath, newPath string, extraUp
 
 	if _, err := store.UpdateBook(bookID, update); err != nil {
 		// ROLLBACK: Move file back to original location
-		slog.Error("file_move: DB update failed for , rolling back file move:", "bookID", bookID, "err", err)
+		slog.Error("file_move DB update failed for , rolling back file move", "bookID", bookID, "err", err)
 		if rbErr := os.Rename(newPath, oldPath); rbErr != nil {
 			// Critical: file is at new location but DB points to old location
-			slog.Error("file_move: rollback failed! File at , DB expects :", "newPath", newPath, "oldPath", oldPath, "rbErr", rbErr)
+			slog.Error("file_move rollback failed! File at , DB expects", "newPath", newPath, "oldPath", oldPath, "rbErr", rbErr)
 			return fmt.Errorf("DB update failed and rollback failed: file at %s, DB expects %s: %w", newPath, oldPath, err)
 		}
 		return fmt.Errorf("DB update failed (file rolled back): %w", err)
 	}
 
-	slog.Info("file_move: moved  →  for book", "oldPath", oldPath, "newPath", newPath, "bookID", bookID)
+	slog.Info("file_move moved → for book", "oldPath", oldPath, "newPath", newPath, "bookID", bookID)
 	return nil
 }

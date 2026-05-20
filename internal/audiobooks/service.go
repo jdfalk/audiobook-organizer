@@ -993,7 +993,7 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 	// Load metadata state and extract file metadata
 	state, err := svc.loadMetadataState(book.ID)
 	if err != nil {
-		slog.Info("[ERROR] GetAudiobook: failed to load metadata state for :", "book", book.ID, "err", err)
+		slog.Info("[ERROR] GetAudiobook failed to load metadata state for", "book", book.ID, "err", err)
 		// Don't fail the entire request, just use empty state
 		state = map[string]metadataFieldState{}
 	}
@@ -1007,7 +1007,7 @@ func (svc *AudiobookService) GetAudiobook(ctx context.Context, id string) (*data
 		if mi, miErr := mediainfo.Extract(book.FilePath); miErr == nil && mi.Duration > 0 {
 			book.Duration = &mi.Duration
 			if _, updErr := svc.store.UpdateBook(book.ID, book); updErr != nil {
-				slog.Warn("GetAudiobook: failed to backfill duration for :", "book", book.ID, "updErr", updErr)
+				slog.Warn("GetAudiobook failed to backfill duration for", "book", book.ID, "updErr", updErr)
 			}
 		}
 	}
@@ -1037,7 +1037,7 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 
 	state, err := svc.loadMetadataState(book.ID)
 	if err != nil {
-		slog.Info("[ERROR] GetAudiobookTags: failed to load metadata state for :", "book", book.ID, "err", err)
+		slog.Info("[ERROR] GetAudiobookTags failed to load metadata state for", "book", book.ID, "err", err)
 		state = map[string]metadataFieldState{}
 	}
 
@@ -1084,7 +1084,7 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 			}
 			if needsUpdate {
 				if _, err := svc.store.UpdateBook(book.ID, book); err != nil {
-					slog.Warn("GetAudiobookTags: failed to backfill media info for :", "book", book.ID, "err", err)
+					slog.Warn("GetAudiobookTags failed to backfill media info for", "book", book.ID, "err", err)
 				}
 				response["media_info"] = map[string]any{
 					"codec":       stringVal(book.Codec),
@@ -1112,7 +1112,7 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 			comparisonValues = buildComparisonValuesFromBook(snapshotBook, snapshotAuthorName, snapshotSeriesName)
 		} else {
 			// Fallback: reconstruct "before" state from activity log old_values
-			slog.Debug("GetAudiobookTags: GetBookAtVersion failed (), falling back to activity log for snapshot at", "verErr", verErr, "snapshotTS", snapshotTS)
+			slog.Debug("GetAudiobookTags GetBookAtVersion failed (), falling back to activity log for snapshot at", "verErr", verErr, "snapshotTS", snapshotTS)
 			if svc.activityService != nil {
 				comparisonValues = buildComparisonValuesFromActivityLog(svc.activityService, id, ts)
 			}
@@ -1120,12 +1120,12 @@ func (svc *AudiobookService) GetAudiobookTags(ctx context.Context, id string, co
 	} else if compareID != "" {
 		compBook, err := svc.store.GetBookByID(compareID)
 		if err != nil {
-			slog.Warn("GetAudiobookTags: failed to load comparison book :", "compareID", compareID, "err", err)
+			slog.Warn("GetAudiobookTags failed to load comparison book", "compareID", compareID, "err", err)
 		} else if compBook != nil && compBook.FilePath != "" {
 			if cm, err := metadata.ExtractMetadata(compBook.FilePath, nil); err == nil {
 				comparisonValues = buildComparisonValuesFromMetadata(&cm)
 			} else {
-				slog.Warn("GetAudiobookTags: failed to extract comparison metadata for :", "compBook", compBook.FilePath, "err", err)
+				slog.Warn("GetAudiobookTags failed to extract comparison metadata for", "compBook", compBook.FilePath, "err", err)
 			}
 		}
 	}
@@ -1144,7 +1144,7 @@ func (svc *AudiobookService) extractBookFileMetadata(book *database.Book, author
 
 	m, err := metadata.ExtractMetadata(book.FilePath, nil)
 	if err != nil {
-		slog.Warn("audiobook_service: failed to extract metadata for :", "book", book.FilePath, "err", err)
+		slog.Warn("audiobook_service failed to extract metadata for", "book", book.FilePath, "err", err)
 		return meta
 	}
 
@@ -1177,7 +1177,7 @@ func (svc *AudiobookService) GetDuplicateBooks(ctx context.Context) (*Duplicates
 	// Get folder-based duplicates (same title in same folder, e.g. M4B + MP3)
 	folderGroups, err := svc.store.GetFolderDuplicates()
 	if err != nil {
-		slog.Warn("folder duplicate detection failed:", "err", err)
+		slog.Warn("folder duplicate detection failed", "err", err)
 	} else {
 		// Merge folder groups, avoiding duplicate groups already found by hash
 		seenBookIDs := map[string]bool{}
@@ -1303,7 +1303,7 @@ func (svc *AudiobookService) PurgeSoftDeletedBooks(ctx context.Context, deleteFi
 		// Step 3: Delete file if requested (only from organizer root, never from protected/import paths)
 		if deleteFiles && book.FilePath != "" {
 			if isProtectedPath(svc.store, book.FilePath) {
-				slog.Debug("purge: skipping file deletion for  — protected path:", "book", book.ID, "book", book.FilePath)
+				slog.Debug("purge skipping file deletion for — protected path", "book", book.ID, "book", book.FilePath)
 			} else {
 				info, statErr := os.Stat(book.FilePath)
 				if statErr == nil && info.IsDir() {
@@ -1458,7 +1458,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 		if _, err := os.Stat(req.Updates.FilePath); err != nil {
 			return nil, fmt.Errorf("file does not exist at new path: %s", req.Updates.FilePath)
 		}
-		slog.Info("audiobook_service: FilePath changed for :  →", "id", id, "currentBook", currentBook.FilePath, "value2", req.Updates.FilePath)
+		slog.Info("audiobook_service FilePath changed for →", "id", id, "currentBook", currentBook.FilePath, "value2", req.Updates.FilePath)
 		currentBook.FilePath = req.Updates.FilePath
 	}
 	if req.Updates.Narrator != nil {
@@ -1493,7 +1493,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 	// Load and process metadata state
 	state, err := svc.loadMetadataState(id)
 	if err != nil {
-		slog.Info("[ERROR] UpdateAudiobook: failed to load metadata state:", "err", err)
+		slog.Info("[ERROR] UpdateAudiobook failed to load metadata state", "err", err)
 		return nil, fmt.Errorf("failed to load metadata state")
 	}
 	if state == nil {
@@ -1582,7 +1582,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 			// Save multiple authors to join table
 			if len(bookAuthors) > 0 {
 				if err := svc.store.SetBookAuthors(id, bookAuthors); err != nil {
-					slog.Warn("failed to set book authors:", "err", err)
+					slog.Warn("failed to set book authors", "err", err)
 				}
 			}
 		} else {
@@ -1609,7 +1609,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 				if err != nil || narrator == nil {
 					narrator, err = svc.store.CreateNarrator(nName)
 					if err != nil {
-						slog.Warn("failed to create narrator %q:", "nName", nName, err)
+						slog.Warn("failed to create narrator %q", "nName", nName, err)
 						continue
 					}
 				}
@@ -1623,7 +1623,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 			}
 			if len(bookNarrators) > 0 {
 				if err := svc.store.SetBookNarrators(id, bookNarrators); err != nil {
-					slog.Warn("failed to set book narrators:", "err", err)
+					slog.Warn("failed to set book narrators", "err", err)
 				}
 			}
 		}
@@ -1712,15 +1712,15 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 
 	for field, extractor := range fieldExtractors {
 		if _, ok := req.RawPayload[field]; !ok {
-			slog.Debug("UpdateAudiobook: field  not in RawPayload", "field", field)
+			slog.Debug("UpdateAudiobook field not in RawPayload", "field", field)
 			continue
 		}
 		if _, hasOverride := req.Updates.Overrides[field]; hasOverride {
-			slog.Debug("UpdateAudiobook: field  has explicit override", "field", field)
+			slog.Debug("UpdateAudiobook field has explicit override", "field", field)
 			continue
 		}
 		if value, ok := extractor(); ok {
-			slog.Debug("UpdateAudiobook: creating state for field  with value", "field", field, "value", value)
+			slog.Debug("UpdateAudiobook creating state for field with value", "field", field, "value", value)
 			entry := state[field]
 			oldValue := entry.OverrideValue
 
@@ -1734,7 +1734,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 				mss.recordChange(id, field, "override", "user_edit", oldValue, value)
 			}
 		} else {
-			slog.Debug("UpdateAudiobook: extractor for field  returned false/nil", "field", field)
+			slog.Debug("UpdateAudiobook extractor for field returned false/nil", "field", field)
 		}
 	}
 
@@ -1754,7 +1754,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 
 	// Save metadata state
 	if err := svc.saveMetadataState(id, state); err != nil {
-		slog.Info("[ERROR] UpdateAudiobook: failed to save metadata state:", "err", err)
+		slog.Info("[ERROR] UpdateAudiobook failed to save metadata state", "err", err)
 		return nil, fmt.Errorf("failed to persist metadata state")
 	}
 
@@ -1813,7 +1813,7 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 		blocked := false
 		if opts.BlockHash && book.FileHash != nil && *book.FileHash != "" {
 			if err := svc.store.AddBlockedHash(*book.FileHash, "User deleted - soft delete"); err != nil {
-				slog.Warn("failed to block hash during soft delete:", "err", err)
+				slog.Warn("failed to block hash during soft delete", "err", err)
 			} else {
 				blocked = true
 			}
@@ -1837,7 +1837,7 @@ func (svc *AudiobookService) DeleteAudiobook(ctx context.Context, id string, opt
 	blocked := false
 	if opts.BlockHash && book.FileHash != nil && *book.FileHash != "" {
 		if err := svc.store.AddBlockedHash(*book.FileHash, "User deleted - prevent reimport"); err != nil {
-			slog.Warn("failed to block hash before delete:", "err", err)
+			slog.Warn("failed to block hash before delete", "err", err)
 			// Continue with delete even if blocking fails
 		} else {
 			blocked = true
@@ -2016,13 +2016,13 @@ func (svc *AudiobookService) BatchUpdateUserTags(bookIDs []string, addTags []str
 	for _, bookID := range bookIDs {
 		for _, tag := range addTags {
 			if err := svc.store.AddBookTag(bookID, tag); err != nil {
-				slog.Warn("BatchUpdateUserTags: failed to add tag %q to book :", "tag", tag, "bookID", bookID, err)
+				slog.Warn("BatchUpdateUserTags failed to add tag %q to book", "tag", tag, "bookID", bookID, err)
 				continue
 			}
 		}
 		for _, tag := range removeTags {
 			if err := svc.store.RemoveBookTag(bookID, tag); err != nil {
-				slog.Warn("BatchUpdateUserTags: failed to remove tag %q from book :", "tag", tag, "bookID", bookID, err)
+				slog.Warn("BatchUpdateUserTags failed to remove tag %q from book", "tag", tag, "bookID", bookID, err)
 				continue
 			}
 		}

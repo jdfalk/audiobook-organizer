@@ -76,6 +76,6 @@ func (p *PebbleStore) BackfillVersionGroupIndex() error {
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return err
 	}
-	slog.Info("versiongroup-backfill: scanned= indexed=", "scanned", scanned, "indexed", indexed)
+	slog.Info("versiongroup-backfill scanned indexed", "scanned", scanned, "indexed", indexed)
 	return nil
 }

@@ -78,7 +78,7 @@ func (s *Server) testAIConnection(c *gin.Context) {
 	// Create parser with the provided/configured API key
 	parser := ai.NewOpenAIParser(&config.AppConfig, apiKey, true)
 	if err := parser.TestConnection(c.Request.Context()); err != nil {
-		slog.Error("connection test failed:", "err", err)
+		slog.Error("connection test failed", "err", err)
 		httputil.RespondWithInternalError(c, "connection test failed")
 		return
 	}

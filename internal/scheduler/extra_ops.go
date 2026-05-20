@@ -480,10 +480,10 @@ func (r *ExtraOpsRegistrar) RegisterCleanupOldBackupsOp(reg *opsregistry.Registr
 					age := time.Since(info.ModTime())
 					if age > maxAge {
 						if rmErr := os.Remove(path); rmErr != nil {
-							slog.Warn("failed to remove old backup: :", "path", path, "rmErr", rmErr)
+							slog.Warn("failed to remove old backup:", "path", path, "rmErr", rmErr)
 						} else {
 							removed++
-							slog.Info("cleaned up old backup:  (age: )", "path", path, "age", age.Round(time.Hour))
+							slog.Info("cleaned up old backup (age )", "path", path, "age", age.Round(time.Hour))
 						}
 					}
 				}
@@ -763,11 +763,11 @@ func (r *ExtraOpsRegistrar) runAutoPurgeSoftDeleted(ctx context.Context, opID st
 		return
 	}
 	if r.Store == nil {
-		slog.Debug("Auto-purge skipped: database not initialized")
+		slog.Debug("Auto-purge skipped database not initialized")
 		return
 	}
 	if r.Deps.AudiobookService == nil {
-		slog.Debug("Auto-purge skipped: audiobook service not initialized")
+		slog.Debug("Auto-purge skipped audiobook service not initialized")
 		return
 	}
 
@@ -780,7 +780,7 @@ func (r *ExtraOpsRegistrar) runAutoPurgeSoftDeleted(ctx context.Context, opID st
 
 	msg := fmt.Sprintf("Purged %d/%d soft-deleted books (%d files deleted, %d errors)",
 		result.Purged, result.Attempted, result.FilesDeleted, len(result.Errors))
-	slog.Info("Auto-purge:", "msg", msg)
+	slog.Info("Auto-purge", "msg", msg)
 	activity.EmitInfo(r.Deps.ActivityWriter, opID, "purge-deleted", "purge-deleted", msg,
 		activity.TagsIf(result.Purged == 0, activity.NoOpTag)...)
 	for _, e := range result.Errors {

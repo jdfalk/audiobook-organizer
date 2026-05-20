@@ -47,7 +47,7 @@ func BackfillExternalIDs(ctx context.Context, store ExternalIDBackfillStore) err
 	backfilled := 0
 	for {
 		if err := ctx.Err(); err != nil {
-			slog.Info("external ID backfill canceled at offset  after  mappings:", "offset", offset, "backfilled", backfilled, "err", err)
+			slog.Info("external ID backfill canceled at offset after mappings", "offset", offset, "backfilled", backfilled, "err", err)
 			return nil
 		}
 		books, err := store.GetAllBooks(10000, offset)
@@ -56,7 +56,7 @@ func BackfillExternalIDs(ctx context.Context, store ExternalIDBackfillStore) err
 		}
 		for _, book := range books {
 			if err := ctx.Err(); err != nil {
-				slog.Info("external ID backfill canceled mid-batch after  mappings:", "backfilled", backfilled, "err", err)
+				slog.Info("external ID backfill canceled mid-batch after mappings", "backfilled", backfilled, "err", err)
 				return nil
 			}
 			// Book-level PID
@@ -91,15 +91,15 @@ func BackfillExternalIDs(ctx context.Context, store ExternalIDBackfillStore) err
 	}
 
 	if err := ctx.Err(); err != nil {
-		slog.Info("external ID backfill canceled before track-PID pass:", "err", err)
+		slog.Info("external ID backfill canceled before track-PID pass", "err", err)
 		return nil
 	}
-	slog.Info("Backfilled  external ID mappings from book + file records", "backfilled", backfilled)
+	slog.Info("Backfilled external ID mappings from book + file records", "backfilled", backfilled)
 
 	// Backfill ALL track-level PIDs from the iTunes XML
 	itunesBackfilled, _ := BackfillITunesTrackPIDs(ctx, store)
 	if itunesBackfilled > 0 {
-		slog.Info("Backfilled  track-level PIDs from iTunes XML", "itunesBackfilled", itunesBackfilled)
+		slog.Info("Backfilled track-level PIDs from iTunes XML", "itunesBackfilled", itunesBackfilled)
 	}
 
 	// Only mark as done AFTER everything completes successfully (and not canceled)
@@ -122,17 +122,17 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 	}
 	xmlPath := config.AppConfig.ITunesLibraryReadPath
 	if xmlPath == "" {
-		slog.Info("BackfillITunesTrackPIDs: no iTunes XML path configured, skipping")
+		slog.Info("BackfillITunesTrackPIDs no iTunes XML path configured, skipping")
 		return 0, nil
 	}
 
-	slog.Info("BackfillITunesTrackPIDs: parsing iTunes XML at", "xmlPath", xmlPath)
+	slog.Info("BackfillITunesTrackPIDs parsing iTunes XML at", "xmlPath", xmlPath)
 	lib, err := ParseLibrary(xmlPath)
 	if err != nil {
-		slog.Warn("BackfillITunesTrackPIDs: failed to parse iTunes XML:", "err", err)
+		slog.Warn("BackfillITunesTrackPIDs failed to parse iTunes XML", "err", err)
 		return 0, err
 	}
-	slog.Info("BackfillITunesTrackPIDs: parsed  tracks", "count", len(lib.Tracks))
+	slog.Info("BackfillITunesTrackPIDs parsed tracks", "count", len(lib.Tracks))
 
 	// Group tracks by album
 	type albumGroup struct {
@@ -160,7 +160,7 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 	}
 
 	// Build PID→book_id index from existing books
-	slog.Info("BackfillITunesTrackPIDs: loading book index...")
+	slog.Info("BackfillITunesTrackPIDs loading book index...")
 	pidToBook := make(map[string]string)
 	titleToBook := make(map[string]string) // lowercase title → book_id
 	totalBooks := 0
@@ -183,7 +183,7 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 		totalBooks += len(books)
 		offset += 10000
 	}
-	slog.Info("BackfillITunesTrackPIDs: loaded  books ( PIDs,  titles)", "totalBooks", totalBooks, "pidToBook_count", len(pidToBook), "titleToBook_count", len(titleToBook))
+	slog.Info("BackfillITunesTrackPIDs loaded books ( PIDs, titles)", "totalBooks", totalBooks, "pidToBook_count", len(pidToBook), "titleToBook_count", len(titleToBook))
 
 	// For each album, find our book and register all track PIDs
 	registered := 0
@@ -191,7 +191,7 @@ func BackfillITunesTrackPIDs(ctx context.Context, store ExternalIDBackfillStore)
 
 	for _, ag := range albums {
 		if err := ctx.Err(); err != nil {
-			slog.Info("BackfillITunesTrackPIDs canceled mid-album pass after  PIDs", "registered", registered)
+			slog.Info("BackfillITunesTrackPIDs canceled mid-album pass after PIDs", "registered", registered)
 			return registered, nil
 		}
 		// Find our book: match by any track PID first, then by title

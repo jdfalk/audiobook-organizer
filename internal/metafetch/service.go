@@ -140,7 +140,7 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 	if mfs.isProtectedPath(book.FilePath) {
 		libCopy := mfs.ensureLibraryCopy(book)
 		if libCopy == nil {
-						slog.Warn("cannot embed cover: no library copy for protected book", "id", book.ID)
+						slog.Warn("cannot embed cover no library copy for protected book", "id", book.ID)
 			return
 		}
 		book = libCopy
@@ -155,7 +155,7 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 		// Multi-file book
 		bookFiles, err := mfs.db.GetBookFiles(book.ID)
 		if err != nil {
-						slog.Warn("failed to list book files for cover embedding on book :", "id", book.ID, "error", err)
+						slog.Warn("failed to list book files for cover embedding on book", "id", book.ID, "error", err)
 			return
 		}
 		for _, bf := range bookFiles {
@@ -200,13 +200,13 @@ func (mfs *Service) embedCoverInBookFiles(book *database.Book, coverPath string)
 	embedded := 0
 	for _, f := range files {
 		if err := tagger.EmbedCoverArtSafe(context.Background(), f, coverPath, mfs.safeWriteDeps); err != nil {
-						slog.Warn("cover art embedding failed for :", "value", f, "error", err)
+						slog.Warn("cover art embedding failed for", "value", f, "error", err)
 		} else {
 			embedded++
 		}
 	}
 	if embedded > 0 {
-				slog.Info("cover art embedded into  file(s) for book", "count", embedded, "id", book.ID)
+				slog.Info("cover art embedded into file(s) for book", "count", embedded, "id", book.ID)
 	}
 }
 
@@ -236,7 +236,7 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 	// Check if we already have this exact image archived (by hash)
 	dedupDir := filepath.Join(config.AppConfig.RootDir, "covers", "dedup")
 	if err := os.MkdirAll(dedupDir, 0775); err != nil {
-				slog.Warn("failed to create cover dedup dir:", "error", err)
+				slog.Warn("failed to create cover dedup dir", "error", err)
 		return
 	}
 
@@ -244,7 +244,7 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 	if _, err := os.Stat(dedupPath); err != nil {
 		// New unique image — save to dedup store
 		if err := os.WriteFile(dedupPath, data, 0664); err != nil {
-						slog.Warn("failed to write dedup cover for :", "id", bookID, "error", err)
+						slog.Warn("failed to write dedup cover for", "id", bookID, "error", err)
 			return
 		}
 	}
@@ -252,7 +252,7 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 	// Create a history entry that references the dedup hash instead of storing a copy
 	historyDir := filepath.Join(config.AppConfig.RootDir, "covers", "history", bookID)
 	if err := os.MkdirAll(historyDir, 0775); err != nil {
-				slog.Warn("failed to create cover history dir:", "error", err)
+				slog.Warn("failed to create cover history dir", "error", err)
 		return
 	}
 
@@ -264,12 +264,12 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 		if err := os.Link(dedupPath, archivePath); err != nil {
 			// Hardlink also failed — just copy
 			if err := os.WriteFile(archivePath, data, 0664); err != nil {
-								slog.Warn("failed to archive old cover for :", "id", bookID, "error", err)
+								slog.Warn("failed to archive old cover for", "id", bookID, "error", err)
 				return
 			}
 		}
 	}
-		slog.Info("archived old cover art:  (hash=)", "path", archivePath, "hash", coverHash[:12])
+		slog.Info("archived old cover art (hash)", "path", archivePath, "hash", coverHash[:12])
 
 	// Record in metadata change history so it appears in the changelog
 	now := time.Now()
@@ -283,7 +283,7 @@ func (mfs *Service) archiveExistingCover(bookID string, audioFilePath string) {
 		ChangedAt:  now,
 	}
 	if err := mfs.db.RecordMetadataChange(record); err != nil {
-				slog.Warn("failed to record cover archive history for :", "id", bookID, "error", err)
+				slog.Warn("failed to record cover archive history for", "id", bookID, "error", err)
 	}
 	// Dual-write to unified activity log
 	if mfs.activityService != nil {
@@ -439,15 +439,15 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 				bookFiles[0].FilePath = entry.TargetPath
 			}
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
-								slog.Warn("failed to update book path for :", "id", id, "error", err)
+								slog.Warn("failed to update book path for", "id", id, "error", err)
 			} else {
-								slog.Info("renamed single-file book :", "id", id, "path", entry.TargetPath)
+								slog.Info("renamed single-file book", "id", id, "path", entry.TargetPath)
 			}
 		} else if bf, ok := bfMap[entry.SegmentID]; ok {
 			bf.FilePath = entry.TargetPath
 			bf.ITunesPath = ComputeITunesPath(entry.TargetPath)
 			if err := mfs.db.UpdateBookFile(bf.ID, bf); err != nil {
-								slog.Warn("failed to update book_file path for :", "id", bf.ID, "error", err)
+								slog.Warn("failed to update book_file path for", "id", bf.ID, "error", err)
 			}
 		}
 		// Record path change for each successful rename
@@ -479,9 +479,9 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 		if newBookPath != book.FilePath {
 			book.FilePath = newBookPath
 			if _, err := mfs.db.UpdateBook(id, book); err != nil {
-								slog.Warn("failed to update book path for :", "id", id, "error", err)
+								slog.Warn("failed to update book path for", "id", id, "error", err)
 			} else {
-								slog.Info("renamed book files for :", "id", id, "path", newBookPath)
+								slog.Info("renamed book files for", "id", id, "path", newBookPath)
 			}
 		}
 	}
@@ -493,7 +493,7 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 				bookFiles[i].ITunesPath = itunesPath
 				if !strings.HasPrefix(bookFiles[i].ID, "virtual-") {
 					if err := mfs.db.UpdateBookFile(bookFiles[i].ID, &bookFiles[i]); err != nil {
-												slog.Warn("failed to update itunes_path for book file :", "id", bookFiles[i].ID, "error", err)
+												slog.Warn("failed to update itunes_path for book file", "id", bookFiles[i].ID, "error", err)
 					}
 				}
 			}
@@ -512,7 +512,7 @@ func (mfs *Service) RunApplyPipelineRenameOnly(id string, book *database.Book) e
 	if mfs.dedupEngine != nil {
 		go func() {
 			if _, err := mfs.dedupEngine.CheckBook(context.Background(), id); err != nil {
-								slog.Warn("dedup re-check failed for book  after metadata apply:", "id", id, "error", err)
+								slog.Warn("dedup re-check failed for book after metadata apply", "id", id, "error", err)
 			}
 		}()
 	}

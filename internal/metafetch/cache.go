@@ -90,7 +90,7 @@ func (mfs *Service) FetchAndCache(ctx context.Context, bookID, query, author, na
 		if err := mfs.db.PutMetadataCache(entry); err != nil {
 			// Cache failure should not break the user's fetch; log and
 			// continue (callers can still consume the in-memory entry).
-						slog.Warn("metafetch: FetchAndCache write :", "id", bookID, "error", err)
+						slog.Warn("metafetch FetchAndCache write", "id", bookID, "error", err)
 			return entry, nil
 		}
 	}

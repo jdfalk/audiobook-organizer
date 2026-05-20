@@ -353,15 +353,15 @@ func NewServer(store database.Store) *Server {
 		regContainer.IncludeGroup("activity")
 	}
 	if err := regContainer.Resolve(); err != nil {
-		slog.Error("serviceregistry resolve:", "value0", "err", err)
+		slog.Error("serviceregistry resolve", "value0", "err", err)
 		os.Exit(1)
 	}
 	if err := regContainer.Build(regCtx); err != nil {
-		slog.Error("serviceregistry build:", "value0", "err", err)
+		slog.Error("serviceregistry build", "value0", "err", err)
 		os.Exit(1)
 	}
 	if err := regContainer.PostInit(regCtx); err != nil {
-		slog.Error("serviceregistry postinit:", "value0", "err", err)
+		slog.Error("serviceregistry postinit", "value0", "err", err)
 		os.Exit(1)
 	}
 	wireServerFromContainer(server, regContainer)
@@ -408,13 +408,13 @@ func NewServer(store database.Store) *Server {
 	// and the mock store has no UpsertOpDefinitionV2 expectations.
 	if config.AppConfig.RootDir != "" {
 		if err := maintenanceplugin.New(server).Register(server.opRegistry); err != nil {
-			slog.Warn("maintenance plugin register:", "value0", "err", err)
+			slog.Warn("maintenance plugin register", "value0", "err", err)
 		}
 		// Iterate all op registrars. Each file calls addOpRegistrar in its init()
 		// so new ops never require touching this block.
 		for _, reg := range opRegistrars {
 			if err := reg(server, server.opRegistry); err != nil {
-				slog.Warn("op registrar:", "value0", "err", err)
+				slog.Warn("op registrar", "value0", "err", err)
 			}
 		}
 	}
@@ -457,7 +457,7 @@ func NewServer(store database.Store) *Server {
 		// GetGlobalStore() lookup here (SERVER-GLOBAL-STORE-AUDIT).
 		if ps, ok := resolvedStore.(*database.PebbleStore); ok {
 			if migrateErr := database.MigrateEmbeddingsFromSQLite(ps.DB(), filepath.Join(dbDir, "embeddings.db")); migrateErr != nil {
-				slog.Warn("embeddings.db migration error (continuing):", "migrateErr", migrateErr)
+				slog.Warn("embeddings.db migration error (continuing)", "migrateErr", migrateErr)
 			}
 		}
 	}
@@ -549,7 +549,7 @@ func NewServer(store database.Store) *Server {
 		}
 		server.metadataFetchService.ApplyMetadataFileIO(bookID)
 		if _, err := server.metadataFetchService.WriteBackMetadataForBook(bookID); err != nil {
-			slog.Warn("recovery write-back for :", "bookID", bookID, "err", err)
+			slog.Warn("recovery write-back for", "bookID", bookID, "err", err)
 		}
 		if server.writeBackBatcher != nil {
 			server.writeBackBatcher.Enqueue(bookID)

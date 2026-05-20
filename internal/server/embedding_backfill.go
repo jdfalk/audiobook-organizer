@@ -64,7 +64,7 @@ func (s *Server) runEmbeddingBackfill() {
 		// runs. The marker stays unset on cancel, which is the right
 		// thing: we want the next startup to resume the backfill.
 		if ctx.Err() != nil {
-			slog.Info("Embedding backfill canceled during book loop at offset :", "offset", offset, "ctx", ctx.Err())
+			slog.Info("Embedding backfill canceled during book loop at offset", "offset", offset, "ctx", ctx.Err())
 			return
 		}
 		books, err := store.GetAllBooks(100, offset)
@@ -78,7 +78,7 @@ func (s *Server) runEmbeddingBackfill() {
 			}
 			status, err := s.dedupEngine.EmbedBook(ctx, book.ID)
 			if err != nil {
-				slog.Warn("backfill embed book :", "book", book.ID, "err", err)
+				slog.Warn("backfill embed book", "book", book.ID, "err", err)
 				statErrors++
 				visited++
 				continue
@@ -97,35 +97,35 @@ func (s *Server) runEmbeddingBackfill() {
 		}
 		offset += len(books)
 		if visited >= nextProgressAt {
-			slog.Info("Embedding backfill progress:  books visited (embedded= cached= skipped_non_primary= skipped_empty_title=)", "visited", visited, "statEmbedded", statEmbedded, "statCached", statCached, "statSkippedNonPrimary", statSkippedNonPrimary, "statSkippedEmptyTitle", statSkippedEmptyTitle)
+			slog.Info("Embedding backfill progress books visited (embedded cached skipped_non_primary skipped_empty_title)", "visited", visited, "statEmbedded", statEmbedded, "statCached", statCached, "statSkippedNonPrimary", statSkippedNonPrimary, "statSkippedEmptyTitle", statSkippedEmptyTitle)
 			for nextProgressAt <= visited {
 				nextProgressAt += 500
 			}
 		}
 	}
-	slog.Info("Book backfill complete: visited= embedded= cached= skipped_non_primary= skipped_empty_title= errors=", "visited", visited, "statEmbedded", statEmbedded, "statCached", statCached, "statSkippedNonPrimary", statSkippedNonPrimary, "statSkippedEmptyTitle", statSkippedEmptyTitle, "statErrors", statErrors)
+	slog.Info("Book backfill complete visited embedded cached skipped_non_primary skipped_empty_title errors", "visited", visited, "statEmbedded", statEmbedded, "statCached", statCached, "statSkippedNonPrimary", statSkippedNonPrimary, "statSkippedEmptyTitle", statSkippedEmptyTitle, "statErrors", statErrors)
 
 	// Backfill authors
 	authorCount := 0
 	authors, err := store.GetAllAuthors()
 	if err != nil {
-		slog.Warn("backfill: failed to get authors:", "err", err)
+		slog.Warn("backfill failed to get authors", "err", err)
 	} else {
 		for _, author := range authors {
 			if ctx.Err() != nil {
-				slog.Info("Embedding backfill canceled during author loop after  authors", "authorCount", authorCount)
+				slog.Info("Embedding backfill canceled during author loop after authors", "authorCount", authorCount)
 				return
 			}
 			if err := s.dedupEngine.EmbedAuthor(ctx, author.ID); err != nil {
-				slog.Warn("backfill embed author :", "author", author.ID, "err", err)
+				slog.Warn("backfill embed author", "author", author.ID, "err", err)
 			} else {
 				authorCount++
 			}
 		}
 	}
-	slog.Info("Embedded  authors", "authorCount", authorCount)
+	slog.Info("Embedded authors", "authorCount", authorCount)
 
-	slog.Info("Embedding backfill complete:  books (embedded=, cached=),  authors", "visited", visited, "statEmbedded", statEmbedded, "statCached", statCached, "authorCount", authorCount)
+	slog.Info("Embedding backfill complete books (embedded, cached), authors", "visited", visited, "statEmbedded", statEmbedded, "statCached", statCached, "authorCount", authorCount)
 
 	// Persist the backfill marker NOW, before FullScan runs. The embedding
 	// work itself is complete; FullScan is a follow-up exact-match/similarity
@@ -139,7 +139,7 @@ func (s *Server) runEmbeddingBackfill() {
 	// crashes. If FullScan fails, the user can still trigger a Re-scan from
 	// the UI; they just won't re-pay for embedding work that's already done.
 	if err := store.SetSetting(backfillVersionMarker, "true", "bool", false); err != nil {
-		slog.Warn("failed to persist backfill marker:  — backfill will re-run next startup", "err", err)
+		slog.Warn("failed to persist backfill marker — backfill will re-run next startup", "err", err)
 	} else {
 		slog.Info("Embedding backfill marker persisted ()", "backfillVersionMarker", backfillVersionMarker)
 	}
@@ -149,9 +149,9 @@ func (s *Server) runEmbeddingBackfill() {
 	// left over from pre-fix backfills — on subsequent startups, the
 	// cleanup is a no-op because FullScan won't create those rows anymore.
 	if deleted, err := s.dedupEngine.PurgeStaleCandidates(ctx); err != nil {
-		slog.Warn("backfill: purge stale candidates error:", "err", err)
+		slog.Warn("backfill purge stale candidates error", "err", err)
 	} else if deleted > 0 {
-		slog.Info("Purged  stale dedup candidate(s) before initial scan", "deleted", deleted)
+		slog.Info("Purged stale dedup candidate(s) before initial scan", "deleted", deleted)
 	}
 
 	// Run full dedup scan with a bucket-crossing progress logger (see
@@ -165,14 +165,14 @@ func (s *Server) runEmbeddingBackfill() {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				slog.Error("Initial dedup scan panicked:  — backfill marker is already set, server will continue", "r", r)
+				slog.Error("Initial dedup scan panicked — backfill marker is already set, server will continue", "r", r)
 			}
 		}()
 		progressFn := newDedupScanProgressLogger(1000, func(format string, args ...any) {
 			slog.DebugContext(context.Background(), "progress", "args", args)
 		})
 		if err := s.dedupEngine.FullScan(ctx, progressFn); err != nil {
-			slog.Warn("Initial dedup scan failed:", "err", err)
+			slog.Warn("Initial dedup scan failed", "err", err)
 		}
 	}()
 

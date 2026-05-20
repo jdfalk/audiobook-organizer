@@ -159,7 +159,7 @@ func (s *Server) createAPIKey(c *gin.Context) {
 		return
 	}
 
-	slog.Info("apikey: created: id= user= name= scopes= expires=", "created", created.ID, "targetUserID", targetUserID, "created", created.Name, "created", created.Scopes, "created", created.ExpiresAt)
+	slog.Info("apikey created id user name scopes expires", "created", created.ID, "targetUserID", targetUserID, "created", created.Name, "created", created.Scopes, "created", created.ExpiresAt)
 
 	resp := createAPIKeyResponse{
 		ID:        created.ID,
@@ -295,7 +295,7 @@ func (s *Server) updateAPIKeyStatus(c *gin.Context) {
 		return
 	}
 
-	slog.Info("apikey: status change: id= user= status=", "id", id, "caller", caller.ID, "req", req.Status)
+	slog.Info("apikey status change id user status", "id", id, "caller", caller.ID, "req", req.Status)
 
 	updated, err := s.Store().GetAPIKey(id)
 	if err != nil || updated == nil {
@@ -333,6 +333,6 @@ func (s *Server) revokeAPIKey(c *gin.Context) {
 		return
 	}
 
-	slog.Info("apikey: revoked: id= user= name=", "id", id, "caller", caller.ID, "key", key.Name)
+	slog.Info("apikey revoked id user name", "id", id, "caller", caller.ID, "key", key.Name)
 	httputil.RespondWithNoContent(c)
 }

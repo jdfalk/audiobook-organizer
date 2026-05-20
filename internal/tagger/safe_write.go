@@ -129,13 +129,13 @@ func resolvePath(ctx context.Context, path string, deps SafeWriteDeps) (string, 
 	}
 
 	// Path is protected.
-	slog.Info("safe_write: importing protected path before tag write", "path", path)
+	slog.Info("safe_write importing protected path before tag write", "path", path)
 
 	if deps.Importer == nil {
 		// Guard is incomplete — log a warning and proceed in-place rather than
 		// failing silently or corrupting a torrent file. This should not happen
 		// in production (both fields must be wired together).
-		slog.Warn("safe_write: LibraryImporter is nil for protected path; writing in-place", "path", path)
+		slog.Warn("safe_write LibraryImporter is nil for protected path; writing in-place", "path", path)
 		return path, nil
 	}
 
@@ -144,6 +144,6 @@ func resolvePath(ctx context.Context, path string, deps SafeWriteDeps) (string, 
 		return "", fmt.Errorf("import protected path %s: %w", path, err)
 	}
 
-	slog.Info("safe_write: imported protected path before tag write", "src", path, "dest", libraryPath)
+	slog.Info("safe_write imported protected path before tag write", "src", path, "dest", libraryPath)
 	return libraryPath, nil
 }

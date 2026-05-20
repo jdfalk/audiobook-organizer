@@ -73,7 +73,7 @@ func MigrateEmbeddingsFromSQLite(db *pebble.DB, sqlitePath string) error {
 		return err
 	}
 
-	slog.Info("Embeddings migration complete in : vectors= cache= candidates=", "value0", time.Since(start).Round(time.Millisecond), "vectors", vectors, "cache", cache, "candidates", candidates)
+	slog.Info("Embeddings migration complete in vectors cache candidates", "value0", time.Since(start).Round(time.Millisecond), "vectors", vectors, "cache", cache, "candidates", candidates)
 	return nil
 }
 
@@ -97,7 +97,7 @@ FROM embeddings ORDER BY created_at`)
 			updatedAtS string
 		)
 		if err := rows.Scan(&entityType, &entityID, &textHash, &vectorBlob, &model, &createdAtS, &updatedAtS); err != nil {
-			slog.Warn("migrate embeddings: scan row:", "err", err)
+			slog.Warn("migrate embeddings scan row", "err", err)
 			continue
 		}
 
@@ -114,7 +114,7 @@ FROM embeddings ORDER BY created_at`)
 				h = textHash
 			}
 			if err := store.PutCachedEmbedding(h, m, vec); err != nil {
-				slog.Warn("migrate embeddings: put cache :", "entityID", entityID, "err", err)
+				slog.Warn("migrate embeddings put cache", "entityID", entityID, "err", err)
 				continue
 			}
 			cache++
@@ -128,7 +128,7 @@ FROM embeddings ORDER BY created_at`)
 				UpdatedAt: updatedAt.UnixNano(),
 			}
 			if err := store.setJSON(key, rec); err != nil {
-				slog.Warn("migrate embeddings: write vector ::", "entityType", entityType, "entityID", entityID, "err", err)
+				slog.Warn("migrate embeddings write vector", "entityType", entityType, "entityID", entityID, "err", err)
 				continue
 			}
 			vectors++
@@ -163,7 +163,7 @@ FROM dedup_candidates ORDER BY id`)
 		)
 		if err := rows.Scan(&entityType, &entityAID, &entityBID, &layer,
 			&sim, &verdict, &reason, &status, &createdAtS, &updatedAtS); err != nil {
-			slog.Warn("migrate dedup_candidates: scan row:", "err", err)
+			slog.Warn("migrate dedup_candidates scan row", "err", err)
 			continue
 		}
 
@@ -188,7 +188,7 @@ FROM dedup_candidates ORDER BY id`)
 		}
 
 		if err := store.UpsertCandidate(c); err != nil {
-			slog.Warn("migrate dedup_candidates: upsert  /:", "entityType", entityType, "entityAID", entityAID, "entityBID", entityBID, "err", err)
+			slog.Warn("migrate dedup_candidates upsert /", "entityType", entityType, "entityAID", entityAID, "entityBID", entityBID, "err", err)
 			continue
 		}
 		n++

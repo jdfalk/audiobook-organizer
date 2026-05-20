@@ -27,7 +27,7 @@ func (s *Server) quarantineKnownBadFiles() {
 
 	books, err := store.GetAllBooks(20000, 0)
 	if err != nil {
-		slog.Warn("quarantineKnownBadFiles: GetAllBooks:", "err", err)
+		slog.Warn("quarantineKnownBadFiles GetAllBooks", "err", err)
 		return
 	}
 
@@ -42,13 +42,13 @@ func (s *Server) quarantineKnownBadFiles() {
 			continue
 		}
 		if err := s.quarantineSvc.QuarantineBook(b.ID, "taglib permanently unreadable after transcode attempt"); err != nil {
-			slog.Warn("quarantineKnownBadFiles: quarantine :", "b", b.FilePath, "err", err)
+			slog.Warn("quarantineKnownBadFiles quarantine", "b", b.FilePath, "err", err)
 			continue
 		}
-		slog.Info("quarantineKnownBadFiles: quarantined", "b", b.FilePath)
+		slog.Info("quarantineKnownBadFiles quarantined", "b", b.FilePath)
 		quarantined++
 	}
 
-	slog.Info("quarantineKnownBadFiles: quarantined  books", "quarantined", quarantined)
+	slog.Info("quarantineKnownBadFiles quarantined books", "quarantined", quarantined)
 	_ = store.SetSetting(quarantineKnownBadKey, "true", "bool", false)
 }

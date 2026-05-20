@@ -127,7 +127,7 @@ func (c *EmbeddingClient) EmbedBatch(ctx context.Context, texts []string) ([][]f
 			vec, err := c.cache.GetCachedEmbedding(hash, c.model)
 			if err != nil {
 				// Cache read failure — treat as miss, log once.
-				slog.Warn("embedding cache get failed (hash=):", "value0", "value0", "value1", hash[:8], "err", err)
+				slog.Warn("embedding cache get failed (hash)", "value0", "value0", "value1", hash[:8], "err", err)
 			}
 			if err == nil && vec != nil {
 				results[i] = vec
@@ -147,12 +147,12 @@ func (c *EmbeddingClient) EmbedBatch(ctx context.Context, texts []string) ([][]f
 
 	// All cache hits? Return without touching the API at all.
 	if len(missTexts) == 0 {
-		slog.Debug("embedding cache: / hits, 0 API calls", "value0", "hits", "hits", hits, "value1", len(texts))
+		slog.Debug("embedding cache / hits, 0 API calls", "value0", "hits", "hits", hits, "value1", len(texts))
 		return results, nil
 	}
 
 	if c.cache != nil {
-		slog.Debug("embedding cache: / hits,  misses sent to API", "value0", "hits", "hits", hits, "value2", "value1", len(texts), "value2", len(missTexts))
+		slog.Debug("embedding cache / hits, misses sent to API", "value0", "hits", "hits", hits, "value2", "value1", len(texts), "value2", len(missTexts))
 	}
 
 	apiResults, err := c.rawEmbed(ctx, missTexts)
@@ -172,7 +172,7 @@ func (c *EmbeddingClient) EmbedBatch(ctx context.Context, texts []string) ([][]f
 		if c.cache != nil {
 			hash := TextHash(missTexts[j])
 			if putErr := c.cache.PutCachedEmbedding(hash, c.model, vec); putErr != nil {
-				slog.Warn("embedding cache put failed (hash=):", "value0", "value0", "value1", hash[:8], "putErr", putErr)
+				slog.Warn("embedding cache put failed (hash)", "value0", "value0", "value1", hash[:8], "putErr", putErr)
 			}
 		}
 	}

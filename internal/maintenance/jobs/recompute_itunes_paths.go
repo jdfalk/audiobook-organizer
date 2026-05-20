@@ -50,7 +50,7 @@ func (j *recomputeITunesPathsJob) Run(ctx context.Context, store database.Store,
 			bf.ITunesPath = want
 			if uerr := store.UpdateBookFile(bf.ID, &bf); uerr != nil {
 				msg := uerr.Error()
-				slog.Error("recompute-itunes-paths: UpdateBookFile failed", "details", msg)
+				slog.Error("recompute-itunes-paths UpdateBookFile failed", "details", msg)
 				continue
 			}
 		}

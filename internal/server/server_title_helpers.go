@@ -253,9 +253,9 @@ func (s *Server) reassignExternalIDsForFiles(sourceBookID, targetBookID string, 
 
 		m.BookID = targetBookID
 		if createErr := eidStore.CreateExternalIDMapping(&m); createErr != nil {
-			slog.Warn("reassignExternalIDsForFiles: failed to reassign : to :", "m", m.Source, "m", m.ExternalID, "targetBookID", targetBookID, "createErr", createErr)
+			slog.Warn("reassignExternalIDsForFiles failed to reassign to", "m", m.Source, "m", m.ExternalID, "targetBookID", targetBookID, "createErr", createErr)
 		}
 	}
 
-	slog.Info("reassigned  external ID mapping(s) from book  to", "toMove_count", len(toMove), "sourceBookID", sourceBookID, "targetBookID", targetBookID)
+	slog.Info("reassigned external ID mapping(s) from book to", "toMove_count", len(toMove), "sourceBookID", sourceBookID, "targetBookID", targetBookID)
 }

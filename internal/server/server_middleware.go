@@ -150,10 +150,10 @@ func saveDismissedDedupGroups(store database.Store, dismissed map[string]bool) {
 	}
 	data, err := json.Marshal(keys)
 	if err != nil {
-		slog.Warn("failed to marshal dismissed dedup groups:", "err", err)
+		slog.Warn("failed to marshal dismissed dedup groups", "err", err)
 		return
 	}
 	if err := store.SetUserPreference("dedup_dismissed_groups", string(data)); err != nil {
-		slog.Warn("failed to save dismissed dedup groups:", "err", err)
+		slog.Warn("failed to save dismissed dedup groups", "err", err)
 	}
 }

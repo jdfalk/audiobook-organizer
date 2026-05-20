@@ -129,7 +129,7 @@ func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, re
 
 	totalBooks := len(existingResults) + len(work)
 	alreadyDone := len(existingResults)
-	slog.Info("bulk-fetch-metadata :  books total,  already cached,  to fetch", "opID", opID, "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
+	slog.Info("bulk-fetch-metadata books total, already cached, to fetch", "opID", opID, "totalBooks", totalBooks, "alreadyDone", alreadyDone, "work_count", len(work))
 
 	reporter.SetTotal(totalBooks)
 	for i := 0; i < alreadyDone; i++ {
@@ -234,8 +234,8 @@ func (j *bulkFetchMetadataJob) Run(ctx context.Context, store database.Store, re
 	}
 
 	finalCount := atomic.LoadInt64(&completed)
-	slog.Info("bulk-fetch-metadata : done  books — cached: not_found:", "opID", opID, "finalCount", finalCount, "found", found, "notFound", notFound)
-	slog.Info("complete — cached: not_found:", "found", found, "notFound", notFound)
+	slog.Info("bulk-fetch-metadata done books — cached not_found", "opID", opID, "finalCount", finalCount, "found", found, "notFound", notFound)
+	slog.Info("complete — cached not_found", "found", found, "notFound", notFound)
 	return nil
 }
 
@@ -286,7 +286,7 @@ func bmf_buildSourceChain() []metadata.MetadataSource {
 		case "wikipedia":
 			rawSource = metadata.NewWikipediaClient()
 		default:
-			slog.Warn("Unknown metadata source:", "src", src.ID)
+			slog.Warn("Unknown metadata source", "src", src.ID)
 		}
 		if rawSource != nil {
 			chain = append(chain, metadata.NewProtectedSource(rawSource, 5, 30*time.Second))

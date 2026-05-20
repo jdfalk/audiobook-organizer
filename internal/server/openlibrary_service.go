@@ -98,7 +98,7 @@ func (s *Server) startOLDownload(c *gin.Context) {
 
 	params := olDownloadOpParams{LegacyOpID: opID, Types: req.Types, TargetDir: targetDir}
 	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "openlibrary.download", params); enqErr != nil {
-		slog.Warn("Failed to enqueue OL download, running directly:", "enqErr", enqErr)
+		slog.Warn("Failed to enqueue OL download, running directly", "enqErr", enqErr)
 		go func() {
 			for _, dumpType := range req.Types {
 				_ = openlibrary.DownloadDump(dumpType, targetDir, tracker)
@@ -136,7 +136,7 @@ func (s *Server) startOLImport(c *gin.Context) {
 
 	importParams := olImportOpParams{LegacyOpID: opID, Types: req.Types, TargetDir: targetDir}
 	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "openlibrary.import", importParams); enqErr != nil {
-		slog.Warn("Failed to enqueue OL import, running directly:", "enqErr", enqErr)
+		slog.Warn("Failed to enqueue OL import, running directly", "enqErr", enqErr)
 		go func() {
 			_ = svc.Import(context.Background(), nil, targetDir, req.Types)
 		}()
@@ -146,9 +146,9 @@ func (s *Server) startOLImport(c *gin.Context) {
 }
 
 func (s *Server) uploadOLDump(c *gin.Context) {
-	slog.Debug("uploadOLDump: Content-Type=, ContentLength=", "c", c.ContentType(), "value1", c.Request.ContentLength)
+	slog.Debug("uploadOLDump Content-Type, ContentLength", "c", c.ContentType(), "value1", c.Request.ContentLength)
 	dumpType := c.PostForm("type")
-	slog.Debug("uploadOLDump: dumpType=%q", dumpType)
+	slog.Debug("uploadOLDump dumpType%q", dumpType)
 	if !metafetch.ValidDumpTypes[dumpType] {
 		httputil.RespondWithBadRequest(c, "type must be one of: editions, authors, works")
 		return
@@ -195,7 +195,7 @@ func (s *Server) uploadOLDump(c *gin.Context) {
 		return
 	}
 
-	slog.Info("OL dump uploaded:  ( bytes) ->", "header", header.Filename, "written", written, "sp", sp.String())
+	slog.Info("OL dump uploaded ( bytes) ->", "header", header.Filename, "written", written, "sp", sp.String())
 	httputil.RespondWithOK(c, gin.H{
 		"message":  "dump file uploaded",
 		"type":     dumpType,

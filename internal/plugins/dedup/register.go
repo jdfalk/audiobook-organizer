@@ -50,7 +50,7 @@ func (p *Plugin) PostInit(ctx context.Context, c *serviceregistry.Container) err
 	}
 	wrapper, ok := serviceregistry.TryGet[*opsregistry.RegistryWrapper](c, "opregistry")
 	if !ok || wrapper == nil {
-		slog.Warn("PostInit: opregistry not available, skipping op-def registration")
+		slog.Warn("PostInit opregistry not available, skipping op-def registration")
 		return nil
 	}
 	return p.Register(wrapper.Registry)

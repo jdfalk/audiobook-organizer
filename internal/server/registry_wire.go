@@ -150,7 +150,7 @@ func init() {
 			dir := filepath.Join(filepath.Dir(cfg.DatabasePath), "metrics.nutsdb")
 			store, err := database.NewNutsMetricsStore(dir)
 			if err != nil {
-				slog.Warn("Failed to open metrics store:", "err", err)
+				slog.Warn("Failed to open metrics store", "err", err)
 				return (*database.NutsMetricsStore)(nil), nil
 			}
 			return store, nil
@@ -172,7 +172,7 @@ func init() {
 			}
 			s, err := database.NewAIScanStoreFromDB(ps.DB())
 			if err != nil {
-				slog.Warn("Failed to init AI scan store:", "err", err)
+				slog.Warn("Failed to init AI scan store", "err", err)
 				return (*database.AIScanStore)(nil), nil
 			}
 			return s, nil
@@ -237,7 +237,7 @@ func init() {
 				},
 			})
 			if err != nil {
-				slog.Warn("iTunes service construction failed, falling back to disabled:", "err", err)
+				slog.Warn("iTunes service construction failed, falling back to disabled", "err", err)
 				return itunesservice.NewDisabled(), nil
 			}
 			return svc, nil

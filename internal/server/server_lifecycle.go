@@ -50,7 +50,7 @@ func (s *Server) resumeInterruptedOperations() {
 
 	interrupted, err := store.GetInterruptedOperations()
 	if err != nil {
-		slog.Warn("Failed to query interrupted operations:", "err", err)
+		slog.Warn("Failed to query interrupted operations", "err", err)
 		return
 	}
 
@@ -63,7 +63,7 @@ func (s *Server) resumeInterruptedOperations() {
 		if checkpoint != nil {
 			phaseInfo = fmt.Sprintf(" from %s at %d/%d", checkpoint.Phase, checkpoint.PhaseIndex, checkpoint.PhaseTotal)
 		}
-		slog.Info("Resuming interrupted operation  ()", "op", op.ID, "op", op.Type, "phaseInfo", phaseInfo)
+		slog.Info("Resuming interrupted operation ()", "op", op.ID, "op", op.Type, "phaseInfo", phaseInfo)
 
 		opID := op.ID
 		opType := op.Type
@@ -95,7 +95,7 @@ func (s *Server) resumeInterruptedOperations() {
 			if s.opRegistry != nil {
 				enqParams := bulkWriteBackOpParams{BookIDs: params.BookIDs, Rename: params.Rename}
 				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "library.bulk-write-back", enqParams); enqErr != nil {
-					slog.Warn("Failed to re-enqueue bulk_write_back  via v2:", "opID", opID, "enqErr", enqErr)
+					slog.Warn("Failed to re-enqueue bulk_write_back via v2", "opID", opID, "enqErr", enqErr)
 					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
 				}
 			} else {
@@ -107,7 +107,7 @@ func (s *Server) resumeInterruptedOperations() {
 			if s.opRegistry != nil {
 				enqParams := schedulerExtraOpParams{LegacyOpID: opID}
 				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "scheduler.isbn-enrichment", enqParams); enqErr != nil {
-					slog.Warn("Failed to re-enqueue isbn-enrichment  via v2:", "opID", opID, "enqErr", enqErr)
+					slog.Warn("Failed to re-enqueue isbn-enrichment via v2", "opID", opID, "enqErr", enqErr)
 					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
 				}
 			} else {
@@ -119,7 +119,7 @@ func (s *Server) resumeInterruptedOperations() {
 			if s.opRegistry != nil {
 				enqParams := schedulerExtraOpParams{LegacyOpID: opID}
 				if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "scheduler.metadata-refresh", enqParams); enqErr != nil {
-					slog.Warn("Failed to re-enqueue metadata-refresh  via v2:", "opID", opID, "enqErr", enqErr)
+					slog.Warn("Failed to re-enqueue metadata-refresh via v2", "opID", opID, "enqErr", enqErr)
 					_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
 				}
 			} else {
@@ -161,7 +161,7 @@ func (s *Server) resumeInterruptedOperations() {
 				if s.opRegistry != nil {
 					enqParams := maintenanceJobOpParams{LegacyOpID: opID, JobID: jobID}
 					if _, enqErr := s.opRegistry.EnqueueOp(context.Background(), "maintenance.job", enqParams); enqErr != nil {
-						slog.Warn("Failed to re-enqueue maintenance job  () via v2:", "opID", opID, "jobID", jobID, "enqErr", enqErr)
+						slog.Warn("Failed to re-enqueue maintenance job () via v2", "opID", opID, "jobID", jobID, "enqErr", enqErr)
 						_ = store.UpdateOperationError(opID, "failed to resume: "+enqErr.Error())
 					}
 				} else {
@@ -233,12 +233,12 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
 		if _, err := os.Stat(cfg.TLSCertFile); err != nil {
-			slog.Warn("TLS certificate not available (): . Falling back to HTTP-only mode.", "cfg", cfg.TLSCertFile, "err", err)
+			slog.Warn("TLS certificate not available () . Falling back to HTTP-only mode.", "cfg", cfg.TLSCertFile, "err", err)
 			cfg.TLSCertFile = ""
 			cfg.TLSKeyFile = ""
 			cfg.HTTP3Port = ""
 		} else if _, err := os.Stat(cfg.TLSKeyFile); err != nil {
-			slog.Warn("TLS key not available (): . Falling back to HTTP-only mode.", "cfg", cfg.TLSKeyFile, "err", err)
+			slog.Warn("TLS key not available () . Falling back to HTTP-only mode.", "cfg", cfg.TLSKeyFile, "err", err)
 			cfg.TLSCertFile = ""
 			cfg.TLSKeyFile = ""
 			cfg.HTTP3Port = ""
@@ -278,9 +278,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 			if cfg.HTTP3Port != "" {
 				protocols = "HTTPS/HTTP2 (HTTP/3 on UDP port " + cfg.HTTP3Port + ")"
 			}
-			slog.Info("Starting  server on", "protocols", protocols, "value1", s.httpServer.Addr)
+			slog.Info("Starting server on", "protocols", protocols, "value1", s.httpServer.Addr)
 			if err := s.httpServer.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && err != http.ErrServerClosed {
-				slog.Error("Failed to start HTTPS server:", "value0", "err", err)
+				slog.Error("Failed to start HTTPS server", "value0", "err", err)
 			}
 		}()
 
@@ -292,9 +292,9 @@ func (s *Server) Start(cfg ServerConfig) error {
 				TLSConfig: tlsConfig,
 			}
 			go func() {
-				slog.Info("Starting HTTP/3 (QUIC) server on UDP :", "cfg", cfg.Host, "cfg", cfg.HTTP3Port)
+				slog.Info("Starting HTTP/3 (QUIC) server on UDP", "cfg", cfg.Host, "cfg", cfg.HTTP3Port)
 				if err := s.http3Server.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil {
-					slog.Error("Failed to start HTTP/3 server:", "value0", "err", err)
+					slog.Error("Failed to start HTTP/3 server", "value0", "err", err)
 				}
 			}()
 		}
@@ -316,26 +316,26 @@ func (s *Server) Start(cfg ServerConfig) error {
 				}
 				target += r.URL.RequestURI()
 
-				slog.Debug("HTTP->HTTPS redirect:  ->", "value0", r.URL.String(), "target", target)
+				slog.Debug("HTTP->HTTPS redirect ->", "value0", r.URL.String(), "target", target)
 				http.Redirect(w, r, target, http.StatusMovedPermanently)
 			})
 
-			slog.Info("Starting HTTP->HTTPS redirect server on  (redirects to :)", "redirectAddr", redirectAddr, "httpsPort", httpsPort)
+			slog.Info("Starting HTTP->HTTPS redirect server on (redirects to )", "redirectAddr", redirectAddr, "httpsPort", httpsPort)
 			httpRedirectServer := &http.Server{
 				Addr:    redirectAddr,
 				Handler: redirectHandler,
 			}
 			if err := httpRedirectServer.ListenAndServe(); err != nil {
 				// Don't fatal - port 80 might require sudo
-				slog.Warn("Warning: HTTP redirect server failed (port 80 may require sudo):", "err", err)
+				slog.Warn("Warning HTTP redirect server failed (port 80 may require sudo)", "err", err)
 			}
 		}()
 	} else {
 		// Start HTTP/1.1 server without TLS
 		go func() {
-			slog.Info("Starting HTTP/1.1 server on  (use --tls-cert and --tls-key for HTTP/2, add --http3-port for HTTP/3)", "value0", s.httpServer.Addr)
+			slog.Info("Starting HTTP/1.1 server on (use --tls-cert and --tls-key for HTTP/2, add --http3-port for HTTP/3)", "value0", s.httpServer.Addr)
 			if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				slog.Error("Failed to start server:", "value0", "err", err)
+				slog.Error("Failed to start server", "value0", "err", err)
 			}
 		}()
 	}
@@ -344,19 +344,19 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// the permission set in auth.SeedRoles has grown since last boot,
 	// existing roles pick up the new entries automatically.
 	if created, updated, err := auth.SeedRoles(s.Store()); err != nil {
-		slog.Warn("seed roles:", "err", err)
+		slog.Warn("seed roles", "err", err)
 	} else if created > 0 || updated > 0 {
-		slog.Info("seed roles:  created,  updated", "created", created, "updated", updated)
+		slog.Info("seed roles created, updated", "created", created, "updated", updated)
 	}
 	if err := auth.SeedSystemUser(s.Store()); err != nil {
-		slog.Warn("seed system user:", "err", err)
+		slog.Warn("seed system user", "err", err)
 	}
 
 	// Initialize the one-time bootstrap token for emergency admin access.
 	if dbPath := config.AppConfig.DatabasePath; dbPath != "" {
 		dataDir := filepath.Dir(dbPath)
 		if err := InitBootstrapToken(s.Store(), dataDir); err != nil {
-			slog.Info("Failed to init bootstrap token:", "err", err)
+			slog.Info("Failed to init bootstrap token", "err", err)
 		}
 	}
 
@@ -396,7 +396,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 		type vgBackfiller interface{ BackfillVersionGroupIndex() error }
 		if b, ok := s.Store().(vgBackfiller); ok {
 			if err := b.BackfillVersionGroupIndex(); err != nil {
-				slog.Warn("versiongroup-backfill:", "err", err)
+				slog.Warn("versiongroup-backfill", "err", err)
 			}
 		}
 	}()
@@ -652,11 +652,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 	defer cancel()
 	if s.http3Server != nil {
 		if err := s.http3Server.Close(); err != nil {
-			slog.Warn("HTTP/3 server close error:", "err", err)
+			slog.Warn("HTTP/3 server close error", "err", err)
 		}
 	}
 	if err := s.httpServer.Shutdown(ctx); err != nil {
-		slog.Warn("HTTP server forced shutdown:", "err", err)
+		slog.Warn("HTTP server forced shutdown", "err", err)
 	}
 
 	// Drain the UOS-02 operations registry before canceling bgCtx so that
@@ -665,7 +665,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 		regCtx, regCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer regCancel()
 		if err := s.opRegistry.Shutdown(regCtx); err != nil {
-			slog.Warn("ops registry shutdown:", "err", err)
+			slog.Warn("ops registry shutdown", "err", err)
 		}
 	}
 
@@ -713,7 +713,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// always used; PR 2 onward may have live sub-components to flush).
 	if s.itunesSvc != nil {
 		if err := s.itunesSvc.Shutdown(30 * time.Second); err != nil {
-			slog.Warn("itunes service shutdown:", "err", err)
+			slog.Warn("itunes service shutdown", "err", err)
 		}
 	}
 
@@ -737,14 +737,14 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// already-stopped services for those.
 	if s.container != nil {
 		if err := s.container.Stop(context.Background()); err != nil {
-			slog.Warn("container stop:", "err", err)
+			slog.Warn("container stop", "err", err)
 		}
 	}
 
 	// Close activity log store
 	if s.activityService != nil {
 		if err := s.activityService.Store().Close(); err != nil {
-			slog.Warn("Failed to close activity log store:", "err", err)
+			slog.Warn("Failed to close activity log store", "err", err)
 		} else {
 			slog.Info("Activity log store closed")
 		}
@@ -761,7 +761,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Close embedding store
 	if s.embeddingStore != nil {
 		if err := s.embeddingStore.Close(); err != nil {
-			slog.Warn("Failed to close embedding store:", "err", err)
+			slog.Warn("Failed to close embedding store", "err", err)
 		} else {
 			slog.Info("Embedding store closed")
 		}
@@ -770,7 +770,7 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Close AI scan store
 	if s.aiScanStore != nil {
 		if err := s.aiScanStore.Close(); err != nil {
-			slog.Warn("Failed to close AI scan store:", "err", err)
+			slog.Warn("Failed to close AI scan store", "err", err)
 		} else {
 			slog.Info("AI scan store closed")
 		}
@@ -849,10 +849,10 @@ func (s *Server) setupRoutes() {
 	if config.AppConfig.EnableAuth {
 		authMiddleware = servermiddleware.RequireAuth(s.Store())
 	} else {
-		slog.Warn("authentication is disabled (enable_auth=false) — do not expose this server to untrusted networks")
+		slog.Warn("authentication is disabled (enable_authfalse) — do not expose this server to untrusted networks")
 	}
 	if !config.AppConfig.EnableRateLimit {
-		slog.Warn("rate limiting is disabled (enable_rate_limit=false) — the API is vulnerable to abuse. Set enable_rate_limit: true in config.yaml for production deployments")
+		slog.Warn("rate limiting is disabled (enable_rate_limitfalse) — the API is vulnerable to abuse. Set enable_rate_limit true in config.yaml for production deployments")
 	}
 
 	// API routes (auth + rate limits + request-size limits)

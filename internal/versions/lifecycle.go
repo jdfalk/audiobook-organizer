@@ -74,7 +74,7 @@ func PurgeVersion(store database.Store, ver *database.BookVersion) error {
 
 	if bookDir != "" {
 		if err := RemoveVersionSlot(bookDir, ver.ID); err != nil {
-			slog.Warn("remove version slot :", "ver", ver.ID, "err", err)
+			slog.Warn("remove version slot", "ver", ver.ID, "err", err)
 		}
 		_ = PruneEmptyVersionsDir(bookDir)
 	}
@@ -109,7 +109,7 @@ func CleanupTrashedVersions(store database.Store) (purged int) {
 			continue
 		}
 		if err := PurgeVersion(store, v); err != nil {
-			slog.Warn("purge trashed :", "v", v.ID, "err", err)
+			slog.Warn("purge trashed", "v", v.ID, "err", err)
 			continue
 		}
 		purged++

@@ -50,7 +50,7 @@ func (j *fixBookFilePathsJob) Run(ctx context.Context, store database.Store, rep
 				bf.Missing = true
 				if uerr := store.UpdateBookFile(bf.ID, &bf); uerr != nil {
 					msg := uerr.Error()
-					slog.Error("fix-book-file-paths: UpdateBookFile failed", "details", msg)
+					slog.Error("fix-book-file-paths UpdateBookFile failed", "details", msg)
 					continue
 				}
 			}

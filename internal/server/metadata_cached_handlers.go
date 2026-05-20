@@ -134,7 +134,7 @@ func (s *Server) getCacheReviewResults(c *gin.Context) {
 		}
 		var cand metafetch.MetadataCandidate
 		if err := json.Unmarshal(entry.Candidates[0], &cand); err != nil {
-			slog.Warn("getCacheReviewResults: decode candidate for :", "sum", sum.BookID, "err", err)
+			slog.Warn("getCacheReviewResults decode candidate for", "sum", sum.BookID, "err", err)
 			continue
 		}
 
@@ -194,16 +194,16 @@ func (s *Server) batchApplyFromCache(c *gin.Context) {
 	for _, bookID := range body.BookIDs {
 		entry, _, err := s.metadataFetchService.GetCachedCandidates(bookID)
 		if err != nil || entry == nil || len(entry.Candidates) == 0 {
-			slog.Warn("batchApplyFromCache: no cached candidates for", "bookID", bookID)
+			slog.Warn("batchApplyFromCache no cached candidates for", "bookID", bookID)
 			continue
 		}
 		var cand metafetch.MetadataCandidate
 		if err := json.Unmarshal(entry.Candidates[0], &cand); err != nil {
-			slog.Warn("batchApplyFromCache: decode candidate for :", "bookID", bookID, "err", err)
+			slog.Warn("batchApplyFromCache decode candidate for", "bookID", bookID, "err", err)
 			continue
 		}
 		if _, err := s.metadataFetchService.ApplyMetadataCandidate(bookID, cand, nil); err != nil {
-			slog.Warn("batchApplyFromCache: apply for :", "bookID", bookID, "err", err)
+			slog.Warn("batchApplyFromCache apply for", "bookID", bookID, "err", err)
 			continue
 		}
 		_ = s.metadataFetchService.InvalidateCachedCandidates(bookID)

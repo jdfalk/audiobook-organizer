@@ -83,7 +83,7 @@ func (j *fixVersionGroupsJob) Run(ctx context.Context, store database.Store, rep
 
 		if !dryRun {
 			if applyErr := vgUnlinkOutliers(store, outliers); applyErr != nil {
-				slog.Error("Failed to unlink outliers in group :", "groupID", groupID, "applyErr", applyErr)
+				slog.Error("Failed to unlink outliers in group", "groupID", groupID, "applyErr", applyErr)
 				mismatchErrors++
 			} else {
 				mismatchFixed++
@@ -119,7 +119,7 @@ func (j *fixVersionGroupsJob) Run(ctx context.Context, store database.Store, rep
 		suggested := vgBestMatchSubdir(b.FilePath, b.Title)
 		if !dryRun && suggested != "" {
 			if fixErr := vgFixAuthorDirPath(store, b, suggested); fixErr != nil {
-				slog.Error("Failed to fix author-dir path for book :", "b", b.ID, "fixErr", fixErr)
+				slog.Error("Failed to fix author-dir path for book", "b", b.ID, "fixErr", fixErr)
 				authorDirErrors++
 			} else {
 				authorDirFixed++
@@ -129,7 +129,7 @@ func (j *fixVersionGroupsJob) Run(ctx context.Context, store database.Store, rep
 		}
 	}
 
-	slog.Info("Done: mismatch_fixed= mismatch_errors= author_dir_fixed= author_dir_errors= dryRun=", "mismatchFixed", mismatchFixed, "mismatchErrors", mismatchErrors, "authorDirFixed", authorDirFixed, "authorDirErrors", authorDirErrors, "dryRun", dryRun)
+	slog.Info("Done mismatch_fixed mismatch_errors author_dir_fixed author_dir_errors dryRun", "mismatchFixed", mismatchFixed, "mismatchErrors", mismatchErrors, "authorDirFixed", authorDirFixed, "authorDirErrors", authorDirErrors, "dryRun", dryRun)
 	return nil
 }
 

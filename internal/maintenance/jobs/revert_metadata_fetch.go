@@ -86,7 +86,7 @@ func (j *revertMetadataFetchJob) Run(ctx context.Context, store database.Store, 
 		}
 	}
 
-	slog.Info("revert-metadata-fetch: reverting  books, changes after", "bookIDSet_count", len(bookIDSet), "revertAfter", revertAfter.Format(time.RFC3339))
+	slog.Info("revert-metadata-fetch reverting books, changes after", "bookIDSet_count", len(bookIDSet), "revertAfter", revertAfter.Format(time.RFC3339))
 	reporter.SetTotal(len(bookIDSet))
 
 	reverted, skipped, errors := 0, 0, 0
@@ -192,7 +192,7 @@ func (j *revertMetadataFetchJob) Run(ctx context.Context, store database.Store, 
 		if didChange {
 			if !dryRun {
 				if _, uerr := store.UpdateBook(bookID, book); uerr != nil {
-					slog.Warn("revert-metadata-fetch: UpdateBook :", "bookID", bookID, "uerr", uerr)
+					slog.Warn("revert-metadata-fetch UpdateBook", "bookID", bookID, "uerr", uerr)
 					errors++
 				} else {
 					reverted++
@@ -205,7 +205,7 @@ func (j *revertMetadataFetchJob) Run(ctx context.Context, store database.Store, 
 		}
 	}
 
-	slog.Info("revert-metadata-fetch: done — reverted: skipped: errors:", "reverted", reverted, "skipped", skipped, "errors", errors)
+	slog.Info("revert-metadata-fetch done — reverted skipped errors", "reverted", reverted, "skipped", skipped, "errors", errors)
 	summary := fmt.Sprintf("Reverted %d books (skipped: %d, errors: %d)", reverted, skipped, errors)
 	slog.Info(summary)
 	return nil

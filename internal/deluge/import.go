@@ -51,7 +51,7 @@ func ImportToLibrary(
 
 	// Idempotency guard: already imported.
 	if bookFile.ImportedFromDelugeAt != nil {
-		slog.Info("ImportToLibrary:  already imported at , skipping", "bookFile", bookFile.FilePath, "value1", bookFile.ImportedFromDelugeAt.Format(time.RFC3339))
+		slog.Info("ImportToLibrary already imported at , skipping", "bookFile", bookFile.FilePath, "value1", bookFile.ImportedFromDelugeAt.Format(time.RFC3339))
 		return bookFile.FilePath, nil
 	}
 
@@ -84,7 +84,7 @@ func ImportToLibrary(
 
 	// Do not copy if source and destination are the same path.
 	if src == dest {
-		slog.Info("ImportToLibrary: source and dest are the same (), skipping copy", "src", src)
+		slog.Info("ImportToLibrary source and dest are the same (), skipping copy", "src", src)
 		return src, nil
 	}
 
@@ -98,7 +98,7 @@ func ImportToLibrary(
 	// Falls back to io.Copy on any error.
 	copyErr := reflinkCopy(src, dest)
 	if copyErr != nil {
-		slog.Debug("ImportToLibrary: reflink failed (), falling back to io.Copy", "copyErr", copyErr)
+		slog.Debug("ImportToLibrary reflink failed (), falling back to io.Copy", "copyErr", copyErr)
 		if err := ioCopy(src, dest); err != nil {
 			return "", fmt.Errorf("ImportToLibrary: copy %s -> %s: %w", src, dest, err)
 		}
@@ -116,16 +116,16 @@ func ImportToLibrary(
 		return dest, fmt.Errorf("ImportToLibrary: UpdateBookFile %s: %w", bookFile.ID, err)
 	}
 
-	slog.Info("ImportToLibrary: copied  ->", "src", src, "dest", dest)
+	slog.Info("ImportToLibrary copied ->", "src", src, "dest", dest)
 
 	// Best-effort: tell Deluge to move the torrent storage.
 	if cfg.DelugeMoveEnabled && bookFile.DelugeHash != "" && delugeClient != nil {
 		moveErr := delugeClient.MoveStorage([]string{bookFile.DelugeHash}, filepath.Dir(dest))
 		if moveErr != nil {
-			slog.Warn("ImportToLibrary: MoveStorage for hash  failed (non-fatal):", "bookFile", bookFile.DelugeHash, "moveErr", moveErr)
+			slog.Warn("ImportToLibrary MoveStorage for hash failed (non-fatal)", "bookFile", bookFile.DelugeHash, "moveErr", moveErr)
 			// Do NOT return this error. MoveStorage is best-effort.
 		} else {
-			slog.Info("ImportToLibrary: MoveStorage for hash  ->  succeeded", "bookFile", bookFile.DelugeHash, "filepath", filepath.Dir(dest))
+			slog.Info("ImportToLibrary MoveStorage for hash -> succeeded", "bookFile", bookFile.DelugeHash, "filepath", filepath.Dir(dest))
 		}
 	}
 

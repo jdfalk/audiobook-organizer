@@ -59,7 +59,7 @@ func (j *fixLibraryStatesJob) Run(ctx context.Context, store database.Store, rep
 			updated.LibraryState = &wantState
 			if _, uerr := store.UpdateBook(book.ID, &updated); uerr != nil {
 				msg := uerr.Error()
-				slog.Error("fix-library-states: UpdateBook failed", "details", msg)
+				slog.Error("fix-library-states UpdateBook failed", "details", msg)
 			} else {
 				fixed++
 			}

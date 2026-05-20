@@ -22,14 +22,14 @@ func init() {
 
 			// Pre-condition: OpenAI API key and AI parsing must be enabled
 			if cfg.OpenAIAPIKey == "" || !cfg.EnableAIParsing {
-				slog.Info("batchpoller: skipping (OpenAI disabled or API key not set)")
+				slog.Info("batchpoller skipping (OpenAI disabled or API key not set)")
 				return nil, nil
 			}
 
 			// Create the OpenAI parser instance and BatchPoller
 			parser := ai.NewOpenAIParser(cfg, cfg.OpenAIAPIKey, cfg.EnableAIParsing)
 			poller := NewBatchPoller(store, parser)
-			slog.Info("batchpoller: initialized")
+			slog.Info("batchpoller initialized")
 			return poller, nil
 		},
 	})

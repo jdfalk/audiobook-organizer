@@ -65,7 +65,7 @@ func (s *ISBNService) EnrichBookISBN(bookID string) (bool, error) {
 			if _, err := s.db.UpdateBook(bookID, book); err != nil {
 				return false, err
 			}
-						slog.Info("ISBN enrichment: found  for  ()", "value", isbn, "value", title, "name", src.Name())
+						slog.Info("ISBN enrichment found for ()", "value", isbn, "value", title, "name", src.Name())
 			updated = true
 			break
 		}
@@ -85,7 +85,7 @@ func (s *ISBNService) EnrichBookISBN(bookID string) (bool, error) {
 			if _, err := s.db.UpdateBook(bookID, book); err != nil {
 				return updated, err
 			}
-						slog.Info("ASIN enrichment: found  for", "value", asin, "value", title)
+						slog.Info("ASIN enrichment found for", "value", asin, "value", title)
 			updated = true
 			break
 		}
@@ -131,7 +131,7 @@ func (s *ISBNService) EnrichMissingISBNs(ctx context.Context, limit int, w *acti
 			checked++
 			found, err := s.EnrichBookISBN(books[i].ID)
 			if err != nil {
-								slog.Warn("ISBN enrichment failed for  during batch scan:", "id", books[i].ID, "error", err)
+								slog.Warn("ISBN enrichment failed for during batch scan", "id", books[i].ID, "error", err)
 			} else if found {
 				updated++
 				activity.LogBatch(w, opID, "isbn-enrich", "isbn-enrichment",

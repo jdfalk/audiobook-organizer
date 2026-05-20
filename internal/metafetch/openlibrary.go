@@ -53,7 +53,7 @@ func NewOpenLibraryService() *OpenLibraryService {
 		}
 		store, err := openlibrary.NewOLStore(storePath)
 		if err != nil {
-						slog.Warn("Failed to open OL dump store:", "error", err)
+						slog.Warn("Failed to open OL dump store", "error", err)
 		} else {
 			svc.OLStore = store
 		}
@@ -136,7 +136,7 @@ func (svc *OpenLibraryService) Import(ctx context.Context, progress operations.P
 			}()
 
 			filePath := filepath.Join(targetDir, openlibrary.DumpFilename(dt))
-						slog.Info("Starting OL dump import:  from", "value", dt, "path", filePath)
+						slog.Info("Starting OL dump import from", "value", dt, "path", filePath)
 
 			lastReported := 0
 			err := svc.OLStore.ImportDump(dt, filePath, func(count int) {
@@ -146,12 +146,12 @@ func (svc *OpenLibraryService) Import(ctx context.Context, progress operations.P
 						msg := fmt.Sprintf("Importing %s: %dk records", dt, count/1000)
 						_ = progress.UpdateProgress(idx, len(types), msg)
 					}
-										slog.Info("OL  import progress:  records", "value", dt, "count", count)
+										slog.Info("OL import progress records", "value", dt, "count", count)
 				}
 			})
 
 			if err != nil {
-								slog.Error("OL dump import failed for :", "value", dt, "error", err)
+								slog.Error("OL dump import failed for", "value", dt, "error", err)
 				if progress != nil {
 					_ = progress.Log("error", fmt.Sprintf("%s import failed: %v", dt, err), nil)
 				}
@@ -159,7 +159,7 @@ func (svc *OpenLibraryService) Import(ctx context.Context, progress operations.P
 				importErr = err
 				mu.Unlock()
 			} else {
-								slog.Info("OL dump import complete:", "value", dt)
+								slog.Info("OL dump import complete", "value", dt)
 				if progress != nil {
 					_ = progress.Log("info", fmt.Sprintf("%s import complete", dt), nil)
 				}

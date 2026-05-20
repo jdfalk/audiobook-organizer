@@ -112,7 +112,7 @@ func NewFileIOPool(workers int) *FileIOPool {
 		p.wg.Add(1)
 		go p.worker(i)
 	}
-	slog.Info("file I/O pool started with  workers, buffer 500", "workers", workers)
+	slog.Info("file I/O pool started with workers, buffer 500", "workers", workers)
 	return p
 }
 
@@ -122,7 +122,7 @@ func (p *FileIOPool) worker(id int) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					slog.Error("file I/O worker  panicked on book  (op=):", "id", id, "job", job.bookID, "job", job.opType, "r", r)
+					slog.Error("file I/O worker panicked on book (op)", "id", id, "job", job.bookID, "job", job.opType, "r", r)
 				}
 			}()
 			job.fn()
@@ -140,7 +140,7 @@ func (p *FileIOPool) Submit(bookID string, fn func()) {
 // SubmitTyped queues a file I/O job with a specific operation type.
 func (p *FileIOPool) SubmitTyped(bookID, opType string, fn func()) {
 	if atomic.LoadInt32(&p.stopped) == 1 {
-		slog.Warn("file I/O pool stopped, dropping job for book  (op=)", "bookID", bookID, "opType", opType)
+		slog.Warn("file I/O pool stopped, dropping job for book (op)", "bookID", bookID, "opType", opType)
 		return
 	}
 	job := FileIOJob{BookID: bookID, OpType: opType, CreatedAt: time.Now()}
@@ -151,7 +151,7 @@ func (p *FileIOPool) SubmitTyped(bookID, opType string, fn func()) {
 	case p.ch <- fileIOJobEntry{bookID: bookID, opType: opType, fn: fn}:
 	default:
 		p.overflow <- struct{}{}
-		slog.Warn("file I/O pool buffer full, running overflow for book  (op=)", "bookID", bookID, "opType", opType)
+		slog.Warn("file I/O pool buffer full, running overflow for book (op)", "bookID", bookID, "opType", opType)
 		go func() {
 			defer func() { <-p.overflow }()
 			fn()
@@ -214,7 +214,7 @@ func (p *FileIOPool) Stop() {
 	case <-done:
 		slog.Info("file I/O pool stopped, all jobs complete")
 	case <-time.After(30 * time.Second):
-		slog.Warn("file I/O pool shutdown timed out after 30s,  jobs may be incomplete", "p", p.Pending())
+		slog.Warn("file I/O pool shutdown timed out after 30s, jobs may be incomplete", "p", p.Pending())
 	}
 }
 
@@ -229,7 +229,7 @@ func InitFileIOPool() {
 		}
 		srv.metadataFetchService.ApplyMetadataFileIO(bookID)
 		if _, err := srv.metadataFetchService.WriteBackMetadataForBook(bookID); err != nil {
-			slog.Warn("recovery write-back for :", "bookID", bookID, "err", err)
+			slog.Warn("recovery write-back for", "bookID", bookID, "err", err)
 		}
 		if srv.writeBackBatcher != nil {
 			srv.writeBackBatcher.Enqueue(bookID)
@@ -305,7 +305,7 @@ func recoverInterruptedFileOps(pool *FileIOPool) {
 		return
 	}
 
-	slog.Info("recovering  interrupted file I/O operations", "keys_count", len(keys))
+	slog.Info("recovering interrupted file I/O operations", "keys_count", len(keys))
 
 	for _, kv := range keys {
 		var job FileIOJob
@@ -342,7 +342,7 @@ func recoverInterruptedFileOps(pool *FileIOPool) {
 
 		bookID := job.BookID
 		opType := job.OpType
-		slog.Info("re-queuing file I/O for book  (type=, started=)", "bookID", bookID, "opType", opType, "value2", job.CreatedAt.Format(time.RFC3339))
+		slog.Info("re-queuing file I/O for book (type, started)", "bookID", bookID, "opType", opType, "value2", job.CreatedAt.Format(time.RFC3339))
 		if pool != nil {
 			pool.SubmitTyped(bookID, opType, func() { fn(bookID) })
 		}

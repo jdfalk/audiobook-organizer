@@ -45,13 +45,13 @@ func (s *Server) handleITunesPathReconcile(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := store.CreateOperation(id, "itunes_path_reconcile", nil)
 	if err != nil {
-		slog.Error("handleITunesPathReconcile: create operation:", "err", err)
+		slog.Error("handleITunesPathReconcile create operation", "err", err)
 		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 	params := itunesPathReconcileOpParams{LegacyOpID: op.ID}
 	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "itunes.path-reconcile", params); enqErr != nil {
-		slog.Error("handleITunesPathReconcile: enqueue:", "enqErr", enqErr)
+		slog.Error("handleITunesPathReconcile enqueue", "enqErr", enqErr)
 		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}
@@ -73,13 +73,13 @@ func (s *Server) handleITunesPathRepair(c *gin.Context) {
 	id := ulid.Make().String()
 	op, err := store.CreateOperation(id, "itunes_path_repair", nil)
 	if err != nil {
-		slog.Error("handleITunesPathRepair: create operation:", "err", err)
+		slog.Error("handleITunesPathRepair create operation", "err", err)
 		httputil.InternalError(c, "failed to create operation", err)
 		return
 	}
 	params := itunesPathRepairOpParams{LegacyOpID: op.ID, DryRun: dryRun}
 	if _, enqErr := s.opRegistry.EnqueueOp(c.Request.Context(), "itunes.path-repair", params); enqErr != nil {
-		slog.Error("handleITunesPathRepair: enqueue:", "enqErr", enqErr)
+		slog.Error("handleITunesPathRepair enqueue", "enqErr", enqErr)
 		httputil.InternalError(c, "failed to enqueue operation", enqErr)
 		return
 	}

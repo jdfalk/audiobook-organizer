@@ -84,7 +84,7 @@ func ExtractMetadataFromFolder(dirPath string) (*FolderMetadata, error) {
 	segments := splitPathSegments(dirPath)
 
 	fm := &FolderMetadata{}
-	slog.Debug("folder_parser: parsing  path segments for", "segments_count", len(segments), "dirPath", dirPath)
+	slog.Debug("folder_parser parsing path segments for", "segments_count", len(segments), "dirPath", dirPath)
 
 	// Walk segments from innermost outward. The innermost segment (segments[last])
 	// is the deepest directory (closest to the files); outermost is the root.
@@ -122,7 +122,7 @@ func ExtractMetadataFromFolder(dirPath string) (*FolderMetadata, error) {
 		tryExtractAuthorFromDashSplit(innermost, fm)
 	}
 
-	slog.Debug("folder_parser: result authors= series=%q pos= title=%q narrator=%q", "fm", fm.Authors, "fm", fm.SeriesName, fm.SeriesPosition, fm.Title, fm.Narrator)
+	slog.Debug("folder_parser result authors series%q pos title%q narrator%q", "fm", fm.Authors, "fm", fm.SeriesName, fm.SeriesPosition, fm.Title, fm.Narrator)
 	return fm, nil
 }
 

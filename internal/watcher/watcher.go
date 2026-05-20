@@ -120,7 +120,7 @@ func (w *Watcher) addRecursive(root string) error {
 		}
 		if d.IsDir() {
 			if watchErr := w.fsWatcher.Add(path); watchErr != nil {
-				slog.Warn("watcher: cannot watch :", "value0", "path", "path", path, "watchErr", watchErr)
+				slog.Warn("watcher cannot watch", "value0", "path", "path", path, "watchErr", watchErr)
 			}
 		}
 		return nil
@@ -143,7 +143,7 @@ func (w *Watcher) eventLoop() {
 			if !ok {
 				return
 			}
-			slog.Error("watcher:", "value0", "err", err)
+			slog.Error("watcher", "value0", "err", err)
 		}
 	}
 }
@@ -189,7 +189,7 @@ func (w *Watcher) scheduleScan() {
 		w.timer = nil
 		w.mu.Unlock()
 
-		slog.Info("watcher: triggering callback for", "value0", "value0", w.rootDir)
+		slog.Info("watcher triggering callback for", "value0", "value0", w.rootDir)
 		if w.callback != nil {
 			w.callback(w.rootDir)
 		}

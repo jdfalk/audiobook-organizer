@@ -149,7 +149,7 @@ func (s *Server) RegisterAuthorMergeOp(reg *opsregistry.Registry) error {
 						newID := keepID
 						current.AuthorID = &newID
 						if _, upErr := store.UpdateBook(book.ID, current); upErr != nil {
-							slog.Warn("author merge: failed to sync denormalized AuthorID on book :", "book", book.ID, "upErr", upErr)
+							slog.Warn("author merge failed to sync denormalized AuthorID on book", "book", book.ID, "upErr", upErr)
 						}
 					}
 				}

@@ -84,10 +84,10 @@ func (s *MetadataUpgradeService) RunUpgrade(ctx context.Context, limit int) (*Up
 		tag := "metadata:source:" + sourceSlug
 		bookIDs, err := s.DB.GetBooksByTag(tag)
 		if err != nil {
-			slog.Warn("metadata-upgrade: GetBooksByTag", "tag", tag, "err", err)
+			slog.Warn("metadata-upgrade GetBooksByTag", "tag", tag, "err", err)
 			continue
 		}
-		slog.Info("metadata-upgrade: found books tagged", "count", len(bookIDs), "tag", tag)
+		slog.Info("metadata-upgrade found books tagged", "count", len(bookIDs), "tag", tag)
 
 		for _, bookID := range bookIDs {
 			if ctx.Err() != nil {
@@ -100,7 +100,7 @@ func (s *MetadataUpgradeService) RunUpgrade(ctx context.Context, limit int) (*Up
 
 			upgraded, upgradeErr := s.tryUpgradeBook(ctx, bookID, sourceSlug)
 			if upgradeErr != nil {
-				slog.Warn("metadata-upgrade: book", "id", bookID, "err", upgradeErr)
+				slog.Warn("metadata-upgrade book", "id", bookID, "err", upgradeErr)
 				result.Errors++
 				continue
 			}
@@ -173,6 +173,6 @@ func (s *MetadataUpgradeService) tryUpgradeBook(ctx context.Context, bookID, cur
 		return false, fmt.Errorf("apply failed: %w", applyErr)
 	}
 
-	slog.Info("metadata-upgrade: upgraded", "id", bookID, "from", currentSourceSlug, "to", bestCandidate.Source, "score", bestCandidate.Score, "title", bestCandidate.Title)
+	slog.Info("metadata-upgrade upgraded", "id", bookID, "from", currentSourceSlug, "to", bestCandidate.Source, "score", bestCandidate.Score, "title", bestCandidate.Title)
 	return true, nil
 }
