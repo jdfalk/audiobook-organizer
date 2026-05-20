@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.10.0
+// version: 1.11.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -59,13 +59,19 @@ type CompactResult struct {
 
 // DigestItem represents a single compacted entry within a daily digest.
 type DigestItem struct {
-	Type        string `json:"type"`
-	Tier        string `json:"tier,omitempty"`
-	Book        string `json:"book,omitempty"`
-	BookID      string `json:"book_id,omitempty"`
-	OperationID string `json:"operation_id,omitempty"`
-	Summary     string `json:"summary"`
-	Details     string `json:"details,omitempty"`
+	Type        string    `json:"type"`
+	Tier        string    `json:"tier,omitempty"`
+	Book        string    `json:"book,omitempty"`
+	BookID      string    `json:"book_id,omitempty"`
+	OperationID string    `json:"operation_id,omitempty"`
+	Summary     string    `json:"summary"`
+	Details     string    `json:"details,omitempty"`
+	// Timestamp is the original event time. Zero for digests compacted before
+	// 2026-05-20 (when this field was added); omitempty hides it from old JSON.
+	Timestamp   time.Time `json:"timestamp,omitempty"`
+	// Tags carries the enriched tag set from the source row.
+	// Empty for digests compacted before 2026-05-20.
+	Tags        []string  `json:"tags,omitempty"`
 }
 
 // DigestDetails is the JSON structure stored in a daily digest row's details column.
@@ -803,6 +809,8 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 				BookID:      e.BookID,
 				OperationID: e.OperationID,
 				Summary:     extractItemSummary(e),
+				Timestamp:   e.Timestamp,
+				Tags:        e.Tags,
 			}
 			switch {
 			case e.Tier == "audit":

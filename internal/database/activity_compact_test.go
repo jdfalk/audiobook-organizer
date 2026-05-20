@@ -1,5 +1,5 @@
 // file: internal/database/activity_compact_test.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package database
@@ -341,4 +341,58 @@ func TestCompactByDay_MergesIntoExistingDigest(t *testing.T) {
 	assert.Equal(t, 3, dd.Counts["metadata_applied"], "old counts preserved")
 	assert.Equal(t, 5, dd.Counts["tag_written"], "new counts added")
 	assert.Len(t, dd.Items, 8, "all 8 items present")
+}
+
+// TestCompactByDay_DigestItemTimestampAndTags verifies that each DigestItem
+// carries the source row's timestamp (non-zero) and any tags from that row.
+// This regression test covers the 2026-05-20 addition of these fields.
+func TestCompactByDay_DigestItemTimestampAndTags(t *testing.T) {
+	s := newTestActivityStore(t)
+
+	base := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
+	olderThan := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+
+	// Insert 3 entries with explicit timestamps and tags, 1 minute apart.
+	for i := 0; i < 3; i++ {
+		_, err := s.Record(ActivityEntry{
+			Tier:      "change",
+			Type:      "metadata_applied",
+			Level:     "info",
+			Source:    "pipeline",
+			Summary:   "applied metadata",
+			Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Tags:      []string{"action:metadata-apply", "outcome:ok", "source:pipeline"},
+		})
+		require.NoError(t, err)
+	}
+
+	result, err := s.CompactByDay(context.Background(), olderThan)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.DaysCompacted)
+	assert.Equal(t, 3, result.EntriesDeleted)
+
+	all, _, err := s.Query(ActivityFilter{Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+
+	detailsJSON, err := json.Marshal(all[0].Details)
+	require.NoError(t, err)
+	var dd DigestDetails
+	require.NoError(t, json.Unmarshal(detailsJSON, &dd))
+	require.Len(t, dd.Items, 3)
+
+	// Items are sorted audit→error→normal; all 3 here are normal.
+	// Verify timestamps are ascending (as inserted) and non-zero.
+	for i, item := range dd.Items {
+		assert.False(t, item.Timestamp.IsZero(), "item %d: Timestamp must be non-zero", i)
+		assert.NotEmpty(t, item.Tags, "item %d: Tags must be populated", i)
+		assert.Contains(t, item.Tags, "action:metadata-apply", "item %d: action tag preserved", i)
+		assert.Contains(t, item.Tags, "outcome:ok", "item %d: outcome tag preserved", i)
+	}
+
+	// Items should be in ascending timestamp order (all are "normal" tier).
+	for i := 1; i < len(dd.Items); i++ {
+		assert.True(t, !dd.Items[i].Timestamp.Before(dd.Items[i-1].Timestamp),
+			"items should be in non-decreasing timestamp order")
+	}
 }
