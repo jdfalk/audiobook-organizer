@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.32.0
+// version: 2.32.1
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-20
 
@@ -1043,9 +1043,14 @@ export async function getBookSegments(bookId: string): Promise<BookSegment[]> {
 
 export async function getBookFiles(
   bookId: string,
-  signal?: AbortSignal
+  options?: { limit?: number; offset?: number; signal?: AbortSignal }
 ): Promise<{ files: BookFile[]; count: number }> {
-  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/files`, { signal });
+  const params = new URLSearchParams();
+  if (options?.limit !== undefined) params.append('limit', String(options.limit));
+  if (options?.offset !== undefined) params.append('offset', String(options.offset));
+  const qs = params.toString();
+  const url = `${API_BASE}/audiobooks/${bookId}/files${qs ? '?' + qs : ''}`;
+  const response = await fetch(url, { signal: options?.signal });
   if (!response.ok)
     throw new Error(`Failed to fetch book files: ${response.status}`);
   const body = await response.json();
