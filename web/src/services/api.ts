@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.32.1
+// version: 2.33.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-20
 
@@ -5048,4 +5048,22 @@ export async function startOptimize(): Promise<{ operation_id: string }> {
     throw await buildApiError(response, 'Failed to start optimize operation');
   }
   return response.json();
+}
+
+// QuickQuery matches the QuickQuery interface defined in web/src/types/index.ts.
+export interface QuickQueryItem {
+  id: string;
+  label: string;
+  count: number;
+  filter: Record<string, unknown>;
+}
+
+/** Fetches the six preset quick-filter counts for the Library header kebab menu. */
+export async function getQuickQueries(): Promise<QuickQueryItem[]> {
+  const response = await fetch(`${API_BASE}/library/quick-queries`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to load quick queries');
+  }
+  const data = await response.json() as { queries: QuickQueryItem[] };
+  return data.queries ?? [];
 }

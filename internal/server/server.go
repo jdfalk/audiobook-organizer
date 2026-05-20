@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.19.4
+// version: 2.20.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 package server
 
@@ -851,3 +851,28 @@ type bulkFetchMetadataResult struct {
 // --- Preview Rename & Metadata Writeback Handlers ---
 
 // --- Preview Organize & Single-Book Organize Handlers ---
+
+// markDuplicatesFlaggedDirty marks the duplicates_flagged quick-query cache
+// entry dirty. Called from dedup handlers (dismiss, scan upsert) so the count
+// is recomputed on the next menu open rather than staying stale.
+func (s *Server) markDuplicatesFlaggedDirty(reason string) {
+	if s.Store() == nil {
+		return
+	}
+	type quickQueryDirtier interface {
+		MarkQuickQueryDirty(id, reason string)
+	}
+	if qd, ok := s.Store().(quickQueryDirtier); ok {
+		qd.MarkQuickQueryDirty("duplicates_flagged", reason)
+		return
+	}
+	// Unwrap if decorated (IndexedStore, etc.)
+	type unwrapper interface {
+		Unwrap() database.Store
+	}
+	if uw, ok := s.Store().(unwrapper); ok {
+		if qd, ok2 := uw.Unwrap().(quickQueryDirtier); ok2 {
+			qd.MarkQuickQueryDirty("duplicates_flagged", reason)
+		}
+	}
+}

@@ -1,7 +1,7 @@
 // file: internal/server/server_search.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 12815699-f9ea-4788-9af3-2e854d710315
-// last-edited: 2026-05-11
+// last-edited: 2026-05-20
 
 package server
 
@@ -172,6 +172,7 @@ func (h *serverOrganizeHooks) OnCollision(currentBookID, occupantPath string) {
 			return
 		}
 		slog.Info("organize-collision created dedup candidate between and (occupant of )", "currentBookID", currentBookID, "occupant", occupant.ID, "occupantPath", occupantPath)
+		h.server.markDuplicatesFlaggedDirty("upsert_candidate")
 	}()
 }
 

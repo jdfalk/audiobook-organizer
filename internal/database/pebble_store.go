@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.75.0
+// version: 1.76.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-20
 
@@ -1789,6 +1789,7 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 	}
 
 	p.InvalidateLibraryStats()
+	p.MarkAllQuickQueriesDirty("create_book")
 	return book, nil
 }
 
@@ -1984,6 +1985,10 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 	}
 
 	p.InvalidateLibraryStats()
+	// UpdateBook may change cover, isbn, or path; mark targeted queries dirty.
+	p.MarkQuickQueryDirty("missing_covers", "update_book")
+	p.MarkQuickQueryDirty("no_isbn", "update_book")
+	p.MarkQuickQueryDirty("in_import_path", "update_book")
 	return book, nil
 }
 
@@ -2308,6 +2313,7 @@ func (p *PebbleStore) DeleteBook(id string) error {
 		return err
 	}
 	p.InvalidateLibraryStats()
+	p.MarkAllQuickQueriesDirty("delete_book")
 	return nil
 }
 
@@ -7754,6 +7760,7 @@ func (s *PebbleStore) CreateBookFile(file *BookFile) error {
 		return err
 	}
 	s.InvalidateLibraryStats()
+	s.MarkQuickQueryDirty("no_fingerprints", "create_book_file")
 	return nil
 }
 
@@ -7801,6 +7808,7 @@ func (s *PebbleStore) UpdateBookFile(id string, file *BookFile) error {
 		return err
 	}
 	s.InvalidateLibraryStats()
+	s.MarkQuickQueryDirty("no_fingerprints", "update_book_file")
 	return nil
 }
 
@@ -8081,6 +8089,7 @@ func (s *PebbleStore) DeleteBookFile(id string) error {
 		return err
 	}
 	s.InvalidateLibraryStats()
+	s.MarkQuickQueryDirty("no_fingerprints", "delete_book_file")
 	return nil
 }
 
@@ -8232,6 +8241,7 @@ func (s *PebbleStore) BatchUpsertBookFiles(files []*BookFile) error {
 		return err
 	}
 	s.InvalidateLibraryStats()
+	s.MarkQuickQueryDirty("no_fingerprints", "batch_upsert_book_files")
 	return nil
 }
 

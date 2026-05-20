@@ -1,7 +1,7 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.7.1
+// version: 2.8.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-19
+// last-edited: 2026-05-20
 
 package server
 
@@ -770,6 +770,7 @@ func (s *Server) dismissDedupCluster(c *gin.Context) {
 		dismissed++
 	}
 	slog.Info("dedup cluster dismiss dismissed candidate row(s) across books", "dismissed", dismissed, "count", len(body.BookIDs))
+	s.markDuplicatesFlaggedDirty("dismiss_cluster")
 
 	httputil.RespondWithOK(c, gin.H{
 		"status":    "dismissed",
@@ -965,6 +966,7 @@ func (s *Server) dismissDedupCandidate(c *gin.Context) {
 		httputil.InternalError(c, "failed to dismiss candidate", err)
 		return
 	}
+	s.markDuplicatesFlaggedDirty("dismiss_candidate")
 
 	httputil.RespondWithOK(c, gin.H{"status": "dismissed"})
 }
