@@ -14,7 +14,7 @@ export GOEXPERIMENT := jsonv2
 -include Makefile.local
 
 .PHONY: all build build-api run run-api install clean help \
-        web-install web-build web-dev web-test web-lint \
+        web-install web-build web-dev web-test web-lint web-lint-memory \
         test test-short test-all test-all-short test-nightly test-frontend test-e2e \
         coverage coverage-check coverage-check-short ci \
         vet mocks mocks-check check-mock-fresh staticcheck oplint sdkguard \
@@ -141,6 +141,12 @@ web-lint:
 	@echo "🔍 Linting frontend..."
 	@cd $(WEB_DIR) && npm run lint
 	@echo "✅ Frontend lint passed"
+
+## web-lint-memory: Scan for common memory leak patterns
+web-lint-memory:
+	@echo "🔍 Scanning for memory leaks..."
+	@python3 scripts/check-memory-leaks.py
+	@echo "✅ Memory leak scan complete"
 
 # --- Testing targets ---
 

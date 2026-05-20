@@ -1,0 +1,27 @@
+name: Memory Leak Detection
+
+on:
+  pull_request:
+    paths:
+      - 'web/src/**'
+      - '.github/workflows/memory-leak-scan.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'web/src/**'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    name: Scan for memory leaks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run memory leak detection
+        run: python3 scripts/check-memory-leaks.py
