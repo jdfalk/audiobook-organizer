@@ -1,5 +1,5 @@
 // file: internal/organizer/pattern_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: 9a0b1c2d-3e4f-5a6b-7c8d-9e0f1a2b3c4d
 
 package organizer
@@ -503,5 +503,54 @@ func TestPatternRejectsUnknownPlaceholder(t *testing.T) {
 	_, err := org.expandPattern("{title}/{unsupported}", book)
 	if err == nil {
 		t.Fatalf("expected error for unresolved placeholder")
+	}
+}
+
+// TestCollapseRedundantDup tests the collapse logic for "X - X" duplications.
+func TestCollapseRedundantDup(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "exact duplicate with case difference",
+			input:    "Cobra Outlaw - Cobra Outlaw",
+			expected: "Cobra Outlaw",
+		},
+		{
+			name:     "duplicate with whitespace difference",
+			input:    "The Moon is a Harsh Mistress - The Moon Is a Harsh Mistress",
+			expected: "The Moon is a Harsh Mistress",
+		},
+		{
+			name:     "duplicate with extra spaces",
+			input:    "Series Name  -  Series Name",
+			expected: "Series Name",
+		},
+		{
+			name:     "different segments no collapse",
+			input:    "Series Name - Book Title",
+			expected: "Series Name - Book Title",
+		},
+		{
+			name:     "no separator no collapse",
+			input:    "Cobra Outlaw",
+			expected: "Cobra Outlaw",
+		},
+		{
+			name:     "three parts no collapse (handles 2-part only)",
+			input:    "Part A - Part B - Part C",
+			expected: "Part A - Part B - Part C",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := collapseRedundantDup(tt.input)
+			if result != tt.expected {
+				t.Errorf("collapseRedundantDup(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
 	}
 }
