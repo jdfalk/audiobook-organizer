@@ -1337,11 +1337,21 @@ export default function ActivityLog() {
                     date?: string;
                     original_count?: number;
                     counts?: Record<string, number>;
+                    tag_counts?: Record<string, Record<string, number>>;
                     items?: Array<{ type: string; tier?: string; book?: string; book_id?: string; operation_id?: string; summary: string; details?: string }>;
                     truncated?: boolean;
                     truncated_count?: number;
                   } | undefined;
-                  const counts = details?.counts || {};
+                  const rawCounts = details?.counts || {};
+                  // Fall back to tag_counts.action when Counts is sparse (only
+                  // the single legacy "system_log" key) so old digests show a
+                  // meaningful breakdown rather than one undifferentiated chip.
+                  const countsKeys = Object.keys(rawCounts);
+                  const isLegacySparse =
+                    countsKeys.length === 1 && countsKeys[0] === 'system_log';
+                  const counts: Record<string, number> = isLegacySparse
+                    ? (details?.tag_counts?.action ?? rawCounts)
+                    : rawCounts;
                   const items = details?.items || [];
 
                   return (

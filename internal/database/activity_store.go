@@ -1,5 +1,5 @@
 // file: internal/database/activity_store.go
-// version: 1.9.3
+// version: 1.10.0
 // guid: e2d3f4a5-b6c7-8d9e-0f1a-2b3c4d5e6f7a
 
 package database
@@ -70,12 +70,18 @@ type DigestItem struct {
 
 // DigestDetails is the JSON structure stored in a daily digest row's details column.
 type DigestDetails struct {
-	Date           string         `json:"date"`
-	OriginalCount  int            `json:"original_count"`
-	Counts         map[string]int `json:"counts"`
-	Items          []DigestItem   `json:"items"`
-	Truncated      bool           `json:"truncated,omitempty"`
-	TruncatedCount int            `json:"truncated_count,omitempty"`
+	Date           string                       `json:"date"`
+	OriginalCount  int                          `json:"original_count"`
+	Counts         map[string]int               `json:"counts"`
+	// TagCounts aggregates entry counts grouped by tag namespace → tag value.
+	// Outer key is a namespace like "action" or "source"; inner key is the
+	// tag value (e.g. "metadata-apply", "scan"). Used by the frontend as a
+	// fallback breakdown when Counts has only one key (e.g. legacy "system_log"
+	// entries whose type was not yet classified at compaction time).
+	TagCounts      map[string]map[string]int    `json:"tag_counts,omitempty"`
+	Items          []DigestItem                 `json:"items"`
+	Truncated      bool                         `json:"truncated,omitempty"`
+	TruncatedCount int                          `json:"truncated_count,omitempty"`
 }
 
 const maxDigestItems = 500
@@ -237,19 +243,14 @@ func (s *ActivityStore) MigrateSystemActivityLogs() (int, error) {
 
 	insertedCount := 0
 	for _, old := range oldLogs {
-		// Map old schema to new ActivityEntry
-		// timestamp ← created_at
-		// tier ← "system"
-		// type ← "system_log"
-		// level ← level (pass through)
-		// source ← source (pass through)
-		// summary ← message
-		// details ← nil
-		// tags ← intelligently derived from message patterns, level, and source
+		// Map old schema to new ActivityEntry.
+		// Type and Tier are derived from the message content so daily digests
+		// can produce meaningful breakdown chips instead of a single "system_log" chip.
+		derivedType, derivedTier := deriveTypeFromMessage(old.Message, old.Source)
 		entry := ActivityEntry{
 			Timestamp: old.CreatedAt,
-			Tier:      "system",
-			Type:      "system_log",
+			Tier:      derivedTier,
+			Type:      derivedType,
 			Level:     old.Level,
 			Source:    old.Source,
 			Summary:   old.Message,
@@ -688,11 +689,14 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 	var result CompactResult
 
 	// 1. Fetch all compactable entries.
+	// Include 'system' tier so legacy migrated rows (which used to be hardcoded
+	// to tier='system') are also compacted into daily digests and produce
+	// breakdown chips via TagCounts.
 	rows, err := s.db.Query(`
 		SELECT id, timestamp, tier, type, level, source, operation_id,
 		       book_id, summary, details, tags
 		FROM   activity_log
-		WHERE  tier IN ('change', 'debug', 'audit')
+		WHERE  tier IN ('change', 'debug', 'audit', 'system')
 		  AND  compacted = 0
 		  AND  timestamp < ?
 		ORDER BY timestamp ASC`,
@@ -759,10 +763,33 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 	for _, dateKey := range dayOrder {
 		dg := days[dateKey]
 
-		// Build counts map.
+		// Build counts map (keyed by Type).
 		counts := make(map[string]int)
 		for _, e := range dg.entries {
 			counts[e.Type]++
+		}
+
+		// Build tag-counts map: namespace → value → count.
+		// Only "action" and "source" namespaces are aggregated for now.
+		// These are used by the frontend as a fallback when Counts is sparse
+		// (e.g. all entries have type="system_log" from old legacy imports).
+		tagCounts := make(map[string]map[string]int)
+		for _, e := range dg.entries {
+			for _, tag := range e.Tags {
+				colonIdx := strings.Index(tag, ":")
+				if colonIdx < 1 {
+					continue
+				}
+				ns := tag[:colonIdx]
+				val := tag[colonIdx+1:]
+				if ns != "action" && ns != "source" {
+					continue
+				}
+				if tagCounts[ns] == nil {
+					tagCounts[ns] = make(map[string]int)
+				}
+				tagCounts[ns][val]++
+			}
 		}
 
 		// Build items — audit first (forensic record must survive
@@ -798,10 +825,15 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 			truncated = true
 		}
 
+		var tagCountsOrNil map[string]map[string]int
+		if len(tagCounts) > 0 {
+			tagCountsOrNil = tagCounts
+		}
 		dd := DigestDetails{
 			Date:           dateKey,
 			OriginalCount:  len(dg.entries),
 			Counts:         counts,
+			TagCounts:      tagCountsOrNil,
 			Items:          items,
 			Truncated:      truncated,
 			TruncatedCount: truncatedCount,
@@ -862,6 +894,18 @@ func (s *ActivityStore) CompactByDay(ctx context.Context, olderThan time.Time) (
 					// Merge counts.
 					for k, v := range existing.Counts {
 						dd.Counts[k] += v
+					}
+					// Merge tag counts.
+					for ns, vals := range existing.TagCounts {
+						if dd.TagCounts == nil {
+							dd.TagCounts = make(map[string]map[string]int)
+						}
+						if dd.TagCounts[ns] == nil {
+							dd.TagCounts[ns] = make(map[string]int)
+						}
+						for val, cnt := range vals {
+							dd.TagCounts[ns][val] += cnt
+						}
 					}
 					dd.OriginalCount += existing.OriginalCount
 					// Merge items — old items first so new errors/warnings
