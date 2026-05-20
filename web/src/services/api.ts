@@ -1042,13 +1042,30 @@ export async function getBookSegments(bookId: string): Promise<BookSegment[]> {
 }
 
 export async function getBookFiles(
-  bookId: string
+  bookId: string,
+  options?: { limit?: number; offset?: number; signal?: AbortSignal }
 ): Promise<{ files: BookFile[]; count: number }> {
-  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/files`);
+  const params = new URLSearchParams();
+  if (options?.limit) params.append('limit', String(options.limit));
+  if (options?.offset) params.append('offset', String(options.offset));
+  const query = params.toString() ? `?${params.toString()}` : '';
+
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/files${query}`, {
+    signal: options?.signal,
+  });
   if (!response.ok)
     throw new Error(`Failed to fetch book files: ${response.status}`);
   const body = await response.json();
-  return body.data;
+
+  // Runtime validation: ensure response shape
+  if (!body.data || !Array.isArray(body.data.files)) {
+    throw new Error('Invalid response format from getBookFiles');
+  }
+
+  return {
+    files: body.data.files,
+    count: body.data.count ?? body.data.files.length,
+  };
 }
 
 export async function getSegmentTags(

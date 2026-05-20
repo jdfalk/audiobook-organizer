@@ -1,9 +1,9 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.2.0
+// version: 2.3.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-19
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 import {
   Table,
   TableBody,
@@ -75,9 +75,11 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   const activeColumns = columns ?? fallbackColumns;
 
   const [anchorEls, setAnchorEls] = React.useState<Record<string, HTMLElement | null>>({});
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [filesCache, setFilesCache] = useState<Record<string, BookFile[]>>({});
-  const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set());
+  const [loadingFiles, setLoadingFiles] = useState<Record<string, boolean>>({});
+  const [fetchErrors, setFetchErrors] = useState<Record<string, boolean>>({});
+  const abortControllersRef = useRef<Record<string, AbortController>>({});
 
   // --- Resize state (non-React for perf during drag) ---
   const resizingRef = useRef<{
@@ -192,56 +194,95 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
     return raw != null ? String(raw) : '--';
   };
 
-  const toggleExpandRow = async (bookId: string) => {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(bookId)) {
-        next.delete(bookId);
-      } else {
-        next.add(bookId);
-        // Fetch files if not cached
-        if (!filesCache[bookId] && !loadingFiles.has(bookId)) {
-          fetchFiles(bookId);
-        }
-      }
-      return next;
-    });
-  };
+  // Check if ANY segment (0-6) exists for fingerprint status
+  const hasFingerprint = useCallback((file: BookFile): boolean => {
+    return !!(
+      file.acoustid_seg0 ||
+      file.acoustid_seg1 ||
+      file.acoustid_seg2 ||
+      file.acoustid_seg3 ||
+      file.acoustid_seg4 ||
+      file.acoustid_seg5 ||
+      file.acoustid_seg6
+    );
+  }, []);
 
-  const fetchFiles = async (bookId: string) => {
-    setLoadingFiles((prev) => new Set(prev).add(bookId));
+  const toggleExpandRow = useCallback(
+    (bookId: string) => {
+      setExpandedRows((prev) => {
+        const isExpanded = prev[bookId];
+        const next = { ...prev, [bookId]: !isExpanded };
+
+        if (!isExpanded) {
+          // Expanding: fetch files if not cached
+          if (!filesCache[bookId] && !loadingFiles[bookId]) {
+            fetchFiles(bookId);
+          }
+        } else {
+          // Collapsing: cancel any in-flight fetch
+          const controller = abortControllersRef.current[bookId];
+          if (controller) {
+            controller.abort();
+            delete abortControllersRef.current[bookId];
+          }
+        }
+        return next;
+      });
+    },
+    [filesCache, loadingFiles]
+  );
+
+  const fetchFiles = useCallback(async (bookId: string) => {
+    setLoadingFiles((prev) => ({ ...prev, [bookId]: true }));
+    setFetchErrors((prev) => ({ ...prev, [bookId]: false }));
+
+    const controller = new AbortController();
+    abortControllersRef.current[bookId] = controller;
+
     try {
-      const result = await api.getBookFiles(bookId);
-      setFilesCache((prev) => ({
-        ...prev,
-        [bookId]: result.files,
-      }));
+      const result = await api.getBookFiles(bookId, { signal: controller.signal });
+
+      // Only update state if not aborted and still expanded
+      if (!controller.signal.aborted) {
+        setFilesCache((prev) => ({
+          ...prev,
+          [bookId]: result.files || [],
+        }));
+      }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Request was cancelled, do nothing
+        return;
+      }
       console.error(`Failed to fetch files for book ${bookId}:`, error);
+      setFetchErrors((prev) => ({ ...prev, [bookId]: true }));
       setFilesCache((prev) => ({
         ...prev,
         [bookId]: [],
       }));
     } finally {
-      setLoadingFiles((prev) => {
-        const next = new Set(prev);
-        next.delete(bookId);
-        return next;
-      });
+      setLoadingFiles((prev) => ({ ...prev, [bookId]: false }));
+      delete abortControllersRef.current[bookId];
     }
-  };
+  }, []);
 
-  const getFingerprinterStatusColor = (file: BookFile): 'success' | 'default' => {
-    return file.acoustid_seg0 ? 'success' : 'default';
-  };
+  const getFingerprinterStatusColor = useCallback(
+    (file: BookFile): 'success' | 'default' => {
+      return hasFingerprint(file) ? 'success' : 'default';
+    },
+    [hasFingerprint]
+  );
 
-  const getFingerprinterStatusIcon = (file: BookFile): React.ReactElement => {
-    return file.acoustid_seg0 ? (
-      <CheckCircleIcon sx={{ fontSize: 16 }} />
-    ) : (
-      <CancelIcon sx={{ fontSize: 16 }} />
-    );
-  };
+  const getFingerprinterStatusIcon = useCallback(
+    (file: BookFile): React.ReactElement => {
+      return hasFingerprint(file) ? (
+        <CheckCircleIcon sx={{ fontSize: 16 }} />
+      ) : (
+        <CancelIcon sx={{ fontSize: 16 }} />
+      );
+    },
+    [hasFingerprint]
+  );
 
   const formatFileSize = (bytes?: number): string => {
     if (!bytes) return '--';
@@ -363,9 +404,10 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
         </TableHead>
         <TableBody>
           {audiobooks.map((audiobook) => {
-            const isExpanded = expandedRows.has(audiobook.id);
+            const isExpanded = expandedRows[audiobook.id] || false;
             const files = filesCache[audiobook.id] ?? [];
-            const isLoadingFiles = loadingFiles.has(audiobook.id);
+            const isLoadingFiles = loadingFiles[audiobook.id] || false;
+            const hasFetchError = fetchErrors[audiobook.id] || false;
 
             return (
               <React.Fragment key={audiobook.id}>
@@ -382,6 +424,8 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                         e.stopPropagation();
                         toggleExpandRow(audiobook.id);
                       }}
+                      aria-label={`${isExpanded ? 'Collapse' : 'Expand'} files for ${audiobook.title || 'audiobook'}`}
+                      aria-expanded={isExpanded}
                     >
                       {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                     </IconButton>
@@ -465,6 +509,21 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                         <Box display="flex" justifyContent="center" p={2}>
                           <CircularProgress size={24} />
                         </Box>
+                      ) : hasFetchError ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.5, bgcolor: '#ffebee', borderRadius: 1 }}>
+                          <Typography variant="body2" color="error">
+                            Failed to load files
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            onClick={() => fetchFiles(audiobook.id)}
+                            sx={{ ml: 'auto' }}
+                          >
+                            <Typography variant="caption" sx={{ textDecoration: 'underline', cursor: 'pointer' }}>
+                              Retry
+                            </Typography>
+                          </IconButton>
+                        </Box>
                       ) : files.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">
                           No files found
@@ -472,40 +531,14 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                       ) : (
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                           {files.map((file) => (
-                            <Box
+                            <FileListRow
                               key={file.id}
-                              sx={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                p: 1.5,
-                                bgcolor: '#fff',
-                                borderRadius: 1,
-                                border: '1px solid #e0e0e0',
-                              }}
-                            >
-                              <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
-                                  {file.original_filename || file.file_path.split('/').pop() || 'Unknown'}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" noWrap>
-                                  {file.file_path}
-                                </Typography>
-                              </Box>
-
-                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ml: 1 }}>
-                                <Chip
-                                  icon={getFingerprinterStatusIcon(file)}
-                                  label={file.acoustid_seg0 ? '✓ Fingerprinted' : '✗ Not Fingerprinted'}
-                                  color={getFingerprinterStatusColor(file)}
-                                  variant="outlined"
-                                  size="small"
-                                />
-                                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80, textAlign: 'right' }}>
-                                  {formatFileSize(file.file_size)}
-                                </Typography>
-                              </Box>
-                            </Box>
+                              file={file}
+                              hasFingerprint={hasFingerprint}
+                              getFingerprinterStatusIcon={getFingerprinterStatusIcon}
+                              getFingerprinterStatusColor={getFingerprinterStatusColor}
+                              formatFileSize={formatFileSize}
+                            />
                           ))}
                         </Box>
                       )}
@@ -522,3 +555,56 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
     </TableContainer>
   );
 };
+
+// Memoized file list row component to prevent unnecessary rerenders
+interface FileListRowProps {
+  file: BookFile;
+  hasFingerprint: (file: BookFile) => boolean;
+  getFingerprinterStatusIcon: (file: BookFile) => React.ReactElement;
+  getFingerprinterStatusColor: (file: BookFile) => 'success' | 'default';
+  formatFileSize: (bytes?: number) => string;
+}
+
+const FileListRow = memo<FileListRowProps>(
+  ({
+    file,
+    hasFingerprint,
+    getFingerprinterStatusIcon,
+    getFingerprinterStatusColor,
+    formatFileSize,
+  }) => (
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        p: 1.5,
+        bgcolor: '#fff',
+        borderRadius: 1,
+        border: '1px solid #e0e0e0',
+      }}
+    >
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+          {file.original_filename || file.file_path.split('/').pop() || 'Unknown'}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" noWrap>
+          {file.file_path}
+        </Typography>
+      </Box>
+
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', ml: 1 }}>
+        <Chip
+          icon={getFingerprinterStatusIcon(file)}
+          label={hasFingerprint(file) ? '✓ Fingerprinted' : '✗ Not Fingerprinted'}
+          color={getFingerprinterStatusColor(file)}
+          variant="outlined"
+          size="small"
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80, textAlign: 'right' }}>
+          {formatFileSize(file.file_size)}
+        </Typography>
+      </Box>
+    </Box>
+  )
+);

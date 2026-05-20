@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.12.0
+// version: 2.13.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-19
 //
@@ -463,7 +463,6 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 	// Convert BookFile to legacy segment JSON shape with file_exists
 	result := make([]gin.H, 0, len(files))
 	for _, f := range files {
-		_, statErr := os.Stat(f.FilePath)
 		result = append(result, gin.H{
 			"id":               f.ID,
 			"book_id":          int(crc32.ChecksumIEEE([]byte(f.BookID))),
@@ -479,7 +478,7 @@ func (s *Server) listAudiobookSegments(c *gin.Context) {
 			"superseded_by":    nil,
 			"created_at":       f.CreatedAt,
 			"updated_at":       f.UpdatedAt,
-			"file_exists":      statErr == nil,
+			"file_exists":      !f.Missing, // Use Missing field instead of os.Stat call
 		})
 	}
 
@@ -503,7 +502,6 @@ func (s *Server) listBookFiles(c *gin.Context) {
 	}
 	results := make([]gin.H, 0, len(files))
 	for _, f := range files {
-		_, statErr := os.Stat(f.FilePath)
 		results = append(results, gin.H{
 			"id":                   f.ID,
 			"book_id":              f.BookID,
@@ -541,7 +539,7 @@ func (s *Server) listBookFiles(c *gin.Context) {
 			"fingerprint_diagnostic_json": f.FingerprintDiagnosticJSON,
 			"organize_method": f.OrganizeMethod,
 			"missing":         f.Missing,
-			"file_exists":     statErr == nil,
+			"file_exists":     !f.Missing, // Use Missing field instead of os.Stat call
 			"created_at":      f.CreatedAt,
 			"updated_at":      f.UpdatedAt,
 		})
