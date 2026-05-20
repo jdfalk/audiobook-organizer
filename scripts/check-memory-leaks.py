@@ -65,20 +65,23 @@ class MemoryLeakDetector:
             timer_type = match.group(1)
 
             # Check if it's being assigned to a ref or variable
-            if re.search(r'(Ref\.current\s*=|const\s+\w*[Rr]ef\s*=|let\s+\w*[Ii]d\s*=)', line):
-                continue  # Already tracked
+            if re.search(r'(Ref\.current\s*=|\.current\s*=|const\s+\w*[Rr]ef\s*=|let\s+\w*[Ii]d\s*=|const\s+\w*interval\s*=|const\s+\w*timeout\s*=|\w+[Tt]imer\s*=|\w+[Tt]imeout\s*=)', line):
+                continue  # Already tracked in variable
 
             # Check if we're in a useEffect with cleanup
             in_use_effect = False
             has_cleanup = False
+            use_effect_start = -1
 
             # Look backwards for useEffect
-            for j in range(i-1, max(0, i-30), -1):
+            for j in range(i-1, max(0, i-50), -1):
                 if 'useEffect' in lines[j]:
                     in_use_effect = True
-                    # Check if there's a return statement (cleanup) before the setTimeout
-                    for k in range(j, i):
-                        if re.search(r'return\s*\(\s*\)\s*=>|return\s*function', lines[k]):
+                    use_effect_start = j
+                    # Check if there's a return statement (cleanup) within this useEffect
+                    # Look forward from useEffect for return statement
+                    for k in range(j, min(i+20, len(lines))):
+                        if re.search(r'return\s*\(\s*\)\s*=>|return\s*function|clearTimeout|clearInterval', lines[k]):
                             has_cleanup = True
                             break
                     break
