@@ -1,11 +1,12 @@
 // file: web/src/components/audiobooks/AudiobookGrid.tsx
-// version: 1.6.0
+// version: 1.7.0
 // guid: 9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e
 
 import React from 'react';
 import { Grid, Box, Typography, CircularProgress } from '@mui/material';
 import { AudiobookCard } from './AudiobookCard';
 import type { Audiobook } from '../../types';
+import type { ColumnDefinition } from '../../config/columnDefinitions';
 
 interface AudiobookGridProps {
   audiobooks: Audiobook[];
@@ -18,6 +19,8 @@ interface AudiobookGridProps {
   onParseWithAI?: (audiobook: Audiobook) => void;
   selectedIds?: Set<string>;
   onToggleSelect?: (audiobook: Audiobook, event?: React.MouseEvent) => void;
+  columns?: ColumnDefinition[];
+  visibleColumnIds?: string[];
 }
 
 export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
@@ -31,6 +34,8 @@ export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
   onParseWithAI,
   selectedIds,
   onToggleSelect,
+  columns,
+  visibleColumnIds,
 }) => {
   if (loading) {
     return (
@@ -85,6 +90,8 @@ export const AudiobookGrid: React.FC<AudiobookGridProps> = ({
             selectable={Boolean(onToggleSelect)}
             selected={selectedIds?.has(audiobook.id) || false}
             onToggleSelect={onToggleSelect}
+            columns={columns}
+            visibleColumnIds={visibleColumnIds}
           />
         </Grid>
       ))}

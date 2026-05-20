@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.6.0
+// version: 2.7.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-20
 
@@ -475,36 +475,47 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
                   </>
                 )}
 
-                {/* Column visibility toggle */}
+                {/* Column visibility toggle — grouped by category */}
                 {onToggleColumn && visibleColumnIds && (
                   <>
                     <MenuItem disabled sx={{ py: 1 }}>
                       <Typography variant="caption" fontWeight="bold" color="text.secondary">
-                        Show/Hide Columns
+                        COLUMNS
                       </Typography>
                     </MenuItem>
-                    {activeColumns.map((col) => (
-                      <MenuItem
-                        key={col.id}
-                        onClick={() => {
-                          onToggleColumn(col.id);
-                        }}
-                        sx={{ pl: 4 }}
-                      >
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              size="small"
-                              checked={visibleColumnIds.includes(col.id)}
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          }
-                          label={<Typography variant="body2">{col.label}</Typography>}
-                          sx={{ m: 0, flex: 1 }}
-                        />
-                      </MenuItem>
-                    ))}
-                    {/* Future menu items go here */}
+                    {Array.from(
+                      new Map(activeColumns.map((col) => [col.category, col])).keys()
+                    ).map((category) => {
+                      const colsInCategory = activeColumns.filter((col) => col.category === category);
+                      return (
+                        <Box key={category}>
+                          <MenuItem disabled sx={{ py: 0.75, pl: 2 }}>
+                            <Typography variant="body2" fontWeight="600" color="text.primary">
+                              {category}
+                            </Typography>
+                          </MenuItem>
+                          {colsInCategory.map((col) => (
+                            <MenuItem
+                              key={col.id}
+                              onClick={() => onToggleColumn(col.id)}
+                              sx={{ pl: 3 }}
+                            >
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    size="small"
+                                    checked={visibleColumnIds.includes(col.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                }
+                                label={<Typography variant="body2">{col.label}</Typography>}
+                                sx={{ m: 0, flex: 1 }}
+                              />
+                            </MenuItem>
+                          ))}
+                        </Box>
+                      );
+                    })}
                   </>
                 )}
               </Menu>

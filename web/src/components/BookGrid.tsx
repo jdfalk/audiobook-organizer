@@ -1,5 +1,5 @@
 // file: web/src/components/BookGrid.tsx
-// version: 1.2.0
+// version: 1.3.0
 // guid: 6e7f8a9b-0c1d-2e3f-4a5b-6c7d8e9f0a1b
 // last-edited: 2026-05-20
 
@@ -96,6 +96,8 @@ export const BookGrid: React.FC<BookGridProps> = ({
           onParseWithAI={onParseWithAI}
           selectedIds={selectedIds}
           onToggleSelect={onToggleSelect}
+          columns={columns}
+          visibleColumnIds={visibleColumnIds}
         />
       ) : (
         <AudiobookList

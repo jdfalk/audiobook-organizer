@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookCard.tsx
-// version: 1.11.0
+// version: 1.12.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 
 import React from 'react';
@@ -26,6 +26,7 @@ import {
   LocalOffer as LocalOfferIcon,
 } from '@mui/icons-material';
 import type { Audiobook } from '../../types';
+import type { ColumnDefinition } from '../../config/columnDefinitions';
 
 interface AudiobookCardProps {
   audiobook: Audiobook;
@@ -38,6 +39,8 @@ interface AudiobookCardProps {
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: (audiobook: Audiobook, event?: React.MouseEvent) => void;
+  columns?: ColumnDefinition[];
+  visibleColumnIds?: string[];
 }
 
 export const AudiobookCard: React.FC<AudiobookCardProps> = ({
@@ -51,6 +54,8 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
   selectable = false,
   selected = false,
   onToggleSelect,
+  columns,
+  visibleColumnIds,
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -224,6 +229,35 @@ export const AudiobookCard: React.FC<AudiobookCardProps> = ({
           >
             Narrated by: {audiobook.narrator}
           </Typography>
+        )}
+
+        {/* Extra fields from columns configuration */}
+        {columns && visibleColumnIds && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, mt: 1 }}>
+            {columns
+              .filter(
+                (col) =>
+                  visibleColumnIds.includes(col.id) &&
+                  !['title', 'author', 'narrator', 'series', 'series_number'].includes(col.id)
+              )
+              .map((col) => {
+                const raw = col.accessor(audiobook);
+                if (raw == null) return null;
+                const value = col.formatter ? col.formatter(raw) : String(raw);
+                if (!value) return null;
+                return (
+                  <Typography
+                    key={col.id}
+                    variant="caption"
+                    color="text.secondary"
+                    noWrap
+                    title={`${col.label}: ${value}`}
+                  >
+                    <strong>{col.label}:</strong> {value}
+                  </Typography>
+                );
+              })}
+          </Box>
         )}
 
         <Box
