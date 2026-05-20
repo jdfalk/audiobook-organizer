@@ -1,5 +1,5 @@
 // file: web/src/config/columnDefinitions.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: a7b8c9d0-e1f2-4a3b-5c6d-7e8f9a0b1c2d
 
 import { Audiobook } from '../types';
@@ -41,6 +41,26 @@ export function formatNumber(value: unknown): string {
   return String(value);
 }
 
+export function formatRelativeDate(value: unknown): string {
+  if (value == null || typeof value !== 'string' || value === '') return '—';
+  try {
+    const date = new Date(value);
+    const now = Date.now();
+    const diffMs = date.getTime() - now;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'today';
+    if (diffDays === -1) return 'yesterday';
+    if (diffDays < 0 && diffDays > -7) return `${Math.abs(diffDays)}d ago`;
+    if (diffDays < 0 && diffDays > -30) return `${Math.abs(Math.floor(diffDays / 7))}w ago`;
+    if (diffDays < 0) return `${Math.abs(Math.floor(diffDays / 30))}mo ago`;
+
+    return new Date(value).toLocaleDateString();
+  } catch {
+    return String(value);
+  }
+}
+
 // --- Column Definition ---
 
 export interface ColumnDefinition {
@@ -59,7 +79,7 @@ export interface ColumnDefinition {
 
 // --- Categories ---
 
-export const COLUMN_CATEGORIES = ['Basic', 'Media', 'iTunes', 'Lifecycle', 'IDs'] as const;
+export const COLUMN_CATEGORIES = ['Basic', 'Media', 'iTunes', 'Lifecycle', 'Fingerprinting', 'IDs'] as const;
 export type ColumnCategory = (typeof COLUMN_CATEGORIES)[number];
 
 // --- Column Definitions ---
@@ -606,6 +626,66 @@ export const ALL_COLUMNS: ColumnDefinition[] = [
     defaultWidth: 180,
     minWidth: 80,
     sortable: false,
+    defaultVisible: false,
+  },
+
+  // ---- Fingerprinting ----
+  {
+    id: 'fingerprint_status',
+    label: 'Fingerprint Status',
+    category: 'Fingerprinting',
+    accessor: (b) => b.fingerprint_status || 'none',
+    sortKey: 'fingerprint_status',
+    searchKey: 'fingerprint_status',
+    defaultWidth: 140,
+    minWidth: 100,
+    sortable: true,
+    defaultVisible: false,
+  },
+  {
+    id: 'coverage_percent',
+    label: 'Coverage',
+    category: 'Fingerprinting',
+    accessor: (b) => {
+      const fp = b.fingerprinted_file_count || 0;
+      const total = b.total_file_count || 0;
+      const pct = b.coverage_percent || 0;
+      return `${fp}/${total} (${pct}%)`;
+    },
+    sortKey: 'coverage_percent',
+    searchKey: 'coverage',
+    defaultWidth: 110,
+    minWidth: 80,
+    sortable: true,
+    defaultVisible: false,
+  },
+  {
+    id: 'fingerprinted_files',
+    label: 'Fingerprinted',
+    category: 'Fingerprinting',
+    accessor: (b) => {
+      const fp = b.fingerprinted_file_count || 0;
+      const total = b.total_file_count || 0;
+      return `${fp}/${total}`;
+    },
+    sortKey: 'fingerprinted_file_count',
+    searchKey: 'fingerprinted',
+    defaultWidth: 100,
+    minWidth: 80,
+    sortable: true,
+    defaultVisible: false,
+  },
+  {
+    id: 'last_fingerprinted_date',
+    label: 'Last Fingerprinted',
+    category: 'Fingerprinting',
+    accessor: (b) => b.last_fingerprinted_at || '',
+    formatter: formatRelativeDate,
+    sortKey: 'last_fingerprinted_at',
+    searchKey: 'last_fingerprinted',
+    defaultWidth: 140,
+    minWidth: 100,
+    sortable: true,
     defaultVisible: false,
   },
 

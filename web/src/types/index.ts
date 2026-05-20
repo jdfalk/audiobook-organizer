@@ -1,7 +1,7 @@
 // file: web/src/types/index.ts
-// version: 1.12.1
+// version: 1.13.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
-// last-edited: 2026-05-16
+// last-edited: 2026-05-19
 
 // Audiobook (Book) type
 export interface Audiobook {
@@ -66,6 +66,13 @@ export interface Audiobook {
   user_rating_story?: number | null;
   user_rating_performance?: number | null;
   user_rating_notes?: string | null;
+
+  // Fingerprinting fields
+  fingerprint_status?: "none" | "partial" | "complete";
+  fingerprinted_file_count?: number;
+  total_file_count?: number;
+  coverage_percent?: number;
+  last_fingerprinted_at?: string; // ISO timestamp
 
   created_at: string;
   updated_at: string;
