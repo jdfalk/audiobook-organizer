@@ -1,11 +1,13 @@
 // file: web/src/pages/Library.tsx
-// version: 1.65.0
+// version: 1.66.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
-// last-edited: 2026-05-16
+// last-edited: 2026-05-19
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, Button } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import CachedIcon from '@mui/icons-material/Cached';
 import { ViewMode } from '../components/audiobooks/SearchBar';
 import { useColumnConfig } from '../hooks/useColumnConfig';
 import { useLibraryFilters } from '../hooks/useLibraryFilters';
@@ -1575,6 +1577,31 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
     }
   };
 
+  const handleFingerprintRescanFull = async () => {
+    if (!window.confirm('Re-fingerprint ALL files? This may take a while for large libraries.')) {
+      return;
+    }
+    try {
+      const op = await api.triggerFingerprintBackfill('all');
+      toast(`Fingerprint rescan started. Operation ID: ${op.id}`, 'success');
+      startOperationPolling(op.id, 'fingerprint-rescan');
+    } catch (error) {
+      console.error('Failed to trigger fingerprint rescan:', error);
+      toast('Failed to start fingerprint rescan', 'error');
+    }
+  };
+
+  const handleFingerprintRescanMissing = async () => {
+    try {
+      const op = await api.triggerFingerprintBackfill('missing');
+      toast(`Fingerprint rescan started. Operation ID: ${op.id}`, 'success');
+      startOperationPolling(op.id, 'fingerprint-rescan');
+    } catch (error) {
+      console.error('Failed to trigger fingerprint rescan:', error);
+      toast('Failed to start fingerprint rescan', 'error');
+    }
+  };
+
   const handleOrganizeLibrary = async () => {
     try {
       setOrganizeRunning(true);
@@ -1689,6 +1716,27 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       />
 
       <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, pb: 3 }}>
+        {defaultPreset === 'fingerprints' && (
+          <Box sx={{ display: 'flex', gap: 1, mb: 2, px: 2, pt: 2 }}>
+            <Button
+              variant="contained"
+              startIcon={<RefreshIcon />}
+              onClick={handleFingerprintRescanFull}
+              size="small"
+            >
+              Full Rescan Fingerprints
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<CachedIcon />}
+              onClick={handleFingerprintRescanMissing}
+              size="small"
+            >
+              Rescan Missing Only
+            </Button>
+          </Box>
+        )}
+
         <LibraryBookGrid
           audiobooks={audiobooks}
           loading={loading}
