@@ -1,5 +1,5 @@
 // file: internal/server/server_lifecycle.go
-// version: 1.19.1
+// version: 1.20.0
 // guid: 2f98675b-61e1-45a0-94e9-e7fdeb8f273e
 // last-edited: 2026-05-19
 
@@ -919,6 +919,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/:id/segments", s.perm(auth.PermLibraryView), s.listAudiobookSegments)
 			protected.GET("/audiobooks/:id/segments/:segmentId/tags", s.perm(auth.PermLibraryView), s.getSegmentTags)
 			protected.GET("/audiobooks/:id/files", s.perm(auth.PermLibraryView), s.listBookFiles)
+			protected.PATCH("/audiobooks/:id/files/:file_id", s.perm(auth.PermLibraryEditMetadata), s.patchBookFile)
 			protected.GET("/audiobooks/:id/changelog", s.perm(auth.PermLibraryView), s.getBookChangelog)
 			protected.GET("/audiobooks/:id/path-history", s.perm(auth.PermLibraryView), s.getBookPathHistory)
 			protected.GET("/audiobooks/:id/external-ids", s.perm(auth.PermLibraryView), s.getAudiobookExternalIDs)
