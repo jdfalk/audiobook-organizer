@@ -1,7 +1,7 @@
 // file: web/src/components/library/LibraryBookGrid.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
-// last-edited: 2026-05-11
+// last-edited: 2026-05-20
 
 import {
   Typography,
@@ -81,6 +81,8 @@ interface LibraryBookGridProps {
   columnWidths: Record<string, number>;
   handleColumnSortChange: (key: string, order: 'asc' | 'desc') => void;
   resizeColumn: (id: string, width: number) => void;
+  visibleColumnIds?: string[];
+  onToggleColumn?: (columnId: string) => void;
   softDeletedCount: number;
   softDeletedBooks: Audiobook[];
   softDeletedLoading: boolean;
@@ -149,6 +151,8 @@ export const LibraryBookGrid = ({
   columnWidths,
   handleColumnSortChange,
   resizeColumn,
+  visibleColumnIds,
+  onToggleColumn,
   softDeletedCount,
   softDeletedBooks,
   softDeletedLoading,
@@ -359,6 +363,8 @@ export const LibraryBookGrid = ({
             onSortChange={handleColumnSortChange}
             onColumnResize={resizeColumn}
             onSelectAll={handleToggleSelectAllOnPage}
+            visibleColumnIds={visibleColumnIds}
+            onToggleColumn={onToggleColumn}
           />
         )}
 

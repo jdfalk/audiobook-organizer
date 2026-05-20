@@ -1,7 +1,7 @@
 // file: web/src/components/BookGrid.tsx
-// version: 1.0.0
+// version: 1.1.0
 // guid: 6e7f8a9b-0c1d-2e3f-4a5b-6c7d8e9f0a1b
-// last-edited: 2026-04-30
+// last-edited: 2026-05-20
 
 import React from 'react';
 import {
@@ -38,6 +38,8 @@ interface BookGridProps {
   onSortChange?: (sortKey: string, order: 'asc' | 'desc') => void;
   onColumnResize?: (columnId: string, width: number) => void;
   onSelectAll?: () => void;
+  visibleColumnIds?: string[];
+  onToggleColumn?: (columnId: string) => void;
 }
 
 export const BookGrid: React.FC<BookGridProps> = ({
@@ -63,6 +65,8 @@ export const BookGrid: React.FC<BookGridProps> = ({
   onSortChange,
   onColumnResize,
   onSelectAll,
+  visibleColumnIds,
+  onToggleColumn,
 }) => {
   return (
     <>
@@ -107,6 +111,8 @@ export const BookGrid: React.FC<BookGridProps> = ({
           sortOrder={sortOrder === SortOrder.Ascending ? 'asc' : 'desc'}
           onSortChange={onSortChange}
           onColumnResize={onColumnResize}
+          visibleColumnIds={visibleColumnIds}
+          onToggleColumn={onToggleColumn}
         />
       )}
     </>

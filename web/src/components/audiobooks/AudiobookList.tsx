@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/AudiobookList.tsx
-// version: 2.4.0
+// version: 2.5.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-20
 
@@ -55,6 +55,8 @@ interface AudiobookListProps {
   sortOrder?: 'asc' | 'desc';
   onSortChange?: (sortKey: string, order: 'asc' | 'desc') => void;
   onColumnResize?: (columnId: string, width: number) => void;
+  visibleColumnIds?: string[];
+  onToggleColumn?: (columnId: string) => void;
 }
 
 const fallbackColumns = getDefaultVisibleColumns();
@@ -74,10 +76,13 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
   sortOrder = 'asc',
   onSortChange,
   onColumnResize,
+  visibleColumnIds,
+  onToggleColumn,
 }) => {
   const activeColumns = columns ?? fallbackColumns;
 
   const [anchorEls, setAnchorEls] = React.useState<Record<string, HTMLElement | null>>({});
+  const [headerMenuAnchor, setHeaderMenuAnchor] = React.useState<HTMLElement | null>(null);
   // Fix #1: use Record instead of Set for proper React equality comparisons
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [filesCache, setFilesCache] = useState<Record<string, BookFile[]>>({});
@@ -110,6 +115,15 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
 
   const handleClose = (id: string) => {
     setAnchorEls((prev) => ({ ...prev, [id]: null }));
+  };
+
+  const handleHeaderMenuClick = (event: React.MouseEvent<HTMLElement>) => {
+    event.stopPropagation();
+    setHeaderMenuAnchor(event.currentTarget);
+  };
+
+  const handleHeaderMenuClose = () => {
+    setHeaderMenuAnchor(null);
   };
 
   const handleEdit = (audiobook: Audiobook) => {
@@ -388,8 +402,54 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
               );
             })}
 
-            {/* Actions column */}
-            {hasActions && <TableCell width={50} />}
+            {/* Header actions column (kebab menu) */}
+            <TableCell width={50} sx={{ textAlign: 'center' }}>
+              <IconButton
+                size="small"
+                onClick={handleHeaderMenuClick}
+                aria-label="Header actions"
+              >
+                <MoreVertIcon />
+              </IconButton>
+              <Menu
+                anchorEl={headerMenuAnchor}
+                open={Boolean(headerMenuAnchor)}
+                onClose={handleHeaderMenuClose}
+              >
+                {/* Column visibility toggle */}
+                {onToggleColumn && visibleColumnIds && (
+                  <>
+                    <MenuItem disabled sx={{ py: 1 }}>
+                      <Typography variant="caption" fontWeight="bold" color="text.secondary">
+                        Show/Hide Columns
+                      </Typography>
+                    </MenuItem>
+                    {activeColumns.map((col) => (
+                      <MenuItem
+                        key={col.id}
+                        onClick={() => {
+                          onToggleColumn(col.id);
+                        }}
+                        sx={{ pl: 4 }}
+                      >
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={visibleColumnIds.includes(col.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          }
+                          label={<Typography variant="body2">{col.label}</Typography>}
+                          sx={{ m: 0, flex: 1 }}
+                        />
+                      </MenuItem>
+                    ))}
+                    {/* Future menu items go here */}
+                  </>
+                )}
+              </Menu>
+            </TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -460,31 +520,33 @@ export const AudiobookList: React.FC<AudiobookListProps> = ({
               ))}
 
               {/* Actions cell */}
-              {hasActions && (
-                <TableCell>
-                  <IconButton size="small" onClick={(e) => handleMenuClick(e, audiobook.id)}>
-                    <MoreVertIcon />
-                  </IconButton>
-                  <Menu
-                    anchorEl={anchorEls[audiobook.id] || null}
-                    open={Boolean(anchorEls[audiobook.id])}
-                    onClose={() => handleClose(audiobook.id)}
-                  >
-                    {onEdit && (
-                      <MenuItem onClick={() => handleEdit(audiobook)}>
-                        <EditIcon sx={{ mr: 1 }} fontSize="small" />
-                        Edit
-                      </MenuItem>
-                    )}
-                    {onDelete && (
-                      <MenuItem onClick={() => handleDelete(audiobook)}>
-                        <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
-                        Delete
-                      </MenuItem>
-                    )}
-                  </Menu>
-                </TableCell>
-              )}
+              <TableCell width={50} sx={{ textAlign: 'center' }}>
+                {hasActions && (
+                  <>
+                    <IconButton size="small" onClick={(e) => handleMenuClick(e, audiobook.id)}>
+                      <MoreVertIcon />
+                    </IconButton>
+                    <Menu
+                      anchorEl={anchorEls[audiobook.id] || null}
+                      open={Boolean(anchorEls[audiobook.id])}
+                      onClose={() => handleClose(audiobook.id)}
+                    >
+                      {onEdit && (
+                        <MenuItem onClick={() => handleEdit(audiobook)}>
+                          <EditIcon sx={{ mr: 1 }} fontSize="small" />
+                          Edit
+                        </MenuItem>
+                      )}
+                      {onDelete && (
+                        <MenuItem onClick={() => handleDelete(audiobook)}>
+                          <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
+                          Delete
+                        </MenuItem>
+                      )}
+                    </Menu>
+                  </>
+                )}
+              </TableCell>
             </TableRow>
 
             {/* Expanded files rows */}
