@@ -1,5 +1,5 @@
 // file: web/src/pages/ActivityLog.tsx
-// version: 2.14.0
+// version: 2.15.0
 // guid: b2c3d4e5-f6a7-8901-bcde-f12345678901
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -47,6 +47,7 @@ import { PendingFileOpsBanner } from '../components/PendingFileOpsBanner';
 import { usePendingFileOps } from '../hooks/usePendingFileOps';
 import { useOperationsStore } from '../stores/useOperationsStore';
 import { STORAGE_KEYS } from '../lib/storageKeys';
+import { tagChipProps } from '../utils/activityTagColors';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 250];
 
@@ -112,6 +113,14 @@ const formatTimestampCompact = (ts: string): string => {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+/** Format an ISO timestamp string as HH:MM:SS time-of-day, or '' if missing/zero. */
+const formatItemTime = (ts?: string): string => {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime()) || d.getFullYear() < 2000) return '';
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+};
+
 export default function ActivityLog() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -132,6 +141,13 @@ export default function ActivityLog() {
   });
   const [hideNoOp, setHideNoOp] = useState(true);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
+
+  /** Toggle a single tag in the tag filter. Adds if absent, removes if present. */
+  const toggleTagFilter = useCallback((tag: string) => {
+    setTagFilter((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  }, []);
 
   // Mobile filter collapse
   const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -1041,19 +1057,21 @@ export default function ActivityLog() {
                     Outcome
                   </Typography>
                   <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                    {['outcome:ok', 'outcome:warn', 'outcome:error', 'outcome:skip'].map((tag) => (
-                      <Chip
-                        key={tag}
-                        label={tag.split(':')[1]}
-                        size="small"
-                        variant={tagFilter.includes(tag) ? 'filled' : 'outlined'}
-                        onClick={() => {
-                          setTagFilter((prev) =>
-                            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-                          );
-                        }}
-                      />
-                    ))}
+                    {['outcome:ok', 'outcome:warn', 'outcome:error', 'outcome:skip'].map((tag) => {
+                      const { color, sx, label } = tagChipProps(tag);
+                      return (
+                        <Chip
+                          key={tag}
+                          label={label}
+                          size="small"
+                          color={color}
+                          sx={{ cursor: 'pointer', ...(sx ?? {}) }}
+                          variant={tagFilter.includes(tag) ? 'filled' : 'outlined'}
+                          clickable
+                          onClick={() => toggleTagFilter(tag)}
+                        />
+                      );
+                    })}
                   </Stack>
                 </Box>
 
@@ -1062,19 +1080,21 @@ export default function ActivityLog() {
                     Action
                   </Typography>
                   <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                    {['action:metadata-apply', 'action:tag-write', 'action:import', 'action:scan', 'action:dedup', 'action:organizer', 'action:purge'].map((tag) => (
-                      <Chip
-                        key={tag}
-                        label={tag.split(':')[1]}
-                        size="small"
-                        variant={tagFilter.includes(tag) ? 'filled' : 'outlined'}
-                        onClick={() => {
-                          setTagFilter((prev) =>
-                            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-                          );
-                        }}
-                      />
-                    ))}
+                    {['action:metadata-apply', 'action:tag-write', 'action:import', 'action:scan', 'action:dedup', 'action:organizer', 'action:purge'].map((tag) => {
+                      const { color, sx, label } = tagChipProps(tag);
+                      return (
+                        <Chip
+                          key={tag}
+                          label={label}
+                          size="small"
+                          color={color}
+                          sx={{ cursor: 'pointer', ...(sx ?? {}) }}
+                          variant={tagFilter.includes(tag) ? 'filled' : 'outlined'}
+                          clickable
+                          onClick={() => toggleTagFilter(tag)}
+                        />
+                      );
+                    })}
                   </Stack>
                 </Box>
 
@@ -1338,10 +1358,29 @@ export default function ActivityLog() {
                     original_count?: number;
                     counts?: Record<string, number>;
                     tag_counts?: Record<string, Record<string, number>>;
-                    items?: Array<{ type: string; tier?: string; book?: string; book_id?: string; operation_id?: string; summary: string; details?: string }>;
+                    items?: Array<{
+                      type: string;
+                      tier?: string;
+                      book?: string;
+                      book_id?: string;
+                      operation_id?: string;
+                      summary: string;
+                      details?: string;
+                      timestamp?: string;
+                      tags?: string[];
+                    }>;
                     truncated?: boolean;
                     truncated_count?: number;
                   } | undefined;
+                  // Pre-2026-05-20 digests won't have per-item timestamps or tags
+                  // because the source rows were already destroyed before this
+                  // field was added. Detect by checking the first item's timestamp.
+                  const isLegacyDigest = (() => {
+                    if (!details?.date) return false;
+                    const cutoff = new Date('2026-05-20');
+                    const digestDate = new Date(details.date);
+                    return digestDate < cutoff && !(details?.items?.[0]?.timestamp);
+                  })();
                   const rawCounts = details?.counts || {};
                   // Fall back to tag_counts.action when Counts is sparse (only
                   // the single legacy "system_log" key) so old digests show a
@@ -1394,12 +1433,22 @@ export default function ActivityLog() {
                         <TableRow>
                           <TableCell colSpan={isMobile ? 5 : 7} sx={{ py: 0, px: 2 }}>
                             <Box sx={{ maxHeight: 400, overflow: 'auto', py: 1 }}>
+                              {isLegacyDigest && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ display: 'block', mb: 1, fontStyle: 'italic' }}
+                                >
+                                  Pre-2026-05-20 digest — per-item timestamps and tags unavailable (source rows already compacted away)
+                                </Typography>
+                              )}
                               {items.map((item, idx) => (
                                 <Stack
                                   key={idx}
                                   direction="row"
                                   spacing={1}
                                   alignItems="center"
+                                  flexWrap="wrap"
                                   sx={{
                                     py: 0.5,
                                     borderBottom: '1px solid',
@@ -1407,6 +1456,11 @@ export default function ActivityLog() {
                                     color: item.type === 'error' ? 'error.main' : 'text.primary',
                                   }}
                                 >
+                                  {item.timestamp && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', minWidth: 70 }}>
+                                      {formatItemTime(item.timestamp)}
+                                    </Typography>
+                                  )}
                                   <Chip size="small" label={item.type.replace(/_/g, ' ')} sx={{ minWidth: 100 }} />
                                   {item.tier === 'audit' && (
                                     <Chip size="small" label="audit" sx={{ bgcolor: '#7c4dff', color: 'white', fontSize: '0.65rem' }} />
@@ -1429,14 +1483,46 @@ export default function ActivityLog() {
                                     {item.summary}
                                   </Typography>
                                   {item.operation_id && (
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.65rem' }}>
-                                      {item.operation_id}
-                                    </Typography>
+                                    <Chip
+                                      size="small"
+                                      label={item.operation_id.slice(0, 12)}
+                                      title={`op:${item.operation_id} — click to filter`}
+                                      color="info"
+                                      variant="outlined"
+                                      sx={{ cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.65rem' }}
+                                      clickable
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
+                                        toggleTagFilter(`op:${item.operation_id}`);
+                                      }}
+                                    />
                                   )}
                                   {item.details && (
                                     <Typography variant="caption" color="error.main">
                                       {item.details}
                                     </Typography>
+                                  )}
+                                  {item.tags && item.tags.length > 0 && (
+                                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                                      {item.tags.map((tag) => {
+                                        const { color, sx: tagSx, label } = tagChipProps(tag);
+                                        return (
+                                          <Chip
+                                            key={tag}
+                                            size="small"
+                                            label={label}
+                                            color={color}
+                                            sx={{ cursor: 'pointer', fontSize: '0.65rem', ...(tagSx ?? {}) }}
+                                            variant={tagFilter.includes(tag) ? 'filled' : 'outlined'}
+                                            clickable
+                                            onClick={(e: React.MouseEvent) => {
+                                              e.stopPropagation();
+                                              toggleTagFilter(tag);
+                                            }}
+                                          />
+                                        );
+                                      })}
+                                    </Stack>
                                   )}
                                 </Stack>
                               ))}
@@ -1504,9 +1590,21 @@ export default function ActivityLog() {
                       <TableCell>
                         {entry.tags && entry.tags.length > 0 ? (
                           <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                            {entry.tags.map((tag) => (
-                              <Chip key={tag} size="small" label={tag} variant="outlined" />
-                            ))}
+                            {entry.tags.map((tag) => {
+                              const { color, sx, label } = tagChipProps(tag);
+                              return (
+                                <Chip
+                                  key={tag}
+                                  size="small"
+                                  label={label}
+                                  color={color}
+                                  sx={{ cursor: 'pointer', ...(sx ?? {}) }}
+                                  variant={tagFilter.includes(tag) ? 'filled' : 'outlined'}
+                                  clickable
+                                  onClick={(e) => { e.stopPropagation(); toggleTagFilter(tag); }}
+                                />
+                              );
+                            })}
                           </Stack>
                         ) : null}
                       </TableCell>
