@@ -1,7 +1,7 @@
 // file: internal/database/store.go
-// version: 2.73.0
+// version: 2.74.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
-// last-edited: 2026-05-16
+// last-edited: 2026-05-19
 
 package database
 
@@ -254,6 +254,12 @@ type Book struct {
 	LastScanMtime *int64 `json:"last_scan_mtime,omitempty"`
 	LastScanSize  *int64 `json:"last_scan_size,omitempty"`
 	NeedsRescan   *bool  `json:"needs_rescan,omitempty"`
+	// Fingerprinting fields (computed, not stored in DB)
+	FingerprintStatus      string     `json:"fingerprint_status,omitempty"`      // "none", "partial", "complete"
+	FingerprintedFileCount int        `json:"fingerprinted_file_count,omitempty"`
+	TotalFileCount         int        `json:"total_file_count,omitempty"`
+	CoveragePercent        int        `json:"coverage_percent,omitempty"`
+	LastFingerprintedAt    *time.Time `json:"last_fingerprinted_at,omitempty"`
 	// Related objects (populated via joins, not stored in DB)
 	Author               *Author                            `json:"author,omitempty" db:"-"`
 	Authors              []BookAuthor                       `json:"authors,omitempty" db:"-"`
