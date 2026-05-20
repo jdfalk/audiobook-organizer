@@ -149,7 +149,7 @@ func (s *OLStore) ImportDump(dumpType, filePath string, progress func(int)) erro
 			lineNum++
 			if lineNum <= skipLines {
 				if lineNum%500000 == 0 {
-					slog.Info("Skipping lines for resume /", "value0", "dumpType", "dumpType", dumpType, "value2", "lineNum", lineNum, "skipLines", skipLines)
+					slog.Info("Skipping lines for resume", "dumpType", dumpType, "lineNum", lineNum, "skipLines", skipLines)
 				}
 				continue
 			}

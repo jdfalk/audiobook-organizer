@@ -72,11 +72,11 @@ func (t *Transcoder) TranscodeMalformedFiles() {
 		k := TranscodeSkipKey(p)
 		if skip, _ := t.store.GetSetting(k); skip == nil {
 			_ = t.store.SetSetting(k, "true", "bool", false)
-			slog.Info("malformed M4B transcode pre-marked permanently unfixable", "value0", "p", p)
+			slog.Info("malformed M4B transcode pre-marked permanently unfixable", "path", p)
 		}
 	}
 
-	slog.Info("Starting malformed M4B transcode scan under …", "value0", "root", root)
+	slog.Info("Starting malformed M4B transcode scan under", "root", root)
 	transcoded, clean, failed, skipped := 0, 0, 0, 0
 
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
@@ -99,7 +99,7 @@ func (t *Transcoder) TranscodeMalformedFiles() {
 
 		// Skip files that have already been confirmed permanently unfixable.
 		if skip, err := t.store.GetSetting(TranscodeSkipKey(path)); err == nil && skip != nil && skip.Value == "true" {
-			slog.Info("malformed M4B transcode skipping known-unfixable", "value0", "path", path)
+			slog.Info("malformed M4B transcode skipping known-unfixable", "path", path)
 			skipped++
 			failed++
 			return nil
@@ -121,7 +121,7 @@ func (t *Transcoder) TranscodeMalformedFiles() {
 			return nil
 		}
 
-		slog.Info("malformed M4B transcoded", "value0", "path", path)
+		slog.Info("malformed M4B transcoded", "path", path)
 		transcoded++
 		return nil
 	})

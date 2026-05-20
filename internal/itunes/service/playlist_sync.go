@@ -72,7 +72,7 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 
 		parsed, err := itunes.ParseSmartCriteria(pl.SmartCriteria)
 		if err != nil {
-			slog.Warn("parse smart criteria for %q (PID )", "pl", pl.Title, "pid", pid, err)
+			slog.Warn("parse smart criteria for playlist", "pl", pl.Title, "pid", pid, "err", err)
 			skipped++
 			continue
 		}
@@ -89,7 +89,7 @@ func (p *PlaylistSync) MigrateSmartPlaylists(lib *itunes.ITLLibrary) (imported, 
 			Description:          fmt.Sprintf("Imported from iTunes smart playlist %q", pl.Title),
 		})
 		if err != nil {
-			slog.Warn("create playlist %q", "pl", pl.Title, err)
+			slog.Warn("create playlist", "pl", pl.Title, "err", err)
 			skipped++
 			continue
 		}

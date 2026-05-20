@@ -516,7 +516,7 @@ func rmfr_repairOne(
 		}
 	}
 	if !withinARoot {
-		slog.Warn("repair-missing-files candidate %q outside all search roots, skipping", "opID", opID, candidate)
+		slog.Warn("repair-missing-files candidate outside all search roots, skipping", "opID", opID, "candidate", candidate)
 		res.Method = "unresolved"
 		return res
 	}

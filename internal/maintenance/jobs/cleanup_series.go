@@ -78,7 +78,7 @@ func (j *cleanupSeriesJob) Run(ctx context.Context, store database.Store, report
 		singleFound++
 		if !dryRun {
 			if applyErr := csUnlinkAndDeleteSeries(store, &book, ser.ID); applyErr != nil {
-				slog.Error("Failed to remove 1-book series (%q)", "ser", ser.ID, "ser", ser.Name, applyErr)
+				slog.Error("Failed to remove 1-book series", "seriesID", ser.ID, "seriesName", ser.Name, "err", applyErr)
 			} else {
 				deletedIDs[ser.ID] = true
 				singleApplied++
@@ -121,7 +121,7 @@ func (j *cleanupSeriesJob) Run(ctx context.Context, store database.Store, report
 
 		if !dryRun {
 			if mergeErr := csMergeSeriesGroup(store, keeper.ID, mergeIDs); mergeErr != nil {
-				slog.Error("Failed to merge series group %q", "normName", normName, mergeErr)
+				slog.Error("Failed to merge series group", "normName", normName, "err", mergeErr)
 			} else {
 				dupApplied++
 			}

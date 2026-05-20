@@ -108,7 +108,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 		case 1:
 			newFP := filepath.Clean(matches[0])
 			if !util.WithinRoot(newFP, iTunesRoot) {
-				slog.Warn("relink-missing-to-itunes match %q outside iTunesRoot, skipping", newFP)
+				slog.Warn("relink-missing-to-itunes match outside iTunesRoot, skipping", "match", newFP)
 				unresolved++
 				break
 			}
@@ -132,7 +132,7 @@ func (j *relinkMissingToITunesJob) Run(ctx context.Context, store database.Store
 			if best != "" {
 				best = filepath.Clean(best)
 				if !util.WithinRoot(best, iTunesRoot) {
-					slog.Warn("relink-missing-to-itunes best match %q outside iTunesRoot, skipping", best)
+					slog.Warn("relink-missing-to-itunes best match outside iTunesRoot, skipping", "match", best)
 					unresolved++
 					break
 				}

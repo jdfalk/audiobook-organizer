@@ -410,7 +410,7 @@ func FindUntrackedFiles(store Store, knownPaths map[string]bool) ([]string, erro
 	// Priority 2: Import paths
 	importPaths, err := store.GetAllImportPaths()
 	if err != nil {
-		slog.Warn("reconcile failed to get import paths", "value0", "err", err)
+		slog.Warn("reconcile failed to get import paths", "err", err)
 	} else {
 		for _, ip := range importPaths {
 			if ip.Enabled {
@@ -452,7 +452,7 @@ func FindUntrackedFiles(store Store, knownPaths map[string]bool) ([]string, erro
 
 	for _, dir := range dirs {
 		if _, err := os.Stat(dir); err != nil {
-			slog.Warn("reconcile directory does not exist", "value0", "dir", dir)
+			slog.Warn("reconcile directory does not exist", "dir", dir)
 			continue
 		}
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -641,7 +641,7 @@ func CleanupDuplicateVersionGroups(store Store, rootDir string, dryRun bool) (*V
 				continue
 			}
 
-			slog.Info("version-group cleanup removing duplicate () from group", "value0", "value0", "dup", dup.ID, "value2", "value1", dup.FilePath, "groupID", groupID)
+			slog.Info("version-group cleanup removing duplicate from group", "dupID", dup.ID, "dupPath", dup.FilePath, "groupID", groupID)
 
 			if !dryRun {
 				// Delete the file if it exists and is in the library

@@ -379,9 +379,8 @@ func (b *WriteBackBatcher) flush() {
 	slog.Info("iTunes write-back flushing location updates, metadata updates, adds, removes", "locationUpdates_count", len(locationUpdates), "metadataUpdates_count", len(metadataUpdates), "adds_count", len(adds), "removes_count", len(removes))
 
 	if dryRun {
-		slog.Info("iTunes write-back DRY-RUN active (ITUNES_WRITEBACK_DRYRUNtrue) — no file written."+
-			"Would have written %d location updates, %d metadata updates, %d adds, %d removes to %s",
-			len(locationUpdates), len(metadataUpdates), len(adds), len(removes), writePath)
+		slog.Info("iTunes write-back DRY-RUN active — no file written",
+			"locationUpdates", len(locationUpdates), "metadataUpdates", len(metadataUpdates), "adds", len(adds), "removes", len(removes), "path", writePath)
 		for pid := range removes {
 			slog.Info("iTunes write-back DRY-RUN would remove PID", "pid", pid)
 		}

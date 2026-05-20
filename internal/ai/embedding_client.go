@@ -152,7 +152,7 @@ func (c *EmbeddingClient) EmbedBatch(ctx context.Context, texts []string) ([][]f
 	}
 
 	if c.cache != nil {
-		slog.Debug("embedding cache / hits, misses sent to API", "value0", "hits", "hits", hits, "value2", "value1", len(texts), "value2", len(missTexts))
+		slog.Debug("embedding cache / hits, misses sent to API", "hits", hits, "total", len(texts), "misses", len(missTexts))
 	}
 
 	apiResults, err := c.rawEmbed(ctx, missTexts)

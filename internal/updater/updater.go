@@ -221,7 +221,7 @@ func (u *Updater) DownloadAndReplace(info *UpdateInfo) error {
 		return err
 	}
 
-	slog.Info("Downloading update from", "value0", "assetURL", assetURL)
+	slog.Info("Downloading update from", "assetURL", assetURL)
 
 	// Get current executable path
 	execPath, err := os.Executable()

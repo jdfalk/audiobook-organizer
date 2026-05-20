@@ -1657,7 +1657,7 @@ func (svc *AudiobookService) UpdateAudiobook(ctx context.Context, id string, req
 				if err != nil || narrator == nil {
 					narrator, err = svc.store.CreateNarrator(nName)
 					if err != nil {
-						slog.Warn("failed to create narrator %q", "nName", nName, err)
+						slog.Warn("failed to create narrator", "nName", nName, "err", err)
 						continue
 					}
 				}
@@ -2064,13 +2064,13 @@ func (svc *AudiobookService) BatchUpdateUserTags(bookIDs []string, addTags []str
 	for _, bookID := range bookIDs {
 		for _, tag := range addTags {
 			if err := svc.store.AddBookTag(bookID, tag); err != nil {
-				slog.Warn("BatchUpdateUserTags failed to add tag %q to book", "tag", tag, "bookID", bookID, err)
+				slog.Warn("BatchUpdateUserTags failed to add tag to book", "tag", tag, "bookID", bookID, "err", err)
 				continue
 			}
 		}
 		for _, tag := range removeTags {
 			if err := svc.store.RemoveBookTag(bookID, tag); err != nil {
-				slog.Warn("BatchUpdateUserTags failed to remove tag %q from book", "tag", tag, "bookID", bookID, err)
+				slog.Warn("BatchUpdateUserTags failed to remove tag from book", "tag", tag, "bookID", bookID, "err", err)
 				continue
 			}
 		}
