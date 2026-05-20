@@ -40,7 +40,7 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
   );
   const [searchQuery, setSearchQuery] = useState('');
   const lastStateRef = useRef(connectionState);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timeoutRef = useRef<number | null>(null);
   const isUnmountedRef = useRef(false);
   const themeMode = useAppStore((state) => state.themeMode);
   const toggleThemeMode = useAppStore((state) => state.toggleThemeMode);
