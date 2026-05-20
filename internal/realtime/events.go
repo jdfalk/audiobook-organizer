@@ -133,7 +133,7 @@ func (h *EventHub) Broadcast(event *Event) {
 			case client.Channel <- event:
 				count++
 			default:
-				slog.Info("Warning Client channel full, dropping event", "value0", "value0", client.ID)
+				slog.Info("Warning Client channel full, dropping event", "clientID", client.ID)
 			}
 		}
 	}
@@ -256,13 +256,13 @@ func (h *EventHub) HandleSSE(c *gin.Context) {
 	for {
 		select {
 		case <-c.Request.Context().Done():
-			slog.Info("Client connection closed", "value0", "clientID", clientID)
+			slog.Info("Client connection closed", "clientID", clientID)
 			return
 		case event := <-client.Channel:
 			// Marshal event to JSON
 			data, err := json.Marshal(event)
 			if err != nil {
-				slog.Info("Error marshaling event", "value0", "err", err)
+				slog.Info("Error marshaling event", "err", err)
 				continue
 			}
 

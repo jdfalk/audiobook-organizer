@@ -62,7 +62,7 @@ func (r *Remuxer) RemuxMalformedFiles() {
 		return
 	}
 
-	slog.Info("Starting malformed M4B remux scan under …", "value0", "root", root)
+	slog.Info("Starting malformed M4B remux scan under", "root", root)
 	remuxed, clean, failed := 0, 0, 0
 
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
@@ -98,12 +98,12 @@ func (r *Remuxer) RemuxMalformedFiles() {
 			return nil
 		}
 
-		slog.Info("malformed M4B remuxed", "value0", "path", path)
+		slog.Info("malformed M4B remuxed", "path", path)
 		remuxed++
 		return nil
 	})
 
-	slog.Info("Malformed M4B remux remuxed, already readable, failed", "value0", "remuxed", "remuxed", remuxed, "value2", "clean", clean, "failed", failed)
+	slog.Info("Malformed M4B remux complete", "remuxed", remuxed, "clean", clean, "failed", failed)
 	_ = r.store.SetSetting(RemuxKey, "true", "bool", false)
 }
 

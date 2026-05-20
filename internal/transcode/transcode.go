@@ -248,7 +248,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store interface {
 		if !success {
 			for _, f := range tempFiles {
 				if err := os.Remove(f); err == nil {
-					slog.Info("transcode cleaned up temp file", "value0", "f", f)
+					slog.Info("transcode cleaned up temp file", "file", f)
 				}
 			}
 		}
@@ -362,7 +362,7 @@ func Transcode(ctx context.Context, opts TranscodeOpts, store interface {
 
 		chapterFile, err := BuildChapterMetadata(inputFiles)
 		if err != nil {
-			slog.Warn("transcode failed to build chapter metadata, skipping", "value0", "err", err)
+			slog.Warn("transcode failed to build chapter metadata, skipping", "err", err)
 		} else {
 			defer os.Remove(chapterFile)
 
@@ -480,13 +480,13 @@ func StartCleanupTicker(rootDir string, interval, maxAge time.Duration) func() {
 	go func() {
 		// Run once immediately on start
 		if n := CleanupStaleTempFiles(rootDir, maxAge); n > 0 {
-			slog.Info("transcode startup cleanup removed stale temp files", "value0", "n", n)
+			slog.Info("transcode startup cleanup removed stale temp files", "count", n)
 		}
 		for {
 			select {
 			case <-ticker.C:
 				if n := CleanupStaleTempFiles(rootDir, maxAge); n > 0 {
-					slog.Info("transcode periodic cleanup removed stale temp files", "value0", "n", n)
+					slog.Info("transcode periodic cleanup removed stale temp files", "count", n)
 				}
 			case <-done:
 				ticker.Stop()

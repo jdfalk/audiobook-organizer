@@ -43,7 +43,7 @@ func SweepTombstones(store database.BookStore) (*SweeperResult, error) {
 
 		if existing != nil {
 			// Book still exists — purge didn't complete. Delete the orphan tombstone.
-			slog.Info("sweeper tombstone has live book record, removing tombstone", "value0", "value0", tomb.ID)
+			slog.Info("sweeper tombstone has live book record, removing tombstone", "tombID", tomb.ID)
 			_ = store.DeleteBookTombstone(tomb.ID)
 			result.TombstonesCleaned++
 			continue

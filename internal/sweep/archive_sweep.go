@@ -29,7 +29,7 @@ func SweepArchivedBooks(store interface {
 }) int {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {
-		slog.Warn("archive sweep list books", "value0", "err", err)
+		slog.Warn("archive sweep list books", "err", err)
 		return 0
 	}
 

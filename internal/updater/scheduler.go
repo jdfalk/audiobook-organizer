@@ -49,7 +49,7 @@ func (s *Scheduler) Start() {
 	}
 	s.ticker = time.NewTicker(interval)
 
-	slog.Info("Auto-update scheduler started checking every minutes on %q channel, window %02d:00-%02d:00", "value0", "value0", cfg.CheckMins)
+	slog.Info("Auto-update scheduler started checking every minutes", "checkMins", cfg.CheckMins)
 
 	go s.loop()
 }
@@ -82,7 +82,7 @@ func (s *Scheduler) tick() {
 
 	info, err := s.updater.CheckForUpdate(cfg.Channel)
 	if err != nil {
-		slog.Warn("Auto-update check failed", "value0", "err", err)
+		slog.Warn("Auto-update check failed", "err", err)
 		return
 	}
 
@@ -91,7 +91,7 @@ func (s *Scheduler) tick() {
 		return
 	}
 
-	slog.Info("Update available -> ()", "value0", "value0", "info", info.CurrentVersion, "value2", "value1", info.LatestVersion, "value2", info.Channel)
+	slog.Info("Update available", "currentVersion", info.CurrentVersion, "latestVersion", info.LatestVersion, "channel", info.Channel)
 
 	// Check if current hour is within the update window
 	hour := time.Now().Hour()
@@ -102,7 +102,7 @@ func (s *Scheduler) tick() {
 
 	slog.Info("Applying update within window...")
 	if err := s.updater.DownloadAndReplace(info); err != nil {
-		slog.Error("Failed to apply update", "value0", "err", err)
+		slog.Error("Failed to apply update", "err", err)
 		return
 	}
 

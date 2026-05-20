@@ -147,7 +147,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 		}
 
 		if dryRun {
-			slog.Info("[dry] would set author %q for book ()", "authorName", authorName, "b", b.ID, b.Title)
+			slog.Info("[dry] would set author for book", "authorName", authorName, "bookID", b.ID, "bookTitle", b.Title)
 			filled++
 			continue
 		}
@@ -157,11 +157,11 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 		if err != nil || author == nil {
 			author, err = store.CreateAuthor(authorName)
 			if err != nil {
-				slog.Error("failed to create author %q for book", "authorName", authorName, "b", b.ID, err)
+				slog.Error("failed to create author for book", "authorName", authorName, "bookID", b.ID, "err", err)
 				errors++
 				continue
 			}
-			slog.Info("refetch-missing-authors created author %q (id)", "opID", opID, "authorName", authorName, author.ID)
+			slog.Info("refetch-missing-authors created author", "opID", opID, "authorName", authorName, "authorID", author.ID)
 		}
 
 		b.AuthorID = &author.ID
@@ -171,7 +171,7 @@ func (j *refetchMissingAuthorsJob) Run(ctx context.Context, store database.Store
 			continue
 		}
 
-		slog.Info("refetch-missing-authors set author %q on book ()", "opID", opID, "authorName", authorName, "b", b.ID, b.Title)
+		slog.Info("refetch-missing-authors set author on book", "opID", opID, "authorName", authorName, "bookID", b.ID, "bookTitle", b.Title)
 		filled++
 	}
 

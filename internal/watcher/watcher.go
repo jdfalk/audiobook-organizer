@@ -143,7 +143,7 @@ func (w *Watcher) eventLoop() {
 			if !ok {
 				return
 			}
-			slog.Error("watcher", "value0", "err", err)
+			slog.Error("watcher error", "err", err)
 		}
 	}
 }
@@ -189,7 +189,7 @@ func (w *Watcher) scheduleScan() {
 		w.timer = nil
 		w.mu.Unlock()
 
-		slog.Info("watcher triggering callback for", "value0", "value0", w.rootDir)
+		slog.Info("watcher triggering callback", "rootDir", w.rootDir)
 		if w.callback != nil {
 			w.callback(w.rootDir)
 		}

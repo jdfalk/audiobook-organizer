@@ -98,12 +98,12 @@ func TestMapping(req TestMappingRequest) (TestMappingResponse, error) {
 		location := opts.RemapPath(track.Location)
 		path, err := itunes.DecodeLocation(location)
 		if err != nil {
-			slog.Info("[/20] decode error for %q", "response", response.Tested, "track", track.Name, err)
+			slog.Info("decode error", "tested", response.Tested, "track", track.Name, "err", err)
 			continue
 		}
 		if _, err := os.Stat(path); err == nil {
 			response.Found++
-			slog.Info("[/20] FOUND %q →", "response", response.Tested, "track", track.Name, path)
+			slog.Info("FOUND", "tested", response.Tested, "track", track.Name, "path", path)
 			if len(response.Examples) < 3 {
 				response.Examples = append(response.Examples, TestMappingItem{
 					Title: track.Name,
@@ -111,7 +111,7 @@ func TestMapping(req TestMappingRequest) (TestMappingResponse, error) {
 				})
 			}
 		} else {
-			slog.Info("[/20] MISSING %q →", "response", response.Tested, "track", track.Name, path)
+			slog.Info("MISSING", "tested", response.Tested, "track", track.Name, "path", path)
 		}
 	}
 

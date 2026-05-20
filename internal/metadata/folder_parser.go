@@ -122,7 +122,7 @@ func ExtractMetadataFromFolder(dirPath string) (*FolderMetadata, error) {
 		tryExtractAuthorFromDashSplit(innermost, fm)
 	}
 
-	slog.Debug("folder_parser result authors series%q pos title%q narrator%q", "fm", fm.Authors, "fm", fm.SeriesName, fm.SeriesPosition, fm.Title, fm.Narrator)
+	slog.Debug("folder_parser result", "authors", fm.Authors, "series", fm.SeriesName, "seriesPos", fm.SeriesPosition, "title", fm.Title, "narrator", fm.Narrator)
 	return fm, nil
 }
 

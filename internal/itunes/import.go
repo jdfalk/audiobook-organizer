@@ -278,7 +278,7 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 				tc := checks[idx]
 				if !tc.decodeOK {
 					if debugLog {
-						slog.Info("[] DECODE_ERR %q (raw )", "idx", idx, "tc", tc.name, tc.rawLoc)
+						slog.Info("DECODE_ERR", "idx", idx, "tc", tc.name, "rawLoc", tc.rawLoc)
 					}
 					results <- statResult{idx: idx, found: false}
 					continue
@@ -287,9 +287,9 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 				found := err == nil
 				if debugLog {
 					if found {
-						slog.Info("[] FOUND %q →", "idx", idx, "tc", tc.name, tc.path)
+						slog.Info("FOUND", "idx", idx, "tc", tc.name, "path", tc.path)
 					} else {
-						slog.Info("[] MISSING %q →", "idx", idx, "tc", tc.name, tc.path)
+						slog.Info("MISSING", "idx", idx, "tc", tc.name, "path", tc.path)
 					}
 				}
 				results <- statResult{idx: idx, found: found}
@@ -323,7 +323,7 @@ func ValidateImport(opts ImportOptions) (*ValidationResult, error) {
 		} else if sr.found {
 			result.FilesFound++
 			if firstFound {
-				slog.Info("iTunes validate first file found %q ()", "tc", tc.name, tc.path)
+				slog.Info("iTunes validate first file found", "name", tc.name, "path", tc.path)
 				firstFound = false
 			}
 		} else {

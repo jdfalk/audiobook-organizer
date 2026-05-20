@@ -146,7 +146,7 @@ func (c *OpenLibraryClient) SearchByTitle(ctx context.Context, title string) ([]
 			for i := range editions {
 				results = append(results, editionToMetadata(&editions[i], c.olStore))
 			}
-			slog.Debug("SearchByTitle found results from local dump for %q", "results_count", len(results), title)
+			slog.Debug("SearchByTitle found results from local dump", "resultsCount", len(results), "title", title)
 			return results, nil
 		}
 	}

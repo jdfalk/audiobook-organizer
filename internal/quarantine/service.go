@@ -134,7 +134,7 @@ func (qs *QuarantineService) QuarantineBook(bookID, reason string) error {
 		ChangeType: "quarantine",
 	})
 
-	slog.Info("QuarantineBook → ()", "value0", "oldPath", "oldPath", oldPath, "value2", "dest", dest, "reason", reason)
+	slog.Info("QuarantineBook moved", "oldPath", oldPath, "dest", dest, "reason", reason)
 
 	qs.events.Publish(context.Background(), plugin.NewEvent(plugin.EventBookQuarantined, bookID, map[string]any{
 		"title":          book.Title,

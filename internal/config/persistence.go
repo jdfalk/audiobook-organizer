@@ -194,14 +194,14 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 		}
 		decrypted, err := database.DecryptValue(setting.Value)
 		if err != nil {
-			slog.Info("WARNING Failed to decrypt setting %q — will try config file fallback. (error )", "setting", setting.Key, err)
+			slog.Info("WARNING Failed to decrypt setting — will try config file fallback", "setting", setting.Key, "err", err)
 			corruptSecrets = append(corruptSecrets, setting.Key)
 			continue
 		}
 		if err := applySetting(setting.Key, decrypted, setting.Type); err != nil {
 			slog.Warn("Failed to apply secret setting", "setting", setting.Key, "err", err)
 		}
-		slog.Debug("LoadConfigFromDatabase found setting (isSecrettrue, valueLen)", "setting", setting.Key, "decrypted_count", len(decrypted))
+		slog.Debug("LoadConfigFromDatabase found setting", "setting", setting.Key, "decrypted_count", len(decrypted))
 	}
 
 	// --- Legacy path (existing installs without a blob) ---
@@ -242,15 +242,15 @@ func LoadConfigFromDatabase(store database.SettingsStore) error {
 			}
 			if plaintext != "" {
 				if err := store.SetSetting(key, plaintext, "string", true); err != nil {
-					slog.Warn("Failed to re-encrypt setting %q", "key", key, err)
+					slog.Warn("Failed to re-encrypt setting", "key", key, "err", err)
 				} else {
-					slog.Info("Re-encrypted setting %q successfully", key)
+					slog.Info("Re-encrypted setting successfully", "key", key)
 				}
 			} else {
 				if err := store.DeleteSetting(key); err != nil {
-					slog.Warn("Could not clear corrupt secret %q from DB", "key", key, err)
+					slog.Warn("Could not clear corrupt secret from DB", "key", key, "err", err)
 				} else {
-					slog.Info("Cleared corrupt secret %q — re-enter via Settings", key)
+					slog.Info("Cleared corrupt secret — re-enter via Settings", "key", key)
 				}
 			}
 		}

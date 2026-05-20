@@ -215,7 +215,7 @@ func dedupReviewCallback(ctx context.Context, itemsJSON []byte, results []aijobs
 	}
 
 	applied := dedupVerdictApplier.ApplyVerdicts(allVerdicts, byIndex)
-	slog.Info("dedup_review callback applied verdicts (from successful rows, errors)", "value0", "applied", "applied", applied, "value2", "successCount", successCount, "errorCount", errorCount)
+	slog.Info("dedup_review callback applied verdicts (from successful rows, errors)", "applied", applied, "successCount", successCount, "errorCount", errorCount)
 
 	return successCount, errorCount, rowErrors, nil
 }

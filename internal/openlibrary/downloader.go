@@ -99,7 +99,7 @@ func DownloadDump(dumpType string, targetDir string, tracker *DownloadTracker) e
 	var lastErr error
 	for _, baseURL := range DumpSources {
 		sourceURL := fmt.Sprintf("%s/%s", baseURL, filename)
-		slog.Info("Trying OL dump download from", "value0", "sourceURL", sourceURL)
+		slog.Info("Trying OL dump download from", "sourceURL", sourceURL)
 
 		err := downloadFromURL(dumpType, sourceURL, targetPath, tracker)
 		if err == nil {
