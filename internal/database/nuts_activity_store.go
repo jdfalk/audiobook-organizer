@@ -1,5 +1,5 @@
 // file: internal/database/nuts_activity_store.go
-// version: 1.2.2
+// version: 1.2.3
 // guid: c3d4e5f6-a7b8-0003-cdef-000000000003
 
 package database
@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -602,10 +603,155 @@ func (s *NutsActivityStore) MigrateSystemActivityLogs() (int, error) {
 	return 0, nil
 }
 
-// RecompactDigests is a no-op for NutsActivityStore — it stores digests with
-// full type/tag enrichment at compaction time, so legacy re-derivation is not needed.
-func (s *NutsActivityStore) RecompactDigests(_ context.Context) (RecompactResult, error) {
-	return RecompactResult{}, nil
+// RecompactDigests re-derives type, tier, and tags on every stored daily-digest
+// entry in NutsDB whose items were compacted before enrichment was added.
+// It mirrors ActivityStore.RecompactDigests but uses NutsDB iteration instead of SQL.
+//
+// Algorithm:
+//  1. Range-scan the entire "act:digest" bucket (all keys).
+//  2. Decode each entry's Details map as DigestDetails.
+//  3. Skip entries where no items are legacy (idempotent guard).
+//  4. For each legacy item: call deriveTypeFromMessage + enrichLegacyLogTags.
+//  5. Rebuild Counts and TagCounts, marshal back, and write with the same key.
+func (s *NutsActivityStore) RecompactDigests(ctx context.Context) (RecompactResult, error) {
+	var result RecompactResult
+
+	// Collect all digest keys+values first so we can update outside the View tx.
+	type digestKV struct {
+		key   []byte
+		entry ActivityEntry
+		dd    DigestDetails
+	}
+
+	var candidates []digestKV
+
+	err := s.db.View(func(tx *nutsdb.Tx) error {
+		keys, vals, err := tx.RangeScanEntries(
+			actBucket("digest"),
+			[]byte("00000000000000000000:"),
+			[]byte("99999999999999999999:\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"),
+			true, true,
+		)
+		if err != nil {
+			if isNutsEmptyScan(err) {
+				return nil
+			}
+			return err
+		}
+		for i, v := range vals {
+			var e ActivityEntry
+			if jsonErr := json.Unmarshal(v, &e); jsonErr != nil {
+				continue
+			}
+			if e.Type != "daily_digest" {
+				continue
+			}
+			// Decode Details map into DigestDetails.
+			var dd DigestDetails
+			if e.Details != nil {
+				if b, merr := json.Marshal(e.Details); merr == nil {
+					_ = json.Unmarshal(b, &dd)
+				}
+			}
+			candidates = append(candidates, digestKV{key: keys[i], entry: e, dd: dd})
+		}
+		return nil
+	})
+	if err != nil {
+		return result, fmt.Errorf("nuts_activity_store: recompact scan digests: %w", err)
+	}
+
+	slog.Info("[activity] recompact: starting digest re-derivation (nuts)",
+		"digest_count", len(candidates))
+
+	for _, c := range candidates {
+		// Check if any items need updating.
+		needsUpdate := false
+		for _, item := range c.dd.Items {
+			if isLegacyItem(item) {
+				needsUpdate = true
+				break
+			}
+		}
+		if !needsUpdate {
+			result.Skipped++
+			continue
+		}
+
+		// Re-derive type, tier, and tags on each legacy item.
+		for i, item := range c.dd.Items {
+			if !isLegacyItem(item) {
+				continue
+			}
+			derivedType, derivedTier := deriveTypeFromMessage(item.Summary, "")
+			derivedTags := enrichLegacyLogTags(item.Summary, "", "info")
+			c.dd.Items[i].Type = derivedType
+			c.dd.Items[i].Tier = derivedTier
+			c.dd.Items[i].Tags = derivedTags
+		}
+
+		// Rebuild Counts from updated items.
+		newCounts := make(map[string]int)
+		for _, item := range c.dd.Items {
+			newCounts[item.Type]++
+		}
+		c.dd.Counts = newCounts
+
+		// Rebuild TagCounts from updated items.
+		newTagCounts := make(map[string]map[string]int)
+		for _, item := range c.dd.Items {
+			for _, tag := range item.Tags {
+				colonIdx := strings.Index(tag, ":")
+				if colonIdx < 1 {
+					continue
+				}
+				ns := tag[:colonIdx]
+				val := tag[colonIdx+1:]
+				if ns != "action" && ns != "source" {
+					continue
+				}
+				if newTagCounts[ns] == nil {
+					newTagCounts[ns] = make(map[string]int)
+				}
+				newTagCounts[ns][val]++
+			}
+		}
+		if len(newTagCounts) > 0 {
+			c.dd.TagCounts = newTagCounts
+		}
+
+		// Merge updated DigestDetails back into the entry's Details map.
+		ddBytes, merr := json.Marshal(c.dd)
+		if merr != nil {
+			return result, fmt.Errorf("nuts_activity_store: recompact marshal digest key=%s: %w", c.key, merr)
+		}
+		var detailsMap map[string]any
+		if err := json.Unmarshal(ddBytes, &detailsMap); err != nil {
+			return result, fmt.Errorf("nuts_activity_store: recompact unmarshal detailsMap key=%s: %w", c.key, err)
+		}
+		c.entry.Details = detailsMap
+		c.entry.Summary = fmt.Sprintf("Daily digest for %s (%d entries)", c.dd.Date, c.dd.OriginalCount)
+
+		entryBytes, merr := json.Marshal(c.entry)
+		if merr != nil {
+			return result, fmt.Errorf("nuts_activity_store: recompact marshal entry key=%s: %w", c.key, merr)
+		}
+
+		key := c.key // capture for closure
+		if uerr := s.db.Update(func(tx *nutsdb.Tx) error {
+			return tx.Put(actBucket("digest"), key, entryBytes, 0)
+		}); uerr != nil {
+			return result, fmt.Errorf("nuts_activity_store: recompact write key=%s: %w", key, uerr)
+		}
+
+		slog.Info("[activity] recompact: updated digest (nuts)",
+			"key", string(c.key), "date", c.dd.Date, "items", len(c.dd.Items))
+		result.Touched++
+	}
+
+	slog.Info("[activity] recompact: complete (nuts)",
+		"touched", result.Touched, "skipped", result.Skipped)
+	return result, nil
 }
 
 // ── internal helpers ──────────────────────────────────────────────────────────

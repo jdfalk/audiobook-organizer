@@ -1,5 +1,5 @@
 // file: internal/database/activity_compact_test.go
-// version: 1.3.0
+// version: 1.3.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
 
 package database
@@ -395,4 +395,65 @@ func TestCompactByDay_DigestItemTimestampAndTags(t *testing.T) {
 		assert.True(t, !dd.Items[i].Timestamp.Before(dd.Items[i-1].Timestamp),
 			"items should be in non-decreasing timestamp order")
 	}
+}
+
+// newTestNutsActivityStore creates a temp NutsActivityStore and registers cleanup.
+func newTestNutsActivityStore(t *testing.T) *NutsActivityStore {
+	t.Helper()
+	dir := t.TempDir()
+	store, err := NewNutsActivityStore(dir)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	return store
+}
+
+// TestNutsActivityStore_RecompactDigests verifies that RecompactDigests:
+//  1. Re-derives type+tags on legacy digest items (type=system_log, empty tags).
+//  2. Returns the correct touched count.
+//  3. Is idempotent: a second run returns 0 touched.
+func TestNutsActivityStore_RecompactDigests(t *testing.T) {
+	s := newTestNutsActivityStore(t)
+	ctx := context.Background()
+
+	day := time.Date(2025, 3, 10, 0, 0, 0, 0, time.UTC)
+
+	// Insert 3 entries with legacy-style types that should be re-derived.
+	for i := 0; i < 3; i++ {
+		_, err := s.Record(ActivityEntry{
+			Tier:      "change",
+			Type:      "system_log",  // legacy type — should be re-derived
+			Level:     "info",
+			Source:    "compaction",
+			Summary:   "applied metadata to book",
+			Timestamp: day.Add(time.Duration(i) * time.Minute),
+			Tags:      []string{},    // empty tags — triggers isLegacyItem
+		})
+		require.NoError(t, err)
+	}
+
+	// Compact to create a digest.
+	olderThan := day.Add(24 * time.Hour)
+	_, err := s.CompactByDay(ctx, olderThan)
+	require.NoError(t, err)
+
+	// Run RecompactDigests — should touch exactly 1 digest.
+	res, err := s.RecompactDigests(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, res.Touched, "first run: should touch the one digest")
+	assert.Equal(t, 0, res.Skipped, "first run: nothing should be skipped")
+
+	// Read back the digest and verify items got proper types and tags.
+	dd, _, err := s.findExistingDigest(day.Format("2006-01-02"))
+	require.NoError(t, err)
+	require.Len(t, dd.Items, 3, "digest should still have 3 items")
+	for i, item := range dd.Items {
+		assert.NotEqual(t, "system_log", item.Type, "item %d: type should be re-derived away from system_log", i)
+		assert.NotEmpty(t, item.Tags, "item %d: tags should be populated after recompact", i)
+	}
+
+	// Idempotency: second run should touch 0 (all items now have proper types/tags).
+	res2, err := s.RecompactDigests(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, res2.Touched, "second run: should be idempotent (0 touched)")
+	assert.Equal(t, 1, res2.Skipped, "second run: digest should be skipped as already clean")
 }
