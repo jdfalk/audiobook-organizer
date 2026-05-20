@@ -1,5 +1,5 @@
 // file: web/src/types/index.ts
-// version: 1.15.0
+// version: 1.16.0
 // guid: 0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a
 // last-edited: 2026-05-19
 
@@ -228,6 +228,7 @@ export interface BookFile {
   fingerprint_failure_detail?: string | null;
   fingerprint_diagnostic_json?: string | null;
   organize_method?: string;
+  skip_scan?: boolean;
   missing: boolean;
   created_at: string;
   updated_at: string;
