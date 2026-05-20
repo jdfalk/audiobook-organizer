@@ -1,5 +1,5 @@
 // file: web/src/hooks/useColumnConfig.ts
-// version: 1.0.0
+// version: 1.1.0
 // guid: b3c4d5e6-f7a8-49b0-c1d2-e3f4a5b6c7d8
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -28,11 +28,28 @@ export interface UseColumnConfigReturn {
 
 const DEBOUNCE_MS = 500;
 
+const FINGERPRINT_COLUMNS = [
+  'title',
+  'author',
+  'fingerprint_status',
+  'coverage_percent',
+  'fingerprinted_files',
+  'last_fingerprinted_date',
+];
+
 function buildDefaults(): ColumnConfig {
   const defaultCols = getDefaultVisibleColumns();
   return {
     visibleColumns: defaultCols.map((c) => c.id),
     columnOrder: defaultCols.map((c) => c.id),
+    columnWidths: {},
+  };
+}
+
+function buildFingerprintPreset(): ColumnConfig {
+  return {
+    visibleColumns: FINGERPRINT_COLUMNS.filter((id) => COLUMN_MAP.has(id)),
+    columnOrder: FINGERPRINT_COLUMNS.filter((id) => COLUMN_MAP.has(id)),
     columnWidths: {},
   };
 }
@@ -53,16 +70,30 @@ function resolveColumns(config: ColumnConfig): ColumnDefinition[] {
     });
 }
 
-export function useColumnConfig(): UseColumnConfigReturn {
-  const [config, setConfig] = useState<ColumnConfig>(buildDefaults);
+export function useColumnConfig(preset?: 'fingerprints' | 'standard'): UseColumnConfigReturn {
+  const getInitialConfig = () => {
+    if (preset === 'fingerprints') {
+      return buildFingerprintPreset();
+    }
+    return buildDefaults();
+  };
+
+  const [config, setConfig] = useState<ColumnConfig>(getInitialConfig);
   const [isLoading, setIsLoading] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
-  // Load saved config on mount
+  // Load saved config on mount (unless a preset is explicitly requested)
   useEffect(() => {
     isMountedRef.current = true;
     let cancelled = false;
+
+    // If a preset is requested, use it directly without loading from server
+    if (preset === 'fingerprints') {
+      setConfig(buildFingerprintPreset());
+      setIsLoading(false);
+      return;
+    }
 
     getUserColumnConfig()
       .then((saved) => {
@@ -98,7 +129,7 @@ export function useColumnConfig(): UseColumnConfigReturn {
       cancelled = true;
       isMountedRef.current = false;
     };
-  }, []);
+  }, [preset]);
 
   // Debounced save
   const scheduleSave = useCallback((newConfig: ColumnConfig) => {

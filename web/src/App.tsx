@@ -1,7 +1,6 @@
 // file: web/src/App.tsx
-// version: 1.20.0
+// version: 1.21.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
-// Trigger CI E2E test run
 
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { STORAGE_KEYS } from './lib/storageKeys';
@@ -208,7 +207,8 @@ function App() {
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-              <Route path="/library" element={<ErrorBoundary><Library /></ErrorBoundary>} />
+              <Route path="/library" element={<ErrorBoundary><Library defaultPreset="standard" /></ErrorBoundary>} />
+              <Route path="/fingerprints" element={<ErrorBoundary><Library defaultPreset="fingerprints" /></ErrorBoundary>} />
               <Route path="/library/:id" element={<ErrorBoundary><BookDetail /></ErrorBoundary>} />
               <Route path="/works" element={<ErrorBoundary><Works /></ErrorBoundary>} />
               <Route path="/system" element={<ErrorBoundary><System /></ErrorBoundary>} />

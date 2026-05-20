@@ -1,5 +1,5 @@
 // file: web/src/components/layout/Sidebar.tsx
-// version: 1.12.0
+// version: 1.13.0
 // guid: 6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c
 
 import { useState } from 'react';
@@ -32,6 +32,7 @@ import BugReportIcon from '@mui/icons-material/BugReport.js';
 import CollectionsBookmarkIcon from '@mui/icons-material/CollectionsBookmark.js';
 import PeopleIcon from '@mui/icons-material/People.js';
 import TimelineIcon from '@mui/icons-material/Timeline.js';
+import WavesIcon from '@mui/icons-material/Waves.js';
 
 const MOBILE_DRAWER_WIDTH = 240;
 
@@ -47,6 +48,7 @@ const librarySubItems = [
   { text: 'All Books', icon: <LibraryBooksIcon />, path: '/library' },
   { text: 'In Progress', icon: <MenuBookIcon />, path: '/library?search=read_status:in_progress' },
   { text: 'Finished', icon: <LibraryBooksIcon />, path: '/library?search=read_status:finished' },
+  { text: 'Fingerprints', icon: <WavesIcon />, path: '/fingerprints' },
   { text: 'Series', icon: <CollectionsBookmarkIcon />, path: '/series' },
   { text: 'Authors', icon: <PeopleIcon />, path: '/authors' },
 ];
@@ -100,7 +102,7 @@ export function Sidebar({ open, onClose, drawerWidth, collapsed = false, onToggl
           <ListItem disablePadding>
             <Tooltip title="Library" placement="right">
               <ListItemButton
-                selected={location.pathname.startsWith('/library') || location.pathname === '/series' || location.pathname === '/authors'}
+                selected={location.pathname.startsWith('/library') || location.pathname === '/fingerprints' || location.pathname === '/series' || location.pathname === '/authors'}
                 onClick={() => handleNavigation('/library')}
                 sx={{ justifyContent: 'center' }}
               >

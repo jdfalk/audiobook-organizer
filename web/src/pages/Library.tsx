@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.64.2
+// version: 1.65.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-05-16
 
@@ -95,7 +95,11 @@ const buildHashCandidates = (book: Audiobook): string[] => {
 
 // getResultLabel is defined in ./libraryTypes and used by LibraryDialogs
 
-export const Library = () => {
+interface LibraryProps {
+  defaultPreset?: 'fingerprints' | 'standard';
+}
+
+export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -172,7 +176,7 @@ export const Library = () => {
     toggleColumn,
     resizeColumn,
     resetToDefaults: resetColumnsToDefaults,
-  } = useColumnConfig();
+  } = useColumnConfig(defaultPreset);
 
   // Import path management
   const [importPaths, setImportPaths] = useState<ImportPath[]>([]);
