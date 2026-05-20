@@ -1,7 +1,7 @@
 // file: internal/server/server_maintenance_deps.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: b4c5d6e7-f8a9-0123-7890-345678901234
-// last-edited: 2026-05-07
+// last-edited: 2026-05-19
 
 // This file implements the maintenance.ServerDeps interface on *Server, giving
 // the maintenance plugin access to server internals without creating an import
@@ -235,4 +235,54 @@ func (s *Server) BackupRetentionDays() int {
 		days = 30
 	}
 	return days
+}
+
+// ---- operation orchestration (library.optimize) ----
+
+// EnqueueOp implements maintenance.ServerDeps. It delegates to the UOS registry.
+// Returns an error if the registry is not initialized or the operation enqueue fails.
+func (s *Server) EnqueueOp(ctx context.Context, defID string, params any) (string, error) {
+	if s.opRegistry == nil {
+		return "", fmt.Errorf("operations registry not initialized")
+	}
+	return s.opRegistry.EnqueueOp(ctx, defID, params)
+}
+
+// WaitForOp implements maintenance.ServerDeps. It polls the database at 5-second
+// intervals until the operation reaches a terminal state or ctx is canceled.
+// Terminal states: completed, failed, canceled, interrupted_dropped, interrupted_quiesced.
+func (s *Server) WaitForOp(ctx context.Context, opID string) error {
+	store := s.Store()
+	if store == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			row, err := store.GetOperationV2(opID)
+			if err != nil {
+				// DB error — keep polling; the op may still be in-flight.
+				continue
+			}
+			if row == nil {
+				// Not found yet — op may not be visible yet; keep polling.
+				continue
+			}
+			switch row.Status {
+			case "completed":
+				return nil
+			case "failed":
+				return fmt.Errorf("child operation %s failed", opID)
+			case "canceled":
+				return fmt.Errorf("child operation %s was canceled", opID)
+			case "interrupted_dropped", "interrupted_quiesced":
+				return fmt.Errorf("child operation %s was interrupted (%s)", opID, row.Status)
+			}
+			// queued or running — continue polling.
+		}
+	}
 }

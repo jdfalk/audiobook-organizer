@@ -1,7 +1,7 @@
 // file: internal/plugins/maintenance/deps.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567891
-// last-edited: 2026-05-12
+// last-edited: 2026-05-19
 
 // Package maintenance is the UOS plugin for all maintenance/janitor operations.
 // It holds 26 OperationDefs migrated from the legacy scheduler_tasks.go.
@@ -90,6 +90,17 @@ type ServerDeps interface {
 	ActivityLogRetentionChangeDays() int
 	ActivityLogRetentionDebugDays() int
 	BackupRetentionDays() int
+
+	// ----- operation orchestration (used by library.optimize) -----
+
+	// EnqueueOp enqueues a child operation by defID with optional params.
+	// Returns the operation ID of the newly enqueued (or deduped existing) run.
+	EnqueueOp(ctx context.Context, defID string, params any) (string, error)
+
+	// WaitForOp blocks until the operation with the given ID reaches a terminal
+	// state (completed, failed, canceled, dropped) or ctx is done.
+	// Returns nil on success, non-nil on failure or context cancellation.
+	WaitForOp(ctx context.Context, opID string) error
 }
 
 // ----- reporter adapter -----

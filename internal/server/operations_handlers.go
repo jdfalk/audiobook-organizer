@@ -1,5 +1,5 @@
 // file: internal/server/operations_handlers.go
-// version: 2.7.0
+// version: 2.8.0
 // guid: 9326aa39-ca40-4db3-a3be-7e76e6e2a23f
 //
 // Background-operation HTTP handlers split out of server.go: the
@@ -54,6 +54,19 @@ func (s *Server) startOrganize(c *gin.Context) {
 		body = []byte("{}")
 	}
 	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.organize", body)
+	if err != nil {
+		httputil.InternalError(c, "enqueue failed", err)
+		return
+	}
+	c.JSON(202, gin.H{"op_id": opID, "id": opID})
+}
+
+func (s *Server) startOptimize(c *gin.Context) {
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operations registry not initialized")
+		return
+	}
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "library.optimize", nil)
 	if err != nil {
 		httputil.InternalError(c, "enqueue failed", err)
 		return
