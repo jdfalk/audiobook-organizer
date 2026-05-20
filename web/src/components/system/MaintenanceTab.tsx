@@ -28,7 +28,7 @@ import {
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow.js';
 import * as api from '../../services/api';
-import { useOperationsStore } from '../../stores/useOperationsStore';
+import { withOptimisticOperation } from '../../utils/withOptimisticOperation';
 
 // ─── OptimizeLibraryCard ────────────────────────────────────────────────────
 
@@ -36,16 +36,13 @@ function OptimizeLibraryCard() {
   const [optimizeRunning, setOptimizeRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const startPolling = useOperationsStore((state) => state.startPolling);
-
   const handleOptimize = async () => {
     setOptimizeRunning(true);
     setError(null);
     setSuccessMsg(null);
     try {
-      const result = await api.startOptimize();
+      const result = await withOptimisticOperation('library.optimize', () => api.startOptimize());
       setSuccessMsg(`Optimize started (op ${result.operation_id})`);
-      startPolling(result.operation_id, 'library.optimize');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start optimize');
     } finally {
@@ -858,8 +855,6 @@ function ManualFixesCard() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const startPolling = useOperationsStore((state) => state.startPolling);
-
   useEffect(() => {
     api.listMaintenanceJobs()
       .then(setJobs)
@@ -871,9 +866,9 @@ function ManualFixesCard() {
     setRunning(jobId);
     setError(null);
     try {
-      const result = await api.runMaintenanceJob(jobId);
-      // Register with the operations store so the bell + activity page track it
-      startPolling(result.operation_id, `maintenance:${jobId}`);
+      // Bell + toast appear instantly; reconcile to the real op id once the
+      // dispatcher returns.
+      await withOptimisticOperation(`maintenance:${jobId}`, () => api.runMaintenanceJob(jobId));
     } catch (e) {
       setError(e instanceof Error ? e.message : `Failed to run ${jobId}`);
     } finally {

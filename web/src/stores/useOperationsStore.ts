@@ -1,5 +1,5 @@
 // file: web/src/stores/useOperationsStore.ts
-// version: 3.3.0
+// version: 3.4.0
 // guid: 2a3b4c5d-6e7f-8a9b-0c1d-2e3f4a5b6c7d
 
 import { create } from 'zustand';
@@ -50,6 +50,17 @@ interface OperationsState {
   _sseSource: EventSource | null;
 
   startPolling: (operationId: string, type: string, resumed?: boolean) => void;
+  /** beginOptimistic inserts a placeholder queued op IMMEDIATELY so the bell
+   *  reflects user intent before any network round-trip completes.
+   *  Returns a synthetic id ("optimistic-…") that callers must hand back to
+   *  reconcileOptimistic once the server returns the real operation id. */
+  beginOptimistic: (type: string) => string;
+  /** reconcileOptimistic finalises a placeholder. If realId is non-null the
+   *  placeholder is renamed in place (so SSE updates land on it) and the
+   *  normal startPolling side-effects (toast, server refresh) fire. If
+   *  realId is null the placeholder is removed silently — used when the
+   *  API call failed or returned no operation_id (e.g. nothing to do). */
+  reconcileOptimistic: (tempId: string, realId: string | null) => void;
   removeOperation: (operationId: string) => void;
   updateOperation: (op: ActiveOperation) => void;
   loadFromServer: () => Promise<void>;
@@ -188,6 +199,68 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
     });
 
     // Trigger a server load shortly after to catch any v2 op registration.
+    setTimeout(() => get().loadFromServer(), 1500);
+  },
+
+  beginOptimistic: (type: string) => {
+    // crypto.randomUUID is available in all modern browsers; fall back to a
+    // timestamp-based id in the unlikely test/SSR case where it is absent.
+    const rand =
+      typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempId = `optimistic-${rand}`;
+    const op: ActiveOperation = {
+      id: tempId,
+      type,
+      status: 'queued',
+      progress: 0,
+      total: 0,
+      message: 'Starting…',
+      startedAt: Date.now(),
+    };
+    set((state) => {
+      const operations = { ...state.operations, [tempId]: op };
+      return {
+        operations,
+        ...deriveOperationArrays(operations),
+        polling: true,
+      };
+    });
+
+    // Fire the "started" toast IMMEDIATELY — the click should produce
+    // visible feedback before any network round-trip. The reconcile step
+    // does not emit a second toast; the catch path can show "Failed".
+    const label = formatOpLabel(type);
+    useAppStore.getState().addNotification(`${label} starting…`, 'info');
+
+    return tempId;
+  },
+
+  reconcileOptimistic: (tempId: string, realId: string | null) => {
+    const existing = get().operations[tempId];
+    if (!existing) return;
+
+    if (realId === null) {
+      // Failed or no-op — drop the placeholder silently.
+      get().removeOperation(tempId);
+      return;
+    }
+
+    // Rename the placeholder to the real id so SSE op.updated events land
+    // on the same entry rather than creating a duplicate.
+    set((state) => {
+      const { [tempId]: _, ...rest } = state.operations;
+      const operations = {
+        ...rest,
+        [realId]: { ...existing, id: realId },
+      };
+      return { operations, ...deriveOperationArrays(operations) };
+    });
+
+    // Server refresh to pick up the real v2 op metadata (display name,
+    // notify_level, progress totals). No additional toast — the "starting…"
+    // notification already fired from beginOptimistic.
     setTimeout(() => get().loadFromServer(), 1500);
   },
 

@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.88.0 -->
+<!-- version: 2.89.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-20 -->
 
@@ -8,6 +8,13 @@
 ## [Unreleased]
 
 ### Fixes
+
+#### May 20, 2026 — Bell + toast appear instantly when starting an operation
+
+- New store primitives `beginOptimistic(type)` and `reconcileOptimistic(tempId, realId|null)` on `useOperationsStore`. Click → bell shows a `queued` placeholder + "{Label} starting…" toast *before* the network round-trip, then reconcile renames the placeholder to the real operation id when the API responds (or removes it silently if the call fails / there's nothing to do).
+- New helper `web/src/utils/withOptimisticOperation.ts` wraps the begin/await/reconcile dance. Picks the real id from `operation_id ?? id` on the response by default.
+- Migrated the user-facing start-op handlers off the post-await `startPolling(opId, type)` pattern: Fetch Unmatched / Fetch Review / Scan / Scan All / Full Rescan / Organize / Fingerprint Rescan (all + missing) / Batch Save to Files on the Library page; Optimize Library + Manual Fixes (per-job) under System → Maintenance.
+- Previously the bell + toast only appeared *after* the start-endpoint returned, so slow start-endpoints (e.g. "fetch all unmatched" scanning 5851 books) gave the operator zero feedback for several seconds and looked broken. Now both fire on click; reconcile picks up the real op metadata when the server responds.
 
 #### May 20, 2026 — Quick-query filter pagination fix
 
