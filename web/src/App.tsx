@@ -1,8 +1,8 @@
 // file: web/src/App.tsx
-// version: 1.21.0
+// version: 1.21.1
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense, useRef } from 'react';
 import { STORAGE_KEYS } from './lib/storageKeys';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import {
@@ -140,10 +140,22 @@ function App() {
   }, []);
 
   // Reconnect attempts when server is down
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isUnmountedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (!serverShutdown) return;
 
-    const interval = setInterval(async () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(async () => {
+      if (isUnmountedRef.current) return;
       try {
         const response = await fetch('/api/v1/health');
         if (response.ok) {
@@ -152,11 +164,15 @@ function App() {
         }
       } catch (_e) {
         // Server still down, increment attempts
-        setReconnectAttempts((prev) => prev + 1);
+        if (!isUnmountedRef.current) {
+          setReconnectAttempts((prev) => prev + 1);
+        }
       }
     }, 5000); // Try every 5 seconds
 
-    return () => clearInterval(interval);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, [serverShutdown]);
 
   const handleWizardComplete = () => {

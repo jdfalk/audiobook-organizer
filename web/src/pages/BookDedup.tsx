@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.25.1
+// version: 3.25.2
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 // last-edited: 2026-05-20
 
@@ -122,18 +122,24 @@ function AIAuthorPipelinePage() {
   // Poll active scan status
   useEffect(() => {
     if (!scan || scan.status === 'complete' || scan.status === 'failed') return;
+    let mounted = true;
     const interval = setInterval(async () => {
       try {
         const updated = await api.getAIScan(scan.id);
-        setScan(updated);
-        if (updated.status === 'complete') {
-          const res = await api.getAIScanResults(scan.id);
-          setResults(res);
-          clearInterval(interval);
+        if (mounted) {
+          setScan(updated);
+          if (updated.status === 'complete') {
+            const res = await api.getAIScanResults(scan.id);
+            if (mounted) setResults(res);
+            clearInterval(interval);
+          }
         }
       } catch { /* ignore polling errors */ }
     }, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
     // scan?.id and scan?.status are the meaningful change signals; including
     // the full `scan` object would restart the interval on every poll update.
     // eslint-disable-next-line react-hooks/exhaustive-deps

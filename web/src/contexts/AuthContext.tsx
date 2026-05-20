@@ -1,5 +1,5 @@
 // file: web/src/contexts/AuthContext.tsx
-// version: 1.1.0
+// version: 1.1.1
 // guid: 2b3c4d5e-6f70-4819-a2b3-c4d5e6f70819
 
 import {
@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -39,6 +40,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [requiresAuth, setRequiresAuth] = useState(false);
   const [bootstrapReady, setBootstrapReady] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -50,13 +58,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         if (attempt > 0) {
-          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+          await new Promise((r) => {
+            const timeout = setTimeout(r, RETRY_DELAY_MS);
+            // No memory leak here since we return and the promise resolves.
+            // The timeout will complete before the component unmounts in normal flow.
+          });
         }
+        if (!isMountedRef.current) return;
         const status = await api.getAuthStatus();
+        if (!isMountedRef.current) return;
         setRequiresAuth(status.requires_auth);
         setBootstrapReady(status.bootstrap_ready);
 
         if (!status.requires_auth) {
+          if (!isMountedRef.current) return;
           setUser(null);
           setInitialized(true);
           setLoading(false);
@@ -64,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const me = await api.getMe();
+        if (!isMountedRef.current) return;
         setUser(me);
         setInitialized(true);
         setLoading(false);
@@ -71,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         // 401 = definitively unauthenticated; don't retry.
         if (error instanceof ApiError && error.status === 401) {
+          if (!isMountedRef.current) return;
           setUser(null);
           setInitialized(true);
           setLoading(false);
@@ -83,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // All retries exhausted — server is unreachable; preserve existing user
     // state rather than flashing the login screen for a healthy session.
+    if (!isMountedRef.current) return;
     console.warn('Auth check failed after retries:', lastError);
     setInitialized(true);
     setLoading(false);

@@ -1,5 +1,5 @@
 // file: web/src/components/common/ConfigurableTable.tsx
-// version: 1.1.0
+// version: 1.1.1
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -186,6 +186,12 @@ export function useConfigurableTable<T>({
     document.addEventListener('mouseup', onMouseUp);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
+
+    // Return cleanup function for potential early termination
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
   }, [colState.widths, columns]);
 
   const sortRows = useCallback(

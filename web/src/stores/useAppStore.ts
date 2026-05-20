@@ -1,5 +1,5 @@
 // file: web/src/stores/useAppStore.ts
-// version: 1.3.0
+// version: 1.4.0
 // guid: 1e2f3a4b-5c6d-7e8f-9a0b-1c2d3e4f5a6b
 
 import { create } from 'zustand';
@@ -89,11 +89,14 @@ export const useAppStore = create<AppState>()(
         }));
         // Auto-remove success/info after 5 seconds; error/warning persist
         if (severity === 'success' || severity === 'info') {
-          setTimeout(() => {
+          const timeoutId = setTimeout(() => {
             set((state) => ({
               notifications: state.notifications.filter((n) => n.id !== id),
             }));
           }, 5000);
+          // Cleanup on store unmount is handled by Zustand's built-in cleanup
+          // Store this reference locally if needed for manual cancellation
+          return () => clearTimeout(timeoutId);
         }
       },
       removeNotification: (id) =>

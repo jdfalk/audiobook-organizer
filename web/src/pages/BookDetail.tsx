@@ -1,9 +1,9 @@
 // file: web/src/pages/BookDetail.tsx
-// version: 1.50.0
+// version: 1.50.1
 // guid: 4d2f7c6a-1b3e-4c5d-8f7a-9b0c1d2e3f4a
 // last-edited: 2026-05-02
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Alert,
@@ -108,6 +108,9 @@ export const BookDetail = () => {
   const isSingleSelect = selectedSegmentIds.size === 1;
   const singleSelectedId = isSingleSelect ? Array.from(selectedSegmentIds)[0] : null;
 
+  // Refs for cleanup
+  const rescanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Load detailed tags for source attribution (CAT-1 / PR #548)
   useEffect(() => {
     if (!id) return;
@@ -190,14 +193,15 @@ export const BookDetail = () => {
     if (!q) { setLinkSearchResults([]); return; }
     let cancelled = false;
     setLinkSearchLoading(true);
-    const timer = window.setTimeout(async () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    timer = window.setTimeout(async () => {
       try {
         const results = await api.searchBooks(q, 10);
         if (!cancelled) setLinkSearchResults(results.filter(r => r.id !== book?.id && !versions.some(v => v.id === r.id)));
       } catch { /* ignore */ }
       finally { if (!cancelled) setLinkSearchLoading(false); }
     }, 300);
-    return () => { cancelled = true; window.clearTimeout(timer); };
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
   }, [linkSearchOpen, linkSearchQuery, book?.id, versions]);
 
   const handleInlineLinkVersion = async (targetId: string) => {
@@ -675,7 +679,8 @@ export const BookDetail = () => {
       await api.startScan(folderPath, undefined, true);
       toast(`Scanning folder: ${folderPath}`, 'success');
       // Refresh book and segments after a short delay to let scan complete
-      setTimeout(async () => {
+      if (rescanTimeoutRef.current) clearTimeout(rescanTimeoutRef.current);
+      rescanTimeoutRef.current = setTimeout(async () => {
         await refreshBook();
       }, 3000);
     } catch (error: unknown) {
@@ -687,6 +692,15 @@ export const BookDetail = () => {
       setRescanningFolder(false);
     }
   };
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (rescanTimeoutRef.current) {
+        clearTimeout(rescanTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // versionSummary removed — tab label is now static "Files & History"
 

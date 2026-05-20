@@ -1,5 +1,5 @@
 // file: web/src/services/eventSourceManager.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 5a9b8c7d-6e5f-4a3b-2c1d-0e9f8a7b6c5d
 
 export type EventSourceStatus = {
@@ -105,6 +105,7 @@ export const createEventSourceManager = (url = '/api/events') => {
       error,
     });
 
+    if (reconnectTimer) window.clearTimeout(reconnectTimer);
     reconnectTimer = window.setTimeout(() => {
       reconnectTimer = null;
       connect();
@@ -119,6 +120,7 @@ export const createEventSourceManager = (url = '/api/events') => {
 
     // Abort the connection if the server doesn't respond in time
     clearConnectTimeout();
+    if (connectTimeoutTimer) window.clearTimeout(connectTimeoutTimer);
     connectTimeoutTimer = window.setTimeout(() => {
       connectTimeoutTimer = null;
       if (connecting && eventSource) {

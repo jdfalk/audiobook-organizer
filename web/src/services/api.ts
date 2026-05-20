@@ -1,5 +1,5 @@
 // file: web/src/services/api.ts
-// version: 2.33.0
+// version: 2.33.1
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
 // last-edited: 2026-05-20
 
@@ -3459,15 +3459,20 @@ export async function uploadOLDump(
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API_BASE}/openlibrary/upload`);
 
-    if (onProgress) {
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
-        }
-      });
+    const progressHandler = onProgress ? (e: ProgressEvent) => {
+      if (e.lengthComputable) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    } : null;
+
+    if (progressHandler) {
+      xhr.upload.addEventListener('progress', progressHandler);
     }
 
     xhr.onload = () => {
+      if (progressHandler) {
+        xhr.upload.removeEventListener('progress', progressHandler);
+      }
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(JSON.parse(xhr.responseText));
       } else {
@@ -3480,7 +3485,12 @@ export async function uploadOLDump(
       }
     };
 
-    xhr.onerror = () => reject(new Error('Upload network error'));
+    xhr.onerror = () => {
+      if (progressHandler) {
+        xhr.upload.removeEventListener('progress', progressHandler);
+      }
+      reject(new Error('Upload network error'));
+    };
     xhr.send(formData);
   });
 }

@@ -1,5 +1,5 @@
 // file: web/src/utils/operationPolling.ts
-// version: 1.1.0
+// version: 1.2.0
 // guid: 9d8c7b6a-5f4e-3d2c-1b0a-9e8d7c6b5a4f
 
 import * as api from '../services/api';
@@ -27,11 +27,12 @@ export function pollOperation(
 ): () => void {
   const start = Date.now();
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let isCleanedUp = false;
 
   const tick = async () => {
     try {
       const op = await api.getOperationStatus(operationId);
-      if (!timeoutId) return; // cleanup already called
+      if (isCleanedUp || !timeoutId) return; // cleanup already called
       onUpdate?.(op);
       if (isTerminal(op.status)) {
         timeoutId = null;
@@ -39,16 +40,19 @@ export function pollOperation(
         return; // stop polling
       }
       if (Date.now() - start < timeoutMs) {
+        if (timeoutId) clearTimeout(timeoutId);
         timeoutId = setTimeout(tick, intervalMs);
       } else {
         timeoutId = null;
         onError?.(new Error('operation polling timed out'));
       }
     } catch (e) {
+      if (isCleanedUp) return;
       if (timeoutId) {
         // Only continue polling if timeoutId is still set (cleanup not called)
         onError?.(e);
         if (Date.now() - start < timeoutMs) {
+          if (timeoutId) clearTimeout(timeoutId);
           timeoutId = setTimeout(tick, intervalMs);
         } else {
           timeoutId = null;
@@ -57,10 +61,12 @@ export function pollOperation(
     }
   };
 
+  if (timeoutId) clearTimeout(timeoutId);
   timeoutId = setTimeout(tick, intervalMs);
 
   // Return cleanup function to cancel polling
   return () => {
+    isCleanedUp = true;
     if (timeoutId) {
       clearTimeout(timeoutId);
       timeoutId = null;

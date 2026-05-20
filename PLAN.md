@@ -1,48 +1,68 @@
-# Fix iTunes Memory Leak – Stream Parse XML
+# Memory Leak Fixes - Parallel Execution Plan
 
-## Goal
-Refactor `BackfillITunesTrackPIDs` to use a streaming XML parser instead of loading the entire 88K-track iTunes Library.xml into memory at once. Current behavior: 53GB peak memory during backfill (unsustainable on prod). Target: <500MB memory usage by processing tracks incrementally.
+**Goal:** Fix all 41 detected memory leaks across 28 files in the React frontend.
 
-## Affected files
-- `internal/itunes/parser.go` — Add `StreamingParseLibrary()` function that yields tracks via a callback instead of returning a full Library struct
-- `internal/itunes/backfill.go` — Refactor `BackfillITunesTrackPIDs()` to use streaming parser; process albums and flush batch writes incrementally instead of building full in-memory maps
-- `internal/itunes/backfill_test.go` — Update tests to verify streaming behavior; add memory profile test for backfill
+**Status:** Parallel subagent execution (Haiku, 4-5 subagents, no git/CHANGELOG per file).
 
-## Steps
-1. **Add streaming parser to parser.go**
-   - Implement `StreamingParseLibrary(ctx, path, onTrack callback)` that:
-     - Opens file and streams XML token-by-token (xml.Decoder)
-     - Unmarshals each track dict on-the-fly without building full Library
-     - Calls `onTrack(track)` for each parsed track
-     - Respects context cancellation
-   - Keep existing `ParseLibrary()` for backward compatibility with other code
+## Leak Categories
+- **Untracked setTimeout/setInterval** (~30 issues): Timer doesn't clear on component unmount
+- **addEventListener without cleanup** (~7 issues): Event listeners not removed in useEffect cleanup
+- **Recursive polling without cancellation** (~2 issues): Polling continues even after component unmount
 
-2. **Refactor BackfillITunesTrackPIDs to use streaming parser**
-   - Remove `lib, err := ParseLibrary(...)` and full albums map
-   - Replace with `StreamingParseLibrary()` callback:
-     - Build up only the current album being processed
-     - When album changes or EOF, flush pending batch and reset
-     - Keep only `pidToBook` and `titleToBook` indexes in memory (lightweight, ~12K + 40K entries)
-   - Batch writes every 5000 tracks (same as before, but streaming)
-   - Add progress logging every 10K tracks
+## Files to Fix (28 total)
+1. src/App.tsx (1 issue)
+2. src/components/AIJobsPanel.tsx (1 issue)
+3. src/components/CacheStatsPanel.tsx (1 issue)
+4. src/components/OperationActivityPanel.tsx (1 issue)
+5. src/components/TagComparison.tsx (2 issues - addEventListener)
+6. src/components/audiobooks/VersionManagement.tsx (1 issue)
+7. src/components/common/ConfigurableTable.tsx (2 issues - addEventListener)
+8. src/components/settings/ITunesImport.tsx (2 issues)
+9. src/components/system/MaintenanceTab.tsx (1 issue)
+10. src/contexts/AuthContext.tsx (1 issue)
+11. src/hooks/useKeyboardShortcuts.ts (1 issue)
+12. src/hooks/usePendingFileOps.ts (1 issue)
+13. src/hooks/useUnsavedChangesBlocker.ts (1 issue)
+14. src/pages/ActivityLog.tsx (3 issues)
+15. src/pages/BookDedup.tsx (1 issue)
+16. src/pages/BookDetail.tsx (2 issues)
+17. src/pages/Dashboard.tsx (1 issue)
+18. src/pages/Library.tsx (5 issues - highest priority)
+19. src/pages/Settings.tsx (1 issue)
+20. src/pages/Users.tsx (1 issue)
+21. src/services/api.ts (2 issues)
+22. src/services/eventSourceManager.ts (2 issues)
+23. src/stores/useAppStore.ts (1 issue)
+24. src/stores/useOperationsStore.ts (2 issues)
+25. src/utils/operationPolling.ts (3 issues)
 
-3. **Update tests**
-   - Verify streaming parser yields same track count as full parser
-   - Add test for context cancellation during parse
-   - Add memory profile assertion for backfill (peak <500MB)
-   - Ensure BackfillITunesTrackPIDs still produces same external_id_mapping count
+## Subagent Work Batches
+- **Batch 1 (Haiku):** src/App.tsx, src/components/{AIJobsPanel, CacheStatsPanel, OperationActivityPanel, TagComparison, VersionManagement}
+- **Batch 2 (Haiku):** src/components/{ConfigurableTable, ITunesImport, MaintenanceTab}, src/contexts/AuthContext, src/hooks/useKeyboardShortcuts
+- **Batch 3 (Haiku):** src/hooks/{usePendingFileOps, useUnsavedChangesBlocker}, src/pages/{ActivityLog, BookDedup, BookDetail, Dashboard}
+- **Batch 4 (Haiku):** src/pages/{Library, Settings, Users}, src/services/{api, eventSourceManager}
+- **Batch 5 (Haiku):** src/stores/{useAppStore, useOperationsStore}, src/utils/operationPolling
 
-## Test strategy
-- **Unit tests:** `make test -- -run TestBackfill` (backfill_test.go)
-- **Memory profile:** Run backfill on staging/prod with `pprof` to verify <500MB peak
-- **Integration:** Restart prod service, trigger backfill manually via admin API, monitor memory via systemctl
-- **Success criteria:**
-  - All existing backfill tests pass
-  - Memory peak <500MB during backfill (vs current 53GB)
-  - Same number of external ID mappings created as before
-  - Backfill completes in <5 minutes
+## Fix Pattern
+1. Add `useRef` to React imports if missing
+2. For setTimeout/setInterval: Add timerRef + isUnmountedRef, wrap calls, add cleanup
+3. For addEventListener: Add removeEventListener in useEffect cleanup
+4. Update file version header (bump patch)
+5. **NO git commits, NO CHANGELOG per file**
+
+## Consolidation (Coordinator)
+- Collect all diffs from subagents
+- Create single consolidated PR with all changes
+- One commit per file: `fix(memory): clear [timer/listener] on unmount`
+- Update CHANGELOG.md once with summary
+- Run `make test-all` before merge
+
+## Test Strategy
+- `make test-all` after consolidation
+- Memory leak scanner verification
+- Spot-check 3-4 high-impact files
 
 ## Rollback
-- Revert to `main` and rebuild: `git checkout main && make clean && make build`
-- Restart service: `sudo systemctl restart audiobook-organizer.service`
-- No data migration needed — backfill is idempotent and already completed on prod (flag set)
+```bash
+git reset --hard origin/main
+```

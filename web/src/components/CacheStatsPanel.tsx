@@ -1,8 +1,8 @@
 // file: web/src/components/CacheStatsPanel.tsx
-// version: 1.1.0
+// version: 1.1.1
 // guid: b5c8d9ea-1f2g-3h4i-5j6k-7l8m9n0o1p2q
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Button,
@@ -73,25 +73,42 @@ export function CacheStatsPanel() {
   const [stats, setStats] = useState<api.CacheStatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isUnmountedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   const fetchStats = async () => {
+    if (isUnmountedRef.current) return;
     setLoading(true);
     try {
       const data = await api.getCacheStats();
-      setStats(data);
-      setError(null);
+      if (!isUnmountedRef.current) {
+        setStats(data);
+        setError(null);
+      }
     } catch (e: unknown) {
-      setError(String(e));
+      if (!isUnmountedRef.current) {
+        setError(String(e));
+      }
     } finally {
-      setLoading(false);
+      if (!isUnmountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     void fetchStats();
-    const iv = setInterval(fetchStats, POLL_INTERVAL_MS);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(fetchStats, POLL_INTERVAL_MS);
     return () => {
-      clearInterval(iv);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
 

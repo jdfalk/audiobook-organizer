@@ -1,7 +1,7 @@
 // file: web/src/components/settings/ITunesImport.tsx
-// version: 1.19.0
+// version: 1.19.1
 // guid: 4eb9b74d-7192-497b-849a-092833ae63a4
-// last-edited: 2026-05-11
+// last-edited: 2026-05-20
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -171,9 +171,11 @@ export function ITunesImport() {
   const [forceImportConfirmOpen, setForceImportConfirmOpen] = useState(false);
   const [forceSyncToITunesConfirmOpen, setForceSyncToITunesConfirmOpen] = useState(false);
   const pollTimeoutRef = useRef<number | null>(null);
+  const pollingUnmountedRef = useRef(false);
 
   useEffect(() => {
     return () => {
+      pollingUnmountedRef.current = true;
       if (pollTimeoutRef.current) {
         window.clearTimeout(pollTimeoutRef.current);
       }
@@ -217,10 +219,14 @@ export function ITunesImport() {
     const itunesPath = settings.libraryPath;
     if (!itunesPath) return;
 
+    let isMounted = true;
+
     const checkStatus = async () => {
       try {
         const status = await getITunesLibraryStatus(itunesPath);
-        setLibraryChanged(status.changed_since_import === true);
+        if (isMounted) {
+          setLibraryChanged(status.changed_since_import === true);
+        }
       } catch {
         // Silently ignore — library status is non-critical
       }
@@ -228,7 +234,10 @@ export function ITunesImport() {
 
     checkStatus();
     const interval = setInterval(checkStatus, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [settings.libraryPath]);
 
   // Detect an already-running iTunes import on mount — read from v2 store (UOS-13).
@@ -440,19 +449,27 @@ export function ITunesImport() {
     const poll = async () => {
       try {
         const status = await getITunesImportStatus(operationId);
-        setImportStatus(status);
+        if (!pollingUnmountedRef.current) {
+          setImportStatus(status);
+        }
 
         if (status.status === 'completed' || status.status === 'failed') {
-          setImporting(false);
+          if (!pollingUnmountedRef.current) {
+            setImporting(false);
+          }
           return;
         }
 
-        pollTimeoutRef.current = window.setTimeout(poll, 2000);
+        if (!pollingUnmountedRef.current) {
+          pollTimeoutRef.current = window.setTimeout(poll, 2000);
+        }
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to get import status';
-        toast(message, 'error');
-        setImporting(false);
+        if (!pollingUnmountedRef.current) {
+          toast(message, 'error');
+          setImporting(false);
+        }
       }
     };
 
