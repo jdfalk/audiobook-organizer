@@ -1,5 +1,5 @@
 // file: internal/server/library_core_ops.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f
 
 // library_core_ops registers the scan, organize, and transcode OperationDefs
@@ -16,6 +16,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logging"
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/scanner"
@@ -62,12 +63,35 @@ func (s *Server) RegisterLibraryScanOp(reg *opsregistry.Registry) error {
 			if len(rawParams) > 0 {
 				_ = json.Unmarshal(rawParams, &p)
 			}
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     ulid.Make().String(),
+				Type:   "library.scan",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
+			folderPath := ""
+			if p.FolderPath != nil {
+				folderPath = *p.FolderPath
+			}
+			logging.Info(ctx, "library scan starting", "folder_path", folderPath)
+
 			scanReq := &scanner.ScanRequest{
 				FolderPath:  p.FolderPath,
 				ForceUpdate: p.ForceUpdate,
 			}
 			progress := registryProgressAdapter{r: reporter}
-			return s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
+			err := s.scanService.PerformScan(ctx, scanReq, operations.LoggerFromReporter(progress))
+			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "library scan failed", "err", err)
+				return err
+			}
+			op.SetStatus("success")
+			logging.Info(ctx, "library scan complete")
+			return nil
 		},
 	})
 }
@@ -93,6 +117,26 @@ func (s *Server) RegisterLibraryOrganizeOp(reg *opsregistry.Registry) error {
 				_ = json.Unmarshal(rawParams, &p)
 			}
 			opID := ulid.Make().String()
+
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     opID,
+				Type:   "library.organize",
+				Status: "pending",
+			}
+			ctx = logging.WithOp(ctx, op)
+
+			op.AddEntity("books", p.BookIDs...)
+			folderPath := ""
+			if p.FolderPath != nil {
+				folderPath = *p.FolderPath
+			}
+			logging.Info(ctx, "library organize starting",
+				"book_count", len(p.BookIDs),
+				"folder_path", folderPath,
+				"fetch_metadata_first", p.FetchMetadataFirst,
+				"sync_itunes_first", p.SyncITunesFirst)
+
 			progress := registryProgressAdapter{r: reporter}
 			organizeReq := &OrganizeRequest{
 				FolderPath:         p.FolderPath,
@@ -101,7 +145,15 @@ func (s *Server) RegisterLibraryOrganizeOp(reg *opsregistry.Registry) error {
 				SyncITunesFirst:    p.SyncITunesFirst,
 				OperationID:        opID,
 			}
-			return s.organizeService.PerformOrganize(ctx, organizeReq, operations.LoggerFromReporter(progress))
+			err := s.organizeService.PerformOrganize(ctx, organizeReq, operations.LoggerFromReporter(progress))
+			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "library organize failed", "err", err)
+				return err
+			}
+			op.SetStatus("success")
+			logging.Info(ctx, "library organize complete", "book_count", len(p.BookIDs))
+			return nil
 		},
 	})
 }
@@ -132,6 +184,20 @@ func (s *Server) RegisterLibraryTranscodeOp(reg *opsregistry.Registry) error {
 				return fmt.Errorf("transcode: book_id is required")
 			}
 
+			// Create operation context for structured logging
+			op := &logging.OpContext{
+				ID:     ulid.Make().String(),
+				Type:   "library.transcode",
+				Status: "pending",
+			}
+			op.AddEntity("books", p.BookID)
+			ctx = logging.WithOp(ctx, op)
+			logging.Info(ctx, "transcode starting",
+				"book_id", p.BookID,
+				"output_format", p.OutputFormat,
+				"bitrate", p.Bitrate,
+				"keep_original", p.KeepOriginal)
+
 			progress := registryProgressAdapter{r: reporter}
 
 			opts := transcode.TranscodeOpts{
@@ -143,11 +209,15 @@ func (s *Server) RegisterLibraryTranscodeOp(reg *opsregistry.Registry) error {
 
 			outputPath, err := transcode.Transcode(ctx, opts, s.Store(), progress)
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "transcode failed", "book_id", p.BookID, "err", err)
 				return err
 			}
 
 			originalBook, err := s.Store().GetBookByID(p.BookID)
 			if err != nil {
+				op.SetStatus("failed")
+				logging.Error(ctx, "transcode: failed to get original book", "book_id", p.BookID, "err", err)
 				return fmt.Errorf("failed to get original book: %w", err)
 			}
 
@@ -217,6 +287,7 @@ func (s *Server) RegisterLibraryTranscodeOp(reg *opsregistry.Registry) error {
 				return nil
 			}
 
+			op.AddEntity("books", newBook.ID)
 			progress.Log("info", fmt.Sprintf("Created M4B version %s (group %s), original %s demoted to non-primary", newBook.ID, groupID, p.BookID), nil)
 
 			if !config.AppConfig.ITLWriteBackEnabled &&
@@ -235,6 +306,8 @@ func (s *Server) RegisterLibraryTranscodeOp(reg *opsregistry.Registry) error {
 				}
 			}
 
+			op.SetStatus("success")
+			logging.Info(ctx, "transcode complete", "book_id", p.BookID, "new_book_id", newBook.ID, "output_path", outputPath)
 			return nil
 		},
 	})
