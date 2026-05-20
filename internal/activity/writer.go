@@ -196,8 +196,13 @@ func (w *Writer) drain() {
 }
 
 // writeBatch persists a slice of entries to the store, ignoring individual errors.
+// Each entry is enriched with derived tags (outcome:, source:, action:,
+// lifecycle: for system entries) before persistence so the Activity Log UI
+// has structured tags on every row — not just rows that went through
+// Service.Record.
 func (w *Writer) writeBatch(entries []database.ActivityEntry) {
 	for _, e := range entries {
+		EnrichTags(&e)
 		w.store.Record(e) //nolint:errcheck
 	}
 }
@@ -209,6 +214,7 @@ func (w *Writer) Flush() {
 	for {
 		select {
 		case e := <-w.ch:
+			EnrichTags(&e)
 			w.store.Record(e) //nolint:errcheck
 		default:
 			return

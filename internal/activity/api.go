@@ -1,10 +1,14 @@
 // file: internal/activity/api.go
-// version: 1.6.0
+// version: 1.7.0
 // guid: 9a4f2e1b-3c7d-4b8e-a6f0-5d2c8e1b7a3f
 
 package activity
 
-import "github.com/jdfalk/audiobook-organizer/internal/database"
+import (
+	"strings"
+
+	"github.com/jdfalk/audiobook-organizer/internal/database"
+)
 
 // batchableTypes is the set of type strings that route through the ActivityBatcher.
 // Only entries with both a non-empty OperationID and a registered type are batched.
@@ -140,9 +144,49 @@ func typeToAction(typeStr string) string {
 		return "reconcile"
 	case "merge":
 		return "merge"
+	case "system":
+		return "system"
 	default:
 		return ""
 	}
+}
+
+// systemLifecycle returns a "lifecycle:<phase>" tag for the given system log
+// message, or "" if no phase keyword is recognised. Substring match is
+// intentionally cheap and case-insensitive — this is decoration, not a
+// contract. Phases:
+//   - startup:    initialized / wired / listening / started / ready / recording
+//   - shutdown:   shutting down / stopping / stopped / closed / canceling /
+//                 flushing / waiting for / forced shutdown
+//   - connection: client connect / disconnect / register events
+func systemLifecycle(msg string) string {
+	if msg == "" {
+		return ""
+	}
+	lower := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lower, "initialized"),
+		strings.Contains(lower, " wired"),
+		strings.Contains(lower, "listening"),
+		strings.Contains(lower, " started"),
+		strings.Contains(lower, " ready"),
+		strings.Contains(lower, "recording"):
+		return "lifecycle:startup"
+	case strings.Contains(lower, "shutting down"),
+		strings.Contains(lower, "shutdown"),
+		strings.Contains(lower, "stopping"),
+		strings.Contains(lower, " stopped"),
+		strings.Contains(lower, " closed"),
+		strings.Contains(lower, "canceling"),
+		strings.Contains(lower, "flushing"),
+		strings.Contains(lower, "waiting for"):
+		return "lifecycle:shutdown"
+	case strings.Contains(lower, "client connection"),
+		strings.Contains(lower, "client unregistered"),
+		strings.Contains(lower, "client registered"):
+		return "lifecycle:connection"
+	}
+	return ""
 }
 
 // EnrichTags auto-derives structured tags from entry fields and appends them.
@@ -207,6 +251,16 @@ func EnrichTags(e *database.ActivityEntry) {
 	// scope: tag (simple heuristic — book if BookID present)
 	if e.BookID != "" && !seen["scope:book"] {
 		derived = append(derived, "scope:book")
+	}
+
+	// lifecycle: tag for system entries (startup/shutdown/connection).
+	// Derived from Summary keywords so the operator can filter the firehose
+	// to "show me everything that happened during boot" or "what stopped
+	// during the last shutdown" without grepping raw text.
+	if e.Type == "system" {
+		if life := systemLifecycle(e.Summary); life != "" && !seen[life] {
+			derived = append(derived, life)
+		}
 	}
 
 	e.Tags = append(e.Tags, derived...)
