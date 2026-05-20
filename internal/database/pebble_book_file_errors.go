@@ -1,7 +1,7 @@
 // file: internal/database/pebble_book_file_errors.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d
-// last-edited: 2026-05-16
+// last-edited: 2026-05-20
 
 package database
 
@@ -68,6 +68,7 @@ func (p *PebbleStore) RecordFileError(filePath, bookID, errClass, message string
 	if err := p.db.Set(indexKey, []byte("1"), pebble.Sync); err != nil {
 		return fmt.Errorf("pebble Set index: %w", err)
 	}
+	p.InvalidateLibraryStats()
 	return nil
 }
 
@@ -98,6 +99,7 @@ func (p *PebbleStore) ClearFileError(filePath string) error {
 	if err := p.db.Delete(indexKey, pebble.Sync); err != nil && err != pebble.ErrNotFound {
 		return fmt.Errorf("pebble Delete index: %w", err)
 	}
+	p.InvalidateLibraryStats()
 	return nil
 }
 
