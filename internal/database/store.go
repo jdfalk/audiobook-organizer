@@ -1,5 +1,5 @@
 // file: internal/database/store.go
-// version: 2.74.0
+// version: 2.75.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
 // last-edited: 2026-05-19
 
@@ -692,6 +692,7 @@ type BookFile struct {
 	FingerprintDiagnosticJSON *string    `json:"fingerprint_diagnostic_json,omitempty"` // full FileDiagnostic JSON blob
 	OrganizeMethod            string     `json:"organize_method,omitempty"`             // "reflink", "hardlink", "copy", "symlink"
 	Missing                   bool       `json:"missing"`
+	SkipScan                  bool       `json:"skip_scan"` // user-set: exclude file from scans/fingerprinting
 	CreatedAt                 time.Time  `json:"created_at"`
 	UpdatedAt                 time.Time  `json:"updated_at"`
 	// Deluge integration fields (spec: deluge-protected-paths-design).
