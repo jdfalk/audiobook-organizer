@@ -146,9 +146,9 @@ func (s *Server) startOLImport(c *gin.Context) {
 }
 
 func (s *Server) uploadOLDump(c *gin.Context) {
-	slog.Debug("uploadOLDump Content-Type, ContentLength", "c", c.ContentType(), "value1", c.Request.ContentLength)
+	slog.Debug("uploadOLDump Content-Type, ContentLength", "contentType", c.ContentType(), "contentLength", c.Request.ContentLength)
 	dumpType := c.PostForm("type")
-	slog.Debug("uploadOLDump dumpType%q", dumpType)
+	slog.Debug("uploadOLDump dumpType", "dumpType", dumpType)
 	if !metafetch.ValidDumpTypes[dumpType] {
 		httputil.RespondWithBadRequest(c, "type must be one of: editions, authors, works")
 		return

@@ -74,7 +74,7 @@ func (bp *BatchPoller) Poll(ctx context.Context) (int, error) {
 
 		handler, ok := bp.handlers[b.Type]
 		if !ok {
-			slog.Warn("batch_poller no handler for type %q (batch )", "b", b.Type, b.ID)
+			slog.Warn("batch_poller no handler for type %q (batch )", "type", b.Type, "id", b.ID)
 			// Mark as processed so we don't warn repeatedly
 			bp.mu.Lock()
 			bp.processedBatches[b.ID] = true

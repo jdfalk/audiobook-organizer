@@ -374,18 +374,18 @@ func (s *Server) handleITunesWriteBack(c *gin.Context) {
 	itlPath := config.AppConfig.ITunesLibraryWritePath
 	itlResult, itlErr := itunes.UpdateITLLocations(itlPath, itlPath+".tmp", itlUpdates)
 	if itlErr != nil {
-		stdlog.Warn("ITL write-back failed: %v", itlErr)
+		stdlog.Warn("ITL write-back failed", "err", itlErr)
 		httputil.RespondWithInternalError(c, fmt.Sprintf("ITL write-back failed: %v", itlErr))
 		return
 	}
 
 	if renameErr := itunes.RenameITLFile(itlPath+".tmp", itlPath); renameErr != nil {
-		stdlog.Warn("ITL rename failed: %v", renameErr)
+		stdlog.Warn("ITL rename failed", "err", renameErr)
 		httputil.RespondWithInternalError(c, fmt.Sprintf("ITL rename failed: %v", renameErr))
 		return
 	}
 
-	stdlog.Info("ITL write-back: updated %d tracks", itlResult.UpdatedCount)
+	stdlog.Info("ITL write-back: updated tracks", "count", itlResult.UpdatedCount)
 	httputil.RespondWithOK(c, ITunesWriteBackResponse{
 		Success:      true,
 		UpdatedCount: itlResult.UpdatedCount,
@@ -447,10 +447,10 @@ func (s *Server) handleITunesWriteBackAll(c *gin.Context) {
 	}
 
 	itunesservice.RecordITLReadTime()
-	stdlog.Info("Bulk ITL write-back: updated %d tracks out of %d candidates", itlResult.UpdatedCount, len(itlUpdates))
+	stdlog.Info("Bulk ITL write-back: updated tracks out of candidates", "updated", itlResult.UpdatedCount, "candidates", len(itlUpdates))
 
 	if n, markErr := s.Store().MarkITunesSynced(writtenBookIDs); markErr == nil && n > 0 {
-		stdlog.Info("Marked %d books as iTunes-synced after write-back", n)
+		stdlog.Info("Marked books as iTunes-synced after write-back", "count", n)
 	}
 
 	httputil.RespondWithOK(c, gin.H{
