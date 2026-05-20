@@ -1,7 +1,7 @@
 // file: internal/plugins/acoustid/fingerprint_rescan.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a7b8c9d0-e1f2-3456-def0-123456789abc
-// last-edited: 2026-05-06
+// last-edited: 2026-05-19
 
 package acoustid
 
@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -188,6 +189,10 @@ func fingerprintBookFileWithForce(store database.Store, f database.BookFile, for
 	}
 	if _, err := os.Stat(f.FilePath); err != nil {
 		return fingerprintOutcomeIneligible
+	}
+	if f.SkipScan {
+		slog.Debug("skipping file due to SkipScan flag", "file_id", f.ID, "file_path", f.FilePath)
+		return fingerprintOutcomeSkipped
 	}
 
 	segs, err := fingerprint.FileSegments(f.FilePath, f.Duration)
