@@ -1,11 +1,20 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.85.0 -->
+<!-- version: 2.86.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-20 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixes
+
+#### May 20, 2026 — Review Metadata Matches: fetch-all + client-side sort/page
+
+- `GET /api/v1/audiobooks/metadata/cache/review` now sorts results matched-first (pending → no_match → applied) and accepts `limit=0` to return the full cached set in one call. The shared `ParsePaginationParams` clamps to ≤500, so the handler parses `limit`/`offset` directly to allow uncapped responses for this endpoint.
+- `matched` / `no_match` / `total_applied` counts in the response are now computed over the full prepared set, not just the returned page — so the dialog's totals match the reality across all 5851 cached candidates.
+- `MetadataReviewDialog` fetches once on open with `limit=0` and paginates client-side via `filteredResults.slice(...)`. Hide / confidence / language filters no longer require a server round-trip and matched rows reliably surface on page 1.
+- Dropped the auto-advance-empty-page effect (no longer needed) and replaced it with a page-clamp effect so shrinking filters don't strand the paginator past the last page.
 
 ### Features
 
