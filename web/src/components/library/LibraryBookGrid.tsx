@@ -1,7 +1,7 @@
 // file: web/src/components/library/LibraryBookGrid.tsx
-// version: 1.3.0
+// version: 1.4.0
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
-// last-edited: 2026-05-11
+// last-edited: 2026-05-20
 
 import {
   Typography,
@@ -114,9 +114,9 @@ export const LibraryBookGrid = ({
   viewMode,
   setViewMode,
   sortBy,
-  handleSortChange,
+  handleSortChange: _handleSortChange,
   sortOrder,
-  setSortOrder,
+  setSortOrder: _setSortOrder,
   setStorageDrawerOpen,
   importPaths,
   handleManualImport,
@@ -242,10 +242,6 @@ export const LibraryBookGrid = ({
             onParsedSearchChange={setParsedSearch}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
-            sortBy={sortBy}
-            onSortChange={handleSortChange}
-            sortOrder={sortOrder}
-            onSortOrderChange={setSortOrder}
             onLibraryInfoClick={() => setStorageDrawerOpen(true)}
           />
         </Stack>

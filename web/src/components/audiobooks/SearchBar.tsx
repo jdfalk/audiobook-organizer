@@ -1,5 +1,5 @@
 // file: web/src/components/audiobooks/SearchBar.tsx
-// version: 2.3.0
+// version: 2.4.0
 // guid: 1d2e3f4a-5b6c-7d8e-9f0a-1b2c3d4e5f6a
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -7,14 +7,10 @@ import {
   Autocomplete,
   Box,
   Chip,
-  FormControl,
   IconButton,
   InputAdornment,
-  InputLabel,
-  MenuItem,
   Paper,
   Popper,
-  Select,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -29,7 +25,6 @@ import {
   HelpOutline as HelpIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
-import { SortField, SortOrder } from '../../types';
 import { parseSearch, SEARCH_FIELDS, type ParsedSearch } from '../../utils/searchParser';
 import { STORAGE_KEYS } from '../../lib/storageKeys';
 
@@ -132,10 +127,6 @@ interface SearchBarProps {
   onParsedSearchChange?: (parsed: ParsedSearch) => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  sortBy?: SortField;
-  onSortChange?: (sort: SortField) => void;
-  sortOrder?: SortOrder;
-  onSortOrderChange?: (order: SortOrder) => void;
   placeholder?: string;
 }
 
@@ -145,10 +136,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onParsedSearchChange,
   viewMode,
   onViewModeChange,
-  sortBy = SortField.Title,
-  onSortChange,
-  sortOrder = SortOrder.Ascending,
-  onSortOrderChange,
   placeholder = 'Search audiobooks... (try author:"Name" tag:scifi)',
 }) => {
   const parsed = useMemo(() => parseSearch(value), [value]);
@@ -252,39 +239,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             />
           )}
         />
-
-        {onSortChange && (
-          <FormControl sx={{ minWidth: 150 }}>
-            <InputLabel id="sort-select-label">Sort by</InputLabel>
-            <Select
-              labelId="sort-select-label"
-              value={sortBy}
-              label="Sort by"
-              onChange={(e) => onSortChange(e.target.value as SortField)}
-            >
-              <MenuItem value={SortField.Title}>Title</MenuItem>
-              <MenuItem value={SortField.Author}>Author</MenuItem>
-              <MenuItem value={SortField.Series}>Series</MenuItem>
-              <MenuItem value={SortField.Year}>Year</MenuItem>
-              <MenuItem value={SortField.CreatedAt}>Date Added</MenuItem>
-            </Select>
-          </FormControl>
-        )}
-
-        {onSortOrderChange && (
-          <FormControl sx={{ minWidth: 140 }}>
-            <InputLabel id="sort-order-label">Order</InputLabel>
-            <Select
-              labelId="sort-order-label"
-              value={sortOrder}
-              label="Order"
-              onChange={(e) => onSortOrderChange(e.target.value as SortOrder)}
-            >
-              <MenuItem value={SortOrder.Ascending}>Ascending</MenuItem>
-              <MenuItem value={SortOrder.Descending}>Descending</MenuItem>
-            </Select>
-          </FormControl>
-        )}
 
         <ToggleButtonGroup
           value={viewMode}
