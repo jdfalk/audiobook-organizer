@@ -74,6 +74,20 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
+## ✅ Completed — May 20, 2026
+
+- [x] **SLOG-W12** Operation context logging end-to-end (PR #1047). New `internal/logging.OpContext` propagated via `context.Context`; `logging.Info/Warn/Error/Debug(ctx, ...)` auto-tag every record with `opID`/`opType`/`opStatus`/`entities`. Wired into 12 ops (metadata-fetch ×2, dedup ×8, library scan/organize/transcode). New endpoint `GET /api/v1/operations/:id/activity`. End-to-end test `TestEndToEndLoggingFlow` captures real slog JSON output and asserts attr propagation. Cleanup: restored 3 maintenance jobs' `reporter.Log` calls W11 dropped; fixed ~30 leftover slog KV-pair vet errors across 8+ files; `go vet ./...` now clean across the whole module.
+- [x] **SLOG-W12-UI** Per-operation activity panel (PR #1049). React component consumes `/api/v1/operations/:id/activity`, mounted in `OperationsIndicator` notifications bell. Reusable anywhere.
+- [x] **SLOG-W11** Repair W10's incomplete printf → kv conversion: 674 format-string fixes + 134 malformed-message cleanups (PRs #1036, #1037).
+- [x] **SLOG-W10** Wave 10 — migrated 265 log.Printf calls across 38 files to slog (PR #1036).
+
+### Remaining slog work (low priority)
+
+- [ ] Wire OpContext into long-tail async ops: `runBulkWriteBack`, ISBN enrichment goroutine, iTunes sync ops, batch poller, scanner deep paths.
+- [ ] Smoke-test metadata-fetch on prod to verify the full chain (opID in logs, /activity returns rows).
+
+---
+
 ## ✅ Completed — May 11, 2026
 
 - [x] **SERVER-THIN-1** Extract `DashboardService` → `internal/sysinfo` (PR #803)
