@@ -1,5 +1,5 @@
 // file: web/src/components/layout/TopBar.tsx
-// version: 1.6.0
+// version: 1.6.1
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useEffect, useRef, useState } from 'react';
@@ -40,6 +40,8 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
   );
   const [searchQuery, setSearchQuery] = useState('');
   const lastStateRef = useRef(connectionState);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
   const themeMode = useAppStore((state) => state.themeMode);
   const toggleThemeMode = useAppStore((state) => state.toggleThemeMode);
 
@@ -54,7 +56,16 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
         if (status.state === 'open') {
           if (previous !== 'open') {
             setConnectionMessage('Connection restored');
-            window.setTimeout(() => setConnectionMessage(null), 3000);
+            // Clear existing timeout and schedule new one
+            if (timeoutRef.current) {
+              clearTimeout(timeoutRef.current);
+            }
+            timeoutRef.current = window.setTimeout(() => {
+              if (!isUnmountedRef.current) {
+                setConnectionMessage(null);
+              }
+              timeoutRef.current = null;
+            }, 3000);
           }
         } else if (
           status.state === 'reconnecting' ||
@@ -65,7 +76,14 @@ export function TopBar({ onMenuClick, drawerWidth }: TopBarProps) {
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      isUnmountedRef.current = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {

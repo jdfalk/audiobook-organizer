@@ -1,7 +1,7 @@
 // file: web/src/pages/Settings.tsx
-// version: 1.45.2
+// version: 1.45.3
 // guid: 7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d
-// last-edited: 2026-05-15
+// last-edited: 2026-05-20
 
 import { useState, useEffect, useMemo, useRef, ChangeEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -180,6 +180,8 @@ function APIKeysTab() {
   const [creating, setCreating] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
 
   const fetchKeys = async (all: boolean) => {
     setLoading(true);
@@ -197,6 +199,17 @@ function APIKeysTab() {
   useEffect(() => {
     fetchKeys(showAll);
   }, [showAll]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -246,7 +259,17 @@ function APIKeysTab() {
     if (!createdToken) return;
     navigator.clipboard.writeText(createdToken).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      // Clear any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      // Schedule reset with cleanup protection
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          setCopied(false);
+        }
+        timeoutRef.current = null;
+      }, 2000);
     });
   };
 
@@ -917,6 +940,8 @@ export function Settings() {
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [configLoaded, setConfigLoaded] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
 
   // Factory reset state
   const [factoryResetStep, setFactoryResetStep] = useState<0 | 1 | 2>(0);
@@ -1077,6 +1102,17 @@ export function Settings() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
+
+  // Cleanup save timeout on unmount
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const loadConfig = async () => {
     try {
@@ -1748,7 +1784,15 @@ export function Settings() {
 
       setSavedSnapshot(JSON.stringify(nextSettings));
       setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          setSaved(false);
+        }
+        timeoutRef.current = null;
+      }, 3000);
       return true;
     } catch (error) {
       if (error instanceof api.ApiError && error.status === 401) {

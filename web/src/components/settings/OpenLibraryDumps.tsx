@@ -1,5 +1,5 @@
 // file: web/src/components/settings/OpenLibraryDumps.tsx
-// version: 2.2.0
+// version: 2.2.1
 // guid: e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -148,6 +148,8 @@ export function OpenLibraryDumps() {
   const [uploadType, setUploadType] = useState('editions');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmountedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -209,12 +211,31 @@ export function OpenLibraryDumps() {
     };
   }, [status?.downloads, importing, refresh]);
 
+  // Cleanup download timeout on unmount
+  useEffect(() => {
+    return () => {
+      isUnmountedRef.current = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const handleDownload = async () => {
     setDownloading(true);
     setError(null);
     try {
       await startOLDumpDownload();
-      setTimeout(refresh, 500);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          refresh();
+        }
+        timeoutRef.current = null;
+      }, 500);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Download failed');
     } finally {
