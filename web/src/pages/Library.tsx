@@ -1,5 +1,5 @@
 // file: web/src/pages/Library.tsx
-// version: 1.66.1
+// version: 1.67.0
 // guid: 3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c
 // last-edited: 2026-05-20
 
@@ -23,6 +23,7 @@ import {
 } from '../services/eventSourceManager';
 import { pollOperation } from '../utils/operationPolling';
 import { useOperationsStore } from '../stores/useOperationsStore';
+import { useLibraryCache, buildCacheKey } from '../stores/useLibraryCache';
 import { withOptimisticOperation } from '../utils/withOptimisticOperation';
 import { STORAGE_KEYS } from '../lib/storageKeys';
 import { LibraryToolbar } from '../components/library/LibraryToolbar';
@@ -649,6 +650,19 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       // 'deleted' is a client-side concept (marked_for_deletion flag); send no library_state to server
       const libraryState = filters.libraryState === 'deleted' ? undefined : filters.libraryState;
 
+      // Check cache before fetching
+      const filterStr = JSON.stringify({ fieldFilters, tagsParam, libraryState, showFailed: filters.showFailed, hasFileErrors: filters.hasFileErrors, fingerprintStatus: filters.fingerprintStatus, coveragePercentMin: filters.coveragePercentMin, coveragePercentMax: filters.coveragePercentMax });
+      const cacheKey = buildCacheKey(page, itemsPerPage, searchText, filterStr, sortBy, sortOrder);
+      const cached = useLibraryCache.getState().getCached(cacheKey);
+      if (cached) {
+        setAudiobooks(cached.audiobooks);
+        setTotalCount(cached.totalCount);
+        setTotalPages(cached.totalPages);
+        setImportPaths(cached.importPaths);
+        setLoading(false);
+        return;
+      }
+
       const [page_, folders] = await Promise.all([
         searchText
           ? api.searchBooksPage(searchText, itemsPerPage, offset, filters.showFailed)
@@ -678,16 +692,26 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       }
 
       const total = serverCount ?? convertedBooks.length;
-      setAudiobooks(convertedBooks);
-      setTotalCount(total);
-      setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
-
-      setImportPaths(folders.map((folder) => ({
+      const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
+      const importPathsData = folders.map((folder) => ({
         id: folder.id,
         path: folder.path,
         status: 'idle' as const,
         book_count: folder.book_count,
-      })));
+      }));
+
+      // Cache the results
+      useLibraryCache.getState().setCached(cacheKey, {
+        audiobooks: convertedBooks,
+        totalCount: total,
+        totalPages,
+        importPaths: importPathsData,
+      });
+
+      setAudiobooks(convertedBooks);
+      setTotalCount(total);
+      setTotalPages(totalPages);
+      setImportPaths(importPathsData);
     } catch (error) {
       if (error instanceof api.ApiError && error.status === 401) {
         navigate('/login');
