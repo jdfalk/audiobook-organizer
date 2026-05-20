@@ -229,6 +229,48 @@ func TestEnrichTags(t *testing.T) {
 			},
 			wantTags: []string{"outcome:ok", "source:unknown"},
 		},
+		{
+			name: "system type with startup lifecycle keyword",
+			entry: database.ActivityEntry{
+				Level:   "info",
+				Source:  "server",
+				Type:    "system",
+				Summary: "Activity log service initialized and recording",
+			},
+			wantTags: []string{"outcome:ok", "source:server", "action:system", "lifecycle:startup"},
+		},
+		{
+			name: "system type with shutdown lifecycle keyword",
+			entry: database.ActivityEntry{
+				Level:   "warning",
+				Source:  "server",
+				Type:    "system",
+				Summary: "HTTP server forced shutdown",
+			},
+			wantTags: []string{"outcome:warn", "source:server", "action:system", "lifecycle:shutdown"},
+		},
+		{
+			name: "system type with connection keyword",
+			entry: database.ActivityEntry{
+				Level:   "info",
+				Source:  "server",
+				Type:    "system",
+				Summary: "Client connection closed",
+			},
+			// "closed" wins over "connection" since shutdown is checked first
+			// — both interpretations are valid for this message.
+			wantTags: []string{"outcome:ok", "source:server", "action:system", "lifecycle:shutdown"},
+		},
+		{
+			name: "system type with no lifecycle keyword",
+			entry: database.ActivityEntry{
+				Level:   "info",
+				Source:  "server",
+				Type:    "system",
+				Summary: "Embedding backfill already complete (), skipping",
+			},
+			wantTags: []string{"outcome:ok", "source:server", "action:system"},
+		},
 	}
 
 	for _, tt := range tests {

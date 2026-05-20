@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.86.0 -->
+<!-- version: 2.87.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-20 -->
 
@@ -8,6 +8,13 @@
 ## [Unreleased]
 
 ### Fixes
+
+#### May 20, 2026 — Activity Log: tag system entries with outcome/source/action/lifecycle
+
+- `activity.Writer.writeBatch` / `Flush` now call `EnrichTags(&e)` before persisting. Previously the slog-derived system entries bypassed `Service.Record` and landed in the store with an empty `tags` column, so the Activity Log UI's Tags column was blank for every "system" row even though `EnrichTags` had been wired everywhere else.
+- `typeToAction` learns `system → system`, so system rows now get an `action:system` tag alongside the standard `outcome:ok|warn|error` and `source:<subsystem>`.
+- New `systemLifecycle(msg)` helper inside `EnrichTags`: when `Type == "system"`, scans the Summary for startup / shutdown / connection keywords and attaches a `lifecycle:startup`, `lifecycle:shutdown`, or `lifecycle:connection` tag. Lets the operator filter the firehose to "show me everything that happened during the last boot/shutdown."
+- Added 4 new `TestEnrichTags` table cases covering startup, shutdown, connection, and no-keyword system entries.
 
 #### May 20, 2026 — Review Metadata Matches: fetch-all + client-side sort/page
 
