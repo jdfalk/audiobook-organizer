@@ -6,7 +6,7 @@ package sweep
 
 import (
 	"io/fs"
-"log/slog"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,7 +32,7 @@ func CleanupOrphanedTempFiles(root string, w *activity.Writer, opID string) int 
 		name := filepath.Base(path)
 		if isOrphanedTempFile(name) {
 			if rmErr := os.Remove(path); rmErr != nil {
-    slog.Warn("temp file cleanup: could not remove %s: %v", "path", path, "rmErr", rmErr)
+				slog.Warn("temp file cleanup: could not remove :", "value0", "path", "path", path, "rmErr", rmErr)
 			} else {
 				removed++
 				activity.LogBatch(w, opID, "temp-file-cleanup", "temp-file-cleanup",

@@ -11,7 +11,8 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"log/slog")
+	"log/slog"
+)
 
 func init() { maintenance.Register(&scanDuplicateFilesJob{}) }
 
@@ -54,6 +55,6 @@ func (j *scanDuplicateFilesJob) Run(ctx context.Context, store database.Store, r
 			slog.Warn("duplicate files detected", "details", detail)
 		}
 	}
-	slog.Info(fmt.Sprintf("scan-duplicate-files complete: %d duplicate groups", dups))
+	slog.Info("scan-duplicate-files complete:  duplicate groups", "dups", dups)
 	return nil
 }

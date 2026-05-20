@@ -64,7 +64,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 		}
 		if !dryRun {
 			if delErr := ddSoftDeleteBook(store, book.ID); delErr != nil {
-				slog.Error(fmt.Sprintf("phase1 delete %s: %v", book.ID, delErr))
+				slog.Error("phase1 delete :", "book", book.ID, "delErr", delErr)
 				continue
 			}
 		}
@@ -104,7 +104,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 			}
 			dup := &live[i]
 			if mergeErr := ddMergeDuplicateBook(store, keeper, dup, dryRun, j.enqueuer); mergeErr != nil {
-				slog.Error(fmt.Sprintf("phase2 merge %s->%s fp=%s: %v", dup.ID, keeper.ID, fp, mergeErr))
+				slog.Error("phase2 merge -> fp=:", "dup", dup.ID, "keeper", keeper.ID, "fp", fp, "mergeErr", mergeErr)
 				continue
 			}
 			deletedIDs[dup.ID] = true
@@ -171,7 +171,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 			}
 			dup := &live[i]
 			if mergeErr := ddMergeDuplicateBook(store, keeper, dup, dryRun, j.enqueuer); mergeErr != nil {
-				slog.Error(fmt.Sprintf("phase3 merge %s->%s: %v", dup.ID, keeper.ID, mergeErr))
+				slog.Error("phase3 merge ->:", "dup", dup.ID, "keeper", keeper.ID, "mergeErr", mergeErr)
 				continue
 			}
 			deletedIDs[dup.ID] = true
@@ -216,7 +216,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 				current.VersionGroupID = nil
 				current.IsPrimaryVersion = nil
 				if _, upErr := store.UpdateBook(dupID, current); upErr != nil {
-					slog.Error(fmt.Sprintf("phase4 unlink vg %s from book %s: %v", vgID, dupID, upErr))
+					slog.Error("phase4 unlink vg  from book :", "vgID", vgID, "dupID", dupID, "upErr", upErr)
 					continue
 				}
 				phase4++
@@ -230,9 +230,7 @@ func (j *dedupBooksJob) Run(ctx context.Context, store database.Store, reporter 
 		reporter.Increment()
 	}
 
-	slog.Info(fmt.Sprintf(
-		"Done: phase1_junk=%d phase2_path=%d phase3_title=%d phase4_vg=%d dryRun=%v",
-		phase1, phase2, phase3, phase4, dryRun))
+	slog.Info("Done: phase1_junk= phase2_path= phase3_title= phase4_vg= dryRun=", "phase1", phase1, "phase2", phase2, "phase3", phase3, "phase4", phase4, "dryRun", dryRun)
 	return nil
 }
 
@@ -347,20 +345,20 @@ func ddMergeDuplicateBook(store database.Store, keeper *database.Book, dup *data
 			f := &files[i]
 			f.BookID = keeper.ID
 			if upErr := store.UpsertBookFile(f); upErr != nil {
-				slog.Warn("dedup-books: UpsertBookFile %s -> keeper %s: %v", f.ID, keeper.ID, upErr)
+				slog.Warn("dedup-books: UpsertBookFile  -> keeper :", "f", f.ID, "keeper", keeper.ID, "upErr", upErr)
 			}
 		}
 	}
 
 	if reassignErr := store.ReassignExternalIDs(dup.ID, keeper.ID); reassignErr != nil {
-		slog.Warn("dedup-books: ReassignExternalIDs %s -> %s: %v", dup.ID, keeper.ID, reassignErr)
+		slog.Warn("dedup-books: ReassignExternalIDs  -> :", "dup", dup.ID, "keeper", keeper.ID, "reassignErr", reassignErr)
 	}
 
 	if enqueuer != nil && len(dupPIDs) > 0 {
 		for _, pid := range dupPIDs {
 			enqueuer.EnqueueRemove(pid)
 		}
-		slog.Info("dedup-books: queued %d ITL removals for dup %s", len(dupPIDs), dup.ID)
+		slog.Info("dedup-books: queued  ITL removals for dup", "dupPIDs_count", len(dupPIDs), "dup", dup.ID)
 	}
 
 	tags, tagsErr := store.GetBookUserTags(dup.ID)
@@ -472,7 +470,7 @@ func ddSoftDeleteBook(store database.Store, bookID string) error {
 	current.MarkedForDeletion = &t
 	current.MarkedForDeletionAt = &now
 	if _, upErr := store.UpdateBook(bookID, current); upErr != nil {
-		slog.Warn("dedup-books: soft-delete failed for %s (%v), falling back to hard delete", bookID, upErr)
+		slog.Warn("dedup-books: soft-delete failed for  (), falling back to hard delete", "bookID", bookID, "upErr", upErr)
 		return store.DeleteBook(bookID)
 	}
 	return nil

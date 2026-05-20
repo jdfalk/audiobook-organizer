@@ -46,7 +46,7 @@ func (s *Server) stripMovementAtoms() {
 	// Build safe-write deps from server state so protected paths are guarded.
 	deps := s.safeWriteDeps()
 
-	slog.Info("Starting movement atom cleanup under %s …", root)
+	slog.Info("Starting movement atom cleanup under  …", "root", root)
 	stripped, clean, failed := 0, 0, 0
 
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
@@ -61,7 +61,7 @@ func (s *Server) stripMovementAtoms() {
 		changed, err := removeMovementAtomsFromFile(path, deps)
 		switch {
 		case err != nil:
-			slog.Warn("movement atom cleanup: %s: %v", path, err)
+			slog.Warn("movement atom cleanup: :", "path", path, "err", err)
 			failed++
 		case changed:
 			stripped++
@@ -71,7 +71,7 @@ func (s *Server) stripMovementAtoms() {
 		return nil
 	})
 
-	slog.Info("Movement atom cleanup: %d stripped, %d already clean, %d errors", stripped, clean, failed)
+	slog.Info("Movement atom cleanup:  stripped,  already clean,  errors", "stripped", stripped, "clean", clean, "failed", failed)
 	_ = store.SetSetting(movementAtomCleanupKey, "true", "bool", false)
 }
 

@@ -6,10 +6,10 @@
 package database
 
 import (
-	"log/slog"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -102,7 +102,7 @@ func NewAIScanStore(path string) (*AIScanStore, error) {
 		return nil, err
 	}
 
-	slog.Info("AI Scan DB opened at %s", path)
+	slog.Info("AI Scan DB opened at", "path", path)
 	return store, nil
 }
 

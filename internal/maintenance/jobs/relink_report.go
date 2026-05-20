@@ -18,7 +18,8 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"log/slog")
+	"log/slog"
+)
 
 func init() { maintenance.Register(&relinkReportJob{}) }
 
@@ -90,7 +91,7 @@ func (j *relinkReportJob) Run(ctx context.Context, store database.Store, reporte
 			}
 		}
 		if authorName == "" {
-			slog.Warn(fmt.Sprintf("No author for missing book %s (%q)", book.ID, book.Title))
+			slog.Warn("No author for missing book  (%q)", "book", book.ID, book.Title)
 			unresolved++
 			reporter.Increment()
 			continue
@@ -103,11 +104,11 @@ func (j *relinkReportJob) Run(ctx context.Context, store database.Store, reporte
 			unresolved++
 		case 1:
 			resolved++
-			slog.Info(fmt.Sprintf("Relinkable: book=%s title=%q -> %s", book.ID, book.Title, matches[0]))
+			slog.Info("Relinkable: book= title=%q ->", "book", book.ID, "book", book.Title, matches[0])
 		default:
 			if best := rrDisambiguate(matches, authorName, book.Title); best != "" {
 				resolved++
-				slog.Info(fmt.Sprintf("Relinkable: book=%s title=%q -> %s", book.ID, book.Title, best))
+				slog.Info("Relinkable: book= title=%q ->", "book", book.ID, "book", book.Title, best)
 			} else {
 				unresolved++
 			}
@@ -115,7 +116,7 @@ func (j *relinkReportJob) Run(ctx context.Context, store database.Store, reporte
 		reporter.Increment()
 	}
 
-	slog.Info(fmt.Sprintf("Done: resolved=%d unresolved=%d skipped=%d", resolved, unresolved, skipped))
+	slog.Info("Done: resolved= unresolved= skipped=", "resolved", resolved, "unresolved", unresolved, "skipped", skipped)
 	return nil
 }
 

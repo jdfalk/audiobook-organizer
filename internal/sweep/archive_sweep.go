@@ -12,7 +12,7 @@
 package sweep
 
 import (
-"log/slog"
+	"log/slog"
 	"os"
 	"time"
 
@@ -29,7 +29,7 @@ func SweepArchivedBooks(store interface {
 }) int {
 	books, err := store.GetAllBooks(0, 0)
 	if err != nil {
-  slog.Warn("archive sweep: list books: %v", "err", err)
+		slog.Warn("archive sweep: list books:", "value0", "err", err)
 		return 0
 	}
 
@@ -49,14 +49,14 @@ func SweepArchivedBooks(store interface {
 		for _, f := range files {
 			if f.FilePath != "" {
 				if err := os.Remove(f.FilePath); err != nil && !os.IsNotExist(err) {
-     slog.Warn("archive sweep: remove %s: %v", "value0", f.FilePath, "err", err)
+					slog.Warn("archive sweep: remove :", "value0", "value0", "f", f.FilePath, "err", err)
 				}
 			}
 		}
 
 		// Hard-delete the book record.
 		if err := store.DeleteBook(book.ID); err != nil {
-   slog.Warn("archive sweep: delete %s: %v", "value0", book.ID, "err", err)
+			slog.Warn("archive sweep: delete :", "value0", "value0", "book", book.ID, "err", err)
 			continue
 		}
 		cleaned++

@@ -102,8 +102,7 @@ func (j *repairMissingFilesJob) Run(ctx context.Context, store database.Store, r
 
 	totalFiles := len(existingResults) + len(work)
 	alreadyDone := len(existingResults)
-	slog.Info("repair-missing-files %s: %d candidates, %d already done, %d to process",
-		opID, totalFiles, alreadyDone, len(work))
+	slog.Info("repair-missing-files :  candidates,  already done,  to process", "opID", opID, "totalFiles", totalFiles, "alreadyDone", alreadyDone, "work_count", len(work))
 
 	reporter.SetTotal(totalFiles)
 	for i := 0; i < alreadyDone; i++ {
@@ -119,14 +118,14 @@ func (j *repairMissingFilesJob) Run(ctx context.Context, store database.Store, r
 	pidToLocation := make(map[string]string)
 	if xmlPath := config.AppConfig.ITunesLibraryReadPath; xmlPath != "" {
 		if lib, parseErr := itunes.ParseLibrary(xmlPath); parseErr != nil {
-			slog.Warn("repair-missing-files %s: iTunes XML parse error: %v", opID, parseErr)
+			slog.Warn("repair-missing-files : iTunes XML parse error:", "opID", opID, "parseErr", parseErr)
 		} else {
 			for _, track := range lib.Tracks {
 				if track.PersistentID != "" && track.Location != "" {
 					pidToLocation[track.PersistentID] = track.Location
 				}
 			}
-			slog.Info("repair-missing-files %s: loaded %d PID→location entries", opID, len(pidToLocation))
+			slog.Info("repair-missing-files : loaded  PID→location entries", "opID", opID, "pidToLocation_count", len(pidToLocation))
 		}
 	}
 
@@ -159,7 +158,7 @@ func (j *repairMissingFilesJob) Run(ctx context.Context, store database.Store, r
 			idxMu.Lock()
 			filenameIdx = idx
 			idxMu.Unlock()
-			slog.Info("repair-missing-files %s: filename index built (%d unique names)", opID, len(idx))
+			slog.Info("repair-missing-files : filename index built ( unique names)", "opID", opID, "idx_count", len(idx))
 		})
 	}
 	getIdx := func() map[string][]string {
@@ -211,7 +210,7 @@ func (j *repairMissingFilesJob) Run(ctx context.Context, store database.Store, r
 	finalCount := atomic.LoadInt64(&completed)
 	msg := fmt.Sprintf("Repaired %d of %d missing files", finalCount, totalFiles)
 	slog.Info(msg)
-	slog.Info("repair-missing-files %s: finished %d/%d files", opID, finalCount, totalFiles)
+	slog.Info("repair-missing-files : finished / files", "opID", opID, "finalCount", finalCount, "totalFiles", totalFiles)
 	return nil
 }
 
@@ -517,7 +516,7 @@ func rmfr_repairOne(
 		}
 	}
 	if !withinARoot {
-		slog.Warn("repair-missing-files %s: candidate %q outside all search roots, skipping", opID, candidate)
+		slog.Warn("repair-missing-files : candidate %q outside all search roots, skipping", "opID", opID, candidate)
 		res.Method = "unresolved"
 		return res
 	}
@@ -542,7 +541,7 @@ func rmfr_repairOne(
 	}
 	if upErr := store.UpdateBookFile(f.ID, &f); upErr != nil {
 		res.Error = upErr.Error()
-		slog.Warn("repair-missing-files %s: UpdateBookFile %s: %v", opID, f.ID, upErr)
+		slog.Warn("repair-missing-files : UpdateBookFile :", "opID", opID, "f", f.ID, "upErr", upErr)
 	} else {
 		res.Applied = true
 	}

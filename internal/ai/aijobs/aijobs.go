@@ -9,7 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-"log/slog"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -146,7 +146,7 @@ func Submit(ctx context.Context, deps Deps, req SubmitRequest) (string, error) {
 	if err := deps.Store.MarkAIJobSubmitted(jobID, batchID); err != nil {
 		return jobID, fmt.Errorf("aijobs.Submit: mark submitted: %w", err)
 	}
- slog.Info("aijobs: submitted job %s type=%s batch=%s items=%d", "jobID", jobID, "value1", req.Type, "batchID", batchID, "value3", req.ItemCount)
+	slog.Info("aijobs: submitted job  type= batch= items=", "value0", "jobID", "jobID", jobID, "value2", "value1", "req", req.Type, "batchID", batchID, "value3", req.ItemCount)
 	return jobID, nil
 }
 
@@ -199,6 +199,6 @@ func Dispatch(ctx context.Context, store database.AIJobsStore, batchID string, r
 	if err := store.MarkAIJobCompleted(job.ID, status, successCount, errorCount, rowErrors); err != nil {
 		return fmt.Errorf("aijobs.Dispatch: mark completed: %w", err)
 	}
- slog.Info("aijobs: dispatched job %s type=%s success=%d errors=%d", "value0", job.ID, "value1", job.Type, "successCount", successCount, "errorCount", errorCount)
+	slog.Info("aijobs: dispatched job  type= success= errors=", "value0", "value0", "job", job.ID, "value2", "value1", "job", job.Type, "successCount", successCount, "errorCount", errorCount)
 	return nil
 }

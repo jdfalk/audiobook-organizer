@@ -16,9 +16,9 @@
 package versions
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
@@ -119,7 +119,7 @@ func RunVersionSwap(
 		if i < len(newFromPaths) {
 			bf.FilePath = newFromPaths[i]
 			if err := store.UpdateBookFile(bf.ID, &bf); err != nil {
-				slog.Warn("update from-file path %s: %v", bf.ID, err)
+				slog.Warn("update from-file path :", "bf", bf.ID, "err", err)
 			}
 		}
 	}
@@ -128,7 +128,7 @@ func RunVersionSwap(
 		if i < len(newToPaths) {
 			bf.FilePath = newToPaths[i]
 			if err := store.UpdateBookFile(bf.ID, &bf); err != nil {
-				slog.Warn("update to-file path %s: %v", bf.ID, err)
+				slog.Warn("update to-file path :", "bf", bf.ID, "err", err)
 			}
 		}
 	}

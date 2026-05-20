@@ -107,15 +107,15 @@ func (s *Server) getOperationStatus(c *gin.Context) {
 // that the frontend's pollOperation helper expects (id, status, progress, etc.).
 func operationV2ToLegacy(v2 *database.OperationV2Row) database.Operation {
 	op := database.Operation{
-		ID:          v2.ID,
-		Type:        v2.DefID,
-		Status:      v2.Status,
-		Progress:    v2.ProgressCurrent,
-		Total:       v2.ProgressTotal,
-		Message:     v2.ProgressMessage,
-		CreatedAt:   v2.QueuedAt,
-		StartedAt:   v2.StartedAt,
-		CompletedAt: v2.CompletedAt,
+		ID:           v2.ID,
+		Type:         v2.DefID,
+		Status:       v2.Status,
+		Progress:     v2.ProgressCurrent,
+		Total:        v2.ProgressTotal,
+		Message:      v2.ProgressMessage,
+		CreatedAt:    v2.QueuedAt,
+		StartedAt:    v2.StartedAt,
+		CompletedAt:  v2.CompletedAt,
 		ErrorMessage: v2.ErrorMessage,
 	}
 	return op
@@ -135,7 +135,7 @@ func (s *Server) cancelOperation(c *gin.Context) {
 		for _, scan := range scans {
 			if scan.OperationID == id {
 				if err := s.pipelineManager.CancelScan(scan.ID); err != nil {
-					slog.Info("canceloperation: AI scan %d cancel warning: %v", scan.ID, err)
+					slog.Info("canceloperation: AI scan  cancel warning:", "scan", scan.ID, "err", err)
 				}
 				httputil.RespondWithNoContent(c)
 				return
@@ -327,7 +327,7 @@ func (s *Server) setInternalFlag(c *gin.Context) {
 		httputil.InternalError(c, "failed to set flag", err)
 		return
 	}
-	slog.Info("setInternalFlag: %s = %q", req.Key, req.Value)
+	slog.Info("setInternalFlag:  = %q", "req", req.Key, req.Value)
 	httputil.RespondWithOK(c, gin.H{"key": req.Key, "value": req.Value})
 }
 
@@ -650,7 +650,7 @@ func (s *Server) updateTaskConfig(c *gin.Context) {
 	// Persist to database
 	if s.Store() != nil {
 		if err := config.SaveConfigToDatabase(s.Store()); err != nil {
-			slog.Warn("Failed to save task config: %v", err)
+			slog.Warn("Failed to save task config:", "err", err)
 		}
 	}
 

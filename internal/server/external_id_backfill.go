@@ -60,7 +60,7 @@ func (s *Server) backfillExternalIDs() {
 	// on shutdown so it can't outlive the store and crash on
 	// "pebble: closed" in CreateExternalIDMapping.
 	if err := itunes.BackfillExternalIDs(s.bgCtx, &externalIDStoreAdapter{eidStore: eidStore, store: store}); err != nil {
-		slog.Warn("backfillExternalIDs: %v", err)
+		slog.Warn("backfillExternalIDs:", "err", err)
 	}
 }
 

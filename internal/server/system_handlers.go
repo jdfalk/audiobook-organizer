@@ -287,7 +287,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 
 	// Reset database (books, authors, series, settings)
 	if err := s.Store().Reset(); err != nil {
-		slog.Error("Factory reset: database reset failed: %v", err)
+		slog.Error("Factory reset: database reset failed:", "err", err)
 		httputil.InternalError(c, "failed to reset database", err)
 		return
 	}
@@ -305,7 +305,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 		targetDir := metafetch.GetOLDumpDir()
 		if targetDir != "" {
 			if err := os.RemoveAll(targetDir); err != nil {
-				slog.Warn("Factory reset: failed to remove OL data dir: %v", err)
+				slog.Warn("Factory reset: failed to remove OL data dir:", "err", err)
 			} else {
 				slog.Info("Factory reset: OL data deleted")
 			}
@@ -320,10 +320,10 @@ func (s *Server) factoryReset(c *gin.Context) {
 			for _, entry := range entries {
 				entryPath := filepath.Join(libraryDir, entry.Name())
 				if err := os.RemoveAll(entryPath); err != nil {
-					slog.Warn("Factory reset: failed to remove %s: %v", entryPath, err)
+					slog.Warn("Factory reset: failed to remove :", "entryPath", entryPath, "err", err)
 				}
 			}
-			slog.Info("Factory reset: library folder cleared (%s)", libraryDir)
+			slog.Info("Factory reset: library folder cleared ()", "libraryDir", libraryDir)
 		}
 	}
 
@@ -332,7 +332,7 @@ func (s *Server) factoryReset(c *gin.Context) {
 	config.AppConfig.RootDir = ""
 	config.AppConfig.SetupComplete = false
 	if err := config.SaveConfigToDatabase(s.Store()); err != nil {
-		slog.Warn("Factory reset: failed to persist config: %v", err)
+		slog.Warn("Factory reset: failed to persist config:", "err", err)
 	}
 
 	// Reset caches

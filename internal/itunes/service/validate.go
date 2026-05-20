@@ -25,7 +25,7 @@ func Validate(req ValidateRequest) (ValidateResponse, error) {
 		return ValidateResponse{}, ErrLibraryNotFound
 	}
 
-	slog.Info("iTunes validate: library=%s, mappings=%d", req.LibraryPath, len(req.PathMappings))
+	slog.Info("iTunes validate: library=, mappings=", "req", req.LibraryPath, "count", len(req.PathMappings))
 
 	mappings := make([]itunes.PathMapping, len(req.PathMappings))
 	for i, m := range req.PathMappings {
@@ -55,8 +55,7 @@ func Validate(req ValidateRequest) (ValidateResponse, error) {
 		missingPaths = missingPaths[:100]
 	}
 
-	slog.Info("iTunes validate complete: %d audiobooks, %d found, %d missing, prefixes=%v",
-		result.AudiobookTracks, result.FilesFound, result.FilesMissing, result.PathPrefixes)
+	slog.Info("iTunes validate complete:  audiobooks,  found,  missing, prefixes=", "result", result.AudiobookTracks, "result", result.FilesFound, "result", result.FilesMissing, "result", result.PathPrefixes)
 
 	return ValidateResponse{
 		TotalTracks:     result.TotalTracks,
@@ -99,12 +98,12 @@ func TestMapping(req TestMappingRequest) (TestMappingResponse, error) {
 		location := opts.RemapPath(track.Location)
 		path, err := itunes.DecodeLocation(location)
 		if err != nil {
-			slog.Info("  [%d/20] decode error for %q: %v", response.Tested, track.Name, err)
+			slog.Info("[/20] decode error for %q:", "response", response.Tested, "track", track.Name, err)
 			continue
 		}
 		if _, err := os.Stat(path); err == nil {
 			response.Found++
-			slog.Info("  [%d/20] FOUND: %q → %s", response.Tested, track.Name, path)
+			slog.Info("[/20] FOUND: %q →", "response", response.Tested, "track", track.Name, path)
 			if len(response.Examples) < 3 {
 				response.Examples = append(response.Examples, TestMappingItem{
 					Title: track.Name,
@@ -112,10 +111,10 @@ func TestMapping(req TestMappingRequest) (TestMappingResponse, error) {
 				})
 			}
 		} else {
-			slog.Info("  [%d/20] MISSING: %q → %s", response.Tested, track.Name, path)
+			slog.Info("[/20] MISSING: %q →", "response", response.Tested, "track", track.Name, path)
 		}
 	}
 
-	slog.Info("iTunes test-mapping: tested=%d found=%d examples=%d", response.Tested, response.Found, len(response.Examples))
+	slog.Info("iTunes test-mapping: tested= found= examples=", "response", response.Tested, "response", response.Found, "count", len(response.Examples))
 	return response, nil
 }

@@ -9,9 +9,9 @@
 package database
 
 import (
-	"log/slog"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -76,6 +76,6 @@ func (p *PebbleStore) BackfillVersionGroupIndex() error {
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return err
 	}
-	slog.Info("versiongroup-backfill: scanned=%d indexed=%d", scanned, indexed)
+	slog.Info("versiongroup-backfill: scanned= indexed=", "scanned", scanned, "indexed", indexed)
 	return nil
 }

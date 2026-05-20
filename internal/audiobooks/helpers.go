@@ -10,9 +10,9 @@
 package audiobooks
 
 import (
-	"log/slog"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -137,7 +137,7 @@ func (svc *AudiobookService) loadMetadataState(bookID string) (map[string]metada
 		return state, nil
 	}
 	if err := svc.saveMetadataState(bookID, legacy); err != nil {
-		slog.Warn("failed to migrate legacy metadata state for %s: %v", bookID, err)
+		slog.Warn("failed to migrate legacy metadata state for :", "bookID", bookID, "err", err)
 	}
 	return legacy, nil
 }
@@ -222,7 +222,7 @@ func (mss *metadataStateSvc) recordChange(bookID, field, changeType, source stri
 		ChangedAt:     time.Now(),
 	}
 	if err := mss.db.RecordMetadataChange(record); err != nil {
-		slog.Warn("failed to record metadata change for %s/%s: %v", bookID, field, err)
+		slog.Warn("failed to record metadata change for /:", "bookID", bookID, "field", field, "err", err)
 	}
 }
 

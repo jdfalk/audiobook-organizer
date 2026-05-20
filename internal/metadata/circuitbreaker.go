@@ -85,13 +85,13 @@ func (cb *CircuitBreaker) RecordFailure() {
 
 	if cb.state == StateHalfOpen {
 		cb.state = StateOpen
-		slog.Warn("circuit breaker: %s probe failed, reopened", cb.sourceName)
+		slog.Warn("circuit breaker:  probe failed, reopened", "cb", cb.sourceName)
 		return
 	}
 
 	if cb.failures >= cb.threshold {
 		cb.state = StateOpen
-		slog.Warn("circuit breaker: %s opened after %d consecutive failures", cb.sourceName, cb.failures)
+		slog.Warn("circuit breaker:  opened after  consecutive failures", "cb", cb.sourceName, "cb", cb.failures)
 	}
 }
 

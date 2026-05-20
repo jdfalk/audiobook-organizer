@@ -73,10 +73,10 @@ func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) er
 			defer cancel()
 			books, authors, err := de.HydrateChromem(hCtx)
 			if err != nil {
-				slog.Warn("chromem hydrate finished with error: %v (books=%d authors=%d)", err, books, authors)
+				slog.Warn("chromem hydrate finished with error:  (books= authors=)", "err", err, "books", books, "authors", authors)
 				return
 			}
-			slog.Info("chromem hydrate complete: books=%d authors=%d", books, authors)
+			slog.Info("chromem hydrate complete: books= authors=", "books", books, "authors", authors)
 		}()
 	}
 
@@ -106,7 +106,7 @@ func (de *Engine) onBookImported(_ context.Context, evt plugin.Event) error {
 		bgCtx = context.Background()
 	}
 	if _, err := de.CheckBook(bgCtx, evt.BookID); err != nil {
-		slog.Warn("dedup-on-import CheckBook(%s): %v", evt.BookID, err)
+		slog.Warn("dedup-on-import CheckBook():", "evt", evt.BookID, "err", err)
 	}
 	return nil
 }

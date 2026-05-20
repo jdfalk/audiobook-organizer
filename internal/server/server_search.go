@@ -47,7 +47,7 @@ func (s *Server) buildSearchIndexIfEmpty() {
 	}
 	count, err := s.searchIndex.DocCount()
 	if err != nil {
-		slog.Warn("search index DocCount: %v", err)
+		slog.Warn("search index DocCount:", "err", err)
 		return
 	}
 	if count > 0 {
@@ -65,13 +65,13 @@ func (s *Server) buildSearchIndexIfEmpty() {
 	for {
 		select {
 		case <-s.bgCtx.Done():
-			slog.Info("Search backfill canceled at %d books (bgCtx)", indexed)
+			slog.Info("Search backfill canceled at  books (bgCtx)", "indexed", indexed)
 			return
 		default:
 		}
 		books, err := store.GetAllBooks(pageSize, offset)
 		if err != nil {
-			slog.Warn("search backfill GetAllBooks: %v", err)
+			slog.Warn("search backfill GetAllBooks:", "err", err)
 			return
 		}
 		if len(books) == 0 {
@@ -80,13 +80,13 @@ func (s *Server) buildSearchIndexIfEmpty() {
 		for i := range books {
 			select {
 			case <-s.bgCtx.Done():
-				slog.Info("Search backfill canceled at %d books", indexed)
+				slog.Info("Search backfill canceled at  books", "indexed", indexed)
 				return
 			default:
 			}
 			doc := search.BookToDoc(store, &books[i])
 			if err := s.searchIndex.IndexBook(doc); err != nil {
-				slog.Warn("search backfill index %s: %v", books[i].ID, err)
+				slog.Warn("search backfill index :", "value0", books[i].ID, "err", err)
 				continue
 			}
 			indexed++
@@ -96,7 +96,7 @@ func (s *Server) buildSearchIndexIfEmpty() {
 			break
 		}
 	}
-	slog.Info("Search backfill complete: %d books in %s", indexed, time.Since(start))
+	slog.Info("Search backfill complete:  books in", "indexed", indexed, "time", time.Since(start))
 }
 
 // IndexBookByID reads a book (plus its related rows) and upserts
@@ -153,7 +153,7 @@ func (h *serverOrganizeHooks) OnCollision(currentBookID, occupantPath string) {
 		defer h.server.bgWG.Done()
 		occupant, err := h.server.store.GetBookByFilePath(occupantPath)
 		if err != nil {
-			slog.Warn("organize-collision hook: lookup %s failed: %v", occupantPath, err)
+			slog.Warn("organize-collision hook: lookup  failed:", "occupantPath", occupantPath, "err", err)
 			return
 		}
 		if occupant == nil || occupant.ID == currentBookID {
@@ -168,10 +168,10 @@ func (h *serverOrganizeHooks) OnCollision(currentBookID, occupantPath string) {
 			Similarity: &sim,
 			Status:     "pending",
 		}); err != nil {
-			slog.Warn("organize-collision hook: upsert candidate %s/%s failed: %v", 				currentBookID, occupant.ID, err)
+			slog.Warn("organize-collision hook: upsert candidate / failed:", "currentBookID", currentBookID, "occupant", occupant.ID, "err", err)
 			return
 		}
-		slog.Info("organize-collision: created dedup candidate between %s and %s (occupant of %s)", 			currentBookID, occupant.ID, occupantPath)
+		slog.Info("organize-collision: created dedup candidate between  and  (occupant of )", "currentBookID", currentBookID, "occupant", occupant.ID, "occupantPath", occupantPath)
 	}()
 }
 
@@ -199,7 +199,7 @@ func (s *Server) fireDedupOnImport(bookID string) {
 	go func() {
 		defer s.bgWG.Done()
 		if _, err := s.dedupEngine.CheckBook(s.bgCtx, bookID); err != nil {
-			slog.Warn("dedup-on-import CheckBook(%s): %v", bookID, err)
+			slog.Warn("dedup-on-import CheckBook():", "bookID", bookID, "err", err)
 		}
 	}()
 }

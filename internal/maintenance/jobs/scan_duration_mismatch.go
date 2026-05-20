@@ -11,7 +11,8 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"log/slog")
+	"log/slog"
+)
 
 func init() { maintenance.Register(&scanDurationMismatchJob{}) }
 
@@ -56,6 +57,6 @@ func (j *scanDurationMismatchJob) Run(ctx context.Context, store database.Store,
 			slog.Warn("duration mismatch: "+b.Title, "details", detail)
 		}
 	}
-	slog.Info(fmt.Sprintf("scan-duration-mismatch complete: %d mismatches", mismatches))
+	slog.Info("scan-duration-mismatch complete:  mismatches", "mismatches", mismatches)
 	return nil
 }

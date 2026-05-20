@@ -5,7 +5,6 @@
 package database
 
 import (
-	"log/slog"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -13,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -327,7 +327,7 @@ func (s *SQLiteStore) GetAllSettings() ([]Setting, error) {
 		var isSecret any
 
 		if err := rows.Scan(&setting.Key, &setting.Value, &setting.Type, &isSecret); err != nil {
-			slog.Warn("Failed to scan setting row: %v", err)
+			slog.Warn("Failed to scan setting row:", "err", err)
 			continue
 		}
 

@@ -345,7 +345,7 @@ func (s *Server) splitSegmentsToBooks(c *gin.Context) {
 
 		created, createErr := s.Store().CreateBook(newBook)
 		if createErr != nil {
-			slog.Warn("splitSegmentsToBooks: failed to create book for file %s: %v", fileID, createErr)
+			slog.Warn("splitSegmentsToBooks: failed to create book for file :", "fileID", fileID, "createErr", createErr)
 			continue
 		}
 

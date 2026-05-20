@@ -142,11 +142,11 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 		if task.RunOnStart != nil && task.RunOnStart() && task.IsEnabled() {
 			taskName := name
 			go func() {
-				slog.Info("Running startup task: %s", taskName)
+				slog.Info("Running startup task:", "taskName", taskName)
 				if op, err := ts.RunTask(taskName); err != nil {
-					slog.Warn("Startup task %s failed: %v", taskName, err)
+					slog.Warn("Startup task  failed:", "taskName", taskName, "err", err)
 				} else if op != nil {
-					slog.Info("Startup task %s started: operation %s", taskName, op.ID)
+					slog.Info("Startup task  started: operation", "taskName", taskName, "op", op.ID)
 				}
 			}()
 		}
@@ -164,16 +164,16 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 					select {
 					case <-ticker.C:
 						if op, err := ts.RunTask(taskName); err != nil {
-							slog.Warn("Scheduled task %s failed: %v", taskName, err)
+							slog.Warn("Scheduled task  failed:", "taskName", taskName, "err", err)
 						} else if op != nil {
-							slog.Info("Scheduled task %s started: operation %s", taskName, op.ID)
+							slog.Info("Scheduled task  started: operation", "taskName", taskName, "op", op.ID)
 						}
 					case <-shutdown:
 						return
 					}
 				}
 			}()
-			slog.Info("Scheduled task %s: interval=%v", taskName, interval)
+			slog.Info("Scheduled task : interval=", "taskName", taskName, "interval", interval)
 		}
 	}
 
@@ -184,8 +184,7 @@ func (ts *TaskScheduler) Start(shutdown chan struct{}, wg *sync.WaitGroup) {
 			defer wg.Done()
 			ticker := time.NewTicker(60 * time.Second)
 			defer ticker.Stop()
-			slog.Info("Maintenance window enabled: %d:00 - %d:00",
-				config.AppConfig.MaintenanceWindowStart, config.AppConfig.MaintenanceWindowEnd)
+			slog.Info("Maintenance window enabled: :00 - :00", "value0", config.AppConfig.MaintenanceWindowStart, "value1", config.AppConfig.MaintenanceWindowEnd)
 			for {
 				select {
 				case <-ticker.C:

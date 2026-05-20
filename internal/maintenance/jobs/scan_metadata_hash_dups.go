@@ -11,7 +11,8 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/maintenance"
-	"log/slog")
+	"log/slog"
+)
 
 func init() { maintenance.Register(&scanMetadataHashDupsJob{}) }
 
@@ -54,6 +55,6 @@ func (j *scanMetadataHashDupsJob) Run(ctx context.Context, store database.Store,
 			slog.Warn("metadata hash duplicate group", "details", detail)
 		}
 	}
-	slog.Info(fmt.Sprintf("scan-metadata-hash-dups complete: %d duplicate groups", dups))
+	slog.Info("scan-metadata-hash-dups complete:  duplicate groups", "dups", dups)
 	return nil
 }

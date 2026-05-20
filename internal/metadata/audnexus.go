@@ -179,7 +179,7 @@ func (c *AudnexusClient) LookupByASIN(asin string) (*BookMetadata, error) {
 				continue
 			}
 			resp.Body.Close()
-			slog.Debug("Audnexus found ASIN %s in region %q", asin, region)
+			slog.Debug("Audnexus found ASIN  in region %q", "asin", asin, region)
 			return c.bookToMetadata(&book), nil
 		}
 		resp.Body.Close()
