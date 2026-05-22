@@ -628,7 +628,7 @@ next picks up. Full plan in
 - [x] **MATCH-1** Deduplicate books by metadata URL/response hash — `metadata_source_hash` column added to `books` (migration 055); `sha256("{source}:{canonical_id}")` populated on metadata apply; duplicate count surfaced in BookDetail — PR #573
 - [x] **MATCH-2** Consolidate multi-file chapter books by duration — files with sequential naming (`01 - Book`, `02 - Book`, etc.) that are individually very short (< 10 min each) should be pre-consolidated into a single book entry using cumulative duration rather than treated as separate books
 - [x] **MATCH-3** Use duration as metadata scoring signal — boost metadata candidates whose Audible `runtime_length_min` roughly matches local file total duration; combine with existing title/author/series scoring for much higher confidence matches
-- [ ] **MATCH-4** Deduplicate on same-metadata-hash at import time — when a new book is scanned and its computed `metadata_source_hash` matches an existing book, automatically flag/merge instead of creating a new record
+- [x] **MATCH-4** Deduplicate on same-metadata-hash at import time — when a new book is scanned and its computed `metadata_source_hash` matches an existing book, flag as potential duplicate via dedup candidate (PR #1080). Computes hash at import time based on metadata source (audible/openlibrary/google_books/hardcover) + external ID; creates candidate with layer `metadata_hash_match` + similarity 1.0; logs "import: metadata hash duplicate detected"
 
 ---
 
