@@ -51,9 +51,66 @@ type Scanner interface {
 // activeScanner overrides the default implementation. Set by tests via SetScanner.
 var activeScanner Scanner
 
+// activeEmbeddingStore is used for dedup candidate creation during scanning.
+// Set by ScanService before starting a scan.
+var activeEmbeddingStore *database.EmbeddingStore
+
 // SetScanner overrides the default scanner implementation for testing.
 func SetScanner(s Scanner) {
 	activeScanner = s
+}
+
+// setActiveEmbeddingStore sets the embedding store for dedup detection.
+func setActiveEmbeddingStore(es *database.EmbeddingStore) {
+	activeEmbeddingStore = es
+}
+
+// detectMetadataHashDuplicate checks if a newly created/updated book matches an existing
+// book by metadata_source_hash and creates a dedup candidate if found.
+func detectMetadataHashDuplicate(book *database.Book, log logger.Logger) {
+	if activeEmbeddingStore == nil {
+		return
+	}
+	if getStore() == nil {
+		return
+	}
+
+	// Compute hash based on current metadata
+	hash := computeMetadataSourceHash(book)
+	if hash == "" {
+		return
+	}
+
+	// Check if another book has the same hash
+	existing, err := getStore().GetBooksByMetadataSourceHash(hash)
+	if err != nil {
+		if log != nil {
+			log.Warn("Failed to check for metadata hash duplicates for %s: %v", book.ID, err)
+		}
+		return
+	}
+
+	// Find a different book with the same hash
+	for _, candidate := range existing {
+		if candidate.ID != book.ID {
+			if log != nil {
+				log.Info("import: metadata hash duplicate detected book=%s existing=%s", book.ID, candidate.ID)
+			}
+			// Create dedup candidate with high confidence
+			dedupCandidate := database.DedupCandidate{
+				EntityType: "book",
+				EntityAID:  candidate.ID,
+				EntityBID:  book.ID,
+				Layer:      "metadata_hash_match",
+				Similarity: new(float64),
+			}
+			*dedupCandidate.Similarity = 1.0
+			if err := activeEmbeddingStore.UpsertCandidate(dedupCandidate); err != nil && log != nil {
+				log.Warn("Failed to create dedup candidate for %s and %s: %v", dedupCandidate.EntityAID, dedupCandidate.EntityBID, err)
+			}
+			break // Only create one candidate per scanned book
+		}
+	}
 }
 
 // pkgStore is the database the scanner's package-level helpers use.
@@ -1717,9 +1774,13 @@ func saveBookToDatabase(book *Book) error {
 			}
 
 			_, err = getStore().CreateBook(dbBook)
-			if err == nil && scanHooks != nil {
-				scanHooks.OnBookScanned(dbBook.ID, dbBook.Title)
-				scanHooks.OnImportDedup(dbBook.ID)
+			if err == nil {
+				// Check for metadata hash duplicates
+				detectMetadataHashDuplicate(dbBook, defaultLog)
+				if scanHooks != nil {
+					scanHooks.OnBookScanned(dbBook.ID, dbBook.Title)
+					scanHooks.OnImportDedup(dbBook.ID)
+				}
 			}
 			return err
 		}
@@ -1736,6 +1797,10 @@ func saveBookToDatabase(book *Book) error {
 		preserveExistingFields(dbBook, existing)
 
 		_, err = getStore().UpdateBook(existing.ID, dbBook)
+		if err == nil {
+			// Check for metadata hash duplicates after update
+			detectMetadataHashDuplicate(dbBook, defaultLog)
+		}
 		return err
 	}
 
