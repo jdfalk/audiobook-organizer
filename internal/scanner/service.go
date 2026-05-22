@@ -32,6 +32,7 @@ type scanServiceStore interface {
 // ScanService orchestrates multi-folder audiobook scanning.
 type ScanService struct {
 	db             scanServiceStore
+	embedStore     *database.EmbeddingStore
 	PostScanFn     func() // optional hook called after each full scan completes
 	activityWriter *activity.Writer
 	// AutoOrganizeFn is an optional hook called after books are processed in a
@@ -40,9 +41,14 @@ type ScanService struct {
 	AutoOrganizeFn func(ctx context.Context, books []Book, log logger.Logger)
 }
 
-// NewScanService creates a new ScanService backed by the given store.
+// NewScanService creates a new ScanService backed by the given store and embedding store.
 func NewScanService(db scanServiceStore) *ScanService {
 	return &ScanService{db: db}
+}
+
+// SetEmbeddingStore sets the EmbeddingStore for dedup candidate creation.
+func (ss *ScanService) SetEmbeddingStore(es *database.EmbeddingStore) {
+	ss.embedStore = es
 }
 
 // SetActivityWriter sets the activity writer used to batch per-book scan events.
@@ -85,6 +91,9 @@ func (ss *ScanService) PerformScan(ctx context.Context, req *ScanRequest, log lo
 // performScanInternal is the shared implementation used by PerformScan and PerformScanWithID.
 // opID may be empty when called without a tracked operation (activity batching is skipped).
 func (ss *ScanService) performScanInternal(ctx context.Context, opID string, req *ScanRequest, log logger.Logger) error {
+	// Set the active embedding store for dedup detection during this scan
+	setActiveEmbeddingStore(ss.embedStore)
+
 	if log == nil {
 		log = logger.New("scan")
 	}
