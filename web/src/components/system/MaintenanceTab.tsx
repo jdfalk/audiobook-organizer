@@ -374,7 +374,7 @@ function SHADuplicateCard() {
   const [stats, setStats] = useState<api.BookFileHashStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
-  const [backfillResult, setBackfillResult] = useState<api.BackfillHashesResult | null>(null);
+  const [backfillOpID, setBackfillOpID] = useState<string | null>(null);
 
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
@@ -405,11 +405,11 @@ function SHADuplicateCard() {
 
   const handleBackfill = useCallback(async () => {
     setBackfilling(true);
-    setBackfillResult(null);
+    setBackfillOpID(null);
     setError(null);
     try {
       const r = await api.backfillFileHashes(false);
-      setBackfillResult(r);
+      setBackfillOpID(r.operation_id);
       await loadStats();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Backfill failed');
@@ -530,9 +530,9 @@ function SHADuplicateCard() {
           </Button>
         </Stack>
 
-        {backfillResult && (
-          <Alert severity="success" sx={{ mb: 2 }} onClose={() => setBackfillResult(null)}>
-            Backfill complete — updated: <strong>{backfillResult.updated}</strong>, skipped: {backfillResult.skipped}, failed: {backfillResult.failed}
+        {backfillOpID && (
+          <Alert severity="info" sx={{ mb: 2 }} onClose={() => setBackfillOpID(null)}>
+            Backfill job started — operation ID: <strong>{backfillOpID}</strong>
           </Alert>
         )}
 

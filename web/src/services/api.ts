@@ -4952,11 +4952,14 @@ export interface BackfillHashesResult {
   failed: number;
 }
 
-export async function backfillFileHashes(dryRun = false): Promise<BackfillHashesResult> {
-  const url = `${API_BASE}/maintenance/backfill-file-hashes${dryRun ? '?dry_run=true' : ''}`;
-  const response = await fetch(url, { method: 'POST' });
+export async function backfillFileHashes(dryRun = false): Promise<{ operation_id: string }> {
+  const response = await fetch(`${API_BASE}/maintenance/jobs/${encodeURIComponent('backfill-file-hashes')}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dry_run: dryRun }),
+  });
   if (!response.ok) {
-    throw await buildApiError(response, 'Failed to backfill file hashes');
+    throw await buildApiError(response, 'Failed to start backfill file hashes job');
   }
   return response.json();
 }
