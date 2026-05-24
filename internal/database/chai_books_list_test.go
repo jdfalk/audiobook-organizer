@@ -7,11 +7,9 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 // TestGetAllBooks_Chai_BasicPagination tests pagination with default filters
@@ -221,38 +219,4 @@ func TestGetAllBooks_Chai_IsPrimaryVersion(t *testing.T) {
 	t.Logf("✓ Primary version filtering tests passed")
 }
 
-// Helper function to insert a test book (uses minimal columns)
-func insertTestBook(db *sql.DB, book *Book) (*Book, error) {
-	now := time.Now()
-	if book.CreatedAt == nil {
-		book.CreatedAt = &now
-	}
-	if book.UpdatedAt == nil {
-		book.UpdatedAt = &now
-	}
-	if book.IsPrimaryVersion == nil {
-		book.IsPrimaryVersion = boolPtr(true)
-	}
-	if book.MarkedForDeletion == nil {
-		book.MarkedForDeletion = boolPtr(false)
-	}
-
-	query := fmt.Sprintf(`
-		INSERT INTO books (id, title, file_path, is_primary_version, marked_for_deletion, created_at, updated_at)
-		VALUES ('%s', '%s', '%s', %v, %v, '%s', '%s')
-	`,
-		book.ID,
-		escapeSQL(book.Title),
-		escapeSQL(book.FilePath),
-		boolToSQL(*book.IsPrimaryVersion),
-		boolToSQL(*book.MarkedForDeletion),
-		now.Format("2006-01-02T15:04:05"),
-		now.Format("2006-01-02T15:04:05"),
-	)
-
-	_, err := db.Exec(query)
-	if err != nil {
-		return nil, err
-	}
-	return book, nil
-}
+// insertTestBook is defined in chai_books_list_test_helper.go

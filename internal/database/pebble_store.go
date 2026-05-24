@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.80.0
+// version: 1.81.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-24
 
@@ -754,6 +754,15 @@ func (p *PebbleStore) deleteAuthorAliases(batch *pebble.Batch, authorID int) err
 // Series operations
 
 func (p *PebbleStore) GetAllSeries() ([]Series, error) {
+	// Use feature flag to switch between Pebble and Chai implementations
+	if p.UseChaiDB && p.chai != nil {
+		return p.GetAllSeries_Chai(context.Background())
+	}
+	return p.GetAllSeries_Pebble()
+}
+
+// GetAllSeries_Pebble returns all series using Pebble key-range iteration.
+func (p *PebbleStore) GetAllSeries_Pebble() ([]Series, error) {
 	var series []Series
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("series:0"),
@@ -778,6 +787,21 @@ func (p *PebbleStore) GetAllSeries() ([]Series, error) {
 	}
 
 	return series, nil
+}
+
+// GetAllSeries_Chai returns all series via Chai SQL (SELECT id, name FROM series ORDER BY name).
+// This is the production entry point when UseChaiDB feature flag is enabled.
+func (p *PebbleStore) GetAllSeries_Chai(ctx context.Context) ([]Series, error) {
+	if p.chai == nil {
+		return nil, fmt.Errorf("Chai database not initialized")
+	}
+
+	chaiStore, err := NewChaiStore(p.chai.DB())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ChaiStore: %w", err)
+	}
+
+	return chaiStore.GetAllSeries_Chai(ctx)
 }
 
 func (p *PebbleStore) GetSeriesByID(id int) (*Series, error) {

@@ -1,5 +1,5 @@
 // file: internal/database/chai_books_list_test_helper.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: c2d3e4f5-g6h7-48i9-j0k1-l2m3n4o5p6q7
 // last-edited: 2026-05-24
 
@@ -76,4 +76,51 @@ func boolToSQL(b bool) int {
 
 func intPtr(i int) *int {
 	return &i
+}
+
+// insertTestBook inserts a minimal book row for use in Chai SQL tests.
+// Returns the book (with defaults filled in) and any insert error.
+func insertTestBook(db *sql.DB, book *Book) (*Book, error) {
+	now := time.Now()
+	if book.CreatedAt == nil {
+		book.CreatedAt = &now
+	}
+	if book.UpdatedAt == nil {
+		book.UpdatedAt = &now
+	}
+	if book.IsPrimaryVersion == nil {
+		book.IsPrimaryVersion = boolPtr(true)
+	}
+	if book.MarkedForDeletion == nil {
+		book.MarkedForDeletion = boolPtr(false)
+	}
+
+	query := fmt.Sprintf(`
+		INSERT INTO books (id, title, is_primary_version, marked_for_deletion, created_at, updated_at)
+		VALUES ('%s', '%s', %v, %v, '%s', '%s')
+	`,
+		book.ID,
+		escapeSQL(book.Title),
+		boolToSQL(*book.IsPrimaryVersion),
+		boolToSQL(*book.MarkedForDeletion),
+		now.Format("2006-01-02T15:04:05"),
+		now.Format("2006-01-02T15:04:05"),
+	)
+
+	_, err := db.Exec(query)
+	if err != nil {
+		return nil, err
+	}
+	return book, nil
+}
+
+// insertTestBookAuthor inserts a book-author relationship row for use in Chai SQL tests.
+func insertTestBookAuthor(db *sql.DB, bookID string, authorID int) error {
+	query := fmt.Sprintf(`
+		INSERT INTO book_authors (id, book_id, author_id, marked_for_deletion)
+		VALUES ('BA_%s_%d', '%s', %d, false)
+	`, bookID, authorID, bookID, authorID)
+
+	_, err := db.Exec(query)
+	return err
 }

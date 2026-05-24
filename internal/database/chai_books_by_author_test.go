@@ -7,11 +7,9 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 // TestGetBooksByAuthorID_Chai_BasicFiltering tests basic author filtering
@@ -42,7 +40,7 @@ func TestGetBooksByAuthorID_Chai_BasicFiltering(t *testing.T) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		if err := insertTestBook(db.DB(), book); err != nil {
+		if _, err := insertTestBook(db.DB(), book); err != nil {
 			t.Fatalf("failed to insert test book %d: %v", i, err)
 		}
 
@@ -115,7 +113,7 @@ func TestGetBooksByAuthorID_Chai_Pagination(t *testing.T) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		if err := insertTestBook(db.DB(), book); err != nil {
+		if _, err := insertTestBook(db.DB(), book); err != nil {
 			t.Fatalf("failed to insert test book %d: %v", i, err)
 		}
 		if err := insertTestBookAuthor(db.DB(), book.ID, authorID); err != nil {
@@ -189,7 +187,7 @@ func TestGetBooksByAuthorID_Chai_DeletedBookExclusion(t *testing.T) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		if err := insertTestBook(db.DB(), book); err != nil {
+		if _, err := insertTestBook(db.DB(), book); err != nil {
 			t.Fatalf("failed to insert active book: %v", err)
 		}
 		if err := insertTestBookAuthor(db.DB(), book.ID, authorID); err != nil {
@@ -204,7 +202,7 @@ func TestGetBooksByAuthorID_Chai_DeletedBookExclusion(t *testing.T) {
 			IsPrimaryVersion:  boolPtr(true),
 			MarkedForDeletion: boolPtr(true),
 		}
-		if err := insertTestBook(db.DB(), book); err != nil {
+		if _, err := insertTestBook(db.DB(), book); err != nil {
 			t.Fatalf("failed to insert deleted book: %v", err)
 		}
 		if err := insertTestBookAuthor(db.DB(), book.ID, authorID); err != nil {
@@ -251,7 +249,7 @@ func TestGetBooksByAuthorID_Chai_NonPrimaryVersionExclusion(t *testing.T) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		if err := insertTestBook(db.DB(), book); err != nil {
+		if _, err := insertTestBook(db.DB(), book); err != nil {
 			t.Fatalf("failed to insert primary book: %v", err)
 		}
 		if err := insertTestBookAuthor(db.DB(), book.ID, authorID); err != nil {
@@ -267,7 +265,7 @@ func TestGetBooksByAuthorID_Chai_NonPrimaryVersionExclusion(t *testing.T) {
 			IsPrimaryVersion:  boolPtr(false),
 			MarkedForDeletion: boolPtr(false),
 		}
-		if err := insertTestBook(db.DB(), book); err != nil {
+		if _, err := insertTestBook(db.DB(), book); err != nil {
 			t.Fatalf("failed to insert non-primary book: %v", err)
 		}
 		if err := insertTestBookAuthor(db.DB(), book.ID, authorID); err != nil {
@@ -315,11 +313,15 @@ func BenchmarkGetBooksByAuthorID_Chai(b *testing.B) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		insertTestBook(db.DB(), book)
+		if _, err := insertTestBook(db.DB(), book); err != nil {
+			b.Fatalf("insertTestBook failed: %v", err)
+		}
 
 		// Assign to author (round-robin across 100 authors)
 		authorID := (bookNum % totalAuthors) + 1
-		insertTestBookAuthor(db.DB(), book.ID, authorID)
+		if err := insertTestBookAuthor(db.DB(), book.ID, authorID); err != nil {
+			b.Fatalf("insertTestBookAuthor failed: %v", err)
+		}
 	}
 
 	// Benchmark: lookup all books for a single author (should be ~500 books)
@@ -333,45 +335,5 @@ func BenchmarkGetBooksByAuthorID_Chai(b *testing.B) {
 	}
 }
 
-// Helper function to insert a book into the test database
-func insertTestBook(db *sql.DB, book *Book) error {
-	now := time.Now().Format("2006-01-02T15:04:05")
-	query := fmt.Sprintf(`
-		INSERT INTO books (id, title, is_primary_version, marked_for_deletion, created_at, updated_at)
-		VALUES ('%s', '%s', %v, %v, '%s', '%s')
-	`,
-		book.ID,
-		escapeSQL(book.Title),
-		boolToSQL(*book.IsPrimaryVersion),
-		boolToSQL(*book.MarkedForDeletion),
-		now,
-		now,
-	)
-
-	_, err := db.Exec(query)
-	return err
-}
-
-// Helper function to insert a book-author relationship
-func insertTestBookAuthor(db *sql.DB, bookID string, authorID int) error {
-	query := fmt.Sprintf(`
-		INSERT INTO book_authors (id, book_id, author_id, marked_for_deletion)
-		VALUES ('BA_%s_%d', '%s', %d, false)
-	`, bookID, authorID, bookID, authorID)
-
-	_, err := db.Exec(query)
-	return err
-}
-
-// Helper function to convert bool to SQL value string
-func boolToSQL(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
-
-// Helper function to convert bool to *bool
-func boolPtr(b bool) *bool {
-	return &b
-}
+// insertTestBook, insertTestBookAuthor, boolToSQL, and boolPtr
+// are defined in chai_books_list_test_helper.go
