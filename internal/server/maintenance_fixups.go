@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_fixups.go
-// version: 2.3.0
+// version: 2.3.1
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
-// last-edited: 2026-05-16
+// last-edited: 2026-05-22
 
 package server
 
@@ -575,9 +575,7 @@ func (s *Server) handleGetBookMetadataHashStats(c *gin.Context) {
 		httputil.InternalError(c, "failed to get book metadata hash stats", err)
 		return
 	}
-	httputil.RespondWithOK(c, struct {
-		Data any `json:"data"`
-	}{Data: stats})
+	httputil.RespondWithOK(c, stats)
 }
 
 // handleGetAcoustIDStats returns AcoustID fingerprint coverage stats.
@@ -593,7 +591,5 @@ func (s *Server) handleGetAcoustIDStats(c *gin.Context) {
 		httputil.InternalError(c, "failed to get acoustid stats", err)
 		return
 	}
-	httputil.RespondWithOK(c, struct {
-		Data any `json:"data"`
-	}{Data: stats})
+	httputil.RespondWithOK(c, stats)
 }
