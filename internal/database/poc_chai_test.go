@@ -2,38 +2,14 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"testing"
-
-	"github.com/chaisql/chai"
-	"github.com/cockroachdb/pebble/v2"
 )
-
-// BenchmarkGetAllSeriesBookCounts_Pebble benchmarks the current Pebble implementation
-func BenchmarkGetAllSeriesBookCounts_Pebble(b *testing.B) {
-	store := setupTestPebbleStore(b)
-	defer store.Close()
-
-	// Add test data: 100 books across 10 series
-	for i := 0; i < 100; i++ {
-		book := Book{
-			ID:             testID(i),
-			Title:          "Test Book",
-			SeriesID:       ptrInt((i % 10) + 1),
-			IsPrimaryVersion: ptrBool(true),
-		}
-		_ = store.SetBook(book.ID, &book)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = store.GetAllSeriesBookCounts()
-	}
-}
 
 // GetAllSeriesBookCounts_Chai demonstrates how it would work with Chai
 // This is pseudocode showing the SQL approach
-func GetAllSeriesBookCounts_Chai(db *chai.DB, ctx context.Context) (map[int]int, error) {
+func GetAllSeriesBookCounts_Chai(db *sql.DB, ctx context.Context) (map[int]int, error) {
 	counts := make(map[int]int)
 
 	// This is what the SQL query would look like
@@ -89,18 +65,6 @@ func TestChai_ParsesBookJSON(t *testing.T) {
 }
 
 // Helper functions
-
-func setupTestPebbleStore(tb testing.TB) *PebbleStore {
-	db, err := pebble.Open(tb.TempDir(), &pebble.Options{})
-	if err != nil {
-		tb.Fatalf("failed to open pebble: %v", err)
-	}
-	return &PebbleStore{db: db}
-}
-
-func testID(i int) string {
-	return "id-" + string(rune(i))
-}
 
 func ptrInt(i int) *int {
 	return &i
