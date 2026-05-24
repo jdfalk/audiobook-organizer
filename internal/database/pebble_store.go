@@ -1,7 +1,7 @@
 // file: internal/database/pebble_store.go
-// version: 1.77.0
+// version: 1.78.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-// last-edited: 2026-05-20
+// last-edited: 2026-05-24
 
 package database
 
@@ -2374,12 +2374,23 @@ func (p *PebbleStore) MarkITunesSynced(bookIDs []string) (int64, error) {
 
 // GetITunesPurgePendingBooks returns books with itunes_sync_status = "purge_pending" and a PID.
 func (p *PebbleStore) GetITunesPurgePendingBooks() ([]Book, error) {
-	allBooks, err := p.GetAllBooks(100000, 0)
+	// Scan book:* index and filter by iTunes sync status without loading all books
+	var pending []Book
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
-	var pending []Book
-	for _, b := range allBooks {
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
 		if b.ITunesSyncStatus != nil && *b.ITunesSyncStatus == "purge_pending" && b.ITunesPersistentID != nil {
 			pending = append(pending, b)
 		}
@@ -2389,12 +2400,23 @@ func (p *PebbleStore) GetITunesPurgePendingBooks() ([]Book, error) {
 
 // GetITunesDirtyBooks returns all primary books with itunes_sync_status = "dirty".
 func (p *PebbleStore) GetITunesDirtyBooks() ([]Book, error) {
-	allBooks, err := p.GetAllBooks(100000, 0)
+	// Scan book:* index and filter by iTunes sync status without loading all books
+	var dirty []Book
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
-	var dirty []Book
-	for _, b := range allBooks {
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
 		if b.ITunesSyncStatus != nil && *b.ITunesSyncStatus == "dirty" {
 			if b.IsPrimaryVersion == nil || *b.IsPrimaryVersion {
 				dirty = append(dirty, b)
@@ -2580,14 +2602,8 @@ func (p *PebbleStore) DeleteBook(id string) error {
 }
 
 func (p *PebbleStore) SearchBooks(query string, limit, offset int) ([]Book, error) {
-	// For PebbleDB, we need to scan all books and filter by title
-	// In production, you'd want a proper full-text search solution
-	allBooks, err := p.GetAllBooks(1000000, 0) // Get all books
-	if err != nil {
-		return nil, err
-	}
-
-	// Build author name index for search matching
+	// Scan book:* index directly instead of loading all books into memory
+	// Pre-load author names for author field matching during iteration
 	authorNames := make(map[int]string)
 	authIter, authErr := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("author:0"),
@@ -2607,38 +2623,56 @@ func (p *PebbleStore) SearchBooks(query string, limit, offset int) ([]Book, erro
 		}
 	}
 
-	var filtered []Book
 	lowerQuery := strings.ToLower(query)
-	for _, book := range allBooks {
-		titleMatch := strings.Contains(strings.ToLower(book.Title), lowerQuery)
+	var filtered []Book
+	var count int
 
-		// Check author name
+	// Scan book:* index and filter during iteration
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		// Skip non-primary book entries
+		if strings.Contains(key, ":") && !strings.HasPrefix(key, "book:") {
+			continue
+		}
+
+		// Check title match first (cheapest operation)
+		value := iter.Value()
+		var book Book
+		if err := json.Unmarshal(value, &book); err != nil {
+			continue
+		}
+
+		titleMatch := strings.Contains(strings.ToLower(book.Title), lowerQuery)
 		authorMatch := false
 		if book.AuthorID != nil {
 			if name, ok := authorNames[*book.AuthorID]; ok {
 				authorMatch = strings.Contains(name, lowerQuery)
 			}
 		}
-
-		// Check narrator
 		narratorMatch := book.Narrator != nil && strings.Contains(strings.ToLower(*book.Narrator), lowerQuery)
 
 		if titleMatch || authorMatch || narratorMatch {
-			filtered = append(filtered, book)
+			// Apply pagination: only collect results in the requested range
+			if count >= offset && len(filtered) < limit {
+				filtered = append(filtered, book)
+			}
+			count++
+			if len(filtered) >= limit {
+				break
+			}
 		}
 	}
 
-	// Apply pagination
-	start := offset
-	if start >= len(filtered) {
-		return []Book{}, nil
-	}
-	end := start + limit
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-
-	return filtered[start:end], nil
+	return filtered, nil
 }
 
 func (p *PebbleStore) CountBooks() (int, error) {
@@ -2678,13 +2712,24 @@ func (p *PebbleStore) CountBooks() (int, error) {
 
 // GetDistinctGenres returns sorted distinct non-empty genre values across all primary books.
 func (p *PebbleStore) GetDistinctGenres() ([]string, error) {
-	books, err := p.GetAllBooks(0, 0)
+	// Scan book:* index directly without loading all books
+	seen := map[string]bool{}
+	var out []string
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var out []string
-	for _, b := range books {
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
 		if b.Genre != nil && *b.Genre != "" {
 			if !seen[*b.Genre] {
 				seen[*b.Genre] = true
@@ -2698,13 +2743,24 @@ func (p *PebbleStore) GetDistinctGenres() ([]string, error) {
 
 // GetDistinctLanguages returns sorted distinct non-empty language values across all primary books.
 func (p *PebbleStore) GetDistinctLanguages() ([]string, error) {
-	books, err := p.GetAllBooks(0, 0)
+	// Scan book:* index directly without loading all books
+	seen := map[string]bool{}
+	var out []string
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var out []string
-	for _, b := range books {
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
 		if b.Language != nil && *b.Language != "" {
 			if !seen[*b.Language] {
 				seen[*b.Language] = true
@@ -8634,19 +8690,32 @@ func (s *PebbleStore) MoveBookFilesToBook(fileIDs []string, sourceBookID, target
 
 // GetQuarantinedBooks returns books with a non-nil QuarantinedAt, newest first.
 func (p *PebbleStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) {
-	all, err := p.GetAllBooks(100000, 0)
+	// Scan book:* index and only deserialize books that are quarantined
+	var result []Book
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
-	var result []Book
-	for _, b := range all {
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
 		if b.QuarantinedAt != nil {
 			result = append(result, b)
 		}
 	}
+
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].QuarantinedAt.After(*result[j].QuarantinedAt)
 	})
+
 	if offset >= len(result) {
 		return nil, nil
 	}
@@ -8659,12 +8728,23 @@ func (p *PebbleStore) GetQuarantinedBooks(limit, offset int) ([]Book, error) {
 
 // CountQuarantinedBooks returns the total number of quarantined books.
 func (p *PebbleStore) CountQuarantinedBooks() (int, error) {
-	all, err := p.GetAllBooks(100000, 0)
+	// Scan book:* index and count without deserializing the full book object
+	n := 0
+
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return 0, err
 	}
-	n := 0
-	for _, b := range all {
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
 		if b.QuarantinedAt != nil {
 			n++
 		}
