@@ -17,10 +17,11 @@ Server IP: <user will prompt>
 
 The skill will:
 1. SSH to the server and restart `audiobook-organizer.service`
-2. Extract the bootstrap token from journalctl logs (10-minute window)
-3. POST to `/api/v1/auth/bootstrap` to exchange token for API key
-4. Write key + expiry to `.claude/.api-token` (shared, .gitignored)
-5. Schedule cleanup after 8 hours (non-blocking background process)
+2. **Wait 90 seconds** for the service to fully initialize — this server takes ~52 seconds to register all plugins before emitting the bootstrap token. Do NOT grep logs until the wait is complete.
+3. Extract the bootstrap token from journalctl logs (10-minute window) — grep for `abbs_` in `--since "3 minutes ago"`
+4. POST to `/api/v1/auth/bootstrap` to exchange token for API key
+5. Write key + expiry to `.claude/.api-token` (shared, .gitignored)
+6. Schedule cleanup after 8 hours (non-blocking background process)
 
 ## The Token File
 
@@ -59,6 +60,7 @@ See [references/bootstrap-api.md](references/bootstrap-api.md) for full API deta
 
 ## Troubleshooting
 
+- **Token not found in logs / empty grep result**: The service takes ~52 seconds to start on this server. If the grep returns nothing, you ran it too early — wait and retry with `--since "3 minutes ago"`. Do NOT restart again; just wait and re-grep.
 - **"Token expired"**: Server restart required. The bootstrap token has a fixed 10-minute TTL from service startup.
 - **SSH connection fails**: Check server IP and network connectivity.
 - **Rate limited**: If you fail the token exchange 5 times in an hour, you'll be rate-limited. Wait or restart the service for a fresh token.

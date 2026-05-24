@@ -17,15 +17,19 @@ ssh "root@$SERVER_IP" 'sudo systemctl restart audiobook-organizer.service' || {
     exit 1
 }
 
-# Step 2: Extract bootstrap token from journalctl (waits up to 10 seconds)
-echo "[2/4] Waiting for bootstrap token in logs..."
+# Step 2: Extract bootstrap token from journalctl
+# NOTE: This server takes ~52s to start (plugin registration). Wait 90s before first grep.
+echo "[2/4] Waiting 90s for service to fully initialize (plugin registration takes ~52s)..."
+sleep 90
+
 BOOTSTRAP_TOKEN=""
-for i in {1..20}; do
-    BOOTSTRAP_TOKEN=$(ssh "root@$SERVER_IP" 'sudo journalctl -u audiobook-organizer.service -n 50' 2>/dev/null | grep 'msg="Emergency access token"' | grep -oP 'raw=\K[^ ]+' | head -1)
+for i in {1..12}; do
+    BOOTSTRAP_TOKEN=$(ssh "jdfalk@$SERVER_IP" 'journalctl -u audiobook-organizer.service --since "3 minutes ago" --no-pager' 2>/dev/null | grep 'msg="Emergency access token"' | grep -oP 'raw=\K[^ ]+' | head -1)
     if [ -n "$BOOTSTRAP_TOKEN" ]; then
         break
     fi
-    sleep 0.5
+    echo "  attempt $i: token not yet visible, retrying in 5s..."
+    sleep 5
 done
 
 if [ -z "$BOOTSTRAP_TOKEN" ]; then
