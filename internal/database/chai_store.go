@@ -70,6 +70,49 @@ func (cs *ChaiStore) GetAllSeriesBookCounts_SQL(ctx context.Context) (map[int]in
 	return counts, nil
 }
 
+// GetAllSeries_Chai returns all series ordered by name via SQL.
+// Replaces manual Pebble key-range iteration (series:0 to series:;) + JSON
+// unmarshaling + index-key skipping with a single ORDER BY query.
+// SQL pattern:
+//
+//	SELECT id, name, author_id FROM series ORDER BY name
+func (cs *ChaiStore) GetAllSeries_Chai(ctx context.Context) ([]Series, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	// Single SQL query replaces:
+	// 1. Create iterator over "series:0" to "series:;"
+	// 2. Skip keys containing ":name:" (index keys)
+	// 3. Unmarshal JSON per record
+	// 4. Append to slice
+	rows, err := cs.db.QueryContext(ctx, `SELECT id, name, author_id FROM series ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query series: %w", err)
+	}
+	defer rows.Close()
+
+	var series []Series
+	for rows.Next() {
+		var s Series
+		var authorID sql.NullInt64
+		if err := rows.Scan(&s.ID, &s.Name, &authorID); err != nil {
+			continue
+		}
+		if authorID.Valid {
+			v := int(authorID.Int64)
+			s.AuthorID = &v
+		}
+		series = append(series, s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading series: %w", err)
+	}
+
+	return series, nil
+}
+
 // GetAllAuthorBookCounts_Chai migrates author book count aggregation to SQL.
 // Replaces 33 lines of Pebble string parsing + filtering with a single SQL GROUP BY.
 // Only counts non-deleted book_authors entries.
