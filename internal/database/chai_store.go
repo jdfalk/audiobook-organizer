@@ -1,5 +1,5 @@
 // file: internal/database/chai_store.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: e5f6a7b8-c9d0-4e1f-2a3b-c4d5e6f7a8b9
 // last-edited: 2026-05-24
 
