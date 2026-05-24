@@ -1,5 +1,5 @@
 // file: internal/database/chai_store.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: e5f6a7b8-c9d0-4e1f-2a3b-c4d5e6f7a8b9
 // last-edited: 2026-05-24
 
@@ -947,6 +947,37 @@ func (cs *ChaiStore) GetBooksByAuthorID_Chai(ctx context.Context, authorID int, 
 		books = append(books, book)
 	}
 	return books, bookRows.Err()
+}
+
+// GetAllAuthors_Chai migrates author listing to SQL.
+// Replaces manual Pebble key iteration (prefix scan + skip index keys + JSON unmarshal)
+// with a single SQL SELECT ordered by name.
+// Chai limitation: no parameterized queries — query is static so fmt.Sprintf is not needed here.
+func (cs *ChaiStore) GetAllAuthors_Chai(ctx context.Context) ([]Author, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := cs.db.QueryContext(ctx, `SELECT id, name FROM authors ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query authors: %w", err)
+	}
+	defer rows.Close()
+
+	var authors []Author
+	for rows.Next() {
+		var a Author
+		if err := rows.Scan(&a.ID, &a.Name); err != nil {
+			continue
+		}
+		authors = append(authors, a)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading authors: %w", err)
+	}
+
+	return authors, nil
 }
 
 // Helper functions
