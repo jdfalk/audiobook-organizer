@@ -93,7 +93,7 @@ func (cs *ChaiSchema) createSeriesTable(ctx context.Context) error {
 func (cs *ChaiSchema) createBooksTable(ctx context.Context) error {
 	query := `
 		CREATE TABLE IF NOT EXISTS books (
-			id INTEGER PRIMARY KEY,
+			id TEXT PRIMARY KEY,
 			title TEXT NOT NULL,
 			normalized_title TEXT,
 			series_id INTEGER,
@@ -112,12 +112,14 @@ func (cs *ChaiSchema) createBooksTable(ctx context.Context) error {
 func (cs *ChaiSchema) createBookFilesTable(ctx context.Context) error {
 	query := `
 		CREATE TABLE IF NOT EXISTS book_files (
-			id INTEGER PRIMARY KEY,
-			book_id INTEGER NOT NULL,
+			id TEXT PRIMARY KEY,
+			book_id TEXT NOT NULL,
 			file_path TEXT NOT NULL,
 			format TEXT,
 			duration_ms INTEGER,
+			file_size_bytes INTEGER,
 			file_hash TEXT,
+			missing BOOLEAN DEFAULT false,
 			created_at TIMESTAMP,
 			updated_at TIMESTAMP,
 			marked_for_deletion BOOLEAN DEFAULT false
@@ -131,9 +133,10 @@ func (cs *ChaiSchema) createBookFilesTable(ctx context.Context) error {
 func (cs *ChaiSchema) createBookAuthorsTable(ctx context.Context) error {
 	query := `
 		CREATE TABLE IF NOT EXISTS book_authors (
-			id INTEGER PRIMARY KEY,
-			book_id INTEGER NOT NULL,
+			id TEXT PRIMARY KEY,
+			book_id TEXT NOT NULL,
 			author_id INTEGER NOT NULL,
+			role TEXT DEFAULT 'author',
 			position INTEGER DEFAULT 0,
 			created_at TIMESTAMP,
 			marked_for_deletion BOOLEAN DEFAULT false
