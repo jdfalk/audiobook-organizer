@@ -1333,7 +1333,8 @@ func (cs *ChaiStore) GetAllWorks_Chai(ctx context.Context) ([]Work, error) {
 
 // Helper functions
 func escapeSQL(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	return strings.ReplaceAll(s, "'", `\'`)
 }
 
 func contains(s, substr string) bool {

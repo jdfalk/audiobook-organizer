@@ -24,7 +24,7 @@ func chaiNullableString(s *string) string {
 	if s == nil || *s == "" {
 		return "NULL"
 	}
-	return fmt.Sprintf("'%s'", strings.ReplaceAll(*s, "'", "''"))
+	return fmt.Sprintf("'%s'", chaiEscapeStr(*s))
 }
 
 func chaiNullableInt(i *int) string {
@@ -66,7 +66,9 @@ func chaiNullableTime(t *time.Time) string {
 }
 
 func chaiEscapeStr(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
+	// Chai SQL lexer uses backslash escaping, not doubled single quotes.
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	return strings.ReplaceAll(s, "'", `\'`)
 }
 
 // ── UpsertBookToChaiDB ───────────────────────────────────────────────────────
