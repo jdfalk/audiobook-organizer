@@ -7,6 +7,21 @@
 
 ## [Unreleased]
 
+### Fixes
+
+#### May 24, 2026 — EMERGENCY: Disable cache warm-ups (memory leak, 81GB peak)
+
+**Issue:** Startup cache warm-ups (`warmAuthorsCache()`, `warmSeriesCache()`, `warmFacetsCache()`) consuming unbounded memory during initialization. Previous crash peaked at 81GB before systemd OOM killer; most recent attempt peaked at 4.8-6.4GB before service hung.
+
+**Temporary fix:** Disabled all three warm-up goroutines in `server_lifecycle.go`. Service now initializes without cache preload; endpoints will be slower on first request (full scan) but will be available and stable.
+
+**Root cause:** UNKNOWN — likely memory leak in `ListAuthorsWithCounts()`, `ListSeriesWithCounts()`, or underlying database scan operations. Requires investigation of:
+1. Which warm-up is consuming the memory (facets / authors / series)
+2. Whether `List*WithCounts()` is allocating unboundedly during scan
+3. Whether the issue is in `pebble_store` query optimization or the service layer
+
+**TODO:** Investigate root cause and fix cache warm-up pattern to allow safe startup preload.
+
 ### Features
 
 #### May 24, 2026 — Optimize all memory-load pain points (5 issues)
