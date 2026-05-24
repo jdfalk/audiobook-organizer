@@ -168,12 +168,32 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		}
 		enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
 
+		// Batch-load all book files at once instead of per-book (N+1 optimization)
+		qqBookIDs := make([]string, len(enriched))
+		for i, book := range enriched {
+			qqBookIDs[i] = book.ID
+		}
+
+		qqBookFilesMap := make(map[string][]database.BookFile)
+		if qqGgf, ok := s.Store().(interface {
+			GetBookFilesForIDs(ids []string) (map[string][]database.BookFile, error)
+		}); ok {
+			if qqBfm, err := qqGgf.GetBookFilesForIDs(qqBookIDs); err == nil {
+				qqBookFilesMap = qqBfm
+			}
+		} else if qqUw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+			if qqInner, ok2 := qqUw.Unwrap().(interface {
+				GetBookFilesForIDs(ids []string) (map[string][]database.BookFile, error)
+			}); ok2 {
+				if qqBfm, err := qqInner.GetBookFilesForIDs(qqBookIDs); err == nil {
+					qqBookFilesMap = qqBfm
+				}
+			}
+		}
+
 		// Compute fingerprinting fields for the selected books.
 		for i, book := range enriched {
-			files, err := s.Store().GetBookFiles(book.ID)
-			if err != nil {
-				continue
-			}
+			files := qqBookFilesMap[book.ID]
 			fpFiles := make([]fingerprint.FileWithFingerprint, len(files))
 			for j := range files {
 				fpFiles[j] = &files[j]
@@ -285,14 +305,32 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 	// Enrich with author and series names
 	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
 
+	// Batch-load all book files at once instead of per-book (N+1 optimization)
+	bookIDs := make([]string, len(enriched))
+	for i, book := range enriched {
+		bookIDs[i] = book.ID
+	}
+
+	bookFilesMap := make(map[string][]database.BookFile)
+	if ggf, ok := s.Store().(interface {
+		GetBookFilesForIDs(ids []string) (map[string][]database.BookFile, error)
+	}); ok {
+		if bfm, err := ggf.GetBookFilesForIDs(bookIDs); err == nil {
+			bookFilesMap = bfm
+		}
+	} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
+		if inner, ok2 := uw.Unwrap().(interface {
+			GetBookFilesForIDs(ids []string) (map[string][]database.BookFile, error)
+		}); ok2 {
+			if bfm, err := inner.GetBookFilesForIDs(bookIDs); err == nil {
+				bookFilesMap = bfm
+			}
+		}
+	}
+
 	// Compute and populate fingerprinting fields for each book
 	for i, book := range enriched {
-		// Fetch files for this book
-		files, err := s.Store().GetBookFiles(book.ID)
-		if err != nil {
-			// If we can't fetch files, leave fingerprinting fields as zero/nil
-			continue
-		}
+		files := bookFilesMap[book.ID]
 
 		// Convert BookFile slice to FileWithFingerprint interface slice
 		fpFiles := make([]fingerprint.FileWithFingerprint, len(files))
