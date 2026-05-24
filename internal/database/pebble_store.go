@@ -201,6 +201,16 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 
 	slog.Info("PebbleDB opened", "path", path, "format_version", db.FormatMajorVersion())
 
+	// Open Chai SQL database alongside Pebble for SQL-backed aggregations.
+	chaiPath := filepath.Join(filepath.Dir(path), "audiobooks.chai")
+	chaiDB, err := NewChaiDB(context.Background(), chaiPath)
+	if err != nil {
+		slog.Warn("chai database failed to open, SQL aggregations disabled", "path", chaiPath, "error", err)
+	} else {
+		store.chai = chaiDB
+		slog.Info("ChaiDB opened", "path", chaiPath)
+	}
+
 	if err := store.migrateImportPathKeys(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to migrate import path keys: %w", err)
