@@ -221,6 +221,8 @@ func (s *Server) Start(cfg ServerConfig) error {
 	// Pre-warm the facets cache in the background so the first Library page
 	// load doesn't block on a full PebbleDB scan.
 	go s.warmFacetsCache()
+	go s.warmAuthorsCache()
+	go s.warmSeriesCache()
 
 	s.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),

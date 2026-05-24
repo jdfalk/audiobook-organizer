@@ -1,5 +1,5 @@
 // file: internal/server/entities_handlers.go
-// version: 2.3.0
+// version: 2.4.0
 // guid: 52cb6f75-cb3e-44e3-bf36-a8bba8a24d21
 //
 // Entity HTTP handlers split out of server.go: works, authors, series,
@@ -10,6 +10,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -226,6 +227,7 @@ func (s *Server) renameAuthor(c *gin.Context) {
 	}
 
 	s.dedupCache.Invalidate("author-duplicates")
+	s.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"id": authorID, "name": name})
 }
 
@@ -347,6 +349,7 @@ func (s *Server) splitCompositeAuthor(c *gin.Context) {
 	}
 
 	s.dedupCache.Invalidate("author-duplicates")
+	s.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"authors": result, "books_updated": booksUpdated})
 }
 
@@ -413,6 +416,7 @@ func (s *Server) deleteAuthorHandler(c *gin.Context) {
 		httputil.InternalError(c, "failed to delete author", err)
 		return
 	}
+	s.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"message": "author deleted"})
 }
 
@@ -444,6 +448,9 @@ func (s *Server) bulkDeleteAuthors(c *gin.Context) {
 			continue
 		}
 		deleted++
+	}
+	if deleted > 0 {
+		s.authorsCache.InvalidateAll()
 	}
 	httputil.RespondWithOK(c, gin.H{
 		"deleted": deleted,
@@ -520,6 +527,7 @@ func (s *Server) createAuthorAlias(c *gin.Context) {
 		httputil.InternalError(c, "failed to create author alias", err)
 		return
 	}
+	s.authorsCache.InvalidateAll()
 	httputil.RespondWithCreated(c, alias)
 }
 
@@ -533,6 +541,7 @@ func (s *Server) deleteAuthorAlias(c *gin.Context) {
 		httputil.InternalError(c, "failed to delete author alias", err)
 		return
 	}
+	s.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"status": "deleted"})
 }
 
@@ -617,6 +626,7 @@ func (s *Server) reclassifyAuthorAsNarrator(c *gin.Context) {
 	}
 
 	s.dedupCache.Invalidate("author-duplicates")
+	s.authorsCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"narrator_id": narrator.ID, "books_updated": booksUpdated})
 }
 
@@ -732,6 +742,7 @@ func (s *Server) renameSeriesHandler(c *gin.Context) {
 	if s.dedupCache != nil {
 		s.dedupCache.Invalidate("series-duplicates")
 	}
+	s.seriesCache.InvalidateAll()
 	series, _ := store.GetSeriesByID(seriesID)
 	httputil.RespondWithOK(c, series)
 }
@@ -782,6 +793,7 @@ func (s *Server) splitSeriesHandler(c *gin.Context) {
 	if s.dedupCache != nil {
 		s.dedupCache.Invalidate("series-duplicates")
 	}
+	s.seriesCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"new_series": newSeries, "books_moved": moved})
 }
 
@@ -805,6 +817,7 @@ func (s *Server) deleteEmptySeries(c *gin.Context) {
 		httputil.InternalError(c, "failed to delete series", err)
 		return
 	}
+	s.seriesCache.InvalidateAll()
 	httputil.RespondWithOK(c, gin.H{"message": "series deleted"})
 }
 
@@ -836,6 +849,9 @@ func (s *Server) bulkDeleteSeries(c *gin.Context) {
 			continue
 		}
 		deleted++
+	}
+	if deleted > 0 {
+		s.seriesCache.InvalidateAll()
 	}
 	httputil.RespondWithOK(c, gin.H{
 		"deleted": deleted,
@@ -870,6 +886,7 @@ func (s *Server) updateSeriesName(c *gin.Context) {
 		return
 	}
 	s.dedupCache.Invalidate("series-duplicates")
+	s.seriesCache.InvalidateAll()
 	series, _ := store.GetSeriesByID(id)
 	httputil.RespondWithOK(c, series)
 }
@@ -933,4 +950,38 @@ func (s *Server) setAudiobookNarrators(c *gin.Context) {
 		return
 	}
 	httputil.RespondWithOK(c, gin.H{"status": "ok"})
+}
+
+func (s *Server) warmAuthorsCache() {
+	if s.Store() == nil {
+		return
+	}
+	slog.Info("authors pre-warming cache")
+	result, err := s.authorSeriesService.ListAuthorsWithCounts()
+	if err != nil {
+		slog.Info("authors warm-up failed", "err", err)
+		return
+	}
+	s.authorsCache.Set("all", gin.H{
+		"items": result.Items,
+		"count": result.Count,
+	})
+	slog.Info("authors cache warmed", "count", result.Count)
+}
+
+func (s *Server) warmSeriesCache() {
+	if s.Store() == nil {
+		return
+	}
+	slog.Info("series pre-warming cache")
+	result, err := s.authorSeriesService.ListSeriesWithCounts()
+	if err != nil {
+		slog.Info("series warm-up failed", "err", err)
+		return
+	}
+	s.seriesCache.Set("all", gin.H{
+		"items": result.Items,
+		"count": result.Count,
+	})
+	slog.Info("series cache warmed", "count", result.Count)
 }
