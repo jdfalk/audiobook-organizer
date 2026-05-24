@@ -121,7 +121,7 @@ type PebbleStore struct {
 	opsLogSeq                int64      // monotonic counter for log key uniqueness; accessed via atomic
 	rootDir                  string     // organized library root; set via SetRootDir after config load
 	libraryCountsRecomputeMu sync.Mutex // gates recompute to prevent stampede when N callers see dirty cache
-	UseChaiDB               bool       // feature flag: use Chai SQL for aggregations (false = use Pebble)
+	UseChaiDB               bool       // feature flag: use Chai SQL for aggregations (true = Chai SQL, false = Pebble)
 }
 
 const statsLibraryKey = "stats:library"
@@ -193,7 +193,10 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 		return nil, fmt.Errorf("failed to open PebbleDB: %w", err)
 	}
 
-	store := &PebbleStore{db: db}
+	store := &PebbleStore{
+		db:        db,
+		UseChaiDB: true, // Enable Chai SQL for aggregation functions (Phase 1-2 migration)
+	}
 
 	slog.Info("PebbleDB opened", "path", path, "format_version", db.FormatMajorVersion())
 
