@@ -1,13 +1,21 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.91.0 -->
+<!-- version: 2.92.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-20 -->
+<!-- last-edited: 2026-05-24 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Features
+
+#### May 24, 2026 — Optimize all memory-load pain points
+
+- **SearchBooks:** Replaced `GetAllBooks(1000000, 0)` with direct `book:*` index scan; filters during iteration instead of loading entire dataset to memory.
+- **GetDistinctGenres/Languages:** Changed from `GetAllBooks(0, 0)` to single-pass `book:*` index scan, collecting distinct values during iteration.
+- **GetQuarantinedBooks/CountQuarantinedBooks:** Replaced `GetAllBooks(100000, 0)` with index scan; only deserializes books with non-nil `QuarantinedAt`.
+- **GetITunesPurgePendingBooks/GetITunesDirtyBooks:** iTunes sync status filtering now happens during index scan, not after loading 100K books.
+- **Result:** Critical operations that loaded full dataset into memory (500K–1M book deserializations) now use filtered index scans. Eliminates memory bloat and improves response times for search, distinct-value queries, and admin operations.
 
 #### May 23, 2026 — Authors/Series endpoint caching (MATCH-6)
 
