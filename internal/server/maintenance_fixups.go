@@ -605,7 +605,12 @@ func (s *Server) backfillChaiDB(c *gin.Context) {
 		return
 	}
 
-	pebbleStore, ok := store.(*database.PebbleStore)
+	// Unwrap indexedStore decorator if present (wraps the real PebbleStore).
+	inner := store
+	if wrapped, ok := store.(*indexedStore); ok {
+		inner = wrapped.Store
+	}
+	pebbleStore, ok := inner.(*database.PebbleStore)
 	if !ok {
 		httputil.RespondWithBadRequest(c, "chai backfill only supported with PebbleStore backend")
 		return
