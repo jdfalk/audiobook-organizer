@@ -220,9 +220,12 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Pre-warm facets cache (genres/languages) - lightweight, <1 second
 	go s.warmFacetsCache()
-	// Authors/series caches: re-enabled after fixing GetAllAuthor*Counts N+1 deserialization
-	go s.warmAuthorsCache()
-	go s.warmSeriesCache()
+	// DISABLED: authors/series cache warm-ups consume 22.9GB → 69.9GB peak memory in minutes
+	// ListAuthorsWithCounts/ListSeriesWithCounts build massive gin.H response objects
+	// Root cause: returning full response structure in cache instead of just counts
+	// Fix: separate cache storage from API response format
+	// go s.warmAuthorsCache()
+	// go s.warmSeriesCache()
 
 	s.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),
