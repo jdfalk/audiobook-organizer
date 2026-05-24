@@ -69,21 +69,37 @@ export function useLibraryFilters({
   }, []);
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const [facets, authors, series] = await Promise.all([
-          api.getBookFacets(),
-          api.getAuthors(),
-          api.getSeries(),
-        ]);
+    api
+      .getBookFacets()
+      .then((facets) => {
         setAvailableGenres(facets.genres);
         setAvailableLanguages(facets.languages);
+      })
+      .catch((e) => {
+        console.error('Failed to load facets:', e);
+      });
+  }, []);
+
+  useEffect(() => {
+    api
+      .getAuthors()
+      .then((authors) => {
         setAvailableAuthors(authors.map((a) => a.name).filter(Boolean).sort());
+      })
+      .catch((e) => {
+        console.error('Failed to load authors:', e);
+      });
+  }, []);
+
+  useEffect(() => {
+    api
+      .getSeries()
+      .then((series) => {
         setAvailableSeries(series.map((s) => s.name).filter(Boolean).sort());
-      } catch (e) {
-        console.error('Failed to load filter facets', e);
-      }
-    })();
+      })
+      .catch((e) => {
+        console.error('Failed to load series:', e);
+      });
   }, []);
 
   const handleFiltersChange = useCallback(
