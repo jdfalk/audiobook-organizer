@@ -1312,6 +1312,13 @@ func (cs *ChaiStore) GetAllBookSummaries_Chai(ctx context.Context, limit, offset
 	return summaries, nil
 }
 
+// GetAllWorks_Chai returns all works via SQL (stub — works table not yet in schema).
+func (cs *ChaiStore) GetAllWorks_Chai(ctx context.Context) ([]Work, error) {
+	// TODO(phase4): works table not yet in chai_schema.go — return empty slice
+	// until the schema is extended and data is synced.
+	return []Work{}, nil
+}
+
 // Helper functions
 func escapeSQL(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
