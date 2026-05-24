@@ -897,56 +897,92 @@ func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
 }
 
 func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
-	series, err := p.GetAllSeries()
+	counts := make(map[int]int)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
-	counts := make(map[int]int, len(series))
-	for _, s := range series {
-		books, _ := p.GetBooksBySeriesID(s.ID)
-		count := 0
-		for _, b := range books {
-			if b.IsPrimaryVersion == nil || *b.IsPrimaryVersion {
-				count++
-			}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":") && !strings.HasPrefix(key, "book:") {
+			continue
 		}
-		counts[s.ID] = count
+		if !strings.HasPrefix(key, "book:") || strings.Contains(key, ":") {
+			continue
+		}
+
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
+		if b.SeriesID == nil || (b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion) {
+			continue
+		}
+		counts[*b.SeriesID]++
 	}
 	return counts, nil
 }
 
 // GetAllSeriesFileCounts returns the number of audio files per series.
 func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
-	series, err := p.GetAllSeries()
+	bookIDToSeriesID := make(map[string]int)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
-	counts := make(map[int]int, len(series))
-	for _, s := range series {
-		books, _ := p.GetBooksBySeriesID(s.ID)
-		total := 0
-		for _, b := range books {
-			if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if !strings.HasPrefix(key, "book:") || strings.Contains(key, ":") {
+			continue
+		}
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
+		if b.SeriesID != nil && (b.IsPrimaryVersion == nil || *b.IsPrimaryVersion) {
+			bookIDToSeriesID[b.ID] = *b.SeriesID
+		}
+	}
+
+	counts := make(map[int]int)
+	fileIter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book_file:0"),
+		UpperBound: []byte("book_file:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer fileIter.Close()
+
+	for fileIter.First(); fileIter.Valid(); fileIter.Next() {
+		key := string(fileIter.Key())
+		if !strings.HasPrefix(key, "book_file:") {
+			continue
+		}
+		parts := strings.Split(key, ":")
+		if len(parts) < 3 {
+			continue
+		}
+		bookID := parts[1]
+		if seriesID, ok := bookIDToSeriesID[bookID]; ok {
+			var f BookFile
+			if err := json.Unmarshal(fileIter.Value(), &f); err != nil {
 				continue
 			}
-			files, err := p.GetBookFiles(b.ID)
-			if err != nil || len(files) == 0 {
-				total++
-				continue
-			}
-			activeCount := 0
-			for _, f := range files {
-				if !f.Missing {
-					activeCount++
-				}
-			}
-			if activeCount > 0 {
-				total += activeCount
-			} else {
-				total++
+			if !f.Missing {
+				counts[seriesID]++
 			}
 		}
-		counts[s.ID] = total
 	}
 	return counts, nil
 }
