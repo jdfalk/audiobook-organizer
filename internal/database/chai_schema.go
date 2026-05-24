@@ -63,8 +63,8 @@ func (cs *ChaiSchema) createAuthorsTable(ctx context.Context) error {
 			id INTEGER PRIMARY KEY,
 			name TEXT NOT NULL,
 			normalized_name TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP,
+			updated_at TIMESTAMP,
 			marked_for_deletion BOOLEAN DEFAULT false
 		)
 	`
@@ -80,10 +80,9 @@ func (cs *ChaiSchema) createSeriesTable(ctx context.Context) error {
 			name TEXT NOT NULL,
 			normalized_name TEXT NOT NULL,
 			author_id INTEGER,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			marked_for_deletion BOOLEAN DEFAULT false,
-			FOREIGN KEY (author_id) REFERENCES authors(id)
+			created_at TIMESTAMP,
+			updated_at TIMESTAMP,
+			marked_for_deletion BOOLEAN DEFAULT false
 		)
 	`
 	_, err := cs.db.ExecContext(ctx, query)
@@ -100,10 +99,9 @@ func (cs *ChaiSchema) createBooksTable(ctx context.Context) error {
 			series_id INTEGER,
 			series_sequence INTEGER,
 			is_primary_version BOOLEAN DEFAULT true,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			marked_for_deletion BOOLEAN DEFAULT false,
-			FOREIGN KEY (series_id) REFERENCES series(id)
+			created_at TIMESTAMP,
+			updated_at TIMESTAMP,
+			marked_for_deletion BOOLEAN DEFAULT false
 		)
 	`
 	_, err := cs.db.ExecContext(ctx, query)
@@ -120,10 +118,9 @@ func (cs *ChaiSchema) createBookFilesTable(ctx context.Context) error {
 			format TEXT,
 			duration_ms INTEGER,
 			file_hash TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			marked_for_deletion BOOLEAN DEFAULT false,
-			FOREIGN KEY (book_id) REFERENCES books(id)
+			created_at TIMESTAMP,
+			updated_at TIMESTAMP,
+			marked_for_deletion BOOLEAN DEFAULT false
 		)
 	`
 	_, err := cs.db.ExecContext(ctx, query)
@@ -138,10 +135,8 @@ func (cs *ChaiSchema) createBookAuthorsTable(ctx context.Context) error {
 			book_id INTEGER NOT NULL,
 			author_id INTEGER NOT NULL,
 			position INTEGER DEFAULT 0,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			marked_for_deletion BOOLEAN DEFAULT false,
-			FOREIGN KEY (book_id) REFERENCES books(id),
-			FOREIGN KEY (author_id) REFERENCES authors(id)
+			created_at TIMESTAMP,
+			marked_for_deletion BOOLEAN DEFAULT false
 		)
 	`
 	_, err := cs.db.ExecContext(ctx, query)
