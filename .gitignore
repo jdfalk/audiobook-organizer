@@ -221,6 +221,12 @@ library.bleve/
 # Bootstrap token (auth credential, do not commit)
 .bootstrap-token
 
+# API token file (auth credential shared across worktrees, do not commit)
+.claude/.api-token
+
+# Worktree-specific credentials (per-branch user/pass, do not commit)
+.claude/.credentials/
+
 # Backup files
 *.bak
 .audiobook-backups/

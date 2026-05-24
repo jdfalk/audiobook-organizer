@@ -42,6 +42,51 @@ make help            # All targets
 
 > **Note:** `go.mod` currently says `go 1.24.0`. The Go instructions reference 1.25 features — update go.mod when upgrading.
 
+## Setup: Git Pre-Commit Hook & Credentials Management
+
+### Pre-Commit Hook (One-Time Setup)
+
+Protect against accidentally committing auth credentials:
+
+```bash
+bash scripts/setup-git-hooks.sh
+```
+
+This installs a pre-commit hook that blocks commits of:
+- `.api-token` — shared API key across worktrees (created by `server-bootstrap` skill)
+- `.bootstrap-token` — temporary bootstrap auth token
+- `.claude/.credentials/` — per-worktree usernames/passwords
+
+### Per-Worktree Credentials
+
+Each worktree can have its own credentials (username/password) for isolated access:
+
+```bash
+# Create credentials for current branch (auto-generates username from branch name)
+./scripts/manage-credentials.sh create
+
+# Create for a specific branch
+./scripts/manage-credentials.sh create fix-auth
+
+# List all stored credentials
+./scripts/manage-credentials.sh list
+
+# Get credentials for current branch
+./scripts/manage-credentials.sh get
+
+# Show how to use in curl
+./scripts/manage-credentials.sh use
+
+# Delete credentials
+./scripts/manage-credentials.sh delete
+
+# Clean up all credentials
+./scripts/manage-credentials.sh cleanup
+```
+
+Credentials are stored in `.claude/.credentials/<branch-name>.json` and are .gitignored.
+Username auto-generates from branch name (e.g., `fix-auth` → `claude_fix_auth`). Password is generated once and stored securely.
+
 ## Workflow Discipline
 
 - ALWAYS use a git worktree for refactors and multi-PR work; never commit directly to main in the primary working tree. Check `git worktree list` first; if in the main checkout, create `git worktree add ../<repo>-<branch> -b <branch>` and confirm the path back before any edits.
