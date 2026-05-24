@@ -1275,6 +1275,43 @@ func (cs *ChaiStore) GetAllPreferencesForUser_Chai(ctx context.Context, userID s
 	return result, nil
 }
 
+// GetAllBookSummaries_Chai returns paginated book summaries from SQL.
+func (cs *ChaiStore) GetAllBookSummaries_Chai(ctx context.Context, limit, offset int) ([]BookSummary, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(
+		`SELECT %s FROM books WHERE is_primary_version = true AND marked_for_deletion = false ORDER BY title LIMIT %d OFFSET %d`,
+		bookSummarySelectColumns, limit, offset,
+	)
+
+	rows, err := cs.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllBookSummaries_Chai query failed: %w", err)
+	}
+	defer rows.Close()
+
+	var summaries []BookSummary
+	for rows.Next() {
+		var summary BookSummary
+		if err := scanBookSummary(rows, &summary); err != nil {
+			return nil, fmt.Errorf("GetAllBookSummaries_Chai scan failed: %w", err)
+		}
+		summaries = append(summaries, summary)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetAllBookSummaries_Chai rows error: %w", err)
+	}
+	return summaries, nil
+}
+
 // Helper functions
 func escapeSQL(s string) string {
 	return strings.ReplaceAll(s, "'", "''")

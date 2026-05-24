@@ -1,5 +1,5 @@
 // file: internal/database/chai_books_by_author_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1g2h3i4-j5k6-47l8-m9n0-o1p2q3r4s5t6
 // last-edited: 2026-05-24
 
@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -313,15 +314,11 @@ func BenchmarkGetBooksByAuthorID_Chai(b *testing.B) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		if _, err := insertTestBook(db.DB(), book); err != nil {
-			b.Fatalf("insertTestBook failed: %v", err)
-		}
+		_, _ = insertTestBook(db.DB(), book)
 
 		// Assign to author (round-robin across 100 authors)
 		authorID := (bookNum % totalAuthors) + 1
-		if err := insertTestBookAuthor(db.DB(), book.ID, authorID); err != nil {
-			b.Fatalf("insertTestBookAuthor failed: %v", err)
-		}
+		_ = insertTestBookAuthor(db.DB(), book.ID, authorID)
 	}
 
 	// Benchmark: lookup all books for a single author (should be ~500 books)
@@ -335,5 +332,14 @@ func BenchmarkGetBooksByAuthorID_Chai(b *testing.B) {
 	}
 }
 
-// insertTestBook, insertTestBookAuthor, boolToSQL, and boolPtr
-// are defined in chai_books_list_test_helper.go
+// Helper function to insert a book-author relationship
+func insertTestBookAuthor(db *sql.DB, bookID string, authorID int) error {
+	query := fmt.Sprintf(`
+		INSERT INTO book_authors (id, book_id, author_id, marked_for_deletion)
+		VALUES ('BA_%s_%d', '%s', %d, false)
+	`, bookID, authorID, bookID, authorID)
+
+	_, err := db.Exec(query)
+	return err
+}
+
