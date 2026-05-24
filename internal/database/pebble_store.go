@@ -626,6 +626,25 @@ func (p *PebbleStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
 	return aliases, nil
 }
 
+// GetAllAuthorAliases_Chai provides SQL-based author alias retrieval via Chai backend.
+// Uses a feature flag to switch between Pebble and Chai implementations.
+// This is the production entry point when UseChaiDB feature flag is enabled.
+func (p *PebbleStore) GetAllAuthorAliases_Chai(ctx context.Context) ([]AuthorAlias, error) {
+	// Feature flag: use Chai SQL if enabled and database is available
+	if p.UseChaiDB && p.chai != nil {
+		// Wrap the ChaiDB's underlying SQL database in a ChaiStore
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err != nil {
+			// Fallback to Pebble if ChaiStore creation fails
+			return p.GetAllAuthorAliases()
+		}
+		return chaiStore.GetAllAuthorAliases_Chai(ctx)
+	}
+
+	// Fallback to Pebble implementation if flag is off or Chai is not available
+	return p.GetAllAuthorAliases()
+}
+
 func (p *PebbleStore) CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*AuthorAlias, error) {
 	if aliasType == "" {
 		aliasType = "alias"

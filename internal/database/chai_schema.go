@@ -54,6 +54,11 @@ func (cs *ChaiSchema) InitializeSchema(ctx context.Context) error {
 		return fmt.Errorf("failed to create user_preferences table: %w", err)
 	}
 
+	// Create author_aliases table
+	if err := cs.createAuthorAliasesTable(ctx); err != nil {
+		return fmt.Errorf("failed to create author_aliases table: %w", err)
+	}
+
 	// Create indexes for performance
 	if err := cs.createIndexes(ctx); err != nil {
 		return fmt.Errorf("failed to create indexes: %w", err)
@@ -238,6 +243,20 @@ func (cs *ChaiSchema) createUserPreferencesTable(ctx context.Context) error {
 	return err
 }
 
+func (cs *ChaiSchema) createAuthorAliasesTable(ctx context.Context) error {
+	query := `
+		CREATE TABLE IF NOT EXISTS author_aliases (
+			id INTEGER PRIMARY KEY,
+			author_id INTEGER NOT NULL,
+			alias_name TEXT NOT NULL,
+			alias_type TEXT,
+			created_at TIMESTAMP
+		)
+	`
+	_, err := cs.db.ExecContext(ctx, query)
+	return err
+}
+
 // createIndexes creates all necessary indexes for query performance
 func (cs *ChaiSchema) createIndexes(ctx context.Context) error {
 	indexes := map[string]string{
@@ -246,8 +265,10 @@ func (cs *ChaiSchema) createIndexes(ctx context.Context) error {
 		"idx_books_is_primary": "CREATE INDEX IF NOT EXISTS idx_books_is_primary ON books(is_primary_version)",
 		"idx_books_marked_del": "CREATE INDEX IF NOT EXISTS idx_books_marked_del ON books(marked_for_deletion)",
 		"idx_book_files_book_id": "CREATE INDEX IF NOT EXISTS idx_book_files_book_id ON book_files(book_id)",
-		"idx_book_authors_author_id": "CREATE INDEX IF NOT EXISTS idx_book_authors_author_id ON book_authors(author_id)",
-		"idx_book_authors_book_id": "CREATE INDEX IF NOT EXISTS idx_book_authors_book_id ON book_authors(book_id)",
+		"idx_book_authors_author_id":   "CREATE INDEX IF NOT EXISTS idx_book_authors_author_id ON book_authors(author_id)",
+		"idx_book_authors_book_id":     "CREATE INDEX IF NOT EXISTS idx_book_authors_book_id ON book_authors(book_id)",
+		"idx_author_aliases_author_id": "CREATE INDEX IF NOT EXISTS idx_author_aliases_author_id ON author_aliases(author_id)",
+		"idx_author_aliases_name":      "CREATE INDEX IF NOT EXISTS idx_author_aliases_alias_name ON author_aliases(alias_name)",
 	}
 
 	for _, stmt := range indexes {
@@ -262,6 +283,7 @@ func (cs *ChaiSchema) createIndexes(ctx context.Context) error {
 // DropAllTables drops all tables (for testing)
 func (cs *ChaiSchema) DropAllTables(ctx context.Context) error {
 	tables := []string{
+		"author_aliases",
 		"book_authors",
 		"book_files",
 		"books",
