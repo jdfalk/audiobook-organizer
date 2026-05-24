@@ -67,8 +67,12 @@ func chaiNullableTime(t *time.Time) string {
 
 func chaiEscapeStr(s string) string {
 	// Chai SQL lexer uses backslash escaping, not doubled single quotes.
+	// Also escape newlines — Chai's parser rejects multi-line string literals.
 	s = strings.ReplaceAll(s, `\`, `\\`)
-	return strings.ReplaceAll(s, "'", `\'`)
+	s = strings.ReplaceAll(s, "'", `\'`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	return s
 }
 
 // ── UpsertBookToChaiDB ───────────────────────────────────────────────────────
@@ -449,6 +453,14 @@ func (p *PebbleStore) BackfillChaiFromPebble(ctx context.Context) (synced int, e
 		return 0, fmt.Errorf("chai database not initialized")
 	}
 
+	slog.Info("chai_sync: resetting Chai schema before backfill")
+	schema := NewChaiSchema(p.chai.DB())
+	if err := schema.DropAllTables(ctx); err != nil {
+		return 0, fmt.Errorf("chai_sync backfill: drop tables failed: %w", err)
+	}
+	if err := schema.InitializeSchema(ctx); err != nil {
+		return 0, fmt.Errorf("chai_sync backfill: reinitialize schema failed: %w", err)
+	}
 	slog.Info("chai_sync: starting backfill from Pebble")
 
 	iter, iterErr := p.db.NewIter(&pebble.IterOptions{

@@ -135,7 +135,7 @@ func (cs *ChaiSchema) createBooksTable(ctx context.Context) error {
 			itunes_play_count INTEGER,
 			itunes_last_played TIMESTAMP,
 			itunes_rating INTEGER,
-			itunes_bookmark INTEGER,
+			itunes_bookmark BIGINT,
 			itunes_import_source TEXT,
 			itunes_path TEXT,
 			original_filename TEXT,
@@ -149,7 +149,7 @@ func (cs *ChaiSchema) createBooksTable(ctx context.Context) error {
 			version_group_id TEXT,
 			version_notes TEXT,
 			file_hash TEXT,
-			file_size INTEGER,
+			file_size BIGINT,
 			original_file_hash TEXT,
 			organized_file_hash TEXT,
 			library_state TEXT,
@@ -189,8 +189,8 @@ func (cs *ChaiSchema) createBooksTable(ctx context.Context) error {
 			cover_url TEXT,
 			narrators_json TEXT,
 			source_import_path TEXT,
-			last_scan_mtime INTEGER,
-			last_scan_size INTEGER,
+			last_scan_mtime BIGINT,
+			last_scan_size BIGINT,
 			needs_rescan BOOLEAN
 		)
 	`
@@ -207,7 +207,7 @@ func (cs *ChaiSchema) createBookFilesTable(ctx context.Context) error {
 			file_path TEXT NOT NULL,
 			format TEXT,
 			duration_ms INTEGER,
-			file_size_bytes INTEGER,
+			file_size_bytes BIGINT,
 			file_hash TEXT,
 			missing BOOLEAN DEFAULT false,
 			created_at TIMESTAMP,
