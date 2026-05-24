@@ -1147,6 +1147,42 @@ func (cs *ChaiStore) GetAllUserPreferences_Chai(ctx context.Context) (map[string
 
 
 
+// GetAllAuthorAliases_Chai returns all author aliases sorted by alias_name via SQL.
+func (cs *ChaiStore) GetAllAuthorAliases_Chai(ctx context.Context) ([]AuthorAlias, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := cs.db.QueryContext(ctx, `
+		SELECT id, author_id, alias_name, alias_type
+		FROM author_aliases
+		ORDER BY alias_name
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query author aliases: %w", err)
+	}
+	defer rows.Close()
+
+	var aliases []AuthorAlias
+	for rows.Next() {
+		var a AuthorAlias
+		var aliasType *string
+		if err := rows.Scan(&a.ID, &a.AuthorID, &a.AliasName, &aliasType); err != nil {
+			return nil, fmt.Errorf("failed to scan author alias row: %w", err)
+		}
+		if aliasType != nil {
+			a.AliasType = *aliasType
+		}
+		aliases = append(aliases, a)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading author aliases: %w", err)
+	}
+
+	return aliases, nil
+}
+
 // Helper functions
 func escapeSQL(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
