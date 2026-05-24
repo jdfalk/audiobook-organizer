@@ -1129,7 +1129,7 @@ func (cs *ChaiStore) GetAllUserPreferences_Chai(ctx context.Context) (map[string
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	rows, err := cs.db.QueryContext(ctx, `SELECT key, value FROM user_preferences`)
+	rows, err := cs.db.QueryContext(ctx, `SELECT pref_key, value FROM user_preferences`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user preferences: %w", err)
 	}
@@ -1244,7 +1244,7 @@ func (cs *ChaiStore) GetAllPreferencesForUser_Chai(ctx context.Context, userID s
 	}
 
 	query := fmt.Sprintf(
-		"SELECT key, value, updated_at, version FROM user_preferences WHERE user_id = '%s'",
+		"SELECT pref_key, value, updated_at, version FROM user_preferences WHERE user_id = '%s'",
 		escapeSQL(userID),
 	)
 
