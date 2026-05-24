@@ -218,12 +218,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 		}
 	}
 
-	// TODO: ALL cache warm-ups consuming unbounded memory during startup (6.4GB peak)
-	// Temporarily disabled until root cause identified and fixed.
-	// Use lazy cache-fill on first request instead.
-	// go s.warmFacetsCache()
-	// go s.warmAuthorsCache()
-	// go s.warmSeriesCache()
+	// Pre-warm facets cache (genres/languages) - lightweight, <1 second
+	go s.warmFacetsCache()
+	// Authors/series caches: re-enabled after fixing GetAllAuthor*Counts N+1 deserialization
+	go s.warmAuthorsCache()
+	go s.warmSeriesCache()
 
 	s.httpServer = &http.Server{
 		Addr:              fmt.Sprintf("%s:%s", cfg.Host, cfg.Port),

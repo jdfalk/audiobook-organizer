@@ -1614,7 +1614,7 @@ func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 
 func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	// Single-pass iteration of book:author index to avoid N+1 queries.
-	// Accumulates primary-version book counts per author in one scan.
+	// Do NOT deserialize books - just count primary-version entries from the index.
 	counts := make(map[int]int)
 	prefix := []byte("book:author:")
 	upper := []byte("book:author;") // ':' + 1
@@ -1635,18 +1635,14 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 			continue
 		}
 
-		// Deserialize book from index value
-		book, err := deserializeBookFromIndex(iter.Value(), func(id string) (*Book, error) {
-			return p.GetBookByID(id)
-		})
-		if err != nil || book == nil {
+		// Check IsPrimaryVersion flag from index metadata (first byte of value)
+		// Skip if book is marked as non-primary version
+		value := iter.Value()
+		if len(value) > 0 && value[0] == 0 { // 0 = non-primary version
 			continue
 		}
 
-		// Count only primary versions
-		if book.IsPrimaryVersion == nil || *book.IsPrimaryVersion {
-			counts[authorID]++
-		}
+		counts[authorID]++
 	}
 
 	return counts, nil
@@ -1657,11 +1653,11 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
 	counts := make(map[int]int)
 
-	// Phase 1: Iterate book:author index to collect all books per author
+	// Phase 1: Iterate book:author index to collect author-book relationships
+	// Do NOT deserialize full books - just extract IDs and check primary-version flag
 	type AuthorBook struct {
 		AuthorID int
 		BookID   string
-		Book     *Book
 	}
 	var authorBooks []AuthorBook
 
@@ -1684,20 +1680,14 @@ func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
 		}
 		bookID := parts[3]
 
-		// Deserialize book from index value
-		book, err := deserializeBookFromIndex(iter.Value(), func(id string) (*Book, error) {
-			return p.GetBookByID(id)
-		})
-		if err != nil || book == nil {
+		// Check IsPrimaryVersion flag from index metadata (first byte of value)
+		// Skip if book is marked as non-primary version
+		value := iter.Value()
+		if len(value) > 0 && value[0] == 0 { // 0 = non-primary version
 			continue
 		}
 
-		// Skip non-primary versions
-		if book.IsPrimaryVersion != nil && !*book.IsPrimaryVersion {
-			continue
-		}
-
-		authorBooks = append(authorBooks, AuthorBook{AuthorID: authorID, BookID: bookID, Book: book})
+		authorBooks = append(authorBooks, AuthorBook{AuthorID: authorID, BookID: bookID})
 	}
 	iter.Close()
 
