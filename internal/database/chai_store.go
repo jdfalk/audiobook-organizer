@@ -856,6 +856,99 @@ func scanBookFromSQL(rows *sql.Rows, book *Book) error {
 	return nil
 }
 
+// GetBooksByAuthorID_Chai returns books by author using two-phase query (Chai SQL
+// doesn't support subqueries in WHERE, so we collect IDs then fetch books).
+func (cs *ChaiStore) GetBooksByAuthorID_Chai(ctx context.Context, authorID int, limit, offset int) ([]Book, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	rows, err := cs.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT DISTINCT book_id FROM book_authors
+		WHERE author_id = %d AND marked_for_deletion = false
+	`, authorID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query author-book mappings: %w", err)
+	}
+	defer rows.Close()
+
+	var bookIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		bookIDs = append(bookIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading author-book mappings: %w", err)
+	}
+	if len(bookIDs) == 0 {
+		return []Book{}, nil
+	}
+
+	var inClause string
+	for i, id := range bookIDs {
+		if i == 0 {
+			inClause = fmt.Sprintf("'%s'", escapeSQL(id))
+		} else {
+			inClause += fmt.Sprintf(", '%s'", escapeSQL(id))
+		}
+	}
+
+	bookRows, err := cs.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT id, title, series_id, series_sequence,
+			is_primary_version, marked_for_deletion, created_at, updated_at
+		FROM books
+		WHERE id IN (%s) AND marked_for_deletion = false AND is_primary_version = true
+		ORDER BY title
+		LIMIT %d OFFSET %d
+	`, inClause, limit, offset))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query books by author: %w", err)
+	}
+	defer bookRows.Close()
+
+	var books []Book
+	for bookRows.Next() {
+		var (
+			book          Book
+			seriesID      sql.NullInt64
+			seriesSeq     sql.NullInt64
+			isPrimary     sql.NullBool
+			markedDeleted sql.NullBool
+			createdAt     sql.NullTime
+			updatedAt     sql.NullTime
+		)
+		if err := bookRows.Scan(&book.ID, &book.Title, &seriesID, &seriesSeq,
+			&isPrimary, &markedDeleted, &createdAt, &updatedAt); err != nil {
+			continue
+		}
+		if seriesID.Valid {
+			v := int(seriesID.Int64)
+			book.SeriesID = &v
+		}
+		if seriesSeq.Valid {
+			v := int(seriesSeq.Int64)
+			book.SeriesSequence = &v
+		}
+		if isPrimary.Valid {
+			book.IsPrimaryVersion = &isPrimary.Bool
+		}
+		if markedDeleted.Valid {
+			book.MarkedForDeletion = &markedDeleted.Bool
+		}
+		books = append(books, book)
+	}
+	return books, bookRows.Err()
+}
+
 // Helper functions
 func escapeSQL(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
