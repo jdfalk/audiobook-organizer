@@ -5807,6 +5807,20 @@ func (p *PebbleStore) GetUserPreferenceForUser(userID, key string) (*UserPrefere
 	return &kv, nil
 }
 func (p *PebbleStore) GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error) {
+	// Feature flag: route to Chai SQL when enabled and database is available.
+	if p.UseChaiDB && p.chai != nil {
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err != nil {
+			// Fallback to Pebble if ChaiStore creation fails.
+			return p.getAllPreferencesForUser_Pebble(userID)
+		}
+		return chaiStore.GetAllPreferencesForUser_Chai(context.Background(), userID)
+	}
+	return p.getAllPreferencesForUser_Pebble(userID)
+}
+
+// getAllPreferencesForUser_Pebble is the original Pebble-scan implementation.
+func (p *PebbleStore) getAllPreferencesForUser_Pebble(userID string) ([]UserPreferenceKV, error) {
 	prefix := []byte("pref:" + userID + ":")
 	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: append(prefix, 0xFF)})
 	if err != nil {

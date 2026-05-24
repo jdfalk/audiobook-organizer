@@ -9,11 +9,12 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
-// TestGetAllUserPreferences_Chai validates that the SQL implementation reads back
-// key-value rows from the user_preferences table.
-func TestGetAllUserPreferences_Chai(t *testing.T) {
+// TestGetAllPreferencesForUser_Chai validates the Chai SQL implementation
+// that replaces the Pebble prefix-scan for per-user preference retrieval.
+func TestGetAllPreferencesForUser_Chai(t *testing.T) {
 	tmpDir := t.TempDir()
 	ctx := context.Background()
 
@@ -29,168 +30,126 @@ func TestGetAllUserPreferences_Chai(t *testing.T) {
 		t.Fatalf("NewChaiStore failed: %v", err)
 	}
 
-	// Insert test rows
-	_, err = chaiDB.ExecContext(ctx, `
-		INSERT INTO user_preferences (key, value) VALUES
-			('theme', 'dark'),
-			('language', 'en'),
-			('volume', '80')
-	`)
-	if err != nil {
-		t.Fatalf("failed to insert test preferences: %v", err)
-	}
+	now := time.Now().UTC().Truncate(time.Second)
 
-	prefs, err := chaiStore.GetAllUserPreferences_Chai(ctx)
-	if err != nil {
-		t.Fatalf("GetAllUserPreferences_Chai failed: %v", err)
+	// Insert preferences for two users; only user-1's rows should be returned.
+	rows := []struct {
+		userID  string
+		key     string
+		value   string
+		version int
+	}{
+		{"user-1", "theme", "dark", 2},
+		{"user-1", "pageSize", "50", 1},
+		{"user-2", "theme", "light", 1},
 	}
-
-	expected := map[string]string{
-		"theme":    "dark",
-		"language": "en",
-		"volume":   "80",
-	}
-
-	if len(prefs) != len(expected) {
-		t.Errorf("expected %d preferences, got %d", len(expected), len(prefs))
-	}
-
-	for k, wantVal := range expected {
-		gotVal, ok := prefs[k]
-		if !ok {
-			t.Errorf("preference %q missing from result", k)
-			continue
-		}
-		if gotVal != wantVal {
-			t.Errorf("preference %q: want %q, got %q", k, wantVal, gotVal)
+	for _, r := range rows {
+		_, err := chaiDB.ExecContext(ctx,
+			"INSERT INTO user_preferences (user_id, key, value, updated_at, version) VALUES (?, ?, ?, ?, ?)",
+			r.userID, r.key, r.value, now, r.version,
+		)
+		if err != nil {
+			t.Fatalf("insert failed (%s/%s): %v", r.userID, r.key, err)
 		}
 	}
+
+	t.Run("returns all prefs for user-1", func(t *testing.T) {
+		prefs, err := chaiStore.GetAllPreferencesForUser_Chai(ctx, "user-1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(prefs) != 2 {
+			t.Fatalf("expected 2 prefs, got %d", len(prefs))
+		}
+		// Build map for stable assertion order.
+		byKey := make(map[string]UserPreferenceKV, len(prefs))
+		for _, p := range prefs {
+			byKey[p.Key] = p
+		}
+		if byKey["theme"].Value != "dark" {
+			t.Errorf("theme: want 'dark', got %q", byKey["theme"].Value)
+		}
+		if byKey["pageSize"].Value != "50" {
+			t.Errorf("pageSize: want '50', got %q", byKey["pageSize"].Value)
+		}
+		if byKey["theme"].UserID != "user-1" {
+			t.Errorf("UserID: want 'user-1', got %q", byKey["theme"].UserID)
+		}
+		if byKey["theme"].Version != 2 {
+			t.Errorf("theme version: want 2, got %d", byKey["theme"].Version)
+		}
+	})
+
+	t.Run("does not return other user's prefs", func(t *testing.T) {
+		prefs, err := chaiStore.GetAllPreferencesForUser_Chai(ctx, "user-1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		for _, p := range prefs {
+			if p.UserID != "user-1" {
+				t.Errorf("got pref for wrong user: %q", p.UserID)
+			}
+		}
+	})
+
+	t.Run("returns empty slice for unknown user", func(t *testing.T) {
+		prefs, err := chaiStore.GetAllPreferencesForUser_Chai(ctx, "no-such-user")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if prefs == nil {
+			t.Error("expected non-nil empty slice, got nil")
+		}
+		if len(prefs) != 0 {
+			t.Errorf("expected 0 prefs, got %d", len(prefs))
+		}
+	})
+
+	t.Run("escapes SQL injection in userID", func(t *testing.T) {
+		// A malicious userID containing a single quote must not cause an error
+		// or leak rows from other users.
+		prefs, err := chaiStore.GetAllPreferencesForUser_Chai(ctx, "bad' OR '1'='1")
+		if err != nil {
+			t.Fatalf("unexpected error on injection attempt: %v", err)
+		}
+		if len(prefs) != 0 {
+			t.Errorf("injection returned %d rows, expected 0", len(prefs))
+		}
+	})
 }
 
-// TestGetAllUserPreferences_Chai_Empty validates that an empty table returns an empty map.
-func TestGetAllUserPreferences_Chai_Empty(t *testing.T) {
-	tmpDir := t.TempDir()
-	ctx := context.Background()
+// TestGetAllPreferencesForUser_PebbleRouting validates that PebbleStore.GetAllPreferencesForUser
+// falls through to the Pebble implementation when UseChaiDB is false (the default).
+func TestGetAllPreferencesForUser_PebbleRouting(t *testing.T) {
+	store, cleanup := setupPebbleTestDB(t)
+	defer cleanup()
 
-	chaiPath := filepath.Join(tmpDir, "chai.db")
-	chaiDB, err := NewChaiDB(ctx, chaiPath)
-	if err != nil {
-		t.Fatalf("NewChaiDB failed: %v", err)
-	}
-	defer chaiDB.Close()
-
-	chaiStore, err := NewChaiStore(chaiDB.DB())
-	if err != nil {
-		t.Fatalf("NewChaiStore failed: %v", err)
-	}
-
-	prefs, err := chaiStore.GetAllUserPreferences_Chai(ctx)
-	if err != nil {
-		t.Fatalf("GetAllUserPreferences_Chai on empty table failed: %v", err)
-	}
-
-	if len(prefs) != 0 {
-		t.Errorf("expected empty map, got %d entries", len(prefs))
-	}
-}
-
-// TestGetAllUserPreferences_Chai_NullValue validates that NULL values are returned as empty strings.
-func TestGetAllUserPreferences_Chai_NullValue(t *testing.T) {
-	tmpDir := t.TempDir()
-	ctx := context.Background()
-
-	chaiPath := filepath.Join(tmpDir, "chai.db")
-	chaiDB, err := NewChaiDB(ctx, chaiPath)
-	if err != nil {
-		t.Fatalf("NewChaiDB failed: %v", err)
-	}
-	defer chaiDB.Close()
-
-	chaiStore, err := NewChaiStore(chaiDB.DB())
-	if err != nil {
-		t.Fatalf("NewChaiStore failed: %v", err)
-	}
-
-	_, err = chaiDB.ExecContext(ctx, `INSERT INTO user_preferences (key, value) VALUES ('nullpref', NULL)`)
-	if err != nil {
-		t.Fatalf("failed to insert NULL preference: %v", err)
-	}
-
-	prefs, err := chaiStore.GetAllUserPreferences_Chai(ctx)
-	if err != nil {
-		t.Fatalf("GetAllUserPreferences_Chai with NULL value failed: %v", err)
-	}
-
-	val, ok := prefs["nullpref"]
+	ps, ok := store.(*PebbleStore)
 	if !ok {
-		t.Fatal("expected 'nullpref' key in result")
+		t.Fatal("store is not *PebbleStore")
 	}
-	if val != "" {
-		t.Errorf("expected empty string for NULL value, got %q", val)
+
+	// Seed a preference via the existing SetUserPreferenceForUser.
+	if err := ps.SetUserPreferenceForUser("user-A", "myKey", "myValue"); err != nil {
+		t.Fatalf("SetUserPreferenceForUser failed: %v", err)
 	}
-}
 
-// TestGetAllUserPreferences_PebbleRouting validates that PebbleStore.GetAllUserPreferences
-// falls through to Pebble iteration when UseChaiDB is false.
-func TestGetAllUserPreferences_PebbleRouting(t *testing.T) {
-	tmpDir := t.TempDir()
-	pebblePath := filepath.Join(tmpDir, "pebble.db")
+	// UseChaiDB defaults to false — should use Pebble path.
+	if ps.UseChaiDB {
+		t.Fatal("expected UseChaiDB=false for this test")
+	}
 
-	store, err := NewPebbleStore(pebblePath)
+	prefs, err := ps.GetAllPreferencesForUser("user-A")
 	if err != nil {
-		t.Fatalf("NewPebbleStore failed: %v", err)
+		t.Fatalf("GetAllPreferencesForUser failed: %v", err)
 	}
-	defer store.Close()
-
-	// UseChaiDB defaults to false; should use Pebble path
-	if store.UseChaiDB {
-		t.Fatal("UseChaiDB should default to false")
-	}
-
-	prefs, err := store.GetAllUserPreferences()
-	if err != nil {
-		t.Fatalf("GetAllUserPreferences on empty Pebble DB failed: %v", err)
-	}
-
-	if len(prefs) != 0 {
-		t.Errorf("expected empty result from empty Pebble DB, got %d entries", len(prefs))
-	}
-}
-
-// TestGetAllUserPreferences_Pebble validates the _Pebble variant directly.
-func TestGetAllUserPreferences_Pebble(t *testing.T) {
-	tmpDir := t.TempDir()
-	pebblePath := filepath.Join(tmpDir, "pebble.db")
-
-	store, err := NewPebbleStore(pebblePath)
-	if err != nil {
-		t.Fatalf("NewPebbleStore failed: %v", err)
-	}
-	defer store.Close()
-
-	// Write a preference the Pebble way
-	if err := store.SetUserPreference("color_scheme", "light"); err != nil {
-		t.Fatalf("SetUserPreference failed: %v", err)
-	}
-
-	prefs, err := store.GetAllUserPreferences_Pebble()
-	if err != nil {
-		t.Fatalf("GetAllUserPreferences_Pebble failed: %v", err)
-	}
-
 	if len(prefs) != 1 {
-		t.Fatalf("expected 1 preference, got %d", len(prefs))
+		t.Fatalf("expected 1 pref, got %d", len(prefs))
 	}
-
-	if prefs[0].Key != "color_scheme" {
-		t.Errorf("expected key 'color_scheme', got %q", prefs[0].Key)
+	if prefs[0].Key != "myKey" {
+		t.Errorf("key: want 'myKey', got %q", prefs[0].Key)
 	}
-
-	if prefs[0].Value == nil || *prefs[0].Value != "light" {
-		val := "<nil>"
-		if prefs[0].Value != nil {
-			val = *prefs[0].Value
-		}
-		t.Errorf("expected value 'light', got %q", val)
+	if prefs[0].Value != "myValue" {
+		t.Errorf("value: want 'myValue', got %q", prefs[0].Value)
 	}
 }

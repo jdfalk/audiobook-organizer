@@ -1225,6 +1225,56 @@ func (cs *ChaiStore) GetAllBlockedHashes_Chai(ctx context.Context) ([]DoNotImpor
 	return items, nil
 }
 
+// GetAllPreferencesForUser_Chai returns all preferences for a specific user from SQL.
+func (cs *ChaiStore) GetAllPreferencesForUser_Chai(ctx context.Context, userID string) ([]UserPreferenceKV, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	query := fmt.Sprintf(
+		"SELECT key, value, updated_at, version FROM user_preferences WHERE user_id = '%s'",
+		escapeSQL(userID),
+	)
+
+	rows, err := cs.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("GetAllPreferencesForUser_Chai: query failed: %w", err)
+	}
+	defer rows.Close()
+
+	var result []UserPreferenceKV
+	for rows.Next() {
+		var kv UserPreferenceKV
+		var rawValue sql.NullString
+		var rawUpdatedAt sql.NullTime
+		var rawVersion sql.NullInt64
+		if err := rows.Scan(&kv.Key, &rawValue, &rawUpdatedAt, &rawVersion); err != nil {
+			return nil, fmt.Errorf("GetAllPreferencesForUser_Chai: scan failed: %w", err)
+		}
+		kv.UserID = userID
+		if rawValue.Valid {
+			kv.Value = rawValue.String
+		}
+		if rawUpdatedAt.Valid {
+			kv.UpdatedAt = rawUpdatedAt.Time
+		}
+		if rawVersion.Valid {
+			kv.Version = int(rawVersion.Int64)
+		} else {
+			kv.Version = 1
+		}
+		result = append(result, kv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetAllPreferencesForUser_Chai: rows iteration failed: %w", err)
+	}
+
+	if result == nil {
+		result = []UserPreferenceKV{}
+	}
+	return result, nil
+}
+
 // Helper functions
 func escapeSQL(s string) string {
 	return strings.ReplaceAll(s, "'", "''")

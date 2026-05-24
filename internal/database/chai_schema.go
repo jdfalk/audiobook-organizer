@@ -236,12 +236,16 @@ func (cs *ChaiSchema) createBookAuthorsTable(ctx context.Context) error {
 	return err
 }
 
-// createUserPreferencesTable creates the user_preferences table
+// createUserPreferencesTable creates the user_preferences table for per-user key/value preferences.
 func (cs *ChaiSchema) createUserPreferencesTable(ctx context.Context) error {
 	query := `
 		CREATE TABLE IF NOT EXISTS user_preferences (
-			key TEXT PRIMARY KEY,
-			value TEXT
+			user_id TEXT NOT NULL,
+			key TEXT NOT NULL,
+			value TEXT,
+			updated_at TIMESTAMP,
+			version INTEGER DEFAULT 1,
+			PRIMARY KEY (user_id, key)
 		)
 	`
 	_, err := cs.db.ExecContext(ctx, query)
