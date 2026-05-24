@@ -1,25 +1,48 @@
 <!-- file: CLAUDE.md -->
-<!-- version: 4.6.0 -->
+<!-- version: 4.7.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
-<!-- last-edited: 2026-05-23 -->
+<!-- last-edited: 2026-05-24 -->
 
 # CLAUDE.md
 
 This is an **audiobook organizer** — Go backend + React/TypeScript frontend.
 All AI agent instructions live in `.github/`. This file is the entry point.
 
-⚠️ **CRITICAL: ALWAYS USE GIT WORKTREES**
+## Worktree Discipline (MANDATORY)
 
-**BEFORE MAKING ANY EDITS:**
-1. Run `git worktree list` to check current location
-2. If in the primary checkout (main), STOP — do one of:
-   - Use EnterPlanMode (triggers plan-first workflow, which enforces worktree creation)
-   - Manually create worktree: `git worktree add ../<repo>-<branch> -b <branch>` then `cd ../<repo>-<branch>`
-3. Verify you're in a worktree: `git worktree list` should show your current path without `(detached)`
+- **NEVER** edit files directly in the main working tree
+- **ALWAYS** create a worktree + feature branch before any code changes:
+  `git worktree add ../<repo>-<feature> -b <branch-name>`
+- **NEVER** commit directly to main — all changes go through PRs
+- If you catch yourself editing main, **STOP immediately**, move changes to a worktree, and reset main
 
-Then proceed with edits, commit, push, PR, and merge via rebase/FF.
+**Before any edit:** run `git worktree list` to confirm current location. If in the primary checkout (main), use EnterPlanMode (which enforces worktree creation) or manually create a worktree first.
 
-**Why:** This repo has production at stake. Direct commits to main can conflict with concurrent work. Worktrees provide isolation. This is non-negotiable — no exceptions.
+**Why:** This repo has production at stake. Direct commits to main conflict with concurrent work. This is non-negotiable — no exceptions.
+
+## Plan Before Execution
+
+- For any refactor, migration, or multi-file change, present a **written plan FIRST** and wait for approval
+- Write the plan to `PLAN.md` at the worktree root, covering: goal / files to change / ordered steps / test strategy / rollback
+- Do **not** start exploring/editing files until the user confirms the plan
+- Use TodoWrite to capture the plan visibly
+
+## Status Reporting Honesty
+
+- When reporting completion, give **EXACT counts** (e.g., `33/41 fixed, 8 remaining`) — never aggregate claims like "all done"
+- If a subagent is still running, explicitly state "X subagents still in progress"
+- Every status update must end with:
+  - `COMPLETED: <count> — <list>`
+  - `REMAINING: <count> — <list>`
+  - `BLOCKED: <count> — <list>`
+- **Never** use "all done", "complete", or "finished" without a number backing it up
+- Never claim "all complete" until you have verified every item in the original scope
+
+## Parallel Subagent Coordination
+
+- Never launch overlapping waves (e.g., W9b + W9c on related files) in parallel — they will conflict on rebase
+- Subagents must report progress every 5 minutes; if silent >10 min, surface the delay to the user
+- Before enabling feature flags in production, verify data backfill has completed
 
 ## Quick Start
 
@@ -100,6 +123,23 @@ Username auto-generates from branch name (e.g., `fix-auth` → `claude_fix_auth`
 - Before running any multi-step build, deploy, or reset sequence, run `grep -E '^[a-z-]+:' Makefile Makefile.local 2>/dev/null` to list targets. Prefer an existing target over manual commands, and state which target is being used and why.
 - For ≥3 mechanically-similar refactor tasks, use the `/parallel-sweep` slash command — it handles worktree-per-task isolation, autonomous PR + admin-merge with the local-`make ci` gate, sibling-rebase loop with Sonnet/Opus conflict resolvers, and resume across usage limits. Spec: [`docs/superpowers/specs/parallel-sweep.md`](docs/superpowers/specs/parallel-sweep.md).
 - For any design doc, plan, or review longer than ~300 lines, write it to a file under `docs/` (shared) or `.claude/notes/` (scratch) and respond with just a summary + file path. Do NOT inline long content in chat.
+- For parallel investigation: use read-only agents first, present findings, await implementation approval before any agent edits files.
+
+## Prompts & Patterns
+
+Use these verbatim to enforce the above disciplines in new sessions:
+
+**Pre-deploy check:**
+> Before we deploy, run a pre-deploy check: (1) list all feature flags being enabled in this PR, (2) for each, verify the underlying data source is populated in prod, (3) grep for `//go:embed` in changed files and confirm those files exist in the build context, (4) run the build locally end-to-end. Report findings before I approve deploy.
+
+**Plan-first gate:**
+> Before touching any files, produce a written plan with: (1) goal, (2) files you'll change, (3) order of operations, (4) test/verification strategy, (5) rollback plan. Write it to a markdown file and wait for my approval. Do NOT read code beyond what's needed to draft the plan.
+
+**Status reporting:**
+> From now on, every status update must end with three lines: 'COMPLETED: \<count\> - \<list\>', 'REMAINING: \<count\> - \<list\>', 'BLOCKED: \<count\> - \<list\>'. Never use words like 'all done', 'complete', or 'finished' without a number backing them up.
+
+**Read-only parallel investigation:**
+> Use 3 parallel agents to investigate (read-only) the call sites of \<X\> across the codebase. Each agent reports findings. Do NOT edit. I will review the findings before authorizing implementation.
 
 ## GitHub Operations
 
