@@ -774,6 +774,12 @@ func (cs *ChaiStore) GetBooksBySeriesID_Chai(ctx context.Context, seriesID int, 
 // scanBookFromSQL unmarshals a Book from SQL query results.
 func scanBookFromSQL(rows *sql.Rows, book *Book) error {
 	var (
+		// Non-pointer string fields need NullString to handle NULL from partial inserts
+		bookID    sql.NullString
+		bookTitle sql.NullString
+		filePath  sql.NullString
+		format    sql.NullString
+		// Nullable numeric fields
 		authorID          sql.NullInt64
 		seriesID          sql.NullInt64
 		seriesSeq         sql.NullInt64
@@ -818,7 +824,7 @@ func scanBookFromSQL(rows *sql.Rows, book *Book) error {
 	)
 
 	err := rows.Scan(
-		&book.ID, &book.Title, &authorID, &seriesID, &seriesSeq, &book.FilePath, &book.Format, &duration,
+		&bookID, &bookTitle, &authorID, &seriesID, &seriesSeq, &filePath, &format, &duration,
 		&book.WorkID, &book.Narrator, &book.Edition, &book.Description, &book.Language, &book.Publisher,
 		&book.Genre, &printYear, &audReleaseYear, &book.ISBN10, &book.ISBN13, &book.ASIN,
 		&book.OpenLibraryID, &book.HardcoverID, &book.GoogleBooksID, &book.ITunesPersistentID,
@@ -840,6 +846,12 @@ func scanBookFromSQL(rows *sql.Rows, book *Book) error {
 	if err != nil {
 		return err
 	}
+
+	// Assign non-pointer string fields from NullString
+	book.ID = bookID.String
+	book.Title = bookTitle.String
+	book.FilePath = filePath.String
+	book.Format = format.String
 
 	// Convert SQL nulls to pointers
 	if authorID.Valid {

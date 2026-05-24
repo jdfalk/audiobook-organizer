@@ -37,20 +37,29 @@ func insertTestBookFull(db *sql.DB, book *Book) (*Book, error) {
 		seriesSeqVal = fmt.Sprintf("%d", *book.SeriesSequence)
 	}
 
+	isPrimary := "true"
+	if !*book.IsPrimaryVersion {
+		isPrimary = "false"
+	}
+	markedDel := "false"
+	if *book.MarkedForDeletion {
+		markedDel = "true"
+	}
+
 	query := fmt.Sprintf(`
 		INSERT INTO books (
 			id, title, file_path, series_id, series_sequence,
 			is_primary_version, marked_for_deletion, created_at, updated_at
 		)
-		VALUES ('%s', '%s', '%s', %s, %s, %v, %v, '%s', '%s')
+		VALUES ('%s', '%s', '%s', %s, %s, %s, %s, '%s', '%s')
 	`,
 		book.ID,
 		escapeSQL(book.Title),
 		escapeSQL(book.FilePath),
 		seriesIDVal,
 		seriesSeqVal,
-		boolToSQL(*book.IsPrimaryVersion),
-		boolToSQL(*book.MarkedForDeletion),
+		isPrimary,
+		markedDel,
 		now.Format("2006-01-02T15:04:05"),
 		now.Format("2006-01-02T15:04:05"),
 	)

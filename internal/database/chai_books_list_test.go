@@ -1,5 +1,5 @@
 // file: internal/database/chai_books_list_test.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6
 // last-edited: 2026-05-24
 
@@ -38,7 +38,7 @@ func TestGetAllBooks_Chai_BasicPagination(t *testing.T) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		_, err := insertTestBook(db.DB(), book)
+		_, err := insertTestBookFull(db.DB(), book)
 		if err != nil {
 			t.Fatalf("failed to insert test book %d: %v", i, err)
 		}
@@ -109,7 +109,7 @@ func TestGetAllBooks_Chai_MarkedForDeletion(t *testing.T) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		_, err := insertTestBook(db.DB(), book)
+		_, err := insertTestBookFull(db.DB(), book)
 		if err != nil {
 			t.Fatalf("failed to insert active book: %v", err)
 		}
@@ -123,7 +123,7 @@ func TestGetAllBooks_Chai_MarkedForDeletion(t *testing.T) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(true),
 		}
-		_, err := insertTestBook(db.DB(), book)
+		_, err := insertTestBookFull(db.DB(), book)
 		if err != nil {
 			t.Fatalf("failed to insert deleted book: %v", err)
 		}
@@ -177,7 +177,7 @@ func TestGetAllBooks_Chai_IsPrimaryVersion(t *testing.T) {
 			IsPrimaryVersion: boolPtr(true),
 			MarkedForDeletion: boolPtr(false),
 		}
-		_, err := insertTestBook(db.DB(), book)
+		_, err := insertTestBookFull(db.DB(), book)
 		if err != nil {
 			t.Fatalf("failed to insert primary book: %v", err)
 		}
@@ -191,7 +191,7 @@ func TestGetAllBooks_Chai_IsPrimaryVersion(t *testing.T) {
 			IsPrimaryVersion: boolPtr(false),
 			MarkedForDeletion: boolPtr(false),
 		}
-		_, err := insertTestBook(db.DB(), book)
+		_, err := insertTestBookFull(db.DB(), book)
 		if err != nil {
 			t.Fatalf("failed to insert non-primary book: %v", err)
 		}
