@@ -124,12 +124,6 @@ func (cs *ChaiStore) GetAllSeriesFileCounts_Chai(ctx context.Context) (map[int]i
 
 	// Phase 1: Get all qualifying books (primary versions, not deleted, with series)
 	// This replaces Pebble's first scan phase
-	type SeriesBook struct {
-		BookID   string
-		SeriesID int
-	}
-	var seriesBooks []SeriesBook
-
 	booksRows, err := cs.db.QueryContext(ctx, `
 		SELECT id, series_id FROM books
 		WHERE series_id IS NOT NULL

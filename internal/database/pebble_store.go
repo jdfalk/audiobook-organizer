@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.79.0
+// version: 1.80.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-24
 
@@ -115,11 +115,13 @@ func isValidULID(s string) bool {
 
 type PebbleStore struct {
 	db                       *pebble.DB
+	chai                     *ChaiDB    // optional: Chai database for SQL queries (Phase 2 migration)
 	counterMu                sync.Mutex // protects nextID read-modify-write
 	opsMu                    sync.Mutex // serializes v2 op CAS operations (SetOperationV2StatusIfQueued)
 	opsLogSeq                int64      // monotonic counter for log key uniqueness; accessed via atomic
 	rootDir                  string     // organized library root; set via SetRootDir after config load
 	libraryCountsRecomputeMu sync.Mutex // gates recompute to prevent stampede when N callers see dirty cache
+	UseChaiDB               bool       // feature flag: use Chai SQL for aggregations (false = use Pebble)
 }
 
 const statsLibraryKey = "stats:library"
@@ -947,6 +949,15 @@ func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
 }
 
 func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
+	// Use feature flag to switch between Pebble and Chai implementations
+	if p.UseChaiDB && p.chai != nil {
+		return p.GetAllSeriesBookCounts_Chai(context.Background())
+	}
+	return p.GetAllSeriesBookCounts_Pebble()
+}
+
+// GetAllSeriesBookCounts_Pebble returns the number of books per series using Pebble iteration
+func (p *PebbleStore) GetAllSeriesBookCounts_Pebble() (map[int]int, error) {
 	counts := make(map[int]int)
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
@@ -977,6 +988,21 @@ func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
 		counts[*b.SeriesID]++
 	}
 	return counts, nil
+}
+
+// GetAllSeriesBookCounts_Chai returns the number of books per series using Chai SQL
+// This delegates to ChaiStore which implements the SQL query.
+func (p *PebbleStore) GetAllSeriesBookCounts_Chai(ctx context.Context) (map[int]int, error) {
+	if p.chai == nil {
+		return nil, fmt.Errorf("Chai database not initialized")
+	}
+
+	chaiStore, err := NewChaiStore(p.chai.DB())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ChaiStore: %w", err)
+	}
+
+	return chaiStore.GetAllSeriesBookCounts_SQL(ctx)
 }
 
 // GetAllSeriesFileCounts returns the number of audio files per series.
@@ -1646,6 +1672,25 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	}
 
 	return counts, nil
+}
+
+// GetAllAuthorBookCounts_Chai provides SQL-based author book counting via Chai backend.
+// Uses a feature flag to switch between Pebble and Chai implementations.
+// This is the production entry point when UseChaiDB feature flag is enabled.
+func (p *PebbleStore) GetAllAuthorBookCounts_Chai(ctx context.Context) (map[int]int, error) {
+	// Feature flag: use Chai SQL if enabled and database is available
+	if p.UseChaiDB && p.chai != nil {
+		// Wrap the ChaiDB's underlying SQL database in a ChaiStore
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err != nil {
+			// Fallback to Pebble if ChaiStore creation fails
+			return p.GetAllAuthorBookCounts()
+		}
+		return chaiStore.GetAllAuthorBookCounts_Chai(ctx)
+	}
+
+	// Fallback to Pebble implementation if flag is off or Chai is not available
+	return p.GetAllAuthorBookCounts()
 }
 
 // GetAllAuthorFileCounts returns the number of audio files per author.
