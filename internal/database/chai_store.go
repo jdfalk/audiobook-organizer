@@ -1183,6 +1183,48 @@ func (cs *ChaiStore) GetAllAuthorAliases_Chai(ctx context.Context) ([]AuthorAlia
 	return aliases, nil
 }
 
+// GetAllBlockedHashes_Chai returns all blocked hashes from SQL.
+func (cs *ChaiStore) GetAllBlockedHashes_Chai(ctx context.Context) ([]DoNotImport, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := cs.db.QueryContext(ctx, `
+		SELECT hash, reason, created_at FROM blocked_hashes
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query blocked hashes: %w", err)
+	}
+	defer rows.Close()
+
+	var items []DoNotImport
+	for rows.Next() {
+		var (
+			item      DoNotImport
+			reason    sql.NullString
+			createdAt sql.NullTime
+		)
+		if err := rows.Scan(&item.Hash, &reason, &createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan blocked hash row: %w", err)
+		}
+		if reason.Valid {
+			item.Reason = reason.String
+		}
+		if createdAt.Valid {
+			item.CreatedAt = createdAt.Time
+		} else {
+			item.CreatedAt = time.Time{}
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading blocked hashes: %w", err)
+	}
+
+	return items, nil
+}
+
 // Helper functions
 func escapeSQL(s string) string {
 	return strings.ReplaceAll(s, "'", "''")

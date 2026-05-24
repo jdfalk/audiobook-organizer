@@ -59,6 +59,11 @@ func (cs *ChaiSchema) InitializeSchema(ctx context.Context) error {
 		return fmt.Errorf("failed to create author_aliases table: %w", err)
 	}
 
+	// Create blocked_hashes table
+	if err := cs.createBlockedHashesTable(ctx); err != nil {
+		return fmt.Errorf("failed to create blocked_hashes table: %w", err)
+	}
+
 	// Create indexes for performance
 	if err := cs.createIndexes(ctx); err != nil {
 		return fmt.Errorf("failed to create indexes: %w", err)
@@ -257,6 +262,18 @@ func (cs *ChaiSchema) createAuthorAliasesTable(ctx context.Context) error {
 	return err
 }
 
+func (cs *ChaiSchema) createBlockedHashesTable(ctx context.Context) error {
+	query := `
+		CREATE TABLE IF NOT EXISTS blocked_hashes (
+			hash TEXT PRIMARY KEY,
+			reason TEXT,
+			created_at TIMESTAMP
+		)
+	`
+	_, err := cs.db.ExecContext(ctx, query)
+	return err
+}
+
 // createIndexes creates all necessary indexes for query performance
 func (cs *ChaiSchema) createIndexes(ctx context.Context) error {
 	indexes := map[string]string{
@@ -283,6 +300,7 @@ func (cs *ChaiSchema) createIndexes(ctx context.Context) error {
 // DropAllTables drops all tables (for testing)
 func (cs *ChaiSchema) DropAllTables(ctx context.Context) error {
 	tables := []string{
+		"blocked_hashes",
 		"author_aliases",
 		"book_authors",
 		"book_files",

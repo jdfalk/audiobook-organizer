@@ -6156,7 +6156,22 @@ func (p *PebbleStore) RemoveBlockedHash(hash string) error {
 	return p.db.Delete(key, pebble.Sync)
 }
 
+// GetAllBlockedHashes returns all blocked hashes.
+// Uses feature flag to switch between Pebble and Chai SQL implementations.
 func (p *PebbleStore) GetAllBlockedHashes() ([]DoNotImport, error) {
+	if p.UseChaiDB && p.chai != nil {
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err != nil {
+			// Fallback to Pebble if ChaiStore creation fails
+			return p.GetAllBlockedHashes_Pebble()
+		}
+		return chaiStore.GetAllBlockedHashes_Chai(context.Background())
+	}
+	return p.GetAllBlockedHashes_Pebble()
+}
+
+// GetAllBlockedHashes_Pebble returns all blocked hashes using Pebble prefix iteration.
+func (p *PebbleStore) GetAllBlockedHashes_Pebble() ([]DoNotImport, error) {
 	var items []DoNotImport
 	prefix := []byte("blocked:hash:")
 
