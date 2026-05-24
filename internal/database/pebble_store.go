@@ -1343,7 +1343,25 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	return books, nil
 }
 
+// GetAllBookSummaries returns lightweight BookSummary records for the library list view.
+// When the UseChaiDB feature flag is enabled and a Chai database is available, it
+// delegates to GetAllBookSummaries_Chai which runs a narrow SQL SELECT instead of
+// deserializing every book from Pebble. Falls back to GetAllBookSummaries_Pebble otherwise.
 func (p *PebbleStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, error) {
+	if p.UseChaiDB && p.chai != nil {
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err == nil {
+			return chaiStore.GetAllBookSummaries_Chai(context.Background(), limit, offset)
+		}
+		// Fall through to Pebble on ChaiStore init failure
+	}
+	return p.GetAllBookSummaries_Pebble(limit, offset)
+}
+
+// GetAllBookSummaries_Pebble is the original Pebble-backed implementation.
+// It fetches all books via full iteration, then projects each Book into a BookSummary,
+// skipping books marked for deletion. Kept as fallback while UseChaiDB is false.
+func (p *PebbleStore) GetAllBookSummaries_Pebble(limit, offset int) ([]BookSummary, error) {
 	if limit <= 0 {
 		limit = 1_000_000
 	}
