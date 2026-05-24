@@ -241,11 +241,11 @@ func (cs *ChaiSchema) createUserPreferencesTable(ctx context.Context) error {
 	query := `
 		CREATE TABLE IF NOT EXISTS user_preferences (
 			user_id TEXT NOT NULL,
-			key TEXT NOT NULL,
+			pref_key TEXT NOT NULL,
 			value TEXT,
 			updated_at TIMESTAMP,
 			version INTEGER DEFAULT 1,
-			PRIMARY KEY (user_id, key)
+			PRIMARY KEY (user_id, pref_key)
 		)
 	`
 	_, err := cs.db.ExecContext(ctx, query)
