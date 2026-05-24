@@ -1,5 +1,5 @@
 // file: internal/database/chai_store.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: e5f6a7b8-c9d0-4e1f-2a3b-c4d5e6f7a8b9
 // last-edited: 2026-05-24
 
@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 // ChaiStore wraps a Chai database (SQL backend)
@@ -400,4 +401,470 @@ func compareImplementations() {
 	// Pebble: O(n) full scan per phase, JSON unmarshal per record, manual filtering
 	// SQL: Indexed subqueries, server-side aggregation, single roundtrip
 	// Expected: 10-100x faster on large libraries due to index usage
+}
+
+// GetAllBooks_Chai returns all books with optional filtering and pagination via SQL.
+// Replaces 500+ lines of Pebble manual filtering with a single SQL query.
+// Filters passed in the map:
+//   - marked_for_deletion (bool): return only deleted books
+//   - is_primary_version (bool): return only primary or non-primary books
+//   - series_id (int): filter books by series
+//   - author_id (int): filter books by author (requires book_authors table)
+//   - library_state (string): filter books by library state
+//   - genre (string): filter books by genre
+//   - has_isbn (bool): filter books that have ISBN10 or ISBN13
+//   - version_group_id (string): filter books by version group
+//
+// Default behavior (no filters): returns all non-deleted, primary-version books ordered by title.
+func (cs *ChaiStore) GetAllBooks_Chai(ctx context.Context, limit, offset int, filters map[string]interface{}) ([]Book, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	// Default values
+	if limit <= 0 {
+		limit = 1_000_000 // Treat 0 or negative as unlimited
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Build WHERE clause with defaults
+	// Default: exclude deleted + primary versions only
+	whereConds := []string{"marked_for_deletion = false", "is_primary_version = true"}
+
+	// Apply optional filters if provided
+	if filters != nil {
+		// marked_for_deletion: explicitly include/exclude deleted books
+		if val, ok := filters["marked_for_deletion"]; ok {
+			if boolVal, ok := val.(bool); ok {
+				if boolVal {
+					whereConds = []string{"marked_for_deletion = true"}
+				}
+				// If false, keep default
+			}
+		}
+
+		// is_primary_version: explicitly include/exclude non-primary versions
+		if val, ok := filters["is_primary_version"]; ok {
+			if boolVal, ok := val.(bool); ok {
+				// Remove default is_primary_version filter and replace
+				newConds := []string{}
+				for _, cond := range whereConds {
+					if !contains(cond, "is_primary_version") {
+						newConds = append(newConds, cond)
+					}
+				}
+				if boolVal {
+					newConds = append(newConds, "is_primary_version = true")
+				} else {
+					newConds = append(newConds, "is_primary_version = false")
+				}
+				whereConds = newConds
+			}
+		}
+
+		// series_id: filter by series
+		if val, ok := filters["series_id"]; ok {
+			if seriesID, ok := val.(int); ok && seriesID > 0 {
+				whereConds = append(whereConds, fmt.Sprintf("series_id = %d", seriesID))
+			}
+		}
+
+		// author_id: filter by author via book_authors table
+		if val, ok := filters["author_id"]; ok {
+			if authorID, ok := val.(int); ok && authorID > 0 {
+				whereConds = append(whereConds, fmt.Sprintf("id IN (SELECT book_id FROM book_authors WHERE author_id = %d)", authorID))
+			}
+		}
+
+		// library_state: filter by state
+		if val, ok := filters["library_state"]; ok {
+			if stateStr, ok := val.(string); ok && stateStr != "" {
+				escaped := escapeSQL(stateStr)
+				whereConds = append(whereConds, fmt.Sprintf("library_state = '%s'", escaped))
+			}
+		}
+
+		// genre: filter by genre
+		if val, ok := filters["genre"]; ok {
+			if genreStr, ok := val.(string); ok && genreStr != "" {
+				escaped := escapeSQL(genreStr)
+				whereConds = append(whereConds, fmt.Sprintf("genre = '%s'", escaped))
+			}
+		}
+
+		// has_isbn: filter books with ISBN
+		if val, ok := filters["has_isbn"]; ok {
+			if hasISBN, ok := val.(bool); ok && hasISBN {
+				whereConds = append(whereConds, "(isbn10 IS NOT NULL OR isbn13 IS NOT NULL)")
+			}
+		}
+
+		// version_group_id: filter by version group
+		if val, ok := filters["version_group_id"]; ok {
+			if versionGroupID, ok := val.(string); ok && versionGroupID != "" {
+				escaped := escapeSQL(versionGroupID)
+				whereConds = append(whereConds, fmt.Sprintf("version_group_id = '%s'", escaped))
+			}
+		}
+	}
+
+	// Build WHERE clause
+	whereClause := "WHERE " + joinStrings(whereConds, " AND ")
+
+	// Build final query with pagination
+	query := fmt.Sprintf(`
+		SELECT
+			id, title, author_id, series_id, series_sequence, file_path, format, duration,
+			work_id, narrator, edition, description, language, publisher, genre, print_year,
+			audiobook_release_year, isbn10, isbn13, asin, open_library_id, hardcover_id,
+			google_books_id, itunes_persistent_id, itunes_date_added, itunes_play_count,
+			itunes_last_played, itunes_rating, itunes_bookmark, itunes_import_source,
+			itunes_path, original_filename, bitrate_kbps, codec, sample_rate_hz, channels,
+			bit_depth, quality, is_primary_version, version_group_id, version_notes,
+			file_hash, file_size, original_file_hash, organized_file_hash, library_state,
+			quantity, marked_for_deletion, marked_for_deletion_at, quarantine_reason,
+			quarantined_at, created_at, updated_at, metadata_updated_at, last_written_at,
+			last_organize_operation_id, last_organized_at, metadata_review_status,
+			metadata_source, book_sig_v1, book_sig_segments, book_sig_built_at,
+			book_sig_v1_mask, book_sig_coverage_pct, itunes_sync_status, audible_runtime_min,
+			metadata_source_hash, merged_into_book_id, audible_rating_overall,
+			audible_rating_performance, audible_rating_story, audible_rating_count,
+			audible_num_reviews, google_rating_average, google_rating_count,
+			user_rating_overall, user_rating_story, user_rating_performance,
+			user_rating_notes, cover_url, narrators_json, source_import_path,
+			last_scan_mtime, last_scan_size, needs_rescan
+		FROM books
+		%s
+		ORDER BY title
+		LIMIT %d OFFSET %d
+	`, whereClause, limit, offset)
+
+	rows, err := cs.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query books: %w", err)
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBookFromSQL(rows, &book); err != nil {
+			continue // Skip malformed rows
+		}
+		books = append(books, book)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading books: %w", err)
+	}
+
+	return books, nil
+}
+
+// GetBooksBySeriesID_Chai returns all books in a given series with pagination.
+// Filters: returns only non-deleted, primary-version books belonging to the series.
+// Replaces manual series lookup + filtering with a single SQL query.
+// SQL pattern:
+//   SELECT * FROM books
+//   WHERE series_id = ? AND is_primary_version = true AND marked_for_deletion = false
+//   ORDER BY title
+//   LIMIT ? OFFSET ?
+func (cs *ChaiStore) GetBooksBySeriesID_Chai(ctx context.Context, seriesID int, limit, offset int) ([]Book, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	if seriesID <= 0 {
+		return nil, fmt.Errorf("series_id must be positive")
+	}
+
+	// Default values
+	if limit <= 0 {
+		limit = 1_000_000 // Treat 0 or negative as unlimited
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Simple WHERE clause: filter by series_id only (no optional filters like GetAllBooks_Chai)
+	query := fmt.Sprintf(`
+		SELECT
+			id, title, author_id, series_id, series_sequence, file_path, format, duration,
+			work_id, narrator, edition, description, language, publisher, genre, print_year,
+			audiobook_release_year, isbn10, isbn13, asin, open_library_id, hardcover_id,
+			google_books_id, itunes_persistent_id, itunes_date_added, itunes_play_count,
+			itunes_last_played, itunes_rating, itunes_bookmark, itunes_import_source,
+			itunes_path, original_filename, bitrate_kbps, codec, sample_rate_hz, channels,
+			bit_depth, quality, is_primary_version, version_group_id, version_notes,
+			file_hash, file_size, original_file_hash, organized_file_hash, library_state,
+			quantity, marked_for_deletion, marked_for_deletion_at, quarantine_reason,
+			quarantined_at, created_at, updated_at, metadata_updated_at, last_written_at,
+			last_organize_operation_id, last_organized_at, metadata_review_status,
+			metadata_source, book_sig_v1, book_sig_segments, book_sig_built_at,
+			book_sig_v1_mask, book_sig_coverage_pct, itunes_sync_status, audible_runtime_min,
+			metadata_source_hash, merged_into_book_id, audible_rating_overall,
+			audible_rating_performance, audible_rating_story, audible_rating_count,
+			audible_num_reviews, google_rating_average, google_rating_count,
+			user_rating_overall, user_rating_story, user_rating_performance,
+			user_rating_notes, cover_url, narrators_json, source_import_path,
+			last_scan_mtime, last_scan_size, needs_rescan
+		FROM books
+		WHERE series_id = %d
+		  AND is_primary_version = true
+		  AND marked_for_deletion = false
+		ORDER BY title
+		LIMIT %d OFFSET %d
+	`, seriesID, limit, offset)
+
+	rows, err := cs.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query books by series: %w", err)
+	}
+	defer rows.Close()
+
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBookFromSQL(rows, &book); err != nil {
+			continue // Skip malformed rows
+		}
+		books = append(books, book)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading books: %w", err)
+	}
+
+	return books, nil
+}
+
+// scanBookFromSQL unmarshals a Book from SQL query results.
+func scanBookFromSQL(rows *sql.Rows, book *Book) error {
+	var (
+		authorID          sql.NullInt64
+		seriesID          sql.NullInt64
+		seriesSeq         sql.NullInt64
+		duration          sql.NullInt64
+		printYear         sql.NullInt64
+		audReleaseYear    sql.NullInt64
+		itPlayCount       sql.NullInt64
+		itRating          sql.NullInt64
+		itBookmark        sql.NullInt64
+		bitrateKbps       sql.NullInt64
+		sampleRate        sql.NullInt64
+		channels          sql.NullInt64
+		bitDepth          sql.NullInt64
+		quantity          sql.NullInt64
+		isPrimary         sql.NullBool
+		markedDeleted     sql.NullBool
+		audibleRtMin      sql.NullInt64
+		audRatingCount    sql.NullInt64
+		audNumReviews     sql.NullInt64
+		googleRatingCnt   sql.NullInt64
+		userRatingOvr     sql.NullFloat64
+		userRatingSty     sql.NullFloat64
+		userRatingPrf     sql.NullFloat64
+		audRatingOvr      sql.NullFloat64
+		audRatingPrf      sql.NullFloat64
+		audRatingStr      sql.NullFloat64
+		googleRatingAvg   sql.NullFloat64
+		coveragePercent   sql.NullInt64
+		lastScanMtime     sql.NullInt64
+		lastScanSize      sql.NullInt64
+		needsRescan       sql.NullBool
+		createdAt         sql.NullTime
+		updatedAt         sql.NullTime
+		metadataUpdatedAt sql.NullTime
+		lastWrittenAt     sql.NullTime
+		lastOrganizedAt   sql.NullTime
+		markedDeletedAt   sql.NullTime
+		quarantinedAt     sql.NullTime
+		itDateAdded       sql.NullTime
+		itLastPlayed      sql.NullTime
+		bookSigBuiltAt    sql.NullTime
+	)
+
+	err := rows.Scan(
+		&book.ID, &book.Title, &authorID, &seriesID, &seriesSeq, &book.FilePath, &book.Format, &duration,
+		&book.WorkID, &book.Narrator, &book.Edition, &book.Description, &book.Language, &book.Publisher,
+		&book.Genre, &printYear, &audReleaseYear, &book.ISBN10, &book.ISBN13, &book.ASIN,
+		&book.OpenLibraryID, &book.HardcoverID, &book.GoogleBooksID, &book.ITunesPersistentID,
+		&itDateAdded, &itPlayCount, &itLastPlayed, &itRating, &itBookmark, &book.ITunesImportSource,
+		&book.ITunesPath, &book.OriginalFilename, &bitrateKbps, &book.Codec, &sampleRate, &channels,
+		&bitDepth, &book.Quality, &isPrimary, &book.VersionGroupID, &book.VersionNotes,
+		&book.FileHash, &book.FileSize, &book.OriginalFileHash, &book.OrganizedFileHash,
+		&book.LibraryState, &quantity, &markedDeleted, &markedDeletedAt, &book.QuarantineReason,
+		&quarantinedAt, &createdAt, &updatedAt, &metadataUpdatedAt, &lastWrittenAt,
+		&book.LastOrganizeOperationID, &lastOrganizedAt, &book.MetadataReviewStatus,
+		&book.MetadataSource, &book.BookSigV1, &book.BookSigSegments, &bookSigBuiltAt,
+		&book.BookSigV1Mask, &coveragePercent, &book.ITunesSyncStatus, &audibleRtMin,
+		&book.MetadataSourceHash, &book.MergedIntoBookID, &audRatingOvr,
+		&audRatingPrf, &audRatingStr, &audRatingCount, &audNumReviews,
+		&googleRatingAvg, &googleRatingCnt, &userRatingOvr, &userRatingSty, &userRatingPrf,
+		&book.UserRatingNotes, &book.CoverURL, &book.NarratorsJSON, &book.SourceImportPath,
+		&lastScanMtime, &lastScanSize, &needsRescan,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Convert SQL nulls to pointers
+	if authorID.Valid {
+		v := int(authorID.Int64)
+		book.AuthorID = &v
+	}
+	if seriesID.Valid {
+		v := int(seriesID.Int64)
+		book.SeriesID = &v
+	}
+	if seriesSeq.Valid {
+		v := int(seriesSeq.Int64)
+		book.SeriesSequence = &v
+	}
+	if duration.Valid {
+		v := int(duration.Int64)
+		book.Duration = &v
+	}
+	if printYear.Valid {
+		v := int(printYear.Int64)
+		book.PrintYear = &v
+	}
+	if audReleaseYear.Valid {
+		v := int(audReleaseYear.Int64)
+		book.AudiobookReleaseYear = &v
+	}
+	if itPlayCount.Valid {
+		v := int(itPlayCount.Int64)
+		book.ITunesPlayCount = &v
+	}
+	if itRating.Valid {
+		v := int(itRating.Int64)
+		book.ITunesRating = &v
+	}
+	if itBookmark.Valid {
+		book.ITunesBookmark = &itBookmark.Int64
+	}
+	if bitrateKbps.Valid {
+		v := int(bitrateKbps.Int64)
+		book.Bitrate = &v
+	}
+	if sampleRate.Valid {
+		v := int(sampleRate.Int64)
+		book.SampleRate = &v
+	}
+	if channels.Valid {
+		v := int(channels.Int64)
+		book.Channels = &v
+	}
+	if bitDepth.Valid {
+		v := int(bitDepth.Int64)
+		book.BitDepth = &v
+	}
+	if quantity.Valid {
+		v := int(quantity.Int64)
+		book.Quantity = &v
+	}
+	if isPrimary.Valid {
+		book.IsPrimaryVersion = &isPrimary.Bool
+	}
+	if markedDeleted.Valid {
+		book.MarkedForDeletion = &markedDeleted.Bool
+	}
+	if audibleRtMin.Valid {
+		v := int(audibleRtMin.Int64)
+		book.AudibleRuntimeMin = &v
+	}
+	if audRatingCount.Valid {
+		v := int(audRatingCount.Int64)
+		book.AudibleRatingCount = &v
+	}
+	if audNumReviews.Valid {
+		v := int(audNumReviews.Int64)
+		book.AudibleNumReviews = &v
+	}
+	if googleRatingCnt.Valid {
+		v := int(googleRatingCnt.Int64)
+		book.GoogleRatingCount = &v
+	}
+	if audRatingOvr.Valid {
+		book.AudibleRatingOverall = &audRatingOvr.Float64
+	}
+	if audRatingPrf.Valid {
+		book.AudibleRatingPerformance = &audRatingPrf.Float64
+	}
+	if audRatingStr.Valid {
+		book.AudibleRatingStory = &audRatingStr.Float64
+	}
+	if googleRatingAvg.Valid {
+		book.GoogleRatingAverage = &googleRatingAvg.Float64
+	}
+	if userRatingOvr.Valid {
+		book.UserRatingOverall = &userRatingOvr.Float64
+	}
+	if userRatingSty.Valid {
+		book.UserRatingStory = &userRatingSty.Float64
+	}
+	if userRatingPrf.Valid {
+		book.UserRatingPerformance = &userRatingPrf.Float64
+	}
+	if coveragePercent.Valid {
+		v := int(coveragePercent.Int64)
+		book.BookSigCoveragePct = &v
+	}
+	if createdAt.Valid {
+		book.CreatedAt = &createdAt.Time
+	}
+	if updatedAt.Valid {
+		book.UpdatedAt = &updatedAt.Time
+	}
+	if metadataUpdatedAt.Valid {
+		book.MetadataUpdatedAt = &metadataUpdatedAt.Time
+	}
+	if lastWrittenAt.Valid {
+		book.LastWrittenAt = &lastWrittenAt.Time
+	}
+	if lastOrganizedAt.Valid {
+		book.LastOrganizedAt = &lastOrganizedAt.Time
+	}
+	if markedDeletedAt.Valid {
+		book.MarkedForDeletionAt = &markedDeletedAt.Time
+	}
+	if quarantinedAt.Valid {
+		book.QuarantinedAt = &quarantinedAt.Time
+	}
+	if itDateAdded.Valid {
+		book.ITunesDateAdded = &itDateAdded.Time
+	}
+	if itLastPlayed.Valid {
+		book.ITunesLastPlayed = &itLastPlayed.Time
+	}
+	if bookSigBuiltAt.Valid {
+		book.BookSigBuiltAt = &bookSigBuiltAt.Time
+	}
+	if lastScanMtime.Valid {
+		book.LastScanMtime = &lastScanMtime.Int64
+	}
+	if lastScanSize.Valid {
+		book.LastScanSize = &lastScanSize.Int64
+	}
+	if needsRescan.Valid {
+		book.NeedsRescan = &needsRescan.Bool
+	}
+
+	return nil
+}
+
+// Helper functions
+func escapeSQL(s string) string {
+	return strings.ReplaceAll(s, "'", "''")
+}
+
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
+
+func joinStrings(strs []string, sep string) string {
+	return strings.Join(strs, sep)
 }
