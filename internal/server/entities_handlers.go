@@ -182,11 +182,25 @@ func (s *Server) getWorkStats(c *gin.Context) {
 }
 
 func (s *Server) listAuthors(c *gin.Context) {
+	// Check cache first
+	if cached, ok := s.authorsCache.Get("all"); ok {
+		httputil.RespondWithOK(c, cached)
+		return
+	}
+
+	// Cache miss: fetch from service
 	resp, err := s.authorSeriesService.ListAuthorsWithCounts()
 	if err != nil {
 		httputil.InternalError(c, "failed to list authors", err)
 		return
 	}
+
+	// Store in cache
+	s.authorsCache.Set("all", gin.H{
+		"items": resp.Items,
+		"count": resp.Count,
+	})
+
 	httputil.RespondWithOK(c, resp)
 }
 
@@ -681,11 +695,25 @@ func (s *Server) countSeries(c *gin.Context) {
 }
 
 func (s *Server) listSeries(c *gin.Context) {
+	// Check cache first
+	if cached, ok := s.seriesCache.Get("all"); ok {
+		httputil.RespondWithOK(c, cached)
+		return
+	}
+
+	// Cache miss: fetch from service
 	resp, err := s.authorSeriesService.ListSeriesWithCounts()
 	if err != nil {
 		httputil.InternalError(c, "failed to list series", err)
 		return
 	}
+
+	// Store in cache
+	s.seriesCache.Set("all", gin.H{
+		"items": resp.Items,
+		"count": resp.Count,
+	})
+
 	httputil.RespondWithOK(c, resp)
 }
 
@@ -949,6 +977,10 @@ func (s *Server) setAudiobookNarrators(c *gin.Context) {
 		httputil.InternalError(c, "failed to set audiobook narrators", err)
 		return
 	}
+
+	// Invalidate caches since narrators may have changed
+	s.authorsCache.InvalidateAll()
+
 	httputil.RespondWithOK(c, gin.H{"status": "ok"})
 }
 
