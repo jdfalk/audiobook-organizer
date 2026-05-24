@@ -1654,6 +1654,10 @@ func (s *Server) updateAudiobook(c *gin.Context) {
 		s.writeBackBatcher.Enqueue(id)
 	}
 
+	// Invalidate caches since book-author and book-series relationships may have changed
+	s.authorsCache.InvalidateAll()
+	s.seriesCache.InvalidateAll()
+
 	httputil.RespondWithOK(c, s.enrichBookForResponseSingle(updatedBook))
 }
 
@@ -1681,6 +1685,10 @@ func (s *Server) deleteAudiobook(c *gin.Context) {
 		"soft_delete": softDelete,
 		"block_hash":  blockHash,
 	}))
+
+	// Invalidate caches since book-author and book-series relationships may have changed
+	s.authorsCache.InvalidateAll()
+	s.seriesCache.InvalidateAll()
 
 	httputil.RespondWithOK(c, result)
 }

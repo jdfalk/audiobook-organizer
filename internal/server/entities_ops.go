@@ -181,6 +181,7 @@ func (s *Server) RegisterAuthorMergeOp(reg *opsregistry.Registry) error {
 				_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
 			}
 			s.dedupCache.InvalidateAll()
+			s.authorsCache.InvalidateAll()
 			return nil
 		},
 	})
@@ -294,6 +295,7 @@ func (s *Server) RegisterResolveProductionAuthorOp(reg *opsregistry.Registry) er
 			if s.dedupCache != nil {
 				s.dedupCache.Invalidate("author-duplicates")
 			}
+			s.authorsCache.InvalidateAll()
 
 			resultMsg := fmt.Sprintf("Resolved %d/%d books for %q (%d unresolved)", resolved, len(books), prodAuthorName, failed)
 			_ = progress.Log("info", resultMsg, nil)
