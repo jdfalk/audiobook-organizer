@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.78.0
+// version: 1.79.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-24
 
@@ -1259,16 +1259,12 @@ func (p *PebbleStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, err
 	if offset < 0 {
 		offset = 0
 	}
-	books, err := p.GetAllBooks(limit+offset, 0)
+	books, err := p.GetAllBooks(limit, offset)
 	if err != nil {
 		return nil, err
 	}
-	if offset >= len(books) {
+	if len(books) == 0 {
 		return nil, nil
-	}
-	books = books[offset:]
-	if len(books) > limit {
-		books = books[:limit]
 	}
 	summaries := make([]BookSummary, 0, len(books))
 	for _, b := range books {
