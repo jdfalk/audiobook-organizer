@@ -79,7 +79,7 @@ CREATE TABLE books (
     itunes_play_count INTEGER,
     itunes_last_played TIMESTAMP,
     itunes_rating INTEGER,
-    itunes_bookmark INTEGER,
+    itunes_bookmark BIGINT,
     itunes_import_source TEXT,
     itunes_path TEXT,
 
@@ -99,7 +99,7 @@ CREATE TABLE books (
 
     -- File hash tracking for deduplication
     file_hash TEXT,
-    file_size INTEGER,
+    file_size BIGINT,
     original_file_hash TEXT,
     organized_file_hash TEXT,
 
@@ -171,8 +171,8 @@ CREATE TABLE books (
     source_import_path TEXT,
 
     -- Scan cache (set by scanner, not user-facing)
-    last_scan_mtime INTEGER,
-    last_scan_size INTEGER,
+    last_scan_mtime BIGINT,
+    last_scan_size BIGINT,
     needs_rescan BOOLEAN DEFAULT false,
 
     -- Foreign keys
@@ -232,8 +232,8 @@ CREATE TABLE book_files (
     -- Audio format/codec info
     format TEXT,
     codec TEXT,
-    duration INTEGER,
-    file_size INTEGER,
+    duration_ms BIGINT,
+    file_size_bytes BIGINT,
     bitrate_kbps INTEGER,
     sample_rate_hz INTEGER,
     channels INTEGER,
@@ -265,6 +265,7 @@ CREATE TABLE book_files (
     -- File state
     missing BOOLEAN DEFAULT false,
     skip_scan BOOLEAN DEFAULT false,
+    marked_for_deletion BOOLEAN DEFAULT false,
 
     -- Timestamps
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
