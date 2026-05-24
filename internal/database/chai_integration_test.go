@@ -461,29 +461,26 @@ func BenchmarkChaiStore_GetAllAuthorFileCounts_Chai(b *testing.B) {
 
 	for i := 1; i <= 20; i++ {
 		authorID := (i-1)%10 + 1
-		_, err := db.ExecContext(ctx, `
-			INSERT INTO books (id, title, is_primary_version, marked_for_deletion)
-			VALUES (?, ?, 1, 0)
-		`, fmt.Sprintf("book%d", i), fmt.Sprintf("Book %d", i))
+		_, err := db.ExecContext(ctx, fmt.Sprintf(
+			"INSERT INTO books (id, title, is_primary_version, marked_for_deletion) VALUES ('book%d', 'Book %d', 1, 0)",
+			i, i))
 		if err != nil {
 			b.Fatalf("failed to insert book: %v", err)
 		}
 
-		_, err = db.ExecContext(ctx, `
-			INSERT INTO book_authors (id, book_id, author_id, role, position, marked_for_deletion)
-			VALUES (?, ?, ?, 'author', 0, 0)
-		`, fmt.Sprintf("ba%d", i), fmt.Sprintf("book%d", i), authorID)
+		_, err = db.ExecContext(ctx, fmt.Sprintf(
+			"INSERT INTO book_authors (id, book_id, author_id, role, position, marked_for_deletion) VALUES ('ba%d', 'book%d', %d, 'author', 0, 0)",
+			i, i, authorID))
 		if err != nil {
 			b.Fatalf("failed to insert book_authors: %v", err)
 		}
 	}
 
 	for i := 1; i <= 50; i++ {
-		bookID := fmt.Sprintf("book%d", (i-1)%20+1)
-		_, err := db.ExecContext(ctx, `
-			INSERT INTO book_files (id, book_id, file_path, duration_ms, file_size_bytes, missing)
-			VALUES (?, ?, ?, 3600000, 1000000, 0)
-		`, fmt.Sprintf("file%d", i), bookID, fmt.Sprintf("/tmp/file%d.m4b", i))
+		bookNum := (i-1)%20 + 1
+		_, err := db.ExecContext(ctx, fmt.Sprintf(
+			"INSERT INTO book_files (id, book_id, file_path, duration_ms, file_size_bytes, missing) VALUES ('file%d', 'book%d', '/tmp/file%d.m4b', 3600000, 1000000, 0)",
+			i, bookNum, i))
 		if err != nil {
 			b.Fatalf("failed to insert file: %v", err)
 		}
