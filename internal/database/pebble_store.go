@@ -2722,6 +2722,13 @@ func (p *PebbleStore) GetDistinctGenres() ([]string, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip index keys (same as GetAllBooks)
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+
 		var b Book
 		if err := json.Unmarshal(iter.Value(), &b); err != nil {
 			continue
@@ -2753,6 +2760,13 @@ func (p *PebbleStore) GetDistinctLanguages() ([]string, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
+		// Skip index keys (same as GetAllBooks)
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") {
+			continue
+		}
+
 		var b Book
 		if err := json.Unmarshal(iter.Value(), &b); err != nil {
 			continue
