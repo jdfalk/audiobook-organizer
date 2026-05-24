@@ -195,7 +195,7 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 
 	store := &PebbleStore{
 		db:        db,
-		UseChaiDB: true, // Enable Chai SQL for aggregation functions (Phase 1-2 migration)
+		UseChaiDB: false, // Chai DB not yet populated — needs data sync before enabling
 	}
 
 	slog.Info("PebbleDB opened", "path", path, "format_version", db.FormatMajorVersion())
