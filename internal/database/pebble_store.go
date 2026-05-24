@@ -909,10 +909,11 @@ func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		key := string(iter.Key())
-		if strings.Contains(key, ":") && !strings.HasPrefix(key, "book:") {
+		if !strings.HasPrefix(key, "book:") {
 			continue
 		}
-		if !strings.HasPrefix(key, "book:") || strings.Contains(key, ":") {
+		parts := strings.Split(key, ":")
+		if len(parts) < 2 || len(parts) > 2 {
 			continue
 		}
 
@@ -942,7 +943,11 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 
 	for iter.First(); iter.Valid(); iter.Next() {
 		key := string(iter.Key())
-		if !strings.HasPrefix(key, "book:") || strings.Contains(key, ":") {
+		if !strings.HasPrefix(key, "book:") {
+			continue
+		}
+		parts := strings.Split(key, ":")
+		if len(parts) != 2 {
 			continue
 		}
 		var b Book
