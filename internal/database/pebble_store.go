@@ -1,5 +1,5 @@
 // file: internal/database/pebble_store.go
-// version: 1.80.0
+// version: 1.81.0
 // guid: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 // last-edited: 2026-05-24
 
@@ -351,6 +351,25 @@ func (p *PebbleStore) GetAllAuthors() ([]Author, error) {
 	}
 
 	return authors, nil
+}
+
+// GetAllAuthors_Chai provides SQL-based author listing via Chai backend.
+// Uses a feature flag to switch between Pebble and Chai implementations.
+// This is the production entry point when UseChaiDB feature flag is enabled.
+func (p *PebbleStore) GetAllAuthors_Chai(ctx context.Context) ([]Author, error) {
+	// Feature flag: use Chai SQL if enabled and database is available
+	if p.UseChaiDB && p.chai != nil {
+		// Wrap the ChaiDB's underlying SQL database in a ChaiStore
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err != nil {
+			// Fallback to Pebble if ChaiStore creation fails
+			return p.GetAllAuthors()
+		}
+		return chaiStore.GetAllAuthors_Chai(ctx)
+	}
+
+	// Fallback to Pebble implementation if flag is off or Chai is not available
+	return p.GetAllAuthors()
 }
 
 func (p *PebbleStore) GetAuthorByID(id int) (*Author, error) {
