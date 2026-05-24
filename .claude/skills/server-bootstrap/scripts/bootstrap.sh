@@ -12,7 +12,7 @@ EXPIRES_IN_SECONDS=$((8 * 3600))
 
 # Step 1: Restart service and wait for token to appear in logs
 echo "[1/4] Connecting to $SERVER_IP and restarting audiobook-organizer service..."
-ssh "root@$SERVER_IP" 'sudo systemctl restart audiobook-organizer.service' || {
+ssh "$SERVER_IP" 'sudo systemctl restart audiobook-organizer.service' || {
     echo "❌ SSH failed or service restart failed"
     exit 1
 }
@@ -24,7 +24,7 @@ sleep 90
 
 BOOTSTRAP_TOKEN=""
 for i in {1..12}; do
-    BOOTSTRAP_TOKEN=$(ssh "jdfalk@$SERVER_IP" 'journalctl -u audiobook-organizer.service --since "3 minutes ago" --no-pager' 2>/dev/null | grep 'msg="Emergency access token"' | grep -oP 'raw=\K[^ ]+' | head -1)
+    BOOTSTRAP_TOKEN=$(ssh "$SERVER_IP" 'journalctl -u audiobook-organizer.service --since "3 minutes ago" --no-pager' 2>/dev/null | grep 'msg="Emergency access token"' | grep -oP 'raw=\K[^ ]+' | head -1)
     if [ -n "$BOOTSTRAP_TOKEN" ]; then
         break
     fi
@@ -40,7 +40,7 @@ echo "✓ Got bootstrap token: ${BOOTSTRAP_TOKEN:0:15}..."
 
 # Step 3: Exchange token for API key via /api/v1/auth/bootstrap
 echo "[3/4] Exchanging bootstrap token for API key..."
-RESPONSE=$(curl -s -X POST "http://$SERVER_IP:$API_PORT/api/v1/auth/bootstrap" \
+RESPONSE=$(curl -sk -X POST "https://$SERVER_IP:$API_PORT/api/v1/auth/bootstrap" \
     -H "Content-Type: application/json" \
     -d "{\"token\":\"$BOOTSTRAP_TOKEN\", \"key_name\":\"Claude-workspace-$(date +%s)\"}" || echo "")
 
