@@ -4114,7 +4114,34 @@ func (p *PebbleStore) SetUserPreference(key, value string) error {
 	return p.db.Set(dbKey, data, pebble.Sync)
 }
 
+// GetAllUserPreferences returns all user preferences.
+// Routes to Chai SQL if UseChaiDB is enabled; otherwise falls back to Pebble iteration.
 func (p *PebbleStore) GetAllUserPreferences() ([]UserPreference, error) {
+	if p.UseChaiDB && p.chai != nil {
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err != nil {
+			// Fallback to Pebble if ChaiStore creation fails
+			return p.GetAllUserPreferences_Pebble()
+		}
+		kvMap, err := chaiStore.GetAllUserPreferences_Chai(context.Background())
+		if err != nil {
+			// Fallback to Pebble on query error
+			return p.GetAllUserPreferences_Pebble()
+		}
+		// Convert map[string]string → []UserPreference to satisfy the interface
+		prefs := make([]UserPreference, 0, len(kvMap))
+		for k, v := range kvMap {
+			v := v // capture loop variable
+			prefs = append(prefs, UserPreference{Key: k, Value: &v})
+		}
+		return prefs, nil
+	}
+	return p.GetAllUserPreferences_Pebble()
+}
+
+// GetAllUserPreferences_Pebble returns all user preferences using Pebble key iteration.
+// Iterates over "preference:*" keys and unmarshals each JSON-encoded UserPreference.
+func (p *PebbleStore) GetAllUserPreferences_Pebble() ([]UserPreference, error) {
 	var preferences []UserPreference
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("preference:"),

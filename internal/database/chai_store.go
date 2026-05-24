@@ -980,6 +980,39 @@ func (cs *ChaiStore) GetAllAuthors_Chai(ctx context.Context) ([]Author, error) {
 	return authors, nil
 }
 
+
+func (cs *ChaiStore) GetAllUserPreferences_Chai(ctx context.Context) (map[string]string, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := cs.db.QueryContext(ctx, `SELECT key, value FROM user_preferences`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user preferences: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]string)
+	for rows.Next() {
+		var key string
+		var value sql.NullString
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, fmt.Errorf("failed to scan user preference row: %w", err)
+		}
+		if value.Valid {
+			result[key] = value.String
+		} else {
+			result[key] = ""
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading user preferences: %w", err)
+	}
+
+	return result, nil
+}
+
 // Helper functions
 func escapeSQL(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
