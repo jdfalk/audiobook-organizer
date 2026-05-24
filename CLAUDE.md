@@ -1,7 +1,7 @@
 <!-- file: CLAUDE.md -->
-<!-- version: 4.5.0 -->
+<!-- version: 4.6.0 -->
 <!-- guid: 3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f -->
-<!-- last-edited: 2026-04-24 -->
+<!-- last-edited: 2026-05-23 -->
 
 # CLAUDE.md
 
@@ -9,11 +9,17 @@ This is an **audiobook organizer** — Go backend + React/TypeScript frontend.
 All AI agent instructions live in `.github/`. This file is the entry point.
 
 ⚠️ **CRITICAL: ALWAYS USE GIT WORKTREES**
-- **NEVER commit directly to main in the primary working tree**
-- Check `git worktree list` before any edits
-- If in main checkout: `git worktree add ../<repo>-<branch> -b <branch>`
-- Make changes in the worktree, push, create PR, merge via rebase/FF
-- This is non-negotiable — no exceptions
+
+**BEFORE MAKING ANY EDITS:**
+1. Run `git worktree list` to check current location
+2. If in the primary checkout (main), STOP — do one of:
+   - Use EnterPlanMode (triggers plan-first workflow, which enforces worktree creation)
+   - Manually create worktree: `git worktree add ../<repo>-<branch> -b <branch>` then `cd ../<repo>-<branch>`
+3. Verify you're in a worktree: `git worktree list` should show your current path without `(detached)`
+
+Then proceed with edits, commit, push, PR, and merge via rebase/FF.
+
+**Why:** This repo has production at stake. Direct commits to main can conflict with concurrent work. Worktrees provide isolation. This is non-negotiable — no exceptions.
 
 ## Quick Start
 
