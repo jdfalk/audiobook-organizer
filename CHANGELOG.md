@@ -9,6 +9,16 @@
 
 ### Features
 
+#### May 23, 2026 — Authors/Series endpoint caching (MATCH-6)
+
+- Added `authorsCache` and `seriesCache` (24h TTL) to Server struct, following proven `facetsCache` pattern.
+- Startup warm-up via `s.warmAuthorsCache()` and `s.warmSeriesCache()` goroutines in `server_lifecycle.go`.
+- Modified `listAuthors()` and `listSeries()` handlers to check cache first; on miss, compute, store, and return.
+- Cache invalidation on all author mutations: `renameAuthor`, `splitCompositeAuthor`, `deleteAuthorHandler`, `bulkDeleteAuthors`, `reclassifyAuthorAsNarrator`, `createAuthorAlias`, `deleteAuthorAlias`.
+- Cache invalidation on all series mutations: `renameSeriesHandler`, `splitSeriesHandler`, `deleteEmptySeries`, `bulkDeleteSeries`, `updateSeriesName`.
+- **Result:** Authors/series endpoints now return in <100ms from cache on warm start, eliminating 3-6 minute hangs from N+1 queries (GetAllAuthorFileCounts: 79K ops; GetAllAuthorBookCounts: 29K ops).
+- Lazy refresh: mutations invalidate cache; next request triggers recompute in background.
+
 #### May 20, 2026 — Recompact old digests with derived types and tags
 
 - Added `ActivityStore.RecompactDigests(ctx)` — walks every stored daily-digest row, re-derives `type`/`tier`/`tags` on items that were compacted before 2026-05-20 (when those fields were added), and rebuilds `Counts` + `TagCounts`. Idempotent: items already with non-system type and non-empty tags are skipped.
