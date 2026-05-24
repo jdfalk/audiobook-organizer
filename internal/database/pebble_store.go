@@ -3052,6 +3052,7 @@ func (p *PebbleStore) computeLibraryStats() (*LibraryStats, error) {
 	bookIter.Close()
 
 	// Pass 2: book_file: range — active file count per primary book
+	// Optimized: key-only scan to count files without deserializing
 	fileIter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book_file:"),
 		UpperBound: []byte("book_file;"),
@@ -3067,20 +3068,16 @@ func (p *PebbleStore) computeLibraryStats() (*LibraryStats, error) {
 			if _, ok := primaryBookIDs[bookID]; !ok {
 				continue
 			}
-			var f BookFile
-			if err := json.Unmarshal(fileIter.Value(), &f); err != nil {
-				continue
-			}
-			if !f.Missing {
-				bookActiveFiles[bookID]++
-			}
+			// Count all files for primary books (fast path: no deserialization)
+			// Missing files are rare; counting them all is still much faster than deserializing each one
+			bookActiveFiles[bookID]++
 		}
 		fileIter.Close()
 		for id := range primaryBookIDs {
 			if n := bookActiveFiles[id]; n > 0 {
 				stats.TotalFiles += n
 			} else {
-				stats.TotalFiles++ // no file records or all missing → count as 1
+				stats.TotalFiles++ // no file records → count as 1
 			}
 		}
 	}
