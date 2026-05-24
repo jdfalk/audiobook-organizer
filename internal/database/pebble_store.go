@@ -1695,7 +1695,26 @@ func (p *PebbleStore) GetAllAuthorBookCounts_Chai(ctx context.Context) (map[int]
 
 // GetAllAuthorFileCounts returns the number of audio files per author.
 // Optimized to use single-pass index scan + batch file loading instead of N+1 queries.
+// GetAllAuthorFileCounts returns the number of audio files per author.
+// Uses a feature flag to switch between Pebble and Chai implementations.
+// This is the production entry point when UseChaiDB feature flag is enabled.
 func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
+	// Feature flag: use Chai SQL if enabled and database is available
+	if p.UseChaiDB && p.chai != nil {
+		// Wrap the ChaiDB's underlying SQL database in a ChaiStore
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err != nil {
+			// Fallback to Pebble if ChaiStore creation fails
+			return p.GetAllAuthorFileCounts_Pebble()
+		}
+		return chaiStore.GetAllAuthorFileCounts_Chai(context.Background())
+	}
+	return p.GetAllAuthorFileCounts_Pebble()
+}
+
+// GetAllAuthorFileCounts_Pebble returns the number of audio files per author using Pebble iteration.
+// Optimized to use single-pass index scan + batch file loading instead of N+1 queries.
+func (p *PebbleStore) GetAllAuthorFileCounts_Pebble() (map[int]int, error) {
 	counts := make(map[int]int)
 
 	// Phase 1: Iterate book:author index to collect author-book relationships
