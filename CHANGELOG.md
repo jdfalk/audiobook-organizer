@@ -7,6 +7,21 @@
 
 ## [Unreleased]
 
+### Refactors
+
+#### May 24, 2026 — Task 3.4: Remove denormalized book:series / book:author indexes
+
+Removed dual-write logic for `book:series:<id>:<bookID>` and `book:author:<id>:<bookID>` prefix keys from `SetBook`, `UpdateBook`, and `DeleteBook`. These denormalized indexes existed to speed up `GetBooksBySeriesID` and `GetBooksByAuthorID`, but are superseded by Chai SQL variants added in Tasks 3.2/3.3.
+
+- **SetBook:** Removed series and author index writes (was ~20 lines)
+- **UpdateBook:** Removed dual-write logic that swapped old/new index keys on series/author change (~40 lines)
+- **DeleteBook:** Removed prefix-key cleanup on delete
+- **GetBooksBySeriesID / GetBooksByAuthorID:** Now route to Chai SQL (`GetBooksBySeriesID_Chai`, `GetBooksByAuthorID_Chai`) when `UseChaiDB` is enabled; added full Pebble scan fallbacks (`_Pebble` variants) for when Chai is disabled
+- **GetAllAuthorBookCounts / GetAllAuthorFileCounts_Pebble:** Rewrote to use full book scan (was using the removed `book:author:` index)
+- **GetAllBooks:** Cleaned up skip logic — no longer needs to skip `:series:` and `:author:` keys
+- **scanBookFromSQL:** Fixed NULL handling for non-pointer string fields (`ID`, `Title`, `FilePath`, `Format`) — these were silently dropped when columns were NULL; now uses `sql.NullString` intermediaries
+- **Test conflicts:** Fixed name collisions from Tasks 3.1/3.3 (duplicate `insertTestBook`, `boolToSQL`, `boolPtr` definitions across test files)
+
 ### Fixes
 
 #### May 24, 2026 — EMERGENCY: Disable cache warm-ups (memory leak, 81GB peak)

@@ -89,8 +89,9 @@ func isValidULID(s string) bool {
 // - series:name:<name>:<author_id> -> series_id (for lookups)
 // - book:<id>                  -> Book JSON
 // - book:path:<path>           -> book_id (for lookups)
-// - book:series:<series_id>:<id> -> Book JSON (PERF-OPT: full JSON to eliminate point lookups)
-// - book:author:<author_id>:<id> -> Book JSON (PERF-OPT: full JSON to eliminate point lookups)
+// NOTE: book:series and book:author prefix indexes were removed in Task 3.4.
+//       GetBooksBySeriesID and GetBooksByAuthorID now use Chai SQL when UseChaiDB is
+//       enabled, or fall back to a full Pebble scan.
 // - import_path:<id>           -> ImportPath JSON
 // - import_path:path:<path>    -> import_path_id (for lookups)
 // - operation:<id>             -> Operation JSON
@@ -1339,10 +1340,9 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	count := 0
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		// Skip index keys
+		// Skip path index keys (book:series and book:author indexes removed in Task 3.4)
 		key := string(iter.Key())
-		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
-			strings.Contains(key, ":author:") {
+		if strings.Contains(key, ":path:") {
 			continue
 		}
 
@@ -1657,12 +1657,24 @@ func (p *PebbleStore) GetDuplicateBooksByMetadata(threshold float64) ([][]Book, 
 }
 
 func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
-	var books []Book
-	prefix := []byte(fmt.Sprintf("book:series:%d:", seriesID))
+	// Use Chai SQL when available (Task 3.4: denormalized index removed).
+	if p.UseChaiDB && p.chai != nil {
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err == nil {
+			return chaiStore.GetBooksBySeriesID_Chai(context.Background(), seriesID, 0, 0)
+		}
+	}
+	// Fallback: full Pebble scan filtered by series ID.
+	return p.GetBooksBySeriesID_Pebble(seriesID)
+}
 
+// GetBooksBySeriesID_Pebble performs a full Pebble book scan filtered by series ID.
+// Used when Chai SQL is unavailable (fallback path after Task 3.4 index removal).
+func (p *PebbleStore) GetBooksBySeriesID_Pebble(seriesID int) ([]Book, error) {
+	var books []Book
 	iter, err := p.db.NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xFF),
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
 	})
 	if err != nil {
 		return nil, err
@@ -1670,28 +1682,47 @@ func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		// Deserialize Book from index value (handles both new JSON format and legacy ID-only format)
-		book, err := deserializeBookFromIndex(iter.Value(), func(id string) (*Book, error) {
-			return p.GetBookByID(id)
-		})
-		if err != nil {
-			return nil, err
+		key := string(iter.Key())
+		// Skip non-primary book keys (path index etc.)
+		if strings.Contains(key, ":path:") {
+			continue
 		}
-		if book != nil && (book.MarkedForDeletion == nil || !*book.MarkedForDeletion) {
-			books = append(books, *book)
+
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
 		}
+		if book.SeriesID == nil || *book.SeriesID != seriesID {
+			continue
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		books = append(books, book)
 	}
 
 	return books, nil
 }
 
 func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
-	var books []Book
-	prefix := []byte(fmt.Sprintf("book:author:%d:", authorID))
+	// Use Chai SQL when available (Task 3.4: denormalized index removed).
+	if p.UseChaiDB && p.chai != nil {
+		chaiStore, err := NewChaiStore(p.chai.DB())
+		if err == nil {
+			return chaiStore.GetBooksByAuthorID_Chai(context.Background(), authorID, 0, 0)
+		}
+	}
+	// Fallback: full Pebble scan filtered by author ID.
+	return p.GetBooksByAuthorID_Pebble(authorID)
+}
 
+// GetBooksByAuthorID_Pebble performs a full Pebble book scan filtered by author ID.
+// Used when Chai SQL is unavailable (fallback path after Task 3.4 index removal).
+func (p *PebbleStore) GetBooksByAuthorID_Pebble(authorID int) ([]Book, error) {
+	var books []Book
 	iter, err := p.db.NewIter(&pebble.IterOptions{
-		LowerBound: prefix,
-		UpperBound: append(prefix, 0xFF),
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
 	})
 	if err != nil {
 		return nil, err
@@ -1699,15 +1730,23 @@ func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		book, err := deserializeBookFromIndex(iter.Value(), func(id string) (*Book, error) {
-			return p.GetBookByID(id)
-		})
-		if err != nil {
-			return nil, err
+		key := string(iter.Key())
+		// Skip non-primary book keys (path index etc.)
+		if strings.Contains(key, ":path:") {
+			continue
 		}
-		if book != nil && (book.MarkedForDeletion == nil || !*book.MarkedForDeletion) {
-			books = append(books, *book)
+
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
 		}
+		if book.AuthorID == nil || *book.AuthorID != authorID {
+			continue
+		}
+		if book.MarkedForDeletion != nil && *book.MarkedForDeletion {
+			continue
+		}
+		books = append(books, book)
 	}
 
 	return books, nil
@@ -1746,36 +1785,43 @@ func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 }
 
 func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
-	// Single-pass iteration of book:author index to avoid N+1 queries.
-	// Do NOT deserialize books - just count primary-version entries from the index.
+	// Full Pebble book scan (book:author index removed in Task 3.4).
+	// Iterates primary book records and counts by AuthorID.
 	counts := make(map[int]int)
-	prefix := []byte("book:author:")
-	upper := []byte("book:author;") // ':' + 1
-	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
 	defer iter.Close()
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		key := string(iter.Key()) // "book:author:<authorID>:<bookID>"
+		key := string(iter.Key())
+		// Skip path index and other sub-keys
+		if strings.Contains(key, ":path:") {
+			continue
+		}
 		parts := strings.Split(key, ":")
-		if len(parts) < 4 {
-			continue
-		}
-		authorID, err := strconv.Atoi(parts[2])
-		if err != nil {
+		if len(parts) != 2 {
 			continue
 		}
 
-		// Check IsPrimaryVersion flag from index metadata (first byte of value)
-		// Skip if book is marked as non-primary version
-		value := iter.Value()
-		if len(value) > 0 && value[0] == 0 { // 0 = non-primary version
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
 			continue
 		}
-
-		counts[authorID]++
+		if b.AuthorID == nil {
+			continue
+		}
+		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+			continue
+		}
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		counts[*b.AuthorID]++
 	}
 
 	return counts, nil
@@ -1820,45 +1866,50 @@ func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
 }
 
 // GetAllAuthorFileCounts_Pebble returns the number of audio files per author using Pebble iteration.
-// Optimized to use single-pass index scan + batch file loading instead of N+1 queries.
+// Full book scan fallback after book:author index removal (Task 3.4).
 func (p *PebbleStore) GetAllAuthorFileCounts_Pebble() (map[int]int, error) {
 	counts := make(map[int]int)
 
-	// Phase 1: Iterate book:author index to collect author-book relationships
-	// Do NOT deserialize full books - just extract IDs and check primary-version flag
+	// Phase 1: Full scan of primary book records to collect author-book relationships.
+	// book:author prefix index removed in Task 3.4; must iterate all books instead.
 	type AuthorBook struct {
 		AuthorID int
 		BookID   string
 	}
 	var authorBooks []AuthorBook
 
-	prefix := []byte("book:author:")
-	upper := []byte("book:author;")
-	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	for iter.First(); iter.Valid(); iter.Next() {
-		key := string(iter.Key()) // "book:author:<authorID>:<bookID>"
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") {
+			continue
+		}
 		parts := strings.Split(key, ":")
-		if len(parts) < 4 {
-			continue
-		}
-		authorID, err := strconv.Atoi(parts[2])
-		if err != nil {
-			continue
-		}
-		bookID := parts[3]
-
-		// Check IsPrimaryVersion flag from index metadata (first byte of value)
-		// Skip if book is marked as non-primary version
-		value := iter.Value()
-		if len(value) > 0 && value[0] == 0 { // 0 = non-primary version
+		if len(parts) != 2 {
 			continue
 		}
 
-		authorBooks = append(authorBooks, AuthorBook{AuthorID: authorID, BookID: bookID})
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
+		if b.AuthorID == nil {
+			continue
+		}
+		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+			continue
+		}
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		authorBooks = append(authorBooks, AuthorBook{AuthorID: *b.AuthorID, BookID: b.ID})
 	}
 	iter.Close()
 
@@ -2088,34 +2139,6 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 		}
 	}
 
-	// Series index (store full Book JSON to eliminate point lookups in GetBooksBySeriesID)
-	if book.SeriesID != nil {
-		seriesKey := []byte(fmt.Sprintf("book:series:%d:%s", *book.SeriesID, book.ID))
-		bookJSON, err := serializeBookForIndex(book)
-		if err != nil {
-			batch.Close()
-			return nil, err
-		}
-		if err := batch.Set(seriesKey, bookJSON, nil); err != nil {
-			batch.Close()
-			return nil, err
-		}
-	}
-
-	// Author index (store full Book JSON to eliminate point lookups in GetBooksByAuthorID)
-	if book.AuthorID != nil {
-		authorKey := []byte(fmt.Sprintf("book:author:%d:%s", *book.AuthorID, book.ID))
-		bookJSON, err := serializeBookForIndex(book)
-		if err != nil {
-			batch.Close()
-			return nil, err
-		}
-		if err := batch.Set(authorKey, bookJSON, nil); err != nil {
-			batch.Close()
-			return nil, err
-		}
-	}
-
 	// Version-group index (PERF-VERSIONS): O(N) full-scan in
 	// GetBooksByVersionGroup was costing ~15s on a 10K-book library.
 	// Indexed by group_id so the read can iterate only matching keys.
@@ -2271,68 +2294,6 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 	if err := updateHashIndex(oldBook.OrganizedFileHash, book.OrganizedFileHash, "organizedhash"); err != nil {
 		batch.Close()
 		return nil, err
-	}
-
-	// Update series index if changed (store full Book JSON)
-	oldSeriesID := -1
-	if oldBook.SeriesID != nil {
-		oldSeriesID = *oldBook.SeriesID
-	}
-	newSeriesID := -1
-	if book.SeriesID != nil {
-		newSeriesID = *book.SeriesID
-	}
-	if oldSeriesID != newSeriesID {
-		if oldSeriesID != -1 {
-			oldSeriesKey := []byte(fmt.Sprintf("book:series:%d:%s", oldSeriesID, id))
-			if err := batch.Delete(oldSeriesKey, nil); err != nil {
-				batch.Close()
-				return nil, err
-			}
-		}
-		if newSeriesID != -1 {
-			newSeriesKey := []byte(fmt.Sprintf("book:series:%d:%s", newSeriesID, id))
-			bookJSON, err := serializeBookForIndex(book)
-			if err != nil {
-				batch.Close()
-				return nil, err
-			}
-			if err := batch.Set(newSeriesKey, bookJSON, nil); err != nil {
-				batch.Close()
-				return nil, err
-			}
-		}
-	}
-
-	// Update author index if changed (store full Book JSON)
-	oldAuthorID := -1
-	if oldBook.AuthorID != nil {
-		oldAuthorID = *oldBook.AuthorID
-	}
-	newAuthorID := -1
-	if book.AuthorID != nil {
-		newAuthorID = *book.AuthorID
-	}
-	if oldAuthorID != newAuthorID {
-		if oldAuthorID != -1 {
-			oldAuthorKey := []byte(fmt.Sprintf("book:author:%d:%s", oldAuthorID, id))
-			if err := batch.Delete(oldAuthorKey, nil); err != nil {
-				batch.Close()
-				return nil, err
-			}
-		}
-		if newAuthorID != -1 {
-			newAuthorKey := []byte(fmt.Sprintf("book:author:%d:%s", newAuthorID, id))
-			bookJSON, err := serializeBookForIndex(book)
-			if err != nil {
-				batch.Close()
-				return nil, err
-			}
-			if err := batch.Set(newAuthorKey, bookJSON, nil); err != nil {
-				batch.Close()
-				return nil, err
-			}
-		}
 	}
 
 	// Update version-group index if changed (PERF-VERSIONS).
@@ -2719,24 +2680,6 @@ func (p *PebbleStore) DeleteBook(id string) error {
 	if err := batch.Delete(pathKey, nil); err != nil {
 		batch.Close()
 		return err
-	}
-
-	// Delete series index
-	if book.SeriesID != nil {
-		seriesKey := []byte(fmt.Sprintf("book:series:%d:%s", *book.SeriesID, id))
-		if err := batch.Delete(seriesKey, nil); err != nil {
-			batch.Close()
-			return err
-		}
-	}
-
-	// Delete author index
-	if book.AuthorID != nil {
-		authorKey := []byte(fmt.Sprintf("book:author:%d:%s", *book.AuthorID, id))
-		if err := batch.Delete(authorKey, nil); err != nil {
-			batch.Close()
-			return err
-		}
 	}
 
 	// Delete version-group index (PERF-VERSIONS).
