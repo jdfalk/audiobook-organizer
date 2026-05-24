@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.51.0 -->
+<!-- version: 8.52.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-20 -->
+<!-- last-edited: 2026-05-24 -->
 
 # Project TODO
 
@@ -19,12 +19,12 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## 🎯 Current Status — April 30, 2026
+## 🎯 Current Status — May 24, 2026
 
-**Library:** 10,891 books / 2,970 authors / 8,507 series (cleaned)
-**Production:** PebbleDB, Linux, HTTPS at `172.16.2.30:8484`, mTLS bridge active
-**Latest shipped release:** v0.221.0 (2026-04-29) — PRs #507–#521; PRs #561–#563 merged 2026-04-30; PRs #570–#573 merged 2026-04-30
-**In flight:** User Ratings UI, ASYNC spec revision, iTunes relink unresolved cases (6,719 files)
+**Library:** ~50K books (~10,891 organized + ~39K iTunes-imported) / 8,837 authors / 21,668 series
+**Production:** PebbleDB primary + ChaiDB SQL (write-through sync active); Linux, HTTPS at `172.16.2.30:8484`
+**Latest activity:** Chai SQL migration (Phases 1–4 complete, Tasks 3.2–3.4 landed); N+1 query elimination; cache warm-up memory fix; authors/series caching
+**In flight:** Chai SQL Phase 5+ (remaining read migrations), SEC-AUDIT-11 (CodeQL bulk dismiss), FE-10 (Vitest coverage thresholds)
 
 ---
 
@@ -74,8 +74,13 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
-## ✅ Completed — May 20, 2026
+## ✅ Completed — May 24, 2026
 
+- [x] **CHAI-SQL-PHASE1-4** Chai SQL migration Phases 1–4 complete. Chai DB opens alongside PebbleDB at startup. Write-through sync (`UpsertBookToChaiDB`) populates `book_files`. `GetBooksBySeriesID_Chai` (Task 3.2) and `GetBooksByAuthorID_Chai` (Task 3.3) implemented with pagination. Denormalized `book:series`/`book:author` prefix indexes removed (Task 3.4) — superseded by Chai SQL variants. `pref_key` column renamed from reserved word `key`. `scanBookFromSQL` NULL handling fixed for non-pointer string fields.
+- [x] **PERF-N1-ALL** All 8 N+1 query patterns eliminated: full JSON stored in indices instead of IDs; batch `GetBookFilesForIDs` added; per-object point lookups removed. Critical memory-load paths fixed: `SearchBooks` (was 1M load), `GetDistinctGenres/Languages` (50K load), quarantine/iTunes status queries (100K loads). Quick-query pagination fixed (was applying filters post-page).
+- [x] **PERF-CACHE-WARMUP-FIX** Emergency: disabled all cache warm-up goroutines (`warmAuthorsCache`, `warmSeriesCache`, `warmFacetsCache`) after 81GB OOM. Root cause TBD — warm-up objects likely retain full API response objects. `[[project_cache_warmup_memory_fix]]`
+- [x] **PERF-AUTHORS-SERIES-CACHE** Authors/series endpoint caching with 24h TTL + mutation invalidation. Response time <100ms from cache (was 3-6 min from N+1).
+- [x] **LOG-RECONCILE-PATHS** Convert `tools/cmd/reconcile-paths/main.go` from `log.Printf`/`log.Fatal` to `fmt.Fprintf(os.Stderr, ...)`. Last `log` import in any non-server tool file removed. `go vet ./...` clean.
 - [x] **SLOG-W12** Operation context logging end-to-end (PR #1047). New `internal/logging.OpContext` propagated via `context.Context`; `logging.Info/Warn/Error/Debug(ctx, ...)` auto-tag every record with `opID`/`opType`/`opStatus`/`entities`. Wired into 12 ops (metadata-fetch ×2, dedup ×8, library scan/organize/transcode). New endpoint `GET /api/v1/operations/:id/activity`. End-to-end test `TestEndToEndLoggingFlow` captures real slog JSON output and asserts attr propagation. Cleanup: restored 3 maintenance jobs' `reporter.Log` calls W11 dropped; fixed ~30 leftover slog KV-pair vet errors across 8+ files; `go vet ./...` now clean across the whole module.
 - [x] **SLOG-W12-UI** Per-operation activity panel (PR #1049). React component consumes `/api/v1/operations/:id/activity`, mounted in `OperationsIndicator` notifications bell. Reusable anywhere.
 - [x] **SLOG-W11** Repair W10's incomplete printf → kv conversion: 674 format-string fixes + 134 malformed-message cleanups (PRs #1036, #1037).
@@ -85,10 +90,11 @@ future agent) can scan the entire workspace in one page.
 
 - [ ] **User-saved quick filters.** Let users save the current filter set as a named preset and surface it in the header kebab menu alongside the six built-in counts. Persist per-user (settings table), include in `/library/quick-queries` payload, edit/delete from a "Manage" submenu.
 
-### Remaining slog work (low priority)
+### Remaining slog / logging work
 
-- [ ] Wire OpContext into long-tail async ops: `runBulkWriteBack`, ISBN enrichment goroutine, iTunes sync ops, batch poller, scanner deep paths.
-- [ ] Smoke-test metadata-fetch on prod to verify the full chain (opID in logs, /activity returns rows).
+- [ ] **SLOG-W13** Wire `logging.Info(ctx, ...)` into long-tail async ops that currently use raw `slog.Info`: `runBulkWriteBack`, ISBN enrichment goroutine, iTunes sync ops, batch poller, scanner deep paths. ~1363 raw `slog.Info/Warn/Error/Debug` calls across 193 files remain. Priority: any code inside an op-context flow (where `logging.WithOp` has been called upstream). Code outside ops (startup, background goroutines) can stay as raw slog.
+- [ ] **SLOG-PROD-VERIFY** Smoke-test metadata-fetch on prod to verify the full chain (opID in logs, `/api/v1/operations/:id/activity` returns rows).
+- [ ] **CACHE-WARMUP-ROOT-CAUSE** Investigate root cause of cache warm-up OOM. Likely issue: `List*WithCounts()` allocates unboundedly during scan, or the `Server` struct cache fields retain full API response objects. Once fixed, re-enable startup preload.
 
 ---
 
