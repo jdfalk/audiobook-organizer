@@ -1,7 +1,7 @@
 // file: web/src/components/library/LibraryBookGrid.tsx
-// version: 1.5.0
+// version: 1.5.1
 // guid: c3d4e5f6-a7b8-9012-cdef-123456789012
-// last-edited: 2026-05-20
+// last-edited: 2026-05-23
 
 import {
   Typography,
@@ -239,16 +239,14 @@ export const LibraryBookGrid = ({
       </Paper>
     ) : (
       <Stack spacing={1.5}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <FilterPanel
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            onParsedSearchChange={setParsedSearch}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            onLibraryInfoClick={() => setStorageDrawerOpen(true)}
-          />
-        </Stack>
+        <FilterPanel
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onParsedSearchChange={setParsedSearch}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onLibraryInfoClick={() => setStorageDrawerOpen(true)}
+        />
 
         {/* Select All bar — always visible */}
         <Stack direction="row" spacing={1} alignItems="center" sx={{ px: 0.5, mt: -0.5, mb: -1 }}>
