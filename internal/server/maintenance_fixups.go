@@ -1,7 +1,7 @@
 // file: internal/server/maintenance_fixups.go
-// version: 2.3.1
+// version: 2.4.0
 // guid: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
-// last-edited: 2026-05-22
+// last-edited: 2026-05-24
 
 package server
 
@@ -592,4 +592,30 @@ func (s *Server) handleGetAcoustIDStats(c *gin.Context) {
 		return
 	}
 	httputil.RespondWithOK(c, stats)
+}
+
+// backfillChaiDB handles POST /api/v1/admin/backfill-chai.
+//
+// Iterates all books in Pebble and upserts them into the Chai SQL index.
+// Idempotent — safe to run multiple times. Returns { synced, error }.
+func (s *Server) backfillChaiDB(c *gin.Context) {
+	store := s.Store()
+	if store == nil {
+		httputil.RespondWithInternalError(c, "database not initialized")
+		return
+	}
+
+	pebbleStore, ok := store.(*database.PebbleStore)
+	if !ok {
+		httputil.RespondWithBadRequest(c, "chai backfill only supported with PebbleStore backend")
+		return
+	}
+
+	synced, err := pebbleStore.BackfillChaiFromPebble(c.Request.Context())
+	if err != nil {
+		httputil.InternalError(c, "chai backfill failed", err)
+		return
+	}
+
+	httputil.RespondWithOK(c, gin.H{"synced": synced})
 }

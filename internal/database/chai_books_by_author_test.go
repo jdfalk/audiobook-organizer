@@ -342,4 +342,3 @@ func insertTestBookAuthor(db *sql.DB, bookID string, authorID int) error {
 	_, err := db.Exec(query)
 	return err
 }
-

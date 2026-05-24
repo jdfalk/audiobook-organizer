@@ -195,7 +195,7 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 
 	store := &PebbleStore{
 		db:        db,
-		UseChaiDB: false, // Chai DB not yet populated — needs data sync before enabling
+		UseChaiDB: true, // Chai DB sync is wired — backfill via POST /api/v1/admin/backfill-chai
 	}
 
 	slog.Info("PebbleDB opened", "path", path, "format_version", db.FormatMajorVersion())
@@ -2163,6 +2163,14 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 
 	p.InvalidateLibraryStats()
 	p.MarkAllQuickQueriesDirty("create_book")
+
+	// Chai write-through sync (best-effort; Pebble is source of truth).
+	if p.UseChaiDB && p.chai != nil {
+		if syncErr := p.UpsertBookToChaiDB(context.Background(), book); syncErr != nil {
+			slog.Warn("chai sync failed for CreateBook", "id", book.ID, "error", syncErr)
+		}
+	}
+
 	return book, nil
 }
 
@@ -2408,6 +2416,14 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 	p.MarkQuickQueryDirty("missing_covers", "update_book")
 	p.MarkQuickQueryDirty("no_isbn", "update_book")
 	p.MarkQuickQueryDirty("in_import_path", "update_book")
+
+	// Chai write-through sync (best-effort; Pebble is source of truth).
+	if p.UseChaiDB && p.chai != nil {
+		if syncErr := p.UpsertBookToChaiDB(context.Background(), book); syncErr != nil {
+			slog.Warn("chai sync failed for UpdateBook", "id", id, "error", syncErr)
+		}
+	}
+
 	return book, nil
 }
 
@@ -2755,6 +2771,14 @@ func (p *PebbleStore) DeleteBook(id string) error {
 	}
 	p.InvalidateLibraryStats()
 	p.MarkAllQuickQueriesDirty("delete_book")
+
+	// Chai write-through sync (best-effort; Pebble is source of truth).
+	if p.UseChaiDB && p.chai != nil {
+		if syncErr := p.DeleteBookFromChaiDB(context.Background(), id); syncErr != nil {
+			slog.Warn("chai sync failed for DeleteBook", "id", id, "error", syncErr)
+		}
+	}
+
 	return nil
 }
 
