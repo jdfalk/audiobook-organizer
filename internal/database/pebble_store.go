@@ -1135,7 +1135,17 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 
 // ---- Work operations (logical title-level grouping) ----
 
+// GetAllWorks returns all works. When UseChaiDB is enabled it delegates to the
+// SQL implementation in ChaiStore; otherwise it falls back to the Pebble prefix scan.
 func (p *PebbleStore) GetAllWorks() ([]Work, error) {
+	if p.UseChaiDB && p.chai != nil {
+		return p.GetAllWorks_Chai(context.Background())
+	}
+	return p.GetAllWorks_Pebble()
+}
+
+// GetAllWorks_Pebble returns all works by iterating the Pebble "work:" prefix.
+func (p *PebbleStore) GetAllWorks_Pebble() ([]Work, error) {
 	var works []Work
 	iter, err := p.db.NewIter(&pebble.IterOptions{LowerBound: []byte("work:0"), UpperBound: []byte("work:;")})
 	if err != nil {
@@ -1154,6 +1164,20 @@ func (p *PebbleStore) GetAllWorks() ([]Work, error) {
 		works = append(works, w)
 	}
 	return works, nil
+}
+
+// GetAllWorks_Chai delegates work retrieval to the SQL backend via ChaiStore.
+// NOTE: The works table is not yet defined in chai_schema.go; ChaiStore.GetAllWorks_Chai
+// returns an empty slice until the schema is extended.
+func (p *PebbleStore) GetAllWorks_Chai(ctx context.Context) ([]Work, error) {
+	if p.chai == nil {
+		return nil, fmt.Errorf("Chai database not initialized")
+	}
+	chaiStore, err := NewChaiStore(p.chai.DB())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ChaiStore: %w", err)
+	}
+	return chaiStore.GetAllWorks_Chai(ctx)
 }
 
 func (p *PebbleStore) GetWorkByID(id string) (*Work, error) {
