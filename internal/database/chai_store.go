@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ChaiStore wraps a Chai database (SQL backend)
@@ -295,6 +296,93 @@ func (cs *ChaiStore) GetAllAuthorFileCounts_Chai(ctx context.Context) (map[int]i
 	}
 
 	return counts, nil
+}
+
+// GetAllImportPaths_Chai returns all managed import paths from the SQL import_paths table.
+// Replaces Pebble's manual KV iteration over "import_path:*" keys with a simple SQL query.
+// book_count is computed via a correlated subquery using source_import_path from the books table.
+// Chai limitation: no JOIN support, so book_count aggregation uses a subquery.
+func (cs *ChaiStore) GetAllImportPaths_Chai(ctx context.Context) ([]ImportPath, error) {
+	if cs.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	// Query import_paths with correlated subquery for live book_count.
+	// Uses source_import_path (preferred) from books. Non-deleted only.
+	rows, err := cs.db.QueryContext(ctx, `
+		SELECT id, path, name, enabled, created_at, last_scan
+		FROM import_paths
+		ORDER BY name
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query import_paths: %w", err)
+	}
+	defer rows.Close()
+
+	var importPaths []ImportPath
+	for rows.Next() {
+		var ip ImportPath
+		var createdAt sql.NullTime
+		var lastScan sql.NullTime
+
+		if err := rows.Scan(&ip.ID, &ip.Path, &ip.Name, &ip.Enabled, &createdAt, &lastScan); err != nil {
+			return nil, fmt.Errorf("failed to scan import_path row: %w", err)
+		}
+
+		if createdAt.Valid {
+			ip.CreatedAt = createdAt.Time
+		} else {
+			ip.CreatedAt = time.Time{}
+		}
+		if lastScan.Valid {
+			ip.LastScan = &lastScan.Time
+		}
+
+		importPaths = append(importPaths, ip)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading import_paths: %w", err)
+	}
+
+	// Phase 2: compute book_count per import path using source_import_path from books.
+	// Chai doesn't support JOINs or correlated subqueries — use a second query and aggregate in-memory.
+	bookCountRows, err := cs.db.QueryContext(ctx, `
+		SELECT source_import_path, COUNT(id) FROM books
+		WHERE source_import_path IS NOT NULL
+		  AND marked_for_deletion = false
+		GROUP BY source_import_path
+	`)
+	if err != nil {
+		// Non-fatal: book_count stays 0 if query fails
+		return importPaths, nil
+	}
+	defer bookCountRows.Close()
+
+	// Map path -> count for quick lookup
+	pathCount := make(map[string]int)
+	for bookCountRows.Next() {
+		var path string
+		var count int
+		if err := bookCountRows.Scan(&path, &count); err != nil {
+			continue
+		}
+		pathCount[path] = count
+	}
+
+	// Assign counts: an import path matches books whose source_import_path starts with ip.Path
+	for i := range importPaths {
+		total := 0
+		prefix := strings.TrimRight(importPaths[i].Path, "/")
+		for path, count := range pathCount {
+			if path == prefix || strings.HasPrefix(path, prefix+"/") {
+				total += count
+			}
+		}
+		importPaths[i].BookCount = total
+	}
+
+	return importPaths, nil
 }
 
 // CountFiles_Chai returns the total number of audio files across all books (SQL version).
@@ -1012,6 +1100,9 @@ func (cs *ChaiStore) GetAllUserPreferences_Chai(ctx context.Context) (map[string
 
 	return result, nil
 }
+
+
+
 
 // Helper functions
 func escapeSQL(s string) string {

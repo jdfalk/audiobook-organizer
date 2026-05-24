@@ -3362,7 +3362,17 @@ func (p *PebbleStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) e
 
 // Import path operations
 
+// GetAllImportPaths returns all managed import paths.
+// Routes to Chai SQL when the UseChaiDB feature flag is set, otherwise falls back to Pebble.
 func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
+	if p.UseChaiDB && p.chai != nil {
+		return p.GetAllImportPaths_Chai(context.Background())
+	}
+	return p.GetAllImportPaths_Pebble()
+}
+
+// GetAllImportPaths_Pebble returns all import paths using Pebble KV iteration.
+func (p *PebbleStore) GetAllImportPaths_Pebble() ([]ImportPath, error) {
 	var importPaths []ImportPath
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("import_path:0"),
@@ -3387,6 +3397,22 @@ func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
 	}
 
 	return importPaths, nil
+}
+
+// GetAllImportPaths_Chai returns all import paths using Chai SQL.
+// This is the production entry point when the UseChaiDB feature flag is enabled.
+func (p *PebbleStore) GetAllImportPaths_Chai(ctx context.Context) ([]ImportPath, error) {
+	if p.chai == nil {
+		return nil, fmt.Errorf("Chai database not initialized")
+	}
+
+	chaiStore, err := NewChaiStore(p.chai.DB())
+	if err != nil {
+		// Fallback to Pebble if ChaiStore creation fails
+		return p.GetAllImportPaths_Pebble()
+	}
+
+	return chaiStore.GetAllImportPaths_Chai(ctx)
 }
 
 // CountBooksByPathPrefix returns the number of books that originated from the
