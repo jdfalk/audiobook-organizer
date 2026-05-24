@@ -1,5 +1,5 @@
 // file: internal/database/chai_sync.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f1e2d3c4-b5a6-4789-0abc-def012345678
 // last-edited: 2026-05-24
 
@@ -305,6 +305,90 @@ func (p *PebbleStore) UpsertBookToChaiDB(ctx context.Context, book *Book) error 
 		)
 		if _, execErr := tx.ExecContext(ctx, insertBA); execErr != nil {
 			return fmt.Errorf("chai insert book_author: %w", execErr)
+		}
+	}
+
+	// Insert book_files rows by iterating the Pebble key range for this book.
+	// Key format: book_file:<bookID>:<fileID>
+	// The Chai book_files table is intentionally slimmer — only columns needed
+	// for aggregation (file count, duration, size, hash coverage).
+	filePrefix := fmt.Sprintf("book_file:%s:", book.ID)
+	fileUpper := fmt.Sprintf("book_file:%s;", book.ID)
+	fileIter, fileIterErr := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte(filePrefix),
+		UpperBound: []byte(fileUpper),
+	})
+	if fileIterErr != nil {
+		slog.Warn("chai_sync: failed to create book_files iterator", "book_id", book.ID, "error", fileIterErr)
+	} else {
+		defer fileIter.Close()
+		for fileIter.First(); fileIter.Valid(); fileIter.Next() {
+			rawFile, fileValErr := fileIter.ValueAndErr()
+			if fileValErr != nil {
+				slog.Warn("chai_sync: failed to read book_file value", "key", string(fileIter.Key()), "error", fileValErr)
+				continue
+			}
+			// Clone before iterator advances.
+			fileBytes := make([]byte, len(rawFile))
+			copy(fileBytes, rawFile)
+
+			var bf BookFile
+			if jsonErr := json.Unmarshal(fileBytes, &bf); jsonErr != nil {
+				slog.Warn("chai_sync: failed to unmarshal book_file", "key", string(fileIter.Key()), "error", jsonErr)
+				continue
+			}
+
+			// Build nullable helpers for BookFile fields.
+			var bfDuration *int
+			if bf.Duration != 0 {
+				bfDuration = &bf.Duration
+			}
+			var bfSize *int64
+			if bf.FileSize != 0 {
+				bfSize = &bf.FileSize
+			}
+			var bfHash *string
+			if bf.FileHash != "" {
+				bfHash = &bf.FileHash
+			}
+			var bfFormat *string
+			if bf.Format != "" {
+				bfFormat = &bf.Format
+			}
+			bfMissing := bf.Missing
+			var bfCreatedAt *time.Time
+			if !bf.CreatedAt.IsZero() {
+				bfCreatedAt = &bf.CreatedAt
+			}
+			var bfUpdatedAt *time.Time
+			if !bf.UpdatedAt.IsZero() {
+				bfUpdatedAt = &bf.UpdatedAt
+			}
+			markedDel := false // BookFile has no MarkedForDeletion field
+
+			insertBF := fmt.Sprintf(`INSERT INTO book_files (
+				id, book_id, file_path, format, duration_ms, file_size_bytes,
+				file_hash, missing, created_at, updated_at, marked_for_deletion
+			) VALUES (
+				'%s', '%s', '%s', %s, %s, %s,
+				%s, %s, %s, %s, %s
+			)`,
+				chaiEscapeStr(bf.ID),
+				chaiEscapeStr(bf.BookID),
+				chaiEscapeStr(bf.FilePath),
+				chaiNullableString(bfFormat),
+				chaiNullableInt(bfDuration),
+				chaiNullableInt64(bfSize),
+				chaiNullableString(bfHash),
+				chaiNullableBool(&bfMissing),
+				chaiNullableTime(bfCreatedAt),
+				chaiNullableTime(bfUpdatedAt),
+				chaiNullableBool(&markedDel),
+			)
+			if _, execErr := tx.ExecContext(ctx, insertBF); execErr != nil {
+				slog.Warn("chai_sync: failed to insert book_file", "file_id", bf.ID, "error", execErr)
+				// Non-fatal: continue with remaining files.
+			}
 		}
 	}
 

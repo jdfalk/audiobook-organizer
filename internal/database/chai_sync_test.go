@@ -1,5 +1,5 @@
 // file: internal/database/chai_sync_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a9b8c7d6-e5f4-4321-9876-fedcba012345
 // last-edited: 2026-05-24
 
@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -221,6 +222,71 @@ func TestBackfillChaiFromPebble_SyncsAllBooks(t *testing.T) {
 	if count < len(bookIDs) {
 		t.Errorf("expected at least %d books in chai after backfill, got %d", len(bookIDs), count)
 	}
+}
+
+// TestUpsertBookToChaiDB_BookFiles verifies that book_files rows in Pebble are
+// synced into the Chai book_files table as part of UpsertBookToChaiDB.
+func TestUpsertBookToChaiDB_BookFiles(t *testing.T) {
+	store := newTestPebbleStoreWithChai(t)
+	ctx := context.Background()
+
+	book := makeTestBook("01TESTBOOKID00000000000005", "Book With Files")
+
+	// Store the book in Pebble (UseChaiDB is true, so it writes through).
+	// We need it in Pebble for CreateBookFile to work.
+	store.UseChaiDB = false // temporarily disable write-through so we can test explicitly
+	if _, err := store.CreateBook(book); err != nil {
+		t.Fatalf("CreateBook failed: %v", err)
+	}
+	store.UseChaiDB = true
+
+	// Create three book files in Pebble.
+	for i := 1; i <= 3; i++ {
+		bf := &BookFile{
+			ID:       fmt.Sprintf("01TESTFILEID0000000000000%d", i),
+			BookID:   book.ID,
+			FilePath: fmt.Sprintf("/test/book/%d.m4b", i),
+			Format:   "m4b",
+			Duration: i * 1000,
+			FileSize: int64(i * 10_000_000),
+			FileHash: fmt.Sprintf("sha256hash%d", i),
+			Missing:  false,
+		}
+		if err := store.CreateBookFile(bf); err != nil {
+			t.Fatalf("CreateBookFile %d failed: %v", i, err)
+		}
+	}
+
+	// Now upsert the book to Chai — this should pull the files from Pebble.
+	if err := store.UpsertBookToChaiDB(ctx, book); err != nil {
+		t.Fatalf("UpsertBookToChaiDB failed: %v", err)
+	}
+
+	// Verify 3 book_files rows in Chai.
+	var count int
+	if err := store.chai.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM book_files WHERE book_id = '01TESTBOOKID00000000000005'",
+	).Scan(&count); err != nil {
+		t.Fatalf("query book_files failed: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("expected 3 book_files rows in Chai, got %d", count)
+	}
+
+	// Verify idempotency: upsert again — should still be 3 (DELETE+INSERT, not duplicates).
+	if err := store.UpsertBookToChaiDB(ctx, book); err != nil {
+		t.Fatalf("second UpsertBookToChaiDB failed: %v", err)
+	}
+	if err := store.chai.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM book_files WHERE book_id = '01TESTBOOKID00000000000005'",
+	).Scan(&count); err != nil {
+		t.Fatalf("query book_files after second upsert failed: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("expected 3 book_files after idempotent upsert, got %d", count)
+	}
+
+	t.Logf("✓ BookFiles sync tests passed")
 }
 
 // TestChaiSyncHelper_NullableHelpers verifies the SQL null-formatting helpers.
