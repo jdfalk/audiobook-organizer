@@ -39,7 +39,7 @@ Other worktrees read this file to get the shared API key. The cleanup process re
 The bootstrap token (from logs) is one-time-use and valid for 10 minutes. The POST request:
 
 ```bash
-curl -X POST http://<server>:8080/api/v1/auth/bootstrap \
+curl -X POST http://<server>:8484/api/v1/auth/bootstrap \
   -H "Content-Type: application/json" \
   -d '{"token":"abbs_...", "key_name":"workspace-key"}'
 ```

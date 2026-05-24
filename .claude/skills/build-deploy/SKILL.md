@@ -14,7 +14,7 @@ Common commands:
 ```bash
 make build          # Full build: frontend + Go backend (embedded UI)
 make build-api      # Backend only (faster iteration)
-make run            # Full build then serve (http://localhost:8080)
+make run            # Full build then serve (http://localhost:8484)
 make run-api        # Backend-only build then serve
 make test-short     # Quick tests (skip slow prop tests)
 make test-all       # All tests (backend full + frontend)
@@ -32,7 +32,7 @@ make deploy-debug   # Build with debug symbols then deploy
 - Minor version updates don't break the build
 - Fast path: `npm install` exits instantly if package.json hasn't changed
 
-**Embedded UI:** Default `make build` embeds the React frontend into the Go binary (tag `embed_frontend`). This creates a single self-contained binary served on `:8080`. For frontend development, use `make web-dev` (separate Vite server on `:5173`).
+**Embedded UI:** Default `make build` embeds the React frontend into the Go binary (tag `embed_frontend`). This creates a single self-contained binary served on `:8484`. For frontend development, use `make web-dev` (separate Vite server on `:5173`).
 
 ## Build Variants
 
@@ -81,13 +81,13 @@ make web-dev
 Then:
 - Open http://localhost:5173
 - Edit `web/src/**/*.tsx` → changes appear instantly (HMR)
-- Backend API available at http://localhost:8080 (adjust in vite.config.ts if needed)
+- Backend API available at http://localhost:8484 (adjust in vite.config.ts if needed)
 
 To test the embedded UI (after `make build`):
 
 ```bash
 ./audiobook-organizer
-# Open http://localhost:8080
+# Open http://localhost:8484
 ```
 
 ## When to Use This Skill

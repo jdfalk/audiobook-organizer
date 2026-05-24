@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SERVER_IP="${1:?Server IP required (e.g., 172.16.2.30)}"
-API_PORT="${2:-8080}"
+API_PORT="${2:-8484}"
 TOKEN_FILE="./.api-token"
 EXPIRES_IN_SECONDS=$((8 * 3600))
 

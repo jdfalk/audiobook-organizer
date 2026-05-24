@@ -30,17 +30,17 @@
 ## Run Targets
 
 ### `make run`
-**Full build then serve (http://localhost:8080)**
+**Full build then serve (http://localhost:8484)**
 
 - Runs `make build` then starts the server
-- Embedded frontend available at http://localhost:8080
+- Embedded frontend available at http://localhost:8484
 - Ctrl+C to stop
 
 ### `make run-api`
 **Backend-only build then serve (API only)**
 
 - Runs `make build-api` then starts the server
-- API endpoints available at http://localhost:8080
+- API endpoints available at http://localhost:8484
 - Useful for running separate frontend via `make web-dev`
 
 ## Frontend Targets

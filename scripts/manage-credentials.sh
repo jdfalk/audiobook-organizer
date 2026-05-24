@@ -6,7 +6,7 @@
 set -euo pipefail
 
 CRED_DIR=".claude/.credentials"
-API_HOST="${API_HOST:-http://localhost:8080}"
+API_HOST="${API_HOST:-http://localhost:8484}"
 
 # Helper: Get current branch name
 get_branch() {
@@ -119,7 +119,7 @@ cmd_use() {
     echo "export API_PASSWORD='$password'"
     echo ""
     echo "# Or use directly in curl:"
-    echo "curl -u '$username:$password' http://localhost:8080/api/v1/audiobooks"
+    echo "curl -u '$username:$password' http://localhost:8484/api/v1/audiobooks"
 }
 
 # Command: delete

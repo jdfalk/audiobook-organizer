@@ -5,7 +5,7 @@
 Once you have credentials from `server-logs` skill, open the web UI:
 
 ```
-http://172.16.2.30:8080
+http://172.16.2.30:8484
 ```
 
 ### Logging In
@@ -37,7 +37,7 @@ All API requests require the `Authorization: Bearer` header:
 API_KEY="abbs_xxxxxxxxxxxxx"
 
 curl -H "Authorization: Bearer $API_KEY" \
-  http://172.16.2.30:8080/api/v1/audiobooks
+  http://172.16.2.30:8484/api/v1/audiobooks
 ```
 
 ### Common Endpoints
@@ -103,7 +103,7 @@ api_key=abbs_xxxxxxxxxxxxx
 key_id=ulid-...
 username=admin
 server_ip=172.16.2.30
-api_port=8080
+api_port=8484
 expires_at=1716470400
 ```
 
@@ -139,7 +139,7 @@ sleep 5
 ./scripts/fetch-logs.sh stream
 
 # Terminal 2: Trigger operation
-curl -X POST http://172.16.2.30:8080/api/v1/audiobooks/scan
+curl -X POST http://172.16.2.30:8484/api/v1/audiobooks/scan
 ```
 
 ### Export Activity Log
@@ -147,7 +147,7 @@ curl -X POST http://172.16.2.30:8080/api/v1/audiobooks/scan
 ```bash
 source .api-token
 curl -H "Authorization: Bearer $api_key" \
-  'http://172.16.2.30:8080/api/v1/activity/digest?limit=1000' \
+  'http://172.16.2.30:8484/api/v1/activity/digest?limit=1000' \
   | jq . > activity.json
 ```
 

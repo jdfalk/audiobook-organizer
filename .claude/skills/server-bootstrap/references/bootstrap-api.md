@@ -64,7 +64,7 @@ Once obtained, use the API key in subsequent requests:
 
 ```bash
 curl -H "Authorization: Bearer abbs_xxxxxxxxxxxxx" \
-  http://server:8080/api/v1/audiobooks
+  http://server:8484/api/v1/audiobooks
 ```
 
 The API key has full permissions (`scopes: ["all"]`).
@@ -78,7 +78,7 @@ api_key=abbs_xxxxxxxxxxxxx
 key_id=ulid-...
 username=admin
 server_ip=172.16.2.30
-api_port=8080
+api_port=8484
 expires_at=1716470400
 ```
 

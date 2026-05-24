@@ -38,9 +38,9 @@ Lines from `journalctl -u audiobook-organizer.service` with timestamps, levels (
 ### Login Credentials
 From `.api-token` file:
 - **Server IP**: `172.16.2.30`
-- **API Port**: `8080`
+- **API Port 8484`
 - **API Key**: `abbs_xxxxx...`
-- **Web UI URL**: `http://172.16.2.30:8080`
+- **Web UI URL**: `http://172.16.2.30:8484`
 - **Username**: `admin` (if using password auth)
 
 ## Log Filtering Options
@@ -66,7 +66,7 @@ Use snapshots for quick checks, streams for watching a deployment or debugging.
 
 Once you have login info from `./scripts/fetch-logs.sh login`:
 
-1. **Web UI (http://172.16.2.30:8080)**
+1. **Web UI (http://172.16.2.30:8484)**
    - Open in browser
    - Log in with username/password OR API key
    - View dashboard, library, activity log, etc.
@@ -74,7 +74,7 @@ Once you have login info from `./scripts/fetch-logs.sh login`:
 2. **API Calls**
    ```bash
    curl -H "Authorization: Bearer abbs_xxxxx" \
-     http://172.16.2.30:8080/api/v1/audiobooks
+     http://172.16.2.30:8484/api/v1/audiobooks
    ```
 
 3. **SSH to Server**
@@ -139,4 +139,4 @@ By default, `errors` filter shows WARN and ERROR. Use `warnings` to include both
 
 - `server-bootstrap` — Create `.api-token` file
 - `build-deploy` — Deploy new version before checking logs
-- Web dashboard — Open http://`<server>`:8080 for full UI
+- Web dashboard — Open http://`<server>`:8484 for full UI
