@@ -161,3 +161,27 @@ func (c *ChaiDB) ResetSchema(ctx context.Context) error {
 func (c *ChaiDB) GetSchema() *ChaiSchema {
 	return c.schema
 }
+
+// GetAllAuthorBookCounts_Chai returns book counts per author via SQL
+func (c *ChaiDB) GetAllAuthorBookCounts_Chai(ctx context.Context) (map[int]int, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	store, err := NewChaiStore(c.db)
+	if err != nil {
+		return nil, err
+	}
+	return store.GetAllAuthorBookCounts_Chai(ctx)
+}
+
+// GetAllSeriesFileCounts_Chai returns file counts per series via SQL
+func (c *ChaiDB) GetAllSeriesFileCounts_Chai(ctx context.Context) (map[int]int, error) {
+	if c.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	store, err := NewChaiStore(c.db)
+	if err != nil {
+		return nil, err
+	}
+	return store.GetAllSeriesFileCounts_Chai(ctx)
+}

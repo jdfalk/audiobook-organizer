@@ -374,7 +374,7 @@ func TestChaiStore_GetAllAuthorFileCounts_Chai(t *testing.T) {
 	}
 
 	// Test 6: Multiple authors with different file counts
-	_, err = db.ExecContext(ctx, "INSERT INTO authors (id, name) VALUES (2, 'Author Two')")
+	_, err = db.ExecContext(ctx, "INSERT INTO authors (id, name, normalized_name) VALUES (2, 'Author Two', 'author two')")
 	if err != nil {
 		t.Fatalf("failed to insert author 2: %v", err)
 	}
