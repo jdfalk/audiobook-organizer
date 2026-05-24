@@ -7,11 +7,10 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	_ "embed"
 	"fmt"
 	"log/slog"
-
-	"github.com/chaisql/chai"
 )
 
 // Embed the schema SQL file at compile time
@@ -30,7 +29,7 @@ var schemaSQL string
 // The schema replaces ~9,300 lines of manual Pebble indexing with SQL
 // optimizations, achieving 78% code reduction and 10-100x performance
 // improvement on aggregation queries.
-func InitializeChaiSchema(ctx context.Context, db *chai.DB) error {
+func InitializeChaiSchema(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return fmt.Errorf("database connection is nil")
 	}
@@ -48,7 +47,7 @@ func InitializeChaiSchema(ctx context.Context, db *chai.DB) error {
 		slog.Debug("executing schema statement", "index", i+1, "total", len(statements))
 
 		// Execute the statement
-		if err := db.Exec(ctx, stmt); err != nil {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("failed to execute schema statement %d: %w\nStatement: %s", i+1, err, stmt)
 		}
 	}
@@ -116,7 +115,7 @@ func splitStatements(sql string) []string {
 // validateSchemaIntegrity checks that all tables exist and have expected columns.
 // Called after initialization to ensure the schema is complete and correct.
 // This is defensive: catches any Chai version incompatibilities or schema SQL errors.
-func validateSchemaIntegrity(ctx context.Context, db *chai.DB) error {
+func validateSchemaIntegrity(ctx context.Context, db *sql.DB) error {
 	// List of tables that must exist after initialization
 	requiredTables := []string{
 		"authors",
@@ -154,7 +153,9 @@ func validateSchemaIntegrity(ctx context.Context, db *chai.DB) error {
 		if err != nil {
 			return fmt.Errorf("table %s does not exist or is not accessible: %w", tableName, err)
 		}
-		rows.Close()
+		if rows != nil {
+			rows.Close()
+		}
 	}
 
 	slog.Info("schema integrity check passed", "table_count", len(requiredTables))
@@ -163,7 +164,7 @@ func validateSchemaIntegrity(ctx context.Context, db *chai.DB) error {
 
 // DropChaiSchema removes all tables (DANGEROUS - for testing only).
 // Never call in production; used by test teardown to reset the database.
-func DropChaiSchema(ctx context.Context, db *chai.DB) error {
+func DropChaiSchema(ctx context.Context, db *sql.DB) error {
 	if db == nil {
 		return fmt.Errorf("database connection is nil")
 	}
@@ -199,7 +200,7 @@ func DropChaiSchema(ctx context.Context, db *chai.DB) error {
 
 	for _, table := range tables {
 		stmt := fmt.Sprintf("DROP TABLE IF EXISTS %s", table)
-		if err := db.Exec(ctx, stmt); err != nil {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			slog.Warn("failed to drop table", "table", table, "error", err)
 			// Continue dropping other tables
 		}
