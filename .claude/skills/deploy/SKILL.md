@@ -32,13 +32,13 @@ Deploy the audiobook-organizer to the production Linux server. Always use `make 
 make deploy
 ```
 
-This builds the Linux binary with embedded frontend and deploys to the production server at 172.16.2.30.
+This builds the Linux binary with embedded frontend and deploys to the production server at <server-ip>.
 
 ## Post-deploy Verification
 
 After deploy completes, verify the service is running:
 ```bash
-ssh jdfalk@172.16.2.30 'curl -sk https://localhost:8484/api/v1/health'
+ssh jdfalk@<server-ip> 'curl -sk https://localhost:8484/api/v1/health'
 ```
 
 ## Rules

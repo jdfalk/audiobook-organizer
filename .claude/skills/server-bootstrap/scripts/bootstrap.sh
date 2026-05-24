@@ -5,8 +5,19 @@
 
 set -euo pipefail
 
-SERVER_IP="${1:?Server IP required (e.g., 172.16.2.30)}"
-API_PORT="${2:-8484}"
+# Load server config from .env if present
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if [ -f "$REPO_ROOT/.env" ]; then
+    # shellcheck disable=SC1090
+    set -a; source "$REPO_ROOT/.env"; set +a
+fi
+
+SERVER_IP="${1:-${AUDIOBOOK_SERVER_IP:-}}"
+if [ -z "$SERVER_IP" ]; then
+    echo "❌ Server IP required: pass as arg or set AUDIOBOOK_SERVER_IP in .env"
+    exit 1
+fi
+API_PORT="${2:-${AUDIOBOOK_API_PORT:-8484}}"
 TOKEN_FILE="./.api-token"
 EXPIRES_IN_SECONDS=$((8 * 3600))
 

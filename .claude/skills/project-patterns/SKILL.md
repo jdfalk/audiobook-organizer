@@ -39,7 +39,7 @@ See `build-deploy` skill for details.
 | Fetch service logs | `server-logs status` | Last 50 lines |
 | Stream logs live | `server-logs stream` | Ctrl+C to stop |
 | Get login credentials | `server-logs login` | Shows web UI URL + API key |
-| SSH to server | `ssh root@172.16.2.30` | Need SSH key/password |
+| SSH to server | `ssh root@<server-ip>` | Need SSH key/password |
 
 See `server-logs` skill for details.
 

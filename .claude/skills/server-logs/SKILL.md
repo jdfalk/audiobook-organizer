@@ -37,10 +37,10 @@ Lines from `journalctl -u audiobook-organizer.service` with timestamps, levels (
 
 ### Login Credentials
 From `.api-token` file:
-- **Server IP**: `172.16.2.30`
+- **Server IP**: `<server-ip>`
 - **API Port 8484`
 - **API Key**: `abbs_xxxxx...`
-- **Web UI URL**: `http://172.16.2.30:8484`
+- **Web UI URL**: `http://<server-ip>:8484`
 - **Username**: `admin` (if using password auth)
 
 ## Log Filtering Options
@@ -66,7 +66,7 @@ Use snapshots for quick checks, streams for watching a deployment or debugging.
 
 Once you have login info from `./scripts/fetch-logs.sh login`:
 
-1. **Web UI (http://172.16.2.30:8484)**
+1. **Web UI (http://<server-ip>:8484)**
    - Open in browser
    - Log in with username/password OR API key
    - View dashboard, library, activity log, etc.
@@ -74,12 +74,12 @@ Once you have login info from `./scripts/fetch-logs.sh login`:
 2. **API Calls**
    ```bash
    curl -H "Authorization: Bearer abbs_xxxxx" \
-     http://172.16.2.30:8484/api/v1/audiobooks
+     http://<server-ip>:8484/api/v1/audiobooks
    ```
 
 3. **SSH to Server**
    ```bash
-   ssh root@172.16.2.30
+   ssh root@<server-ip>
    sudo systemctl status audiobook-organizer.service
    sudo systemctl restart audiobook-organizer.service
    ```

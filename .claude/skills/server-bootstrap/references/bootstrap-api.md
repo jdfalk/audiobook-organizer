@@ -77,7 +77,7 @@ After bootstrap.sh runs, the token file contains:
 api_key=abbs_xxxxxxxxxxxxx
 key_id=ulid-...
 username=admin
-server_ip=172.16.2.30
+server_ip=<server-ip>
 api_port=8484
 expires_at=1716470400
 ```
