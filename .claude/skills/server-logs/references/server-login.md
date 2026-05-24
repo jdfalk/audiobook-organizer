@@ -5,7 +5,7 @@
 Once you have credentials from `server-logs` skill, open the web UI:
 
 ```
-http://172.16.2.30:8484
+http://<server-ip>:8484
 ```
 
 ### Logging In
@@ -37,7 +37,7 @@ All API requests require the `Authorization: Bearer` header:
 API_KEY="abbs_xxxxxxxxxxxxx"
 
 curl -H "Authorization: Bearer $API_KEY" \
-  http://172.16.2.30:8484/api/v1/audiobooks
+  http://<server-ip>:8484/api/v1/audiobooks
 ```
 
 ### Common Endpoints
@@ -75,7 +75,7 @@ If you need direct server access:
 
 ```bash
 # SSH to server
-ssh root@172.16.2.30
+ssh root@<server-ip>
 
 # Check service status
 sudo systemctl status audiobook-organizer.service
@@ -102,7 +102,7 @@ The `.api-token` file (created by `server-bootstrap` skill) contains:
 api_key=abbs_xxxxxxxxxxxxx
 key_id=ulid-...
 username=admin
-server_ip=172.16.2.30
+server_ip=<server-ip>
 api_port=8484
 expires_at=1716470400
 ```
@@ -127,7 +127,7 @@ curl -H "Authorization: Bearer $api_key" \
 ### Restart Service and Wait for Startup
 
 ```bash
-ssh root@172.16.2.30 'sudo systemctl restart audiobook-organizer.service'
+ssh root@<server-ip> 'sudo systemctl restart audiobook-organizer.service'
 sleep 5
 ./scripts/fetch-logs.sh status
 ```
@@ -139,7 +139,7 @@ sleep 5
 ./scripts/fetch-logs.sh stream
 
 # Terminal 2: Trigger operation
-curl -X POST http://172.16.2.30:8484/api/v1/audiobooks/scan
+curl -X POST http://<server-ip>:8484/api/v1/audiobooks/scan
 ```
 
 ### Export Activity Log
@@ -147,7 +147,7 @@ curl -X POST http://172.16.2.30:8484/api/v1/audiobooks/scan
 ```bash
 source .api-token
 curl -H "Authorization: Bearer $api_key" \
-  'http://172.16.2.30:8484/api/v1/activity/digest?limit=1000' \
+  'http://<server-ip>:8484/api/v1/activity/digest?limit=1000' \
   | jq . > activity.json
 ```
 
