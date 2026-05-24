@@ -1,6 +1,6 @@
 // file: tools/cmd/reconcile-paths/main.go
-// version: 1.1.0
-// last-edited: 2026-05-20
+// version: 1.2.0
+// last-edited: 2026-05-24
 //
 // reconcile-paths is a READ-ONLY dry-run CLI tool that identifies audiobooks
 // whose FilePath no longer exists on disk and finds their candidate location
@@ -27,7 +27,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -104,7 +103,8 @@ func main() {
 		key = os.Getenv("AUDIOBOOK_API_KEY")
 	}
 	if key == "" {
-		log.Fatal("API key required: use -key flag or AUDIOBOOK_API_KEY env var")
+		fmt.Fprintln(os.Stderr, "reconcile-paths: API key required: use -key flag or AUDIOBOOK_API_KEY env var")
+		os.Exit(1)
 	}
 
 	sshHost := os.Getenv("RECONCILE_VIA_SSH")
@@ -118,13 +118,14 @@ func main() {
 	// Fetch all books.
 	books, err := fetchAllBooks(client, *apiURL, key, *pageSize, *limit, *pageDelayMs, *verbose)
 	if err != nil {
-		log.Fatalf("fetch books: %v", err)
+		fmt.Fprintf(os.Stderr, "reconcile-paths: fetch books: %v\n", err)
+		os.Exit(1)
 	}
-	log.Printf("Fetched %d books from API", len(books))
+	fmt.Fprintf(os.Stderr, "Fetched %d books from API\n", len(books))
 
 	// Stat all db paths to find missing ones.
 	missing := filterMissing(books, sshHost, *verbose)
-	log.Printf("%d books have missing FilePath on disk", len(missing))
+	fmt.Fprintf(os.Stderr, "%d books have missing FilePath on disk\n", len(missing))
 
 	// For each missing book, probe candidates.
 	var records []matchRecord
@@ -145,14 +146,16 @@ func main() {
 	} else {
 		f, err := os.Create(*outFile)
 		if err != nil {
-			log.Fatalf("create output file: %v", err)
+			fmt.Fprintf(os.Stderr, "reconcile-paths: create output file: %v\n", err)
+			os.Exit(1)
 		}
 		defer f.Close()
 		w = f
-		log.Printf("Writing CSV to %s", *outFile)
+		fmt.Fprintf(os.Stderr, "Writing CSV to %s\n", *outFile)
 	}
 	if err := writeCSV(w, records); err != nil {
-		log.Fatalf("write CSV: %v", err)
+		fmt.Fprintf(os.Stderr, "reconcile-paths: write CSV: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Summary.
@@ -212,7 +215,7 @@ func fetchAllBooks(client *http.Client, apiURL, key string, pageSize, limit, pag
 			count = lr.Data.Count
 		}
 		if verbose {
-			log.Printf("Page offset=%d: got %d items (total count=%d)", offset, len(items), count)
+			fmt.Fprintf(os.Stderr, "Page offset=%d: got %d items (total count=%d)\n", offset, len(items), count)
 		}
 		all = append(all, items...)
 
@@ -248,7 +251,7 @@ func filterMissing(books []book, sshHost string, verbose bool) []book {
 		}
 		if _, err := os.Stat(b.FilePath); os.IsNotExist(err) {
 			if verbose {
-				log.Printf("MISSING: %s", b.FilePath)
+				fmt.Fprintf(os.Stderr, "MISSING: %s\n", b.FilePath)
 			}
 			missing = append(missing, b)
 		}
@@ -309,13 +312,13 @@ func runSSHBatch(host string, paths []string, verbose bool) map[string]bool {
 	script := sb.String()
 
 	if verbose {
-		log.Printf("SSH batch (%d paths) to %s", len(paths), host)
+		fmt.Fprintf(os.Stderr, "SSH batch (%d paths) to %s\n", len(paths), host)
 	}
 
 	cmd := exec.Command("ssh", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", host, script)
 	out, err := cmd.Output()
 	if err != nil {
-		log.Printf("WARN: ssh batch error: %v (marking paths as unknown/missing)", err)
+		fmt.Fprintf(os.Stderr, "WARN: ssh batch error: %v (marking paths as unknown/missing)\n", err)
 		result := make(map[string]bool, len(paths))
 		for _, p := range paths {
 			result[p] = false
@@ -357,7 +360,7 @@ func findCandidate(b book, sshHost string, verbose bool) (matchRecord, bool) {
 	if statExists(doubled, sshHost) {
 		count := countAudioFiles(doubled, sshHost)
 		if verbose {
-			log.Printf("MATCH doubled-folder: %s %q → %s (%d audio files)", b.ID, title, doubled, count)
+			fmt.Fprintf(os.Stderr, "MATCH doubled-folder: %s %q → %s (%d audio files)\n", b.ID, title, doubled, count)
 		}
 		return matchRecord{
 			bookID:        b.ID,
@@ -374,7 +377,7 @@ func findCandidate(b book, sshHost string, verbose bool) (matchRecord, bool) {
 		candidate := filepath.Join(parent, title+ext)
 		if statExists(candidate, sshHost) {
 			if verbose {
-				log.Printf("MATCH single-file: %s %q → %s", b.ID, title, candidate)
+				fmt.Fprintf(os.Stderr, "MATCH single-file: %s %q → %s\n", b.ID, title, candidate)
 			}
 			return matchRecord{
 				bookID:        b.ID,
@@ -397,7 +400,7 @@ func findCandidate(b book, sshHost string, verbose bool) (matchRecord, bool) {
 	}
 
 	if verbose {
-		log.Printf("NO MATCH: %s %q (db_path=%s)", b.ID, title, b.FilePath)
+		fmt.Fprintf(os.Stderr, "NO MATCH: %s %q (db_path=%s)\n", b.ID, title, b.FilePath)
 	}
 	return matchRecord{}, false
 }
@@ -423,7 +426,7 @@ func findAuthorRootMatch(b book, authorRoot, sshHost string, verbose bool) *matc
 			audioCount := countAudioFilesRecursive(candidatePath, sshHost)
 
 			if verbose {
-				log.Printf("MATCH P3:author_root_match: %s %q → %s (%d audio files)",
+				fmt.Fprintf(os.Stderr, "MATCH P3:author_root_match: %s %q → %s (%d audio files)\n",
 					b.ID, title, candidatePath, audioCount)
 			}
 			return &matchRecord{
@@ -499,7 +502,7 @@ func listDirChildren(dir, sshHost string, verbose bool) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if verbose {
-			log.Printf("WARN: cannot list %s: %v", dir, err)
+			fmt.Fprintf(os.Stderr, "WARN: cannot list %s: %v\n", dir, err)
 		}
 		return nil
 	}
@@ -521,7 +524,7 @@ func listDirChildrenSSH(dir, host string, verbose bool) []string {
 	out, err := cmd.Output()
 	if err != nil {
 		if verbose {
-			log.Printf("WARN: ssh list dir error for %s: %v", dir, err)
+			fmt.Fprintf(os.Stderr, "WARN: ssh list dir error for %s: %v\n", dir, err)
 		}
 		return nil
 	}

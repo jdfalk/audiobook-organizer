@@ -1,11 +1,30 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.93.0 -->
+<!-- version: 2.94.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-24 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Fixes
+
+#### May 24, 2026 — CLI tools: remove stdlib `log` package (LOG-RECONCILE-PATHS)
+
+- `tools/cmd/reconcile-paths/main.go`: replaced all `log.Printf`/`log.Fatalf`/`log.Fatal` calls with `fmt.Fprintf(os.Stderr, ...)` + `os.Exit(1)` for fatal paths. Removed the `"log"` import. Matches the existing `fmt.Fprintf(os.Stderr, ...)` convention already used in the summary block. No behavior change (log timestamps dropped — not useful in a CLI). `go vet ./...` clean.
+
+#### May 24, 2026 — Chai SQL: schema fix, startup init, book_files population
+
+- **`pref_key` column rename**: `user_preferences.key` column renamed to `pref_key` in migration — `key` is a reserved word in Chai SQL and caused parse errors at runtime.
+- **ChaiDB opens at startup**: `NewServer` now opens `ChaiDB` alongside `PebbleDB` so backfill and SQL aggregation handlers work without a separate init step.
+- **`UpsertBookToChaiDB` populates `book_files`**: writes the book's `BookFiles` slice to the `book_files` table on upsert. Previously `book_files` was empty after write-through sync, breaking SQL joins.
+- **Maintenance handler cast fix**: `indexedStore` is unwrapped to `PebbleStore` before the `ChaiDB` backfill cast — avoids a nil-panic when the store is wrapped by an instrumentation layer.
+
+#### May 24, 2026 — Server-bootstrap skill: configuration cleanup
+
+- Reads server IP and SSH user from `.env` (`AUDIOBOOK_SERVER_IP`) — no more hardcoded IPs or usernames in skill files.
+- Switched API endpoint to HTTPS (port 8484, was HTTP 8080).
+- Bootstrap token grep waits 90 seconds after service restart before scanning `journalctl` output (avoids a race condition where the token appears before logs flush).
 
 ### Refactors
 
