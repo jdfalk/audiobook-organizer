@@ -170,6 +170,8 @@ type Server struct {
 	dedupCache             *cache.Cache[gin.H]
 	listCache              *cache.Cache[gin.H]
 	facetsCache            *cache.Cache[gin.H]
+	authorsCache           *cache.Cache[gin.H]
+	seriesCache            *cache.Cache[gin.H]
 	itunesSvc              *itunesservice.Service
 	updater                *updater.Updater
 	updateScheduler        *updater.Scheduler
@@ -326,6 +328,8 @@ func NewServer(store database.Store) *Server {
 		dedupCache:             cache.New[gin.H]("dedup", 24*time.Hour),
 		listCache:              cache.New[gin.H]("list", 24*time.Hour),
 		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
+		authorsCache:           cache.New[gin.H]("authors", 24*time.Hour),
+		seriesCache:            cache.New[gin.H]("series", 24*time.Hour),
 		// olService, updater, updateScheduler are container-built;
 		// wireServerFromContainer populates the fields.
 		diagnosticsService: diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
