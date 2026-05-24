@@ -2,25 +2,24 @@ package database
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"fmt"
-
-	"github.com/chaisql/chai"
-	"github.com/cockroachdb/pebble/v2"
 )
 
-// ChaiStore wraps a Chai database (which uses Pebble as backend)
-// This POC demonstrates how to replace manual indexing with SQL queries
+// ChaiStore wraps a Chai database (SQL backend)
+// This demonstrates how to replace manual indexing with SQL queries
+// See chi_integration.go for the actual database initialization
 type ChaiStore struct {
-	db *chai.DB
+	db *sql.DB
 }
 
-// NewChaiStore creates a new Chai database with Pebble backend
-func NewChaiStore(pebbleDB *pebble.DB) (*ChaiStore, error) {
-	// Chai can use a custom engine; we'll create one that wraps Pebble
-	// For now, using in-memory for POC
-	// TODO: Replace with actual Pebble backend integration
-	return &ChaiStore{}, nil
+// NewChaiStore creates a new Chai store wrapper
+// The database should be initialized separately using NewChaiDB()
+func NewChaiStore(db *sql.DB) (*ChaiStore, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database cannot be nil")
+	}
+	return &ChaiStore{db: db}, nil
 }
 
 // GetAllSeriesBookCounts_SQL shows what the SQL query looks like
