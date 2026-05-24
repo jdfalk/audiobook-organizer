@@ -61,6 +61,10 @@ RestartSec=5
 StartLimitBurst=5
 StartLimitIntervalSec=60
 
+# Memory limit: prevent service from consuming entire system (previous crash: 81GB)
+# If warm-up cache logic allocates unbounded memory, this kills it gracefully
+MemoryLimit=8G
+
 # Security hardening — kept minimal to allow reading from various mount points
 # (NFS, external drives, etc). The service needs:
 #   - Read access to audiobook source directories (configured at AUDIOBOOK_ROOT_DIR)
