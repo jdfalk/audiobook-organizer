@@ -1,6 +1,6 @@
 package database
 
-// version: 1.2.0
+// version: 1.3.0
 // guid: a1b2c3d4-e5f6-47g8-h9i0-j1k2l3m4n5o6
 // last-edited: 2026-05-24
 
@@ -47,6 +47,11 @@ func (cs *ChaiSchema) InitializeSchema(ctx context.Context) error {
 	// Create book_authors junction table
 	if err := cs.createBookAuthorsTable(ctx); err != nil {
 		return fmt.Errorf("failed to create book_authors table: %w", err)
+	}
+
+	// Create user_preferences table
+	if err := cs.createUserPreferencesTable(ctx); err != nil {
+		return fmt.Errorf("failed to create user_preferences table: %w", err)
 	}
 
 	// Create indexes for performance
@@ -221,6 +226,18 @@ func (cs *ChaiSchema) createBookAuthorsTable(ctx context.Context) error {
 	return err
 }
 
+// createUserPreferencesTable creates the user_preferences table
+func (cs *ChaiSchema) createUserPreferencesTable(ctx context.Context) error {
+	query := `
+		CREATE TABLE IF NOT EXISTS user_preferences (
+			key TEXT PRIMARY KEY,
+			value TEXT
+		)
+	`
+	_, err := cs.db.ExecContext(ctx, query)
+	return err
+}
+
 // createIndexes creates all necessary indexes for query performance
 func (cs *ChaiSchema) createIndexes(ctx context.Context) error {
 	indexes := map[string]string{
@@ -250,6 +267,7 @@ func (cs *ChaiSchema) DropAllTables(ctx context.Context) error {
 		"books",
 		"series",
 		"authors",
+		"user_preferences",
 	}
 	
 	for _, table := range tables {
