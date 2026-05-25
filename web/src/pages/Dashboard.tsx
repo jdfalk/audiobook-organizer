@@ -1,7 +1,7 @@
 // file: web/src/pages/Dashboard.tsx
-// version: 1.14.2
+// version: 1.14.3
 // guid: 2f3a4b5c-6d7e-8f9a-0b1c-2d3e4f5a6b7c
-// last-edited: 2026-05-16
+// last-edited: 2026-05-24
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -88,7 +88,10 @@ export function Dashboard() {
 
   const loadStats = useCallback(async () => {
     try {
-      const systemStatus = await api.getSystemStatus();
+      const [systemStatus, storageInfo] = await Promise.all([
+        api.getSystemStatus(),
+        api.getSystemStorage().catch(() => null),
+      ]);
 
       const libraryBooks =
         systemStatus.library_book_count ?? systemStatus.library.book_count ?? 0;
@@ -107,12 +110,13 @@ export function Dashboard() {
         0;
       const totalSizeBytes =
         systemStatus.total_size_bytes ?? librarySizeBytes + importSizeBytes;
-      const diskTotalBytes =
-        systemStatus.disk_total_bytes ?? totalSizeBytes;
-      const diskUsedBytes =
-        systemStatus.disk_used_bytes ?? librarySizeBytes + importSizeBytes;
-      const diskUsagePercent =
-        diskTotalBytes > 0 ? (diskUsedBytes / diskTotalBytes) * 100 : 0;
+
+      // Prefer the dedicated storage endpoint which statfs's the actual data volume.
+      // Fall back to system status fields only if the endpoint is unavailable.
+      const diskTotalBytes = storageInfo?.total_bytes ?? systemStatus.disk_total_bytes ?? 0;
+      const diskUsedBytes = storageInfo?.used_bytes ?? systemStatus.disk_used_bytes ?? 0;
+      const diskUsagePercent = storageInfo?.percent_used ??
+        (diskTotalBytes > 0 ? (diskUsedBytes / diskTotalBytes) * 100 : 0);
 
       setStats({
         library_books: libraryBooks,
