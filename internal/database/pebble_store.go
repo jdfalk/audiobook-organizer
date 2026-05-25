@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cockroachdb/pebble/v2"
@@ -115,8 +116,12 @@ func isValidULID(s string) bool {
 // - author_tombstone:<old_id>        -> canonical_id (merged author redirect)
 
 type PebbleStore struct {
-	db                       *pebble.DB
-	mem                      *MemStore  // optional: in-memory query/index layer; replacement for Chai
+	db *pebble.DB
+	// memPtr atomically holds the warm in-memory query layer (or nil while
+	// warmup is in progress / failed). Reads load it lock-free; warmup
+	// stores it once it completes. Use the mem() helper to read; never
+	// touch memPtr directly outside the warmup path.
+	memPtr                   atomic.Pointer[MemStore]
 	counterMu                sync.Mutex // protects nextID read-modify-write
 	opsMu                    sync.Mutex // serializes v2 op CAS operations (SetOperationV2StatusIfQueued)
 	opsLogSeq                int64      // monotonic counter for log key uniqueness; accessed via atomic
@@ -124,6 +129,11 @@ type PebbleStore struct {
 	libraryCountsRecomputeMu sync.Mutex // gates recompute to prevent stampede when N callers see dirty cache
 	UseMemDB                 bool       // feature flag: use in-memory query layer for aggregations / filtered reads
 }
+
+// mem returns the active in-memory query layer or nil if warmup hasn't
+// completed yet. Read paths that check `p.mem() != nil` should use
+// `p.mem() != nil` instead.
+func (p *PebbleStore) mem() *MemStore { return p.memPtr.Load() }
 
 const statsLibraryKey = "stats:library"
 const statsLibraryTTL = 10 * time.Minute
@@ -206,15 +216,25 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 		return nil, fmt.Errorf("failed to migrate import path keys: %w", err)
 	}
 
-	// Initialize in-memory query layer. store.mem is only set if warmup
-	// succeeds — otherwise dispatchers fall through to the Pebble path
-	// rather than serve empty results from an unpopulated memdb.
+	// Initialize in-memory query layer. Warmup runs in a goroutine so the
+	// server is available immediately — reads transparently fall back to
+	// Pebble until memdb is ready (couple of minutes for ~50K books).
+	// store.memPtr is only published once warmup completes successfully.
 	if memStore, memErr := NewMemStore(); memErr != nil {
 		slog.Warn("memdb init failed, in-memory queries disabled", "error", memErr)
-	} else if warmErr := memStore.WarmFromPebble(context.Background(), store); warmErr != nil {
-		slog.Warn("memdb warmup failed, falling back to Pebble for reads", "error", warmErr)
 	} else {
-		store.mem = memStore
+		go func() {
+			started := time.Now()
+			slog.Info("memdb warmup starting (async)")
+			if warmErr := memStore.WarmFromPebble(context.Background(), store); warmErr != nil {
+				slog.Warn("memdb warmup failed, will stay on Pebble for reads",
+					"error", warmErr, "duration_ms", time.Since(started).Milliseconds())
+				return
+			}
+			store.memPtr.Store(memStore)
+			slog.Info("memdb warmup published",
+				"duration_ms", time.Since(started).Milliseconds())
+		}()
 	}
 
 	// Initialize counters if they don't exist
@@ -339,8 +359,8 @@ func (p *PebbleStore) migrateImportPathKeys() error {
 // Author operations
 
 func (p *PebbleStore) GetAllAuthors() ([]Author, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllAuthors()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllAuthors()
 	}
 	var authors []Author
 	iter, err := p.db.NewIter(&pebble.IterOptions{
@@ -607,8 +627,8 @@ func (p *PebbleStore) GetAuthorAliases(authorID int) ([]AuthorAlias, error) {
 }
 
 func (p *PebbleStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllAuthorAliases()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllAuthorAliases()
 	}
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("author_alias:0"),
@@ -787,8 +807,8 @@ func (p *PebbleStore) deleteAuthorAliases(batch *pebble.Batch, authorID int) err
 // Series operations
 
 func (p *PebbleStore) GetAllSeries() ([]Series, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllSeries()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllSeries()
 	}
 	return p.GetAllSeries_Pebble()
 }
@@ -1004,8 +1024,8 @@ func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
 }
 
 func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllSeriesBookCounts()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllSeriesBookCounts()
 	}
 	return p.GetAllSeriesBookCounts_Pebble()
 }
@@ -1046,8 +1066,8 @@ func (p *PebbleStore) GetAllSeriesBookCounts_Pebble() (map[int]int, error) {
 
 // GetAllSeriesFileCounts returns the number of audio files per series.
 func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllSeriesFileCounts()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllSeriesFileCounts()
 	}
 	bookIDToSeriesID := make(map[string]int)
 	iter, err := p.db.NewIter(&pebble.IterOptions{
@@ -1115,8 +1135,8 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 // GetAllWorks returns all works. Uses the in-memory query layer when enabled,
 // otherwise falls back to the Pebble prefix scan.
 func (p *PebbleStore) GetAllWorks() ([]Work, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllWorks()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllWorks()
 	}
 	return p.GetAllWorks_Pebble()
 }
@@ -1294,8 +1314,8 @@ func (p *PebbleStore) GetBooksByWorkID(workID string) ([]Book, error) {
 // Book operations
 
 func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllBooks(limit, offset, nil)
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllBooks(limit, offset, nil)
 	}
 	var books []Book
 	iter, err := p.db.NewIter(&pebble.IterOptions{
@@ -1342,8 +1362,8 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 // When memdb is available, takes the indexed-iteration fast path that
 // avoids materializing the full Book slice. Falls back to Pebble otherwise.
 func (p *PebbleStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetBookSummaries(limit, offset, BookSummaryFilter{})
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetBookSummaries(limit, offset, BookSummaryFilter{})
 	}
 	return p.GetAllBookSummaries_Pebble(limit, offset)
 }
@@ -1354,8 +1374,8 @@ func (p *PebbleStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, err
 // Go" pattern that was making /audiobooks?is_primary_version=true scan 68K
 // rows on every page load.
 func (p *PebbleStore) GetAllBookSummariesFiltered(limit, offset int, f BookSummaryFilter) ([]BookSummary, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetBookSummaries(limit, offset, f)
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetBookSummaries(limit, offset, f)
 	}
 	// Pebble fallback: filter manually after a full scan. Matches the
 	// historical service behavior so we never regress correctness when
@@ -1664,8 +1684,8 @@ func (p *PebbleStore) GetDuplicateBooksByMetadata(threshold float64) ([][]Book, 
 }
 
 func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetBooksBySeriesID(seriesID, 0, 0)
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetBooksBySeriesID(seriesID, 0, 0)
 	}
 	return p.GetBooksBySeriesID_Pebble(seriesID)
 }
@@ -1707,8 +1727,8 @@ func (p *PebbleStore) GetBooksBySeriesID_Pebble(seriesID int) ([]Book, error) {
 }
 
 func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetBooksByAuthorID(authorID, 0, 0)
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetBooksByAuthorID(authorID, 0, 0)
 	}
 	return p.GetBooksByAuthorID_Pebble(authorID)
 }
@@ -1786,8 +1806,8 @@ func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 }
 
 func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllAuthorBookCounts()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllAuthorBookCounts()
 	}
 	// Full Pebble book scan (book:author index removed in Task 3.4).
 	counts := make(map[int]int)
@@ -1833,8 +1853,8 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 // GetAllAuthorFileCounts returns the number of audio files per author.
 // Uses the in-memory query layer when enabled, otherwise the Pebble fallback.
 func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllAuthorFileCounts()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllAuthorFileCounts()
 	}
 	return p.GetAllAuthorFileCounts_Pebble()
 }
@@ -2881,8 +2901,8 @@ func (p *PebbleStore) GetDistinctLanguages() ([]string, error) {
 // Books with active segments count their segments; books without segments count as 1 file each.
 // Uses two range scans instead of per-book GetBookFiles calls to avoid N+1 queries.
 func (p *PebbleStore) CountFiles() (int, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.CountFiles()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().CountFiles()
 	}
 	// Pass 1: collect IDs of all primary, non-deleted books (key scan + JSON decode)
 	primaryBookIDs := make(map[string]struct{})
@@ -3386,8 +3406,8 @@ func (p *PebbleStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) e
 
 // GetAllImportPaths returns all managed import paths.
 func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
-	if p.UseMemDB && p.mem != nil {
-		return p.mem.GetAllImportPaths()
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllImportPaths()
 	}
 	return p.GetAllImportPaths_Pebble()
 }

@@ -26,10 +26,10 @@ import (
 // memSync runs fn inside a write transaction. Returns immediately if memdb
 // is not initialized. Always commits on success; aborts and logs on error.
 func (p *PebbleStore) memSync(op string, fn func(txn memTxn) error) {
-	if p.mem == nil {
+	if p.mem() == nil {
 		return
 	}
-	txn := p.mem.db.Txn(true)
+	txn := p.mem().db.Txn(true)
 	if err := fn(txn); err != nil {
 		txn.Abort()
 		slog.Warn("memdb sync failed (pebble still authoritative)",

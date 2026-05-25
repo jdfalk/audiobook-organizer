@@ -99,8 +99,14 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer:      &memdb.StringFieldIndex{Field: "FilePath"},
 					},
 					memIdxTitle: {
-						Name:    memIdxTitle,
-						Indexer: &memdb.StringFieldIndex{Field: "Title", Lowercase: true},
+						// AllowMissing: real data has books with empty Title
+						// (scanned but not yet enriched, quarantined, etc.).
+						// Without AllowMissing the StringFieldIndex rejects
+						// the row entirely — which silently dropped 6913
+						// books from memdb in prod.
+						Name:         memIdxTitle,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "Title", Lowercase: true},
 					},
 				},
 			},
@@ -114,8 +120,10 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer: &memdb.IntFieldIndex{Field: "ID"},
 					},
 					memIdxName: {
-						Name:    memIdxName,
-						Indexer: &memdb.StringFieldIndex{Field: "Name", Lowercase: true},
+						// AllowMissing: legacy/placeholder rows may have empty Name.
+						Name:         memIdxName,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "Name", Lowercase: true},
 					},
 				},
 			},
@@ -129,8 +137,10 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer: &memdb.IntFieldIndex{Field: "ID"},
 					},
 					memIdxName: {
-						Name:    memIdxName,
-						Indexer: &memdb.StringFieldIndex{Field: "Name", Lowercase: true},
+						// AllowMissing: legacy/placeholder rows may have empty Name.
+						Name:         memIdxName,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "Name", Lowercase: true},
 					},
 					memIdxAuthorID: {
 						Name:         memIdxAuthorID,
@@ -182,8 +192,10 @@ func memdbSchema() *memdb.DBSchema {
 						// Narrator rows with the same name (case-insensitive
 						// matching is best-effort, not enforced). Unique would
 						// abort warmup on the first collision.
-						Name:    memIdxName,
-						Indexer: &memdb.StringFieldIndex{Field: "Name", Lowercase: true},
+						// AllowMissing covers empty-name rows.
+						Name:         memIdxName,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "Name", Lowercase: true},
 					},
 				},
 			},
@@ -250,8 +262,9 @@ func memdbSchema() *memdb.DBSchema {
 						// import paths at write time via path-keyed lookup, but
 						// historical data may have collisions and we don't want
 						// warmup to abort.
-						Name:    memIdxPath,
-						Indexer: &memdb.StringFieldIndex{Field: "Path"},
+						Name:         memIdxPath,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "Path"},
 					},
 					memIdxEnabled: {
 						Name:    memIdxEnabled,
@@ -273,8 +286,10 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer: &memdb.IntFieldIndex{Field: "AuthorID"},
 					},
 					memIdxAliasName: {
-						Name:    memIdxAliasName,
-						Indexer: &memdb.StringFieldIndex{Field: "AliasName", Lowercase: true},
+						// AllowMissing: legacy rows may have empty AliasName.
+						Name:         memIdxAliasName,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "AliasName", Lowercase: true},
 					},
 				},
 			},
@@ -305,8 +320,9 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer: &memdb.StringFieldIndex{Field: "ID"},
 					},
 					memIdxTitle: {
-						Name:    memIdxTitle,
-						Indexer: &memdb.StringFieldIndex{Field: "Title", Lowercase: true},
+						Name:         memIdxTitle,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "Title", Lowercase: true},
 					},
 					memIdxWorkAuthor: {
 						Name:         memIdxWorkAuthor,
