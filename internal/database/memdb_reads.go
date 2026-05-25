@@ -256,8 +256,10 @@ func (m *MemStore) GetAllAuthorFileCounts() (map[int]int, error) {
 	return out, nil
 }
 
-// GetBooksBySeriesID returns primary, not-deleted books for a series,
-// sorted by series_sequence (nulls last) then title, with pagination.
+// GetBooksBySeriesID returns primary, not-deleted books for a series with
+// pagination. Sort order is series_sequence (nulls last) then title, but
+// the comparator pre-lowercases titles ONCE per row instead of on every
+// compare to avoid O(n log n) string allocations.
 func (m *MemStore) GetBooksBySeriesID(seriesID int, limit, offset int) ([]Book, error) {
 	txn := m.db.Txn(false)
 	defer txn.Abort()
@@ -267,39 +269,45 @@ func (m *MemStore) GetBooksBySeriesID(seriesID int, limit, offset int) ([]Book, 
 		return nil, fmt.Errorf("memdb books by series: %w", err)
 	}
 
-	// Collect matches into a slice, filter, sort, then page.
-	var all []Book
+	all := make([]Book, 0, 32)
 	for obj := iter.Next(); obj != nil; obj = iter.Next() {
 		b := obj.(*Book)
 		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
 			continue
 		}
-		// Match SQL semantics: nil IsPrimaryVersion → treat as true.
 		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
 			continue
 		}
 		all = append(all, *b)
 	}
-	sort.SliceStable(all, func(i, j int) bool {
-		si, sj := all[i].SeriesSequence, all[j].SeriesSequence
-		switch {
-		case si == nil && sj == nil:
-			return strings.ToLower(all[i].Title) < strings.ToLower(all[j].Title)
-		case si == nil:
-			return false
-		case sj == nil:
-			return true
-		case *si != *sj:
-			return *si < *sj
-		default:
-			return strings.ToLower(all[i].Title) < strings.ToLower(all[j].Title)
+	if len(all) > 1 {
+		keys := make([]string, len(all))
+		for i := range all {
+			keys[i] = strings.ToLower(all[i].Title)
 		}
-	})
+		sort.SliceStable(all, func(i, j int) bool {
+			si, sj := all[i].SeriesSequence, all[j].SeriesSequence
+			switch {
+			case si == nil && sj == nil:
+				return keys[i] < keys[j]
+			case si == nil:
+				return false
+			case sj == nil:
+				return true
+			case *si != *sj:
+				return *si < *sj
+			default:
+				return keys[i] < keys[j]
+			}
+		})
+	}
 	return paginate(all, limit, offset), nil
 }
 
-// GetBooksByAuthorID returns primary, not-deleted books for an author (by
-// primary AuthorID field), sorted by title with pagination.
+// GetBooksByAuthorID returns primary, not-deleted books for an author with
+// pagination. No default sort — matches the Pebble path (which returned
+// books in key/ULID order) and avoids per-call sort cost. Callers that
+// need a specific order should sort the slice themselves.
 func (m *MemStore) GetBooksByAuthorID(authorID int, limit, offset int) ([]Book, error) {
 	txn := m.db.Txn(false)
 	defer txn.Abort()
@@ -309,7 +317,7 @@ func (m *MemStore) GetBooksByAuthorID(authorID int, limit, offset int) ([]Book, 
 		return nil, fmt.Errorf("memdb books by author: %w", err)
 	}
 
-	var all []Book
+	all := make([]Book, 0, 32)
 	for obj := iter.Next(); obj != nil; obj = iter.Next() {
 		b := obj.(*Book)
 		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
@@ -320,27 +328,22 @@ func (m *MemStore) GetBooksByAuthorID(authorID int, limit, offset int) ([]Book, 
 		}
 		all = append(all, *b)
 	}
-	sort.SliceStable(all, func(i, j int) bool {
-		return strings.ToLower(all[i].Title) < strings.ToLower(all[j].Title)
-	})
 	return paginate(all, limit, offset), nil
 }
 
-// GetAllBooks returns books with optional filters and pagination. Filter map
-// keys mirror the Chai implementation:
-//   - "is_primary_version" (bool)
-//   - "marked_for_deletion" (bool)
-//   - "series_id" (int)
-//   - "author_id" (int)
-//   - "version_group_id" (string)
+// GetAllBooks returns books with optional filters and pagination. Filter
+// keys: "is_primary_version" (bool), "marked_for_deletion" (bool),
+// "series_id" (int), "author_id" (int), "version_group_id" (string).
 //
-// Unknown keys are ignored. Default sort: title (case-insensitive).
+// No default sort. The Pebble path iterated in key (ULID) order without
+// sorting; matching that here keeps allocation cost flat. Sorting 68K
+// books by lowercase title on every page-load was the prod regression
+// that caused 340MB allocations per call and severe GC pressure — never
+// again.
 func (m *MemStore) GetAllBooks(limit, offset int, filters map[string]interface{}) ([]Book, error) {
 	txn := m.db.Txn(false)
 	defer txn.Abort()
 
-	// Choose the most selective index available from the filter set.
-	// If no filter narrows the scan, fall back to scanning by ID.
 	var (
 		iter interface {
 			Next() interface{}
@@ -364,7 +367,15 @@ func (m *MemStore) GetAllBooks(limit, offset int, filters map[string]interface{}
 		return nil, fmt.Errorf("memdb books scan: %w", err)
 	}
 
-	var all []Book
+	// Pre-allocate to the requested page size. Callers passing limit=1M
+	// (the "fetch all" sentinel) get clamped to 1024 to avoid an upfront
+	// hundred-megabyte allocation; append grows naturally if needed.
+	cap0 := limit
+	if cap0 <= 0 || cap0 > 100_000 {
+		cap0 = 1024
+	}
+	all := make([]Book, 0, cap0)
+
 	for obj := iter.Next(); obj != nil; obj = iter.Next() {
 		b := obj.(*Book)
 		if v, ok := filters["is_primary_version"].(bool); ok {
@@ -402,9 +413,6 @@ func (m *MemStore) GetAllBooks(limit, offset int, filters map[string]interface{}
 		}
 		all = append(all, *b)
 	}
-	sort.SliceStable(all, func(i, j int) bool {
-		return strings.ToLower(all[i].Title) < strings.ToLower(all[j].Title)
-	})
 	return paginate(all, limit, offset), nil
 }
 

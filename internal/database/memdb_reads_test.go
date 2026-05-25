@@ -183,8 +183,15 @@ func TestMemStore_GetBooksByAuthorID(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 books, got %d", len(got))
 	}
-	if got[0].Title != "Alpha" || got[1].Title != "Zebra" {
-		t.Errorf("sort order wrong: %s, %s", got[0].Title, got[1].Title)
+	// GetBooksByAuthorID intentionally does NOT sort (matches Pebble path
+	// and avoids per-call sort cost on hot read path). Assert the set
+	// without ordering.
+	seen := map[string]bool{}
+	for _, b := range got {
+		seen[b.Title] = true
+	}
+	if !seen["Alpha"] || !seen["Zebra"] {
+		t.Errorf("expected {Alpha, Zebra}, got %v", got)
 	}
 }
 
