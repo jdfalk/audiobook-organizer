@@ -1,5 +1,5 @@
 // file: internal/plugins/maintenance/batch_poller.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: c9d0e1f2-a3b4-5678-2345-890123456789
 // last-edited: 2026-05-07
 
@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/logging"
 	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
@@ -41,11 +42,11 @@ func (p *Plugin) runBatchPoller(ctx context.Context, _ json.RawMessage, reporter
 	}
 	processed, err := p.deps.PollBatch(ctx)
 	if err != nil {
-		slog.Warn("batch-poller", "err", err)
+		logging.Warn(ctx, "batch-poller", "err", err)
 	}
 	if processed > 0 {
 		msg := fmt.Sprintf("Processed %d completed batches", processed)
-		slog.Info("batch-poller", "msg", msg)
+		logging.Info(ctx, "batch-poller", "msg", msg)
 		_ = reporter.Log(slog.LevelInfo, msg)
 	}
 	return nil

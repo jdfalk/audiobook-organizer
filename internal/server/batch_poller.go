@@ -1,5 +1,5 @@
 // file: internal/server/batch_poller.go
-// version: 1.5.0
+// version: 1.5.1
 // guid: f8a1b2c3-d4e5-6789-abcd-0123456789ab
 
 package server
@@ -14,6 +14,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
 	"github.com/jdfalk/audiobook-organizer/internal/ai/aijobs"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logging"
 )
 
 // BatchCompletionHandler processes a completed batch.
@@ -74,7 +75,7 @@ func (bp *BatchPoller) Poll(ctx context.Context) (int, error) {
 
 		handler, ok := bp.handlers[b.Type]
 		if !ok {
-			slog.Warn("batch_poller no handler for type %q (batch )", "type", b.Type, "id", b.ID)
+			logging.Warn(ctx, "batch_poller no handler for type %q (batch )", "type", b.Type, "id", b.ID)
 			// Mark as processed so we don't warn repeatedly
 			bp.mu.Lock()
 			bp.processedBatches[b.ID] = true
@@ -83,14 +84,14 @@ func (bp *BatchPoller) Poll(ctx context.Context) (int, error) {
 		}
 
 		if err := handler(ctx, b.ID, b.OutputFileID); err != nil {
-			slog.Error("batch_poller handler for batch failed", "b", b.Type, "b", b.ID, "err", err)
+			logging.Error(ctx, "batch_poller handler for batch failed", "b", b.Type, "b", b.ID, "err", err)
 			// Do NOT mark as processed — retry on next poll
 		} else {
 			bp.mu.Lock()
 			bp.processedBatches[b.ID] = true
 			bp.mu.Unlock()
 			processed++
-			slog.Info("batch_poller processed batch", "b", b.Type, "b", b.ID)
+			logging.Info(ctx, "batch_poller processed batch", "b", b.Type, "b", b.ID)
 		}
 	}
 	return processed, nil
@@ -126,7 +127,7 @@ func (s *Server) registerBatchPollerHandlers() {
 		if err != nil {
 			return fmt.Errorf("download author_dedup results: %w", err)
 		}
-		slog.Info("batch_poller author_dedup batch yielded suggestions", "batchID", batchID, "discoveries_count", len(discoveries))
+		logging.Info(ctx, "batch_poller author_dedup batch yielded suggestions", "batchID", batchID, "discoveries_count", len(discoveries))
 		// Store results in any operation referencing this batch
 		s.storeBatchResultForOperation(batchID, map[string]any{
 			"mode":        "batch-full",
@@ -145,7 +146,7 @@ func (s *Server) registerBatchPollerHandlers() {
 		if err != nil {
 			return fmt.Errorf("download author_review results: %w", err)
 		}
-		slog.Info("batch_poller author_review batch yielded suggestions", "batchID", batchID, "suggestions_count", len(suggestions))
+		logging.Info(ctx, "batch_poller author_review batch yielded suggestions", "batchID", batchID, "suggestions_count", len(suggestions))
 		s.storeBatchResultForOperation(batchID, map[string]any{
 			"mode":        "batch-groups",
 			"suggestions": suggestions,
@@ -163,7 +164,7 @@ func (s *Server) registerBatchPollerHandlers() {
 		if err != nil {
 			return fmt.Errorf("download diagnostics results: %w", err)
 		}
-		slog.Info("batch_poller diagnostics batch yielded results", "batchID", batchID, "rawResults_count", len(rawResults))
+		logging.Info(ctx, "batch_poller diagnostics batch yielded results", "batchID", batchID, "rawResults_count", len(rawResults))
 		s.storeBatchResultForOperation(batchID, map[string]any{
 			"raw_responses": rawResults,
 			"batch_id":      batchID,
@@ -225,12 +226,12 @@ func (s *Server) registerBatchPollerHandlers() {
 				Vector:     r.Vector,
 				Model:      "text-embedding-3-large",
 			}); err != nil {
-				slog.Warn("embed_async upsert book", "r", r.BookID, "err", err)
+				logging.Warn(ctx, "embed_async upsert book", "r", r.BookID, "err", err)
 			} else {
 				stored++
 			}
 		}
-		slog.Info("embed_async stored / embeddings from batch", "stored", stored, "results_count", len(results), "batchID", batchID)
+		logging.Info(ctx, "embed_async stored / embeddings from batch", "stored", stored, "results_count", len(results), "batchID", batchID)
 		return nil
 	})
 }

@@ -1,5 +1,5 @@
 // file: internal/metafetch/isbn.go
-// version: 1.4.0
+// version: 1.4.1
 // guid: 34290bd0-745e-4509-ad2d-e237785bb7ef
 
 package metafetch
@@ -11,6 +11,7 @@ import (
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
+	"github.com/jdfalk/audiobook-organizer/internal/logging"
 	"github.com/jdfalk/audiobook-organizer/internal/metadata"
 )
 
@@ -131,7 +132,7 @@ func (s *ISBNService) EnrichMissingISBNs(ctx context.Context, limit int, w *acti
 			checked++
 			found, err := s.EnrichBookISBN(books[i].ID)
 			if err != nil {
-								slog.Warn("ISBN enrichment failed for during batch scan", "id", books[i].ID, "error", err)
+								logging.Warn(ctx, "ISBN enrichment failed for during batch scan", "id", books[i].ID, "error", err)
 			} else if found {
 				updated++
 				activity.LogBatch(w, opID, "isbn-enrich", "isbn-enrichment",
