@@ -220,6 +220,11 @@ func (s *Server) Start(cfg ServerConfig) error {
 
 	// Pre-warm facets cache (genres/languages) - lightweight, <1 second
 	go s.warmFacetsCache()
+	// Pre-warm library size cache via filesystem walk so any later refresh
+	// path (nightly maintenance, manual rescan) starts with current data.
+	// The hot path of /system/status reads DB stats (PR #1137); this just
+	// keeps the FS-based numbers fresh in the 24h-TTL package cache.
+	go s.warmLibrarySizes()
 	// DISABLED: authors/series cache warm-ups consume 22.9GB → 69.9GB peak memory in minutes
 	// ListAuthorsWithCounts/ListSeriesWithCounts build massive gin.H response objects
 	// Root cause: returning full response structure in cache instead of just counts

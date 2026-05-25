@@ -1,16 +1,18 @@
 // file: internal/server/server_helpers.go
-// version: 1.2.0
+// version: 1.3.0
 // guid: 8a40b808-2bf2-4a35-893c-ad5e3351dbae
-// last-edited: 2026-05-18
+// last-edited: 2026-05-25
 
 package server
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 	"github.com/jdfalk/audiobook-organizer/internal/security/pathvalidation"
 )
@@ -75,6 +77,35 @@ func nonEmpty(s string) any {
 		return nil
 	}
 	return s
+}
+
+// warmLibrarySizes runs calculateLibrarySizes once at startup so the
+// filesystem-walk path (Sonarr/Radarr-style refresh of physical-on-disk
+// sizes) is primed for any caller that asks for it later. The hot path
+// of /system/status itself reads from DB stats (PR #1137), so this is
+// purely an offline refresh — never blocks any request.
+//
+// Runs in its own goroutine; safe to start before memdb warmup completes.
+func (s *Server) warmLibrarySizes() {
+	if s.Store() == nil {
+		return
+	}
+	folders, err := s.Store().GetAllImportPaths()
+	if err != nil {
+		slog.Info("library size warm-up skipped", "err", err)
+		return
+	}
+	rootDir := strings.TrimSpace(config.AppConfig.RootDir)
+	started := time.Now()
+	slog.Info("library size warm-up starting",
+		"root_dir", rootDir,
+		"import_folders", len(folders))
+	lib, imp := calculateLibrarySizes(rootDir, folders)
+	slog.Info("library size warm-up complete",
+		"library_bytes", lib,
+		"import_bytes", imp,
+		"duration_ms", time.Since(started).Milliseconds(),
+	)
 }
 
 func calculateLibrarySizes(rootDir string, importFolders []database.ImportPath) (librarySize, importSize int64) {
