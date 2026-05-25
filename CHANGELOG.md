@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.97.0 -->
+<!-- version: 2.98.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-25 -->
 
@@ -8,6 +8,14 @@
 ## [Unreleased]
 
 ### Changes
+
+#### May 25, 2026 — Startup library-size warmer
+
+`Server.Start` now kicks off `warmLibrarySizes` in a goroutine alongside
+`warmFacetsCache`. Primes the 24h-TTL filesystem-size cache with current
+on-disk numbers so any later refresh path (nightly maintenance, manual
+rescan) starts from fresh data. Hot-path /system/status reads still come
+from DB stats (PR #1137); this is purely an offline refresh.
 
 #### May 25, 2026 — Skip filesystem walk in /system/status (use DB sizes)
 
