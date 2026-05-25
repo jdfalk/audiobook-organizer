@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/hashicorp/go-memdb"
 )
@@ -264,6 +265,56 @@ func encodeBool(b bool) []byte {
 	return []byte{0}
 }
 
+// titleSortIndex indexes Book.Title for sorted iteration, with a fallback so
+// every book has a key (even those scanned without enrichment). Order:
+//   1. Title (lowercased, trimmed) if non-empty
+//   2. OriginalFilename (lowercased) if Title empty
+//   3. "~" sentinel — sorts after all printable ASCII so titleless+filename-less
+//      books cluster at the end of asc iteration.
+//
+// Without this fallback, books with empty Title would be dropped from the
+// title index entirely, vanishing from the library list when sort_by=title.
+type titleSortIndex struct{}
+
+func (titleSortIndex) FromObject(obj interface{}) (bool, []byte, error) {
+	b, ok := obj.(*Book)
+	if !ok {
+		return false, nil, fmt.Errorf("titleSortIndex: expected *Book, got %T", obj)
+	}
+	key := strings.ToLower(strings.TrimSpace(b.Title))
+	if key == "" && b.OriginalFilename != nil {
+		key = strings.ToLower(strings.TrimSpace(*b.OriginalFilename))
+	}
+	if key == "" {
+		key = "~" // sort to end
+	}
+	// memdb convention: null-terminate for prefix-iteration correctness
+	return true, append([]byte(key), 0), nil
+}
+
+func (titleSortIndex) FromArgs(args ...interface{}) ([]byte, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("titleSortIndex: expected 1 arg, got %d", len(args))
+	}
+	s, ok := args[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("titleSortIndex: arg must be string, got %T", args[0])
+	}
+	return append([]byte(strings.ToLower(strings.TrimSpace(s))), 0), nil
+}
+
+func (titleSortIndex) PrefixFromArgs(args ...interface{}) ([]byte, error) {
+	b, err := titleSortIndex{}.FromArgs(args...)
+	if err != nil {
+		return nil, err
+	}
+	// drop trailing null for prefix matching
+	if len(b) > 0 && b[len(b)-1] == 0 {
+		b = b[:len(b)-1]
+	}
+	return b, nil
+}
+
 // Compile-time assertions that custom indexers satisfy memdb interfaces.
 var (
 	_ memdb.SingleIndexer = (*nullableIntFieldIndex)(nil)
@@ -278,4 +329,7 @@ var (
 	_ memdb.Indexer       = (*effectiveIntFieldIndex)(nil)
 	_ memdb.SingleIndexer = (*plainBoolFieldIndex)(nil)
 	_ memdb.Indexer       = (*plainBoolFieldIndex)(nil)
+	_ memdb.SingleIndexer = titleSortIndex{}
+	_ memdb.Indexer       = titleSortIndex{}
+	_ memdb.PrefixIndexer = titleSortIndex{}
 )
