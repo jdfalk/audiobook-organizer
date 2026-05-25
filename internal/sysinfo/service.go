@@ -142,13 +142,17 @@ func (ss *SystemService) CollectSystemStatus() (*SystemStatus, error) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	librarySize, importSize := ss.libSizesFn(rootDir, importFolders)
-	// Fall back to DB file sizes when filesystem walk returns 0 (e.g. paths don't exist on this host)
-	if librarySize+importSize == 0 {
-		librarySize = dbStats.OrganizedSize
-		importSize = dbStats.UnorganizedSize
-	}
+	// Use the DB-aggregated sizes from LibraryStats (computed in memdb at
+	// ComputeLibraryStats time, free as part of the cache). The previous
+	// filesystem-walk path took ~28s on cold cache for a 50K-book library
+	// and gated the first /system/status request after restart on it.
+	// Sonarr/Radarr work the same way: trust DB sizes after the initial
+	// scan populates them, refresh on book mutation, never re-walk on read.
+	librarySize := dbStats.OrganizedSize
+	importSize := dbStats.UnorganizedSize
 	totalSize := librarySize + importSize
+	_ = importFolders // libSizesFn dependency now unused; kept on the type for backwards compat (tests, callers)
+	_ = ss.libSizesFn
 
 	brokenFiles := dbStats.BrokenFiles
 	status := &SystemStatus{
