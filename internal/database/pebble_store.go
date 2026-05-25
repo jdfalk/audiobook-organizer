@@ -198,8 +198,8 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 
 	store := &PebbleStore{
 		db:        db,
-		UseChaiDB: true, // Chai DB sync is wired — backfill via POST /api/v1/admin/backfill-chai
-		UseMemDB:  false, // gated off during Phase 1; flip on once read migrations land
+		UseChaiDB: false, // Chai is being removed; memdb is the new query layer
+		UseMemDB:  true,  // in-memory query layer is the default after Phase 3
 	}
 
 	slog.Info("PebbleDB opened", "path", path, "format_version", db.FormatMajorVersion())
@@ -351,6 +351,9 @@ func (p *PebbleStore) migrateImportPathKeys() error {
 // Author operations
 
 func (p *PebbleStore) GetAllAuthors() ([]Author, error) {
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllAuthors()
+	}
 	var authors []Author
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("author:0"),
@@ -635,6 +638,9 @@ func (p *PebbleStore) GetAuthorAliases(authorID int) ([]AuthorAlias, error) {
 }
 
 func (p *PebbleStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllAuthorAliases()
+	}
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("author_alias:0"),
 		UpperBound: []byte("author_alias:;"),
@@ -831,7 +837,9 @@ func (p *PebbleStore) deleteAuthorAliases(batch *pebble.Batch, authorID int) err
 // Series operations
 
 func (p *PebbleStore) GetAllSeries() ([]Series, error) {
-	// Use feature flag to switch between Pebble and Chai implementations
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllSeries()
+	}
 	if p.UseChaiDB && p.chai != nil {
 		return p.GetAllSeries_Chai(context.Background())
 	}
@@ -1064,7 +1072,9 @@ func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
 }
 
 func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
-	// Use feature flag to switch between Pebble and Chai implementations
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllSeriesBookCounts()
+	}
 	if p.UseChaiDB && p.chai != nil {
 		return p.GetAllSeriesBookCounts_Chai(context.Background())
 	}
@@ -1122,6 +1132,9 @@ func (p *PebbleStore) GetAllSeriesBookCounts_Chai(ctx context.Context) (map[int]
 
 // GetAllSeriesFileCounts returns the number of audio files per series.
 func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllSeriesFileCounts()
+	}
 	bookIDToSeriesID := make(map[string]int)
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
@@ -1188,6 +1201,9 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 // GetAllWorks returns all works. When UseChaiDB is enabled it delegates to the
 // SQL implementation in ChaiStore; otherwise it falls back to the Pebble prefix scan.
 func (p *PebbleStore) GetAllWorks() ([]Work, error) {
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllWorks()
+	}
 	if p.UseChaiDB && p.chai != nil {
 		return p.GetAllWorks_Chai(context.Background())
 	}
@@ -1381,6 +1397,9 @@ func (p *PebbleStore) GetBooksByWorkID(workID string) ([]Book, error) {
 // Book operations
 
 func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllBooks(limit, offset, nil)
+	}
 	var books []Book
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
@@ -1712,14 +1731,15 @@ func (p *PebbleStore) GetDuplicateBooksByMetadata(threshold float64) ([][]Book, 
 }
 
 func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
-	// Use Chai SQL when available (Task 3.4: denormalized index removed).
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetBooksBySeriesID(seriesID, 0, 0)
+	}
 	if p.UseChaiDB && p.chai != nil {
 		chaiStore, err := NewChaiStore(p.chai.DB())
 		if err == nil {
 			return chaiStore.GetBooksBySeriesID_Chai(context.Background(), seriesID, 0, 0)
 		}
 	}
-	// Fallback: full Pebble scan filtered by series ID.
 	return p.GetBooksBySeriesID_Pebble(seriesID)
 }
 
@@ -1760,14 +1780,15 @@ func (p *PebbleStore) GetBooksBySeriesID_Pebble(seriesID int) ([]Book, error) {
 }
 
 func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
-	// Use Chai SQL when available (Task 3.4: denormalized index removed).
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetBooksByAuthorID(authorID, 0, 0)
+	}
 	if p.UseChaiDB && p.chai != nil {
 		chaiStore, err := NewChaiStore(p.chai.DB())
 		if err == nil {
 			return chaiStore.GetBooksByAuthorID_Chai(context.Background(), authorID, 0, 0)
 		}
 	}
-	// Fallback: full Pebble scan filtered by author ID.
 	return p.GetBooksByAuthorID_Pebble(authorID)
 }
 
@@ -1844,8 +1865,10 @@ func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 }
 
 func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllAuthorBookCounts()
+	}
 	// Full Pebble book scan (book:author index removed in Task 3.4).
-	// Iterates primary book records and counts by AuthorID.
 	counts := make(map[int]int)
 	iter, err := p.db.NewIter(&pebble.IterOptions{
 		LowerBound: []byte("book:0"),
@@ -1911,12 +1934,12 @@ func (p *PebbleStore) GetAllAuthorBookCounts_Chai(ctx context.Context) (map[int]
 // Uses a feature flag to switch between Pebble and Chai implementations.
 // This is the production entry point when UseChaiDB feature flag is enabled.
 func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
-	// Feature flag: use Chai SQL if enabled and database is available
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllAuthorFileCounts()
+	}
 	if p.UseChaiDB && p.chai != nil {
-		// Wrap the ChaiDB's underlying SQL database in a ChaiStore
 		chaiStore, err := NewChaiStore(p.chai.DB())
 		if err != nil {
-			// Fallback to Pebble if ChaiStore creation fails
 			return p.GetAllAuthorFileCounts_Pebble()
 		}
 		return chaiStore.GetAllAuthorFileCounts_Chai(context.Background())
@@ -2984,6 +3007,9 @@ func (p *PebbleStore) GetDistinctLanguages() ([]string, error) {
 // Books with active segments count their segments; books without segments count as 1 file each.
 // Uses two range scans instead of per-book GetBookFiles calls to avoid N+1 queries.
 func (p *PebbleStore) CountFiles() (int, error) {
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.CountFiles()
+	}
 	// Pass 1: collect IDs of all primary, non-deleted books (key scan + JSON decode)
 	primaryBookIDs := make(map[string]struct{})
 	bookIter, err := p.db.NewIter(&pebble.IterOptions{
@@ -3487,6 +3513,9 @@ func (p *PebbleStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) e
 // GetAllImportPaths returns all managed import paths.
 // Routes to Chai SQL when the UseChaiDB feature flag is set, otherwise falls back to Pebble.
 func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
+	if p.UseMemDB && p.mem != nil {
+		return p.mem.GetAllImportPaths()
+	}
 	if p.UseChaiDB && p.chai != nil {
 		return p.GetAllImportPaths_Chai(context.Background())
 	}
