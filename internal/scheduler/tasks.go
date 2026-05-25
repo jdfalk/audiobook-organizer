@@ -29,6 +29,8 @@ type libraryScanParams struct{}
 
 type libraryOrganizeParams struct{}
 
+type librarySizeRefreshParams struct{}
+
 type authorDedupScanOpParams struct {
 	LegacyOpID string `json:"legacy_op_id"`
 }
@@ -99,6 +101,31 @@ func (ts *TaskScheduler) registerAllTasks() {
 		GetInterval:            func() time.Duration { return 0 },
 		RunOnStart:             func() bool { return false },
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowLibraryOrganize },
+	})
+
+	ts.registerTask(TaskDefinition{
+		Name:        "library_size_refresh",
+		Description: "Walk library + import-path trees to refresh on-disk size cache",
+		Category:    "maintenance",
+		TriggerFn: func(source string) (*database.Operation, error) {
+			store := ts.deps.Store()
+			if store == nil {
+				return nil, fmt.Errorf("database not initialized")
+			}
+			opID := ulid.Make().String()
+			op, err := store.CreateOperation(opID, "library-size-refresh", nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create operation: %w", err)
+			}
+			if _, enqErr := ts.deps.OpRegistry.EnqueueOp(context.Background(), "library.size-refresh", librarySizeRefreshParams{}); enqErr != nil {
+				return nil, fmt.Errorf("failed to enqueue library.size-refresh: %w", enqErr)
+			}
+			return op, nil
+		},
+		IsEnabled:              func() bool { return true },
+		GetInterval:            func() time.Duration { return 0 },
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowLibrarySizeRefresh },
 	})
 
 	ts.registerTask(TaskDefinition{

@@ -336,6 +336,7 @@ type Config struct {
 	MaintenanceWindowLibraryScan      bool `json:"maintenance_window_library_scan"`
 	MaintenanceWindowLibraryOrganize  bool `json:"maintenance_window_library_organize"`
 	MaintenanceWindowMetadataRefresh  bool `json:"maintenance_window_metadata_refresh"`
+	MaintenanceWindowLibrarySizeRefresh bool `json:"maintenance_window_library_size_refresh"`
 
 	// Plugin system
 	Plugins map[string]PluginConfig `json:"plugins"`
@@ -483,6 +484,9 @@ func InitConfig() {
 	viper.SetDefault("maintenance_window_library_scan", false)
 	viper.SetDefault("maintenance_window_library_organize", false)
 	viper.SetDefault("maintenance_window_metadata_refresh", false)
+	// FS-walk-based on-disk size refresh — true by default (cheap, runs nightly,
+	// keeps the FS-side cache fresh for any caller that queries physical sizes).
+	viper.SetDefault("maintenance_window_library_size_refresh", true)
 
 	// Download client defaults
 	viper.SetDefault("download_client.torrent.type", "")
@@ -622,6 +626,7 @@ func InitConfig() {
 		MaintenanceWindowLibraryScan:      viper.GetBool("maintenance_window_library_scan"),
 		MaintenanceWindowLibraryOrganize:  viper.GetBool("maintenance_window_library_organize"),
 		MaintenanceWindowMetadataRefresh:  viper.GetBool("maintenance_window_metadata_refresh"),
+		MaintenanceWindowLibrarySizeRefresh: viper.GetBool("maintenance_window_library_size_refresh"),
 
 		// iTunes sync
 		ITunesSyncEnabled:      viper.GetBool("itunes_sync_enabled"),

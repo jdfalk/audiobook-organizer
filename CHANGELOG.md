@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.98.0 -->
+<!-- version: 2.99.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-25 -->
 
@@ -8,6 +8,18 @@
 ## [Unreleased]
 
 ### Changes
+
+#### May 25, 2026 — Nightly library-size refresh task
+
+Adds `library.size-refresh` OperationDef + `library_size_refresh` scheduler
+task. Walks the library + import-path trees to repopulate the on-disk size
+cache. Runs nightly via `maintenance.window` (toggle:
+`maintenance_window_library_size_refresh`, default true) and can be
+triggered manually from /scheduler.
+
+Together with the startup warmer (prior entry), this gives Sonarr/Radarr-
+style refresh: scrape at startup, scrape during nightly maintenance,
+trust DB sizes on every read.
 
 #### May 25, 2026 — Startup library-size warmer
 
