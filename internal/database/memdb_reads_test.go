@@ -1,5 +1,5 @@
 // file: internal/database/memdb_reads_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-mema-aaaa-aaaa-000000000007
 
 package database
@@ -7,6 +7,7 @@ package database
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 // Local ptr helpers — names suffixed _mem to avoid conflict with poc_chai_test.go.
@@ -278,4 +279,197 @@ func TestMemStore_GetAllAuthorsSeriesImportPaths_Sort(t *testing.T) {
 	if gotSeries[0].Name != "A Series" || gotSeries[1].Name != "Z Series" {
 		t.Errorf("series not sorted: %v", gotSeries)
 	}
+}
+
+func TestMemStore_ListSoftDeletedBooks(t *testing.T) {
+	m, err := NewMemStore()
+	if err != nil {
+		t.Fatalf("NewMemStore: %v", err)
+	}
+	now := time.Now()
+	older := now.Add(-30 * 24 * time.Hour)
+	recent := now.Add(-1 * time.Hour)
+	tOlder := older
+	tRecent := recent
+
+	books := []Book{
+		// alive — skipped
+		{ID: "b1", Title: "Alive"},
+		// soft-deleted (recent)
+		{ID: "b2", Title: "Recently deleted", MarkedForDeletion: ptrBool_mem(true), MarkedForDeletionAt: &tRecent},
+		// soft-deleted (old)
+		{ID: "b3", Title: "Old deleted", MarkedForDeletion: ptrBool_mem(true), MarkedForDeletionAt: &tOlder},
+		// soft-deleted, no timestamp — included, sorts last
+		{ID: "b4", Title: "Timeless deleted", MarkedForDeletion: ptrBool_mem(true)},
+	}
+	seedMemStore(t, m, books, nil, nil, nil)
+
+	got, err := m.ListSoftDeletedBooks(100, 0, nil)
+	if err != nil {
+		t.Fatalf("ListSoftDeletedBooks: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("got %d soft-deleted, want 3 (ids=%v)", len(got), idList(got))
+	}
+	// Sorted: recent first, then older, then nil last.
+	wantOrder := []string{"b2", "b3", "b4"}
+	if !reflect.DeepEqual(idList(got), wantOrder) {
+		t.Errorf("order mismatch: got %v want %v", idList(got), wantOrder)
+	}
+
+	// Age filter: olderThan=14 days ago → only b3 qualifies (b2 deleted 1h ago is too recent).
+	cutoff := now.Add(-14 * 24 * time.Hour)
+	got, err = m.ListSoftDeletedBooks(100, 0, &cutoff)
+	if err != nil {
+		t.Fatalf("ListSoftDeletedBooks filtered: %v", err)
+	}
+	// b4 has nil MarkedForDeletionAt → not filtered out (matches Pebble semantics).
+	wantIDs := map[string]bool{"b3": true, "b4": true}
+	for _, b := range got {
+		if !wantIDs[b.ID] {
+			t.Errorf("unexpected book in filtered result: %s", b.ID)
+		}
+	}
+
+	// Pagination
+	page, err := m.ListSoftDeletedBooks(1, 1, nil)
+	if err != nil {
+		t.Fatalf("paginated: %v", err)
+	}
+	if len(page) != 1 || page[0].ID != "b3" {
+		t.Errorf("page got %v, want [b3]", idList(page))
+	}
+}
+
+func TestMemStore_CountBooksByPathPrefix(t *testing.T) {
+	m, err := NewMemStore()
+	if err != nil {
+		t.Fatalf("NewMemStore: %v", err)
+	}
+	books := []Book{
+		{ID: "b1", FilePath: "/mnt/books/a/one.m4b", SourceImportPath: ptrString_mem("/mnt/books/a")},
+		{ID: "b2", FilePath: "/mnt/books/a/two.m4b", SourceImportPath: ptrString_mem("/mnt/books/a")},
+		{ID: "b3", FilePath: "/mnt/books/b/three.m4b", SourceImportPath: ptrString_mem("/mnt/books/b")},
+		// no SourceImportPath → falls back to FilePath
+		{ID: "b4", FilePath: "/mnt/books/a/four.m4b"},
+		// deleted — excluded
+		{ID: "b5", FilePath: "/mnt/books/a/five.m4b", SourceImportPath: ptrString_mem("/mnt/books/a"), MarkedForDeletion: ptrBool_mem(true)},
+	}
+	seedMemStore(t, m, books, nil, nil, nil)
+
+	cases := []struct {
+		prefix string
+		want   int
+	}{
+		{"/mnt/books/a", 3}, // b1, b2 via SourceImportPath; b4 via FilePath
+		{"/mnt/books/b", 1},
+		{"/mnt/books", 4},
+		{"", 0},
+	}
+	for _, tc := range cases {
+		got, err := m.CountBooksByPathPrefix(tc.prefix)
+		if err != nil {
+			t.Fatalf("CountBooksByPathPrefix(%q): %v", tc.prefix, err)
+		}
+		if got != tc.want {
+			t.Errorf("CountBooksByPathPrefix(%q) = %d, want %d", tc.prefix, got, tc.want)
+		}
+	}
+}
+
+func TestMemStore_ComputeLibraryStats(t *testing.T) {
+	m, err := NewMemStore()
+	if err != nil {
+		t.Fatalf("NewMemStore: %v", err)
+	}
+	imp := []ImportPath{
+		{ID: 1, Name: "Drop A", Path: "/inbox/a"},
+		{ID: 2, Name: "Drop B", Path: "/inbox/b"},
+	}
+	books := []Book{
+		// organized (under root)
+		{ID: "b1", Title: "Org1", FilePath: "/library/x.m4b", IsPrimaryVersion: ptrBool_mem(true),
+			Duration: ptrInt_mem(3600), FileSize: ptrInt64_mem(100), Codec: ptrString_mem("aac"), LibraryState: ptrString_mem("organized")},
+		// unorganized under import path A
+		{ID: "b2", Title: "Inbox1", FilePath: "/inbox/a/x.m4b", IsPrimaryVersion: ptrBool_mem(true),
+			Duration: ptrInt_mem(7200), FileSize: ptrInt64_mem(200), Codec: ptrString_mem("aac")},
+		// unorganized under import path B
+		{ID: "b3", Title: "Inbox2", FilePath: "/inbox/b/y.m4b", IsPrimaryVersion: ptrBool_mem(true),
+			FileSize: ptrInt64_mem(50)},
+		// non-primary version — counted in totals, NOT in organized/unorganized
+		{ID: "b4", Title: "Variant", FilePath: "/library/x-alt.m4b", IsPrimaryVersion: ptrBool_mem(false),
+			FileSize: ptrInt64_mem(10)},
+		// deleted — fully excluded
+		{ID: "b5", Title: "Gone", FilePath: "/library/gone.m4b", IsPrimaryVersion: ptrBool_mem(true),
+			MarkedForDeletion: ptrBool_mem(true), FileSize: ptrInt64_mem(999)},
+	}
+	files := []BookFile{
+		{ID: "f1", BookID: "b1"},
+		{ID: "f2", BookID: "b1"}, // b1 has 2 files
+		{ID: "f3", BookID: "b2"},
+		// b3 has no file rows → counted as 1
+	}
+	authors := []Author{{ID: 1, Name: "A"}, {ID: 2, Name: "B"}}
+	series := []Series{{ID: 1, Name: "S1"}}
+	seedMemStore(t, m, books, files, authors, series)
+
+	stats, err := m.ComputeLibraryStats("/library", imp)
+	if err != nil {
+		t.Fatalf("ComputeLibraryStats: %v", err)
+	}
+
+	if stats.TotalBooks != 4 {
+		t.Errorf("TotalBooks = %d, want 4 (excludes deleted)", stats.TotalBooks)
+	}
+	if stats.OrganizedBooks != 1 {
+		t.Errorf("OrganizedBooks = %d, want 1", stats.OrganizedBooks)
+	}
+	if stats.UnorganizedBooks != 2 {
+		t.Errorf("UnorganizedBooks = %d, want 2", stats.UnorganizedBooks)
+	}
+	if stats.OrganizedSize != 100 {
+		t.Errorf("OrganizedSize = %d, want 100", stats.OrganizedSize)
+	}
+	if stats.UnorganizedSize != 250 {
+		t.Errorf("UnorganizedSize = %d, want 250", stats.UnorganizedSize)
+	}
+	if stats.TotalSize != 360 { // 100+200+50+10
+		t.Errorf("TotalSize = %d, want 360", stats.TotalSize)
+	}
+	if stats.TotalDuration != 10800 {
+		t.Errorf("TotalDuration = %d, want 10800", stats.TotalDuration)
+	}
+	// b1: 2 files, b2: 1 file, b3: 0 → 1 sentinel. b4 not primary so skipped.
+	if stats.TotalFiles != 4 {
+		t.Errorf("TotalFiles = %d, want 4 (2+1+1)", stats.TotalFiles)
+	}
+	if stats.BooksByImportPath[1] != 1 || stats.BooksByImportPath[2] != 1 {
+		t.Errorf("BooksByImportPath = %v, want {1:1, 2:1}", stats.BooksByImportPath)
+	}
+	if stats.SizeByImportPath[1] != 200 || stats.SizeByImportPath[2] != 50 {
+		t.Errorf("SizeByImportPath = %v, want {1:200, 2:50}", stats.SizeByImportPath)
+	}
+	if stats.TotalAuthors != 2 {
+		t.Errorf("TotalAuthors = %d, want 2", stats.TotalAuthors)
+	}
+	if stats.TotalSeries != 1 {
+		t.Errorf("TotalSeries = %d, want 1", stats.TotalSeries)
+	}
+	if stats.StateDistribution["organized"] != 1 {
+		t.Errorf("StateDistribution[organized] = %d, want 1", stats.StateDistribution["organized"])
+	}
+	if stats.FormatDistribution["aac"] != 2 {
+		t.Errorf("FormatDistribution[aac] = %d, want 2", stats.FormatDistribution["aac"])
+	}
+	if stats.ComputedAt.IsZero() {
+		t.Error("ComputedAt not set")
+	}
+}
+
+func idList(books []Book) []string {
+	out := make([]string, len(books))
+	for i, b := range books {
+		out[i] = b.ID
+	}
+	return out
 }

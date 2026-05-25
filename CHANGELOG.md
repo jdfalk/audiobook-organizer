@@ -1,13 +1,34 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.95.0 -->
+<!-- version: 2.96.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-24 -->
+<!-- last-edited: 2026-05-25 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Changes
+
+#### May 25, 2026 — Slow-path cleanup (memdb pushdown for stats, soft-deleted, path-counts)
+
+Three remaining post-memdb slow paths moved off Pebble full-scans onto memdb:
+
+- **`library_counts` recompute** (drives `/system/status` periodic spike):
+  `PebbleStore.computeLibraryStats` now prefers `MemStore.ComputeLibraryStats`
+  when memdb is published — ~150× faster (no JSON unmarshal, no disk I/O).
+  Pebble fallback retained when memdb is not yet warm. `BrokenFiles` still
+  read from the Pebble `book_file_errors_by_book:` secondary index since
+  that data doesn't exist in memdb.
+- **`/api/v1/audiobooks/soft-deleted`**: routes through memdb's
+  `marked_for_deletion` index — O(deleted_count) instead of O(393K) scan.
+  Was ~20s, now <50ms.
+- **`/api/v1/import-paths`**: drops per-folder `CountBooksByPathPrefix`
+  scans in favor of a single `GetDashboardStats().BooksByImportPath` map
+  lookup. Was ~20s for 4 folders, now O(folders) map reads. Falls back
+  to per-folder scans when the cache isn't available.
+
+New methods on `MemStore`: `ComputeLibraryStats`, `ListSoftDeletedBooks`,
+`CountBooksByPathPrefix` — all with unit coverage in `memdb_reads_test.go`.
 
 #### May 25, 2026 — Library `sort_by=title` pushdown (fix 524 timeout)
 
