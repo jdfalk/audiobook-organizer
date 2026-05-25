@@ -9,6 +9,26 @@
 
 ### Changes
 
+#### May 25, 2026 — Library `sort_by=title` pushdown (fix 524 timeout)
+
+Library page request `/api/v1/audiobooks?sort_by=title&sort_order=asc&is_primary_version=true`
+was timing out at the gateway (524 after 125s) because the service treated
+`sort_by=title` as a "heavy" post-filter — fetching all ~68K books, sorting
+in-memory, then paginating. Replaced with a memdb pushdown that walks the
+already-sorted title radix index directly (O(offset+limit) instead of
+O(n log n)).
+
+- New custom `titleSortIndex` indexer ensures every book has a sort key —
+  falls back to `OriginalFilename` then a `~` sentinel for titleless rows
+  so they don't vanish from the library list (regression risk from the
+  prior `AllowMissing: true` approach).
+- `BookSummaryFilter` gained `SortBy` + `SortAscending`; memdb honors
+  `txn.Get` / `txn.GetReverse` on `memIdxTitle`.
+- `summariesPushdown` signature extended; service no longer classifies
+  `sort_by=title` as heavy.
+- IsPrimary filter still pushed down, applied as in-loop predicate when
+  the title index drives iteration.
+
 #### May 24, 2026 — Chai SQL removed; replaced with `hashicorp/go-memdb` in-memory query layer
 
 Burned the Chai SQL sidecar (`github.com/chaisql/chai`) to the ground and

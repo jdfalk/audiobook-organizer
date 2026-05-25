@@ -16,6 +16,16 @@ import "fmt"
 type BookSummaryFilter struct {
 	IsPrimaryVersion  *bool
 	MarkedForDeletion *bool // nil → exclude deleted (default behavior)
+
+	// SortBy selects which memdb index drives iteration. Empty string means
+	// "any order" (currently equivalent to ID-sorted). Only "title" is
+	// honored today — other sort keys fall through to the service-level
+	// in-memory sort path. The memdb title index is a sorted radix tree, so
+	// iterating it is O(offset+limit), not O(n).
+	SortBy string
+	// SortAscending controls iteration direction when SortBy is set.
+	// True (or zero value with SortBy=="title") = A→Z; false = Z→A.
+	SortAscending bool
 }
 
 // GetBookSummaries returns a paginated slice of BookSummary records,
@@ -40,19 +50,40 @@ func (m *MemStore) GetBookSummaries(limit, offset int, f BookSummaryFilter) ([]B
 	txn := m.db.Txn(false)
 	defer txn.Abort()
 
+	// Index selection priority:
+	//   1. SortBy=="title" → iterate title index in order (asc/desc). IsPrimary
+	//      is applied as an in-loop filter — title index is the sorted radix
+	//      tree we need, and the rejected rows are cheap to skip.
+	//   2. IsPrimary set, no SortBy → use the IsPrimary index (most selective
+	//      for the typical library page query).
+	//   3. Otherwise → ID-ordered scan.
 	var (
 		iter interface {
 			Next() interface{}
 		}
 		err error
 	)
-	if f.IsPrimaryVersion != nil {
+	switch {
+	case f.SortBy == "title":
+		if f.SortAscending {
+			iter, err = txn.Get(memTableBooks, memIdxTitle)
+		} else {
+			iter, err = txn.GetReverse(memTableBooks, memIdxTitle)
+		}
+	case f.IsPrimaryVersion != nil:
 		iter, err = txn.Get(memTableBooks, memIdxIsPrimaryVersion, *f.IsPrimaryVersion)
-	} else {
+	default:
 		iter, err = txn.Get(memTableBooks, memIdxID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("memdb book_summaries scan: %w", err)
+	}
+
+	// When iterating by title, IsPrimary becomes an in-loop predicate.
+	primaryFilter := f.SortBy == "title" && f.IsPrimaryVersion != nil
+	wantPrimary := false
+	if primaryFilter {
+		wantPrimary = *f.IsPrimaryVersion
 	}
 
 	// excludeDeleted: by default we drop marked_for_deletion=true rows
@@ -73,6 +104,17 @@ func (m *MemStore) GetBookSummaries(limit, offset int, f BookSummaryFilter) ([]B
 
 	for obj := iter.Next(); obj != nil; obj = iter.Next() {
 		b := obj.(*Book)
+
+		// When sorting by title, IsPrimary is enforced here (not by index).
+		// nil IsPrimaryVersion on the row counts as "primary" per the
+		// historical Pebble fallback semantics in
+		// GetAllBookSummariesFiltered.
+		if primaryFilter {
+			eff := b.IsPrimaryVersion == nil || *b.IsPrimaryVersion
+			if eff != wantPrimary {
+				continue
+			}
+		}
 
 		// Apply filters before pagination so offset/limit match the
 		// post-filter set, not the pre-filter set.

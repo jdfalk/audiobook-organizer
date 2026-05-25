@@ -99,14 +99,14 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer:      &memdb.StringFieldIndex{Field: "FilePath"},
 					},
 					memIdxTitle: {
-						// AllowMissing: real data has books with empty Title
-						// (scanned but not yet enriched, quarantined, etc.).
-						// Without AllowMissing the StringFieldIndex rejects
-						// the row entirely — which silently dropped 6913
-						// books from memdb in prod.
-						Name:         memIdxTitle,
-						AllowMissing: true,
-						Indexer:      &memdb.StringFieldIndex{Field: "Title", Lowercase: true},
+						// Custom indexer so every book gets a sort key,
+						// even when Title is empty (scanned-but-not-enriched,
+						// quarantined, etc.). Falls back to OriginalFilename,
+						// then a "~" sentinel that sorts to the end. Without
+						// this, sort_by=title would silently drop titleless
+						// books from the library page.
+						Name:    memIdxTitle,
+						Indexer: titleSortIndex{},
 					},
 				},
 			},
