@@ -1,0 +1,259 @@
+// file: internal/database/memdb_warmup.go
+// version: 1.0.0
+// guid: a1b2c3d4-mema-aaaa-aaaa-000000000004
+
+package database
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"strings"
+	"time"
+
+	"github.com/cockroachdb/pebble/v2"
+)
+
+// WarmFromPebble populates the in-memory store by scanning every relevant
+// Pebble key prefix. Must be called once after NewMemStore to make queries
+// useful. Safe to re-run (transaction is atomic: either it fully replaces
+// the contents of each table or it leaves the store untouched).
+func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
+	if p == nil || p.db == nil {
+		return fmt.Errorf("memdb warmup: PebbleStore not initialized")
+	}
+
+	started := time.Now()
+	txn := m.db.Txn(true)
+	defer txn.Abort()
+
+	counts := map[string]int{}
+
+	// Books: book:<id> where id has no further colons.
+	if n, err := warmIter(ctx, p.db, "book:", func(key string, val []byte) error {
+		// Skip index keys like book:author:* etc.
+		if strings.Count(key, ":") != 1 {
+			return nil
+		}
+		var b Book
+		if err := json.Unmarshal(val, &b); err != nil {
+			return nil // skip malformed
+		}
+		return txn.Insert(memTableBooks, &b)
+	}); err != nil {
+		return fmt.Errorf("warmup books: %w", err)
+	} else {
+		counts[memTableBooks] = n
+	}
+
+	// Authors: author:<id> (skip author:name:* index)
+	if n, err := warmIter(ctx, p.db, "author:", func(key string, val []byte) error {
+		if strings.Contains(key, ":name:") {
+			return nil
+		}
+		if strings.Count(key, ":") != 1 {
+			return nil
+		}
+		var a Author
+		if err := json.Unmarshal(val, &a); err != nil {
+			return nil
+		}
+		return txn.Insert(memTableAuthors, &a)
+	}); err != nil {
+		return fmt.Errorf("warmup authors: %w", err)
+	} else {
+		counts[memTableAuthors] = n
+	}
+
+	// Series: series:<id>
+	if n, err := warmIter(ctx, p.db, "series:", func(key string, val []byte) error {
+		if strings.Count(key, ":") != 1 {
+			return nil
+		}
+		var s Series
+		if err := json.Unmarshal(val, &s); err != nil {
+			return nil
+		}
+		return txn.Insert(memTableSeries, &s)
+	}); err != nil {
+		return fmt.Errorf("warmup series: %w", err)
+	} else {
+		counts[memTableSeries] = n
+	}
+
+	// BookFiles: book_file:<bookID>:<fileID>
+	if n, err := warmIter(ctx, p.db, "book_file:", func(key string, val []byte) error {
+		if strings.Count(key, ":") != 2 {
+			return nil
+		}
+		var bf BookFile
+		if err := json.Unmarshal(val, &bf); err != nil {
+			return nil
+		}
+		return txn.Insert(memTableBookFiles, &bf)
+	}); err != nil {
+		return fmt.Errorf("warmup book_files: %w", err)
+	} else {
+		counts[memTableBookFiles] = n
+	}
+
+	// BookAuthors: book_authors:<bookID> contains []BookAuthor; flatten.
+	if n, err := warmIter(ctx, p.db, "book_authors:", func(key string, val []byte) error {
+		var list []BookAuthor
+		if err := json.Unmarshal(val, &list); err != nil {
+			return nil
+		}
+		for i := range list {
+			ba := list[i]
+			if err := txn.Insert(memTableBookAuthors, &ba); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("warmup book_authors: %w", err)
+	} else {
+		counts[memTableBookAuthors] = n
+	}
+
+	// BookNarrators: book_narrators:<bookID> contains []BookNarrator; flatten.
+	if n, err := warmIter(ctx, p.db, "book_narrators:", func(key string, val []byte) error {
+		var list []BookNarrator
+		if err := json.Unmarshal(val, &list); err != nil {
+			return nil
+		}
+		for i := range list {
+			bn := list[i]
+			if err := txn.Insert(memTableBookNarrators, &bn); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("warmup book_narrators: %w", err)
+	} else {
+		counts[memTableBookNarrators] = n
+	}
+
+	// Narrators: narrator:<id>
+	if n, err := warmIter(ctx, p.db, "narrator:", func(key string, val []byte) error {
+		var nrt Narrator
+		if err := json.Unmarshal(val, &nrt); err != nil {
+			return nil
+		}
+		return txn.Insert(memTableNarrators, &nrt)
+	}); err != nil {
+		return fmt.Errorf("warmup narrators: %w", err)
+	} else {
+		counts[memTableNarrators] = n
+	}
+
+	// ImportPaths: import_path:<id> (skip import_path:path:* index)
+	if n, err := warmIter(ctx, p.db, "import_path:", func(key string, val []byte) error {
+		if strings.Contains(key, ":path:") {
+			return nil
+		}
+		var ip ImportPath
+		if err := json.Unmarshal(val, &ip); err != nil {
+			return nil
+		}
+		return txn.Insert(memTableImportPaths, &ip)
+	}); err != nil {
+		return fmt.Errorf("warmup import_paths: %w", err)
+	} else {
+		counts[memTableImportPaths] = n
+	}
+
+	// AuthorAliases: author_alias:<id>
+	if n, err := warmIter(ctx, p.db, "author_alias:", func(key string, val []byte) error {
+		var aa AuthorAlias
+		if err := json.Unmarshal(val, &aa); err != nil {
+			return nil
+		}
+		return txn.Insert(memTableAuthorAliases, &aa)
+	}); err != nil {
+		return fmt.Errorf("warmup author_aliases: %w", err)
+	} else {
+		counts[memTableAuthorAliases] = n
+	}
+
+	// BlockedHashes: blocked:hash:<hash>
+	if n, err := warmIter(ctx, p.db, "blocked:hash:", func(key string, val []byte) error {
+		var bh DoNotImport
+		if err := json.Unmarshal(val, &bh); err != nil {
+			return nil
+		}
+		return txn.Insert(memTableBlockedHashes, &bh)
+	}); err != nil {
+		return fmt.Errorf("warmup blocked_hashes: %w", err)
+	} else {
+		counts[memTableBlockedHashes] = n
+	}
+
+	// Works: work:<id>
+	if n, err := warmIter(ctx, p.db, "work:", func(key string, val []byte) error {
+		var w Work
+		if err := json.Unmarshal(val, &w); err != nil {
+			return nil
+		}
+		return txn.Insert(memTableWorks, &w)
+	}); err != nil {
+		return fmt.Errorf("warmup works: %w", err)
+	} else {
+		counts[memTableWorks] = n
+	}
+
+	txn.Commit()
+
+	slog.Info("memdb warmup complete",
+		"duration_ms", time.Since(started).Milliseconds(),
+		"books", counts[memTableBooks],
+		"authors", counts[memTableAuthors],
+		"series", counts[memTableSeries],
+		"book_files", counts[memTableBookFiles],
+		"book_authors", counts[memTableBookAuthors],
+		"book_narrators", counts[memTableBookNarrators],
+		"narrators", counts[memTableNarrators],
+		"import_paths", counts[memTableImportPaths],
+		"author_aliases", counts[memTableAuthorAliases],
+		"blocked_hashes", counts[memTableBlockedHashes],
+		"works", counts[memTableWorks],
+	)
+
+	return nil
+}
+
+// warmIter iterates every key under a given prefix and invokes the callback.
+// Returns the number of times the callback was invoked. Stops early if ctx
+// is cancelled or the callback returns an error.
+func warmIter(ctx context.Context, db *pebble.DB, prefix string, fn func(key string, val []byte) error) (int, error) {
+	upper := append([]byte(nil), []byte(prefix)...)
+	// Replace trailing ':' with ';' so the upper bound sorts immediately past
+	// all keys starting with prefix.
+	if len(upper) > 0 && upper[len(upper)-1] == ':' {
+		upper[len(upper)-1] = ';'
+	} else {
+		upper = append(upper, 0xFF)
+	}
+	iter, err := db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte(prefix),
+		UpperBound: upper,
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	count := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		if ctx.Err() != nil {
+			return count, ctx.Err()
+		}
+		if err := fn(string(iter.Key()), iter.Value()); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
+}

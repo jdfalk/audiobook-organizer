@@ -117,12 +117,14 @@ func isValidULID(s string) bool {
 type PebbleStore struct {
 	db                       *pebble.DB
 	chai                     *ChaiDB    // optional: Chai database for SQL queries (Phase 2 migration)
+	mem                      *MemStore  // optional: in-memory query/index layer; replacement for Chai
 	counterMu                sync.Mutex // protects nextID read-modify-write
 	opsMu                    sync.Mutex // serializes v2 op CAS operations (SetOperationV2StatusIfQueued)
 	opsLogSeq                int64      // monotonic counter for log key uniqueness; accessed via atomic
 	rootDir                  string     // organized library root; set via SetRootDir after config load
 	libraryCountsRecomputeMu sync.Mutex // gates recompute to prevent stampede when N callers see dirty cache
-	UseChaiDB               bool       // feature flag: use Chai SQL for aggregations (true = Chai SQL, false = Pebble)
+	UseChaiDB                bool       // feature flag: use Chai SQL for aggregations (true = Chai SQL, false = Pebble)
+	UseMemDB                 bool       // feature flag: use in-memory query layer for aggregations / filtered reads
 }
 
 const statsLibraryKey = "stats:library"
@@ -197,6 +199,7 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 	store := &PebbleStore{
 		db:        db,
 		UseChaiDB: true, // Chai DB sync is wired — backfill via POST /api/v1/admin/backfill-chai
+		UseMemDB:  false, // gated off during Phase 1; flip on once read migrations land
 	}
 
 	slog.Info("PebbleDB opened", "path", path, "format_version", db.FormatMajorVersion())
@@ -214,6 +217,16 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 	if err := store.migrateImportPathKeys(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to migrate import path keys: %w", err)
+	}
+
+	// Initialize in-memory query layer (always built; gated by UseMemDB flag for read path).
+	if memStore, memErr := NewMemStore(); memErr != nil {
+		slog.Warn("memdb init failed, in-memory queries disabled", "error", memErr)
+	} else {
+		store.mem = memStore
+		if warmErr := memStore.WarmFromPebble(context.Background(), store); warmErr != nil {
+			slog.Warn("memdb warmup failed, in-memory queries will be stale", "error", warmErr)
+		}
 	}
 
 	// Initialize counters if they don't exist
