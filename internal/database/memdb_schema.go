@@ -89,8 +89,12 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer:      &nullableStringFieldIndex{Field: "VersionGroupID"},
 					},
 					memIdxFilePath: {
+						// NOT unique. Pebble doesn't enforce file_path uniqueness;
+						// real data has duplicates (soft-deleted versions, dedup
+						// candidates). Declaring Unique here caused warmup to
+						// abort on the first conflict and silently leave memdb
+						// empty — which made the library list look empty.
 						Name:         memIdxFilePath,
-						Unique:       true,
 						AllowMissing: true,
 						Indexer:      &memdb.StringFieldIndex{Field: "FilePath"},
 					},
@@ -174,8 +178,11 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer: &memdb.IntFieldIndex{Field: "ID"},
 					},
 					memIdxName: {
+						// NOT unique. Pebble may legitimately have multiple
+						// Narrator rows with the same name (case-insensitive
+						// matching is best-effort, not enforced). Unique would
+						// abort warmup on the first collision.
 						Name:    memIdxName,
-						Unique:  true,
 						Indexer: &memdb.StringFieldIndex{Field: "Name", Lowercase: true},
 					},
 				},
@@ -239,8 +246,11 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer: &memdb.IntFieldIndex{Field: "ID"},
 					},
 					memIdxPath: {
+						// NOT unique (warmup-safety). Pebble already de-dupes
+						// import paths at write time via path-keyed lookup, but
+						// historical data may have collisions and we don't want
+						// warmup to abort.
 						Name:    memIdxPath,
-						Unique:  true,
 						Indexer: &memdb.StringFieldIndex{Field: "Path"},
 					},
 					memIdxEnabled: {

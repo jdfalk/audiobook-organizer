@@ -1,5 +1,5 @@
 // file: internal/database/memdb_warmup.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-mema-aaaa-aaaa-000000000004
 
 package database
@@ -17,8 +17,15 @@ import (
 
 // WarmFromPebble populates the in-memory store by scanning every relevant
 // Pebble key prefix. Must be called once after NewMemStore to make queries
-// useful. Safe to re-run (transaction is atomic: either it fully replaces
-// the contents of each table or it leaves the store untouched).
+// useful. Safe to re-run.
+//
+// Resilience model: an individual row failing to insert (uniqueness conflict,
+// indexer error, malformed JSON, etc.) is logged and skipped — it does NOT
+// abort the whole warmup. Pebble remains source of truth; missing a few
+// rows in memdb is recoverable, but having ALL rows missing because of one
+// bad apple is a production-breaking bug (and was — see the v1.0.0 incident
+// where unique-on-file_path caused memdb to come up empty for the entire
+// library list).
 func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 	if p == nil || p.db == nil {
 		return fmt.Errorf("memdb warmup: PebbleStore not initialized")
@@ -29,18 +36,35 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 	defer txn.Abort()
 
 	counts := map[string]int{}
+	skips := map[string]int{}
+
+	// safeInsert tries to insert an object, logging+counting failures rather
+	// than aborting the warmup. Returns nil so warmIter keeps going.
+	safeInsert := func(table string, obj interface{}, keyForLog string) error {
+		if err := txn.Insert(table, obj); err != nil {
+			skips[table]++
+			// Don't spam: log first 10 per table, then drop to debug.
+			if skips[table] <= 10 {
+				slog.Warn("memdb warmup: skipping row",
+					"table", table, "key", keyForLog, "error", err)
+			} else if skips[table] == 11 {
+				slog.Warn("memdb warmup: further skips muted",
+					"table", table, "muting_after", 10)
+			}
+		}
+		return nil
+	}
 
 	// Books: book:<id> where id has no further colons.
 	if n, err := warmIter(ctx, p.db, "book:", func(key string, val []byte) error {
-		// Skip index keys like book:author:* etc.
 		if strings.Count(key, ":") != 1 {
 			return nil
 		}
 		var b Book
 		if err := json.Unmarshal(val, &b); err != nil {
-			return nil // skip malformed
+			return nil
 		}
-		return txn.Insert(memTableBooks, &b)
+		return safeInsert(memTableBooks, &b, key)
 	}); err != nil {
 		return fmt.Errorf("warmup books: %w", err)
 	} else {
@@ -59,7 +83,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &a); err != nil {
 			return nil
 		}
-		return txn.Insert(memTableAuthors, &a)
+		return safeInsert(memTableAuthors, &a, key)
 	}); err != nil {
 		return fmt.Errorf("warmup authors: %w", err)
 	} else {
@@ -75,7 +99,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &s); err != nil {
 			return nil
 		}
-		return txn.Insert(memTableSeries, &s)
+		return safeInsert(memTableSeries, &s, key)
 	}); err != nil {
 		return fmt.Errorf("warmup series: %w", err)
 	} else {
@@ -91,7 +115,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &bf); err != nil {
 			return nil
 		}
-		return txn.Insert(memTableBookFiles, &bf)
+		return safeInsert(memTableBookFiles, &bf, key)
 	}); err != nil {
 		return fmt.Errorf("warmup book_files: %w", err)
 	} else {
@@ -106,9 +130,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		}
 		for i := range list {
 			ba := list[i]
-			if err := txn.Insert(memTableBookAuthors, &ba); err != nil {
-				return err
-			}
+			_ = safeInsert(memTableBookAuthors, &ba, key)
 		}
 		return nil
 	}); err != nil {
@@ -125,9 +147,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		}
 		for i := range list {
 			bn := list[i]
-			if err := txn.Insert(memTableBookNarrators, &bn); err != nil {
-				return err
-			}
+			_ = safeInsert(memTableBookNarrators, &bn, key)
 		}
 		return nil
 	}); err != nil {
@@ -142,7 +162,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &nrt); err != nil {
 			return nil
 		}
-		return txn.Insert(memTableNarrators, &nrt)
+		return safeInsert(memTableNarrators, &nrt, key)
 	}); err != nil {
 		return fmt.Errorf("warmup narrators: %w", err)
 	} else {
@@ -158,7 +178,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &ip); err != nil {
 			return nil
 		}
-		return txn.Insert(memTableImportPaths, &ip)
+		return safeInsert(memTableImportPaths, &ip, key)
 	}); err != nil {
 		return fmt.Errorf("warmup import_paths: %w", err)
 	} else {
@@ -171,7 +191,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &aa); err != nil {
 			return nil
 		}
-		return txn.Insert(memTableAuthorAliases, &aa)
+		return safeInsert(memTableAuthorAliases, &aa, key)
 	}); err != nil {
 		return fmt.Errorf("warmup author_aliases: %w", err)
 	} else {
@@ -184,7 +204,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &bh); err != nil {
 			return nil
 		}
-		return txn.Insert(memTableBlockedHashes, &bh)
+		return safeInsert(memTableBlockedHashes, &bh, key)
 	}); err != nil {
 		return fmt.Errorf("warmup blocked_hashes: %w", err)
 	} else {
@@ -197,7 +217,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &w); err != nil {
 			return nil
 		}
-		return txn.Insert(memTableWorks, &w)
+		return safeInsert(memTableWorks, &w, key)
 	}); err != nil {
 		return fmt.Errorf("warmup works: %w", err)
 	} else {
@@ -219,9 +239,22 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		"author_aliases", counts[memTableAuthorAliases],
 		"blocked_hashes", counts[memTableBlockedHashes],
 		"works", counts[memTableWorks],
+		"skipped_total", sumInts(skips),
 	)
+	if len(skips) > 0 {
+		slog.Warn("memdb warmup: rows skipped by table",
+			"skipped_by_table", skips)
+	}
 
 	return nil
+}
+
+func sumInts(m map[string]int) int {
+	total := 0
+	for _, v := range m {
+		total += v
+	}
+	return total
 }
 
 // warmIter iterates every key under a given prefix and invokes the callback.
