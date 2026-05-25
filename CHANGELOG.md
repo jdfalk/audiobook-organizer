@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.96.0 -->
+<!-- version: 2.97.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-25 -->
 
@@ -8,6 +8,17 @@
 ## [Unreleased]
 
 ### Changes
+
+#### May 25, 2026 — Skip filesystem walk in /system/status (use DB sizes)
+
+`sysinfo.CollectSystemStatus` no longer calls `calculateLibrarySizes` (which
+ran `filepath.Walk` over the entire library + import-path trees) on the hot
+path. On a 50K-book library this walk took ~28s on the first call after
+restart and gated `/system/status` on it. Now uses `dbStats.OrganizedSize`
+and `dbStats.UnorganizedSize` directly — already aggregated for free during
+the memdb `ComputeLibraryStats` walk. Matches the pattern Sonarr/Radarr use:
+trust DB sizes after the initial scan, refresh on book mutation, never
+re-walk on read.
 
 #### May 25, 2026 — Slow-path cleanup (memdb pushdown for stats, soft-deleted, path-counts)
 
