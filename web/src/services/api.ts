@@ -903,6 +903,31 @@ export async function restoreSoftDeletedBook(bookId: string): Promise<void> {
   }
 }
 
+export interface RescanBookResult {
+  book_id: string;
+  old_total: number;
+  new_total: number;
+  file_count: number;
+  files: Array<{
+    id?: string;
+    path: string;
+    old_size: number;
+    new_size: number;
+    missing: boolean;
+  }>;
+}
+
+export async function rescanBookFiles(bookId: string): Promise<RescanBookResult> {
+  const response = await fetch(`${API_BASE}/audiobooks/${bookId}/rescan`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to rescan book files');
+  }
+  const json = await response.json();
+  return json.data ?? json;
+}
+
 export async function deleteBook(
   bookId: string,
   options: { softDelete?: boolean; blockHash?: boolean } = {}

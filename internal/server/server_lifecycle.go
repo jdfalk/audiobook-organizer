@@ -917,6 +917,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/audiobooks/soft-deleted", s.perm(auth.PermLibraryView), s.listSoftDeletedAudiobooks)
 			protected.DELETE("/audiobooks/purge-soft-deleted", s.perm(auth.PermLibraryDelete), s.purgeSoftDeletedAudiobooks)
 			protected.POST("/audiobooks/:id/restore", s.perm(auth.PermLibraryOrganize), s.restoreAudiobook)
+			protected.POST("/audiobooks/:id/rescan", s.perm(auth.PermLibraryEditMetadata), s.rescanAudiobook)
 			protected.POST("/audiobooks/:id/quarantine", s.perm(auth.PermSettingsManage), s.quarantineBook)
 			protected.DELETE("/audiobooks/:id/quarantine", s.perm(auth.PermSettingsManage), s.unquarantineBook)
 			protected.GET("/audiobooks/:id", s.perm(auth.PermLibraryView), s.getAudiobook)

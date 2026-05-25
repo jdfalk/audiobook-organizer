@@ -20,6 +20,7 @@ import type { Book, BookFile, BookSegment, BookTags, SegmentTags, OverridePayloa
 import * as api from '../services/api';
 import { useToast } from '../components/toast/ToastProvider';
 import type { Audiobook } from '../types';
+import { formatBytes } from '../components/bookdetail/bookDetailUtils';
 import { BookDetailHeader } from '../components/bookdetail/BookDetailHeader';
 import { BookDetailStatusAlerts } from '../components/bookdetail/BookDetailStatusAlerts';
 import { BookDetailActions } from '../components/bookdetail/BookDetailActions';
@@ -332,6 +333,29 @@ export const BookDetail = () => {
     } catch (error) {
       console.error('Failed to restore audiobook', error);
       toast('Failed to restore audiobook.', 'error');
+    } finally {
+      setActionLabel(null);
+      setActionLoading(false);
+    }
+  };
+
+  const handleRescanFiles = async () => {
+    if (!book) return;
+    setActionLoading(true);
+    setActionLabel('Rescanning files...');
+    try {
+      const result = await api.rescanBookFiles(book.id);
+      const changed = result.old_total !== result.new_total;
+      toast(
+        changed
+          ? `File size updated (${formatBytes(result.old_total)} → ${formatBytes(result.new_total)})`
+          : `Files in sync, no changes (${result.file_count} file${result.file_count === 1 ? '' : 's'} checked)`,
+        'success'
+      );
+      await loadBook();
+    } catch (error) {
+      console.error('Failed to rescan files', error);
+      toast('Failed to rescan files.', 'error');
     } finally {
       setActionLabel(null);
       setActionLoading(false);
@@ -941,6 +965,7 @@ export const BookDetail = () => {
         onOpenHistory={() => setHistoryDialogOpen(true)}
         onParseWithAI={handleParseWithAI}
         onRescanFolder={handleRescanFolder}
+        onRescanFiles={handleRescanFiles}
         onRefresh={() => { loadBook(); loadVersions(); refreshFilesTab(); }}
         onOpenEdit={() => setEditDialogOpen(true)}
         onFetchMetadata={handleFetchMetadata}

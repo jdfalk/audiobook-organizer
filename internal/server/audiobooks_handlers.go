@@ -441,6 +441,108 @@ func (s *Server) runAutoPurgeSoftDeleted(opID string) {
 	}
 }
 
+// rescanAudiobook re-stats the book's files on disk and updates FileSize
+// fields in the DB to match physical reality. Cheap (O(file_count) per
+// book) and intended for the "this number looks wrong" button on the
+// book detail page — gives the user an out when DB sizes have drifted
+// from disk (e.g. after a manual file replacement).
+//
+// Also invalidates the library_counts cache so the dashboard reflects
+// the updated number immediately.
+func (s *Server) rescanAudiobook(c *gin.Context) {
+	id := c.Param("id")
+	store := s.Store()
+	if store == nil {
+		httputil.RespondWithInternalError(c, "database not initialized")
+		return
+	}
+	book, err := store.GetBookByID(id)
+	if err != nil || book == nil {
+		httputil.RespondWithNotFound(c, "audiobook", id)
+		return
+	}
+
+	type fileResult struct {
+		ID       string `json:"id"`
+		Path     string `json:"path"`
+		OldSize  int64  `json:"old_size"`
+		NewSize  int64  `json:"new_size"`
+		Missing  bool   `json:"missing"`
+	}
+
+	results := []fileResult{}
+	var newTotal int64
+
+	files, _ := store.GetBookFiles(id)
+	if len(files) > 0 {
+		for i := range files {
+			f := files[i]
+			fr := fileResult{ID: f.ID, Path: f.FilePath, OldSize: f.FileSize}
+			info, statErr := os.Stat(f.FilePath)
+			if statErr != nil {
+				fr.Missing = true
+				if !f.Missing {
+					f.Missing = true
+					_ = store.UpdateBookFile(f.ID, &f)
+				}
+				results = append(results, fr)
+				continue
+			}
+			size := info.Size()
+			fr.NewSize = size
+			if f.FileSize != size || f.Missing {
+				f.FileSize = size
+				f.Missing = false
+				if upErr := store.UpdateBookFile(f.ID, &f); upErr != nil {
+					httputil.InternalError(c, "failed to update book file", upErr)
+					return
+				}
+			}
+			newTotal += size
+			results = append(results, fr)
+		}
+	} else if book.FilePath != "" {
+		// Legacy single-file book with no BookFile rows — stat the main path.
+		fr := fileResult{Path: book.FilePath}
+		if book.FileSize != nil {
+			fr.OldSize = *book.FileSize
+		}
+		if info, statErr := os.Stat(book.FilePath); statErr == nil {
+			fr.NewSize = info.Size()
+			newTotal = info.Size()
+		} else {
+			fr.Missing = true
+		}
+		results = append(results, fr)
+	}
+
+	// Update the Book.FileSize aggregate if it changed.
+	oldBookSize := int64(0)
+	if book.FileSize != nil {
+		oldBookSize = *book.FileSize
+	}
+	if newTotal != oldBookSize {
+		book.FileSize = &newTotal
+		if _, upErr := store.UpdateBook(id, book); upErr != nil {
+			httputil.InternalError(c, "failed to update book", upErr)
+			return
+		}
+		// Invalidate the dashboard cache so the next /system/status sees
+		// the new sum.
+		if inv, ok := store.(interface{ InvalidateLibraryStats() }); ok {
+			inv.InvalidateLibraryStats()
+		}
+	}
+
+	httputil.RespondWithOK(c, gin.H{
+		"book_id":      id,
+		"old_total":    oldBookSize,
+		"new_total":    newTotal,
+		"file_count":   len(results),
+		"files":        results,
+	})
+}
+
 func (s *Server) restoreAudiobook(c *gin.Context) {
 	id := c.Param("id")
 	updated, err := s.audiobookService.RestoreAudiobook(c.Request.Context(), id)
