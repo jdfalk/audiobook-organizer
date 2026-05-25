@@ -497,6 +497,7 @@ func (p *PebbleStore) CreateAuthor(name string) (*Author, error) {
 		return nil, err
 	}
 
+	p.UpsertAuthorToMemDB(author)
 	return author, nil
 }
 
@@ -548,7 +549,12 @@ func (p *PebbleStore) DeleteAuthor(id int) error {
 		}
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	p.DeleteAuthorFromMemDB(id)
+	p.DeleteAuthorAliasesByAuthorIDFromMemDB(id)
+	return nil
 }
 
 func (p *PebbleStore) UpdateAuthorName(id int, name string) error {
@@ -584,7 +590,11 @@ func (p *PebbleStore) UpdateAuthorName(id int, name string) error {
 		return err
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	p.UpsertAuthorToMemDB(author)
+	return nil
 }
 
 // Author Alias operations
@@ -717,6 +727,7 @@ func (p *PebbleStore) CreateAuthorAlias(authorID int, aliasName string, aliasTyp
 		batch.Close()
 		return nil, err
 	}
+	p.UpsertAuthorAliasToMemDB(&alias)
 	return &alias, nil
 }
 
@@ -742,7 +753,11 @@ func (p *PebbleStore) DeleteAuthorAlias(id int) error {
 		batch.Close()
 		return fmt.Errorf("pebble Delete author_alias:name index: %w", err)
 	}
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	p.DeleteAuthorAliasFromMemDB(id)
+	return nil
 }
 
 func (p *PebbleStore) FindAuthorByAlias(aliasName string) (*Author, error) {
@@ -972,6 +987,7 @@ func (p *PebbleStore) CreateSeries(name string, authorID *int) (*Series, error) 
 		return nil, err
 	}
 
+	p.UpsertSeriesToMemDB(series)
 	return series, nil
 }
 
@@ -995,7 +1011,11 @@ func (p *PebbleStore) DeleteSeries(id int) error {
 		closer.Close()
 	}
 
-	return p.db.Delete(key, pebble.Sync)
+	if err := p.db.Delete(key, pebble.Sync); err != nil {
+		return err
+	}
+	p.DeleteSeriesFromMemDB(id)
+	return nil
 }
 
 func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
@@ -1034,7 +1054,13 @@ func (p *PebbleStore) UpdateSeriesName(id int, name string) error {
 	// Create new name index
 	newIndexKey := []byte(fmt.Sprintf("series:name:%s:%s", strings.ToLower(name), oldAuthorIDStr))
 	idBytes := []byte(fmt.Sprintf("%d", id))
-	return p.db.Set(newIndexKey, idBytes, pebble.Sync)
+	if err := p.db.Set(newIndexKey, idBytes, pebble.Sync); err != nil {
+		return err
+	}
+	if updated, err := p.GetSeriesByID(id); err == nil && updated != nil {
+		p.UpsertSeriesToMemDB(updated)
+	}
+	return nil
 }
 
 func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
@@ -1251,6 +1277,7 @@ func (p *PebbleStore) CreateWork(work *Work) (*Work, error) {
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return nil, err
 	}
+	p.UpsertWorkToMemDB(work)
 	return work, nil
 }
 
@@ -1292,6 +1319,7 @@ func (p *PebbleStore) UpdateWork(id string, work *Work) (*Work, error) {
 	if err := batch.Commit(pebble.Sync); err != nil {
 		return nil, err
 	}
+	p.UpsertWorkToMemDB(work)
 	return work, nil
 }
 
@@ -1316,7 +1344,11 @@ func (p *PebbleStore) DeleteWork(id string) error {
 			return fmt.Errorf("pebble batch delete work title index: %w", err)
 		}
 	}
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	p.DeleteWorkFromMemDB(id)
+	return nil
 }
 
 func (p *PebbleStore) GetBooksByWorkID(workID string) ([]Book, error) {
@@ -1799,7 +1831,11 @@ func (p *PebbleStore) SetBookAuthors(bookID string, authors []BookAuthor) error 
 	if err != nil {
 		return err
 	}
-	return p.db.Set(key, data, pebble.Sync)
+	if err := p.db.Set(key, data, pebble.Sync); err != nil {
+		return err
+	}
+	p.ReplaceBookAuthorsInMemDB(bookID, authors)
+	return nil
 }
 
 func (p *PebbleStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
@@ -2015,6 +2051,7 @@ func (p *PebbleStore) CreateNarrator(name string) (*Narrator, error) {
 		return nil, fmt.Errorf("pebble Set narrator counter: %w", err)
 	}
 
+	p.UpsertNarratorToMemDB(narrator)
 	return narrator, nil
 }
 
@@ -2098,7 +2135,11 @@ func (p *PebbleStore) SetBookNarrators(bookID string, narrators []BookNarrator) 
 	if err != nil {
 		return err
 	}
-	return p.db.Set(key, data, pebble.Sync)
+	if err := p.db.Set(key, data, pebble.Sync); err != nil {
+		return err
+	}
+	p.ReplaceBookNarratorsInMemDB(bookID, narrators)
+	return nil
 }
 
 func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
@@ -2216,6 +2257,8 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 			slog.Warn("chai sync failed for CreateBook", "id", book.ID, "error", syncErr)
 		}
 	}
+	// memdb write-through (replacement for Chai; always on when initialized)
+	p.UpsertBookToMemDB(context.Background(), book)
 
 	return book, nil
 }
@@ -2407,6 +2450,8 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 			slog.Warn("chai sync failed for UpdateBook", "id", id, "error", syncErr)
 		}
 	}
+	// memdb write-through
+	p.UpsertBookToMemDB(context.Background(), book)
 
 	return book, nil
 }
@@ -2744,6 +2789,8 @@ func (p *PebbleStore) DeleteBook(id string) error {
 			slog.Warn("chai sync failed for DeleteBook", "id", id, "error", syncErr)
 		}
 	}
+	// memdb write-through
+	p.DeleteBookFromMemDB(context.Background(), id)
 
 	return nil
 }
@@ -3605,6 +3652,7 @@ func (p *PebbleStore) CreateImportPath(path, name string) (*ImportPath, error) {
 		return nil, err
 	}
 
+	p.UpsertImportPathToMemDB(importPath)
 	return importPath, nil
 }
 
@@ -3647,7 +3695,11 @@ func (p *PebbleStore) UpdateImportPath(id int, importPath *ImportPath) error {
 		return err
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	p.UpsertImportPathToMemDB(importPath)
+	return nil
 }
 
 func (p *PebbleStore) DeleteImportPath(id int) error {
@@ -3673,7 +3725,11 @@ func (p *PebbleStore) DeleteImportPath(id int) error {
 		return err
 	}
 
-	return batch.Commit(pebble.Sync)
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return err
+	}
+	p.DeleteImportPathFromMemDB(id)
+	return nil
 }
 
 // Operation operations
@@ -6194,12 +6250,20 @@ func (p *PebbleStore) AddBlockedHash(hash, reason string) error {
 	}
 
 	key := []byte(fmt.Sprintf("blocked:hash:%s", hash))
-	return p.db.Set(key, data, pebble.Sync)
+	if err := p.db.Set(key, data, pebble.Sync); err != nil {
+		return err
+	}
+	p.UpsertBlockedHashToMemDB(&item)
+	return nil
 }
 
 func (p *PebbleStore) RemoveBlockedHash(hash string) error {
 	key := []byte(fmt.Sprintf("blocked:hash:%s", hash))
-	return p.db.Delete(key, pebble.Sync)
+	if err := p.db.Delete(key, pebble.Sync); err != nil {
+		return err
+	}
+	p.DeleteBlockedHashFromMemDB(hash)
+	return nil
 }
 
 // GetAllBlockedHashes returns all blocked hashes.
@@ -8347,6 +8411,7 @@ func (s *PebbleStore) CreateBookFile(file *BookFile) error {
 	}
 	s.InvalidateLibraryStats()
 	s.MarkQuickQueryDirty("no_fingerprints", "create_book_file")
+	s.UpsertBookFileToMemDB(file)
 	return nil
 }
 
@@ -8395,6 +8460,7 @@ func (s *PebbleStore) UpdateBookFile(id string, file *BookFile) error {
 	}
 	s.InvalidateLibraryStats()
 	s.MarkQuickQueryDirty("no_fingerprints", "update_book_file")
+	s.UpsertBookFileToMemDB(file)
 	return nil
 }
 
@@ -8715,6 +8781,7 @@ func (s *PebbleStore) DeleteBookFile(id string) error {
 	}
 	s.InvalidateLibraryStats()
 	s.MarkQuickQueryDirty("no_fingerprints", "delete_book_file")
+	s.DeleteBookFileFromMemDB(id)
 	return nil
 }
 

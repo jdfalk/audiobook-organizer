@@ -89,9 +89,10 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer:      &nullableStringFieldIndex{Field: "VersionGroupID"},
 					},
 					memIdxFilePath: {
-						Name:    memIdxFilePath,
-						Unique:  true,
-						Indexer: &memdb.StringFieldIndex{Field: "FilePath"},
+						Name:         memIdxFilePath,
+						Unique:       true,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "FilePath"},
 					},
 					memIdxTitle: {
 						Name:    memIdxTitle,
@@ -157,8 +158,9 @@ func memdbSchema() *memdb.DBSchema {
 						Indexer: &plainBoolFieldIndex{Field: "Missing"},
 					},
 					memIdxFilePath: {
-						Name:    memIdxFilePath,
-						Indexer: &memdb.StringFieldIndex{Field: "FilePath"},
+						Name:         memIdxFilePath,
+						AllowMissing: true,
+						Indexer:      &memdb.StringFieldIndex{Field: "FilePath"},
 					},
 				},
 			},
@@ -270,6 +272,12 @@ func memdbSchema() *memdb.DBSchema {
 			memTableBlockedHashes: {
 				Name: memTableBlockedHashes,
 				Indexes: map[string]*memdb.IndexSchema{
+					// go-memdb requires every table to have an "id" index.
+					memIdxID: {
+						Name:    memIdxID,
+						Unique:  true,
+						Indexer: &memdb.StringFieldIndex{Field: "Hash"},
+					},
 					memIdxHash: {
 						Name:    memIdxHash,
 						Unique:  true,
