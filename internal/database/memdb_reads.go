@@ -15,7 +15,7 @@ import (
 // All methods on MemStore here are read-only and use snapshot transactions,
 // which means they never block writers and never return errors related to
 // concurrency. The signatures intentionally mirror the existing
-// `*_Chai`/`*_Pebble` counterparts on PebbleStore so swap-in is a one-line
+// `*_Pebble` counterparts on PebbleStore so swap-in is a one-line
 // delegation change.
 
 // GetAllSeries returns every Series sorted by Name (case-insensitive).
