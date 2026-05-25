@@ -643,6 +643,27 @@ func bookSummariesToBooks(summaries []database.BookSummary) []database.Book {
 	return books
 }
 
+// summariesPushdown calls the store's filtered-summary fast path if it's
+// exposed (memdb path), else falls back to GetAllBookSummaries. The
+// optional isPrimary flag is the only filter pushed down today — extend
+// as more memdb-indexed predicates are added.
+func (svc *AudiobookService) summariesPushdown(limit, offset int, isPrimary *bool) ([]database.BookSummary, error) {
+	type filteredSummaryStore interface {
+		GetAllBookSummariesFiltered(limit, offset int, f database.BookSummaryFilter) ([]database.BookSummary, error)
+	}
+	if fs, ok := svc.store.(filteredSummaryStore); ok {
+		return fs.GetAllBookSummariesFiltered(limit, offset, database.BookSummaryFilter{IsPrimaryVersion: isPrimary})
+	}
+	if uw, ok := svc.store.(interface{ Unwrap() database.Store }); ok {
+		if fs, ok2 := uw.Unwrap().(filteredSummaryStore); ok2 {
+			return fs.GetAllBookSummariesFiltered(limit, offset, database.BookSummaryFilter{IsPrimaryVersion: isPrimary})
+		}
+	}
+	// Fallback: store has no filtered fast path. Match prior behavior —
+	// fetch all summaries then let the caller filter.
+	return svc.store.GetAllBookSummaries(limit, offset)
+}
+
 // GetAudiobooks retrieves audiobooks with optional filtering.
 // Supports search, author_id, series_id, is_primary_version, and library_state filters.
 func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offset int, search string, authorID *int, seriesID *int, filters ...ListFilters) ([]database.Book, error) {
@@ -665,13 +686,18 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	hasSorting := f.SortBy != ""
 	hasPerUser := len(f.PerUserFilters) > 0 && f.UserID != ""
 	hasFingerprintingFilters := f.FingerprintStatus != "" || f.CoveragePercentMin != nil || f.CoveragePercentMax != nil
-	hasPostFilters := f.IsPrimaryVersion != nil || f.LibraryState != "" || f.Tag != "" || len(f.Tags) > 0 || len(f.FieldFilters) > 0 || hasPerUser || hasSorting || hasFingerprintingFilters
+	// "Heavy" post-filters require fetching all rows to apply in Go.
+	// IsPrimaryVersion is intentionally NOT in this set because the store
+	// (memdb-backed) can push it down via an indexed iteration — fetching
+	// all 68K rows to satisfy ?is_primary_version=true was the prod
+	// "library spins forever" bug.
+	hasHeavyPostFilters := f.LibraryState != "" || f.Tag != "" || len(f.Tags) > 0 || len(f.FieldFilters) > 0 || hasPerUser || hasSorting || hasFingerprintingFilters
+	hasPostFilters := hasHeavyPostFilters || f.IsPrimaryVersion != nil
 
-	// When post-filters are active, fetch all and filter in memory
-	// (PebbleStore doesn't support query-level boolean/string filtering)
+	// When heavy post-filters are active, fetch all and filter in memory.
 	storeLimit := limit
 	storeOffset := offset
-	if hasPostFilters {
+	if hasHeavyPostFilters {
 		storeLimit = 0
 		storeOffset = 0
 	}
@@ -695,19 +721,21 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 
 	// Fall back to generic list only when no filter was applied
 	if search == "" && authorID == nil && seriesID == nil {
-		if !hasPostFilters {
-			cacheKey := fmt.Sprintf("all:%d:%d", limit, offset)
+		// Pushdown path: only "light" filters (is_primary_version) — let
+		// the store paginate using its index, no in-memory full-scan.
+		if !hasHeavyPostFilters {
+			cacheKey := fmt.Sprintf("all:%d:%d:p=%v", limit, offset, f.IsPrimaryVersion)
 			if cached, ok := svc.listCache.Get(cacheKey); ok {
 				return cached, nil
 			}
-			summaries, err := svc.store.GetAllBookSummaries(storeLimit, storeOffset)
-			if err == nil && summaries != nil {
+			summaries, sErr := svc.summariesPushdown(storeLimit, storeOffset, f.IsPrimaryVersion)
+			if sErr == nil && summaries != nil {
 				books = bookSummariesToBooks(summaries)
 				svc.listCache.Set(cacheKey, books)
 			}
 		} else {
-			summaries, err := svc.store.GetAllBookSummaries(storeLimit, storeOffset)
-			if err == nil && summaries != nil {
+			summaries, sErr := svc.summariesPushdown(storeLimit, storeOffset, nil)
+			if sErr == nil && summaries != nil {
 				books = bookSummariesToBooks(summaries)
 			}
 		}
