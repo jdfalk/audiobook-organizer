@@ -5,7 +5,6 @@
 package database
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -1183,48 +1182,6 @@ func TestGetAllSeriesBookCounts_Pebble(t *testing.T) {
 	require.Equal(t, 2, counts[series3.ID], "Series 3 should have 2 primary books")
 }
 
-// TestGetAllSeriesBookCounts_FeatureFlag tests that the feature flag switches between implementations
-func TestGetAllSeriesBookCounts_FeatureFlag(t *testing.T) {
-	// Arrange
-	store, cleanup := setupPebbleTestDB(t)
-	defer cleanup()
-	pstore := store.(*PebbleStore)
-
-	// Create test data
-	author, err := store.CreateAuthor("Test Author")
-	require.NoError(t, err)
-
-	series, err := store.CreateSeries("Test Series", &author.ID)
-	require.NoError(t, err)
-
-	isPrimary := true
-	book := &Book{
-		Title:            "Test Book",
-		AuthorID:         &author.ID,
-		SeriesID:         &series.ID,
-		FilePath:         "/test/path/book.mp3",
-		IsPrimaryVersion: &isPrimary,
-	}
-	_, err = store.CreateBook(book)
-	require.NoError(t, err)
-
-	// Act & Assert: Test with feature flag OFF (should use Pebble)
-	pstore.UseChaiDB = false
-	results, err := pstore.GetAllSeriesBookCounts()
-	require.NoError(t, err)
-	require.NotNil(t, results)
-	require.Equal(t, 1, len(results))
-	require.Equal(t, 1, results[series.ID])
-
-	// Act & Assert: Test with feature flag ON but Chai not initialized (should still work - no Chai)
-	pstore.UseChaiDB = true
-	results2, err := pstore.GetAllSeriesBookCounts()
-	require.NoError(t, err)
-	require.NotNil(t, results2)
-	// Both results should match since Chai is not initialized, it falls back to Pebble
-	require.Equal(t, len(results), len(results2))
-}
-
 // BenchmarkGetAllSeriesBookCounts_Pebble benchmarks the Pebble implementation
 func BenchmarkGetAllSeriesBookCounts_Pebble(b *testing.B) {
 	// Setup: Create a database with many books
@@ -1258,43 +1215,3 @@ func BenchmarkGetAllSeriesBookCounts_Pebble(b *testing.B) {
 	}
 }
 
-// BenchmarkGetAllSeriesBookCounts_Chai benchmarks the Chai implementation
-func BenchmarkGetAllSeriesBookCounts_Chai(b *testing.B) {
-	// Setup: Create a database with many books
-	store, cleanup := setupPebbleTestDB(&testing.T{})
-	defer cleanup()
-	pstore := store.(*PebbleStore)
-
-	// Initialize Chai
-	chaiDBPath := "/tmp/bench_chai_" + ulid.Make().String()
-	defer os.RemoveAll(chaiDBPath)
-
-	chai, _ := NewChaiDB(context.Background(), chaiDBPath)
-	defer chai.Close()
-	pstore.chai = chai
-
-	author, _ := store.CreateAuthor("Test Author")
-
-	// Create 20 series with 50 books each (1000 total books)
-	for seriesIdx := 0; seriesIdx < 20; seriesIdx++ {
-		series, _ := store.CreateSeries(fmt.Sprintf("Series %d", seriesIdx), &author.ID)
-
-		for bookIdx := 0; bookIdx < 50; bookIdx++ {
-			isPrimary := true
-			book := &Book{
-				Title:            fmt.Sprintf("Book %d", bookIdx),
-				AuthorID:         &author.ID,
-				SeriesID:         &series.ID,
-				FilePath:         fmt.Sprintf("/test/s%db%d.mp3", seriesIdx, bookIdx),
-				IsPrimaryVersion: &isPrimary,
-			}
-			store.CreateBook(book)
-		}
-	}
-
-	// Benchmark
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = pstore.GetAllSeriesBookCounts_Chai(context.Background())
-	}
-}

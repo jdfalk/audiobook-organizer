@@ -594,33 +594,3 @@ func (s *Server) handleGetAcoustIDStats(c *gin.Context) {
 	httputil.RespondWithOK(c, stats)
 }
 
-// backfillChaiDB handles POST /api/v1/admin/backfill-chai.
-//
-// Iterates all books in Pebble and upserts them into the Chai SQL index.
-// Idempotent — safe to run multiple times. Returns { synced, error }.
-func (s *Server) backfillChaiDB(c *gin.Context) {
-	store := s.Store()
-	if store == nil {
-		httputil.RespondWithInternalError(c, "database not initialized")
-		return
-	}
-
-	// Unwrap indexedStore decorator if present (wraps the real PebbleStore).
-	inner := store
-	if wrapped, ok := store.(*indexedStore); ok {
-		inner = wrapped.Store
-	}
-	pebbleStore, ok := inner.(*database.PebbleStore)
-	if !ok {
-		httputil.RespondWithBadRequest(c, "chai backfill only supported with PebbleStore backend")
-		return
-	}
-
-	synced, err := pebbleStore.BackfillChaiFromPebble(c.Request.Context())
-	if err != nil {
-		httputil.InternalError(c, "chai backfill failed", err)
-		return
-	}
-
-	httputil.RespondWithOK(c, gin.H{"synced": synced})
-}

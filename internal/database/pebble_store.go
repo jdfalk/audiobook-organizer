@@ -90,8 +90,8 @@ func isValidULID(s string) bool {
 // - book:<id>                  -> Book JSON
 // - book:path:<path>           -> book_id (for lookups)
 // NOTE: book:series and book:author prefix indexes were removed in Task 3.4.
-//       GetBooksBySeriesID and GetBooksByAuthorID now use Chai SQL when UseChaiDB is
-//       enabled, or fall back to a full Pebble scan.
+//       GetBooksBySeriesID and GetBooksByAuthorID fall back to a full Pebble scan
+//       (the in-memory query layer covers the hot paths).
 // - import_path:<id>           -> ImportPath JSON
 // - import_path:path:<path>    -> import_path_id (for lookups)
 // - operation:<id>             -> Operation JSON
@@ -116,14 +116,12 @@ func isValidULID(s string) bool {
 
 type PebbleStore struct {
 	db                       *pebble.DB
-	chai                     *ChaiDB    // optional: Chai database for SQL queries (Phase 2 migration)
 	mem                      *MemStore  // optional: in-memory query/index layer; replacement for Chai
 	counterMu                sync.Mutex // protects nextID read-modify-write
 	opsMu                    sync.Mutex // serializes v2 op CAS operations (SetOperationV2StatusIfQueued)
 	opsLogSeq                int64      // monotonic counter for log key uniqueness; accessed via atomic
 	rootDir                  string     // organized library root; set via SetRootDir after config load
 	libraryCountsRecomputeMu sync.Mutex // gates recompute to prevent stampede when N callers see dirty cache
-	UseChaiDB                bool       // feature flag: use Chai SQL for aggregations (true = Chai SQL, false = Pebble)
 	UseMemDB                 bool       // feature flag: use in-memory query layer for aggregations / filtered reads
 }
 
@@ -197,22 +195,11 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 	}
 
 	store := &PebbleStore{
-		db:        db,
-		UseChaiDB: false, // Chai is being removed; memdb is the new query layer
-		UseMemDB:  true,  // in-memory query layer is the default after Phase 3
+		db:       db,
+		UseMemDB: true, // in-memory query layer is the default after Phase 3
 	}
 
 	slog.Info("PebbleDB opened", "path", path, "format_version", db.FormatMajorVersion())
-
-	// Open Chai SQL database alongside Pebble for SQL-backed aggregations.
-	chaiPath := filepath.Join(filepath.Dir(path), "audiobooks.chai")
-	chaiDB, err := NewChaiDB(context.Background(), chaiPath)
-	if err != nil {
-		slog.Warn("chai database failed to open, SQL aggregations disabled", "path", chaiPath, "error", err)
-	} else {
-		store.chai = chaiDB
-		slog.Info("ChaiDB opened", "path", chaiPath)
-	}
 
 	if err := store.migrateImportPathKeys(); err != nil {
 		db.Close()
@@ -378,25 +365,6 @@ func (p *PebbleStore) GetAllAuthors() ([]Author, error) {
 	}
 
 	return authors, nil
-}
-
-// GetAllAuthors_Chai provides SQL-based author listing via Chai backend.
-// Uses a feature flag to switch between Pebble and Chai implementations.
-// This is the production entry point when UseChaiDB feature flag is enabled.
-func (p *PebbleStore) GetAllAuthors_Chai(ctx context.Context) ([]Author, error) {
-	// Feature flag: use Chai SQL if enabled and database is available
-	if p.UseChaiDB && p.chai != nil {
-		// Wrap the ChaiDB's underlying SQL database in a ChaiStore
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err != nil {
-			// Fallback to Pebble if ChaiStore creation fails
-			return p.GetAllAuthors()
-		}
-		return chaiStore.GetAllAuthors_Chai(ctx)
-	}
-
-	// Fallback to Pebble implementation if flag is off or Chai is not available
-	return p.GetAllAuthors()
 }
 
 func (p *PebbleStore) GetAuthorByID(id int) (*Author, error) {
@@ -666,25 +634,6 @@ func (p *PebbleStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
 	return aliases, nil
 }
 
-// GetAllAuthorAliases_Chai provides SQL-based author alias retrieval via Chai backend.
-// Uses a feature flag to switch between Pebble and Chai implementations.
-// This is the production entry point when UseChaiDB feature flag is enabled.
-func (p *PebbleStore) GetAllAuthorAliases_Chai(ctx context.Context) ([]AuthorAlias, error) {
-	// Feature flag: use Chai SQL if enabled and database is available
-	if p.UseChaiDB && p.chai != nil {
-		// Wrap the ChaiDB's underlying SQL database in a ChaiStore
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err != nil {
-			// Fallback to Pebble if ChaiStore creation fails
-			return p.GetAllAuthorAliases()
-		}
-		return chaiStore.GetAllAuthorAliases_Chai(ctx)
-	}
-
-	// Fallback to Pebble implementation if flag is off or Chai is not available
-	return p.GetAllAuthorAliases()
-}
-
 func (p *PebbleStore) CreateAuthorAlias(authorID int, aliasName string, aliasType string) (*AuthorAlias, error) {
 	if aliasType == "" {
 		aliasType = "alias"
@@ -840,9 +789,6 @@ func (p *PebbleStore) GetAllSeries() ([]Series, error) {
 	if p.UseMemDB && p.mem != nil {
 		return p.mem.GetAllSeries()
 	}
-	if p.UseChaiDB && p.chai != nil {
-		return p.GetAllSeries_Chai(context.Background())
-	}
 	return p.GetAllSeries_Pebble()
 }
 
@@ -872,21 +818,6 @@ func (p *PebbleStore) GetAllSeries_Pebble() ([]Series, error) {
 	}
 
 	return series, nil
-}
-
-// GetAllSeries_Chai returns all series via Chai SQL (SELECT id, name FROM series ORDER BY name).
-// This is the production entry point when UseChaiDB feature flag is enabled.
-func (p *PebbleStore) GetAllSeries_Chai(ctx context.Context) ([]Series, error) {
-	if p.chai == nil {
-		return nil, fmt.Errorf("Chai database not initialized")
-	}
-
-	chaiStore, err := NewChaiStore(p.chai.DB())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ChaiStore: %w", err)
-	}
-
-	return chaiStore.GetAllSeries_Chai(ctx)
 }
 
 func (p *PebbleStore) GetSeriesByID(id int) (*Series, error) {
@@ -1075,9 +1006,6 @@ func (p *PebbleStore) GetAllSeriesBookCounts() (map[int]int, error) {
 	if p.UseMemDB && p.mem != nil {
 		return p.mem.GetAllSeriesBookCounts()
 	}
-	if p.UseChaiDB && p.chai != nil {
-		return p.GetAllSeriesBookCounts_Chai(context.Background())
-	}
 	return p.GetAllSeriesBookCounts_Pebble()
 }
 
@@ -1113,21 +1041,6 @@ func (p *PebbleStore) GetAllSeriesBookCounts_Pebble() (map[int]int, error) {
 		counts[*b.SeriesID]++
 	}
 	return counts, nil
-}
-
-// GetAllSeriesBookCounts_Chai returns the number of books per series using Chai SQL
-// This delegates to ChaiStore which implements the SQL query.
-func (p *PebbleStore) GetAllSeriesBookCounts_Chai(ctx context.Context) (map[int]int, error) {
-	if p.chai == nil {
-		return nil, fmt.Errorf("Chai database not initialized")
-	}
-
-	chaiStore, err := NewChaiStore(p.chai.DB())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ChaiStore: %w", err)
-	}
-
-	return chaiStore.GetAllSeriesBookCounts_SQL(ctx)
 }
 
 // GetAllSeriesFileCounts returns the number of audio files per series.
@@ -1198,14 +1111,11 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 
 // ---- Work operations (logical title-level grouping) ----
 
-// GetAllWorks returns all works. When UseChaiDB is enabled it delegates to the
-// SQL implementation in ChaiStore; otherwise it falls back to the Pebble prefix scan.
+// GetAllWorks returns all works. Uses the in-memory query layer when enabled,
+// otherwise falls back to the Pebble prefix scan.
 func (p *PebbleStore) GetAllWorks() ([]Work, error) {
 	if p.UseMemDB && p.mem != nil {
 		return p.mem.GetAllWorks()
-	}
-	if p.UseChaiDB && p.chai != nil {
-		return p.GetAllWorks_Chai(context.Background())
 	}
 	return p.GetAllWorks_Pebble()
 }
@@ -1230,20 +1140,6 @@ func (p *PebbleStore) GetAllWorks_Pebble() ([]Work, error) {
 		works = append(works, w)
 	}
 	return works, nil
-}
-
-// GetAllWorks_Chai delegates work retrieval to the SQL backend via ChaiStore.
-// NOTE: The works table is not yet defined in chai_schema.go; ChaiStore.GetAllWorks_Chai
-// returns an empty slice until the schema is extended.
-func (p *PebbleStore) GetAllWorks_Chai(ctx context.Context) ([]Work, error) {
-	if p.chai == nil {
-		return nil, fmt.Errorf("Chai database not initialized")
-	}
-	chaiStore, err := NewChaiStore(p.chai.DB())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ChaiStore: %w", err)
-	}
-	return chaiStore.GetAllWorks_Chai(ctx)
 }
 
 func (p *PebbleStore) GetWorkByID(id string) (*Work, error) {
@@ -1442,23 +1338,13 @@ func (p *PebbleStore) GetAllBooks(limit, offset int) ([]Book, error) {
 }
 
 // GetAllBookSummaries returns lightweight BookSummary records for the library list view.
-// When the UseChaiDB feature flag is enabled and a Chai database is available, it
-// delegates to GetAllBookSummaries_Chai which runs a narrow SQL SELECT instead of
-// deserializing every book from Pebble. Falls back to GetAllBookSummaries_Pebble otherwise.
 func (p *PebbleStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, error) {
-	if p.UseChaiDB && p.chai != nil {
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err == nil {
-			return chaiStore.GetAllBookSummaries_Chai(context.Background(), limit, offset)
-		}
-		// Fall through to Pebble on ChaiStore init failure
-	}
 	return p.GetAllBookSummaries_Pebble(limit, offset)
 }
 
-// GetAllBookSummaries_Pebble is the original Pebble-backed implementation.
+// GetAllBookSummaries_Pebble is the Pebble-backed implementation.
 // It fetches all books via full iteration, then projects each Book into a BookSummary,
-// skipping books marked for deletion. Kept as fallback while UseChaiDB is false.
+// skipping books marked for deletion.
 func (p *PebbleStore) GetAllBookSummaries_Pebble(limit, offset int) ([]BookSummary, error) {
 	if limit <= 0 {
 		limit = 1_000_000
@@ -1734,17 +1620,11 @@ func (p *PebbleStore) GetBooksBySeriesID(seriesID int) ([]Book, error) {
 	if p.UseMemDB && p.mem != nil {
 		return p.mem.GetBooksBySeriesID(seriesID, 0, 0)
 	}
-	if p.UseChaiDB && p.chai != nil {
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err == nil {
-			return chaiStore.GetBooksBySeriesID_Chai(context.Background(), seriesID, 0, 0)
-		}
-	}
 	return p.GetBooksBySeriesID_Pebble(seriesID)
 }
 
 // GetBooksBySeriesID_Pebble performs a full Pebble book scan filtered by series ID.
-// Used when Chai SQL is unavailable (fallback path after Task 3.4 index removal).
+// Fallback path after Task 3.4 index removal.
 func (p *PebbleStore) GetBooksBySeriesID_Pebble(seriesID int) ([]Book, error) {
 	var books []Book
 	iter, err := p.db.NewIter(&pebble.IterOptions{
@@ -1783,17 +1663,11 @@ func (p *PebbleStore) GetBooksByAuthorID(authorID int) ([]Book, error) {
 	if p.UseMemDB && p.mem != nil {
 		return p.mem.GetBooksByAuthorID(authorID, 0, 0)
 	}
-	if p.UseChaiDB && p.chai != nil {
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err == nil {
-			return chaiStore.GetBooksByAuthorID_Chai(context.Background(), authorID, 0, 0)
-		}
-	}
 	return p.GetBooksByAuthorID_Pebble(authorID)
 }
 
 // GetBooksByAuthorID_Pebble performs a full Pebble book scan filtered by author ID.
-// Used when Chai SQL is unavailable (fallback path after Task 3.4 index removal).
+// Fallback path after Task 3.4 index removal.
 func (p *PebbleStore) GetBooksByAuthorID_Pebble(authorID int) ([]Book, error) {
 	var books []Book
 	iter, err := p.db.NewIter(&pebble.IterOptions{
@@ -1909,40 +1783,11 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	return counts, nil
 }
 
-// GetAllAuthorBookCounts_Chai provides SQL-based author book counting via Chai backend.
-// Uses a feature flag to switch between Pebble and Chai implementations.
-// This is the production entry point when UseChaiDB feature flag is enabled.
-func (p *PebbleStore) GetAllAuthorBookCounts_Chai(ctx context.Context) (map[int]int, error) {
-	// Feature flag: use Chai SQL if enabled and database is available
-	if p.UseChaiDB && p.chai != nil {
-		// Wrap the ChaiDB's underlying SQL database in a ChaiStore
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err != nil {
-			// Fallback to Pebble if ChaiStore creation fails
-			return p.GetAllAuthorBookCounts()
-		}
-		return chaiStore.GetAllAuthorBookCounts_Chai(ctx)
-	}
-
-	// Fallback to Pebble implementation if flag is off or Chai is not available
-	return p.GetAllAuthorBookCounts()
-}
-
 // GetAllAuthorFileCounts returns the number of audio files per author.
-// Optimized to use single-pass index scan + batch file loading instead of N+1 queries.
-// GetAllAuthorFileCounts returns the number of audio files per author.
-// Uses a feature flag to switch between Pebble and Chai implementations.
-// This is the production entry point when UseChaiDB feature flag is enabled.
+// Uses the in-memory query layer when enabled, otherwise the Pebble fallback.
 func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {
 	if p.UseMemDB && p.mem != nil {
 		return p.mem.GetAllAuthorFileCounts()
-	}
-	if p.UseChaiDB && p.chai != nil {
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err != nil {
-			return p.GetAllAuthorFileCounts_Pebble()
-		}
-		return chaiStore.GetAllAuthorFileCounts_Chai(context.Background())
 	}
 	return p.GetAllAuthorFileCounts_Pebble()
 }
@@ -2274,13 +2119,7 @@ func (p *PebbleStore) CreateBook(book *Book) (*Book, error) {
 	p.InvalidateLibraryStats()
 	p.MarkAllQuickQueriesDirty("create_book")
 
-	// Chai write-through sync (best-effort; Pebble is source of truth).
-	if p.UseChaiDB && p.chai != nil {
-		if syncErr := p.UpsertBookToChaiDB(context.Background(), book); syncErr != nil {
-			slog.Warn("chai sync failed for CreateBook", "id", book.ID, "error", syncErr)
-		}
-	}
-	// memdb write-through (replacement for Chai; always on when initialized)
+	// memdb write-through (always on when initialized)
 	p.UpsertBookToMemDB(context.Background(), book)
 
 	return book, nil
@@ -2467,12 +2306,6 @@ func (p *PebbleStore) UpdateBook(id string, book *Book) (*Book, error) {
 	p.MarkQuickQueryDirty("no_isbn", "update_book")
 	p.MarkQuickQueryDirty("in_import_path", "update_book")
 
-	// Chai write-through sync (best-effort; Pebble is source of truth).
-	if p.UseChaiDB && p.chai != nil {
-		if syncErr := p.UpsertBookToChaiDB(context.Background(), book); syncErr != nil {
-			slog.Warn("chai sync failed for UpdateBook", "id", id, "error", syncErr)
-		}
-	}
 	// memdb write-through
 	p.UpsertBookToMemDB(context.Background(), book)
 
@@ -2806,12 +2639,6 @@ func (p *PebbleStore) DeleteBook(id string) error {
 	p.InvalidateLibraryStats()
 	p.MarkAllQuickQueriesDirty("delete_book")
 
-	// Chai write-through sync (best-effort; Pebble is source of truth).
-	if p.UseChaiDB && p.chai != nil {
-		if syncErr := p.DeleteBookFromChaiDB(context.Background(), id); syncErr != nil {
-			slog.Warn("chai sync failed for DeleteBook", "id", id, "error", syncErr)
-		}
-	}
 	// memdb write-through
 	p.DeleteBookFromMemDB(context.Background(), id)
 
@@ -3511,13 +3338,9 @@ func (p *PebbleStore) FlagMetadataHashDuplicate(primaryID, duplicateID string) e
 // Import path operations
 
 // GetAllImportPaths returns all managed import paths.
-// Routes to Chai SQL when the UseChaiDB feature flag is set, otherwise falls back to Pebble.
 func (p *PebbleStore) GetAllImportPaths() ([]ImportPath, error) {
 	if p.UseMemDB && p.mem != nil {
 		return p.mem.GetAllImportPaths()
-	}
-	if p.UseChaiDB && p.chai != nil {
-		return p.GetAllImportPaths_Chai(context.Background())
 	}
 	return p.GetAllImportPaths_Pebble()
 }
@@ -3548,22 +3371,6 @@ func (p *PebbleStore) GetAllImportPaths_Pebble() ([]ImportPath, error) {
 	}
 
 	return importPaths, nil
-}
-
-// GetAllImportPaths_Chai returns all import paths using Chai SQL.
-// This is the production entry point when the UseChaiDB feature flag is enabled.
-func (p *PebbleStore) GetAllImportPaths_Chai(ctx context.Context) ([]ImportPath, error) {
-	if p.chai == nil {
-		return nil, fmt.Errorf("Chai database not initialized")
-	}
-
-	chaiStore, err := NewChaiStore(p.chai.DB())
-	if err != nil {
-		// Fallback to Pebble if ChaiStore creation fails
-		return p.GetAllImportPaths_Pebble()
-	}
-
-	return chaiStore.GetAllImportPaths_Chai(ctx)
 }
 
 // CountBooksByPathPrefix returns the number of books that originated from the
@@ -4301,27 +4108,7 @@ func (p *PebbleStore) SetUserPreference(key, value string) error {
 }
 
 // GetAllUserPreferences returns all user preferences.
-// Routes to Chai SQL if UseChaiDB is enabled; otherwise falls back to Pebble iteration.
 func (p *PebbleStore) GetAllUserPreferences() ([]UserPreference, error) {
-	if p.UseChaiDB && p.chai != nil {
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err != nil {
-			// Fallback to Pebble if ChaiStore creation fails
-			return p.GetAllUserPreferences_Pebble()
-		}
-		kvMap, err := chaiStore.GetAllUserPreferences_Chai(context.Background())
-		if err != nil {
-			// Fallback to Pebble on query error
-			return p.GetAllUserPreferences_Pebble()
-		}
-		// Convert map[string]string → []UserPreference to satisfy the interface
-		prefs := make([]UserPreference, 0, len(kvMap))
-		for k, v := range kvMap {
-			v := v // capture loop variable
-			prefs = append(prefs, UserPreference{Key: k, Value: &v})
-		}
-		return prefs, nil
-	}
 	return p.GetAllUserPreferences_Pebble()
 }
 
@@ -5924,15 +5711,6 @@ func (p *PebbleStore) GetUserPreferenceForUser(userID, key string) (*UserPrefere
 	return &kv, nil
 }
 func (p *PebbleStore) GetAllPreferencesForUser(userID string) ([]UserPreferenceKV, error) {
-	// Feature flag: route to Chai SQL when enabled and database is available.
-	if p.UseChaiDB && p.chai != nil {
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err != nil {
-			// Fallback to Pebble if ChaiStore creation fails.
-			return p.getAllPreferencesForUser_Pebble(userID)
-		}
-		return chaiStore.GetAllPreferencesForUser_Chai(context.Background(), userID)
-	}
 	return p.getAllPreferencesForUser_Pebble(userID)
 }
 
@@ -6296,16 +6074,7 @@ func (p *PebbleStore) RemoveBlockedHash(hash string) error {
 }
 
 // GetAllBlockedHashes returns all blocked hashes.
-// Uses feature flag to switch between Pebble and Chai SQL implementations.
 func (p *PebbleStore) GetAllBlockedHashes() ([]DoNotImport, error) {
-	if p.UseChaiDB && p.chai != nil {
-		chaiStore, err := NewChaiStore(p.chai.DB())
-		if err != nil {
-			// Fallback to Pebble if ChaiStore creation fails
-			return p.GetAllBlockedHashes_Pebble()
-		}
-		return chaiStore.GetAllBlockedHashes_Chai(context.Background())
-	}
 	return p.GetAllBlockedHashes_Pebble()
 }
 

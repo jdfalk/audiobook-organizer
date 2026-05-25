@@ -1165,7 +1165,6 @@ func (s *Server) setupRoutes() {
 				adminOnly.POST("/maintenance/wipe", s.handleWipe)
 				adminOnly.GET("/cache/stats/keys", s.handleCacheKeysIntrospection)
 				adminOnly.POST("/admin/recompact-digests", s.recompactDigests)
-				adminOnly.POST("/admin/backfill-chai", s.backfillChaiDB)
 			}
 
 			// Unified activity log

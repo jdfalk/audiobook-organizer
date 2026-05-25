@@ -1,11 +1,64 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.94.0 -->
+<!-- version: 2.95.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-24 -->
 
 # Changelog
 
 ## [Unreleased]
+
+### Changes
+
+#### May 24, 2026 — Chai SQL removed; replaced with `hashicorp/go-memdb` in-memory query layer
+
+Burned the Chai SQL sidecar (`github.com/chaisql/chai`) to the ground and
+replaced it with an in-memory query/index layer built on
+`github.com/hashicorp/go-memdb`. PebbleDB remains the only source of truth
+and persistence layer; memdb is rebuilt from Pebble on startup and kept in
+sync via write-through from every PebbleStore mutator.
+
+**Why:** Chai was dev-stage, lacked JOINs, had a type system with int64
+quirks (caused the recent "integer out of range" production incidents),
+and was single-developer maintenance. go-memdb is HashiCorp-maintained,
+runs in production at scale (Consul, Vault, Nomad), pure Go, native int64
+support, MVCC via immutable radix trees (concurrent readers never block
+writers).
+
+**What it does:**
+- 11 in-memory tables covering books, authors, series, book_files,
+  narrators, book_authors, book_narrators, import_paths, author_aliases,
+  blocked_hashes, and works
+- Custom indexers for `*int` / `*bool` / `*string` nullable fields plus
+  composite indexes for relationships
+- Read queries (`GetAllAuthors`, `GetAllSeriesBookCounts`,
+  `GetAllSeriesFileCounts`, `GetBooksBySeriesID`, etc.) now route through
+  memdb when `UseMemDB=true` (default after this change). Pure-Pebble
+  fallbacks remain in place.
+- Aggregations expected to be 10-100x faster than the Chai SQL path at
+  50K-book scale (in-memory radix scan vs. SQL planner)
+
+**Removed:**
+- All `internal/database/chai_*.go` (19 source and test files)
+- `internal/database/poc_chai_test.go`
+- `internal/database/migration.go` (Chai schema initializer)
+- `internal/database/schema.sql` (Chai schema reference)
+- `/api/v1/admin/backfill-chai` admin endpoint and its handler
+- `PebbleStore.chai`, `PebbleStore.UseChaiDB`, and all `*_Chai` dispatcher
+  methods
+- `github.com/chaisql/chai` from go.mod
+
+**Added:**
+- `internal/database/memdb_schema.go` — schema definitions
+- `internal/database/memdb_indexers.go` — custom indexers for pointer fields
+- `internal/database/memdb_store.go` — MemStore wrapper
+- `internal/database/memdb_warmup.go` — bulk-load from Pebble on startup
+- `internal/database/memdb_sync.go` — write-through helpers
+- `internal/database/memdb_reads.go` — read query implementations
+- `internal/database/memdb_reads_test.go` — parity tests
+
+No data migration required — Chai held only derived/cached data; every
+byte lived in Pebble. Memdb rebuilds from the same Pebble keys on every
+startup.
 
 ### Fixes
 
