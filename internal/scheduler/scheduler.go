@@ -113,6 +113,7 @@ func NewTaskScheduler(deps SchedulerDeps) *TaskScheduler {
 		"purge_old_logs",
 		"cleanup_activity_log",
 		"cleanup_old_backups",
+		"library_size_refresh",
 		"db_optimize",
 	}
 	return ts
