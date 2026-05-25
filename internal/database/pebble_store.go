@@ -206,14 +206,15 @@ func NewPebbleStore(path string) (*PebbleStore, error) {
 		return nil, fmt.Errorf("failed to migrate import path keys: %w", err)
 	}
 
-	// Initialize in-memory query layer (always built; gated by UseMemDB flag for read path).
+	// Initialize in-memory query layer. store.mem is only set if warmup
+	// succeeds — otherwise dispatchers fall through to the Pebble path
+	// rather than serve empty results from an unpopulated memdb.
 	if memStore, memErr := NewMemStore(); memErr != nil {
 		slog.Warn("memdb init failed, in-memory queries disabled", "error", memErr)
+	} else if warmErr := memStore.WarmFromPebble(context.Background(), store); warmErr != nil {
+		slog.Warn("memdb warmup failed, falling back to Pebble for reads", "error", warmErr)
 	} else {
 		store.mem = memStore
-		if warmErr := memStore.WarmFromPebble(context.Background(), store); warmErr != nil {
-			slog.Warn("memdb warmup failed, in-memory queries will be stale", "error", warmErr)
-		}
 	}
 
 	// Initialize counters if they don't exist
