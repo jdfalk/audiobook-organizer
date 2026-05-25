@@ -40,6 +40,7 @@ export interface BookDetailActionsProps {
   onOpenHistory: () => void;
   onParseWithAI: () => void;
   onRescanFolder: () => void;
+  onRescanFiles: () => void;
   onRefresh: () => void;
   onOpenEdit: () => void;
   onFetchMetadata: () => void;
@@ -67,6 +68,7 @@ export const BookDetailActions = ({
   onOpenHistory,
   onParseWithAI,
   onRescanFolder,
+  onRescanFiles,
   onRefresh,
   onOpenEdit,
   onFetchMetadata,
@@ -122,6 +124,18 @@ export const BookDetailActions = ({
           >
             {rescanningFolder ? 'Scanning...' : 'Rescan Folder'}
           </Button>
+          <Tooltip title="Re-stat this book's files on disk and update size">
+            <span>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={onRescanFiles}
+                disabled={actionLoading || isSoftDeleted}
+              >
+                Rescan Files
+              </Button>
+            </span>
+          </Tooltip>
         </Stack>
         <Stack
           direction="row"

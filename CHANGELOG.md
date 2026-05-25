@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 2.99.0 -->
+<!-- version: 3.00.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-25 -->
 
@@ -8,6 +8,16 @@
 ## [Unreleased]
 
 ### Changes
+
+#### May 25, 2026 — Per-book "Rescan Files" button
+
+New `POST /api/v1/audiobooks/{id}/rescan` endpoint re-stats each of a book's
+files on disk, updates `FileSize` (per file + book aggregate), and
+invalidates the library-counts cache. Surfaced as a "Rescan Files" button
+in `BookDetailActions` next to "Rescan Folder". Gives the user an out
+when DB sizes have drifted from disk (e.g. after a manual file replacement).
+
+Cheap: O(file_count) per book, no full library scan.
 
 #### May 25, 2026 — Nightly library-size refresh task
 
