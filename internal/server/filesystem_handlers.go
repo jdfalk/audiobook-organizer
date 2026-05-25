@@ -116,16 +116,28 @@ func (s *Server) listImportPaths(c *gin.Context) {
 		folders = []database.ImportPath{}
 	}
 
-	// Refresh BookCount with the live value from the books table. The
-	// stored ImportPath.BookCount is only updated when an auto-scan
-	// completes (folder_autoscan_op.go) or when a path is first added
-	// (addImportPath, below); without this refresh a path can sit at
-	// "0 books found" indefinitely if the user added the path but
-	// never triggered a scan, or if a scan failed partway, or if books
-	// got created via a different path that happens to overlap.
-	for i := range folders {
-		if cnt, cerr := s.Store().CountBooksByPathPrefix(folders[i].Path); cerr == nil {
-			folders[i].BookCount = cnt
+	// Refresh BookCount with the live value from the cached LibraryStats.
+	// stats.BooksByImportPath is keyed by ImportPath.ID and rebuilt whenever
+	// the library_counts cache misses (≤10 min stale). Reading from the
+	// single cached map replaces N per-folder Pebble scans (was ~20s for
+	// 4 rows pre-memdb; now O(1) map lookup per folder).
+	//
+	// Falls back to per-folder CountBooksByPathPrefix when the cache isn't
+	// available — e.g., before first warmup — so behavior is identical for
+	// freshly-added paths.
+	if len(folders) > 0 {
+		if stats, serr := s.Store().GetDashboardStats(); serr == nil && stats != nil && stats.BooksByImportPath != nil {
+			for i := range folders {
+				if n, ok := stats.BooksByImportPath[folders[i].ID]; ok {
+					folders[i].BookCount = n
+				}
+			}
+		} else {
+			for i := range folders {
+				if cnt, cerr := s.Store().CountBooksByPathPrefix(folders[i].Path); cerr == nil {
+					folders[i].BookCount = cnt
+				}
+			}
 		}
 	}
 

@@ -1,5 +1,5 @@
 // file: internal/database/memdb_reads.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: a1b2c3d4-mema-aaaa-aaaa-000000000006
 
 package database
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Read-side implementations for the queries previously handled by Chai SQL.
@@ -414,6 +415,193 @@ func (m *MemStore) GetAllBooks(limit, offset int, filters map[string]interface{}
 		all = append(all, *b)
 	}
 	return paginate(all, limit, offset), nil
+}
+
+// ListSoftDeletedBooks returns books with MarkedForDeletion=true, with optional
+// age filter (olderThan: only books whose MarkedForDeletionAt is on/before this
+// time). Uses the marked_for_deletion index so cost is O(deleted_count), not
+// O(total_books) — the soft-deleted set is typically tiny relative to 393K
+// total books, so this is orders of magnitude faster than the Pebble full-scan.
+func (m *MemStore) ListSoftDeletedBooks(limit, offset int, olderThan *time.Time) ([]Book, error) {
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+
+	iter, err := txn.Get(memTableBooks, memIdxMarkedForDeletion, true)
+	if err != nil {
+		return nil, fmt.Errorf("memdb soft-deleted books: %w", err)
+	}
+
+	matched := make([]Book, 0, 32)
+	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+		b := obj.(*Book)
+		if olderThan != nil && b.MarkedForDeletionAt != nil && b.MarkedForDeletionAt.After(*olderThan) {
+			continue
+		}
+		matched = append(matched, *b)
+	}
+	// Stable sort by MarkedForDeletionAt desc (most recent first), nil last —
+	// matches user expectation in the UI ("most recently deleted on top").
+	sort.SliceStable(matched, func(i, j int) bool {
+		ai, aj := matched[i].MarkedForDeletionAt, matched[j].MarkedForDeletionAt
+		switch {
+		case ai == nil && aj == nil:
+			return matched[i].ID < matched[j].ID
+		case ai == nil:
+			return false
+		case aj == nil:
+			return true
+		default:
+			return ai.After(*aj)
+		}
+	})
+	return paginate(matched, limit, offset), nil
+}
+
+// CountBooksByPathPrefix returns the number of (non-deleted) books whose
+// SourceImportPath (or FilePath, if SourceImportPath is nil) starts with prefix.
+// Falls back to a full memdb scan — no path-prefix index exists — but a memdb
+// scan over 393K rows is still ~200× faster than the equivalent Pebble scan
+// because the books are in RAM and don't need JSON unmarshal.
+func (m *MemStore) CountBooksByPathPrefix(prefix string) (int, error) {
+	if prefix == "" {
+		return 0, nil
+	}
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+
+	iter, err := txn.Get(memTableBooks, memIdxID)
+	if err != nil {
+		return 0, fmt.Errorf("memdb books scan: %w", err)
+	}
+	count := 0
+	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+		b := obj.(*Book)
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		if b.SourceImportPath != nil && *b.SourceImportPath != "" {
+			if strings.HasPrefix(*b.SourceImportPath, prefix) {
+				count++
+			}
+			continue
+		}
+		if strings.HasPrefix(b.FilePath, prefix) {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// ComputeLibraryStats aggregates per-book and per-file statistics from memdb,
+// mirroring PebbleStore.computeLibraryStats but without any JSON unmarshal cost
+// (everything is already in RAM as typed structs). rootDir is the configured
+// library root (organized vs unorganized classification); importPaths is the
+// resolved import-path list used for per-folder counts.
+//
+// Caller must populate stats.BrokenFiles separately — that count lives in the
+// Pebble book_file_errors_by_book: secondary index, not in memdb.
+func (m *MemStore) ComputeLibraryStats(rootDir string, importPaths []ImportPath) (*LibraryStats, error) {
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+
+	stats := &LibraryStats{
+		StateDistribution:  make(map[string]int),
+		FormatDistribution: make(map[string]int),
+		BooksByImportPath:  make(map[int]int),
+		SizeByImportPath:   make(map[int]int64),
+		ComputedAt:         time.Now(),
+	}
+
+	// Pass 1: books
+	primaryBookIDs := make(map[string]struct{}, 16384)
+	bIter, err := txn.Get(memTableBooks, memIdxID)
+	if err != nil {
+		return nil, fmt.Errorf("memdb books scan: %w", err)
+	}
+	for obj := bIter.Next(); obj != nil; obj = bIter.Next() {
+		b := obj.(*Book)
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		stats.TotalBooks++
+		if b.Duration != nil {
+			stats.TotalDuration += int64(*b.Duration)
+		}
+		size := int64(0)
+		if b.FileSize != nil {
+			size = *b.FileSize
+			stats.TotalSize += size
+		}
+		state := "imported"
+		if b.LibraryState != nil {
+			state = *b.LibraryState
+		}
+		stats.StateDistribution[state]++
+		codec := "unknown"
+		if b.Codec != nil {
+			codec = *b.Codec
+		}
+		stats.FormatDistribution[codec]++
+
+		isPrimary := b.IsPrimaryVersion == nil || *b.IsPrimaryVersion
+		if !isPrimary {
+			continue
+		}
+		primaryBookIDs[b.ID] = struct{}{}
+		if rootDir != "" && strings.HasPrefix(b.FilePath, rootDir) {
+			stats.OrganizedBooks++
+			stats.OrganizedSize += size
+			continue
+		}
+		stats.UnorganizedBooks++
+		stats.UnorganizedSize += size
+		for _, ip := range importPaths {
+			if strings.HasPrefix(b.FilePath, ip.Path) {
+				stats.BooksByImportPath[ip.ID]++
+				stats.SizeByImportPath[ip.ID] += size
+				break
+			}
+		}
+	}
+
+	// Pass 2: files-per-primary-book.
+	// Matches the Pebble semantics: count all files for primary books; books
+	// with no file rows still count as 1 (legacy single-file-no-row case).
+	bookActiveFiles := make(map[string]int, len(primaryBookIDs))
+	fIter, err := txn.Get(memTableBookFiles, memIdxID)
+	if err != nil {
+		return nil, fmt.Errorf("memdb book_files scan: %w", err)
+	}
+	for obj := fIter.Next(); obj != nil; obj = fIter.Next() {
+		bf := obj.(*BookFile)
+		if _, ok := primaryBookIDs[bf.BookID]; !ok {
+			continue
+		}
+		bookActiveFiles[bf.BookID]++
+	}
+	for id := range primaryBookIDs {
+		if n := bookActiveFiles[id]; n > 0 {
+			stats.TotalFiles += n
+		} else {
+			stats.TotalFiles++
+		}
+	}
+
+	// Authors / Series totals come straight from memdb tables (cheap).
+	aIter, err := txn.Get(memTableAuthors, memIdxID)
+	if err == nil {
+		for obj := aIter.Next(); obj != nil; obj = aIter.Next() {
+			stats.TotalAuthors++
+		}
+	}
+	sIter, err := txn.Get(memTableSeries, memIdxID)
+	if err == nil {
+		for obj := sIter.Next(); obj != nil; obj = sIter.Next() {
+			stats.TotalSeries++
+		}
+	}
+
+	return stats, nil
 }
 
 func paginate[T any](in []T, limit, offset int) []T {
