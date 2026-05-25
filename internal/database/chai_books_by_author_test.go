@@ -7,7 +7,6 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -332,13 +331,6 @@ func BenchmarkGetBooksByAuthorID_Chai(b *testing.B) {
 	}
 }
 
-// Helper function to insert a book-author relationship
-func insertTestBookAuthor(db *sql.DB, bookID string, authorID int) error {
-	query := fmt.Sprintf(`
-		INSERT INTO book_authors (id, book_id, author_id, marked_for_deletion)
-		VALUES ('BA_%s_%d', '%s', %d, false)
-	`, bookID, authorID, bookID, authorID)
-
-	_, err := db.Exec(query)
-	return err
-}
+// (Duplicate insertTestBookAuthor removed; canonical version lives in
+// chai_books_list_test_helper.go. This stub kept so unused imports above
+// stay referenced.)
