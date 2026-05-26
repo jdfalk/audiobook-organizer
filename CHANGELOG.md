@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.00.0 -->
+<!-- version: 3.01.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-25 -->
 
@@ -8,6 +8,19 @@
 ## [Unreleased]
 
 ### Changes
+
+#### May 25, 2026 — Aggressive audiobook list cache pre-warm
+
+After memdb publishes, fire ~50 of the most common library-page queries to
+populate `audiobookService.listCache` before any user hits the page. Covers
+the first 20 pages of `title asc / is_primary=true`, the first 5 pages of
+the reverse sort, first 10 pages of `-review:matched` (unmatched books),
+and `library_state` filter combinations. Adds `IsMemReady()` to
+PebbleStore so the warmer can wait for memdb before firing.
+
+Eliminates the ~3-minute cold-miss the user saw on the first library load
+after restart. Caches are 24h TTL; RAM consumed here saves Pebble-cache
+thrash and transient query allocations.
 
 #### May 25, 2026 — Per-book "Rescan Files" button
 
