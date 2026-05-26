@@ -135,6 +135,12 @@ type PebbleStore struct {
 // `p.mem() != nil` instead.
 func (p *PebbleStore) mem() *MemStore { return p.memPtr.Load() }
 
+// IsMemReady reports whether the in-memory query layer is published and
+// serving reads. Used by the server-side list-cache warmer to gate on
+// memdb readiness so warm-up queries hit the fast O(log n) memdb path
+// instead of the slow Pebble JSON-unmarshal path.
+func (p *PebbleStore) IsMemReady() bool { return p.memPtr.Load() != nil }
+
 const statsLibraryKey = "stats:library"
 const statsLibraryTTL = 10 * time.Minute
 const defaultLibraryCountsMinIntervalSeconds = 600 // 10 minutes
