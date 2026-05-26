@@ -24,6 +24,25 @@ type memReadyChecker interface {
 	IsMemReady() bool
 }
 
+// resolveDefaultUserID returns a UserID to warm per-user filtered
+// queries against (read_status, progress_pct, ...). Prefers "admin",
+// falls back to the first user in ListUsers. Returns "" if nothing
+// is available — caller should skip per-user warm-up in that case.
+func (s *Server) resolveDefaultUserID() string {
+	store := s.Store()
+	if store == nil {
+		return ""
+	}
+	if u, err := store.GetUserByUsername("admin"); err == nil && u != nil {
+		return u.ID
+	}
+	users, err := store.ListUsers()
+	if err == nil && len(users) > 0 {
+		return users[0].ID
+	}
+	return ""
+}
+
 // warmAudiobookListCache waits for memdb to publish, then fires the
 // common library-page queries to populate svc.audiobookService.listCache.
 // All queries run sequentially against the AudiobookService — no extra
@@ -119,8 +138,9 @@ func (s *Server) warmAudiobookListCache() {
 			},
 		})
 	}
-	// library_state filter — organized vs imported. Common left-rail filter.
-	for _, state := range []string{"organized", "imported"} {
+	// library_state filter — organized / imported / suspicious. Common
+	// left-rail filter, first 5 pages each.
+	for _, state := range []string{"organized", "imported", "suspicious"} {
 		for off := 0; off < 100; off += 20 {
 			queries = append(queries, qry{
 				name:   "library-state-" + state,
@@ -133,6 +153,218 @@ func (s *Server) warmAudiobookListCache() {
 					SortOrder:        "asc",
 				},
 			})
+		}
+	}
+	// Tag filters — favorites and read are the popular ones; first 5 pages each.
+	for _, tag := range []string{"favorites", "read"} {
+		for off := 0; off < 100; off += 20 {
+			queries = append(queries, qry{
+				name:   "tag-" + tag,
+				limit:  20,
+				offset: off,
+				filters: audiobookspkg.ListFilters{
+					IsPrimaryVersion: &primaryTrue,
+					Tag:              tag,
+					SortBy:           "title",
+					SortOrder:        "asc",
+				},
+			})
+		}
+	}
+	// -tag:read (unread) — first 5 pages.
+	for off := 0; off < 100; off += 20 {
+		queries = append(queries, qry{
+			name:   "not-tag-read",
+			limit:  20,
+			offset: off,
+			filters: audiobookspkg.ListFilters{
+				IsPrimaryVersion: &primaryTrue,
+				SortBy:           "title",
+				SortOrder:        "asc",
+				FieldFilters: []audiobookspkg.FieldFilter{
+					{Field: "tag", Value: "read", Negated: true},
+				},
+			},
+		})
+	}
+	// FieldFilter-style binary toggles: yes/no for has_cover, has_written,
+	// needs_writeback, has_organized. First 5 pages each.
+	binaryFields := []string{"has_cover", "has_written", "needs_writeback", "has_organized"}
+	for _, field := range binaryFields {
+		for _, val := range []string{"yes", "no"} {
+			// needs_writeback:no isn't useful — skip to halve count.
+			if field == "needs_writeback" && val == "no" {
+				continue
+			}
+			for off := 0; off < 100; off += 20 {
+				queries = append(queries, qry{
+					name:   field + "-" + val,
+					limit:  20,
+					offset: off,
+					filters: audiobookspkg.ListFilters{
+						IsPrimaryVersion: &primaryTrue,
+						SortBy:           "title",
+						SortOrder:        "asc",
+						FieldFilters: []audiobookspkg.FieldFilter{
+							{Field: field, Value: val},
+						},
+					},
+				})
+			}
+		}
+	}
+	// review:no_match — already covered review:matched + -review:matched
+	// above; add the explicit "rejected" path.
+	for off := 0; off < 60; off += 20 {
+		queries = append(queries, qry{
+			name:   "review-no-match",
+			limit:  20,
+			offset: off,
+			filters: audiobookspkg.ListFilters{
+				IsPrimaryVersion: &primaryTrue,
+				SortBy:           "title",
+				SortOrder:        "asc",
+				FieldFilters: []audiobookspkg.FieldFilter{
+					{Field: "review", Value: "no_match"},
+				},
+			},
+		})
+	}
+	// language:en — top-of-list locale filter, first 5 pages.
+	for off := 0; off < 100; off += 20 {
+		queries = append(queries, qry{
+			name:   "language-en",
+			limit:  20,
+			offset: off,
+			filters: audiobookspkg.ListFilters{
+				IsPrimaryVersion: &primaryTrue,
+				SortBy:           "title",
+				SortOrder:        "asc",
+				FieldFilters: []audiobookspkg.FieldFilter{
+					{Field: "language", Value: "en"},
+				},
+			},
+		})
+	}
+	// NOT author:Unknown — exclude untagged books, first 5 pages.
+	for off := 0; off < 100; off += 20 {
+		queries = append(queries, qry{
+			name:   "not-author-unknown",
+			limit:  20,
+			offset: off,
+			filters: audiobookspkg.ListFilters{
+				IsPrimaryVersion: &primaryTrue,
+				SortBy:           "title",
+				SortOrder:        "asc",
+				FieldFilters: []audiobookspkg.FieldFilter{
+					{Field: "author", Value: "Unknown", Negated: true},
+				},
+			},
+		})
+	}
+	// Format filter — m4b, mp3, m4a. First 5 pages each.
+	for _, fmt := range []string{"m4b", "mp3", "m4a"} {
+		for off := 0; off < 100; off += 20 {
+			queries = append(queries, qry{
+				name:   "format-" + fmt,
+				limit:  20,
+				offset: off,
+				filters: audiobookspkg.ListFilters{
+					IsPrimaryVersion: &primaryTrue,
+					SortBy:           "title",
+					SortOrder:        "asc",
+					FieldFilters: []audiobookspkg.FieldFilter{
+						{Field: "format", Value: fmt},
+					},
+				},
+			})
+		}
+	}
+	// Compound triage queries straight from the filter cheatsheet — these
+	// are how the user actually finds work to do. First 5 pages each.
+	type compound struct {
+		name string
+		ff   []audiobookspkg.FieldFilter
+		ls   string
+	}
+	compounds := []compound{
+		// Fully processed books: review:matched has_written:yes has_organized:yes
+		{name: "fully-processed", ff: []audiobookspkg.FieldFilter{
+			{Field: "review", Value: "matched"},
+			{Field: "has_written", Value: "yes"},
+			{Field: "has_organized", Value: "yes"},
+		}},
+		// Organized but needs metadata + file write
+		{name: "organized-needs-metadata-write", ls: "organized", ff: []audiobookspkg.FieldFilter{
+			{Field: "review", Value: "matched", Negated: true},
+			{Field: "has_written", Value: "yes", Negated: true},
+		}},
+		// Metadata applied but not written to files
+		{name: "matched-not-written", ff: []audiobookspkg.FieldFilter{
+			{Field: "review", Value: "matched"},
+			{Field: "has_written", Value: "yes", Negated: true},
+		}},
+		// Written but not organized
+		{name: "written-not-organized", ff: []audiobookspkg.FieldFilter{
+			{Field: "review", Value: "matched"},
+			{Field: "has_written", Value: "yes"},
+			{Field: "has_organized", Value: "yes", Negated: true},
+		}},
+		// Matched but missing cover art
+		{name: "matched-no-cover", ff: []audiobookspkg.FieldFilter{
+			{Field: "review", Value: "matched"},
+			{Field: "has_cover", Value: "no"},
+		}},
+		// Imported books needing metadata
+		{name: "imported-needs-metadata", ls: "imported", ff: []audiobookspkg.FieldFilter{
+			{Field: "review", Value: "matched", Negated: true},
+		}},
+	}
+	for _, c := range compounds {
+		for off := 0; off < 100; off += 20 {
+			queries = append(queries, qry{
+				name:   c.name,
+				limit:  20,
+				offset: off,
+				filters: audiobookspkg.ListFilters{
+					IsPrimaryVersion: &primaryTrue,
+					LibraryState:     c.ls,
+					SortBy:           "title",
+					SortOrder:        "asc",
+					FieldFilters:     c.ff,
+				},
+			})
+		}
+	}
+	// Per-user state filters (read_status / progress_pct). These require
+	// a UserID — only fire if we can resolve a default admin user.
+	// Without UserID the per-user filter is silently skipped and the
+	// warm-up entry would be a duplicate of an existing one.
+	if adminID := s.resolveDefaultUserID(); adminID != "" {
+		perUserGroups := []struct {
+			name string
+			pu   []audiobookspkg.FieldFilter
+		}{
+			{name: "read-finished", pu: []audiobookspkg.FieldFilter{{Field: "read_status", Value: "finished"}}},
+			{name: "read-in-progress", pu: []audiobookspkg.FieldFilter{{Field: "read_status", Value: "in_progress"}}},
+			{name: "read-not-finished", pu: []audiobookspkg.FieldFilter{{Field: "read_status", Value: "finished", Negated: true}}},
+			{name: "progress-gt-75", pu: []audiobookspkg.FieldFilter{{Field: "progress_pct", Value: ">75"}}},
+		}
+		for _, g := range perUserGroups {
+			for off := 0; off < 60; off += 20 {
+				queries = append(queries, qry{
+					name:   g.name,
+					limit:  20,
+					offset: off,
+					filters: audiobookspkg.ListFilters{
+						IsPrimaryVersion: &primaryTrue,
+						SortBy:           "title",
+						SortOrder:        "asc",
+						PerUserFilters:   g.pu,
+						UserID:           adminID,
+					},
+				})
+			}
 		}
 	}
 	// Plain list, no filter — sidebar/import flow first page.

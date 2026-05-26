@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.01.0 -->
+<!-- version: 3.02.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-25 -->
 
@@ -8,6 +8,23 @@
 ## [Unreleased]
 
 ### Changes
+
+#### May 25, 2026 — List warm-up: filter cheatsheet coverage
+
+Expands the post-memdb list cache warm-up to cover the filters the user
+actually browses with:
+
+- `tag:favorites`, `tag:read`, `-tag:read`
+- `has_cover:yes/no`, `has_written:yes/no`, `has_organized:yes/no`, `needs_writeback:yes`
+- `review:matched`, `review:no_match`, `-review:matched`
+- `library_state:organized/imported/suspicious`
+- `language:en`, `NOT author:Unknown`
+- `format:m4b/mp3/m4a`
+- Compound triage queries (fully processed, organized-needs-metadata,
+  matched-not-written, written-not-organized, matched-no-cover,
+  imported-needs-metadata)
+- Per-user filters (`read_status:finished/in_progress`, `-read_status:finished`,
+  `progress_pct:>75`) when an admin user can be resolved
 
 #### May 25, 2026 — Aggressive audiobook list cache pre-warm
 
