@@ -12,16 +12,44 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
+	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+func typeName(v interface{}) string { return fmt.Sprintf("%T", v) }
 
 // memReadyChecker is satisfied by *database.PebbleStore. Decoupled
 // behind an interface so tests can stub it.
 type memReadyChecker interface {
 	IsMemReady() bool
+}
+
+// storeUnwrapper is implemented by decorator types (e.g. indexedStore)
+// that wrap an inner Store. Used to peel layers and reach the concrete
+// PebbleStore for capability checks like IsMemReady.
+type storeUnwrapper interface {
+	Unwrap() database.Store
+}
+
+// unwrapStore peels Unwrap()-implementing decorators until reaching the
+// innermost Store. Bounded to 8 levels as a sanity guard against cycles.
+func unwrapStore(s database.Store) database.Store {
+	for i := 0; i < 8; i++ {
+		w, ok := s.(storeUnwrapper)
+		if !ok {
+			return s
+		}
+		inner := w.Unwrap()
+		if inner == nil || inner == s {
+			return s
+		}
+		s = inner
+	}
+	return s
 }
 
 // resolveDefaultUserID returns a UserID to warm per-user filtered
@@ -51,11 +79,14 @@ func (s *Server) warmAudiobookListCache() {
 	if s.audiobookService == nil {
 		return
 	}
-	store := s.Store()
-	checker, ok := store.(memReadyChecker)
+	// The Server's store is wrapped by indexedStore (and possibly other
+	// decorators). Peel them to reach the concrete PebbleStore so the
+	// IsMemReady() type assertion succeeds.
+	rawStore := unwrapStore(s.Store())
+	checker, ok := rawStore.(memReadyChecker)
 	if !ok {
-		// Store doesn't expose memdb state — skip; we'd just warm cold
-		// queries with no upside.
+		slog.Warn("library list warm-up: store doesn't expose IsMemReady, skipping",
+			"store_type", typeName(rawStore))
 		return
 	}
 
