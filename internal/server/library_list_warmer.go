@@ -1,5 +1,5 @@
 // file: internal/server/library_list_warmer.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 7e8d9a0b-1c2d-3e4f-5a6b-7c8d9e0f1a2b
 
 // Pre-warms svc.audiobookService.listCache by firing the queries the UI
@@ -12,13 +12,76 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"strconv"
 	"time"
 
 	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+// buildListCacheRawQuery constructs the URL.RawQuery string in the exact
+// order/format the React UI's URLSearchParams emits in getBooks(). Must
+// match web/src/services/api.ts:getBooks line-for-line or the cache key
+// won't collide with what the handler computes from c.Request.URL.RawQuery.
+func buildListCacheRawQuery(limit, offset int, f audiobookspkg.ListFilters) string {
+	var parts []string
+	add := func(k, v string) { parts = append(parts, k+"="+url.QueryEscape(v)) }
+
+	add("limit", strconv.Itoa(limit))
+	add("offset", strconv.Itoa(offset))
+	if f.SortBy != "" {
+		add("sort_by", f.SortBy)
+	}
+	if f.SortOrder != "" {
+		add("sort_order", f.SortOrder)
+	}
+	if len(f.Tags) > 0 {
+		for _, t := range f.Tags {
+			add("tags[]", t)
+		}
+	} else if f.Tag != "" {
+		add("tag", f.Tag)
+	}
+	if f.LibraryState != "" {
+		add("library_state", f.LibraryState)
+	}
+	// FieldFilters + PerUserFilters travel together in the UI's `filters`
+	// JSON param; the handler splits them after Unmarshal. Combine here so
+	// the cache key matches.
+	combined := append([]audiobookspkg.FieldFilter{}, f.FieldFilters...)
+	combined = append(combined, f.PerUserFilters...)
+	if len(combined) > 0 {
+		if b, err := json.Marshal(combined); err == nil {
+			add("filters", string(b))
+		}
+	}
+	if f.FingerprintStatus != "" {
+		add("fingerprint_status", f.FingerprintStatus)
+	}
+	if f.CoveragePercentMin != nil {
+		add("coverage_percent_min", strconv.Itoa(*f.CoveragePercentMin))
+	}
+	if f.CoveragePercentMax != nil {
+		add("coverage_percent_max", strconv.Itoa(*f.CoveragePercentMax))
+	}
+	// UI always sets is_primary_version=true last; we only set it when the
+	// caller asked for primary-only (the UI's default).
+	if f.IsPrimaryVersion != nil && *f.IsPrimaryVersion {
+		add("is_primary_version", "true")
+	}
+	out := ""
+	for i, p := range parts {
+		if i > 0 {
+			out += "&"
+		}
+		out += p
+	}
+	return out
+}
 
 func typeName(v interface{}) string { return fmt.Sprintf("%T", v) }
 
@@ -408,10 +471,10 @@ func (s *Server) warmAudiobookListCache() {
 	})
 
 	slog.Info("library list warm-up starting", "queries", len(queries))
-	hits, misses := 0, 0
+	hits, misses, cached := 0, 0, 0
 	for _, q := range queries {
 		qStart := time.Now()
-		_, err := s.audiobookService.GetAudiobooks(ctx, q.limit, q.offset, "", nil, nil, q.filters)
+		resp, err := s.buildAudiobookListResponse(ctx, q.limit, q.offset, "", nil, nil, q.filters, false)
 		if err != nil {
 			misses++
 			slog.Warn("library list warm-up query failed",
@@ -419,12 +482,22 @@ func (s *Server) warmAudiobookListCache() {
 			continue
 		}
 		hits++
+		// Populate the HTTP handler's listCache with a key that matches
+		// what c.Request.URL.RawQuery will produce for the same UI URL.
+		// PerUserFilters queries are deliberately not cached by the
+		// handler (would leak across users) — skip them here too.
+		if len(q.filters.PerUserFilters) == 0 {
+			raw := buildListCacheRawQuery(q.limit, q.offset, q.filters)
+			s.listCache.Set("list:"+raw, resp)
+			cached++
+		}
 		slog.Debug("library list warm-up query ok",
 			"name", q.name, "offset", q.offset,
 			"duration_ms", time.Since(qStart).Milliseconds())
 	}
 	slog.Info("library list warm-up complete",
 		"queries_warmed", hits,
+		"cache_entries_populated", cached,
 		"failures", misses,
 		"duration_ms", time.Since(started).Milliseconds(),
 	)
