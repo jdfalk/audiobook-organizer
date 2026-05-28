@@ -41,6 +41,7 @@ import * as api from '../services/api';
 import { ServerFileBrowser } from '../components/common/ServerFileBrowser';
 import { SettingsGeneral } from '../components/SettingsGeneral';
 import BlockedHashesTab from '../components/settings/BlockedHashesTab';
+import { TempLoginTab } from '../components/settings/TempLoginTab';
 import PluginsTab from '../components/settings/PluginsTab';
 import { PathsSettingsTab } from '../components/settings/PathsSettingsTab';
 import { MetadataSettingsTab } from '../components/settings/MetadataSettingsTab';
@@ -2188,6 +2189,7 @@ export function Settings() {
             <Tab label="API Keys" />
             <Tab label="Plugins" />
             <Tab label="System Info" />
+            <Tab label="Temp Login" />
           </Tabs>
         </Box>
 
@@ -2654,6 +2656,10 @@ export function Settings() {
               </Button>
             </DialogActions>
           </Dialog>
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={9}>
+          <TempLoginTab />
         </TabPanel>
 
         <Box
