@@ -1,5 +1,5 @@
 // file: internal/server/library_list_warmer.go
-// version: 1.1.0
+// version: 2.0.0
 // guid: 7e8d9a0b-1c2d-3e4f-5a6b-7c8d9e0f1a2b
 
 // Pre-warms svc.audiobookService.listCache by firing the queries the UI
@@ -16,12 +16,49 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
+	"runtime"
+	"runtime/debug"
 	"strconv"
 	"time"
 
 	audiobookspkg "github.com/jdfalk/audiobook-organizer/internal/audiobooks"
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+// readHeapAllocMB returns the process's current heap allocation in MB.
+// Used as a guard before each warmer query — skip the tick if we're
+// already pressuring memory rather than pile on. HeapAlloc is what GC
+// sees as "live"; RSS includes returned-to-OS memory that doesn't matter.
+func readHeapAllocMB() uint64 {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	return ms.HeapAlloc / (1024 * 1024)
+}
+
+// warmerMemoryCeilingMB is the hard heap-alloc cap. Above this the
+// trickle pauses (it'll retry on the next tick). Tunable via
+// LIST_WARMER_MAX_HEAP_MB; default 1024 (1GB).
+func warmerMemoryCeilingMB() uint64 {
+	if v := os.Getenv("LIST_WARMER_MAX_HEAP_MB"); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 1024
+}
+
+// warmerTrickleInterval is the gap between trickle ticks. Default 10s
+// → ~30 min to drain a 180-query backlog. Tunable via
+// LIST_WARMER_TRICKLE_INTERVAL_MS.
+func warmerTrickleInterval() time.Duration {
+	if v := os.Getenv("LIST_WARMER_TRICKLE_INTERVAL_MS"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 500 {
+			return time.Duration(n) * time.Millisecond
+		}
+	}
+	return 10 * time.Second
+}
 
 // buildListCacheRawQuery constructs the URL.RawQuery string in the exact
 // order/format the React UI's URLSearchParams emits in getBooks(). Must
@@ -85,6 +122,16 @@ func buildListCacheRawQuery(limit, offset int, f audiobookspkg.ListFilters) stri
 
 func typeName(v interface{}) string { return fmt.Sprintf("%T", v) }
 
+// qry is one cache-warming target. Hoisted to package scope so both the
+// eager phase (warmAudiobookListCache) and the background trickle
+// (runTrickleWarmer) can pass them around.
+type qry struct {
+	name    string
+	limit   int
+	offset  int
+	filters audiobookspkg.ListFilters
+}
+
 // memReadyChecker is satisfied by *database.PebbleStore. Decoupled
 // behind an interface so tests can stub it.
 type memReadyChecker interface {
@@ -139,16 +186,6 @@ func (s *Server) resolveDefaultUserID() string {
 // All queries run sequentially against the AudiobookService — no extra
 // HTTP overhead.
 func (s *Server) warmAudiobookListCache() {
-	// HOTFIX 2026-05-28: disabled. Running 177 list queries against a
-	// 392K-book memdb on startup OOM'd at 67GB peak. The transient
-	// per-query working set (full-set load + filter + sort) is the
-	// killer, not the cache itself. See critical-issues memory:
-	// project_cache_warmup_memory_fix. Re-enable only with:
-	//  - bounded concurrency (1 at a time, explicit runtime.GC between)
-	//  - ONLY 1-3 queries the UI hits on first load, not 177 combos
-	//  - a hard memory ceiling check before each call
-	slog.Info("library list warm-up DISABLED (OOM hotfix 2026-05-28)")
-	return
 	if s.audiobookService == nil {
 		return
 	}
@@ -180,13 +217,7 @@ func (s *Server) warmAudiobookListCache() {
 	// Each query mirrors what the UI sends on a fresh library-page load.
 	// Pagination keys are independent cache entries, so we warm a lot of
 	// pages — RAM here means less Pebble cache thrash + zero cold-miss
-	// for the user. The server has plenty of memory.
-	type qry struct {
-		name    string
-		limit   int
-		offset  int
-		filters audiobookspkg.ListFilters
-	}
+	// for the user.
 	primaryTrue := true
 	queries := []qry{}
 	// Default UI sort: title asc, primary only — warm the first 20 pages
@@ -480,22 +511,33 @@ func (s *Server) warmAudiobookListCache() {
 		filters: audiobookspkg.ListFilters{IsPrimaryVersion: &primaryTrue},
 	})
 
-	slog.Info("library list warm-up starting", "queries", len(queries))
-	hits, misses, cached := 0, 0, 0
+	// Split the backlog into EAGER (run immediately, sequential, small) and
+	// TRICKLE (run one-per-tick in background, paced, with GC between).
+	// Eager covers the default UI load so the first "All Books" click after
+	// restart is instant. Trickle fills in everything else over ~30 min so
+	// peak memory never trampolines.
+	eagerQueries := make([]qry, 0, 2)
+	trickleQueries := make([]qry, 0, len(queries))
 	for _, q := range queries {
+		if q.name == "title-asc-primary" && q.offset < 40 {
+			eagerQueries = append(eagerQueries, q)
+		} else {
+			trickleQueries = append(trickleQueries, q)
+		}
+	}
+
+	slog.Info("library list warm-up eager starting", "eager_queries", len(eagerQueries), "trickle_queries", len(trickleQueries))
+	hits, misses, cached := 0, 0, 0
+	for _, q := range eagerQueries {
 		qStart := time.Now()
 		resp, err := s.buildAudiobookListResponse(ctx, q.limit, q.offset, "", nil, nil, q.filters, false)
 		if err != nil {
 			misses++
-			slog.Warn("library list warm-up query failed",
+			slog.Warn("library list warm-up eager query failed",
 				"name", q.name, "offset", q.offset, "err", err)
 			continue
 		}
 		hits++
-		// Populate the HTTP handler's listCache with a key that matches
-		// what c.Request.URL.RawQuery will produce for the same UI URL.
-		// PerUserFilters queries are deliberately not cached by the
-		// handler (would leak across users) — skip them here too.
 		if len(q.filters.PerUserFilters) == 0 {
 			raw := buildListCacheRawQuery(q.limit, q.offset, q.filters)
 			s.listCache.Set("list:"+raw, resp)
@@ -505,10 +547,116 @@ func (s *Server) warmAudiobookListCache() {
 			"name", q.name, "offset", q.offset,
 			"duration_ms", time.Since(qStart).Milliseconds())
 	}
-	slog.Info("library list warm-up complete",
+	slog.Info("library list warm-up eager complete",
 		"queries_warmed", hits,
 		"cache_entries_populated", cached,
 		"failures", misses,
+		"duration_ms", time.Since(started).Milliseconds(),
+	)
+
+	// Kick off the trickle warmer in its own goroutine so the startup
+	// path returns immediately. Trickle owns its own lifetime (runs
+	// until backlog drained, then exits).
+	go s.runTrickleWarmer(trickleQueries)
+}
+
+// runTrickleWarmer pops one query per tick from the backlog, runs it,
+// caches the result, and forces a GC before the next tick. Memory-guard:
+// if HeapAlloc > LIST_WARMER_MAX_HEAP_MB (default 1GB) at tick start,
+// skip and back off. Already-cached entries are skipped (the user may
+// have beat us to it). Total time at default 10s interval ≈ 30 min for
+// ~180 queries.
+func (s *Server) runTrickleWarmer(backlog []qry) {
+	if len(backlog) == 0 {
+		return
+	}
+	interval := warmerTrickleInterval()
+	ceilingMB := warmerMemoryCeilingMB()
+	ctx := context.Background()
+	started := time.Now()
+	slog.Info("library list trickle warmer starting",
+		"queries", len(backlog),
+		"interval_ms", interval.Milliseconds(),
+		"heap_ceiling_mb", ceilingMB,
+	)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	var (
+		idx     int
+		hits    int
+		misses  int
+		cached  int
+		skipped int
+		backoff time.Duration
+	)
+	for idx < len(backlog) {
+		<-ticker.C
+		if backoff > 0 {
+			time.Sleep(backoff)
+		}
+
+		// Memory-pressure guard: skip this tick if heap is already
+		// near ceiling. Double the backoff (capped 60s); reset on
+		// successful tick. HeapAlloc, not RSS — we care about live
+		// objects, not returned-to-OS memory.
+		if heap := readHeapAllocMB(); heap > ceilingMB {
+			skipped++
+			if backoff == 0 {
+				backoff = interval
+			} else if backoff < 60*time.Second {
+				backoff *= 2
+			}
+			slog.Warn("library list trickle warmer: heap above ceiling, backing off",
+				"heap_mb", heap, "ceiling_mb", ceilingMB,
+				"backoff_ms", backoff.Milliseconds())
+			continue
+		}
+		backoff = 0
+
+		q := backlog[idx]
+		idx++
+
+		// Skip if already cached (user query or earlier warmer round beat us).
+		raw := buildListCacheRawQuery(q.limit, q.offset, q.filters)
+		cacheKey := "list:" + raw
+		if len(q.filters.PerUserFilters) == 0 {
+			if _, ok := s.listCache.Get(cacheKey); ok {
+				continue
+			}
+		}
+
+		qStart := time.Now()
+		resp, err := s.buildAudiobookListResponse(ctx, q.limit, q.offset, "", nil, nil, q.filters, false)
+		if err != nil {
+			misses++
+			slog.Warn("library list trickle warmer query failed",
+				"name", q.name, "offset", q.offset, "err", err)
+		} else {
+			hits++
+			if len(q.filters.PerUserFilters) == 0 {
+				s.listCache.Set(cacheKey, resp)
+				cached++
+			}
+			slog.Debug("library list trickle warmer query ok",
+				"name", q.name, "offset", q.offset,
+				"duration_ms", time.Since(qStart).Milliseconds(),
+				"progress", fmt.Sprintf("%d/%d", idx, len(backlog)),
+			)
+		}
+
+		// Force GC + return-to-OS so the next tick starts from a clean
+		// allocation baseline. The cost (~5-20ms on a 1GB heap) is
+		// negligible against the interval.
+		runtime.GC()
+		debug.FreeOSMemory()
+	}
+
+	slog.Info("library list trickle warmer complete",
+		"queries_warmed", hits,
+		"cache_entries_populated", cached,
+		"failures", misses,
+		"skipped_pressure", skipped,
 		"duration_ms", time.Since(started).Milliseconds(),
 	)
 }

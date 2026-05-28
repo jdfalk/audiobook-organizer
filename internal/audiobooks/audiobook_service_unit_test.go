@@ -484,18 +484,24 @@ func TestAudiobookService_CountAudiobooksFiltered_WithPrimaryFilter(t *testing.T
 	svc := NewAudiobookService(mockStore)
 
 	isPrimary := true
-	books := []database.Book{
+	// CountAudiobooksFiltered uses the count-only pushdown path. For mocks
+	// without GetAllBookSummariesFiltered, it falls through to fetching
+	// all summaries via GetAllBookSummaries(0, 0) then counts in memory.
+	// Semantics: nil IsPrimaryVersion is treated as "primary" (matches
+	// the memdb walker / list path), so both id=1 (explicit true) and
+	// id=3 (nil) match.
+	summaries := []database.BookSummary{
 		{ID: "1", IsPrimaryVersion: boolPtr(true)},
 		{ID: "2", IsPrimaryVersion: boolPtr(false)},
 		{ID: "3", IsPrimaryVersion: nil},
 	}
-	mockStore.EXPECT().GetAllBooks(0, 0).Return(books, nil)
+	mockStore.EXPECT().GetAllBookSummaries(0, 0).Return(summaries, nil)
 
 	count, err := svc.CountAudiobooksFiltered(context.Background(), ListFilters{
 		IsPrimaryVersion: &isPrimary,
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, 1, count, "only book 1 has IsPrimaryVersion=true")
+	assert.Equal(t, 2, count, "books 1 (explicit true) and 3 (nil → primary) both match")
 }
 
 // --- EnrichAudiobooksWithNames ---

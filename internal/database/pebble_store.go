@@ -1374,6 +1374,22 @@ func (p *PebbleStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, err
 	return p.GetAllBookSummaries_Pebble(limit, offset)
 }
 
+// CountBookSummariesFiltered returns the count of rows that would match
+// the given filter. Memdb-backed when available (O(matches) without
+// projection allocations); Pebble fallback materializes summaries and
+// counts (slow but correct, only hit during cold start before memdb
+// publishes).
+func (p *PebbleStore) CountBookSummariesFiltered(f BookSummaryFilter) (int, error) {
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().CountBookSummaries(f)
+	}
+	summaries, err := p.GetAllBookSummariesFiltered(0, 0, f)
+	if err != nil {
+		return 0, err
+	}
+	return len(summaries), nil
+}
+
 // GetAllBookSummariesFiltered is the filtered variant used by the library
 // list when post-filters can be pushed down to memdb (most common case:
 // is_primary_version=true). Bypasses the "fetch all books then filter in

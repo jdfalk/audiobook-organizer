@@ -643,10 +643,11 @@ func bookSummariesToBooks(summaries []database.BookSummary) []database.Book {
 	return books
 }
 
-// summariesPushdown calls the store's filtered-summary fast path if it's
-// exposed (memdb path), else falls back to GetAllBookSummaries. The
-// optional isPrimary flag is the only filter pushed down today — extend
-// as more memdb-indexed predicates are added.
+// summariesPushdown — light-filter path (IsPrimary + title sort).
+// Calls the store with the real (limit, offset) so the page is paginated
+// by the store. Mock-friendly: when the store lacks
+// GetAllBookSummariesFiltered, falls back to GetAllBookSummaries(limit,
+// offset) — preserves the pre-pushdown test contract.
 func (svc *AudiobookService) summariesPushdown(limit, offset int, isPrimary *bool, sortBy string, sortAscending bool) ([]database.BookSummary, error) {
 	type filteredSummaryStore interface {
 		GetAllBookSummariesFiltered(limit, offset int, f database.BookSummaryFilter) ([]database.BookSummary, error)
@@ -664,9 +665,203 @@ func (svc *AudiobookService) summariesPushdown(limit, offset int, isPrimary *boo
 			return fs.GetAllBookSummariesFiltered(limit, offset, filter)
 		}
 	}
-	// Fallback: store has no filtered fast path. Match prior behavior —
-	// fetch all summaries then let the caller filter.
 	return svc.store.GetAllBookSummaries(limit, offset)
+}
+
+// summariesPushdownFiltered runs the full pushdown — every filter the
+// memdb walker can apply in-loop is on the BookSummaryFilter. Returns at
+// most `limit` summaries (after `offset` matches are skipped). Walker
+// stops on its own; no full-corpus materialization.
+//
+// Returns didPushdown=true when the store actually applied the filter
+// (production path). false means the store fell back to fetching all
+// summaries unfiltered — caller must re-apply filters in-memory (mock /
+// non-memdb test path). This boolean is the contract that lets the
+// caller skip the post-filter pass safely in production.
+func (svc *AudiobookService) summariesPushdownFiltered(limit, offset int, filter database.BookSummaryFilter) (summaries []database.BookSummary, didPushdown bool, err error) {
+	type filteredSummaryStore interface {
+		GetAllBookSummariesFiltered(limit, offset int, f database.BookSummaryFilter) ([]database.BookSummary, error)
+	}
+	if fs, ok := svc.store.(filteredSummaryStore); ok {
+		s, e := fs.GetAllBookSummariesFiltered(limit, offset, filter)
+		return s, true, e
+	}
+	if uw, ok := svc.store.(interface{ Unwrap() database.Store }); ok {
+		if fs, ok2 := uw.Unwrap().(filteredSummaryStore); ok2 {
+			s, e := fs.GetAllBookSummariesFiltered(limit, offset, filter)
+			return s, true, e
+		}
+	}
+	// Fallback: no filtered store. Fetch everything; caller post-filters
+	// in-memory. Pass (0, 0) so the caller sees the full set and applies
+	// pagination after filtering.
+	s, e := svc.store.GetAllBookSummaries(0, 0)
+	return s, false, e
+}
+
+// countSummariesPushdownFiltered counts matches without allocating
+// BookSummary projections. Used by CountAudiobooksFiltered for the
+// pagination "total" field. Falls back to materialize-and-count when the
+// store lacks the count fast path — and when summariesPushdownFiltered
+// itself fell back to unfiltered summaries (mock/non-memdb path), we
+// re-apply the filter here so the count is still correct.
+func (svc *AudiobookService) countSummariesPushdownFiltered(filter database.BookSummaryFilter) (int, error) {
+	type countingFilteredStore interface {
+		CountBookSummariesFiltered(f database.BookSummaryFilter) (int, error)
+	}
+	if cs, ok := svc.store.(countingFilteredStore); ok {
+		return cs.CountBookSummariesFiltered(filter)
+	}
+	if uw, ok := svc.store.(interface{ Unwrap() database.Store }); ok {
+		if cs, ok2 := uw.Unwrap().(countingFilteredStore); ok2 {
+			return cs.CountBookSummariesFiltered(filter)
+		}
+	}
+	summaries, didPushdown, err := svc.summariesPushdownFiltered(0, 0, filter)
+	if err != nil {
+		return 0, err
+	}
+	if didPushdown {
+		return len(summaries), nil
+	}
+	// Store fell back to unfiltered set; apply the filter manually so
+	// the count is still correct. Only the fields the BookSummary
+	// projects from Book are inspectable here.
+	n := 0
+	for _, s := range summaries {
+		if filter.IsPrimaryVersion != nil {
+			eff := s.IsPrimaryVersion == nil || *s.IsPrimaryVersion
+			if eff != *filter.IsPrimaryVersion {
+				continue
+			}
+		}
+		if filter.LibraryState != "" {
+			ls := ""
+			if s.LibraryState != nil {
+				ls = *s.LibraryState
+			}
+			if ls != filter.LibraryState {
+				continue
+			}
+		}
+		if filter.ReviewStatus != "" {
+			rs := ""
+			if s.MetadataReviewStatus != nil {
+				rs = *s.MetadataReviewStatus
+			}
+			if !strings.EqualFold(rs, filter.ReviewStatus) {
+				continue
+			}
+		}
+		if filter.RestrictToIDs != nil {
+			if _, ok := filter.RestrictToIDs[s.ID]; !ok {
+				continue
+			}
+		}
+		// Predicate inspects *Book, but the fallback only has summaries.
+		// In the rare fallback case with a complex predicate, accept that
+		// the count may be approximate — production path uses memdb and
+		// doesn't hit this branch.
+		n++
+	}
+	return n, nil
+}
+
+// buildBookSummaryFilter translates service-level ListFilters into a
+// database.BookSummaryFilter the memdb walker can apply in-loop.
+// Returns ok=false when any component CAN'T be pushed down (non-title
+// sort, fingerprint filters), and the caller falls back to the old
+// fetch-all-then-filter path.
+func (svc *AudiobookService) buildBookSummaryFilter(f ListFilters, sortAsc bool) (database.BookSummaryFilter, bool) {
+	if f.SortBy != "" && f.SortBy != "title" {
+		return database.BookSummaryFilter{}, false
+	}
+	if f.FingerprintStatus != "" || f.CoveragePercentMin != nil || f.CoveragePercentMax != nil {
+		return database.BookSummaryFilter{}, false
+	}
+
+	// Tag intersection → ID set. Empty set ⇒ no matches (walker short-circuits).
+	var restrictIDs map[string]struct{}
+	tagsToMatch := f.Tags
+	if len(tagsToMatch) == 0 && f.Tag != "" {
+		tagsToMatch = []string{f.Tag}
+	}
+	for _, tag := range tagsToMatch {
+		if tag == "" {
+			continue
+		}
+		ids, err := svc.store.GetBooksByTag(tag)
+		if err != nil {
+			return database.BookSummaryFilter{}, false
+		}
+		cur := make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			cur[id] = struct{}{}
+		}
+		if restrictIDs == nil {
+			restrictIDs = cur
+		} else {
+			for id := range restrictIDs {
+				if _, ok := cur[id]; !ok {
+					delete(restrictIDs, id)
+				}
+			}
+		}
+		if len(restrictIDs) == 0 {
+			break
+		}
+	}
+
+	// Pluck exact-match positive FieldFilters for indexed columns; the
+	// rest run via the predicate closure on surviving rows only.
+	libraryState := f.LibraryState
+	reviewStatus := ""
+	remainingFF := make([]FieldFilter, 0, len(f.FieldFilters))
+	for _, ff := range f.FieldFilters {
+		if !ff.Negated && (ff.Field == "review" || ff.Field == "metadata_review_status") && reviewStatus == "" {
+			reviewStatus = ff.Value
+			continue
+		}
+		if !ff.Negated && ff.Field == "library_state" && libraryState == "" {
+			libraryState = ff.Value
+			continue
+		}
+		remainingFF = append(remainingFF, ff)
+	}
+
+	var predicate func(*database.Book) bool
+	hasPerUser := len(f.PerUserFilters) > 0 && f.UserID != ""
+	if len(remainingFF) > 0 || hasPerUser {
+		store := svc.store
+		userID := f.UserID
+		perUser := f.PerUserFilters
+		ff := remainingFF
+		predicate = func(b *database.Book) bool {
+			if len(ff) > 0 && !matchesFieldFilters(*b, ff) {
+				return false
+			}
+			if hasPerUser {
+				state, _ := store.GetUserBookState(userID, b.ID)
+				if !matchesAllPerUserFilters(state, perUser) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+
+	bsf := database.BookSummaryFilter{
+		IsPrimaryVersion: f.IsPrimaryVersion,
+		LibraryState:     libraryState,
+		ReviewStatus:     reviewStatus,
+		RestrictToIDs:    restrictIDs,
+		Predicate:        predicate,
+	}
+	if f.SortBy == "title" {
+		bsf.SortBy = "title"
+		bsf.SortAscending = sortAsc
+	}
+	return bsf, true
 }
 
 // GetAudiobooks retrieves audiobooks with optional filtering.
@@ -747,9 +942,38 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 				svc.listCache.Set(cacheKey, books)
 			}
 		} else {
-			summaries, sErr := svc.summariesPushdown(storeLimit, storeOffset, nil, "", true)
-			if sErr == nil && summaries != nil {
-				books = bookSummariesToBooks(summaries)
+			// Heavy-filter pushdown: build a BookSummaryFilter that
+			// captures every predicate the walker can apply in-loop, then
+			// call summariesPushdownFiltered with REAL limit/offset. The
+			// walker stops at limit+offset matches — no full-corpus
+			// materialization, no 1GB working set per query.
+			//
+			// Falls back to the legacy fetch-all-then-filter path when the
+			// filter set contains something we can't push down (non-title
+			// sort, fingerprint filters). Pre-fix this was 100% of heavy
+			// queries; post-fix it's the rare ones.
+			if bsf, pushdownOK := svc.buildBookSummaryFilter(f, sortAsc); pushdownOK {
+				summaries, didPushdown, sErr := svc.summariesPushdownFiltered(limit, offset, bsf)
+				if sErr == nil && summaries != nil {
+					books = bookSummariesToBooks(summaries)
+				}
+				// When the store actually pushed down (production memdb
+				// path), the walker has already applied filters AND
+				// pagination — re-running the in-memory post-filter
+				// would re-apply pagination against an already-paginated
+				// slice (offset bug) and waste cycles. Skip it.
+				//
+				// When the store fell back (mock / no filteredSummaryStore
+				// impl), summaries are unfiltered — let the post-filter
+				// pass below do its thing as the safety net.
+				if didPushdown {
+					hasPostFilters = false
+				}
+			} else {
+				summaries, _, sErr := svc.summariesPushdownFiltered(storeLimit, storeOffset, database.BookSummaryFilter{})
+				if sErr == nil && summaries != nil {
+					books = bookSummariesToBooks(summaries)
+				}
 			}
 		}
 	}
@@ -897,46 +1121,61 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 	return books, nil
 }
 
-// CountAudiobooksFiltered returns the count of audiobooks matching the given filters.
+// CountAudiobooksFiltered returns the count of audiobooks matching the
+// given filters. Uses the memdb count-only pushdown (no projection
+// allocations, no full-corpus materialization) for the common filter set.
+// Falls back to materialize-and-count when the filter set contains
+// something we can't push down (non-title sort doesn't matter for counts;
+// fingerprint filters depend on BookFile data).
 func (svc *AudiobookService) CountAudiobooksFiltered(ctx context.Context, filters ListFilters) (int, error) {
 	if svc.store == nil {
 		return 0, fmt.Errorf("database not initialized")
 	}
+	// SortBy doesn't affect counts; clear it so buildBookSummaryFilter
+	// doesn't reject the filter for non-title sort. Counts don't depend
+	// on iteration order.
+	filtersForCount := filters
+	filtersForCount.SortBy = ""
+	bsf, pushdownOK := svc.buildBookSummaryFilter(filtersForCount, true)
+	if pushdownOK {
+		return svc.countSummariesPushdownFiltered(bsf)
+	}
+
+	// Fallback: legacy fetch-all-then-filter path. Hit only when the
+	// caller passed a fingerprint filter, which depends on BookFile data
+	// not stored on Book. Slow but correct.
 	books, err := svc.store.GetAllBooks(0, 0)
 	if err != nil {
 		return 0, err
 	}
-	// Build tag intersection if tags are provided
 	tagsToMatch := filters.Tags
 	if len(tagsToMatch) == 0 && filters.Tag != "" {
 		tagsToMatch = []string{filters.Tag}
 	}
 	var tagBookIDs map[string]struct{}
-	if len(tagsToMatch) > 0 {
-		for _, tag := range tagsToMatch {
-			if tag == "" {
-				continue
-			}
-			ids, tagErr := svc.store.GetBooksByTag(tag)
-			if tagErr != nil {
-				return 0, tagErr
-			}
-			curSet := make(map[string]struct{}, len(ids))
-			for _, id := range ids {
-				curSet[id] = struct{}{}
-			}
-			if tagBookIDs == nil {
-				tagBookIDs = curSet
-			} else {
-				for id := range tagBookIDs {
-					if _, ok := curSet[id]; !ok {
-						delete(tagBookIDs, id)
-					}
+	for _, tag := range tagsToMatch {
+		if tag == "" {
+			continue
+		}
+		ids, tagErr := svc.store.GetBooksByTag(tag)
+		if tagErr != nil {
+			return 0, tagErr
+		}
+		curSet := make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			curSet[id] = struct{}{}
+		}
+		if tagBookIDs == nil {
+			tagBookIDs = curSet
+		} else {
+			for id := range tagBookIDs {
+				if _, ok := curSet[id]; !ok {
+					delete(tagBookIDs, id)
 				}
 			}
-			if len(tagBookIDs) == 0 {
-				break
-			}
+		}
+		if len(tagBookIDs) == 0 {
+			break
 		}
 	}
 
@@ -965,21 +1204,14 @@ func (svc *AudiobookService) CountAudiobooksFiltered(ctx context.Context, filter
 				continue
 			}
 		}
-		// Apply fingerprinting filters
-		if filters.FingerprintStatus != "" {
-			if b.FingerprintStatus != filters.FingerprintStatus {
-				continue
-			}
+		if filters.FingerprintStatus != "" && b.FingerprintStatus != filters.FingerprintStatus {
+			continue
 		}
-		if filters.CoveragePercentMin != nil {
-			if b.CoveragePercent < *filters.CoveragePercentMin {
-				continue
-			}
+		if filters.CoveragePercentMin != nil && b.CoveragePercent < *filters.CoveragePercentMin {
+			continue
 		}
-		if filters.CoveragePercentMax != nil {
-			if b.CoveragePercent > *filters.CoveragePercentMax {
-				continue
-			}
+		if filters.CoveragePercentMax != nil && b.CoveragePercent > *filters.CoveragePercentMax {
+			continue
 		}
 		count++
 	}
