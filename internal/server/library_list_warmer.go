@@ -37,13 +37,10 @@ func readHeapAllocMB() uint64 {
 }
 
 // warmerMemoryDeltaMB is how many MB above the post-eager baseline the
-// trickle is allowed to grow heap by. The previous absolute heap ceiling
-// (LIST_WARMER_MAX_HEAP_MB=1024) was unworkable because the process
-// baseline after memdb publish is already ~13GB — the trickle would back
-// off forever and never warm anything. A delta-from-baseline model
-// adapts: if the process settles at 15GB after eager, trickle proceeds
-// while heap stays under 15GB + delta. Tunable via
-// LIST_WARMER_HEAP_DELTA_MB; default 1024 (1GB headroom).
+// trickle is allowed to grow heap by. Production measurement (392K-book
+// library, ~13GB baseline): a single trickle query allocates ~1.8GB
+// transient before GC. Default 4096 (4GB) gives one-query headroom +
+// GC reclaim buffer. Tunable via LIST_WARMER_HEAP_DELTA_MB.
 func warmerMemoryDeltaMB() uint64 {
 	if v := os.Getenv("LIST_WARMER_HEAP_DELTA_MB"); v != "" {
 		if n, err := strconv.ParseUint(v, 10, 64); err == nil && n > 0 {
@@ -56,7 +53,7 @@ func warmerMemoryDeltaMB() uint64 {
 			return n
 		}
 	}
-	return 1024
+	return 4096
 }
 
 // warmerTrickleInterval is the gap between trickle ticks. Default 10s
