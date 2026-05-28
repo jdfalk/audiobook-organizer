@@ -1,5 +1,5 @@
 // file: internal/server/audiobooks_handlers.go
-// version: 2.16.0
+// version: 2.17.0
 // guid: 221bde8e-dd34-458c-8afb-fe71f04597c0
 // last-edited: 2026-05-20
 //
@@ -283,15 +283,28 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		}
 	}
 
-	// Call service
-	books, err := s.audiobookService.GetAudiobooks(c.Request.Context(), params.Limit, params.Offset, params.Search, authorID, seriesID, filters)
+	showQuarantined := c.Query("show_quarantined") == "true"
+	resp, err := s.buildAudiobookListResponse(c.Request.Context(), params.Limit, params.Offset, params.Search, authorID, seriesID, filters, showQuarantined)
 	if err != nil {
 		httputil.InternalError(c, "failed to list audiobooks", err)
 		return
 	}
+	if len(filters.PerUserFilters) == 0 {
+		s.listCache.Set(cacheKey, resp)
+	}
+	httputil.RespondWithOK(c, resp)
+}
 
-	// Exclude quarantined books unless show_quarantined=true
-	showQuarantined := c.Query("show_quarantined") == "true"
+// buildAudiobookListResponse runs the full /api/v1/audiobooks list pipeline
+// (service call, quarantine filter, enrichment, batch file load, fingerprint
+// compute, count) and returns the response payload. Shared between the HTTP
+// handler and the startup cache warmer so both produce identical results.
+func (s *Server) buildAudiobookListResponse(ctx context.Context, limit, offset int, search string, authorID, seriesID *int, filters ListFilters, showQuarantined bool) (gin.H, error) {
+	books, err := s.audiobookService.GetAudiobooks(ctx, limit, offset, search, authorID, seriesID, filters)
+	if err != nil {
+		return nil, err
+	}
+
 	if !showQuarantined {
 		filtered := books[:0]
 		for _, b := range books {
@@ -302,10 +315,8 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		books = filtered
 	}
 
-	// Enrich with author and series names
 	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
 
-	// Batch-load all book files at once instead of per-book (N+1 optimization)
 	bookIDs := make([]string, len(enriched))
 	for i, book := range enriched {
 		bookIDs[i] = book.ID
@@ -328,20 +339,13 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		}
 	}
 
-	// Compute and populate fingerprinting fields for each book
 	for i, book := range enriched {
 		files := bookFilesMap[book.ID]
-
-		// Convert BookFile slice to FileWithFingerprint interface slice
 		fpFiles := make([]fingerprint.FileWithFingerprint, len(files))
 		for j := range files {
 			fpFiles[j] = &files[j]
 		}
-
-		// Compute fingerprinting fields using the calculator
 		status, fpCount, coverage, lastFp := fingerprint.ComputeFingerprintFields(fpFiles)
-
-		// Populate the Book struct fields added in Task 1
 		enriched[i].FingerprintStatus = status
 		enriched[i].FingerprintedFileCount = fpCount
 		enriched[i].TotalFileCount = len(files)
@@ -349,26 +353,21 @@ func (s *Server) listAudiobooks(c *gin.Context) {
 		enriched[i].LastFingerprintedAt = lastFp
 	}
 
-	// Get total count for proper pagination
 	totalCount := len(enriched)
 	hasFilters := filters.IsPrimaryVersion != nil || filters.LibraryState != "" || filters.Tag != "" || len(filters.Tags) > 0
-	if params.Search == "" && authorID == nil && seriesID == nil {
+	if search == "" && authorID == nil && seriesID == nil {
 		if hasFilters {
-			if tc, err := s.audiobookService.CountAudiobooksFiltered(c.Request.Context(), filters); err == nil {
+			if tc, err := s.audiobookService.CountAudiobooksFiltered(ctx, filters); err == nil {
 				totalCount = tc
 			}
 		} else {
-			if tc, err := s.audiobookService.CountAudiobooks(c.Request.Context()); err == nil {
+			if tc, err := s.audiobookService.CountAudiobooks(ctx); err == nil {
 				totalCount = tc
 			}
 		}
 	}
 
-	resp := gin.H{"items": enriched, "count": totalCount, "limit": params.Limit, "offset": params.Offset}
-	if len(filters.PerUserFilters) == 0 {
-		s.listCache.Set(cacheKey, resp)
-	}
-	httputil.RespondWithOK(c, resp)
+	return gin.H{"items": enriched, "count": totalCount, "limit": limit, "offset": offset}, nil
 }
 
 func (s *Server) listSoftDeletedAudiobooks(c *gin.Context) {
