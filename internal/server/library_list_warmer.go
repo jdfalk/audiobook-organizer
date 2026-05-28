@@ -139,6 +139,16 @@ func (s *Server) resolveDefaultUserID() string {
 // All queries run sequentially against the AudiobookService — no extra
 // HTTP overhead.
 func (s *Server) warmAudiobookListCache() {
+	// HOTFIX 2026-05-28: disabled. Running 177 list queries against a
+	// 392K-book memdb on startup OOM'd at 67GB peak. The transient
+	// per-query working set (full-set load + filter + sort) is the
+	// killer, not the cache itself. See critical-issues memory:
+	// project_cache_warmup_memory_fix. Re-enable only with:
+	//  - bounded concurrency (1 at a time, explicit runtime.GC between)
+	//  - ONLY 1-3 queries the UI hits on first load, not 177 combos
+	//  - a hard memory ceiling check before each call
+	slog.Info("library list warm-up DISABLED (OOM hotfix 2026-05-28)")
+	return
 	if s.audiobookService == nil {
 		return
 	}
