@@ -36,12 +36,23 @@ func readHeapAllocMB() uint64 {
 	return ms.HeapAlloc / (1024 * 1024)
 }
 
-// warmerMemoryCeilingMB is the hard heap-alloc cap. Above this the
-// trickle pauses (it'll retry on the next tick). Tunable via
-// LIST_WARMER_MAX_HEAP_MB; default 1024 (1GB).
-func warmerMemoryCeilingMB() uint64 {
-	if v := os.Getenv("LIST_WARMER_MAX_HEAP_MB"); v != "" {
+// warmerMemoryDeltaMB is how many MB above the post-eager baseline the
+// trickle is allowed to grow heap by. The previous absolute heap ceiling
+// (LIST_WARMER_MAX_HEAP_MB=1024) was unworkable because the process
+// baseline after memdb publish is already ~13GB — the trickle would back
+// off forever and never warm anything. A delta-from-baseline model
+// adapts: if the process settles at 15GB after eager, trickle proceeds
+// while heap stays under 15GB + delta. Tunable via
+// LIST_WARMER_HEAP_DELTA_MB; default 1024 (1GB headroom).
+func warmerMemoryDeltaMB() uint64 {
+	if v := os.Getenv("LIST_WARMER_HEAP_DELTA_MB"); v != "" {
 		if n, err := strconv.ParseUint(v, 10, 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	// Back-compat: the old var name now also means "delta", with sane min.
+	if v := os.Getenv("LIST_WARMER_MAX_HEAP_MB"); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 64); err == nil && n >= 256 {
 			return n
 		}
 	}
@@ -571,13 +582,24 @@ func (s *Server) runTrickleWarmer(backlog []qry) {
 		return
 	}
 	interval := warmerTrickleInterval()
-	ceilingMB := warmerMemoryCeilingMB()
+	deltaMB := warmerMemoryDeltaMB()
+	// Establish the baseline heap RIGHT NOW (post-eager, post-GC).
+	// Anything above baseline+delta means our own queries are pressuring
+	// memory; back off. Below means there's headroom — proceed. This
+	// adapts to the process's actual steady-state heap (memdb + caches)
+	// instead of an absolute ceiling we have to guess at deploy time.
+	runtime.GC()
+	debug.FreeOSMemory()
+	baselineMB := readHeapAllocMB()
+	ceilingMB := baselineMB + deltaMB
 	ctx := context.Background()
 	started := time.Now()
 	slog.Info("library list trickle warmer starting",
 		"queries", len(backlog),
 		"interval_ms", interval.Milliseconds(),
-		"heap_ceiling_mb", ceilingMB,
+		"baseline_mb", baselineMB,
+		"delta_mb", deltaMB,
+		"effective_ceiling_mb", ceilingMB,
 	)
 
 	ticker := time.NewTicker(interval)
@@ -596,8 +618,8 @@ func (s *Server) runTrickleWarmer(backlog []qry) {
 			time.Sleep(backoff)
 		}
 
-		// Memory-pressure guard: skip this tick if heap is already
-		// near ceiling. Double the backoff (capped 60s); reset on
+		// Memory-pressure guard: skip this tick if heap is above
+		// baseline+delta. Double the backoff (capped 60s); reset on
 		// successful tick. HeapAlloc, not RSS — we care about live
 		// objects, not returned-to-OS memory.
 		if heap := readHeapAllocMB(); heap > ceilingMB {
@@ -608,7 +630,7 @@ func (s *Server) runTrickleWarmer(backlog []qry) {
 				backoff *= 2
 			}
 			slog.Warn("library list trickle warmer: heap above ceiling, backing off",
-				"heap_mb", heap, "ceiling_mb", ceilingMB,
+				"heap_mb", heap, "ceiling_mb", ceilingMB, "baseline_mb", baselineMB,
 				"backoff_ms", backoff.Milliseconds())
 			continue
 		}
