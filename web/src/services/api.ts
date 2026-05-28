@@ -1918,6 +1918,46 @@ export async function login(payload: {
   return body.data;
 }
 
+export interface TempLoginTokenResponse {
+  token: string;
+  login_url: string;
+  expires_at: string;
+  user: { id: string; username: string };
+  session_ttl_hours: number;
+}
+
+export async function createTempLoginToken(userID: string): Promise<TempLoginTokenResponse> {
+  const response = await fetch(`${API_BASE}/auth/temp-tokens`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userID }),
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to mint temp-login token');
+  }
+  const body = await response.json();
+  return body.data ?? body;
+}
+
+export interface AdminUserSummary {
+  id: string;
+  username: string;
+  email: string;
+  status: string;
+  roles: string[];
+}
+
+export async function listAdminUsers(): Promise<AdminUserSummary[]> {
+  const response = await fetch(`${API_BASE}/users`, { credentials: 'include' });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to list users');
+  }
+  const body = await response.json();
+  const data = body.data ?? body;
+  return data.users ?? data.items ?? data ?? [];
+}
+
 export async function getMe(): Promise<AuthUser> {
   const response = await fetch(`${API_BASE}/auth/me`, {
     credentials: 'include',
