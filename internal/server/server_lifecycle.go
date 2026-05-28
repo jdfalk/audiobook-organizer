@@ -827,6 +827,11 @@ func (s *Server) setupRoutes() {
 	// Real-time events (SSE)
 	s.router.GET("/api/events", s.handleEvents)
 
+	// Public temp-login consumer at the root so URLs are short and
+	// browser-friendly. Validates the token, deletes it (single-use),
+	// creates a 24h session, sets the cookie, redirects to the SPA.
+	s.router.GET("/auth/temp-login", s.consumeTempLoginToken)
+
 	// Redirect /api/* to /api/v1/* for v1 compatibility
 	s.router.Use(func(c *gin.Context) {
 		path := c.Request.URL.Path
@@ -892,6 +897,11 @@ func (s *Server) setupRoutes() {
 			authProtected.GET("/sessions", s.listMySessions)
 			authProtected.DELETE("/sessions/:id", s.revokeMySession)
 			authProtected.PUT("/me/password", s.changePassword)
+			// Admin mints a single-use 15-min URL that exchanges for a
+			// 24h session cookie when clicked. Lets the admin sign
+			// themselves (or a user) in on a new device without
+			// re-entering credentials.
+			authProtected.POST("/temp-tokens", s.perm(permTempLoginMint()), s.createTempLoginToken)
 
 			// API key management
 			authProtected.POST("/api-keys", s.createAPIKey)

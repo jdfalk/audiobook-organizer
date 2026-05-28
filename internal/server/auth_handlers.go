@@ -65,7 +65,11 @@ func clearFailedLogins(userID string) {
 	delete(loginLockout, userID)
 }
 
-const defaultSessionTTL = 24 * time.Hour
+const (
+	defaultSessionTTL    = 24 * time.Hour
+	rememberMeSessionTTL = 7 * 24 * time.Hour
+	tempLoginTokenTTL    = 15 * time.Minute
+)
 
 type authUserResponse struct {
 	ID        string    `json:"id"`
@@ -206,8 +210,9 @@ func (s *Server) login(c *gin.Context) {
 	}
 
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username   string `json:"username"`
+		Password   string `json:"password"`
+		RememberMe bool   `json:"remember_me"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.RespondWithBadRequest(c, err.Error())
@@ -237,11 +242,15 @@ func (s *Server) login(c *gin.Context) {
 	}
 	clearFailedLogins(user.ID)
 
+	ttl := defaultSessionTTL
+	if req.RememberMe {
+		ttl = rememberMeSessionTTL
+	}
 	session, err := s.Store().CreateSession(
 		user.ID,
 		strings.TrimSpace(c.ClientIP()),
 		strings.TrimSpace(c.Request.UserAgent()),
-		defaultSessionTTL,
+		ttl,
 	)
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to create session")
