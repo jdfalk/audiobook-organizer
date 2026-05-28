@@ -8,7 +8,9 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
+  FormControlLabel,
   Paper,
   Stack,
   TextField,
@@ -26,6 +28,7 @@ export function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,7 +59,7 @@ export function Login() {
       if (mode === 'setup') {
         await auth.setupAdmin({ username, password, email });
       }
-      await auth.login(username, password);
+      await auth.login(username, password, rememberMe);
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
@@ -150,6 +153,19 @@ export function Login() {
             required
             fullWidth
           />
+
+          {mode === 'login' && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  name="remember_me"
+                />
+              }
+              label="Remember me for 1 week"
+            />
+          )}
 
           <Button
             type="submit"

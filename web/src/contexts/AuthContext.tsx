@@ -23,7 +23,7 @@ interface AuthContextValue {
   bootstrapReady: boolean;
   isAuthenticated: boolean;
   refresh: () => Promise<void>;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   setupAdmin: (payload: {
     username: string;
@@ -106,8 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const response = await api.login({ username, password });
+  const login = useCallback(async (username: string, password: string, rememberMe?: boolean) => {
+    const response = await api.login({ username, password, remember_me: rememberMe });
     setUser(response.user);
     setRequiresAuth(true);
     setBootstrapReady(false);

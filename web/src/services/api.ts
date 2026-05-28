@@ -1903,6 +1903,7 @@ export async function setupAdmin(payload: {
 export async function login(payload: {
   username: string;
   password: string;
+  remember_me?: boolean;
 }): Promise<{ user: AuthUser; session: AuthSession }> {
   const response = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',

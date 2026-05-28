@@ -1,13 +1,30 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.02.0 -->
+<!-- version: 3.03.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-25 -->
+<!-- last-edited: 2026-05-28 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Changes
+
+#### May 28, 2026 — Remember-me login + temp-login URLs
+
+- **Remember me checkbox** on the login page. Checked → session cookie
+  TTL flips from 24h to 7d. Sent to backend as `remember_me: true` in
+  the login payload.
+- **Temp-login token endpoint** for getting yourself onto a new device
+  without re-entering credentials:
+  - `POST /api/v1/auth/temp-tokens` (admin-only, `users.manage` perm) —
+    body `{user_id}`, returns `{token, login_url, expires_at}`. URL is
+    valid for 15 min, single-use.
+  - `GET /auth/temp-login?token=xxx` (public) — validates token,
+    deletes it (single-use), checks user is `active`, creates a 24h
+    session, sets the cookie, redirects to `/`. On failure redirects
+    to `/login?error=<reason>` so the SPA can surface a message.
+- Tokens are in-memory only — server restart invalidates pending ones
+  (acceptable given the 15-min TTL).
 
 #### May 25, 2026 — List warm-up: filter cheatsheet coverage
 
