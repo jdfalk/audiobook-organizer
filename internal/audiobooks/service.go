@@ -1234,52 +1234,79 @@ func splitMultipleNames(name string) []string {
 	return result
 }
 
-// aggregateFileMetadata calculates total duration and file size from files for each book.
-// Uses a single GetAllBookFiles call to avoid N+1 queries.
+// aggregateFileMetadata calculates total duration and file size from files
+// for each book. Uses GetBookFilesForIDs to fetch ONLY the files for the
+// passed-in books — not GetAllBookFiles, which materialized all 308K+
+// book_file rows (~46GB heap) on every library list query and trampolined
+// the process to 67GB the moment the filter-pushdown warmer started.
 func (svc *AudiobookService) aggregateFileMetadata(books []database.Book) {
 	if svc.store == nil || len(books) == 0 {
 		return
 	}
 
-	// Build set of book IDs for fast lookup
-	bookIDMap := make(map[string]int)
+	bookIDMap := make(map[string]int, len(books))
+	bookIDs := make([]string, 0, len(books))
 	for i, b := range books {
 		bookIDMap[b.ID] = i
+		bookIDs = append(bookIDs, b.ID)
 	}
 
-	// Fetch all book files once
-	allFiles, err := svc.store.GetAllBookFiles()
-	if err != nil {
-		slog.Warn("aggregateFileMetadata: GetAllBookFiles failed", "err", err)
-		return
+	// Targeted batch fetch via memdb's book_id index. Returns only the
+	// files belonging to these books. For a 20-book page, that's
+	// ~20-200 files, not 308K.
+	type batchFilesStore interface {
+		GetBookFilesForIDs(ids []string) (map[string][]database.BookFile, error)
+	}
+	var filesByBookID map[string][]database.BookFile
+	if fs, ok := svc.store.(batchFilesStore); ok {
+		if m, err := fs.GetBookFilesForIDs(bookIDs); err == nil {
+			filesByBookID = m
+		}
+	} else if uw, ok := svc.store.(interface{ Unwrap() database.Store }); ok {
+		if fs, ok2 := uw.Unwrap().(batchFilesStore); ok2 {
+			if m, err := fs.GetBookFilesForIDs(bookIDs); err == nil {
+				filesByBookID = m
+			}
+		}
+	}
+	if filesByBookID == nil {
+		// Store doesn't expose the batched method — fall back to per-book
+		// fetch. Slow (N+1) but bounded by len(books) (typically 20).
+		filesByBookID = make(map[string][]database.BookFile, len(books))
+		for _, id := range bookIDs {
+			files, err := svc.store.GetBookFiles(id)
+			if err != nil {
+				slog.Warn("aggregateFileMetadata: GetBookFiles failed", "book_id", id, "err", err)
+				continue
+			}
+			filesByBookID[id] = files
+		}
 	}
 
-	// Allocate aggregate structs upfront so we can safely take pointers to their fields
 	aggregates := make(map[string]*struct {
 		totalDuration int
-		totalSize    int64
-	})
+		totalSize     int64
+	}, len(books))
 	for _, b := range books {
 		aggregates[b.ID] = &struct {
 			totalDuration int
-			totalSize    int64
+			totalSize     int64
 		}{}
 	}
 
-	for _, f := range allFiles {
-		if f.Missing {
-			continue // Skip missing files
-		}
-		agg, ok := aggregates[f.BookID]
+	for bookID, files := range filesByBookID {
+		agg, ok := aggregates[bookID]
 		if !ok {
-			continue // Skip files not in our book list
+			continue
 		}
-
-		agg.totalDuration += f.Duration / 1000 // Convert ms to seconds
-		agg.totalSize += f.FileSize
-
-		// Update the book's aggregates with pointers to the aggregated values
-		if idx, ok := bookIDMap[f.BookID]; ok {
+		for _, f := range files {
+			if f.Missing {
+				continue
+			}
+			agg.totalDuration += f.Duration / 1000
+			agg.totalSize += f.FileSize
+		}
+		if idx, ok := bookIDMap[bookID]; ok {
 			books[idx].Duration = &agg.totalDuration
 			books[idx].FileSize = &agg.totalSize
 		}
