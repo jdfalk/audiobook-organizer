@@ -116,10 +116,47 @@ via SQLite-to-chromem hydrate at startup.
   `audiobooks/service.go:matchesFieldFilters` that fetches the
   full Book via GetBookByID ONLY when the predicate field is
   stripped — preserves correctness on rare descriptions filter.
-- [ ] **D4** Profile: trigger a fresh memdb warm, capture
+- [x] **D4** Profile: trigger a fresh memdb warm, capture
   `inuse_space` heap profile, compare to pre-strip baseline. Confirm
   ~5GB drop matches expectations. File any remaining hot allocators
-  as new D-tasks.
+  as new D-tasks. — Structural audit (no live prof access) at
+  `docs/perf-audit-2026-05-29-heap-breakdown.md`. Predicted memdb
+  drop ~6.7 GB (8.5 GB → 1.7 GB). Observed RSS drop 67 → 39 GB ≈ 28 GB
+  (GC headroom + arena release amplify the live-heap delta). Followups
+  filed as MAYDEPLOY-I below.
+
+### MAYDEPLOY-I: Heap baseline follow-ups (from D4 audit)
+Structural audit (`docs/perf-audit-2026-05-29-heap-breakdown.md`)
+identifies these next-biggest-win targets at the ~18 GB post-strip
+baseline.
+
+- [ ] **I1** Verify MAYDEPLOY-D1 (`DEDUP_CHROMEM_LAZY`) and D2
+  (chromem persistence vs `NewDB()`) ship before any more memdb
+  strips. Chromem is the largest remaining bucket (~6 GB live;
+  3–6 GB savings projected).
+- [ ] **I2** Drop `works` table from memdb entirely. 211 K rows ×
+  (~270 B/row + ~320 B index) ≈ 120 MB heap, and Works are queried
+  in <0.1% of requests. Route the read paths through Pebble
+  (`GetWorkByID`) on demand and delete the table from `memdbSchema()`
+  + remove `stripBookForMemdb`-adjacent warmup. Est. savings: ~120 MB.
+- [ ] **I3** Add `stripBookFileForMemdb` (mirrors #1152). Clear the 7
+  `AcoustIDSeg0..6` strings + 3 fingerprint-diagnostic `*string`/
+  `*time.Time` fields. ~70 MB savings across 308 K book_files.
+  AcoustID is read only by dedup, which already has a Pebble path.
+- [ ] **I4** Cap the 24h `list` / `facets` / `dedup` / `bookCache` /
+  `audiobook_list` LRU caches by entry count (e.g. 1000), not just
+  TTL. These hold full `gin.H` / `Book` payloads with descriptions
+  and provenance maps; suspected ~0.5–1.5 GB of baseline. Touch
+  points: `internal/server/server.go:335-337`,
+  `internal/audiobooks/service.go:105-106`.
+- [ ] **I5** Truncate description text fed to bleve to first ~500
+  chars (or skip indexing description entirely). bleve still indexes
+  the full description from Pebble even though memdb has been stripped.
+  Est. savings: 0.5–1 GB index residency.
+- [ ] **I6** Once I1+I2+I3 ship (or chromem D1/D2 lands), re-run this
+  audit with a real `inuse_space` heap profile from prod via
+  `pprof_endpoint` — replace structural estimates with measured
+  bytes. Target: baseline ~18 GB → ~10 GB.
 
 ### MAYDEPLOY-E: Pre-existing test failures
 Surfaced during today's deploys but not caused by them; failing on
