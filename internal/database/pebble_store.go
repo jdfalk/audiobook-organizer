@@ -7062,6 +7062,18 @@ func (p *PebbleStore) Reset() error {
 		return fmt.Errorf("failed to flush after reset: %w", err)
 	}
 
+	// Clear the in-memory query layer so it no longer returns stale rows
+	// that were wiped from Pebble. Reads check `p.mem() != nil`, so swapping
+	// in a fresh empty MemStore (or nil-ing the pointer if construction
+	// fails) immediately bypasses the stale snapshot. Without this, reads
+	// from memdb-backed paths (e.g. GetAllAuthors) would continue to return
+	// entries that were just deleted from Pebble.
+	if fresh, err := NewMemStore(); err == nil {
+		p.memPtr.Store(fresh)
+	} else {
+		p.memPtr.Store(nil)
+	}
+
 	return nil
 }
 
