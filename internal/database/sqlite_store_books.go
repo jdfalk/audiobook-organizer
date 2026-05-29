@@ -642,6 +642,27 @@ func (s *SQLiteStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	return books, rows.Err()
 }
 
+// ListBookIDs returns the IDs of all non-deleted books, without
+// materializing Book structs. ID-only projection saves the per-row scan
+// cost when callers only need the ID set.
+func (s *SQLiteStore) ListBookIDs() ([]string, error) {
+	rows, err := s.db.Query(`SELECT id FROM books WHERE COALESCE(marked_for_deletion, 0) = 0`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, 1024)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func (s *SQLiteStore) GetAllBookSummaries(limit, offset int) ([]BookSummary, error) {
 	if limit <= 0 {
 		limit = 1_000_000
