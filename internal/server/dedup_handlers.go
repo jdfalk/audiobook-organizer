@@ -968,9 +968,26 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 		return
 	}
 
+	// Optional JSON body {"keep_id": "<bookID>"} lets the caller pick
+	// which side of the candidate pair becomes the merge primary. When
+	// absent or empty, fall back to MergeService's auto-select (by
+	// format/bitrate/size). When present, it must match one of the two
+	// candidate entities — otherwise the caller is confused and we
+	// refuse rather than silently auto-picking.
+	var body struct {
+		KeepID string `json:"keep_id"`
+	}
+	// Ignore parse errors: an empty/missing body is valid (back-compat).
+	_ = c.ShouldBindJSON(&body)
+	keepID := body.KeepID
+	if keepID != "" && keepID != candidate.EntityAID && keepID != candidate.EntityBID {
+		httputil.RespondWithBadRequest(c, "keep_id must match the candidate's entity_a_id or entity_b_id")
+		return
+	}
+
 	var result interface{}
 	if candidate.EntityType == "book" && s.mergeService != nil {
-		mergeResult, mergeErr := s.mergeService.MergeBooks([]string{candidate.EntityAID, candidate.EntityBID}, "")
+		mergeResult, mergeErr := s.mergeService.MergeBooks([]string{candidate.EntityAID, candidate.EntityBID}, keepID)
 		if mergeErr != nil {
 			// MAYDEPLOY-B2: when one of the source books no longer exists (a previous
 			// merge already absorbed it), the candidate is stale rather than the
@@ -1036,7 +1053,7 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 		"candidate_id": id,
 	}))
 
-	httputil.RespondWithOK(c, gin.H{"status": "merged", "result": result})
+	httputil.RespondWithOK(c, gin.H{"status": "merged", "result": result, "keep_id": keepID})
 }
 
 // dismissDedupCandidate handles POST /api/v1/dedup/candidates/:id/dismiss.

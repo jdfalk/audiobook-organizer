@@ -2280,15 +2280,20 @@ function AcousticDedupTab() {
     }
   };
 
-  const handleMerge = async (candidateId: number) => {
+  const handleMerge = async (candidateId: number, keepId?: string) => {
     // The sync /dedup/candidates/:id/merge endpoint performs the merge,
     // updates candidate status, publishes the event, and cleans up orphan
     // candidates (PR #1167). Previously we also fired /audiobooks/merge
     // (async) here, which caused a race + UI flicker + spurious 409 from
     // the sync call when the async one won. (B1)
+    //
+    // keepId, when provided, tells the backend which side of the pair to
+    // keep as the merge primary. Without it the backend auto-selects by
+    // format/bitrate/size — which historically ignored the user's
+    // Keep A / Keep B click.
     setResolving((s) => new Set(s).add(candidateId));
     try {
-      await api.mergeDedupCandidate(candidateId);
+      await api.mergeDedupCandidate(candidateId, keepId);
       setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
     } catch (err) {
       setStatusMsg(err instanceof Error ? err.message : 'Merge failed');
@@ -2404,13 +2409,13 @@ function AcousticDedupTab() {
                       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
                         <Tooltip title="Keep Book A, merge B into it">
                           <Button size="small" variant={recommendA ? 'contained' : 'outlined'} color="primary"
-                            disabled={busy} onClick={() => handleMerge(c.id)}>
+                            disabled={busy} onClick={() => handleMerge(c.id, c.entity_a_id)}>
                             Keep A
                           </Button>
                         </Tooltip>
                         <Tooltip title="Keep Book B, merge A into it">
                           <Button size="small" variant={recommendB ? 'contained' : 'outlined'} color="primary"
-                            disabled={busy} onClick={() => handleMerge(c.id)}>
+                            disabled={busy} onClick={() => handleMerge(c.id, c.entity_b_id)}>
                             Keep B
                           </Button>
                         </Tooltip>
