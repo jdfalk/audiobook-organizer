@@ -110,6 +110,8 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 	}
 
 	// BookFiles: book_file:<bookID>:<fileID>
+	// Strip AcoustIDSeg1..6 and fingerprint-diagnostic fields before
+	// insertion — see memdb_strip.go. Cuts ~70MB heap across 308K rows.
 	if n, err := warmIter(ctx, p.db, "book_file:", func(key string, val []byte) error {
 		if strings.Count(key, ":") != 2 {
 			return nil
@@ -118,7 +120,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &bf); err != nil {
 			return nil
 		}
-		return safeInsert(memTableBookFiles, &bf, key)
+		return safeInsert(memTableBookFiles, stripBookFileForMemdb(&bf), key)
 	}); err != nil {
 		return fmt.Errorf("warmup book_files: %w", err)
 	} else {
@@ -214,18 +216,12 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		counts[memTableBlockedHashes] = n
 	}
 
-	// Works: work:<id>
-	if n, err := warmIter(ctx, p.db, "work:", func(key string, val []byte) error {
-		var w Work
-		if err := json.Unmarshal(val, &w); err != nil {
-			return nil
-		}
-		return safeInsert(memTableWorks, &w, key)
-	}); err != nil {
-		return fmt.Errorf("warmup works: %w", err)
-	} else {
-		counts[memTableWorks] = n
-	}
+	// Works: intentionally NOT warmed into memdb. Works are queried in
+	// <0.1% of requests and a 211K-row × ~590B memdb residency cost
+	// ~120MB of heap for no measurable read-path win. GetAllWorks
+	// now routes through PebbleStore.GetAllWorks_Pebble (a streaming
+	// prefix scan + JSON unmarshal). The scanner uses a single
+	// GetAllWorks at scan start, which is the only meaningful caller.
 
 	txn.Commit()
 
@@ -241,7 +237,6 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		"import_paths", counts[memTableImportPaths],
 		"author_aliases", counts[memTableAuthorAliases],
 		"blocked_hashes", counts[memTableBlockedHashes],
-		"works", counts[memTableWorks],
 		"skipped_total", sumInts(skips),
 	)
 	if len(skips) > 0 {

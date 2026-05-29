@@ -98,24 +98,10 @@ func (m *MemStore) GetAllAuthorAliases() ([]AuthorAlias, error) {
 	return out, nil
 }
 
-// GetAllWorks returns every Work sorted by Title.
-func (m *MemStore) GetAllWorks() ([]Work, error) {
-	txn := m.db.Txn(false)
-	defer txn.Abort()
-
-	iter, err := txn.Get(memTableWorks, memIdxID)
-	if err != nil {
-		return nil, fmt.Errorf("memdb works scan: %w", err)
-	}
-	var out []Work
-	for obj := iter.Next(); obj != nil; obj = iter.Next() {
-		out = append(out, *(obj.(*Work)))
-	}
-	sort.Slice(out, func(i, j int) bool {
-		return strings.ToLower(out[i].Title) < strings.ToLower(out[j].Title)
-	})
-	return out, nil
-}
+// GetAllWorks is intentionally NOT implemented on MemStore — Works are not
+// resident in memdb (dropped to save ~120MB heap across 211K rows). Callers
+// hit PebbleStore.GetAllWorks_Pebble directly via the routing in
+// PebbleStore.GetAllWorks.
 
 // CountFiles returns the total number of non-missing BookFile rows.
 func (m *MemStore) CountFiles() (int, error) {
