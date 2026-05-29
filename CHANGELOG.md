@@ -1,13 +1,119 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.04.0 -->
+<!-- version: 3.05.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-28 -->
+<!-- last-edited: 2026-05-29 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Changes
+
+#### May 29, 2026 — MAYDEPLOY A→I sweep + Wave 4 perf audit (33 commits, PRs #1156–#1191)
+
+Continuation of the May 28 perf sprint. Group A→I covers dedup
+correctness, chromem persistence, split-book detection,
+warmer/heap tuning, iTunes/Deluge/Works perf pushdowns, and memdb
+field stripping. Wave 4 (H+I batch) cut steady-state RSS from
+67.8 GB → 39.6 GB; "All Books" list went from 4-minute timeouts to
+~250 ms.
+
+**Group A — Subprocess isolation (reverted, respec'd)**
+
+- **#1156 (1ecb48d1)** — Wire `IsChildMode()` into `main.go`, restore
+  `Isolate: true` on 7 ops (acoustid scan/fingerprint/backfill,
+  itunes.import, 3 ffmpeg maintenance ops).
+- **#1181 (f432aeb5)** — Revert: child process can't re-open Pebble
+  (single-writer). Isolate disabled across the board. Architectural
+  redesign deferred to `docs/specs/subprocess-isolation-rpc.md`
+  (Option A: parent-mediated Store RPC).
+
+**Group B — Dedup correctness**
+
+- **#1158 (a5105ad0)** — Frontend Merge button calls only
+  `/dedup/candidates/:id/merge`; removed stale dual-dispatch.
+- **#1159 (891debd5)** — Return HTTP 409 (not 500) when source book
+  already merged away.
+- **#1160 (be183ead)** — Cleanup orphan candidates referencing
+  already-merged books.
+- **#1161 (8616c7fc)** — Filter dead-book candidates out of list
+  response.
+- **#1184 (df89b752)** — `mergeDedupCandidate` honors user's Keep A/B
+  choice; previously discarded UI selection.
+
+**Group C — Perf audit documentation**
+
+- **#1170 (73d58263)** — `docs/perf-audit-getall-callers.md` — catalog
+  every `GetAll*` caller in request paths.
+
+**Group D — Chromem + heap analysis**
+
+- **#1162 (71980c54)** — `DEDUP_CHROMEM_LAZY` env skips eager chromem
+  hydrate at startup.
+- **#1163 (b2ae22ff)** — Chromem switched to `NewDB()` in-memory;
+  removed broken persistence layer.
+- **#1164 (cb3ddd7d)** — Pebble fallback when memdb-stripped fields
+  appear in predicates.
+- **#1165 (49721c40)** — `docs/perf-audit-heap-breakdown.md` — per-PR
+  heap delta analysis.
+
+**Group F — Warmer tuning**
+
+- **#1166 (6cf24c9a)** — F1 eager warmer heap guard + F2 trickle
+  warmer baseline resample (delta ceiling instead of absolute).
+
+**Group G — Scanner / split-book detection**
+
+- **#1167 (6c20be77)** — Scanner detects multi-file audiobooks at
+  import (prevents per-chapter dir creation).
+- **#1168 (fb1c0a0d)** — Split-book backfill detector + CLI for
+  cleaning up the `/`-in-template damage (~85 dup books per series).
+- **#1169 (a0d6bf9c)** — UI: "Split Books" dedup review tab.
+- **#1172 (6ca78388)** — G5a: strip chapter prefix from per-chapter
+  track `Name` during iTunes import.
+- **#1173 (4d093f8b)** — G6: maintenance op `orphan-book-files-cleanup`
+  for stale `book_file` rows after merges.
+
+**Group H — Memdb pushdowns (hot-path perf)**
+
+- **#1185 (d4f720fb)** — H1: `ListBooksByITunesPID` uses memdb iTunes
+  PID index (was full-corpus scan).
+- **#1186 (86a80b90)** — H2+H8: memdb fastpath for
+  `GetBookFilesNeedingDelugeImport` + Deluge hash index.
+- **#1187 (699654df)** — H3: `GetAllWorkBookCounts` aggregated +
+  paginate `listWork`; drops 50K-book materialization.
+- **#1188 (79c6201e)** — H4: `ListBookIDs` no longer materializes
+  50K `Book` structs (memdb projection only).
+- **#1189 (56e3a638)** — H6: scanner caches works lookup per scan.
+
+**Group I — Memdb field-strip / cache caps**
+
+- **#1190 (5ef08285)** — I2+I3: drop `Works` table from memdb; strip
+  remaining bulk fields from `BookFile` (description, sig, masks).
+  Largest single RSS win in the I-batch.
+- **#1183 (c2455b18)** — I4: bound LRU caches by entry count (prevent
+  unbounded growth under warmer pressure).
+- **#1171 (f80bbae6)** — I5: truncate description fed to bleve to 500
+  chars (was indexing 100K+ char descriptions verbatim).
+
+**Fixes / test hygiene**
+
+- **#1182 (aa285264)** — Op log: Copy button + pause auto-refresh on
+  hover; manual Refresh.
+- **#1191 (304509b2)** — Fingerprint-rescan params: fix
+  double-marshal that caused `failed to unmarshal params` immediate
+  failure from UI trigger.
+- **#1157 (3311d6b3)** — `GetAllBookFiles` uses memdb when available.
+- **(c22af5fd)** — Single `GetBookFilesForIDs` per list request.
+- **(e96db6d7)** — `TestPebbleStoreReset` clears memdb in `Reset`.
+- **(777a6da2)** — Initialize caches in test `Server` fixture.
+- **(edcb27d3)** — Mock `GetBookFilesForIDs` + `GetBookFiles` in
+  `EnrichAudiobooksWithNames` test.
+
+**Net deploy impact:** RSS 67.8 GB → 39.6 GB at steady-state;
+500-per-page list query 3m51s → 241 ms; iTunes PID lookup <200 ms
+warm; Deluge discover <500 ms warm. Post-deploy verification
+checklist: `docs/specs/post-deploy-2026-05-29-verification.md`.
 
 #### May 28, 2026 — Perf sprint: OOM fix, filter pushdown, files-via-memdb, registry double-dispatch
 
