@@ -1,5 +1,5 @@
 // file: internal/search/index_builder.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: 8a1c2f4d-5b3e-4f70-b7d6-2e8d0f1b9a57
 //
 // Helpers that project a database.Book (with its author, series,
@@ -11,8 +11,70 @@
 package search
 
 import (
+	"os"
+	"strconv"
+	"sync"
+	"unicode/utf8"
+
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
+
+// defaultDescriptionMaxChars caps the number of UTF-8 characters
+// (runes) of Book.Description that are fed to the bleve index. The
+// full description body contributes the bulk of index residency
+// (~2GB across the production library) while most queries match on
+// Title/Author/Series, not description prose. Truncating to the
+// opening ~500 runes preserves the most query-relevant terms.
+//
+// Override via env BLEVE_DESCRIPTION_MAX_CHARS. A value of 0
+// disables truncation entirely (full description indexed).
+const defaultDescriptionMaxChars = 500
+
+var (
+	descriptionMaxCharsOnce sync.Once
+	descriptionMaxChars     int
+)
+
+// descriptionLimit returns the configured max-rune limit for the
+// description field, loading from the environment on first call.
+func descriptionLimit() int {
+	descriptionMaxCharsOnce.Do(func() {
+		descriptionMaxChars = defaultDescriptionMaxChars
+		if v := os.Getenv("BLEVE_DESCRIPTION_MAX_CHARS"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				descriptionMaxChars = n
+			}
+		}
+	})
+	return descriptionMaxChars
+}
+
+// truncateForIndex returns the first n UTF-8 runes of s. n == 0
+// means no truncation. The result is always valid UTF-8 (cut on a
+// rune boundary). Invalid UTF-8 in the source is replaced with the
+// Unicode replacement character via strings.ToValidUTF8-equivalent
+// behavior at the rune-decode boundary.
+func truncateForIndex(s string, n int) string {
+	if n <= 0 || s == "" {
+		return s
+	}
+	// Fast path: ASCII-only strings shorter than n bytes are also
+	// shorter than n runes.
+	if len(s) <= n {
+		return s
+	}
+	count := 0
+	i := 0
+	for i < len(s) {
+		if count == n {
+			return s[:i]
+		}
+		_, size := utf8.DecodeRuneInString(s[i:])
+		i += size
+		count++
+	}
+	return s
+}
 
 // BookToDoc resolves a Book's related rows through the Store and
 // returns the flat BookDocument for indexing. Missing relations are
@@ -35,7 +97,7 @@ func BookToDoc(store interface {
 		doc.Publisher = *book.Publisher
 	}
 	if book.Description != nil {
-		doc.Description = *book.Description
+		doc.Description = truncateForIndex(*book.Description, descriptionLimit())
 	}
 	doc.FilePath = book.FilePath
 	doc.Format = book.Format
