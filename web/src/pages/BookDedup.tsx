@@ -2280,10 +2280,14 @@ function AcousticDedupTab() {
     }
   };
 
-  const handleMerge = async (candidateId: number, keepId: string, discardId: string) => {
+  const handleMerge = async (candidateId: number) => {
+    // The sync /dedup/candidates/:id/merge endpoint performs the merge,
+    // updates candidate status, publishes the event, and cleans up orphan
+    // candidates (PR #1167). Previously we also fired /audiobooks/merge
+    // (async) here, which caused a race + UI flicker + spurious 409 from
+    // the sync call when the async one won. (B1)
     setResolving((s) => new Set(s).add(candidateId));
     try {
-      await api.mergeBooks(keepId, [discardId]);
       await api.mergeDedupCandidate(candidateId);
       setCandidates((prev) => prev.filter((c) => c.id !== candidateId));
     } catch (err) {
@@ -2400,13 +2404,13 @@ function AcousticDedupTab() {
                       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
                         <Tooltip title="Keep Book A, merge B into it">
                           <Button size="small" variant={recommendA ? 'contained' : 'outlined'} color="primary"
-                            disabled={busy} onClick={() => handleMerge(c.id, c.entity_a_id, c.entity_b_id)}>
+                            disabled={busy} onClick={() => handleMerge(c.id)}>
                             Keep A
                           </Button>
                         </Tooltip>
                         <Tooltip title="Keep Book B, merge A into it">
                           <Button size="small" variant={recommendB ? 'contained' : 'outlined'} color="primary"
-                            disabled={busy} onClick={() => handleMerge(c.id, c.entity_b_id, c.entity_a_id)}>
+                            disabled={busy} onClick={() => handleMerge(c.id)}>
                             Keep B
                           </Button>
                         </Tooltip>
