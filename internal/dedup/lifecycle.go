@@ -1,5 +1,5 @@
 // file: internal/dedup/lifecycle.go
-// version: 1.0.1
+// version: 1.1.0
 
 // Lifecycle methods on *dedup.Engine that the serviceregistry container
 // picks up via interface satisfaction. PostInit subscribes to lifecycle
@@ -15,6 +15,8 @@ package dedup
 import (
 	"context"
 	"log/slog"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/ai"
@@ -22,6 +24,29 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/plugin"
 	"github.com/jdfalk/audiobook-organizer/internal/serviceregistry"
 )
+
+// dedupChromemLazy reports whether the eager HydrateChromem at startup
+// should be skipped. Controlled by env var DEDUP_CHROMEM_LAZY (default
+// false / eager). When true, the chromem store stays empty and
+// FindSimilar in engine.go falls back to the SQLite linear-scan path
+// (EmbeddingStore.FindSimilar at internal/database/embedding_store.go).
+//
+// Tradeoff: skipping hydrate saves ~6GB heap on the 392K-book / 42K-
+// embedding production library, but each dedup FindSimilar goes from
+// chromem ANN (<10ms) to SQLite full-scan + cosine (~50-200ms). Dedup
+// queries are rare (operator-triggered scans, dedup-on-import), so the
+// memory savings dominate for memory-constrained deployments.
+func dedupChromemLazy() bool {
+	v := os.Getenv("DEDUP_CHROMEM_LAZY")
+	if v == "" {
+		return false
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false
+	}
+	return b
+}
 
 // PostInit wires the dedup engine into the rest of the container. Called
 // by Container.PostInit after Build completes. Three steps:
@@ -67,17 +92,25 @@ func (de *Engine) PostInit(ctx context.Context, c *serviceregistry.Container) er
 	if chromemStore, ok := serviceregistry.TryGet[*database.ChromemEmbeddingStore](c, "chromemstore"); ok && chromemStore != nil {
 		de.SetChromemStore(chromemStore)
 		slog.Info("[INFO] chromem-go ANN store active for dedup Layer 2")
-		// Hydrate asynchronously on the engine's bg-context.
-		go func() {
-			hCtx, cancel := context.WithTimeout(bgCtx, 30*time.Minute)
-			defer cancel()
-			books, authors, err := de.HydrateChromem(hCtx)
-			if err != nil {
-				slog.Warn("chromem hydrate finished with error", "err", err, "books", books, "authors", authors)
-				return
-			}
-			slog.Info("chromem hydrate complete", "books", books, "authors", authors)
-		}()
+		if dedupChromemLazy() {
+			// Skip the eager hydrate. Chromem stays empty; FindSimilar in
+			// engine.go falls back to the SQLite linear-scan path via
+			// EmbeddingStore.FindSimilar (slower per-query but no upfront
+			// ~6GB heap from mirroring 42K book vectors into memory).
+			slog.Info("chromem hydrate skipped (DEDUP_CHROMEM_LAZY=true) — dedup FindSimilar will use SQLite linear-scan fallback")
+		} else {
+			// Hydrate asynchronously on the engine's bg-context.
+			go func() {
+				hCtx, cancel := context.WithTimeout(bgCtx, 30*time.Minute)
+				defer cancel()
+				books, authors, err := de.HydrateChromem(hCtx)
+				if err != nil {
+					slog.Warn("chromem hydrate finished with error", "err", err, "books", books, "authors", authors)
+					return
+				}
+				slog.Info("chromem hydrate complete", "books", books, "authors", authors)
+			}()
+		}
 	}
 
 	// Step 3 — aijobs store + verdict applier
