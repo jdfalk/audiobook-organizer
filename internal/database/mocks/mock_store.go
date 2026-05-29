@@ -4196,6 +4196,61 @@ func (_c *MockBookReader_GetQuarantinedBooks_Call) RunAndReturn(run func(limit i
 	return _c
 }
 
+// ListBookIDs provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) ListBookIDs() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBookIDs")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookReader_ListBookIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBookIDs'
+type MockBookReader_ListBookIDs_Call struct {
+	*mock.Call
+}
+
+// ListBookIDs is a helper method to define mock.On call
+func (_e *MockBookReader_Expecter) ListBookIDs() *MockBookReader_ListBookIDs_Call {
+	return &MockBookReader_ListBookIDs_Call{Call: _e.mock.On("ListBookIDs")}
+}
+
+func (_c *MockBookReader_ListBookIDs_Call) Run(run func()) *MockBookReader_ListBookIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockBookReader_ListBookIDs_Call) Return(strings []string, err error) *MockBookReader_ListBookIDs_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockBookReader_ListBookIDs_Call) RunAndReturn(run func() ([]string, error)) *MockBookReader_ListBookIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListBookTombstones provides a mock function for the type MockBookReader
 func (_mock *MockBookReader) ListBookTombstones(limit int) ([]database.Book, error) {
 	ret := _mock.Called(limit)
@@ -7324,6 +7379,61 @@ func (_c *MockBookStore_IncrScanFailCount_Call) Return(n int, err error) *MockBo
 }
 
 func (_c *MockBookStore_IncrScanFailCount_Call) RunAndReturn(run func(pathHash string) (int, error)) *MockBookStore_IncrScanFailCount_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListBookIDs provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) ListBookIDs() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBookIDs")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookStore_ListBookIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBookIDs'
+type MockBookStore_ListBookIDs_Call struct {
+	*mock.Call
+}
+
+// ListBookIDs is a helper method to define mock.On call
+func (_e *MockBookStore_Expecter) ListBookIDs() *MockBookStore_ListBookIDs_Call {
+	return &MockBookStore_ListBookIDs_Call{Call: _e.mock.On("ListBookIDs")}
+}
+
+func (_c *MockBookStore_ListBookIDs_Call) Run(run func()) *MockBookStore_ListBookIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockBookStore_ListBookIDs_Call) Return(strings []string, err error) *MockBookStore_ListBookIDs_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockBookStore_ListBookIDs_Call) RunAndReturn(run func() ([]string, error)) *MockBookStore_ListBookIDs_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -40329,6 +40439,61 @@ func (_c *MockStore_ListAllTags_Call) Return(tagWithCounts []database.TagWithCou
 }
 
 func (_c *MockStore_ListAllTags_Call) RunAndReturn(run func() ([]database.TagWithCount, error)) *MockStore_ListAllTags_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListBookIDs provides a mock function for the type MockStore
+func (_mock *MockStore) ListBookIDs() ([]string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBookIDs")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListBookIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBookIDs'
+type MockStore_ListBookIDs_Call struct {
+	*mock.Call
+}
+
+// ListBookIDs is a helper method to define mock.On call
+func (_e *MockStore_Expecter) ListBookIDs() *MockStore_ListBookIDs_Call {
+	return &MockStore_ListBookIDs_Call{Call: _e.mock.On("ListBookIDs")}
+}
+
+func (_c *MockStore_ListBookIDs_Call) Run(run func()) *MockStore_ListBookIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockStore_ListBookIDs_Call) Return(strings []string, err error) *MockStore_ListBookIDs_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockStore_ListBookIDs_Call) RunAndReturn(run func() ([]string, error)) *MockStore_ListBookIDs_Call {
 	_c.Call.Return(run)
 	return _c
 }

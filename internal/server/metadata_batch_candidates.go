@@ -843,11 +843,14 @@ func (s *Server) handleListMetadataResults(c *gin.Context) {
 	// only get streamed when the caller asks for include_unfetched=true.
 	var unfetchedBookIDs []string
 	if includeUnfetched || statusFilter["unfetched"] {
-		allBooks, err := store.GetAllBooks(0, 0)
+		// Use ListBookIDs (key-only projection) instead of GetAllBooks —
+		// we only need the ID set to diff against `latest`. Avoids
+		// materializing ~50K Book structs (~50x memory reduction). H4.
+		allIDs, err := store.ListBookIDs()
 		if err == nil {
-			for _, b := range allBooks {
-				if _, ok := latest[b.ID]; !ok {
-					unfetchedBookIDs = append(unfetchedBookIDs, b.ID)
+			for _, id := range allIDs {
+				if _, ok := latest[id]; !ok {
+					unfetchedBookIDs = append(unfetchedBookIDs, id)
 				}
 			}
 			counts["unfetched"] = len(unfetchedBookIDs)

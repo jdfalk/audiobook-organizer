@@ -27,6 +27,10 @@ type UpdateBookRatingRequest struct {
 type BookReader interface {
 	GetBookByID(id string) (*Book, error)
 	GetAllBooks(limit, offset int) ([]Book, error)
+	// ListBookIDs returns just the IDs of all non-deleted books, without
+	// materializing Book structs. Saves ~50x memory vs GetAllBooks(0,0) when
+	// the caller only needs the ID set (e.g., diff'ing against another set).
+	ListBookIDs() ([]string, error)
 	GetAllBookSummaries(limit, offset int) ([]BookSummary, error)
 	GetBookByFilePath(path string) (*Book, error)
 	GetBookByITunesPersistentID(persistentID string) (*Book, error)

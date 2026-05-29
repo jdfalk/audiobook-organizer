@@ -35,6 +35,7 @@ type MockStore struct {
 	GetBookByIDFunc                 func(id string) (*Book, error)
 	GetBookByFilePathFunc           func(path string) (*Book, error)
 	GetAllBooksFunc                 func(limit, offset int) ([]Book, error)
+	ListBookIDsFunc                 func() ([]string, error)
 	GetAllBookSummariesFunc         func(limit, offset int) ([]BookSummary, error)
 	GetBooksByWorkIDFunc            func(workID string) ([]Book, error)
 	GetBooksBySeriesIDFunc          func(seriesID int) ([]Book, error)
@@ -647,6 +648,13 @@ func (m *MockStore) GetBooksByWorkID(workID string) ([]Book, error) {
 func (m *MockStore) GetAllBooks(limit, offset int) ([]Book, error) {
 	if m.GetAllBooksFunc != nil {
 		return m.GetAllBooksFunc(limit, offset)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListBookIDs() ([]string, error) {
+	if m.ListBookIDsFunc != nil {
+		return m.ListBookIDsFunc()
 	}
 	return nil, nil
 }

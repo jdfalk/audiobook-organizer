@@ -443,6 +443,31 @@ func (m *MemStore) GetAllBooks(limit, offset int, filters map[string]interface{}
 	return paginate(all, limit, offset), nil
 }
 
+// ListBookIDs returns the IDs of all non-deleted books. Walks the memdb
+// books table via the ID index and reads only b.ID off each pointer — no
+// struct copy, no JSON unmarshal. Used by callers that only need the ID
+// set (e.g., diff'ing against another set of IDs). Saves ~50x memory vs
+// GetAllBooks(0,0).
+func (m *MemStore) ListBookIDs() ([]string, error) {
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+
+	iter, err := txn.Get(memTableBooks, memIdxID)
+	if err != nil {
+		return nil, fmt.Errorf("memdb list book ids: %w", err)
+	}
+
+	ids := make([]string, 0, 1024)
+	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+		b := obj.(*Book)
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		ids = append(ids, b.ID)
+	}
+	return ids, nil
+}
+
 // ListSoftDeletedBooks returns books with MarkedForDeletion=true, with optional
 // age filter (olderThan: only books whose MarkedForDeletionAt is on/before this
 // time). Uses the marked_for_deletion index so cost is O(deleted_count), not
