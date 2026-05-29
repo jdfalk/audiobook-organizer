@@ -1174,6 +1174,31 @@ func (s *SQLiteStore) GetBooksByAuthorIDWithRole(authorID int) ([]Book, error) {
 	return books, rows.Err()
 }
 
+// GetAllWorkBookCounts returns map[workID] → count of primary, not-deleted
+// books per work in a single query, avoiding N+1 GetBooksByWorkID calls.
+func (s *SQLiteStore) GetAllWorkBookCounts() (map[string]int, error) {
+	rows, err := s.db.Query(`SELECT work_id, COUNT(*)
+		FROM books
+		WHERE work_id IS NOT NULL AND work_id != ''
+		  AND COALESCE(marked_for_deletion, 0) = 0
+		  AND COALESCE(is_primary_version, 1) = 1
+		GROUP BY work_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := make(map[string]int)
+	for rows.Next() {
+		var workID string
+		var count int
+		if err := rows.Scan(&workID, &count); err != nil {
+			return nil, err
+		}
+		counts[workID] = count
+	}
+	return counts, rows.Err()
+}
+
 func (s *SQLiteStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	rows, err := s.db.Query(`SELECT ba.author_id, COUNT(DISTINCT ba.book_id)
 		FROM book_authors ba

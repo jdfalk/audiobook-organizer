@@ -107,23 +107,44 @@ func (s *Server) listWorkBooks(c *gin.Context) {
 	httputil.RespondWithOK(c, gin.H{"items": books, "count": len(books)})
 }
 
-// listWork returns all work items (audiobooks grouped by work entity)
+// listWork returns work items (audiobooks grouped by work entity), paginated.
+// Uses GetAllWorkBookCounts to compute book counts in a single pass instead of
+// per-work GetBooksByWorkID calls (N+1 on a 50K-work corpus). Books for each
+// work in the page are still fetched individually so callers that need the
+// books slice continue to work; pagination bounds the per-request cost.
 func (s *Server) listWork(c *gin.Context) {
 	if s.Store() == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
 		return
 	}
 
-	// Get all works
+	params := httputil.ParsePaginationParams(c)
+
 	works, err := s.Store().GetAllWorks()
 	if err != nil {
 		httputil.RespondWithInternalError(c, "failed to retrieve works")
 		return
 	}
 
-	// For each work, get associated books
-	items := make([]map[string]any, 0, len(works))
-	for _, work := range works {
+	counts, err := s.Store().GetAllWorkBookCounts()
+	if err != nil {
+		httputil.RespondWithInternalError(c, "failed to retrieve work book counts")
+		return
+	}
+
+	total := len(works)
+	start := params.Offset
+	if start > total {
+		start = total
+	}
+	end := start + params.Limit
+	if end > total {
+		end = total
+	}
+	page := works[start:end]
+
+	items := make([]map[string]any, 0, len(page))
+	for _, work := range page {
 		books, err := s.Store().GetBooksByWorkID(work.ID)
 		if err != nil {
 			books = []database.Book{}
@@ -133,18 +154,22 @@ func (s *Server) listWork(c *gin.Context) {
 			"id":         work.ID,
 			"title":      work.Title,
 			"author_id":  work.AuthorID,
-			"book_count": len(books),
+			"book_count": counts[work.ID],
 			"books":      books,
 		})
 	}
 
 	httputil.RespondWithOK(c, gin.H{
-		"items": items,
-		"total": len(items),
+		"items":  items,
+		"total":  total,
+		"limit":  params.Limit,
+		"offset": params.Offset,
 	})
 }
 
-// getWorkStats returns statistics about work items
+// getWorkStats returns statistics about work items. Uses GetAllWorkBookCounts
+// to compute per-work counts in a single store call instead of N+1
+// GetBooksByWorkID lookups.
 func (s *Server) getWorkStats(c *gin.Context) {
 	if s.Store() == nil {
 		httputil.RespondWithInternalError(c, "database not initialized")
@@ -157,16 +182,18 @@ func (s *Server) getWorkStats(c *gin.Context) {
 		return
 	}
 
+	counts, err := s.Store().GetAllWorkBookCounts()
+	if err != nil {
+		httputil.RespondWithInternalError(c, "failed to retrieve work book counts")
+		return
+	}
+
 	totalWorks := len(works)
 	totalBooks := 0
 	worksWithMultipleEditions := 0
 
 	for _, work := range works {
-		books, err := s.Store().GetBooksByWorkID(work.ID)
-		if err != nil {
-			continue
-		}
-		bookCount := len(books)
+		bookCount := counts[work.ID]
 		totalBooks += bookCount
 		if bookCount > 1 {
 			worksWithMultipleEditions++

@@ -749,6 +749,10 @@ func (m *MockStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	return map[int]int{}, nil
 }
 
+func (m *MockStore) GetAllWorkBookCounts() (map[string]int, error) {
+	return map[string]int{}, nil
+}
+
 func (m *MockStore) GetAllAuthorFileCounts() (map[int]int, error) {
 	return map[int]int{}, nil
 }
