@@ -1,5 +1,5 @@
 // file: internal/organizer/path_format.go
-// version: 1.1.0
+// version: 1.2.0
 // guid: a7b3c1d2-e4f5-6789-abcd-ef0123456789
 
 package organizer
@@ -34,7 +34,9 @@ const (
 
 // FormatSegmentTitle formats a per-segment title using the template.
 // For single-file books (totalTracks == 1), returns just the title without numbering.
+// title is scrubbed of path separators — segment titles are path components.
 func FormatSegmentTitle(format string, title string, track, totalTracks int) string {
+	title = scrubVar(title)
 	if totalTracks <= 1 {
 		return title
 	}
@@ -58,18 +60,60 @@ func FormatSegmentTitle(format string, title string, track, totalTracks int) str
 	return result
 }
 
+// scrubVar strips characters that would create unintended path separators
+// or hidden directories if they leaked from metadata into a template
+// substitution. Called on EVERY variable value before it's interpolated
+// into the path format. Without this, a Title like "Tarkin - Star Wars - 3/85"
+// (real prod data, 2026-05-28) splits into a "Tarkin - Star Wars - 3/"
+// directory + "85.mp3" file — and the scanner then sees 85 single-file
+// directories and creates 85 separate Book records instead of one Book
+// with 85 BookFiles.
+//
+// Replaces:
+//   '/' and '\' (path separators) → ' '
+//   leading '.' (would create hidden dirs / could match parent ".")
+// Whitespace is collapsed at the per-component SanitizePathComponent step.
+func scrubVar(s string) string {
+	if s == "" {
+		return s
+	}
+	// Drop path separators outright — they have no place inside a single
+	// metadata value. Anyone wanting a "/" in a path should put it in the
+	// template structure, not in {title} / {series} / etc.
+	s = strings.ReplaceAll(s, "/", " ")
+	s = strings.ReplaceAll(s, "\\", " ")
+	// Leading dots create hidden files/dirs on POSIX and ".." is parent.
+	s = strings.TrimLeft(s, ".")
+	return s
+}
+
 // FormatPath formats a full file path using the path_format template.
 func FormatPath(format string, vars FormatVars) string {
-	trackTitle := vars.TrackTitle
+	// SCRUB every variable BEFORE substitution so no metadata value can
+	// introduce an unintended path separator. The post-substitution split
+	// at line ~150 below treats every '/' as a directory boundary; if
+	// {title} leaks a '/', the directory tree explodes (see scrubVar comment).
+	author := scrubVar(vars.Author)
+	title := scrubVar(vars.Title)
+	series := scrubVar(vars.Series)
+	seriesPos := scrubVar(vars.SeriesPos)
+	narrator := scrubVar(vars.Narrator)
+	lang := scrubVar(vars.Lang)
+
+	trackTitle := scrubVar(vars.TrackTitle)
 	if trackTitle == "" && vars.Track > 0 {
-		trackTitle = FormatSegmentTitle(DefaultSegmentTitleFormat, vars.Title, vars.Track, vars.TotalTracks)
+		// Use scrubbed title here too — segment title is a path component.
+		trackTitle = FormatSegmentTitle(DefaultSegmentTitleFormat, title, vars.Track, vars.TotalTracks)
+		// FormatSegmentTitle could in theory emit a '/' if a future template
+		// uses one — re-scrub defensively.
+		trackTitle = scrubVar(trackTitle)
 	}
 
 	seriesPrefix := ""
-	if vars.Series != "" {
-		seriesPrefix = vars.Series
-		if vars.SeriesPos != "" {
-			seriesPrefix += " " + vars.SeriesPos
+	if series != "" {
+		seriesPrefix = series
+		if seriesPos != "" {
+			seriesPrefix += " " + seriesPos
 		}
 		seriesPrefix += " - "
 	}
@@ -80,14 +124,14 @@ func FormatPath(format string, vars FormatVars) string {
 	}
 
 	result := format
-	result = strings.ReplaceAll(result, "{author}", vars.Author)
-	result = strings.ReplaceAll(result, "{title}", vars.Title)
-	result = strings.ReplaceAll(result, "{series}", vars.Series)
-	result = strings.ReplaceAll(result, "{series_position}", vars.SeriesPos)
+	result = strings.ReplaceAll(result, "{author}", author)
+	result = strings.ReplaceAll(result, "{title}", title)
+	result = strings.ReplaceAll(result, "{series}", series)
+	result = strings.ReplaceAll(result, "{series_position}", seriesPos)
 	result = strings.ReplaceAll(result, "{series_prefix}", seriesPrefix)
 	result = strings.ReplaceAll(result, "{year}", yearStr)
-	result = strings.ReplaceAll(result, "{narrator}", vars.Narrator)
-	result = strings.ReplaceAll(result, "{lang}", vars.Lang)
+	result = strings.ReplaceAll(result, "{narrator}", narrator)
+	result = strings.ReplaceAll(result, "{lang}", lang)
 	result = strings.ReplaceAll(result, "{track_title}", trackTitle)
 	result = strings.ReplaceAll(result, "{ext}", vars.Ext)
 
