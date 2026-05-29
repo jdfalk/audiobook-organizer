@@ -54,7 +54,7 @@ func (p *Plugin) movementAtomCleanupDef() sdk.OperationDef {
 		DefaultPriority: sdk.PriorityLow,
 		ConcurrencyKey:  "maintenance.movement-atom-cleanup",
 		Cancellable:     false,
-		Isolate:         true, // uses ffmpeg subprocess
+		Isolate:         false, // child-mode handler not wired in main.go; ffmpeg still spawned in-process via exec.Cmd
 		Timeout:         60 * time.Minute,
 		Schedule:        nil,
 		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
@@ -79,7 +79,7 @@ func (p *Plugin) malformedM4BRemuxDef() sdk.OperationDef {
 		DefaultPriority: sdk.PriorityLow,
 		ConcurrencyKey:  "maintenance.malformed-m4b-remux",
 		Cancellable:     false,
-		Isolate:         true, // uses ffmpeg subprocess
+		Isolate:         false, // child-mode handler not wired in main.go; ffmpeg still spawned in-process via exec.Cmd
 		Timeout:         120 * time.Minute,
 		Schedule:        nil,
 		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
@@ -106,7 +106,7 @@ func (p *Plugin) malformedM4BTranscodeDef() sdk.OperationDef {
 		DefaultPriority: sdk.PriorityLow,
 		ConcurrencyKey:  "maintenance.malformed-m4b-transcode",
 		Cancellable:     true,
-		Isolate:         true, // uses ffmpeg subprocess
+		Isolate:         false, // child-mode handler not wired in main.go; ffmpeg still spawned in-process via exec.Cmd
 		Timeout:         6 * time.Hour,
 		Schedule:        nil,
 		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
