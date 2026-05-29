@@ -6,7 +6,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -75,19 +74,18 @@ func (s *Server) triggerFingerprintRescan(c *gin.Context) {
 		return
 	}
 
-	// Convert request to UOS operation params
+	// Convert request to UOS operation params. Pass the MAP directly —
+	// Registry.EnqueueOp does its own json.Marshal. If we pre-marshaled
+	// to []byte here, EnqueueOp would marshal the byte slice itself,
+	// producing a base64 string that fails Unmarshal on the worker
+	// side ("failed to unmarshal params").
 	params := map[string]interface{}{
 		"scope":    scope,
 		"book_ids": req.BookIDs,
 		"force":    req.Force,
 	}
-	paramsJSON, err := json.Marshal(params)
-	if err != nil {
-		httputil.InternalError(c, "failed to marshal operation params", err)
-		return
-	}
 
-	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.fingerprint-rescan", paramsJSON)
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.fingerprint-rescan", params)
 	if err != nil {
 		httputil.InternalError(c, "failed to enqueue fingerprint-rescan", err)
 		return
