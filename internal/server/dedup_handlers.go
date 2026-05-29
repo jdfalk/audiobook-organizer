@@ -964,6 +964,22 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 			return
 		}
 		result = mergeResult
+
+		// MAYDEPLOY-B3: sweep orphan candidates. Any *other* pending candidate
+		// row that still references the merged-away book(s) is now stale —
+		// clicking Merge on it would 500 ("book not found") absent the
+		// PR #1160 409-hotfix path. Mark them merged proactively so the UI
+		// drops them on the next refresh rather than the user having to
+		// dismiss each by hand.
+		if s.dedupEngine != nil && mergeResult != nil {
+			var mergedAway []string
+			for _, bid := range []string{candidate.EntityAID, candidate.EntityBID} {
+				if bid != "" && bid != mergeResult.PrimaryID {
+					mergedAway = append(mergedAway, bid)
+				}
+			}
+			s.dedupEngine.CleanupCandidatesAfterMerge(mergedAway)
+		}
 	}
 
 	if err := s.embeddingStore.UpdateCandidateStatus(id, "merged"); err != nil {

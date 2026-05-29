@@ -160,6 +160,182 @@ func TestDedupCandidates_RemoveForEntity(t *testing.T) {
 	assert.Equal(t, "b4", remaining[0].EntityBID)
 }
 
+// TestDedupCandidates_MarkAsMergedForEntity covers MAYDEPLOY-B3: after a merge
+// collapses book B into book A, any other candidate row referencing book B
+// must be flipped to status="merged" so the candidates UI drops the orphan.
+func TestDedupCandidates_MarkAsMergedForEntity(t *testing.T) {
+	t.Run("zero matches", func(t *testing.T) {
+		store := newTestEmbeddingStore(t)
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "b1", EntityBID: "b2",
+			Layer: "embedding", Status: "pending",
+		}))
+
+		n, err := store.MarkCandidatesAsMergedForEntity("book", "b99")
+		require.NoError(t, err)
+		assert.Equal(t, 0, n)
+
+		// Existing row untouched.
+		results, _, err := store.ListCandidates(CandidateFilter{})
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Equal(t, "pending", results[0].Status)
+	})
+
+	t.Run("match on entity_a_id side", func(t *testing.T) {
+		store := newTestEmbeddingStore(t)
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "bA", EntityBID: "bX",
+			Layer: "embedding", Status: "pending",
+		}))
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "bY", EntityBID: "bZ",
+			Layer: "embedding", Status: "pending",
+		}))
+
+		n, err := store.MarkCandidatesAsMergedForEntity("book", "bA")
+		require.NoError(t, err)
+		assert.Equal(t, 1, n)
+
+		got, _, err := store.ListCandidates(CandidateFilter{EntityType: "book"})
+		require.NoError(t, err)
+		statuses := map[string]string{}
+		for _, c := range got {
+			statuses[c.EntityAID+"|"+c.EntityBID] = c.Status
+		}
+		// UpsertCandidate canonicalizes so the pair becomes (bA, bX).
+		assert.Equal(t, "merged", statuses["bA|bX"])
+		assert.Equal(t, "pending", statuses["bY|bZ"])
+	})
+
+	t.Run("match on entity_b_id side", func(t *testing.T) {
+		store := newTestEmbeddingStore(t)
+		// UpsertCandidate canonicalizes so the merged-away book ends up on
+		// whichever side it sorts to; constructing a pair where the target
+		// will land on the B side requires the target ID to sort *after* its
+		// partner.
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "aaa", EntityBID: "zzz",
+			Layer: "embedding", Status: "pending",
+		}))
+
+		n, err := store.MarkCandidatesAsMergedForEntity("book", "zzz")
+		require.NoError(t, err)
+		assert.Equal(t, 1, n)
+
+		results, _, err := store.ListCandidates(CandidateFilter{})
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		assert.Equal(t, "merged", results[0].Status)
+	})
+
+	t.Run("both sides match across rows", func(t *testing.T) {
+		store := newTestEmbeddingStore(t)
+		// Target book = "bMid". It appears on the A side in one row and on
+		// the B side in another after canonicalization.
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "bMid", EntityBID: "zOther",
+			Layer: "embedding", Status: "pending",
+		}))
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "aOther", EntityBID: "bMid",
+			Layer: "embedding", Status: "pending",
+		}))
+		// Unrelated row must stay pending.
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "x1", EntityBID: "x2",
+			Layer: "embedding", Status: "pending",
+		}))
+
+		n, err := store.MarkCandidatesAsMergedForEntity("book", "bMid")
+		require.NoError(t, err)
+		assert.Equal(t, 2, n)
+
+		results, _, err := store.ListCandidates(CandidateFilter{})
+		require.NoError(t, err)
+		require.Len(t, results, 3)
+		merged := 0
+		pending := 0
+		for _, c := range results {
+			switch c.Status {
+			case "merged":
+				merged++
+				// Each merged row must touch bMid.
+				assert.True(t, c.EntityAID == "bMid" || c.EntityBID == "bMid", "merged row should reference bMid")
+			case "pending":
+				pending++
+				assert.False(t, c.EntityAID == "bMid" || c.EntityBID == "bMid", "pending row should not reference bMid")
+			}
+		}
+		assert.Equal(t, 2, merged)
+		assert.Equal(t, 1, pending)
+	})
+
+	t.Run("already merged rows untouched in count", func(t *testing.T) {
+		store := newTestEmbeddingStore(t)
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "bA", EntityBID: "bX",
+			Layer: "embedding", Status: "merged",
+		}))
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "bA", EntityBID: "bY",
+			Layer: "embedding", Status: "pending",
+		}))
+
+		n, err := store.MarkCandidatesAsMergedForEntity("book", "bA")
+		require.NoError(t, err)
+		// Only the pending row counts as newly transitioned.
+		assert.Equal(t, 1, n)
+
+		results, _, err := store.ListCandidates(CandidateFilter{})
+		require.NoError(t, err)
+		for _, c := range results {
+			assert.Equal(t, "merged", c.Status)
+		}
+	})
+
+	t.Run("entity_type filter respected", func(t *testing.T) {
+		store := newTestEmbeddingStore(t)
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "x1", EntityBID: "x2",
+			Layer: "embedding", Status: "pending",
+		}))
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "author", EntityAID: "x1", EntityBID: "x2",
+			Layer: "metadata", Status: "pending",
+		}))
+
+		n, err := store.MarkCandidatesAsMergedForEntity("book", "x1")
+		require.NoError(t, err)
+		assert.Equal(t, 1, n)
+
+		results, _, err := store.ListCandidates(CandidateFilter{})
+		require.NoError(t, err)
+		statuses := map[string]string{}
+		for _, c := range results {
+			statuses[c.EntityType] = c.Status
+		}
+		assert.Equal(t, "merged", statuses["book"])
+		assert.Equal(t, "pending", statuses["author"])
+	})
+
+	t.Run("empty inputs noop", func(t *testing.T) {
+		store := newTestEmbeddingStore(t)
+		require.NoError(t, store.UpsertCandidate(DedupCandidate{
+			EntityType: "book", EntityAID: "b1", EntityBID: "b2",
+			Layer: "embedding", Status: "pending",
+		}))
+
+		n, err := store.MarkCandidatesAsMergedForEntity("", "b1")
+		require.NoError(t, err)
+		assert.Equal(t, 0, n)
+
+		n, err = store.MarkCandidatesAsMergedForEntity("book", "")
+		require.NoError(t, err)
+		assert.Equal(t, 0, n)
+	})
+}
+
 // TestDedupCandidates_LayerPrecedence verifies that an upsert with a
 // lower-confidence layer does not downgrade an existing higher-confidence
 // row. Precedence: exact > llm > embedding. This locks in the fix for a

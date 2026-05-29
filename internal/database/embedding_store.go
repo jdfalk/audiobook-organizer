@@ -633,6 +633,84 @@ func (s *EmbeddingStore) DeleteCandidate(id int64) error {
 	return b.Commit(pebble.Sync)
 }
 
+// MarkCandidatesAsMergedForEntity sets status="merged" on every candidate row
+// that references the given entity on either side (entity_a_id OR entity_b_id),
+// regardless of current layer or status — *except* rows whose status is already
+// "merged", which are left untouched so the returned count reflects only newly
+// transitioned rows.
+//
+// Use case (MAYDEPLOY-B3): when a Merge operation collapses book B into book A,
+// any other dedup candidate that still references book B (e.g. a separate row
+// comparing book B vs book C) becomes a stale "orphan" — clicking Merge on it
+// would fail because book B is gone. Marking those rows as merged here causes
+// the candidates UI to drop them on its next refresh, instead of the user
+// having to dismiss each one manually.
+//
+// Returns the number of rows whose status was newly changed.
+func (s *EmbeddingStore) MarkCandidatesAsMergedForEntity(entityType, entityID string) (int, error) {
+	if entityType == "" || entityID == "" {
+		return 0, nil
+	}
+
+	prefix := []byte(dedupRecPfx)
+	upper := prefixUpperBound(prefix)
+
+	iter, err := s.db.NewIter(&pebble.IterOptions{LowerBound: prefix, UpperBound: upper})
+	if err != nil {
+		return 0, fmt.Errorf("mark candidates merged for entity: %w", err)
+	}
+
+	type target struct {
+		id  int64
+		rec candRec
+	}
+	var targets []target
+	for iter.First(); iter.Valid(); iter.Next() {
+		idHex := string(iter.Key())[len(dedupRecPfx):]
+		id, err := strconv.ParseInt(idHex, 16, 64)
+		if err != nil {
+			continue
+		}
+		var rec candRec
+		if err := json.Unmarshal(iter.Value(), &rec); err != nil {
+			continue
+		}
+		if rec.EntityType != entityType {
+			continue
+		}
+		if rec.EntityAID != entityID && rec.EntityBID != entityID {
+			continue
+		}
+		if rec.Status == "merged" {
+			continue
+		}
+		targets = append(targets, target{id: id, rec: rec})
+	}
+	iter.Close()
+	if err := iter.Error(); err != nil {
+		return 0, err
+	}
+
+	now := time.Now().UnixNano()
+	b := s.db.NewBatch()
+	defer b.Close()
+	for _, t := range targets {
+		t.rec.Status = "merged"
+		t.rec.UpdatedAt = now
+		data, err := json.Marshal(t.rec)
+		if err != nil {
+			return 0, fmt.Errorf("mark candidates merged marshal %d: %w", t.id, err)
+		}
+		if err := b.Set(dedupRecKey(t.id), data, nil); err != nil {
+			return 0, fmt.Errorf("mark candidates merged set %d: %w", t.id, err)
+		}
+	}
+	if err := b.Commit(pebble.Sync); err != nil {
+		return 0, fmt.Errorf("mark candidates merged commit: %w", err)
+	}
+	return len(targets), nil
+}
+
 // RemoveCandidatesForEntity deletes all candidate rows that involve the given
 // entity (as either entity_a or entity_b). Returns the number of rows deleted.
 func (s *EmbeddingStore) RemoveCandidatesForEntity(entityType, entityID string) (int, error) {
