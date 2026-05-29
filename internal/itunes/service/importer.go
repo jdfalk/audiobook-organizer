@@ -1,5 +1,5 @@
 // file: internal/itunes/service/importer.go
-// version: 1.0.4
+// version: 1.0.5
 // guid: 2b8e5f1a-4c7d-4e9f-b3a0-6d8c2e7a4f1b
 
 package itunesservice
@@ -1097,7 +1097,12 @@ func (imp *Importer) buildBookFromAlbumGroup(group albumGroup, libraryPath strin
 		bookFilePath = imp.commonParentDir(group.tracks, opts)
 	}
 	if title == "" {
-		title = strings.TrimSpace(firstTrack.Name)
+		// Album tag was empty/missing — falling back to the per-chapter track
+		// Name. iTunes audiobook tracks frequently have Names shaped like
+		// "(76/85) Tarkin: Star Wars (Unabridged)" — strip the chapter prefix
+		// so Book.Title doesn't carry a chapter number.
+		// See docs/perf-audit-2026-05-29-g5-title-mismatch.md (MAYDEPLOY-G5a).
+		title = stripChapterPrefix(strings.TrimSpace(firstTrack.Name))
 	}
 	if title == "" {
 		title = strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))

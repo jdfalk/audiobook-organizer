@@ -194,15 +194,30 @@ one book × many BookFiles).
   prints dry-run plan, optionally executes. Operator runs once
   against the existing ~thousands of over-split books in the
   library.
-- [ ] **G5** Investigate the WRONG metadata source: book
-  `01KQGDQTJ44FCAPW5Z9D2KNQDE` has title `(76/85) Tarkin` but
-  the only file is `4/85.mp3`. Either the title was set from a
-  different file (cross-file contamination during scan), or the
-  scanner read tags from a stale source. Reproduce by
-  re-importing the folder; trace where the `76` came from.
-  Likely culprit: `audiobookService.extractBookFileMetadata`
-  or similar fills Title from the first/last file in the folder
-  rather than the file the Book represents.
+- [x] **G5a** Strip leading `(N/M)` / `Chapter N` prefix from
+  iTunes per-chapter track Names when fall-back populates
+  `Book.Title`. Root-cause analysis:
+  `docs/perf-audit-2026-05-29-g5-title-mismatch.md`.
+  Source of the `(76/85)` prefix: `buildBookFromAlbumGroup`
+  fell back to `firstTrack.Name` when iTunes Album tag was
+  empty, writing the per-chapter Name into `Book.Title`. The
+  file-vs-title mismatch (file=4, title=76) is a second-order
+  artifact from a later organizer/dedup reassignment, not a
+  second bug. Fix: `stripChapterPrefix` helper in
+  `internal/itunes/service/strip_chapter_prefix.go`, applied
+  only in the empty-Album fall-back branch.
+- [ ] **G5b** Back-fill existing poisoned `Book.Title` rows in
+  PebbleDB. Scan all books for leading `(N/M)`, `(N of M)`,
+  `Chapter NN`, `Track NN`, `Part NN`, `NN -` patterns; strip
+  the prefix; update `Book.Title`; log old→new. Estimated
+  scope: ~85 Tarkin records plus unknown N more from other
+  iTunes-imported series.
+- [ ] **G5c** Tighten `groupTracksByAlbum` to use
+  `stripChapterPrefix(track.Name)` as the album key when the
+  Album tag is empty. Currently every chapter falls back to a
+  unique key (the raw Name) and becomes its own book record.
+  Deferred — risks merging unrelated tracks that happen to
+  share a stripped prefix; needs a separate design pass.
 - [ ] **G6** Once G1 lands, the legacy `book_files` rows for the
   merged-away books should be cleaned up by G3/G4's merge path —
   but verify orphan rows aren't left in the `book_files` table
