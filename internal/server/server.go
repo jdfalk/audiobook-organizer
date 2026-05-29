@@ -1,7 +1,7 @@
 // file: internal/server/server.go
-// version: 2.20.0
+// version: 2.21.0
 // guid: 4c5d6e7f-8a9b-0c1d-2e3f-4a5b6c7d8e9f
-// last-edited: 2026-05-20
+// last-edited: 2026-05-29
 
 package server
 
@@ -332,11 +332,15 @@ func NewServer(store database.Store) *Server {
 		audiobookUpdateService: NewAudiobookUpdateService(resolvedStore),
 		authorSeriesService:    audiobookspkg.NewAuthorSeriesService(resolvedStore),
 		importService:          importer.NewImportService(resolvedStore),
-		dedupCache:             cache.New[gin.H]("dedup", 24*time.Hour),
-		listCache:              cache.New[gin.H]("list", 24*time.Hour),
-		facetsCache:            cache.New[gin.H]("facets", 24*time.Hour),
-		authorsCache:           cache.New[gin.H]("authors", 24*time.Hour),
-		seriesCache:            cache.New[gin.H]("series", 24*time.Hour),
+		// MAYDEPLOY-I4: caches were bounded only by 24h TTL and could grow
+		// to hundreds of thousands of entries (estimated 0.5–1.5 GB) on heavy
+		// use. Cap entry count via LRU; defaults are conservative starting
+		// points — watch cache_evictions_total{reason="capacity"} in prod.
+		dedupCache:   cache.NewWithLimit[gin.H]("dedup", 24*time.Hour, 1000),
+		listCache:    cache.NewWithLimit[gin.H]("list", 24*time.Hour, 2000),
+		facetsCache:  cache.NewWithLimit[gin.H]("facets", 24*time.Hour, 100),
+		authorsCache: cache.NewWithLimit[gin.H]("authors", 24*time.Hour, 500),
+		seriesCache:  cache.NewWithLimit[gin.H]("series", 24*time.Hour, 500),
 		// olService, updater, updateScheduler are container-built;
 		// wireServerFromContainer populates the fields.
 		diagnosticsService: diagnostics.NewService(resolvedStore, nil, config.AppConfig.ITunesLibraryReadPath),
