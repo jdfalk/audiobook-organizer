@@ -50,6 +50,7 @@ func (p *Plugin) Register(r sdk.Registry) error {
 		p.fullScanDef(),
 		p.llmReviewDef(),
 		p.bookSignatureScanDef(),
+		p.splitBookScanDef(),
 	}
 
 	for _, op := range ops {

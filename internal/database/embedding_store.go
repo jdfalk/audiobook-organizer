@@ -145,6 +145,17 @@ func (s *EmbeddingStore) Close() error {
 	return closeErr
 }
 
+// PebbleDB returns the underlying Pebble handle. This is provided so
+// adjacent stores (e.g. the split-book candidate keyspace) can share
+// the same shared-database connection without re-opening it. Returns
+// nil if the receiver is nil or already closed.
+func (s *EmbeddingStore) PebbleDB() *pebble.DB {
+	if s == nil || s.closed.Load() {
+		return nil
+	}
+	return s.db
+}
+
 // errClosed is returned by all operations when the store has been closed.
 var errClosed = fmt.Errorf("embedding store closed")
 
