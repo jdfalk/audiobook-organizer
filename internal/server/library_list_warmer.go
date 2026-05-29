@@ -1,5 +1,5 @@
 // file: internal/server/library_list_warmer.go
-// version: 2.0.0
+// version: 2.1.0
 // guid: 7e8d9a0b-1c2d-3e4f-5a6b-7c8d9e0f1a2b
 
 // Pre-warms svc.audiobookService.listCache by firing the queries the UI
@@ -534,9 +534,44 @@ func (s *Server) warmAudiobookListCache() {
 		}
 	}
 
-	slog.Info("library list warm-up eager starting", "eager_queries", len(eagerQueries), "trickle_queries", len(trickleQueries))
-	hits, misses, cached := 0, 0, 0
-	for _, q := range eagerQueries {
+	// F1: heap-pressure guard for the eager phase. Sample baseline ONCE,
+	// post-GC, right after memdb publish. If concurrent work (chromem
+	// hydrate, etc.) has already pressured the heap above baseline+delta,
+	// skip the rest of eager rather than piling on. Uses the same
+	// warmerMemoryDeltaMB() ceiling concept as the trickle warmer.
+	runtime.GC()
+	debug.FreeOSMemory()
+	eagerBaselineMB := readHeapAllocMB()
+	eagerDeltaMB := warmerMemoryDeltaMB()
+	eagerCeilingMB := eagerBaselineMB + eagerDeltaMB
+	slog.Info("library list warm-up eager starting",
+		"eager_queries", len(eagerQueries),
+		"trickle_queries", len(trickleQueries),
+		"eager_baseline_mb", eagerBaselineMB,
+		"eager_delta_mb", eagerDeltaMB,
+		"eager_ceiling_mb", eagerCeilingMB,
+	)
+	hits, misses, cached, eagerSkipped := 0, 0, 0, 0
+	// Pre-flight heap check BEFORE the first eager query, in case
+	// concurrent hydrate has already pushed us over the line.
+	if heap := readHeapAllocMB(); heap > eagerCeilingMB {
+		slog.Warn("library list warm-up eager: heap above ceiling before first query, skipping eager phase",
+			"heap_mb", heap, "ceiling_mb", eagerCeilingMB, "baseline_mb", eagerBaselineMB)
+		eagerSkipped = len(eagerQueries)
+		eagerQueries = nil
+	}
+	for i, q := range eagerQueries {
+		// Heap-pressure guard BETWEEN eager queries (skip for i==0;
+		// already covered by the pre-flight check above).
+		if i > 0 {
+			if heap := readHeapAllocMB(); heap > eagerCeilingMB {
+				eagerSkipped = len(eagerQueries) - i
+				slog.Warn("library list warm-up eager: heap above ceiling, skipping remaining eager queries",
+					"heap_mb", heap, "ceiling_mb", eagerCeilingMB,
+					"baseline_mb", eagerBaselineMB, "skipped", eagerSkipped)
+				break
+			}
+		}
 		qStart := time.Now()
 		resp, err := s.buildAudiobookListResponse(ctx, q.limit, q.offset, "", nil, nil, q.filters, false)
 		if err != nil {
@@ -559,6 +594,7 @@ func (s *Server) warmAudiobookListCache() {
 		"queries_warmed", hits,
 		"cache_entries_populated", cached,
 		"failures", misses,
+		"skipped_pressure", eagerSkipped,
 		"duration_ms", time.Since(started).Milliseconds(),
 	)
 
@@ -591,28 +627,78 @@ func (s *Server) runTrickleWarmer(backlog []qry) {
 	ceilingMB := baselineMB + deltaMB
 	ctx := context.Background()
 	started := time.Now()
+	// F2: re-sample the baseline every 5 minutes inside the trickle loop
+	// to track real heap drift from concurrent workloads (dedup,
+	// embedding, chromem hydrate release). Median of last 3 samples
+	// dampens jitter so one transient spike/drop doesn't move the
+	// ceiling.
+	const resampleInterval = 5 * time.Minute
+	const ceilingChangeLogThreshold = 0.10 // log if |delta| > 10%
+	baselineSamples := []uint64{baselineMB, baselineMB, baselineMB}
+	lastResample := time.Now()
 	slog.Info("library list trickle warmer starting",
 		"queries", len(backlog),
 		"interval_ms", interval.Milliseconds(),
 		"baseline_mb", baselineMB,
 		"delta_mb", deltaMB,
 		"effective_ceiling_mb", ceilingMB,
+		"resample_interval_ms", resampleInterval.Milliseconds(),
 	)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	var (
-		idx     int
-		hits    int
-		misses  int
-		cached  int
-		skipped int
-		backoff time.Duration
+		idx        int
+		hits       int
+		misses     int
+		cached     int
+		skipped    int
+		resampled  int
+		backoff    time.Duration
 	)
 	for idx < len(backlog) {
 		<-ticker.C
 		if backoff > 0 {
 			time.Sleep(backoff)
+		}
+
+		// F2: periodically re-sample baseline + recompute ceiling.
+		if time.Since(lastResample) >= resampleInterval {
+			lastResample = time.Now()
+			newSample := readHeapAllocMB()
+			// shift ring buffer (oldest out, newest in)
+			baselineSamples = append(baselineSamples[1:], newSample)
+			newBaseline := medianUint64(baselineSamples)
+			newCeiling := newBaseline + deltaMB
+			oldCeiling := ceilingMB
+			oldBaseline := baselineMB
+			changeRatio := 0.0
+			if oldCeiling > 0 {
+				diff := float64(newCeiling) - float64(oldCeiling)
+				if diff < 0 {
+					diff = -diff
+				}
+				changeRatio = diff / float64(oldCeiling)
+			}
+			baselineMB = newBaseline
+			ceilingMB = newCeiling
+			resampled++
+			if changeRatio > ceilingChangeLogThreshold {
+				slog.Info("library list trickle warmer ceiling resampled",
+					"old_baseline_mb", oldBaseline,
+					"new_baseline_mb", newBaseline,
+					"old_ceiling_mb", oldCeiling,
+					"new_ceiling_mb", newCeiling,
+					"sample_mb", newSample,
+					"change_pct", int(changeRatio*100),
+				)
+			} else {
+				slog.Debug("library list trickle warmer ceiling resampled (small change)",
+					"old_ceiling_mb", oldCeiling,
+					"new_ceiling_mb", newCeiling,
+					"sample_mb", newSample,
+				)
+			}
 		}
 
 		// Memory-pressure guard: skip this tick if heap is above
@@ -676,6 +762,31 @@ func (s *Server) runTrickleWarmer(backlog []qry) {
 		"cache_entries_populated", cached,
 		"failures", misses,
 		"skipped_pressure", skipped,
+		"baseline_resamples", resampled,
+		"final_baseline_mb", baselineMB,
+		"final_ceiling_mb", ceilingMB,
 		"duration_ms", time.Since(started).Milliseconds(),
 	)
+}
+
+// medianUint64 returns the median of a small slice of uint64 values
+// (used for the trickle warmer's 3-sample baseline ring buffer).
+// Operates on a copy so the caller's slice is not reordered.
+func medianUint64(in []uint64) uint64 {
+	n := len(in)
+	if n == 0 {
+		return 0
+	}
+	cp := make([]uint64, n)
+	copy(cp, in)
+	// Tiny n (3) — insertion sort is fine and avoids importing sort.
+	for i := 1; i < n; i++ {
+		for j := i; j > 0 && cp[j-1] > cp[j]; j-- {
+			cp[j-1], cp[j] = cp[j], cp[j-1]
+		}
+	}
+	if n%2 == 1 {
+		return cp[n/2]
+	}
+	return (cp[n/2-1] + cp[n/2]) / 2
 }
