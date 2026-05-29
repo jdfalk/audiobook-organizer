@@ -1,5 +1,5 @@
 // file: internal/dedup/engine.go
-// version: 1.21.2
+// version: 1.22.0
 // guid: 8f3a1c6e-d472-4b9a-a5e1-7c2d9f0b3e84
 // last-edited: 2026-05-18
 
@@ -832,12 +832,18 @@ func (de *Engine) findSimilarBooks(ctx context.Context, bookID string) error {
 				})
 			}
 		}
-	} else {
-		var fErr error
-		results, fErr = de.embedStore.FindSimilar("book", emb.Vector, float32(de.BookLowThreshold), 20)
+	}
+	// SQLite linear-scan fallback. Hit when chromem isn't wired at all,
+	// OR when chromem is wired but empty (the DEDUP_CHROMEM_LAZY=true
+	// path skips the eager HydrateChromem at startup to save ~6GB heap).
+	// SQLite full-scan + cosine is ~50-200ms per query for 42K books vs
+	// chromem's <10ms; dedup queries are rare so the tradeoff is fine.
+	if len(results) == 0 && de.embedStore != nil {
+		fallback, fErr := de.embedStore.FindSimilar("book", emb.Vector, float32(de.BookLowThreshold), 20)
 		if fErr != nil {
 			return fErr
 		}
+		results = fallback
 	}
 
 	for _, r := range results {
@@ -935,12 +941,16 @@ func (de *Engine) CheckAuthor(ctx context.Context, authorID int) error {
 				results = append(results, database.SimilarityResult{EntityID: cr.EntityID, Similarity: cr.Similarity})
 			}
 		}
-	} else {
-		var fErr error
-		results, fErr = de.embedStore.FindSimilar("author", emb.Vector, float32(de.AuthorLowThreshold), 20)
+	}
+	// SQLite linear-scan fallback. Hit when chromem isn't wired, or when
+	// chromem is wired-but-empty under DEDUP_CHROMEM_LAZY=true. See the
+	// matching block in CheckBook above for the tradeoff rationale.
+	if len(results) == 0 && de.embedStore != nil {
+		fallback, fErr := de.embedStore.FindSimilar("author", emb.Vector, float32(de.AuthorLowThreshold), 20)
 		if fErr != nil {
 			return fErr
 		}
+		results = fallback
 	}
 
 	for _, r := range results {
