@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.52.0 -->
+<!-- version: 8.53.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-24 -->
+<!-- last-edited: 2026-05-28 -->
 
 # Project TODO
 
@@ -28,9 +28,152 @@ future agent) can scan the entire workspace in one page.
 
 ---
 
+## 🚀 Followups from May 28, 2026 perf sprint
+
+Today shipped 10 PRs (#1147-#1155) fixing the 67GB OOM, slow filtered
+queries (4m→100ms), 500-per-page (3m51s→241ms), and the registry
+double-dispatch + acoustid.scan subprocess bug. The fixes left a tail
+of cleanup and proper-implementation work. Each task below is sized
+for a small model (~30 min, single-file scope, clear acceptance test).
+
+### MAYDEPLOY-A: Wire subprocess child-mode handler in main.go
+`Isolate: true` on operation defs is currently disabled (PR #1155)
+because the subprocess child-mode handler is never wired into
+`main.go`. Without it, the child process re-execs with
+`--operation-runner` and cobra root errors out with "unknown flag".
+
+- [ ] **A1** `main.go`: before `cmd.Execute`, call
+  `registry.IsChildMode()`. If true, build a minimal Registry with all
+  plugin defs (NO server init, NO memdb warm — just defs + store
+  access), then call `registry.RunChildMode(r)` which never returns.
+  Acceptance: `audiobook-organizer --operation-runner <opID>` with
+  `UOS_SOCKET=/tmp/sock` connects to a parent socket and runs.
+- [ ] **A2** Add unit test in `internal/operations/registry/subprocess_test.go`
+  that re-execs the test binary as child and verifies handshake +
+  result roundtrip via the unix socket. (`testscript` or
+  `os/exec.Cmd` with `os.Args[0]`.)
+- [ ] **A3** After A1+A2 pass in CI, revert `Isolate: false` on the
+  7 ops (PR #1155). Restore the original comments. Verify
+  acoustid.scan logs both parent "dispatched" AND child stdout
+  routed through reporter.
+
+### MAYDEPLOY-B: Dedup UX hardening (today's logs)
+The merge button hits TWO endpoints per click, and stale candidate
+rows reference merged-away book IDs.
+
+- [ ] **B1** Find which frontend component fires both
+  `POST /api/v1/audiobooks/merge` AND
+  `POST /api/v1/dedup/candidates/:id/merge` for one Merge click
+  (likely `web/src/components/dedup/`). Pick one endpoint, remove
+  the other call.
+- [ ] **B2** `server/dedup_handlers.go:mergeDedupCandidate`: when
+  `mergeService.MergeBooks` returns "book not found", respond 409
+  Conflict with body `{status: "already_merged"}` instead of 500.
+- [ ] **B3** Add `cleanupCandidatesForMergedBook(bookID)` to
+  `internal/dedup/engine.go`: when a book is merged-away, mark
+  ALL other candidate rows referencing that book ID as "merged" so
+  they disappear from the pending-candidates list. Call from
+  `mergeService.MergeBooks` after the book is gone.
+- [ ] **B4** `embeddingStore.ListCandidates`: filter out rows whose
+  `entity_a_id` or `entity_b_id` no longer exists in the book table
+  (defense-in-depth against B3 missing edge cases).
+
+### MAYDEPLOY-C: List-query perf cleanup
+The big wins shipped (#1153 GetBookFilesForIDs memdb pushdown), but
+the request path still has redundant work.
+
+- [ ] **C1** `server/audiobooks_handlers.go:buildAudiobookListResponse`
+  calls `GetBookFilesForIDs(bookIDs)` directly AND
+  `aggregateFileMetadata` also calls it. Pass the map from one to the
+  other, eliminate the duplicate fetch. Saves ~2x for fingerprint
+  compute path.
+- [ ] **C2** `PebbleStore.GetAllBookFiles` still does a full Pebble
+  scan. Add a memdb fastpath like #1153 did for
+  `GetBookFilesForIDs`. Acceptance: `aggregateFileMetadata` fallback
+  path uses memdb when published.
+- [ ] **C3** Audit ALL `GetAll*` callers in request paths (handlers
+  + services). Anything that fetches the full corpus to filter 20
+  rows is the same bug class as #1149/#1153. List candidates:
+  `git grep -E 'GetAll(Books|Authors|Series|BookFiles|BookAuthors)' internal/server/ internal/audiobooks/ | grep -v _test`.
+  File any hits as new MAYDEPLOY-C subtasks.
+
+### MAYDEPLOY-D: Heap baseline reduction
+After the strip (#1152), memdb baseline is ~5GB (down from ~10GB).
+Total process baseline is ~18GB, with chromem-go contributing ~6GB
+via SQLite-to-chromem hydrate at startup.
+
+- [ ] **D1** `internal/dedup/engine.go:HydrateChromem` reads ALL
+  `book` embeddings (1.8GB on disk) into memory at startup and
+  mirrors to chromem. Add `DEDUP_CHROMEM_LAZY=true` env var that
+  skips the eager hydrate; mirror lazy on first FindSimilar call.
+- [ ] **D2** chromem persistent dir `/var/lib/audiobook-organizer/chromem`
+  is empty (1KB). Either fix chromem-go persistence so we don't
+  re-hydrate from SQLite each restart, OR remove the
+  `NewPersistentDB` call and use `NewDB()` (clearer intent).
+- [ ] **D3** Description / NotesJSON / BookSigV1 stripped from
+  memdb in #1152 mean `field:description` filters silently return
+  zero. Add a Pebble-backed fallback in
+  `audiobooks/service.go:matchesFieldFilters` that fetches the
+  full Book via GetBookByID ONLY when the predicate field is
+  stripped — preserves correctness on rare descriptions filter.
+- [ ] **D4** Profile: trigger a fresh memdb warm, capture
+  `inuse_space` heap profile, compare to pre-strip baseline. Confirm
+  ~5GB drop matches expectations. File any remaining hot allocators
+  as new D-tasks.
+
+### MAYDEPLOY-E: Pre-existing test failures
+Surfaced during today's deploys but not caused by them; failing on
+`main` too.
+
+- [ ] **E1** `TestHandler_RenameAuthor_Success` (`server/handlers_unit_test.go:982`)
+  panics with nil pointer in `Cache.InvalidateAll`. Test creates a
+  Server without initializing `authorsCache`. Fix test fixture to
+  use `cache.New[any]("authors", 30*time.Second)`.
+- [ ] **E2** `TestPebbleStoreReset` (`database/coverage_test.go:841`)
+  expects 0 authors after reset, gets 1. Likely a memdb-vs-pebble
+  reset-order bug. Reproduce, fix, add regression test.
+- [ ] **E3** `TestEnrichAudiobooksWithNames_WithAuthorAndSeries`
+  (`audiobooks/audiobook_service_unit_test.go:536`) fails because
+  `aggregateFileMetadata` calls `GetBookFiles` per book and the
+  mock has no expectation. Add `.EXPECT().GetBookFiles(...).Return(...).Maybe()`
+  to the fixture.
+
+### MAYDEPLOY-F: Trickle warmer tuning
+The warmer's eager phase is fast post-#1153, but the trickle's heap
+ceiling logic isn't quite right under sustained background activity
+(chromem hydrate, dedup scans).
+
+- [ ] **F1** Eager warmer (in `library_list_warmer.go`) has no heap
+  guard. If chromem hydrate is concurrent with eager, eager could
+  pile on. Add same `readHeapAllocMB() > ceiling` check as trickle.
+- [ ] **F2** Trickle baseline is sampled once at start. If baseline
+  drops over time (e.g., chromem hydrate completes and releases),
+  ceiling stays artificially high. Re-sample baseline every 5 min
+  (median of last 3 samples to dampen).
+
+### How to fan out
+Each task is independent within its parent letter group; A1→A2→A3
+must sequence, but A and B are parallelizable. Spawn:
+- One **Haiku** agent per task, scoped to the single file noted.
+- Each agent owns: branch creation, the fix, build verify, `gh pr create`,
+  admin-merge gate (do NOT merge — let a reviewer signoff).
+- Coordinator (or the user) merges in MAYDEPLOY letter order so
+  Subprocess (A) lands before Dedup UX (B) (B may reuse the
+  Isolate path).
+
+---
+
 ## 🐛 Open Bugs — May 17, 2026
 
 - [ ] **BUG-ITUNES-WRITEBACK-CORRUPTS-LIBRARY** (2026-05-25 — PRIORITY) iTunes library writeback is corrupting the .itl file. After our writeback runs, iTunes opens, declares the library corrupt, and rebuilds/changes it, making the integration unusable. Investigate: (1) recent changes to `internal/itunes/` writeback (XML/binary mode, atomic write, lock semantics, byte-order, header version), (2) whether we're writing while iTunes still has the file mapped, (3) whether the .itl plist format we're emitting still matches the iTunes version in use. Reproduce on the Windows iTunes host. Block: user explicitly says this makes the whole tool useless to them until fixed.
+
+  **Bisect hint (user, 2026-05-28):** iTunes writeback was working at some point in the past. Find when active feature work on `internal/itunes/` stopped — the breaking change is most likely in the refactor/security/perf commits that came AFTER the last functional feature commit. Candidates to bisect first (newest → oldest):
+  - `ee180f84 perf(itunes): implement streaming XML parser for backfill operation` — most likely. Streaming XML changes how we read/emit plist structures; subtle byte-output differences would corrupt .itl.
+  - `8c7269af fix(itl): add size cap before uint32 buffer allocations (SEC-AUDIT-8 #468)` — buffer caps on writes could silently truncate atom data.
+  - `03380992 fix(security): validate ITunesLibraryWritePath before passing to ITL read funcs (SEC-AUDIT-4b)` and `7b07f17e fix(security): break taint chain in iTunes/audiobook path handlers (SEC-AUDIT-4)` — path normalization side effects (e.g., resolving symlinks could change what we open/write).
+  - Last known-good baseline: `f2856e45 feat(itunes): full ITL rebuild-from-DB + partial export (Tasks 033/035)`.
+
+  Procedure: `git checkout f2856e45 -- internal/itunes/` into a worktree, build, attempt writeback against a SAFE copy of an .itl, confirm iTunes accepts it. Then `git bisect` from there to `main`.
 
 - [x] **BUG-STORAGE-PCT-WRONG** (2026-05-20) ✅ Fixed 2026-05-25.
 

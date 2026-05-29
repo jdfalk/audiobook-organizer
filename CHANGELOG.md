@@ -1,5 +1,5 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.03.0 -->
+<!-- version: 3.04.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
 <!-- last-edited: 2026-05-28 -->
 
@@ -8,6 +8,75 @@
 ## [Unreleased]
 
 ### Changes
+
+#### May 28, 2026 — Perf sprint: OOM fix, filter pushdown, files-via-memdb, registry double-dispatch
+
+Ten-PR sprint resolving the 67.8GB OOM-kill and the queries it was
+hiding. Steady-state RSS dropped from ~67GB peak (OOM) to ~18-25GB
+stable. User-facing list queries dropped from 4-minute timeouts to
+sub-second.
+
+- **PR #1147** — Hotfix: disable the speculative list warmer that
+  was running 177 filtered queries at startup. Each query was
+  fetching all 392K books to filter 20, and 177 of them in series
+  trampolined heap to 67.8GB → systemd OOM-kill.
+- **PR #1148** — Filter pushdown into the memdb walker.
+  `audiobookService.GetAudiobooks` for heavy filters
+  (`library_state`, `review`, `tag`, FieldFilters, PerUserFilters)
+  now passes a predicate closure into `MemStore.GetBookSummaries` so
+  the walker stops at `limit+offset` matches. New eager (2 default
+  pages at startup) + trickle (background, paced) warmer pattern.
+  Working set per query: ~1GB → ~10MB.
+- **PR #1149** — `aggregateFileMetadata` now uses
+  `GetBookFilesForIDs(bookIDs)` instead of `GetAllBookFiles()`.
+  Previously every list query loaded all 308,857 book_file rows
+  (~46GB heap) to compute duration/size for the 20 books on the
+  page.
+- **PR #1150** — Trickle warmer switched from absolute heap ceiling
+  to baseline+delta. The absolute 1GB ceiling was unworkable
+  because process baseline is ~13GB after memdb publish — trickle
+  would back off forever.
+- **PR #1151** — Default `LIST_WARMER_HEAP_DELTA_MB` bumped 1024 →
+  4096 to give trickle one-query headroom + GC reclaim buffer.
+- **PR #1152** — `stripBookForMemdb` clears Description, BookSigV1,
+  VersionNotes, BookSigV1Mask, BookSigSegments, BookSigBuiltAt,
+  BookSigCoveragePct, and pre-resolved Author/Series pointers
+  before insertion into memdb. Memdb only needs lightweight
+  projections for indexed iteration; full Book lazy-fetched from
+  Pebble via `GetBookByID` when needed. Memdb heap: ~10GB → ~5GB.
+- **PR #1153** — `PebbleStore.GetBookFilesForIDs` now uses the
+  memdb `book_id` index when available — was scanning all 308K
+  book_files regardless of input size. **The largest single perf
+  win:** eager warmer's first query dropped 248s → 60ms
+  (~4000x); 500-per-page UI query 3m51s → 241ms (~960x).
+- **PR #1154** — Registry dispatcher Gate 0: in-memory
+  `r.running[opID]` guard prevents double-dispatch. Without it the
+  100ms ticker could re-dispatch the same op between channel-send
+  and worker-pickup (DB still shows "queued"). Caught in prod:
+  dedup.book-merge ran twice for one user click.
+- **PR #1155** — Hotfix: `Isolate: false` on all 7 ops
+  (`acoustid.scan`, `acoustid.fingerprint-rescan`,
+  `acoustid.backfill`, `itunes.import`, three maintenance ffmpeg
+  ops). The subprocess child-mode handler (`IsChildMode()` /
+  `RunChildMode()`) was defined but never wired into `main.go`, so
+  every subprocess re-exec died with "unknown flag:
+  --operation-runner" 47ms after start. Proper fix tracked as
+  MAYDEPLOY-A in TODO.md.
+
+User-facing perf comparison (392K-book production library):
+
+| Query | Before | After |
+|-------|--------|-------|
+| "All Books" 20/page cached | 4m timeout | 75ms |
+| "All Books" 500/page cold | 3m51s | 241ms |
+| Filter (`library_state:imported`) | 4m or OOM | ~50-100ms |
+| Process RSS peak | 67.8GB → OOM | 18-25GB stable |
+
+Followup work (subprocess wire-up, dedup UX, perf cleanup, pre-existing
+test failures, chromem hydrate, trickle tuning) tracked in TODO.md
+under "Followups from May 28, 2026 perf sprint" — broken into
+haiku-sized tasks (A1-A3, B1-B4, C1-C3, D1-D4, E1-E3, F1-F2) for
+parallel agent fan-out.
 
 #### May 28, 2026 — Remember-me login + temp-login URLs
 
