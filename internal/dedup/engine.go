@@ -1455,6 +1455,40 @@ func (de *Engine) FullScan(ctx context.Context, progress func(done, total int)) 
 // after the backfill completes and again at the start of a user-triggered
 // Re-scan so the candidate table stays clean after the Layer 1 + Layer 2
 // rules tighten.
+// CleanupCandidatesAfterMerge marks dedup candidate rows referencing any of
+// the given merged-away book IDs as status="merged" so the candidates UI drops
+// them on its next refresh. Without this, candidate Y comparing book B vs book
+// C remains pending after book B was collapsed into book A by a separate
+// candidate row — clicking Merge on Y then 500s ("book not found"), the
+// 409-hotfix path in PR #1160 notwithstanding.
+//
+// Best-effort: per-ID errors are logged, not returned. Returns total rows
+// transitioned across all IDs.
+func (de *Engine) CleanupCandidatesAfterMerge(mergedAwayBookIDs []string) int {
+	if de == nil || de.embedStore == nil || len(mergedAwayBookIDs) == 0 {
+		return 0
+	}
+	total := 0
+	for _, id := range mergedAwayBookIDs {
+		if id == "" {
+			continue
+		}
+		n, err := de.embedStore.MarkCandidatesAsMergedForEntity("book", id)
+		if err != nil {
+			slog.Warn("dedup cleanup candidates after merge", "book_id", id, "err", err)
+			continue
+		}
+		total += n
+	}
+	if total > 0 {
+		slog.Info("dedup cleanup candidates after merge",
+			"merged_away_count", len(mergedAwayBookIDs),
+			"orphan_candidates_marked_merged", total,
+		)
+	}
+	return total
+}
+
 func (de *Engine) PurgeStaleCandidates(ctx context.Context) (int, error) {
 	_, span := dedupTracer.Start(ctx, "dedup.purge_stale_candidates")
 	defer span.End()
