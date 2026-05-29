@@ -176,6 +176,120 @@ func ClearScanCache() {
 	SetScanCache(nil)
 }
 
+// worksLookupCache caches a (normalizedTitle|authorID) → workID map for the
+// duration of a single scan. Without this cache, saveBookToDatabase calls
+// GetAllWorks() once per book, producing 50K × 50K = 2.5B lookups on a full
+// scan of the production library (MAYDEPLOY-H6). With it, GetAllWorks is
+// called at most once per scan and reused for every book.
+//
+// The cache is populated lazily on first access (so test paths that don't
+// initialise it still work) and invalidated when the scanner creates a new
+// Work mid-scan, so subsequent books in the same scan can find it.
+//
+// Set via InitWorksLookupCache / cleared via ClearWorksLookupCache from
+// ScanService.performScanInternal. Protected by worksLookupMu.
+var (
+	worksLookupCache    map[string]string // key = normalizedTitle + "|" + authorID(or "nil")
+	worksLookupReady    bool              // true when cache has been populated (or attempted) for this scan
+	worksLookupDisabled bool              // true outside a scan window (lazy fallback to GetAllWorks)
+	worksLookupMu       sync.RWMutex
+)
+
+// worksLookupKey builds the cache key used by both lookups and inserts.
+func worksLookupKey(normalizedTitle string, authorID *int) string {
+	if authorID == nil {
+		return normalizedTitle + "|nil"
+	}
+	return normalizedTitle + "|" + strconv.Itoa(*authorID)
+}
+
+// InitWorksLookupCache builds the (normalizedTitle|authorID) → workID map by
+// calling GetAllWorks once. Called by ScanService at the start of each scan.
+// If GetAllWorks fails, the cache is left empty but enabled — saveBookToDatabase
+// will fall through to a direct CreateWork (which is the same fallback path as
+// when nothing matched).
+func InitWorksLookupCache() {
+	worksLookupMu.Lock()
+	defer worksLookupMu.Unlock()
+	worksLookupCache = make(map[string]string)
+	worksLookupReady = true
+	worksLookupDisabled = false
+	store := getStore()
+	if store == nil {
+		return
+	}
+	works, err := store.GetAllWorks()
+	if err != nil {
+		defaultLog.Warn("InitWorksLookupCache: GetAllWorks failed: %v", err)
+		return
+	}
+	for _, w := range works {
+		worksLookupCache[worksLookupKey(util.NormalizeString(w.Title), w.AuthorID)] = w.ID
+	}
+	defaultLog.Info("InitWorksLookupCache: loaded %d works", len(works))
+}
+
+// ClearWorksLookupCache drops the per-scan works lookup map. Called by
+// ScanService after the scan completes (deferred).
+func ClearWorksLookupCache() {
+	worksLookupMu.Lock()
+	defer worksLookupMu.Unlock()
+	worksLookupCache = nil
+	worksLookupReady = false
+	worksLookupDisabled = true
+}
+
+// lookupWorkID returns the cached workID for (normalizedTitle, authorID), or
+// "" if no match. Falls back to a one-shot GetAllWorks() scan when the cache
+// hasn't been initialised (test paths and any code that calls saveBook outside
+// a ScanService-driven scan).
+func lookupWorkID(normalizedTitle string, authorID *int) string {
+	key := worksLookupKey(normalizedTitle, authorID)
+	worksLookupMu.RLock()
+	ready := worksLookupReady
+	if ready {
+		id, ok := worksLookupCache[key]
+		worksLookupMu.RUnlock()
+		if ok {
+			return id
+		}
+		return ""
+	}
+	worksLookupMu.RUnlock()
+
+	// Cache not initialised (test/legacy path) — do the old per-call scan.
+	store := getStore()
+	if store == nil {
+		return ""
+	}
+	works, err := store.GetAllWorks()
+	if err != nil {
+		return ""
+	}
+	for _, w := range works {
+		if util.NormalizeString(w.Title) == normalizedTitle &&
+			((authorID == nil && w.AuthorID == nil) ||
+				(authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
+			return w.ID
+		}
+	}
+	return ""
+}
+
+// rememberCreatedWork records a freshly-created Work in the per-scan cache so
+// subsequent books in the same scan can resolve it without re-querying.
+func rememberCreatedWork(w *database.Work) {
+	if w == nil {
+		return
+	}
+	worksLookupMu.Lock()
+	defer worksLookupMu.Unlock()
+	if !worksLookupReady || worksLookupCache == nil {
+		return
+	}
+	worksLookupCache[worksLookupKey(util.NormalizeString(w.Title), w.AuthorID)] = w.ID
+}
+
 // shouldSkipFile returns true when a file is unchanged since the last scan and
 // does not have a pending rescan request.
 func shouldSkipFile(filePath string, mtime int64, size int64, cache map[string]database.ScanCacheEntry) bool {
@@ -1525,20 +1639,15 @@ func saveBookToDatabase(book *Book) error {
 			return err
 		}
 
-		// Attempt Work association (normalize title + author)
+		// Attempt Work association (normalize title + author).
+		// Uses the per-scan worksLookupCache (MAYDEPLOY-H6) to avoid an
+		// O(N) GetAllWorks scan per book.
 		var workID *string
 		if book.Title != "" {
 			canonical := util.NormalizeString(book.Title)
-			// Simple heuristic: try existing works then create new.
-			works, err := getStore().GetAllWorks()
-			if err == nil { // non-critical
-				for _, w := range works {
-					if util.NormalizeString(w.Title) == canonical && ((authorID == nil && w.AuthorID == nil) || (authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
-						wid := w.ID
-						workID = &wid
-						break
-					}
-				}
+			if id := lookupWorkID(canonical, authorID); id != "" {
+				wid := id
+				workID = &wid
 			}
 			if workID == nil {
 				newWork := &database.Work{Title: book.Title, AuthorID: authorID}
@@ -1546,8 +1655,11 @@ func saveBookToDatabase(book *Book) error {
 				if err == nil {
 					wid := created.ID
 					workID = &wid
+					// Make the new work visible to subsequent books in this scan.
+					rememberCreatedWork(created)
 				} else if isUniqueConstraintError(err) {
-					// A parallel worker likely created the same work; resolve it.
+					// A parallel worker likely created the same work — bypass
+					// the cache (it may be stale) and re-query.
 					works, lookupErr := getStore().GetAllWorks()
 					if lookupErr == nil {
 						for _, w := range works {
@@ -1556,6 +1668,8 @@ func saveBookToDatabase(book *Book) error {
 									(authorID != nil && w.AuthorID != nil && *authorID == *w.AuthorID)) {
 								wid := w.ID
 								workID = &wid
+								// Refresh the cache entry with the resolved ID.
+								rememberCreatedWork(&w)
 								break
 							}
 						}
