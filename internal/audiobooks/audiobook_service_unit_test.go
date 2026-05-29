@@ -886,3 +886,98 @@ func TestAudiobookService_UpdateAudiobook_TitleUpdate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "New Title", result.Title)
 }
+
+// TestGetAudiobooks_DescriptionFilter_UsesFullBook verifies that a
+// FieldFilter on the "description" field (a stripped memdb field) routes
+// through Pebble via GetBookByID, instead of silently missing because
+// BookSummary doesn't carry Description.
+//
+// Setup: 3 BookSummary rows (none carry Description). The mock's
+// GetBookByID returns a Book WITH Description for each. Only "matchID"
+// has a description that contains the filter value. Expectation: exactly
+// that one book is returned.
+func TestGetAudiobooks_DescriptionFilter_UsesFullBook(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	summaries := []database.BookSummary{
+		{ID: "matchID", Title: "Match"},
+		{ID: "missA", Title: "Miss A"},
+		{ID: "missB", Title: "Miss B"},
+	}
+	mockStore.EXPECT().GetAllBookSummaries(0, 0).Return(summaries, nil)
+
+	matchDesc := "this book is about the mysterious forest"
+	missDescA := "an entirely unrelated topic"
+	missDescB := "something else again"
+	mockStore.EXPECT().GetBookByID("matchID").Return(
+		&database.Book{ID: "matchID", Title: "Match", Description: &matchDesc}, nil).Maybe()
+	mockStore.EXPECT().GetBookByID("missA").Return(
+		&database.Book{ID: "missA", Title: "Miss A", Description: &missDescA}, nil).Maybe()
+	mockStore.EXPECT().GetBookByID("missB").Return(
+		&database.Book{ID: "missB", Title: "Miss B", Description: &missDescB}, nil).Maybe()
+
+	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
+		FieldFilters: []FieldFilter{
+			{Field: "description", Value: "mysterious forest"},
+		},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "matchID", got[0].ID)
+}
+
+// TestGetAudiobooks_DescriptionFilter_PebbleNilDropsRow verifies that
+// when GetBookByID returns nil (book missing from Pebble), the row is
+// dropped rather than included — consistent with the pre-fix
+// silent-miss behavior, and the safer default for Negated filters.
+func TestGetAudiobooks_DescriptionFilter_PebbleNilDropsRow(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	summaries := []database.BookSummary{
+		{ID: "ghost", Title: "Ghost Book"},
+	}
+	mockStore.EXPECT().GetAllBookSummaries(0, 0).Return(summaries, nil)
+	mockStore.EXPECT().GetBookByID("ghost").Return(nil, nil).Maybe()
+
+	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
+		FieldFilters: []FieldFilter{
+			{Field: "description", Value: "anything"},
+		},
+	})
+	assert.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+// TestGetAudiobooks_DescriptionFilter_CheapFilterShortCircuits verifies
+// that when a cheap filter rejects a row, the Pebble lookup is NOT
+// performed for that row — the whole point of cheap-first ordering.
+func TestGetAudiobooks_DescriptionFilter_CheapFilterShortCircuits(t *testing.T) {
+	mockStore := mocks.NewMockStore(t)
+	svc := NewAudiobookService(mockStore)
+
+	summaries := []database.BookSummary{
+		{ID: "wrongTitle", Title: "Other"},
+		{ID: "rightTitle", Title: "Target"},
+	}
+	mockStore.EXPECT().GetAllBookSummaries(0, 0).Return(summaries, nil)
+
+	desc := "matching description here"
+	// Only rightTitle should hit GetBookByID. We assert this via .Times(1)
+	// on a specific call; if wrongTitle also triggered a lookup the mock
+	// would fail (no expectation for it).
+	mockStore.EXPECT().GetBookByID("rightTitle").Return(
+		&database.Book{ID: "rightTitle", Title: "Target", Description: &desc}, nil).Times(1)
+
+	got, err := svc.GetAudiobooks(context.Background(), 0, 0, "", nil, nil, ListFilters{
+		FieldFilters: []FieldFilter{
+			{Field: "title", Value: "Target"},                 // cheap
+			{Field: "description", Value: "matching"},         // stripped
+		},
+	})
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, "rightTitle", got[0].ID)
+}
+

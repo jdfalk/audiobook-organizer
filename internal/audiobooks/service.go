@@ -1,5 +1,5 @@
 // file: internal/audiobooks/service.go
-// version: 1.27.1
+// version: 1.28.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
 // last-edited: 2026-05-20
 
@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/activity"
@@ -443,6 +444,32 @@ func matchesAllPerUserFilters(state *database.UserBookState, filters []FieldFilt
 	return true
 }
 
+// strippedMemdbFields enumerates Book fields that stripBookForMemdb()
+// clears from memdb-resident copies. Predicate filters on these fields
+// silently miss against memdb Books (which is the default code path in
+// production) — callers must fetch the full Book from Pebble via
+// GetBookByID and re-test those filters. See internal/database/memdb_strip.go.
+var strippedMemdbFields = map[string]bool{
+	"description":   true,
+	"version_notes": true,
+	"book_sig_v1":   true,
+}
+
+// splitFieldFilters partitions a FieldFilter list into ones that can be
+// evaluated against a memdb-stripped *Book (cheap) and ones that require
+// the full Pebble-resident Book (stripped). Order within each partition
+// is preserved.
+func splitFieldFilters(filters []FieldFilter) (cheap, stripped []FieldFilter) {
+	for _, f := range filters {
+		if strippedMemdbFields[f.Field] {
+			stripped = append(stripped, f)
+		} else {
+			cheap = append(cheap, f)
+		}
+	}
+	return cheap, stripped
+}
+
 // matchesFieldFilters returns true if a book matches all the given field filters.
 // All filters are ANDed: every filter must match for the book to be included.
 func matchesFieldFilters(book database.Book, filters []FieldFilter) bool {
@@ -456,6 +483,46 @@ func matchesFieldFilters(book database.Book, filters []FieldFilter) bool {
 		}
 	}
 	return true
+}
+
+// matchesFieldFiltersWithStrippedFallback evaluates field filters against a
+// memdb-resident *Book, fetching the full Book from Pebble (via fetchFull)
+// only when filters reference stripped fields AND all cheap filters have
+// already passed. This keeps the common path (no stripped filters, or row
+// already filtered out by a cheap predicate) at memdb cost.
+//
+// If fetchFull returns nil/err the row is dropped regardless of negation:
+// we can't verify either way, and silently flipping a Negated filter to
+// "matches" would be the wrong default. This is consistent with the
+// pre-fix behavior where memdb books silently failed all
+// stripped-field filters.
+//
+// pebbleLookups is incremented once per actual GetBookByID call so the
+// caller can log a per-query count at DEBUG.
+func matchesFieldFiltersWithStrippedFallback(
+	memBook *database.Book,
+	cheap, stripped []FieldFilter,
+	fetchFull func(id string) (*database.Book, error),
+	pebbleLookups *int64,
+	warnOnce func(id string, err error),
+) bool {
+	if len(cheap) > 0 && !matchesFieldFilters(*memBook, cheap) {
+		return false
+	}
+	if len(stripped) == 0 {
+		return true
+	}
+	full, err := fetchFull(memBook.ID)
+	if pebbleLookups != nil {
+		*pebbleLookups++
+	}
+	if err != nil || full == nil {
+		if warnOnce != nil {
+			warnOnce(memBook.ID, err)
+		}
+		return false
+	}
+	return matchesFieldFilters(*full, stripped)
 }
 
 // fieldMatchesValue checks whether a book's field value matches the search
@@ -772,12 +839,22 @@ func (svc *AudiobookService) countSummariesPushdownFiltered(filter database.Book
 // Returns ok=false when any component CAN'T be pushed down (non-title
 // sort, fingerprint filters), and the caller falls back to the old
 // fetch-all-then-filter path.
+//
+// pebbleLookups is non-nil when the predicate may invoke a Pebble
+// fallback for memdb-stripped fields (description / version_notes /
+// book_sig_v1). The caller can DEBUG-log *pebbleLookups after the
+// walker returns to surface the cost of D3 fallback queries.
 func (svc *AudiobookService) buildBookSummaryFilter(f ListFilters, sortAsc bool) (database.BookSummaryFilter, bool) {
+	bsf, ok, _ := svc.buildBookSummaryFilterWithLookupCount(f, sortAsc)
+	return bsf, ok
+}
+
+func (svc *AudiobookService) buildBookSummaryFilterWithLookupCount(f ListFilters, sortAsc bool) (database.BookSummaryFilter, bool, *int64) {
 	if f.SortBy != "" && f.SortBy != "title" {
-		return database.BookSummaryFilter{}, false
+		return database.BookSummaryFilter{}, false, nil
 	}
 	if f.FingerprintStatus != "" || f.CoveragePercentMin != nil || f.CoveragePercentMax != nil {
-		return database.BookSummaryFilter{}, false
+		return database.BookSummaryFilter{}, false, nil
 	}
 
 	// Tag intersection → ID set. Empty set ⇒ no matches (walker short-circuits).
@@ -792,7 +869,7 @@ func (svc *AudiobookService) buildBookSummaryFilter(f ListFilters, sortAsc bool)
 		}
 		ids, err := svc.store.GetBooksByTag(tag)
 		if err != nil {
-			return database.BookSummaryFilter{}, false
+			return database.BookSummaryFilter{}, false, nil
 		}
 		cur := make(map[string]struct{}, len(ids))
 		for _, id := range ids {
@@ -830,15 +907,39 @@ func (svc *AudiobookService) buildBookSummaryFilter(f ListFilters, sortAsc bool)
 	}
 
 	var predicate func(*database.Book) bool
+	var pebbleLookupsPtr *int64
 	hasPerUser := len(f.PerUserFilters) > 0 && f.UserID != ""
 	if len(remainingFF) > 0 || hasPerUser {
 		store := svc.store
 		userID := f.UserID
 		perUser := f.PerUserFilters
-		ff := remainingFF
+		cheapFF, strippedFF := splitFieldFilters(remainingFF)
+		if len(strippedFF) > 0 {
+			slog.Debug("predicate uses stripped-field Pebble fallback",
+				"stripped_fields", strippedFieldNames(strippedFF),
+				"cheap_filter_count", len(cheapFF))
+		}
+		// Per-query Pebble-lookup counter + once-per-query warn for
+		// nil/err. The walker invokes the predicate row-by-row on the
+		// caller's goroutine, so a plain int64 + sync.Once captured in the
+		// closure is safe. Pointer is returned so the caller can DEBUG-log
+		// the total after the walker returns.
+		pebbleLookups := new(int64)
+		var warnOnce sync.Once
+		warnFn := func(id string, err error) {
+			warnOnce.Do(func() {
+				slog.Warn("predicate stripped-field Pebble fallback: GetBookByID failed; dropping row",
+					"book_id", id, "err", err)
+			})
+		}
+		fetchFull := func(id string) (*database.Book, error) {
+			return store.GetBookByID(id)
+		}
 		predicate = func(b *database.Book) bool {
-			if len(ff) > 0 && !matchesFieldFilters(*b, ff) {
-				return false
+			if len(remainingFF) > 0 {
+				if !matchesFieldFiltersWithStrippedFallback(b, cheapFF, strippedFF, fetchFull, pebbleLookups, warnFn) {
+					return false
+				}
 			}
 			if hasPerUser {
 				state, _ := store.GetUserBookState(userID, b.ID)
@@ -848,6 +949,7 @@ func (svc *AudiobookService) buildBookSummaryFilter(f ListFilters, sortAsc bool)
 			}
 			return true
 		}
+		pebbleLookupsPtr = pebbleLookups
 	}
 
 	bsf := database.BookSummaryFilter{
@@ -861,7 +963,17 @@ func (svc *AudiobookService) buildBookSummaryFilter(f ListFilters, sortAsc bool)
 		bsf.SortBy = "title"
 		bsf.SortAscending = sortAsc
 	}
-	return bsf, true
+	return bsf, true, pebbleLookupsPtr
+}
+
+// strippedFieldNames returns the field names from a FieldFilter slice,
+// for log diagnostics only.
+func strippedFieldNames(ff []FieldFilter) []string {
+	out := make([]string, 0, len(ff))
+	for _, f := range ff {
+		out = append(out, f.Field)
+	}
+	return out
 }
 
 // GetAudiobooks retrieves audiobooks with optional filtering.
@@ -952,10 +1064,14 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 			// filter set contains something we can't push down (non-title
 			// sort, fingerprint filters). Pre-fix this was 100% of heavy
 			// queries; post-fix it's the rare ones.
-			if bsf, pushdownOK := svc.buildBookSummaryFilter(f, sortAsc); pushdownOK {
+			if bsf, pushdownOK, pebbleLookups := svc.buildBookSummaryFilterWithLookupCount(f, sortAsc); pushdownOK {
 				summaries, didPushdown, sErr := svc.summariesPushdownFiltered(limit, offset, bsf)
 				if sErr == nil && summaries != nil {
 					books = bookSummariesToBooks(summaries)
+				}
+				if pebbleLookups != nil && *pebbleLookups > 0 {
+					slog.Debug("GetAudiobooks: stripped-field predicate Pebble fallback",
+						"lookups", *pebbleLookups, "books_returned", len(books))
 				}
 				// When the store actually pushed down (production memdb
 				// path), the walker has already applied filters AND
@@ -1046,13 +1162,33 @@ func (svc *AudiobookService) GetAudiobooks(ctx context.Context, limit int, offse
 			filtered = append(filtered, b)
 		}
 
-		// Apply field-specific filters (advanced search)
+		// Apply field-specific filters (advanced search). Books here came
+		// from BookSummary projections, which never carry stripped fields
+		// (description / version_notes / book_sig_v1). Route those filters
+		// through the Pebble fallback so they don't silently miss.
 		if len(f.FieldFilters) > 0 {
+			cheapFF, strippedFF := splitFieldFilters(f.FieldFilters)
+			var pebbleLookups int64
+			var warnOnce sync.Once
+			warnFn := func(id string, err error) {
+				warnOnce.Do(func() {
+					slog.Warn("post-filter stripped-field Pebble fallback: GetBookByID failed; dropping row",
+						"book_id", id, "err", err)
+				})
+			}
+			fetchFull := func(id string) (*database.Book, error) {
+				return svc.store.GetBookByID(id)
+			}
 			fieldFiltered := make([]database.Book, 0, len(filtered))
-			for _, b := range filtered {
-				if matchesFieldFilters(b, f.FieldFilters) {
+			for i := range filtered {
+				b := filtered[i]
+				if matchesFieldFiltersWithStrippedFallback(&b, cheapFF, strippedFF, fetchFull, &pebbleLookups, warnFn) {
 					fieldFiltered = append(fieldFiltered, b)
 				}
+			}
+			if pebbleLookups > 0 {
+				slog.Debug("GetAudiobooks post-filter: stripped-field Pebble fallback",
+					"lookups", pebbleLookups, "matched", len(fieldFiltered))
 			}
 			filtered = fieldFiltered
 		}
