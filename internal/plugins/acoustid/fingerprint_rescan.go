@@ -41,7 +41,7 @@ func (p *Plugin) fingerprintRescanDef() sdk.OperationDef {
 		Description:     "Generates per-file fingerprints on demand with scope and force options.",
 		ResumePolicy:    sdk.ResumeDrop,
 		DefaultPriority: sdk.PriorityLow,
-		Isolate:         true,
+		Isolate:         false, // subprocess child-mode handler not wired in main.go; in-process until fixed
 		Timeout:         12 * time.Hour,
 		Capabilities: []sdk.Capability{
 			sdk.CapLibraryRead,
