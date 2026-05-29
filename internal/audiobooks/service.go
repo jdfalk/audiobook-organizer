@@ -1,7 +1,7 @@
 // file: internal/audiobooks/service.go
-// version: 1.28.0
+// version: 1.29.0
 // guid: 5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b
-// last-edited: 2026-05-20
+// last-edited: 2026-05-29
 
 package audiobooks
 
@@ -102,8 +102,10 @@ func (svc *AudiobookService) SetITunesEnqueuer(e ITunesEnqueuer) {
 func NewAudiobookService(store audiobookStore) *AudiobookService {
 	return &AudiobookService{
 		store:     store,
-		bookCache: cache.New[*database.Book]("book", 24*time.Hour),
-		listCache: cache.New[[]database.Book]("audiobook_list", 24*time.Hour),
+		// MAYDEPLOY-I4: cap entry count via LRU so 24h TTL doesn't allow
+		// unbounded growth of full Book payloads.
+		bookCache: cache.NewWithLimit[*database.Book]("book", 24*time.Hour, 5000),
+		listCache: cache.NewWithLimit[[]database.Book]("audiobook_list", 24*time.Hour, 500),
 	}
 }
 

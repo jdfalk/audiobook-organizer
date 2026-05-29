@@ -1,10 +1,11 @@
 // file: internal/cache/cache_test.go
-// version: 1.3.0
+// version: 1.4.0
 // guid: b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e
 
 package cache
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -104,6 +105,33 @@ func TestLRUCapacityEviction(t *testing.T) {
 	for _, k := range []string{"a", "c", "d"} {
 		if _, ok := c.Get(k); !ok {
 			t.Fatalf("expected %s to remain after capacity eviction", k)
+		}
+	}
+}
+
+// TestLRUCapacityBoundedAtN inserts N+10 entries with no recency touches and
+// verifies the cap is enforced: only N entries remain, the oldest 10 are
+// evicted, and the newest N are retained. This is the MAYDEPLOY-I4 contract
+// that prevents unbounded growth of the list/facets/dedup/book caches.
+func TestLRUCapacityBoundedAtN(t *testing.T) {
+	const N = 50
+	c := NewWithLimit[int]("test_lru_n_plus_10", time.Minute, N)
+	for i := 0; i < N+10; i++ {
+		c.Set(strconv.Itoa(i), i)
+	}
+	if got := c.Len(); got != N {
+		t.Fatalf("expected exactly %d entries after N+10 inserts, got %d", N, got)
+	}
+	// Oldest 10 (keys 0..9) must be evicted.
+	for i := 0; i < 10; i++ {
+		if _, ok := c.Get(strconv.Itoa(i)); ok {
+			t.Fatalf("expected key %d to be evicted (oldest)", i)
+		}
+	}
+	// Newest N (keys 10..N+9) must be retained.
+	for i := 10; i < N+10; i++ {
+		if _, ok := c.Get(strconv.Itoa(i)); !ok {
+			t.Fatalf("expected key %d to be retained", i)
 		}
 	}
 }
