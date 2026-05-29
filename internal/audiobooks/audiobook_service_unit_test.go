@@ -539,6 +539,13 @@ func TestAudiobookService_EnrichAudiobooksWithNames_WithAuthorAndSeries(t *testi
 		},
 	}
 
+	// aggregateFileMetadata (called by EnrichAudiobooksWithNames) tries
+	// GetBookFilesForIDs first, then falls back to per-book GetBookFiles.
+	// MockStore doesn't implement GetBookFilesForIDs, so the per-book path
+	// is taken. The test doesn't care about file aggregates — return empty.
+	mockStore.EXPECT().GetBookFiles("e1").Return(nil, nil).Maybe()
+	mockStore.EXPECT().GetBookFiles("e2").Return(nil, nil).Maybe()
+
 	result := svc.EnrichAudiobooksWithNames(books)
 	assert.Len(t, result, 2)
 
