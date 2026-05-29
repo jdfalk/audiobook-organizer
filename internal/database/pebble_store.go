@@ -8403,32 +8403,40 @@ func (s *PebbleStore) GetBookFiles(bookID string) ([]BookFile, error) {
 	return files, nil
 }
 
-// GetBookFilesForIDs returns book files for multiple book IDs in a single scan.
-// Returns a map of bookID -> []BookFile, reducing N+1 queries when loading
-// files for multiple books (e.g., fingerprinting in listAudiobooks).
+// GetBookFilesForIDs returns book files grouped by bookID. When memdb is
+// published, uses the memdb book_id index — O(sum of files per ID), not
+// O(all 308K book_files) like the Pebble full-scan fallback. For a
+// 500-book page query, this drops the call from ~15s to <5ms; for a
+// 20-book query, from ~15s to <1ms. The Pebble full-scan was the actual
+// killer behind 500-per-page taking 3m51s pre-fix.
+//
+// Pebble full-scan retained as fallback for cold-start (before memdb
+// publishes) and tests with no memdb.
 func (s *PebbleStore) GetBookFilesForIDs(bookIDs []string) (map[string][]BookFile, error) {
+	if s.UseMemDB && s.mem() != nil {
+		return s.mem().GetBookFilesForIDs(bookIDs)
+	}
+	return s.getBookFilesForIDsPebbleScan(bookIDs)
+}
+
+func (s *PebbleStore) getBookFilesForIDsPebbleScan(bookIDs []string) (map[string][]BookFile, error) {
 	result := make(map[string][]BookFile)
 	if len(bookIDs) == 0 {
 		return result, nil
 	}
-
-	// Build a set of IDs for quick lookup
 	idSet := make(map[string]bool)
 	for _, id := range bookIDs {
 		idSet[id] = true
 	}
-
-	// Scan all book_file entries and filter by requested IDs
 	prefix := []byte("book_file:")
 	iter, err := s.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,
-		UpperBound: []byte("book_file;"), // ';' is one past ':' in ASCII
+		UpperBound: []byte("book_file;"),
 	})
 	if err != nil {
 		return nil, err
 	}
 	defer iter.Close()
-
 	for iter.First(); iter.Valid(); iter.Next() {
 		var f BookFile
 		if err := json.Unmarshal(iter.Value(), &f); err != nil {
@@ -8438,7 +8446,6 @@ func (s *PebbleStore) GetBookFilesForIDs(bookIDs []string) (map[string][]BookFil
 			result[f.BookID] = append(result[f.BookID], f)
 		}
 	}
-
 	return result, nil
 }
 
