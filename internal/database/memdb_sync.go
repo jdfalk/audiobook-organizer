@@ -99,7 +99,7 @@ func (p *PebbleStore) UpsertBookToMemDB(ctx context.Context, book *Book) {
 		if fileErr == nil {
 			for i := range files {
 				bf := files[i]
-				if err := txn.Insert(memTableBookFiles, &bf); err != nil {
+				if err := txn.Insert(memTableBookFiles, stripBookFileForMemdb(&bf)); err != nil {
 					return fmt.Errorf("insert book_file: %w", err)
 				}
 			}
@@ -141,7 +141,7 @@ func (p *PebbleStore) UpsertBookFileToMemDB(bf *BookFile) {
 		return
 	}
 	p.memSync("UpsertBookFile", func(txn memTxn) error {
-		return txn.Insert(memTableBookFiles, bf)
+		return txn.Insert(memTableBookFiles, stripBookFileForMemdb(bf))
 	})
 }
 
@@ -323,28 +323,14 @@ func (p *PebbleStore) DeleteBlockedHashFromMemDB(hash string) {
 }
 
 // ── Work ───────────────────────────────────────────────────────────────────
+//
+// Works are NOT mirrored into memdb (dropped in PR for I2 — 211K rows × ~590B
+// = ~120MB heap saved). The write-through helpers are kept as no-op stubs so
+// existing call sites compile without churn; Pebble remains source of truth.
 
-func (p *PebbleStore) UpsertWorkToMemDB(w *Work) {
-	if w == nil {
-		return
-	}
-	p.memSync("UpsertWork", func(txn memTxn) error {
-		return txn.Insert(memTableWorks, w)
-	})
-}
+func (p *PebbleStore) UpsertWorkToMemDB(w *Work) {}
 
-func (p *PebbleStore) DeleteWorkFromMemDB(id string) {
-	if id == "" {
-		return
-	}
-	p.memSync("DeleteWork", func(txn memTxn) error {
-		obj, err := txn.First(memTableWorks, memIdxID, id)
-		if err == nil && obj != nil {
-			return txn.Delete(memTableWorks, obj)
-		}
-		return nil
-	})
-}
+func (p *PebbleStore) DeleteWorkFromMemDB(id string) {}
 
 // ── Internal helpers ───────────────────────────────────────────────────────
 

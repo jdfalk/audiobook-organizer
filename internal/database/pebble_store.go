@@ -1138,12 +1138,12 @@ func (p *PebbleStore) GetAllSeriesFileCounts() (map[int]int, error) {
 
 // ---- Work operations (logical title-level grouping) ----
 
-// GetAllWorks returns all works. Uses the in-memory query layer when enabled,
-// otherwise falls back to the Pebble prefix scan.
+// GetAllWorks returns all works by iterating the Pebble "work:" prefix.
+// Works are intentionally NOT mirrored into memdb — 211K rows × ~590B is
+// ~120MB of heap for a query path used in <0.1% of requests. The single
+// meaningful hot caller (scanner-side work lookup) batches one call at
+// scan start, which Pebble handles in tens of milliseconds.
 func (p *PebbleStore) GetAllWorks() ([]Work, error) {
-	if p.UseMemDB && p.mem() != nil {
-		return p.mem().GetAllWorks()
-	}
 	return p.GetAllWorks_Pebble()
 }
 
@@ -9510,7 +9510,11 @@ func (p *PebbleStore) GetAcoustIDStats() (*AcoustIDStats, error) {
 // GetFilesWithFingerprintFailures scans all book_files and returns those where
 // FingerprintFailedAt is set, optionally filtered to a specific reason string.
 func (p *PebbleStore) GetFilesWithFingerprintFailures(reason string, limit, offset int) ([]BookFile, int64, error) {
-	allFiles, err := p.GetAllBookFiles()
+	// Bypass memdb deliberately: memdb-resident BookFiles have their
+	// fingerprint-diagnostic fields stripped (see stripBookFileForMemdb),
+	// so the Failed/Reason/Detail/Diagnostic columns this endpoint
+	// surfaces are only available from Pebble.
+	allFiles, err := p.getAllBookFilesPebbleScan()
 	if err != nil {
 		return nil, 0, fmt.Errorf("GetFilesWithFingerprintFailures: %w", err)
 	}

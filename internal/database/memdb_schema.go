@@ -18,7 +18,6 @@ const (
 	memTableImportPaths      = "import_paths"
 	memTableAuthorAliases    = "author_aliases"
 	memTableBlockedHashes    = "blocked_hashes"
-	memTableWorks            = "works"
 )
 
 // Index names.
@@ -41,7 +40,6 @@ const (
 	memIdxEnabled           = "enabled"
 	memIdxAliasName         = "alias_name"
 	memIdxHash              = "hash"
-	memIdxWorkAuthor        = "author_id"
 	memIdxDelugeHash        = "deluge_hash"
 )
 
@@ -333,31 +331,6 @@ func memdbSchema() *memdb.DBSchema {
 				},
 			},
 
-			memTableWorks: {
-				Name: memTableWorks,
-				Indexes: map[string]*memdb.IndexSchema{
-					memIdxID: {
-						Name:    memIdxID,
-						Unique:  true,
-						Indexer: &memdb.StringFieldIndex{Field: "ID"},
-					},
-					memIdxTitle: {
-						Name:         memIdxTitle,
-						AllowMissing: true,
-						Indexer:      &memdb.StringFieldIndex{Field: "Title", Lowercase: true},
-					},
-					memIdxWorkAuthor: {
-						Name:         memIdxWorkAuthor,
-						AllowMissing: true,
-						Indexer:      &nullableIntFieldIndex{Field: "AuthorID"},
-					},
-					memIdxSeriesID: {
-						Name:         memIdxSeriesID,
-						AllowMissing: true,
-						Indexer:      &nullableIntFieldIndex{Field: "SeriesID"},
-					},
-				},
-			},
 		},
 	}
 }
