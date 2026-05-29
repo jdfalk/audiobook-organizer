@@ -1,8 +1,8 @@
 // file: web/src/components/OperationActivityPanel.tsx
-// version: 1.0.1
+// version: 1.1.0
 // guid: f7a1e2c3-9b4d-4e5a-8c6f-1d3b5a7e9c0f
 
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import {
   Box,
   Chip,
@@ -11,16 +11,19 @@ import {
   IconButton,
   Paper,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight.js';
 import RefreshIcon from '@mui/icons-material/Refresh.js';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy.js';
 import {
   fetchOperationActivity,
   type OperationActivityEntry,
 } from '../services/activityApi';
 import { useOperationsStore } from '../stores/useOperationsStore';
+import { useToast } from './toast/ToastProvider';
 
 interface OperationActivityPanelProps {
   /** Operation ID to fetch the per-op activity feed for. */
@@ -176,8 +179,15 @@ export function OperationActivityPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  // Pause auto-refresh while the user's mouse is over the log body so they can
+  // select/copy text without being kicked out of their selection. We use the
+  // hover approach because it's the simplest given the existing setInterval +
+  // useState data flow; selection-aware pause would require tracking
+  // selectionchange globally and resolving Range containers, which is brittle.
+  const [paused, setPaused] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isUnmountedRef = useRef(false);
+  const { toast } = useToast();
 
   const op = useOperationsStore((state) =>
     state.activeOperations.find((o) => o.id === operationId),
@@ -218,14 +228,43 @@ export function OperationActivityPanel({
   }, [load]);
 
   // Poll for non-terminal ops every 3s — terminal ops do not need refresh.
+  // Paused while the user is hovering the log body (so text selection is not
+  // wiped out by re-renders).
   useEffect(() => {
     if (op && TERMINAL_STATUSES.has(op.status)) return;
+    if (paused) return;
     if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = setInterval(load, 3000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [load, op]);
+  }, [load, op, paused]);
+
+  // Plain-text representation of the log for clipboard copy.
+  const logsAsText = useMemo(() => {
+    return entries
+      .map((e) => {
+        const ts = e.timestamp;
+        const lvl = (e.level || '').toUpperCase();
+        const main = `${ts} ${lvl} ${e.message}`;
+        return e.details && e.details.trim().length > 0
+          ? `${main}\n${e.details}`
+          : main;
+      })
+      .join('\n');
+  }, [entries]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(logsAsText);
+      toast('Copied to clipboard', 'success');
+    } catch (err) {
+      toast(
+        err instanceof Error ? `Copy failed: ${err.message}` : 'Copy failed',
+        'error',
+      );
+    }
+  }, [logsAsText, toast]);
 
   const status = op?.status ?? inferStatusFromEntries(entries);
   const operationType =
@@ -266,9 +305,26 @@ export function OperationActivityPanel({
           <Typography variant="caption" color="text.secondary">
             {total} {total === 1 ? 'entry' : 'entries'}
           </Typography>
-          <IconButton size="small" onClick={load} aria-label="Refresh activity">
-            <RefreshIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Copy log to clipboard">
+            <span>
+              <IconButton
+                size="small"
+                onClick={handleCopy}
+                aria-label="Copy log to clipboard"
+                disabled={entries.length === 0}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={paused ? 'Auto-refresh paused (hovering)' : 'Refresh activity'}>
+            <IconButton size="small" onClick={load} aria-label="Refresh activity">
+              <RefreshIcon
+                fontSize="small"
+                sx={paused ? { color: 'warning.main' } : undefined}
+              />
+            </IconButton>
+          </Tooltip>
         </Stack>
       </Box>
 
@@ -292,7 +348,11 @@ export function OperationActivityPanel({
           No activity recorded for this operation yet.
         </Typography>
       ) : (
-        <Box sx={{ maxHeight: 480, overflowY: 'auto' }}>
+        <Box
+          sx={{ maxHeight: 480, overflowY: 'auto' }}
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+        >
           {entries.map((entry, idx) => (
             <EntryRow key={`${entry.timestamp}-${idx}`} entry={entry} />
           ))}
