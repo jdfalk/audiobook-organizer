@@ -1046,6 +1046,11 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), s.triggerEmbedScan)
 			protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), s.triggerEmbedAsync)
 
+			// MAYDEPLOY-G2/G4: split-book backfill (chapter-cluster scrub)
+			protected.POST("/dedup/split-book-scan", s.perm(auth.PermScanTrigger), s.triggerSplitBookScan)
+			protected.GET("/dedup/split-book-candidates", s.perm(auth.PermLibraryView), s.listSplitBookCandidates)
+			protected.POST("/dedup/split-book-candidates/:id/merge", s.perm(auth.PermLibraryEditMetadata), s.mergeSplitBookCandidate)
+
 			// File system routes
 			protected.GET("/filesystem/home", s.perm(auth.PermSettingsManage), s.getHomeDirectory)
 			protected.GET("/filesystem/browse", s.perm(auth.PermSettingsManage), s.browseFilesystem)
