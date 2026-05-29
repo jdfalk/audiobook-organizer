@@ -39,6 +39,7 @@ func (p *Plugin) backfillDef() sdk.OperationDef {
 		Description:     "Generates AcoustID fingerprints for files missing acoustid_seg0.",
 		ResumePolicy:    sdk.ResumeRestart,
 		DefaultPriority: sdk.PriorityLow,
+		ConcurrencyKey:  "acoustid.fingerprint",
 		Schedule:        &sched,
 		Isolate:         false, // DISABLED 2026-05-29: PR #1172 child-mode wire-up cannot work because Pebble is single-writer; child re-open fails. See MAYDEPLOY-A revisit.
 		Timeout:         24 * time.Hour,
