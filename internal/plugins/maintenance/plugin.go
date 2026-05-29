@@ -40,6 +40,7 @@ func (p *Plugin) Register(r sdk.Registry) error {
 		p.cleanupOldBackupsDef(),
 		p.trashCleanupDef(),
 		p.archiveSweepDef(),
+		p.orphanBookFilesCleanupDef(),
 
 		// --- database ---
 		p.dbOptimizeDef(),
