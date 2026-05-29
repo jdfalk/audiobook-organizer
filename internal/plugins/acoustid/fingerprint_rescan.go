@@ -41,6 +41,7 @@ func (p *Plugin) fingerprintRescanDef() sdk.OperationDef {
 		Description:     "Generates per-file fingerprints on demand with scope and force options.",
 		ResumePolicy:    sdk.ResumeDrop,
 		DefaultPriority: sdk.PriorityLow,
+		ConcurrencyKey:  "acoustid.fingerprint",
 		Isolate:         false, // DISABLED 2026-05-29: PR #1172 child-mode wire-up cannot work because Pebble is single-writer; child re-open fails. See MAYDEPLOY-A revisit.
 		Timeout:         12 * time.Hour,
 		Capabilities: []sdk.Capability{

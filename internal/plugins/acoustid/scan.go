@@ -23,7 +23,7 @@ func (p *Plugin) scanDef() sdk.OperationDef {
 		Description:     "Runs AcoustID fingerprint-based dedup scan comparing acoustic fingerprints.",
 		ResumePolicy:    sdk.ResumeDrop,
 		DefaultPriority: sdk.PriorityLow,
-		ConcurrencyKey:  "acoustid.scan",
+		ConcurrencyKey:  "acoustid.fingerprint",
 		Isolate:         false, // DISABLED 2026-05-29: PR #1172 child-mode wire-up cannot work because Pebble is single-writer; child re-open fails. See MAYDEPLOY-A revisit.
 		Timeout:         6 * time.Hour,
 		Capabilities: []sdk.Capability{
