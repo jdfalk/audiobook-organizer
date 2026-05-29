@@ -57,7 +57,11 @@ func (p *PebbleStore) UpsertBookToMemDB(ctx context.Context, book *Book) {
 		return
 	}
 	p.memSync("UpsertBook", func(txn memTxn) error {
-		if err := txn.Insert(memTableBooks, book); err != nil {
+		// Strip heavy fields (Description, BookSigV1, etc.) — memdb
+		// only needs lightweight projections for indexed iteration.
+		// Pebble retains the full Book; callers needing full payload
+		// hit GetBookByID. See memdb_strip.go.
+		if err := txn.Insert(memTableBooks, stripBookForMemdb(book)); err != nil {
 			return fmt.Errorf("insert book: %w", err)
 		}
 
