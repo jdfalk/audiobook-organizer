@@ -1596,7 +1596,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       const path = pathEntry?.path;
       if (!path) return;
       setImportPaths((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'scanning' } : p)));
-      const op = await withOptimisticOperation('scan', () => api.startScan(path));
+      const op = await api.startScan(path);
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to scan import path:', error);
@@ -1610,7 +1610,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
     try {
       // Mark all paths scanning
       setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'scanning' })));
-      const op = await withOptimisticOperation('scan', () => api.startScan()); // no folder path -> scan all
+      const op = await api.startScan(); // no folder path -> scan all
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to start full scan:', error);
@@ -1624,7 +1624,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       // Mark all paths scanning
       setImportPaths((prev) => prev.map((p) => ({ ...p, status: 'scanning' })));
       // Force full rescan with database path updates
-      const op = await withOptimisticOperation('scan', () => api.startScan(undefined, undefined, true));
+      const op = await api.startScan(undefined, undefined, true);
       startPolling(op.id, 'scan');
     } catch (error) {
       console.error('Failed to start full rescan:', error);
@@ -1637,9 +1637,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
       return;
     }
     try {
-      const op = await withOptimisticOperation('fingerprint-rescan', () =>
-        api.triggerFingerprintBackfill('all'),
-      );
+      const op = await api.triggerFingerprintBackfill('all');
       toast(`Fingerprint rescan started. Operation ID: ${op.id}`, 'success');
     } catch (error) {
       console.error('Failed to trigger fingerprint rescan:', error);
@@ -1649,9 +1647,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
 
   const handleFingerprintRescanMissing = async () => {
     try {
-      const op = await withOptimisticOperation('fingerprint-rescan', () =>
-        api.triggerFingerprintBackfill('missing'),
-      );
+      const op = await api.triggerFingerprintBackfill('missing');
       toast(`Fingerprint rescan started. Operation ID: ${op.id}`, 'success');
     } catch (error) {
       console.error('Failed to trigger fingerprint rescan:', error);
@@ -1662,7 +1658,7 @@ export const Library = ({ defaultPreset = 'standard' }: LibraryProps) => {
   const handleOrganizeLibrary = async () => {
     try {
       setOrganizeRunning(true);
-      const op = await withOptimisticOperation('organize', () => api.startOrganize());
+      const op = await api.startOrganize();
       startPolling(op.id, 'organize');
     } catch (e) {
       console.error('Failed to start organize', e);

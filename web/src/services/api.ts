@@ -1,12 +1,30 @@
 // file: web/src/services/api.ts
-// version: 2.33.1
+// version: 2.34.0
 // guid: a0b1c2d3-e4f5-6789-abcd-ef0123456789
-// last-edited: 2026-05-20
+// last-edited: 2026-05-29
 
 // API service layer for audiobook-organizer backend
 // Provides typed functions for all backend endpoints
 
+import { withOptimisticOperation } from '../utils/withOptimisticOperation';
+
 const API_BASE = '/api/v1';
+
+/**
+ * wrapTrigger is the single seam every op-launching API call funnels through.
+ * It inserts an optimistic placeholder into the ops store BEFORE the network
+ * call, then reconciles it with the server's real op_id (which schedules a
+ * loadFromServer refresh). The bell badge updates instantly; no UI handler
+ * needs to remember to call loadFromServer or beginOptimistic.
+ *
+ * Use for every trigger* / start* function that enqueues a backend op.
+ */
+function wrapTrigger<T extends { id?: string; operation_id?: string }>(
+  opName: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return withOptimisticOperation(opName, fn, (r) => r?.id ?? r?.operation_id ?? null);
+}
 
 export class ApiError extends Error {
   readonly status: number;
@@ -1566,17 +1584,19 @@ export async function startBulkMetadataFetch(
   selection: SelectionSpec,
   options?: { prefer_audible?: boolean; skip_cached?: boolean }
 ): Promise<{ operation_id: string }> {
-  const response = await fetch(`${API_BASE}/operations/v2`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      def_id: 'library.bulk-metadata-fetch',
-      params: { selection, ...options },
-    }),
+  return wrapTrigger('library.bulk-metadata-fetch', async () => {
+    const response = await fetch(`${API_BASE}/operations/v2`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        def_id: 'library.bulk-metadata-fetch',
+        params: { selection, ...options },
+      }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start bulk metadata fetch');
+    const body = await response.json();
+    return body?.data ?? { operation_id: '' };
   });
-  if (!response.ok) throw await buildApiError(response, 'Failed to start bulk metadata fetch');
-  const body = await response.json();
-  return body?.data ?? { operation_id: '' };
 }
 
 // Operations
@@ -1585,41 +1605,39 @@ export async function startScan(
   priority?: number,
   forceUpdate?: boolean
 ): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/operations/scan`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      folder_path: folderPath,
-      priority,
-      force_update: forceUpdate,
-    }),
+  return wrapTrigger('library.scan', async () => {
+    const response = await fetch(`${API_BASE}/operations/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder_path: folderPath,
+        priority,
+        force_update: forceUpdate,
+      }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start scan');
+    return (await response.json()).data;
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to start scan');
-  }
-  const body = await response.json();
-  return body.data;
 }
 
 export async function startTranscode(
   bookId: string,
   opts?: { output_format?: string; bitrate?: number; keep_original?: boolean }
 ): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/operations/transcode`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      book_id: bookId,
-      output_format: opts?.output_format,
-      bitrate: opts?.bitrate,
-      keep_original: opts?.keep_original,
-    }),
+  return wrapTrigger('library.transcode', async () => {
+    const response = await fetch(`${API_BASE}/operations/transcode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        book_id: bookId,
+        output_format: opts?.output_format,
+        bitrate: opts?.bitrate,
+        keep_original: opts?.keep_original,
+      }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start transcode');
+    return (await response.json()).data;
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to start transcode');
-  }
-  const body = await response.json();
-  return body.data;
 }
 
 export async function getOperationStatus(id: string): Promise<Operation> {
@@ -1809,22 +1827,21 @@ export async function startOrganize(
   bookIds?: string[],
   options?: { fetchMetadataFirst?: boolean; syncITunesFirst?: boolean }
 ): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/operations/organize`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      folder_path: folderPath,
-      priority,
-      book_ids: bookIds,
-      fetch_metadata_first: options?.fetchMetadataFirst,
-      sync_itunes_first: options?.syncITunesFirst,
-    }),
+  return wrapTrigger('library.organize', async () => {
+    const response = await fetch(`${API_BASE}/operations/organize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        folder_path: folderPath,
+        priority,
+        book_ids: bookIds,
+        fetch_metadata_first: options?.fetchMetadataFirst,
+        sync_itunes_first: options?.syncITunesFirst,
+      }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start organize');
+    return (await response.json()).data;
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to start organize');
-  }
-  const body = await response.json();
-  return body.data;
 }
 
 export async function getSystemLogs(params?: {
@@ -2275,14 +2292,15 @@ export async function startITunesSync(
   libraryPath?: string,
   force?: boolean
 ): Promise<{ operation_id: string; message: string }> {
-  const response = await fetch(`${API_BASE}/itunes/sync`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ library_path: libraryPath, force: force ?? true }),
+  return wrapTrigger('itunes.sync', async () => {
+    const response = await fetch(`${API_BASE}/itunes/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ library_path: libraryPath, force: force ?? true }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Sync failed');
+    return (await response.json()).data;
   });
-  if (!response.ok) throw await buildApiError(response, 'Sync failed');
-  const body = await response.json();
-  return body.data;
 }
 
 export async function getITunesLibraryStatus(
@@ -3501,15 +3519,15 @@ export async function startOLDumpDownload(
 export async function startOLDumpImport(
   types?: string[]
 ): Promise<{ message: string; types: string[]; operation_id?: string }> {
-  const response = await fetch(`${API_BASE}/openlibrary/import`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ types: types || ['editions', 'authors', 'works'] }),
+  return wrapTrigger('openlibrary.import', async () => {
+    const response = await fetch(`${API_BASE}/openlibrary/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ types: types || ['editions', 'authors', 'works'] }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start OL dump import');
+    return response.json();
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to start OL dump import');
-  }
-  return response.json();
 }
 
 export async function uploadOLDump(
@@ -4036,27 +4054,27 @@ export async function getReconcilePreview(): Promise<ReconcilePreview> {
 export async function startReconcile(
   matches: Array<{ book_id: string; new_path: string }>
 ): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/operations/reconcile`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ matches }),
+  return wrapTrigger('library.reconcile', async () => {
+    const response = await fetch(`${API_BASE}/operations/reconcile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ matches }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start reconciliation');
+    return response.json();
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to start reconciliation');
-  }
-  return response.json();
 }
 
 export async function startReconcileScan(): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/operations/reconcile/scan`, {
-    method: 'POST',
+  return wrapTrigger('library.reconcile-scan', async () => {
+    const response = await fetch(`${API_BASE}/operations/reconcile/scan`, {
+      method: 'POST',
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start reconcile scan');
+    const responseData = await response.json();
+    const raw = responseData.data ?? responseData;
+    return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to start reconcile scan');
-  }
-  const responseData = await response.json();
-  const raw = responseData.data ?? responseData;
-  return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
 }
 
 export interface LatestReconcileScan {
@@ -4094,14 +4112,15 @@ export async function startDiagnosticsExport(
   category: string,
   description: string
 ): Promise<{ operation_id: string; status: string }> {
-  const response = await fetch(`${API_BASE}/diagnostics/export`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ category, description }),
+  return wrapTrigger('diagnostics.export', async () => {
+    const response = await fetch(`${API_BASE}/diagnostics/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, description }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start export');
+    return (await response.json()).data;
   });
-  if (!response.ok) throw await buildApiError(response, 'Failed to start export');
-  const body = await response.json();
-  return body.data;
 }
 
 export async function downloadDiagnosticsExport(operationId: string): Promise<Blob> {
@@ -4666,16 +4685,18 @@ export interface SplitBookMergeResult {
 // Backend returns {op_id: "..."} — normalized to an Operation-shaped
 // object so the caller can drop it into useOperationsStore.startPolling.
 export async function triggerSplitBookScan(): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/dedup/split-book-scan`, {
-    method: 'POST',
+  return wrapTrigger('dedup.split-book-scan', async () => {
+    const response = await fetch(`${API_BASE}/dedup/split-book-scan`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw await buildApiError(response, 'Failed to trigger split-book scan');
+    }
+    const responseData = await response.json();
+    const raw = (responseData.data ?? {}) as Record<string, unknown>;
+    const id = (raw.id ?? raw.op_id ?? '') as string;
+    return { ...raw, id, type: (raw.type as string) ?? 'dedup.split-book-scan' } as Operation;
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to trigger split-book scan');
-  }
-  const responseData = await response.json();
-  const raw = (responseData.data ?? {}) as Record<string, unknown>;
-  const id = (raw.id ?? raw.op_id ?? '') as string;
-  return { ...raw, id, type: (raw.type as string) ?? 'dedup.split-book-scan' } as Operation;
 }
 
 // Fetch all persisted split-book candidates. The backend does NOT paginate
@@ -4719,48 +4740,41 @@ export async function mergeSplitBookCandidate(
 // 15s background sweep — that wait is what made fast scans look invisible
 // after the user clicked "Re-scan" or "Re-embed All".
 export async function triggerDedupScan(): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/dedup/scan`, { method: 'POST' });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to trigger dedup scan');
-  }
-  const responseData = await response.json();
-  return responseData.data;
+  return wrapTrigger('dedup.scan', async () => {
+    const response = await fetch(`${API_BASE}/dedup/scan`, { method: 'POST' });
+    if (!response.ok) throw await buildApiError(response, 'Failed to trigger dedup scan');
+    return (await response.json()).data;
+  });
 }
 
 export async function triggerDedupLLM(): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/dedup/scan-llm`, {
-    method: 'POST',
+  return wrapTrigger('dedup.scan-llm', async () => {
+    const response = await fetch(`${API_BASE}/dedup/scan-llm`, { method: 'POST' });
+    if (!response.ok) throw await buildApiError(response, 'Failed to trigger dedup LLM scan');
+    return (await response.json()).data;
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to trigger dedup LLM scan');
-  }
-  const responseData = await response.json();
-  return responseData.data;
 }
 
 export async function triggerDedupAcoustID(): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/dedup/scan-acoustid`, { method: 'POST' });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to trigger AcoustID scan');
-  }
-  const responseData = await response.json();
-  const raw = responseData.data ?? {};
-  // Backend returns {op_id: "..."} — normalize to Operation shape.
-  return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
+  return wrapTrigger('acoustid.scan', async () => {
+    const response = await fetch(`${API_BASE}/dedup/scan-acoustid`, { method: 'POST' });
+    if (!response.ok) throw await buildApiError(response, 'Failed to trigger AcoustID scan');
+    const raw = (await response.json()).data ?? {};
+    return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
+  });
 }
 
 export async function triggerFingerprintBackfill(scope: 'missing' | 'all' = 'missing'): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/dedup/fingerprint-rescan`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scope }),
+  return wrapTrigger('acoustid.fingerprint-rescan', async () => {
+    const response = await fetch(`${API_BASE}/dedup/fingerprint-rescan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope }),
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to trigger fingerprint backfill');
+    const raw = (await response.json()).data ?? {};
+    return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to trigger fingerprint backfill');
-  }
-  const responseData = await response.json();
-  const raw = responseData.data ?? {};
-  return { ...raw, id: raw.id ?? raw.op_id ?? '' } as Operation;
 }
 
 export interface AcoustIDSegmentComparison {
@@ -4790,23 +4804,19 @@ export async function compareAcoustID(bookAID: string, bookBID: string): Promise
 }
 
 export async function triggerDedupRefresh(): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/dedup/refresh`, {
-    method: 'POST',
+  return wrapTrigger('dedup.refresh', async () => {
+    const response = await fetch(`${API_BASE}/dedup/refresh`, { method: 'POST' });
+    if (!response.ok) throw await buildApiError(response, 'Failed to trigger dedup refresh');
+    return (await response.json()).data;
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to trigger dedup refresh');
-  }
-  const responseData = await response.json();
-  return responseData.data;
 }
 
 export async function triggerEmbedScan(): Promise<Operation> {
-  const response = await fetch(`${API_BASE}/dedup/embed`, { method: 'POST' });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to trigger embedding scan');
-  }
-  const responseData = await response.json();
-  return responseData.data;
+  return wrapTrigger('dedup.embed', async () => {
+    const response = await fetch(`${API_BASE}/dedup/embed`, { method: 'POST' });
+    if (!response.ok) throw await buildApiError(response, 'Failed to trigger embedding scan');
+    return (await response.json()).data;
+  });
 }
 
 // ── API Key management ────────────────────────────────────────────────────────
@@ -5200,14 +5210,14 @@ export async function runMaintenanceJob(jobId: string, dryRun = false): Promise<
 }
 
 export async function startOptimize(): Promise<{ operation_id: string }> {
-  const response = await fetch(`${API_BASE}/operations/optimize`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  return wrapTrigger('library.optimize', async () => {
+    const response = await fetch(`${API_BASE}/operations/optimize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw await buildApiError(response, 'Failed to start optimize operation');
+    return response.json();
   });
-  if (!response.ok) {
-    throw await buildApiError(response, 'Failed to start optimize operation');
-  }
-  return response.json();
 }
 
 // QuickQuery matches the QuickQuery interface defined in web/src/types/index.ts.
