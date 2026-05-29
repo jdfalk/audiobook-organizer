@@ -1,12 +1,14 @@
 // file: internal/search/index_builder_test.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 9d8e2c1a-5b4f-4f70-a7c6-2d8e0f1b9a47
 
 package search
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/jdfalk/audiobook-organizer/internal/database"
 )
@@ -67,6 +69,68 @@ func TestBookToDoc_ResolvesRelations(t *testing.T) {
 	}
 	if doc.Type != BookDocType {
 		t.Errorf("Type = %q", doc.Type)
+	}
+}
+
+func TestTruncateForIndex(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		n    int
+		want string
+	}{
+		{"empty", "", 500, ""},
+		{"under-limit", "hello", 500, "hello"},
+		{"at-limit", strings.Repeat("a", 500), 500, strings.Repeat("a", 500)},
+		{"truncate-ascii", strings.Repeat("a", 600), 500, strings.Repeat("a", 500)},
+		{"no-limit", strings.Repeat("a", 600), 0, strings.Repeat("a", 600)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := truncateForIndex(tc.in, tc.n)
+			if got != tc.want {
+				t.Errorf("truncateForIndex(%q, %d) len=%d want len=%d",
+					tc.name, tc.n, len(got), len(tc.want))
+			}
+		})
+	}
+}
+
+func TestTruncateForIndex_MultiByteRunesNotSplit(t *testing.T) {
+	// Each rune is 3 bytes (CJK). 600 runes = 1800 bytes; truncating
+	// to 500 runes must yield exactly 1500 bytes and still be valid
+	// UTF-8 — i.e. never cut a rune mid-byte.
+	in := strings.Repeat("漢", 600)
+	out := truncateForIndex(in, 500)
+	if !utf8.ValidString(out) {
+		t.Fatalf("truncated output is not valid UTF-8")
+	}
+	if rc := utf8.RuneCountInString(out); rc != 500 {
+		t.Errorf("rune count = %d, want 500", rc)
+	}
+}
+
+func TestBookToDoc_TruncatesDescription(t *testing.T) {
+	store, err := database.NewPebbleStore(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	long := strings.Repeat("x", 5000)
+	book := &database.Book{
+		ID: "b-desc", Title: "Long Description", Format: "mp3",
+		Description: &long,
+	}
+	created, err := store.CreateBook(book)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	doc := BookToDoc(store, created)
+	limit := descriptionLimit()
+	if limit > 0 && utf8.RuneCountInString(doc.Description) > limit {
+		t.Errorf("doc.Description rune count = %d, want <= %d",
+			utf8.RuneCountInString(doc.Description), limit)
 	}
 }
 
