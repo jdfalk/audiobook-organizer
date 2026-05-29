@@ -4638,6 +4638,80 @@ export async function removeFromDedupCluster(
   return responseData.data;
 }
 
+// --- Split-book backfill (MAYDEPLOY-G2/G3/G4) ---
+
+export interface SplitBookCandidate {
+  id: string;
+  parent_folder: string;
+  book_ids: string[];
+  suggested_title: string;
+  suggested_author: string;
+  sequential_pattern: string;
+  shape: 'parent' | 'grandparent' | string;
+}
+
+export interface SplitBookCandidatesResponse {
+  candidates: SplitBookCandidate[];
+  total: number;
+}
+
+export interface SplitBookMergeResult {
+  keep_id?: string;
+  merged_files?: number;
+  merged_sources?: number;
+  [key: string]: unknown;
+}
+
+// Trigger the split-book backfill scan (dedup.split-book-scan op).
+// Backend returns {op_id: "..."} — normalized to an Operation-shaped
+// object so the caller can drop it into useOperationsStore.startPolling.
+export async function triggerSplitBookScan(): Promise<Operation> {
+  const response = await fetch(`${API_BASE}/dedup/split-book-scan`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to trigger split-book scan');
+  }
+  const responseData = await response.json();
+  const raw = (responseData.data ?? {}) as Record<string, unknown>;
+  const id = (raw.id ?? raw.op_id ?? '') as string;
+  return { ...raw, id, type: (raw.type as string) ?? 'dedup.split-book-scan' } as Operation;
+}
+
+// Fetch all persisted split-book candidates. The backend does NOT paginate
+// — clusters are small (hundreds at most) — so callers paginate client-side.
+export async function getSplitBookCandidates(): Promise<SplitBookCandidatesResponse> {
+  const response = await fetch(`${API_BASE}/dedup/split-book-candidates`);
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to fetch split-book candidates');
+  }
+  const responseData = await response.json();
+  return responseData.data;
+}
+
+// Merge a single split-book candidate cluster. If keepId is omitted the
+// backend uses the suggested keep (BookIDs[0], earliest ULID). On success
+// the candidate row is deleted server-side.
+export async function mergeSplitBookCandidate(
+  id: string,
+  keepId?: string
+): Promise<SplitBookMergeResult> {
+  const init: RequestInit = { method: 'POST' };
+  if (keepId) {
+    init.headers = { 'Content-Type': 'application/json' };
+    init.body = JSON.stringify({ keep_id: keepId });
+  }
+  const response = await fetch(
+    `${API_BASE}/dedup/split-book-candidates/${encodeURIComponent(id)}/merge`,
+    init
+  );
+  if (!response.ok) {
+    throw await buildApiError(response, 'Failed to merge split-book candidate');
+  }
+  const responseData = await response.json();
+  return responseData.data;
+}
+
 // All trigger* dedup endpoints return the full Operation row (id, type,
 // status, progress, ...). Returning the bare Operation lets callers
 // register the op with useOperationsStore.startPolling immediately so the
