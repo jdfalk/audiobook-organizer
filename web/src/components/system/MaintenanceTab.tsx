@@ -41,7 +41,7 @@ function OptimizeLibraryCard() {
     setError(null);
     setSuccessMsg(null);
     try {
-      const result = await withOptimisticOperation('library.optimize', () => api.startOptimize());
+      const result = await api.startOptimize();
       setSuccessMsg(`Optimize started (op ${result.operation_id})`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start optimize');

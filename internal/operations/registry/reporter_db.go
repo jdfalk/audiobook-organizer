@@ -37,11 +37,12 @@ type logEntry struct {
 
 // dbReporter is the UOS-03 DB-backed Reporter.
 type dbReporter struct {
-	opID    string
-	defID   string
-	plugin  string
-	traceID string
-	spanID  string
+	opID        string
+	defID       string
+	displayName string
+	plugin      string
+	traceID     string
+	spanID      string
 
 	store  database.OpsV2Store
 	bus    Bus // may be nil until UOS-06
@@ -51,8 +52,9 @@ type dbReporter struct {
 	logBuf  []logEntry
 	flushCh chan struct{}
 
-	progressMu      sync.Mutex
-	progressCurrent int
+	progressMu          sync.Mutex
+	progressCurrent     int
+	lastProgressMessage string
 
 	// setCurrentItemFn, if non-nil, updates the runHandle's in-memory label.
 	setCurrentItemFn func(string)
@@ -108,23 +110,29 @@ func NewDBReporterForTest(
 	bus Bus,
 	logger *slog.Logger,
 ) Reporter {
-	return newDBReporter(runCtx, opID, defID, plugin, traceID, spanID, store, bus, logger, nil)
+	return newDBReporter(runCtx, opID, defID, "", plugin, traceID, spanID, store, bus, logger, nil)
 }
 
 // newDBReporter creates a DB-backed Reporter.
+// displayName is the human-readable op name (def.DisplayName) bound as the
+// op_name attribute on every log line; empty falls back to defID.
 // setCurrentItemFn, if non-nil, is called by SetCurrentItem to update
 // the registry's in-memory runHandle without a DB write.
 func newDBReporter(
 	runCtx context.Context,
-	opID, defID, plugin, traceID, spanID string,
+	opID, defID, displayName, plugin, traceID, spanID string,
 	store database.OpsV2Store,
 	bus Bus,
 	logger *slog.Logger,
 	setCurrentItemFn func(string),
 ) Reporter {
+	if displayName == "" {
+		displayName = defID
+	}
 	r := &dbReporter{
 		opID:             opID,
 		defID:            defID,
+		displayName:      displayName,
 		plugin:           plugin,
 		traceID:          traceID,
 		spanID:           spanID,
@@ -135,25 +143,24 @@ func newDBReporter(
 		setCurrentItemFn: setCurrentItemFn,
 	}
 
-	// Build a slog.Logger with default attrs and a fanout handler.
-	baseHandler := slog.Default().Handler().WithAttrs([]slog.Attr{
+	// Every log line emitted via reporter.Logger() inherits these attrs.
+	// op_name is the human label (e.g. "AcoustID fingerprint scan") so
+	// digest aggregation can group by name without joining against the
+	// def table.
+	baseAttrs := []slog.Attr{
 		slog.String("op_id", opID),
 		slog.String("def_id", defID),
+		slog.String("op_name", displayName),
 		slog.String("plugin", plugin),
 		slog.String("trace_id", traceID),
 		slog.String("span_id", spanID),
-	})
+	}
+
+	baseHandler := slog.Default().Handler().WithAttrs(baseAttrs)
 	r.logger = slog.New(&fanoutHandler{base: baseHandler, rep: r})
 
 	if logger != nil {
-		// Use the caller-supplied logger's handler as the base for journalctl output.
-		baseHandler2 := logger.Handler().WithAttrs([]slog.Attr{
-			slog.String("op_id", opID),
-			slog.String("def_id", defID),
-			slog.String("plugin", plugin),
-			slog.String("trace_id", traceID),
-			slog.String("span_id", spanID),
-		})
+		baseHandler2 := logger.Handler().WithAttrs(baseAttrs)
 		r.logger = slog.New(&fanoutHandler{base: baseHandler2, rep: r})
 	}
 
@@ -211,7 +218,9 @@ func (r *dbReporter) flushLogs() {
 // UpdateProgress implements Reporter.
 func (r *dbReporter) UpdateProgress(current, total int, message string) error {
 	r.progressMu.Lock()
+	last := r.lastProgressMessage
 	r.progressCurrent = current
+	r.lastProgressMessage = message
 	r.progressMu.Unlock()
 
 	if err := r.store.UpdateOpProgressV2(r.opID, current, total, message); err != nil {
@@ -223,6 +232,16 @@ func (r *dbReporter) UpdateProgress(current, total int, message string) error {
 			"progress_current": current,
 			"progress_total":   total,
 		})
+	}
+	// Emit one log line per *distinct* progress message so the op_log feed
+	// has a searchable trail of the phases the Run went through. Skipping
+	// duplicates keeps a 50K-row scan from producing 50K log lines.
+	if message != "" && message != last {
+		r.logger.LogAttrs(r.runCtx, slog.LevelInfo, message,
+			slog.String("phase", "progress"),
+			slog.Int("progress_current", current),
+			slog.Int("progress_total", total),
+		)
 	}
 	return nil
 }

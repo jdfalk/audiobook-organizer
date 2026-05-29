@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -149,9 +150,23 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 	// Build reporter (DB-backed). Pass a setter so SetCurrentItem updates
 	// the runHandle's in-memory currentItem without a DB write.
 	setItemFn := func(label string) { h.setCurrentItem(label) }
-	reporter := newDBReporter(runCtx, qr.opID, qr.defID, qr.plugin,
+	reporter := newDBReporter(runCtx, qr.opID, qr.defID, def.DisplayName, qr.plugin,
 		"", "", // traceID / spanID loaded from DB row in future; empty for now
 		r.store, r.bus, r.logger, setItemFn)
+
+	// Canonical "operation started" log line, with all the tags downstream
+	// readers (op_log feed, activity-log enricher, digest aggregator) need
+	// to group, filter, and search without parsing the message. Every op
+	// gets this even if its Run forgets to emit one.
+	runStartedAt := time.Now().UTC()
+	reporter.Logger().LogAttrs(runCtx, slog.LevelInfo, "operation started",
+		slog.String("phase", "start"),
+		slog.String("op_display", def.DisplayName),
+		slog.Int("params_bytes", len(qr.params)),
+		slog.Bool("isolated", def.Isolate),
+		slog.Int("priority", int(def.DefaultPriority)),
+		slog.String("concurrency_key", def.ConcurrencyKey),
+	)
 
 	// Subprocess path (Isolate=true): re-exec self.
 	if def.Isolate {
@@ -172,6 +187,7 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 		if err := r.store.UpdateOperationV2Status(qr.opID, finalStatus, nil, &completedAt, errMsg); err != nil {
 			r.logger.Warn("registry: failed to update subprocess op terminal status", "op_id", qr.opID, "error", err)
 		}
+		emitOpFinishedLog(runCtx, reporter, runStartedAt, finalStatus, runErr, true)
 		r.logger.Info("registry: subprocess run finished", "op_id", qr.opID, "status", finalStatus)
 		return false
 	}
@@ -253,8 +269,34 @@ func (r *Registry) executeRun(parentCtx context.Context, qr *queuedRun) (wasAban
 		r.logger.Warn("registry: failed to update op terminal status", "op_id", qr.opID, "error", err)
 	}
 
+	emitOpFinishedLog(runCtx, reporter, runStartedAt, finalStatus, runErr, false)
 	r.logger.Info("registry: run finished", "op_id", qr.opID, "status", finalStatus)
 	return false
+}
+
+// emitOpFinishedLog emits the canonical "operation finished" line through
+// the reporter's tagged logger. Every op gets this line regardless of
+// whether its Run emitted one. Downstream readers can rely on a
+// phase=end tag + structured outcome instead of parsing the message.
+func emitOpFinishedLog(ctx context.Context, rep Reporter, startedAt time.Time, outcome string, runErr error, subprocess bool) {
+	durMs := time.Since(startedAt).Milliseconds()
+	attrs := []slog.Attr{
+		slog.String("phase", "end"),
+		slog.String("outcome", outcome),
+		slog.Int64("duration_ms", durMs),
+		slog.Bool("subprocess", subprocess),
+	}
+	if runErr != nil {
+		attrs = append(attrs, slog.String("error", runErr.Error()))
+	}
+	level := slog.LevelInfo
+	switch outcome {
+	case "failed":
+		level = slog.LevelError
+	case "canceled", "interrupted_dropped", "interrupted_restart":
+		level = slog.LevelWarn
+	}
+	rep.Logger().LogAttrs(ctx, level, "operation finished", attrs...)
 }
 
 // checkInfiniteRestart checks whether an op should be force-dropped due to
