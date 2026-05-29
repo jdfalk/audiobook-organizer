@@ -60,31 +60,26 @@ func stripBookForMemdb(src *Book) *Book {
 //
 // Combined expected drop: ~70 MB.
 //
-// Critical: AcoustIDSeg0 is intentionally NOT stripped. It is read on every
-// /api/v1/audiobooks list response by fingerprint.ComputeFingerprintFields
+// Critical: AcoustIDSeg0..6 are intentionally PRESERVED. seg0 is read on
+// every /api/v1/audiobooks list by fingerprint.ComputeFingerprintFields
 // (via the memdb-routed GetBookFilesForIDs path) to compute the per-book
-// fingerprint_status badge. Clearing seg0 would silently make every book
-// report "none".
+// fingerprint_status badge. seg1..6 are read by the memdb-routed
+// MemStore.GetBookFileByAcoustIDFuzzy used by the dedup engine — without
+// them in memdb, the fuzzy lookup has to full-scan Pebble (308K book_file
+// keys per call), which wedged AcoustIDScan at book 1 in prod.
 //
-// Safe to strip because:
-//   - Seg1..6 + diagnostic fields are only read by acoustid backfill,
-//     fingerprint_diagnosis_handler, and dedup. Backfill and dedup fetch
-//     files via GetBookFiles(bookID), which is Pebble-direct (no memdb).
-//     fingerprint_diagnosis_handler is rerouted in this PR to use
-//     getAllBookFilesPebbleScan() so it also bypasses memdb.
-//   - listBookFiles handler (which exposes seg1..6 in API responses) uses
-//     GetBookFiles(bookID) — Pebble-direct, sees the full payload.
+// Heap cost of preserving seg1..6 at steady-state full coverage:
+// 308K × 6 × ~400B ≈ 700 MB worst case; ~70 MB at current fp-coverage.
+// Trivially affordable vs the 30 GB headroom from the May 29 I-batch.
+//
+// Diagnostic fields remain stripped — they're only needed by the
+// fingerprint_diagnosis_handler, which calls GetBookFiles(bookID)
+// Pebble-direct.
 func stripBookFileForMemdb(src *BookFile) *BookFile {
 	if src == nil {
 		return nil
 	}
 	cp := *src
-	cp.AcoustIDSeg1 = ""
-	cp.AcoustIDSeg2 = ""
-	cp.AcoustIDSeg3 = ""
-	cp.AcoustIDSeg4 = ""
-	cp.AcoustIDSeg5 = ""
-	cp.AcoustIDSeg6 = ""
 	cp.FingerprintFailedAt = nil
 	cp.FingerprintFailureReason = nil
 	cp.FingerprintFailureDetail = nil
