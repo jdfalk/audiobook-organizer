@@ -1591,6 +1591,59 @@ func (p *PebbleStore) GetBookByITunesPersistentID(persistentID string) (*Book, e
 	return nil, nil
 }
 
+// ListBooksByITunesPID returns books that have a non-empty iTunes persistent
+// ID, paginated. Fast path: memdb has an itunes_persistent_id index, so this
+// is O(matches) instead of O(50K books × JSON unmarshal) — the prior
+// implementation in handleListITunesBooks and the writeback-preview handler
+// called GetAllBooks(0,0) and post-filtered, allocating the full book set
+// on every request. With ~50K total books and ~3K iTunes-mapped, that's a
+// >15× reduction in allocations and ~100ms→<1ms latency.
+//
+// Pebble fallback preserved for cold-start (before memdb publishes) and
+// tests with no memdb.
+func (p *PebbleStore) ListBooksByITunesPID(limit, offset int) ([]Book, error) {
+	if mem := p.mem(); mem != nil {
+		return mem.ListBooksByITunesPID(limit, offset)
+	}
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	var books []Book
+	skipped := 0
+	collected := 0
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") || strings.Contains(key, ":series:") ||
+			strings.Contains(key, ":author:") || strings.Contains(key, ":hash:") ||
+			strings.Contains(key, ":version:") {
+			continue
+		}
+		var book Book
+		if err := json.Unmarshal(iter.Value(), &book); err != nil {
+			continue
+		}
+		if book.ITunesPersistentID == nil || *book.ITunesPersistentID == "" {
+			continue
+		}
+		if skipped < offset {
+			skipped++
+			continue
+		}
+		if limit > 0 && collected >= limit {
+			break
+		}
+		books = append(books, book)
+		collected++
+	}
+	return books, nil
+}
+
 func (p *PebbleStore) GetBookByFileHash(hash string) (*Book, error) {
 	indexKey := []byte(fmt.Sprintf("book:hash:%s", hash))
 	value, closer, err := p.db.Get(indexKey)

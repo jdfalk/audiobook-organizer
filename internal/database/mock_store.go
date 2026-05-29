@@ -41,6 +41,7 @@ type MockStore struct {
 	GetBooksBySeriesIDFunc          func(seriesID int) ([]Book, error)
 	GetBooksByAuthorIDFunc          func(authorID int) ([]Book, error)
 	GetBookByITunesPersistentIDFunc func(persistentID string) (*Book, error)
+	ListBooksByITunesPIDFunc        func(limit, offset int) ([]Book, error)
 	GetBookByFileHashFunc           func(hash string) (*Book, error)
 	GetBookByOriginalHashFunc       func(hash string) (*Book, error)
 	GetBookByOrganizedHashFunc      func(hash string) (*Book, error)
@@ -683,6 +684,13 @@ func (m *MockStore) GetBookByFilePath(path string) (*Book, error) {
 func (m *MockStore) GetBookByITunesPersistentID(persistentID string) (*Book, error) {
 	if m.GetBookByITunesPersistentIDFunc != nil {
 		return m.GetBookByITunesPersistentIDFunc(persistentID)
+	}
+	return nil, nil
+}
+
+func (m *MockStore) ListBooksByITunesPID(limit, offset int) ([]Book, error) {
+	if m.ListBooksByITunesPIDFunc != nil {
+		return m.ListBooksByITunesPIDFunc(limit, offset)
 	}
 	return nil, nil
 }

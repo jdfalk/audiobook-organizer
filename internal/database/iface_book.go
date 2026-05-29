@@ -34,6 +34,7 @@ type BookReader interface {
 	GetAllBookSummaries(limit, offset int) ([]BookSummary, error)
 	GetBookByFilePath(path string) (*Book, error)
 	GetBookByITunesPersistentID(persistentID string) (*Book, error)
+	ListBooksByITunesPID(limit, offset int) ([]Book, error)
 	GetBookByFileHash(hash string) (*Book, error)
 	GetBookByOriginalHash(hash string) (*Book, error)
 	GetBookByOrganizedHash(hash string) (*Book, error)
