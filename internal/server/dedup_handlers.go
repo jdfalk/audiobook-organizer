@@ -1,7 +1,7 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.9.0
+// version: 2.10.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-28
+// last-edited: 2026-05-29
 
 package server
 
@@ -61,8 +61,51 @@ func (s *Server) listDedupCandidates(c *gin.Context) {
 		return
 	}
 
+	// MAYDEPLOY-B4: defensive filter — drop candidate rows whose
+	// referenced book IDs no longer exist in the book table. This is
+	// the safety net to B3's proactive cleanup: even if a stale row
+	// slips through (race, missed delete, crash between cleanup runs),
+	// the UI never shows a candidate that would 404 when clicked.
+	// Non-book entities (e.g. author) skip the existence check.
+	filtered := candidates[:0]
+	existCache := make(map[string]bool, len(candidates)*2)
+	bookExists := func(id string) bool {
+		if id == "" {
+			return false
+		}
+		if v, ok := existCache[id]; ok {
+			return v
+		}
+		book, gerr := s.Store().GetBookByID(id)
+		exists := gerr == nil && book != nil
+		existCache[id] = exists
+		return exists
+	}
+	dropped := 0
+	for _, cand := range candidates {
+		if cand.EntityType == "book" {
+			if !bookExists(cand.EntityAID) || !bookExists(cand.EntityBID) {
+				dropped++
+				continue
+			}
+		}
+		filtered = append(filtered, cand)
+	}
+	if dropped > 0 {
+		slog.Warn("dedup.list_candidates: filtered dead-book candidate rows",
+			"dropped", dropped,
+			"returned", len(filtered),
+			"page_size", len(candidates),
+			"note", "B3 cleanup may be lagging")
+		// Reflect the filtered count in the total so pagination
+		// hints stay roughly accurate from the client's view.
+		if total >= dropped {
+			total -= dropped
+		}
+	}
+
 	httputil.RespondWithOK(c, gin.H{
-		"candidates": candidates,
+		"candidates": filtered,
 		"total":      total,
 	})
 }
