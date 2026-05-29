@@ -62,19 +62,17 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 
 	_ = reporter.UpdateProgress(0, 100, "Loading Deluge-imported files...")
 
-	// Fetch all BookFiles that have a DelugeHash set (these were imported from Deluge).
-	bookFiles, err := p.store.GetAllBookFiles()
+	// Pull only BookFiles with non-empty DelugeHash AND not yet imported.
+	// Centralized store method routes through the memdb sparse deluge_hash
+	// index when published, avoiding the full 308K BookFile scan.
+	pending, err := p.store.GetBookFilesNeedingDelugeImport()
 	if err != nil {
-		return fmt.Errorf("load book files: %w", err)
+		return fmt.Errorf("load deluge-pending book files: %w", err)
 	}
 
-	// Filter to only those with DelugeHash that haven't been imported yet.
-	var toImport []*database.BookFile
-	for i := range bookFiles {
-		bf := &bookFiles[i]
-		if bf.DelugeHash != "" && bf.ImportedFromDelugeAt == nil {
-			toImport = append(toImport, bf)
-		}
+	toImport := make([]*database.BookFile, 0, len(pending))
+	for i := range pending {
+		toImport = append(toImport, &pending[i])
 	}
 
 	total := len(toImport)

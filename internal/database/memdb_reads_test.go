@@ -248,6 +248,44 @@ func TestMemStore_CountFiles(t *testing.T) {
 	}
 }
 
+func TestMemStore_GetBookFilesNeedingDelugeImport(t *testing.T) {
+	m, err := NewMemStore()
+	if err != nil {
+		t.Fatalf("NewMemStore: %v", err)
+	}
+	now := time.Now()
+	files := []BookFile{
+		// Match: has DelugeHash, not yet imported.
+		{ID: "f1", BookID: "b1", DelugeHash: "aaa"},
+		// Match: has DelugeHash, not yet imported.
+		{ID: "f2", BookID: "b1", DelugeHash: "bbb"},
+		// Skip: DelugeHash present but already imported.
+		{ID: "f3", BookID: "b2", DelugeHash: "ccc", ImportedFromDelugeAt: &now},
+		// Skip: no DelugeHash (not in the sparse index at all).
+		{ID: "f4", BookID: "b3"},
+		// Skip: empty DelugeHash, with ImportedFromDelugeAt nil — must not
+		// leak into results just because the post-filter passes.
+		{ID: "f5", BookID: "b4", DelugeHash: ""},
+	}
+	seedMemStore(t, m, nil, files, nil, nil)
+
+	got, err := m.GetBookFilesNeedingDelugeImport()
+	if err != nil {
+		t.Fatalf("GetBookFilesNeedingDelugeImport: %v", err)
+	}
+	gotIDs := map[string]bool{}
+	for _, f := range got {
+		gotIDs[f.ID] = true
+	}
+	if len(gotIDs) != 2 || !gotIDs["f1"] || !gotIDs["f2"] {
+		ids := []string{}
+		for _, f := range got {
+			ids = append(ids, f.ID)
+		}
+		t.Errorf("expected [f1 f2], got %v", ids)
+	}
+}
+
 func TestMemStore_GetAllAuthorsSeriesImportPaths_Sort(t *testing.T) {
 	m, err := NewMemStore()
 	if err != nil {

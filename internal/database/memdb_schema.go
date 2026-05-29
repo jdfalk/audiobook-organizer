@@ -41,6 +41,7 @@ const (
 	memIdxAliasName         = "alias_name"
 	memIdxHash              = "hash"
 	memIdxWorkAuthor        = "author_id"
+	memIdxDelugeHash        = "deluge_hash"
 )
 
 // memdbSchema returns the complete schema for the in-memory query layer.
@@ -175,6 +176,16 @@ func memdbSchema() *memdb.DBSchema {
 						Name:         memIdxFilePath,
 						AllowMissing: true,
 						Indexer:      &memdb.StringFieldIndex{Field: "FilePath"},
+					},
+					memIdxDelugeHash: {
+						// Sparse: only rows with non-empty DelugeHash are
+						// indexed. Backs GetBookFilesNeedingDelugeImport
+						// (deluge discovery handler + centralization plugin)
+						// so they don't have to scan all 308K BookFiles to
+						// find the small subset that came from Deluge.
+						Name:         memIdxDelugeHash,
+						AllowMissing: true,
+						Indexer:      &nonEmptyStringFieldIndex{Field: "DelugeHash"},
 					},
 				},
 			},

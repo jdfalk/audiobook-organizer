@@ -8510,9 +8510,17 @@ func (s *PebbleStore) getAllBookFilesPebbleScan() ([]BookFile, error) {
 
 // GetBookFilesNeedingDelugeImport returns book_files that have a non-empty
 // deluge_hash but have not yet been imported (imported_from_deluge_at IS NULL).
-// PebbleStore is not the primary backend for deluge operations, so this returns
-// results by filtering GetAllBookFiles in memory.
+//
+// When memdb is published, walks the sparse deluge_hash index — only rows
+// where DelugeHash is non-empty are indexed — and post-filters on the
+// ImportedFromDelugeAt nil check. Drops the deluge discovery handler +
+// centralization plugin from a 308K full BookFile scan to walking just the
+// (much smaller) deluge-touched subset (H2 + H8). Pebble full-scan retained
+// as the cold-start fallback.
 func (s *PebbleStore) GetBookFilesNeedingDelugeImport() ([]BookFile, error) {
+	if s.UseMemDB && s.mem() != nil {
+		return s.mem().GetBookFilesNeedingDelugeImport()
+	}
 	all, err := s.GetAllBookFiles()
 	if err != nil {
 		return nil, err

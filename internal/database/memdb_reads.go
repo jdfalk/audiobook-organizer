@@ -656,6 +656,36 @@ func (m *MemStore) GetAllBookFiles() ([]BookFile, error) {
 	return files, nil
 }
 
+// GetBookFilesNeedingDelugeImport returns BookFiles that have a non-empty
+// DelugeHash AND have not yet been imported (ImportedFromDelugeAt is nil).
+//
+// Walks the sparse memdb deluge_hash index — only rows with a non-empty
+// DelugeHash exist in that index — then post-filters on the
+// ImportedFromDelugeAt nil check. This is O(deluge-hash-present rows), not
+// O(308K), which mirrors the GetAllBookFiles fastpath from PR #1166 but
+// trims the working set to the deluge-relevant subset for the discovery
+// handler and centralization plugin (H2 + H8).
+func (m *MemStore) GetBookFilesNeedingDelugeImport() ([]BookFile, error) {
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+	iter, err := txn.Get(memTableBookFiles, memIdxDelugeHash)
+	if err != nil {
+		return nil, fmt.Errorf("memdb deluge_hash scan: %w", err)
+	}
+	var out []BookFile
+	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+		bf, ok := obj.(*BookFile)
+		if !ok {
+			continue
+		}
+		if bf.ImportedFromDelugeAt != nil {
+			continue
+		}
+		out = append(out, *bf)
+	}
+	return out, nil
+}
+
 func paginate[T any](in []T, limit, offset int) []T {
 	if offset < 0 {
 		offset = 0
