@@ -1239,21 +1239,32 @@ func splitMultipleNames(name string) []string {
 // passed-in books — not GetAllBookFiles, which materialized all 308K+
 // book_file rows (~46GB heap) on every library list query and trampolined
 // the process to 67GB the moment the filter-pushdown warmer started.
+//
+// This is the fetch-then-aggregate wrapper. Callers that already have a
+// files map (e.g. the list handler which uses it twice) should call
+// FetchBookFilesForBooks once and then aggregateFileMetadataWithFiles +
+// EnrichAudiobooksWithNamesAndFiles to avoid a duplicate fetch.
 func (svc *AudiobookService) aggregateFileMetadata(books []database.Book) {
 	if svc.store == nil || len(books) == 0 {
 		return
 	}
+	filesByBookID := svc.FetchBookFilesForBooks(books)
+	svc.aggregateFileMetadataWithFiles(books, filesByBookID)
+}
 
-	bookIDMap := make(map[string]int, len(books))
+// FetchBookFilesForBooks performs the targeted batch fetch via memdb's
+// book_id index, with the same unwrap + fallback semantics as the original
+// aggregateFileMetadata. Returns a non-nil map (possibly empty) so callers
+// can safely range over it without nil checks.
+func (svc *AudiobookService) FetchBookFilesForBooks(books []database.Book) map[string][]database.BookFile {
+	if svc.store == nil || len(books) == 0 {
+		return map[string][]database.BookFile{}
+	}
 	bookIDs := make([]string, 0, len(books))
-	for i, b := range books {
-		bookIDMap[b.ID] = i
+	for _, b := range books {
 		bookIDs = append(bookIDs, b.ID)
 	}
 
-	// Targeted batch fetch via memdb's book_id index. Returns only the
-	// files belonging to these books. For a 20-book page, that's
-	// ~20-200 files, not 308K.
 	type batchFilesStore interface {
 		GetBookFilesForIDs(ids []string) (map[string][]database.BookFile, error)
 	}
@@ -1276,11 +1287,29 @@ func (svc *AudiobookService) aggregateFileMetadata(books []database.Book) {
 		for _, id := range bookIDs {
 			files, err := svc.store.GetBookFiles(id)
 			if err != nil {
-				slog.Warn("aggregateFileMetadata: GetBookFiles failed", "book_id", id, "err", err)
+				slog.Warn("FetchBookFilesForBooks: GetBookFiles failed", "book_id", id, "err", err)
 				continue
 			}
 			filesByBookID[id] = files
 		}
+	}
+	return filesByBookID
+}
+
+// aggregateFileMetadataWithFiles applies duration/file-size aggregation
+// using a pre-fetched files map. Skips the GetBookFilesForIDs call,
+// allowing callers that already have the map to reuse it.
+func (svc *AudiobookService) aggregateFileMetadataWithFiles(books []database.Book, filesByBookID map[string][]database.BookFile) {
+	if len(books) == 0 {
+		return
+	}
+	if filesByBookID == nil {
+		filesByBookID = map[string][]database.BookFile{}
+	}
+
+	bookIDMap := make(map[string]int, len(books))
+	for i, b := range books {
+		bookIDMap[b.ID] = i
 	}
 
 	aggregates := make(map[string]*struct {
@@ -1316,9 +1345,22 @@ func (svc *AudiobookService) aggregateFileMetadata(books []database.Book) {
 // EnrichAudiobooksWithNames adds author and series names to audiobook details.
 // Also aggregates duration and file size from individual files.
 // Batch-fetches authors and series by unique IDs to avoid N+1 DB lookups.
+//
+// This is the fetch-then-enrich wrapper. Callers that have already fetched
+// the book_files map should use EnrichAudiobooksWithNamesAndFiles to avoid
+// a duplicate GetBookFilesForIDs call.
 func (svc *AudiobookService) EnrichAudiobooksWithNames(books []database.Book) []AudiobookDetail {
+	filesByBookID := svc.FetchBookFilesForBooks(books)
+	return svc.EnrichAudiobooksWithNamesAndFiles(books, filesByBookID)
+}
+
+// EnrichAudiobooksWithNamesAndFiles is the variant that accepts a pre-fetched
+// files map and threads it into aggregation, avoiding a duplicate
+// GetBookFilesForIDs call when the caller already has the map (e.g. the
+// list handler uses it again for fingerprint compute).
+func (svc *AudiobookService) EnrichAudiobooksWithNamesAndFiles(books []database.Book, filesByBookID map[string][]database.BookFile) []AudiobookDetail {
 	// Aggregate file metadata for all books at once (avoids N+1)
-	svc.aggregateFileMetadata(books)
+	svc.aggregateFileMetadataWithFiles(books, filesByBookID)
 
 	// Collect unique IDs that need DB lookups (skip pre-loaded objects).
 	authorIDs := make([]int, 0)

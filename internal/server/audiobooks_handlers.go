@@ -315,29 +315,12 @@ func (s *Server) buildAudiobookListResponse(ctx context.Context, limit, offset i
 		books = filtered
 	}
 
-	enriched := s.audiobookService.EnrichAudiobooksWithNames(books)
+	// Fetch book_files ONCE up front; thread the map into both enrichment
+	// (for duration/file-size aggregation) and the fingerprint compute loop
+	// below. Previously each path independently called GetBookFilesForIDs.
+	bookFilesMap := s.audiobookService.FetchBookFilesForBooks(books)
 
-	bookIDs := make([]string, len(enriched))
-	for i, book := range enriched {
-		bookIDs[i] = book.ID
-	}
-
-	bookFilesMap := make(map[string][]database.BookFile)
-	if ggf, ok := s.Store().(interface {
-		GetBookFilesForIDs(ids []string) (map[string][]database.BookFile, error)
-	}); ok {
-		if bfm, err := ggf.GetBookFilesForIDs(bookIDs); err == nil {
-			bookFilesMap = bfm
-		}
-	} else if uw, ok := s.Store().(interface{ Unwrap() database.Store }); ok {
-		if inner, ok2 := uw.Unwrap().(interface {
-			GetBookFilesForIDs(ids []string) (map[string][]database.BookFile, error)
-		}); ok2 {
-			if bfm, err := inner.GetBookFilesForIDs(bookIDs); err == nil {
-				bookFilesMap = bfm
-			}
-		}
-	}
+	enriched := s.audiobookService.EnrichAudiobooksWithNamesAndFiles(books, bookFilesMap)
 
 	for i, book := range enriched {
 		files := bookFilesMap[book.ID]
