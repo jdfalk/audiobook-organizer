@@ -20,7 +20,7 @@ func (p *Plugin) importDef() sdk.OperationDef {
 		Plugin:                "itunes",
 		DisplayName:           "iTunes Library Import",
 		Description:           "Import audiobooks from the iTunes/Music library into the organizer.",
-		Isolate:               true, // runs in subprocess (re-exec) — wired via cmd.RunOperationRunner
+		Isolate:               false, // DISABLED 2026-05-29: PR #1172 child-mode wire-up cannot work because Pebble is single-writer; child re-open fails. See MAYDEPLOY-A revisit.
 		ResumePolicy:          sdk.ResumeRestart,
 		DefaultPriority:       sdk.PriorityNormal,
 		Cancellable:           true,

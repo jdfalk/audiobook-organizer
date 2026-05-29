@@ -54,7 +54,7 @@ func (p *Plugin) movementAtomCleanupDef() sdk.OperationDef {
 		DefaultPriority: sdk.PriorityLow,
 		ConcurrencyKey:  "maintenance.movement-atom-cleanup",
 		Cancellable:     false,
-		Isolate:         true, // uses ffmpeg subprocess — runs in re-exec child
+		Isolate:         false, // DISABLED 2026-05-29: PR #1172 child-mode wire-up cannot work because Pebble is single-writer; child re-open fails. See MAYDEPLOY-A revisit.
 		Timeout:         60 * time.Minute,
 		Schedule:        nil,
 		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
@@ -79,7 +79,7 @@ func (p *Plugin) malformedM4BRemuxDef() sdk.OperationDef {
 		DefaultPriority: sdk.PriorityLow,
 		ConcurrencyKey:  "maintenance.malformed-m4b-remux",
 		Cancellable:     false,
-		Isolate:         true, // uses ffmpeg subprocess — runs in re-exec child
+		Isolate:         false, // DISABLED 2026-05-29: PR #1172 child-mode wire-up cannot work because Pebble is single-writer; child re-open fails. See MAYDEPLOY-A revisit.
 		Timeout:         120 * time.Minute,
 		Schedule:        nil,
 		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
@@ -106,7 +106,7 @@ func (p *Plugin) malformedM4BTranscodeDef() sdk.OperationDef {
 		DefaultPriority: sdk.PriorityLow,
 		ConcurrencyKey:  "maintenance.malformed-m4b-transcode",
 		Cancellable:     true,
-		Isolate:         true, // uses ffmpeg subprocess — runs in re-exec child
+		Isolate:         false, // DISABLED 2026-05-29: PR #1172 child-mode wire-up cannot work because Pebble is single-writer; child re-open fails. See MAYDEPLOY-A revisit.
 		Timeout:         6 * time.Hour,
 		Schedule:        nil,
 		Capabilities:    []sdk.Capability{sdk.CapLibraryRead, sdk.CapFilesRead, sdk.CapFilesWrite, sdk.CapSubprocessSpawn},
