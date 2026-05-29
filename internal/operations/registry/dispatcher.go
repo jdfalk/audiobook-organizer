@@ -44,6 +44,22 @@ func (r *Registry) dispatchCycle(ctx context.Context) {
 			return
 		}
 
+		// Gate 0: already claimed / running? The worker marks the DB row
+		// "running" only AFTER receiving from nextRun (worker.go:143), but
+		// the dispatcher can fire again (via r.dispatch signal or the
+		// 100ms ticker) in the gap between channel-send and worker-pickup.
+		// Without this in-memory guard, ListQueuedOperationsV2() still
+		// sees the row as "queued" and we re-dispatch the same opID —
+		// observed in prod on dedup.book-merge running twice
+		// (same op_id, two "dispatched op" + "starting run" log lines
+		// 3ms apart, two book-merge complete events).
+		r.mu.RLock()
+		_, alreadyClaimed := r.running[row.ID]
+		r.mu.RUnlock()
+		if alreadyClaimed {
+			continue
+		}
+
 		// Gate 1: def must be registered.
 		r.mu.RLock()
 		def, ok := r.defs[row.DefID]
@@ -87,6 +103,10 @@ func (r *Registry) dispatchCycle(ctx context.Context) {
 		// All gates passed — claim and dispatch.
 		r.mu.Lock()
 		// Re-check under write lock to avoid TOCTOU.
+		if _, alreadyClaimed := r.running[row.ID]; alreadyClaimed {
+			r.mu.Unlock()
+			continue
+		}
 		maxC = r.pluginMax[def.Plugin]
 		currentRunning = r.pluginRunning[def.Plugin]
 		if maxC > 0 && currentRunning >= maxC {
@@ -101,6 +121,16 @@ func (r *Registry) dispatchCycle(ctx context.Context) {
 			r.concurrencyKeys[def.ConcurrencyKey] = row.ID
 		}
 		r.pluginRunning[def.Plugin]++
+		// Stub handle: blocks Gate 0 re-dispatch immediately. The worker
+		// overwrites this with the full handle (with cancel func) on
+		// pickup at worker.go:138.
+		r.running[row.ID] = &runHandle{
+			id:             row.ID,
+			defID:          row.DefID,
+			plugin:         def.Plugin,
+			concurrencyKey: def.ConcurrencyKey,
+			resumePolicy:   def.ResumePolicy,
+		}
 		r.mu.Unlock()
 
 		qr := &queuedRun{
@@ -125,6 +155,9 @@ func (r *Registry) dispatchCycle(ctx context.Context) {
 					delete(r.concurrencyKeys, def.ConcurrencyKey)
 				}
 			}
+			// Undo the stub handle we added for Gate 0 — without this,
+			// the op would be permanently un-dispatchable.
+			delete(r.running, row.ID)
 			r.mu.Unlock()
 		}
 	}
