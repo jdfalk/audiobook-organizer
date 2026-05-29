@@ -217,6 +217,47 @@ func (i *effectiveIntFieldIndex) FromArgs(args ...interface{}) ([]byte, error) {
 	}
 }
 
+// nonEmptyStringFieldIndex indexes a struct field of type string, skipping
+// rows where the value is the empty string. The schema must set
+// AllowMissing=true. Useful for sparse predicates like "DelugeHash != \"\""
+// where we want an index over only the small subset of matching rows rather
+// than scanning every row in the table.
+type nonEmptyStringFieldIndex struct{ Field string }
+
+func (i *nonEmptyStringFieldIndex) FromObject(obj interface{}) (bool, []byte, error) {
+	v := reflect.ValueOf(obj)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	fv := v.FieldByName(i.Field)
+	if !fv.IsValid() {
+		return false, nil, fmt.Errorf("nonEmptyStringFieldIndex: field %q missing", i.Field)
+	}
+	if fv.Kind() != reflect.String {
+		return false, nil, fmt.Errorf("nonEmptyStringFieldIndex: field %q is not a string", i.Field)
+	}
+	s := fv.String()
+	if s == "" {
+		return false, nil, nil
+	}
+	return true, []byte(s + "\x00"), nil
+}
+
+func (i *nonEmptyStringFieldIndex) FromArgs(args ...interface{}) ([]byte, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("nonEmptyStringFieldIndex: must provide exactly one arg")
+	}
+	switch v := args[0].(type) {
+	case string:
+		if v == "" {
+			return nil, fmt.Errorf("nonEmptyStringFieldIndex: cannot query with empty string")
+		}
+		return []byte(v + "\x00"), nil
+	default:
+		return nil, fmt.Errorf("nonEmptyStringFieldIndex: unsupported arg type %T", args[0])
+	}
+}
+
 // plainBoolFieldIndex indexes a struct field of type bool (not pointer).
 type plainBoolFieldIndex struct{ Field string }
 
@@ -329,6 +370,8 @@ var (
 	_ memdb.Indexer       = (*effectiveIntFieldIndex)(nil)
 	_ memdb.SingleIndexer = (*plainBoolFieldIndex)(nil)
 	_ memdb.Indexer       = (*plainBoolFieldIndex)(nil)
+	_ memdb.SingleIndexer = (*nonEmptyStringFieldIndex)(nil)
+	_ memdb.Indexer       = (*nonEmptyStringFieldIndex)(nil)
 	_ memdb.SingleIndexer = titleSortIndex{}
 	_ memdb.Indexer       = titleSortIndex{}
 	_ memdb.PrefixIndexer = titleSortIndex{}

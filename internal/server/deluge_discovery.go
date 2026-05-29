@@ -15,7 +15,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
-	"github.com/jdfalk/audiobook-organizer/internal/database"
 	delugeclient "github.com/jdfalk/audiobook-organizer/internal/deluge"
 	"github.com/jdfalk/audiobook-organizer/internal/httputil"
 	"github.com/jdfalk/audiobook-organizer/internal/importer"
@@ -131,18 +130,13 @@ func (s *Server) handleDiscoveryImport(c *gin.Context) {
 		return
 	}
 
-	files, err := store.GetAllBookFiles()
+	// Centralized store method — uses the memdb deluge_hash fastpath
+	// when published (avoids loading all 308K BookFiles just to filter
+	// to the small Deluge-touched subset).
+	pending, err := store.GetBookFilesNeedingDelugeImport()
 	if err != nil {
 		httputil.InternalError(c, "failed to load book files", err)
 		return
-	}
-
-	var pending []database.BookFile
-	for i := range files {
-		f := &files[i]
-		if f.DelugeHash != "" && f.ImportedFromDelugeAt == nil {
-			pending = append(pending, *f)
-		}
 	}
 
 	if req.MaxBooks > 0 && len(pending) > req.MaxBooks {
