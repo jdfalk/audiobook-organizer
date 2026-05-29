@@ -1872,6 +1872,52 @@ func (p *PebbleStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	return counts, nil
 }
 
+// GetAllWorkBookCounts returns map[workID] → count of primary, not-deleted
+// books per work. Mirrors GetAllAuthorBookCounts; used to avoid N+1
+// GetBooksByWorkID lookups when listing/aggregating works.
+func (p *PebbleStore) GetAllWorkBookCounts() (map[string]int, error) {
+	if p.UseMemDB && p.mem() != nil {
+		return p.mem().GetAllWorkBookCounts()
+	}
+	counts := make(map[string]int)
+	iter, err := p.db.NewIter(&pebble.IterOptions{
+		LowerBound: []byte("book:0"),
+		UpperBound: []byte("book:;"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := string(iter.Key())
+		if strings.Contains(key, ":path:") {
+			continue
+		}
+		parts := strings.Split(key, ":")
+		if len(parts) != 2 {
+			continue
+		}
+
+		var b Book
+		if err := json.Unmarshal(iter.Value(), &b); err != nil {
+			continue
+		}
+		if b.WorkID == nil || *b.WorkID == "" {
+			continue
+		}
+		if b.IsPrimaryVersion != nil && !*b.IsPrimaryVersion {
+			continue
+		}
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		counts[*b.WorkID]++
+	}
+
+	return counts, nil
+}
+
 // GetAllAuthorFileCounts returns the number of audio files per author.
 // Uses the in-memory query layer when enabled, otherwise the Pebble fallback.
 func (p *PebbleStore) GetAllAuthorFileCounts() (map[int]int, error) {

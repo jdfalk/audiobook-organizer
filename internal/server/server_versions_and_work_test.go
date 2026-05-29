@@ -80,6 +80,7 @@ func TestWorkEndpoints_WithMockStore(t *testing.T) {
 	author2 := 2
 	works := []database.Work{{ID: "w1", Title: "Work One", AuthorID: &author1}, {ID: "w2", Title: "Work Two", AuthorID: &author2}}
 	store.EXPECT().GetAllWorks().Return(works, nil)
+	store.EXPECT().GetAllWorkBookCounts().Return(map[string]int{"w1": 2, "w2": 1}, nil)
 	store.EXPECT().GetBooksByWorkID("w1").Return([]database.Book{{ID: "b1"}, {ID: "b2"}}, nil)
 	store.EXPECT().GetBooksByWorkID("w2").Return(nil, assert.AnError)
 
@@ -94,8 +95,7 @@ func TestWorkEndpoints_WithMockStore(t *testing.T) {
 	store2 := dbmocks.NewMockStore(t)
 	store2.EXPECT().SetRootDir(mock.Anything).Return()
 	store2.EXPECT().GetAllWorks().Return(works, nil)
-	store2.EXPECT().GetBooksByWorkID("w1").Return([]database.Book{{ID: "b1"}, {ID: "b2"}}, nil)
-	store2.EXPECT().GetBooksByWorkID("w2").Return(nil, assert.AnError)
+	store2.EXPECT().GetAllWorkBookCounts().Return(map[string]int{"w1": 2}, nil)
 	server2, cleanup2 := setupTestServerWithStore(t, store2)
 	defer cleanup2()
 

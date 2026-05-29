@@ -46,6 +46,7 @@ type WorkStore interface {
 	UpdateWork(id string, work *Work) (*Work, error)
 	DeleteWork(id string) error
 	GetBooksByWorkID(workID string) ([]Book, error)
+	GetAllWorkBookCounts() (map[string]int, error)
 }
 
 // SessionStore covers authenticated session CRUD.

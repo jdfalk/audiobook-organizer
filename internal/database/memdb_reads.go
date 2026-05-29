@@ -183,6 +183,32 @@ func (m *MemStore) GetAllAuthorBookCounts() (map[int]int, error) {
 	return out, nil
 }
 
+// GetAllWorkBookCounts returns map[workID] → count of primary, not-deleted
+// books for which the work is the WorkID on the Book row. Mirrors
+// GetAllAuthorBookCounts; built with a single memdb iteration so callers
+// avoid N+1 GetBooksByWorkID lookups on a 50K-work corpus.
+func (m *MemStore) GetAllWorkBookCounts() (map[string]int, error) {
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+
+	out := make(map[string]int)
+	iter, err := txn.Get(memTableBooks, memIdxIsPrimaryVersion, true)
+	if err != nil {
+		return nil, fmt.Errorf("memdb books scan: %w", err)
+	}
+	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+		b := obj.(*Book)
+		if b.WorkID == nil || *b.WorkID == "" {
+			continue
+		}
+		if b.MarkedForDeletion != nil && *b.MarkedForDeletion {
+			continue
+		}
+		out[*b.WorkID]++
+	}
+	return out, nil
+}
+
 // GetAllSeriesFileCounts returns map[seriesID] → count of non-missing
 // book_files that belong to a primary book in that series.
 func (m *MemStore) GetAllSeriesFileCounts() (map[int]int, error) {
