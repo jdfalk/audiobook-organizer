@@ -531,15 +531,14 @@ func (s *Server) handleITunesWriteBackPreview(c *gin.Context) {
 			}
 		}
 	} else {
-		allBooks, bErr := s.Store().GetAllBooks(0, 0)
+		// Pushdown: use the memdb itunes_persistent_id index so we only
+		// walk books that actually have a PID, instead of loading all
+		// ~50K books and post-filtering.
+		var bErr error
+		books, bErr = s.Store().ListBooksByITunesPID(0, 0)
 		if bErr != nil {
 			httputil.InternalError(c, "failed to list books", bErr)
 			return
-		}
-		for _, book := range allBooks {
-			if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
-				books = append(books, book)
-			}
 		}
 	}
 
@@ -599,22 +598,28 @@ func (s *Server) handleListITunesBooks(c *gin.Context) {
 	search := p.Search
 	limit, offset := p.Limit, p.Offset
 
-	var allBooks []database.Book
-	var err error
-	if search != "" {
-		allBooks, err = s.Store().SearchBooks(search, 0, 0)
-	} else {
-		allBooks, err = s.Store().GetAllBooks(0, 0)
-	}
-	if err != nil {
-		httputil.InternalError(c, "failed to list books", err)
-		return
-	}
-
 	var filtered []database.Book
-	for _, book := range allBooks {
-		if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
-			filtered = append(filtered, book)
+	if search != "" {
+		// Search path still needs to scan the search results then filter,
+		// since SearchBooks doesn't have an iTunes-PID filter.
+		allBooks, err := s.Store().SearchBooks(search, 0, 0)
+		if err != nil {
+			httputil.InternalError(c, "failed to list books", err)
+			return
+		}
+		for _, book := range allBooks {
+			if book.ITunesPersistentID != nil && *book.ITunesPersistentID != "" {
+				filtered = append(filtered, book)
+			}
+		}
+	} else {
+		// Pushdown: memdb itunes_persistent_id index returns only books
+		// with a non-empty PID, O(matches) instead of O(50K).
+		var err error
+		filtered, err = s.Store().ListBooksByITunesPID(0, 0)
+		if err != nil {
+			httputil.InternalError(c, "failed to list books", err)
+			return
 		}
 	}
 

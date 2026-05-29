@@ -761,6 +761,30 @@ func (s *SQLiteStore) GetBookByITunesPersistentID(persistentID string) (*Book, e
 	return &book, nil
 }
 
+func (s *SQLiteStore) ListBooksByITunesPID(limit, offset int) ([]Book, error) {
+	if limit <= 0 {
+		limit = 1_000_000
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	query := fmt.Sprintf(`SELECT %s FROM books WHERE itunes_persistent_id IS NOT NULL AND itunes_persistent_id <> '' LIMIT ? OFFSET ?`, bookSelectColumns)
+	rows, err := s.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var books []Book
+	for rows.Next() {
+		var book Book
+		if err := scanBook(rows, &book); err != nil {
+			return nil, err
+		}
+		books = append(books, book)
+	}
+	return books, rows.Err()
+}
+
 func (s *SQLiteStore) GetBookByFileHash(hash string) (*Book, error) {
 	var book Book
 	query := fmt.Sprintf(`SELECT %s FROM books WHERE file_hash = ? LIMIT 1`, bookSelectColumns)

@@ -4313,6 +4313,74 @@ func (_c *MockBookReader_ListBookTombstones_Call) RunAndReturn(run func(limit in
 	return _c
 }
 
+// ListBooksByITunesPID provides a mock function for the type MockBookReader
+func (_mock *MockBookReader) ListBooksByITunesPID(limit int, offset int) ([]database.Book, error) {
+	ret := _mock.Called(limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBooksByITunesPID")
+	}
+
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, int) ([]database.Book, error)); ok {
+		return returnFunc(limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, int) []database.Book); ok {
+		r0 = returnFunc(limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = returnFunc(limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookReader_ListBooksByITunesPID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBooksByITunesPID'
+type MockBookReader_ListBooksByITunesPID_Call struct {
+	*mock.Call
+}
+
+// ListBooksByITunesPID is a helper method to define mock.On call
+//   - limit int
+//   - offset int
+func (_e *MockBookReader_Expecter) ListBooksByITunesPID(limit interface{}, offset interface{}) *MockBookReader_ListBooksByITunesPID_Call {
+	return &MockBookReader_ListBooksByITunesPID_Call{Call: _e.mock.On("ListBooksByITunesPID", limit, offset)}
+}
+
+func (_c *MockBookReader_ListBooksByITunesPID_Call) Run(run func(limit int, offset int)) *MockBookReader_ListBooksByITunesPID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookReader_ListBooksByITunesPID_Call) Return(books []database.Book, err error) *MockBookReader_ListBooksByITunesPID_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockBookReader_ListBooksByITunesPID_Call) RunAndReturn(run func(limit int, offset int) ([]database.Book, error)) *MockBookReader_ListBooksByITunesPID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListSoftDeletedBooks provides a mock function for the type MockBookReader
 func (_mock *MockBookReader) ListSoftDeletedBooks(limit int, offset int, olderThan *time.Time) ([]database.Book, error) {
 	ret := _mock.Called(limit, offset, olderThan)
@@ -7496,6 +7564,74 @@ func (_c *MockBookStore_ListBookTombstones_Call) Return(books []database.Book, e
 }
 
 func (_c *MockBookStore_ListBookTombstones_Call) RunAndReturn(run func(limit int) ([]database.Book, error)) *MockBookStore_ListBookTombstones_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListBooksByITunesPID provides a mock function for the type MockBookStore
+func (_mock *MockBookStore) ListBooksByITunesPID(limit int, offset int) ([]database.Book, error) {
+	ret := _mock.Called(limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBooksByITunesPID")
+	}
+
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, int) ([]database.Book, error)); ok {
+		return returnFunc(limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, int) []database.Book); ok {
+		r0 = returnFunc(limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = returnFunc(limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBookStore_ListBooksByITunesPID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBooksByITunesPID'
+type MockBookStore_ListBooksByITunesPID_Call struct {
+	*mock.Call
+}
+
+// ListBooksByITunesPID is a helper method to define mock.On call
+//   - limit int
+//   - offset int
+func (_e *MockBookStore_Expecter) ListBooksByITunesPID(limit interface{}, offset interface{}) *MockBookStore_ListBooksByITunesPID_Call {
+	return &MockBookStore_ListBooksByITunesPID_Call{Call: _e.mock.On("ListBooksByITunesPID", limit, offset)}
+}
+
+func (_c *MockBookStore_ListBooksByITunesPID_Call) Run(run func(limit int, offset int)) *MockBookStore_ListBooksByITunesPID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBookStore_ListBooksByITunesPID_Call) Return(books []database.Book, err error) *MockBookStore_ListBooksByITunesPID_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockBookStore_ListBooksByITunesPID_Call) RunAndReturn(run func(limit int, offset int) ([]database.Book, error)) *MockBookStore_ListBooksByITunesPID_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -40618,6 +40754,74 @@ func (_c *MockStore_ListBookTombstones_Call) Return(books []database.Book, err e
 }
 
 func (_c *MockStore_ListBookTombstones_Call) RunAndReturn(run func(limit int) ([]database.Book, error)) *MockStore_ListBookTombstones_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListBooksByITunesPID provides a mock function for the type MockStore
+func (_mock *MockStore) ListBooksByITunesPID(limit int, offset int) ([]database.Book, error) {
+	ret := _mock.Called(limit, offset)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBooksByITunesPID")
+	}
+
+	var r0 []database.Book
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, int) ([]database.Book, error)); ok {
+		return returnFunc(limit, offset)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, int) []database.Book); ok {
+		r0 = returnFunc(limit, offset)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]database.Book)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, int) error); ok {
+		r1 = returnFunc(limit, offset)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListBooksByITunesPID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBooksByITunesPID'
+type MockStore_ListBooksByITunesPID_Call struct {
+	*mock.Call
+}
+
+// ListBooksByITunesPID is a helper method to define mock.On call
+//   - limit int
+//   - offset int
+func (_e *MockStore_Expecter) ListBooksByITunesPID(limit interface{}, offset interface{}) *MockStore_ListBooksByITunesPID_Call {
+	return &MockStore_ListBooksByITunesPID_Call{Call: _e.mock.On("ListBooksByITunesPID", limit, offset)}
+}
+
+func (_c *MockStore_ListBooksByITunesPID_Call) Run(run func(limit int, offset int)) *MockStore_ListBooksByITunesPID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListBooksByITunesPID_Call) Return(books []database.Book, err error) *MockStore_ListBooksByITunesPID_Call {
+	_c.Call.Return(books, err)
+	return _c
+}
+
+func (_c *MockStore_ListBooksByITunesPID_Call) RunAndReturn(run func(limit int, offset int) ([]database.Book, error)) *MockStore_ListBooksByITunesPID_Call {
 	_c.Call.Return(run)
 	return _c
 }

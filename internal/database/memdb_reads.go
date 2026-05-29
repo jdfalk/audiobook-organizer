@@ -737,6 +737,39 @@ func (m *MemStore) GetBookFilesNeedingDelugeImport() ([]BookFile, error) {
 	return out, nil
 }
 
+// ListBooksByITunesPID returns books whose ITunesPersistentID is non-nil and
+// non-empty, paginated. Walks the itunes_persistent_id memdb index — the
+// nullableStringFieldIndex skips nil/empty rows, so the iterator only sees
+// books that actually have an iTunes mapping. Order is the index's natural
+// byte order on the PID; not sorted further because the iTunes handlers
+// don't care about ordering (results are joined back to the iTunes library
+// XML by PID lookup).
+//
+// Returns the full match-set when limit <= 0 (matches the GetAllBooks
+// "fetch all" convention used by the iTunes writeback-preview handler).
+func (m *MemStore) ListBooksByITunesPID(limit, offset int) ([]Book, error) {
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+
+	iter, err := txn.Get(memTableBooks, memIdxITunesPID)
+	if err != nil {
+		return nil, fmt.Errorf("memdb books by itunes pid: %w", err)
+	}
+
+	all := make([]Book, 0, 256)
+	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+		b := obj.(*Book)
+		// Defensive: the index already skips nil/empty, but a non-nil
+		// pointer to an empty string would only be skipped by the indexer
+		// itself — keep the check so callers can rely on the postcondition.
+		if b.ITunesPersistentID == nil || *b.ITunesPersistentID == "" {
+			continue
+		}
+		all = append(all, *b)
+	}
+	return paginate(all, limit, offset), nil
+}
+
 func paginate[T any](in []T, limit, offset int) []T {
 	if offset < 0 {
 		offset = 0

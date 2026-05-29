@@ -35,6 +35,7 @@ const (
 	memIdxIsPrimaryVersion  = "is_primary_version"
 	memIdxMarkedForDeletion = "marked_for_deletion"
 	memIdxVersionGroupID    = "version_group_id"
+	memIdxITunesPID         = "itunes_persistent_id"
 	memIdxTitle             = "title"
 	memIdxPath              = "path"
 	memIdxEnabled           = "enabled"
@@ -88,6 +89,16 @@ func memdbSchema() *memdb.DBSchema {
 						Name:         memIdxVersionGroupID,
 						AllowMissing: true,
 						Indexer:      &nullableStringFieldIndex{Field: "VersionGroupID"},
+					},
+					memIdxITunesPID: {
+						// nullableStringFieldIndex skips rows where the *string
+						// field is nil OR empty, so the walker over this index
+						// only sees books that actually have an iTunes
+						// persistent ID — exactly the filter the iTunes
+						// handlers want.
+						Name:         memIdxITunesPID,
+						AllowMissing: true,
+						Indexer:      &nullableStringFieldIndex{Field: "ITunesPersistentID"},
 					},
 					memIdxFilePath: {
 						// NOT unique. Pebble doesn't enforce file_path uniqueness;
