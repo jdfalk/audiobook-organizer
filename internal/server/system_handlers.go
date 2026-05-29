@@ -1,6 +1,6 @@
 // file: internal/server/system_handlers.go
-// version: 2.4.0
-// last-edited: 2026-05-20
+// version: 2.5.0
+// last-edited: 2026-05-29
 // guid: 0c5a18be-5744-4e41-a35a-e7e96630833b
 //
 // System-level HTTP handlers split out of server.go: health, status,
@@ -43,13 +43,19 @@ func (s *Server) healthCheck(c *gin.Context) {
 		} else {
 			dbErr = err
 		}
-		if authors, err := s.Store().GetAllAuthors(); err == nil {
-			authorCount = len(authors)
+		// Use Count* instead of GetAll* + len() to avoid materializing
+		// every Author/Series struct on every health probe. On cold-start
+		// (memdb not yet published) the GetAll* path falls back to a full
+		// Pebble prefix scan + JSON unmarshal across the corpus, which is
+		// the same bug class as PR #1149 — wasteful for a probe endpoint.
+		// See docs/perf-audit-2026-05-29-getall-callers.md (Win 1).
+		if ac, err := s.Store().CountAuthors(); err == nil {
+			authorCount = ac
 		} else if dbErr == nil {
 			dbErr = err
 		}
-		if series, err := s.Store().GetAllSeries(); err == nil {
-			seriesCount = len(series)
+		if sc, err := s.Store().CountSeries(); err == nil {
+			seriesCount = sc
 		} else if dbErr == nil {
 			dbErr = err
 		}

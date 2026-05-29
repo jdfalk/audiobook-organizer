@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.53.0 -->
+<!-- version: 8.54.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-28 -->
+<!-- last-edited: 2026-05-29 -->
 
 # Project TODO
 
@@ -91,11 +91,13 @@ the request path still has redundant work.
   scan. Add a memdb fastpath like #1153 did for
   `GetBookFilesForIDs`. Acceptance: `aggregateFileMetadata` fallback
   path uses memdb when published.
-- [ ] **C3** Audit ALL `GetAll*` callers in request paths (handlers
+- [x] **C3** Audit ALL `GetAll*` callers in request paths (handlers
   + services). Anything that fetches the full corpus to filter 20
-  rows is the same bug class as #1149/#1153. List candidates:
-  `git grep -E 'GetAll(Books|Authors|Series|BookFiles|BookAuthors)' internal/server/ internal/audiobooks/ | grep -v _test`.
-  File any hits as new MAYDEPLOY-C subtasks.
+  rows is the same bug class as #1149/#1153. Completed 2026-05-29 —
+  see [`docs/perf-audit-2026-05-29-getall-callers.md`](docs/perf-audit-2026-05-29-getall-callers.md).
+  8 HOT-BAD, 2 WARM-BAD findings filed as MAYDEPLOY-H1..H8 below.
+  Easy `/health` win (`CountAuthors`/`CountSeries`) shipped in the
+  audit PR.
 
 ### MAYDEPLOY-D: Heap baseline reduction
 After the strip (#1152), memdb baseline is ~5GB (down from ~10GB).
@@ -262,6 +264,61 @@ one book × many BookFiles).
   `maintenance.orphan-book-files-cleanup` that lists `book_file`
   rows whose `book_id` no longer exists, surfaces a count, and
   optionally deletes them.
+
+### MAYDEPLOY-H: GetAll\* pushdown wins from C3 audit
+
+C3 audit findings — see [`docs/perf-audit-2026-05-29-getall-callers.md`](docs/perf-audit-2026-05-29-getall-callers.md).
+HOT-BAD callers that fetch the entire corpus to filter a small subset in
+synchronous handlers. Same bug class as PR #1149/#1153. The easy 5-line
+`/health` win (CountAuthors/CountSeries instead of GetAllAuthors/GetAllSeries)
+landed in this audit PR; the rest need a new store method or memdb index.
+
+- [ ] **H1** `internal/server/itunes_handlers.go:534,607` — `handleListITunesBooks`
+  + writeback-preview load all 50K books to filter by
+  `ITunesPersistentID != ""`. Add a memdb secondary index on
+  `book.itunes_persistent_id` and a new `ListBooksByITunesPID(limit, offset)`
+  store method. Pebble keeps current scan as cold-start fallback.
+  Acceptance: `GET /api/v1/itunes/books?limit=20` returns in <100ms hot,
+  no full-corpus materialization.
+
+- [ ] **H2** `internal/server/deluge_discovery.go:134` — Deluge discovery
+  handler loads 308K BookFiles to filter by `DelugeHash != ""`. Switch to
+  the existing `store.GetBookFilesNeedingDelugeImport()` wrapper, then
+  add a memdb fastpath inside that method (index on non-empty
+  `deluge_hash` + null `imported_from_deluge_at`). Mirror the #1153/#1166
+  fastpath pattern. Also fixes `internal/plugins/deluge/centralization.go:66`.
+  Acceptance: `POST /api/v1/deluge/discover` returns in <100ms hot.
+
+- [ ] **H3** `internal/server/entities_handlers.go:118,154` — `listWork` /
+  `getWorkStats` use GetAllWorks + per-work `GetBooksByWorkID` (N+1). Add
+  `GetWorkBookCounts() map[string]int` (mirrors `GetAllAuthorBookCounts`).
+  `listWork` should also paginate. Acceptance: `GET /api/v1/works`
+  returns in <200ms with 50K works; `GET /api/v1/works/stats` <50ms.
+
+- [ ] **H4** `internal/server/metadata_batch_candidates.go:846` — unfetched
+  count loads all Book structs to extract IDs. Add `store.ListBookIDs()
+  ([]string, error)` that returns only string IDs (Pebble: iter without
+  Value(); memdb: project from books table without copy). Saves ~50×
+  memory. Acceptance: `GET /api/v1/metadata/candidates?include_unfetched=true`
+  uses <10MB peak vs ~50MB today.
+
+- [ ] **H5** `internal/server/metadata_handlers.go:1283` — metadata-fetch-ids
+  op always materializes 8.8K authors even for 20-book requests. When
+  `len(bookIDs) < 100`, use per-book `GetAuthorByID`. Low priority.
+
+- [ ] **H6** `internal/scanner/scanner.go:1533,1551` — scanner calls
+  `GetAllWorks()` per-book during scan (N² behavior). Build a
+  `map[normalizedTitle+authorID]workID` once at scan start, invalidate
+  on new-work creation. Cuts scan time on 50K-work corpus by ~10x.
+
+- [ ] **H7** `internal/server/server_middleware.go:90` and
+  `internal/audiobooks/helpers.go:248` — `isProtectedPath` calls
+  `GetAllImportPaths()` per-file. Cache with TTL or invalidate on
+  import-path mutation. Low priority (~10 rows total).
+
+- [ ] **H8** `internal/database/pebble_store.go:8515` —
+  `GetBookFilesNeedingDelugeImport` is still a `GetAllBookFiles` wrapper.
+  Folded into H2's memdb index work.
 
 ### How to fan out
 Each task is independent within its parent letter group; A1→A2→A3
