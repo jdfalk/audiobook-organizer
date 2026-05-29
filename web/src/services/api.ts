@@ -4476,10 +4476,17 @@ export async function getDedupStats(): Promise<{ stats: DedupStats[] }> {
   return responseData.data;
 }
 
-export async function mergeDedupCandidate(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/dedup/candidates/${id}/merge`, {
-    method: 'POST',
-  });
+export async function mergeDedupCandidate(id: number, keepId?: string): Promise<void> {
+  // When keepId is provided, the backend uses it as the merge primary
+  // (which book is kept). When omitted, the backend falls back to
+  // auto-select by format/bitrate/size. keepId must match the candidate's
+  // entity_a_id or entity_b_id, otherwise the server returns 400.
+  const init: RequestInit = { method: 'POST' };
+  if (keepId) {
+    init.headers = { 'Content-Type': 'application/json' };
+    init.body = JSON.stringify({ keep_id: keepId });
+  }
+  const response = await fetch(`${API_BASE}/dedup/candidates/${id}/merge`, init);
   if (!response.ok) {
     throw await buildApiError(response, 'Failed to merge dedup candidate');
   }
