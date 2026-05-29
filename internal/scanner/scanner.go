@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -1347,6 +1348,29 @@ func quickReadAlbum(filePath string) string {
 	return strings.TrimSpace(m.Album())
 }
 
+// quickReadMultiFileInfo reads album, album_artist, and track tags from an
+// audio file in one open/parse pass, returning a MultiFileInfo for the
+// multi-file detector. Best-effort: unreadable files yield an info with
+// only Path populated.
+func quickReadMultiFileInfo(filePath string) MultiFileInfo {
+	info := MultiFileInfo{Path: filePath}
+	f, err := os.Open(filePath)
+	if err != nil {
+		return info
+	}
+	defer f.Close()
+	m, err := tag.ReadFrom(f)
+	if err != nil {
+		return info
+	}
+	info.Album = strings.TrimSpace(m.Album())
+	info.AlbumArtist = strings.TrimSpace(m.AlbumArtist())
+	tn, tt := m.Track()
+	info.TrackNum = tn
+	info.TotalTracks = tt
+	return info
+}
+
 // groupFilesIntoBooks groups audio files from a single directory into logical books.
 // When all files in a directory share the same non-empty album tag, they become a
 // single directory-based Book (with segments created later). Otherwise, each file
@@ -1361,6 +1385,35 @@ func groupFilesIntoBooks(files []string) []Book {
 			})
 		}
 		return books
+	}
+
+	// MAYDEPLOY-G1: multi-file audiobook detection — if the folder contains
+	// N≥3 audio files matching a sequential naming pattern (Chapter NN,
+	// Part N of M, (NN of MM), bare NN, etc.) AND ≥75% of files share an
+	// album or album_artist tag, treat the whole folder as ONE Book with
+	// N BookFiles rather than letting the existing per-file paths kick in.
+	if len(files) >= 3 {
+		infos := make([]MultiFileInfo, len(files))
+		for i, f := range files {
+			infos[i] = quickReadMultiFileInfo(f)
+		}
+		if ok, sorted := DetectMultiFileGroup(infos, DefaultMultiFileConfig()); ok {
+			segs := make([]string, len(sorted))
+			for i, s := range sorted {
+				segs[i] = s.Path
+			}
+			slog.Info("scanner multi-file group detected",
+				"dir", filepath.Dir(segs[0]),
+				"count", len(segs),
+				"first", filepath.Base(segs[0]),
+				"last", filepath.Base(segs[len(segs)-1]),
+			)
+			return []Book{{
+				FilePath:     segs[0],
+				Format:       strings.ToLower(filepath.Ext(segs[0])),
+				SegmentFiles: segs,
+			}}
+		}
 	}
 
 	// Sample up to 3 files to quickly check if directory is a single-album book
