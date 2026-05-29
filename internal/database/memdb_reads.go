@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 )
 
 // Read-side implementations for the queries previously handled by Chai SQL.
@@ -754,6 +756,47 @@ func (m *MemStore) ListBooksByITunesPID(limit, offset int) ([]Book, error) {
 		all = append(all, *b)
 	}
 	return paginate(all, limit, offset), nil
+}
+
+// GetBookFileByAcoustIDFuzzy walks memdb book_files (in-RAM, no Pebble I/O)
+// and returns the first row whose any of AcoustIDSeg0..6 is fuzzy-similar
+// to fp at or above minSimilarity. This replaces a full Pebble prefix scan
+// of all book_file:* keys (308K+) — wedge point for the AcoustIDScan op.
+//
+// Iteration order is arbitrary (memdb's id index is hash-based). The dedup
+// engine only needs ANY match, not a deterministic one, so this is fine.
+func (m *MemStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float64) (*BookFile, error) {
+	if fp == "" {
+		return nil, nil
+	}
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+
+	iter, err := txn.Get(memTableBookFiles, memIdxID)
+	if err != nil {
+		return nil, fmt.Errorf("memdb fuzzy acoustid scan: %w", err)
+	}
+	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+		bf := obj.(*BookFile)
+		segs := [7]string{
+			bf.AcoustIDSeg0, bf.AcoustIDSeg1, bf.AcoustIDSeg2, bf.AcoustIDSeg3,
+			bf.AcoustIDSeg4, bf.AcoustIDSeg5, bf.AcoustIDSeg6,
+		}
+		for _, seg := range segs {
+			if seg == "" {
+				continue
+			}
+			sim, simErr := fingerprint.HammingSimilarity(fp, seg)
+			if simErr != nil {
+				continue
+			}
+			if sim >= minSimilarity {
+				cp := *bf
+				return &cp, nil
+			}
+		}
+	}
+	return nil, nil
 }
 
 func paginate[T any](in []T, limit, offset int) []T {

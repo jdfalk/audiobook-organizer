@@ -8780,7 +8780,16 @@ func (s *PebbleStore) GetBookFileByAcoustID(fp string) (*BookFile, error) {
 // GetBookFileByAcoustIDFuzzy scans all book_file records and returns the first
 // whose AcoustID fingerprint similarity to fp is >= minSimilarity.
 // O(n) over fingerprinted files — only called when exact match misses.
+//
+// Memdb fastpath: when memdb is warm, walk in-RAM book_files (seg0..6 are
+// preserved post-MAYDEPLOY-J). Falls back to Pebble prefix scan below.
 func (s *PebbleStore) GetBookFileByAcoustIDFuzzy(fp string, minSimilarity float64) (*BookFile, error) {
+	if s.UseMemDB {
+		if m := s.mem(); m != nil {
+			return m.GetBookFileByAcoustIDFuzzy(fp, minSimilarity)
+		}
+	}
+
 	prefix := []byte("book_file:")
 	iter, err := s.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,

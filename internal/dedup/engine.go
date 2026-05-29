@@ -2177,11 +2177,18 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 				}
 
 				// Tier 1: exact match.
-				if match, _ := de.bookStore.GetBookFileByAcoustID(seg); match != nil && match.BookID != book.ID {
-					emit(book.ID, match.BookID, 1.0)
+				exactHit, _ := de.bookStore.GetBookFileByAcoustID(seg)
+				if exactHit != nil && exactHit.BookID != book.ID {
+					emit(book.ID, exactHit.BookID, 1.0)
 				}
 
-				// Tier 2: fuzzy match (skip if exact already found — same candidate).
+				// Tier 2: fuzzy match — only when exact missed. The previous
+				// code called fuzzy unconditionally; on a 308K-file corpus
+				// fuzzy hits an O(n) Pebble scan per seg per file per book,
+				// which wedged the scan at ~book 1 in prod.
+				if exactHit != nil {
+					continue
+				}
 				if match, _ := de.bookStore.GetBookFileByAcoustIDFuzzy(seg, fingerprint.FuzzyMinSimilarity); match != nil && match.BookID != book.ID {
 					sim, simErr := fingerprint.HammingSimilarity(seg, bestSeg(match))
 					if simErr != nil {
