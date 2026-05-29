@@ -273,6 +273,13 @@ func (s *Server) Store() database.Store {
 	return database.GetGlobalStore()
 }
 
+// OpRegistry returns the operations registry. Used by the operation-runner
+// child mode (cmd.RunOperationRunner) to dispatch a single op without
+// starting workers or the HTTP server.
+func (s *Server) OpRegistry() *opsregistry.Registry {
+	return s.opRegistry
+}
+
 // publishEvent publishes a lifecycle event to the plugin event bus.
 func (s *Server) publishEvent(ctx context.Context, event plugin.Event) {
 	if s.eventBus != nil {

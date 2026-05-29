@@ -45,6 +45,22 @@ const childModeArg = "--operation-runner"
 // EnvSocketPath is the environment variable name for the unix socket path.
 const EnvSocketPath = "UOS_SOCKET"
 
+// Env variables propagated from parent to child so the child can open the
+// same store and register the same plugin defs as the parent. The child
+// side (cmd.RunOperationRunner) is the consumer of these.
+const (
+	EnvChildDBPath  = "UOS_DB_PATH"
+	EnvChildDBType  = "UOS_DB_TYPE"
+	EnvChildRootDir = "UOS_ROOT_DIR"
+)
+
+// ChildEnvFunc returns the additional KEY=VALUE strings (without the trailing
+// newline) that should be appended to the child process's environment when
+// the parent re-execs itself as an operation-runner. Production wires this
+// to a closure over internal/config.AppConfig from cmd.init(). Tests may
+// leave it nil — runSubprocess only forwards UOS_SOCKET in that case.
+var ChildEnvFunc func() []string
+
 // childHandshake is the JSON payload sent from parent to child.
 type childHandshake struct {
 	DefID  string          `json:"def_id"`
@@ -152,7 +168,11 @@ func runSubprocess(ctx context.Context, def OperationDef, opID string, params js
 	}
 
 	cmd := exec.CommandContext(ctx, exe, childModeArg, opID)
-	cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", EnvSocketPath, socketPath))
+	childEnv := append(os.Environ(), fmt.Sprintf("%s=%s", EnvSocketPath, socketPath))
+	if ChildEnvFunc != nil {
+		childEnv = append(childEnv, ChildEnvFunc()...)
+	}
+	cmd.Env = childEnv
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Capture stdout/stderr.

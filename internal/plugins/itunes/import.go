@@ -20,7 +20,7 @@ func (p *Plugin) importDef() sdk.OperationDef {
 		Plugin:                "itunes",
 		DisplayName:           "iTunes Library Import",
 		Description:           "Import audiobooks from the iTunes/Music library into the organizer.",
-		Isolate:               false, // subprocess child-mode handler not wired in main.go; in-process until fixed
+		Isolate:               true, // runs in subprocess (re-exec) — wired via cmd.RunOperationRunner
 		ResumePolicy:          sdk.ResumeRestart,
 		DefaultPriority:       sdk.PriorityNormal,
 		Cancellable:           true,
