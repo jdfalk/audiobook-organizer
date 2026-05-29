@@ -151,6 +151,66 @@ ceiling logic isn't quite right under sustained background activity
   ceiling stays artificially high. Re-sample baseline every 5 min
   (median of last 3 samples to dampen).
 
+### MAYDEPLOY-G: Multi-file audiobook over-split detection + fix
+
+Observed in prod (book `01KQGDQTJ44FCAPW5Z9D2KNQDE`,
+`/Tarkin - Star Wars/Tarkin - Star Wars - 4/85.mp3`): the scanner
+created **85 separate Book records for what is ONE 85-chapter
+audiobook**. Each "book" has exactly one file. Titles like
+`(76/85) Tarkin: Star Wars` where the `(76/85)` is fabricated and
+doesn't even match the file's own chapter number (file is `4/85`
+but Book says `76/85`). All 85 books sit in the same folder with
+the same series + author, varying only by chapter number.
+
+This is a different bug class than acoustic dedup — it's
+**scanner mis-grouping** (one folder → many books instead of
+one book × many BookFiles).
+
+- [ ] **G1** Scanner detection at import time:
+  `internal/scan/` — when a folder contains N≥3 files matching a
+  sequential numeric pattern (`*-N/M.ext`, `Chapter NN`,
+  `NN of MM`, `Part NN`, etc.) AND the audio metadata's
+  `album_artist`/`album` agree across files, treat as a single
+  Book with N BookFiles. Add unit tests covering the
+  `N/M`, `Chapter NN`, `Part NN`, `NN of MM`, and bare `NN.ext`
+  patterns.
+- [ ] **G2** Backfill scan operation:
+  `dedup.split-book-detector` (new opdef, in-process). Group
+  existing Books by `(filepath.Dir(FilePath), author_id,
+  series_id)`. Flag any group with ≥3 single-file books matching
+  the sequential-naming heuristic above. Write results as new
+  `book_split_candidate` rows in embedding store (or new table)
+  for review.
+- [ ] **G3** API + UI for reviewing split candidates:
+  `GET /api/v1/dedup/split-candidates` returns flagged groups
+  (parent folder + book list + suggested merged title).
+  `POST /api/v1/dedup/split-candidates/:id/merge` collapses the N
+  books into one (keep oldest book ID, move all files to it,
+  delete the rest). UI: new tab in the Dedup page alongside
+  acoustic/embedding candidates.
+- [ ] **G4** One-shot CLI:
+  `tools/cmd/merge-split-books/` (mirrors
+  `tools/cmd/reconcile-paths/`). Reads split-candidate rows,
+  prints dry-run plan, optionally executes. Operator runs once
+  against the existing ~thousands of over-split books in the
+  library.
+- [ ] **G5** Investigate the WRONG metadata source: book
+  `01KQGDQTJ44FCAPW5Z9D2KNQDE` has title `(76/85) Tarkin` but
+  the only file is `4/85.mp3`. Either the title was set from a
+  different file (cross-file contamination during scan), or the
+  scanner read tags from a stale source. Reproduce by
+  re-importing the folder; trace where the `76` came from.
+  Likely culprit: `audiobookService.extractBookFileMetadata`
+  or similar fills Title from the first/last file in the folder
+  rather than the file the Book represents.
+- [ ] **G6** Once G1 lands, the legacy `book_files` rows for the
+  merged-away books should be cleaned up by G3/G4's merge path —
+  but verify orphan rows aren't left in the `book_files` table
+  (deleted bookID still has rows). Add a maintenance task
+  `maintenance.orphan-book-files-cleanup` that lists `book_file`
+  rows whose `book_id` no longer exists, surfaces a count, and
+  optionally deletes them.
+
 ### How to fan out
 Each task is independent within its parent letter group; A1→A2→A3
 must sequence, but A and B are parallelizable. Spawn:
