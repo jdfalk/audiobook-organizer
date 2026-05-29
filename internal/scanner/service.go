@@ -161,6 +161,12 @@ func (ss *ScanService) performScanInternal(ctx context.Context, opID string, req
 	SetScanCache(scanCache)
 	defer ClearScanCache()
 
+	// Build the per-scan works lookup cache so saveBookToDatabase does not
+	// run GetAllWorks() once per book (MAYDEPLOY-H6: 50K books × 50K works
+	// = 2.5B lookups → single load + map access).
+	InitWorksLookupCache()
+	defer ClearWorksLookupCache()
+
 	// Scan each folder
 	stats := &ScanStats{}
 	var processedFiles atomic.Int32
