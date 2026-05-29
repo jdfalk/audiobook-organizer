@@ -8461,10 +8461,21 @@ func (s *PebbleStore) getBookFilesForIDsPebbleScan(bookIDs []string) (map[string
 	return result, nil
 }
 
-// GetAllBookFiles returns every BookFile in the database by iterating the
-// book_file: prefix space. Used by bulk-scan operations that would otherwise
-// make one GetBookFiles call per book (N+1 problem).
+// GetAllBookFiles returns every BookFile in the database. When memdb is
+// published, iterates the in-memory book_files table — a pointer walk over
+// ~308K rows — instead of a Pebble prefix scan with per-row JSON unmarshal.
+// Mirrors the GetBookFilesForIDs fastpath from PR #1153.
+//
+// Pebble full-scan retained as fallback for cold-start (before memdb
+// publishes) and tests with no memdb.
 func (s *PebbleStore) GetAllBookFiles() ([]BookFile, error) {
+	if s.UseMemDB && s.mem() != nil {
+		return s.mem().GetAllBookFiles()
+	}
+	return s.getAllBookFilesPebbleScan()
+}
+
+func (s *PebbleStore) getAllBookFilesPebbleScan() ([]BookFile, error) {
 	prefix := []byte("book_file:")
 	iter, err := s.db.NewIter(&pebble.IterOptions{
 		LowerBound: prefix,

@@ -634,6 +634,28 @@ func (m *MemStore) GetBookFilesForIDs(bookIDs []string) (map[string][]BookFile, 
 	return result, nil
 }
 
+// GetAllBookFiles returns every BookFile in the memdb book_files table by
+// iterating the primary ID index. O(N) pointer walk over the in-memory table
+// — no JSON unmarshal, no Pebble disk scan. For 308K book_files this is
+// roughly two orders of magnitude faster than the Pebble full-scan fallback.
+func (m *MemStore) GetAllBookFiles() ([]BookFile, error) {
+	txn := m.db.Txn(false)
+	defer txn.Abort()
+	iter, err := txn.Get(memTableBookFiles, memIdxID)
+	if err != nil {
+		return nil, fmt.Errorf("memdb book_files scan: %w", err)
+	}
+	var files []BookFile
+	for obj := iter.Next(); obj != nil; obj = iter.Next() {
+		bf, ok := obj.(*BookFile)
+		if !ok {
+			continue
+		}
+		files = append(files, *bf)
+	}
+	return files, nil
+}
+
 func paginate[T any](in []T, limit, offset int) []T {
 	if offset < 0 {
 		offset = 0
