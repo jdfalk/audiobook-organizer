@@ -1,5 +1,5 @@
 // file: internal/database/chromem_embedding_store.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: 2d0e1f9a-3b4c-4a70-b8c5-3d7e0f1b9a99
 //
 // chromem-go backed embedding vector store (DES-2).
@@ -10,15 +10,34 @@
 // Supports metadata filtering at query time (primary-version,
 // series exclusion, etc.).
 //
-// The SQLite EmbeddingStore stays for DedupCandidate CRUD — this
-// only handles the vector operations.
+// The SQLite/Pebble EmbeddingStore stays as the source of truth for
+// embedding vectors — this only handles the in-memory ANN index.
+//
+// MAYDEPLOY-D2 (2026-05): Switched from chromem.NewPersistentDB to
+// chromem.NewDB (in-memory only). Background:
+//
+//   - chromem-go v0.7.0 persists synchronously by writing one gob file
+//     per document on every AddDocument call. With ~50K books × 3072-dim
+//     vectors that is 50K+ files (~600MB-1.2GB) and 50K fsync-heavy
+//     writes per hydrate cycle — slow and inode-heavy.
+//   - In production the persistent dir was observed as empty (1KB) and
+//     the dedup engine already re-hydrates from the SQLite/Pebble
+//     embedding store on every startup (see dedup/lifecycle.go and
+//     engine.HydrateChromem). The hydrate is the canonical mirror path.
+//   - DEDUP_CHROMEM_LAZY=true (MAYDEPLOY-D1 / PR #1169) is the operator
+//     escape hatch when hydrate is too costly; without persistence the
+//     intent is now unambiguous: chromem is a derived in-memory index,
+//     not a second source of truth.
+//
+// If we ever want on-disk ANN persistence again, the right answer is
+// a different backing store (e.g. HNSW with mmap), not chromem-go's
+// per-document gob files.
 
 package database
 
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -34,13 +53,20 @@ type ChromemEmbeddingStore struct {
 	dims        int
 }
 
-// NewChromemEmbeddingStore opens or creates a persistent chromem-go
-// database at the given directory.
+// NewChromemEmbeddingStore returns an in-memory chromem-go store.
+//
+// The `dir` argument is preserved for backwards compatibility with the
+// service-registry wiring (and to make it cheap to swap back to a
+// persistent backend later), but it is currently unused — chromem-go's
+// NewPersistentDB writes one gob file per document on each Upsert,
+// which does not scale to 50K+ books, and the dedup engine already
+// re-hydrates from the SQLite/Pebble embedding store on startup.
+// See the file-level comment for the full rationale (MAYDEPLOY-D2).
 func NewChromemEmbeddingStore(dir string, dims int) (*ChromemEmbeddingStore, error) {
-	dbPath := filepath.Join(dir, "chromem")
-	db, err := chromem.NewPersistentDB(dbPath, false)
-	if err != nil {
-		return nil, fmt.Errorf("open chromem at %s: %w", dbPath, err)
+	_ = dir // intentionally unused; see NewChromemEmbeddingStore doc.
+	db := chromem.NewDB()
+	if db == nil {
+		return nil, fmt.Errorf("chromem.NewDB returned nil")
 	}
 	return &ChromemEmbeddingStore{
 		db:          db,
@@ -176,7 +202,9 @@ func (s *ChromemEmbeddingStore) CountByType(ctx context.Context, entityType stri
 	return col.Count(), nil
 }
 
-// Close is a no-op for chromem-go (persistence is automatic).
+// Close is a no-op for the in-memory chromem-go store. The dedup
+// engine re-hydrates from the SQLite/Pebble embedding store on
+// startup, so there is nothing to flush here.
 func (s *ChromemEmbeddingStore) Close() error {
 	return nil
 }
