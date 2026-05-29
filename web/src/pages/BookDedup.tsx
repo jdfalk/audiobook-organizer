@@ -1,5 +1,5 @@
 // file: web/src/pages/BookDedup.tsx
-// version: 3.25.2
+// version: 3.26.0
 // guid: c3d4e5f6-a7b8-9c0d-1e2f-book0dedup02
 // last-edited: 2026-05-20
 
@@ -74,6 +74,8 @@ import { BookDedupScanTab } from '../components/dedup/DedupAdvancedScanTab';
 import { AuthorDedupTab, RoleDetails } from '../components/dedup/DedupAuthorTab';
 import { SeriesDedupTab } from '../components/dedup/DedupSeriesTab';
 import { ReconcileTab } from '../components/dedup/DedupReconcileTab';
+import { DedupSplitBookTab } from '../components/dedup/DedupSplitBookTab';
+import CallSplitIcon from '@mui/icons-material/CallSplit';
 import { cleanDisplayTitle } from '../components/dedup/dedupHelpers';
 import { CoverLightbox } from '../components/CoverLightbox';
 
@@ -2457,7 +2459,7 @@ function AcousticDedupTab() {
 }
 
 // ---- Main Dedup Page ----
-const TAB_NAMES = ['books', 'book-duplicates', 'authors', 'series', 'ai', 'reconcile', 'embedding', 'acoustic'] as const;
+const TAB_NAMES = ['books', 'book-duplicates', 'authors', 'series', 'ai', 'reconcile', 'embedding', 'acoustic', 'split-books'] as const;
 
 export function BookDedup() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -2484,6 +2486,7 @@ export function BookDedup() {
         <Tab icon={<Badge color="default"><BuildIcon /></Badge>} label="Reconcile" iconPosition="start" />
         <Tab icon={<Badge color="default"><FingerprintIcon /></Badge>} label="Embedding" iconPosition="start" />
         <Tab icon={<Badge color="default"><GraphicEqIcon /></Badge>} label="Acoustic" iconPosition="start" />
+        <Tab icon={<Badge color="default"><CallSplitIcon /></Badge>} label="Split Books" iconPosition="start" />
       </Tabs>
 
       {tab === 0 && <DedupBookTab />}
@@ -2494,6 +2497,7 @@ export function BookDedup() {
       {tab === 5 && <ReconcileTab />}
       {tab === 6 && <EmbeddingDedupTab />}
       {tab === 7 && <AcousticDedupTab />}
+      {tab === 8 && <DedupSplitBookTab />}
     </Box>
   );
 }
