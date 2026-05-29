@@ -1,7 +1,7 @@
 // file: internal/server/dedup_handlers.go
-// version: 2.8.0
+// version: 2.9.0
 // guid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-// last-edited: 2026-05-20
+// last-edited: 2026-05-28
 
 package server
 
@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -928,6 +929,37 @@ func (s *Server) mergeDedupCandidate(c *gin.Context) {
 	if candidate.EntityType == "book" && s.mergeService != nil {
 		mergeResult, mergeErr := s.mergeService.MergeBooks([]string{candidate.EntityAID, candidate.EntityBID}, "")
 		if mergeErr != nil {
+			// MAYDEPLOY-B2: when one of the source books no longer exists (a previous
+			// merge already absorbed it), the candidate is stale rather than the
+			// request being a server error. Treat that as 409 Conflict and mark the
+			// candidate merged so the UI's next refresh drops it.
+			//
+			// We use a substring match on "not found" because the underlying merge
+			// service returns a plain fmt.Errorf("book %s not found", ...) without an
+			// exported sentinel error. Switch to errors.Is if/when that error type
+			// becomes exported.
+			if strings.Contains(mergeErr.Error(), "not found") {
+				if statusErr := s.embeddingStore.UpdateCandidateStatus(id, "merged"); statusErr != nil {
+					slog.Warn("dedup merge already-merged: failed to update candidate status", "candidate_id", id, "err", statusErr)
+				}
+				s.publishEvent(c.Request.Context(), plugin.NewEvent(plugin.EventDedupMerged, candidate.EntityAID, map[string]any{
+					"entity_b_id":   candidate.EntityBID,
+					"entity_type":   candidate.EntityType,
+					"candidate_id":  id,
+					"already_merged": true,
+				}))
+				slog.Info("dedup merge skipped: source book already merged away",
+					"candidate_id", id,
+					"entity_a", candidate.EntityAID,
+					"entity_b", candidate.EntityBID,
+					"err", mergeErr,
+				)
+				c.JSON(http.StatusConflict, gin.H{
+					"status":       "already_merged",
+					"candidate_id": id,
+				})
+				return
+			}
 			httputil.InternalError(c, "failed to merge books", mergeErr)
 			return
 		}
