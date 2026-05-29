@@ -40,7 +40,7 @@ func (p *Plugin) backfillDef() sdk.OperationDef {
 		ResumePolicy:    sdk.ResumeRestart,
 		DefaultPriority: sdk.PriorityLow,
 		Schedule:        &sched,
-		Isolate:         true, // uses ffmpeg/fpcalc subprocess — runs in re-exec child
+		Isolate:         false, // DISABLED 2026-05-29: PR #1172 child-mode wire-up cannot work because Pebble is single-writer; child re-open fails. See MAYDEPLOY-A revisit.
 		Timeout:         24 * time.Hour,
 		Capabilities: []sdk.Capability{
 			sdk.CapLibraryRead,
