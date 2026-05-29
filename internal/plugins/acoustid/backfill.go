@@ -40,7 +40,7 @@ func (p *Plugin) backfillDef() sdk.OperationDef {
 		ResumePolicy:    sdk.ResumeRestart,
 		DefaultPriority: sdk.PriorityLow,
 		Schedule:        &sched,
-		Isolate:         false, // subprocess child-mode handler not wired in main.go; in-process until fixed
+		Isolate:         true, // uses ffmpeg/fpcalc subprocess — runs in re-exec child
 		Timeout:         24 * time.Hour,
 		Capabilities: []sdk.Capability{
 			sdk.CapLibraryRead,

@@ -24,7 +24,7 @@ func (p *Plugin) scanDef() sdk.OperationDef {
 		ResumePolicy:    sdk.ResumeDrop,
 		DefaultPriority: sdk.PriorityLow,
 		ConcurrencyKey:  "acoustid.scan",
-		Isolate:         false, // subprocess child-mode handler not wired in main.go; in-process until fixed
+		Isolate:         true, // uses ffmpeg/fpcalc subprocess — runs in re-exec child
 		Timeout:         6 * time.Hour,
 		Capabilities: []sdk.Capability{
 			sdk.CapLibraryRead,
