@@ -1,5 +1,5 @@
 <!-- file: TODO.md -->
-<!-- version: 8.54.0 -->
+<!-- version: 8.55.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
 <!-- last-edited: 2026-05-29 -->
 
@@ -61,20 +61,20 @@ because the subprocess child-mode handler is never wired into
 The merge button hits TWO endpoints per click, and stale candidate
 rows reference merged-away book IDs.
 
-- [ ] **B1** Find which frontend component fires both
+- [x] **B1** Find which frontend component fires both
   `POST /api/v1/audiobooks/merge` AND
   `POST /api/v1/dedup/candidates/:id/merge` for one Merge click
   (likely `web/src/components/dedup/`). Pick one endpoint, remove
   the other call.
-- [ ] **B2** `server/dedup_handlers.go:mergeDedupCandidate`: when
+- [x] **B2** `server/dedup_handlers.go:mergeDedupCandidate`: when
   `mergeService.MergeBooks` returns "book not found", respond 409
   Conflict with body `{status: "already_merged"}` instead of 500.
-- [ ] **B3** Add `cleanupCandidatesForMergedBook(bookID)` to
+- [x] **B3** Add `cleanupCandidatesForMergedBook(bookID)` to
   `internal/dedup/engine.go`: when a book is merged-away, mark
   ALL other candidate rows referencing that book ID as "merged" so
   they disappear from the pending-candidates list. Call from
   `mergeService.MergeBooks` after the book is gone.
-- [ ] **B4** `embeddingStore.ListCandidates`: filter out rows whose
+- [x] **B4** `embeddingStore.ListCandidates`: filter out rows whose
   `entity_a_id` or `entity_b_id` no longer exists in the book table
   (defense-in-depth against B3 missing edge cases).
 
@@ -82,12 +82,12 @@ rows reference merged-away book IDs.
 The big wins shipped (#1153 GetBookFilesForIDs memdb pushdown), but
 the request path still has redundant work.
 
-- [ ] **C1** `server/audiobooks_handlers.go:buildAudiobookListResponse`
+- [x] **C1** `server/audiobooks_handlers.go:buildAudiobookListResponse`
   calls `GetBookFilesForIDs(bookIDs)` directly AND
   `aggregateFileMetadata` also calls it. Pass the map from one to the
   other, eliminate the duplicate fetch. Saves ~2x for fingerprint
   compute path.
-- [ ] **C2** `PebbleStore.GetAllBookFiles` still does a full Pebble
+- [x] **C2** `PebbleStore.GetAllBookFiles` still does a full Pebble
   scan. Add a memdb fastpath like #1153 did for
   `GetBookFilesForIDs`. Acceptance: `aggregateFileMetadata` fallback
   path uses memdb when published.
@@ -104,15 +104,15 @@ After the strip (#1152), memdb baseline is ~5GB (down from ~10GB).
 Total process baseline is ~18GB, with chromem-go contributing ~6GB
 via SQLite-to-chromem hydrate at startup.
 
-- [ ] **D1** `internal/dedup/engine.go:HydrateChromem` reads ALL
+- [x] **D1** `internal/dedup/engine.go:HydrateChromem` reads ALL
   `book` embeddings (1.8GB on disk) into memory at startup and
   mirrors to chromem. Add `DEDUP_CHROMEM_LAZY=true` env var that
   skips the eager hydrate; mirror lazy on first FindSimilar call.
-- [ ] **D2** chromem persistent dir `/var/lib/audiobook-organizer/chromem`
+- [x] **D2** chromem persistent dir `/var/lib/audiobook-organizer/chromem`
   is empty (1KB). Either fix chromem-go persistence so we don't
   re-hydrate from SQLite each restart, OR remove the
   `NewPersistentDB` call and use `NewDB()` (clearer intent).
-- [ ] **D3** Description / NotesJSON / BookSigV1 stripped from
+- [x] **D3** Description / NotesJSON / BookSigV1 stripped from
   memdb in #1152 mean `field:description` filters silently return
   zero. Add a Pebble-backed fallback in
   `audiobooks/service.go:matchesFieldFilters` that fetches the
@@ -136,22 +136,22 @@ baseline.
   (chromem persistence vs `NewDB()`) ship before any more memdb
   strips. Chromem is the largest remaining bucket (~6 GB live;
   3–6 GB savings projected).
-- [ ] **I2** Drop `works` table from memdb entirely. 211 K rows ×
+- [x] **I2** Drop `works` table from memdb entirely. 211 K rows ×
   (~270 B/row + ~320 B index) ≈ 120 MB heap, and Works are queried
   in <0.1% of requests. Route the read paths through Pebble
   (`GetWorkByID`) on demand and delete the table from `memdbSchema()`
   + remove `stripBookForMemdb`-adjacent warmup. Est. savings: ~120 MB.
-- [ ] **I3** Add `stripBookFileForMemdb` (mirrors #1152). Clear the 7
+- [x] **I3** Add `stripBookFileForMemdb` (mirrors #1152). Clear the 7
   `AcoustIDSeg0..6` strings + 3 fingerprint-diagnostic `*string`/
   `*time.Time` fields. ~70 MB savings across 308 K book_files.
   AcoustID is read only by dedup, which already has a Pebble path.
-- [ ] **I4** Cap the 24h `list` / `facets` / `dedup` / `bookCache` /
+- [x] **I4** Cap the 24h `list` / `facets` / `dedup` / `bookCache` /
   `audiobook_list` LRU caches by entry count (e.g. 1000), not just
   TTL. These hold full `gin.H` / `Book` payloads with descriptions
   and provenance maps; suspected ~0.5–1.5 GB of baseline. Touch
   points: `internal/server/server.go:335-337`,
   `internal/audiobooks/service.go:105-106`.
-- [ ] **I5** Truncate description text fed to bleve to first ~500
+- [x] **I5** Truncate description text fed to bleve to first ~500
   chars (or skip indexing description entirely). bleve still indexes
   the full description from Pebble even though memdb has been stripped.
   Est. savings: 0.5–1 GB index residency.
@@ -160,18 +160,77 @@ baseline.
   `pprof_endpoint` — replace structural estimates with measured
   bytes. Target: baseline ~18 GB → ~10 GB.
 
+---
+
+## 🧭 Post-Deploy 2026-05-29 — Remaining Work
+
+End-of-day state: MAYDEPLOY A→I shipped except items listed below. 45 PRs
+merged today (#1147–#1191). RSS 67.8GB→39.6GB stable. "All Books" cold
+~250ms, 500/page 3m51s→241ms. Fingerprint rescan hotfix #1191 in. Op-log
+Copy + pause-on-hover in #1182.
+
+### Highest-priority remainders
+
+- [ ] **PD-1 / MAYDEPLOY-A revisit** — Subprocess isolation via parent-RPC
+  bridge. Current `Isolate: true` cannot work because PebbleDB is
+  single-writer and the child cannot reopen the store
+  (`resource temporarily unavailable` on second open). Two viable paths:
+  (a) child runs against a *read-only* Pebble snapshot and routes writes
+  back through a unix-socket RPC to the parent's writer, or
+  (b) drop subprocess isolation entirely and rely on in-process panic
+  recovery + memory caps. Spec: `docs/specs/subprocess-isolation-rpc.md`.
+- [ ] **PD-2 / BUG-ITUNES-WRITEBACK-CORRUPTS-LIBRARY** — see open-bugs
+  section. Bisect candidate `f2856e45` flagged as last known-good.
+  No progress yet; tool is unusable for the user until fixed.
+- [ ] **PD-3 / Post-deploy verification** — confirm in prod:
+  (1) fingerprint-rescan from UI now actually runs (no
+  "failed to unmarshal params"), (2) op-log Copy + Refresh buttons work,
+  (3) RSS post-I2/I3/I4/I5 holds steady or drops further, (4) chromem
+  switch from `NewPersistentDB` → `NewDB` doesn't regress dedup recall.
+
+### Deferred from MAYDEPLOY
+
+- [ ] **MAYDEPLOY-G5b** — back-fill poisoned `Book.Title` rows
+  (leading `(N/M)`, `Chapter NN`, `Track NN`, `Part NN`, `NN -`).
+  Scan all books, strip prefix, update title, log old→new. Scope:
+  ~85 Tarkin + unknown N more iTunes-imports.
+- [ ] **MAYDEPLOY-G5c** — tighten `groupTracksByAlbum` to use
+  `stripChapterPrefix(track.Name)` as the album key when Album tag is
+  empty. Needs design pass — risks merging unrelated tracks that
+  share a stripped prefix.
+- [ ] **MAYDEPLOY-H5** — metadata-fetch-ids: when `len(bookIDs) < 100`,
+  use per-book `GetAuthorByID` instead of materialising 8.8K authors.
+  Low priority; defer until profiler shows actual cost.
+- [ ] **MAYDEPLOY-H7** — Cache `isProtectedPath` / `GetAllImportPaths`
+  with TTL or mutation invalidation. Low priority (~10 rows).
+- [ ] **MAYDEPLOY-I1** — Verify D1 (`DEDUP_CHROMEM_LAZY`) and D2
+  (`NewDB()`) shipped behaviour matches design. Needs live prod
+  observation (`/system/status`, heap dump).
+- [ ] **MAYDEPLOY-I6** — Re-run heap audit with live pprof from prod
+  via `pprof_endpoint`. Replace structural estimates in
+  `docs/perf-audit-2026-05-29-heap-breakdown.md` with measured bytes.
+  Target: baseline ~18 GB → ~10 GB.
+
+### Post-Task Hygiene (per CLAUDE.md)
+
+- [ ] **PD-4** Update `CHANGELOG.md` with full MAYDEPLOY A–I sweep +
+  Wave 4 PRs (#1182–#1191), prepending to current section, not
+  overwriting.
+
+---
+
 ### MAYDEPLOY-E: Pre-existing test failures
 Surfaced during today's deploys but not caused by them; failing on
 `main` too.
 
-- [ ] **E1** `TestHandler_RenameAuthor_Success` (`server/handlers_unit_test.go:982`)
+- [x] **E1** `TestHandler_RenameAuthor_Success` (`server/handlers_unit_test.go:982`)
   panics with nil pointer in `Cache.InvalidateAll`. Test creates a
   Server without initializing `authorsCache`. Fix test fixture to
   use `cache.New[any]("authors", 30*time.Second)`.
-- [ ] **E2** `TestPebbleStoreReset` (`database/coverage_test.go:841`)
+- [x] **E2** `TestPebbleStoreReset` (`database/coverage_test.go:841`)
   expects 0 authors after reset, gets 1. Likely a memdb-vs-pebble
   reset-order bug. Reproduce, fix, add regression test.
-- [ ] **E3** `TestEnrichAudiobooksWithNames_WithAuthorAndSeries`
+- [x] **E3** `TestEnrichAudiobooksWithNames_WithAuthorAndSeries`
   (`audiobooks/audiobook_service_unit_test.go:536`) fails because
   `aggregateFileMetadata` calls `GetBookFiles` per book and the
   mock has no expectation. Add `.EXPECT().GetBookFiles(...).Return(...).Maybe()`
@@ -182,10 +241,10 @@ The warmer's eager phase is fast post-#1153, but the trickle's heap
 ceiling logic isn't quite right under sustained background activity
 (chromem hydrate, dedup scans).
 
-- [ ] **F1** Eager warmer (in `library_list_warmer.go`) has no heap
+- [x] **F1** Eager warmer (in `library_list_warmer.go`) has no heap
   guard. If chromem hydrate is concurrent with eager, eager could
   pile on. Add same `readHeapAllocMB() > ceiling` check as trickle.
-- [ ] **F2** Trickle baseline is sampled once at start. If baseline
+- [x] **F2** Trickle baseline is sampled once at start. If baseline
   drops over time (e.g., chromem hydrate completes and releases),
   ceiling stays artificially high. Re-sample baseline every 5 min
   (median of last 3 samples to dampen).
@@ -205,7 +264,7 @@ This is a different bug class than acoustic dedup — it's
 **scanner mis-grouping** (one folder → many books instead of
 one book × many BookFiles).
 
-- [ ] **G1** Scanner detection at import time:
+- [x] **G1** Scanner detection at import time:
   `internal/scan/` — when a folder contains N≥3 files matching a
   sequential numeric pattern (`*-N/M.ext`, `Chapter NN`,
   `NN of MM`, `Part NN`, etc.) AND the audio metadata's
@@ -213,21 +272,21 @@ one book × many BookFiles).
   Book with N BookFiles. Add unit tests covering the
   `N/M`, `Chapter NN`, `Part NN`, `NN of MM`, and bare `NN.ext`
   patterns.
-- [ ] **G2** Backfill scan operation:
+- [x] **G2** Backfill scan operation:
   `dedup.split-book-detector` (new opdef, in-process). Group
   existing Books by `(filepath.Dir(FilePath), author_id,
   series_id)`. Flag any group with ≥3 single-file books matching
   the sequential-naming heuristic above. Write results as new
   `book_split_candidate` rows in embedding store (or new table)
   for review.
-- [ ] **G3** API + UI for reviewing split candidates:
+- [x] **G3** API + UI for reviewing split candidates:
   `GET /api/v1/dedup/split-candidates` returns flagged groups
   (parent folder + book list + suggested merged title).
   `POST /api/v1/dedup/split-candidates/:id/merge` collapses the N
   books into one (keep oldest book ID, move all files to it,
   delete the rest). UI: new tab in the Dedup page alongside
   acoustic/embedding candidates.
-- [ ] **G4** One-shot CLI:
+- [x] **G4** One-shot CLI:
   `tools/cmd/merge-split-books/` (mirrors
   `tools/cmd/reconcile-paths/`). Reads split-candidate rows,
   prints dry-run plan, optionally executes. Operator runs once
@@ -257,7 +316,7 @@ one book × many BookFiles).
   unique key (the raw Name) and becomes its own book record.
   Deferred — risks merging unrelated tracks that happen to
   share a stripped prefix; needs a separate design pass.
-- [ ] **G6** Once G1 lands, the legacy `book_files` rows for the
+- [x] **G6** Once G1 lands, the legacy `book_files` rows for the
   merged-away books should be cleaned up by G3/G4's merge path —
   but verify orphan rows aren't left in the `book_files` table
   (deleted bookID still has rows). Add a maintenance task
@@ -273,7 +332,7 @@ synchronous handlers. Same bug class as PR #1149/#1153. The easy 5-line
 `/health` win (CountAuthors/CountSeries instead of GetAllAuthors/GetAllSeries)
 landed in this audit PR; the rest need a new store method or memdb index.
 
-- [ ] **H1** `internal/server/itunes_handlers.go:534,607` — `handleListITunesBooks`
+- [x] **H1** `internal/server/itunes_handlers.go:534,607` — `handleListITunesBooks`
   + writeback-preview load all 50K books to filter by
   `ITunesPersistentID != ""`. Add a memdb secondary index on
   `book.itunes_persistent_id` and a new `ListBooksByITunesPID(limit, offset)`
@@ -281,7 +340,7 @@ landed in this audit PR; the rest need a new store method or memdb index.
   Acceptance: `GET /api/v1/itunes/books?limit=20` returns in <100ms hot,
   no full-corpus materialization.
 
-- [ ] **H2** `internal/server/deluge_discovery.go:134` — Deluge discovery
+- [x] **H2** `internal/server/deluge_discovery.go:134` — Deluge discovery
   handler loads 308K BookFiles to filter by `DelugeHash != ""`. Switch to
   the existing `store.GetBookFilesNeedingDelugeImport()` wrapper, then
   add a memdb fastpath inside that method (index on non-empty
@@ -289,13 +348,13 @@ landed in this audit PR; the rest need a new store method or memdb index.
   fastpath pattern. Also fixes `internal/plugins/deluge/centralization.go:66`.
   Acceptance: `POST /api/v1/deluge/discover` returns in <100ms hot.
 
-- [ ] **H3** `internal/server/entities_handlers.go:118,154` — `listWork` /
+- [x] **H3** `internal/server/entities_handlers.go:118,154` — `listWork` /
   `getWorkStats` use GetAllWorks + per-work `GetBooksByWorkID` (N+1). Add
   `GetWorkBookCounts() map[string]int` (mirrors `GetAllAuthorBookCounts`).
   `listWork` should also paginate. Acceptance: `GET /api/v1/works`
   returns in <200ms with 50K works; `GET /api/v1/works/stats` <50ms.
 
-- [ ] **H4** `internal/server/metadata_batch_candidates.go:846` — unfetched
+- [x] **H4** `internal/server/metadata_batch_candidates.go:846` — unfetched
   count loads all Book structs to extract IDs. Add `store.ListBookIDs()
   ([]string, error)` that returns only string IDs (Pebble: iter without
   Value(); memdb: project from books table without copy). Saves ~50×
@@ -306,7 +365,7 @@ landed in this audit PR; the rest need a new store method or memdb index.
   op always materializes 8.8K authors even for 20-book requests. When
   `len(bookIDs) < 100`, use per-book `GetAuthorByID`. Low priority.
 
-- [ ] **H6** `internal/scanner/scanner.go:1533,1551` — scanner calls
+- [x] **H6** `internal/scanner/scanner.go:1533,1551` — scanner calls
   `GetAllWorks()` per-book during scan (N² behavior). Build a
   `map[normalizedTitle+authorID]workID` once at scan start, invalidate
   on new-work creation. Cuts scan time on 50K-work corpus by ~10x.
@@ -316,7 +375,7 @@ landed in this audit PR; the rest need a new store method or memdb index.
   `GetAllImportPaths()` per-file. Cache with TTL or invalidate on
   import-path mutation. Low priority (~10 rows total).
 
-- [ ] **H8** `internal/database/pebble_store.go:8515` —
+- [x] **H8** `internal/database/pebble_store.go:8515` —
   `GetBookFilesNeedingDelugeImport` is still a `GetAllBookFiles` wrapper.
   Folded into H2's memdb index work.
 
