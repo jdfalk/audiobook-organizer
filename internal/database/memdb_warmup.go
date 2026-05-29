@@ -56,6 +56,9 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 	}
 
 	// Books: book:<id> where id has no further colons.
+	// Strip heavy fields (Description, BookSigV1, etc.) before insertion
+	// — see memdb_strip.go. Cuts radix-tree footprint from ~10GB to
+	// ~2GB on the 392K-book production library.
 	if n, err := warmIter(ctx, p.db, "book:", func(key string, val []byte) error {
 		if strings.Count(key, ":") != 1 {
 			return nil
@@ -64,7 +67,7 @@ func (m *MemStore) WarmFromPebble(ctx context.Context, p *PebbleStore) error {
 		if err := json.Unmarshal(val, &b); err != nil {
 			return nil
 		}
-		return safeInsert(memTableBooks, &b, key)
+		return safeInsert(memTableBooks, stripBookForMemdb(&b), key)
 	}); err != nil {
 		return fmt.Errorf("warmup books: %w", err)
 	} else {
