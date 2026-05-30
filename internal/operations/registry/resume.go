@@ -101,6 +101,12 @@ func (r *Registry) resumeRestart(ctx context.Context, row database.OperationV2Ro
 	r.logger.Info("registry: resumeAfterStartup: re-queued restart op",
 		"op_id", row.ID, "def_id", def.ID, "resume_count_new", row.ResumeCount+1)
 
+	// Emit op.created so the UI can pick the op back up — without this,
+	// connected clients only ever see op.updated for a row they don't know
+	// exists locally.
+	row.Status = "queued"
+	r.publishOpCreated(row, true)
+
 	r.pingDispatch()
 }
 
@@ -137,6 +143,9 @@ func (r *Registry) resumeRequeue(ctx context.Context, row database.OperationV2Ro
 
 	r.logger.Info("registry: resumeAfterStartup: requeued op",
 		"old_op_id", row.ID, "new_op_id", newID, "def_id", def.ID)
+
+	r.publishOpCreated(newRow, true)
+
 	r.pingDispatch()
 }
 

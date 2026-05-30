@@ -204,3 +204,55 @@ func TestActiveDefs_ReturnsAllRegistered(t *testing.T) {
 		t.Errorf("expected 3 defs, got %d", len(defs))
 	}
 }
+
+// --- op.created event tests ---
+
+// recordingBus captures every Publish call so the test can assert on event
+// names. Implements registry.Bus.
+type recordingBus struct {
+	events []recordedEvent
+}
+
+type recordedEvent struct {
+	name    string
+	payload any
+}
+
+func (b *recordingBus) Publish(_ context.Context, name string, payload any) error {
+	b.events = append(b.events, recordedEvent{name: name, payload: payload})
+	return nil
+}
+
+func TestEnqueueOp_PublishesOpCreated(t *testing.T) {
+	store := newFakeStore()
+	bus := &recordingBus{}
+	r := registry.New(store, slog.Default(), 4, nil)
+	r.SetBus(bus)
+	_ = r.RegisterOp(makeValidDef("test.opcreated"))
+
+	opID, err := r.EnqueueOp(context.Background(), "test.opcreated", nil)
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+
+	var found bool
+	for _, ev := range bus.events {
+		if ev.name != "op.created" {
+			continue
+		}
+		p, ok := ev.payload.(map[string]any)
+		if !ok {
+			t.Fatalf("op.created payload not a map: %T", ev.payload)
+		}
+		if p["op_id"] != opID {
+			t.Errorf("op.created op_id: got %v want %v", p["op_id"], opID)
+		}
+		if p["resumed"] != false {
+			t.Errorf("op.created resumed: got %v want false for fresh enqueue", p["resumed"])
+		}
+		found = true
+	}
+	if !found {
+		t.Fatalf("expected an op.created event, got events: %+v", bus.events)
+	}
+}
