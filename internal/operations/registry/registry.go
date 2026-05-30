@@ -287,10 +287,31 @@ func (r *Registry) EnqueueOp(ctx context.Context, defID string, params any, opts
 
 	r.logger.Info("registry: enqueued op", "op_id", opID, "def_id", defID, "priority", priority)
 
+	r.publishOpCreated(row, false)
+
 	// Signal the dispatcher.
 	r.pingDispatch()
 
 	return opID, nil
+}
+
+// publishOpCreated fans out an op.created SSE event so the UI's operations
+// bell can pick up newly enqueued OR server-resumed ops without waiting for
+// the next op.updated event. The "resumed" flag distinguishes startup
+// resume from a fresh enqueue so the client can render a "Resumed" badge
+// if desired (currently it just triggers loadFromServer()).
+func (r *Registry) publishOpCreated(row database.OperationV2Row, resumed bool) {
+	if r.bus == nil {
+		return
+	}
+	_ = r.bus.Publish(context.Background(), "op.created", map[string]any{
+		"op_id":    row.ID,
+		"def_id":   row.DefID,
+		"plugin":   row.Plugin,
+		"status":   row.Status,
+		"priority": row.Priority,
+		"resumed":  resumed,
+	})
 }
 
 // Cancel cancels an operation by id.
