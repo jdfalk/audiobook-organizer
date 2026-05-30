@@ -9617,3 +9617,140 @@ func (p *PebbleStore) GetNarratorsByBookIDs(ctx context.Context, bookIDs []strin
 	}
 	return result, nil
 }
+
+// ClearAllAcoustIDFingerprints wipes AcoustIDSeg0..6 on every BookFile and
+// drops the matching book_file_acoustid:<seg> secondary index entries in
+// batched Pebble commits — one fsync per batchSize records instead of one
+// per UpdateBookFile call. The progress callback is invoked roughly every
+// 5000 records with (processed, cleared, total).
+//
+// Returns (cleared, total, err). cleared counts only files that actually had
+// at least one non-empty segment.
+func (s *PebbleStore) ClearAllAcoustIDFingerprints(ctx context.Context, batchSize int, progress func(processed, cleared, total int)) (int, int, error) {
+	if batchSize <= 0 {
+		batchSize = 2000
+	}
+
+	// First pass: collect primary keys so we don't hold an iterator open while
+	// we mutate Pebble underneath it. 308K keys at ~50 bytes each ≈ 15MB — fine.
+	prefix := []byte("book_file:")
+	iter, err := s.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: []byte("book_file;"),
+	})
+	if err != nil {
+		return 0, 0, err
+	}
+	type ref struct {
+		key  []byte
+		data []byte
+	}
+	var refs []ref
+	for iter.First(); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		if !strings.HasPrefix(string(key), "book_file:") {
+			continue
+		}
+		// Skip secondary indexes — only primary book_file:<bookID>:<fileID>.
+		if c := strings.Count(string(key), ":"); c != 2 {
+			continue
+		}
+		kc := make([]byte, len(key))
+		copy(kc, key)
+		vc := make([]byte, len(iter.Value()))
+		copy(vc, iter.Value())
+		refs = append(refs, ref{key: kc, data: vc})
+	}
+	if err := iter.Close(); err != nil {
+		return 0, 0, err
+	}
+
+	total := len(refs)
+	cleared := 0
+	processed := 0
+	batch := s.db.NewBatch()
+	flush := func() error {
+		if err := batch.Commit(pebble.Sync); err != nil {
+			return err
+		}
+		batch = s.db.NewBatch()
+		return nil
+	}
+
+	for _, r := range refs {
+		select {
+		case <-ctx.Done():
+			_ = batch.Close()
+			return cleared, total, ctx.Err()
+		default:
+		}
+
+		var f BookFile
+		if err := json.Unmarshal(r.data, &f); err != nil {
+			processed++
+			continue
+		}
+		processed++
+
+		if f.AcoustIDSeg0 == "" && f.AcoustIDSeg1 == "" && f.AcoustIDSeg2 == "" &&
+			f.AcoustIDSeg3 == "" && f.AcoustIDSeg4 == "" && f.AcoustIDSeg5 == "" &&
+			f.AcoustIDSeg6 == "" {
+			if progress != nil && processed%5000 == 0 {
+				progress(processed, cleared, total)
+			}
+			continue
+		}
+
+		// Delete each acoustid secondary index entry.
+		for _, seg := range [7]string{f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2,
+			f.AcoustIDSeg3, f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6} {
+			if seg == "" {
+				continue
+			}
+			if err := batch.Delete([]byte("book_file_acoustid:"+seg), nil); err != nil {
+				_ = batch.Close()
+				return cleared, total, err
+			}
+		}
+
+		f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2 = "", "", ""
+		f.AcoustIDSeg3, f.AcoustIDSeg4, f.AcoustIDSeg5, f.AcoustIDSeg6 = "", "", "", ""
+		f.UpdatedAt = time.Now()
+
+		data, err := json.Marshal(&f)
+		if err != nil {
+			continue
+		}
+		if err := batch.Set(r.key, data, nil); err != nil {
+			_ = batch.Close()
+			return cleared, total, err
+		}
+		cleared++
+
+		// Keep memdb in lock-step with Pebble so subsequent in-RAM lookups
+		// don't return stale seg values.
+		if s.UseMemDB {
+			s.UpsertBookFileToMemDB(&f)
+		}
+
+		if batch.Len() >= batchSize {
+			if err := flush(); err != nil {
+				return cleared, total, err
+			}
+			if progress != nil {
+				progress(processed, cleared, total)
+			}
+		}
+	}
+
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return cleared, total, err
+	}
+	if progress != nil {
+		progress(processed, cleared, total)
+	}
+
+	s.InvalidateLibraryStats()
+	s.MarkQuickQueryDirty("no_fingerprints", "clear_all_acoustid_fingerprints")
+	return cleared, total, nil
+}

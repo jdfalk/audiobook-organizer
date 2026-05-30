@@ -53,48 +53,66 @@ func (p *Plugin) runResetAll(ctx context.Context, _ json.RawMessage, reporter sd
 	log := reporter.Logger()
 	startedAt := time.Now()
 
-	_ = reporter.UpdateProgress(0, 100, "Loading book files…")
-	files, err := p.store.GetAllBookFiles()
-	if err != nil {
-		return fmt.Errorf("load book files: %w", err)
-	}
-	total := len(files)
-	log.Info("acoustid reset-all: clearing fingerprints", "book_files", total)
+	_ = reporter.UpdateProgress(0, 100, "Clearing fingerprints (batched)…")
 
-	cleared := 0
-	for i := range files {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
+	var cleared int
 
-		f := files[i]
-		// Skip rows that already have no fingerprint data — saves a lot of
-		// Pebble writes on partial libraries.
-		if f.AcoustIDSeg0 == "" && f.AcoustIDSeg1 == "" && f.AcoustIDSeg2 == "" &&
-			f.AcoustIDSeg3 == "" && f.AcoustIDSeg4 == "" && f.AcoustIDSeg5 == "" &&
-			f.AcoustIDSeg6 == "" {
-			continue
+	// Fast path: PebbleStore exposes a batched bulk-clear that fsyncs once
+	// per ~2000 records instead of once per UpdateBookFile call — ~100×
+	// faster than the per-row fallback below.
+	if pebble, ok := p.store.(*database.PebbleStore); ok {
+		c, t, clearErr := pebble.ClearAllAcoustIDFingerprints(ctx, 2000,
+			func(processed, c, t int) {
+				pct := 0
+				if t > 0 {
+					pct = int(float64(processed) / float64(t) * 80)
+				}
+				_ = reporter.UpdateProgress(pct, 100,
+					fmt.Sprintf("Clearing fingerprints %d/%d (cleared=%d)", processed, t, c))
+			})
+		if clearErr != nil {
+			return fmt.Errorf("bulk clear fingerprints: %w", clearErr)
 		}
-		updated := f
-		updated.AcoustIDSeg0 = ""
-		updated.AcoustIDSeg1 = ""
-		updated.AcoustIDSeg2 = ""
-		updated.AcoustIDSeg3 = ""
-		updated.AcoustIDSeg4 = ""
-		updated.AcoustIDSeg5 = ""
-		updated.AcoustIDSeg6 = ""
-		if err := p.store.UpdateBookFile(f.ID, &updated); err != nil {
-			log.Warn("acoustid reset-all: update file failed", "id", f.ID, "err", err)
-			continue
+		cleared = c
+		log.Info("acoustid reset-all: bulk clear done", "cleared", c, "total", t, "elapsed", time.Since(startedAt).Round(time.Second))
+	} else {
+		// Per-row fallback (mock/sqlite tests).
+		files, err := p.store.GetAllBookFiles()
+		if err != nil {
+			return fmt.Errorf("load book files: %w", err)
 		}
-		cleared++
-
-		if i%500 == 0 || i == total-1 {
-			pct := int(float64(i+1) / float64(total) * 80)
-			_ = reporter.UpdateProgress(pct, 100,
-				fmt.Sprintf("Clearing fingerprints %d/%d (cleared=%d)", i+1, total, cleared))
+		total := len(files)
+		log.Info("acoustid reset-all: clearing fingerprints (slow path)", "book_files", total)
+		for i := range files {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			f := files[i]
+			if f.AcoustIDSeg0 == "" && f.AcoustIDSeg1 == "" && f.AcoustIDSeg2 == "" &&
+				f.AcoustIDSeg3 == "" && f.AcoustIDSeg4 == "" && f.AcoustIDSeg5 == "" &&
+				f.AcoustIDSeg6 == "" {
+				continue
+			}
+			updated := f
+			updated.AcoustIDSeg0 = ""
+			updated.AcoustIDSeg1 = ""
+			updated.AcoustIDSeg2 = ""
+			updated.AcoustIDSeg3 = ""
+			updated.AcoustIDSeg4 = ""
+			updated.AcoustIDSeg5 = ""
+			updated.AcoustIDSeg6 = ""
+			if err := p.store.UpdateBookFile(f.ID, &updated); err != nil {
+				log.Warn("acoustid reset-all: update file failed", "id", f.ID, "err", err)
+				continue
+			}
+			cleared++
+			if i%500 == 0 || i == total-1 {
+				pct := int(float64(i+1) / float64(total) * 80)
+				_ = reporter.UpdateProgress(pct, 100,
+					fmt.Sprintf("Clearing fingerprints %d/%d (cleared=%d)", i+1, total, cleared))
+			}
 		}
 	}
 
