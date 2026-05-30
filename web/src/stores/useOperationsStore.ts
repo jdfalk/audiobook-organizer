@@ -102,6 +102,12 @@ function fromV2(op: api.OperationV2): ActiveOperation {
   };
 }
 
+// Throttle flag for the "unknown op id → reload timeline" path. Without it,
+// a server-resumed op that emits a burst of op.updated events would trigger
+// one loadFromServer per event until the first reload returns. We coalesce
+// to a single reload per 500ms window.
+let unknownOpReloadPending = false;
+
 function formatOpLabel(type: string): string {
   const labels: Record<string, string> = {
     itunes_import: 'iTunes Import',
@@ -306,9 +312,22 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
           get().loadFromServer();
         } else if (name === 'op.updated' && opId) {
           // Partial progress update: merge into existing operation if present.
+          // If the op is unknown locally (e.g. server resumed it after a
+          // restart, so no op.created ever fired), pull the full timeline
+          // so the bar shows up. Throttle the reload to avoid hammering
+          // the API when many updates arrive in a burst.
           set((state) => {
             const existing = state.operations[opId];
-            if (!existing) return state;
+            if (!existing) {
+              if (!unknownOpReloadPending) {
+                unknownOpReloadPending = true;
+                setTimeout(() => {
+                  unknownOpReloadPending = false;
+                  get().loadFromServer();
+                }, 500);
+              }
+              return state;
+            }
             const updated: ActiveOperation = {
               ...existing,
               progress: (p.progress_current as number | undefined) ?? existing.progress,
@@ -339,6 +358,10 @@ export const useOperationsStore = create<OperationsState>()((set, get) => ({
         // The browser EventSource already retries automatically, but if the
         // connection is truly closed we want the next call to re-open it.
         set({ _sseSource: null });
+        // Reconcile after a likely server restart: pull the timeline so any
+        // ops the server auto-resumed (which won't emit op.created) show up
+        // in the bell again. Delay so we don't fire during transient blips.
+        setTimeout(() => get().loadFromServer(), 1500);
       },
     });
 
