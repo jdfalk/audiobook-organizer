@@ -4,7 +4,7 @@
 // last-edited: 2026-05-20
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import {
   Box,
@@ -2389,10 +2389,15 @@ function AcousticDedupTab() {
             (missing book — {id.slice(-8)})
           </Typography>
         ) : (
+          // SPA navigation via react-router Link (NOT target="_blank"). The
+          // new-tab version forced a full bundle reload, which kicked the
+          // SSE connection — causing "Client unregistered" + HTTP/3 TLS
+          // handshake EOF noise every click. In-app nav is instant and
+          // preserves the SSE. Ctrl/Cmd-click still opens in a new tab if
+          // the user wants to keep their place in the candidate list.
           <Link
-            href={`/books/${id}`}
-            target="_blank"
-            rel="noopener"
+            component={RouterLink}
+            to={`/books/${id}`}
             underline="hover"
             sx={{
               color: 'primary.main',
