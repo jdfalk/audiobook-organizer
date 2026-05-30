@@ -37,23 +37,28 @@ func (p *Plugin) runBookSignatureScan(ctx context.Context, _ json.RawMessage, re
 		return fmt.Errorf("dedup engine not available")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Starting book signature scan...")
+	startProg := sdk.NewProgress(reporter, 0)
+	startProg.Start("Starting book signature scan...")
 
-	var lastPct int
+	var prog *sdk.Progress
 	scanErr := p.engine.BookSignatureScan(ctx, func(done, total int) {
 		if total <= 0 {
 			return
 		}
-		pct := 1 + (98 * done / total)
-		if pct == lastPct {
-			return
+		if prog == nil {
+			prog = sdk.NewProgress(reporter, total)
+			prog.Start(fmt.Sprintf("Scanning books: 0 / %d", total))
 		}
-		lastPct = pct
-		_ = reporter.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
+		prog.StepN(done, fmt.Sprintf("Scanning books: %d / %d", done, total))
 	})
 	if scanErr != nil {
 		reporter.Logger().Error("BookSignatureScan error", "error", scanErr)
 		return fmt.Errorf("book signature scan: %w", scanErr)
+	}
+
+	if prog == nil {
+		prog = sdk.NewProgress(reporter, 0)
+		prog.Start("Scanning books: 0 / 0")
 	}
 
 	pendingCount := 0
@@ -63,7 +68,7 @@ func (p *Plugin) runBookSignatureScan(ctx context.Context, _ json.RawMessage, re
 			pendingCount = total
 		}
 	}
-	_ = reporter.UpdateProgress(100, 100,
-		fmt.Sprintf("Book signature scan complete — %d pending candidate(s)", pendingCount))
+	prog.Finalize("writing results...")
+	prog.Done(fmt.Sprintf("Book signature scan complete — %d pending candidate(s)", pendingCount))
 	return nil
 }

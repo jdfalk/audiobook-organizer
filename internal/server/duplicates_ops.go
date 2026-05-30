@@ -37,6 +37,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/logger"
 	"github.com/jdfalk/audiobook-organizer/internal/logging"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
+	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // ── OperationDef registrations ────────────────────────────────────────────────
@@ -207,7 +208,11 @@ func (s *Server) RegisterAuthorDedupScanOp(reg *opsregistry.Registry) error {
 			progress := registryProgressAdapter{r: reporter}
 
 			logging.Info(ctx, "author duplicate scan starting")
-			_ = progress.UpdateProgress(0, 100, "Fetching authors...")
+			// We don't know the final count until authors load; start with N=0
+			// and reset to a real N once we know it.
+			sp := sdk.NewProgress(reporter, 0)
+			sp.Start("Fetching authors...")
+			_ = progress.Log("info", "Fetching authors...", nil)
 
 			authors, err := store.GetAllAuthors()
 			if err != nil {
@@ -216,7 +221,9 @@ func (s *Server) RegisterAuthorDedupScanOp(reg *opsregistry.Registry) error {
 				return err
 			}
 			logging.Info(ctx, "authors loaded", "count", len(authors))
-			_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Loaded %d authors, fetching book counts...", len(authors)))
+			// Re-create the helper now that we know N = len(authors).
+			sp = sdk.NewProgress(reporter, len(authors))
+			sp.Start(fmt.Sprintf("Loaded %d authors, fetching book counts...", len(authors)))
 
 			bookCounts, err := store.GetAllAuthorBookCounts()
 			if err != nil {
@@ -225,11 +232,12 @@ func (s *Server) RegisterAuthorDedupScanOp(reg *opsregistry.Registry) error {
 				return err
 			}
 			bookCountFn := func(authorID int) int { return bookCounts[authorID] }
-			_ = progress.UpdateProgress(20, 100, "Finding duplicate authors...")
+			sp.StepN(0, "Finding duplicate authors...")
 
 			progressFn := func(current, total int, message string) {
-				pct := 20 + (current*70)/max(total, 1)
-				_ = progress.UpdateProgress(pct, 100, message)
+				// Forward the real (current, total) from the dedup callback
+				// verbatim — never re-scale into 0..100.
+				sp.StepN(current, message)
 			}
 
 			groups := dedup.FindDuplicateAuthors(authors, 0.9, bookCountFn, progressFn)
@@ -248,7 +256,7 @@ func (s *Server) RegisterAuthorDedupScanOp(reg *opsregistry.Registry) error {
 			s.dedupCache.SetWithTTL("author-duplicates", result, 30*time.Minute)
 
 			op.SetStatus("success")
-			_ = progress.UpdateProgress(100, 100, fmt.Sprintf("Found %d duplicate groups (after filtering reviewed)", len(groups)))
+			sp.Done(fmt.Sprintf("Found %d duplicate groups (after filtering reviewed)", len(groups)))
 			logging.Info(ctx, "author duplicate scan complete", "groups", len(groups))
 
 			if s.activityWriter != nil && p.LegacyOpID != "" {

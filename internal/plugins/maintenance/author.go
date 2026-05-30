@@ -45,7 +45,8 @@ func (p *Plugin) runAuthorDedupScan(ctx context.Context, _ json.RawMessage, repo
 		return fmt.Errorf("database not initialized")
 	}
 	_ = reporter.Log(slog.LevelInfo, "Starting author dedup scan")
-	_ = reporter.UpdateProgress(0, 100, "Fetching authors...")
+	loadProg := sdk.NewProgress(reporter, 0)
+	loadProg.Start("Fetching authors...")
 
 	authors, err := store.GetAllAuthors()
 	if err != nil {
@@ -62,20 +63,20 @@ func (p *Plugin) runAuthorDedupScan(ctx context.Context, _ json.RawMessage, repo
 	msg := fmt.Sprintf("Fetched %d authors (%d with book counts), running duplicate comparison...",
 		len(authors), booksWithCounts)
 	_ = reporter.Log(slog.LevelInfo, msg)
-	_ = reporter.UpdateProgress(25, 100, msg)
 
 	total := len(authors)
+	prog := sdk.NewProgress(reporter, total)
+	prog.Start(msg)
 	groups := dedup.FindDuplicateAuthors(authors, 0.85, func(id int) int { return bookCounts[id] },
 		func(current, t int, message string) {
-			pct := 25 + (70 * current / total)
-			_ = reporter.UpdateProgress(pct, 100, message)
+			prog.StepN(current, message)
 		},
 	)
 
 	resultMsg := fmt.Sprintf("Dedup scan complete: %d duplicate groups found across %d authors",
 		len(groups), total)
 	_ = reporter.Log(slog.LevelInfo, resultMsg)
-	_ = reporter.UpdateProgress(100, 100, resultMsg)
+	prog.Done(resultMsg)
 	return nil
 }
 
@@ -117,6 +118,8 @@ func (p *Plugin) runAuthorSplitScan(ctx context.Context, _ json.RawMessage, repo
 	booksUpdated := 0
 	errCount := 0
 	total := len(authors)
+	prog := sdk.NewProgress(reporter, total)
+	prog.Start(fmt.Sprintf("Scanning %d authors for composite names...", total))
 
 	for i, author := range authors {
 		if ctx.Err() != nil {
@@ -126,7 +129,7 @@ func (p *Plugin) runAuthorSplitScan(ctx context.Context, _ json.RawMessage, repo
 		parts := dedup.SplitCompositeAuthorName(author.Name)
 		if len(parts) <= 1 {
 			if (i+1)%200 == 0 {
-				_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Checked %d/%d authors", i+1, total))
+				prog.StepN(i+1, fmt.Sprintf("Checked %d/%d authors", i+1, total))
 			}
 			continue
 		}
@@ -219,7 +222,7 @@ func (p *Plugin) runAuthorSplitScan(ctx context.Context, _ json.RawMessage, repo
 		}
 
 		if (i+1)%200 == 0 || splitCount%50 == 0 {
-			_ = reporter.UpdateProgress(i+1, total,
+			prog.StepN(i+1,
 				fmt.Sprintf("Checked %d/%d authors, split %d so far", i+1, total, splitCount))
 		}
 	}
@@ -230,7 +233,7 @@ func (p *Plugin) runAuthorSplitScan(ctx context.Context, _ json.RawMessage, repo
 	resultMsg := fmt.Sprintf("Split %d composite authors, updated %d books (%d errors)",
 		splitCount, booksUpdated, errCount)
 	_ = reporter.Log(slog.LevelInfo, resultMsg)
-	_ = reporter.UpdateProgress(total, total, resultMsg)
+	prog.Done(resultMsg)
 	return nil
 }
 
@@ -276,6 +279,8 @@ func (p *Plugin) runResolveProductionAuthors(ctx context.Context, _ json.RawMess
 	_ = reporter.Log(slog.LevelInfo, fmt.Sprintf("Found %d production company authors", len(prodAuthors)))
 	total := len(prodAuthors)
 	resolved := 0
+	prog := sdk.NewProgress(reporter, total)
+	prog.Start(fmt.Sprintf("Processing %d production companies", total))
 
 	for i := range prodAuthors {
 		if ctx.Err() != nil {
@@ -284,13 +289,13 @@ func (p *Plugin) runResolveProductionAuthors(ctx context.Context, _ json.RawMess
 		if reporter.IsCanceled() {
 			return context.Canceled
 		}
-		_ = reporter.UpdateProgress(i+1, total,
+		prog.StepN(i+1,
 			fmt.Sprintf("Processed %d/%d production companies (%d resolved)", i+1, total, resolved))
 	}
 
 	p.deps.InvalidateDedupCache()
 	resultMsg := fmt.Sprintf("Resolved %d books across %d production companies", resolved, total)
 	_ = reporter.Log(slog.LevelInfo, resultMsg)
-	_ = reporter.UpdateProgress(total, total, resultMsg)
+	prog.Done(resultMsg)
 	return nil
 }

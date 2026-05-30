@@ -529,7 +529,9 @@ func (s *Server) aiReviewDuplicateAuthors(c *gin.Context) {
 // aiReviewGroupsMode is the existing Groups mode — local heuristics build groups, AI validates.
 func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.ProgressReporter, parser aiParser, store database.Store, opID string, dedupGroups []dedup.AuthorDedupGroup) error {
 	_ = progress.Log("info", fmt.Sprintf("Starting AI review (groups mode) of %d duplicate author groups", len(dedupGroups)), nil)
-	_ = progress.UpdateProgress(0, len(dedupGroups), "Building AI review input...")
+	// Schedule: 1 setup + N input rows + 1 send + 1 done = len+3 steps.
+	totalSteps := len(dedupGroups) + 3
+	_ = progress.UpdateProgress(0, totalSteps, fmt.Sprintf("Building AI review input for %d groups... (0/%d 0.00%%)", len(dedupGroups), totalSteps))
 
 	var inputs []ai.AuthorDedupInput
 	for i, group := range dedupGroups {
@@ -558,7 +560,8 @@ func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.Pro
 		})
 	}
 
-	_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Sending %d groups to AI for review...", len(inputs)))
+	sent := len(inputs) + 1 // setup + N inputs built
+	_ = progress.UpdateProgress(sent, totalSteps, fmt.Sprintf("Sending %d groups to AI for review... (%d/%d %.2f%%)", len(inputs), sent, totalSteps, float64(sent)/float64(totalSteps)*100))
 
 	suggestions, err := parser.ReviewAuthorDuplicates(ctx, inputs)
 	if err != nil {
@@ -585,7 +588,7 @@ func (s *Server) aiReviewGroupsMode(ctx context.Context, progress operations.Pro
 		return fmt.Errorf("failed to store results: %w", err)
 	}
 
-	_ = progress.UpdateProgress(100, 100, fmt.Sprintf("AI review complete: %d suggestions", len(suggestions)))
+	_ = progress.UpdateProgress(totalSteps, totalSteps, fmt.Sprintf("AI review complete: %d suggestions (%d/%d 100.00%%)", len(suggestions), totalSteps, totalSteps))
 	return nil
 }
 
@@ -595,7 +598,8 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 	database.OperationStore
 }, opID string) error {
 	_ = progress.Log("info", "Starting AI review (full mode) — discovering duplicates from all authors", nil)
-	_ = progress.UpdateProgress(0, 100, "Loading all authors...")
+	// Pre-load total is unknown; use a placeholder (0/1) Start so we never emit 0/0.
+	_ = progress.UpdateProgress(0, 1, "Loading all authors... (0/1 0.00%)")
 
 	allAuthors, err := store.GetAllAuthors()
 	if err != nil {
@@ -603,7 +607,9 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 	}
 
 	_ = progress.Log("info", fmt.Sprintf("Building discovery input for %d authors", len(allAuthors)), nil)
-	_ = progress.UpdateProgress(5, 100, fmt.Sprintf("Building input for %d authors...", len(allAuthors)))
+	// Schedule: N input rows + 1 send + 1 done = len+2 steps.
+	totalSteps := len(allAuthors) + 2
+	_ = progress.UpdateProgress(0, totalSteps, fmt.Sprintf("Building input for %d authors... (0/%d 0.00%%)", len(allAuthors), totalSteps))
 
 	var inputs []ai.AuthorDiscoveryInput
 	for _, author := range allAuthors {
@@ -625,7 +631,8 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 		})
 	}
 
-	_ = progress.UpdateProgress(10, 100, fmt.Sprintf("Sending %d authors to AI for discovery...", len(inputs)))
+	sent := len(inputs)
+	_ = progress.UpdateProgress(sent, totalSteps, fmt.Sprintf("Sending %d authors to AI for discovery... (%d/%d %.2f%%)", len(inputs), sent, totalSteps, float64(sent)/float64(totalSteps)*100))
 
 	discoveries, err := parser.DiscoverAuthorDuplicates(ctx, inputs)
 	if err != nil {
@@ -698,7 +705,7 @@ func (s *Server) aiReviewFullMode(ctx context.Context, progress operations.Progr
 		return fmt.Errorf("failed to store results: %w", err)
 	}
 
-	_ = progress.UpdateProgress(100, 100, fmt.Sprintf("AI discovery complete: %d groups found", len(groups)))
+	_ = progress.UpdateProgress(totalSteps, totalSteps, fmt.Sprintf("AI discovery complete: %d groups found (%d/%d 100.00%%)", len(groups), totalSteps, totalSteps))
 	return nil
 }
 

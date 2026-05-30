@@ -81,7 +81,7 @@ func (p *Plugin) runPathUpdate(ctx context.Context, params json.RawMessage, repo
 		return fmt.Errorf("book_id is required")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, fmt.Sprintf("Loading book %s...", bookID))
+	sdk.NewProgress(reporter, 0).Start(fmt.Sprintf("Loading book %s...", bookID))
 
 	// Fetch the book.
 	book, err := p.store.GetBookByID(bookID)
@@ -98,11 +98,13 @@ func (p *Plugin) runPathUpdate(ctx context.Context, params json.RawMessage, repo
 		return fmt.Errorf("load versions: %w", err)
 	}
 
-	_ = reporter.UpdateProgress(50, 100, fmt.Sprintf("Updating %d version(s) in Deluge...", len(versions)))
+	prog := sdk.NewProgress(reporter, len(versions))
+	prog.Start(fmt.Sprintf("Updating %d version(s) in Deluge...", len(versions)))
 
 	// Update each version's torrent path.
 	updated := 0
-	for _, v := range versions {
+	for i, v := range versions {
+		prog.StepN(i+1, fmt.Sprintf("Processing version %d/%d", i+1, len(versions)))
 		if v.TorrentHash == "" {
 			continue // Not a Deluge torrent
 		}
@@ -150,6 +152,7 @@ func (p *Plugin) runPathUpdate(ctx context.Context, params json.RawMessage, repo
 		}
 	}
 
-	_ = reporter.UpdateProgress(100, 100, fmt.Sprintf("Updated %d torrent(s)", updated))
+	prog.Finalize("Writing results...")
+	prog.Done(fmt.Sprintf("Updated %d torrent(s)", updated))
 	return nil
 }

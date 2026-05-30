@@ -15,6 +15,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/auth"
 	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/diagnostics"
+	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 )
 
@@ -49,7 +50,8 @@ func (s *Server) RegisterDiagnosticsExportOp(reg *opsregistry.Registry) error {
 			if ds == nil {
 				ds = diagnostics.NewService(store, nil, config.AppConfig.ITunesLibraryReadPath)
 			}
-			_ = reporter.UpdateProgress(0, 100, "Generating export data")
+			prog := sdk.NewProgress(reporter, 0)
+			prog.Start("Generating export data")
 			zipPath, genErr := ds.GenerateExport(p.Category, p.Description)
 			if genErr != nil {
 				if store != nil {
@@ -62,7 +64,7 @@ func (s *Server) RegisterDiagnosticsExportOp(reg *opsregistry.Registry) error {
 				_ = store.UpdateOperationResultData(p.LegacyOpID, string(resultJSON))
 				_ = store.UpdateOperationStatus(p.LegacyOpID, "completed", 100, 100, "Export complete")
 			}
-			_ = reporter.UpdateProgress(100, 100, "Export complete")
+			prog.Done("Export complete")
 			return nil
 		},
 	})

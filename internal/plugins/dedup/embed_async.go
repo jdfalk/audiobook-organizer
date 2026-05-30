@@ -38,18 +38,22 @@ func (p *Plugin) runEmbedAsync(ctx context.Context, _ json.RawMessage, reporter 
 		return errors.New("dedup engine not available (embedding may be disabled or API key not configured)")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Collecting un-embedded books...")
+	collectProg := sdk.NewProgress(reporter, 0)
+	collectProg.Start("Collecting un-embedded books...")
 
 	batchID, count, err := p.engine.EmbedBooksAsync(ctx)
 	if err != nil {
 		return fmt.Errorf("submit embedding batch: %w", err)
 	}
 	if count == 0 {
-		_ = reporter.UpdateProgress(100, 100, "All books already embedded — nothing to submit")
+		collectProg.Done("All books already embedded — nothing to submit")
 		return nil
 	}
 
-	_ = reporter.UpdateProgress(100, 100,
-		fmt.Sprintf("Submitted %d books to OpenAI Batch API (batch_id=%s). Results will be ingested automatically within 24h.", count, batchID))
+	prog := sdk.NewProgress(reporter, count)
+	prog.Start(fmt.Sprintf("Submitting %d books to batch API...", count))
+	prog.StepN(count, fmt.Sprintf("Submitted %d / %d books", count, count))
+	prog.Finalize("writing results...")
+	prog.Done(fmt.Sprintf("Submitted %d books to OpenAI Batch API (batch_id=%s). Results will be ingested automatically within 24h.", count, batchID))
 	return nil
 }

@@ -67,6 +67,8 @@ func (p *Plugin) runMetadataUpgrade(ctx context.Context, _ json.RawMessage, repo
 	if !p.deps.HasMetadataFetchService() {
 		return fmt.Errorf("metadata fetch service not initialized")
 	}
+	prog := sdk.NewProgress(reporter, 0)
+	prog.Start("Scanning for books with upgradeable metadata sources...")
 	_ = reporter.Log(slog.LevelInfo, "Scanning for books with upgradeable metadata sources...")
 	checked, upgraded, skipped, errs, err := p.deps.MetadataUpgradeRun(ctx, 200)
 	if err != nil {
@@ -75,7 +77,7 @@ func (p *Plugin) runMetadataUpgrade(ctx context.Context, _ json.RawMessage, repo
 	msg := fmt.Sprintf("Metadata upgrade complete: checked %d, upgraded %d, skipped %d, errors %d",
 		checked, upgraded, skipped, errs)
 	_ = reporter.Log(slog.LevelInfo, msg)
-	_ = reporter.UpdateProgress(100, 100, msg)
+	prog.Done(msg)
 	return nil
 }
 

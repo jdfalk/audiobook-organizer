@@ -131,9 +131,13 @@ func ScanSeriesDuplicates(
 	store database.Store,
 	progress ProgressReporter,
 ) (SeriesScanResult, error) {
-	report := func(pct int, msg string) {
+	// Fixed-step scan: 6 stages (start, load, author-lookup, exact, subseries, done).
+	const totalSteps = 6
+	report := func(step int, msg string) {
 		if progress != nil {
-			_ = progress.UpdateProgress(pct, 100, msg)
+			pct := float64(step) * 100.0 / float64(totalSteps)
+			_ = progress.UpdateProgress(step, totalSteps,
+				fmt.Sprintf("%s (%d/%d, %.2f%%)", msg, step, totalSteps, pct))
 		}
 	}
 
@@ -143,7 +147,7 @@ func ScanSeriesDuplicates(
 	if err != nil {
 		return SeriesScanResult{}, err
 	}
-	report(10, fmt.Sprintf("Loaded %d series, grouping...", len(allSeries)))
+	report(1, fmt.Sprintf("Loaded %d series, grouping...", len(allSeries)))
 
 	// Build exact-match groups (normalised name → series list).
 	exactGroups := make(map[string][]database.Series)
@@ -155,7 +159,7 @@ func ScanSeriesDuplicates(
 		exactGroups[key] = append(exactGroups[key], s)
 	}
 
-	report(20, "Building author lookup...")
+	report(2, "Building author lookup...")
 
 	allAuthors, _ := store.GetAllAuthors()
 	authorNameMap := make(map[int]string, len(allAuthors))
@@ -166,7 +170,7 @@ func ScanSeriesDuplicates(
 	var result []SeriesDupGroup
 	seen := make(map[int]bool)
 
-	report(30, "Finding exact duplicates...")
+	report(3, "Finding exact duplicates...")
 
 	groupKeys := make([]string, 0, len(exactGroups))
 	for k := range exactGroups {
@@ -192,16 +196,16 @@ func ScanSeriesDuplicates(
 			MatchType:     "exact",
 		})
 		processed++
-		if processed%10 == 0 {
-			pct := 30 + (processed*40)/maxInt(totalGroups, 1)
+		if processed%10 == 0 && totalGroups > 0 {
 			if progress != nil {
-				_ = progress.UpdateProgress(minInt(pct, 70), 100,
-					fmt.Sprintf("Processing groups... (%d/%d)", processed, totalGroups))
+				pct := float64(processed) * 100.0 / float64(totalGroups)
+				_ = progress.UpdateProgress(processed, totalGroups,
+					fmt.Sprintf("Processing groups... (%d/%d, %.2f%%)", processed, totalGroups, pct))
 			}
 		}
 	}
 
-	report(70, "Finding sub-series patterns...")
+	report(4, "Finding sub-series patterns...")
 
 	seriesByNormalizedName := make(map[string][]database.Series)
 	for _, s := range allSeries {
@@ -239,7 +243,7 @@ func ScanSeriesDuplicates(
 		}
 	}
 
-	report(100, fmt.Sprintf("Found %d duplicate groups", len(result)))
+	report(6, fmt.Sprintf("Found %d duplicate groups", len(result)))
 
 	return SeriesScanResult{
 		Groups:      result,
@@ -265,6 +269,7 @@ func DedupSeries(
 ) (SeriesDedupResult, error) {
 	if progress != nil {
 		_ = progress.Log("info", "Starting series deduplication...", nil)
+		_ = progress.UpdateProgress(0, 1, "Starting series deduplication... (0/1, 0.00%)")
 	}
 
 	allSeries, err := store.GetAllSeries()
@@ -273,8 +278,12 @@ func DedupSeries(
 	}
 
 	if progress != nil {
-		_ = progress.UpdateProgress(0, len(allSeries),
-			fmt.Sprintf("Scanning %d series for duplicates...", len(allSeries)))
+		denom := len(allSeries)
+		if denom == 0 {
+			denom = 1
+		}
+		_ = progress.UpdateProgress(0, denom,
+			fmt.Sprintf("Scanning %d series for duplicates... (0/%d, 0.00%%)", len(allSeries), len(allSeries)))
 	}
 
 	// Group by normalised name.
@@ -294,7 +303,12 @@ func DedupSeries(
 	if progress != nil {
 		msg := fmt.Sprintf("Found %d duplicate groups to merge", len(dupGroups))
 		_ = progress.Log("info", msg, nil)
-		_ = progress.UpdateProgress(0, len(dupGroups), msg)
+		denom := len(dupGroups)
+		if denom == 0 {
+			denom = 1
+		}
+		_ = progress.UpdateProgress(0, denom,
+			fmt.Sprintf("%s (0/%d, 0.00%%)", msg, len(dupGroups)))
 	}
 
 	var result SeriesDedupResult
@@ -341,8 +355,10 @@ func DedupSeries(
 		}
 
 		if progress != nil {
+			pct := float64(gi+1) * 100.0 / float64(len(dupGroups))
 			_ = progress.UpdateProgress(gi+1, len(dupGroups),
-				fmt.Sprintf("Merged %d/%d groups (%d series merged)", gi+1, len(dupGroups), result.TotalMerged))
+				fmt.Sprintf("Merged %d/%d groups (%d series merged, %.2f%%)",
+					gi+1, len(dupGroups), result.TotalMerged, pct))
 		}
 	}
 
@@ -354,6 +370,12 @@ func DedupSeries(
 			errDetail := strings.Join(result.Errors[:minInt(len(result.Errors), 10)], "; ")
 			_ = progress.Log("warn", fmt.Sprintf("Merge errors: %s", errDetail), nil)
 		}
+		denom := len(dupGroups)
+		if denom == 0 {
+			denom = 1
+		}
+		_ = progress.UpdateProgress(denom, denom,
+			fmt.Sprintf("%s (%d/%d, 100.00%%)", msg, len(dupGroups), len(dupGroups)))
 	}
 
 	return result, nil
@@ -413,10 +435,16 @@ func MergeSeries(
 		}
 	}
 
+	total := len(mergeIDs)
 	if progress != nil {
 		_ = progress.Log("info",
-			fmt.Sprintf("Merging %d series into %q", len(mergeIDs), keepName), nil)
-		_ = progress.UpdateProgress(0, len(mergeIDs), "Starting series merge...")
+			fmt.Sprintf("Merging %d series into %q", total, keepName), nil)
+		denom := total
+		if denom == 0 {
+			denom = 1
+		}
+		_ = progress.UpdateProgress(0, denom,
+			fmt.Sprintf("Starting series merge... (0/%d, 0.00%%)", total))
 	}
 
 	// Collect all unique author IDs from the full set of series (keep + merge).
@@ -489,8 +517,9 @@ func MergeSeries(
 		}
 
 		if progress != nil {
-			_ = progress.UpdateProgress(i+1, len(mergeIDs),
-				fmt.Sprintf("Merged %d/%d series", i+1, len(mergeIDs)))
+			pct := float64(i+1) * 100.0 / float64(total)
+			_ = progress.UpdateProgress(i+1, total,
+				fmt.Sprintf("Merged %d/%d series (%.2f%%)", i+1, total, pct))
 		}
 	}
 
@@ -544,6 +573,12 @@ func MergeSeries(
 			errDetail := strings.Join(result.Errors[:minInt(len(result.Errors), 10)], "; ")
 			_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
 		}
+		denom := total
+		if denom == 0 {
+			denom = 1
+		}
+		_ = progress.UpdateProgress(denom, denom,
+			fmt.Sprintf("%s (%d/%d, 100.00%%)", msg, total, total))
 	}
 
 	return result, nil

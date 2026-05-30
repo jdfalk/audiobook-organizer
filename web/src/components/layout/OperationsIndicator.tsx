@@ -1,5 +1,5 @@
 // file: web/src/components/layout/OperationsIndicator.tsx
-// version: 3.10.0
+// version: 4.0.0
 // guid: 3b4c5d6e-7f8a-9b0c-1d2e-3f4a5b6c7d8e
 
 import { useState } from 'react';
@@ -10,6 +10,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -26,6 +27,8 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew.js';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty.js';
 import ArticleIcon from '@mui/icons-material/Article.js';
 import CloseIcon from '@mui/icons-material/Close.js';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight.js';
 import { OperationActivityPanel } from '../OperationActivityPanel';
 import {
   useOperationsStore,
@@ -94,7 +97,7 @@ function formatElapsed(op: ActiveOperation): string | null {
 }
 
 function parseMessageDetails(message: string) {
-  const titleMatch = message.match(/\u2014\s*(.+)$/);
+  const titleMatch = message.match(/—\s*(.+)$/);
   const countsMatch = message.match(
     /\(imported (\d+), skipped (\d+), failed (\d+)\)/
   );
@@ -110,6 +113,81 @@ function parseMessageDetails(message: string) {
   };
 }
 
+type CollapseKey = 'running' | 'pending' | 'completed';
+
+const COLLAPSE_STORAGE_KEY = 'ops-indicator-collapse-v1';
+
+function loadCollapseState(): Record<CollapseKey, boolean> {
+  // Defaults: Running open, Pending open, Completed collapsed.
+  const defaults: Record<CollapseKey, boolean> = {
+    running: true,
+    pending: true,
+    completed: false,
+  };
+  try {
+    const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    return { ...defaults, ...parsed };
+  } catch {
+    return defaults;
+  }
+}
+
+function persistCollapseState(state: Record<CollapseKey, boolean>) {
+  try {
+    localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore quota errors */
+  }
+}
+
+function SectionHeader({
+  label,
+  count,
+  open,
+  onToggle,
+}: {
+  label: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Box
+      onClick={onToggle}
+      sx={{
+        px: 2,
+        pt: 1,
+        pb: 0.5,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        cursor: 'pointer',
+        userSelect: 'none',
+        '&:hover': { bgcolor: 'action.hover' },
+      }}
+    >
+      {open ? (
+        <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+      ) : (
+        <ChevronRightIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+      )}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          textTransform: 'uppercase',
+          fontSize: '0.65rem',
+          letterSpacing: '0.08em',
+          fontWeight: 600,
+        }}
+      >
+        {label} ({count})
+      </Typography>
+    </Box>
+  );
+}
 
 export function OperationsIndicator() {
   const activeOperations = useOperationsStore((state) => state.activeOperations);
@@ -117,10 +195,16 @@ export function OperationsIndicator() {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
   const [activityOpId, setActivityOpId] = useState<string | null>(null);
+  const [collapse, setCollapse] = useState<Record<CollapseKey, boolean>>(loadCollapseState);
   const navigate = useNavigate();
 
-  // Active ops are now discovered exclusively via SSE (op.created) and
-  // loadFromServer (v2 timeline). No v1 polling loop needed here.
+  const toggleSection = (key: CollapseKey) => {
+    setCollapse((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      persistCollapseState(next);
+      return next;
+    });
+  };
 
   const handleCancel = async (opId: string) => {
     setCancelling((prev) => new Set(prev).add(opId));
@@ -136,15 +220,11 @@ export function OperationsIndicator() {
     });
   };
 
-  // Badge only counts alert-level ops (notify_level === 0).
-  // Activity-only ops (single-book fetches, background maintenance) are visible
-  // in the dropdown list but do not increment the badge.
   const alertInProgress = alertOperations.filter(
     (op) => !['completed', 'failed', 'canceled'].includes(op.status)
   );
   const badgeCount = alertInProgress.length;
 
-  // The dropdown shows all ops regardless of notify level.
   const inProgress = activeOperations.filter(
     (op) => !['completed', 'failed', 'canceled'].includes(op.status)
   );
@@ -153,6 +233,8 @@ export function OperationsIndicator() {
   const terminal = activeOperations.filter((op) =>
     ['completed', 'failed', 'canceled'].includes(op.status)
   );
+
+  const empty = running.length === 0 && queued.length === 0 && terminal.length === 0;
 
   return (
     <>
@@ -215,89 +297,217 @@ export function OperationsIndicator() {
 
           <Divider />
 
-          {activeOperations.length === 0 && (
+          {empty && (
             <Typography
               variant="body2"
               color="text.secondary"
               sx={{ px: 2, py: 3, textAlign: 'center' }}
             >
-              No active operations
+              No operations
             </Typography>
           )}
 
-          {/* Queued (pending) operations */}
-          {queued.length > 0 && (
+          {/* ===== RUNNING ===== */}
+          {running.length > 0 && (
             <>
-              <Box sx={{ px: 2, pt: 1, pb: 0.25 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.08em' }}>
-                  Pending ({queued.length})
-                </Typography>
-              </Box>
-              {queued.map((op: ActiveOperation) => (
-                <Box key={op.id} sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <HourglassEmptyIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                    <Box>
-                      <Typography variant="body2" fontWeight="bold">{formatOperationType(op.type)}</Typography>
-                      <Typography variant="caption" color="text.secondary">Waiting to start…</Typography>
-                    </Box>
-                  </Box>
-                  <Tooltip title="Cancel">
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleCancel(op.id)}
-                      disabled={cancelling.has(op.id)}
-                      sx={{ p: 0.25 }}
+              <SectionHeader
+                label="Running"
+                count={running.length}
+                open={collapse.running}
+                onToggle={() => toggleSection('running')}
+              />
+              <Collapse in={collapse.running} unmountOnExit>
+                {running.map((op: ActiveOperation) => {
+                  const progressPct =
+                    op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
+                  const eta = formatETA(op);
+                  const elapsed = formatElapsed(op);
+                  const details = parseMessageDetails(op.message);
+
+                  return (
+                    <Box
+                      key={op.id}
+                      sx={{
+                        px: 2,
+                        py: 1.5,
+                        '&:not(:last-child)': {
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                        },
+                      }}
                     >
-                      {cancelling.has(op.id) ? <CircularProgress size={14} /> : <CancelIcon sx={{ fontSize: 18 }} />}
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              ))}
-              {running.length > 0 && (
-                <Box sx={{ px: 2, pt: 1, pb: 0.25 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: '0.65rem', letterSpacing: '0.08em' }}>
-                    Running ({running.length})
-                  </Typography>
-                </Box>
-              )}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          mb: 0.5,
+                        }}
+                      >
+                        <Typography variant="body2" fontWeight="bold">
+                          {formatOperationType(op.type)}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {elapsed && (
+                            <Typography variant="caption" color="text.secondary">
+                              {elapsed}
+                            </Typography>
+                          )}
+                          <Tooltip title="View activity">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActivityOpId(op.id);
+                              }}
+                              sx={{ p: 0.25 }}
+                            >
+                              <ArticleIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Cancel">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleCancel(op.id)}
+                              disabled={cancelling.has(op.id)}
+                              sx={{ p: 0.25 }}
+                            >
+                              {cancelling.has(op.id) ? (
+                                <CircularProgress size={14} />
+                              ) : (
+                                <CancelIcon sx={{ fontSize: 18 }} />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </Box>
+
+                      {op.total > 0 ? (
+                        <LinearProgress
+                          variant="determinate"
+                          value={progressPct}
+                          sx={{ height: 6, borderRadius: 1, mb: 0.5 }}
+                        />
+                      ) : (
+                        <LinearProgress sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
+                      )}
+
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          mb: 0.25,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontFamily: 'monospace' }}
+                        >
+                          {op.total > 0 ? (
+                            <>
+                              {op.progress.toLocaleString()} / {op.total.toLocaleString()}
+                              {' '}({progressPct}%)
+                            </>
+                          ) : (
+                            'Starting...'
+                          )}
+                        </Typography>
+                        {eta && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            fontStyle="italic"
+                          >
+                            {eta}
+                          </Typography>
+                        )}
+                      </Box>
+
+                      {details.imported !== null && (
+                        <Typography variant="caption" sx={{ display: 'block', mb: 0.25 }}>
+                          <Box component="span" sx={{ color: 'success.main' }}>
+                            {details.imported} imported
+                          </Box>
+                          {details.skipped! > 0 && (
+                            <Box component="span" sx={{ color: 'text.secondary', ml: 1 }}>
+                              {details.skipped} skipped
+                            </Box>
+                          )}
+                          {details.failed! > 0 && (
+                            <Box component="span" sx={{ color: 'error.main', ml: 1 }}>
+                              {details.failed} failed
+                            </Box>
+                          )}
+                        </Typography>
+                      )}
+
+                      {details.olType && (
+                        <Typography
+                          variant="caption"
+                          color="info.main"
+                          sx={{ display: 'block', mb: 0.25 }}
+                        >
+                          {details.olType}: {details.olRecords} records
+                        </Typography>
+                      )}
+
+                      {details.currentTitle && (
+                        <Typography
+                          variant="caption"
+                          color="primary.main"
+                          display="block"
+                          noWrap
+                          title={details.currentTitle}
+                        >
+                          {details.currentTitle}
+                        </Typography>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Collapse>
             </>
           )}
 
-          {/* Active (running) operations */}
-          {running.map((op: ActiveOperation) => {
-            const progressPct =
-              op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
-            const eta = formatETA(op);
-            const elapsed = formatElapsed(op);
-            const details = parseMessageDetails(op.message);
-
-            return (
-              <Box key={op.id} sx={{ px: 2, py: 1.5, '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' } }}>
-                {/* Row 1: Type + Cancel */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                  <Typography variant="body2" fontWeight="bold">
-                    {formatOperationType(op.type)}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    {elapsed && (
-                      <Typography variant="caption" color="text.secondary">
-                        {elapsed}
-                      </Typography>
-                    )}
-                    <Tooltip title="View activity">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActivityOpId(op.id);
-                        }}
-                        sx={{ p: 0.25 }}
-                      >
-                        <ArticleIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                    </Tooltip>
+          {/* ===== PENDING ===== */}
+          {queued.length > 0 && (
+            <>
+              <SectionHeader
+                label="Pending"
+                count={queued.length}
+                open={collapse.pending}
+                onToggle={() => toggleSection('pending')}
+              />
+              <Collapse in={collapse.pending} unmountOnExit>
+                {queued.map((op: ActiveOperation) => (
+                  <Box
+                    key={op.id}
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      '&:not(:last-child)': {
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <HourglassEmptyIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                      <Box>
+                        <Typography variant="body2" fontWeight="bold">
+                          {formatOperationType(op.type)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Waiting to start…
+                        </Typography>
+                      </Box>
+                    </Box>
                     <Tooltip title="Cancel">
                       <IconButton
                         size="small"
@@ -314,176 +524,133 @@ export function OperationsIndicator() {
                       </IconButton>
                     </Tooltip>
                   </Box>
-                </Box>
-
-                {/* Row 2: Progress bar */}
-                {op.total > 0 ? (
-                  <LinearProgress
-                    variant="determinate"
-                    value={progressPct}
-                    sx={{ height: 6, borderRadius: 1, mb: 0.5 }}
-                  />
-                ) : (
-                  <LinearProgress sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
-                )}
-
-                {/* Row 3: Numbers */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.25 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-                    {op.total > 0 ? (
-                      <>
-                        {op.progress.toLocaleString()} / {op.total.toLocaleString()}
-                        {' '}({progressPct}%)
-                      </>
-                    ) : (
-                      'Starting...'
-                    )}
-                  </Typography>
-                  {eta && (
-                    <Typography variant="caption" color="text.secondary" fontStyle="italic">
-                      {eta}
-                    </Typography>
-                  )}
-                </Box>
-
-                {/* Row 4: Import stats (if available) */}
-                {details.imported !== null && (
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.25 }}>
-                    <Box component="span" sx={{ color: 'success.main' }}>{details.imported} imported</Box>
-                    {details.skipped! > 0 && (
-                      <Box component="span" sx={{ color: 'text.secondary', ml: 1 }}>{details.skipped} skipped</Box>
-                    )}
-                    {details.failed! > 0 && (
-                      <Box component="span" sx={{ color: 'error.main', ml: 1 }}>{details.failed} failed</Box>
-                    )}
-                  </Typography>
-                )}
-
-                {/* Row 4 alt: OL import stats */}
-                {details.olType && (
-                  <Typography variant="caption" color="info.main" sx={{ display: 'block', mb: 0.25 }}>
-                    {details.olType}: {details.olRecords} records
-                  </Typography>
-                )}
-
-                {/* Row 5: Current item */}
-                {details.currentTitle && (
-                  <Typography
-                    variant="caption"
-                    color="primary.main"
-                    display="block"
-                    noWrap
-                    title={details.currentTitle}
-                  >
-                    {details.currentTitle}
-                  </Typography>
-                )}
-              </Box>
-            );
-          })}
-
-          {/* Recent completed operations — read from v2 store (terminal ops).
-              V1 getRecentCompletedOperations() is no longer called (UOS-13). */}
-          {terminal.length === 0 && inProgress.length === 0 && (
-            <>
-              <Divider />
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ px: 2, py: 1.5, textAlign: 'center', fontSize: '0.8rem' }}
-              >
-                No recent operations
-              </Typography>
+                ))}
+              </Collapse>
             </>
           )}
 
-          {terminal.map((op: ActiveOperation) => (
-            <Box
-              key={`recent-${op.id}`}
-              onClick={() => {
-                setActivityOpId(op.id);
-              }}
-              sx={{
-                px: 2,
-                py: 1,
-                cursor: 'pointer',
-                '&:hover': { bgcolor: 'action.hover' },
-                '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' },
-              }}
-            >
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                <Typography variant="caption" fontWeight="bold" noWrap sx={{ flex: 1 }}>
-                  {formatOperationType(op.type)}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
-                  <Chip
-                    label={op.status}
-                    size="small"
-                    color={op.status === 'completed' ? 'success' : op.status === 'failed' ? 'error' : 'default'}
-                    sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.75 } }}
-                  />
-                </Box>
-              </Box>
-              {op.message && (
-                <Typography variant="caption" color="text.secondary" display="block" noWrap title={op.message}>
-                  {op.message}
-                </Typography>
-              )}
-              {op.current_item && op.status === 'running' && (
-                <Tooltip title={op.current_item} placement="bottom-start">
-                  <Typography variant="caption" color="text.disabled" display="block" noWrap
-                    sx={{ fontStyle: 'italic', fontSize: '0.68rem' }}>
-                    {op.current_item}
-                  </Typography>
-                </Tooltip>
-              )}
-              {op.type === 'metadata_candidate_fetch' && op.status === 'completed' && (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  sx={{ mt: 0.5, textTransform: 'none', fontSize: '0.7rem', py: 0, minHeight: 22 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    setAnchorEl(null);
-                    window.location.href = `/library?reviewOp=${op.id}`;
-                  }}
-                >
-                  Review Results
-                </Button>
-              )}
-              {(op.type === 'organize' || op.type === 'scan_and_organize') && op.status === 'completed' && (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="warning"
-                  sx={{ mt: 0.5, textTransform: 'none', fontSize: '0.7rem', py: 0, minHeight: 22 }}
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    try {
-                      const preflight = await getUndoPreflight(op.id);
-                      const conflicts = (preflight.content_changed?.length || 0) +
-                        (preflight.book_deleted?.length || 0) +
-                        (preflight.re_organized?.length || 0);
-                      const msg = conflicts > 0
-                        ? `${preflight.safe} changes can be undone. ${conflicts} conflict(s) detected. Proceed?`
-                        : `Undo ${preflight.safe} change(s) from this operation?`;
-                      if (confirm(msg)) {
-                        await revertOp(op.id);
-                        alert('Operation reverted successfully');
-                      }
-                    } catch (err: unknown) {
-                      const msg = (err as { message?: string })?.message || 'Undo failed';
-                      alert(msg);
-                    }
-                  }}
-                >
-                  Undo
-                </Button>
-              )}
-            </Box>
-          ))}
+          {/* ===== COMPLETED ===== */}
+          {terminal.length > 0 && (
+            <>
+              <SectionHeader
+                label="Completed"
+                count={terminal.length}
+                open={collapse.completed}
+                onToggle={() => toggleSection('completed')}
+              />
+              <Collapse in={collapse.completed} unmountOnExit>
+                {terminal.map((op: ActiveOperation) => {
+                  const statusLabel =
+                    op.status === 'completed' ? 'success' : op.status;
+                  const statusColor =
+                    op.status === 'completed'
+                      ? ('success' as const)
+                      : op.status === 'failed'
+                        ? ('error' as const)
+                        : ('default' as const);
+                  return (
+                    <Box
+                      key={`recent-${op.id}`}
+                      onClick={() => setActivityOpId(op.id)}
+                      sx={{
+                        px: 2,
+                        py: 0.75,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 1,
+                        '&:hover': { bgcolor: 'action.hover' },
+                        '&:not(:last-child)': {
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                        },
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        fontWeight="bold"
+                        noWrap
+                        sx={{ flex: 1 }}
+                      >
+                        {formatOperationType(op.type)}
+                      </Typography>
+                      <Chip
+                        label={statusLabel}
+                        size="small"
+                        color={statusColor}
+                        sx={{
+                          height: 18,
+                          fontSize: '0.65rem',
+                          '& .MuiChip-label': { px: 0.75 },
+                        }}
+                      />
+                      {op.type === 'metadata_candidate_fetch' &&
+                        op.status === 'completed' && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              textTransform: 'none',
+                              fontSize: '0.65rem',
+                              py: 0,
+                              minHeight: 20,
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setAnchorEl(null);
+                              window.location.href = `/library?reviewOp=${op.id}`;
+                            }}
+                          >
+                            Review
+                          </Button>
+                        )}
+                      {(op.type === 'organize' || op.type === 'scan_and_organize') &&
+                        op.status === 'completed' && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            sx={{
+                              textTransform: 'none',
+                              fontSize: '0.65rem',
+                              py: 0,
+                              minHeight: 20,
+                            }}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              try {
+                                const preflight = await getUndoPreflight(op.id);
+                                const conflicts =
+                                  (preflight.content_changed?.length || 0) +
+                                  (preflight.book_deleted?.length || 0) +
+                                  (preflight.re_organized?.length || 0);
+                                const msg =
+                                  conflicts > 0
+                                    ? `${preflight.safe} changes can be undone. ${conflicts} conflict(s) detected. Proceed?`
+                                    : `Undo ${preflight.safe} change(s) from this operation?`;
+                                if (confirm(msg)) {
+                                  await revertOp(op.id);
+                                  alert('Operation reverted successfully');
+                                }
+                              } catch (err: unknown) {
+                                const msg =
+                                  (err as { message?: string })?.message || 'Undo failed';
+                                alert(msg);
+                              }
+                            }}
+                          >
+                            Undo
+                          </Button>
+                        )}
+                    </Box>
+                  );
+                })}
+              </Collapse>
+            </>
+          )}
         </Box>
       </Popover>
 

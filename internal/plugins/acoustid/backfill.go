@@ -1,7 +1,7 @@
 // file: internal/plugins/acoustid/backfill.go
-// version: 1.0.1
+// version: 1.1.0
 // guid: f6a7b8c9-d0e1-2345-def0-123456789abc
-// last-edited: 2026-05-06
+// last-edited: 2026-05-30
 
 package acoustid
 
@@ -76,7 +76,9 @@ func (p *Plugin) runBackfill(ctx context.Context, params json.RawMessage, report
 		}
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Loading books for fingerprint backfill...")
+	// Start with N=0 until we've loaded books and know the real total.
+	prog := sdk.NewProgress(reporter, 0)
+	prog.Start("Loading books for fingerprint backfill...")
 
 	books, err := p.store.GetAllBooks(100000, 0)
 	if err != nil {
@@ -96,6 +98,17 @@ func (p *Plugin) runBackfill(ctx context.Context, params json.RawMessage, report
 
 	var fingerprinted, skipped, failed int
 	total := len(books)
+
+	// Rebuild with the real N once it's known.
+	prog = sdk.NewProgress(reporter, total)
+	prog.Start(fmt.Sprintf("Backfilling %d books…", total))
+
+	// Nothing to do — still emit Start + Done so the bar never stays at 0/0.
+	if total == 0 || startIdx >= total {
+		prog.Done(fmt.Sprintf("Acoustid backfill complete: fingerprinted=%d skipped=%d failed=%d",
+			fingerprinted, skipped, failed))
+		return nil
+	}
 
 	for i := startIdx; i < total; i++ {
 		select {
@@ -133,8 +146,7 @@ func (p *Plugin) runBackfill(ctx context.Context, params json.RawMessage, report
 		}
 
 		if i%25 == 0 || i == total-1 {
-			pct := 1 + (99 * (i + 1) / total)
-			_ = reporter.UpdateProgress(pct, 100,
+			prog.StepN(i+1,
 				fmt.Sprintf("Books %d/%d (fp=%d skip=%d fail=%d)", i+1, total, fingerprinted, skipped, failed))
 
 			// Checkpoint progress every 25 books for resumability
@@ -147,9 +159,8 @@ func (p *Plugin) runBackfill(ctx context.Context, params json.RawMessage, report
 		}
 	}
 
-	_ = reporter.UpdateProgress(100, 100,
-		fmt.Sprintf("Acoustid backfill complete: fingerprinted=%d skipped=%d failed=%d",
-			fingerprinted, skipped, failed))
+	prog.Done(fmt.Sprintf("Acoustid backfill complete: fingerprinted=%d skipped=%d failed=%d",
+		fingerprinted, skipped, failed))
 	return nil
 }
 

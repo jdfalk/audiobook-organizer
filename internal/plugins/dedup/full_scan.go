@@ -41,32 +41,37 @@ func (p *Plugin) runFullScan(ctx context.Context, _ json.RawMessage, reporter sd
 		return fmt.Errorf("dedup engine not available")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Purging stale candidates...")
+	// Progress is created lazily once FullScan reports its total. Until then
+	// we emit a Start frame on a zero-N progress so the bar isn't 0/0.
+	startProg := sdk.NewProgress(reporter, 0)
+	startProg.Start("Purging stale candidates...")
 	if deleted, err := p.engine.PurgeStaleCandidates(ctx); err != nil {
 		reporter.Logger().Error("purge stale candidates error", "error", err)
 	} else if deleted > 0 {
 		reporter.Logger().Info("purged stale candidates before scan", "count", deleted)
 	}
 
-	// FullScan reports progress via a callback (done, total). Translate
-	// that into ProgressReporter updates, reserving 5% at the start for
-	// the purge pass and 5% at the end for the "complete" line so the
-	// bar actually moves all the way to 100.
-	var lastPct int
+	// FullScan reports progress via a callback (done, total). Build the
+	// real Progress on the first callback once we know N.
+	var prog *sdk.Progress
 	fullScanErr := p.engine.FullScan(ctx, func(done, total int) {
 		if total <= 0 {
 			return
 		}
-		pct := 5 + (90 * done / total)
-		if pct == lastPct {
-			return
+		if prog == nil {
+			prog = sdk.NewProgress(reporter, total)
+			prog.Start(fmt.Sprintf("Scanning books: 0 / %d", total))
 		}
-		lastPct = pct
-		_ = reporter.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
+		prog.StepN(done, fmt.Sprintf("Scanning books: %d / %d", done, total))
 	})
 	if fullScanErr != nil {
 		reporter.Logger().Error("FullScan error", "error", fullScanErr)
 		return fmt.Errorf("dedup scan: %w", fullScanErr)
+	}
+
+	if prog == nil {
+		prog = sdk.NewProgress(reporter, 0)
+		prog.Start("Scanning books: 0 / 0")
 	}
 
 	// Fetch final candidate counts for the completion message.
@@ -77,7 +82,7 @@ func (p *Plugin) runFullScan(ctx context.Context, _ json.RawMessage, reporter sd
 			pendingCount = total
 		}
 	}
-	_ = reporter.UpdateProgress(100, 100,
-		fmt.Sprintf("Dedup scan complete — %d pending candidates", pendingCount))
+	prog.Finalize("writing results...")
+	prog.Done(fmt.Sprintf("Dedup scan complete — %d pending candidates", pendingCount))
 	return nil
 }

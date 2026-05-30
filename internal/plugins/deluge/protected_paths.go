@@ -32,7 +32,8 @@ func (p *Plugin) protectedPathsSyncDef() sdk.OperationDef {
 }
 
 func (p *Plugin) runProtectedPathsSync(ctx context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
-	_ = reporter.UpdateProgress(0, 100, "Refreshing protected paths from Deluge...")
+	prog := sdk.NewProgress(reporter, 1)
+	prog.Start("Refreshing protected paths from Deluge...")
 
 	// Force refresh the protected path cache by invalidating it.
 	p.cache.Invalidate()
@@ -40,8 +41,10 @@ func (p *Plugin) runProtectedPathsSync(ctx context.Context, _ json.RawMessage, r
 	// Trigger the lazy refresh by calling IsProtected with a dummy path.
 	// The next IsProtected call will trigger a fresh fetch from Deluge.
 	p.cache.IsProtected("")
+	prog.Step("Cache refreshed")
 
-	_ = reporter.UpdateProgress(100, 100, "Protected paths refreshed")
+	prog.Finalize("Writing results...")
+	prog.Done("Protected paths refreshed")
 	return nil
 }
 

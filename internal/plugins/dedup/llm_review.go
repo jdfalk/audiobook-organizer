@@ -37,11 +37,13 @@ func (p *Plugin) runLLMReview(ctx context.Context, _ json.RawMessage, reporter s
 		return fmt.Errorf("dedup engine not available")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Starting LLM review of ambiguous candidates...")
+	prog := sdk.NewProgress(reporter, 0)
+	prog.Start("Starting LLM review of ambiguous candidates...")
 	if err := p.engine.RunLLMReview(ctx); err != nil {
 		reporter.Logger().Error("LLM review error", "error", err)
 		return fmt.Errorf("LLM review: %w", err)
 	}
-	_ = reporter.UpdateProgress(100, 100, "LLM review complete")
+	prog.Finalize("writing results...")
+	prog.Done("LLM review complete")
 	return nil
 }

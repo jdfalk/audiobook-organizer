@@ -164,7 +164,18 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 		log = logger.New("reconcile")
 	}
 	report := func(current, total int, msg string) {
-		log.UpdateProgress(current, total, msg)
+		if total <= 0 {
+			log.UpdateProgress(current, total, msg)
+			return
+		}
+		pct := float64(current) * 100.0 / float64(total)
+		var pctStr string
+		if total >= 100 {
+			pctStr = fmt.Sprintf("%.2f%%", pct)
+		} else {
+			pctStr = fmt.Sprintf("%.0f%%", pct)
+		}
+		log.UpdateProgress(current, total, fmt.Sprintf("%s (%s)", msg, pctStr))
 	}
 	logMsg := func(level, msg string) {
 		switch level {
@@ -187,7 +198,7 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 	}
 
 	// Step 1: Find broken DB records
-	report(0, 100, "Loading all books from database...")
+	report(0, 1, "Loading all books from database...")
 	books, err := store.GetAllBooks(100000, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list books: %w", err)
@@ -198,7 +209,12 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 	knownPaths := make(map[string]bool, len(books))
 	var brokenBooks []database.Book
 
-	report(5, 100, fmt.Sprintf("Checking file paths for %d books...", len(books)))
+	totalBooks := len(books)
+	if totalBooks == 0 {
+		report(1, 1, "No books in database — nothing to reconcile")
+		return result, nil
+	}
+	report(0, totalBooks, fmt.Sprintf("Checking file paths for %d books...", totalBooks))
 	for i, book := range books {
 		if book.FilePath == "" {
 			continue
@@ -214,20 +230,20 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 			})
 		}
 		if i%1000 == 0 && i > 0 {
-			pct := 5 + (i*15)/len(books)
-			report(pct, 100, fmt.Sprintf("Checked %d / %d book paths (%d broken so far)...", i, len(books), len(brokenBooks)))
+			report(i, totalBooks, fmt.Sprintf("Checked %d/%d book paths (%d broken so far)", i, totalBooks, len(brokenBooks)))
 		}
 	}
+	report(totalBooks, totalBooks, fmt.Sprintf("Checked %d/%d book paths (%d broken)", totalBooks, totalBooks, len(brokenBooks)))
 
 	logMsg("info", fmt.Sprintf("Found %d broken records out of %d books", len(brokenBooks), len(books)))
 
 	if len(brokenBooks) == 0 {
-		report(100, 100, fmt.Sprintf("All %d books have valid file paths", len(books)))
+		report(1, 1, fmt.Sprintf("All %d books have valid file paths", len(books)))
 		return result, nil
 	}
 
 	// Step 2: Scan directories for untracked audio files
-	report(20, 100, "Scanning directories for untracked audio files...")
+	report(0, 1, "Scanning directories for untracked audio files...")
 	logMsg("info", "Scanning library, import paths, and iTunes directories for untracked files")
 	untrackedFiles, err := FindUntrackedFiles(store, knownPaths)
 	if err != nil {
@@ -238,12 +254,13 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 
 	if len(untrackedFiles) == 0 {
 		result.UnmatchedBooks = result.BrokenRecords
-		report(100, 100, fmt.Sprintf("No untracked files found. %d broken records remain unmatched.", len(brokenBooks)))
+		report(1, 1, fmt.Sprintf("No untracked files found. %d broken records remain unmatched.", len(brokenBooks)))
 		return result, nil
 	}
 
 	// Step 3: Hash untracked files for matching
-	report(40, 100, fmt.Sprintf("Hashing %d untracked files...", len(untrackedFiles)))
+	totalUntracked := len(untrackedFiles)
+	report(0, totalUntracked, fmt.Sprintf("Hashing %d untracked files...", totalUntracked))
 	hashIndex := make(map[string]string)
 	for i, fp := range untrackedFiles {
 		h, err := scanner.ComputeSegmentFileHash(fp)
@@ -252,17 +269,18 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 		}
 		hashIndex[h] = fp
 		if i%100 == 0 && i > 0 {
-			pct := 40 + (i*20)/len(untrackedFiles)
-			report(pct, 100, fmt.Sprintf("Hashed %d / %d untracked files...", i, len(untrackedFiles)))
+			report(i, totalUntracked, fmt.Sprintf("Hashed %d/%d untracked files", i, totalUntracked))
 		}
 	}
+	report(totalUntracked, totalUntracked, fmt.Sprintf("Hashed %d/%d untracked files", totalUntracked, totalUntracked))
 	logMsg("info", fmt.Sprintf("Computed hashes for %d untracked files", len(hashIndex)))
 
 	matchedBooks := make(map[string]bool)
 	matchedFiles := make(map[string]bool)
 
 	// Step 3a: Match by file hash
-	report(60, 100, "Matching by file hash...")
+	totalBroken := len(brokenBooks)
+	report(0, totalBroken, fmt.Sprintf("Matching %d broken records by file hash...", totalBroken))
 	for _, book := range brokenBooks {
 		if book.FileHash != nil && *book.FileHash != "" {
 			if fp, ok := hashIndex[*book.FileHash]; ok && !matchedFiles[fp] {
@@ -305,7 +323,7 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 	logMsg("info", fmt.Sprintf("Hash matching found %d matches", len(result.Matches)))
 
 	// Step 4: Match by filename pattern
-	report(75, 100, "Matching by filename patterns...")
+	report(0, totalBroken, fmt.Sprintf("Matching %d broken records by filename patterns...", totalBroken))
 	filenameIndex := make(map[string][]string)
 	for _, fp := range untrackedFiles {
 		if matchedFiles[fp] {
@@ -341,7 +359,7 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 	}
 
 	// Step 4b: Try matching by title contained in filename
-	report(85, 100, "Matching by title in filename...")
+	report(0, totalBroken, fmt.Sprintf("Matching %d broken records by title in filename...", totalBroken))
 	for _, book := range brokenBooks {
 		if matchedBooks[book.ID] {
 			continue
@@ -392,7 +410,7 @@ func BuildReconcilePreviewWithProgress(store Store, log logger.Logger) (*Reconci
 		len(result.UnmatchedBooks),
 		len(brokenBooks))
 	logMsg("info", summary)
-	report(100, 100, summary)
+	report(totalBroken, totalBroken, summary)
 
 	return result, nil
 }
@@ -491,12 +509,30 @@ func ExecuteReconcile(ctx context.Context, store Store, operationID string, matc
 	}
 
 	total := len(matches)
+	fmtPct := func(cur, tot int) string {
+		if tot <= 0 {
+			return "0%"
+		}
+		pct := float64(cur) * 100.0 / float64(tot)
+		if tot >= 100 {
+			return fmt.Sprintf("%.2f%%", pct)
+		}
+		return fmt.Sprintf("%.0f%%", pct)
+	}
+	if total == 0 {
+		log.UpdateProgress(0, 1, "Reconciliation starting: 0 matches to apply")
+		log.UpdateProgress(1, 1, "Reconciliation complete: 0 applied, 0 skipped (100%)")
+		resultJSON, _ := json.Marshal(result)
+		_ = store.UpdateOperationResultData(operationID, string(resultJSON))
+		return nil
+	}
+	log.UpdateProgress(0, total, fmt.Sprintf("Reconciliation starting: 0/%d (0%%)", total))
 	for i, m := range matches {
 		if log.IsCanceled() {
 			break
 		}
 
-		log.UpdateProgress(i+1, total, fmt.Sprintf("Updating %s", m.BookID))
+		log.UpdateProgress(i+1, total, fmt.Sprintf("Updating %d/%d (%s) %s", i+1, total, fmtPct(i+1, total), m.BookID))
 
 		book, err := store.GetBookByID(m.BookID)
 		if err != nil || book == nil {
@@ -545,7 +581,7 @@ func ExecuteReconcile(ctx context.Context, store Store, operationID string, matc
 	// Store result data on the operation
 	resultJSON, _ := json.Marshal(result)
 	_ = store.UpdateOperationResultData(operationID, string(resultJSON))
-	log.UpdateProgress(total, total, fmt.Sprintf("Reconciliation complete: %d applied, %d skipped", result.Applied, result.Skipped))
+	log.UpdateProgress(total, total, fmt.Sprintf("Reconciliation complete: %d/%d processed (%s) — %d applied, %d skipped", total, total, fmtPct(total, total), result.Applied, result.Skipped))
 
 	if len(result.Errors) > 0 {
 		for _, e := range result.Errors {

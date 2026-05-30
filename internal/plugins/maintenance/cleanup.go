@@ -41,12 +41,13 @@ func (p *Plugin) purgeDeletedDef() sdk.OperationDef {
 
 func (p *Plugin) runPurgeDeleted(ctx context.Context, _ json.RawMessage, reporter sdk.Reporter) error {
 	_ = reporter.Log(slog.LevelInfo, "Starting purge of soft-deleted books")
-	_ = reporter.UpdateProgress(0, 100, "Purging soft-deleted books...")
+	prog := sdk.NewProgress(reporter, 0)
+	prog.Start("Purging soft-deleted books...")
 	opID := ctxOpID(ctx)
 	p.deps.RunAutoPurgeSoftDeleted(opID)
 	p.deps.ActivityFlushOp(opID)
 	_ = reporter.Log(slog.LevelInfo, "Purge complete")
-	_ = reporter.UpdateProgress(100, 100, "Purge complete")
+	prog.Done("Purge complete")
 	return nil
 }
 
@@ -77,14 +78,15 @@ func (p *Plugin) runTombstoneCleanup(_ context.Context, _ json.RawMessage, repor
 		return fmt.Errorf("database not initialized")
 	}
 	_ = reporter.Log(slog.LevelInfo, "Starting author tombstone chain resolution")
-	_ = reporter.UpdateProgress(0, 100, "Resolving tombstone chains...")
+	prog := sdk.NewProgress(reporter, 0)
+	prog.Start("Resolving tombstone chains...")
 	updated, err := store.ResolveTombstoneChains()
 	if err != nil {
 		return fmt.Errorf("tombstone chain resolution failed: %w", err)
 	}
 	resultMsg := fmt.Sprintf("Resolved %d tombstone chains", updated)
 	_ = reporter.Log(slog.LevelInfo, resultMsg)
-	_ = reporter.UpdateProgress(100, 100, resultMsg)
+	prog.Done(resultMsg)
 	return nil
 }
 
