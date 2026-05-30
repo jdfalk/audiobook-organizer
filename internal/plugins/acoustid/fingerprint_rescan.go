@@ -87,7 +87,7 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 		return fmt.Errorf("scope must be one of: missing, all, books")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Loading books for fingerprint rescan...")
+	_ = reporter.UpdateProgress(0, 1, "Loading books for fingerprint rescan...")
 
 	books, lerr := loadBooksForRescan(p.store, scope, req.BookIDs)
 	if lerr != nil {
@@ -97,7 +97,7 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 
 	total := len(books)
 	if total == 0 {
-		_ = reporter.UpdateProgress(100, 100, "No books matched the requested scope")
+		_ = reporter.UpdateProgress(1, 1, "No books matched the requested scope")
 		return nil
 	}
 
@@ -142,14 +142,13 @@ func (p *Plugin) runFingerprintRescan(ctx context.Context, params json.RawMessag
 		}
 
 		if i%25 == 0 || i == total-1 {
-			pct := 1 + (98 * (i + 1) / total)
-			_ = reporter.UpdateProgress(pct, 100,
+			_ = reporter.UpdateProgress(i+1, total,
 				fmt.Sprintf("Books %d/%d (fp=%d skip=%d ineligible=%d fail=%d)",
 					i+1, total, fingerprinted, skipped, ineligible, failed))
 		}
 	}
 
-	_ = reporter.UpdateProgress(100, 100,
+	_ = reporter.UpdateProgress(total, total,
 		fmt.Sprintf("Fingerprint rescan complete in %s — fp=%d skip=%d ineligible=%d fail=%d (of %d books)",
 			time.Since(startedAt).Round(time.Second),
 			fingerprinted, skipped, ineligible, failed, total))
