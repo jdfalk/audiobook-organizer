@@ -4811,6 +4811,16 @@ export async function triggerDedupRefresh(): Promise<Operation> {
   });
 }
 
+// Runs PurgeStaleCandidates synchronously on the backend — wipes pending
+// candidates that are no longer valid (chapter files in the same folder,
+// same version-group books, distinct series volumes). Cheap and fast; no
+// op queued.
+export async function purgeStaleCandidates(): Promise<{ deleted: number }> {
+  const response = await fetch(`${API_BASE}/dedup/purge-stale`, { method: 'POST' });
+  if (!response.ok) throw await buildApiError(response, 'Failed to purge stale candidates');
+  return (await response.json()).data ?? { deleted: 0 };
+}
+
 export async function triggerEmbedScan(): Promise<Operation> {
   return wrapTrigger('dedup.embed', async () => {
     const response = await fetch(`${API_BASE}/dedup/embed`, { method: 'POST' });
