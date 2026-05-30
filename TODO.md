@@ -1,7 +1,7 @@
 <!-- file: TODO.md -->
-<!-- version: 8.55.0 -->
+<!-- version: 8.56.0 -->
 <!-- guid: 8e7d5d79-394f-4c91-9c7c-fc4a3a4e84d2 -->
-<!-- last-edited: 2026-05-29 -->
+<!-- last-edited: 2026-05-30 -->
 
 # Project TODO
 
@@ -25,6 +25,39 @@ future agent) can scan the entire workspace in one page.
 **Production:** PebbleDB primary + ChaiDB SQL (write-through sync active); Linux, HTTPS at `172.16.2.30:8484`
 **Latest activity:** Chai SQL migration (Phases 1–4 complete, Tasks 3.2–3.4 landed); N+1 query elimination; cache warm-up memory fix; authors/series caching
 **In flight:** Chai SQL Phase 5+ (remaining read migrations), SEC-AUDIT-11 (CodeQL bulk dismiss), FE-10 (Vitest coverage thresholds)
+
+---
+
+## 🎯 Whole-file fingerprint migration (started May 30, 2026)
+
+PR `feat/fingerprint-wholefile` (Step 1 + 2) ships:
+- New `BookFile.AcoustIDFingerprint []byte` + duration sec
+- `FileWholeFingerprint(path)` extraction (no seek, no offsets)
+- Middle-80% similarity compare (suppresses Audible intros/outros)
+- `synthesizeBookSignatureForBook` switched to partial-coverage synth
+- Memdb strip of the new fingerprint bytes (RSS protection)
+
+**Post-deploy actions for this PR:**
+- [ ] Run `acoustid.reset-all` on prod (retires AQAAAA-poisoned segs)
+- [ ] Run `fingerprint-rescan` on prod (populates new whole-file fp + clean seg0)
+- [ ] Verify dedup stops showing 14K false-positive 100% matches
+- [ ] Verify book-sig coverage % shows up for partial books
+
+**Follow-up PRs (not in this PR):**
+- [ ] **Step 3 — LSH index for whole-file similarity.** Add
+  `fpidx:<subfp>:<bookfile_id>` secondary index in PebbleStore;
+  replace dedup's full-scan fuzzy match with candidate-set + Hamming
+  refine. Bench target: <100ms per query at 15K files. Includes
+  global subfingerprint-frequency masking to learn shared intros
+  from the data instead of relying on the 10% slice rule.
+- [ ] **Step 4 — Drop legacy seg1..6 fields.** After one release
+  cycle of validation: remove `AcoustIDSeg1..6` from `BookFile`,
+  remove `FileSegments` + offset/ffmpeg-pipe code from
+  `internal/fingerprint/fpcalc.go`, migrate prod data to clear
+  the columns.
+- [ ] **Online AcoustID lookup.** Whole-file fps can now be POSTed
+  to `acoustid.org` for MBID enrichment — wire it up as an
+  optional enrichment step after fingerprinting.
 
 ---
 

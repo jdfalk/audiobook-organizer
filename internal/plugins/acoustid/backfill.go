@@ -183,37 +183,60 @@ var audioExtensions = map[string]bool{
 	".wv":   true,
 }
 
-// fingerprintBookFile generates and persists 7-segment chromaprint segments
-// for a single book_file row. Honours `force` and respects eligibility rules.
-func fingerprintBookFile(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
-	if f.AcoustIDSeg0 != "" && !force {
-		return fingerprintOutcomeSkipped
+// fingerprintEligibility classifies whether a BookFile is a candidate for
+// fingerprinting. Returns the terminal outcome and `true` when the file is
+// not eligible (skipped or ineligible); returns the zero value and `false`
+// when the caller should proceed with fpcalc. Pure function, no I/O except
+// os.Stat for existence check.
+func fingerprintEligibility(f database.BookFile, force bool) (fingerprintFileOutcome, bool) {
+	if (len(f.AcoustIDFingerprint) > 0 || f.AcoustIDSeg0 != "") && !force {
+		return fingerprintOutcomeSkipped, true
 	}
 	if f.FilePath == "" || f.Missing {
-		return fingerprintOutcomeIneligible
+		return fingerprintOutcomeIneligible, true
 	}
 	if _, ok := audioExtensions[strings.ToLower(filepath.Ext(f.FilePath))]; !ok {
-		return fingerprintOutcomeIneligible
+		return fingerprintOutcomeIneligible, true
 	}
 	if _, err := os.Stat(f.FilePath); err != nil {
-		return fingerprintOutcomeIneligible
+		return fingerprintOutcomeIneligible, true
+	}
+	return 0, false
+}
+
+// fingerprintBookFile generates and persists a whole-file chromaprint for a
+// single book_file row. Also populates AcoustIDSeg0 as a transition
+// fallback for code paths still reading the segment field; Seg1..6 are no
+// longer written (the offset-based segment extraction had a seek-past-EOF
+// failure mode and is being retired — see PLAN.md in this branch).
+func fingerprintBookFile(store database.Store, f database.BookFile, force bool) fingerprintFileOutcome {
+	if outcome, stop := fingerprintEligibility(f, force); stop {
+		return outcome
 	}
 
-	segs, err := fingerprint.FileSegments(f.FilePath, f.Duration)
+	wf, err := fingerprint.FileWholeFingerprint(f.FilePath)
 	if err != nil {
 		slog.Warn("fingerprint", "path", f.FilePath, "err", err)
 		return fingerprintOutcomeFailed
 	}
 
 	updated := f
-	// Normalize at write time: canonicalize fingerprints for uniformity
-	updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(segs[0])
-	updated.AcoustIDSeg1 = fingerprint.NormalizeForStorage(segs[1])
-	updated.AcoustIDSeg2 = fingerprint.NormalizeForStorage(segs[2])
-	updated.AcoustIDSeg3 = fingerprint.NormalizeForStorage(segs[3])
-	updated.AcoustIDSeg4 = fingerprint.NormalizeForStorage(segs[4])
-	updated.AcoustIDSeg5 = fingerprint.NormalizeForStorage(segs[5])
-	updated.AcoustIDSeg6 = fingerprint.NormalizeForStorage(segs[6])
+	updated.AcoustIDFingerprint = wf.Raw
+	updated.AcoustIDFingerprintDurationSec = wf.DurationSec
+	// Derive Seg0 from the first SegmentSeconds of the whole-file fp so
+	// callers that still read the segment field get a comparable value
+	// without a second fpcalc invocation.
+	updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(fingerprint.DeriveSeg0(wf.Raw))
+	// Stop writing Seg1..6 — clear them so a force-rescan retires the
+	// poisoned sentinel values that prompted this migration.
+	if force {
+		updated.AcoustIDSeg1 = ""
+		updated.AcoustIDSeg2 = ""
+		updated.AcoustIDSeg3 = ""
+		updated.AcoustIDSeg4 = ""
+		updated.AcoustIDSeg5 = ""
+		updated.AcoustIDSeg6 = ""
+	}
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
 		slog.Warn("fingerprint update", "id", f.ID, "err", err)
 		return fingerprintOutcomeFailed
@@ -221,15 +244,20 @@ func fingerprintBookFile(store database.Store, f database.BookFile, force bool) 
 	return fingerprintOutcomeFingerprinted
 }
 
-// synthesizeBookSignatureForBook generates and persists the unified book signature
-// for a single book from its files' 7-segment chromaprint fingerprints.
+// synthesizeBookSignatureForBook generates and persists the unified book
+// signature for a single book from its files' chromaprint fingerprints.
+//
+// Uses SynthesizePartialBookSignature so books with partial file coverage
+// (some files failed to fingerprint, some still missing whole-file fp) still
+// produce a usable book sig with a coverage mask + percentage. The strict
+// SynthesizeBookSignature was dropping ~71% of books in production because
+// any one failing file caused the whole synthesis to bail.
 func synthesizeBookSignatureForBook(store database.Store, bookID string) error {
 	files, err := store.GetBookFiles(bookID)
 	if err != nil {
 		return fmt.Errorf("get book files: %w", err)
 	}
 
-	// Sort files by sort_order or original_filename
 	var orderedFiles []fingerprint.FileWithSegments
 	for _, f := range files {
 		orderedFiles = append(orderedFiles, fingerprint.FileWithSegments{
@@ -248,13 +276,31 @@ func synthesizeBookSignatureForBook(store database.Store, bookID string) error {
 	}
 	fingerprint.SortFilesByOrder(orderedFiles)
 
-	// Extract just the segments in order
-	var segData []fingerprint.FileSegmentData
-	for _, f := range orderedFiles {
-		segData = append(segData, f.Segments)
+	// Build per-file input including Missing flag + EstimatedLen so
+	// partial synthesis can keep positional alignment.
+	inputs := make([]fingerprint.FileSegmentInput, 0, len(orderedFiles))
+	for i, sf := range orderedFiles {
+		inp := fingerprint.FileSegmentInput{Segments: sf.Segments}
+		// A file is "missing" for synthesis purposes when it has neither
+		// the whole-file fp nor seg0.
+		src := files[0]
+		for _, ff := range files {
+			if ff.OriginalFilename == sf.Filename && ff.TrackNumber == sf.SortOrder {
+				src = ff
+				break
+			}
+		}
+		if len(src.AcoustIDFingerprint) == 0 && sf.Segments.Seg0 == "" {
+			inp.Missing = true
+			inp.EstimatedLen = fingerprint.EstimateSegmentCount(
+				src.Duration, int(src.FileSize), src.BitrateKbps, 0,
+			)
+		}
+		_ = i
+		inputs = append(inputs, inp)
 	}
 
-	sig, segCount, err := fingerprint.SynthesizeBookSignature(segData)
+	sig, mask, coverage, preLen, err := fingerprint.SynthesizePartialBookSignature(inputs)
 	if err != nil {
 		if err == fingerprint.ErrIncompleteFingerprint {
 			return nil
@@ -269,8 +315,10 @@ func synthesizeBookSignatureForBook(store database.Store, bookID string) error {
 	}
 
 	book.BookSigV1 = &sig
-	book.BookSigSegments = &segCount
+	book.BookSigSegments = &preLen
 	book.BookSigBuiltAt = &now
+	book.BookSigV1Mask = &mask
+	book.BookSigCoveragePct = &coverage
 
 	_, err = store.UpdateBook(book.ID, book)
 	if err != nil {

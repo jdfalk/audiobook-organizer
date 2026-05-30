@@ -1,61 +1,115 @@
-# PLAN: G2+G4 Split-Book Backfill Detector + CLI
+<!-- file: PLAN.md
+version: 1.1.0
+guid: fp-wholefile-2026-05-30
+-->
 
-## Goal
+# Whole-File Fingerprint Migration
 
-Detect existing split-book clusters (one Book per chapter) in the production
-DB and provide a one-shot CLI that can dry-run and execute a portable merge.
+**Goal:** Replace the 7-segment per-BookFile fingerprint with a single whole-file chromaprint per BookFile, stored as raw bytes. Add an LSH index later for sub-linear similarity search.
 
-## Files to add
+**Strategy: stop the bleeding first.** Step 1 ships ASAP so any new fingerprint extraction produces a valid whole-file fp. Then run reset + rescan once on prod to fix existing damage. Steps 2–4 follow at normal pace.
 
-- `internal/dedup/split_book_detector.go` (+ test) — pure detector.
-- `internal/dedup/split_book_storage.go` — Pebble JSON store of candidates.
-- `internal/dedup/split_book_merge.go` — portable cluster merge.
-- `internal/plugins/dedup/split_book_scan.go` — OperationDef wrapper.
-- `internal/plugins/dedup/plugin.go` — register the new op.
-- `internal/server/split_book_handlers.go` — list/run/merge handlers.
-- `internal/server/server_lifecycle.go` — route bindings.
-- `tools/cmd/merge-split-books/main.go` — CLI.
+**Branch:** `feat/fingerprint-wholefile`
+**Worktree:** `../audiobook-organizer-fp-wholefile`
 
-## Heuristic
+---
 
-Group by `filepath.Dir(FilePath)` (parent) and `filepath.Dir(filepath.Dir(FilePath))` (grandparent).
+## Why
 
-Qualifies as candidate when:
-- ≥3 books in the group
-- all share same AuthorID (or all nil)
-- all share same SeriesID or all nil
-- extracted integers from filename or parent-dir name form near-sequential run (≥70% coverage of [min..max], no gap >2)
+- **Robust:** `fpcalc path` from offset 0 to EOF has no seek-past-EOF failure mode. Every file that plays gets a fingerprint.
+- **No sentinel pollution:** `AQAAAA` (header-only) came from ffmpeg pipes seeking past lying duration metadata. With whole-file extraction this disappears.
+- **Per-file spec:** "save the AcoustID for every file; multi-part books also get a combined book signature."
+- **Better matching:** full audio fp > 7 × 5-min spot-checks.
+- **Simpler code:** one extraction path, one field.
 
-Grandparent emit only when every child parent-group has size 1.
-A book is assigned to at most one candidate (parent wins).
+---
 
-## Storage
+## Storage Budget
 
-Pebble keyspace `split_book_candidate:<ulid>` → JSON. List by prefix scan.
-Each entry: ID, ParentFolder, BookIDs, SuggestedTitle, SuggestedAuthor,
-SequentialPattern, CreatedAt.
+| Metric | Value |
+|---|---|
+| Per-file raw bytes (avg 2hr file) | ~230 KB |
+| Per-file raw bytes (10hr single-file book) | ~1.15 MB |
+| Reachable files in lib | ~10–15K |
+| Projected fingerprint total | **2–6 GB** raw |
 
-## Merge (portable; works on Pebble)
+Stays in main PebbleDB under `BookFile.AcoustIDFingerprint []byte` field. No separate DB until/unless compaction stalls show up.
 
-For `keepID + srcIDs`:
-1. For each src: GetBookFiles, MoveBookFilesToBook → keepID.
-2. Recompute keep duration as sum of all bookfile durations.
-3. Update keep title to SuggestedTitle.
-4. SoftDelete each src via merge.SoftDeleteBook.
+---
 
-Avoids SQLite-only MergeChapterBooks and avoids merge.MergeBooks (which deletes losers + their files).
+## Step 1 — Schema + Whole-File Extraction (SHIP FIRST)
 
-## CLI
+**Goal:** Stop new fingerprints from being bad. Land + deploy under flag.
 
-`tools/cmd/merge-split-books` — mirror reconcile-paths structure.
-Flags: `--api`, `--key`, `--dry-run` (default true), `--execute`,
-`--min-group-size 3`, `--limit 0`.
+### Files to add
+- `internal/fingerprint/wholefile.go`
+  - `FileWholeFingerprint(path string) (raw []byte, duration float64, err error)`
+  - Runs `fpcalc -raw path` — raw uint32 stream, no base64 wrap, no `-length` cap, no offset.
+  - Parses `DURATION=...` and `FINGERPRINT=...` from fpcalc output.
+  - Returns `[]byte` of length `4 × frame_count`.
+  - Validates: frame count ≥ `MinUsefulFingerprintFrames` (80).
 
-## Test strategy
+### Files to modify
+- `internal/database/store.go`:
+  - Add `BookFile.AcoustIDFingerprint []byte`
+  - Add `BookFile.AcoustIDFingerprintDurationSec float64`
+  - Keep `AcoustIDSeg0..6 string` for back-compat reads.
+- `internal/plugins/acoustid/backfill.go`:
+  - `fingerprintBookFile` switches to `FileWholeFingerprint` when `WHOLEFILE_FINGERPRINTS=true` (env-gated, default ON in this PR so it actually takes effect).
+  - Writes to new field; still writes seg0 (cheap, useful as fallback during transition).
+  - Stops writing seg1..6 entirely (these were the buggy ones anyway).
+- `internal/dedup/engine.go`:
+  - Tier-1 AcoustID compare prefers `AcoustIDFingerprint` when present, falls back to `AcoustIDSeg0`.
 
-Unit tests for detector (flat case, grandparent case, qualify/disqualify).
-Manual smoke for CLI (documented in PR body).
+### Tests
+- `internal/fingerprint/wholefile_test.go`:
+  - known-good m4b fixture → fingerprint non-empty, duration > 0
+  - tiny mp3 (10 sec) → fingerprint non-empty
+  - corrupt file → returns error, no partial data
+  - lying-duration m4b → still produces full fp (this is the key test)
+- `internal/database/` — round-trip `BookFile.AcoustIDFingerprint` through Pebble.
 
-## Rollback
+### Migration
+- No schema rewrite. New field is `nil` for existing rows.
+- After ship: run `acoustid.reset-all` then `fingerprint-rescan` on prod to fix existing damage.
 
-Pure additive. Revert PR.
+### Verify before merge
+- `make ci` passes
+- New field round-trips through PebbleDB
+- Existing dedup tests still pass with fallback path
+
+---
+
+## Step 2 — Book Signature Partial Coverage (next PR)
+
+Wire `synthesizeBookSignatureForBook` to use `SynthesizePartialBookSignature` so books with partial file coverage still get a sig with a coverage % flag. Surface coverage in UI.
+
+---
+
+## Step 3 — LSH Index (later PR)
+
+Add `fpidx:<subfp>:<bookfile_id>` secondary index for sub-linear similarity search. Replaces full-scan dedup with candidate-set + Hamming refine. Bench target: <100ms query at 15K-file scale.
+
+---
+
+## Step 4 — Cleanup (final PR)
+
+Remove `AcoustIDSeg1..6` fields and `FileSegments`. Keep `AcoustIDSeg0` one more release cycle as fallback.
+
+---
+
+## Rollback (Step 1)
+
+- Feature flag `WHOLEFILE_FINGERPRINTS=false` reverts new-write path; reads still work because seg0 is still populated.
+- New `AcoustIDFingerprint` field is additive — reverting code leaves data in place.
+- `acoustid.reset-all` still works to clear everything.
+
+---
+
+## Status
+
+- [ ] Step 1: Schema + whole-file extraction **(in progress)**
+- [ ] Reset + rescan prod
+- [ ] Step 2: Book sig partial coverage
+- [ ] Step 3: LSH index
+- [ ] Step 4: Cleanup

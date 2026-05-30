@@ -2241,6 +2241,11 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 		}
 
 		for _, f := range files {
+			// Whole-file fingerprint exists on rows written by the
+			// FileWholeFingerprint path (PLAN.md/feat/fingerprint-wholefile).
+			// Tier-1 exact match still keys on Seg0 (derived from the whole-
+			// file fp by DeriveSeg0 so it's free of the AQAAAA sentinels).
+			// Whole-file similarity matching is deferred to Step 3 / LSH.
 			segs := []string{
 				f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2,
 				f.AcoustIDSeg3, f.AcoustIDSeg4, f.AcoustIDSeg5,
