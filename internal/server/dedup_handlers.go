@@ -1132,26 +1132,21 @@ func (s *Server) triggerDedupAcoustID(c *gin.Context) {
 }
 
 // purgeStaleCandidates handles POST /api/v1/dedup/purge-stale.
-// Runs Engine.PurgeStaleCandidates synchronously (fast, no full rescan)
-// to delete pending candidates that are no longer valid: same parent
-// directory (chapter files of one multi-file book), same version group,
-// distinct series volume numbers, etc. Returns the count deleted.
-//
-// Wired to the UI as "Cleanup chapter/split-book candidates" because the
-// dominant case in the wild is thousands of pre-PR-1167 split-books that
-// are flagged as 100% AcoustID matches just because chapter files share
-// fingerprint segments.
+// Enqueues the dedup.purge-stale UOS op so the cleanup shows up in the
+// bell with proper start/end log lines, instead of silently running and
+// returning a count. Engine.PurgeStaleCandidates still does the actual
+// work — see internal/plugins/dedup/purge_stale.go.
 func (s *Server) purgeStaleCandidates(c *gin.Context) {
-	if s.dedupEngine == nil {
-		httputil.RespondWithInternalError(c, "dedup engine not initialized")
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
 		return
 	}
-	deleted, err := s.dedupEngine.PurgeStaleCandidates(c.Request.Context())
+	opID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "dedup.purge-stale", nil)
 	if err != nil {
-		httputil.InternalError(c, "failed to purge stale candidates", err)
+		httputil.InternalError(c, "failed to enqueue dedup purge-stale", err)
 		return
 	}
-	httputil.RespondWithSuccess(c, http.StatusOK, map[string]int{"deleted": deleted})
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
 // triggerEmbedScan handles POST /api/v1/dedup/embed.

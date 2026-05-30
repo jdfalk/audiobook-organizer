@@ -2330,9 +2330,16 @@ function AcousticDedupTab() {
     setPurging(true);
     setStatusMsg(null);
     try {
-      const { deleted } = await api.purgeStaleCandidates();
-      setStatusMsg(`Cleanup complete — ${deleted.toLocaleString()} stale candidate(s) removed.`);
-      await loadCandidates();
+      const { op_id } = await api.purgeStaleCandidates();
+      setStatusMsg(
+        op_id
+          ? `Cleanup queued — see bell for progress (op ${op_id.slice(-6)}).`
+          : 'Cleanup queued — see bell for progress.',
+      );
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        if (!isUnmountedRef.current) loadCandidates();
+      }, 3000);
     } catch (err) {
       setStatusMsg(err instanceof Error ? err.message : 'Cleanup failed');
     } finally {

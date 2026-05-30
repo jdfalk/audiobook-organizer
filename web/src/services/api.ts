@@ -4811,14 +4811,17 @@ export async function triggerDedupRefresh(): Promise<Operation> {
   });
 }
 
-// Runs PurgeStaleCandidates synchronously on the backend — wipes pending
-// candidates that are no longer valid (chapter files in the same folder,
-// same version-group books, distinct series volumes). Cheap and fast; no
-// op queued.
-export async function purgeStaleCandidates(): Promise<{ deleted: number }> {
-  const response = await fetch(`${API_BASE}/dedup/purge-stale`, { method: 'POST' });
-  if (!response.ok) throw await buildApiError(response, 'Failed to purge stale candidates');
-  return (await response.json()).data ?? { deleted: 0 };
+// Enqueues the dedup.purge-stale UOS op so the cleanup appears in the bell
+// just like every other user-triggered backend action. Returns the op id;
+// the actual deleted count lands in the op's final progress message which
+// the bell reads.
+export async function purgeStaleCandidates(): Promise<{ op_id: string }> {
+  return wrapTrigger('dedup.purge-stale', async () => {
+    const response = await fetch(`${API_BASE}/dedup/purge-stale`, { method: 'POST' });
+    if (!response.ok) throw await buildApiError(response, 'Failed to purge stale candidates');
+    const data = (await response.json()).data ?? {};
+    return { op_id: data.op_id ?? '', id: data.op_id ?? '' } as { op_id: string; id: string };
+  });
 }
 
 export async function triggerEmbedScan(): Promise<Operation> {
