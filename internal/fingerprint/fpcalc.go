@@ -50,6 +50,41 @@ const NumSegments = 7
 // while rejecting different recordings of the same title.
 const FuzzyMinSimilarity = 0.80
 
+// MinUsefulFingerprintFrames is the minimum number of decoded chromaprint
+// frames (≈8 frames/sec) we accept before treating a fingerprint as real.
+// fpcalc emits a header-only "AQAAAA" string when it's handed too little PCM
+// to produce a hash (e.g. ffmpeg seeks past EOF because the container's
+// reported duration is wrong). Storing those sentinels makes every other
+// book with the same sentinel index-match at similarity 1.0. 80 frames ≈
+// 10 seconds of real audio — well above any sentinel, well below any real
+// 5-minute segment.
+const MinUsefulFingerprintFrames = 80
+
+// IsUsefulFingerprint reports whether fp decodes to at least
+// MinUsefulFingerprintFrames real chromaprint frames. Empty / sentinel /
+// truncated values return false.
+func IsUsefulFingerprint(fp string) bool {
+	if fp == "" {
+		return false
+	}
+	ints, err := decodeAnyFingerprint(fp)
+	if err != nil {
+		return false
+	}
+	return len(ints) >= MinUsefulFingerprintFrames
+}
+
+// NormalizeForStorage canonicalizes fp for storage and drops degenerate
+// outputs that would otherwise poison the AcoustID index. Use this at all
+// write sites instead of plain NormalizeFingerprint.
+func NormalizeForStorage(fp string) string {
+	canonical := NormalizeFingerprint(fp)
+	if !IsUsefulFingerprint(canonical) {
+		return ""
+	}
+	return canonical
+}
+
 // Segments holds the 7 acoustic fingerprint strings for one audio file.
 // [0]=intro, [1–5]=body at evenly-spaced offsets, [6]=outro.
 // Unused segments are empty strings (e.g., when the file is too short).

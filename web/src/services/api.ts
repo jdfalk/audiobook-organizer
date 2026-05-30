@@ -4832,6 +4832,23 @@ export async function triggerEmbedScan(): Promise<Operation> {
   });
 }
 
+// Enqueues acoustid.reset-all followed by a forced acoustid.fingerprint-rescan.
+// Both ops share the "acoustid.fingerprint" concurrency key so the rescan
+// queues behind the reset and runs sequentially.
+export async function resetAcoustIDFingerprints(): Promise<{ reset_op_id: string; rescan_op_id: string }> {
+  return wrapTrigger('acoustid.reset-all', async () => {
+    const response = await fetch(`${API_BASE}/dedup/reset-acoustid`, { method: 'POST' });
+    if (!response.ok) throw await buildApiError(response, 'Failed to reset AcoustID fingerprints');
+    const data = (await response.json()).data ?? {};
+    return {
+      reset_op_id: data.reset_op_id ?? data.op_id ?? '',
+      rescan_op_id: data.rescan_op_id ?? '',
+      op_id: data.reset_op_id ?? data.op_id ?? '',
+      id: data.reset_op_id ?? data.op_id ?? '',
+    } as { reset_op_id: string; rescan_op_id: string; op_id: string; id: string };
+  });
+}
+
 // ── API Key management ────────────────────────────────────────────────────────
 
 export interface APIKey {

@@ -1096,7 +1096,7 @@ function EmbeddingDedupTab() {
       <Box sx={{ minWidth: 0, position: 'relative' }}>
         <Box
           sx={{ cursor: 'pointer', minWidth: 0, '&:hover .dedup-side-title': { textDecoration: 'underline' } }}
-          onClick={() => navigate(`/books/${book.id}`)}
+          onClick={() => navigate(`/library/${book.id}`)}
         >
           <Typography
             className="dedup-side-title"
@@ -1845,7 +1845,7 @@ export function AcousticBookMetadata({ book, filePath }: { book: Book; filePath?
         variant="body2"
         fontWeight={600}
         sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-        onClick={() => navigate(`/books/${book.id}`)}
+        onClick={() => navigate(`/library/${book.id}`)}
         noWrap
       >
         {book.title || <em style={{ opacity: 0.5 }}>Untitled</em>}
@@ -2347,6 +2347,29 @@ function AcousticDedupTab() {
     }
   };
 
+  // Nuke every stored AcoustID fingerprint + drop acoustid candidates + force
+  // a full rescan. Use when prior fingerprints are suspected bad (e.g. the
+  // "AQAAAA" sentinel pollution that made every book a 100% match against
+  // one anchor). Heavy: 5–10 minute clear, then a multi-hour rescan.
+  const [resetting, setResetting] = useState(false);
+  const handleResetAcoustID = async () => {
+    if (!window.confirm(
+      'This clears EVERY stored AcoustID fingerprint and re-enqueues a full library rescan (multi-hour). Continue?',
+    )) return;
+    setResetting(true);
+    setStatusMsg(null);
+    try {
+      const { reset_op_id, rescan_op_id } = await api.resetAcoustIDFingerprints();
+      setStatusMsg(
+        `Reset queued (op ${reset_op_id.slice(-6)}); rescan will follow (op ${rescan_op_id.slice(-6) || 'pending'}). Watch the bell.`,
+      );
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   // Bulk dismiss N candidates in parallel (capped concurrency to be polite to
   // the backend). Refreshes the list once at the end instead of per-call so
   // the UI doesn't thrash. Selecting nothing is a no-op.
@@ -2423,7 +2446,7 @@ function AcousticDedupTab() {
           // the user wants to keep their place in the candidate list.
           <Link
             component={RouterLink}
-            to={`/books/${id}`}
+            to={`/library/${id}`}
             underline="hover"
             sx={{
               color: 'primary.main',
@@ -2481,6 +2504,12 @@ function AcousticDedupTab() {
         <Tooltip title="Delete pending candidates that are no longer valid duplicates: chapter files of one multi-file book, same-version-group books, distinct series volumes. Fast — no rescan.">
           <Button variant="outlined" color="warning" onClick={handlePurgeStale} disabled={purging}>
             {purging ? 'Cleaning…' : 'Cleanup Stale (same-folder, etc)'}
+          </Button>
+        </Tooltip>
+
+        <Tooltip title="Nuke every stored AcoustID fingerprint and force a full rescan. Use when stored fingerprints are suspected bad (e.g. every book matching one anchor at 100%). Multi-hour.">
+          <Button variant="outlined" color="error" onClick={handleResetAcoustID} disabled={resetting}>
+            {resetting ? 'Queuing…' : 'Reset & Rescan All AcoustID'}
           </Button>
         </Tooltip>
 

@@ -1131,6 +1131,42 @@ func (s *Server) triggerDedupAcoustID(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
+// resetAcoustIDFingerprints handles POST /api/v1/dedup/reset-acoustid.
+// Enqueues acoustid.reset-all (clears every stored fingerprint + drops
+// acoustid-layer dedup candidates) immediately followed by a forced
+// fingerprint rescan over the whole library. Both ops share the
+// "acoustid.fingerprint" concurrency key so the rescan queues behind the
+// reset and runs sequentially.
+func (s *Server) resetAcoustIDFingerprints(c *gin.Context) {
+	if s.opRegistry == nil {
+		httputil.RespondWithInternalError(c, "operation registry not initialized")
+		return
+	}
+	resetID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.reset-all", nil)
+	if err != nil {
+		httputil.InternalError(c, "failed to enqueue acoustid reset", err)
+		return
+	}
+	rescanParams := map[string]any{"scope": "all", "force": true}
+	rescanID, err := s.opRegistry.EnqueueOp(c.Request.Context(), "acoustid.fingerprint-rescan", rescanParams)
+	if err != nil {
+		// Reset already enqueued; rescan failure is non-fatal — surface it
+		// in the response so the operator can re-run rescan manually.
+		httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]any{
+			"op_id":          resetID,
+			"reset_op_id":    resetID,
+			"rescan_op_id":   "",
+			"rescan_warning": err.Error(),
+		})
+		return
+	}
+	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]any{
+		"op_id":        resetID,
+		"reset_op_id":  resetID,
+		"rescan_op_id": rescanID,
+	})
+}
+
 // purgeStaleCandidates handles POST /api/v1/dedup/purge-stale.
 // Enqueues the dedup.purge-stale UOS op so the cleanup shows up in the
 // bell with proper start/end log lines, instead of silently running and

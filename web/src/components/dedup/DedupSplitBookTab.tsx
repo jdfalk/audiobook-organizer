@@ -146,7 +146,7 @@ function CandidateRow({ candidate, expanded, onToggle, onMergeRequest, merging }
                   <Link
                     key={bid}
                     component={RouterLink}
-                    to={`/books/${encodeURIComponent(bid)}`}
+                    to={`/library/${encodeURIComponent(bid)}`}
                     underline="hover"
                     sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
                   >
