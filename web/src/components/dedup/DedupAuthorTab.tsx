@@ -166,7 +166,7 @@ function AuthorBooksPopover({
               key={book.id}
               sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 0.5, cursor: 'pointer',
                 borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}
-              onClick={() => { onClose(); navigate(`/books/${book.id}`); }}
+              onClick={() => { onClose(); navigate(`/library/${book.id}`); }}
             >
               {book.cover_url ? (
                 <Box component="img" src={book.cover_url} alt="" sx={{ width: 40, height: 56, objectFit: 'cover', borderRadius: 0.5, flexShrink: 0 }} />

@@ -201,13 +201,13 @@ func fingerprintBookFileWithForce(store database.Store, f database.BookFile, for
 	}
 
 	updated := f
-	updated.AcoustIDSeg0 = fingerprint.NormalizeFingerprint(segs[0])
-	updated.AcoustIDSeg1 = fingerprint.NormalizeFingerprint(segs[1])
-	updated.AcoustIDSeg2 = fingerprint.NormalizeFingerprint(segs[2])
-	updated.AcoustIDSeg3 = fingerprint.NormalizeFingerprint(segs[3])
-	updated.AcoustIDSeg4 = fingerprint.NormalizeFingerprint(segs[4])
-	updated.AcoustIDSeg5 = fingerprint.NormalizeFingerprint(segs[5])
-	updated.AcoustIDSeg6 = fingerprint.NormalizeFingerprint(segs[6])
+	updated.AcoustIDSeg0 = fingerprint.NormalizeForStorage(segs[0])
+	updated.AcoustIDSeg1 = fingerprint.NormalizeForStorage(segs[1])
+	updated.AcoustIDSeg2 = fingerprint.NormalizeForStorage(segs[2])
+	updated.AcoustIDSeg3 = fingerprint.NormalizeForStorage(segs[3])
+	updated.AcoustIDSeg4 = fingerprint.NormalizeForStorage(segs[4])
+	updated.AcoustIDSeg5 = fingerprint.NormalizeForStorage(segs[5])
+	updated.AcoustIDSeg6 = fingerprint.NormalizeForStorage(segs[6])
 	if err := store.UpdateBookFile(f.ID, &updated); err != nil {
 		return fingerprintOutcomeFailed
 	}

@@ -2250,6 +2250,14 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 				if seg == "" {
 					continue
 				}
+				// Reject degenerate fingerprints (e.g. "AQAAAA" sentinel
+				// from a failed ffmpeg seek). They'd otherwise match every
+				// other book carrying the same sentinel at similarity 1.0.
+				// The writer now drops these, but old rows in production
+				// still need this guard until reset-and-rescan clears them.
+				if !fingerprint.IsUsefulFingerprint(seg) {
+					continue
+				}
 
 				// Tier 1: exact match (O(1) via Pebble book_file_acoustid: index).
 				exactHit, _ := de.bookStore.GetBookFileByAcoustID(seg)
