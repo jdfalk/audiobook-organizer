@@ -1131,6 +1131,29 @@ func (s *Server) triggerDedupAcoustID(c *gin.Context) {
 	httputil.RespondWithSuccess(c, http.StatusAccepted, map[string]string{"op_id": opID})
 }
 
+// purgeStaleCandidates handles POST /api/v1/dedup/purge-stale.
+// Runs Engine.PurgeStaleCandidates synchronously (fast, no full rescan)
+// to delete pending candidates that are no longer valid: same parent
+// directory (chapter files of one multi-file book), same version group,
+// distinct series volume numbers, etc. Returns the count deleted.
+//
+// Wired to the UI as "Cleanup chapter/split-book candidates" because the
+// dominant case in the wild is thousands of pre-PR-1167 split-books that
+// are flagged as 100% AcoustID matches just because chapter files share
+// fingerprint segments.
+func (s *Server) purgeStaleCandidates(c *gin.Context) {
+	if s.dedupEngine == nil {
+		httputil.RespondWithInternalError(c, "dedup engine not initialized")
+		return
+	}
+	deleted, err := s.dedupEngine.PurgeStaleCandidates(c.Request.Context())
+	if err != nil {
+		httputil.InternalError(c, "failed to purge stale candidates", err)
+		return
+	}
+	httputil.RespondWithSuccess(c, http.StatusOK, map[string]int{"deleted": deleted})
+}
+
 // triggerEmbedScan handles POST /api/v1/dedup/embed.
 // Delegates to the UOS registry (dedup.embed-scan op) since UOS-07.
 func (s *Server) triggerEmbedScan(c *gin.Context) {

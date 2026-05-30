@@ -2152,10 +2152,44 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 		return a + ":" + b
 	}
 
+	// Per-book parent-directory cache so we don't fetch BookFiles twice per
+	// comparison. Empty string = unknown / no files / different parents.
+	parentDirCache := make(map[string]string)
+	parentDirForBook := func(bookID string) string {
+		if v, ok := parentDirCache[bookID]; ok {
+			return v
+		}
+		bfs, err := de.bookStore.GetBookFiles(bookID)
+		if err != nil || len(bfs) == 0 {
+			parentDirCache[bookID] = ""
+			return ""
+		}
+		dir := filepath.Dir(bfs[0].FilePath)
+		for _, bf := range bfs[1:] {
+			if filepath.Dir(bf.FilePath) != dir {
+				parentDirCache[bookID] = ""
+				return ""
+			}
+		}
+		parentDirCache[bookID] = dir
+		return dir
+	}
+
 	emit := func(bookAID, bookBID string, sim float64) {
 		key := pairKey(bookAID, bookBID)
 		if _, already := emitted[key]; already {
 			return
+		}
+		// Suppress when both books' files live in the same directory: those
+		// are chapter/part files of one multi-file book, not duplicates.
+		// The scanner's split-book detection (PR #1167) prevents this for
+		// new imports, but the library has thousands of pre-PR splits that
+		// would otherwise be flagged as 100% AcoustID matches just because
+		// their fingerprint segments happen to overlap.
+		if dirA := parentDirForBook(bookAID); dirA != "" {
+			if dirB := parentDirForBook(bookBID); dirB == dirA {
+				return
+			}
 		}
 		emitted[key] = struct{}{}
 		if err := de.embedStore.UpsertCandidate(database.DedupCandidate{
@@ -2182,6 +2216,28 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 		if err != nil {
 			slog.Info("[dedup] acoustid scan get files for", "book", book.ID, "err", err)
 			continue
+		}
+
+		// Prime cache for this book (avoids the duplicate GetBookFiles
+		// inside parentDirForBook when emit is called for this side).
+		if _, cached := parentDirCache[book.ID]; !cached {
+			if len(files) == 0 {
+				parentDirCache[book.ID] = ""
+			} else {
+				dir := filepath.Dir(files[0].FilePath)
+				ok := true
+				for _, bf := range files[1:] {
+					if filepath.Dir(bf.FilePath) != dir {
+						ok = false
+						break
+					}
+				}
+				if ok {
+					parentDirCache[book.ID] = dir
+				} else {
+					parentDirCache[book.ID] = ""
+				}
+			}
 		}
 
 		for _, f := range files {

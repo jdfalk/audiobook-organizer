@@ -2203,6 +2203,7 @@ function AcousticDedupTab() {
   const [bookCache, setBookCache] = useState<Map<string, Book>>(new Map());
   const [selectedCandIds, setSelectedCandIds] = useState<Set<number>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [purging, setPurging] = useState(false);
   const [resolving, setResolving] = useState<Set<number>>(new Set());
   const [compareA, setCompareA] = useState('');
   const [compareB, setCompareB] = useState('');
@@ -2318,6 +2319,24 @@ function AcousticDedupTab() {
       setStatusMsg(err instanceof Error ? err.message : 'Dismiss failed');
     } finally {
       setResolving((s) => { const next = new Set(s); next.delete(candidateId); return next; });
+    }
+  };
+
+  // One-shot cleanup of pending candidates that are no longer real duplicates:
+  // chapter files of one multi-file book (same parent directory), books in the
+  // same version group, distinct numbered series volumes. Runs server-side via
+  // Engine.PurgeStaleCandidates; no rescan required.
+  const handlePurgeStale = async () => {
+    setPurging(true);
+    setStatusMsg(null);
+    try {
+      const { deleted } = await api.purgeStaleCandidates();
+      setStatusMsg(`Cleanup complete — ${deleted.toLocaleString()} stale candidate(s) removed.`);
+      await loadCandidates();
+    } catch (err) {
+      setStatusMsg(err instanceof Error ? err.message : 'Cleanup failed');
+    } finally {
+      setPurging(false);
     }
   };
 
@@ -2449,6 +2468,12 @@ function AcousticDedupTab() {
         <Tooltip title="Compare already-stored fingerprints across all books to find audio-level duplicate pairs. Fast — no file I/O.">
           <Button variant="outlined" startIcon={<GraphicEqIcon />} onClick={handleScan} disabled={scanning}>
             {scanning ? 'Queuing…' : 'Find Acoustic Duplicates'}
+          </Button>
+        </Tooltip>
+
+        <Tooltip title="Delete pending candidates that are no longer valid duplicates: chapter files of one multi-file book, same-version-group books, distinct series volumes. Fast — no rescan.">
+          <Button variant="outlined" color="warning" onClick={handlePurgeStale} disabled={purging}>
+            {purging ? 'Cleaning…' : 'Cleanup Stale (same-folder, etc)'}
           </Button>
         </Tooltip>
 

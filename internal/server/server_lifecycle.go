@@ -1043,6 +1043,7 @@ func (s *Server) setupRoutes() {
 			protected.POST("/dedup/scan-book-signature", s.perm(auth.PermScanTrigger), s.triggerBookSignatureScan)
 			protected.POST("/dedup/fingerprint-rescan", s.perm(auth.PermScanTrigger), s.triggerFingerprintRescan)
 			protected.POST("/dedup/refresh", s.perm(auth.PermScanTrigger), s.triggerDedupRefresh)
+			protected.POST("/dedup/purge-stale", s.perm(auth.PermScanTrigger), s.purgeStaleCandidates)
 			protected.POST("/dedup/embed", s.perm(auth.PermScanTrigger), s.triggerEmbedScan)
 			protected.POST("/dedup/embed-async", s.perm(auth.PermScanTrigger), s.triggerEmbedAsync)
 
