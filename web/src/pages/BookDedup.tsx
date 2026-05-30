@@ -1113,6 +1113,26 @@ function EmbeddingDedupTab() {
               {book.author_name}
             </Typography>
           )}
+          {book.book_sig_coverage_pct != null && book.book_sig_coverage_pct < 100 && (
+            <Tooltip
+              title={`Book signature was synthesized from partial audio (${book.book_sig_coverage_pct}% real, rest is silence-padded). Similarity matches against this book may be less reliable than full-coverage matches.`}
+            >
+              <Chip
+                label={`partial fp ${book.book_sig_coverage_pct}%`}
+                size="small"
+                color="warning"
+                variant="outlined"
+                onClick={(e) => e.stopPropagation()}
+                sx={{
+                  height: 16,
+                  fontSize: '0.6rem',
+                  mt: 0.25,
+                  mr: 0.5,
+                  '& .MuiChip-label': { px: 0.5 },
+                }}
+              />
+            </Tooltip>
+          )}
           {shortPath && (
             <Tooltip
               title={tooltipContent}
