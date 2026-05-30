@@ -62,7 +62,8 @@ func (p *Plugin) runOrphanBookFilesCleanup(ctx context.Context, raw json.RawMess
 	_ = reporter.Log(slog.LevelInfo, "Starting orphan book_file scan",
 		slog.Bool("delete", params.Delete),
 	)
-	_ = reporter.UpdateProgress(0, 100, "Scanning book_files for orphan rows...")
+	scanProg := sdk.NewProgress(reporter, 0)
+	scanProg.Start("Scanning book_files for orphan rows...")
 
 	orphans, totalFiles, totalBooks, err := findOrphanBookFiles(ctx, store)
 	if err != nil {
@@ -74,9 +75,6 @@ func (p *Plugin) runOrphanBookFilesCleanup(ctx context.Context, raw json.RawMess
 		slog.Int("total_book_files", totalFiles),
 		slog.Int("total_books", totalBooks),
 	)
-	_ = reporter.UpdateProgress(50, 100,
-		fmt.Sprintf("Found %d orphan book_file row(s) out of %d (valid books: %d)",
-			len(orphans), totalFiles, totalBooks))
 
 	if !params.Delete || len(orphans) == 0 {
 		msg := fmt.Sprintf("Orphan book_file scan: %d orphan(s) detected (report-only)", len(orphans))
@@ -84,18 +82,22 @@ func (p *Plugin) runOrphanBookFilesCleanup(ctx context.Context, raw json.RawMess
 			msg = "Orphan book_file cleanup: no orphans found, nothing to delete"
 		}
 		_ = reporter.Log(slog.LevelInfo, msg)
-		_ = reporter.UpdateProgress(100, 100, msg)
+		scanProg.Done(msg)
 		return nil
 	}
 
-	// Delete pass.
+	// Delete pass — now we know N.
+	total := len(orphans)
+	prog := sdk.NewProgress(reporter, total)
+	prog.Start(fmt.Sprintf("Found %d orphan book_file row(s) out of %d (valid books: %d)",
+		total, totalFiles, totalBooks))
 	var deleted, failed int
 	for i, of := range orphans {
 		if ctx.Err() != nil {
 			_ = reporter.Log(slog.LevelWarn, "Orphan delete cancelled",
 				slog.Int("deleted", deleted),
 				slog.Int("failed", failed),
-				slog.Int("remaining", len(orphans)-i),
+				slog.Int("remaining", total-i),
 			)
 			return ctx.Err()
 		}
@@ -110,18 +112,13 @@ func (p *Plugin) runOrphanBookFilesCleanup(ctx context.Context, raw json.RawMess
 			continue
 		}
 		deleted++
-		// Progress: scale the delete pass over 50..100.
-		if total := len(orphans); total > 0 {
-			done := 50 + (50*(i+1))/total
-			_ = reporter.UpdateProgress(done, 100,
-				fmt.Sprintf("Deleting orphan book_files: %d/%d", i+1, total))
-		}
+		prog.StepN(i+1, fmt.Sprintf("Deleting orphan book_files: %d/%d", i+1, total))
 	}
 
 	final := fmt.Sprintf("Orphan book_file cleanup: deleted %d, failed %d (of %d detected)",
-		deleted, failed, len(orphans))
+		deleted, failed, total)
 	_ = reporter.Log(slog.LevelInfo, final)
-	_ = reporter.UpdateProgress(100, 100, final)
+	prog.Done(final)
 	return nil
 }
 

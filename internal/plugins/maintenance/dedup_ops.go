@@ -83,7 +83,8 @@ func (p *Plugin) runAIDedupBatch(ctx context.Context, _ json.RawMessage, reporte
 	}
 
 	_ = reporter.Log(slog.LevelInfo, "Building author list for batch AI dedup")
-	_ = reporter.UpdateProgress(0, 100, "Loading authors...")
+	loadProg := sdk.NewProgress(reporter, 0)
+	loadProg.Start("Loading authors...")
 
 	allAuthors, err := store.GetAllAuthors()
 	if err != nil {
@@ -110,21 +111,23 @@ func (p *Plugin) runAIDedupBatch(ctx context.Context, _ json.RawMessage, reporte
 
 	if len(inputs) == 0 {
 		_ = reporter.Log(slog.LevelInfo, "No authors to process")
+		loadProg.Done("No authors to process")
 		return nil
 	}
 
-	_ = reporter.UpdateProgress(10, 100, fmt.Sprintf("Submitting %d authors to OpenAI Batch API...", len(inputs)))
+	// Poll for completion (up to 24h, check every 5 min)
+	pollInterval := 5 * time.Minute
+	maxPolls := 288 // 24h / 5min
+	opID := ctxOpID(ctx)
+
+	prog := sdk.NewProgress(reporter, maxPolls)
+	prog.Start(fmt.Sprintf("Submitting %d authors to OpenAI Batch API...", len(inputs)))
 
 	batchID, err := parser.CreateBatchAuthorDedup(ctx, inputs)
 	if err != nil {
 		return fmt.Errorf("failed to create batch: %w", err)
 	}
 	_ = reporter.Log(slog.LevelInfo, fmt.Sprintf("Batch created: %s — polling for completion", batchID))
-
-	// Poll for completion (up to 24h, check every 5 min)
-	pollInterval := 5 * time.Minute
-	maxPolls := 288 // 24h / 5min
-	opID := ctxOpID(ctx)
 
 	for i := 0; i < maxPolls; i++ {
 		if reporter.IsCanceled() {
@@ -142,7 +145,7 @@ func (p *Plugin) runAIDedupBatch(ctx context.Context, _ json.RawMessage, reporte
 			continue
 		}
 
-		_ = reporter.UpdateProgress(10+i, maxPolls, fmt.Sprintf("Batch status: %s", status))
+		prog.StepN(i+1, fmt.Sprintf("Batch status: %s (poll %d/%d)", status, i+1, maxPolls))
 
 		switch status {
 		case "completed":
@@ -165,7 +168,7 @@ func (p *Plugin) runAIDedupBatch(ctx context.Context, _ json.RawMessage, reporte
 					return fmt.Errorf("failed to store results: %w", err)
 				}
 			}
-			_ = reporter.UpdateProgress(100, 100, fmt.Sprintf("Batch complete: %d suggestions", len(discoveries)))
+			prog.Done(fmt.Sprintf("Batch complete: %d suggestions", len(discoveries)))
 			return nil
 
 		case "failed", "expired", "cancelled":

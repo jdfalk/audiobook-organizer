@@ -908,7 +908,8 @@ func (s *Server) runBulkMetadataFetchAll(
 	}
 	ctx = logging.WithOp(ctx, op)
 
-	_ = progress.UpdateProgress(0, 0, "loading books")
+	// Total unknown until books load; use placeholder (0/1) to avoid 0/0.
+	_ = progress.UpdateProgress(0, 1, "loading books (0/1 0.00%)")
 
 	allBooks, err := store.GetAllBooks(0, 0)
 	if err != nil {
@@ -1666,7 +1667,13 @@ func (s *Server) runIsbnEnrichment(ctx context.Context, progress operations.Prog
 	activity.FlushOperation(s.activityWriter, opID)
 	msg := fmt.Sprintf("ISBN enrichment complete: checked %d, updated %d", checked, updated)
 	_ = progress.Log("info", msg, nil)
-	_ = progress.UpdateProgress(100, 100, msg)
+	// Use real (checked, checked) so the bar is honest. Fall back to (1,1)
+	// when nothing was checked to avoid 0/0.
+	total := checked
+	if total <= 0 {
+		total = 1
+	}
+	_ = progress.UpdateProgress(total, total, fmt.Sprintf("%s (%d/%d 100.00%%)", msg, total, total))
 	tags := activity.TagsIf(updated == 0, activity.NoOpTag)
 	if operations.IsManual(ctx) {
 		tags = append(tags, activity.AlwaysShow)
@@ -1683,7 +1690,8 @@ func (s *Server) runMetadataRefreshScan(ctx context.Context, progress operations
 		return fmt.Errorf("database not initialized")
 	}
 	_ = progress.Log("info", "Starting metadata refresh scan", nil)
-	_ = progress.UpdateProgress(0, 100, "Scanning books for incomplete metadata...")
+	// Pre-load total is unknown; placeholder (0/1) avoids 0/0.
+	_ = progress.UpdateProgress(0, 1, "Scanning books for incomplete metadata... (0/1 0.00%)")
 	books, err := store.GetAllBooks(10000, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get books: %w", err)

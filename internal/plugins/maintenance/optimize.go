@@ -55,7 +55,6 @@ func (p *Plugin) runOptimize(ctx context.Context, _ json.RawMessage, reporter sd
 		"operation_id", opID,
 	)
 	_ = reporter.Log(slog.LevelInfo, "Library optimize sweep started")
-	_ = reporter.UpdateProgress(0, 100, "Starting optimize sweep...")
 
 	children := []childOp{
 		{
@@ -86,6 +85,9 @@ func (p *Plugin) runOptimize(ctx context.Context, _ json.RawMessage, reporter sd
 	completed := 0
 	failed := 0
 
+	prog := sdk.NewProgress(reporter, total)
+	prog.Start("Starting optimize sweep...")
+
 	for i, ch := range children {
 		if reporter.IsCanceled() {
 			slog.Info("library.optimize: sweep canceled",
@@ -103,8 +105,7 @@ func (p *Plugin) runOptimize(ctx context.Context, _ json.RawMessage, reporter sd
 		default:
 		}
 
-		pct := 5 + (90 * i / total)
-		_ = reporter.UpdateProgress(pct, 100, fmt.Sprintf("Running child op %d/%d: %s", i+1, total, ch.name))
+		prog.StepN(i, fmt.Sprintf("Running child op %d/%d: %s", i+1, total, ch.name))
 
 		childStart := time.Now()
 		slog.Info("library.optimize: child started",
@@ -174,9 +175,8 @@ func (p *Plugin) runOptimize(ctx context.Context, _ json.RawMessage, reporter sd
 		"children_total", total,
 		"elapsed_ms", totalElapsed.Milliseconds(),
 	)
-	_ = reporter.UpdateProgress(100, 100,
-		fmt.Sprintf("Optimize sweep complete in %s — %d/%d children succeeded",
-			totalElapsed.Round(time.Second), completed, total))
+	prog.Done(fmt.Sprintf("Optimize sweep complete in %s — %d/%d children succeeded",
+		totalElapsed.Round(time.Second), completed, total))
 	_ = reporter.Log(slog.LevelInfo,
 		fmt.Sprintf("Library optimize sweep complete: %d/%d children succeeded, %d failed (elapsed: %s)",
 			completed, total, failed, totalElapsed.Round(time.Second)))

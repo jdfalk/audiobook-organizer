@@ -47,15 +47,16 @@ func (p *Plugin) runSplitBookScan(ctx context.Context, _ json.RawMessage, report
 		return fmt.Errorf("split-book scan: embedding store not available (needed for shared Pebble DB)")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Scanning library for split-book clusters...")
+	scanProg := sdk.NewProgress(reporter, 0)
+	scanProg.Start("Scanning library for split-book clusters...")
 	cands, err := dedupengine.DetectSplitBookCandidates(ctx, p.store)
 	if err != nil {
 		reporter.Logger().Error("split-book detector error", "error", err)
 		return fmt.Errorf("split-book scan: %w", err)
 	}
 
-	_ = reporter.UpdateProgress(80, 100,
-		fmt.Sprintf("Found %d candidate cluster(s); persisting...", len(cands)))
+	prog := sdk.NewProgress(reporter, len(cands))
+	prog.Start(fmt.Sprintf("Found %d candidate cluster(s); persisting...", len(cands)))
 
 	db := p.embeddingStore.PebbleDB()
 	if db == nil {
@@ -67,8 +68,9 @@ func (p *Plugin) runSplitBookScan(ctx context.Context, _ json.RawMessage, report
 		return fmt.Errorf("split-book scan persist: %w", err)
 	}
 
-	_ = reporter.UpdateProgress(100, 100,
-		fmt.Sprintf("Split-book scan complete — %d candidate cluster(s) saved", len(cands)))
+	prog.StepN(len(cands), fmt.Sprintf("Persisted %d / %d cluster(s)", len(cands), len(cands)))
+	prog.Finalize("writing results...")
+	prog.Done(fmt.Sprintf("Split-book scan complete — %d candidate cluster(s) saved", len(cands)))
 	reporter.Logger().Info("split-book scan complete", "candidates", len(cands))
 	return nil
 }

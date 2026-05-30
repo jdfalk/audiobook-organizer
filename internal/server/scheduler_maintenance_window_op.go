@@ -18,6 +18,7 @@ import (
 	"github.com/jdfalk/audiobook-organizer/internal/operations"
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/scheduler"
+	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // RegisterMaintenanceWindowOp registers the "maintenance.window" OperationDef which
@@ -63,7 +64,8 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 				today := time.Now().Format("2006-01-02")
 				if updateDone == nil || updateDone.Value != today {
 					_ = progress.Log("info", "Running auto-update (step 1)", nil)
-					_ = progress.UpdateProgress(0, 100, "Running auto-update...")
+					// Auto-update is a single bounded step (0/1 → done).
+					_ = reporter.UpdateProgress(0, 1, "Running auto-update... (0/1 0%)")
 					_ = store.SetSetting("maintenance_window_update_completed", today, "string", false)
 					if s.updater != nil {
 						channel := config.AppConfig.AutoUpdateChannel
@@ -112,6 +114,8 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 				windowStartTags = []string{activity.AlwaysShow, mwTag}
 			}
 
+			sp := sdk.NewProgress(reporter, len(eligible))
+			sp.Start(fmt.Sprintf("Maintenance window starting: %d tasks eligible", len(eligible)))
 			_ = progress.Log("info", fmt.Sprintf("Maintenance window starting: %d tasks eligible: %s", len(eligible), strings.Join(eligible, ", ")), nil)
 			activity.EmitInfo(s.activityWriter, opID, activity.MaintenanceWindow, "maintenance-window",
 				fmt.Sprintf("Maintenance window starting: %d tasks: %s", len(eligible), strings.Join(eligible, ", ")),
@@ -138,7 +142,7 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 					continue
 				}
 
-				_ = progress.UpdateProgress(i, len(eligible), fmt.Sprintf("Running task %d/%d: %s", i+1, len(eligible), name))
+				sp.StepN(i, fmt.Sprintf("Running task %d/%d: %s", i+1, len(eligible), name))
 				_ = progress.Log("info", fmt.Sprintf("Starting maintenance task: %s", name), nil)
 				ran++
 
@@ -197,13 +201,13 @@ func (s *Server) RegisterMaintenanceWindowOp(reg *opsregistry.Registry) error {
 			summary := strings.Join(summaryParts, ", ")
 
 			if len(failures) > 0 {
-				_ = progress.UpdateProgress(len(eligible), len(eligible), "Maintenance window completed with errors")
+				sp.Done("Maintenance window completed with errors")
 				activity.EmitInfo(s.activityWriter, opID, activity.MaintenanceWindow, "maintenance-window",
 					"Maintenance window done (errors): "+summary,
 					windowStartTags...)
 				return fmt.Errorf("maintenance window: %s", summary)
 			}
-			_ = progress.UpdateProgress(len(eligible), len(eligible), "Maintenance window completed successfully")
+			sp.Done("Maintenance window completed successfully")
 			activity.EmitInfo(s.activityWriter, opID, activity.MaintenanceWindow, "maintenance-window",
 				"Maintenance window done: "+summary,
 				windowStartTags...)

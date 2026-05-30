@@ -60,7 +60,7 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 		_ = json.Unmarshal(params, &checkpoint)
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Loading Deluge-imported files...")
+	sdk.NewProgress(reporter, 0).Start("Loading Deluge-imported files...")
 
 	// Pull only BookFiles with non-empty DelugeHash AND not yet imported.
 	// Centralized store method routes through the memdb sparse deluge_hash
@@ -76,8 +76,11 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 	}
 
 	total := len(toImport)
+	prog := sdk.NewProgress(reporter, total)
+	prog.Start(fmt.Sprintf("Centralizing %d files...", total))
 	if total == 0 {
-		_ = reporter.UpdateProgress(100, 100, "No files to centralize")
+		prog.Finalize("Writing results...")
+		prog.Done("No files to centralize")
 		return nil
 	}
 
@@ -107,7 +110,7 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 		srcPath := bf.FilePath
 		if srcPath == "" {
 			skipCount++
-			_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Skipped %d files with no path", skipCount))
+			prog.StepN(i+1, fmt.Sprintf("Skipped %d/%d files with no path", skipCount, total))
 			continue
 		}
 
@@ -127,7 +130,7 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 		// Skip if already at destination.
 		if srcPath == dest {
 			skipCount++
-			_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Skipped %d files already in library", skipCount))
+			prog.StepN(i+1, fmt.Sprintf("Skipped %d/%d files already in library", skipCount, total))
 			continue
 		}
 
@@ -136,7 +139,7 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 			errCount++
 			checkpoint.LastError = fmt.Sprintf("mkdir %s: %v", destDir, err)
 			reporter.Logger().Error("mkdir failed", "path", destDir, "error", err)
-			_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Error: %s", checkpoint.LastError))
+			prog.StepN(i+1, fmt.Sprintf("Error (%d/%d): %s", i+1, total, checkpoint.LastError))
 			continue
 		}
 
@@ -146,7 +149,7 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 				errCount++
 				checkpoint.LastError = fmt.Sprintf("copy %s: %v", srcPath, err)
 				reporter.Logger().Error("copy failed", "src", srcPath, "dest", dest, "error", err)
-				_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Error: %s", checkpoint.LastError))
+				prog.StepN(i+1, fmt.Sprintf("Error (%d/%d): %s", i+1, total, checkpoint.LastError))
 				continue
 			}
 		}
@@ -161,7 +164,7 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 			errCount++
 			checkpoint.LastError = fmt.Sprintf("update book file: %v", err)
 			reporter.Logger().Error("update book file failed", "id", bf.ID, "error", err)
-			_ = reporter.UpdateProgress(i+1, total, fmt.Sprintf("Error: %s", checkpoint.LastError))
+			prog.StepN(i+1, fmt.Sprintf("Error (%d/%d): %s", i+1, total, checkpoint.LastError))
 			continue
 		}
 
@@ -182,14 +185,11 @@ func (p *Plugin) runCentralization(ctx context.Context, params json.RawMessage, 
 		// Checkpoint after each file to support fine-grained restart.
 		_ = reporter.Checkpoint(checkpoint)
 
-		progress := (successCount * 100) / total
-		if progress > 100 {
-			progress = 100
-		}
-		_ = reporter.UpdateProgress(progress, 100, fmt.Sprintf("Centralized %d/%d files", successCount, total))
+		prog.StepN(i+1, fmt.Sprintf("Centralized %d/%d files", successCount, total))
 	}
 
-	_ = reporter.UpdateProgress(100, 100, fmt.Sprintf("Done: %d succeeded, %d skipped, %d errors", successCount, skipCount, errCount))
+	prog.Finalize("Writing results...")
+	prog.Done(fmt.Sprintf("Done: %d succeeded, %d skipped, %d errors", successCount, skipCount, errCount))
 	return nil
 }
 

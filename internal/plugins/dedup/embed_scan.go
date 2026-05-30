@@ -37,7 +37,8 @@ func (p *Plugin) runEmbedScan(ctx context.Context, _ json.RawMessage, reporter s
 		return errors.New("dedup engine not available (embedding may be disabled or API key not configured)")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Loading books for embedding...")
+	loadProg := sdk.NewProgress(reporter, 0)
+	loadProg.Start("Loading books for embedding...")
 
 	books, err := p.store.GetAllBooks(0, 0)
 	if err != nil {
@@ -45,9 +46,12 @@ func (p *Plugin) runEmbedScan(ctx context.Context, _ json.RawMessage, reporter s
 	}
 	total := len(books)
 	if total == 0 {
-		_ = reporter.UpdateProgress(100, 100, "No books to embed")
+		loadProg.Done("No books to embed")
 		return nil
 	}
+
+	prog := sdk.NewProgress(reporter, total)
+	prog.Start(fmt.Sprintf("Embedding books: 0 / %d", total))
 
 	var embedded, cached, skipped, errs int
 	for i, book := range books {
@@ -76,15 +80,14 @@ func (p *Plugin) runEmbedScan(ctx context.Context, _ json.RawMessage, reporter s
 		}
 
 		if i%50 == 0 || i == total-1 {
-			pct := 1 + (98 * (i + 1) / total)
-			_ = reporter.UpdateProgress(pct, 100,
+			prog.StepN(i+1,
 				fmt.Sprintf("Embedding books: %d / %d (new=%d cached=%d skipped=%d errors=%d)",
 					i+1, total, embedded, cached, skipped, errs))
 		}
 	}
 
-	_ = reporter.UpdateProgress(100, 100,
-		fmt.Sprintf("Embedding complete — %d new, %d cached, %d skipped, %d errors (of %d books)",
-			embedded, cached, skipped, errs, total))
+	prog.Finalize("writing results...")
+	prog.Done(fmt.Sprintf("Embedding complete — %d new, %d cached, %d skipped, %d errors (of %d books)",
+		embedded, cached, skipped, errs, total))
 	return nil
 }

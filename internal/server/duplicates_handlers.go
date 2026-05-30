@@ -467,7 +467,9 @@ func (s *Server) executeSeriesPrune(ctx context.Context, store interface {
 		return fmt.Errorf("failed to get series: %w", err)
 	}
 
-	_ = progress.UpdateProgress(0, len(allSeries), fmt.Sprintf("Scanning %d series...", len(allSeries)))
+	// Schedule: scan phase (N=len(allSeries)) + 1 orphan phase + 1 done.
+	totalSteps := len(allSeries) + 2
+	_ = progress.UpdateProgress(0, totalSteps, fmt.Sprintf("Scanning %d series... (0/%d 0.00%%)", len(allSeries), totalSteps))
 
 	// Group by LOWER(TRIM(name)) + author_id
 	type groupKey struct {
@@ -560,7 +562,8 @@ func (s *Server) executeSeriesPrune(ctx context.Context, store interface {
 	}
 
 	_ = progress.Log("info", fmt.Sprintf("Phase 1 complete: merged %d duplicate series from %d groups", totalMerged, dupGroupCount), nil)
-	_ = progress.UpdateProgress(50, 100, "Scanning for orphan series...")
+	orphanStep := len(allSeries) + 1
+	_ = progress.UpdateProgress(orphanStep, totalSteps, fmt.Sprintf("Scanning for orphan series... (%d/%d %.2f%%)", orphanStep, totalSteps, float64(orphanStep)/float64(totalSteps)*100))
 
 	// Phase 2: Delete orphan series (0 books)
 	orphansDeleted := 0
@@ -617,7 +620,7 @@ func (s *Server) executeSeriesPrune(ctx context.Context, store interface {
 		errDetail := strings.Join(mergeErrors[:min(len(mergeErrors), 10)], "; ")
 		_ = progress.Log("warn", fmt.Sprintf("Errors: %s", errDetail), nil)
 	}
-	_ = progress.UpdateProgress(100, 100, resultMsg)
+	_ = progress.UpdateProgress(totalSteps, totalSteps, fmt.Sprintf("%s (%d/%d 100.00%%)", resultMsg, totalSteps, totalSteps))
 
 	if s.dedupCache != nil {
 		s.dedupCache.InvalidateAll()

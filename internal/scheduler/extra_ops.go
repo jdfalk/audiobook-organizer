@@ -1,5 +1,5 @@
 // file: internal/scheduler/extra_ops.go
-// version: 1.0.1
+// version: 1.0.2
 // guid: a9b8c7d6-e5f4-3210-fedc-ba9876543210
 
 // extra_ops registers OperationDefs for 13 scheduler tasks that previously
@@ -37,6 +37,7 @@ import (
 	opsregistry "github.com/jdfalk/audiobook-organizer/internal/operations/registry"
 	"github.com/jdfalk/audiobook-organizer/internal/sweep"
 	"github.com/jdfalk/audiobook-organizer/internal/versions"
+	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
 
 // ExtraOpsDeps holds the typed dependencies needed by ExtraOpsRegistrar.
@@ -188,6 +189,8 @@ func (r *ExtraOpsRegistrar) RegisterMetadataUpgradeOp(reg *opsregistry.Registry)
 		Capabilities:    []opsregistry.Capability{opsregistry.CapLibraryRead, opsregistry.CapLibraryWrite, opsregistry.CapNetworkOpenAI},
 		Run: func(ctx context.Context, rawParams json.RawMessage, reporter opsregistry.Reporter) error {
 			progress := extraOpsProgressAdapter{r: reporter}
+			p := sdk.NewProgress(reporter, 0)
+			p.Start("Scanning for books with upgradeable metadata sources...")
 			if r.Deps.MetadataFetchService == nil {
 				return fmt.Errorf("metadata fetch service not initialized")
 			}
@@ -200,7 +203,7 @@ func (r *ExtraOpsRegistrar) RegisterMetadataUpgradeOp(reg *opsregistry.Registry)
 			msg := fmt.Sprintf("Metadata upgrade complete: checked %d, upgraded %d, skipped %d, errors %d",
 				result.Checked, result.Upgraded, result.Skipped, result.Errors)
 			_ = progress.Log("info", msg, nil)
-			_ = progress.UpdateProgress(100, 100, msg)
+			p.Done(msg)
 			return nil
 		},
 	})
@@ -240,6 +243,8 @@ func (r *ExtraOpsRegistrar) RegisterAuthorSplitScanOp(reg *opsregistry.Registry)
 			booksUpdated := 0
 			errCount := 0
 			total := len(authors)
+			p := sdk.NewProgress(reporter, total)
+			p.Start(fmt.Sprintf("Scanning %d authors for composite names", total))
 
 			for i, author := range authors {
 				if ctx.Err() != nil {
@@ -249,7 +254,7 @@ func (r *ExtraOpsRegistrar) RegisterAuthorSplitScanOp(reg *opsregistry.Registry)
 				parts := dedup.SplitCompositeAuthorName(author.Name)
 				if len(parts) <= 1 {
 					if (i+1)%200 == 0 {
-						_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("Checked %d/%d authors", i+1, total))
+						p.StepN(i+1, fmt.Sprintf("Checked %d/%d authors", i+1, total))
 					}
 					continue
 				}
@@ -345,7 +350,7 @@ func (r *ExtraOpsRegistrar) RegisterAuthorSplitScanOp(reg *opsregistry.Registry)
 				}
 
 				if (i+1)%200 == 0 || splitCount%50 == 0 {
-					_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("Checked %d/%d authors, split %d so far", i+1, total, splitCount))
+					p.StepN(i+1, fmt.Sprintf("Checked %d/%d authors, split %d so far", i+1, total, splitCount))
 				}
 			}
 
@@ -356,7 +361,7 @@ func (r *ExtraOpsRegistrar) RegisterAuthorSplitScanOp(reg *opsregistry.Registry)
 
 			resultMsg := fmt.Sprintf("Split %d composite authors, updated %d books (%d errors)", splitCount, booksUpdated, errCount)
 			_ = progress.Log("info", resultMsg, nil)
-			_ = progress.UpdateProgress(total, total, resultMsg)
+			p.Done(resultMsg)
 			return nil
 		},
 	})
@@ -389,10 +394,12 @@ func (r *ExtraOpsRegistrar) RegisterDBOptimizeOp(reg *opsregistry.Registry) erro
 			storesOptimized := 0
 			storesTotal := 3
 			startTotal := time.Now()
+			p := sdk.NewProgress(reporter, storesTotal)
+			p.Start("Starting database optimization")
 
 			// 1. Main store
 			_ = progress.Log("info", "Optimizing main database (VACUUM, ANALYZE, WAL checkpoint)...", nil)
-			_ = progress.UpdateProgress(0, storesTotal, "Optimizing main database...")
+			p.StepN(0, "Optimizing main database (0/3)")
 			t1 := time.Now()
 			if err := store.Optimize(); err != nil {
 				_ = progress.Log("error", fmt.Sprintf("Main DB optimization failed: %v", err), nil)
@@ -400,9 +407,9 @@ func (r *ExtraOpsRegistrar) RegisterDBOptimizeOp(reg *opsregistry.Registry) erro
 				storesOptimized++
 				_ = progress.Log("info", fmt.Sprintf("Main database optimized in %s", time.Since(t1).Round(time.Millisecond)), nil)
 			}
+			p.StepN(1, fmt.Sprintf("Main database done (1/%d)", storesTotal))
 
 			// 2. AI scan store
-			_ = progress.UpdateProgress(1, storesTotal, "Optimizing AI scan database...")
 			if r.Deps.AIScanStore != nil {
 				t2 := time.Now()
 				if err := r.Deps.AIScanStore.Optimize(); err != nil {
@@ -414,9 +421,9 @@ func (r *ExtraOpsRegistrar) RegisterDBOptimizeOp(reg *opsregistry.Registry) erro
 			} else {
 				_ = progress.Log("info", "AI scan store not initialized, skipping", nil)
 			}
+			p.StepN(2, fmt.Sprintf("AI scan database done (2/%d)", storesTotal))
 
 			// 3. OpenLibrary store (accessed via OLService)
-			_ = progress.UpdateProgress(2, storesTotal, "Optimizing OpenLibrary cache...")
 			if r.Deps.OLService != nil && r.Deps.OLService.Store() != nil {
 				t3 := time.Now()
 				if err := r.Deps.OLService.Store().Optimize(); err != nil {
@@ -428,10 +435,10 @@ func (r *ExtraOpsRegistrar) RegisterDBOptimizeOp(reg *opsregistry.Registry) erro
 			} else {
 				_ = progress.Log("info", "OpenLibrary store not initialized, skipping", nil)
 			}
+			p.StepN(3, fmt.Sprintf("OpenLibrary cache done (3/%d)", storesTotal))
 
-			_ = progress.UpdateProgress(storesTotal, storesTotal,
-				fmt.Sprintf("Database optimization complete: %d/%d stores in %s",
-					storesOptimized, storesTotal, time.Since(startTotal).Round(time.Millisecond)))
+			p.Done(fmt.Sprintf("Database optimization complete: %d/%d stores in %s",
+				storesOptimized, storesTotal, time.Since(startTotal).Round(time.Millisecond)))
 			return nil
 		},
 	})
@@ -580,12 +587,13 @@ func (r *ExtraOpsRegistrar) RegisterPurgeDeletedOp(reg *opsregistry.Registry) er
 				return fmt.Errorf("purge-deleted: decode params: %w", err)
 			}
 			progress := extraOpsProgressAdapter{r: reporter}
+			prog := sdk.NewProgress(reporter, 0)
+			prog.Start("Starting purge of soft-deleted books")
 			_ = progress.Log("info", "Starting purge of soft-deleted books", nil)
-			_ = progress.UpdateProgress(0, 100, "Purging soft-deleted books...")
 			r.runAutoPurgeSoftDeleted(ctx, p.LegacyOpID)
 			activity.FlushOperation(r.Deps.ActivityWriter, p.LegacyOpID)
 			_ = progress.Log("info", "Purge complete", nil)
-			_ = progress.UpdateProgress(100, 100, "Purge complete")
+			prog.Done("Purge complete")
 			return nil
 		},
 	})
@@ -614,15 +622,16 @@ func (r *ExtraOpsRegistrar) RegisterTombstoneCleanupOp(reg *opsregistry.Registry
 			if store == nil {
 				return fmt.Errorf("database not initialized")
 			}
+			p := sdk.NewProgress(reporter, 0)
+			p.Start("Resolving tombstone chains")
 			_ = progress.Log("info", "Starting author tombstone chain resolution", nil)
-			_ = progress.UpdateProgress(0, 100, "Resolving tombstone chains...")
 			updated, err := store.ResolveTombstoneChains()
 			if err != nil {
 				return fmt.Errorf("tombstone chain resolution failed: %w", err)
 			}
 			resultMsg := fmt.Sprintf("Resolved %d tombstone chains", updated)
 			_ = progress.Log("info", resultMsg, nil)
-			_ = progress.UpdateProgress(100, 100, resultMsg)
+			p.Done(resultMsg)
 			return nil
 		},
 	})
@@ -667,12 +676,15 @@ func (r *ExtraOpsRegistrar) RegisterResolveProductionAuthorsOp(reg *opsregistry.
 			_ = progress.Log("info", fmt.Sprintf("Found %d production company authors", len(prodAuthors)), nil)
 			total := len(prodAuthors)
 			resolved := 0
+			p := sdk.NewProgress(reporter, total)
+			p.Start(fmt.Sprintf("Processing %d production companies", total))
 			for i, author := range prodAuthors {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
 				books, err := store.GetBooksByAuthorIDWithRole(author.ID)
 				if err != nil {
+					p.StepN(i+1, fmt.Sprintf("Processed %d/%d production companies (%d books resolved)", i+1, total, resolved))
 					continue
 				}
 				for _, book := range books {
@@ -687,7 +699,7 @@ func (r *ExtraOpsRegistrar) RegisterResolveProductionAuthorsOp(reg *opsregistry.
 						}
 					}
 				}
-				_ = progress.UpdateProgress(i+1, total, fmt.Sprintf("Processed %d/%d production companies (%d books resolved)", i+1, total, resolved))
+				p.StepN(i+1, fmt.Sprintf("Processed %d/%d production companies (%d books resolved)", i+1, total, resolved))
 			}
 
 			if r.Deps.DedupCache != nil {
@@ -696,7 +708,7 @@ func (r *ExtraOpsRegistrar) RegisterResolveProductionAuthorsOp(reg *opsregistry.
 
 			resultMsg := fmt.Sprintf("Resolved %d books across %d production companies", resolved, total)
 			_ = progress.Log("info", resultMsg, nil)
-			_ = progress.UpdateProgress(total, total, resultMsg)
+			p.Done(resultMsg)
 			return nil
 		},
 	})
@@ -741,6 +753,7 @@ func (r *ExtraOpsRegistrar) runIsbnEnrichment(ctx context.Context, progress oper
 	if operations.IsManual(ctx) {
 		activity.EmitInfo(r.Deps.ActivityWriter, opID, "isbn-enrich", "isbn-enrichment", startMsg, activity.AlwaysShow)
 	}
+	_ = progress.UpdateProgress(0, 2, "Starting ISBN enrichment (0/2) (0.00%)")
 	checked, updated, err := r.Deps.MetadataFetchService.ISBNEnrichment().EnrichMissingISBNs(ctx, 100, r.Deps.ActivityWriter, opID)
 	if err != nil {
 		return err
@@ -748,7 +761,7 @@ func (r *ExtraOpsRegistrar) runIsbnEnrichment(ctx context.Context, progress oper
 	activity.FlushOperation(r.Deps.ActivityWriter, opID)
 	msg := fmt.Sprintf("ISBN enrichment complete: checked %d, updated %d", checked, updated)
 	_ = progress.Log("info", msg, nil)
-	_ = progress.UpdateProgress(100, 100, msg)
+	_ = progress.UpdateProgress(2, 2, fmt.Sprintf("%s (2/2) (100.00%%)", msg))
 	tags := activity.TagsIf(updated == 0, activity.NoOpTag)
 	if operations.IsManual(ctx) {
 		tags = append(tags, activity.AlwaysShow)
@@ -797,12 +810,20 @@ func (r *ExtraOpsRegistrar) runMetadataRefreshScan(ctx context.Context, progress
 		return fmt.Errorf("database not initialized")
 	}
 	_ = progress.Log("info", "Starting metadata refresh scan", nil)
-	_ = progress.UpdateProgress(0, 100, "Scanning books for incomplete metadata...")
 	books, err := store.GetAllBooks(10000, 0)
 	if err != nil {
 		return fmt.Errorf("failed to get books: %w", err)
 	}
-	_ = progress.Log("info", fmt.Sprintf("Checking %d books for incomplete metadata", len(books)), nil)
+	total := len(books)
+	denom := total + 2
+	fmtPct := func(cur int) float64 {
+		if denom <= 0 {
+			return 0
+		}
+		return float64(cur) / float64(denom) * 100
+	}
+	_ = progress.UpdateProgress(0, denom, fmt.Sprintf("Scanning %d books for incomplete metadata (0/%d) (%.2f%%)", total, denom, fmtPct(0)))
+	_ = progress.Log("info", fmt.Sprintf("Checking %d books for incomplete metadata", total), nil)
 	incomplete := 0
 	for i, book := range books {
 		select {
@@ -815,11 +836,11 @@ func (r *ExtraOpsRegistrar) runMetadataRefreshScan(ctx context.Context, progress
 			_ = progress.Log("debug", fmt.Sprintf("Incomplete: %q (id=%s)", book.Title, book.ID), nil)
 		}
 		if (i+1)%200 == 0 {
-			_ = progress.UpdateProgress(i+1, len(books), fmt.Sprintf("Checked %d/%d books", i+1, len(books)))
+			_ = progress.UpdateProgress(i+1, denom, fmt.Sprintf("Checked %d/%d books (%.2f%%)", i+1, total, fmtPct(i+1)))
 		}
 	}
-	resultMsg := fmt.Sprintf("Found %d books with incomplete metadata out of %d total", incomplete, len(books))
+	resultMsg := fmt.Sprintf("Found %d books with incomplete metadata out of %d total", incomplete, total)
 	_ = progress.Log("info", resultMsg, nil)
-	_ = progress.UpdateProgress(len(books), len(books), resultMsg)
+	_ = progress.UpdateProgress(denom, denom, fmt.Sprintf("%s (%d/%d) (100.00%%)", resultMsg, denom, denom))
 	return nil
 }

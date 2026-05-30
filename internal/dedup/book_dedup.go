@@ -48,23 +48,27 @@ func ScanBookDuplicates(
 	dismissed map[string]bool,
 	progress ProgressReporter,
 ) (BookScanResult, error) {
-	report := func(pct int, msg string) {
+	// Fixed-step scan: 5 stages (start, hash, folder, metadata, merge, done).
+	const totalSteps = 5
+	report := func(step int, msg string) {
 		if progress != nil {
-			_ = progress.UpdateProgress(pct, 100, msg)
+			pct := float64(step) * 100.0 / float64(totalSteps)
+			_ = progress.UpdateProgress(step, totalSteps,
+				fmt.Sprintf("%s (%d/%d, %.2f%%)", msg, step, totalSteps, pct))
 		}
 	}
 
 	report(0, "Scanning for duplicate books...")
 
 	// Step 1: Hash-based duplicates (high confidence)
-	report(10, "Finding hash-based duplicates...")
+	report(1, "Finding hash-based duplicates...")
 	hashGroups, err := store.GetDuplicateBooks()
 	if err != nil {
 		return BookScanResult{}, fmt.Errorf("hash-based dedup failed: %w", err)
 	}
 
 	// Step 2: Folder duplicates (same title in same folder)
-	report(30, "Finding folder-based duplicates...")
+	report(2, "Finding folder-based duplicates...")
 	folderGroups, err := store.GetFolderDuplicates()
 	if err != nil {
 		slog.Warn("folder dedup failed", "error", err)
@@ -72,14 +76,14 @@ func ScanBookDuplicates(
 	}
 
 	// Step 3: Metadata-based fuzzy matching
-	report(50, "Finding metadata-based duplicates...")
+	report(3, "Finding metadata-based duplicates...")
 	metadataGroups, err := store.GetDuplicateBooksByMetadata(0.85)
 	if err != nil {
 		slog.Warn("metadata dedup failed", "error", err)
 		metadataGroups = nil
 	}
 
-	report(80, "Merging results...")
+	report(4, "Merging results...")
 
 	// Combine all groups, deduplicating by book ID.
 	seenBookIDs := map[string]bool{}
@@ -128,7 +132,7 @@ func ScanBookDuplicates(
 		totalDuplicates += len(g.Books) - 1
 	}
 
-	report(100, fmt.Sprintf("Found %d duplicate groups (%d duplicates)", len(allGroups), totalDuplicates))
+	report(5, fmt.Sprintf("Found %d duplicate groups (%d duplicates)", len(allGroups), totalDuplicates))
 
 	return BookScanResult{
 		Groups:          allGroups,
@@ -164,10 +168,16 @@ func MergeBooks(
 		return BookMergeResult{}, fmt.Errorf("keep book %s not found", keepID)
 	}
 
+	total := len(mergeIDs)
 	if progress != nil {
 		_ = progress.Log("info",
-			fmt.Sprintf("Merging %d book(s) into %q", len(mergeIDs), keepBook.Title), nil)
-		_ = progress.UpdateProgress(0, len(mergeIDs), "Starting book merge...")
+			fmt.Sprintf("Merging %d book(s) into %q", total, keepBook.Title), nil)
+		denom := total
+		if denom == 0 {
+			denom = 1
+		}
+		_ = progress.UpdateProgress(0, denom,
+			fmt.Sprintf("Starting book merge... (0/%d, 0.00%%)", total))
 	}
 
 	kBook, err := store.GetBookByID(keepID)
@@ -227,8 +237,9 @@ func MergeBooks(
 		}
 
 		if progress != nil {
-			_ = progress.UpdateProgress(i+1, len(mergeIDs),
-				fmt.Sprintf("Merged %d/%d books", i+1, len(mergeIDs)))
+			pct := float64(i+1) * 100.0 / float64(total)
+			_ = progress.UpdateProgress(i+1, total,
+				fmt.Sprintf("Merged %d/%d books (%.2f%%)", i+1, total, pct))
 		}
 	}
 
@@ -241,6 +252,12 @@ func MergeBooks(
 		msg := fmt.Sprintf("Book merge complete: merged %d, %d errors",
 			result.MergedCount, len(result.Errors))
 		_ = progress.Log("info", msg, nil)
+		denom := total
+		if denom == 0 {
+			denom = 1
+		}
+		_ = progress.UpdateProgress(denom, denom,
+			fmt.Sprintf("%s (%d/%d, 100.00%%)", msg, total, total))
 	}
 
 	result.UpdatedKeepBook = kBook

@@ -1,5 +1,5 @@
 // file: internal/plugins/acoustid/reset_all.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: f3b1e8c4-2d7a-4d62-aabb-1f1d6e2c4a01
 // last-edited: 2026-05-30
 
@@ -53,7 +53,11 @@ func (p *Plugin) runResetAll(ctx context.Context, _ json.RawMessage, reporter sd
 	log := reporter.Logger()
 	startedAt := time.Now()
 
-	_ = reporter.UpdateProgress(0, 100, "Clearing fingerprints (batched)…")
+	// Initial Progress with N=0 — we don't know the real N until we either
+	// get the first callback from the Pebble bulk-clear or load the slow
+	// path's file list. The helper degrades gracefully to a 2-frame bar.
+	prog := sdk.NewProgress(reporter, 0)
+	prog.Start("Clearing fingerprints (batched)…")
 
 	var cleared int
 
@@ -61,13 +65,16 @@ func (p *Plugin) runResetAll(ctx context.Context, _ json.RawMessage, reporter sd
 	// per ~2000 records instead of once per UpdateBookFile call — ~100×
 	// faster than the per-row fallback below.
 	if pebble, ok := p.store.(*database.PebbleStore); ok {
+		var totalN int
 		c, t, clearErr := pebble.ClearAllAcoustIDFingerprints(ctx, 2000,
 			func(processed, c, t int) {
-				pct := 0
-				if t > 0 {
-					pct = int(float64(processed) / float64(t) * 80)
+				// Rebuild the Progress as soon as we know the real total.
+				if totalN != t {
+					totalN = t
+					prog = sdk.NewProgress(reporter, t)
+					prog.Start("Clearing fingerprints (batched)…")
 				}
-				_ = reporter.UpdateProgress(pct, 100,
+				prog.StepN(processed,
 					fmt.Sprintf("Clearing fingerprints %d/%d (cleared=%d)", processed, t, c))
 			})
 		if clearErr != nil {
@@ -83,6 +90,8 @@ func (p *Plugin) runResetAll(ctx context.Context, _ json.RawMessage, reporter sd
 		}
 		total := len(files)
 		log.Info("acoustid reset-all: clearing fingerprints (slow path)", "book_files", total)
+		prog = sdk.NewProgress(reporter, total)
+		prog.Start("Clearing fingerprints (slow path)…")
 		for i := range files {
 			select {
 			case <-ctx.Done():
@@ -109,8 +118,7 @@ func (p *Plugin) runResetAll(ctx context.Context, _ json.RawMessage, reporter sd
 			}
 			cleared++
 			if i%500 == 0 || i == total-1 {
-				pct := int(float64(i+1) / float64(total) * 80)
-				_ = reporter.UpdateProgress(pct, 100,
+				prog.StepN(i+1,
 					fmt.Sprintf("Clearing fingerprints %d/%d (cleared=%d)", i+1, total, cleared))
 			}
 		}
@@ -118,7 +126,7 @@ func (p *Plugin) runResetAll(ctx context.Context, _ json.RawMessage, reporter sd
 
 	// Drop acoustid-layer pending candidates so the dedup review doesn't
 	// keep showing the 14K+ poisoned rows after the rescan starts.
-	_ = reporter.UpdateProgress(85, 100, "Dropping acoustid dedup candidates…")
+	prog.Finalize("Dropping acoustid dedup candidates…")
 	deleted := 0
 	if p.embeddingStore != nil {
 		offset := 0
@@ -150,16 +158,12 @@ func (p *Plugin) runResetAll(ctx context.Context, _ json.RawMessage, reporter sd
 		}
 	}
 
-	_ = reporter.UpdateProgress(95, 100,
-		fmt.Sprintf("Cleared %d files, dropped %d candidates", cleared, deleted))
-
 	log.Info("acoustid reset-all: complete",
 		"cleared", cleared,
 		"candidates_deleted", deleted,
 		"elapsed", time.Since(startedAt).Round(time.Second))
 
-	_ = reporter.UpdateProgress(100, 100,
-		fmt.Sprintf("Reset complete: %d files cleared, %d candidates dropped (elapsed %s). Now enqueue acoustid.fingerprint-rescan with scope=all force=true.",
-			cleared, deleted, time.Since(startedAt).Round(time.Second)))
+	prog.Done(fmt.Sprintf("Reset complete: %d files cleared, %d candidates dropped (elapsed %s). Now enqueue acoustid.fingerprint-rescan with scope=all force=true.",
+		cleared, deleted, time.Since(startedAt).Round(time.Second)))
 	return nil
 }
