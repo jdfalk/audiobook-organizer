@@ -150,6 +150,14 @@ export interface Book {
   // MATCH-1: metadata-source deduplication
   metadata_source_hash?: string | null;
   metadata_source_hash_duplicate_count?: number | null;
+  // Book-level fingerprint signature (whole-file chromaprint synthesis)
+  book_sig_v1?: string | null;
+  book_sig_segments?: number | null;
+  book_sig_built_at?: string | null;
+  book_sig_v1_mask?: string | null;
+  // 0–100 coverage % of real (non-synthesized) audio in the book sig.
+  // null / undefined = full coverage (all files contributed real fingerprints).
+  book_sig_coverage_pct?: number | null;
 }
 
 export interface Author {
