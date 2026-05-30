@@ -33,6 +33,7 @@ import {
   useTheme,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh.js';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy.js';
 import PushPinIcon from '@mui/icons-material/PushPin.js';
 import TimelineIcon from '@mui/icons-material/Timeline.js';
 import ClearIcon from '@mui/icons-material/Clear.js';
@@ -341,16 +342,22 @@ export default function ActivityLog() {
     }
   }, [typeFilter, levelFilter, operationId, sinceFilter, untilFilter, search, excludedSources, tiers, hideNoOp, tagFilter]);
 
-  // Initial load + polling for active ops (3s when Activity page is mounted or bell is open)
+  // Initial load + polling for active ops (3s when Activity page is mounted or
+  // bell is open). The interval was unconditional before — toggling
+  // Auto-refresh OFF didn't actually stop it, which made the toggle a lie.
+  // Now it respects autoRefresh: initial fetch always runs, interval only
+  // arms when autoRefresh is on.
   useEffect(() => {
     loadActiveOpsFromServer();
     if (opsIntervalRef.current) window.clearInterval(opsIntervalRef.current);
-    opsIntervalRef.current = window.setInterval(loadActiveOpsFromServer, 3000);
+    if (autoRefresh) {
+      opsIntervalRef.current = window.setInterval(loadActiveOpsFromServer, 3000);
+    }
     return () => {
       if (opsIntervalRef.current) window.clearInterval(opsIntervalRef.current);
       opsIntervalRef.current = null;
     };
-  }, [loadActiveOpsFromServer]);
+  }, [loadActiveOpsFromServer, autoRefresh]);
 
   // Load feed when filters change
   useEffect(() => {
@@ -421,6 +428,37 @@ export default function ActivityLog() {
       await loadActiveOpsFromServer();
     } catch (err) {
       console.error('Failed to clear stale operations', err);
+    }
+  };
+
+  // Per-op manual refresh: forces a server fetch for just this op's progress
+  // / status without waiting for the auto-refresh tick. Useful when the user
+  // has Auto-refresh OFF but wants the truth on one op.
+  const handleRefreshOp = async (_opId: string) => {
+    try {
+      await loadActiveOpsFromServer();
+    } catch (err) {
+      console.error('Failed to refresh op', err);
+    }
+  };
+
+  // Per-op copy: plain-text summary suitable for pasting into a bug report
+  // or sharing with another claude session — id, def, status, progress,
+  // message, timestamps.
+  const handleCopyOp = async (op: typeof activeOps[0]) => {
+    const lines = [
+      `id:       ${op.id}`,
+      `def:      ${op.def_id ?? op.type}`,
+      `name:     ${op.displayName ?? ''}`,
+      `status:   ${op.status}`,
+      `progress: ${op.progress} / ${op.total}` +
+        (op.total > 0 ? ` (${((op.progress / op.total) * 100).toFixed(2)}%)` : ''),
+      `message:  ${op.message ?? ''}`,
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+    } catch (err) {
+      console.error('Failed to copy op summary', err);
     }
   };
 
@@ -768,7 +806,12 @@ export default function ActivityLog() {
                 ];
 
                 const renderOp = (op: typeof activeOps[0]) => {
-                  const pct = op.total > 0 ? Math.round((op.progress / op.total) * 100) : 0;
+                  // 2-decimal precision so a 49915-book scan shows 1.10 → 1.11
+                  // → 1.12 instead of being welded to "1%" for hundreds of
+                  // books at a time. fmtPct returns "1.10" not "1.1".
+                  const pctNum = op.total > 0 ? (op.progress / op.total) * 100 : 0;
+                  const pct = pctNum >= 100 ? '100' : pctNum.toFixed(2);
+                  const pctBar = Math.min(100, pctNum); // for LinearProgress value
                   const depth = getDepth(op);
                   const indent = depth * 24; // 24px per level for indentation
                   const hasChildren = (childrenCount[op.id] ?? 0) > 0;
@@ -827,18 +870,38 @@ export default function ActivityLog() {
                             }
                           />
                         </Stack>
-                        {!['completed', 'failed', 'canceled'].includes(op.status) && (
-                          <Button
-                            size="small"
-                            color="error"
-                            variant="outlined"
-                            startIcon={<CancelIcon />}
-                            onClick={(e) => { e.stopPropagation(); handleCancelOp(op.id); }}
-                            disabled={cancelling.has(op.id)}
-                          >
-                            {cancelling.has(op.id) ? 'Cancelling...' : 'Cancel'}
-                          </Button>
-                        )}
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <Tooltip title="Refresh this operation">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => { e.stopPropagation(); handleRefreshOp(op.id); }}
+                              aria-label="Refresh"
+                            >
+                              <RefreshIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Copy op summary">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => { e.stopPropagation(); handleCopyOp(op); }}
+                              aria-label="Copy"
+                            >
+                              <ContentCopyIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {!['completed', 'failed', 'canceled'].includes(op.status) && (
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="outlined"
+                              startIcon={<CancelIcon />}
+                              onClick={(e) => { e.stopPropagation(); handleCancelOp(op.id); }}
+                              disabled={cancelling.has(op.id)}
+                            >
+                              {cancelling.has(op.id) ? 'Cancelling...' : 'Cancel'}
+                            </Button>
+                          )}
+                        </Stack>
                       </Stack>
                       {op.status === 'queued' ? (
                         <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
@@ -871,7 +934,7 @@ export default function ActivityLog() {
                         )
                       ) : op.total > 0 ? (
                         <Box>
-                          <LinearProgress variant="determinate" value={pct} sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
+                          <LinearProgress variant="determinate" value={pctBar} sx={{ height: 6, borderRadius: 1, mb: 0.5 }} />
                           <Typography variant="caption" color="text.secondary">
                             {op.progress.toLocaleString()} / {op.total.toLocaleString()} ({pct}%)
                           </Typography>

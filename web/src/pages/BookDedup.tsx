@@ -39,6 +39,7 @@ import {
   TablePagination,
   Drawer,
   Switch,
+  Link,
   Table,
   TableHead,
   TableRow,
@@ -2188,7 +2189,6 @@ function qualityChip(score: number) {
 
 // ---- Acoustic Dedup Tab ----
 function AcousticDedupTab() {
-  const navigate = useNavigate();
   const [candidates, setCandidates] = useState<DedupCandidate[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -2196,8 +2196,13 @@ function AcousticDedupTab() {
   const [fingerprinting, setFingerprinting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const rowsPerPage = 25;
+  // Bigger default than 25 and exposes 50/100/250 because 12K candidates at
+  // 25/page is 512 clicks — the user understandably refuses to triage that
+  // way. Multiselect bulk Keep-A / Keep-B / Dismiss is a follow-up.
+  const [rowsPerPage, setRowsPerPage] = useState(100);
   const [bookCache, setBookCache] = useState<Map<string, Book>>(new Map());
+  const [selectedCandIds, setSelectedCandIds] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [resolving, setResolving] = useState<Set<number>>(new Set());
   const [compareA, setCompareA] = useState('');
   const [compareB, setCompareB] = useState('');
@@ -2316,6 +2321,43 @@ function AcousticDedupTab() {
     }
   };
 
+  // Bulk dismiss N candidates in parallel (capped concurrency to be polite to
+  // the backend). Refreshes the list once at the end instead of per-call so
+  // the UI doesn't thrash. Selecting nothing is a no-op.
+  const bulkApply = async (
+    action: 'dismiss' | 'keep-a' | 'keep-b',
+  ) => {
+    if (selectedCandIds.size === 0) return;
+    setBulkBusy(true);
+    const ids = Array.from(selectedCandIds);
+    const failed: number[] = [];
+    const CONCURRENCY = 5;
+    for (let i = 0; i < ids.length; i += CONCURRENCY) {
+      const batch = ids.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(async (id) => {
+        const c = candidates.find((x) => x.id === id);
+        if (!c) return;
+        try {
+          if (action === 'dismiss') {
+            await api.dismissDedupCandidate(id);
+          } else if (action === 'keep-a') {
+            await api.mergeDedupCandidate(id, c.entity_a_id);
+          } else {
+            await api.mergeDedupCandidate(id, c.entity_b_id);
+          }
+        } catch {
+          failed.push(id);
+        }
+      }));
+    }
+    setSelectedCandIds(new Set(failed));
+    setBulkBusy(false);
+    setStatusMsg(failed.length === 0
+      ? `Bulk ${action}: ${ids.length} candidate(s) processed`
+      : `Bulk ${action}: ${ids.length - failed.length} ok, ${failed.length} failed`);
+    await loadCandidates();
+  };
+
   const simPct = (c: DedupCandidate) =>
     c.similarity != null ? `${Math.round(c.similarity * 100)}%` : '—';
 
@@ -2326,6 +2368,66 @@ function AcousticDedupTab() {
     const isGarbage = !title || title.toUpperCase() === 'TITLE' || /^[0-9A-Z]{26}$/.test(title.trim());
     if (isGarbage) return <em style={{ color: 'orange' }}>{title || '(no title)'}</em>;
     return title;
+  };
+
+  // Renders the title + file path for a candidate cell. Title opens the book
+  // detail page in a new tab so reviewers don't lose their position in the
+  // dedup list. File path lives directly under the title so reviewers can
+  // disambiguate when titles are missing, identical, or wrong — the case the
+  // user has been screaming about. If the book row 404s out of the backend
+  // (merged/deleted/orphaned candidate) the cell shows a clear "(missing)"
+  // marker and a Dismiss-orphan action is implied via the row's Dismiss
+  // button.
+  const renderBookCell = (id: string) => {
+    const b = bookCache.get(id);
+    const missing = !b;
+    const path = b?.file_path ?? '';
+    return (
+      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+        {missing ? (
+          <Typography variant="body2" sx={{ color: 'error.main', fontStyle: 'italic' }}>
+            (missing book — {id.slice(-8)})
+          </Typography>
+        ) : (
+          <Link
+            href={`/books/${id}`}
+            target="_blank"
+            rel="noopener"
+            underline="hover"
+            sx={{
+              color: 'primary.main',
+              fontWeight: 500,
+              fontSize: '0.95rem',
+              textTransform: 'none',
+              textAlign: 'left',
+              display: 'block',
+              whiteSpace: 'normal',
+              wordBreak: 'break-word',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {bookTitle(id)}
+          </Link>
+        )}
+        {path && (
+          <Tooltip title={path} placement="bottom-start">
+            <Typography
+              variant="caption"
+              sx={{
+                color: 'text.secondary',
+                fontFamily: 'monospace',
+                fontSize: '0.72rem',
+                lineHeight: 1.2,
+                wordBreak: 'break-all',
+                opacity: 0.75,
+              }}
+            >
+              {path}
+            </Typography>
+          </Tooltip>
+        )}
+      </Stack>
+    );
   };
 
   return (
@@ -2360,9 +2462,53 @@ function AcousticDedupTab() {
         <Alert severity="info">No acoustic duplicate candidates found. Run "Fingerprint Books" then "Find Acoustic Duplicates".</Alert>
       ) : (
         <Paper>
+          {/* Bulk action toolbar — visible whenever any row is selected. */}
+          {selectedCandIds.size > 0 && (
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ px: 2, py: 1, bgcolor: 'action.selected', borderBottom: '1px solid', borderColor: 'divider' }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {selectedCandIds.size} selected
+              </Typography>
+              <Box sx={{ flexGrow: 1 }} />
+              <Button size="small" variant="outlined" disabled={bulkBusy}
+                onClick={() => bulkApply('keep-a')}>
+                Keep A on {selectedCandIds.size}
+              </Button>
+              <Button size="small" variant="outlined" disabled={bulkBusy}
+                onClick={() => bulkApply('keep-b')}>
+                Keep B on {selectedCandIds.size}
+              </Button>
+              <Button size="small" variant="outlined" color="warning" disabled={bulkBusy}
+                onClick={() => bulkApply('dismiss')}>
+                Dismiss {selectedCandIds.size}
+              </Button>
+              <Button size="small" variant="text" disabled={bulkBusy}
+                onClick={() => setSelectedCandIds(new Set())}>
+                Clear
+              </Button>
+            </Stack>
+          )}
           <Table size="small">
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    size="small"
+                    indeterminate={selectedCandIds.size > 0 && selectedCandIds.size < candidates.length}
+                    checked={candidates.length > 0 && selectedCandIds.size === candidates.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedCandIds(new Set(candidates.map((c) => c.id)));
+                      } else {
+                        setSelectedCandIds(new Set());
+                      }
+                    }}
+                  />
+                </TableCell>
                 <TableCell>Book A</TableCell>
                 <TableCell>Book B</TableCell>
                 <TableCell align="center">Similarity</TableCell>
@@ -2378,27 +2524,41 @@ function AcousticDedupTab() {
                 const recommendA = qA > qB;
                 const recommendB = qB > qA;
                 const busy = resolving.has(c.id);
+                const selected = selectedCandIds.has(c.id);
                 return (
-                  <TableRow key={c.id} hover sx={{ opacity: busy ? 0.5 : 1 }}>
-                    <TableCell>
+                  <TableRow
+                    key={c.id}
+                    hover
+                    selected={selected}
+                    sx={{ opacity: busy ? 0.5 : 1 }}
+                  >
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={selected}
+                        onChange={(e) => {
+                          setSelectedCandIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(c.id);
+                            else next.delete(c.id);
+                            return next;
+                          });
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ verticalAlign: 'top', minWidth: 280 }}>
                       <Stack spacing={0.5}>
-                        <Button size="small" sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
-                          onClick={() => navigate(`/books/${c.entity_a_id}`)}>
-                          {bookTitle(c.entity_a_id)}
-                        </Button>
-                        <Stack direction="row" spacing={0.5}>
+                        {renderBookCell(c.entity_a_id)}
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
                           {qualityChip(qA)}
                           {recommendA && <Chip label="★ Recommended keep" size="small" color="primary" />}
                         </Stack>
                       </Stack>
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ verticalAlign: 'top', minWidth: 280 }}>
                       <Stack spacing={0.5}>
-                        <Button size="small" sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
-                          onClick={() => navigate(`/books/${c.entity_b_id}`)}>
-                          {bookTitle(c.entity_b_id)}
-                        </Button>
-                        <Stack direction="row" spacing={0.5}>
+                        {renderBookCell(c.entity_b_id)}
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
                           {qualityChip(qB)}
                           {recommendB && <Chip label="★ Recommended keep" size="small" color="primary" />}
                         </Stack>
@@ -2444,9 +2604,10 @@ function AcousticDedupTab() {
             component="div"
             count={total}
             page={page}
-            onPageChange={(_, p) => setPage(p)}
+            onPageChange={(_, p) => { setPage(p); setSelectedCandIds(new Set()); }}
             rowsPerPage={rowsPerPage}
-            rowsPerPageOptions={[rowsPerPage]}
+            onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); setSelectedCandIds(new Set()); }}
+            rowsPerPageOptions={[25, 50, 100, 250]}
           />
         </Paper>
       )}

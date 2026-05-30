@@ -41,19 +41,19 @@ func (p *Plugin) runAcoustIDScan(ctx context.Context, _ json.RawMessage, reporte
 		return fmt.Errorf("dedup engine not available")
 	}
 
-	_ = reporter.UpdateProgress(0, 100, "Starting AcoustID fingerprint scan...")
+	_ = reporter.UpdateProgress(0, 1, "Starting AcoustID fingerprint scan...")
 
-	var lastPct int
+	// Pass REAL done/total instead of remapping to 0..100. The UI computes
+	// the percentage with 2-decimal precision, so a 49915-book scan shows
+	// "551 / 49915 (1.10%)" instead of being welded to "1 / 100 (1%)" for
+	// hundreds of books at a time. The dedup-by-percent throttle (which
+	// was hiding real progress) is replaced by the engine's existing
+	// every-50-books emit cadence.
 	scanErr := p.engine.AcoustIDScan(ctx, func(done, total int) {
 		if total <= 0 {
 			return
 		}
-		pct := 1 + (98 * done / total)
-		if pct == lastPct {
-			return
-		}
-		lastPct = pct
-		_ = reporter.UpdateProgress(pct, 100, fmt.Sprintf("Scanning books: %d / %d", done, total))
+		_ = reporter.UpdateProgress(done, total, fmt.Sprintf("Scanning books: %d / %d", done, total))
 	})
 	if scanErr != nil {
 		reporter.Logger().Error("AcoustIDScan error", "error", scanErr)
@@ -67,7 +67,7 @@ func (p *Plugin) runAcoustIDScan(ctx context.Context, _ json.RawMessage, reporte
 			pendingCount = total
 		}
 	}
-	_ = reporter.UpdateProgress(100, 100,
+	_ = reporter.UpdateProgress(1, 1,
 		fmt.Sprintf("AcoustID scan complete — %d pending candidate(s)", pendingCount))
 	return nil
 }
