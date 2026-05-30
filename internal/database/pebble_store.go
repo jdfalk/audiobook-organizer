@@ -3201,55 +3201,73 @@ func (p *PebbleStore) GetBookSizesByLocation(rootDir string) (librarySize, impor
 // Only when a cache miss (TTL expiry, or recent compute + dirty but outside min-interval)
 // requires recompute, a per-process mutex gates the work to prevent concurrent stampedes.
 func (p *PebbleStore) GetDashboardStats() (*DashboardStats, error) {
-	// Fast path: check if cached value exists and is recent (within min-interval)
-	if cached := p.readCachedLibraryStats(); cached != nil {
+	// Stale-while-revalidate. ANY cached value — even a week-old one —
+	// is returned immediately; if stale beyond the min-interval, kick a
+	// background recompute for next time. This eliminates the cold-start
+	// 87s spike where memdb wasn't warm yet and computeLibraryStats fell
+	// through to a slow Pebble scan blocking the dashboard.
+	cached := p.readCachedLibraryStats()
+
+	if cached != nil {
 		ageSec := time.Since(cached.ComputedAt).Seconds()
 		minIntervalSec := float64(getLibraryCountsMinIntervalSeconds())
-		if ageSec < minIntervalSec {
-			slog.Debug("library_counts cache hit (within min interval)",
+		if ageSec >= minIntervalSec {
+			// Stale: kick off background recompute. TryLock so we don't
+			// queue duplicate recomputes — one in flight is enough.
+			if p.libraryCountsRecomputeMu.TryLock() {
+				go func() {
+					defer p.libraryCountsRecomputeMu.Unlock()
+					start := time.Now()
+					stats, err := p.computeLibraryStats()
+					if err != nil {
+						slog.Warn("library_counts background recompute failed",
+							"component", "library_counts_cache", "error", err)
+						return
+					}
+					p.writeCachedLibraryStats(stats)
+					slog.Info("library_counts cache recomputed (background)",
+						"component", "library_counts_cache",
+						"total_books", stats.TotalBooks,
+						"duration_ms", time.Since(start).Milliseconds(),
+						"reason", "stale-while-revalidate",
+					)
+				}()
+			}
+		} else {
+			slog.Debug("library_counts cache hit (fresh)",
 				"component", "library_counts_cache",
 				"age_seconds", ageSec,
 				"min_interval_seconds", minIntervalSec,
 			)
-			return cached, nil
 		}
-		// Cached but outside min-interval; allow recompute (fall through)
+		return cached, nil
 	}
 
-	// Slow path: recompute needed. Gate with mutex to prevent stampede when N
-	// concurrent callers all see dirty cache simultaneously.
+	// No cache at all (first boot or post-Invalidate restart). Block on
+	// recompute — nothing to serve in the meantime.
 	p.libraryCountsRecomputeMu.Lock()
 	defer p.libraryCountsRecomputeMu.Unlock()
 
-	// Double-check: another goroutine may have just recomputed while we waited for the lock
+	// Double-check: a peer goroutine may have populated the cache while
+	// we waited for the lock.
 	if cached := p.readCachedLibraryStats(); cached != nil {
-		ageSec := time.Since(cached.ComputedAt).Seconds()
-		minIntervalSec := float64(getLibraryCountsMinIntervalSeconds())
-		if ageSec < minIntervalSec {
-			slog.Debug("library_counts cache hit (within min interval, after lock wait)",
-				"component", "library_counts_cache",
-				"age_seconds", ageSec,
-				"min_interval_seconds", minIntervalSec,
-			)
-			return cached, nil
-		}
+		return cached, nil
 	}
 
-	// Perform recompute
 	start := time.Now()
 	stats, err := p.computeLibraryStats()
 	if err != nil {
 		return nil, err
 	}
 	p.writeCachedLibraryStats(stats)
-	slog.Info("library_counts cache recomputed",
+	slog.Info("library_counts cache recomputed (cold)",
 		"component", "library_counts_cache",
 		"total_books", stats.TotalBooks,
 		"organized_books", stats.OrganizedBooks,
 		"unorganized_books", stats.UnorganizedBooks,
 		"broken_files", stats.BrokenFiles,
 		"duration_ms", time.Since(start).Milliseconds(),
-		"reason", "expired",
+		"reason", "cold-cache",
 	)
 	return stats, nil
 }
