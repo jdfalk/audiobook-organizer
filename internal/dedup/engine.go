@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -25,6 +26,24 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// acoustidFuzzyEnabled gates the tier-2 fuzzy AcoustID lookup. Default OFF.
+//
+// Background: tier-2 is an O(N) similarity scan over all 308K+ BookFile rows
+// per query. The dedup engine calls it per seg per file per book when the
+// tier-1 exact lookup misses — which on a fresh corpus is most segments,
+// because rescan hasn't backfilled fingerprints for neighbouring books yet.
+// Even routed through memdb (PR #1194) the in-RAM walk is too slow to keep
+// the scan moving fast enough to dodge the registry's infinite-restart
+// force-drop guard.
+//
+// Until LSH/minhash bucketing lands (architecture proposal Stage B), tier-2
+// stays off by default. Set ACOUSTID_FUZZY_ENABLED=1 to re-enable for
+// experiments on small corpora.
+//
+// Tier-1 (exact) is O(1) via the pre-built book_file_acoustid: Pebble index
+// and catches the dominant case (identical fingerprints across duplicates).
+var acoustidFuzzyEnabled = os.Getenv("ACOUSTID_FUZZY_ENABLED") == "1"
 
 var dedupTracer = otel.Tracer("audiobook-organizer/dedup")
 
@@ -2176,17 +2195,18 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 					continue
 				}
 
-				// Tier 1: exact match.
+				// Tier 1: exact match (O(1) via Pebble book_file_acoustid: index).
 				exactHit, _ := de.bookStore.GetBookFileByAcoustID(seg)
 				if exactHit != nil && exactHit.BookID != book.ID {
 					emit(book.ID, exactHit.BookID, 1.0)
+					continue
 				}
 
-				// Tier 2: fuzzy match — only when exact missed. The previous
-				// code called fuzzy unconditionally; on a 308K-file corpus
-				// fuzzy hits an O(n) Pebble scan per seg per file per book,
-				// which wedged the scan at ~book 1 in prod.
-				if exactHit != nil {
+				// Tier 2: fuzzy match. Gated by ACOUSTID_FUZZY_ENABLED; OFF by
+				// default. Even routed through memdb (PR #1194), this is an
+				// O(308K-row) walk per call and force-drops the scan on a
+				// 50K-book library. Waits for LSH bucketing (Stage B).
+				if !acoustidFuzzyEnabled {
 					continue
 				}
 				if match, _ := de.bookStore.GetBookFileByAcoustIDFuzzy(seg, fingerprint.FuzzyMinSimilarity); match != nil && match.BookID != book.ID {
