@@ -1,7 +1,7 @@
 // file: internal/database/store.go
-// version: 2.76.0
+// version: 2.77.0
 // guid: 8a9b0c1d-2e3f-4a5b-6c7d-8e9f0a1b2c3d
-// last-edited: 2026-05-20
+// last-edited: 2026-05-30
 
 package database
 
@@ -673,7 +673,18 @@ type BookFile struct {
 	// tag write. It differs from OriginalFileHash because tag writes add/change
 	// bytes in the header. Store it so pre-write identity is always recoverable.
 	PostMetadataHash string `json:"post_metadata_hash,omitempty"`
-	// 7 acoustic fingerprint segments. [0]=intro, [1-5]=body, [6]=outro.
+	// AcoustIDFingerprint is the whole-file chromaprint, raw uint32 stream
+	// stored as little-endian bytes. 4 bytes per frame at 8 frames/sec.
+	// Populated by FileWholeFingerprint. Preferred over the segment fields
+	// for similarity matching.
+	AcoustIDFingerprint []byte `json:"acoustid_fingerprint,omitempty"`
+	// AcoustIDFingerprintDurationSec is the duration fpcalc actually
+	// measured while decoding (may differ from container metadata when the
+	// container is lying about duration).
+	AcoustIDFingerprintDurationSec float64 `json:"acoustid_fingerprint_duration_sec,omitempty"`
+	// 7-segment fields. Deprecated — kept for back-compat reads during the
+	// whole-file migration. New writes only populate Seg0 as a transition
+	// fallback; Seg1..6 are no longer written.
 	AcoustIDSeg0 string `json:"acoustid_seg0,omitempty"`
 	AcoustIDSeg1 string `json:"acoustid_seg1,omitempty"`
 	AcoustIDSeg2 string `json:"acoustid_seg2,omitempty"`

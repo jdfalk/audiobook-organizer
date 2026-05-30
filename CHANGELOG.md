@@ -1,13 +1,52 @@
 <!-- file: CHANGELOG.md -->
-<!-- version: 3.05.0 -->
+<!-- version: 3.06.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-29 -->
+<!-- last-edited: 2026-05-30 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Changes
+
+#### May 30, 2026 — Whole-file fingerprint migration (Step 1 + 2)
+
+Replaces the 7-segment per-BookFile fingerprint with a single whole-file
+chromaprint stored as raw uint32 LE bytes. Step 1 stops new fingerprints
+from being poisoned by ffmpeg's seek-past-EOF behaviour on m4b files
+with wrong duration metadata (the source of the ~14K false-positive
+100% dedup matches and the 71% prod fingerprint coverage gap).
+
+- `internal/fingerprint/wholefile.go` — new `FileWholeFingerprint(path)`
+  extracts from offset 0 to EOF with no `-length` cap and no offset
+  seeking. Rejects results with <80 frames. Exposes `DeriveSeg0(raw)`
+  so the legacy `AcoustIDSeg0` field stays populated as a transition
+  fallback without a second fpcalc invocation. New `WholeFileSimilarity`
+  Hamming-compares the middle 80% of two fps to suppress shared
+  Audible intros / publisher stings / "this has been an Audible
+  production" outros that otherwise make every Audible book partially
+  match every other one.
+- `internal/database/store.go` — new `BookFile.AcoustIDFingerprint []byte`
+  and `AcoustIDFingerprintDurationSec float64`. Legacy `AcoustIDSeg0..6`
+  remain on the struct as deprecated read-only fallbacks.
+- `internal/database/memdb_strip.go` — strips `AcoustIDFingerprint`
+  before memdb insert. ~3 GB potential RSS saving at full coverage.
+- `internal/plugins/acoustid/backfill.go` — `fingerprintBookFile`
+  switched to whole-file path. Force-rescan now clears legacy
+  `Seg1..6` so the AQAAAA sentinel pollution is retired. The
+  eligibility check is now a pure `fingerprintEligibility` function,
+  unit-testable without faking the entire Store interface.
+  `synthesizeBookSignatureForBook` switched from strict
+  `SynthesizeBookSignature` to `SynthesizePartialBookSignature` so
+  books with partial file coverage still produce a usable book sig
+  with `BookSigV1Mask` + `BookSigCoveragePct` set.
+- `internal/dedup/engine.go` — annotation only; Tier-1 exact match
+  still keys on `Seg0` (now derived deterministically from the
+  whole-file fp so the AQAAAA sentinel cannot recur). Whole-file
+  similarity matching is deferred to a future LSH index.
+- Tests: 22 new unit tests covering whole-file extraction failure
+  modes, intro/outro slicing, encode round-trip, eligibility matrix,
+  memdb strip invariant. All affected packages green.
 
 #### May 29, 2026 — MAYDEPLOY A→I sweep + Wave 4 perf audit (33 commits, PRs #1156–#1191)
 

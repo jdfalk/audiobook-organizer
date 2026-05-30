@@ -84,5 +84,12 @@ func stripBookFileForMemdb(src *BookFile) *BookFile {
 	cp.FingerprintFailureReason = nil
 	cp.FingerprintFailureDetail = nil
 	cp.FingerprintDiagnosticJSON = nil
+	// AcoustIDFingerprint is the whole-file raw chromaprint stream
+	// (~230 KB per 2hr file). At ~15K reachable files that's 3+ GB of
+	// memdb RSS for data nothing currently reads from memdb — the LSH
+	// index (Step 3) will live in Pebble secondary keys, not memdb rows.
+	// Pebble-direct callers that need the whole-file fp can still fetch
+	// it via GetBookFile / GetBookFiles bypass paths.
+	cp.AcoustIDFingerprint = nil
 	return &cp
 }
