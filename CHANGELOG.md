@@ -1,13 +1,24 @@
 <!-- file: CHANGELOG.md -->
 <!-- version: 3.06.0 -->
 <!-- guid: 8c5a02ad-7cfe-4c6d-a4b7-3d5f92daabc1 -->
-<!-- last-edited: 2026-05-30 -->
+<!-- last-edited: 2026-05-31 -->
 
 # Changelog
 
 ## [Unreleased]
 
 ### Changes
+
+#### May 31, 2026 — G5b: title backfill for poisoned iTunes-import rows
+
+New maintenance op `maintenance.title-backfill` strips leading chapter/track
+markers from `Book.Title` rows created by iTunes imports (e.g.
+`(76/85) Tarkin: Star Wars` → `Tarkin: Star Wars`). Dry-run by default;
+re-run with `{"dryRun": false}` to apply. Logs every old→new change.
+Skips titles that would strip to empty rather than blanking them.
+
+Extracts `StripChapterPrefix` into a new leaf package `internal/titleutil`
+so the iTunes importer and the maintenance op share one pattern list.
 
 #### May 30, 2026 — Whole-file fingerprint migration (Step 1 + 2)
 

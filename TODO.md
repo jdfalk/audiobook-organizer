@@ -223,10 +223,9 @@ Copy + pause-on-hover in #1182.
 
 ### Deferred from MAYDEPLOY
 
-- [ ] **MAYDEPLOY-G5b** — back-fill poisoned `Book.Title` rows
-  (leading `(N/M)`, `Chapter NN`, `Track NN`, `Part NN`, `NN -`).
-  Scan all books, strip prefix, update title, log old→new. Scope:
-  ~85 Tarkin + unknown N more iTunes-imports.
+- [x] **MAYDEPLOY-G5b** — back-fill poisoned `Book.Title` rows ✅ (2026-05-31)
+  Op `maintenance.title-backfill` shipped; dry-run by default. Run with
+  `{"dryRun": false}` on prod to apply. Old→new logged via op reporter.
 - [ ] **MAYDEPLOY-G5c** — tighten `groupTracksByAlbum` to use
   `stripChapterPrefix(track.Name)` as the album key when Album tag is
   empty. Needs design pass — risks merging unrelated tracks that
@@ -337,12 +336,8 @@ one book × many BookFiles).
   second bug. Fix: `stripChapterPrefix` helper in
   `internal/itunes/service/strip_chapter_prefix.go`, applied
   only in the empty-Album fall-back branch.
-- [ ] **G5b** Back-fill existing poisoned `Book.Title` rows in
-  PebbleDB. Scan all books for leading `(N/M)`, `(N of M)`,
-  `Chapter NN`, `Track NN`, `Part NN`, `NN -` patterns; strip
-  the prefix; update `Book.Title`; log old→new. Estimated
-  scope: ~85 Tarkin records plus unknown N more from other
-  iTunes-imported series.
+- [x] **G5b** Back-fill existing poisoned `Book.Title` rows ✅ (2026-05-31)
+  `maintenance.title-backfill` op shipped. Dry-run default.
 - [ ] **G5c** Tighten `groupTracksByAlbum` to use
   `stripChapterPrefix(track.Name)` as the album key when the
   Album tag is empty. Currently every chapter falls back to a
