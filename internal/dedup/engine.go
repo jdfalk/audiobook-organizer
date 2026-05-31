@@ -2240,12 +2240,42 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 			}
 		}
 
+		// LSH-backed candidate lookup is optional — only PebbleStore
+		// implements it. SQLite/mock stores skip this path and fall
+		// through to the segment walk below.
+		lshStore, _ := de.bookStore.(interface {
+			LookupAcoustIDCandidates(fp []byte, maxCandidates int) ([]string, error)
+			GetBookFileByID(bookID, fileID string) (*database.BookFile, error)
+		})
+
 		for _, f := range files {
-			// Whole-file fingerprint exists on rows written by the
-			// FileWholeFingerprint path (PLAN.md/feat/fingerprint-wholefile).
-			// Tier-1 exact match still keys on Seg0 (derived from the whole-
-			// file fp by DeriveSeg0 so it's free of the AQAAAA sentinels).
-			// Whole-file similarity matching is deferred to Step 3 / LSH.
+			// Tier-0: whole-file LSH candidate set + Hamming refine.
+			// Sub-linear via the fpidx: secondary index, so it runs
+			// unconditionally (no acoustidFuzzyEnabled gate needed —
+			// the index caps candidates so the work is bounded).
+			if lshStore != nil && len(f.AcoustIDFingerprint) > 0 {
+				cands, _ := lshStore.LookupAcoustIDCandidates(f.AcoustIDFingerprint, 200)
+				for _, candID := range cands {
+					if candID == f.ID {
+						continue
+					}
+					cand, _ := lshStore.GetBookFileByID("", candID)
+					if cand == nil || cand.BookID == book.ID || len(cand.AcoustIDFingerprint) == 0 {
+						continue
+					}
+					sim, simErr := fingerprint.WholeFileSimilarity(f.AcoustIDFingerprint, cand.AcoustIDFingerprint)
+					if simErr != nil {
+						continue
+					}
+					if sim >= fingerprint.FuzzyMinSimilarity {
+						emit(book.ID, cand.BookID, sim)
+					}
+				}
+			}
+
+			// Tier-1 (exact) and Tier-2 (legacy fuzzy walk) over seg
+			// strings — still useful for rows that haven't been
+			// re-fingerprinted to whole-file yet (no AcoustIDFingerprint).
 			segs := []string{
 				f.AcoustIDSeg0, f.AcoustIDSeg1, f.AcoustIDSeg2,
 				f.AcoustIDSeg3, f.AcoustIDSeg4, f.AcoustIDSeg5,
@@ -2271,10 +2301,10 @@ func (de *Engine) AcoustIDScan(ctx context.Context, progress func(done, total in
 					continue
 				}
 
-				// Tier 2: fuzzy match. Gated by ACOUSTID_FUZZY_ENABLED; OFF by
-				// default. Even routed through memdb (PR #1194), this is an
-				// O(308K-row) walk per call and force-drops the scan on a
-				// 50K-book library. Waits for LSH bucketing (Stage B).
+				// Tier 2: legacy fuzzy walk over seg strings. Gated by
+				// ACOUSTID_FUZZY_ENABLED — OFF by default. Kept only as
+				// an emergency fallback for libraries without whole-file
+				// fingerprints (rare now that LSH is the default).
 				if !acoustidFuzzyEnabled {
 					continue
 				}

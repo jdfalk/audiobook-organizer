@@ -48,6 +48,7 @@ func (p *Plugin) Register(r sdk.Registry) error {
 		p.backfillDef(),
 		p.fingerprintRescanDef(),
 		p.resetAllDef(),
+		p.lshBackfillDef(),
 	}
 
 	for _, op := range ops {
