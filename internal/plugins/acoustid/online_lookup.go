@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jdfalk/audiobook-organizer/internal/acoustid"
+	"github.com/jdfalk/audiobook-organizer/internal/config"
 	"github.com/jdfalk/audiobook-organizer/internal/fingerprint"
 	"github.com/jdfalk/audiobook-organizer/pkg/plugin/sdk"
 )
@@ -69,9 +70,15 @@ func (p *Plugin) runOnlineLookup(ctx context.Context, params json.RawMessage, re
 		return fmt.Errorf("database store not available")
 	}
 
-	apiKey := os.Getenv("ACOUSTID_API_KEY")
+	// Prefer the persisted setting (set via PUT /api/v1/config from the
+	// AcousticDedup tab). Fall back to env so the original env-only
+	// setup still works.
+	apiKey := config.AppConfig.AcoustIDAPIKey
 	if apiKey == "" {
-		return fmt.Errorf("ACOUSTID_API_KEY is not set; refusing to run")
+		apiKey = os.Getenv("ACOUSTID_API_KEY")
+	}
+	if apiKey == "" {
+		return fmt.Errorf("AcoustID API key is not configured; set it on the AcoustID Dedup page or via the ACOUSTID_API_KEY env var")
 	}
 	client := acoustid.NewClient(apiKey)
 
