@@ -374,10 +374,10 @@ func TestCoverageRestoreAudiobook(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCoverageListAuthors(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
 	t.Run("empty authors list", func(t *testing.T) {
+		server, cleanup := setupTestServer(t)
+		defer cleanup()
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/authors", nil)
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
@@ -389,7 +389,11 @@ func TestCoverageListAuthors(t *testing.T) {
 	})
 
 	t.Run("authors after creating books with authors", func(t *testing.T) {
-		// Create a book which will auto-create an author
+		// Fresh server per subtest so the authorsCache doesn't carry over
+		// an empty result from the previous subtest.
+		server, cleanup := setupTestServer(t)
+		defer cleanup()
+
 		tempDir := t.TempDir()
 		filePath := filepath.Join(tempDir, "authored.m4b")
 		require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))
@@ -422,10 +426,10 @@ func TestCoverageListAuthors(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCoverageListSeries(t *testing.T) {
-	server, cleanup := setupTestServer(t)
-	defer cleanup()
-
 	t.Run("empty series list", func(t *testing.T) {
+		server, cleanup := setupTestServer(t)
+		defer cleanup()
+
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
 		w := httptest.NewRecorder()
 		server.router.ServeHTTP(w, req)
@@ -437,6 +441,11 @@ func TestCoverageListSeries(t *testing.T) {
 	})
 
 	t.Run("series after creating books with series", func(t *testing.T) {
+		// Fresh server per subtest so the seriesCache doesn't carry over
+		// an empty result from the previous subtest.
+		server, cleanup := setupTestServer(t)
+		defer cleanup()
+
 		tempDir := t.TempDir()
 		filePath := filepath.Join(tempDir, "series.m4b")
 		require.NoError(t, os.WriteFile(filePath, []byte("audio"), 0o644))

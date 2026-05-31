@@ -52,8 +52,8 @@ func TestHandler_HealthCheck_Success(t *testing.T) {
 	srv, mockStore, router := setupHandlerTest(t)
 
 	mockStore.EXPECT().CountBooks().Return(42, nil)
-	mockStore.EXPECT().GetAllAuthors().Return([]database.Author{{ID: 1, Name: "Author1"}}, nil)
-	mockStore.EXPECT().GetAllSeries().Return([]database.Series{{ID: 1, Name: "Series1"}}, nil)
+	mockStore.EXPECT().CountAuthors().Return(1, nil)
+	mockStore.EXPECT().CountSeries().Return(1, nil)
 
 	router.GET("/health", srv.healthCheck)
 
@@ -77,8 +77,8 @@ func TestHandler_HealthCheck_DBError(t *testing.T) {
 	srv, mockStore, router := setupHandlerTest(t)
 
 	mockStore.EXPECT().CountBooks().Return(0, errors.New("db down"))
-	mockStore.EXPECT().GetAllAuthors().Return(nil, errors.New("db down"))
-	mockStore.EXPECT().GetAllSeries().Return(nil, errors.New("db down"))
+	mockStore.EXPECT().CountAuthors().Return(0, errors.New("db down"))
+	mockStore.EXPECT().CountSeries().Return(0, errors.New("db down"))
 
 	router.GET("/health", srv.healthCheck)
 
