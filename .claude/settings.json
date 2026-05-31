@@ -63,6 +63,15 @@
             "command": "file=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty') && base=$(basename \"$file\") && [[ \"$base\" == \".env\" ]] && echo 'BLOCKED: Cannot edit .env files directly — use .env.example instead' && exit 1 || true"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(echo \"$TOOL_INPUT\" | jq -r '.file_path // empty') && [[ \"$file\" == /etc/systemd/* || \"$file\" == /lib/systemd/* || \"$file\" == /usr/lib/systemd/* ]] && echo 'BLOCKED: Direct edits to systemd unit files outside the repo are not allowed. Update deploy/audiobook-organizer.service in the repo instead, then copy it to the server manually.' >&2 && exit 2 || true"
+          }
+        ]
       }
     ],
     "PostToolUse": [
