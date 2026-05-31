@@ -7,6 +7,7 @@ package acoustid
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -88,6 +89,58 @@ func TestLookup_APIError(t *testing.T) {
 	_, err := c.Lookup(context.Background(), "FP", 600)
 	if err == nil || !strings.Contains(err.Error(), "invalid fingerprint") {
 		t.Fatalf("expected API error, got %v", err)
+	}
+}
+
+func TestLookup_429ReturnsErrRateLimited(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(429)
+		_, _ = w.Write([]byte(`{"status":"error","error":{"code":17,"message":"rate limit"}}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("TESTKEY")
+	c.BaseURL = srv.URL
+	_, err := c.Lookup(context.Background(), "FP", 600)
+	if err == nil {
+		t.Fatal("expected error after exhausted retries, got nil")
+	}
+	if !errors.Is(err, ErrRateLimited) {
+		t.Errorf("expected ErrRateLimited, got %v", err)
+	}
+	// initial + 2 retries = 3 attempts
+	if calls != 3 {
+		t.Errorf("expected 3 attempts, got %d", calls)
+	}
+}
+
+func TestLookup_429ThenSucceedsRetries(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(429)
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ok","results":[{"score":0.95,"recordings":[{"id":"mb-x"}]}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("TESTKEY")
+	c.BaseURL = srv.URL
+	res, err := c.Lookup(context.Background(), "FP", 600)
+	if err != nil {
+		t.Fatalf("expected success after retry, got %v", err)
+	}
+	if res.RecordingID != "mb-x" {
+		t.Errorf("RecordingID: got %q want mb-x", res.RecordingID)
+	}
+	if calls != 2 {
+		t.Errorf("expected 2 attempts, got %d", calls)
 	}
 }
 

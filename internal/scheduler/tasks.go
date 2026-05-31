@@ -470,6 +470,39 @@ func (ts *TaskScheduler) registerAllTasks() {
 		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowDbOptimize },
 	})
 
+	// Nightly AcoustID online lookup. Off unless the user explicitly
+	// enables MaintenanceWindowAcoustIDOnlineLookup. The op itself
+	// refuses to run without ACOUSTID_API_KEY, so flipping the toggle
+	// without setting the env is a no-op.
+	ts.registerTask(TaskDefinition{
+		Name:        "acoustid_online_lookup",
+		Description: "Look up un-queried fingerprints on acoustid.org (rate-limited, bounded)",
+		Category:    "maintenance",
+		TriggerFn: func(source string) (*database.Operation, error) {
+			store := ts.deps.Store()
+			if store == nil {
+				return nil, fmt.Errorf("database not initialized")
+			}
+			opID := ulid.Make().String()
+			op, err := store.CreateOperation(opID, "acoustid-online-lookup", nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create operation: %w", err)
+			}
+			params := map[string]any{
+				"limit": config.AppConfig.AcoustIDOnlineLookupNightlyLimit,
+				"force": false,
+			}
+			if _, enqErr := ts.deps.OpRegistry.EnqueueOp(context.Background(), "acoustid.lookup-online", params); enqErr != nil {
+				return nil, fmt.Errorf("failed to enqueue acoustid.lookup-online: %w", enqErr)
+			}
+			return op, nil
+		},
+		IsEnabled:              func() bool { return config.AppConfig.MaintenanceWindowAcoustIDOnlineLookup },
+		GetInterval:            func() time.Duration { return 0 }, // run only inside the maintenance window
+		RunOnStart:             func() bool { return false },
+		RunInMaintenanceWindow: func() bool { return config.AppConfig.MaintenanceWindowAcoustIDOnlineLookup },
+	})
+
 	ts.registerTask(TaskDefinition{
 		Name:        "cleanup_old_backups",
 		Description: "Remove old .bak-* backup files past retention",

@@ -1,5 +1,5 @@
 // file: internal/acoustid/client.go
-// version: 1.0.0
+// version: 1.1.0
 // guid: 5d6e7f80-9a1b-2c3d-4e5f-607182931a2b
 // last-edited: 2026-05-31
 
@@ -30,6 +30,38 @@ import (
 
 // ErrNoAPIKey is returned by Lookup when the env var ACOUSTID_API_KEY is unset.
 var ErrNoAPIKey = errors.New("acoustid: ACOUSTID_API_KEY is not set")
+
+// ErrRateLimited is returned when the API responds with HTTP 429 after
+// the in-client retry budget is exhausted. Callers should react by
+// backing off further (the lookup-online op widens its throttle for the
+// remainder of the run).
+var ErrRateLimited = errors.New("acoustid: rate-limited (HTTP 429)")
+
+// retryDelays are the fallback wait intervals between automatic retries
+// on 429 or 5xx when the server doesn't send Retry-After. Three attempts
+// total (initial + 2 retries) — beyond that we surface ErrRateLimited so
+// the caller can throttle the whole run.
+var retryDelays = []time.Duration{2 * time.Second, 5 * time.Second}
+
+// parseRetryAfter returns the duration encoded in a Retry-After header
+// value. Per RFC 7231 the value is either delta-seconds (an integer) or
+// an HTTP-date — we only honor the integer form because acoustid.org
+// uses it. Caps at 60s so a misconfigured server can't stall an op.
+func parseRetryAfter(v string) time.Duration {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	d := time.Duration(n) * time.Second
+	if d > 60*time.Second {
+		d = 60 * time.Second
+	}
+	return d
+}
 
 // LookupResult is the minimal subset of /v2/lookup's response we care about.
 type LookupResult struct {
@@ -84,26 +116,59 @@ func (c *Client) Lookup(ctx context.Context, fingerprint string, durationSec int
 	form.Set("fingerprint", fingerprint)
 	form.Set("meta", "recordings")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL,
-		strings.NewReader(form.Encode()))
-	if err != nil {
-		return LookupResult{}, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Retry loop: on 429 or 5xx, honor Retry-After (or fall back to
+	// retryDelays). Budget = 1 initial + len(retryDelays) attempts.
+	var (
+		resp        *http.Response
+		body        []byte
+		lastStatus  int
+		rateLimited bool
+	)
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL,
+			strings.NewReader(form.Encode()))
+		if err != nil {
+			return LookupResult{}, err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return LookupResult{}, err
-	}
-	defer resp.Body.Close()
+		var doErr error
+		resp, doErr = c.HTTP.Do(req)
+		if doErr != nil {
+			return LookupResult{}, doErr
+		}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return LookupResult{}, err
+		body, err = io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil {
+			return LookupResult{}, err
+		}
+		lastStatus = resp.StatusCode
+
+		retryable := lastStatus == http.StatusTooManyRequests || lastStatus/100 == 5
+		if !retryable {
+			break
+		}
+		rateLimited = rateLimited || lastStatus == http.StatusTooManyRequests
+		if attempt >= len(retryDelays) {
+			break
+		}
+		wait := parseRetryAfter(resp.Header.Get("Retry-After"))
+		if wait == 0 {
+			wait = retryDelays[attempt]
+		}
+		select {
+		case <-ctx.Done():
+			return LookupResult{}, ctx.Err()
+		case <-time.After(wait):
+		}
 	}
 
-	if resp.StatusCode/100 != 2 {
-		return LookupResult{Raw: body}, fmt.Errorf("acoustid: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	if lastStatus/100 != 2 {
+		if rateLimited {
+			return LookupResult{Raw: body}, ErrRateLimited
+		}
+		return LookupResult{Raw: body}, fmt.Errorf("acoustid: HTTP %d: %s", lastStatus, strings.TrimSpace(string(body)))
 	}
 
 	var parsed struct {
